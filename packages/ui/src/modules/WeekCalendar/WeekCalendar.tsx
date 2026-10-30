@@ -6,6 +6,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type FocusEvent,
   type KeyboardEvent,
   type PointerEvent,
   type ReactNode,
@@ -14,11 +15,24 @@ import {
 import { Button } from '../../atoms/Button/Button.tsx';
 import { ProviderMark, type ProviderName } from '../../atoms/ProviderMark/ProviderMark.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
+import { PlaneArea, type PlaneGrab, type PlaneTravel } from '../../lib/drag/plane.tsx';
 import { focusLater } from '../../lib/focus-later.ts';
+import { durationToken } from '../../lib/token-values.ts';
 import { Menu, MenuItem } from '../../molecules/Menu/Menu.tsx';
 import { Modal } from '../../molecules/Modal/Modal.tsx';
 import { Popover, type PopoverPlacement } from '../../molecules/Popover/Popover.tsx';
 import type { Hue } from '../../hue.ts';
+import {
+  isMoveKey,
+  keyedFrom,
+  movedBy,
+  resizedBy,
+  sameSpan,
+  shiftOf,
+  type MoveGeometry,
+  type MoveSteps,
+} from './blockMove.ts';
+import { MovableBlock, type BlockWire } from './MovableBlock.tsx';
 import { liftClosed, NEST_AFTER, placeBlocks, type More, type Placed as PlacedSlot, type Slot } from './placeBlocks.ts';
 import styles from './WeekCalendar.module.css';
 import { strings } from './strings.ts';
@@ -97,6 +111,51 @@ export interface WeekCalendarSpan {
   readonly startMinute: number;
   readonly endMinute: number;
 }
+
+/**
+ * Moving the week's blocks by hand (the Bookings page: a booking dragged to another time or day, its foot dragged to
+ * change its length, or Alt and the arrow keys, with Shift to change the length). The week only draws what is held
+ * and asks; what may land, and what happens when it does, is the screen's.
+ */
+export interface WeekCalendarMove {
+  /** Whether a block can be moved (a booking still ahead, not moved the most it can). Others have no grip. */
+  readonly isMovable: (id: string) => boolean;
+  /** The minutes a move snaps to, as the block's page offers times (default 15). */
+  readonly stepOf?: (id: string) => number | undefined;
+  /**
+   * Whether the block may be where it is held: false draws it with a red outline and, let go there, it slides home
+   * without asking; undefined while that is not yet known (the drop is then asked of the server).
+   */
+  readonly canLand: (id: string, to: WeekCalendarSpan) => boolean | undefined;
+  /**
+   * A movable block is about to be taken: pressed by a mouse or pen, or kept focused by the keyboard for a moment.
+   * The screen can read ahead where it may land, so the first step already knows.
+   */
+  readonly onPrepare?: (id: string) => void;
+  /**
+   * The block is held at `to` (picked up, then each new place): the screen can find out whether that place is free,
+   * so `canLand` has an answer by the time it is let go.
+   */
+  readonly onHold?: (id: string, to: WeekCalendarSpan) => void;
+  /** The block was let go of, or its keys settled, at a new place. `from` is where it was. */
+  readonly onMove: (id: string, to: WeekCalendarSpan, from: WeekCalendarSpan) => void;
+}
+
+/** A block held away from where it began: by the pointer, or by keys that settle a moment after the last one. */
+interface Held {
+  readonly id: string;
+  readonly from: WeekCalendarSpan;
+  readonly to: WeekCalendarSpan;
+  readonly source: 'pointer' | 'keys';
+  /** The columns' shape when it was taken, which turns whole columns into the block's sideways shift. */
+  readonly geometry: MoveGeometry;
+}
+
+/** How long a block keeps the keyboard's focus before the screen reads ahead for it. */
+const PREPARE_MS = 300;
+
+/** After the last key of a keyboard move, how long before it lands (Enter lands it at once, Escape puts it back). */
+const KEYS_SETTLE_MS = 900;
 
 /** Drawing snaps to the quarter hour: the finest span anybody drags on purpose. */
 const SNAP = 15;
@@ -213,6 +272,8 @@ export interface WeekCalendarProps {
    * the now line shows in every column, and below 480px one column shows at a time, with Previous and Next.
    */
   readonly view?: 'week' | 'day' | 'team';
+  /** Lets blocks the screen names move by hand (see `WeekCalendarMove`). Absent, no block moves. */
+  readonly move?: WeekCalendarMove;
 }
 
 /** The parts of a day outside its open hours, in order. */
@@ -317,6 +378,7 @@ export function WeekCalendar({
   emptyHint,
   emptyAction,
   view = 'week',
+  move,
 }: WeekCalendarProps) {
   const scroller = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -414,6 +476,157 @@ export function WeekCalendar({
       return block?.isConnected === true ? block : columns.current.get(focusDay.dayKey);
     });
   }, [focusDay]);
+
+  // Moving a block (the screen's `move`): the block held, drawn at its new place before anything is sent. It lives in
+  // a ref as well, as the drawn span does: pointer events can come faster than renders, and each must see the last.
+  const [held, setHeldState] = useState<Held | null>(null);
+  const holding = useRef<Held | null>(null);
+  const setHeld = (next: Held | null) => {
+    holding.current = next;
+    setHeldState(next);
+  };
+  // The columns' shape when a hold began, which turns pixels into minutes and days.
+  const shape = useRef<MoveGeometry | null>(null);
+  // The block let go where it can't land, or put back: it slides home rather than jumping (not with reduced motion).
+  const [settling, setSettling] = useState<string | null>(null);
+  useEffect(() => {
+    if (settling === null) return;
+    const timer = setTimeout(() => setSettling(null), durationToken('duration-move'));
+    return () => clearTimeout(timer);
+  }, [settling]);
+  // What a screen reader hears while a block is held by keys, and when it can't land.
+  const [said, setSaid] = useState('');
+  const keysTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const stopKeys = () => {
+    clearTimeout(keysTimer.current);
+    keysTimer.current = undefined;
+  };
+  // A block kept focused by the keyboard for a moment is about to be moved: the screen reads ahead.
+  const prepareTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(
+    () => () => {
+      stopKeys();
+      clearTimeout(prepareTimer.current);
+    },
+    [],
+  );
+  const spanOfBlock = (id: string): WeekCalendarSpan | undefined => {
+    const block = blocks.find((each) => each.id === id);
+    return block === undefined
+      ? undefined
+      : { dayKey: block.dayKey, startMinute: block.startMinute, endMinute: block.endMinute };
+  };
+  /** The columns on screen and what a pixel is, read off the page (a hidden column has no width). */
+  const measure = (): MoveGeometry | null => {
+    const shown = days.flatMap((day) => {
+      const box = columns.current.get(day.key)?.getBoundingClientRect();
+      return box === undefined || box.width === 0 ? [] : [{ key: day.key, width: box.width, height: box.height }];
+    });
+    const first = shown[0];
+    if (first === undefined) return null;
+    return {
+      dayKeys: shown.map((each) => each.key),
+      dayWidth: shown.length > 1 ? first.width : 0,
+      pxPerMinute: first.height / 1440,
+    };
+  };
+  const stepsFor = (id: string): MoveSteps => {
+    const step = Math.max(move?.stepOf?.(id) ?? SNAP, 1);
+    return { move: step, length: Math.min(step, SNAP) };
+  };
+  /** A held span in words, for a screen reader: "Wednesday, 4 November, 10:15 AM – 10:45 AM". */
+  const whereOf = (to: WeekCalendarSpan): string => {
+    const day = days.find((each) => each.key === to.dayKey)?.label ?? to.dayKey;
+    return minuteLabel === undefined ? day : `${day}, ${minuteLabel(to.startMinute)} – ${minuteLabel(to.endMinute)}`;
+  };
+  /** Lets go of a hold: where it can land it lands (the screen sends it), where it can't it slides home. */
+  const land = (item: Held) => {
+    setHeld(null);
+    stopKeys();
+    if (move === undefined || sameSpan(item.to, item.from)) return;
+    if (move.canLand(item.id, item.to) === false) {
+      setSettling(item.id);
+      setSaid(strings.moveRefused(whereOf(item.to)));
+      return;
+    }
+    move.onMove(item.id, item.to, item.from);
+  };
+  /** Puts a hold back where it began. */
+  const putBack = () => {
+    const item = holding.current;
+    setHeld(null);
+    stopKeys();
+    if (item === null) return;
+    if (!sameSpan(item.to, item.from)) setSettling(item.id);
+    setSaid(strings.moveCancelled);
+  };
+  const landRef = useRef(land);
+  useLayoutEffect(() => {
+    landRef.current = land;
+  });
+  // Where a block is held, told to the screen as it moves, so it can find out if that place is free.
+  useEffect(() => {
+    if (held !== null) move?.onHold?.(held.id, held.to);
+    // Only when the hold changes: the screen's `move` is a new object each render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [held]);
+  const grab = (grabbed: PlaneGrab) => {
+    if (move === undefined || !move.isMovable(grabbed.id)) return;
+    const from = spanOfBlock(grabbed.id);
+    const columnsNow = measure();
+    if (from === undefined || columnsNow === null) return;
+    stopKeys();
+    shape.current = columnsNow;
+    setHeld({ id: grabbed.id, from, to: from, source: 'pointer', geometry: columnsNow });
+  };
+  /** The hold a pointer's travel makes of the current one, snapped to the grid. */
+  const dragged = (grabbed: PlaneGrab, by: PlaneTravel): Held | null => {
+    const current = holding.current;
+    const columnsNow = shape.current;
+    if (current === null || columnsNow === null || current.id !== grabbed.id || current.source !== 'pointer') {
+      return null;
+    }
+    const steps = stepsFor(current.id);
+    const to =
+      grabbed.part === 'resize'
+        ? resizedBy(current.from, by.y, columnsNow, steps)
+        : movedBy(current.from, by, columnsNow, steps);
+    return { ...current, to };
+  };
+  /** Alt and the arrows on a focused block move it a step, with Shift change its length; they land a moment after the last. */
+  const onBlockKey = (event: KeyboardEvent<HTMLElement>, block: WeekCalendarBlock) => {
+    if (move === undefined || !move.isMovable(block.id)) return;
+    const current = holding.current?.source === 'keys' && holding.current.id === block.id ? holding.current : null;
+    // Enter alone lands it: a Space's click would come on its key up and open the card.
+    if (current !== null && event.key === 'Enter') {
+      event.preventDefault();
+      event.stopPropagation();
+      land(current);
+      return;
+    }
+    if (current !== null && event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      putBack();
+      return;
+    }
+    if (!event.altKey || event.ctrlKey || event.metaKey || !isMoveKey(event.key)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const from = current?.from ?? spanOfBlock(block.id);
+    const columnsNow = measure();
+    if (from === undefined || columnsNow === null) return;
+    shape.current = columnsNow;
+    const to = keyedFrom(current?.to ?? from, event.key, event.shiftKey, columnsNow.dayKeys, stepsFor(block.id));
+    if (sameSpan(to, current?.to ?? from)) return;
+    setHeld({ id: block.id, from, to, source: 'keys', geometry: columnsNow });
+    setSaid(move.canLand(block.id, to) === false ? strings.moveRefused(whereOf(to)) : strings.moveTo(whereOf(to)));
+    stopKeys();
+    keysTimer.current = setTimeout(() => {
+      const item = holding.current;
+      if (item?.source === 'keys') landRef.current(item);
+    }, KEYS_SETTLE_MS);
+  };
 
   /** The minute under the pointer in `column`, snapped and clamped to the day. */
   const minuteAt = (column: HTMLElement, clientY: number): number => {
@@ -565,7 +778,7 @@ export function WeekCalendar({
           ))}
     </div>
   );
-  return (
+  const grid = (
     <section
       className={styles.root}
       aria-label={label}
@@ -733,20 +946,29 @@ export function WeekCalendar({
                   />
                 )}
                 {dayBlocks.map((block) => {
-                  const length = block.endMinute - block.startMinute;
+                  // A block held by the pointer or keys is drawn at its new place, its time saying where.
+                  const mine = held?.id === block.id ? held : null;
+                  const shiftX =
+                    mine === null
+                      ? 0
+                      : shiftOf(mine.from, mine.to, mine.geometry.dayKeys).columns * mine.geometry.dayWidth;
+                  const shiftMinutes = mine === null ? 0 : mine.to.startMinute - mine.from.startMinute;
+                  const length = (mine?.to ?? block).endMinute - (mine?.to ?? block).startMinute;
                   const size = sizeOf(length);
                   // Half an hour or less shows the start alone, as Google Calendar and Klaviyo write it, so
                   // the title keeps its room; "10:00 AM – 10:30 AM" was cut to "10:00 A…".
                   const shownTime =
-                    (size === 'tiny' || size === 'pair') && minuteLabel !== undefined
-                      ? minuteLabel(block.startMinute)
-                      : block.time;
-                  return (
+                    mine !== null && minuteLabel !== undefined
+                      ? heldTime(mine, days, minuteLabel)
+                      : (size === 'tiny' || size === 'pair') && minuteLabel !== undefined
+                        ? minuteLabel(block.startMinute)
+                        : block.time;
+                  const draw = (wire?: BlockWire) => (
                     <button
-                      key={block.id}
                       ref={(element) => {
                         if (element === null) blockRefs.current.delete(block.id);
                         else blockRefs.current.set(block.id, element);
+                        wire?.bind(element);
                       }}
                       type="button"
                       tabIndex={-1}
@@ -757,7 +979,12 @@ export function WeekCalendar({
                       data-nested={block.indent > 0 || undefined}
                       data-narrow={(block.span / block.lanes) * block.width < 0.5 || undefined}
                       data-open={block.id === openId || undefined}
+                      data-movable={wire === undefined ? undefined : true}
+                      data-moving={mine === null ? undefined : true}
+                      data-refused={(mine !== null && move?.canLand(mine.id, mine.to) === false) || undefined}
+                      data-settling={settling === block.id || undefined}
                       data-size={size}
+                      {...(wire === undefined ? {} : { 'aria-description': strings.moveHint })}
                       aria-haspopup="dialog"
                       aria-expanded={block.id === openId}
                       aria-label={strings.blockName(
@@ -770,13 +997,35 @@ export function WeekCalendar({
                       )}
                       style={{
                         '--start': String(block.startMinute),
-                        '--length': String(Math.max(block.endMinute - block.startMinute, 15)),
+                        '--length': String(Math.max(length, 15)),
                         '--left': String(block.left),
                         '--width': String(block.width),
                         '--indent': String(block.indent),
                         '--lane': String(block.lane),
                         '--lanes': String(block.lanes),
                         '--span': String(block.span),
+                        '--shift-x': `${String(shiftX)}px`,
+                        '--shift-minutes': String(shiftMinutes),
+                      }}
+                      {...(wire === undefined
+                        ? {}
+                        : {
+                            onPointerDown: (event: PointerEvent<HTMLElement>) => {
+                              if (event.button === 0) move?.onPrepare?.(block.id);
+                              wire.onPointerDown(event);
+                            },
+                            onFocus: (event: FocusEvent<HTMLElement>) => {
+                              // Only the keyboard's focus: a pointer's press prepares by its own.
+                              if (!event.currentTarget.matches(':focus-visible')) return;
+                              clearTimeout(prepareTimer.current);
+                              prepareTimer.current = setTimeout(() => move?.onPrepare?.(block.id), PREPARE_MS);
+                            },
+                          })}
+                      onKeyDown={(event) => onBlockKey(event, block)}
+                      onBlur={() => {
+                        clearTimeout(prepareTimer.current);
+                        // Focus left a block held by keys before it landed: it goes back.
+                        if (holding.current?.source === 'keys' && holding.current.id === block.id) putBack();
                       }}
                       onClick={(event) => {
                         if (block.id === openId) {
@@ -803,7 +1052,15 @@ export function WeekCalendar({
                         {shownTime}
                       </span>
                       {block.detail !== undefined && <span className={styles.blockDetail}>{block.detail}</span>}
+                      {wire?.edge}
                     </button>
+                  );
+                  return move?.isMovable(block.id) === true ? (
+                    <MovableBlock key={block.id} id={block.id}>
+                      {draw}
+                    </MovableBlock>
+                  ) : (
+                    <Fragment key={block.id}>{draw()}</Fragment>
                   );
                 })}
                 {dayMore.map((more) => (
@@ -951,8 +1208,40 @@ export function WeekCalendar({
             {detail}
           </Popover>
         ))}
+      {move !== undefined && (
+        <VisuallyHidden>
+          <span role="status">{said}</span>
+        </VisuallyHidden>
+      )}
     </section>
   );
+  // Blocks that move hang their drag on one context around the whole week; a week with none has no drag at all.
+  return move === undefined ? (
+    grid
+  ) : (
+    <PlaneArea
+      onLift={grab}
+      onTravel={(grabbed, by) => {
+        const next = dragged(grabbed, by);
+        if (next !== null && !sameSpan(next.to, holding.current?.to ?? next.from)) setHeld(next);
+      }}
+      onDrop={(grabbed, by) => {
+        const next = dragged(grabbed, by) ?? holding.current;
+        if (next !== null) land(next);
+      }}
+      onCancel={putBack}
+    >
+      {grid}
+    </PlaneArea>
+  );
+}
+
+/** A held block's time as it is read while it moves: its range, with the day first once it left its own. */
+function heldTime(item: Held, days: readonly WeekCalendarDay[], minuteLabel: (minute: number) => string): string {
+  const range = `${minuteLabel(item.to.startMinute)} – ${minuteLabel(item.to.endMinute)}`;
+  if (item.to.dayKey === item.from.dayKey) return range;
+  const day = days.find((each) => each.key === item.to.dayKey);
+  return day === undefined ? range : `${day.weekday} ${day.dayNumber}, ${range}`;
 }
 
 /** A day's timed blocks as laid out: closed time full width under the rest, then bookings and events in lanes. */

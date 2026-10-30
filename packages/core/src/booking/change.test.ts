@@ -330,6 +330,33 @@ describe('the host moves and cancels (AC-640)', () => {
     expect(recorder.cancels).toHaveLength(1);
   });
 
+  it('gives a booking a new length at any free five minutes, and its event the new end (the week’s drag on its foot)', async () => {
+    const recorder = recordingCalendar();
+    const s = await setup(recorder.calendar);
+    const booked = await s.book();
+    const target = hostTarget(s.host, booked.bookingId);
+    const range = { from: new Date('2026-11-02T00:00:00Z'), to: new Date('2026-11-03T00:00:00Z') };
+    // The same length keeps the page’s step (30 minutes); a new one starts at any free five minutes.
+    const same = await readMoveSlots(target, s.deps, range);
+    expect(same.slots.map((slot) => slot.start)).not.toContain('2026-11-02T09:15:00.000Z');
+    const longer = await readMoveSlots(target, s.deps, { ...range, minutes: 45 });
+    expect(longer.slots.map((slot) => slot.start)).toEqual(
+      expect.arrayContaining([MONDAY_9, '2026-11-02T09:15:00.000Z']),
+    );
+    expect(longer.slots.every((slot) => Date.parse(slot.end) - Date.parse(slot.start) === 45 * 60_000)).toBe(true);
+    // The same time and length again changes nothing; a new length at the same start moves the end only.
+    expect(await moveBooking(target, s.deps, { start: new Date(MONDAY_9), minutes: 30 })).toEqual({ moved: false });
+    expect(await moveBooking(target, s.deps, { start: new Date(MONDAY_9), minutes: 45 })).toEqual({ moved: true });
+    const changed = await row(s.workspaceId, booked.bookingId);
+    expect(changed.reschedules).toBe(1);
+    expect(recorder.changes.at(-1)?.change).toEqual({ start: MONDAY_9, end: '2026-11-02T09:45:00.000Z' });
+    // Asked for with a time another booking holds, it is refused as a move is.
+    await s.book({ start: '2026-11-02T10:00:00.000Z', email: 'ann@navy.example' });
+    expect(await refusalOf(moveBooking(target, s.deps, { start: new Date(MONDAY_9), minutes: 90 }))).toMatchObject({
+      code: 'SLOT_TAKEN',
+    });
+  });
+
   it('copies the guest link with the guest’s token', async () => {
     const s = await setup();
     const booked = await s.book();

@@ -188,4 +188,7 @@ export const strings = {
   calendarPrevious: 'Previous week, or previous day',
   calendarDay: 'Day view',
   calendarWeek: 'Week view',
+  /** A focused booking on the week: Alt and the arrows move it, with Shift its length. */
+  calendarMove: 'Move a booking',
+  calendarResize: 'Change its length',
 } as const;

@@ -4370,11 +4370,14 @@ export function createDataLayer({
       /**
        * Moves a booking to a time its page offers (AC-640): at its new time at
        * once, back on a refusal (`SLOT_TAKEN` when the time just went,
-       * `LIMIT_REACHED` after 5 moves). The guest is emailed.
+       * `LIMIT_REACHED` after 5 moves). The guest is emailed. With `minutes` it
+       * takes a new length too (the week's drag on a booking's foot), at any
+       * free five minutes; a round robin booking refuses that (`CONFIG_INVALID`).
        */
-      move: async (workspace: string, bookingId: string, start: string): Promise<void> => {
+      move: async (workspace: string, bookingId: string, start: string, minutes?: number): Promise<void> => {
         const restore = bookingsLists.patchBooking(workspace, bookingId, (booking) => {
-          const length = Date.parse(booking.endsAt) - Date.parse(booking.startsAt);
+          const length =
+            minutes === undefined ? Date.parse(booking.endsAt) - Date.parse(booking.startsAt) : minutes * 60_000;
           return {
             ...booking,
             startsAt: start,
@@ -4383,7 +4386,12 @@ export function createDataLayer({
           };
         });
         try {
-          await call((options) => api.bookings.move({ workspace, bookingId, start, mutationId: mintId() }, options));
+          await call((options) =>
+            api.bookings.move(
+              { workspace, bookingId, start, ...(minutes === undefined ? {} : { minutes }), mutationId: mintId() },
+              options,
+            ),
+          );
         } catch (error) {
           restore();
           reloadBookings(workspace);
@@ -4391,9 +4399,23 @@ export function createDataLayer({
         }
         reloadBookings(workspace);
       },
-      /** Where a booking could move in a range: its page's times of its length, its own time free. */
-      moveSlots: (workspace: string, bookingId: string, from: string, to: string): Promise<PublicSlots> =>
-        call((options) => api.bookings.moveSlots({ workspace, bookingId, from, to }, options)),
+      /**
+       * Where a booking could move in a range: its page's times of its length, its own time free. With `minutes`, the
+       * free five minutes that fit that length instead (where it could be given that length).
+       */
+      moveSlots: (
+        workspace: string,
+        bookingId: string,
+        from: string,
+        to: string,
+        minutes?: number,
+      ): Promise<PublicSlots> =>
+        call((options) =>
+          api.bookings.moveSlots(
+            { workspace, bookingId, from, to, ...(minutes === undefined ? {} : { minutes }) },
+            options,
+          ),
+        ),
       /** The guest page's path for a booking (`/b/<key>/manage?t=…`), read only when asked: it is the guest's key. */
       guestLink: (workspace: string, bookingId: string): Promise<{ path: string }> =>
         call((options) => api.bookings.guestLink({ workspace, bookingId }, options)),

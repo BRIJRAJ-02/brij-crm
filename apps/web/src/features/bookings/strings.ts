@@ -338,6 +338,10 @@ export const strings = {
   confirmCancel: 'Cancel booking',
   cancelling: 'Cancelling',
   movedToast: (name: string) => `Moved. ${name} is emailed the new time.`,
+  /** A booking's foot dragged on the week: only its length changed. */
+  resizedToast: (name: string) => `Length changed. ${name} is emailed the new time.`,
+  /** Undo on either: the booking went back, and the guest is told again. */
+  putBackToast: (name: string) => `Put back. ${name} is emailed.`,
   cancelledToast: (name: string) => `Cancelled. ${name} is emailed.`,
   /** The detail's line for why a round robin booking went to its host (spec 0029, AC-742). */
   assignedTerm: 'Assigned',

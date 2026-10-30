@@ -45,8 +45,8 @@ export function hostActions(
 ): HostBookingActions {
   return {
     cancel: (bookingId, reason) => data.bookings.cancel(slug, bookingId, reason),
-    move: (bookingId, start) => data.bookings.move(slug, bookingId, start),
-    moveSlots: (bookingId, from, to) => data.bookings.moveSlots(slug, bookingId, from, to),
+    move: (bookingId, start, minutes) => data.bookings.move(slug, bookingId, start, minutes),
+    moveSlots: (bookingId, from, to, minutes) => data.bookings.moveSlots(slug, bookingId, from, to, minutes),
     guestLink: (bookingId) => data.bookings.guestLink(slug, bookingId),
     assignments: (bookingId) => data.bookings.assignments(slug, bookingId),
     reassign: (bookingId, to) => data.bookings.reassign(slug, bookingId, to),

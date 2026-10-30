@@ -509,6 +509,8 @@ export function WorkspaceFrame({
                       { label: strings.calendarPrevious, keys: [WEEK_KEYS.previous] },
                       { label: strings.calendarDay, keys: [WEEK_KEYS.day] },
                       { label: strings.calendarWeek, keys: [WEEK_KEYS.week] },
+                      { label: strings.calendarMove, keys: ['⌥', '← ↑ ↓ →'] },
+                      { label: strings.calendarResize, keys: ['⇧', '⌥', '↑ ↓'] },
                     ],
                   },
                 ]

@@ -946,3 +946,147 @@ export const DrawThenEscape: Story = {
     await expect(getComputedStyle(column).outlineStyle).toBe('solid');
   },
 };
+
+/** "3:30 PM": a minute of the day as the stories write it. */
+const clock = (minute: number) =>
+  `${String(Math.floor(minute / 60) % 12 === 0 ? 12 : Math.floor(minute / 60) % 12)}:${String(minute % 60).padStart(2, '0')} ${minute < 720 ? 'AM' : 'PM'}`;
+
+/** Grace Hopper's booking, 3:30 – 4:00 PM on Thursday: the one block these stories can take. */
+const GRACE: WeekCalendarSpan = { dayKey: '2026-10-08', startMinute: 15 * 60 + 30, endMinute: 16 * 60 };
+
+/**
+ * A booking that can move (the Bookings page's drag): Alt and the arrow keys hold it a step later, saying where, and
+ * Enter lets it land. The week only asks; the screen sends it.
+ */
+export const MoveByKeys: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { move: { isMovable: (id: string) => id === 'grace', canLand: () => true, onMove: fn() } },
+  render: (args) => (
+    <Stage width="fill">
+      <WeekCalendar {...args} days={days()} blocks={blocks()} scrollToMinute={14 * 60} minuteLabel={clock} />
+    </Stage>
+  ),
+  play: async ({ canvas, args }) => {
+    const block = canvas.getByRole('button', { name: /^Grace Hopper/ });
+    block.focus();
+    await userEvent.keyboard('{Alt>}{ArrowDown}{ArrowDown}{/Alt}');
+    await expect(block).toHaveAttribute('data-moving');
+    await expect(canvas.getByRole('status')).toHaveTextContent('Moving to Thursday, 8 October, 4:00 PM – 4:30 PM');
+    await userEvent.keyboard('{Enter}');
+    await expect(args.move?.onMove).toHaveBeenCalledWith(
+      'grace',
+      { dayKey: '2026-10-08', startMinute: 16 * 60, endMinute: 16 * 60 + 30 },
+      GRACE,
+    );
+  },
+};
+
+/** Shift and Alt with Up and Down change a booking's length, and Alt with Left and Right moves it a day. */
+export const ResizeByKeys: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { move: { isMovable: (id: string) => id === 'grace', canLand: () => true, onMove: fn() } },
+  render: (args) => (
+    <Stage width="fill">
+      <WeekCalendar {...args} days={days()} blocks={blocks()} scrollToMinute={14 * 60} minuteLabel={clock} />
+    </Stage>
+  ),
+  play: async ({ canvas, args }) => {
+    const block = canvas.getByRole('button', { name: /^Grace Hopper/ });
+    block.focus();
+    await userEvent.keyboard('{Shift>}{Alt>}{ArrowDown}{/Alt}{/Shift}');
+    await userEvent.keyboard('{Alt>}{ArrowRight}{/Alt}');
+    await userEvent.keyboard('{Enter}');
+    await expect(args.move?.onMove).toHaveBeenCalledWith(
+      'grace',
+      { dayKey: '2026-10-09', startMinute: 15 * 60 + 30, endMinute: 16 * 60 + 15 },
+      GRACE,
+    );
+  },
+};
+
+/** Held where it can't land: outlined red, said aloud, and let go it asks nothing and slides home. */
+export const MoveRefused: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { move: { isMovable: (id: string) => id === 'grace', canLand: () => false, onMove: fn() } },
+  render: (args) => (
+    <Stage width="fill">
+      <WeekCalendar {...args} days={days()} blocks={blocks()} scrollToMinute={14 * 60} minuteLabel={clock} />
+    </Stage>
+  ),
+  play: async ({ canvas, args }) => {
+    const block = canvas.getByRole('button', { name: /^Grace Hopper/ });
+    block.focus();
+    await userEvent.keyboard('{Alt>}{ArrowUp}{/Alt}');
+    await expect(block).toHaveAttribute('data-refused');
+    await expect(canvas.getByRole('status')).toHaveTextContent('Thursday, 8 October, 3:15 PM – 3:45 PM isn’t free');
+    await userEvent.keyboard('{Enter}');
+    await expect(args.move?.onMove).not.toHaveBeenCalled();
+    await waitFor(() => expect(block).not.toHaveAttribute('data-moving'));
+  },
+};
+
+/** Escape puts a held booking back where it was; a block the screen doesn't name has no grip at all. */
+export const MoveEscape: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { move: { isMovable: (id: string) => id === 'grace', canLand: () => true, onMove: fn() } },
+  render: (args) => (
+    <Stage width="fill">
+      <WeekCalendar {...args} days={days()} blocks={blocks()} scrollToMinute={14 * 60} minuteLabel={clock} />
+    </Stage>
+  ),
+  play: async ({ canvas, args }) => {
+    const block = canvas.getByRole('button', { name: /^Grace Hopper/ });
+    block.focus();
+    await userEvent.keyboard('{Alt>}{ArrowDown}{/Alt}');
+    await userEvent.keyboard('{Escape}');
+    await expect(block).not.toHaveAttribute('data-moving');
+    await expect(canvas.getByRole('status')).toHaveTextContent('Put back');
+    await expect(args.move?.onMove).not.toHaveBeenCalled();
+    await expect(canvas.getByRole('button', { name: /^Team standup/ })).not.toHaveAttribute('data-movable');
+  },
+};
+
+/** Dragging a booking by the pointer: a column to the right and half an hour down, snapped to the grid. */
+export const MoveByDragging: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { move: { isMovable: (id: string) => id === 'grace', canLand: () => true, onMove: fn() } },
+  render: (args) => (
+    <Stage width="fill">
+      <WeekCalendar {...args} days={days()} blocks={blocks()} scrollToMinute={14 * 60} minuteLabel={clock} />
+    </Stage>
+  ),
+  play: async ({ canvas, args, canvasElement }) => {
+    const block = canvas.getByRole('button', { name: /^Grace Hopper/ });
+    const column = canvas.getByRole('group', { name: /^Thursday, 8 October/ });
+    const at = block.getBoundingClientRect();
+    const box = column.getBoundingClientRect();
+    const doc = canvasElement.ownerDocument;
+    const pointer = (type: string, x: number, y: number, target: Element | Document) =>
+      target.dispatchEvent(
+        new PointerEvent(type, {
+          bubbles: true,
+          button: 0,
+          isPrimary: true,
+          pointerId: 7,
+          pointerType: 'mouse',
+          clientX: x,
+          clientY: y,
+        }),
+      );
+    const x = at.left + at.width / 2;
+    const y = at.top + 8;
+    pointer('pointerdown', x, y, block);
+    // Past the first few pixels, then a column across and half an hour (a 48th of the day's height) down.
+    pointer('pointermove', x + 10, y + 10, doc);
+    pointer('pointermove', x + box.width, y + box.height / 48, doc);
+    await waitFor(() => expect(block).toHaveAttribute('data-moving'));
+    pointer('pointerup', x + box.width, y + box.height / 48, doc);
+    await waitFor(() =>
+      expect(args.move?.onMove).toHaveBeenCalledWith(
+        'grace',
+        { dayKey: '2026-10-09', startMinute: 16 * 60, endMinute: 16 * 60 + 30 },
+        GRACE,
+      ),
+    );
+  },
+};
