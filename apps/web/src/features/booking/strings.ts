@@ -250,10 +250,6 @@ export const strings = {
   linkOnlyChanging: 'Old address stops working on save.',
   /** InfoTips on the editor's settings that a new member wouldn't read from the label alone. */
   tips: {
-    schedule: {
-      text: 'Default follows your default schedule.',
-      example: 'Pick Evenings and the page offers only your evening hours.',
-    },
     bufferBefore: {
       text: 'Time kept free before each meeting, so nobody books right up to its start.',
       example: 'With 15 minutes, a 10:00 AM meeting keeps 9:45 to 10:00 clear.',
