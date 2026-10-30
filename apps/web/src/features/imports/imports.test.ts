@@ -2,7 +2,7 @@ import type { AttributeDefinition } from '@crm/data';
 import type { FieldAttribute, TextContext } from '@crm/ui';
 import { describe, expect, it } from 'vitest';
 import { autoMatch, defaultMatch, importChoices, isFree, matchAttributes, samplesFit } from './matching.ts';
-import { columnNames, missingOptions, suggestType } from './missing.ts';
+import { columnNames, missingOptions, suggestAttribute, suggestType } from './missing.ts';
 import { EMPTY_ROW, errorRowsCsv, readRows, relationNames } from './rows.ts';
 
 const id = (n: number) => `0192a000-0000-7000-8000-${String(n).padStart(12, '0')}`;
@@ -162,6 +162,41 @@ describe('readRows', () => {
     expect(result.errors[1]?.problems[0]?.reason).toBe(EMPTY_ROW);
   });
 
+  it('leaves a column’s unreadable cells empty when review says so, so the rest of the row imports', () => {
+    const result = readRows([['Ada', '', 'old', '']], headers, targets, fields, context, 0, {
+      emptyColumns: new Set([2]),
+    });
+    expect(result.errors).toEqual([]);
+    expect(result.ready).toEqual([{ rowNumber: 2, values: { [name.id]: { firstName: 'Ada' } } }]);
+  });
+
+  it('turns a cell’s text first with review’s rewrite, an emptied cell left out', () => {
+    const result = readRows([['Ada', '', 'forty', '']], headers, targets, fields, context, 0, {
+      rewrite: (column, text) => (column === 2 && text === 'forty' ? '40' : text),
+    });
+    expect(result.ready[0]?.values[age.id]).toBe('40');
+  });
+
+  it('reads money written with a symbol: $ € £ ₹ ¥', () => {
+    const money = attribute(7, 'deal_value', 'Value', 'currency');
+    const moneyFields = new Map([[money.id, field(money)]]);
+    const result = readRows(
+      [['$1,200'], ['€900'], ['£5'], ['₹500'], ['¥300']],
+      ['Value'],
+      [{ attributeId: money.id }],
+      moneyFields,
+      context,
+    );
+    expect(result.errors).toEqual([]);
+    expect(result.ready.map((row) => row.values[money.id])).toEqual([
+      { amount: '1200', currency: 'USD' },
+      { amount: '900', currency: 'EUR' },
+      { amount: '5', currency: 'GBP' },
+      { amount: '500', currency: 'INR' },
+      { amount: '300', currency: 'JPY' },
+    ]);
+  });
+
   it('takes a spreadsheet’s formula guard off before reading', () => {
     const result = readRows([["'-5"]], ['Age'], [{ attributeId: age.id }], fields, context);
     expect(result.ready[0]?.values[age.id]).toBe('-5');
@@ -218,6 +253,18 @@ describe('milestone 5: relations, missing options and new attributes', () => {
     expect(suggestType(['2026-10-21', '21/10/2026'])).toBe('date');
     expect(suggestType(['Acme', '12'])).toBe('text');
     expect(suggestType([])).toBe('text');
+  });
+
+  it('suggests a Select of a text column’s values when they repeat and are 20 or fewer', () => {
+    expect(suggestAttribute(['Gold', 'silver', 'gold', '', 'Silver'])).toEqual({
+      type: 'select',
+      options: ['Gold', 'silver'],
+    });
+    // Every value once (names): text, not a select.
+    expect(suggestAttribute(['Ada', 'Bob'])).toEqual({ type: 'text', options: [] });
+    const many = Array.from({ length: 21 }, (_, index) => `Tier ${String(index)}`);
+    expect(suggestAttribute([...many, ...many])).toEqual({ type: 'text', options: [] });
+    expect(suggestAttribute(['1', '2', '1'])).toEqual({ type: 'number', options: [] });
   });
 
   it('collects a relation column’s distinct names across rows', () => {

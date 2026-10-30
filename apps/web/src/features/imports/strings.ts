@@ -10,11 +10,9 @@ const rowsWord = (value: number) => `${n(value)} ${value === 1 ? 'row' : 'rows'}
 export const strings = {
   /** The view's More menu items (AC-1111, AC-1130), and the export's first toast. */
   menuItem: 'Import CSV',
-  exportItem: 'Export CSV',
   /** The view bar's Import / Export menu (it was only under "This view"), and its two items. */
   transferMenu: 'Import / Export',
   importPlural: (pluralName: string) => `Import ${pluralName.toLowerCase()}`,
-  exportView: 'Export this view (CSV)',
   /** The export's one toast: working, then Download, or Try again. */
   exporting: (name: string) => `Exporting ${name}…`,
   exportFailed: (name: string, why: string | undefined) =>
@@ -33,7 +31,7 @@ export const strings = {
   steps: {
     upload: 'Upload',
     columns: 'Match columns',
-    records: 'Match records',
+    review: 'Review values',
     preview: 'Preview',
   },
   back: 'Back',
@@ -46,6 +44,8 @@ export const strings = {
   reading: 'Reading the file',
   refusals: {
     type: 'Choose a .csv, .tsv or .txt file.',
+    /** An Excel file dropped: how to make it a CSV. */
+    excel: 'Excel file? In Excel choose File › Save as › CSV UTF-8, then drop it here.',
     bytes: (bytes: number, limit: number) => `This file is ${mb(bytes)}. Import at most ${mb(limit)} at a time.`,
     rows: (limit: number) => `This file has more than ${n(limit)} rows. Split it and import each part.`,
     columns: (columns: number, limit: number) =>
@@ -86,31 +86,13 @@ export const strings = {
   sampleFile: (pluralName: string) => `${pluralName} sample.csv`,
   // Milestone 5: new attributes (AC-1116), missing options (AC-1122) and relation columns (decision 7)
   newAttribute: 'New attribute',
-  newAttributeHint: (type: string) => `Creates ${type} attribute from this column`,
-  /** The types a new attribute may take from its column (AC-1116), as a type picker names them. */
-  suggestedTypes: {
-    text: 'a text',
-    email: 'an email',
-    url: 'a URL',
-    number: 'a number',
-    checkbox: 'a checkbox',
-    date: 'a date',
-  } as Readonly<Record<string, string>>,
   newAttributeTitle: (column: number) => `Column ${n(column + 1)}`,
   saving: (header: string) => `Saving changes for the column ${header}…`,
-  missingOptions: (count: number, attribute: string) =>
-    `${n(count)} ${count === 1 ? 'value isn’t an option' : 'values aren’t options'} of ${attribute}`,
-  missingOptionsText: (labels: readonly string[]) =>
-    `${labels.slice(0, 5).join(', ')}${labels.length > 5 ? ` and ${n(labels.length - 5)} more` : ''}. Rows holding them show as errors until they are options.`,
-  missingOptionsNoManage: 'Ask an admin to add them in Settings, or those rows show as errors.',
-  createOptions: (count: number) => `Create ${n(count)} ${count === 1 ? 'option' : 'options'}`,
   checkingLinks: (header: string) => `Looking up the names in ${header}…`,
   linksFailed: (header: string) =>
     `Couldn’t look up the names in ${header}. They are still linked when the import runs.`,
   linksAllFound: (header: string, far: string) => `Every name in ${header} matches a ${far.toLowerCase()}.`,
   linksCantMake: (far: string) => `You can’t add ${far.toLowerCase()}, so these links are left out.`,
-  tooManyOptions: (attribute: string) =>
-    `${attribute} holds at most 500 options, so these can’t all be added here. Fix the file, or match the column elsewhere.`,
   linksMissing: (missing: number, total: number, attribute: string) =>
     `${n(missing)} of ${n(total)} ${total === 1 ? 'name' : 'names'} in ${attribute} match no record`,
   linksMissingText: (names: readonly string[]) =>
@@ -120,13 +102,29 @@ export const strings = {
     `${n(count)} ${count === 1 ? 'name matches' : 'names match'} several records, so ${count === 1 ? 'it is' : 'they are'} left out.`,
   createMissing: (count: number, far: string) => `Create the ${n(count)} missing ${far.toLowerCase()}`,
   createMissingHint: 'Each is made once, named as in the file, and goes to the trash if you undo the import.',
-  // Match records (AC-1117, AC-1118)
-  findBy: 'Find existing records by',
-  findByInfo:
-    'A row whose value matches a record updates that record instead of adding a new one. An empty cell never clears a value.',
-  findByExample: 'With Email addresses, a row with ada@example.com updates Ada.',
-  alwaysCreate: 'Always create new records',
+  // Review values (owner walk 30 Oct 2026): only when a value won't read as it is, each with a choice made already.
+  review: {
+    missingLabels: (count: number, attribute: string) =>
+      `${n(count)} ${count === 1 ? 'value isn’t an option' : 'values aren’t options'} of ${attribute}`,
+    labelChoice: (label: string) => `What ${label} becomes`,
+    create: 'Create option',
+    empty: 'Leave empty',
+    mapTo: (label: string) => `Use ${label}`,
+    cantCreate: 'Only admins add options.',
+    tooMany: (attribute: string) => `${attribute} holds at most 500 options.`,
+    cells: (count: number, header: string) =>
+      `${n(count)} ${count === 1 ? 'cell' : 'cells'} in ${header} can’t be read`,
+    cellsText: (samples: readonly string[], reason: string) => `${samples.join(', ')}. ${reason}`,
+    leaveEmpty: (count: number) => `Leave ${count === 1 ? 'this cell' : `these ${n(count)} cells`} empty`,
+    creating: 'Creating options…',
+  },
+  // Match records (AC-1117, AC-1118), on the preview since 30 Oct 2026
+  findBy: 'Match existing records by',
+  alwaysCreate: 'Don’t match, always add',
   noKeyHint: 'Match a column to a unique attribute, such as Email addresses, to update records you have.',
+  /** No match attribute on an object that already has records. */
+  duplicates: 'Rows are always added; importing this file again creates duplicates.',
+  moreSettings: 'More settings',
   onMatch: 'When a row matches a record',
   onMatchChoices: {
     fill: 'Fill empty fields',
@@ -159,13 +157,17 @@ export const strings = {
   errorsFile: (fileName: string) => `${fileName.replace(/\.[^.]+$/u, '')} errors.csv`,
   nothingReady: 'No row is ready. Download the rows with errors, fix them and choose the file again.',
   start: 'Start import',
-  // Running (AC-1123)
-  confirmTitle: (rows: number, pluralName: string) => `Import ${rowsWord(rows)} into ${pluralName}?`,
-  confirmText: (errors: number) =>
-    errors === 0
-      ? 'It runs in the background, and you can undo it for 7 days.'
-      : `${rowsWord(errors)} with errors ${errors === 1 ? 'stays' : 'stay'} out. It runs in the background, and you can undo it for 7 days.`,
-  notYet: 'Not yet',
+  /** Beside Start: what the rows will do (one lookup of the match column), and the undo window. */
+  plan: (created: number, updated: number, skipped: number) =>
+    [
+      created > 0 ? `${n(created)} new` : '',
+      updated > 0 ? `${n(updated)} update` : '',
+      skipped > 0 ? `${n(skipped)} skip` : '',
+    ]
+      .filter((part) => part !== '')
+      .join(' · '),
+  planChecking: 'Checking which rows match records…',
+  undoNote: 'You can undo it for 7 days.',
   sent: (sent: number, total: number) => `Sending rows: ${n(sent)} of ${n(total)}`,
   stopSending: 'Stop',
   stopTitle: 'Stop this import?',
@@ -190,13 +192,9 @@ export const strings = {
   counts: {
     created: 'Created',
     updated: 'Updated',
-    skipped: 'Skipped',
     refused: 'Not imported',
-    errorRows: 'Left out for errors',
     undone: 'Undone',
   },
-  countsInfo:
-    'Skipped rows matched a record and had nothing new for it, or you chose to skip them. Rows with errors were left out in the preview. Rows not imported were turned down while importing, for example by a rule or a value another record holds.',
   finished: 'Import finished',
   failed: 'Import failed',
   cancelled: 'Import cancelled',
@@ -225,8 +223,25 @@ export const strings = {
       .filter((line) => line !== '')
       .join(' '),
   undoCloses: 'Undo closes',
-  undoInfo: 'Created records go to the trash. Changed records go back, unless someone edited them since.',
   keepImport: 'Keep it',
+  /** The upload step's list of the member's last imports into this object. */
+  recent: {
+    title: 'Recent imports',
+    file: 'File',
+    by: 'By',
+    when: 'Started',
+    rows: 'Rows',
+    undo: 'Undo closes',
+    counts: (done: number, refused: number) =>
+      refused === 0 ? `${n(done)} imported` : `${n(done)} imported, ${n(refused)} not`,
+    closed: 'Closed',
+    undone: 'Undone',
+    formerMember: 'Former member',
+  },
+  /** A member who may read the object but not add to it, on the import page. */
+  noAccess: (pluralName: string) => `You can view ${pluralName.toLowerCase()} but not add to them`,
+  noAccessText: 'Ask a workspace admin for edit access to import.',
+  viewPlural: (pluralName: string) => `View ${pluralName.toLowerCase()}`,
   missingTitle: 'Import not found',
   missingText: "That import doesn't exist, or you can't see it.",
   failedTitle: "The import didn't load",

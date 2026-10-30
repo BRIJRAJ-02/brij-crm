@@ -649,7 +649,6 @@ export function ViewScreen(props: ViewScreenProps) {
     canManage,
     copyLinkReason: draft.isDraft && !draft.isLinkable ? strings.linkTooLong : undefined,
     onDuplicate: duplicate,
-    onExport: exportView,
     onDeleting: (isDeleting) => {
       // This tab's own delete: the view going away is no news here.
       leaving.current = isDeleting;
