@@ -31,14 +31,15 @@
      opacity move, so layout never shifts, and the tiles take input from the first frame. */
   .root[data-entering] > * {
     animation: tile-rise var(--duration-modal) var(--ease-out) both;
+    animation-delay: calc(var(--duration-press) * 2);
+  }
+
+  .root[data-entering] > :first-child {
+    animation-delay: initial;
   }
 
   .root[data-entering] > :nth-child(2) {
     animation-delay: var(--duration-press);
-  }
-
-  .root[data-entering] > :nth-child(n + 3) {
-    animation-delay: calc(var(--duration-press) * 2);
   }
 
   @keyframes tile-rise {

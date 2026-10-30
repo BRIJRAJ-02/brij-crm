@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, fn, userEvent } from 'storybook/test';
+import { expect, fn, spyOn, userEvent } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { probeAlignment } from '../../lib/alignment-probe.ts';
@@ -52,9 +52,15 @@ export const Default: Story = {
 export const Copied: Story = {
   parameters: { crm: { screenshot: false } },
   play: async ({ canvas }) => {
+    // The test browsers grant no clipboard permission, so the write is stubbed, as CopyButton's own story does.
+    const write = spyOn(navigator.clipboard, 'writeText').mockResolvedValue(undefined);
+    // The panel eases in, and the test helpers hold that at its first frame (opacity 0) until settled.
+    await settleAnimations();
     await userEvent.click(canvas.getByRole('button', { name: 'Copy link' }));
+    await expect(write).toHaveBeenCalledWith(LINK);
     await expect(await canvas.findByRole('button', { name: 'Copied' })).toBeVisible();
     await expect(canvas.getByRole('status')).toHaveTextContent('Link copied');
+    write.mockRestore();
   },
 };
 
