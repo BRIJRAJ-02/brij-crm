@@ -458,8 +458,8 @@ export function DataGrid<Row>({
     scrollMargin: HEADER,
     scrollPaddingStart: HEADER,
     scrollPaddingEnd: (hasFooter ? ROW : 0) + (hasFloatingBar ? FLOATING_INSET : 0),
-    // The body draws the virtualizer's total less the header (`rowsHeight`), so the inset carries the header too.
-    paddingEnd: hasFloatingBar ? FLOATING_INSET + HEADER : 0,
+    // Below the last row, room for the floating bar (the body draws the virtualizer's total, `rowsHeight`).
+    paddingEnd: hasFloatingBar ? FLOATING_INSET : 0,
     rangeExtractor: (visible) => {
       const drawn = defaultRangeExtractor(visible);
       const extra = kept.filter((row) => !drawn.includes(row));
@@ -477,7 +477,9 @@ export function DataGrid<Row>({
     },
   });
   // The body as drawn, and the scale between the rows' range and the scroller's (1 while the rows fit).
-  const rowsHeight = virtualizer.getTotalSize() - HEADER;
+  // The total leaves out the scroll margin (the header) already: the rows and the inset below them, no more, so a
+  // footer after the body starts under the last row rather than over it.
+  const rowsHeight = virtualizer.getTotalSize();
   const bodyHeight = Math.min(rowsHeight, MAX_BODY);
   const outside = HEADER + (hasFooter ? ROW : 0) - (virtualizer.scrollRect?.height ?? 0);
   const scale = rowsHeight <= MAX_BODY ? 1 : Math.max(1, (rowsHeight + outside) / Math.max(1, bodyHeight + outside));
