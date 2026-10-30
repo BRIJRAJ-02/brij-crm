@@ -621,6 +621,48 @@ export function toEntryView(row: AuditRow, names: AuditNames): AuditEntryView | 
         changes: [],
       };
     }
+    case 'team.changed': {
+      const kind = after.change;
+      if (kind !== 'created' && kind !== 'renamed' && kind !== 'deleted' && kind !== 'members') {
+        return undefined;
+      }
+      // A rename names the team as it was called then; the others carry the name they had (a delete, only in `before`).
+      const team = text(after.name) ?? text(before.name) ?? '';
+      return {
+        ...base,
+        action,
+        target: workspace,
+        params: {
+          change: kind,
+          team: kind === 'renamed' ? (text(before.name) ?? team) : team,
+          joined: Array.isArray(after.joined) ? after.joined.length : 0,
+          left: Array.isArray(after.left) ? after.left.length : 0,
+        },
+        changes: kind === 'renamed' ? change('name', plain(before.name), plain(after.name)) : [],
+      };
+    }
+    case 'access.rule_set': {
+      const level = after.level;
+      const records = after.records;
+      if (level !== 'none' && level !== 'read' && level !== 'write') return undefined;
+      if (records !== 'all' && records !== 'own' && records !== 'team') return undefined;
+      const subject = text(after.subject);
+      const who = subject === 'team' ? (text(after.team) ?? 'a team') : subject === 'guest' ? 'Guests' : 'Members';
+      return {
+        ...base,
+        action,
+        target: workspace,
+        params: {
+          object: text(after.object) ?? 'an object',
+          who,
+          level,
+          records,
+          fields: Object.keys(bag(after.fields)).length,
+          isDefault: after.isDefault === true,
+        },
+        changes: [],
+      };
+    }
     default:
       return undefined;
   }

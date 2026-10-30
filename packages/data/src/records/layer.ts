@@ -2270,7 +2270,7 @@ export function createRecordsLayer({
     const outcome = { recordId: each.recordId, cells: each.cells, failure };
     // Signed out: the layer already said so, and sign in comes next.
     if (failure.code === 'UNAUTHENTICATED') return { recordId: each.recordId, cells: each.cells };
-    if (failure.code === 'RECORD_DELETED' || failure.code === 'NOT_FOUND') {
+    if (failure.code === 'RECORD_DELETED' || failure.code === 'NOT_FOUND' || failure.code === 'RECORD_OUT_OF_SCOPE') {
       dropRecords(workspace, [each.recordId]);
       return { ...outcome, gone: true };
     }
@@ -2309,7 +2309,12 @@ export function createRecordsLayer({
     outcomes: readonly RecordOutcome[],
     retry: (refused: readonly RecordOutcome[]) => void,
   ) {
-    if (outcomes.some((outcome) => outcome.gone === true)) notify({ tone: 'danger', message: RECORD_WORDS.recordGone });
+    // A record the writer's own rule now hides (spec 0032, AC-848): it saved, so it is news, not a failure.
+    const hidden = outcomes.find((outcome) => outcome.failure?.code === 'RECORD_OUT_OF_SCOPE');
+    if (hidden?.failure !== undefined) notify({ tone: 'success', message: hidden.failure.message });
+    if (outcomes.some((outcome) => outcome.gone === true && outcome.failure?.code !== 'RECORD_OUT_OF_SCOPE')) {
+      notify({ tone: 'danger', message: RECORD_WORDS.recordGone });
+    }
     const refusedOnes = outcomes.filter((outcome) => outcome.failure !== undefined && outcome.gone !== true);
     const passing = refusedOnes.filter((outcome) => TEMPORARY_CODES.has(outcome.failure?.code ?? ''));
     const lasting = refusedOnes.filter((outcome) => !TEMPORARY_CODES.has(outcome.failure?.code ?? ''));

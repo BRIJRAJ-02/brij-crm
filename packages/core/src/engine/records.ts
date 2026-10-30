@@ -38,7 +38,7 @@ import {
 import { append, runWrite, type AfterWrite, type EntryRef, type ValueChange, type WriteContext } from './write.ts';
 import { inWorkspace } from '../access/run.ts';
 import { checkRecordRules, ruledAttributes } from '../validation/rules.ts';
-import { fieldReadOnlyReason, filterRecordView, isOpen, type Access } from '../access/policy.ts';
+import { fieldReadOnlyReason, filterRecordView, isOpen, recordRule, type Access } from '../access/policy.ts';
 import {
   attributeLevel,
   attributeVisible,
@@ -422,6 +422,27 @@ export async function initialValues(
 }
 
 /**
+ * The values a new record starts from: under a record rule (spec 0032, AC-848) the member who makes it owns it
+ * unless they chose an owner themselves, so a record made by someone limited to their own records never vanishes
+ * from them the moment it is made. The rule's field must be a live Member field of the object; any other rule is left
+ * as it is. Anyone who isn't a member (a form, a key, the system) gets the values as given.
+ */
+function creatorOwns(
+  scope: EngineScope,
+  objectId: string,
+  attributes: ReadonlyMap<string, AttributeDef>,
+  values: Readonly<Record<string, unknown>>,
+): Readonly<Record<string, unknown>> {
+  const rule = recordRule(scope.access, objectId);
+  const { principal } = scope.access;
+  if (rule === undefined || principal.kind !== 'member') return values;
+  const attribute = attributes.get(rule.attributeId);
+  if (attribute === undefined || attribute.type !== 'actor_reference' || isArchivedNow(attribute)) return values;
+  if (Object.keys(values).some((key) => key.toLowerCase() === attribute.id)) return values;
+  return { ...values, [attribute.id]: { type: 'member', id: principal.memberId } };
+}
+
+/**
  * Creates one record inside a write (shared by single creates and batches).
  * Its record slot is taken last, after the record and its values are
  * written, as every write takes the workspace counter row last: the row is
@@ -438,7 +459,13 @@ export async function insertRecord(context: WriteContext, input: RecordInput, kn
     await liveObject(tx, objectId);
   }
   const attributes = known?.attributes ?? (await loadAttributes(tx, objectId));
-  const parsed = await initialValues(tx, scope, attributes, input.values ?? {}, input.timeZone ?? 'UTC');
+  const parsed = await initialValues(
+    tx,
+    scope,
+    attributes,
+    creatorOwns(scope, objectId, attributes, input.values ?? {}),
+    input.timeZone ?? 'UTC',
+  );
   // Every rule of the object runs on a create (spec 0013, AC-255): its definitions are held still, then checked.
   const hold = holdDefinitions(
     tx,

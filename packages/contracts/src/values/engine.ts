@@ -10,6 +10,8 @@ export const ENGINE_REFUSAL_CODES = [
   'UNIQUE_HAS_DUPLICATES',
   'OPTION_ARCHIVED',
   'RECORD_DELETED',
+  // A write landed but left the record where its writer can no longer see it (spec 0032, AC-848): their record rule.
+  'RECORD_OUT_OF_SCOPE',
   'RELATIONSHIP_TAKEN',
   'ENTRY_EXISTS',
   'ATTRIBUTE_READ_ONLY',

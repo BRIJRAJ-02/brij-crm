@@ -22,7 +22,8 @@ function objectSettingsSearch(search: Record<string, unknown>): ObjectSettingsSe
 // links survive renames: the object from every object the person can see
 // (archived ones too), and on the Attributes tab all its attributes (archived
 // ones too), the usage for the meter and the members for a Member default;
-// on the Configuration tab its live attributes, for its name attribute.
+// on the Configuration tab its live attributes, for its name attribute; on the Access tab (spec 0032) its access
+// and the teams and members (for Preview as).
 // An unknown object or tab shows "not found" inside the frame.
 export const Route = createFileRoute('/w/$slug/settings/objects/$object/$tab')({
   validateSearch: objectSettingsSearch,
@@ -51,7 +52,24 @@ export const Route = createFileRoute('/w/$slug/settings/objects/$object/$tab')({
       params.tab === 'configuration' && !object.isArchived
         ? await context.data.attributes.list(params.slug, object.id).catch(() => 'unavailable' as const)
         : undefined;
-    return { page: { object, objects, tab: params.tab, attributesPage, nameAttributes } };
+    // The Access tab (spec 0032): the object's access and the teams, for those who set access; anyone else who opens
+    // its address gets the no access state, never a refusal page.
+    const accessPage =
+      params.tab === 'access'
+        ? (await context.data.access.mine(params.slug)).permissions.includes('access.manage')
+          ? // A read that fails leaves the tabs and says so inside the tab, with Try again.
+            await Promise.all([
+              context.data.accessRules.get(params.slug, object.id),
+              context.data.teams.list(params.slug),
+              // Preview as is an extra: no members leaves it out, never the tab failed.
+              context.data.members.list(params.slug).catch(() => []),
+            ]).then(
+              ([access, teams, members]) => ({ access, teams, members }),
+              () => 'failed' as const,
+            )
+          : ('no-access' as const)
+        : undefined;
+    return { page: { object, objects, tab: params.tab, attributesPage, nameAttributes, accessPage } };
   },
   pendingComponent: () => (
     <LoadingNow>

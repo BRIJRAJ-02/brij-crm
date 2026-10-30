@@ -15,6 +15,12 @@ export {
   type DoorSession,
   type RuleSource,
 } from './access/door.ts';
+// The production rule source: the stored rules and the member's teams, read with the door's one statement.
+export { storedRules } from './access/stored-rules.ts';
+// An object's access rules (spec 0032): what the Member role and each team may do with its records.
+export { getObjectAccess, ownerAttributeOf, setObjectAccess } from './access/rules.ts';
+export { previewAccess } from './access/preview.ts';
+export type { AccessRuleOptions, ObjectAccessRule } from './access/rules.ts';
 export {
   EVENT_KINDS,
   eventFacts,
@@ -555,6 +561,10 @@ export { listVisibleMembers } from './scheduling/visible.ts';
 export { copyWeek, readTeamWeek, setDayHours, setUsualHours } from './availability/team-week.ts';
 export { createTimeOff, deleteTimeOff, listTimeOff, updateTimeOff } from './scheduling/time-off.ts';
 export { getLimits, limitsAt, setLimits } from './scheduling/limits.ts';
+// Teams (spec 0031, slice 8, AC-824 to AC-827): flat groups of members that access rules name.
+export { changeTeamMembers, createTeam, deleteTeam, listTeams, renameTeam } from './teams/teams.ts';
+export type { TeamWriteOptions } from './teams/teams.ts';
+export { membersAffectedByTeamChange } from './teams/reach.ts';
 export { PREFERENCES_MEMBERS_ONLY, readMyPreferences, updateMyPreferences } from './members/preferences.ts';
 export { outboxEvent, stubEvent, wireEvent } from './realtime/events.ts';
 export {

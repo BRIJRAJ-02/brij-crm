@@ -43,6 +43,7 @@ import {
 import { inWorkspace } from '../access/run.ts';
 import { requirePermission } from '../access/check.ts';
 import { requireFieldManager } from '../lists/manager.ts';
+import { joinNames, objectsRuledBy } from '../access/rule-guard.ts';
 import { attributeVisible } from '../access/visibility.ts';
 import { objectLevel, type Access } from '../access/policy.ts';
 
@@ -1031,6 +1032,15 @@ export async function archiveAttribute(
         .where(eq(objects.primaryAttributeId, attribute.id));
       if (primary !== undefined)
         throw refuse('CONFIG_INVALID', "A record's name attribute can't be archived.", attribute.id);
+      // An Owner field an access rule limits records by stays while it does (spec 0032, AC-849).
+      const ruled = await objectsRuledBy(tx, attribute.id);
+      if (ruled.length > 0) {
+        throw refuse(
+          'IN_USE',
+          `${attribute.title} decides who sees ${joinNames(ruled)}. Change that access first.`,
+          attribute.id,
+        );
+      }
       const far = await farEnd(tx, attribute);
       const ends = far === undefined ? [attribute] : [attribute, far];
       await checkNotAMatch(tx, context.scope.access, ends);

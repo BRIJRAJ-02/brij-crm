@@ -3,6 +3,7 @@
 // rule, every fail closed default included.
 import { PERMISSION_NAMES, ROLE_PERMISSIONS, ROLES, type Role } from '@crm/contracts';
 import { describe, expect, it } from 'vitest';
+import { exportAccessKey } from '../forms/export.ts';
 import {
   can,
   fieldLevel,
@@ -15,6 +16,7 @@ import {
   readOnlyReason,
   recordRule,
   roleAccess,
+  ruleMembers,
   SYSTEM_ACCESS,
   visibleAttributes,
   type AccessRules,
@@ -22,6 +24,7 @@ import {
   type LevelRule,
   type MemberPrincipal,
   type ObjectLevel,
+  type RuleSubject,
 } from './policy.ts';
 
 const OBJECT = '00000000-0000-7000-8000-00000000000a';
@@ -29,6 +32,7 @@ const OTHER = '00000000-0000-7000-8000-00000000000b';
 const FIELD = '00000000-0000-7000-8000-0000000000f1';
 const MEMBER_FIELD = '00000000-0000-7000-8000-0000000000f2';
 const TEAM = '00000000-0000-7000-8000-0000000000c1';
+const OTHER_TEAM = '00000000-0000-7000-8000-0000000000c2';
 
 const member = (role: string, teamIds: readonly string[] = []): MemberPrincipal => ({
   kind: 'member',
@@ -128,29 +132,114 @@ describe('the data grid: object level × field level', () => {
         // Another object and another field are untouched.
         expect(objectLevel(access, OTHER)).toBe('write');
         expect(fieldLevel(access, { id: MEMBER_FIELD, objectId: OTHER })).toBe('write');
-        expect(access.data.key).toEqual(levels.length === 0 ? OPEN_KEY : expect.stringMatching(/^[0-9a-f]{16}$/));
+        // A result that restricts nothing is the open policy, whatever rules named it (they cancel into it).
+        expect(access.data.key).toEqual(
+          object === 'write' && field === 'write' ? OPEN_KEY : expect.stringMatching(/^[0-9a-f]{16}$/),
+        );
       });
     }
   }
 
-  it('applies only rules about the member’s role or teams, and the strictest of several', () => {
+  it('applies only rules about the member’s role or teams, and the most open of several (AC-844)', () => {
     expect(objectLevel(roleAccess(member('admin'), rules([objectRule('none')])), OBJECT)).toBe('write');
     const teamRead: LevelRule = {
       subject: { type: 'team', teamId: TEAM },
       target: { type: 'object', objectId: OBJECT },
       level: 'read',
     };
+    // A team rule only grants: it never takes away what the role leaves, and it is no one else's.
     expect(objectLevel(roleAccess(member('member'), rules([teamRead])), OBJECT)).toBe('write');
-    expect(objectLevel(roleAccess(member('member', [TEAM]), rules([teamRead])), OBJECT)).toBe('read');
-    expect(objectLevel(roleAccess(member('member', [TEAM]), rules([objectRule('write'), teamRead])), OBJECT)).toBe(
+    expect(objectLevel(roleAccess(member('member', [TEAM]), rules([teamRead])), OBJECT)).toBe('write');
+    // The role restricts and the team grants back: the more open wins, whichever way round they are listed.
+    for (const levels of [
+      [objectRule('none'), teamRead],
+      [teamRead, objectRule('none')],
+    ]) {
+      expect(objectLevel(roleAccess(member('member', [TEAM]), rules(levels)), OBJECT)).toBe('read');
+      expect(objectLevel(roleAccess(member('member'), rules(levels)), OBJECT)).toBe('none');
+    }
+    expect(objectLevel(roleAccess(member('member', [TEAM]), rules([objectRule('read'), teamRead])), OBJECT)).toBe(
       'read',
     );
     expect(
-      fieldLevel(roleAccess(member('member'), rules([fieldRule('write'), fieldRule('hidden')])), {
-        id: FIELD,
-        objectId: OBJECT,
-      }),
+      fieldLevel(roleAccess(member('member'), rules([fieldRule('hidden')])), { id: FIELD, objectId: OBJECT }),
     ).toBe('hidden');
+  });
+
+  it('grants a restricted object back to a team: members outside it see nothing, owners and admins everything', () => {
+    const salesWrite: LevelRule = {
+      subject: { type: 'team', teamId: TEAM },
+      target: { type: 'object', objectId: OBJECT },
+      level: 'write',
+    };
+    const stored = rules([objectRule('none'), salesWrite]);
+    expect(objectLevel(roleAccess(member('member', [TEAM]), stored), OBJECT)).toBe('write');
+    expect(objectLevel(roleAccess(member('member', [OTHER_TEAM]), stored), OBJECT)).toBe('none');
+    expect(objectLevel(roleAccess(member('member'), stored), OBJECT)).toBe('none');
+    // Owners and admins keep the open policy, in a team or not: a team only grants, and no stored rule names them.
+    for (const role of ['owner', 'admin']) {
+      for (const teams of [[], [TEAM]]) {
+        const access = roleAccess(member(role, teams), stored);
+        expect(access.data.key).toBe(OPEN_KEY);
+        expect(objectLevel(access, OBJECT)).toBe('write');
+      }
+    }
+  });
+
+  it('puts a member whose teams cancel a rule on the open policy, so they share its audience', () => {
+    const grant: LevelRule = {
+      subject: { type: 'team', teamId: TEAM },
+      target: { type: 'object', objectId: OBJECT },
+      level: 'write',
+    };
+    expect(roleAccess(member('member', [TEAM]), rules([objectRule('read'), grant])).data.key).toBe(OPEN_KEY);
+    expect(roleAccess(member('member'), rules([objectRule('read'), grant])).data.key).not.toBe(OPEN_KEY);
+  });
+
+  it('gives a field its most open level across the views that see the object, never above a view’s object level', () => {
+    const teamField = (level: string): LevelRule => ({
+      subject: { type: 'team', teamId: TEAM },
+      target: { type: 'attribute', objectId: OBJECT, attributeId: FIELD },
+      level,
+    });
+    const teamObject = (level: string): LevelRule => ({
+      subject: { type: 'team', teamId: TEAM },
+      target: { type: 'object', objectId: OBJECT },
+      level,
+    });
+    const field = { id: FIELD, objectId: OBJECT };
+    // Hidden from the role, shown by the team that can edit the object: the team's view shows it.
+    expect(
+      fieldLevel(roleAccess(member('member', [TEAM]), rules([fieldRule('hidden'), teamObject('write')])), field),
+    ).toBe('write');
+    // A team view that can only view caps its field at read.
+    expect(
+      fieldLevel(
+        roleAccess(member('member', [TEAM]), rules([objectRule('none'), teamObject('read'), teamField('write')])),
+        field,
+      ),
+    ).toBe('read');
+    // A team with no access to the object gives its field rule nothing to show.
+    expect(
+      fieldLevel(roleAccess(member('member', [TEAM]), rules([objectRule('none'), teamField('write')])), field),
+    ).toBe('hidden');
+  });
+
+  it('fails closed on a view with a level it does not know, leaving the other views as they are (AC-845)', () => {
+    const teamObject = (level: string): LevelRule => ({
+      subject: { type: 'team', teamId: TEAM },
+      target: { type: 'object', objectId: OBJECT },
+      level,
+    });
+    // The team's stored level is unknown: it grants nothing, and the role's own rule stands.
+    expect(
+      objectLevel(roleAccess(member('member', [TEAM]), rules([objectRule('read'), teamObject('manage')])), OBJECT),
+    ).toBe('read');
+    // The role's is unknown: that view sees nothing, so the team's grant is all there is.
+    expect(
+      objectLevel(roleAccess(member('member', [TEAM]), rules([objectRule('manage'), teamObject('read')])), OBJECT),
+    ).toBe('read');
+    expect(objectLevel(roleAccess(member('member'), rules([objectRule('manage')])), OBJECT)).toBe('none');
   });
 
   it('gives none on an object with no entry when the default is none', () => {
@@ -162,30 +251,104 @@ describe('the data grid: object level × field level', () => {
 });
 
 describe('record rules', () => {
-  const recordRuleRow = (kind: string, subject = { type: 'role', role: 'member' } as const) => ({
+  const recordRuleRow = (kind: string, subject: RuleSubject = { type: 'role', role: 'member' }) => ({
     subject,
     objectId: OBJECT,
     kind,
     attributeId: MEMBER_FIELD,
   });
 
-  it('narrows an object to own or team records, own winning over team', () => {
+  it('narrows an object to own or team records, the broadest scope across the views winning (AC-844)', () => {
     expect(recordRule(roleAccess(member('member'), rules([], [recordRuleRow('own')])), OBJECT)).toEqual({
       kind: 'own',
       attributeId: MEMBER_FIELD,
     });
     expect(recordRule(roleAccess(member('member'), rules([], [recordRuleRow('team')])), OBJECT)?.kind).toBe('team');
+    const team = { type: 'team', teamId: TEAM } as const;
+    // Own for the role, their team's for a team they are in (and grant the object): the team's is broader.
+    const teamWrite: LevelRule = { subject: team, target: { type: 'object', objectId: OBJECT }, level: 'write' };
     expect(
-      recordRule(roleAccess(member('member'), rules([], [recordRuleRow('team'), recordRuleRow('own')])), OBJECT)?.kind,
+      recordRule(
+        roleAccess(member('member', [TEAM]), rules([teamWrite], [recordRuleRow('own'), recordRuleRow('team', team)])),
+        OBJECT,
+      )?.kind,
+    ).toBe('team');
+    // Not in the team, the role's own scope is all there is.
+    expect(
+      recordRule(
+        roleAccess(member('member'), rules([teamWrite], [recordRuleRow('own'), recordRuleRow('team', team)])),
+        OBJECT,
+      )?.kind,
     ).toBe('own');
+    // A team's record rule alone grants nothing: only an object level makes a team a view of the object.
+    expect(
+      recordRule(
+        roleAccess(member('member', [TEAM]), rules([], [recordRuleRow('own'), recordRuleRow('team', team)])),
+        OBJECT,
+      )?.kind,
+    ).toBe('own');
+    // A team that grants the object with no record rule sees every record, which makes the object whole.
+    const grant: LevelRule = { subject: team, target: { type: 'object', objectId: OBJECT }, level: 'write' };
+    expect(
+      recordRule(roleAccess(member('member', [TEAM]), rules([grant], [recordRuleRow('own')])), OBJECT),
+    ).toBeUndefined();
     expect(recordRule(roleAccess(member('admin'), rules([], [recordRuleRow('own')])), OBJECT)).toBeUndefined();
     expect(recordRule(roleAccess(member('member'), rules([], [recordRuleRow('own')])), OTHER)).toBeUndefined();
+  });
+
+  it('never gives the level of one view on the records of another (no escalation across rules)', () => {
+    const team = { type: 'team', teamId: TEAM } as const;
+    const teamRead: LevelRule = { subject: team, target: { type: 'object', objectId: OBJECT }, level: 'read' };
+    // Members edit their own records; Sales views all of them. A Sales member views all: not edits all.
+    const access = roleAccess(member('member', [TEAM]), rules([teamRead], [recordRuleRow('own')]));
+    expect(objectLevel(access, OBJECT)).toBe('read');
+    expect(recordRule(access, OBJECT)).toBeUndefined();
+    // Outside Sales the same rules leave edit on their own records.
+    const outside = roleAccess(member('member'), rules([teamRead], [recordRuleRow('own')]));
+    expect(objectLevel(outside, OBJECT)).toBe('write');
+    expect(recordRule(outside, OBJECT)?.kind).toBe('own');
+    // And a team that edits all while members view their own is edit on all, which is exactly what it grants.
+    const teamWrite: LevelRule = { subject: team, target: { type: 'object', objectId: OBJECT }, level: 'write' };
+    const grants = roleAccess(member('member', [TEAM]), rules([objectRule('read'), teamWrite], [recordRuleRow('own')]));
+    expect(objectLevel(grants, OBJECT)).toBe('write');
+    expect(recordRule(grants, OBJECT)).toBeUndefined();
+  });
+
+  it('matches the members of the member’s teams, themself included, for a team scope', () => {
+    const rule = { kind: 'team', attributeId: MEMBER_FIELD } as const;
+    const principal: MemberPrincipal = { ...member('member', [TEAM]), teamMemberIds: ['m2', 'm3'] };
+    expect(new Set(ruleMembers({ principal }, rule))).toEqual(new Set([principal.memberId, 'm2', 'm3']));
+    // Own is the member alone, and a team scope of someone in no team is their own.
+    expect(ruleMembers({ principal }, { kind: 'own', attributeId: MEMBER_FIELD })).toEqual([principal.memberId]);
+    expect(ruleMembers({ principal: member('member') }, rule)).toEqual([principal.memberId]);
+    expect(ruleMembers({ principal: { kind: 'system' } }, rule)).toEqual([]);
   });
 
   it('denies the whole object for a rule kind it does not know', () => {
     const access = roleAccess(member('member'), rules([], [recordRuleRow('everyone')]));
     expect(objectLevel(access, OBJECT)).toBe('none');
     expect(recordRule(access, OBJECT)).toBeUndefined();
+  });
+});
+
+describe('an export’s access key (AC-847)', () => {
+  it('holds who a team scope reaches, so a file outlives neither a teammate who left nor a rule that no longer reaches them', () => {
+    const principal = (mates: readonly string[]): MemberPrincipal => ({
+      ...member('member', [TEAM]),
+      teamMemberIds: mates,
+    });
+    const keyOf = (mates: readonly string[], kind: string) =>
+      exportAccessKey(
+        roleAccess(
+          principal(mates),
+          rules([], [{ subject: { type: 'role', role: 'member' }, objectId: OBJECT, kind, attributeId: MEMBER_FIELD }]),
+        ),
+      );
+    // A team scope: a teammate leaving changes the key; their order doesn't.
+    expect(keyOf(['m1', 'm2'], 'team')).not.toBe(keyOf(['m1'], 'team'));
+    expect(keyOf(['m2', 'm1'], 'team')).toBe(keyOf(['m1', 'm2'], 'team'));
+    // An own scope reaches no teammate, so who they are is not in the key.
+    expect(keyOf(['m1', 'm2'], 'own')).toBe(keyOf(['m1'], 'own'));
   });
 });
 

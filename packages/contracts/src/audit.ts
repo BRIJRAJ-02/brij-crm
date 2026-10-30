@@ -303,6 +303,33 @@ export const AuditEntryView = z.discriminatedUnion('action', [
   entry(['limits.changed'], member, NoParams),
   /** Someone asked a member to reconnect their calendar (spec 0037, AC-1309): the target is that member. */
   entry(['calendar.reconnect_asked'], member, NoParams),
+  /** A team made, renamed, filled or deleted (spec 0031): its name then, and how many people joined and left. */
+  entry(
+    ['team.changed'],
+    workspace,
+    z.strictObject({
+      change: z.enum(['created', 'renamed', 'deleted', 'members']),
+      team: z.string(),
+      joined: z.number().int().min(0),
+      left: z.number().int().min(0),
+    }),
+  ),
+  /**
+   * One subject's access to an object set (spec 0032, AC-852): the object's name and who it was for then ("Members",
+   * a team's name), what they may do, which records, and how many field rules they have.
+   */
+  entry(
+    ['access.rule_set'],
+    workspace,
+    z.strictObject({
+      object: z.string(),
+      who: z.string(),
+      level: z.enum(['none', 'read', 'write']),
+      records: z.enum(['all', 'own', 'team']),
+      fields: z.number().int().min(0),
+      isDefault: z.boolean(),
+    }),
+  ),
   /** A booking made, moved or cancelled by someone other than its host (spec 0037, AC-1263). */
   entry(
     ['booking.changed_for'],

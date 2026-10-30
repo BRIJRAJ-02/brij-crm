@@ -19,7 +19,7 @@ export interface TestScopeInput {
   /** Who acts: a member (with `role`, an owner by default), an API key (with `scopes`), or the system. */
   readonly actor: Actor;
   readonly role?: Role;
-  /** Rules injected as #24 will store them (none by default). */
+  /** Rules injected as the stored ones read (none by default), with the member's teams when they are in any. */
   readonly rules?: AccessRules;
   /** An API key's scopes: every key scope, with write on every object, by default. */
   readonly scopes?: readonly string[];
@@ -39,7 +39,8 @@ function accessOf(input: TestScopeInput): Access {
         kind: 'member',
         memberId: actor.id,
         role: input.role ?? 'owner',
-        teamIds: [],
+        teamIds: input.rules?.teamIds ?? [],
+        ...(input.rules?.teamMemberIds === undefined ? {} : { teamMemberIds: input.rules.teamMemberIds }),
         ...(input.userId === undefined ? {} : { userId: input.userId }),
       },
       input.rules ?? NO_RULES,

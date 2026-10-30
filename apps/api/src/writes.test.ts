@@ -45,6 +45,12 @@ const READS: ReadonlySet<string> = new Set([
   // What an attribute's change would touch, read before the change (the flow pass).
   'attributes.impact',
   'members.list',
+  // Teams (spec 0031, slice 8): the list every member reads.
+  'teams.list',
+  // An object's access, as its Access tab reads it (spec 0032).
+  'accessRules.get',
+  // Preview as (spec 0032, AC-858): reads as someone else through the policy; its one write is an audit row, no outbox.
+  'accessRules.preview',
   // Invitations (spec 0031): the open list, and the invitation page's look (no session).
   'invitations.list',
   'invitations.peek',
@@ -2443,6 +2449,12 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'entries.setValues': 5,
   'entries.remove': 4,
   'entries.restore': 5,
+  // A team made first, then the write (spec 0031, slice 8).
+  // A teammate invited and accepted first, then the write.
+  'accessRules.set': 3,
+  'teams.rename': 2,
+  'teams.delete': 2,
+  'teams.changeMembers': 2,
   // Imports (spec 0040): the import made (and its rows staged) first, then the write.
   'imports.stage': 2,
   'imports.start': 3,
@@ -2559,6 +2571,55 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'submissions.retry': 3,
   'submissions.delete': 3,
 };
+
+// Teams (spec 0031, slice 8): every team write stores a `members` row (everyone's team list reads again), naming the
+// people it changed and the writer; a change of people also stores the `access` row (their access, AC-825).
+Object.assign(WRITES, {
+  'teams.create': async (m: Member, mutationId: string) => {
+    const me = (await m.client.access.mine({ workspace: m.slug })).memberId;
+    await m.client.teams.create({ workspace: m.slug, name: 'Sales', mutationId });
+    return [{ kind: 'members', item_ids: [me], mutation_id: mutationId }];
+  },
+  'teams.rename': async (m: Member, mutationId: string) => {
+    const me = (await m.client.access.mine({ workspace: m.slug })).memberId;
+    const team = await m.client.teams.create({ workspace: m.slug, name: 'Sales', mutationId: newId() });
+    await m.client.teams.rename({ workspace: m.slug, teamId: team.id, name: 'Revenue', mutationId });
+    return [{ kind: 'members' }, { kind: 'members', item_ids: [me], mutation_id: mutationId }];
+  },
+  'teams.delete': async (m: Member, mutationId: string) => {
+    const me = (await m.client.access.mine({ workspace: m.slug })).memberId;
+    const team = await m.client.teams.create({ workspace: m.slug, name: 'Sales', mutationId: newId() });
+    await m.client.teams.delete({ workspace: m.slug, teamId: team.id, mutationId });
+    return [{ kind: 'members' }, { kind: 'members', item_ids: [me], mutation_id: mutationId }];
+  },
+  'teams.changeMembers': async (m: Member, mutationId: string) => {
+    const me = (await m.client.access.mine({ workspace: m.slug })).memberId;
+    const team = await m.client.teams.create({ workspace: m.slug, name: 'Sales', mutationId: newId() });
+    await m.client.teams.changeMembers({ workspace: m.slug, teamId: team.id, add: [me], mutationId });
+    return [
+      { kind: 'members' },
+      { kind: 'members', item_ids: [me], mutation_id: mutationId },
+      { kind: 'access', item_ids: [me], mutation_id: mutationId },
+    ];
+  },
+});
+
+// Access rules (spec 0032, AC-852): a rule change stores one `access` row naming the members the subject covers (a
+// team with no one in it covers nobody, so a team's first rule stores none).
+Object.assign(WRITES, {
+  'accessRules.set': async (m: Member, mutationId: string) => {
+    const mate = await teammate(m);
+    // The Member role stops seeing People: its one member (the teammate) reads their access again.
+    await m.client.accessRules.set({
+      workspace: m.slug,
+      objectId: m.people.id,
+      subject: { type: 'role', role: 'member' },
+      rule: { level: 'none', records: 'all' },
+      mutationId,
+    });
+    return [{ kind: 'members' }, { kind: 'access', item_ids: [mate.memberId], mutation_id: mutationId }];
+  },
+});
 
 describe('the one write path', () => {
   it('knows every procedure in the contract as a read or a write', () => {

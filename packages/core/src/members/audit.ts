@@ -19,7 +19,16 @@ export interface AuditSource {
 export interface AuditEntry {
   readonly action: AuditAction;
   readonly targetType:
-    'member' | 'invitation' | 'workspace' | 'join_request' | 'rotation' | 'booking' | 'form' | 'booking_page';
+    | 'member'
+    | 'invitation'
+    | 'workspace'
+    | 'join_request'
+    | 'rotation'
+    | 'booking'
+    | 'form'
+    | 'booking_page'
+    | 'team'
+    | 'object';
   readonly targetId: string;
   /** Changed fields only, never a token, code or secret. */
   readonly before?: Readonly<Record<string, unknown>>;

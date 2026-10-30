@@ -1,15 +1,26 @@
 // Brief
-// Purpose: one object's settings, standard or custom alike: its Attributes and Configuration tabs.
+// Purpose: one object's settings, standard or custom alike: its Attributes, Configuration and Access tabs.
 // Main task: add, edit, move, archive and restore its attributes, and rename, restyle, archive or restore it; Open
 // <Plural> goes to its records.
-// Leaves out: types with setup and options (spec 0012, milestone 3), and the schema map (#56).
-import { isDataError, type AttributeDefinition, type MemberSummary, type ObjectSummary, type Usage } from '@crm/data';
+// Leaves out: types with setup and options (spec 0012, milestone 3), and the schema map (#56). The Access tab (spec 0032)
+// is for `access.manage`: anyone else who opens its address sees a no access state, never a broken page.
+import {
+  isDataError,
+  type AttributeDefinition,
+  type MemberSummary,
+  type MemberView,
+  type ObjectAccess,
+  type ObjectSummary,
+  type TeamView,
+  type Usage,
+} from '@crm/data';
 import {
   Badge,
   Button,
   ButtonLink,
   Callout,
   Card,
+  EmptyState,
   SettingsSection,
   SettingsStack,
   sharedStrings,
@@ -20,17 +31,19 @@ import {
   TabPanel,
   Tabs,
 } from '@crm/ui';
-import { useNavigate, useParams, useRouteContext } from '@tanstack/react-router';
+import { useNavigate, useParams, useRouteContext, useRouter } from '@tanstack/react-router';
 import { useState } from 'react';
 import { objectHref } from '../workspace/objects.ts';
 import { useCan } from '../workspace/WorkspacePage.tsx';
 import { strings as attributeStrings } from './attribute-strings.ts';
+import { AccessTab, AccessTabPending } from './AccessTab.tsx';
 import { useAtLimit } from './AtLimit.tsx';
 import { AttributesTab } from './AttributesTab.tsx';
 import { ConfigurationTab, useObjectConfiguration } from './ConfigurationTab.tsx';
 import { isObjectTab, objectSettingsHref, type ObjectTab } from './nav.ts';
 import { settingsCrumbs, SettingsPage } from './SettingsPage.tsx';
 import { strings } from './strings.ts';
+import { strings as teamStrings } from './teams-strings.ts';
 
 /** What the Attributes tab loaded: every attribute (archived ones too), the usage and the members. */
 export interface AttributesPage {
@@ -38,6 +51,13 @@ export interface AttributesPage {
   /** The usage, or undefined when it could not be read (the meter stays a skeleton). */
   readonly usage: Usage | undefined;
   readonly members: readonly MemberSummary[];
+}
+
+/** What the Access tab loaded: the object's access, the workspace's teams and its members (for Preview as). */
+export interface AccessPage {
+  readonly access: ObjectAccess;
+  readonly teams: readonly TeamView[];
+  readonly members: readonly MemberView[];
 }
 
 /** Props for an object's settings: what its route loaded through the data layer. */
@@ -54,6 +74,11 @@ export interface ObjectSettingsScreenProps {
    * undefined on the other tab and while the object is archived.
    */
   readonly nameAttributes: readonly AttributeDefinition[] | 'unavailable' | undefined;
+  /**
+   * The Access tab's reads: `no-access` for someone without `access.manage`, `failed` when they could not be read;
+   * undefined on the other tabs.
+   */
+  readonly accessPage: AccessPage | 'no-access' | 'failed' | undefined;
   /** `?attribute=<id>` (AC-231). */
   readonly selectedAttribute: string | undefined;
   readonly onSelectAttribute: (attributeId: string | undefined, replace?: boolean) => void;
@@ -77,12 +102,16 @@ export function ObjectSettingsScreen({
   tab,
   attributesPage,
   nameAttributes,
+  accessPage,
   selectedAttribute,
   onSelectAttribute,
 }: ObjectSettingsScreenProps) {
   const navigate = useNavigate();
+  const router = useRouter();
   const { data, toasts } = useRouteContext({ from: '__root__' });
   const canManage = useCan('schema.manage');
+  // The Access tab is for those who set access; an address that opens it for anyone else still shows it, saying so.
+  const canAccess = useCan('access.manage');
   const [isRestoring, setRestoring] = useState(false);
   /** The archived note's Restore: the same call as the Archived section's and the Configuration tab's. */
   const restore = () => {
@@ -153,6 +182,7 @@ export function ObjectSettingsScreen({
         tabs={[
           { id: 'attributes', label: strings.attributesTab },
           { id: 'configuration', label: strings.configurationTab },
+          ...(canAccess || tab === 'access' ? [{ id: 'access', label: teamStrings.accessTab }] : []),
         ]}
       >
         <TabPanel id="attributes">
@@ -193,6 +223,36 @@ export function ObjectSettingsScreen({
             <ConfigurationTab slug={slug} object={object} configuration={configuration} attributes={nameAttributes} />
           )}
         </TabPanel>
+        <TabPanel id="access">
+          {tab === 'access' &&
+            (accessPage === undefined ? (
+              <AccessTabPending />
+            ) : accessPage === 'no-access' ? (
+              <EmptyState icon="lock" title={teamStrings.noAccessTitle}>
+                {teamStrings.noAccessText}
+              </EmptyState>
+            ) : accessPage === 'failed' ? (
+              <EmptyState
+                tone="error"
+                title={teamStrings.accessFailed}
+                onRetry={() => {
+                  void router.invalidate();
+                }}
+              />
+            ) : (
+              <AccessTab
+                // Another object starts from its own rows.
+                key={object.id}
+                data={data}
+                toasts={toasts}
+                slug={slug}
+                object={object}
+                access={accessPage.access}
+                teams={accessPage.teams}
+                members={accessPage.members}
+              />
+            ))}
+        </TabPanel>
       </Tabs>
     </SettingsPage>
   );
@@ -215,6 +275,7 @@ export function ObjectSettingsPending() {
   const { slug = '', tab = 'attributes' } = useParams({ strict: false });
   // The meter's place only for those who get a meter, so nothing moves when the page arrives.
   const canManage = useCan('schema.manage');
+  const canAccess = useCan('access.manage');
   return (
     <SettingsPage title={strings.loading} crumbs={settingsCrumbs(slug)} hasTabs isLoading hasTile>
       <Tabs
@@ -224,6 +285,7 @@ export function ObjectSettingsPending() {
         tabs={[
           { id: 'attributes', label: strings.attributesTab, isDisabled: true },
           { id: 'configuration', label: strings.configurationTab, isDisabled: true },
+          ...(canAccess || tab === 'access' ? [{ id: 'access', label: teamStrings.accessTab, isDisabled: true }] : []),
         ]}
       >
         <TabPanel id="attributes">
@@ -270,6 +332,9 @@ export function ObjectSettingsPending() {
               </Card>
             </SettingsSection>
           </SettingsStack>
+        </TabPanel>
+        <TabPanel id="access">
+          <AccessTabPending />
         </TabPanel>
       </Tabs>
     </SettingsPage>

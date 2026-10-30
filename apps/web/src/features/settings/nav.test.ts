@@ -20,7 +20,7 @@ describe('settingsNav', () => {
     expect(groups.map((group) => group.label)).toEqual(['Account', 'Workspace', 'Super admin']);
     expect(groups.map((group) => group.entries.map((entry) => entry.label))).toEqual([
       ['Profile', 'Preferences', 'Sign in and devices', 'Notifications', 'Scheduling access'],
-      ['General', 'Members', 'Security', 'Objects', 'Lists', 'Background jobs', 'History', 'Trash'],
+      ['General', 'Members', 'Teams', 'Security', 'Objects', 'Lists', 'Background jobs', 'History', 'Trash'],
       ['Overview', 'Users', 'Booking pages', 'Website'],
     ]);
   });
@@ -35,6 +35,7 @@ describe('settingsNav', () => {
       general: '/w/acme/settings/general',
       security: '/w/acme/settings/account/sign-in',
       members: '/w/acme/settings/members',
+      teams: '/w/acme/settings/teams',
       'workspace-security': '/w/acme/settings/security',
       objects: '/w/acme/settings/objects',
       lists: '/w/acme/settings/lists',
@@ -84,7 +85,7 @@ describe('visibleSettingsNav', () => {
     // Calendars and Round robin are tabs of Bookings (25 October 2026), so neither is in here to lose.
     expect(visibleSettingsNav(settingsNav('acme'), []).map((group) => group.entries.map((entry) => entry.id))).toEqual([
       ['profile', 'preferences', 'security', 'notifications', 'scheduling-access'],
-      ['general', 'members', 'objects', 'lists', 'jobs', 'history', 'trash'],
+      ['general', 'members', 'teams', 'objects', 'lists', 'jobs', 'history', 'trash'],
     ]);
   });
 
@@ -144,6 +145,7 @@ describe('settingsPageOf', () => {
     expect(settingsPageOf('/w/acme/settings/history/changes')).toBe('history');
     expect(settingsPageOf('/w/acme/settings/history/sign-ins')).toBe('history');
     expect(settingsPageOf('/w/acme/settings/members')).toBe('members');
+    expect(settingsPageOf('/w/acme/settings/teams')).toBe('teams');
     expect(settingsPageOf('/w/acme/settings/admin')).toBe('admin-overview');
     expect(settingsPageOf('/w/acme/settings/admin/users/0199a6f2-0000-7000-8000-000000000001')).toBe('admin-users');
     expect(settingsPageOf('/w/acme/settings/admin/booking-pages')).toBe('admin-pages');

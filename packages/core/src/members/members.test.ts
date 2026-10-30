@@ -164,6 +164,8 @@ describe('a member', () => {
       role: 'member',
       roleLabel: 'Member',
       permissions: ['lists.manage', 'records.export', 'booking.manage', 'availability.own'],
+      // Spec 0031, AC-825: the teams they are in, none yet.
+      teamIds: [],
       // Spec 0037, AC-1261: a member reaches nobody's scheduling but their own; an owner everyone's.
       scheduling: { seesOthers: false, managesOthers: false, seesEveryone: false, managesEveryone: false },
     });

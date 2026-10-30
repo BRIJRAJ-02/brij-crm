@@ -13,6 +13,7 @@ import { strings as jobs } from './jobs-strings.ts';
 import { strings as members } from './members-strings.ts';
 import { strings as notifications } from './notifications-strings.ts';
 import { strings as schedulingAccess } from './scheduling-access-nav-strings.ts';
+import { strings as teams } from './teams-nav-strings.ts';
 import { strings as security } from './security-strings.ts';
 import { strings as workspaceSecurity } from './workspace-security-strings.ts';
 import { strings } from './strings.ts';
@@ -55,6 +56,9 @@ export const generalSettingsHref = (slug: string) => `/w/${slug}/settings/genera
 /** Settings › Workspace › Members (spec 0031): who is in the workspace, roles and invitations. */
 export const membersSettingsHref = (slug: string) => `/w/${slug}/settings/members`;
 
+/** Settings › Workspace › Teams (spec 0031, slice 8): the groups of people that access rules name. */
+export const teamsSettingsHref = (slug: string) => `/w/${slug}/settings/teams`;
+
 /** Settings › Account › Notifications (spec 0038): the member's email for this workspace. */
 export const notificationSettingsHref = (slug: string) => `/w/${slug}/settings/account/notifications`;
 
@@ -73,6 +77,7 @@ export type SettingsPageId =
   | 'scheduling-access'
   | 'general'
   | 'members'
+  | 'teams'
   | 'workspace-security'
   | 'objects'
   | 'lists'
@@ -174,6 +179,8 @@ export function settingsNav(slug: string): readonly SettingsNavGroup[] {
         // call.
         { id: 'general', label: workspace.generalTitle, href: generalSettingsHref(slug), icon: 'building' },
         { id: 'members', label: members.title, href: membersSettingsHref(slug), icon: 'users' },
+        // Teams (spec 0031, slice 8, AC-832): every member reads them; changing them is for `teams.manage`.
+        { id: 'teams', label: teams.title, href: teamsSettingsHref(slug), icon: 'users-round' },
         // The workspace's sign in rules (spec 0033): owners only, so nobody else sees the entry at all.
         {
           id: 'workspace-security',
@@ -261,6 +268,7 @@ export function settingsPageOf(pathname: string): SettingsPageId | undefined {
   if (rest === 'jobs') return 'jobs';
   if (rest === 'history' || rest === 'history/changes' || rest === 'history/sign-ins') return 'history';
   if (rest === 'members') return 'members';
+  if (rest === 'teams') return 'teams';
   if (rest === 'security') return 'workspace-security';
   if (rest === 'trash') return 'trash';
   if (rest === 'admin') return 'admin-overview';
