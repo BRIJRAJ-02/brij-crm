@@ -42,17 +42,23 @@ async function openSwitcher(page: Page, current: string) {
   return menu;
 }
 
-/** Creates a view from the switcher's Create view, named `name`, private or for everyone. */
+/**
+ * Creates a view from the switcher's Create view, named `name`: it is private, and starts from the view open; for
+ * everyone it is shared afterwards from its own menu (30 October 2026: the dialog asks only Name and Type).
+ */
 async function createView(page: Page, current: string, name: string, everyone: boolean): Promise<void> {
   const menu = await openSwitcher(page, current);
   await menu.getByRole('menuitemradio', { name: 'Create view' }).click();
   const dialog = page.getByRole('dialog', { name: 'Create view' });
   await expect(dialog).toBeVisible();
   await dialog.getByLabel('Name').fill(name);
-  if (everyone) await dialog.getByText('Everyone in the workspace', { exact: true }).click();
   await dialog.getByRole('button', { name: 'Create view' }).click();
   await expect(dialog).toBeHidden();
   await expect(viewBarSwitcher(page, name)).toBeVisible();
+  if (!everyone) return;
+  const own = await openSwitcher(page, name);
+  await own.getByRole('menuitem', { name: 'Share with everyone' }).click();
+  await expect(page.getByText(`${name} is shared with everyone.`)).toBeVisible();
 }
 
 /** Flips one column's switch in View settings, then closes it. */
@@ -161,8 +167,7 @@ test.describe('saved views: many views and their layout', () => {
     await ada.keyboard.press('Escape');
     await expect(sorts).toBeHidden();
     await expect(ada).toHaveURL(/\?draft=/);
-    await ada.getByRole('button', { name: 'More ways to save' }).click();
-    await ada.getByRole('menuitem', { name: 'Save as new view' }).click();
+    await ada.getByRole('toolbar', { name: 'View options' }).getByRole('button', { name: 'Save as new view' }).click();
     const saveAs = ada.getByRole('dialog', { name: 'Save as new view' });
     await saveAs.getByLabel('Name').fill('Oldest first');
     await saveAs.getByRole('button', { name: 'Save as new view' }).click();

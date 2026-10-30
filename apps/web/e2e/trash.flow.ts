@@ -1,5 +1,5 @@
 // Delete, undo and the trash (spec 0022, milestone 1), end to end with two
-// browsers: an owner ticks two people and deletes them after the confirm; a
+// browsers: an owner ticks two people and deletes them at once (Undo, no confirm); a
 // second browser, the same person on the same table, sees them leave live;
 // the toast's Undo brings them back on both. One person deleted alone goes at
 // once; the Trash, in Settings (A120) and at its old address with the
@@ -30,7 +30,7 @@ const bar = (page: Page) => page.getByRole('toolbar', { name: 'Selected records'
 test.describe('trash', () => {
   test.skip(({ viewport }) => (viewport?.width ?? 0) < 1000, 'The table flow runs at desktop width.');
 
-  test('deletes with a confirm, undoes live in a second browser, and restores from the trash', async ({
+  test('deletes at once, undoes live in a second browser, and restores from the trash', async ({
     browser,
     page,
   }, testInfo) => {
@@ -53,24 +53,14 @@ test.describe('trash', () => {
     await signInAgain(reader, email, `/w/${slug}/objects/people`, [code]);
     await expect(table(reader).getByRole('rowheader', { name: /Bea Stone/ })).toBeVisible();
 
-    // Two ticked: the bar counts them, and Delete asks first (AC-522, AC-525).
+    // Two ticked: the bar counts them, and Delete goes at once, Undo in its toast (30 October 2026: no confirm).
     await tick(page, 'Ada Byron').click();
     await tick(page, 'Bea Stone').click();
     // The count, of the bar's two live regions (the other says the bulk steps as they run).
     await expect(bar(page).getByRole('status').filter({ hasText: 'selected' })).toHaveText('2 selected');
     await checkScreen(page, 'trash-bar');
     await bar(page).getByRole('button', { name: 'Delete' }).click();
-    const confirm = page
-      .getByRole('alertdialog', { name: 'Delete 2 people?' })
-      .or(page.getByRole('dialog', { name: 'Delete 2 people?' }));
-    await expect(confirm.getByText('They stay in the trash for 30 days.')).toBeVisible();
-    await checkScreen(page, 'trash-confirm');
-    // Cancel (Esc) hands focus back to Delete in the bar (AC-542); then the confirm again, and Delete.
-    await page.keyboard.press('Escape');
-    await expect(confirm).toHaveCount(0);
-    await expect(bar(page).getByRole('button', { name: 'Delete' })).toBeFocused();
-    await bar(page).getByRole('button', { name: 'Delete' }).click();
-    await confirm.getByRole('button', { name: 'Delete 2 people' }).click();
+    await expect(page.getByRole('alertdialog')).toHaveCount(0);
     await expect(page.getByText('Deleted 2 people.')).toBeVisible();
     await expect(table(page).getByRole('rowheader', { name: /Ada Byron/ })).toHaveCount(0);
     await expect(bar(page)).toHaveCount(0);

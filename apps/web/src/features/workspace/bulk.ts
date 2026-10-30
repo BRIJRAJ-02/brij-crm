@@ -167,11 +167,6 @@ export function deleteOffer(selected: number): 'delete' | 'too-many' {
   return selected > BULK_INLINE_MAX ? 'too-many' : 'delete';
 }
 
-/** Whether deleting `selected` records asks first (AC-524, AC-525): one goes at once, since Undo is a click away. */
-export function needsConfirm(selected: number): boolean {
-  return selected > 1;
-}
-
 /**
  * The toast after a delete lands (AC-524, AC-525): "Deleted Ada Lovelace." or
  * "Deleted 48 people.", with Undo; how many were refused when some were; the

@@ -1046,17 +1046,14 @@ export function ViewScreen(props: ViewScreenProps) {
                     icon="list-filter"
                     title={strings.noMatchesTitle(object.pluralName)}
                     actions={
-                      draft.isDraft ? (
-                        <Button onPress={discard}>{strings.discard}</Button>
-                      ) : (
-                        <Button
-                          onPress={() => {
-                            setFilterOn({ attributeId: '' });
-                          }}
-                        >
-                          {strings.editFilters}
-                        </Button>
-                      )
+                      // One way out: the filters themselves (the Toolbar's Discard stays for a draft).
+                      <Button
+                        onPress={() => {
+                          setFilterOn({ attributeId: '' });
+                        }}
+                      >
+                        {strings.editFilters}
+                      </Button>
                     }
                   >
                     {strings.noMatchesText}

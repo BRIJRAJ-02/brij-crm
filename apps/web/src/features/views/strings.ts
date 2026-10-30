@@ -23,11 +23,10 @@ export const strings = {
   draftDropped: 'Some filters in this link use fields that aren’t available to you, so they were left out.',
   /** A view filtering or sorting on archived fields (spec 0020, AC-480), naming them. */
   archivedInView: (titles: readonly string[]) => {
-    const one = titles.length === 1;
     const named = new Intl.ListFormat('en', { style: 'long', type: 'conjunction' }).format(titles);
-    return one
-      ? `This view uses ${named}, which is archived. It’s left out until the attribute is restored. Saving a new filter removes it for good.`
-      : `This view uses ${named}, which are archived. They’re left out until the attributes are restored. Saving a new filter removes them for good.`;
+    return titles.length === 1
+      ? `This view uses ${named}, which is archived, so it’s left out.`
+      : `This view uses ${named}, which are archived, so they’re left out.`;
   },
   dismiss: 'Dismiss',
   /** A filter that matches nothing (AC-486). */
@@ -58,7 +57,6 @@ export const strings = {
   saveFailed: 'Couldn’t save this view. Try again in a moment.',
   /** Milestone 2: making and managing views. */
   saveAsNew: 'Save as new view',
-  saveMore: 'More ways to save',
   createViewTitle: 'Create view',
   saveAsNewTitle: 'Save as new view',
   createView: 'Create view',
@@ -70,13 +68,6 @@ export const strings = {
   viewType: 'Type',
   typeTable: 'Table',
   typeBoard: 'Board',
-  whoCanSee: 'Who can see it',
-  /** Who can see it's InfoTip. */
-  whoCanSeeHelp:
-    'Only me keeps the view in your own list. Everyone puts it in every member’s list, and anyone can change it unless an admin locks it.',
-  onlyMe: 'Only me',
-  everyone: 'Everyone in the workspace',
-  startFromView: 'Start from this view’s columns and filters',
   createFailed: 'Couldn’t create this view. Try again in a moment.',
   created: (name: string) => `Created ${name}.`,
   privateSection: 'Private',
@@ -93,7 +84,7 @@ export const strings = {
   rename: 'Rename',
   renameTitle: 'Rename view',
   duplicate: 'Duplicate',
-  duplicated: (name: string) => `Duplicated as ${name}, only for you.`,
+  duplicated: (name: string) => `Duplicated as ${name}.`,
   copyLink: 'Copy link',
   linkCopied: 'Link copied',
   copyFailed: 'Couldn’t copy the link. Copy it from the address bar.',
@@ -114,8 +105,7 @@ export const strings = {
   unlocked: (name: string) => `${name} is unlocked.`,
   setDefault: 'Set as default',
   // Late trap #27: a member's last opened view still wins for them (AC-462), so the toast says who lands on it.
-  isDefaultNow: (name: string, plural: string) =>
-    `${name} is the default view for ${plural}. Anyone opening ${plural} for the first time lands here.`,
+  isDefaultNow: (name: string) => `${name} is the default view.`,
   deleteView: 'Delete view',
   deleting: 'Deleting',
   deleteSharedTitle: (name: string) => `Delete ${name} for everyone?`,

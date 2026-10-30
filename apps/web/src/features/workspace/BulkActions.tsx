@@ -29,7 +29,6 @@ import {
   bulkStrings,
   deleteToast,
   bulkEditToast,
-  needsConfirm,
   recordsWord,
 } from './bulk.ts';
 import { runUndo } from './useUndoShortcut.ts';
@@ -230,10 +229,6 @@ export function useBulkActions({
 }: BulkActionsOptions): BulkActions {
   const { data, toasts } = useRouteContext({ from: '__root__' });
   const { selection, asOf } = ticked;
-  // An inline delete of several waiting for its confirm (AC-525), and the last one asked, so it closes with its words.
-  const [asking, setAsking] = useState<readonly string[] | undefined>(undefined);
-  const [lastAsked, setLastAsked] = useState<readonly string[]>([]);
-  if (asking !== undefined && asking !== lastAsked) setLastAsked(asking);
   const count = selectedCount(selection, total);
   // The ticked ids, copied once per selection, not on every render (a selection holds up to 10,000).
   const ids = useMemo(() => (selection.kind === 'some' ? [...selection.ids] : []), [selection]);
@@ -397,8 +392,8 @@ export function useBulkActions({
             });
             return;
           }
-          if (needsConfirm(ids.length)) setAsking(ids);
-          else remove(ids);
+          // Up to 500 go at once, with Undo in the toast: an undoable delete never asks (30 October 2026).
+          remove(ids);
         }}
       >
         {bulkStrings.delete}
@@ -445,7 +440,6 @@ export function useBulkActions({
   const isEditJob = bulkJob.action === 'edit';
   const changed = jobChange === undefined ? undefined : definitionOf(jobChange.attributeId);
   const editShown = editing ?? lastEdited;
-  const deleteWords = recordsWord(lastAsked.length, object);
   const dialog = (
     <>
       <BulkEditDialog
@@ -468,35 +462,6 @@ export function useBulkActions({
             : editAsJob(choice)
         }
       />
-      {/* An inline delete of 2 to 500 asks first (AC-525). */}
-      <Modal
-        title={bulkStrings.confirmTitle(deleteWords)}
-        tone="danger"
-        isOpen={asking !== undefined}
-        onOpenChange={(isOpen) => {
-          if (!isOpen) setAsking(undefined);
-        }}
-        actions={
-          <>
-            <Button slot="close" kbd="ESC">
-              {bulkStrings.cancel}
-            </Button>
-            <Button
-              variant="danger-solid"
-              icon="trash"
-              onPress={() => {
-                const confirmed = asking;
-                setAsking(undefined);
-                if (confirmed !== undefined) remove(confirmed);
-              }}
-            >
-              {bulkStrings.confirmAction(deleteWords)}
-            </Button>
-          </>
-        }
-      >
-        {bulkStrings.confirmText}
-      </Modal>
       {/*
         A counted background change, opened by Review (AC-528, AC-531): the exact number, and for an edit the value
         it writes. Declining cancels it (nothing was changed); either way focus goes on to the bar, which keeps it.

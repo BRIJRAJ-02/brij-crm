@@ -9,7 +9,6 @@ import {
   deleteToast,
   jobProgress,
   lifecycleUndoToast,
-  needsConfirm,
   recordsWord,
 } from './bulk.ts';
 import { carrySelection } from './BulkActions.tsx';
@@ -21,9 +20,7 @@ const RECORDS = { singularName: 'Record', pluralName: 'Records' };
 const OBJECT = '0199a6f2-0000-7000-8000-000000000003';
 
 describe('the bulk bar', () => {
-  it('deletes one at once and asks for two or more; past 500 it says so', () => {
-    expect(needsConfirm(1)).toBe(false);
-    expect(needsConfirm(2)).toBe(true);
+  it('deletes up to 500 at once; past 500 it says so', () => {
     expect(deleteOffer(500)).toBe('delete');
     expect(deleteOffer(501)).toBe('too-many');
     expect(recordsWord(1, PEOPLE)).toBe('1 person');

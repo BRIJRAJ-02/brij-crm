@@ -20,12 +20,9 @@ import {
   conditionOn,
   FilterBuilder,
   focusLater,
-  Menu,
-  MenuItem,
   Popover,
   SortBuilder,
   SortChip,
-  SplitButton,
   Toolbar,
 } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
@@ -227,20 +224,15 @@ export function ViewToolbar({
                     {strings.discard}
                   </Button>
                   {canSave ? (
-                    <SplitButton
-                      onPress={onSave}
-                      isPending={isSaving}
-                      menuLabel={strings.saveMore}
-                      menu={
-                        <Menu label={strings.saveMore} onAction={onSaveAsNew}>
-                          <MenuItem id="save-as-new" icon="plus">
-                            {strings.saveAsNew}
-                          </MenuItem>
-                        </Menu>
-                      }
-                    >
-                      {isSaving ? strings.saving : strings.save}
-                    </SplitButton>
+                    // Two plain buttons, not a split button with a one item menu (30 October 2026).
+                    <>
+                      <Button variant="ghost" icon="plus" onPress={onSaveAsNew} isDisabled={isSaving}>
+                        {strings.saveAsNew}
+                      </Button>
+                      <Button variant="primary" onPress={onSave} isPending={isSaving}>
+                        {isSaving ? strings.saving : strings.save}
+                      </Button>
+                    </>
                   ) : (
                     // A locked view the person may not change (AC-476): their draft can only become a view of its own.
                     <Button variant="primary" icon="plus" onPress={onSaveAsNew}>

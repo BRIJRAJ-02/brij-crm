@@ -12,7 +12,7 @@ const grid = (page: Page) => page.getByRole('grid', { name: 'People' });
 /** The view's toolbar. */
 const toolbar = (page: Page) => page.getByRole('toolbar', { name: 'View options' });
 
-const BANNER = /This view uses Job title, which is archived\./;
+const BANNER = /This view uses Job title, which is archived/;
 
 test.describe('a view filtered on an archived field', () => {
   test.skip(({ viewport }) => (viewport?.width ?? 0) < 1000, 'The table flow runs at desktop width.');
