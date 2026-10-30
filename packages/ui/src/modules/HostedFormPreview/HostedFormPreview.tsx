@@ -1,6 +1,7 @@
 import type { PublicForm } from '@crm/contracts/forms';
 import { HostedForm } from '../../public-form/HostedForm.tsx';
 import type { ProductLogo } from '../AuthLayout/AuthLayout.tsx';
+import type { PageBrand } from '../BookingFrame/BookingFrame.tsx';
 
 /** Props for HostedFormPreview. */
 export interface HostedFormPreviewProps {
@@ -15,12 +16,22 @@ export interface HostedFormPreviewProps {
   readonly mode?: 'preview' | 'page';
   /** The Timefix wordmark under the form; defaults to the web app's own files, as on the hosted page. */
   readonly logo?: ProductLogo;
+  /** A brand kit to wear in place of the one the form's read names (Settings › Brand's preview, spec 0060). */
+  readonly brand?: PageBrand;
 }
 
 /**
  * The form a visitor fills in, drawn by the hosted page's own component, so
  * the builder shows exactly what goes live: the same tree, the same controls.
  */
-export function HostedFormPreview({ form, mode = 'preview', logo }: HostedFormPreviewProps) {
-  return <HostedForm key={mode} form={form} mode={mode} {...(logo === undefined ? {} : { logo })} />;
+export function HostedFormPreview({ form, mode = 'preview', logo, brand }: HostedFormPreviewProps) {
+  return (
+    <HostedForm
+      key={mode}
+      form={form}
+      mode={mode}
+      {...(logo === undefined ? {} : { logo })}
+      {...(brand === undefined ? {} : { brand })}
+    />
+  );
 }

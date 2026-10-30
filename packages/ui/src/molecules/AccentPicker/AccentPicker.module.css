@@ -1,0 +1,125 @@
+/* AccentPicker (spec 0060, AC-3, AC-6): the default, the quick picks and Any colour as one row of swatches the size
+   of HuePicker's, the hex under them on the same left edge, and the guard's one line when it moved the colour. A
+   swatch's colour is the one value handed in (`--swatch`, a checked hex); everything else is tokens. */
+@layer components {
+  .root {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-8);
+  }
+
+  /* The swatches, then Any colour at the end of the same row, on the same gap. */
+  .row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-6);
+  }
+
+  .swatches {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-6);
+  }
+
+  .label {
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .field {
+    display: inline-flex;
+  }
+
+  .swatch {
+    display: inline-grid;
+    place-items: center;
+    inline-size: var(--size-tile);
+    block-size: var(--size-tile);
+    border: var(--border-width-hairline) solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--swatch, var(--accent));
+    color: var(--surface-raised);
+    outline: none;
+    transition: scale var(--duration-press) var(--ease-out);
+  }
+
+  /* The default draws the colour it stands for, and Any colour an empty square with a plus until it holds one. */
+  .swatch[data-any] {
+    background: var(--swatch, var(--surface-raised));
+    color: var(--text-secondary);
+  }
+
+  .swatch[data-any][data-selected] {
+    color: var(--surface-raised);
+  }
+
+  .swatch[data-selected] {
+    box-shadow: var(--shadow-focus);
+  }
+
+  .swatch[data-pressed] {
+    scale: var(--scale-enter);
+  }
+
+  .swatch[data-focus-visible] {
+    outline: var(--border-width-thick) solid var(--accent);
+    outline-offset: var(--border-width-thick);
+  }
+
+  .swatch[data-disabled] {
+    opacity: var(--opacity-disabled);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .swatch {
+      transition: none;
+    }
+  }
+
+  /* The system picker: there to be opened, never seen. */
+  .native {
+    position: absolute;
+    inline-size: var(--border-width-hairline);
+    block-size: var(--border-width-hairline);
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .hex {
+    inline-size: var(--size-column-narrow);
+  }
+
+  /* The guard's line (AC-6): the two colours it draws, then the one sentence, on the swatches' left edge. */
+  .note {
+    display: flex;
+    align-items: center;
+    gap: var(--space-6);
+    margin: 0;
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .drawn {
+    flex: none;
+    inline-size: var(--size-icon);
+    block-size: var(--size-icon);
+    border: var(--border-width-hairline) solid var(--border);
+    border-radius: var(--radius-xs);
+    background: var(--swatch, transparent);
+  }
+
+  .drawn + .drawn {
+    margin-inline-start: calc(var(--space-4) * -1);
+  }
+
+  @media (forced-colors: active) {
+    .swatch {
+      border-color: CanvasText;
+    }
+  }
+}

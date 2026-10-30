@@ -147,6 +147,8 @@ export { FileItem, formatFileSize, type FileItemProps } from './molecules/FileIt
 export { FilterChip, type FilterChipProps } from './molecules/FilterChip/FilterChip.tsx';
 export { Form, type FormProps, type FormRefusal, type FormValues } from './molecules/Form/Form.tsx';
 export { HuePicker, type HuePickerProps } from './molecules/HuePicker/HuePicker.tsx';
+/** Any colour, picked by sight: a brand kit's or a link page's accent (spec 0060). */
+export { AccentPicker, type AccentPickerProps, type AccentQuickPick } from './molecules/AccentPicker/AccentPicker.tsx';
 export { IconPicker, type IconPickerProps } from './molecules/IconPicker/IconPicker.tsx';
 export {
   ContextMenu,
