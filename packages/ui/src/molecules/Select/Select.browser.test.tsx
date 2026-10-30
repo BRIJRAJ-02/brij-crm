@@ -215,6 +215,46 @@ describe('a disabled option in a single choice', () => {
       for (const unmount of mounted.splice(0)) unmount();
     }
   });
+
+  it('is not chosen by a letter typed on the closed trigger after the list closed on it, nor is Clear', async () => {
+    // The trigger's typeahead starts from the key the open list last rested on, disabled or not.
+    for (const props of [{ value: 'small' }, { value: undefined, defaultValue: 'small' }]) {
+      const { onChange, node } = single(props);
+      await render(node);
+      await arrowOntoDisabled();
+      await userEvent.keyboard('{Escape}');
+      await expect.poll(listbox).toBeNull();
+      await userEvent.keyboard('L');
+      await frame();
+      expect(onChange).not.toHaveBeenCalled();
+      expect(trigger().textContent).toContain('Small team');
+      for (const unmount of mounted.splice(0)) unmount();
+    }
+    const { onChange, node } = single({ value: 'small', isClearable: true });
+    await render(node);
+    trigger().focus();
+    await userEvent.keyboard('{ArrowDown}');
+    await expect.poll(listbox).not.toBeNull();
+    await userEvent.keyboard('{End}');
+    await expect.poll(() => current()?.textContent).toContain('Clear');
+    await userEvent.keyboard('{Escape}');
+    await expect.poll(listbox).toBeNull();
+    await userEvent.keyboard('C');
+    await frame();
+    expect(onChange).not.toHaveBeenCalled();
+    expect(trigger().textContent).toContain('Small team');
+  });
+
+  it('is reached by the arrows in a grouped list too', async () => {
+    const grouped = ITEMS.map((option) => ({ ...option, group: 'Sizes' }));
+    const { onChange, node } = single({ items: grouped });
+    await render(node);
+    await arrowOntoDisabled();
+    expectAnnouncedDisabled();
+    await userEvent.keyboard('{Enter}');
+    await frame();
+    expect(onChange).not.toHaveBeenCalled();
+  });
 });
 
 const item = (id: string, extra: Partial<SelectItem> = {}): SelectItem => ({ id, label: `Option ${id}`, ...extra });

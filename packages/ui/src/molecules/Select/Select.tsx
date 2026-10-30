@@ -496,6 +496,9 @@ export function Select({
           onValuesChange?.(items.filter((item) => picked.has(item.id)).map((item) => item.id));
           return;
         }
+        // The closed trigger's typeahead tests the key the open list last rested on without asking whether it is
+        // disabled, so a disabled option (or Clear and Create, while closed) is refused here too.
+        if (next !== null && disabledKeys.includes(String(next))) return;
         if (next === CREATE) {
           if (canCreate) onCreate(typed);
           return;
