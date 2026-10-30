@@ -182,6 +182,11 @@ export interface WeekCalendarProps {
    * which jumps to it.
    */
   readonly emptyAction?: { readonly label: string; readonly onPress: () => void };
+  /**
+   * `week` (the default) draws the seven days; `day` draws only the selected one across the width, its head still
+   * the week's days to pick from, as a phone's narrow week does.
+   */
+  readonly view?: 'week' | 'day';
 }
 
 /** The parts of a day outside its open hours, in order. */
@@ -285,6 +290,7 @@ export function WeekCalendar({
   openHours,
   emptyHint,
   emptyAction,
+  view = 'week',
 }: WeekCalendarProps) {
   const scroller = useRef<HTMLDivElement>(null);
   const columns = useRef(new Map<string, HTMLDivElement>());
@@ -479,6 +485,7 @@ export function WeekCalendar({
       {...(zone === undefined ? {} : { 'aria-describedby': zoneId })}
       aria-busy={isLoading || undefined}
       data-fill={isFill || undefined}
+      data-view={view}
     >
       <div className={styles.head}>
         {zone === undefined ? (

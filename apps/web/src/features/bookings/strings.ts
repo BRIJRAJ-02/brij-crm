@@ -38,6 +38,15 @@ export const strings = {
   dayToDay: (first: string, last: string) => `${first} to ${last}`,
   previousWeek: 'Previous week',
   nextWeek: 'Next week',
+  previousDay: 'Previous day',
+  nextDay: 'Next day',
+  goToToday: 'Go to today',
+  /** The bar's Day and Week switch. */
+  calendarView: 'View',
+  dayView: 'Day',
+  weekView: 'Week',
+  /** An empty week's way on: the day of the reader's next booking after it. */
+  nextBooking: (day: string) => `Next booking: ${day}`,
   weekLabel: (range: string) => `Bookings, ${range}`,
   weekSummary: (count: number) =>
     count === 0

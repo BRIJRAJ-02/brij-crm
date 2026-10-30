@@ -150,6 +150,8 @@ function Calendar({ objects, pages, connections, availability, forPeople }: Cale
       hosts={choice}
       search={search}
       week={week}
+      // The reader's upcoming bookings, read only while the week on show is empty, for its "Next booking".
+      upcoming={data.bookings.meetings(slug, { when: 'upcoming', source: 'bookings' })}
       objects={objects}
       pages={pages}
       connections={connections}

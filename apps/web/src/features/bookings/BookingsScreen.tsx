@@ -1,6 +1,6 @@
 // Brief
 // Purpose: Bookings › Calendar and Bookings › List (spec 0025, AC-646), on the reference product's bookings page: a week calendar (bookings and the member's own calendar events) and a list (Upcoming, Past, Cancelled) with sort and pages.
-// Main task: see the week at a glance, open a booking or an event for its details, or page through the list.
+// Main task: see the week (or one day) at a glance, open a booking or an event for its details, or page through the list.
 // Leaves out: changing a booking from here (the actions arrive next), the new meeting dialog, team views beyond an admin's Mine · Everyone (spec 0037), filing, and live arrival (it reads again when the page is shown again).
 import {
   isDataError,
@@ -52,6 +52,7 @@ import {
   useKeyboardPlatform,
   focusLater,
   Skeleton,
+  Tooltip,
   WeekCalendar,
   type BookingListGroup,
   type Hue,
@@ -102,6 +103,7 @@ import {
   weekOf,
 } from './week.ts';
 import { useFirstDay } from '../workspace/first-day.ts';
+import { WEEK_KEYS, weekKeyAction, type WeekKeyAction } from './week-keys.ts';
 import { AnswerList } from '../questions/AnswerList.tsx';
 import { strings as questionStrings } from '../questions/strings.ts';
 
@@ -839,6 +841,11 @@ export interface BookingsCalendarScreenProps {
   readonly hosts?: HostsChoice | undefined;
   readonly search: BookingsSearch;
   readonly week: BookingsCalendarHeld;
+  /**
+   * The reader's upcoming bookings, read only while the week on show is empty, for its "Next booking: Tue 3 Nov".
+   * Absent, an empty week offers no jump.
+   */
+  readonly upcoming?: MeetingsHeld | undefined;
   readonly objects: readonly ObjectSummary[];
   readonly pages: readonly BookingPageView[];
   readonly connections: readonly CalendarConnectionView[];
@@ -925,6 +932,39 @@ type CardQuestion =
 
 /** A question as the week holds it: numbered, so each one mounts its dialog afresh. */
 type CardAsk = CardQuestion & { readonly opening: number };
+
+/**
+ * Reads the reader's upcoming bookings while the week on show is empty, and reports the first day after it holding a
+ * confirmed one (or none). It draws nothing; it is mounted only for an empty week, so a full week reads nothing more.
+ */
+function NextBookingProbe({
+  held,
+  after,
+  timeZone,
+  onFound,
+}: {
+  readonly held: MeetingsHeld;
+  readonly after: string;
+  readonly timeZone: string;
+  readonly onFound: (day: string | undefined) => void;
+}) {
+  const state = useMeetings(held);
+  const found =
+    state.status !== 'ready'
+      ? undefined
+      : state.items
+          .flatMap((item) => (item.kind === 'booking' && item.booking.status === 'confirmed' ? [item.booking] : []))
+          .map((booking) => dayKeyOf(new Date(booking.startsAt), timeZone))
+          .find((day) => day > after);
+  const report = useRef(onFound);
+  useEffect(() => {
+    report.current = onFound;
+  });
+  useEffect(() => {
+    report.current(found);
+  }, [found]);
+  return null;
+}
 
 /** The week view's toolbar, grid and count. */
 function WeekView(props: BookingsCalendarScreenProps) {
@@ -1022,7 +1062,50 @@ function WeekView(props: BookingsCalendarScreenProps) {
   // Go to date: the small month the calendars panel held, now from the week's bar (the panel stays folded here).
   const [isJumpOpen, setJumpOpen] = useState(false);
   const jumpRef = useRef<HTMLButtonElement>(null);
-  const range = rangeLabel(search.week, locale);
+  // Day or Week (D and W), kept while the screen is: the day view is the picked day across the width.
+  const [view, setView] = useState<'week' | 'day'>('week');
+  const shownDay = days.includes(search.day) ? search.day : (days[0] ?? search.week);
+  const range =
+    view === 'day'
+      ? new Intl.DateTimeFormat(locale, { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' }).format(
+          new Date(`${shownDay}T12:00:00Z`),
+        )
+      : rangeLabel(search.week, locale);
+  // The day after the shown week holding the reader's next booking, while the week is empty (`NextBookingProbe`).
+  const [nextBooking, setNextBooking] = useState<{ readonly after: string; readonly day: string } | undefined>(
+    undefined,
+  );
+  /** Today, the next or previous week (a day in the day view), or the view: the bar's buttons and their keys. */
+  const go = (action: WeekKeyAction) => {
+    if (action === 'day' || action === 'week') {
+      setView(action);
+      return;
+    }
+    if (action === 'today') {
+      onSearch({ week: weekOf(today, firstDay), day: today });
+      return;
+    }
+    const step = (action === 'next' ? 1 : -1) * (view === 'day' ? 1 : 7);
+    const day = addDays(shownDay, step);
+    onSearch(view === 'day' ? { week: weekOf(day, firstDay), day } : { week: addDays(search.week, step), day });
+  };
+  const goRef = useRef(go);
+  useEffect(() => {
+    goRef.current = go;
+  });
+  useEffect(() => {
+    // T, J, K, D and W, unless typed into a field or pressed inside a dialog, a menu or a popover.
+    const listener = (event: KeyboardEvent) => {
+      const target = event.target instanceof Element ? (event.target as Element & KeyTarget) : null;
+      const action = weekKeyAction(event);
+      if (action === undefined || event.defaultPrevented || belongsElsewhere(target)) return;
+      if (target !== null && target.closest('[role="menu"], [role="listbox"]') !== null) return;
+      event.preventDefault();
+      goRef.current(action);
+    };
+    document.addEventListener('keydown', listener);
+    return () => document.removeEventListener('keydown', listener);
+  }, []);
   // Each event in its calendar's colour (the member's pick, else the provider's); before the list reads, its account's.
   const connectionHue = new Map(
     connections.map((connection, index) => [connection.id, CALENDAR_HUES[index % CALENDAR_HUES.length] ?? 'blue']),
@@ -1062,33 +1145,39 @@ function WeekView(props: BookingsCalendarScreenProps) {
       (connection) => [connection.id, connection.provider === 'google' ? 'google-calendar' : 'outlook'] as const,
     ),
   );
-  // Today and the arrows lead, then the week's dates (quiet), then the calendar switch; Filter at the end.
+  // Today and the arrows lead, then the week's dates (or the day's) as the bar's title, then the calendar switch;
+  // Day and Week, then Filter, at the end. Each button's tooltip teaches its key (T, K, J; D and W on the switch).
   const toolbar = (
     <SectionBar
       variant="bar"
-      isTitleQuiet
       start={
         <>
           {/* Secondary: the page's one primary is New (the owner, 22 October 2026). */}
-          <Button variant="secondary" onPress={() => onSearch({ week: weekOf(today, firstDay), day: today })}>
-            {isThisWeek
-              ? strings.today
-              : strings.todayOn(
-                  new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', timeZone }).format(now),
-                )}
-          </Button>
-          <Button
-            variant="ghost"
-            icon="chevron-left"
-            label={strings.previousWeek}
-            onPress={() => onSearch({ week: addDays(search.week, -7), day: addDays(search.day, -7) })}
-          />
-          <Button
-            variant="ghost"
-            icon="chevron-right"
-            label={strings.nextWeek}
-            onPress={() => onSearch({ week: addDays(search.week, 7), day: addDays(search.day, 7) })}
-          />
+          <Tooltip content={strings.goToToday} kbd={WEEK_KEYS.today}>
+            <Button variant="secondary" onPress={() => go('today')}>
+              {isThisWeek
+                ? strings.today
+                : strings.todayOn(
+                    new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', timeZone }).format(now),
+                  )}
+            </Button>
+          </Tooltip>
+          <Tooltip content={view === 'day' ? strings.previousDay : strings.previousWeek} kbd={WEEK_KEYS.previous}>
+            <Button
+              variant="ghost"
+              icon="chevron-left"
+              label={view === 'day' ? strings.previousDay : strings.previousWeek}
+              onPress={() => go('previous')}
+            />
+          </Tooltip>
+          <Tooltip content={view === 'day' ? strings.nextDay : strings.nextWeek} kbd={WEEK_KEYS.next}>
+            <Button
+              variant="ghost"
+              icon="chevron-right"
+              label={view === 'day' ? strings.nextDay : strings.nextWeek}
+              onPress={() => go('next')}
+            />
+          </Tooltip>
           <Button
             ref={jumpRef}
             variant="ghost"
@@ -1132,7 +1221,23 @@ function WeekView(props: BookingsCalendarScreenProps) {
           <CalendarSwitch calendars={switchable} choice={choice} onChoose={choose} />
         )
       }
-      end={<FilterMenu search={search} pages={pages} onSearch={onSearch} />}
+      end={
+        <>
+          <SegmentedControl
+            label={strings.calendarView}
+            size="compact"
+            value={view}
+            onChange={(next) => {
+              if (next === 'day' || next === 'week') setView(next);
+            }}
+            segments={[
+              { value: 'day', label: strings.dayView },
+              { value: 'week', label: strings.weekView },
+            ]}
+          />
+          <FilterMenu search={search} pages={pages} onSearch={onSearch} />
+        </>
+      }
     />
   );
   if (state.status === 'loading') {
@@ -1146,7 +1251,8 @@ function WeekView(props: BookingsCalendarScreenProps) {
             blocks={[]}
             isLoading
             isFill
-            selectedDay={days.includes(search.day) ? search.day : (days[0] ?? search.week)}
+            view={view}
+            selectedDay={shownDay}
             onSelectDay={(day) => onSearch({ day })}
             zone={zone}
             hourLabel={(hour) =>
@@ -1313,14 +1419,43 @@ function WeekView(props: BookingsCalendarScreenProps) {
   const openBusy = open?.kind === 'busy' ? byBusy.get(open.piece.sourceId) : undefined;
   const live = bookings.filter((booking) => booking.status === 'confirmed').length;
   const hourFormat = new Intl.DateTimeFormat(locale, { hour: 'numeric' });
+  const weekEnd = days.at(-1) ?? search.week;
+  const isWeekEmpty = blocks.length === 0;
+  const next = isWeekEmpty && nextBooking?.after === weekEnd ? nextBooking.day : undefined;
   return (
     <>
+      {isWeekEmpty && props.upcoming !== undefined && (
+        <NextBookingProbe
+          held={props.upcoming}
+          after={weekEnd}
+          timeZone={timeZone}
+          onFound={(day) => {
+            setNextBooking(day === undefined ? undefined : { after: weekEnd, day });
+          }}
+        />
+      )}
       {framed(
         <>
           <WeekCalendar
             label={strings.weekLabel(range)}
             days={weekDayItems(days, today, locale)}
             blocks={blocks}
+            view={view}
+            {...(next === undefined
+              ? {}
+              : {
+                  emptyAction: {
+                    label: strings.nextBooking(
+                      new Intl.DateTimeFormat(locale, {
+                        weekday: 'short',
+                        day: 'numeric',
+                        month: 'short',
+                        timeZone: 'UTC',
+                      }).format(new Date(`${next}T12:00:00Z`)),
+                    ),
+                    onPress: () => onSearch({ week: weekOf(next, firstDay), day: next }),
+                  },
+                })}
             {...(props.openHours === undefined ? {} : { openHours: props.openHours })}
             emptyHint={
               choice === ALL_CALENDARS
@@ -1330,7 +1465,7 @@ function WeekView(props: BookingsCalendarScreenProps) {
                   )
             }
             isFill
-            selectedDay={days.includes(search.day) ? search.day : (days[0] ?? search.week)}
+            selectedDay={shownDay}
             onSelectDay={(day) => onSearch({ day })}
             zone={zone}
             hourLabel={(hour) => hourFormat.format(new Date(2000, 0, 1, hour))}

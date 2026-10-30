@@ -791,6 +791,21 @@ export const EmptyWeek: Story = {
   },
 };
 
+/** `view="day"`: the selected day across the width, the head still the week's days to pick from. */
+export const DayView: Story = {
+  render: (args) => (
+    <Stage width="fill">
+      <WeekCalendar {...args} days={days()} blocks={[]} view="day" />
+    </Stage>
+  ),
+  play: async ({ canvasElement }) => {
+    const shown = [...canvasElement.querySelectorAll<HTMLElement>('[role="group"]')].filter(
+      (column) => getComputedStyle(column).display !== 'none',
+    );
+    await expect(shown).toHaveLength(1);
+  },
+};
+
 /** An empty week with a way on (`emptyAction`): "Next booking: Tue 13 Oct" jumps to it, the one press the note takes. */
 export const EmptyWeekNext: Story = {
   args: { onSelectDay: fn() },
