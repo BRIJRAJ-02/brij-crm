@@ -14,6 +14,7 @@ import {
 import { takeRecordSlots } from './limits.ts';
 import { decodeValue, encodeValue, sameItems } from './columns.ts';
 import { canonicalId, canonicalKeys, checkId, isUuid, isUuidV7 } from './ids.ts';
+import { companyLogoPath } from './logos.ts';
 import { isRefusal, postgresError, refuse, refuseAll, versionChangedMessage } from './refusals.ts';
 import { actorRow, type Actor, type EngineScope } from './scope.ts';
 import { resolveNewOptions } from './new-option.ts';
@@ -860,6 +861,42 @@ export function bucketItems<T extends { readonly ownerId: string; readonly attri
   return (ownerId, attributeId) => byOwner.get(ownerId)?.get(attributeId) ?? [];
 }
 
+/**
+ * Each Companies object's Domains attribute, by object id, where the reader may see it (spec 0059, AC-5907): the
+ * standard object's live `domains`, found by api slug and type as filing finds it. A workspace that archived or
+ * retyped it, a custom object, and a reader a field rule hides it from all get no logo.
+ */
+function logoAttributesOf(
+  objectRows: readonly { readonly id: string; readonly standardKey: string | null }[],
+  attributesByObject: ReadonlyMap<string, ReadonlyMap<string, AttributeDef>>,
+  access: Access,
+): ReadonlyMap<string, string> {
+  const found = new Map<string, string>();
+  for (const object of objectRows) {
+    if (object.standardKey !== 'companies') continue;
+    const domains = [...(attributesByObject.get(object.id)?.values() ?? [])].find(
+      (attribute) =>
+        attribute.apiSlug === 'domains' &&
+        attribute.type === 'domain' &&
+        !isArchivedNow(attribute) &&
+        attributeVisible(access, attribute),
+    );
+    if (domains !== undefined) found.set(object.id, domains.id);
+  }
+  return found;
+}
+
+/** A company's logo address from its Domains items: the value shown first (the lowest position), when it can have one. */
+function logoOf(
+  items: readonly { readonly position: number; readonly textValue: string | null }[],
+): string | undefined {
+  const first = items.reduce<(typeof items)[number] | undefined>(
+    (lowest, item) => (lowest === undefined || item.position < lowest.position ? item : lowest),
+    undefined,
+  );
+  return first === undefined || first.textValue === null ? undefined : companyLogoPath(first.textValue);
+}
+
 /** What a read of records may be given: the attributes wanted, and attributes already loaded. */
 export interface ReadOptions {
   /** Only these attributes' values (the primary attribute is read too, for the name). */
@@ -961,10 +998,14 @@ export async function readRecords(
   // The record's name needs its primary attribute, even when the caller asked for other attributes only.
   const primaryIds = objectRows.flatMap((row) => (row.primaryAttributeId === null ? [] : [row.primaryAttributeId]));
   const wanted = input.attributeIds === undefined ? undefined : [...input.attributeIds, ...primaryIds];
+  // A company's picture is its logo, named by its first Domains value (spec 0059, AC-5901), so Domains is read in the
+  // same statement as the name, even by a caller that asked for no attributes. Only where the reader may see Domains:
+  // hidden means absent, and the logo's address would carry the domain (AC-5907).
+  const logoAttributes = logoAttributesOf(objectRows, attributesByObject, access);
   const items = await currentItems(
     tx,
     rows.map((row) => row.id),
-    wanted,
+    wanted === undefined ? undefined : [...wanted, ...logoAttributes.values()],
     { withCleared: true },
   );
   // The attributes a read returns: those asked for and the primary (spec 0006, AC-55), or every one.
@@ -1049,11 +1090,14 @@ export async function readRecords(
       const primary = primaryDef !== undefined && attributeVisible(access, primaryDef) ? primaryDef : undefined;
       const name = primary === undefined ? '' : nameOf(decodeValue(primary.type, false, primaryItems));
       const hue = object === undefined ? undefined : hueOf(object.hue);
+      const logoAttribute = logoAttributes.get(row.objectId);
+      const imageSrc = logoAttribute === undefined ? undefined : logoOf(itemsOf(row.id, logoAttribute));
       const display: RecordRefDisplay = {
         objectId: row.objectId,
         recordId: row.id,
         name: name === '' ? `Unnamed ${(object?.singularName ?? 'record').toLowerCase()}` : name,
         kind: object?.standardKey === 'people' ? 'person' : object?.standardKey === 'companies' ? 'company' : 'other',
+        ...(imageSrc === undefined ? {} : { imageSrc }),
         ...(hue === undefined ? {} : { hue }),
       };
       // The four system fields at the top level follow their attributes' field rules, as `values` does.
