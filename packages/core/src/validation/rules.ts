@@ -388,7 +388,7 @@ export interface RulesWritten {
  * Replaces an attribute's rules with `inputs`, in order (spec 0013, AC-252,
  * AC-253): each rule's settings are checked (`checkRuleSettings`, patterns
  * compiled by RE2) and refused `CONFIG_INVALID` on `rules.<index>.<setting>`;
- * a rule left out is deleted; a kept one's `version` goes up when its kind,
+ * a rule left out is deleted (never a Required When, which the list can't carry); a kept one's `version` goes up when its kind,
  * settings or condition change. A rule id another attribute's rule holds is
  * `ID_TAKEN`. Then every attribute whose rule count moved (the rule's own,
  * and those an old or new condition names) gets its `rule_count` set exactly
@@ -483,9 +483,16 @@ export async function writeRules(
   if (next.some((rule) => hiddenIds.has(rule.id))) {
     throw refuseAll([{ code: 'NOT_FOUND', message: 'That rule does not exist.', field: 'rules' }]);
   }
-  const storedById = new Map(stored.filter((rule) => !hiddenIds.has(rule.id)).map((rule) => [rule.id, rule]));
+  // Required When isn't a kind the `rules` input takes (`required` sets it, milestone 2), so the list can never carry
+  // it: it is never this write's to delete, and its id answers as unknown like a hidden one's. Leaving it out of the
+  // list kept it out of the dialog, and every Save then deleted it (flow pass, 30 October 2026).
+  const isElsewhere = (rule: StoredRule) => hiddenIds.has(rule.id) || rule.kind === 'required_when';
+  if (next.some((rule) => stored.some((each) => each.id === rule.id && each.kind === 'required_when'))) {
+    throw refuseAll([{ code: 'NOT_FOUND', message: 'That rule does not exist.', field: 'rules' }]);
+  }
+  const storedById = new Map(stored.filter((rule) => !isElsewhere(rule)).map((rule) => [rule.id, rule]));
   const nextIds = new Set(next.map((rule) => rule.id));
-  const deleted = stored.filter((rule) => !nextIds.has(rule.id) && !hiddenIds.has(rule.id));
+  const deleted = stored.filter((rule) => !nextIds.has(rule.id) && !isElsewhere(rule));
   const inserted = next.filter((rule) => !storedById.has(rule.id));
   const kept = next.flatMap((rule) => {
     const before = storedById.get(rule.id);
