@@ -25,7 +25,7 @@ import { profileRouter } from './modules/profile/router.ts';
 import { deletedWorkspaceRouter } from './modules/workspace/deleted.ts';
 import { workspaceRouter } from './modules/workspace/router.ts';
 import { rolesRouter } from './modules/roles/router.ts';
-import { schedulingRouter } from './modules/scheduling/router.ts';
+import { availabilityRouter, schedulingRouter, timeOffRouter } from './modules/scheduling/router.ts';
 import { workspaceSecurityRouter } from './modules/security/router.ts';
 import { objectsRouter } from './modules/objects/router.ts';
 import { optionsRouter } from './modules/options/router.ts';
@@ -87,6 +87,8 @@ export const router = base.router({
   bookingPages: bookingPagesRouter,
   bookings: bookingsRouter,
   schedules: schedulesRouter,
+  timeOff: timeOffRouter,
+  availability: availabilityRouter,
   rotations: rotationsRouter,
   routing: routingRouter,
   audit: auditRouter,

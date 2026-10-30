@@ -257,6 +257,17 @@ export const CalendarsEvent = z.object({
   mutationId,
 });
 
+/**
+ * Someone's time off was added, changed or removed (spec 0037, AC-1281): names nothing, so every audience may hear
+ * it. A screen holding the Team week, a time off list or Bookings (whose Host away flags time off sets) reads again
+ * what it may.
+ */
+export const TimeOffEvent = z.object({
+  ...place,
+  kind: z.literal('time_off'),
+  mutationId,
+});
+
 /** Background jobs changed (spec 0008): refetch them, or when `coarse` the unfinished jobs you hold. */
 export const JobsEvent = z.object({
   ...place,
@@ -294,6 +305,7 @@ export const ChangeEvent = z.discriminatedUnion('kind', [
   JobsEvent,
   NavEvent,
   CalendarsEvent,
+  TimeOffEvent,
   CommentsEvent,
   NotificationsEvent,
   RestrictedEvent,
@@ -318,6 +330,7 @@ export const CHANGE_EVENT_KINDS = [
   'comments',
   'notifications',
   'calendars',
+  'time_off',
   'restricted',
 ] as const satisfies readonly ChangeEvent['kind'][];
 

@@ -52,7 +52,8 @@ import { useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useBookingsActionSlot } from '../bookings/toolbarSlot.ts';
 import { isCalendarInUse } from '../calendars/in-use.ts';
-import { strings, type ConnectResult } from './calendar-strings.ts';
+import { strings } from './calendar-strings.ts';
+import type { ConnectResult } from './connect-result.ts';
 import { SettingsPage } from './SettingsPage.tsx';
 
 /**

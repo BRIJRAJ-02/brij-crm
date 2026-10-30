@@ -522,12 +522,13 @@ describe('the Joining tab', () => {
     await page.getByRole('tab', { name: /Joining/ }).click();
     const panel = page.getByRole('tabpanel');
     await expect.element(panel.getByRole('heading', { name: 'Asking to join' })).toBeVisible();
+    // The invite link's limits sit folded under Link settings, whose trigger is a heading of its own.
     expect(
       panel
         .getByRole('heading')
         .elements()
         .map((heading) => heading.textContent),
-    ).toEqual(['Asking to join', 'Pending invitations', 'Other ways to join']);
+    ).toEqual(['Asking to join', 'Pending invitations', 'Other ways to join', 'Link settings']);
     await expect.element(panel.getByRole('rowheader', { name: /Mary Shelley/ })).toBeVisible();
     await expect.element(panel.getByRole('rowheader', { name: 'grace@example.com' })).toBeVisible();
     // The invite link first, then Company email, with what Company email does.

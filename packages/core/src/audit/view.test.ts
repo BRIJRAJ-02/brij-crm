@@ -223,6 +223,12 @@ const FIXTURES: Record<ListedAuditAction, readonly AuditRow[]> = {
       after: { ownerMemberId: null, ownerRotationId: rotation },
     }),
   ],
+  'form.notify_changed': [
+    row('form.notify_changed', 'form', form, {
+      before: { notifyMemberIds: [ada] },
+      after: { notifyMemberIds: [ada, bea] },
+    }),
+  ],
   'booking.no_show': [row('booking.no_show', 'booking', booking)],
   'booking.no_show_undone': [row('booking.no_show_undone', 'booking', booking)],
   'booking.record_linked': [
@@ -260,6 +266,15 @@ const FIXTURES: Record<ListedAuditAction, readonly AuditRow[]> = {
   ],
   'block.created': [
     row('block.created', 'member', bea, { after: { memberId: bea, blockId: newId(), kind: 'busy', repeat: 'once' } }),
+  ],
+  'time_off.created': [
+    row('time_off.created', 'member', bea, { after: { memberId: bea, timeOffId: newId(), reason: 'vacation' } }),
+  ],
+  'time_off.changed': [
+    row('time_off.changed', 'member', bea, { after: { memberId: bea, timeOffId: newId(), reason: 'sick' } }),
+  ],
+  'time_off.deleted': [
+    row('time_off.deleted', 'member', bea, { before: { memberId: bea, timeOffId: newId(), reason: 'travel' } }),
   ],
   'block.removed': [
     row('block.removed', 'member', bea, { before: { memberId: bea, blockId: newId(), kind: 'busy', repeat: 'once' } }),

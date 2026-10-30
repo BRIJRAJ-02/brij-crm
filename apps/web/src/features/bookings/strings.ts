@@ -322,6 +322,13 @@ export const strings = {
   assignedTerm: 'Assigned',
   /** Reassigning a round robin seat (spec 0029, AC-748). */
   needsHost: 'Needs a host',
+  // Time off (spec 0037, AC-1285, AC-1287).
+  hostAway: 'Host away',
+  hostAwayText: 'Its host is away then. It stays booked: move it, or reassign it on a round robin page.',
+  hostAwayReassignText: 'Its host is away then. It stays booked unless you reassign or move it.',
+  away: 'Away',
+  awayNote: 'Online bookings can’t be placed during time off.',
+  openTimeOff: 'Open time off',
   // A no show (spec 0043, AC-1613).
   noShow: 'No show',
   markNoShow: 'Mark as no show',
@@ -342,6 +349,22 @@ export const strings = {
   reassign: 'Reassign',
   reassigning: 'Reassigning',
   reassigned: 'Reassigned. The guest and both hosts are emailed.',
+  /** Reassign from Host away (spec 0037, AC-1284): to the time off's stand in, else the next in the group. */
+  awayReassignTitle: (page: string, visitor: string) => `Reassign ${page} with ${visitor}?`,
+  awayToStandin: (standin: string, host: string) =>
+    `${standin} takes it, as ${host}’s stand in while they’re away. The guest, ${standin} and ${host} are emailed.`,
+  awayStandinOutside: (host: string, rotation: string) =>
+    `${host}’s stand in can’t take ${rotation}’s bookings now, so whoever is free then and next in it takes it. The guest and both hosts are emailed.`,
+  awayMembersFailed: (rotation: string) =>
+    `Couldn’t load who is in ${rotation}, so the server checks the stand in is free and in it.`,
+  awayNotChanged: (host: string, rotation: string) =>
+    `Nobody else in ${rotation} is free then, so it stays with ${host}.`,
+  awayToNext: (rotation: string) =>
+    `Whoever is free then and next in ${rotation} takes it. The guest and both hosts are emailed.`,
+  awayStandinUnknown: (host: string) =>
+    `${host}’s stand in takes it while they’re away. The guest and both hosts are emailed.`,
+  theGroup: 'its round robin group',
+  reassignedTo: (member: string) => `Reassigned to ${member}. The guest and both hosts are emailed.`,
   assignedIn: (rotation: string) => `Assigned in ${rotation}`,
   assignedLine: (member: string, why: string) => `${member} ${why}`,
   noLongerCounts: (line: string) => `${line} (no longer counts)`,

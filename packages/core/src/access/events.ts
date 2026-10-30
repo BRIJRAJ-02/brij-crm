@@ -47,6 +47,7 @@ export const EVENT_KINDS = [
   'comments',
   'notifications',
   'calendars',
+  'time_off',
 ] as const satisfies readonly EventRow['kind'][];
 
 /** One member of an audience: who, and what they may do. */
@@ -386,6 +387,9 @@ export function filterEvent(audience: Audience, row: EventRow, facts: EventFacts
     case 'members':
     case 'access':
     case 'notifications':
+      return row;
+    // Time off (spec 0037) names nothing: every audience hears that it changed, and reads what it may.
+    case 'time_off':
       return row;
     // A member's own sidebar (spec 0034) names one member id and nothing else. Only the audience that member is in
     // receives it (their own clients act on it); any other gets the stub, so a sidebar click is no feed of when a

@@ -8,7 +8,7 @@ import type { Template } from './template.ts';
 import { bookingCalendarRemoved, calendarDisconnected, signInAlert } from './templates/account.ts';
 import { formConfirmation, formSubmission } from './templates/forms.ts';
 import { memberInvite } from './templates/invite.ts';
-import { importFinished, jobFailed, schedulingChanged } from './templates/team.ts';
+import { importFinished, jobFailed, schedulingChanged, standinCovering } from './templates/team.ts';
 import { workspaceWelcome } from './templates/welcome.ts';
 
 /** One queued kind of email. */
@@ -129,6 +129,9 @@ export const CATALOG: Catalog = {
       jobLabel: 'Bulk edit',
       reason: 'This job stopped after repeated errors. What it finished is kept.',
       jobsPath: '/w/acme/settings/jobs',
+      startedAt: '2026-11-02T09:00:00.000Z',
+      timeZone: 'Europe/London',
+      progress: { done: 1200, total: 5000 },
     },
   },
   scheduling_changed: {
@@ -142,6 +145,15 @@ export const CATALOG: Catalog = {
       ],
       more: 0,
       availabilityPath: '/w/acme/bookings/availability',
+    },
+  },
+  standin_covering: {
+    template: standinCovering,
+    medium: 'email_calendar_alert',
+    sample: {
+      memberName: 'Sam Lee',
+      dates: 'from 3 to 7 November',
+      bookingsPath: '/w/acme/bookings',
     },
   },
   workspace_welcome: {

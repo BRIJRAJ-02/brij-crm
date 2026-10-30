@@ -5,7 +5,7 @@
 // `?attribute=<id>`; moves, archives and restores one; and the table shows the
 // new columns, the "+" header and the column menu's schema items.
 import { expect, test, type Page } from '@playwright/test';
-import { checkScreen, newWorkspace } from './people.ts';
+import { checkScreen, chooseNewAttribute, newWorkspace } from './people.ts';
 
 /** The ten types without setup, as the picker names them, with what each sets beyond its name. */
 const TYPES = [
@@ -149,6 +149,7 @@ test('an owner adds, edits, moves, archives and restores attributes without setu
   const plus = grid.getByRole('columnheader').getByRole('button', { name: 'Add attribute' });
   await expect(plus).toHaveCount(1);
   await plus.click();
+  await chooseNewAttribute(page);
   const fromTable = page.getByRole('dialog', { name: 'New attribute' });
   await expect(fromTable).toBeVisible();
   await fromTable.getByLabel('Name', { exact: true }).fill('Nickname');

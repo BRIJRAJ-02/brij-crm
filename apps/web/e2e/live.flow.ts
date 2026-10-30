@@ -20,7 +20,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { expect, firefox, test, webkit, type Browser, type Page, type WebSocketRoute } from '@playwright/test';
-import { addPerson, cellAt, checkScreen, newWorkspace, showColumn, signInAgain } from './people.ts';
+import { addPerson, cellAt, checkScreen, chooseNewAttribute, newWorkspace, showColumn, signInAgain } from './people.ts';
 
 const SHOTS = process.env.FLOW_SCREENSHOTS;
 const REALTIME = /\/connection\/websocket/;
@@ -158,7 +158,8 @@ test.describe('live updates between two browsers', () => {
     const createdAt = Date.now();
     await addPerson(writer, 'Grace', lastName, `grace-${tag}@example.com`);
     timings.push({ change: 'create', ms: (await seen(reader, '[role="grid"]', fullName)) - createdAt });
-    if (STATE === undefined) await expect(readerGrid).toHaveAttribute('aria-rowcount', '2');
+    // The header, the new row and the footer ("+ New person" and the count).
+    if (STATE === undefined) await expect(readerGrid).toHaveAttribute('aria-rowcount', '3');
     // Where the reader shows the new person (first in an empty table; somewhere on screen in a deployed one).
     const readerRow = await reader
       .locator(`[data-cell$=":${String(nameColumn)}"]`, { hasText: fullName })
@@ -192,6 +193,7 @@ test.describe('live updates between two browsers', () => {
     const echoRefetches = writerRefetches;
     const columns = Number(await readerGrid.getAttribute('aria-colcount'));
     await writer.getByRole('button', { name: 'Add attribute' }).first().click();
+    await chooseNewAttribute(writer);
     const dialog = writer.getByRole('dialog', { name: 'New attribute' });
     await dialog.getByLabel('Name', { exact: true }).fill(`Nickname ${tag}`);
     const addedAt = Date.now();

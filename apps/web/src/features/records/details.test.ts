@@ -2,7 +2,8 @@
 // header's name as it is typed, and which addresses name a tab or a record.
 import type { AttributeDefinition, ObjectSummary, RecordView } from '@crm/data';
 import { describe, expect, it } from 'vitest';
-import { detailAttributes, isRecordId, isRecordTab, recordHref, recordName, refsOf, relatedSides } from './details.ts';
+import { detailAttributes, recordHref, recordName, refsOf, relatedSides } from './details.ts';
+import { isRecordId, isRecordTab } from './params.ts';
 
 const attribute = (overrides: Partial<AttributeDefinition>): AttributeDefinition => ({
   id: '0199a6f2-0000-7000-8000-000000000001',

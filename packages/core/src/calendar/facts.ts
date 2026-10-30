@@ -45,7 +45,8 @@ export async function readMeetingFacts(
         union all
         select p.owner_member_id from bookings b
         join booking_pages p on p.workspace_id = b.workspace_id and p.id = b.page_id
-        where b.workspace_id = m.workspace_id and b.id = any(bk.ids)
+        -- A workspace link's maker isn't its owner (seen.ts, pageManagerColumn).
+        where b.workspace_id = m.workspace_id and b.id = any(bk.ids) and p.scope = 'member'
       ) w) end as seers,
       (select json_agg(json_build_object('objectId', r.object_id, 'recordId', r.id, 'trashed', r.deleted_at is not null))
         from meeting_records l join records r on r.workspace_id = l.workspace_id and r.id = l.record_id

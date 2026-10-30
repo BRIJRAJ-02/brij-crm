@@ -20,7 +20,7 @@ import { DateTime } from 'luxon';
 import { defaultAvailability, type BookingAvailability } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { resolveMany } from '../availability/resolve.ts';
-import { blockedTime } from '../booking/blocks.ts';
+import { blockedTimes } from '../booking/blocks.ts';
 import type { BusyReader } from '../booking/calendar.ts';
 import type { BookedSpan, Span } from '../booking/engine.ts';
 import {
@@ -34,8 +34,9 @@ import {
 import { intersectSlots, unionSlots } from './combine.ts';
 import { capStarts, windowCounts, windowStart, type WindowCount } from './ledger.ts';
 import { evenWaiting, hallHolds, type Candidate, type PickRules } from './pick.ts';
+import { rosterCalibration } from './roster.ts';
 
-const { bookingPageRotations, members, rotationMembers, rotations } = schema;
+const { bookingPageRotations, members, rotationRoster, rotations } = schema;
 
 /** The roles that may take bookings from a rotation: guests never (spec 0037, AC-729 narrowed); unknown roles fail closed. */
 export const ROTATION_ROLES: readonly string[] = ['owner', 'admin', 'member'];
@@ -59,6 +60,13 @@ export interface RotationMember {
   readonly dailyCap: number | null;
   readonly weeklyCap: number | null;
   readonly calibration: number;
+  /**
+   * Their settings are stored. Always so in a rotation of chosen people; in "Everyone on the roster" someone with no
+   * row yet takes the pool's average on read (`rosterCalibration`) until their first assignment stores it.
+   */
+  readonly stored?: boolean;
+  /** No row yet, and joined the workspace after "Everyone on the roster" was made (`rosterCalibration`). */
+  readonly joinsLate?: boolean;
 }
 
 /** A rotation a round robin page books from, and its members who may take work now. */
@@ -121,7 +129,9 @@ export async function pageRotations(tx: WorkspaceTx, pageId: string): Promise<re
 
 /**
  * Each rotation's members who may take work now (AC-729, AC-731): switched
- * on, active in the workspace, and not a guest, in the rotation's order.
+ * on, active in the workspace, and not a guest, in the rotation's order. Read
+ * through `rotation_roster`, so "Everyone on the roster" (the workspace link)
+ * holds every such member, whether or not they have settings of their own.
  */
 export async function eligibleMembers(
   tx: WorkspaceTx,
@@ -131,23 +141,25 @@ export async function eligibleMembers(
   if (rotationIds.length === 0) return found;
   const rows = await tx
     .select({
-      rotationId: rotationMembers.rotationId,
-      memberId: rotationMembers.memberId,
-      weight: rotationMembers.weight,
-      priority: rotationMembers.priority,
-      dailyCap: rotationMembers.dailyCap,
-      weeklyCap: rotationMembers.weeklyCap,
-      calibration: rotationMembers.calibration,
+      rotationId: rotationRoster.rotationId,
+      memberId: rotationRoster.memberId,
+      weight: rotationRoster.weight,
+      priority: rotationRoster.priority,
+      dailyCap: rotationRoster.dailyCap,
+      weeklyCap: rotationRoster.weeklyCap,
+      calibration: rotationRoster.calibration,
+      stored: rotationRoster.stored,
+      joinsLate: rotationRoster.joinsLate,
     })
-    .from(rotationMembers)
+    .from(rotationRoster)
     .innerJoin(
       members,
-      and(eq(members.workspaceId, rotationMembers.workspaceId), eq(members.id, rotationMembers.memberId)),
+      and(eq(members.workspaceId, rotationRoster.workspaceId), eq(members.id, rotationRoster.memberId)),
     )
     .where(
       and(
-        inArray(rotationMembers.rotationId, [...rotationIds]),
-        eq(rotationMembers.isOn, true),
+        inArray(rotationRoster.rotationId, [...rotationIds]),
+        eq(rotationRoster.isOn, true),
         eq(members.status, 'active'),
         sql`${members.role}::text in (${sql.join(
           ROTATION_ROLES.map((role) => sql`${role}`),
@@ -155,7 +167,7 @@ export async function eligibleMembers(
         )})`,
       ),
     )
-    .orderBy(asc(rotationMembers.position), asc(rotationMembers.memberId));
+    .orderBy(asc(rotationRoster.position), asc(members.name), asc(rotationRoster.memberId));
   for (const { rotationId, ...member } of rows) found.get(rotationId)?.push(member);
   return found;
 }
@@ -232,15 +244,23 @@ export async function memberClosed(
   from: Date,
   to: Date,
 ): Promise<ReadonlyMap<string, MembersClosed>> {
-  const found = new Map<string, MembersClosed>();
-  for (const memberId of memberIds) {
-    const closed = await blockedTime(tx, memberId, from, to, page);
-    found.set(memberId, { busy: closed.busy, openHolds: page.isPrivate ? closed.openHolds : [] });
-  }
-  return found;
+  // One read for every member: "Everyone on the roster" may be the whole workspace.
+  const closed = await blockedTimes(tx, memberIds, from, to, page);
+  return new Map(
+    memberIds.map((memberId) => {
+      const theirs = closed.get(memberId) ?? { busy: [], openHolds: [] };
+      return [memberId, { busy: theirs.busy, openHolds: page.isPrivate ? theirs.openHolds : [] }] as const;
+    }),
+  );
 }
 
-/** Each member's calendars, read once each and in parallel, outside any transaction. */
+/**
+ * How many members' calendars one read asks at once: a team page's 20 in three rounds, and "Everyone on the
+ * roster" on a big workspace never a burst of a hundred calls at the providers.
+ */
+const BUSY_READS_AT_ONCE = 8;
+
+/** Each member's calendars, read once each, `BUSY_READS_AT_ONCE` at a time, outside any transaction. */
 export async function memberBusy(
   read: BusyReader,
   workspaceId: string,
@@ -248,20 +268,22 @@ export async function memberBusy(
   from: Date,
   to: Date,
 ): Promise<ReadonlyMap<string, MembersBusy>> {
-  const answers = await Promise.all(
-    memberIds.map(async (memberId) => {
-      const answer = await read({ workspaceId, memberId, from: from.toISOString(), to: to.toISOString() });
-      const busy: MembersBusy = {
-        busy:
-          answer.status === 'read'
-            ? answer.busy.map((each) => ({ start: new Date(each.start), end: new Date(each.end) }))
-            : [],
-        blocked: answer.status === 'blocked',
-        noCalendar: answer.status === 'none',
-      };
-      return [memberId, busy] as const;
-    }),
-  );
+  const readOne = async (memberId: string) => {
+    const answer = await read({ workspaceId, memberId, from: from.toISOString(), to: to.toISOString() });
+    const busy: MembersBusy = {
+      busy:
+        answer.status === 'read'
+          ? answer.busy.map((each) => ({ start: new Date(each.start), end: new Date(each.end) }))
+          : [],
+      blocked: answer.status === 'blocked',
+      noCalendar: answer.status === 'none',
+    };
+    return [memberId, busy] as const;
+  };
+  const answers: (readonly [string, MembersBusy])[] = [];
+  for (let start = 0; start < memberIds.length; start += BUSY_READS_AT_ONCE) {
+    answers.push(...(await Promise.all(memberIds.slice(start, start + BUSY_READS_AT_ONCE).map(readOne))));
+  }
   return new Map(answers);
 }
 
@@ -306,12 +328,15 @@ export function memberSlots(
 
 /** A rotation's members as the pick reads them: their counts in the window and calibration. */
 export function candidatesOf(rotation: PageRotation, standing: RotationStanding | undefined): readonly Candidate[] {
-  return rotation.members.map((member) => {
+  const calibrated = rosterCalibration(
+    rotation.members.map((member) => ({ ...member, count: standing?.counts.get(member.memberId)?.count ?? 0 })),
+  );
+  return rotation.members.map((member, index) => {
     const counted = standing?.counts.get(member.memberId);
     return {
       memberId: member.memberId,
       count: counted?.count ?? 0,
-      calibration: member.calibration,
+      calibration: calibrated[index] ?? member.calibration,
       weight: member.weight,
       priority: member.priority,
       ...(counted === undefined ? {} : { lastAssignedAt: counted.lastAssignedAt }),

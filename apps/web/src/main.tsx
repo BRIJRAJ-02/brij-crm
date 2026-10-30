@@ -83,6 +83,8 @@ const data = createDataLayer({
   }),
   // The session ended under the person: sign in says so, and whether a change was lost with it.
   onSignedOut: (redirectTo, { unsaved }) => {
+    // Nothing of the workspace stays behind sign in: a toast naming a record (Ada Lovelace created) goes too.
+    toasts.queue.clear();
     goTo(signInHref(redirectTo, unsaved ? 'unsaved' : 'ended'));
   },
   onSessionChange: forgetPages,
@@ -130,10 +132,9 @@ const data = createDataLayer({
     const exported = data.exports.forJob(job.id);
     if (job.kind === 'records.export' && exported !== undefined) return;
     if (job.kind === 'records.export' && job.status === 'succeeded' && exportId !== undefined) {
-      const changed = job.result?.changedWhileWritten === true;
       toasts.toast({
-        tone: changed ? 'info' : 'success',
-        message: (changed ? exportToast.readyChanged : exportToast.ready)(exported?.fileName ?? job.label),
+        tone: 'success',
+        message: exportToast.ready(exported?.fileName ?? job.label),
         action: {
           label: exportToast.download,
           onAction: () => {

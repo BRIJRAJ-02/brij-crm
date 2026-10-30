@@ -23,6 +23,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import { actorColumns, timestamptz, workspaceId } from './common.ts';
 import { comments } from './comments.ts';
+import { formSubmissions } from './forms.ts';
 import { notes } from './notes.ts';
 import { records } from './records.ts';
 import { tasks } from './tasks.ts';
@@ -30,7 +31,13 @@ import { joinRequests } from './team.ts';
 import { actorConstraints, members } from './workspaces.ts';
 
 /** Why a member was notified (spec 0038, decision 8). */
-export const notificationKind = pgEnum('notification_kind', ['mention', 'reply', 'task_assigned', 'join_request']);
+export const notificationKind = pgEnum('notification_kind', [
+  'mention',
+  'reply',
+  'task_assigned',
+  'form_submission',
+  'join_request',
+]);
 
 const actor = actorColumns('actor');
 
@@ -55,7 +62,9 @@ export const notifications = pgTable(
     taskId: uuid('task_id'),
     /** A mention in a note (spec 0038 with spec 0019): the note, and its record in `recordId`. */
     noteId: uuid('note_id'),
-    /** A request to join (migration 0127): told to each holder of `members.invite`. */
+    /** A form's new submission (spec 0023, AC-568): the submission, never its answers. */
+    submissionId: uuid('submission_id'),
+    /** A request to join (migration 0131): told to each holder of `members.invite`. */
     joinRequestId: uuid('join_request_id'),
     createdAt: timestamptz('created_at').notNull().defaultNow(),
     readAt: timestamptz('read_at'),
@@ -91,19 +100,29 @@ export const notifications = pgTable(
       columns: [t.workspaceId, t.noteId],
       foreignColumns: [notes.workspaceId, notes.id],
     }).onDelete('cascade'),
+    foreignKey({
+      name: 'notifications_submission',
+      columns: [t.workspaceId, t.submissionId],
+      foreignColumns: [formSubmissions.workspaceId, formSubmissions.id],
+    }).onDelete('cascade'),
     // A comment notification names its comment, thread and record; a task one its task; a note mention its note
-    // and record; a join request its request alone. `kind::text`: migration 0127 added the value in its own
-    // transaction.
+    // and record; a submission one its submission (and its record, once filed); a join request its request
+    // alone. Kinds compare as text (0130, 0131): each value was added in its own migration's transaction.
     check(
       'notifications_subject',
       sql`(${t.kind}::text = 'task_assigned' and ${t.taskId} is not null and ${t.commentId} is null
-          and ${t.noteId} is null and ${t.joinRequestId} is null)
+          and ${t.noteId} is null and ${t.submissionId} is null and ${t.joinRequestId} is null)
         or (${t.kind}::text in ('mention', 'reply') and ${t.commentId} is not null and ${t.threadId} is not null
-          and ${t.recordId} is not null and ${t.taskId} is null and ${t.noteId} is null and ${t.joinRequestId} is null)
+          and ${t.recordId} is not null and ${t.taskId} is null and ${t.noteId} is null and ${t.submissionId} is null
+          and ${t.joinRequestId} is null)
         or (${t.kind}::text = 'mention' and ${t.noteId} is not null and ${t.recordId} is not null
-          and ${t.commentId} is null and ${t.threadId} is null and ${t.taskId} is null and ${t.joinRequestId} is null)
+          and ${t.commentId} is null and ${t.threadId} is null and ${t.taskId} is null and ${t.submissionId} is null
+          and ${t.joinRequestId} is null)
+        or (${t.kind}::text = 'form_submission' and ${t.submissionId} is not null and ${t.commentId} is null
+          and ${t.threadId} is null and ${t.taskId} is null and ${t.noteId} is null and ${t.joinRequestId} is null)
         or (${t.kind}::text = 'join_request' and ${t.joinRequestId} is not null and ${t.recordId} is null
-          and ${t.threadId} is null and ${t.commentId} is null and ${t.taskId} is null and ${t.noteId} is null)`,
+          and ${t.threadId} is null and ${t.commentId} is null and ${t.taskId} is null and ${t.noteId} is null
+          and ${t.submissionId} is null)`,
     ),
     // One per recipient per comment, and per task assignment.
     uniqueIndex('notifications_one_per_comment')
@@ -127,6 +146,9 @@ export const notifications = pgTable(
     uniqueIndex('notifications_one_per_note')
       .on(t.workspaceId, t.memberId, t.noteId)
       .where(sql`${t.noteId} is not null`),
+    uniqueIndex('notifications_one_per_submission')
+      .on(t.workspaceId, t.memberId, t.submissionId)
+      .where(sql`${t.submissionId} is not null`),
     // The inbox and Done tabs, newest first.
     index('notifications_inbox')
       .on(t.workspaceId, t.memberId, t.createdAt.desc(), t.id.desc())
@@ -138,6 +160,10 @@ export const notifications = pgTable(
     index('notifications_unread')
       .on(t.workspaceId, t.memberId, t.createdAt.desc())
       .where(sql`${t.readAt} is null and ${t.doneAt} is null`),
+    // A submission's delete takes its notifications with it.
+    index('notifications_by_submission')
+      .on(t.workspaceId, t.submissionId)
+      .where(sql`${t.submissionId} is not null`),
     // The purge's delete of a record's notifications.
     index('notifications_by_record')
       .on(t.workspaceId, t.recordId)

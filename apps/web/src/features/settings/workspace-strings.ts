@@ -1,3 +1,5 @@
+import type { GooglePhotoResult } from './google-photo-result.ts';
+
 /** Settings › Workspace › General and Account › Profile copy (spec 0031, slice 7). */
 export const strings = {
   // Workspace › General.
@@ -150,18 +152,10 @@ export const strings = {
       title: 'Google photo not synced',
       text: () => 'Your Google photo couldn’t be synced. Try again.',
     },
-  },
+  } as const satisfies Record<GooglePhotoResult, unknown>,
   yourName: 'Your name',
   email: 'Email',
   emailUse: 'Used to sign in',
   sameAsWorkspace: (zone: string) => `Same as the workspace (${zone})`,
   zoneFollows: 'Your time zone now follows the workspace.',
 } as const;
-
-/** How a Google photo sync went, as the API's way back from Google names it (`?google-photo=`). */
-export type GooglePhotoResult = keyof typeof strings.googlePhoto;
-
-/** True when `value` is one of the results the API sends Profile back with. */
-export function isGooglePhotoResult(value: unknown): value is GooglePhotoResult {
-  return typeof value === 'string' && Object.hasOwn(strings.googlePhoto, value);
-}

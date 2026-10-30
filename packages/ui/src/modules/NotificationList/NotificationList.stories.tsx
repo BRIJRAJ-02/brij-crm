@@ -42,6 +42,17 @@ function sampleItems(): readonly NotificationItem[] {
       isDone: false,
       excerpt: 'Call Globex about the security review',
     },
+    {
+      id: 'n4',
+      kind: 'form_submission',
+      actor: { type: 'form', id: null, name: 'Contact us' },
+      createdAt: '2026-10-07T08:30:00.000Z',
+      isRead: false,
+      isDone: false,
+      formName: 'Contact us',
+      ...(SAMPLE_COMPANIES[2] === undefined ? {} : { record: SAMPLE_COMPANIES[2] }),
+      excerpt: '',
+    },
   ];
 }
 
@@ -95,7 +106,9 @@ function SampleInbox({
               emptyIcon: 'list-filter' as const,
               emptyActions: <Button>Clear filters</Button>,
             }
-          : { emptyBody: 'Mentions, replies to your threads and tasks assigned to you show here.' })}
+          : {
+              emptyBody: 'Mentions, replies to your threads, tasks assigned to you and new form submissions show here.',
+            })}
       />
     </Stage>
   );
@@ -117,6 +130,7 @@ export const Default: Story = {
     await expect(canvas.getByRole('grid', { name: 'Inbox' })).toBeInTheDocument();
     await expect(canvas.getByText('Ada Lovelace mentioned you')).toBeInTheDocument();
     await expect(canvas.getByText('@Grace Hopper')).toBeInTheDocument();
+    await expect(canvas.getByText('Contact us got a new submission')).toBeInTheDocument();
     await userEvent.click(canvas.getByText('Alan Turing replied in a thread'));
     await expect(args.onAction).toHaveBeenCalledWith('n2');
   },
@@ -160,7 +174,7 @@ export const Empty: Story = {
   args: { isEmpty: true },
   play: async ({ canvas }) => {
     await expect(canvas.getByText('You’re all caught up.')).toBeInTheDocument();
-    await expect(canvas.getByText(/tasks assigned to you show here/)).toBeInTheDocument();
+    await expect(canvas.getByText(/new form submissions show here/)).toBeInTheDocument();
   },
 };
 

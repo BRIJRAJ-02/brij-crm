@@ -13,12 +13,12 @@ import { exportToast } from './toast.ts';
 export type ExportRequest = Omit<Parameters<DataLayer['exports']['start']>[1], 'id'>;
 
 /** Where a job stands, for the export's toast. */
-export type ExportOutcome = 'working' | 'ready' | 'changed' | 'failed';
+export type ExportOutcome = 'working' | 'ready' | 'failed';
 
-/** How an export's job stands: still writing, written (exactly, or with records changing under it), or not. */
+/** How an export's job stands: still writing, written (from a snapshot of its ids, late trap #40), or not. */
 export function exportOutcome(job: Pick<JobView, 'status' | 'result'> | undefined): ExportOutcome {
   if (job === undefined) return 'working';
-  if (job.status === 'succeeded') return job.result?.changedWhileWritten === true ? 'changed' : 'ready';
+  if (job.status === 'succeeded') return 'ready';
   if (job.status === 'failed' || job.status === 'cancelled') return 'failed';
   return 'working';
 }
@@ -60,8 +60,8 @@ export function runExport(deps: ExportDeps, slug: string, name: string, request:
     if (outcome === 'failed') return failed(job.error?.message);
     const exportId = typeof job.result?.exportId === 'string' ? job.result.exportId : view.id;
     return {
-      tone: outcome === 'changed' ? 'info' : 'success',
-      message: (outcome === 'changed' ? exportToast.readyChanged : exportToast.ready)(view.fileName),
+      tone: 'success',
+      message: exportToast.ready(view.fileName),
       action: { label: exportToast.download, onAction: () => download(data.exports.downloadPath(slug, exportId)) },
     };
   };

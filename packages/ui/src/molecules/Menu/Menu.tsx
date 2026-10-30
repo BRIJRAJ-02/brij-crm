@@ -1,7 +1,9 @@
 import {
   createContext,
+  createElement,
   useContext,
   useMemo,
+  type JSX,
   type KeyboardEvent,
   type ReactElement,
   type ReactNode,
@@ -407,6 +409,47 @@ interface ItemState {
   readonly hasSubmenu: boolean;
 }
 
+/** Whether a key press is the move's: Alt with the up or down arrow. */
+const isMoveKey = (event: KeyboardEvent) => event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown');
+
+/** A movable item's element: its keys said (aria-keyshortcuts), and Alt with an arrow moving it, not the focus. */
+function moveKeys(onMove: (direction: 'up' | 'down') => void) {
+  const move = (event: KeyboardEvent) => {
+    // The move, not the menu's own arrow: focus stays on this item as it moves.
+    event.preventDefault();
+    event.stopPropagation();
+    onMove(event.key === 'ArrowUp' ? 'up' : 'down');
+  };
+  // createElement, not JSX: the element is React Aria's own menuitem (its role, tab stop and handlers arrive in
+  // `element`), which the JSX lint can't see.
+  return (element: JSX.IntrinsicElements['div'] | JSX.IntrinsicElements['a']) =>
+    isLinkElement(element)
+      ? createElement('a', {
+          ...element,
+          'aria-keyshortcuts': MOVE_KEYS,
+          onKeyDown: (event: KeyboardEvent<HTMLAnchorElement>) => {
+            if (isMoveKey(event)) move(event);
+            else element.onKeyDown?.(event);
+          },
+        })
+      : createElement('div', {
+          ...element,
+          'aria-keyshortcuts': MOVE_KEYS,
+          onKeyDown: (event: KeyboardEvent<HTMLDivElement>) => {
+            if (isMoveKey(event)) move(event);
+            else element.onKeyDown?.(event);
+          },
+        });
+}
+
+/** Whether React Aria draws the item as a link (it has an address). */
+const isLinkElement = (
+  element: JSX.IntrinsicElements['div'] | JSX.IntrinsicElements['a'],
+): element is JSX.IntrinsicElements['a'] => 'href' in element;
+
+/** The keys that move a movable item, as aria-keyshortcuts says them. */
+const MOVE_KEYS = 'Alt+ArrowUp Alt+ArrowDown';
+
 function itemProps({
   id,
   children,
@@ -422,14 +465,9 @@ function itemProps({
     ...(onMove === undefined
       ? {}
       : {
-          'aria-keyshortcuts': 'Alt+ArrowUp Alt+ArrowDown',
-          onKeyDown: (event: KeyboardEvent<HTMLDivElement>) => {
-            if (!event.altKey || (event.key !== 'ArrowUp' && event.key !== 'ArrowDown')) return;
-            // The move, not the menu's own arrow: focus stays on this item as it moves.
-            event.preventDefault();
-            event.stopPropagation();
-            onMove(event.key === 'ArrowUp' ? 'up' : 'down');
-          },
+          // React Aria's MenuItem passes neither aria-keyshortcuts nor a key handler through, so both go on the
+          // element through its `render`, the menu's own keys running after the move's.
+          render: moveKeys(onMove),
         }),
     id: id ?? children,
     textValue: children,

@@ -17,8 +17,20 @@ import type {
   VisibleMembers,
 } from '@crm/contracts';
 import { toDataError, type DataError } from '../errors.ts';
+import type { MutationLog } from '../live/mutations.ts';
 import type { Notice } from '../notice.ts';
 import { refusalSummary } from '../refusals.ts';
+import { createTimeOffStore, type TimeOffApi, type TimeOffDraft } from './time-off.ts';
+import { createTeamWeekStore, type TeamWeekApi } from './team-week.ts';
+import type {
+  BulkHoursResult,
+  DayHours,
+  SetDayResult,
+  TeamWeek,
+  TimeOffList,
+  TimeOffSaved,
+  WeeklyHours,
+} from '@crm/contracts';
 
 export type { DelegationTarget, DelegationView, SchedulingLevel, VisibleMember } from '@crm/contracts';
 
@@ -55,6 +67,10 @@ export interface SchedulingAccessApi {
   readonly grant: (input: { readonly workspace: string } & DelegationGrant) => Promise<DelegationView>;
   readonly revoke: (input: { readonly workspace: string; readonly id: string }) => Promise<void>;
   readonly visible: (input: { readonly workspace: string }) => Promise<VisibleMembers>;
+  /** Time off's calls (spec 0037): its store loads in this same chunk. Absent in tests that don't need it. */
+  readonly timeOff?: TimeOffApi;
+  /** The Team week's calls (spec 0037, job J6): its store loads in this same chunk. Absent in tests that don't need it. */
+  readonly teamWeek?: TeamWeekApi;
 }
 
 /**
@@ -77,21 +93,138 @@ export interface SchedulingAccessWire<O> {
       };
     };
     readonly members: { visible(input: { readonly workspace: string }, options: O): Promise<VisibleMembers> };
+    readonly timeOff: {
+      list(input: { readonly workspace: string; readonly memberId?: string }, options: O): Promise<TimeOffList>;
+      create(
+        input: {
+          readonly workspace: string;
+          readonly id: string;
+          readonly memberId?: string;
+          readonly mutationId: string;
+        } & TimeOffDraft,
+        options: O,
+      ): Promise<TimeOffSaved>;
+      update(
+        input: {
+          readonly workspace: string;
+          readonly id: string;
+          readonly updatedAt: string;
+          readonly mutationId: string;
+        } & TimeOffDraft,
+        options: O,
+      ): Promise<TimeOffSaved>;
+      delete(
+        input: { readonly workspace: string; readonly id: string; readonly mutationId: string },
+        options: O,
+      ): Promise<unknown>;
+    };
+    readonly availability: {
+      teamWeek(
+        input: {
+          readonly workspace: string;
+          readonly weekStart: string;
+          readonly search?: string;
+          readonly cursor?: string;
+        },
+        options: O,
+      ): Promise<TeamWeek>;
+      setDay(
+        input: {
+          readonly workspace: string;
+          readonly memberId: string;
+          readonly date: string;
+          readonly hours: DayHours;
+          readonly updatedAt: string | null;
+          readonly mutationId: string;
+        },
+        options: O,
+      ): Promise<SetDayResult>;
+      copyWeek(
+        input: {
+          readonly workspace: string;
+          readonly memberIds: string[];
+          readonly fromWeekStart: string;
+          readonly toWeekStart: string;
+          readonly mutationId: string;
+        },
+        options: O,
+      ): Promise<BulkHoursResult>;
+      setUsualHours(
+        input: {
+          readonly workspace: string;
+          readonly memberIds: string[];
+          readonly weekly: WeeklyHours;
+          readonly mutationId: string;
+        },
+        options: O,
+      ): Promise<BulkHoursResult>;
+    };
   };
   readonly call: <T>(run: (options: O) => Promise<T>) => Promise<T>;
   readonly beforeRead: (workspace: string) => Promise<void>;
   readonly mintId: () => string;
+  /**
+   * This tab's writes whose echoes are due: a time off write's own `time_off` event is then skipped, since the store
+   * already read again what it changed. Left out (tests), every echo is heard.
+   */
+  readonly mutations?: Pick<MutationLog, 'sent' | 'answered' | 'forget'>;
 }
 
 /** The store's calls over the data layer's client (each write with its own mutation id). */
-export function wireApi<O>({ client, call, beforeRead, mintId }: SchedulingAccessWire<O>): SchedulingAccessApi {
+export function wireApi<O>({
+  client,
+  call,
+  beforeRead,
+  mintId,
+  mutations,
+}: SchedulingAccessWire<O>): SchedulingAccessApi {
   const { delegations } = client.scheduling;
+  /** A time off write under a mutation id this tab knows, so its one `time_off` echo is skipped. */
+  const echoed = async <T>(send: (mutationId: string) => Promise<T>): Promise<T> => {
+    const mutationId = mintId();
+    mutations?.sent(mutationId);
+    try {
+      const answer = await send(mutationId);
+      mutations?.answered(mutationId, 1);
+      return answer;
+    } catch (error) {
+      mutations?.forget(mutationId);
+      throw error;
+    }
+  };
   return {
     list: (input) => beforeRead(input.workspace).then(() => call((options) => delegations.list(input, options))),
     grant: (input) => call((options) => delegations.grant({ ...input, mutationId: mintId() }, options)),
     revoke: (input) => call((options) => delegations.revoke({ ...input, mutationId: mintId() }, options)),
     visible: (input) =>
       beforeRead(input.workspace).then(() => call((options) => client.members.visible(input, options))),
+    timeOff: {
+      list: (input) => beforeRead(input.workspace).then(() => call((options) => client.timeOff.list(input, options))),
+      create: (input) =>
+        echoed((mutationId) => call((options) => client.timeOff.create({ ...input, mutationId }, options))),
+      update: (input) =>
+        echoed((mutationId) => call((options) => client.timeOff.update({ ...input, mutationId }, options))),
+      remove: (input) =>
+        echoed((mutationId) => call((options) => client.timeOff.delete({ ...input, mutationId }, options))).then(
+          () => undefined,
+        ),
+    },
+    teamWeek: {
+      read: (input) =>
+        beforeRead(input.workspace).then(() => call((options) => client.availability.teamWeek(input, options))),
+      setDay: (input) => call((options) => client.availability.setDay({ ...input, mutationId: mintId() }, options)),
+      copyWeek: (input) =>
+        call((options) =>
+          client.availability.copyWeek({ ...input, memberIds: [...input.memberIds], mutationId: mintId() }, options),
+        ),
+      setUsualHours: (input) =>
+        call((options) =>
+          client.availability.setUsualHours(
+            { ...input, memberIds: [...input.memberIds], mutationId: mintId() },
+            options,
+          ),
+        ),
+    },
   };
 }
 
@@ -102,6 +235,10 @@ export interface SchedulingAccessDeps {
   readonly notify: (notice: Notice) => void;
   /** The clock, in milliseconds; tests pass their own. */
   readonly now?: () => number;
+  /** Watches a workspace's live events while a Team week or a time off list of it is held. */
+  readonly watch?: (workspace: string) => () => void;
+  /** Time off changed here (a write landed): Bookings' held reads, whose Host away flags it sets, read again. */
+  readonly onTimeOffChanged?: (workspace: string) => void;
 }
 
 /** A read this recent serves a new holder as it is: the loader and the screen it opens hold it together. */
@@ -160,6 +297,34 @@ export function createSchedulingAccessStore(deps: SchedulingAccessDeps) {
   const lists = new Map<string, ReturnType<typeof make>>();
   const visibles = new Map<string, Promise<readonly VisibleMember[]>>();
   const keyOf = (workspace: string, scope: DelegationsScope) => `${workspace}\u0000${scope}`;
+  // Time off (spec 0037), in this same chunk: Availability opens this store anyway for whose schedules show.
+  const { timeOff: timeOffApi } = deps.api;
+  const timeOff = createTimeOffStore({
+    api: timeOffApi ?? {
+      list: () => Promise.reject(new Error('time off is not wired')),
+      create: () => Promise.reject(new Error('time off is not wired')),
+      update: () => Promise.reject(new Error('time off is not wired')),
+      remove: () => Promise.reject(new Error('time off is not wired')),
+    },
+    mintId: deps.mintId,
+    notify: deps.notify,
+    ...(deps.watch === undefined ? {} : { watch: deps.watch }),
+    // The Team week draws Away from time off, and Bookings flags Host away by it: both read again at once.
+    onChanged: (workspace) => {
+      teamWeek.changed(workspace);
+      deps.onTimeOffChanged?.(workspace);
+    },
+    ...(deps.now === undefined ? {} : { now: deps.now }),
+  });
+
+  // The Team week (spec 0037, job J6), in this same chunk: Availability opens this store for whose rows show.
+  const notWired = () => Promise.reject(new Error('the Team week is not wired'));
+  const teamWeek = createTeamWeekStore({
+    api: deps.api.teamWeek ?? { read: notWired, setDay: notWired, copyWeek: notWired, setUsualHours: notWired },
+    notify: deps.notify,
+    ...(deps.watch === undefined ? {} : { watch: deps.watch }),
+    ...(deps.now === undefined ? {} : { now: deps.now }),
+  });
 
   function make(workspace: string, scope: DelegationsScope) {
     let state: DelegationsState = { status: 'loading' };
@@ -264,6 +429,29 @@ export function createSchedulingAccessStore(deps: SchedulingAccessDeps) {
   };
 
   return {
+    /** A member's time off (spec 0037, AC-1286): held per workspace and member, Availability's Time off section. */
+    timeOff,
+    /**
+     * The Team week (spec 0037, AC-1289 to AC-1296): weeks of the roster held per workspace, week and search; a cell's
+     * change shows at once and is put back if refused; Copy week and Set usual hours wait, then the weeks read again.
+     */
+    teamWeek,
+    /**
+     * What Availability › Team's loader needs, in this chunk so the first load carries none of it: the week (`date`'s
+     * Monday, else this week's in `timeZone`), its first read settled (a failure shows in the screen), and the members
+     * in the reader's See reach for "Set usual hours for…".
+     */
+    async openTeamWeek(workspace: string, date: string | undefined, search: string, timeZone: string) {
+      const week = teamWeek.weekOf(date, timeZone);
+      const [members] = await Promise.all([
+        this.visible(workspace),
+        teamWeek
+          .held(workspace, week, search)
+          .ready()
+          .catch(() => undefined),
+      ]);
+      return { week, members };
+    },
     /** A held list of delegations: the member's own both ways, or the workspace's (`members.manage`). */
     delegations: (workspace: string, scope: DelegationsScope): DelegationsHeld => of(workspace, scope).held,
     /**
@@ -373,12 +561,16 @@ export function createSchedulingAccessStore(deps: SchedulingAccessDeps) {
     /** The member's reach changed (an `access` row naming them): every held list reads again, `visible` too. */
     reload(workspace: string): void {
       visibles.delete(workspace);
+      teamWeek.changed(workspace);
+      timeOff.changed(workspace);
       for (const [key, list] of lists) if (key.startsWith(`${workspace}\u0000`)) list.reread();
     },
     /** Signed out: forgets every workspace's. */
     clear(): void {
       lists.clear();
       visibles.clear();
+      timeOff.clear();
+      teamWeek.clear();
     },
   };
 }

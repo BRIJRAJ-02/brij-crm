@@ -43,6 +43,8 @@ export interface PageRecord extends BookingPageSettings {
   readonly workspaceId: string;
   readonly publicKey: string;
   readonly kind: 'personal' | 'collective' | 'round_robin';
+  /** A person's page (`member`), or the workspace's own link (`workspace`), which its `ownerMemberId` only made. */
+  readonly scope: 'member' | 'workspace';
   readonly ownerMemberId: string;
   /** The owner member's identity, which their handle belongs to; null for a member without one. */
   readonly ownerUserId: string | null;
@@ -95,6 +97,7 @@ export function pageOf(
     workspaceId: row.workspaceId,
     publicKey: row.publicKey,
     kind: KINDS.has(row.kind) ? (row.kind as PageRecord['kind']) : 'personal',
+    scope: row.scope === 'workspace' ? 'workspace' : 'member',
     ownerMemberId: row.ownerMemberId,
     ownerUserId: row.ownerUserId,
     title: row.title,

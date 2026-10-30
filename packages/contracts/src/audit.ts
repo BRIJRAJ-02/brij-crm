@@ -134,6 +134,7 @@ export const AUDIT_FIELDS = [
   'reason',
   'rules',
   'leadsTo',
+  'people',
 ] as const;
 /** A field a change names. */
 export const AuditField = z.enum(AUDIT_FIELDS);
@@ -261,6 +262,8 @@ export const AuditEntryView = z.discriminatedUnion('action', [
   ),
   entry(['routing.changed'], z.discriminatedUnion('type', [form, bookingPage]), NoParams),
   entry(['form.owner_changed'], form, NoParams),
+  /** How many people the form emailed before and after: who they are stays in the row. */
+  entry(['form.notify_changed'], form, NoParams),
   /** A record link row names the booking only: the record is never named or sent. */
   entry(
     ['booking.no_show', 'booking.no_show_undone', 'booking.record_linked', 'booking.record_unlinked'],
@@ -294,6 +297,8 @@ export const AuditEntryView = z.discriminatedUnion('action', [
   ),
   /** Time blocked or a block removed (spec 0037, AC-1263): the target is the member whose time it is. */
   entry(['block.created', 'block.removed'], member, NoParams),
+  /** Time off added, changed or removed (spec 0037, AC-1282): the target is the member who is away. */
+  entry(['time_off.created', 'time_off.changed', 'time_off.deleted'], member, NoParams),
   /** A booking made, moved or cancelled by someone other than its host (spec 0037, AC-1263). */
   entry(
     ['booking.changed_for'],

@@ -1,4 +1,5 @@
-// Settings, Background jobs: the page's copy, apart from the objects pages' own (strings.ts).
+// Settings, Background jobs: the page's copy, apart from the objects pages' own (strings.ts) and the end toast's
+// (jobs-toast-strings.ts).
 import type { JobStatus } from '@crm/data';
 
 /** Why records in a job were refused, by the code the server gave (SW33): the reasons a bulk change meets. */
@@ -123,11 +124,4 @@ export const strings = {
   failedText: 'Something went wrong. Try again in a moment.',
   /** Local and previews only (AC-123). */
   runTest: 'Run a test job',
-  /** The toast when a job this browser started ends (AC-119): "Test job: Done, 6 refused". */
-  finished: (label: string, how: string) => `${label}: ${how}`,
-  finishedDone: 'Done',
-  finishedRefused: (count: string) => `Done, ${count} refused`,
-  finishedFailed: 'Failed',
-  finishedCancelled: 'Cancelled',
-  view: 'View',
 } as const;

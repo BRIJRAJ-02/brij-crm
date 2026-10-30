@@ -1,7 +1,8 @@
 import type { RecordRefDisplay, TaskView } from '@crm/data';
 import { describe, expect, it } from 'vitest';
 import { withLinks } from '../records/timeline.ts';
-import { chipOrder, isTaskParam, memberDisplay, tabCount, toTaskEntry } from './entries.ts';
+import { isTaskParam } from '../records/params.ts';
+import { chipOrder, memberDisplay, tabCount, toTaskEntry } from './entries.ts';
 
 const acme: RecordRefDisplay = { objectId: 'o1', recordId: 'r1', name: 'Acme', kind: 'company' };
 const ada: RecordRefDisplay = { objectId: 'o2', recordId: 'r2', name: 'Ada', kind: 'person' };

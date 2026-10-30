@@ -30,7 +30,8 @@ export type AccessEntry =
   | { readonly publicForm: true }
   /**
    * Booking pages (spec 0025): `booking.manage` first (403 `FORBIDDEN`), then the reader's own pages, or anyone's
-   * with `booking.admin`; another's page answers as absent. A booking: its host, a co-host, its page's owner, or
+   * with `booking.admin`; another's page answers as absent (a workspace link is `booking.admin`'s alone, and its maker
+   * owns nothing of it). A booking: its host, a co-host, its page's owner (never a workspace link's maker), or
    * `booking.admin` (`booking/seen.ts`, the one rule); the Bookings reads take `hosts: 'mine'` unless asked for all.
    */
   | { readonly bookingPages: true }
@@ -74,6 +75,8 @@ export type AccessEntry =
 export const ACCESS_TABLE = {
   // Definitions: schema.manage (AC-135).
   defineObject: { permission: 'schema.manage' },
+  // What an attribute's change would touch (the flow pass), shown in its settings before the change.
+  attributeImpact: { permission: 'schema.manage' },
   updateObject: { permission: 'schema.manage' },
   setObjectArchived: { permission: 'schema.manage' },
   reorderObject: { permission: 'schema.manage' },
@@ -189,6 +192,10 @@ export const ACCESS_TABLE = {
   countMatches: { data: 'read' },
   // A board's first load (spec 0021): object read, and the filter's field checks through the compiler.
   queryGroups: { data: 'read' },
+  // A view's footer calculations and a board's column totals (the CRM flow pass): object read, and the filter's
+  // field checks through the compiler.
+  aggregateMatches: { data: 'read' },
+  aggregateGroups: { data: 'read' },
   getHistory: { data: 'read' },
   getValuesAsOf: { data: 'read' },
   getTimeInStages: { data: 'read' },
@@ -423,6 +430,18 @@ export const ACCESS_TABLE = {
   deleteSchedule: { schedules: true },
   createTimeBlock: { scheduling: 'manage' },
   removeTimeBlock: { scheduling: 'manage' },
+  // Time off (spec 0037, AC-1282, AC-1286): read with See (reason and note with Manage), changed with Manage; the
+  // caller's own `booking.manage` first.
+  listTimeOff: { scheduling: 'view' },
+  createTimeOff: { scheduling: 'manage' },
+  updateTimeOff: { scheduling: 'manage' },
+  deleteTimeOff: { scheduling: 'manage' },
+  // The Team week (spec 0037, AC-1289 to AC-1293): rows from the reader's See reach (themself at least); a cell, a
+  // copied week and usual hours need Manage over each member's hours (their own with `availability.own`).
+  readTeamWeek: { filtered: 'schedulingReach' },
+  setDayHours: { scheduling: 'manage' },
+  copyWeek: { scheduling: 'manage' },
+  setUsualHours: { scheduling: 'manage' },
   bookAsHost: { scheduling: 'manage' },
   // Changing a booking from Bookings (spec 0025, milestone 2): booking.manage first, then the booking's row.
   hostTarget: { bookingPages: true },

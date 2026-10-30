@@ -1,6 +1,6 @@
 import { isDataError } from '@crm/data';
 import { createFileRoute, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
-import { isTaskParam } from '../features/tasks/entries.ts';
+import { isTaskParam } from '../features/records/params.ts';
 import { MyTasksScreen } from '../features/tasks/MyTasksScreen.tsx';
 import { strings } from '../features/tasks/strings.ts';
 import { failedPage, missingPage, pendingPage } from '../features/workspace/ObjectScreen.tsx';

@@ -42,6 +42,9 @@ export const availabilityHref = (slug: string, member?: string) =>
 /** Bookings › Calendars: a member's own calendar connections (specs 0024 and 0026). */
 export const calendarsHref = (slug: string) => `/w/${slug}/bookings/calendars`;
 
+/** Bookings' own tab (its week or list, as the member left it). */
+export const bookingsHref = (slug: string) => `/w/${slug}/bookings`;
+
 /** Bookings › Round robin: the groups a booking is shared out between (spec 0029). */
 export const roundRobinHref = (slug: string) => `/w/${slug}/bookings/round-robin`;
 
@@ -59,11 +62,24 @@ export function memberSearch(search: Record<string, unknown>): { readonly member
   return typeof search.member === 'string' && UUID.test(search.member) ? { member: search.member.toLowerCase() } : {};
 }
 
-/** The Availability tab's search: `?member=` as `memberSearch`, and `?schedule=`, the schedule open (else the default). */
+/**
+ * The Availability tab's search: `?member=` as `memberSearch`, and `?schedule=`, the schedule open (else the default);
+ * or `?view=team`, the Team week (the Roster, spec 0037), with `?week=` (a Monday) and `?q=` (a name).
+ */
 export function availabilitySearch(search: Record<string, unknown>): {
   readonly member?: string;
   readonly schedule?: string;
+  readonly view?: 'team';
+  readonly week?: string;
+  readonly q?: string;
 } {
+  if (search.view === 'team') {
+    return {
+      view: 'team',
+      ...(typeof search.week === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(search.week) ? { week: search.week } : {}),
+      ...(typeof search.q === 'string' && search.q.trim() !== '' ? { q: search.q.slice(0, 100) } : {}),
+    };
+  }
   return {
     ...memberSearch(search),
     ...(typeof search.schedule === 'string' && UUID.test(search.schedule)

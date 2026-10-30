@@ -42,6 +42,8 @@ const READS: ReadonlySet<string> = new Set([
   'workspaces.slugAvailable',
   'objects.list',
   'attributes.list',
+  // What an attribute's change would touch, read before the change (the flow pass).
+  'attributes.impact',
   'members.list',
   // Invitations (spec 0031): the open list, and the invitation page's look (no session).
   'invitations.list',
@@ -166,6 +168,9 @@ const READS: ReadonlySet<string> = new Set([
   // Availability schedules (spec 0035).
   'schedules.members',
   'schedules.list',
+  'timeOff.list',
+  // The Team week (spec 0037): the roster over everyone's default schedules.
+  'availability.teamWeek',
   'schedules.get',
   // Round robin (spec 0029): the rotations a member may see, and why a booking went to its host.
   'rotations.list',
@@ -375,6 +380,30 @@ async function schedule(m: Member) {
   return { made, named: schedules.map((each) => each.id ?? '').sort() };
 }
 
+/** A Monday two to three weeks ahead: inside the Team week's reach (a year on), and never in a week already gone. */
+function rosterMonday(weeksOn: number): string {
+  const day = new Date();
+  day.setUTCDate(day.getUTCDate() + 14 + ((8 - day.getUTCDay()) % 7) + weeksOn * 7);
+  return day.toISOString().slice(0, 10);
+}
+const ROSTER_MONDAY = rosterMonday(0);
+
+/** The member's own Monday on the Team week, 10 to 2 that week only, as read first so the stale check passes. */
+async function rosterDay(m: Member, mutationId: string) {
+  const week = await m.client.availability.teamWeek({ workspace: m.slug, weekStart: ROSTER_MONDAY });
+  const own = week.rows[0];
+  if (own === undefined) throw new Error('The Team week had no row for its reader.');
+  const set = await m.client.availability.setDay({
+    workspace: m.slug,
+    memberId: own.memberId,
+    date: ROSTER_MONDAY,
+    hours: [['10:00', '14:00']],
+    updatedAt: own.schedule.updatedAt,
+    mutationId,
+  });
+  return { memberId: own.memberId, schedule: set.schedule };
+}
+
 /**
  * A calendar connection of the member's with one synced meeting that shows on a person they made: stored by hand
  * (the owner role), as a sync would leave them, since connecting is the OAuth redirect, not a procedure.
@@ -577,8 +606,8 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
       { kind: 'access', item_ids: [mate.memberId], mutation_id: mutationId },
     ];
   },
-  // Domain join (slice 6, AC-819, AC-820): settings and requests nobody's screen follows live, so no row, until an
-  // approval brings someone in (one members row).
+  // Domain join (slice 6, AC-819, AC-820): settings nobody's screen follows live, so no row; a request tells the
+  // admins in their inbox (one notifications row), and an approval brings someone in (one members row).
   'joinRequests.setDomains': async (m, mutationId) => {
     await m.client.joinRequests.setDomains({ workspace: m.slug, domains: ['example.com'], mutationId });
     return [];
@@ -587,7 +616,7 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     await m.client.joinRequests.setDomains({ workspace: m.slug, domains: ['example.com'], mutationId: newId() });
     const asker = await signIn(app);
     await rpcClient(app, asker.cookie).join.request({ workspaceId: m.workspace.id });
-    return [];
+    return [{ kind: 'notifications' }];
   },
   'joinRequests.decide': async (m, mutationId) => {
     await m.client.joinRequests.setDomains({ workspace: m.slug, domains: ['example.com'], mutationId: newId() });
@@ -595,7 +624,7 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     await rpcClient(app, asker.cookie).join.request({ workspaceId: m.workspace.id });
     const [request] = await m.client.joinRequests.list({ workspace: m.slug });
     await m.client.joinRequests.decide({ workspace: m.slug, requestId: request?.id ?? '', approve: true, mutationId });
-    return [{ kind: 'members', mutation_id: mutationId }];
+    return [{ kind: 'notifications' }, { kind: 'members', mutation_id: mutationId }];
   },
   // Slice 7: the workspace's own settings and delete, and its restore, which nobody's screen follows live; a
   // profile change reaches every member's list (one members row).
@@ -1627,6 +1656,98 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     await m.client.bookings.blocks.remove({ workspace: m.slug, id: block.id, mutationId });
     return [];
   },
+  // Time off (spec 0037): one `time_off` row naming nothing, so open tabs read the Team week, time off and Host away
+  // again.
+  'timeOff.create': async (m, mutationId) => {
+    await m.client.timeOff.create({
+      workspace: m.slug,
+      id: newId(),
+      fromDate: '2030-11-03',
+      toDate: '2030-11-07',
+      reason: 'vacation',
+      mutationId,
+    });
+    return [{ kind: 'time_off', item_ids: [], mutation_id: mutationId }];
+  },
+  'timeOff.update': async (m, mutationId) => {
+    const made = await m.client.timeOff.create({
+      workspace: m.slug,
+      id: newId(),
+      fromDate: '2030-11-03',
+      toDate: '2030-11-07',
+      reason: 'vacation',
+      mutationId: newId(),
+    });
+    await m.client.timeOff.update({
+      workspace: m.slug,
+      id: made.entry.id,
+      fromDate: '2030-11-04',
+      toDate: '2030-11-07',
+      reason: 'travel',
+      updatedAt: made.entry.updatedAt,
+      mutationId,
+    });
+    return [
+      { kind: 'time_off', item_ids: [] },
+      { kind: 'time_off', item_ids: [], mutation_id: mutationId },
+    ];
+  },
+  'timeOff.delete': async (m, mutationId) => {
+    const made = await m.client.timeOff.create({
+      workspace: m.slug,
+      id: newId(),
+      fromDate: '2030-11-03',
+      toDate: '2030-11-07',
+      reason: 'sick',
+      mutationId: newId(),
+    });
+    await m.client.timeOff.delete({ workspace: m.slug, id: made.entry.id, mutationId });
+    return [
+      { kind: 'time_off', item_ids: [] },
+      { kind: 'time_off', item_ids: [], mutation_id: mutationId },
+    ];
+  },
+  // The Team week (spec 0037): every write goes through the schedules' write path, so each stores a `schedules` row.
+  'availability.setDay': async (m, mutationId) => {
+    const set = await rosterDay(m, mutationId);
+    return [{ kind: 'schedules', item_ids: [set.schedule.id], mutation_id: mutationId }];
+  },
+  'availability.copyWeek': async (m, mutationId) => {
+    const set = await rosterDay(m, newId());
+    await m.client.availability.copyWeek({
+      workspace: m.slug,
+      memberIds: [set.memberId],
+      fromWeekStart: ROSTER_MONDAY,
+      toWeekStart: rosterMonday(1),
+      mutationId,
+    });
+    return [
+      { kind: 'schedules', item_ids: [set.schedule.id] },
+      { kind: 'schedules', item_ids: [set.schedule.id], mutation_id: mutationId },
+    ];
+  },
+  'availability.setUsualHours': async (m, mutationId) => {
+    const set = await rosterDay(m, newId());
+    const nine = (): [string, string][] => [['09:00', '17:00']];
+    await m.client.availability.setUsualHours({
+      workspace: m.slug,
+      memberIds: [set.memberId],
+      weekly: {
+        mon: [['10:00', '16:00']],
+        tue: nine(),
+        wed: nine(),
+        thu: nine(),
+        fri: nine(),
+        sat: [],
+        sun: [],
+      },
+      mutationId,
+    });
+    return [
+      { kind: 'schedules', item_ids: [set.schedule.id] },
+      { kind: 'schedules', item_ids: [set.schedule.id], mutation_id: mutationId },
+    ];
+  },
   // Imports (spec 0040): made, staged and started through the one write path; start and undo each start a job.
   'imports.create': async (m, mutationId) => {
     await importOf(m, mutationId);
@@ -2209,6 +2330,10 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'profile.archiveItem': 2,
   'profile.deleteItem': 2,
   'bookings.blocks.remove': 2,
+  'timeOff.update': 2,
+  'timeOff.delete': 2,
+  'availability.copyWeek': 2,
+  'availability.setUsualHours': 2,
   'bookings.bookAsHost': 2,
   'bookings.cancel': 3,
   'bookings.markNoShow': 3,

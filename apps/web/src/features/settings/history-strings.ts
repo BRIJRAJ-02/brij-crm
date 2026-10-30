@@ -185,6 +185,7 @@ const SENTENCES: SentenceTemplates = {
         : `changed the routing rules of ${w.thing(entry.target)}`,
     ),
   'form.owner_changed': (entry, w) => actor(`changed who gets ${w.thing(entry.target)}’s leads`),
+  'form.notify_changed': (entry, w) => actor(`changed who is emailed ${w.thing(entry.target)}’s new submissions`),
   'booking.no_show': (entry, w) => actor(`marked ${w.booking(entry.target)} as a no show`),
   'booking.no_show_undone': (entry, w) => actor(`took back the no show on ${w.booking(entry.target)}`),
   'booking.record_linked': (entry, w) => actor(`linked ${w.booking(entry.target)} to a record`),
@@ -224,6 +225,9 @@ const SENTENCES: SentenceTemplates = {
   },
   'block.created': (entry, w) => actor(`blocked time on ${w.persons(entry.target.person)} calendar`),
   'block.removed': (entry, w) => actor(`removed a block from ${w.persons(entry.target.person)} calendar`),
+  'time_off.created': (entry, w) => actor(`added time off for ${w.person(entry.target.person)}`),
+  'time_off.changed': (entry, w) => actor(`changed ${w.persons(entry.target.person)} time off`),
+  'time_off.deleted': (entry, w) => actor(`removed ${w.persons(entry.target.person)} time off`),
   'booking.changed_for': (entry, w) => {
     const verb = { made: 'booked', moved: 'moved', cancelled: 'cancelled' }[entry.params.change];
     return actor(`${verb} ${w.booking(entry.target)} for ${w.person(entry.params.host)}`);

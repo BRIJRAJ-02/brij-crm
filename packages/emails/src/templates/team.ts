@@ -1,8 +1,13 @@
 // Emails about a member's own background work: an import's result (#30), and
 // any other job of theirs that failed (late trap #20). A mention has no email of its own: it goes in the
 // notifications email (spec 0038), the one email a mention sends.
-import type { ImportFinishedEmail, JobFailedEmail, SchedulingChangedEmail } from '@crm/contracts/emails';
-import { plural } from '../format.ts';
+import type {
+  ImportFinishedEmail,
+  JobFailedEmail,
+  SchedulingChangedEmail,
+  StandinCoveringEmail,
+} from '@crm/contracts/emails';
+import { formatMoment, plural } from '../format.ts';
 
 /** A count as the app writes it (1,204). */
 const number = (count: number): string => new Intl.NumberFormat('en-GB').format(count);
@@ -53,19 +58,40 @@ export const importFinished: Template<ImportFinishedEmail> = (params, context) =
   };
 };
 
-/** A background job a member started ended `failed`: which, why, and where their jobs are. */
-export const jobFailed: Template<JobFailedEmail> = (params, context) => ({
-  // "Didn't finish" reads with any job's name, a long one ("Hand on a removed member's work") included.
-  subject: `Didn’t finish: ${params.jobLabel}`,
-  preheader: params.reason,
-  eyebrow: workspaceOf(context),
-  heading: `Didn’t finish: ${params.jobLabel}`,
-  blocks: [
-    { type: 'paragraph', text: params.reason },
-    { type: 'button', label: 'Open Background jobs', url: context.link(params.jobsPath) },
-  ],
-  why: `You got this email because you started this job in ${workspaceOf(context)}.`,
-});
+/** How far a failed job got, in a sentence, so the reader knows how much to check (the reason says what is kept). */
+function progressText(progress: JobFailedEmail['progress']): string | undefined {
+  if (progress === undefined) return undefined;
+  if (progress.done === 0) return 'It stopped before it changed anything.';
+  const of = progress.total === undefined ? '' : ` of ${number(progress.total)}`;
+  return `It got through ${number(progress.done)}${of} before it stopped.`;
+}
+
+/** A background job a member started ended `failed`: which, when they started it, how far it got, why, and where their jobs are. */
+export const jobFailed: Template<JobFailedEmail> = (params, context) => {
+  const progress = progressText(params.progress);
+  return {
+    // "Didn't finish" reads with any job's name, a long one ("Hand on a removed member's work") included.
+    subject: `Didn’t finish: ${params.jobLabel}`,
+    preheader: params.reason,
+    eyebrow: workspaceOf(context),
+    heading: `Didn’t finish: ${params.jobLabel}`,
+    blocks: [
+      { type: 'paragraph', text: params.reason },
+      ...(progress === undefined ? [] : [{ type: 'paragraph' as const, text: progress }]),
+      ...(params.startedAt === undefined
+        ? []
+        : [
+            {
+              type: 'rows' as const,
+              layout: 'compact' as const,
+              rows: [{ label: 'Started', value: formatMoment(params.startedAt, params.timeZone) }],
+            },
+          ]),
+      { type: 'button', label: 'Open Background jobs', url: context.link(params.jobsPath) },
+    ],
+    why: `You got this email because you started this job in ${workspaceOf(context)}.`,
+  };
+};
 
 /**
  * Someone else changed the reader's scheduling (spec 0037, AC-1264): ten minutes of one person's changes, a line
@@ -91,5 +117,24 @@ export const schedulingChanged: Template<SchedulingChangedEmail> = (params, cont
       { type: 'button', label: 'See your hours', url: context.link(params.availabilityPath) },
     ],
     why: `You got this email because ${params.actorName} can manage your scheduling in ${workspaceOf(context)}.`,
+  };
+};
+
+/** Covering for someone (spec 0037, AC-1282): to a stand in, "You're covering for Sam from 3 to 7 November." */
+export const standinCovering: Template<StandinCoveringEmail> = (params, context) => {
+  const subject = `You’re covering for ${params.memberName} ${params.dates}`;
+  return {
+    subject,
+    preheader: `${params.memberName} is away ${params.dates}. People who would book them may come to you.`,
+    eyebrow: workspaceOf(context),
+    heading: `You’re covering for ${params.memberName}`,
+    blocks: [
+      {
+        type: 'paragraph',
+        text: `You’re covering for ${params.memberName} ${params.dates}. While they’re away, people who usually meet them may be booked with you.`,
+      },
+      { type: 'button', label: 'See your bookings', url: context.link(params.bookingsPath) },
+    ],
+    why: `You got this email because ${params.memberName} named you as their stand in in ${workspaceOf(context)}.`,
   };
 };

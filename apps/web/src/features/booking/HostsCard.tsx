@@ -1,6 +1,8 @@
 // Brief
 // Purpose: a round robin page's Hosts (spec 0029, AC-732; spec 0037, AC-1319, AC-1323): fixed hosts who attend every meeting, and the rotations it books one host from.
 // Main task: add, order and remove fixed hosts, pick up to 3 rotations, and choose where a reschedule goes; each host change saves at once.
+// A workspace link (30 Oct 2026) leads with one switch, "Everyone in the workspace, including people who join later"
+// (Cal.com's "Add all team members"): on, it books "Everyone on the roster" and nothing else shows; off, the pickers.
 // Leaves out: a rotation's own members and rules (Settings › Rotations, linked here), and each member's hours (their schedules).
 import { isDataError, type BookingPageView, type DataLayer, type MemberSummary, type RotationView } from '@crm/data';
 import {
@@ -13,6 +15,7 @@ import {
   RadioGroup,
   Select,
   SettingsStack,
+  Switch,
   Table,
   type SelectItem,
   type TableColumn,
@@ -70,6 +73,12 @@ export function HostsCard({
   const nameOf = (memberId: string) => people.find((person) => person.id === memberId)?.name ?? '';
   const rotationName = (rotationId: string) => rotations.find((each) => each.id === rotationId)?.name ?? '';
   const isFull = fixed.length + linked.length >= LIMITS.hosts;
+  // A workspace link books "Everyone on the roster" while its one switch is on; off, its hosts are picked as on any page.
+  const isWorkspace = page.scope === 'workspace';
+  const roster = rotations.find((each) => each.follows === 'everyone');
+  const followsEveryone = roster !== undefined && fixed.length === 0 && linked.length === 1 && linked[0] === roster.id;
+  const [isPicking, setPicking] = useState(false);
+  const isEveryone = isWorkspace && followsEveryone && !isPicking;
 
   /** Saves the hosts; true once the server has them. */
   const save = (next: {
@@ -130,123 +139,150 @@ export function HostsCard({
   return (
     <Card
       title={strings.hosts}
-      description={strings.hostsLine(fixed.map(nameOf), linked.map(rotationName))}
+      // With everyone on, the switch says who books; the line would only repeat it.
+      {...(isEveryone ? {} : { description: strings.hostsLine(fixed.map(nameOf), linked.map(rotationName)) })}
       actions={<Link href={roundRobinHref(slug)}>{strings.manageRotations}</Link>}
     >
       <SettingsStack>
         {failure !== undefined && <Callout tone="danger">{failure}</Callout>}
-        <Select
-          label={strings.addFixed}
-          hint={
-            isFull
-              ? strings.hostsFull(LIMITS.hosts)
-              : fixed.length >= LIMITS.fixed
-                ? strings.fixedFull(LIMITS.fixed)
-                : fixed.length === 0
-                  ? strings.noFixed
-                  : strings.fixedHint
-          }
-          placeholder={strings.addMemberPlaceholder}
-          items={peopleLeft}
-          isSearchable
-          value={null}
-          isReadOnly={isLocked}
-          isDisabled={isSaving || fixed.length >= LIMITS.fixed || isFull}
-          onChange={(memberId) => {
-            if (memberId !== null) void save({ fixed: [...fixed, memberId], rotations: linked });
-          }}
-        />
-        {fixed.length > 0 && (
-          <Table
-            label={strings.fixedHosts}
-            isScrollable
-            columns={COLUMNS}
-            rows={fixed.map((memberId) => ({ id: memberId }))}
-            getRowId={(row) => row.id}
-            renderCell={(row, column) => {
-              if (column === 'name') {
-                return <RecordChip display={{ type: 'member', id: row.id, name: nameOf(row.id) }} isFlat />;
+        {isWorkspace && roster !== undefined && (
+          <Switch
+            label={strings.everyoneSwitch}
+            description={
+              isEveryone
+                ? strings.everyoneSwitchOn(roster.members.filter((each) => each.isOn).length)
+                : strings.everyoneSwitchOff
+            }
+            isSelected={isEveryone}
+            isReadOnly={isLocked}
+            isDisabled={isSaving}
+            onChange={(isOn) => {
+              if (!isOn) {
+                setPicking(true);
+                return;
               }
-              if (isLocked) return null;
-              const index = fixed.indexOf(row.id);
-              return (
-                <>
-                  {index > 0 && (
-                    <Button
-                      variant="ghost"
-                      icon="arrow-up"
-                      label={strings.moveUp(nameOf(row.id))}
-                      isDisabled={isSaving}
-                      onPress={() => {
-                        move(index, -1);
-                      }}
-                    />
-                  )}
-                  {index < fixed.length - 1 && (
-                    <Button
-                      variant="ghost"
-                      icon="arrow-down"
-                      label={strings.moveDown(nameOf(row.id))}
-                      isDisabled={isSaving}
-                      onPress={() => {
-                        move(index, 1);
-                      }}
-                    />
-                  )}
-                  <Button
-                    variant="ghost"
-                    icon="x"
-                    label={strings.removeFixed(nameOf(row.id))}
-                    isDisabled={isSaving}
-                    onPress={() => {
-                      setConfirming({ kind: 'fixed', id: row.id });
-                    }}
-                  />
-                </>
-              );
+              void save({ fixed: [], rotations: [roster.id] }).then((saved) => {
+                if (saved) setPicking(false);
+              });
             }}
           />
         )}
-        {linked.map((rotationId, index) => (
-          <SettingsStack key={rotationId}>
+        {!isEveryone && (
+          <>
             <Select
-              label={linked.length === 1 ? strings.rotation : strings.rotationAt(index)}
-              items={rotationItems(rotationId)}
-              value={rotationId}
+              label={strings.addFixed}
+              hint={
+                isFull
+                  ? strings.hostsFull(LIMITS.hosts)
+                  : fixed.length >= LIMITS.fixed
+                    ? strings.fixedFull(LIMITS.fixed)
+                    : fixed.length === 0
+                      ? strings.noFixed
+                      : strings.fixedHint
+              }
+              placeholder={strings.addMemberPlaceholder}
+              items={peopleLeft}
+              isSearchable
+              value={null}
               isReadOnly={isLocked}
-              isDisabled={isSaving}
-              onChange={(next) => {
-                if (next === null || next === rotationId) return;
-                void save({ fixed, rotations: linked.map((each) => (each === rotationId ? next : each)) });
+              isDisabled={isSaving || fixed.length >= LIMITS.fixed || isFull}
+              onChange={(memberId) => {
+                if (memberId !== null) void save({ fixed: [...fixed, memberId], rotations: linked });
               }}
             />
-            {!isLocked && linked.length > 1 && (
-              <Button
-                variant="ghost"
-                icon="x"
-                isDisabled={isSaving}
-                onPress={() => {
-                  setConfirming({ kind: 'rotation', id: rotationId });
+            {fixed.length > 0 && (
+              <Table
+                label={strings.fixedHosts}
+                isScrollable
+                columns={COLUMNS}
+                rows={fixed.map((memberId) => ({ id: memberId }))}
+                getRowId={(row) => row.id}
+                renderCell={(row, column) => {
+                  if (column === 'name') {
+                    return <RecordChip display={{ type: 'member', id: row.id, name: nameOf(row.id) }} isFlat />;
+                  }
+                  if (isLocked) return null;
+                  const index = fixed.indexOf(row.id);
+                  return (
+                    <>
+                      {index > 0 && (
+                        <Button
+                          variant="ghost"
+                          icon="arrow-up"
+                          label={strings.moveUp(nameOf(row.id))}
+                          isDisabled={isSaving}
+                          onPress={() => {
+                            move(index, -1);
+                          }}
+                        />
+                      )}
+                      {index < fixed.length - 1 && (
+                        <Button
+                          variant="ghost"
+                          icon="arrow-down"
+                          label={strings.moveDown(nameOf(row.id))}
+                          isDisabled={isSaving}
+                          onPress={() => {
+                            move(index, 1);
+                          }}
+                        />
+                      )}
+                      <Button
+                        variant="ghost"
+                        icon="x"
+                        label={strings.removeFixed(nameOf(row.id))}
+                        isDisabled={isSaving}
+                        onPress={() => {
+                          setConfirming({ kind: 'fixed', id: row.id });
+                        }}
+                      />
+                    </>
+                  );
                 }}
-              >
-                {strings.removeRotation(rotationName(rotationId))}
-              </Button>
+              />
             )}
-          </SettingsStack>
-        ))}
-        {linked.length < LIMITS.rotations && (
-          <Select
-            label={linked.length === 0 ? strings.rotation : strings.addRotation}
-            hint={isFull ? strings.hostsFull(LIMITS.hosts) : strings.rotationsHint}
-            placeholder={strings.pickRotation}
-            items={rotationItems()}
-            value={null}
-            isReadOnly={isLocked}
-            isDisabled={isSaving || isFull}
-            onChange={(next) => {
-              if (next !== null) void save({ fixed, rotations: [...linked, next] });
-            }}
-          />
+            {linked.map((rotationId, index) => (
+              <SettingsStack key={rotationId}>
+                <Select
+                  label={linked.length === 1 ? strings.rotation : strings.rotationAt(index)}
+                  items={rotationItems(rotationId)}
+                  value={rotationId}
+                  isReadOnly={isLocked}
+                  isDisabled={isSaving}
+                  onChange={(next) => {
+                    if (next === null || next === rotationId) return;
+                    void save({ fixed, rotations: linked.map((each) => (each === rotationId ? next : each)) });
+                  }}
+                />
+                {!isLocked && linked.length > 1 && (
+                  <Button
+                    variant="ghost"
+                    icon="x"
+                    isDisabled={isSaving}
+                    onPress={() => {
+                      setConfirming({ kind: 'rotation', id: rotationId });
+                    }}
+                  >
+                    {strings.removeRotation(rotationName(rotationId))}
+                  </Button>
+                )}
+              </SettingsStack>
+            ))}
+            {linked.length < LIMITS.rotations && (
+              <Select
+                label={linked.length === 0 ? strings.rotation : strings.addRotation}
+                hint={isFull ? strings.hostsFull(LIMITS.hosts) : strings.rotationsHint}
+                placeholder={strings.pickRotation}
+                items={rotationItems()}
+                value={null}
+                isReadOnly={isLocked}
+                isDisabled={isSaving || isFull}
+                onChange={(next) => {
+                  if (next !== null) void save({ fixed, rotations: [...linked, next] });
+                }}
+              />
+            )}
+          </>
         )}
         <RadioGroup
           label={strings.reschedule}

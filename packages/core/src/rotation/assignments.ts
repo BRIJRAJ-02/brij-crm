@@ -11,6 +11,7 @@ import type { EngineScope } from '../access/mint.ts';
 import { canActFor, managesPageOf, schedulingReach } from '../access/scheduling.ts';
 import { inWorkspace } from '../access/run.ts';
 import { refuse } from '../engine/refusals.ts';
+import { pageManagerColumn } from '../booking/seen.ts';
 
 const { bookingPages, bookings, members, rotationAssignments, rotations } = schema;
 
@@ -46,7 +47,8 @@ export async function bookingAssignments(
   requirePermission(scope, 'booking.manage');
   return inWorkspace(scope, async (tx) => {
     const [booking] = await tx
-      .select({ hostMemberId: bookings.hostMemberId, ownerMemberId: bookingPages.ownerMemberId })
+      // A workspace link's maker manages nothing by it (`pageManagerColumn`).
+      .select({ hostMemberId: bookings.hostMemberId, ownerMemberId: pageManagerColumn })
       .from(bookings)
       .innerJoin(
         bookingPages,

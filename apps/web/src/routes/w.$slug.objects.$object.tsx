@@ -8,7 +8,6 @@ import { navObjects } from '../features/workspace/objects.ts';
 import { strings } from '../features/workspace/strings.ts';
 import { useWorkspaceName, WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
 import { createView, landingView } from '../features/views/query.ts';
-import { strings as commandStrings } from '../features/command/strings.ts';
 
 // Any live object's address (`people`, `projects`; spec 0012, AC-240) opens
 // one of its views (spec 0020, AC-462): the address is replaced with the
@@ -44,8 +43,11 @@ export const Route = createFileRoute('/w/$slug/objects/$object')({
     const name = isNew && typeof asked.name === 'string' && asked.name.trim() !== '' ? asked.name : undefined;
     const table = isNew && list.status === 'ready' ? createView(list) : undefined;
     // Only boards here: they have no new record dialog, so the menu's request says so rather than doing nothing.
+    // Its words load when asked (rarely), so they stay out of the first load with this loader.
     if (isNew && table === undefined) {
-      context.toasts.toast({ tone: 'info', message: commandStrings.openTableToCreate(object.singularName) });
+      void import('../features/command/frame-strings.ts').then(({ strings: commandStrings }) => {
+        context.toasts.toast({ tone: 'info', message: commandStrings.openTableToCreate(object.singularName) });
+      });
     }
     const viewId = list.status !== 'ready' ? undefined : (table ?? landingView(list));
     if (viewId !== undefined) {

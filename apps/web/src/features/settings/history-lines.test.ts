@@ -295,6 +295,10 @@ const SENTENCES: readonly (readonly [AuditEntryView, string])[] = [
     'Ada Lovelace changed who gets Contact us’s leads',
   ],
   [
+    { ...base, action: 'form.notify_changed', target: form, params: {} },
+    'Ada Lovelace changed who is emailed Contact us’s new submissions',
+  ],
+  [
     { ...base, action: 'booking.no_show', target: booking, params: {} },
     'Ada Lovelace marked Intro call on dayTime(2026-10-24T09:30) as a no show',
   ],
@@ -370,6 +374,9 @@ const SENTENCES: readonly (readonly [AuditEntryView, string])[] = [
     { ...base, action: 'block.removed', target: member(bea), params: {} },
     'Ada Lovelace removed a block from Bea Rao’s calendar',
   ],
+  [{ ...base, action: 'time_off.created', target: member(bea), params: {} }, 'Ada Lovelace added time off for Bea Rao'],
+  [{ ...base, action: 'time_off.changed', target: member(bea), params: {} }, 'Ada Lovelace changed Bea Rao’s time off'],
+  [{ ...base, action: 'time_off.deleted', target: member(bea), params: {} }, 'Ada Lovelace removed Bea Rao’s time off'],
   [
     { ...base, action: 'booking.changed_for', target: booking, params: { host: bea, change: 'moved' } },
     'Ada Lovelace moved Intro call on dayTime(2026-10-24T09:30) for Bea Rao',

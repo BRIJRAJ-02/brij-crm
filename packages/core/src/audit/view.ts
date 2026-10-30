@@ -543,6 +543,17 @@ export function toEntryView(row: AuditRow, names: AuditNames): AuditEntryView | 
         changes: change('leadsTo', leadsTo(before), leadsTo(after)),
       };
     }
+    case 'form.notify_changed': {
+      const people = (side: Bag) =>
+        Array.isArray(side.notifyMemberIds) ? count(side.notifyMemberIds.length) : undefined;
+      return {
+        ...base,
+        action,
+        target: thing('form', names.forms),
+        params: {},
+        changes: change('people', people(before), people(after)),
+      };
+    }
     case 'booking.no_show':
     case 'booking.no_show_undone':
     case 'booking.record_linked':
@@ -592,6 +603,9 @@ export function toEntryView(row: AuditRow, names: AuditNames): AuditEntryView | 
     }
     case 'block.created':
     case 'block.removed':
+    case 'time_off.created':
+    case 'time_off.changed':
+    case 'time_off.deleted':
       // Whose time and when stay in the row; the sentence names whose (a block's label is never stored).
       return { ...base, action, target: memberTarget(), params: {}, changes: [] };
     case 'booking.changed_for': {

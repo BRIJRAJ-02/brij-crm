@@ -25,8 +25,8 @@ export const NOTIFICATION_MARK_MAX = 100;
 /** The longest cursor `notifications.list` takes. */
 export const MAX_NOTIFICATION_CURSOR = 256;
 
-/** Why a member was notified (decision 8). */
-export const NotificationKind = z.enum(['mention', 'reply', 'task_assigned', 'join_request']);
+/** Why a member was notified (decision 8); `form_submission`, a form they're told about got one (spec 0023, AC-568); `join_request`, someone asks to join (flow pass). */
+export const NotificationKind = z.enum(['mention', 'reply', 'task_assigned', 'form_submission', 'join_request']);
 /** Why a member was notified. */
 export type NotificationKind = z.infer<typeof NotificationKind>;
 
@@ -56,6 +56,10 @@ export const NotificationView = z.object({
   noteId: Uuid.optional(),
   /** Someone asks to join (flow pass, 30 Oct 2026): shown to holders of `members.invite` while it is open. */
   joinRequestId: Uuid.optional(),
+  /** A form's new submission (with the record it filed in `record`, when the reader may see it). */
+  submissionId: Uuid.optional(),
+  formId: Uuid.optional(),
+  formName: z.string().optional(),
   excerpt: z.string(),
 });
 /** One notification as its recipient sees it. */

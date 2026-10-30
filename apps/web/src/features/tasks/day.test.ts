@@ -2,7 +2,8 @@
 // day, and the timer to the next local midnight, across time zones and a
 // daylight saving change.
 import { describe, expect, it } from 'vitest';
-import { dayAt, dayGroup, daySections, msToNextDay } from './day.ts';
+import { dayGroup, daySections, msToNextDay } from './day.ts';
+import { dayAt } from './today.ts';
 
 describe('dayAt', () => {
   it('names the day in the given time zone', () => {

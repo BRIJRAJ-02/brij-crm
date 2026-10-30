@@ -2,7 +2,8 @@ import { isDataError } from '@crm/data';
 import { EmptyState, LoadingNow, PageColumn } from '@crm/ui';
 import { createFileRoute, useNavigate, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { CalendarScreen, CalendarsLoading } from '../features/settings/CalendarScreen.tsx';
-import { isConnectResult, strings, type ConnectResult } from '../features/settings/calendar-strings.ts';
+import { strings } from '../features/settings/calendar-strings.ts';
+import { isConnectResult, type ConnectResult } from '../features/settings/connect-result.ts';
 import { SettingsMissing, SettingsPage } from '../features/settings/SettingsPage.tsx';
 
 // Bookings › Calendars (specs 0024 and 0026), up out of Settings › Scheduling (25 October 2026): every member's own

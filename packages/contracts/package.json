@@ -20,6 +20,7 @@
     "./social-networks": "./src/values/social-networks.ts",
     "./social": "./src/values/social.ts",
     "./picker": "./src/values/picker.ts",
+    "./record-name": "./src/values/record-name.ts",
     "./activity-keys": "./src/activity-keys.ts",
     "./link-limits": "./src/link-limits.ts",
     "./link-page": "./src/booking/link-page-rules.ts",
@@ -42,6 +43,7 @@
     "./booking": "./src/booking/index.ts",
     "./handles": "./src/booking/handles.ts",
     "./hours": "./src/booking/summary.ts",
+    "./roster": "./src/booking/roster.ts",
     "./zones": "./src/booking/zones.ts",
     "./emails": "./src/emails.ts",
     "./brand": "./src/brand.ts"

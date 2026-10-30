@@ -446,6 +446,65 @@ describe('reassigning a booking', () => {
   });
 });
 
+const BO = '0199f0a0-0000-7000-8000-0000000000e2';
+
+describe('reassigning from Host away', () => {
+  it('asks first, alone, naming the stand in, then hands the seat to them', async () => {
+    const away = { ...bookingOf(), hostAway: true, hostAwayStandinId: BO } as BookingListItem;
+    const { actions, notify } = await renderWeek([], [away], undefined, ['booking.admin']);
+    vi.mocked(actions.rotations).mockResolvedValue([
+      {
+        id: SEAT.rotationId,
+        members: [
+          { memberId: SEAT.memberId, name: 'Ada Lovelace', isOn: true },
+          { memberId: BO, name: 'Bo Diaz', isOn: true },
+        ],
+      },
+    ] as never);
+    vi.mocked(actions.reassign).mockResolvedValue({ hostMemberId: BO, changed: true });
+    await openCard(/^Quick chat,/);
+    await userEvent.click(page.getByRole('button', { name: 'Reassign', exact: true }));
+    // The card closed first: the confirm stands alone.
+    await expect
+      .poll(() => [...document.querySelectorAll('[role="dialog"]')].map(heading))
+      .toEqual(['Reassign Quick chat with Ada Lovelace?']);
+    await expect.element(page.getByText(/^Bo Diaz takes it, as Ada Lovelace’s stand in/)).toBeVisible();
+    expect(actions.reassign).not.toHaveBeenCalled();
+    await userEvent.click(page.getByRole('dialog').getByRole('button', { name: 'Reassign' }));
+    await expect.poll(() => vi.mocked(actions.reassign).mock.calls.length).toBe(1);
+    expect(vi.mocked(actions.reassign).mock.calls[0]).toEqual([
+      away.id,
+      { rotationId: SEAT.rotationId, memberId: BO, memberName: 'Bo Diaz' },
+    ]);
+    await expect
+      .poll(() => notify.mock.calls.at(-1))
+      .toEqual(['success', 'Reassigned to Bo Diaz. The guest and both hosts are emailed.']);
+  });
+
+  it('keeps the host on Esc, and the card opens again with focus back on its Reassign', async () => {
+    const away = { ...bookingOf(), hostAway: true } as BookingListItem;
+    const { actions } = await renderWeek([], [away], undefined, ['booking.admin']);
+    await openCard(/^Quick chat,/);
+    await userEvent.click(page.getByRole('button', { name: 'Reassign', exact: true }));
+    await expect
+      .poll(() => [...document.querySelectorAll('[role="dialog"]')].map(heading))
+      .toEqual(['Reassign Quick chat with Ada Lovelace?']);
+    // No stand in named: whoever is next in the group.
+    await expect.element(page.getByText(/^Whoever is free then and next in Support takes it/)).toBeVisible();
+    await userEvent.keyboard('{Escape}');
+    await expect.poll(card).not.toBeNull();
+    await expect.poll(() => document.activeElement?.textContent).toBe('Reassign');
+    expect(actions.reassign).not.toHaveBeenCalled();
+  });
+
+  it('offers nothing to someone who may not reassign', async () => {
+    await renderWeek([], [{ ...bookingOf(), hostAway: true }]);
+    await openCard(/^Quick chat,/);
+    await expect.element(page.getByRole('note').getByText('Host away')).toBeVisible();
+    expect(page.getByRole('button', { name: 'Reassign', exact: true }).elements()).toHaveLength(0);
+  });
+});
+
 describe('cancelling from the list', () => {
   it('asks inside the booking’s panel, stays busy, then the panel closes and focus goes back to its row', async () => {
     let state: MeetingsState = { ...ready, items: [{ kind: 'booking', booking: bookingOf() }] };

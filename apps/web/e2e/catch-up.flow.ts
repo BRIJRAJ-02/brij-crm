@@ -145,7 +145,8 @@ test.describe('catch up after a long drop', () => {
     const realtime = await realtimeSwitch(reader);
     await signInAgain(reader, email, peoplePath, []);
     const grid = reader.getByRole('grid', { name: 'People' });
-    await expect(grid).toHaveAttribute('aria-rowcount', String(PEOPLE_COUNT + 1));
+    // The header, the people and the footer ("+ New person" and the count).
+    await expect(grid).toHaveAttribute('aria-rowcount', String(PEOPLE_COUNT + 2));
     await expect.poll(() => realtime.subscribes()).toBeGreaterThan(0);
 
     // Away: 150 edits across the forty, and a new column.

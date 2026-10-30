@@ -93,9 +93,12 @@ const searchKey = (key: SearchKey) => `${key.objectId}:${key.attributeId ?? ''}:
 /**
  * The searches a screen's pickers use, one open at a time (opening another
  * lets the last one go), re-rendering the screen as answers land. Let go
- * when the screen goes.
+ * when the screen goes. A form draws all its pickers at once and each asks
+ * as it draws, so there (`isEach`) every key keeps its own search: letting
+ * one go for the next would start them over and over, each answer drawing
+ * the form again.
  */
-function useSearches(slug: string) {
+function useSearches(slug: string, isEach = false) {
   const { data } = useRouteContext({ from: '__root__' });
   const searches = useRef(new Map<string, RecordSearch>());
   // Every result any of them answered, by record id: a chip picked in one search keeps its name after the next.
@@ -113,8 +116,10 @@ function useSearches(slug: string) {
       const id = searchKey(key);
       const found = searches.current.get(id);
       if (found !== undefined) return found;
-      for (const other of searches.current.values()) other.dispose();
-      searches.current.clear();
+      if (!isEach) {
+        for (const other of searches.current.values()) other.dispose();
+        searches.current.clear();
+      }
       const made = data.records.search(slug, {
         objectId: key.objectId,
         ...(key.attributeId === undefined ? {} : { forAttributeId: key.attributeId }),
@@ -128,7 +133,7 @@ function useSearches(slug: string) {
       searches.current.set(id, made);
       return made;
     },
-    [data, slug],
+    [data, slug, isEach],
   );
   const peek = useCallback((key: SearchKey) => searches.current.get(searchKey(key)), []);
   const seenResult = useCallback((recordId: string) => seen.current.get(recordId), []);
@@ -155,7 +160,9 @@ function sourceOf(search: RecordSearch, query: string): ListSource<RecordRefDisp
  */
 export function useLinkEditing(slug: string, openForm?: OpenRecordForm) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
-  const { searchFor, peek, seenResult } = useSearches(slug);
+  const { searchFor, peek } = useSearches(slug);
+  // The create form's pickers, all drawn at once: a search for each.
+  const inForm = useSearches(slug, true);
   const making = useRecordMaking(slug);
   const keyFor = (definition: AttributeDefinition, recordId?: string): SearchKey | undefined => {
     const objectId = definition.relationship?.targetObjectIds[0];
@@ -247,12 +254,12 @@ export function useLinkEditing(slug: string, openForm?: OpenRecordForm) {
     const offer = offerFor(definition, () => undefined);
     return {
       editor: {
-        onSearch: editorSearch((query: string) => sourceOf(searchFor(key), query)),
-        describeResult: (display: RecordRefDisplay) => resultState(peek(key)?.resultOf(display.recordId)),
+        onSearch: editorSearch((query: string) => sourceOf(inForm.searchFor(key), query)),
+        describeResult: (display: RecordRefDisplay) => resultState(inForm.peek(key)?.resultOf(display.recordId)),
         ...(offer?.formNoun === undefined ? editorOffer(offer) : {}),
       },
       displayOf: (recordId: string): RecordRefDisplay | undefined =>
-        making.madeHere(recordId) ?? seenResult(recordId)?.ref,
+        making.madeHere(recordId) ?? inForm.seenResult(recordId)?.ref,
     };
   };
 

@@ -1,4 +1,4 @@
-import { use, useLayoutEffect, useRef, useState, type ReactNode, type Ref } from 'react';
+import { use, useLayoutEffect, useRef, useState, type ComponentProps, type ReactNode, type Ref } from 'react';
 import {
   Autocomplete,
   Button as AriaButton,
@@ -7,6 +7,7 @@ import {
   ListBox,
   ListBoxItem,
   ListBoxSection,
+  type ListBoxItemProps,
   Select as AriaSelect,
   SelectValue,
   Text,
@@ -173,6 +174,40 @@ const FOCUS_FIRST_EVENT = 'react-aria-focus';
 const CLEAR = '\u0000clear';
 const CREATE = '\u0000create';
 
+/** Untyped on ListBoxItem, so `reachableWhileDisabled` takes it through a spread. */
+const selectionOnly = { disabledBehavior: 'selection' };
+
+/**
+ * What a disabled option (`isDisabled`) adds to its ListBoxItem while the list is open: the arrows and typeahead land
+ * on it, so a keyboard or screen reader user hears it and its reason, while staying in `disabledKeys` keeps Enter,
+ * Space and a click from choosing it (#68). React Aria's own disabled option is skipped, reason and all. React Stately
+ * reads an item's `disabledBehavior` (its keyboard delegate's and selection manager's `isDisabled`), though
+ * ListBoxItem's types leave it out, so it comes in through a spread; `Select.browser.test.tsx` pins it. A focusable
+ * option isn't marked disabled by React Aria, so `render` puts back `aria-disabled` and the `data-disabled` its look
+ * keys on. While the list is closed it stays a plain disabled option, so the trigger's arrows and typeahead skip it.
+ */
+const reachableWhileDisabled: Partial<ListBoxItemProps<SelectItem>> = {
+  ...selectionOnly,
+  // A Select's options never link, so the option is always a div. With the search on, focus stays in the search
+  // and React Aria hands the option Enter and Space itself, and its press then empties the choice for a key it
+  // can't select; the option swallows them, so the list stays open on it with the choice as it was.
+  render: (props) => {
+    const div = props as ComponentProps<'div'>;
+    return (
+      // eslint-disable-next-line jsx-a11y-x/no-static-element-interactions -- React Aria's props bring role="option"
+      <div
+        {...div}
+        aria-disabled="true"
+        data-disabled=""
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') event.preventDefault();
+          else div.onKeyDown?.(event);
+        }}
+      />
+    );
+  },
+};
+
 function Face({ item, optionStyle }: { readonly item: SelectItem; readonly optionStyle: SelectOptionStyle }) {
   if (optionStyle === 'tag') {
     return (
@@ -276,7 +311,11 @@ export function Select({
   const isInPopover = use(InPopover);
   const [query, setQuery] = useState(defaultSearch ?? '');
   const isMultiple = selectionMode === 'multiple';
-  const current = isMultiple ? null : (value ?? defaultValue ?? null);
+  // Without a `value`, the Select keeps its own: React Aria's uncontrolled value took Clear's own key as the value.
+  const [own, setOwn] = useState<string | null>(defaultValue ?? null);
+  const current = isMultiple ? null : value === undefined ? own : value;
+  // Disabled options are reachable only in the open list; the closed trigger's arrows and typeahead skip them.
+  const [isOpen, setIsOpen] = useState(defaultOpen ?? false);
   const chosen = items.find((item) => item.id === current);
   // Every chosen id: the one in a single choice, all of them in a multiple one.
   const chosenIds: readonly string[] = isMultiple ? (values ?? []) : current === null ? [] : [current];
@@ -328,9 +367,13 @@ export function Select({
 
   // Nothing to choose yet and nothing typed: a list that creates says how to add the first one.
   const emptyText = onCreate !== undefined && typed === '' ? strings.typeToCreate : strings.noMatches;
-  const disabledKeys = items
-    .filter((item) => item.isDisabled === true || (item.isArchived === true && !chosenIds.includes(item.id)))
-    .map((item) => item.id);
+  // While closed, Clear and Create are skipped too: the trigger's arrows would clear or create without the list.
+  const disabledKeys = [
+    ...items
+      .filter((item) => item.isDisabled === true || (item.isArchived === true && !chosenIds.includes(item.id)))
+      .map((item) => item.id),
+    ...(isOpen ? [] : [CLEAR, CREATE]),
+  ];
   // Several chosen take Create too (a multi select's new tag): it hands the label over, as one choice does.
   const canCreate =
     onCreate !== undefined &&
@@ -363,6 +406,7 @@ export function Select({
       data-clear={item.id === CLEAR || item.id === CREATE || undefined}
       data-apart={item.isApart === true || undefined}
       data-description={item.description === undefined ? undefined : optionDescription}
+      {...(isOpen && item.isDisabled === true ? reachableWhileDisabled : {})}
     >
       {({ isSelected }) => (
         <>
@@ -408,6 +452,8 @@ export function Select({
       ref={listRef}
       className={styles.list}
       items={options}
+      // Its options are drawn again when the list opens or closes: a disabled one is reachable only while open.
+      dependencies={[isOpen]}
       renderEmptyState={() => <span className={styles.empty}>{emptyText}</span>}
     >
       {(item) => (
@@ -418,6 +464,7 @@ export function Select({
           data-clear={item.id === CLEAR || item.id === CREATE || undefined}
           data-apart={item.isApart === true || undefined}
           data-description={item.description === undefined ? undefined : optionDescription}
+          {...(isOpen && item.isDisabled === true ? reachableWhileDisabled : {})}
         >
           {({ isSelected }) => (
             <>
@@ -451,12 +498,12 @@ export function Select({
       // React Aria opens no list with nothing in it; a list that creates opens anyway, to take the first one typed.
       {...(onCreate === undefined ? {} : { allowsEmptyCollection: true })}
       {...(isMultiple ? { value: [...chosenIds] } : {})}
-      {...(isMultiple || value === undefined ? {} : { value })}
-      {...(isMultiple || defaultValue === undefined ? {} : { defaultValue })}
+      {...(isMultiple ? {} : { value: current })}
       {...(defaultOpen === undefined ? {} : { defaultOpen })}
       {...(autoFocus ? { autoFocus: true } : {})}
       // Each opening searches afresh (from the key that opened a cell's list, when one did).
       onOpenChange={(isOpen) => {
+        setIsOpen(isOpen);
         if (!isOpen) setQuery(defaultSearch ?? '');
         onOpenChange?.(isOpen);
       }}
@@ -470,11 +517,16 @@ export function Select({
           onValuesChange?.(items.filter((item) => picked.has(item.id)).map((item) => item.id));
           return;
         }
+        // The closed trigger's typeahead tests the key the open list last rested on without asking whether it is
+        // disabled, so a disabled option (or Clear and Create, while closed) is refused here too.
+        if (next !== null && disabledKeys.includes(String(next))) return;
         if (next === CREATE) {
           if (canCreate) onCreate(typed);
           return;
         }
-        onChange?.(next === CLEAR || next === null ? null : String(next));
+        const id = next === CLEAR || next === null ? null : String(next);
+        setOwn(id);
+        onChange?.(id);
       }}
     >
       {!isLabelHidden && <FieldLabel label={label} aside={labelAside} info={info} isDisabled={isDisabled} />}

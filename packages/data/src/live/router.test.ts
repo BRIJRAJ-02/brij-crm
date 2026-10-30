@@ -26,6 +26,7 @@ const SAMPLES: Readonly<Record<ChangeEvent['kind'], ChangeEvent>> = {
   comments: { seq: 1, at: AT, kind: 'comments', objectId: ID, recordIds: [ID], threadIds: [ID] },
   notifications: { seq: 1, at: AT, kind: 'notifications', memberIds: [ID] },
   calendars: { seq: 1, at: AT, kind: 'calendars', memberIds: [ID] },
+  time_off: { seq: 1, at: AT, kind: 'time_off' },
   restricted: { seq: 1, at: AT, kind: 'restricted' },
 };
 

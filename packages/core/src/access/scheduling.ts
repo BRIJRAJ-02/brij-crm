@@ -234,9 +234,10 @@ export function isHostOf(
 
 /**
  * Whether the principal manages a booking's page (decision 12): its owner, or `booking.admin`, which manages every
- * page (its editors join with job J14). The system manages every page.
+ * page (its editors join with job J14). The system manages every page. A workspace link has no owner here (null).
+ *
  */
-export function managesPageOf(booking: { readonly ownerMemberId: string }, access: Access): boolean {
+export function managesPageOf(booking: { readonly ownerMemberId: string | null }, access: Access): boolean {
   const { principal } = access;
   if (principal.kind === 'system') return true;
   return can(access, 'booking.admin') || (principal.kind === 'member' && booking.ownerMemberId === principal.memberId);

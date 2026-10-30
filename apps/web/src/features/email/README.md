@@ -1,6 +1,6 @@
 # Email preferences
 
-The emails lane. The pages sit in `AuthLayout`, as the pages before the app do. They go through `data.emailPreferences(token)` and `data.emailUnsubscribe(token)`.
+The emails lane. The pages sit in `AuthLayout`, as the pages before the app do. They go through `data.emailPreferences(token)` and `data.emailUnsubscribe(token)`, which the loader awaits: their store loads with the page, outside the first load.
 
 ## `/email-preferences#t=<token>` (EmailPreferencesScreen)
 

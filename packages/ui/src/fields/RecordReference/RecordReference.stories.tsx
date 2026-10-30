@@ -248,6 +248,9 @@ export const ResultNotes: Story = {
   },
 };
 
+/** The record the create story's screen makes: an id, as every record's is, or the field refuses it. */
+const NEW_COMPANY_ID = '7d1f0c3e-5a2b-4c6d-8e9f-0a1b2c3d4e5f';
+
 /**
  * A search that finds nothing by that name ends in "Create "<typed>"" (for someone who may make records of the far
  * object): choosing it hands the name over, and the record the screen made at once is picked, as if chosen.
@@ -261,7 +264,7 @@ export const CreatesRecord: Story = {
       )) as never,
     onCreateRecord: fn((label: string) => ({
       objectId: SAMPLE_IDS.companies,
-      recordId: 'new-company',
+      recordId: NEW_COMPANY_ID,
       name: label,
       kind: 'company' as const,
     })),
@@ -275,11 +278,11 @@ export const CreatesRecord: Story = {
     await userEvent.click(canvas.getByRole('button', { name: /Choose Company/ }));
     const page = within(document.body);
     await page.findByRole('menu');
-    await userEvent.keyboard('Initech');
-    await userEvent.click(await page.findByRole('menuitem', { name: 'Create "Initech"' }));
-    await expect(args.onCreateRecord).toHaveBeenCalledWith('Initech');
+    await userEvent.keyboard('Hooli');
+    await userEvent.click(await page.findByRole('menuitem', { name: 'Create "Hooli"' }));
+    await expect(args.onCreateRecord).toHaveBeenCalledWith('Hooli');
     await waitFor(() => expect(canvas.getByRole('button', { name: /Change Company/ })).toHaveFocus(), { timeout: 100 });
-    await expect(args.onCommit).toHaveBeenCalledWith({ objectId: SAMPLE_IDS.companies, recordId: 'new-company' });
+    await expect(args.onCommit).toHaveBeenCalledWith({ objectId: SAMPLE_IDS.companies, recordId: NEW_COMPANY_ID });
     await waitFor(() => expect(document.querySelector('[role="menu"]')).toBeNull());
   },
 };

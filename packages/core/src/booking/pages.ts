@@ -5,7 +5,7 @@
 // everyone's. A page the reader may not see answers as absent (NOT_FOUND).
 // Pages are settings, not CRM data: their writes store no outbox row.
 import { randomBytes } from 'node:crypto';
-import { and, asc, desc, eq, gte, inArray, isNull, like, lt, notInArray, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNull, like, lt, notInArray, or, sql } from 'drizzle-orm';
 import {
   defaultAvailability,
   PERMISSIONS,
@@ -46,6 +46,7 @@ import { placeNewPage } from '../profile/items.ts';
 import { linksOf, seenLinks } from './links.ts';
 import { lockKey } from './locks.ts';
 import { lockRotations } from '../rotation/assign.ts';
+import { everyoneRotation } from '../rotation/roster.ts';
 import { eligibleMembers, pageRotations, ROTATION_ROLES, TEAM_LIMITS } from '../rotation/team.ts';
 import { loadPage, pagesOf, type PageRecord } from './slots.ts';
 import {
@@ -74,7 +75,8 @@ function memberOf(scope: EngineScope): string | undefined {
 /**
  * Whether the reader may see and change the page: their own with
  * `booking.manage`, anyone's with `booking.admin`. A round robin page is
- * `booking.admin`'s alone (spec 0029, AC-751), whoever made it.
+ * `booking.admin`'s alone (spec 0029, AC-751), whoever made it, and so is a
+ * workspace link, which is always round robin.
  */
 function mayChange(scope: EngineScope, page: { readonly ownerMemberId: string; readonly kind: string }): boolean {
   if (can(scope.access, 'booking.admin')) return true;
@@ -193,6 +195,7 @@ function viewOf(
     id: page.id,
     publicKey: page.publicKey,
     kind: page.kind,
+    scope: page.scope,
     ownerMemberId: page.ownerMemberId,
     ...(handle === undefined ? {} : { handle }),
     title: page.title,
@@ -222,9 +225,12 @@ function viewOf(
     fileToCrm: page.fileToCrm,
     answersObjectId: page.answersObjectId,
     ...(page.status === 'paused' && page.pausedReason !== undefined ? { pausedReason: page.pausedReason } : {}),
-    ...(hosts === undefined ? {} : { hosts }),
+    // Who hosts it and how it routes are for those who manage it: a member seeing a workspace link gets neither.
+    ...(hosts === undefined || !mayChange(scope, page) ? {} : { hosts }),
     // Hidden means absent (spec 0009): a rule over a field the reader can't see isn't sent, not even its id.
-    ...(page.kind === 'round_robin' ? { routing: { rules: [...rulesSeen(page.routingRules ?? [], unseen)] } } : {}),
+    ...(page.kind === 'round_robin' && mayChange(scope, page)
+      ? { routing: { rules: [...rulesSeen(page.routingRules ?? [], unseen)] } }
+      : {}),
     bookingsThisMonth: count,
     canChange: mayChange(scope, page),
     createdAt: page.createdAt.toISOString(),
@@ -232,7 +238,11 @@ function viewOf(
   };
 }
 
-/** The pages the reader may see (AC-645): their own, or every live page with `booking.admin`; newest first. */
+/**
+ * The pages the reader may see (AC-645): their own and the workspace's links, or every page with `booking.admin`;
+ * newest first. A workspace link the reader may not change comes without its hosts and routing: they may copy and
+ * open it, nothing more.
+ */
 export async function listBookingPages(
   scope: EngineScope,
   now: Date = new Date(),
@@ -244,7 +254,19 @@ export async function listBookingPages(
     const rows = await tx
       .select()
       .from(bookingPages)
-      .where(and(isNull(bookingPages.deletedAt), mine === undefined ? undefined : eq(bookingPages.ownerMemberId, mine)))
+      .where(
+        and(
+          isNull(bookingPages.deletedAt),
+          // A member's own pages, and the workspace's links (owner, 30 Oct 2026: the company's front door, which every
+          // member may see and copy; only `booking.admin` changes one, whoever made it).
+          mine === undefined
+            ? undefined
+            : or(
+                and(eq(bookingPages.ownerMemberId, mine), eq(bookingPages.scope, 'member')),
+                eq(bookingPages.scope, 'workspace'),
+              ),
+        ),
+      )
       .orderBy(desc(bookingPages.createdAt), asc(bookingPages.id))
       .limit(500);
     const pages = await pagesOf(tx, rows);
@@ -422,6 +444,23 @@ function checkTeamSchedule(kind: PageRecord['kind'], scheduleId: string | null |
 }
 
 /**
+ * A workspace link is on nobody's profile, so it takes no place on one (CONFIG_INVALID on the field). Its address
+ * is the workspace's slug.
+ */
+function checkWorkspaceSettings(settings: NonNullable<CreateBookingPageInput['settings']>): void {
+  // No section and the first place are what every page starts with, so a copy sending them back is let through.
+  const placement =
+    settings.profileSection !== undefined && settings.profileSection !== null
+      ? 'profileSection'
+      : settings.profilePosition !== undefined && settings.profilePosition !== 0
+        ? 'profilePosition'
+        : undefined;
+  if (placement !== undefined) {
+    throw refuseOn('CONFIG_INVALID', 'A workspace link isn’t on anyone’s profile.', placement);
+  }
+}
+
+/**
  * A page offers one to `BOOKING_DURATIONS_MAX` (4) lengths, each once: the
  * database's `booking_pages_durations` check, refused here first as a typed
  * `CONFIG_INVALID` on `durations` for a caller that skipped the contract.
@@ -451,12 +490,27 @@ async function freeSlug(tx: WorkspaceTx, workspaceId: string, ownerMemberId: str
       and(
         isNull(bookingPages.deletedAt),
         eq(bookingPages.ownerMemberId, ownerMemberId),
+        eq(bookingPages.scope, 'member'),
         like(bookingPages.slug, `${base}%`),
       ),
     );
   const elsewhere =
     owner?.userId === null || owner === undefined ? [] : await ownerSlugs(tx, owner.userId, workspaceId, base);
   const taken = new Set([...here.map((row) => row.slug), ...elsewhere]);
+  if (!taken.has(wanted)) return wanted;
+  for (let n = 2; ; n += 1) if (!taken.has(`${base}-${String(n)}`)) return `${base}-${String(n)}`;
+}
+
+/** A slug free among the workspace's own links (`booking_pages_workspace_slug`): the wanted one, else it with -2, -3 … */
+async function freeWorkspaceSlug(tx: WorkspaceTx, wanted: string): Promise<string> {
+  const base = wanted.slice(0, 56).replace(/-+$/, '');
+  const here = await tx
+    .select({ slug: bookingPages.slug })
+    .from(bookingPages)
+    .where(
+      and(isNull(bookingPages.deletedAt), eq(bookingPages.scope, 'workspace'), like(bookingPages.slug, `${base}%`)),
+    );
+  const taken = new Set(here.map((row) => row.slug));
   if (!taken.has(wanted)) return wanted;
   for (let n = 2; ; n += 1) if (!taken.has(`${base}-${String(n)}`)) return `${base}-${String(n)}`;
 }
@@ -472,13 +526,22 @@ async function nextProfilePosition(tx: WorkspaceTx, ownerMemberId: string): Prom
   const [row] = await tx
     .select({ last: sql<number | null>`max(${bookingPages.profilePosition})::int` })
     .from(bookingPages)
-    .where(and(eq(bookingPages.ownerMemberId, ownerMemberId), isNull(bookingPages.deletedAt)));
+    .where(
+      and(
+        eq(bookingPages.ownerMemberId, ownerMemberId),
+        eq(bookingPages.scope, 'member'),
+        isNull(bookingPages.deletedAt),
+      ),
+    );
   const last = row?.last ?? null;
   return last === null ? 0 : Math.min(last + 1, PROFILE_POSITION_MAX);
 }
 
 /** The unique indexes a taken slug is refused on: the owner's in this workspace, and the owner's everywhere. */
 const SLUG_CONSTRAINTS: ReadonlySet<string | undefined> = new Set(['booking_pages_slug', 'booking_pages_owner_slug']);
+
+/** The unique index a workspace link's slug is refused on: another of the workspace's links holds it. */
+const WORKSPACE_SLUG_CONSTRAINT = 'booking_pages_workspace_slug';
 
 /** The unique index an old slug of another of the owner's pages is refused on (slug history, migration 0087). */
 const OLD_SLUG_CONSTRAINT = 'booking_page_slugs_owner_slug';
@@ -491,6 +554,9 @@ function slugRefusal(error: unknown) {
   const constraint = postgresError(error)?.constraint;
   if (SLUG_CONSTRAINTS.has(constraint)) {
     return refuseOn('SLUG_TAKEN', 'You have another booking page at that address.', 'slug');
+  }
+  if (constraint === WORKSPACE_SLUG_CONSTRAINT) {
+    return refuseOn('SLUG_TAKEN', 'Another workspace link has that address.', 'slug');
   }
   if (constraint === OLD_SLUG_CONSTRAINT) {
     return refuseOn(
@@ -511,23 +577,31 @@ function slugRefusal(error: unknown) {
  */
 export async function createBookingPage(
   scope: EngineScope,
-  input: Pick<CreateBookingPageInput, 'id' | 'title' | 'timeZone' | 'settings' | 'kind' | 'hosts'>,
+  input: Pick<CreateBookingPageInput, 'id' | 'title' | 'timeZone' | 'settings' | 'kind' | 'hosts' | 'scope'>,
   now: Date = new Date(),
 ): Promise<BookingPageView> {
   requirePermission(scope, 'booking.manage');
   const owner = memberOf(scope);
   if (owner === undefined) throw refuse('FORBIDDEN', PERMISSIONS['booking.manage'].message);
-  const kind = input.kind ?? 'personal';
+  const isWorkspace = input.scope === 'workspace';
+  // A workspace link is always round robin, and booking.admin's alone (team scheduling brief, decision 3).
+  const kind = isWorkspace ? 'round_robin' : (input.kind ?? 'personal');
   if (kind === 'round_robin') requirePermission(scope, 'booking.admin');
-  if (kind === 'round_robin' && input.hosts === undefined) {
+  if (isWorkspace && input.kind === 'personal') {
+    throw refuseOn('CONFIG_INVALID', 'A workspace link books round robin.', 'kind');
+  }
+  if (kind === 'round_robin' && input.hosts === undefined && !isWorkspace) {
     throw refuseOn('VALUE_REQUIRED', 'Pick the rotation this page books from.', 'hosts');
   }
+  if (isWorkspace) checkWorkspaceSettings(input.settings ?? {});
   checkTeamSchedule(kind, input.settings?.scheduleId);
   checkDurations(input.settings?.durations);
   return inWorkspace(scope, async (tx) => {
     const [existing] = await tx.select().from(bookingPages).where(eq(bookingPages.id, input.id));
     if (existing !== undefined) {
-      if (existing.ownerMemberId !== owner) throw refuse('ID_TAKEN', 'A booking page with that id already exists.');
+      if (existing.ownerMemberId !== owner || existing.scope !== (isWorkspace ? 'workspace' : 'member')) {
+        throw refuse('ID_TAKEN', 'A booking page with that id already exists.');
+      }
       const [page] = await pagesOf(tx, [existing]);
       if (page === undefined) throw refuse('ID_TAKEN', 'A booking page with that id already exists.');
       return viewWithCounts(tx, scope, page, now);
@@ -536,7 +610,11 @@ export async function createBookingPage(
     const settings: BookingPageSettings = {
       title: input.title,
       description: given.description ?? '',
-      slug: given.slug ?? (await freeSlug(tx, scope.workspaceId, owner, slugFromTitle(input.title))),
+      slug:
+        given.slug ??
+        (isWorkspace
+          ? await freeWorkspaceSlug(tx, slugFromTitle(input.title))
+          : await freeSlug(tx, scope.workspaceId, owner, slugFromTitle(input.title))),
       durations: given.durations ?? [30],
       location: given.location ?? { type: 'video' },
       bufferBefore: given.bufferBefore ?? 0,
@@ -553,7 +631,8 @@ export async function createBookingPage(
       // Every new page opens in Month, the one view the page had before the host could choose.
       defaultView: given.defaultView ?? 'month',
       profileSection: given.profileSection ?? null,
-      profilePosition: given.profilePosition ?? (await nextProfilePosition(tx, owner)),
+      // A workspace link is on nobody's profile.
+      profilePosition: given.profilePosition ?? (isWorkspace ? 0 : await nextProfilePosition(tx, owner)),
       questions: given.questions ?? [],
       fileToCrm: given.fileToCrm ?? true,
       answersObjectId: given.answersObjectId ?? null,
@@ -575,6 +654,8 @@ export async function createBookingPage(
           publicKey: newPublicKey(),
           slug: settings.slug,
           kind,
+          scope: isWorkspace ? 'workspace' : 'member',
+          // On a workspace link, only who made it: nothing manages, addresses or pauses it by this.
           ownerMemberId: owner,
           title: settings.title,
           description: settings.description,
@@ -611,9 +692,12 @@ export async function createBookingPage(
         .returning();
       if (row === undefined) throw new Error('The booking page was not created.');
       // A Public page joins the end of its owner's link page (spec 0051), as the profile always listed new pages.
-      if (!row.isPrivate) await placeNewPage(tx, scope, row);
-      if (kind === 'round_robin' && input.hosts !== undefined) {
-        await setPageHosts(tx, scope.workspaceId, row.id, input.hosts);
+      if (!row.isPrivate && !isWorkspace) await placeNewPage(tx, scope, row);
+      // A workspace link with no hosts named books "Everyone on the roster", made with the workspace's first link.
+      const hosts =
+        input.hosts ?? (isWorkspace ? { fixed: [], rotations: [await everyoneRotation(tx, scope)] } : undefined);
+      if (kind === 'round_robin' && hosts !== undefined) {
+        await setPageHosts(tx, scope.workspaceId, row.id, hosts);
         if (row.status === 'live') await checkRotationsBook(tx, scope.workspaceId, row.id);
         const [team] = await pagesOf(tx, [row]);
         if (team === undefined) throw new Error('The booking page was not created.');
@@ -656,7 +740,12 @@ export async function updateBookingPage(
     const placement = (['slug', 'profileSection', 'profilePosition', 'showSocials'] as const).find(
       (key) => settings[key] !== undefined,
     );
-    if (placement !== undefined && memberOf(scope) !== page.ownerMemberId) {
+    // A workspace link is on nobody's profile and shows nobody's links; its address (`slug`) is the workspace's,
+    // so any `booking.admin` holder changes it.
+    if (page.scope === 'workspace' && placement !== undefined && placement !== 'slug') {
+      throw refuseOn('CONFIG_INVALID', 'A workspace link isn’t on anyone’s profile.', placement);
+    }
+    if (placement !== undefined && page.scope === 'member' && memberOf(scope) !== page.ownerMemberId) {
       throw refuseOn(
         'FORBIDDEN',
         placement === 'showSocials'
@@ -779,7 +868,9 @@ export async function updateBookingPage(
       const [changed] = row === undefined ? [] : await pagesOf(tx, [row]);
       if (changed === undefined) throw refuse('NOT_FOUND', NOT_FOUND_MESSAGE);
       // Link only made Public: the page joins the end of its owner's link page, once (spec 0051).
-      if (row !== undefined && page.isPrivate && !row.isPrivate) await placeNewPage(tx, scope, row);
+      if (row !== undefined && page.isPrivate && !row.isPrivate && page.scope === 'member') {
+        await placeNewPage(tx, scope, row);
+      }
       return await viewWithCounts(tx, scope, changed, now);
     } catch (error) {
       throw slugRefusal(error) ?? error;
@@ -843,7 +934,12 @@ export async function reorderProfilePages(
   }
   return inWorkspace(scope, async (tx) => {
     await lockKey(tx, profileLockKey(scope.workspaceId, owner));
-    const mine = and(eq(bookingPages.ownerMemberId, owner), isNull(bookingPages.deletedAt));
+    // A workspace link is nobody's to place: it is on no profile.
+    const mine = and(
+      eq(bookingPages.ownerMemberId, owner),
+      eq(bookingPages.scope, 'member'),
+      isNull(bookingPages.deletedAt),
+    );
     const place = { id: bookingPages.id, profilePosition: bookingPages.profilePosition };
     const found = await tx
       .select(place)
@@ -874,7 +970,7 @@ export async function reorderProfilePages(
           updated_by_type = ${by.type}, updated_by_id = ${by.id}::uuid, updated_by_member_id = ${by.memberId}::uuid
         from (values ${values}) as v (id, position)
         where p.workspace_id = ${scope.workspaceId}::uuid and p.id = v.id
-          and p.owner_member_id = ${owner}::uuid and p.deleted_at is null
+          and p.owner_member_id = ${owner}::uuid and p.scope = 'member' and p.deleted_at is null
       `);
       // The named pages' order before and after: what the person changed, and nothing of the pages it left alone.
       const before = [...found]
@@ -969,11 +1065,12 @@ const hostlessPages = (memberId: string) => sql`
       and exists (
         select 1 from booking_page_rotations pr
         join rotations r on r.workspace_id = pr.workspace_id and r.id = pr.rotation_id and r.deleted_at is null
-        join rotation_members theirs on theirs.workspace_id = pr.workspace_id and theirs.rotation_id = pr.rotation_id
+        -- Through rotation_roster: "Everyone on the roster" holds every active member who isn't a guest, stored or not.
+        join rotation_roster theirs on theirs.workspace_id = pr.workspace_id and theirs.rotation_id = pr.rotation_id
           and theirs.member_id = ${memberId}::uuid and theirs.is_on
         where pr.workspace_id = p.workspace_id and pr.page_id = p.id
           and not exists (
-            select 1 from rotation_members other
+            select 1 from rotation_roster other
             join members h on h.workspace_id = other.workspace_id and h.id = other.member_id and h.status = 'active'
               and h.role::text in (${sql.join(
                 ROTATION_ROLES.map((role) => sql`${role}`),
@@ -1011,7 +1108,9 @@ export const bookingPagesRemoval: RemovalEffect = {
     // Their rotations' locks first, as `rotationsRemoval` takes them: a rotation change switching off the one other
     // member waits, and then sees them gone, so no page is left live on a rotation with nobody (late trap #22).
     const theirs = await tx.execute<{ id: string }>(
-      sql`select rotation_id::text as id from rotation_members where member_id = ${memberId}::uuid`,
+      // "Everyone on the roster" too: someone in it may have no row of their own to find it by.
+      sql`select rotation_id::text as id from rotation_members where member_id = ${memberId}::uuid
+        union select id::text from rotations where follows = 'everyone' and deleted_at is null`,
     );
     await lockRotations(
       tx,

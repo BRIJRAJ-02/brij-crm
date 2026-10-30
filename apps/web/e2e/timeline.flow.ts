@@ -79,8 +79,10 @@ test('the timeline shows changes and links, live, and pages as it scrolls', asyn
   });
   await expect(recent.getByRole('article').first()).toContainText('Rear admiral');
 
-  // A company, and Grace linked to it from her side, through the API (the record picker comes with #15).
+  // A company, and Grace linked to it from her side, through the API (the record picker comes with #15). One
+  // person's changes in the same second read as one entry ("changed 2 attributes"), so the link waits for the next.
   const { objectId, attribute } = await definitions(page, slug);
+  await page.waitForTimeout(1_100);
   const acmeId = uuidv7();
   await rpc(page, 'records/create', {
     workspace: slug,
@@ -132,7 +134,8 @@ test('the timeline shows changes and links, live, and pages as it scrolls', asyn
   console.warn(`timeline live: the change showed in the second browser after ${String(seenAfter)} ms`);
   expect(seenAfter).toBeLessThan(LIVE_BUDGET_MS + 500);
 
-  // A long timeline pages as it scrolls and ends with the creation.
+  // A long timeline pages as it scrolls and ends with the creation. Steps sent in the same second read as one
+  // entry, "changed N attributes", newest first.
   for (let index = 0; index < 60; index += 1) {
     await rpc(page, 'records/setValues', {
       workspace: slug,
@@ -142,7 +145,9 @@ test('the timeline shows changes and links, live, and pages as it scrolls', asyn
     });
   }
   await reader.reload();
-  await expect(readerFeed.getByRole('article').first()).toContainText('Step 59');
+  await expect(readerFeed.getByRole('article').first()).toHaveAccessibleName(
+    /^Ada Lovelace (set Job title|changed \d+ attributes)$/,
+  );
   // By keyboard: End reaches the last entry loaded (one still loading past it while there are more), the next
   // page arrives, and End again, until the creation shows. Focus stays in the feed throughout.
   await readerFeed.getByRole('article').first().focus();
@@ -153,7 +158,8 @@ test('the timeline shows changes and links, live, and pages as it scrolls', asyn
     await expect(readerFeed.locator(':focus')).toHaveCount(1);
   }
   await expect(readerFeed.getByText('created this record')).toBeVisible();
-  // 60 steps, the three changes before them and the creation, each once.
-  await expect(readerFeed.getByRole('article').last()).toHaveAttribute('aria-setsize', '64');
+  // The creation ends the feed, once.
+  await expect(readerFeed.getByRole('article').last()).toContainText('created this record');
+  await expect(readerFeed.getByText('created this record')).toHaveCount(1);
   await readerContext.close();
 });

@@ -1,6 +1,8 @@
 // Brief
 // Purpose: make or change a rotation (spec 0029, AC-728, AC-729; spec 0037): its name, how it picks, the window it counts over, where returning guests go, and its 2 to 20 members.
 // Main task: add the people who share the meetings, set each one's weight, priority, daily and weekly caps and on or off, then Create or Save.
+// "Everyone on the roster" (the workspace link's rotation, 30 Oct 2026) holds every active member by itself: no Add or
+// Remove, only each person's own settings.
 // Leaves out: shares and history (the Rotations screen), teams (#23 brings rotations that follow a team), and marking who
 // can't join in the picker (that needs the server to say who can host; until then its hint says who can, and the
 // server's refusal of one member offers to remove them or open their hours in a new tab).
@@ -89,6 +91,8 @@ const COLUMNS: readonly TableColumn[] = [
   { id: 'on', label: strings.columns.on },
   { id: 'remove', label: strings.columns.remove, isLabelHidden: true, align: 'end' },
 ];
+/** "Everyone on the roster": its members come with the workspace, so no one is removed here. */
+const ROSTER_COLUMNS: readonly TableColumn[] = COLUMNS.filter((column) => column.id !== 'remove');
 
 /** The dialog. The id is minted once per opening, so a retry makes one rotation. */
 export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, onSaved }: RotationDialogProps) {
@@ -121,7 +125,15 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
   const left: SelectItem[] = people
     .filter((person) => !members.some((member) => member.memberId === person.id))
     .map((person) => ({ id: person.id, label: person.name, description: person.email }));
-  const countError = members.length < 2 ? strings.needTwo : members.length > 20 ? strings.tooMany : undefined;
+  // Everyone on the roster: membership follows the workspace, so the 2 to 20 of a chosen group doesn't apply.
+  const isRoster = rotation?.follows === 'everyone';
+  const countError = isRoster
+    ? undefined
+    : members.length < 2
+      ? strings.needTwo
+      : members.length > 20
+        ? strings.tooMany
+        : undefined;
   // A refusal about one member ("Maya Patel needs to set hours or connect a calendar first.") offers to remove them,
   // and, while they are an active member (so hours are what they lack), their hours in a new tab, so the group stays.
   const refused = failure?.memberId;
@@ -146,7 +158,7 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
     setNameError(trimmed === '' ? strings.nameRequired : undefined);
     const weights = members.map((member) => weightOf(member.weight));
     if (trimmed === '' || countError !== undefined || weights.some((weight) => weight === undefined)) return;
-    if (rotation !== undefined && removed.length > 0 && !isConfirming) {
+    if (rotation !== undefined && !isRoster && removed.length > 0 && !isConfirming) {
       setConfirming(true);
       return;
     }
@@ -156,14 +168,32 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
     );
   };
 
+  /** A member's settings as the rotation was read, unchanged in the draft. */
+  const sameAsHeld = (member: RotationMemberInput) => {
+    const held = rotation?.members.find((each) => each.memberId === member.memberId);
+    return (
+      held !== undefined &&
+      held.weight === member.weight &&
+      held.priority === member.priority &&
+      held.dailyCap === member.dailyCap &&
+      held.weeklyCap === member.weeklyCap &&
+      held.isOn === member.isOn
+    );
+  };
+
   const save = (trimmed: string, list: RotationMemberInput[]) => {
     setBusy(true);
     setFailure(undefined);
     const settings = { name: trimmed, strategy, windowDays, evenGap, returning };
+    // Everyone on the roster takes only the people whose own settings changed: nobody joins or leaves by a save.
+    const changed = isRoster ? list.filter((member) => !sameAsHeld(member)) : list;
     const sent =
       rotation === undefined
         ? data.rotations.create(slug, { id, settings, members: list })
-        : data.rotations.update(slug, rotation.id, { settings, members: list });
+        : data.rotations.update(slug, rotation.id, {
+            settings,
+            ...(isRoster && changed.length === 0 ? {} : { members: changed }),
+          });
     sent.then(
       (saved) => {
         setBusy(false);
@@ -175,7 +205,7 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
         setConfirming(false);
         const field = isDataError(error) ? error.data?.refusals?.[0]?.field : undefined;
         const index = field?.startsWith('members.') === true ? Number(field.slice('members.'.length)) : undefined;
-        const memberId = index === undefined ? undefined : list[index]?.memberId;
+        const memberId = index === undefined ? undefined : changed[index]?.memberId;
         setFailure({
           message: isDataError(error) ? error.message : strings.somethingWrong,
           ...(memberId === undefined ? {} : { memberId }),
@@ -305,14 +335,27 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
                 : {
                     actions: (
                       <>
-                        <Button
-                          label={strings.removeRefused(nameOf(refused))}
-                          onPress={() => {
-                            removeMember(refused, 'save');
-                          }}
-                        >
-                          {strings.removeFromGroup}
-                        </Button>
+                        {isRoster ? (
+                          // Nobody leaves Everyone on the roster by a save: the fix is to switch them off.
+                          <Button
+                            onPress={() => {
+                              change(refused, { isOn: false });
+                              setFailure(undefined);
+                              focusLater(() => saveRef.current);
+                            }}
+                          >
+                            {strings.switchOffRefused(nameOf(refused))}
+                          </Button>
+                        ) : (
+                          <Button
+                            label={strings.removeRefused(nameOf(refused))}
+                            onPress={() => {
+                              removeMember(refused, 'save');
+                            }}
+                          >
+                            {strings.removeFromGroup}
+                          </Button>
+                        )}
                         {isRefusedActive && (
                           <ButtonLink
                             href={availabilityHref(slug, refused)}
@@ -335,6 +378,8 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
             // A new group starts with its name, so the field takes focus as the dialog opens (Q102).
             autoFocus={rotation === undefined}
             placeholder={strings.namePlaceholder}
+            // Everyone on the roster is named by the workspace link that books it.
+            isReadOnly={isRoster}
             value={name}
             onChange={(next) => {
               setName(next);
@@ -347,14 +392,21 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
           />
           <RadioGroup
             label={strings.strategy}
+            variant="cards"
             value={strategy}
             onChange={(value) => {
               if (value === 'fair' || value === 'priority' || value === 'even') setStrategy(value);
             }}
           >
-            <Radio value="fair">{strings.fair}</Radio>
-            <Radio value="priority">{strings.priority}</Radio>
-            <Radio value="even">{strings.even}</Radio>
+            <Radio value="fair" icon="scale" description={strings.fairLine}>
+              {strings.fairCard}
+            </Radio>
+            <Radio value="priority" icon="star" description={strings.priorityLine}>
+              {strings.priorityCard}
+            </Radio>
+            <Radio value="even" icon="users" description={strings.evenLine}>
+              {strings.evenCard}
+            </Radio>
           </RadioGroup>
           {strategy === 'even' && (
             <Select
@@ -380,29 +432,35 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
               if (value === 'owner' || value === 'last_host' || value === 'none') setReturning(value);
             }}
           />
-          <Select
-            label={strings.addMember}
-            placeholder={left.length === 0 ? strings.noMembersLeft : strings.addMemberPlaceholder}
-            items={left}
-            isSearchable
-            isDisabled={left.length === 0 || members.length >= 20}
-            value={null}
-            // Who can join, in plain words (SS-R1): a link here would open the reader's own hours, not a teammate's.
-            hint={strings.membersHint(members.length)}
-            {...(hasTried && countError !== undefined ? { error: countError } : {})}
-            onChange={(memberId) => {
-              if (memberId === null) return;
-              setMembers((current) => [
-                ...current,
-                { memberId, weight: '100', priority: 2, dailyCap: null, weeklyCap: null, isOn: true },
-              ]);
-            }}
-          />
+          {isRoster ? (
+            <Callout tone="info">
+              {strings.rosterNote(members.filter((member) => member.isOn).length, members.length)}
+            </Callout>
+          ) : (
+            <Select
+              label={strings.addMember}
+              placeholder={left.length === 0 ? strings.noMembersLeft : strings.addMemberPlaceholder}
+              items={left}
+              isSearchable
+              isDisabled={left.length === 0 || members.length >= 20}
+              value={null}
+              // Who can join, in plain words (SS-R1): a link here would open the reader's own hours, not a teammate's.
+              hint={strings.membersHint(members.length)}
+              {...(hasTried && countError !== undefined ? { error: countError } : {})}
+              onChange={(memberId) => {
+                if (memberId === null) return;
+                setMembers((current) => [
+                  ...current,
+                  { memberId, weight: '100', priority: 2, dailyCap: null, weeklyCap: null, isOn: true },
+                ]);
+              }}
+            />
+          )}
           {members.length > 0 && (
             <Table
               label={strings.members(name.trim() === '' ? strings.newRotation : name.trim())}
               isScrollable
-              columns={COLUMNS}
+              columns={isRoster ? ROSTER_COLUMNS : COLUMNS}
               rows={members}
               getRowId={(member) => member.memberId}
               renderCell={renderCell}

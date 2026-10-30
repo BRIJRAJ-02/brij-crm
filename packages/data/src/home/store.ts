@@ -184,6 +184,17 @@ export function createHomeStore(deps: HomeDeps) {
         else reads.delete(key);
       }
     },
+    /**
+     * Team today's held reads of the workspace read again, and unheld ones are forgotten (spec 0037: someone's time
+     * off changed, so who reads Away did). Metrics and recents stay as they are.
+     */
+    teamChanged(workspace: string): void {
+      for (const [key, view] of [...reads]) {
+        if (!key.startsWith(`team:${workspace}:`)) continue;
+        if (view.isHeld()) view.reload();
+        else reads.delete(key);
+      }
+    },
   };
 }
 

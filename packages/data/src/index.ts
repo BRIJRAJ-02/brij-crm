@@ -143,12 +143,7 @@ import {
   type StepUpResult,
 } from './account/security.ts';
 import { createAccountSessionsStore, type AccountSessionsView, type SignOutOthersResult } from './account/sessions.ts';
-import {
-  createEmailPreferences,
-  createEmailUnsubscribe,
-  type EmailPreferencesStore,
-  type EmailUnsubscribeStore,
-} from './email-preferences.ts';
+import type { EmailPreferencesStore, EmailUnsubscribeStore } from './email-preferences.ts';
 import {
   connectUrl,
   createCalendarStore,
@@ -169,6 +164,29 @@ export type {
   SchedulingLevel,
   VisibleMember,
 } from './scheduling/access.ts';
+export type {
+  TimeOffBooking,
+  TimeOffDraft,
+  TimeOffEntry,
+  TimeOffHeld,
+  TimeOffList,
+  TimeOffReason,
+  TimeOffSaved,
+  TimeOffState,
+  TimeOffStore,
+} from './scheduling/time-off.ts';
+export type {
+  DayHours,
+  TeamWeek,
+  TeamWeekDay,
+  TeamWeekHeld,
+  TeamWeekRow,
+  TeamWeekSource,
+  TeamWeekState,
+  TeamWeekStore,
+  TeamWeekTotal,
+  WeeklyHours,
+} from './scheduling/team-week.ts';
 import {
   createPreferencesStore,
   type MemberPreferences,
@@ -570,6 +588,8 @@ export {
   type GuessedType,
   type PickerType,
 } from '@crm/contracts/picker';
+/** Which attributes can name an object's records (late trap #15): the settings choice offers only these. */
+export { canNameRecords } from '@crm/contracts/record-name';
 export {
   MAX_PENDING_OPTIONS,
   withPendingOptions,
@@ -867,6 +887,8 @@ export interface ObjectChanges {
   readonly pluralName?: string;
   readonly icon?: ObjectSummary['icon'];
   readonly hue?: ObjectSummary['hue'];
+  /** The attribute that names its records (late trap #15): a custom object's, one `canNameRecords` takes. */
+  readonly primaryAttributeId?: string;
 }
 
 /** An attribute's default (spec 0012, AC-234): a value, the member creating the record, or today plus days. */
@@ -1358,8 +1380,9 @@ export function createDataLayer({
 
   const auth = createAuth({ origin, fetch, reset, report: reportSafely });
   // Email preferences pages (the emails lane), one store per link's token for the app load, and the one click's.
-  const emailPreferenceStores = new Map<string, EmailPreferencesStore>();
-  const emailUnsubscribeStores = new Map<string, EmailUnsubscribeStore>();
+  // Their module loads with the page (`import()`), never in the first load: only an email's link opens it.
+  const emailPreferenceStores = new Map<string, Promise<EmailPreferencesStore>>();
+  const emailUnsubscribeStores = new Map<string, Promise<EmailUnsubscribeStore>>();
 
   /** Reads a per workspace list once, dropping it from the cache when it fails, so the next call asks again. */
   function cached<T>(cache: Map<string, Promise<T>>, key: string, load: () => Promise<T>): Promise<T> {
@@ -1417,8 +1440,25 @@ export function createDataLayer({
     const changed = await refreshHeld(objects, workspace, () => allObjects(workspace));
     if (!changed) return false;
     const after = await objects.get(workspace)?.catch(() => undefined);
-    if (archivedIds(before) !== archivedIds(after)) await refreshAttributes(workspace);
+    // A name attribute moved (late trap #15): which attribute is the primary changed too, and every record's name.
+    const renamed = primaries(before) !== primaries(after);
+    if (renamed || archivedIds(before) !== archivedIds(after)) await refreshAttributes(workspace);
+    if (renamed) renameRecords(workspace);
     return true;
+  };
+
+  /** Each object's name attribute in a held list, to tell when one moved (late trap #15). */
+  const primaries = (list: readonly ObjectSummary[] | undefined): string =>
+    (list ?? [])
+      .map((object) => object.id + (object.primaryAttributeId ?? ''))
+      .sort()
+      .join();
+
+  /** An object's records are named by another attribute: every held record and linked name is read again. */
+  const renameRecords = (workspace: string): void => {
+    void records?.then((layer) => {
+      layer.renamed(workspace);
+    });
   };
 
   /**
@@ -1775,6 +1815,25 @@ export function createDataLayer({
       () => {
         schedulesDue.delete(workspace);
         schedules.changed(workspace);
+        // The Team week reads the same schedules (spec 0037, job J6).
+        accessLoaded?.teamWeek.changed(workspace);
+      },
+      100 + Math.round(random() * 300),
+    );
+  });
+  // Someone's time off changed (spec 0037): the Team week (Away), the held time off lists and Bookings' held reads
+  // (Host away) read again, once for a burst, spread over 100 to 400 ms as schedules are. The event names nobody, so
+  // every tab of the workspace hears it; only what a screen holds reads.
+  const timeOffDue = new Set<string>();
+  router.on('time_off', (workspace) => {
+    if (timeOffDue.has(workspace)) return;
+    timeOffDue.add(workspace);
+    setTimeout(
+      () => {
+        timeOffDue.delete(workspace);
+        accessLoaded?.teamWeek.changed(workspace);
+        accessLoaded?.timeOff.changed(workspace);
+        refreshBookings(workspace);
       },
       100 + Math.round(random() * 300),
     );
@@ -1834,6 +1893,8 @@ export function createDataLayer({
   });
   router.onResync((workspace) => {
     schedules.changed(workspace);
+    accessLoaded?.teamWeek.changed(workspace);
+    accessLoaded?.timeOff.changed(workspace);
     jobs.resync(workspace);
     views.resync(workspace);
     navStore?.resync(workspace);
@@ -2069,6 +2130,15 @@ export function createDataLayer({
     },
     ...bookingsFresh,
   });
+  /**
+   * Time off changed (spec 0037): what Bookings shows now reads again (Host away), each held read once, and so does
+   * Home's Team today (Away).
+   */
+  const refreshBookings = (workspace: string) => {
+    bookingsLists.refreshHeld(workspace);
+    meetings.refreshHeld(workspace);
+    homeReads.teamChanged(workspace);
+  };
   /** A booking or a calendar changed: every held Bookings read of the workspace reads again. */
   const reloadBookings = (workspace: string) => {
     bookingsLists.reloadAll(workspace);
@@ -2090,9 +2160,13 @@ export function createDataLayer({
   const schedulingAccess = (): Promise<SchedulingAccessStore> =>
     (accessStore ??= import('./scheduling/access.ts').then(({ createSchedulingAccessStore, wireApi }) => {
       accessLoaded = createSchedulingAccessStore({
-        api: wireApi({ client: api, call: (run) => call(run), beforeRead, mintId }),
+        api: wireApi({ client: api, call: (run) => call(run), beforeRead, mintId, mutations }),
         mintId,
         notify,
+        watch,
+        onTimeOffChanged: (workspace) => {
+          refreshBookings(workspace);
+        },
       });
       return accessLoaded;
     }));
@@ -2604,6 +2678,11 @@ export function createDataLayer({
       readonly archives?: boolean;
       /** The workspace's objects as the answer already holds them (a move answers the whole new order). */
       readonly objectsOf?: (answer: T) => ObjectSummary[];
+      /**
+       * A new name attribute (late trap #15): the held attribute lists are read again (which one is the primary
+       * moved), and so is every record this tab holds, since each one's name changed.
+       */
+      readonly renames?: boolean;
     } = {},
   ) {
     const mutationId = mintId();
@@ -2615,10 +2694,11 @@ export function createDataLayer({
       if (known === undefined) objects.delete(workspace);
       else objects.set(workspace, Promise.resolve(known));
       usage.delete(workspace);
-      if (effects.archives === true) {
+      if (effects.archives === true || effects.renames === true) {
         dropAllAttributes(workspace);
         await refreshAttributes(workspace);
       }
+      if (effects.renames === true) renameRecords(workspace);
       onDefinitionsChange();
       return answer;
     } catch (error) {
@@ -3322,6 +3402,8 @@ export function createDataLayer({
           settings?: Partial<BookingPageSettings>;
           /** `round_robin` (spec 0029) needs `booking.admin` and its hosts. */
           kind?: 'personal' | 'round_robin';
+          /** `workspace`: the workspace's own link (`booking.admin`), booking everyone on the roster unless `hosts` says. */
+          scope?: 'workspace';
           hosts?: TeamHosts;
         },
       ): Promise<BookingPageView> =>
@@ -3441,10 +3523,11 @@ export function createDataLayer({
                         title,
                         scheduleId: page.ownerMemberId === me ? page.scheduleId : null,
                       },
-                      // A round robin page’s copy books from the same hosts.
+                      // A round robin page’s copy books from the same hosts; a workspace link's copy is the workspace's.
                       ...(page.kind === 'round_robin' && page.hosts !== undefined
                         ? { kind: 'round_robin' as const, hosts: page.hosts }
                         : {}),
+                      scope: page.scope,
                       mutationId: mintId(),
                     },
                     options,
@@ -3928,10 +4011,16 @@ export function createDataLayer({
             options,
           ),
         ),
-      /** Renames or restyles an object (AC-224), waiting for the server. Refusals: `NAME_TAKEN`, `CONFIG_INVALID`. */
+      /**
+       * Renames or restyles an object (AC-224), or names its records by another attribute (late trap #15), waiting
+       * for the server; a new name attribute reads the records this tab holds again. Refusals: `NAME_TAKEN`,
+       * `CONFIG_INVALID` (on its field, `primaryAttributeId` included).
+       */
       update: (workspace: string, objectId: string, changes: ObjectChanges): Promise<ObjectSummary> =>
-        writeObject(workspace, (mutationId, options) =>
-          api.objects.update({ workspace, objectId, ...changes, mutationId }, options),
+        writeObject(
+          workspace,
+          (mutationId, options) => api.objects.update({ workspace, objectId, ...changes, mutationId }, options),
+          { renames: changes.primaryAttributeId !== undefined },
         ),
       /** Moves an object to `position` in the workspace's order (AC-225), archived objects counted. */
       reorder: (workspace: string, objectId: string, position: number): Promise<ObjectSummary[]> =>
@@ -5428,7 +5517,10 @@ export function createDataLayer({
             call((options) => api.forms.publish({ workspace, formId, ...input, mutationId: mintId() }, options)),
           land: landForm(formId),
         }),
-      /** The settings that apply at once: name, address, owner (a member or a rotation), the sites that may post, signatures. */
+      /**
+       * The settings that apply at once: name, address, owner (a member or a rotation), who hears of each submission,
+       * the sites that may post, signatures.
+       */
       updateSettings: (
         workspace: string,
         formId: string,
@@ -5439,6 +5531,7 @@ export function createDataLayer({
           readonly ownerRotationId?: string | null;
           readonly allowedOrigins?: readonly string[];
           readonly requireSignature?: boolean;
+          readonly notifyMemberIds?: readonly string[];
         },
       ) =>
         formLists.write(workspace, {
@@ -5450,6 +5543,7 @@ export function createDataLayer({
                   formId,
                   ...settings,
                   allowedOrigins: settings.allowedOrigins === undefined ? undefined : [...settings.allowedOrigins],
+                  notifyMemberIds: settings.notifyMemberIds === undefined ? undefined : [...settings.notifyMemberIds],
                   mutationId: mintId(),
                 },
                 options,
@@ -6003,26 +6097,25 @@ export function createDataLayer({
     /**
      * A member's email preferences, opened by an email's link with no session
      * (the emails lane): one store per link's token, the page's one copy, its
-     * changes shown at once and put back on a refusal.
+     * changes shown at once and put back on a refusal. Its module loads on
+     * first use, so the store comes as a promise for the route's loader.
      */
-    emailPreferences: (token: string): EmailPreferencesStore => {
-      const held = emailPreferenceStores.get(token);
-      if (held !== undefined) return held;
-      const made = createEmailPreferences({ origin, fetch }, token);
-      emailPreferenceStores.set(token, made);
-      return made;
-    },
+    emailPreferences: (token: string): Promise<EmailPreferencesStore> =>
+      cached(emailPreferenceStores, token, () =>
+        import('./email-preferences.ts').then(({ createEmailPreferences }) =>
+          createEmailPreferences({ origin, fetch }, token),
+        ),
+      ),
     /**
      * An optional email's one click unsubscribe opened in a browser (the
      * emails lane): one store per link's token, which asks before it posts.
      */
-    emailUnsubscribe: (token: string): EmailUnsubscribeStore => {
-      const held = emailUnsubscribeStores.get(token);
-      if (held !== undefined) return held;
-      const made = createEmailUnsubscribe({ origin, fetch }, token);
-      emailUnsubscribeStores.set(token, made);
-      return made;
-    },
+    emailUnsubscribe: (token: string): Promise<EmailUnsubscribeStore> =>
+      cached(emailUnsubscribeStores, token, () =>
+        import('./email-preferences.ts').then(({ createEmailUnsubscribe }) =>
+          createEmailUnsubscribe({ origin, fetch }, token),
+        ),
+      ),
   };
 }
 

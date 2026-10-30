@@ -6,7 +6,7 @@
 // 0037, AC-1272) made or removed for a colleague they Manage, with their own
 // `booking.manage` (AC-1275); never shown to anyone but the member. Every block
 // made or removed writes one audit row naming whose time it is (AC-1263).
-import { and, asc, eq, getTableColumns, sql } from 'drizzle-orm';
+import { and, asc, eq, getTableColumns, inArray, sql } from 'drizzle-orm';
 import { DateTime } from 'luxon';
 import { PERMISSIONS, type TimeBlockOccurrence, type TimeBlockView } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
@@ -159,7 +159,13 @@ async function existing(tx: WorkspaceTx, member: string, id: string): Promise<Ti
   const [row] = await tx
     .select(blockColumns())
     .from(bookingTimeBlocks)
-    .where(and(eq(bookingTimeBlocks.id, id), eq(bookingTimeBlocks.memberId, member)));
+    .where(
+      and(
+        eq(bookingTimeBlocks.id, id),
+        eq(bookingTimeBlocks.memberId, member),
+        sql`${bookingTimeBlocks.kind} <> 'away'`,
+      ),
+    );
   return row === undefined ? undefined : viewOf(row);
 }
 
@@ -199,7 +205,8 @@ export async function removeTimeBlock(
     const [found] = await tx
       .select({ memberId: bookingTimeBlocks.memberId })
       .from(bookingTimeBlocks)
-      .where(eq(bookingTimeBlocks.id, input.id));
+      .where(and(eq(bookingTimeBlocks.id, input.id), sql`${bookingTimeBlocks.kind} <> 'away'`));
+    // Time off is removed through its own service (audited as time off), never as a block.
     if (found === undefined) throw refuse('NOT_FOUND', NOT_FOUND_MESSAGE);
     if (found.memberId !== actor) {
       try {
@@ -214,7 +221,13 @@ export async function removeTimeBlock(
     await lockKey(tx, hostLockKey(scope.workspaceId, found.memberId));
     const removed = await tx
       .delete(bookingTimeBlocks)
-      .where(and(eq(bookingTimeBlocks.id, input.id), eq(bookingTimeBlocks.memberId, found.memberId)))
+      .where(
+        and(
+          eq(bookingTimeBlocks.id, input.id),
+          eq(bookingTimeBlocks.memberId, found.memberId),
+          sql`${bookingTimeBlocks.kind} <> 'away'`,
+        ),
+      )
       .returning(blockColumns());
     const [row] = removed;
     if (row === undefined) throw refuse('NOT_FOUND', NOT_FOUND_MESSAGE);
@@ -246,12 +259,23 @@ function auditFieldsOf(row: BlockRow): Readonly<Record<string, unknown>> {
 
 /** A member's blocks that can touch `[from, to)`: once ones overlapping it, and every weekly one begun by its end. */
 async function blocksTouching(tx: WorkspaceTx, member: string, from: Date, to: Date): Promise<readonly BlockRow[]> {
+  return blocksOfMembersTouching(tx, [member], from, to);
+}
+
+/** Every block of these members touching [from, to), in one read (a team's slots read every host's at once). */
+async function blocksOfMembersTouching(
+  tx: WorkspaceTx,
+  memberIds: readonly string[],
+  from: Date,
+  to: Date,
+): Promise<readonly BlockRow[]> {
+  if (memberIds.length === 0) return [];
   return tx
     .select(blockColumns())
     .from(bookingTimeBlocks)
     .where(
       and(
-        eq(bookingTimeBlocks.memberId, member),
+        inArray(bookingTimeBlocks.memberId, [...memberIds]),
         // Plain comparisons on the stored ends, not `during &&`: under row level security only leakproof operators
         // reach the index, and range overlap isn't one.
         sql`((${bookingTimeBlocks.repeat} = 'once' and ${bookingTimeBlocks.endsAt} > ${from.toISOString()}::timestamptz
@@ -293,10 +317,18 @@ export function weeklyTurns(
 
 /** One row's occurrences in `[from, to)`. */
 function occurrencesOf(row: BlockRow, from: Date, to: Date): readonly TimeBlockOccurrence[] {
-  const kind = row.kind === 'hold' ? 'hold' : 'block';
+  const kind = row.kind === 'hold' ? 'hold' : row.kind === 'away' ? 'away' : 'block';
   const label = row.label === null ? {} : { label: row.label };
   if (row.repeat !== 'weekly') {
     if (row.startsAt === null || row.endsAt === null) return [];
+    // Time off (spec 0037) carries its days, so the week draws it as all day in the zone it was chosen in.
+    const days =
+      kind === 'away' && row.timeZone !== null
+        ? {
+            fromDate: DateTime.fromJSDate(row.startsAt, { zone: row.timeZone }).toISODate() ?? '',
+            toDate: DateTime.fromJSDate(row.endsAt, { zone: row.timeZone }).minus({ days: 1 }).toISODate() ?? '',
+          }
+        : {};
     return [
       {
         key: row.id,
@@ -306,6 +338,7 @@ function occurrencesOf(row: BlockRow, from: Date, to: Date): readonly TimeBlockO
         ...label,
         startsAt: iso(row.startsAt),
         endsAt: iso(row.endsAt),
+        ...days,
       },
     ];
   }
@@ -357,15 +390,31 @@ export async function blockedTime(
   to: Date,
   page: { readonly id: string; readonly isPrivate: boolean },
 ): Promise<{ readonly busy: readonly Span[]; readonly openHolds: readonly Span[] }> {
-  const rows = await blocksTouching(tx, member, from, to);
-  const busy: Span[] = [];
-  const openHolds: Span[] = [];
-  for (const row of rows) {
+  return (await blockedTimes(tx, [member], from, to, page)).get(member) ?? { busy: [], openHolds: [] };
+}
+
+/**
+ * `blockedTime` for many members in one read: a team page's slots (every host of "Everyone on the roster") read their
+ * blocks together rather than one query per member.
+ */
+export async function blockedTimes(
+  tx: WorkspaceTx,
+  memberIds: readonly string[],
+  from: Date,
+  to: Date,
+  page: { readonly id: string; readonly isPrivate: boolean },
+): Promise<ReadonlyMap<string, { readonly busy: readonly Span[]; readonly openHolds: readonly Span[] }>> {
+  const found = new Map<string, { busy: Span[]; openHolds: Span[] }>(
+    memberIds.map((memberId) => [memberId, { busy: [], openHolds: [] }]),
+  );
+  for (const row of await blocksOfMembersTouching(tx, memberIds, from, to)) {
+    const theirs = found.get(row.memberId);
+    if (theirs === undefined) continue;
     const usable = row.kind === 'hold' && page.isPrivate && (row.pageId === null || row.pageId === page.id);
     for (const occurrence of occurrencesOf(row, from, to)) {
       const span = { start: new Date(occurrence.startsAt), end: new Date(occurrence.endsAt) };
-      (usable ? openHolds : busy).push(span);
+      (usable ? theirs.openHolds : theirs.busy).push(span);
     }
   }
-  return { busy, openHolds };
+  return found;
 }

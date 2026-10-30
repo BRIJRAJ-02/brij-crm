@@ -11,6 +11,11 @@ import { WorkspaceScoped } from '../workspaces.ts';
 
 /** How many members a rotation holds (AC-728). */
 export const ROTATION_MEMBERS = { min: 2, max: 20 } as const;
+/**
+ * The most people "Everyone on the roster" (the workspace link's rotation, which follows membership) lists and takes
+ * per person settings for in one change. Its members aren't chosen, so the 2 to 20 above doesn't hold for it.
+ */
+export const ROSTER_MEMBERS_MAX = 200;
 /** The windows fairness may count over, in days (AC-728). */
 export const ROTATION_WINDOWS = [7, 30, 90] as const;
 /** The five priority levels, lowest first (AC-728); 2 is medium, the default. */
@@ -83,6 +88,12 @@ export type RotationMemberView = z.infer<typeof RotationMemberView>;
 /** A rotation as Settings shows it. */
 export const RotationView = RotationSettings.extend({
   id: Uuid,
+  /**
+   * `everyone`: "Everyone on the roster", the workspace link's rotation, whose members are every active member who
+   * isn't a guest, joining and leaving with the workspace; only their own settings (on or off, weight, priority,
+   * caps) change. Absent for a rotation of chosen people.
+   */
+  follows: z.literal('everyone').optional(),
   members: z.array(RotationMemberView),
   /** How many live booking pages book from it. */
   pages: z.number().int().min(0),
@@ -109,11 +120,28 @@ export const CreateRotationInput = WorkspaceScoped.extend({
 /** A new rotation. */
 export type CreateRotationInput = z.infer<typeof CreateRotationInput>;
 
-/** A change to a rotation: only the settings given; `members`, when given, replaces the list (AC-757). */
+/**
+ * A rotation's members as a change sends them: the whole list for a rotation of chosen people (2 to 20, checked by
+ * the server), or the people whose own settings change in "Everyone on the roster" (1 to 200).
+ */
+export const RotationMembersChange = z
+  .array(RotationMemberInput)
+  .min(1, 'Name at least one member.')
+  .max(ROSTER_MEMBERS_MAX, `Change at most ${String(ROSTER_MEMBERS_MAX)} people at once.`)
+  .refine((list) => new Set(list.map((member) => member.memberId)).size === list.length, {
+    error: 'Add each member once.',
+  });
+/** A rotation's members as a change sends them. */
+export type RotationMembersChange = z.infer<typeof RotationMembersChange>;
+
+/**
+ * A change to a rotation: only the settings given; `members`, when given, replaces the list (AC-757), or, for
+ * "Everyone on the roster", sets those people's own settings and leaves everyone else as they are.
+ */
 export const UpdateRotationInput = WorkspaceScoped.extend({
   rotationId: Uuid,
   settings: RotationSettings.partial(),
-  members: RotationMembersInput.optional(),
+  members: RotationMembersChange.optional(),
   mutationId: Uuid,
 });
 /** A change to a rotation. */

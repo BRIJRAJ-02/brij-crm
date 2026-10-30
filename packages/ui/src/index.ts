@@ -233,7 +233,7 @@ export {
   type BookingListRow,
 } from './modules/BookingList/BookingList.tsx';
 export { LinkCard, LinkCardSkeleton, type LinkCardProps, type LinkCardToggle } from './modules/LinkCard/LinkCard.tsx';
-export { LinkGrid, type LinkGridCard, type LinkGridProps } from './modules/LinkGrid/LinkGrid.tsx';
+export { LinkGrid, type LinkGridCard, type LinkGridGroup, type LinkGridProps } from './modules/LinkGrid/LinkGrid.tsx';
 export {
   LinkList,
   LinkListToolbar,
@@ -353,6 +353,15 @@ export {
   type RolePowersProps,
 } from './modules/RolePowers/RolePowers.tsx';
 export { TeamList, type TeamListProps, type TeamPresence, type TeamRow } from './modules/TeamList/TeamList.tsx';
+export {
+  TeamWeek,
+  type TeamWeekCell,
+  type TeamWeekDay,
+  type TeamWeekPerson,
+  type TeamWeekProps,
+  type TeamWeekTone,
+  type TeamWeekTotal,
+} from './modules/TeamWeek/TeamWeek.tsx';
 export {
   SetupChecklist,
   type SetupChecklistProps,

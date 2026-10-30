@@ -66,6 +66,8 @@ export const AUDIT_ACTIONS = [
   'routing.changed',
   // Spec 0029 milestone 3: who a form's new records go to changed (a member, a round robin rotation, or nobody).
   'form.owner_changed',
+  // Who a form emails each new submission changed (spec 0023, AC-568): the list decides who reads visitors' answers.
+  'form.notify_changed',
   'booking.no_show',
   'booking.no_show_undone',
   // A booking linked to a record by hand from its card, and the link taken off (polish F2).
@@ -86,6 +88,11 @@ export const AUDIT_ACTIONS = [
   'schedule.changed',
   'block.created',
   'block.removed',
+  // Time off added, changed or removed (spec 0037, AC-1282): the target is the member who is away; the row keeps
+  // the dates, the reason code and the stand in, never the note.
+  'time_off.created',
+  'time_off.changed',
+  'time_off.deleted',
   // A booking made, moved or cancelled by someone other than its host: the target is the booking, `memberId` the host.
   'booking.changed_for',
 ] as const;

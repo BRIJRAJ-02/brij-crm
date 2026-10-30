@@ -62,9 +62,11 @@ export const formSubmission: Template<FormSubmissionEmail> = (params, context) =
     why:
       params.reason === 'lead'
         ? `You got this email because this lead was given to you in ${workspaceOf(context)}.`
-        : params.reason === 'maker'
-          ? `You got this email because you made the form ${params.formName} in ${workspaceOf(context)}.`
-          : `You got this email because you made ${params.formName} or its lead was given to you, in ${workspaceOf(context)}.`,
+        : params.reason === 'listed'
+          ? `You got this email because ${params.formName} tells you about new submissions in ${workspaceOf(context)}.`
+          : params.reason === 'maker'
+            ? `You got this email because you made the form ${params.formName} in ${workspaceOf(context)}.`
+            : `You got this email because you made ${params.formName} or its lead was given to you, in ${workspaceOf(context)}.`,
   };
 };
 

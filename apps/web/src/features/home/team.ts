@@ -44,6 +44,8 @@ export function standingOf(items: readonly TeamTodayItem[], now: Date): Standing
 export interface TeamMemberDay {
   readonly member: MemberView;
   readonly items: readonly TeamTodayItem[];
+  /** On time off today (spec 0037, AC-1287): the row reads "Away". */
+  readonly away?: boolean;
 }
 
 /**
@@ -68,6 +70,7 @@ export function teamDaysOf(
         joinedAt: new Date(0).toISOString(),
       },
       items: day.items,
+      ...(day.away === true ? { away: true } : {}),
     }))
     .toSorted((a, b) => {
       if (a.member.id === meId) return -1;

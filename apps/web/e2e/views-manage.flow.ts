@@ -13,7 +13,7 @@ import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Page } from '@playwright/test';
-import { addPerson, checkScreen, newWorkspace, objectUrl, signInAgain } from './people.ts';
+import { addPerson, checkScreen, chooseNewAttribute, newWorkspace, objectUrl, signInAgain } from './people.ts';
 
 /**
  * Whether live updates reach the browsers: Centrifugo admits only the app on :5173, so a run on another port
@@ -42,6 +42,12 @@ async function openSwitcher(page: Page, current: string) {
   return menu;
 }
 
+/** Who can see it, in an open switcher (30 October 2026: one choice in place of Share, Make private and Lock). */
+async function chooseWho(page: Page, choice: 'Only me' | 'Everyone' | 'Everyone, only admins edit'): Promise<void> {
+  await page.getByRole('menuitem', { name: 'Who can see it' }).click();
+  await page.getByRole('menuitem', { name: choice, exact: true }).click();
+}
+
 /**
  * Creates a view from the switcher's Create view, named `name`: it is private, and starts from the view open; for
  * everyone it is shared afterwards from its own menu (30 October 2026: the dialog asks only Name and Type).
@@ -56,8 +62,8 @@ async function createView(page: Page, current: string, name: string, everyone: b
   await expect(dialog).toBeHidden();
   await expect(viewBarSwitcher(page, name)).toBeVisible();
   if (!everyone) return;
-  const own = await openSwitcher(page, name);
-  await own.getByRole('menuitem', { name: 'Share with everyone' }).click();
+  await openSwitcher(page, name);
+  await chooseWho(page, 'Everyone');
   await expect(page.getByText(`${name} is shared with everyone.`)).toBeVisible();
 }
 
@@ -65,7 +71,13 @@ async function createView(page: Page, current: string, name: string, everyone: b
 async function toggleColumn(page: Page, column: string): Promise<void> {
   await page.getByRole('button', { name: 'View settings' }).click();
   const settings = page.getByRole('dialog', { name: 'View settings' });
-  await settings.getByRole('switch', { name: `Show ${column}` }).press('Space');
+  const toggle = settings.getByRole('switch', { name: `Show ${column}` });
+  const wasOn = await toggle.isChecked();
+  // The switch's input is hidden under its label (the library's switch): press the label, as a person does.
+  await toggle.locator('xpath=ancestor::label[1]').click();
+  // The switch shows the change at once (the layout goes to the server behind it).
+  if (wasOn) await expect(toggle).not.toBeChecked();
+  else await expect(toggle).toBeChecked();
   await page.keyboard.press('Escape');
   await expect(settings).toBeHidden();
 }
@@ -125,7 +137,7 @@ test.describe('saved views: many views and their layout', () => {
 
     // Make private asks first, naming the view; Cancel keeps it shared.
     await openSwitcher(ada, 'Pipeline');
-    await ada.getByRole('menuitem', { name: 'Make private', exact: true }).click();
+    await chooseWho(ada, 'Only me');
     const goPrivate = ada.getByRole('dialog', { name: 'Make Pipeline private?' });
     await expect(goPrivate).toBeVisible();
     await goPrivate.getByRole('button', { name: 'Cancel' }).click();
@@ -135,7 +147,7 @@ test.describe('saved views: many views and their layout', () => {
     // (AC-475, AC-476).
     // The view's own actions sit under "This view" in the switcher's menu (21 October 2026).
     await openSwitcher(ada, 'Pipeline');
-    await ada.getByRole('menuitem', { name: 'Lock', exact: true }).click();
+    await chooseWho(ada, 'Everyone, only admins edit');
     await expect(ada.getByText('Locked by Ada Lovelace.')).toBeVisible();
     if (!LIVE) await bea.reload();
     await expect(bea.getByText('Locked by Ada Lovelace. Your changes here aren’t saved.')).toBeVisible({
@@ -148,7 +160,7 @@ test.describe('saved views: many views and their layout', () => {
     await openSwitcher(bea, 'Pipeline');
     await expect(bea.getByRole('menuitem', { name: /Rename/ })).toBeDisabled();
     await expect(bea.getByRole('menuitem', { name: /Rename/ })).toContainText('This view is locked.');
-    await expect(bea.getByRole('menuitem', { name: 'Lock', exact: true })).toHaveCount(0);
+    await expect(bea.getByRole('menuitem', { name: 'Who can see it' })).toHaveCount(0);
     await bea.keyboard.press('Escape');
     await checkScreen(bea, 'views-locked');
 
@@ -181,18 +193,10 @@ test.describe('saved views: many views and their layout', () => {
 
     // Ada deletes Pipeline: Bea's tab goes to the default view (AC-474), or, reloaded, finds it gone (AC-463).
     await ada.goto(pipelineUrl);
-    // It asks first: Cancel changes nothing, and the view stays.
+    // It goes at once, with Undo in its toast (30 October 2026: Undo over a confirm).
     await openSwitcher(ada, 'Pipeline');
     await ada.getByRole('menuitem', { name: 'Delete view' }).click();
-    const confirm = ada.getByRole('alertdialog', { name: 'Delete Pipeline for everyone?' });
-    await expect(confirm).toContainText('Everyone who sees this view loses it for good, and its records stay.');
-    await confirm.getByRole('button', { name: 'Cancel' }).click();
-    await expect(confirm).toBeHidden();
-    await expect(viewBarSwitcher(ada, 'Pipeline')).toBeVisible();
-    await expect(ada).toHaveURL(new RegExp(`${pipelineUrl}$`));
-    await openSwitcher(ada, 'Pipeline');
-    await ada.getByRole('menuitem', { name: 'Delete view' }).click();
-    await confirm.getByRole('button', { name: 'Delete view' }).click();
+    await expect(ada.getByRole('alertdialog', { name: 'Delete Pipeline for everyone?' })).toHaveCount(0);
     await expect(ada).toHaveURL(new RegExp(`${defaultUrl}$`));
     await expect(ada.getByText('Deleted Pipeline.')).toBeVisible();
     // This tab's own delete raises no "isn't available" notice.
@@ -230,6 +234,7 @@ test.describe('a schema change keeps the table where it was', () => {
       if (request.url().includes('/rpc/attributes/list')) attributeReads += 1;
     });
     await plus.click();
+    await chooseNewAttribute(page);
     const dialog = page.getByRole('dialog', { name: 'New attribute' });
     await dialog.getByLabel('Name', { exact: true }).fill('Nickname');
     await dialog.getByRole('button', { name: 'Create attribute' }).click();
@@ -271,6 +276,7 @@ test.describe('a schema change keeps the table where it was', () => {
     const before = await table.evaluate((element) => element.scrollLeft);
     await table.getByRole('columnheader', { name: /Created at/ }).focus();
     await grid(second).getByRole('columnheader').getByRole('button', { name: 'Add attribute' }).click();
+    await chooseNewAttribute(second);
     const dialog = second.getByRole('dialog', { name: 'New attribute' });
     await dialog.getByLabel('Name', { exact: true }).fill('Nickname');
     await dialog.getByRole('button', { name: 'Create attribute' }).click();
@@ -302,6 +308,7 @@ test.describe('a schema change keeps the table where it was', () => {
       if (request.url().includes('/rpc/attributes/list')) attributeReads += 1;
     });
     await table.getByRole('columnheader').getByRole('button', { name: 'Add attribute' }).click();
+    await chooseNewAttribute(page);
     const attribute = page.getByRole('dialog', { name: 'New attribute' });
     await attribute.getByLabel('Name', { exact: true }).fill('Employers');
     await attribute.getByRole('button', { name: /Type$/ }).click();

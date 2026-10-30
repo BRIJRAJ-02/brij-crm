@@ -3,8 +3,9 @@
 // sending, whether and where submissions go in the CRM, the form's words, its details (name, link, owner: nobody, a
 // teammate, or a round robin group handing each new record to its next teammate, spec 0029) and spam.
 // Main task: scan the groups, change only what needs changing (the defaults already work), and save the name,
-// address and owner from the SaveBar; the rest goes live on Publish, which the header's state says once (not each card).
-// Leaves out: email notifications (no backend yet), each question's filing (set on the question, linked from here),
+// address, owner and who is emailed each submission from the SaveBar; the rest goes live on Publish, which the
+// header's state says once (not each card).
+// Leaves out: the daily digest (spec 0023 milestone 3), each question's filing (set on the question, linked from here),
 // and the look (on the Form tab, beside the preview, the only tab that has one).
 import type {
   BookingPageView,
@@ -16,6 +17,7 @@ import type {
 } from '@crm/data';
 import { useCaptureList } from '@crm/data/react';
 import {
+  Avatar,
   ButtonLink,
   Callout,
   Card,
@@ -45,6 +47,9 @@ import { useCan } from '../workspace/WorkspacePage.tsx';
 
 const NOBODY = 'nobody';
 
+/** The one option standing for the listed people the reader can't list. */
+const HIDDEN_NOTIFY = 'hidden-people';
+
 /** A round robin group's option id in the owner list, apart from a teammate's id. */
 const GROUP = 'group:';
 const groupOption = (rotationId: string) => `${GROUP}${rotationId}`;
@@ -73,12 +78,20 @@ type AfterKind = FormDocument['after']['kind'];
 const questionHref = (slug: string, formId: string, questionId: string) =>
   `/w/${slug}/captures/forms/${formId}?question=${encodeURIComponent(questionId)}`;
 
-/** The settings that apply when saved: the name, the address and the owner. */
+/** The settings that apply when saved: the name, the address, the owner and who is emailed each submission. */
 interface Applied {
   readonly name: string;
   readonly address: string;
   readonly owner: string;
+  readonly notify: readonly string[];
 }
+
+/** Whether two lists name the same people, in any order (the picker answers its own order). */
+const sameList = (a: readonly string[], b: readonly string[]) =>
+  a.length === b.length && a.every((id) => b.includes(id));
+
+/** The most people a form emails (the server's limit). */
+const NOTIFY_MAX = 20;
 
 /** Props for useFormSettings. */
 export interface FormSettingsInput {
@@ -98,13 +111,18 @@ export function useFormSettings({ slug, form, onFormChange }: FormSettingsInput)
     name: form.name,
     address: form.publicKey,
     owner: form.ownerRotationId === undefined ? (form.ownerMemberId ?? NOBODY) : groupOption(form.ownerRotationId),
+    notify: form.notifyMemberIds,
   };
   // Only the edits are held, so a change made elsewhere (the first publish, a rename) shows here at once.
   const [edits, setEdits] = useState<Partial<Applied>>({});
   const values: Applied = { ...saved, ...edits };
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [failure, setFailure] = useState<{ readonly message: string; readonly field?: string } | undefined>(undefined);
-  const isDirty = values.name !== saved.name || values.address !== saved.address || values.owner !== saved.owner;
+  const isDirty =
+    values.name !== saved.name ||
+    values.address !== saved.address ||
+    values.owner !== saved.owner ||
+    !sameList(values.notify, saved.notify);
 
   const set = (patch: Partial<Applied>) => {
     setEdits((before) => ({ ...before, ...patch }));
@@ -121,6 +139,7 @@ export function useFormSettings({ slug, form, onFormChange }: FormSettingsInput)
         ...(values.name === saved.name ? {} : { name: values.name.trim() }),
         ...(addressChanged ? { slug: values.address } : {}),
         ...(values.owner === saved.owner ? {} : ownerChange(values.owner)),
+        ...(sameList(values.notify, saved.notify) ? {} : { notifyMemberIds: values.notify }),
       })
       .then(
         (view) => {
@@ -163,7 +182,7 @@ export function useFormSettings({ slug, form, onFormChange }: FormSettingsInput)
     />
   );
 
-  const fieldError = (field: 'name' | 'slug' | 'owner') =>
+  const fieldError = (field: 'name' | 'slug' | 'owner' | 'notifyMemberIds') =>
     failure !== undefined &&
     (failure.field === field ||
       (field === 'owner' && (failure.field === 'ownerMemberId' || failure.field === 'ownerRotationId')))
@@ -310,7 +329,11 @@ export function SettingsTab({
   const takers = (rotation: (typeof rotationList)[number]) => rotation.members.filter((member) => member.isOn).length;
   const ownerItems = [
     { id: NOBODY, label: strings.nobody },
-    ...members.map((member) => ({ id: member.id, label: member.name })),
+    ...members.map((member) => ({
+      id: member.id,
+      label: member.name,
+      leading: <Avatar name={member.name} id={member.id} size="xs" isDecorative />,
+    })),
     ...rotationList.map((rotation) => ({
       id: groupOption(rotation.id),
       label: rotation.name,
@@ -321,6 +344,37 @@ export function SettingsTab({
       ? [{ id: groupOption(chosenGroupId), label: strings.groupUnknown, group: strings.ownerGroups }]
       : []),
     ...(ownerLeft ? [{ id: settings.values.owner, label: strings.ownerFormer }] : []),
+  ];
+  // Who is emailed each submission: any teammate, drawn as people are. Those the form lists whom the reader can't
+  // list stay chosen as one "other people" option, so a save keeps them.
+  // Read from what is saved, so unticking that option can be ticked again.
+  const hiddenNotify = form.notifyMemberIds.filter((id) => !members.some((member) => member.id === id));
+  const notifyValues = [
+    ...settings.values.notify.filter((id) => !hiddenNotify.includes(id)),
+    ...(hiddenNotify.some((id) => settings.values.notify.includes(id)) ? [HIDDEN_NOTIFY] : []),
+  ];
+  // At the limit, the people not chosen yet wait, saying why.
+  const isFull = settings.values.notify.length >= NOTIFY_MAX;
+  const notifyItems = [
+    ...members.map((member) => {
+      const waits = isFull && !settings.values.notify.includes(member.id);
+      return {
+        id: member.id,
+        label: member.name,
+        description: waits ? strings.noticesFull : member.email,
+        leading: <Avatar name={member.name} id={member.id} size="xs" isDecorative />,
+        ...(waits ? { isDisabled: true } : {}),
+      };
+    }),
+    ...(hiddenNotify.length === 0
+      ? []
+      : [
+          {
+            id: HIDDEN_NOTIFY,
+            label: strings.noticesOthers(hiddenNotify.length),
+            description: strings.noticesOthersHint,
+          },
+        ]),
   ];
   // One line under it: who gets new records, or why nobody will.
   const ownerHint = ownerLeft
@@ -368,6 +422,13 @@ export function SettingsTab({
   const afterProblem = afterPageProblem(draft, pages.status === 'ready' ? pages.items : undefined, seesAllPages);
   // Where each question's answer goes: the target's attribute, or kept with the submission only.
   const isFiling = draft.targets.main !== undefined && target.objectName !== undefined;
+  // The new record's owner hears of each submission too, when there is one to hear: not Nobody, not someone who left,
+  // and not a round robin group with nobody switched on.
+  const ownerIsTold =
+    isFiling &&
+    settings.values.owner !== NOBODY &&
+    !ownerLeft &&
+    !(chosenGroup !== undefined && takers(chosenGroup) === 0);
   const objectName = target.objectName ?? '';
   const attributeTitle = (attributeId: string | undefined) =>
     target.items.find((item) => item.attributeId === attributeId)?.title;
@@ -708,6 +769,30 @@ export function SettingsTab({
           )}
         </Card>
       )}
+      <Card title={strings.noticesTitle}>
+        <Select
+          label={strings.noticesLabel}
+          selectionMode="multiple"
+          placeholder={ownerIsTold ? strings.noticesNobody : strings.nobody}
+          hint={strings.noticesHint(ownerIsTold)}
+          items={notifyItems}
+          values={notifyValues}
+          isSearchable={members.length > 8}
+          searchLabel={strings.noticesSearch}
+          isReadOnly={isReadOnly}
+          {...(settings.fieldError('notifyMemberIds') === undefined
+            ? {}
+            : { error: settings.fieldError('notifyMemberIds') ?? '' })}
+          onValuesChange={(ids) => {
+            settings.set({
+              notify: [
+                ...ids.filter((id) => id !== HIDDEN_NOTIFY),
+                ...(ids.includes(HIDDEN_NOTIFY) ? hiddenNotify : []),
+              ],
+            });
+          }}
+        />
+      </Card>
       <Card
         title={strings.spamTitle}
         {...(isPublished

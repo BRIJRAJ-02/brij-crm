@@ -607,6 +607,14 @@ describe('the walk: a principal without the access is refused', () => {
     '%s answers a member with no reach nothing about anyone else',
     async (name) => {
       const { scope, ownerId, memberId } = await memberOf('member');
+      // The Team week (spec 0037, AC-1289) takes a week and a clock; its rows name members as the other reads do.
+      if (name === 'readTeamWeek') {
+        const now = new Date();
+        const monday = new Date(now.getTime() - ((now.getUTCDay() + 6) % 7) * 86_400_000).toISOString().slice(0, 10);
+        const week = await core.readTeamWeek(scope, { now: () => now }, { weekStart: monday });
+        expect(week.rows.map((row) => row.memberId).filter((id) => id !== memberId)).toEqual([]);
+        return;
+      }
       const answer = (await service(name)(scope, { memberIds: [ownerId] })) as
         readonly { readonly memberId: string }[] | { readonly members: readonly { readonly id: string }[] };
       const ids = Array.isArray(answer)
@@ -686,7 +694,54 @@ describe('the walk: a principal without the access is refused', () => {
           forMemberId: ownerId,
         },
       ),
+    listTimeOff: (scope, ownerId) => core.listTimeOff(scope, { now: () => new Date() }, { memberId: ownerId }),
+    createTimeOff: (scope, ownerId) =>
+      core.createTimeOff(
+        scope,
+        { now: () => new Date() },
+        { id: core.newId(), memberId: ownerId, fromDate: '2030-01-07', toDate: '2030-01-08', reason: 'vacation' },
+      ),
+    updateTimeOff: async (scope, _ownerId, owner) => {
+      const made = await core.createTimeOff(
+        owner,
+        { now: () => new Date() },
+        { id: core.newId(), fromDate: '2030-01-07', toDate: '2030-01-08', reason: 'vacation' },
+      );
+      return core.updateTimeOff(scope, {
+        id: made.entry.id,
+        fromDate: '2030-01-07',
+        toDate: '2030-01-09',
+        reason: 'sick',
+        updatedAt: made.entry.updatedAt,
+      });
+    },
+    deleteTimeOff: async (scope, _ownerId, owner) => {
+      const made = await core.createTimeOff(
+        owner,
+        { now: () => new Date() },
+        { id: core.newId(), fromDate: '2030-01-07', toDate: '2030-01-08', reason: 'vacation' },
+      );
+      return core.deleteTimeOff(scope, { id: made.entry.id });
+    },
     reassignUpcoming: (scope, ownerId) => core.reassignUpcoming(scope, { rotationId: core.newId(), memberId: ownerId }),
+    // The Team week's writes (spec 0037, AC-1291, AC-1292): a cell, a copied week, usual hours for several.
+    setDayHours: (scope, ownerId) =>
+      core.setDayHours(
+        scope,
+        { now: () => new Date() },
+        { memberId: ownerId, date: '2099-01-05', hours: 'off', updatedAt: null },
+      ),
+    copyWeek: (scope, ownerId) =>
+      core.copyWeek(
+        scope,
+        { now: () => new Date() },
+        { memberIds: [ownerId], fromWeekStart: '2099-01-05', toWeekStart: '2099-01-12' },
+      ),
+    setUsualHours: (scope, ownerId) =>
+      core.setUsualHours(scope, {
+        memberIds: [ownerId],
+        weekly: { mon: [['09:00', '17:00']], tue: [], wed: [], thu: [], fri: [], sat: [], sun: [] },
+      }),
   };
   it('has a case for every scheduling entry', () => {
     expect([...schedulingEntries].sort()).toEqual(Object.keys(SCHEDULING_CALLS).sort());
@@ -1026,6 +1081,18 @@ const DATA_CASES: Readonly<Record<string, DataCase>> = {
   countMatches: refused('NOT_FOUND', (scope, world) => core.countMatches(scope, { objectId: world.people })),
   queryGroups: refused('NOT_FOUND', (scope, world) =>
     core.queryGroups(scope, { objectId: world.people, groupBy: world.stage, groupIds: [null] }),
+  ),
+  aggregateMatches: refused('NOT_FOUND', (scope, world) =>
+    core.aggregateMatches(scope, { objectId: world.people, asks: [{ attributeId: world.jobTitle, fn: 'count' }] }),
+  ),
+  aggregateGroups: refused('NOT_FOUND', (scope, world) =>
+    // A board totals amounts only; the owner's sum over a text field is refused for its type, past the door.
+    core.aggregateGroups(scope, {
+      objectId: world.people,
+      asks: [{ attributeId: world.jobTitle, fn: 'sum' }],
+      groupBy: world.stage,
+      groupIds: [null],
+    }),
   ),
   getHistory: refused('NOT_FOUND', (scope, world) =>
     core.getHistory(scope, { recordId: world.recordId, attributeId: world.jobTitle }),

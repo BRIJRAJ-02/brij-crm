@@ -95,8 +95,11 @@ export const FormSubmissionEmail = z.strictObject({
   timeZone: EmailTimeZone.optional(),
   /** Where the submission opens in the app. */
   submissionPath: AppPath,
-  /** Why this member is told: the lead went to them, or they made the form (a member who is both reads `lead`). */
-  reason: z.enum(['lead', 'maker']).optional(),
+  /**
+   * Why this member is told: the lead went to them, or the form lists them (a member who is both reads `lead`).
+   * `maker` only on an email queued before forms listed who they tell (30 October 2026).
+   */
+  reason: z.enum(['lead', 'listed', 'maker']).optional(),
   /** False when it couldn't be added to the CRM (it ended `failed`), so the reader knows to act on it. */
   filed: z.boolean().optional(),
 });
@@ -287,6 +290,11 @@ export const JobFailedEmail = z.strictObject({
   /** Why it stopped, as the job's page says it. */
   reason: Paragraph,
   jobsPath: AppPath,
+  /** When they started it, stated in `timeZone`; absent on an email queued before 30 October 2026. */
+  startedAt: Instant.optional(),
+  timeZone: EmailTimeZone.optional(),
+  /** How far it got before it stopped: items done, of how many when the kind knows. */
+  progress: z.strictObject({ done: Count, total: Count.optional() }).optional(),
 });
 /** A member's background job failed. */
 export type JobFailedEmail = z.infer<typeof JobFailedEmail>;
@@ -323,6 +331,21 @@ export const SchedulingChangedEmail = z.strictObject({
 /** The scheduling changed email's params. */
 export type SchedulingChangedEmail = z.infer<typeof SchedulingChangedEmail>;
 
+/**
+ * Covering for someone (spec 0037, AC-1282): to a stand in, when time off naming them is saved or its dates change.
+ * "You're covering for Sam from 3 to 7 November." Never the reason or the note.
+ */
+export const StandinCoveringEmail = z.strictObject({
+  /** Who is away, by name. */
+  memberName: Name,
+  /** The days, already worded in the away member's calendar ("from 3 to 7 November", "on 3 November"). */
+  dates: z.string().min(1).max(80),
+  /** Scheduling › Bookings, where the stand in sees what comes their way. */
+  bookingsPath: AppPath,
+});
+/** The covering for someone email's params. */
+export type StandinCoveringEmail = z.infer<typeof StandinCoveringEmail>;
+
 /** Every email with a template, and its params' schema. The sign in code is drawn on its own (`renderSignInCode`). */
 export const EMAIL_PARAMS = {
   form_submission: FormSubmissionEmail,
@@ -335,6 +358,7 @@ export const EMAIL_PARAMS = {
   job_failed: JobFailedEmail,
   workspace_welcome: WorkspaceWelcomeEmail,
   scheduling_changed: SchedulingChangedEmail,
+  standin_covering: StandinCoveringEmail,
 } as const;
 
 /** A kind of email with a template. */
@@ -361,6 +385,7 @@ export const QUEUED_EMAIL_KINDS = [
   'job_failed',
   'workspace_welcome',
   'scheduling_changed',
+  'standin_covering',
 ] as const satisfies readonly EmailKind[];
 /** A kind that goes through the workspace email queue. */
 export const QueuedEmailKind = z.enum(QUEUED_EMAIL_KINDS);

@@ -3,6 +3,7 @@ import { Button } from '../../atoms/Button/Button.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import type { LoadStatus } from '../../lib/load-status.ts';
 import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
+import { SectionBar } from '../../molecules/SectionBar/SectionBar.tsx';
 import { useDelayedLoading } from '../../provider/useDelayedLoading.ts';
 import { LinkCard, LinkCardSkeleton, type LinkCardProps } from '../LinkCard/LinkCard.tsx';
 import styles from './LinkGrid.module.css';
@@ -11,6 +12,17 @@ import { strings } from './strings.ts';
 /** One card in the grid: a LinkCard's props and its id. */
 export interface LinkGridCard extends LinkCardProps {
   readonly id: string;
+  /** The `groups` entry it sits under, when the grid is grouped. */
+  readonly groupId?: string;
+}
+
+/** A titled group of cards (Captures › Links' Workspace and Members' pages): its id, heading and quiet line. */
+export interface LinkGridGroup {
+  readonly id: string;
+  /** The group's heading, an h2. */
+  readonly label: string;
+  /** One quiet line after the heading. */
+  readonly description?: string;
 }
 
 /** Props for LinkGrid. */
@@ -30,6 +42,11 @@ export interface LinkGridProps {
   readonly errorTitle?: string;
   /** Shown with no cards at all: usually an EmptyState. */
   readonly emptyState?: ReactNode;
+  /**
+   * Draws the cards in these groups, in this order, each under its heading with its own grid; each card names its
+   * group by `groupId`. A group the search empties is left out. Without it, one grid with no headings.
+   */
+  readonly groups?: readonly LinkGridGroup[];
 }
 
 /** How many skeleton cards stand in while the grid loads. */
@@ -59,6 +76,7 @@ export function LinkGrid({
   onRetry,
   errorTitle,
   emptyState,
+  groups,
 }: LinkGridProps) {
   const showSkeleton = useDelayedLoading(status === 'loading');
   if (status === 'no-access') {
@@ -112,12 +130,52 @@ export function LinkGrid({
       </div>
     );
   }
+  if (groups !== undefined) {
+    const known = new Set(groups.map((group) => group.id));
+    const loose = shown.filter((card) => card.groupId === undefined || !known.has(card.groupId));
+    return (
+      <div className={styles.groups}>
+        {groups.map((group) => {
+          const inGroup = shown.filter((card) => card.groupId === group.id);
+          if (inGroup.length === 0) return null;
+          return (
+            // Headed by its h2; the list inside carries the group's name.
+            <section key={group.id} className={styles.group}>
+              <div className={styles.groupBar}>
+                <SectionBar
+                  title={group.label}
+                  {...(group.description === undefined ? {} : { description: group.description })}
+                />
+              </div>
+              {/* Under the group's h2, each card's title is an h3. */}
+              <CardList label={group.label} cards={inGroup} titleLevel={3} />
+            </section>
+          );
+        })}
+        {/* A card naming no group the grid knows still shows, after the groups, never lost. */}
+        {loose.length > 0 && <CardList label={label} cards={loose} titleLevel={3} />}
+      </div>
+    );
+  }
+  // On a page the grid's cards are its sections, under the TopBar's h1.
+  return <CardList label={label} cards={shown} titleLevel={2} />;
+}
+
+/** One grid of cards, as a list named `label`. */
+function CardList({
+  label,
+  cards,
+  titleLevel,
+}: {
+  readonly label: string;
+  readonly cards: readonly LinkGridCard[];
+  readonly titleLevel: 2 | 3;
+}) {
   return (
     <ul className={styles.grid} aria-label={label}>
-      {shown.map(({ id, ...card }) => (
+      {cards.map(({ id, groupId: _group, ...card }) => (
         <li key={id} className={styles.item}>
-          {/* On a page the grid's cards are its sections, under the TopBar's h1. */}
-          <LinkCard titleLevel={2} {...card} />
+          <LinkCard titleLevel={titleLevel} {...card} />
         </li>
       ))}
     </ul>

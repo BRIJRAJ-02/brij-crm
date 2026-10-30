@@ -1,7 +1,7 @@
 // Brief
 // Purpose: New booking page (spec 0025 experience, AC-678): a centred dialog, "Add a booking page" (the owner's call on 19 October 2026, over the side panel).
 // Main task: a title, one length and the schedule it books by, then Create page into the editor.
-// An admin also chooses who it books: themselves, or one host from a rotation (spec 0029, AC-732); a round robin page's other hosts are set in its editor.
+// An admin also chooses who it books: themselves, one host from a rotation (spec 0029, AC-732), or everyone on the roster, which makes a workspace link (30 Oct 2026); a round robin page's other hosts are set in its editor.
 // Leaves out: everything else a page has (its editor), and its web address part: the server makes a free one from the title (22 October 2026: it shows nowhere a visitor sees, since links use the page's key).
 import { isDataError, type BookingPageView, type DataLayer } from '@crm/data';
 import { useCaptureList, useSchedules } from '@crm/data/react';
@@ -51,7 +51,8 @@ export function NewPageDialog({
   // The member's schedules, held only while the dialog is open: it is mounted, closed, under all of Captures.
   const schedules = useSchedules(isOpen ? data.schedules.view(slug, undefined, memberZone(data, slug)) : undefined);
   const choices = schedules.status === 'ready' ? schedules.schedules : [];
-  const [who, setWho] = useState<'me' | 'rotation'>('me');
+  // `everyone` makes the workspace's own link, booking whoever on the roster is free (team scheduling, decision 3).
+  const [who, setWho] = useState<'me' | 'rotation' | 'everyone'>('me');
   const [rotationId, setRotationId] = useState<string | null>(null);
   const [rotationError, setRotationError] = useState<string | undefined>(undefined);
   const rotations = useCaptureList(data.rotations.view(slug));
@@ -64,6 +65,7 @@ export function NewPageDialog({
         }))
       : [];
   const isTeam = canBookTeams && who === 'rotation';
+  const isWorkspace = canBookTeams && who === 'everyone' && !isLinkOnly;
   // No group yet: Manage round robin opens in a new tab, so what is typed here stays (flow walks B8), and the
   // groups are read again when this tab is back in front.
   const isWaitingForGroup = isOpen && isTeam && rotations.status === 'ready' && rotationItems.length === 0;
@@ -125,7 +127,7 @@ export function NewPageDialog({
         timeZone: memberZone(data, slug),
         // A round robin page books by each host's own hours, so it names no schedule.
         settings: {
-          ...(isTeam
+          ...(isTeam || isWorkspace
             ? { durations: [minutes] }
             : { durations: [minutes], scheduleId: schedule === 'default' ? null : schedule }),
           ...(isLinkOnly ? { isPrivate: true } : {}),
@@ -133,10 +135,13 @@ export function NewPageDialog({
         ...(isTeam && rotationId !== null
           ? { kind: 'round_robin' as const, hosts: { fixed: [], rotations: [rotationId] } }
           : {}),
+        ...(isWorkspace ? { kind: 'round_robin' as const, scope: 'workspace' as const } : {}),
       })
       .then(
         (page) => {
           setBusy(false);
+          // The workspace's first link made "Everyone on the roster": the held rotations read it.
+          if (isWorkspace) data.rotations.view(slug).reload();
           reset();
           onCreated(page);
         },
@@ -230,14 +235,25 @@ export function NewPageDialog({
       {canBookTeams && (
         <RadioGroup
           label={rotationStrings.whoBooks}
+          variant="cards"
           value={who}
           isDisabled={isBusy}
           onChange={(value) => {
-            if (value === 'me' || value === 'rotation') setWho(value);
+            if (value === 'me' || value === 'rotation' || value === 'everyone') setWho(value);
           }}
         >
-          <Radio value="me">{rotationStrings.bookMe}</Radio>
-          <Radio value="rotation">{rotationStrings.bookRotation}</Radio>
+          <Radio value="me" icon="user" description={rotationStrings.bookMeLine}>
+            {rotationStrings.bookMe}
+          </Radio>
+          <Radio value="rotation" icon="users" description={rotationStrings.bookRotationLine}>
+            {rotationStrings.bookRotation}
+          </Radio>
+          {/* A workspace link is on nobody's profile, so Link only means nothing for it. */}
+          {!isLinkOnly && (
+            <Radio value="everyone" icon="building" description={rotationStrings.bookEveryoneLine}>
+              {rotationStrings.bookEveryone}
+            </Radio>
+          )}
         </RadioGroup>
       )}
       {isTeam &&
@@ -267,7 +283,7 @@ export function NewPageDialog({
             {...(rotationError === undefined ? {} : { error: rotationError })}
           />
         ))}
-      {!isTeam && (
+      {!isTeam && !isWorkspace && (
         <Select
           label={scheduleStrings.schedule}
           info={<InfoTip label={scheduleStrings.schedule}>{strings.tips.schedule.text}</InfoTip>}

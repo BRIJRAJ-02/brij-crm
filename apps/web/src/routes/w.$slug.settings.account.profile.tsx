@@ -12,7 +12,8 @@ import { LinkPageLoader } from '../features/link-page/LinkPageLoader.tsx';
 import { LinkPagePending } from '../features/link-page/LinkPagePending.tsx';
 import { ProfilePending, ProfileScreen } from '../features/settings/ProfileScreen.tsx';
 import { SettingsFailed, SettingsMissing } from '../features/settings/SettingsPage.tsx';
-import { isGooglePhotoResult, strings, type GooglePhotoResult } from '../features/settings/workspace-strings.ts';
+import { isGooglePhotoResult, type GooglePhotoResult } from '../features/settings/google-photo-result.ts';
+import { strings } from '../features/settings/workspace-strings.ts';
 
 /** The page's address: how a Google photo sync just went, if one did (`?google-photo=`, from the API's callback). */
 interface ProfileSearch {

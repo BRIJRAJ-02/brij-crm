@@ -66,7 +66,8 @@ export interface OutboxEvent {
     | 'nav'
     | 'comments'
     | 'notifications'
-    | 'calendars';
+    | 'calendars'
+    | 'time_off';
   /** The object: a `records` row's, an `entries` row's list's parent, a `definitions` row's when it names one. */
   readonly objectId?: string;
   /** The list: an `entries` row's, a `definitions` row's when it names one. */
@@ -315,7 +316,7 @@ function definitionRows(change: CappedChange): OutboxEvent[] {
  * (spec 0020) one `views` row per object, (spec 0019) one `tasks` row, its task ids in `itemIds` and in `recordIds`
  * every record they linked before or after the write, and (spec 0024) one `meetings` row the same way, coarse with
  * no ids past `CHANGE_CAP` meetings or records, and (spec 0035) one `schedules` row, its schedule ids in `itemIds`
- * (a write touches a handful: one member's at most 20).
+ * (a write touches a handful: one member's at most 20), and (spec 0037) one `time_off` row naming nothing.
  */
 function kindRows(change: CappedChange): OutboxEvent[] {
   const rows: OutboxEvent[] = [];
@@ -372,6 +373,8 @@ function kindRows(change: CappedChange): OutboxEvent[] {
   if (change.schedules.length > 0) {
     rows.push({ kind: 'schedules', ...NO_IDS, itemIds: [...new Set(change.schedules)].sort(byId), coarse: false });
   }
+  // Time off changed (spec 0037): one row naming nothing, so the Team week, time off and Host away read again.
+  if (change.timeOff.length > 0) rows.push({ kind: 'time_off', ...NO_IDS, coarse: false });
   // A member's own sidebar (spec 0034): one row naming the members whose rows the write changed, nothing else.
   if (change.nav.length > 0) {
     rows.push({ kind: 'nav', ...NO_IDS, itemIds: [...change.nav].sort(byId), coarse: false });

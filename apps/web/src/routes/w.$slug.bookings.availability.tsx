@@ -2,6 +2,7 @@ import { isDataError } from '@crm/data';
 import { EmptyState, LoadingNow, PageColumn, TopBar } from '@crm/ui';
 import { createFileRoute, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { AvailabilityPending, AvailabilityScreen } from '../features/booking/AvailabilityScreen.tsx';
+import { TeamWeekPending, TeamWeekScreen } from '../features/booking/TeamWeekScreen.tsx';
 import { memberZone } from '../features/booking/zone.ts';
 import { availabilitySearch } from '../features/booking/links.ts';
 import { scheduleStrings } from '../features/booking/schedule-strings.ts';
@@ -17,8 +18,15 @@ export const Route = createFileRoute('/w/$slug/bookings/availability')({
   codeSplitGroupings: [['component', 'pendingComponent', 'errorComponent']],
   // `?member=`: an admin viewing a colleague's schedules (AC-971); anyone else sees their own. `?schedule=`: which.
   validateSearch: availabilitySearch,
-  loaderDeps: ({ search }) => ({ member: search.member }),
+  loaderDeps: ({ search }) => ({ member: search.member, view: search.view, week: search.week, q: search.q }),
   loader: async ({ context, params, deps }) => {
+    // `?view=team`: the Team week, the Roster (spec 0037, job J6), from the scheduling chunk's store.
+    if (deps.view === 'team') {
+      const zone = memberZone(context.data, params.slug);
+      const q = deps.q ?? '';
+      const team = await (await context.data.scheduling.open()).openTeamWeek(params.slug, deps.week, q, zone);
+      return { view: 'team' as const, q, zone, ...team };
+    }
     // Whose schedules the reader may see comes from the server's reach (`members.visible`, spec 0037, AC-1268): a
     // colleague outside it opens the reader's own. The workspace's members name whoever changed a schedule last.
     const [access, members, people] = await Promise.all([
@@ -30,8 +38,17 @@ export const Route = createFileRoute('/w/$slug/bookings/availability')({
       deps.member !== undefined && deps.member !== access.memberId && members.some((each) => each.id === deps.member)
         ? deps.member
         : undefined;
-    await context.data.schedules.view(params.slug, member, memberZone(context.data, params.slug)).ready();
+    await Promise.all([
+      context.data.schedules.view(params.slug, member, memberZone(context.data, params.slug)).ready(),
+      // Time off (spec 0037, AC-1286), from the store `scheduling.open()` loaded above; a failure shows in its card.
+      context.data.scheduling
+        .loaded()
+        ?.timeOff.held(params.slug, member)
+        .ready()
+        .catch(() => undefined),
+    ]);
     return {
+      view: 'mine' as const,
       member,
       members,
       me: access.memberId,
@@ -40,20 +57,34 @@ export const Route = createFileRoute('/w/$slug/bookings/availability')({
     };
   },
   // Shown only once the loading delay passed: its skeletons show at once.
-  pendingComponent: () => (
-    <LoadingNow>
-      <AvailabilityPending />
-    </LoadingNow>
-  ),
+  pendingComponent: AvailabilityRoutePending,
   errorComponent: AvailabilityError,
   component: AvailabilityRoute,
 });
 
+function AvailabilityRoutePending() {
+  const { view, week } = Route.useSearch();
+  return <LoadingNow>{view === 'team' ? <TeamWeekPending week={week} /> : <AvailabilityPending />}</LoadingNow>;
+}
+
 function AvailabilityRoute() {
-  const { member, members, me, ownHours, people } = Route.useLoaderData();
+  const loaded = Route.useLoaderData();
   const { schedule } = Route.useSearch();
   const { slug } = Route.useParams();
   const { data } = Route.useRouteContext();
+  if (loaded.view === 'team') {
+    return (
+      <TeamWeekScreen
+        data={data}
+        slug={slug}
+        week={loaded.week}
+        search={loaded.q}
+        zone={loaded.zone}
+        members={loaded.members}
+      />
+    );
+  }
+  const { member, members, me, ownHours, people } = loaded;
   return (
     <AvailabilityScreen
       data={data}
@@ -64,6 +95,7 @@ function AvailabilityRoute() {
       me={me}
       ownHours={ownHours}
       nameOf={(id) => people.find((person) => person.id === id)?.name}
+      people={people}
     />
   );
 }

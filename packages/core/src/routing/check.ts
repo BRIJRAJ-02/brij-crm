@@ -13,7 +13,7 @@ import { bookingTargetProblem } from '../booking/pages.ts';
 import { refuseOn } from '../engine/refusals.ts';
 import { fieldsSeen, ruleFields } from './seen.ts';
 
-const { bookingPageRotations, bookingPages, rotationMembers, rotations } = schema;
+const { bookingPageRotations, bookingPages, rotationRoster, rotations } = schema;
 
 /** A rule's name in a sentence: "Rule 2" or "Rule 2, “Enterprise”,". */
 export function ruleName(rule: RoutingRule, index: number): string {
@@ -33,7 +33,7 @@ export async function pageHostPool(
     .where(and(eq(bookingPages.id, pageId), isNull(bookingPages.deletedAt)));
   if (page === undefined) return undefined;
   const rows = await tx
-    .select({ memberId: rotationMembers.memberId })
+    .select({ memberId: rotationRoster.memberId })
     .from(bookingPageRotations)
     .innerJoin(
       rotations,
@@ -43,10 +43,10 @@ export async function pageHostPool(
       ),
     )
     .innerJoin(
-      rotationMembers,
+      rotationRoster,
       and(
-        eq(rotationMembers.workspaceId, bookingPageRotations.workspaceId),
-        eq(rotationMembers.rotationId, bookingPageRotations.rotationId),
+        eq(rotationRoster.workspaceId, bookingPageRotations.workspaceId),
+        eq(rotationRoster.rotationId, bookingPageRotations.rotationId),
       ),
     )
     .where(and(eq(bookingPageRotations.pageId, pageId), isNull(rotations.deletedAt)));
