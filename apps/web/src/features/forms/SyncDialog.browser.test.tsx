@@ -80,7 +80,10 @@ describe('Sync earlier submissions (AC-14)', () => {
 
   it('All reads its own counts, says once that the ones it can’t sync stay as they are, and syncs all', async () => {
     const started = await open();
-    await userEvent.click(page.getByRole('radio', { name: 'All' }));
+    // The segment's label takes the press, as a pointer's would.
+    await userEvent.click(
+      page.getByRole('radiogroup', { name: 'Which submissions' }).getByText('All', { exact: true }),
+    );
     const sync = page.getByRole('button', { name: 'Sync 42 submissions' });
     await expect.element(sync).toBeEnabled();
     await expect.element(page.getByText('Can’t be synced')).toBeVisible();

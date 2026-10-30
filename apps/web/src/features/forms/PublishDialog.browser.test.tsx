@@ -113,7 +113,7 @@ async function open(
   return changes;
 }
 
-const SAID = 'Work email becomes unique on Graphic Designers.';
+const SAID = 'Work email becomes unique on Graphic Designers: one record per email.';
 
 describe('the first publish, in one step (AC-13)', () => {
   it('shows the name, the link, where submissions go and each answer’s field at once, with no Next', async () => {
@@ -144,9 +144,10 @@ describe('the first publish, in one step (AC-13)', () => {
     await userEvent.click(page.getByRole('button', { name: /Save to$/ }));
     await userEvent.click(page.getByRole('listbox').getByRole('option', { name: /^New object “Apply”/ }));
     // Picking it only chose it (the fake data layer has no objects.create, so a call would have failed loudly).
-    await expect
-      .element(page.getByRole('button', { name: /Save to$/ }))
-      .toHaveTextContent(/1 field from its questions/);
+    await expect.element(page.getByRole('button', { name: /Save to$/ })).toBeVisible();
+    expect(page.getByRole('button', { name: /Save to$/ }).element().textContent).toContain(
+      '1 field from its questions',
+    );
     // Every question gets its own field, so there are no rows to match.
     expect(page.getByRole('button', { name: /saved as$/ }).query()).toBeNull();
     expect(page.getByRole('alert').query()).toBeNull();
@@ -177,7 +178,8 @@ describe('the Ready panel after the first publish (AC-6)', () => {
     await expect.element(page.getByRole('heading', { name: 'Your form is live' })).toBeVisible();
     await expect.element(page.getByText('https://app.example.com/f/apply')).toBeVisible();
     await expect.element(page.getByRole('button', { name: /Copy link/ })).toBeVisible();
-    await expect.element(page.getByRole('img', { name: 'QR code for the link' })).toBeVisible();
+    // Drawn (its size comes from the library's stylesheet, which this test doesn't load).
+    await expect.element(page.getByRole('img', { name: 'QR code for the link' })).toBeInTheDocument();
     const tiles = page.getByRole('radiogroup', { name: 'Put it on your site' });
     await expect.element(tiles).toBeVisible();
     expect(tiles.getByRole('radio').all()).toHaveLength(3);
@@ -185,7 +187,8 @@ describe('the Ready panel after the first publish (AC-6)', () => {
     // Done takes focus as Publish leaves, so Esc and the dialog's name stay with it.
     await expect.element(page.getByRole('button', { name: /^Done/ })).toHaveFocus();
 
-    await userEvent.click(tiles.getByRole('radio', { name: 'Popup' }));
+    // The tile's press layer covers its name, so the press lands on the tile, as a pointer's does.
+    await userEvent.click(tiles.getByText('Popup', { exact: true }), { force: true });
     const snippet = page.getByRole('textbox', { name: /Embed snippet/ });
     await expect.element(snippet).toBeVisible();
     const code = snippet.element();

@@ -70,7 +70,8 @@ describe('the Install tab (AC-11)', () => {
     expect(tiles.getByRole('radio').all()).toHaveLength(3);
     expect(snippetCode()).not.toContain('data-timefix-mode');
 
-    await userEvent.click(tiles.getByRole('radio', { name: 'Corner button' }));
+    // The tile's press layer covers its name, so the press lands on the tile, as a pointer's does.
+    await userEvent.click(tiles.getByText('Corner button', { exact: true }), { force: true });
     await expect.element(tiles.getByRole('radio', { name: 'Corner button' })).toBeChecked();
     expect(snippetCode()).toContain('data-timefix-mode="floating"');
     // The one thing a site may change, said under the snippet it is about.
