@@ -40,6 +40,16 @@ export interface BoardColumn {
   readonly refusesDrop?: { readonly reason: string };
 }
 
+/**
+ * The "+ Add stage" column at the board's end: what it says ("Add stage", "Add option"), and what makes a column of
+ * the name typed. It answers undefined once the column is made (the field clears for the next one), or why it was
+ * refused, which the field shows under the name it keeps.
+ */
+export interface BoardAddColumn {
+  readonly label: string;
+  readonly onAdd: (title: string) => Promise<string | undefined>;
+}
+
 /** A card moved: where to, and (when the board can reorder) the card it now sits before. */
 export interface BoardMove {
   readonly cardId: string;

@@ -14,7 +14,9 @@ import { useDelayedLoading } from '../../provider/useDelayedLoading.ts';
 import styles from './Board.module.css';
 import { KanbanCardOverlay, KanbanColumn, refusalOf } from './KanbanColumn.tsx';
 import { strings } from './strings.ts';
-import type { BoardCard, BoardColumn, BoardMove } from './types.ts';
+import { Field } from '../../molecules/Field/Field.tsx';
+import { Spinner } from '../../atoms/Spinner/Spinner.tsx';
+import type { BoardAddColumn, BoardCard, BoardColumn, BoardMove } from './types.ts';
 
 /** Props for Board. */
 export interface BoardProps {
@@ -40,6 +42,12 @@ export interface BoardProps {
   readonly onAddCard?: (columnId: string) => void;
   /** A card was picked up (true) or dropped or put back (false): the screen holds its columns still meanwhile. */
   readonly onMovingChange?: (isMoving: boolean) => void;
+  /** The columns the viewer folded into strips (kept by the screen, per view). */
+  readonly collapsedIds?: ReadonlySet<string>;
+  /** A column folded or opened: each column's head gets a collapse button, and a folded strip an expand one. */
+  readonly onCollapsedChange?: (columnId: string, isCollapsed: boolean) => void;
+  /** "+ Add stage" at the board's end, for someone who may add options to the grouping field. */
+  readonly addColumn?: BoardAddColumn;
   /** `loading` (skeleton columns after the loading delay), `error`, or `no-access`. */
   readonly status?: LoadStatus;
   /** Try again, when `status` is `error`. */
@@ -91,6 +99,9 @@ export function Board({
   onOpen,
   onAddCard,
   onMovingChange,
+  collapsedIds,
+  onCollapsedChange,
+  addColumn,
   status = 'ready',
   onRetry,
 }: BoardProps) {
@@ -131,7 +142,7 @@ export function Board({
       </div>
     );
   }
-  if (columns.length === 0) {
+  if (columns.length === 0 && addColumn === undefined) {
     return (
       <EmptyState icon="kanban" title={strings.noColumns}>
         {strings.noColumnsBody}
@@ -226,7 +237,24 @@ export function Board({
             isOver={overGroup === column.id}
             // A strip stays a strip while a card moves (it takes the drop as it is, so no column shifts under the
             // pointer), and one that has held cards on this board stays wide when its last card leaves.
-            isCollapsed={column.isCollapsedWhenEmpty === true && column.count === 0 && !hasHeld.has(column.id)}
+            isCollapsed={
+              collapsedIds?.has(column.id) === true ||
+              (column.isCollapsedWhenEmpty === true && column.count === 0 && !hasHeld.has(column.id))
+            }
+            {...(onCollapsedChange === undefined
+              ? {}
+              : {
+                  onCollapse: () => {
+                    onCollapsedChange(column.id, true);
+                  },
+                  ...(collapsedIds?.has(column.id) === true
+                    ? {
+                        onExpand: () => {
+                          onCollapsedChange(column.id, false);
+                        },
+                      }
+                    : {}),
+                })}
             {...(onAddCard === undefined || isMoving ? {} : { onAddCard: () => onAddCard(column.id) })}
             {...(onOpen === undefined
               ? {}
@@ -237,6 +265,8 @@ export function Board({
                 })}
           />
         ))}
+        {/* Where a new stage goes: after the last one, in a column's own width. Never while a card moves. */}
+        {addColumn !== undefined && !isMoving && <AddColumn add={addColumn} />}
         {onShowEmptyColumnsChange !== undefined && hiddenEmpty > 0 && !isMoving && (
           <span className={styles.hidden}>
             {showEmptyColumns ? (
@@ -264,5 +294,83 @@ export function Board({
         )}
       </div>
     </DragArea>
+  );
+}
+
+/**
+ * "+ Add stage" at the board's end: a dashed button that turns into a name field in place. Enter makes the column
+ * and clears the field for the next one; Esc, or leaving it empty, puts the button back. A refused name stays in the
+ * field, and the screen says why.
+ */
+function AddColumn({ add }: { readonly add: BoardAddColumn }) {
+  const [isTyping, setTyping] = useState(false);
+  const [name, setName] = useState('');
+  const [isPending, setPending] = useState(false);
+  const [error, setError] = useState<string | undefined>(undefined);
+  // Put away with Esc: the button comes back with focus, so the keyboard never lands on the page.
+  const [wasPutAway, setPutAway] = useState(false);
+  const submit = () => {
+    const title = name.trim();
+    if (title === '' || isPending) return;
+    setPending(true);
+    setError(undefined);
+    add.onAdd(title).then(
+      (refused) => {
+        setPending(false);
+        if (refused === undefined) setName('');
+        else setError(refused);
+      },
+      () => {
+        setPending(false);
+        setError(strings.addFailed);
+      },
+    );
+  };
+  return (
+    <div className={styles.add}>
+      {isTyping ? (
+        <Field
+          label={strings.newColumnName(add.label)}
+          isLabelHidden
+          size="sm"
+          placeholder={add.label}
+          value={name}
+          maxLength={100}
+          // eslint-disable-next-line jsx-a11y-x/no-autofocus
+          autoFocus
+          // Read only rather than disabled while it is made, so focus stays for the next name.
+          isReadOnly={isPending}
+          {...(isPending ? { suffix: <Spinner size="sm" label={strings.adding} /> } : {})}
+          {...(error === undefined ? {} : { error })}
+          onChange={(next) => {
+            setName(next);
+            setError(undefined);
+          }}
+          onSubmit={submit}
+          onEscape={() => {
+            setName('');
+            setError(undefined);
+            setTyping(false);
+            setPutAway(true);
+          }}
+          onBlur={() => {
+            if (name.trim() === '' && !isPending) setTyping(false);
+          }}
+        />
+      ) : (
+        <Button
+          variant="dashed"
+          icon="plus"
+          isFullWidth
+          // eslint-disable-next-line jsx-a11y-x/no-autofocus
+          autoFocus={wasPutAway}
+          onPress={() => {
+            setTyping(true);
+          }}
+        >
+          {add.label}
+        </Button>
+      )}
+    </div>
   );
 }

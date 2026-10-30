@@ -2,9 +2,10 @@
 // as a virtualised React Aria GridList. The column is a drop zone of the
 // library's drag wrapper, and each card a sortable item in it, moved by
 // pointer from anywhere on the card, or by keyboard from its grip.
-import { useId, useMemo } from 'react';
+import { useId, useMemo, useRef } from 'react';
 import { GridList, GridListItem, ListLayout, Virtualizer, type Key } from 'react-aria-components';
 import { Button } from '../../atoms/Button/Button.tsx';
+import { focusLater } from '../../lib/focus-later.ts';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { StatusDot } from '../../atoms/StatusDot/StatusDot.tsx';
 import type { FieldAttribute } from '../../fields/types.ts';
@@ -40,6 +41,10 @@ export interface KanbanColumnProps {
   readonly onOpen?: (card: BoardCard) => void;
   /** The head's "+": add a card with this column's value. Absent, there is no button. */
   readonly onAddCard?: () => void;
+  /** Folds the column into a strip (the head's collapse button). Absent, there is no button. */
+  readonly onCollapse?: () => void;
+  /** Opens a strip the viewer folded (the strip's expand button). */
+  readonly onExpand?: () => void;
 }
 
 /** A card's row content: binds its row as a sortable item, and drags from anywhere on it. */
@@ -88,6 +93,8 @@ export function KanbanColumn({
   isCollapsed = false,
   onOpen,
   onAddCard,
+  onCollapse,
+  onExpand,
 }: KanbanColumnProps) {
   const { locale } = useFormatSettings();
   const onShown = useRangeReporter(column.cards);
@@ -105,6 +112,9 @@ export function KanbanColumn({
   );
   const cardAt = (key: Key) => itemOfKey(column.cards, rows, key);
   const titleId = useId();
+  // Folding or opening takes away the button pressed: focus goes to the one that takes its place.
+  const collapseRef = useRef<HTMLButtonElement>(null);
+  const expandRef = useRef<HTMLButtonElement>(null);
   return (
     <section
       ref={bindZone}
@@ -116,6 +126,19 @@ export function KanbanColumn({
       data-collapsed={isCollapsed || undefined}
     >
       <div className={styles.head}>
+        {/* A strip the viewer folded opens again from its top, where the eye lands on its name. */}
+        {isCollapsed && onExpand !== undefined && (
+          <Button
+            ref={expandRef}
+            variant="ghost"
+            icon="panel-left-open"
+            label={strings.expand(column.title)}
+            onPress={() => {
+              onExpand();
+              focusLater(() => collapseRef.current);
+            }}
+          />
+        )}
         <h3 id={titleId} className={styles.heading}>
           {column.hue === undefined ? (
             <span className={styles.title}>{column.title}</span>
@@ -136,6 +159,21 @@ export function KanbanColumn({
         {/* A strip is too narrow for it, and a column that refuses cards (archived, required) takes no new one. */}
         {onAddCard !== undefined && !isCollapsed && refusal === undefined && (
           <Button variant="ghost" icon="plus" label={strings.addCard(column.title)} onPress={onAddCard} />
+        )}
+        {/* Quiet until the head is hovered or focused (a pointer that can hover), so the "+" stays the head's action. */}
+        {onCollapse !== undefined && !isCollapsed && (
+          <span className={styles.collapse}>
+            <Button
+              ref={collapseRef}
+              variant="ghost"
+              icon="panel-left-close"
+              label={strings.collapse(column.title)}
+              onPress={() => {
+                onCollapse();
+                focusLater(() => expandRef.current);
+              }}
+            />
+          </span>
         )}
       </div>
       {/* A strip is too narrow for the sentence: dimmed, it says enough, and a drop there is put back with words. */}

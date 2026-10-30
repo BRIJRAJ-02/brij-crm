@@ -275,9 +275,10 @@ export const Edit: Story = {
     );
     // The relationship's own choice alone, read only: no radio that looks pickable.
     await expect(within(dialog).queryAllByRole('radio')).toEqual([]);
-    const fixed = inDialog(dialog, 'How records link');
-    await expect(fixed).toHaveValue('Each company has many people, each person has many companies');
-    await expect(fixed).toHaveAttribute('readonly');
+    // The two cards say how many each holds, in words.
+    const shape = within(dialog).getByRole('group', { name: 'How records link' });
+    await expect(shape).toHaveTextContent('Each company has many people');
+    await expect(shape).toHaveTextContent('Each person has many companies');
     const near = inDialog(dialog, 'Name on Companies');
     await waitFor(() => expect(near).toHaveFocus());
     await userEvent.clear(near);
@@ -309,9 +310,9 @@ export const EditSelf: Story = {
     // Opened from Reports: its name has focus, and the choice names the sides rather than "each person" twice.
     const second = inDialog(dialog, 'Reverse name on People');
     await waitFor(() => expect(second).toHaveFocus());
-    await expect(inDialog(dialog, 'How records link')).toHaveValue(
-      'This side holds one person, the reverse side holds many people',
-    );
+    const shape = within(dialog).getByRole('group', { name: 'How records link' });
+    await expect(shape).toHaveTextContent('This side holds one person');
+    await expect(shape).toHaveTextContent('The reverse side holds many people');
     await userEvent.clear(second);
     await userEvent.type(second, 'Manager');
     await userEvent.keyboard('{Meta>}{Enter}{/Meta}');

@@ -42,6 +42,13 @@ export interface RecordPanelProps {
   readonly width?: PanelWidth;
   /** The stat strip over the tabs: counts (tasks, notes) and the last activity, as the record page shows them. */
   readonly stats?: readonly RecordStat[];
+  /** One line over the tabs, such as a danger Callout saying the record is no longer available. */
+  readonly notice?: ReactNode;
+  /**
+   * In place of the tabs: the screen's own EmptyState, for a record that isn't available (missing or hidden, one
+   * state). The header keeps Close and Open full page.
+   */
+  readonly empty?: ReactNode;
 }
 
 /**
@@ -66,6 +73,8 @@ export function RecordPanel({
   status = 'ready',
   onRetry,
   stats = [],
+  notice,
+  empty,
 }: RecordPanelProps) {
   const hasSteps = onPrevious !== undefined || onNext !== undefined;
   const previousRef = useRef<HTMLButtonElement>(null);
@@ -81,7 +90,9 @@ export function RecordPanel({
   }, [atStart, atEnd]);
   const isReady = status === 'ready' && record !== undefined;
   let content: ReactNode;
-  if (status === 'error') {
+  if (empty !== undefined) {
+    content = <div className={styles.content}>{empty}</div>;
+  } else if (status === 'error') {
     content = <EmptyState tone="error" title={strings.failed} {...(onRetry === undefined ? {} : { onRetry })} />;
   } else if (status === 'no-access') {
     content = (
@@ -98,12 +109,24 @@ export function RecordPanel({
   }
   return (
     <Panel
-      title={record?.name ?? strings.loading}
+      title={
+        record?.name ??
+        (empty !== undefined ? strings.unavailable : status === 'error' ? strings.failed : strings.loading)
+      }
       variant="floating"
       isFlush
       width={width}
       isOpen={isOpen}
       onClose={onClose}
+      // ↑ and ↓ step as Previous and Next do, where nothing in the panel owns the arrows.
+      {...(hasSteps
+        ? {
+            onStep: (step: 'previous' | 'next') => {
+              if (step === 'previous') onPrevious?.();
+              else onNext?.();
+            },
+          }
+        : {})}
       leading={
         record !== undefined && (
           <Avatar
@@ -126,6 +149,8 @@ export function RecordPanel({
                 variant="ghost"
                 icon="chevron-up"
                 label={strings.previous}
+                // ↑ steps too, where nothing in the panel owns the arrows: shown in the button's tooltip.
+                kbd="↑"
                 isDisabled={onPrevious === undefined}
                 {...(onPrevious === undefined ? {} : { onPress: onPrevious })}
               />
@@ -134,6 +159,7 @@ export function RecordPanel({
                 variant="ghost"
                 icon="chevron-down"
                 label={strings.next}
+                kbd="↓"
                 isDisabled={onNext === undefined}
                 {...(onNext === undefined ? {} : { onPress: onNext })}
               />
@@ -148,6 +174,7 @@ export function RecordPanel({
     >
       {content ?? (
         <div className={styles.body}>
+          {notice !== undefined && <div className={styles.notice}>{notice}</div>}
           {stats.length > 0 && record !== undefined && (
             <div className={styles.stats}>
               <RecordStats label={strings.about(record.name)} stats={stats} />

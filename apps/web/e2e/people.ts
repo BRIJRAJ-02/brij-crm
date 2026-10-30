@@ -222,6 +222,16 @@ export async function openTrash(page: Page): Promise<void> {
  * After the table's "+" (Add attribute): a view that hides columns opens a menu listing them first (the flow
  * pass), whose last item, New attribute…, opens the dialog; a view hiding none opens the dialog at once.
  */
+/**
+ * A row's name or a card opens its record in the panel beside the list (spec 0017, AC-384; the CRM flow pass, 31
+ * October 2026): this waits for the panel, then takes its Open full page to the record's page.
+ */
+export async function openFullPage(page: Page): Promise<void> {
+  const open = page.getByRole('button', { name: 'Open full page' });
+  await expect(open).toBeVisible({ timeout: 30_000 });
+  await open.click();
+}
+
 export async function chooseNewAttribute(page: Page): Promise<void> {
   const dialog = page.getByRole('dialog', { name: 'New attribute' });
   const item = page.getByRole('menuitem', { name: 'New attribute…' });

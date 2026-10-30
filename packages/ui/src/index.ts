@@ -411,7 +411,7 @@ export {
   type AttributeSection,
 } from './modules/AttributeList/AttributeList.tsx';
 export { Board, type BoardProps } from './modules/Board/Board.tsx';
-export type { BoardCard, BoardColumn, BoardMove } from './modules/Board/types.ts';
+export type { BoardAddColumn, BoardCard, BoardColumn, BoardMove } from './modules/Board/types.ts';
 export { BulkActionBar, type BulkActionBarProps } from './modules/BulkActionBar/BulkActionBar.tsx';
 export { SaveBar, type SaveBarProps, type SaveBarStatus } from './modules/SaveBar/SaveBar.tsx';
 export {

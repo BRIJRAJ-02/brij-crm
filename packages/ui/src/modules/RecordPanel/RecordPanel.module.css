@@ -1,4 +1,4 @@
-/* RecordPanel: the stat strip (when given) over the tabs; each tab's content fills the floating panel's height under the
+/* RecordPanel: a notice and the stat strip (when given) over the tabs; each tab's content fills the floating panel's height under the
    tabs, padded space-16 on the sides and space-12 above, and scrolls itself, so
    a feed or task list inside scrolls in its own slot. */
 @layer components {
@@ -10,6 +10,8 @@
     min-block-size: 0;
   }
 
+  /* A notice (the record no longer available) and the stat strip sit over the tabs, padded as the content is. */
+  .notice,
   .stats {
     flex: none;
     padding: var(--space-12) var(--space-16) 0;

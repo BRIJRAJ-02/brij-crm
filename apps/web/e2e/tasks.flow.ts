@@ -9,7 +9,7 @@
 // Tasks tab and the dialog (AC-432 to AC-435, AC-438, AC-448, AC-451).
 import { randomBytes, randomUUID } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
-import { addPerson, checkScreen, newWorkspace, signInAgain } from './people.ts';
+import { addPerson, checkScreen, newWorkspace, openFullPage, signInAgain } from './people.ts';
 
 const RECORD_URL = /\/w\/[^/]+\/objects\/people\/([0-9a-f-]{36})\/overview$/;
 /** AC-432: a task shows in every other open browser within a second. */
@@ -52,6 +52,7 @@ test('tasks on a record: quick add, the dialog, links, ticks and the timeline, l
     .getByRole('rowheader', { name: /Grace Hopper/ })
     .getByText('Grace Hopper')
     .click();
+  await openFullPage(page);
   await expect(page).toHaveURL(RECORD_URL);
   const graceId = RECORD_URL.exec(page.url())?.[1] ?? '';
   const tasksPath = `/w/${slug}/objects/people/${graceId}/tasks`;

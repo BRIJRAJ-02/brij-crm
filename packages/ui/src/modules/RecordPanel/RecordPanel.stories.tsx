@@ -3,6 +3,8 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
 import { expect, fn, waitFor, within } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
+import { Callout } from '../../molecules/Callout/Callout.tsx';
+import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
 import { arraySource } from '../../lib/list-source.ts';
 import { SAMPLE_COMPANIES } from '../../workbench/field-samples.ts';
 import {
@@ -25,10 +27,12 @@ interface SampleProps {
   readonly status?: LoadStatus;
   /** The stat strip over the tabs (on by default), or its values still coming. */
   readonly stats?: 'shown' | 'loading' | 'none';
+  /** The record was deleted while open (a notice over the tabs), or isn't available at all (in place of the tabs). */
+  readonly gone?: 'lost' | 'unavailable';
 }
 
 /** A company opened from the table: details, activity and tasks, stepping through three companies. */
-function SamplePanel({ startOpen = true, onOpenPage, status = 'ready', stats = 'shown' }: SampleProps) {
+function SamplePanel({ startOpen = true, onOpenPage, status = 'ready', stats = 'shown', gone }: SampleProps) {
   const [isOpen, setOpen] = useState(startOpen);
   const [tab, setTab] = useState('details');
   const isLoadingStats = stats === 'loading';
@@ -48,7 +52,7 @@ function SamplePanel({ startOpen = true, onOpenPage, status = 'ready', stats = '
       </Button>
       <RecordPanel
         status={status}
-        {...(status === 'loading' ? {} : { record })}
+        {...(status === 'loading' || gone === 'unavailable' ? {} : { record })}
         isOpen={isOpen}
         onClose={() => {
           setOpen(false);
@@ -69,6 +73,24 @@ function SamplePanel({ startOpen = true, onOpenPage, status = 'ready', stats = '
           : {})}
         {...(onOpenPage === undefined ? {} : { onOpenPage })}
         actions={<Button variant="ghost" icon="ellipsis" label="Record actions" />}
+        {...(gone === 'lost'
+          ? {
+              notice: (
+                <Callout tone="danger" isAnnounced>
+                  This company is no longer available.
+                </Callout>
+              ),
+            }
+          : {})}
+        {...(gone === 'unavailable'
+          ? {
+              empty: (
+                <EmptyState icon="search" title="This record isn’t available.">
+                  It may have been deleted, or you can’t see it.
+                </EmptyState>
+              ),
+            }
+          : {})}
         selectedTab={tab}
         onTabChange={setTab}
         stats={
@@ -161,6 +183,41 @@ export const StepThrough: Story = {
     await waitFor(() => expect(canvas.getByRole('button', { name: 'Previous record' })).toHaveFocus());
     await userEvent.click(canvas.getByRole('button', { name: 'Open full page' }));
     await expect(args.onOpenPage).toHaveBeenCalled();
+  },
+};
+
+/** ↓ and ↑ step through the list as Next and Previous do; inside the tabs the arrows stay the tabs'. */
+export const ArrowKeysStep: Story = {
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas, userEvent }) => {
+    canvas.getByRole('button', { name: 'Open full page' }).focus();
+    await userEvent.keyboard('{ArrowDown}');
+    await expect(canvas.getByRole('dialog', { name: 'Globex' })).toBeInTheDocument();
+    canvas.getByRole('button', { name: 'Open full page' }).focus();
+    await userEvent.keyboard('{ArrowUp}');
+    await expect(canvas.getByRole('dialog', { name: 'Northwind Traders' })).toBeInTheDocument();
+    canvas.getByRole('tab', { name: 'Details' }).focus();
+    await userEvent.keyboard('{ArrowDown}');
+    await expect(canvas.getByRole('dialog', { name: 'Northwind Traders' })).toBeInTheDocument();
+  },
+};
+
+/** The record was deleted while open: the notice says so over the tabs, which stay. */
+export const NoLongerAvailable: Story = {
+  args: { gone: 'lost', stats: 'none' },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('This company is no longer available.')).toBeInTheDocument();
+    await expect(canvas.getByRole('tab', { name: 'Details' })).toBeInTheDocument();
+  },
+};
+
+/** A record that doesn't exist or is hidden: the screen's EmptyState in place of the tabs, Close in the header. */
+export const Unavailable: Story = {
+  args: { gone: 'unavailable', stats: 'none' },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('dialog', { name: 'Record unavailable' })).toBeInTheDocument();
+    await expect(canvas.getByText('This record isn’t available.')).toBeInTheDocument();
+    await expect(canvas.queryByRole('tab')).not.toBeInTheDocument();
   },
 };
 

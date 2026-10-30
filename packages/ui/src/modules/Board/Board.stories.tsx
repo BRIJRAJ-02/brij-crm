@@ -50,6 +50,12 @@ interface SampleProps {
   /** A "No Stage" column first, empty, which stays a slim strip. */
   readonly withNoValue?: boolean;
   readonly onAddCard?: (columnId: string) => void;
+  /** Columns fold into strips, held by the story as the screen keeps them per view. */
+  readonly canCollapse?: boolean;
+  /** Columns folded when it opens. */
+  readonly startCollapsed?: readonly string[];
+  /** "+ Add stage" at the end: a name typed makes a column (one taken is refused). */
+  readonly canAddColumn?: boolean;
 }
 
 /** The board holding its own cards, as the data layer would: a move rewrites the card's stage. */
@@ -62,13 +68,19 @@ function SampleBoard({
   startShowingEmpty = false,
   withNoValue = false,
   onAddCard,
+  canCollapse = false,
+  startCollapsed = [],
+  canAddColumn = false,
 }: SampleProps) {
   const [cards, setCards] = useState(CARDS);
   const [showEmpty, setShowEmpty] = useState(startShowingEmpty);
+  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set(startCollapsed));
+  const [added, setAdded] = useState<readonly string[]>([]);
   const columns: readonly BoardColumn[] = [
     ...(withNoValue ? [{ id: 'none', title: 'No Stage', isArchived: false, isCollapsedWhenEmpty: true }] : []),
     ...SAMPLE_STAGES.map((stage) => ({ id: stage.id, title: stage.label, hue: stage.hue, isArchived: stage.archived })),
     { id: 'lost', title: 'Lost', hue: 'red' as const, isArchived: false },
+    ...added.map((title) => ({ id: `added-${title}`, title, hue: 'gray' as const, isArchived: false })),
   ].map((column) => {
     const inColumn = cards.filter((card) => card.stage === column.id);
     return { ...column, count: inColumn.length, cards: arraySource<BoardCard>(inColumn, (card) => card.id) };
@@ -86,6 +98,33 @@ function SampleBoard({
         {...(status === undefined ? {} : { status })}
         {...(onRetry === undefined ? {} : { onRetry })}
         {...(onAddCard === undefined ? {} : { onAddCard })}
+        {...(canCollapse
+          ? {
+              collapsedIds: collapsed,
+              onCollapsedChange: (columnId: string, isCollapsed: boolean) => {
+                setCollapsed((was) => {
+                  const next = new Set(was);
+                  if (isCollapsed) next.add(columnId);
+                  else next.delete(columnId);
+                  return next;
+                });
+              },
+            }
+          : {})}
+        {...(canAddColumn
+          ? {
+              addColumn: {
+                label: 'Add stage',
+                onAdd: (title: string) =>
+                  columns.some((column) => column.title.toLowerCase() === title.toLowerCase())
+                    ? Promise.resolve('A stage already has this name.')
+                    : Promise.resolve().then(() => {
+                        setAdded((was) => [...was, title]);
+                        return undefined;
+                      }),
+              },
+            }
+          : {})}
         onMove={(move) => {
           setCards((previous) =>
             previous.map((card) => (card.id === move.cardId ? { ...card, stage: move.toColumnId } : card)),
@@ -470,5 +509,54 @@ export const NoColumns: Story = {
   ),
   play: async ({ canvas }) => {
     await expect(canvas.getByText('Nothing to group by yet')).toBeInTheDocument();
+  },
+};
+
+/** A column folds into a strip with its name and count, and opens again from the strip. */
+export const CollapseColumn: Story = {
+  args: { canCollapse: true },
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Collapse Lead' }));
+    const lead = canvas.getByRole('region', { name: /Lead/ });
+    await expect(lead).toHaveAttribute('data-collapsed');
+    await expect(within(lead).queryByRole('grid')).not.toBeInTheDocument();
+    await userEvent.click(canvas.getByRole('button', { name: 'Expand Lead' }));
+    await expect(canvas.getByRole('region', { name: /Lead/ })).not.toHaveAttribute('data-collapsed');
+  },
+};
+
+/** "+ Add stage": the name typed and Enter make a column; the field clears for the next, and Esc puts it away. */
+export const AddStage: Story = {
+  args: { canAddColumn: true },
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Add stage' }));
+    const field = canvas.getByRole('textbox', { name: 'Add stage: name' });
+    await waitFor(() => expect(field).toHaveFocus());
+    await userEvent.type(field, 'Negotiation{Enter}');
+    await waitFor(() => expect(canvas.getByRole('region', { name: /Negotiation/ })).toBeInTheDocument());
+    await waitFor(() => expect(canvas.getByRole('textbox', { name: 'Add stage: name' })).toHaveValue(''));
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(canvas.getByRole('button', { name: 'Add stage' })).toBeInTheDocument());
+  },
+};
+
+/** A name already taken is refused: it stays in the field (the screen says why). */
+export const AddStageRefused: Story = {
+  args: { canAddColumn: true },
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Add stage' }));
+    await userEvent.type(canvas.getByRole('textbox', { name: 'Add stage: name' }), 'Lost{Enter}');
+    await waitFor(() => expect(canvas.getByRole('textbox', { name: 'Add stage: name' })).toHaveValue('Lost'));
+    await expect(canvas.getByText('A stage already has this name.')).toBeInTheDocument();
+  },
+};
+
+/** Lost folded out of the way: a strip with its name and count down it, and Expand at its top. */
+export const Folded: Story = {
+  args: { canCollapse: true, startCollapsed: ['lost'], startShowingEmpty: true },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('region', { name: /Lost/ })).toHaveAttribute('data-collapsed');
+    await expect(canvas.getByRole('button', { name: 'Expand Lost' })).toBeInTheDocument();
   },
 };

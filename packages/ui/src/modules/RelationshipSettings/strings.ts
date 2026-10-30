@@ -1,6 +1,3 @@
-/** Words for a record count: "one company", "many companies". */
-const howMany = (isOne: boolean, singular: string, plural: string) => (isOne ? `one ${singular}` : `many ${plural}`);
-
 /** RelationshipSettings' built in copy. */
 export const strings = {
   newTitle: 'New relationship',
@@ -26,6 +23,9 @@ export const strings = {
   eachHas: (singular: string) => `Each ${singular} has`,
   one: (singular: string) => `One ${singular}`,
   many: (plural: string) => `Many ${plural}`,
+  /** A fixed side's answer, after its question on the card: "Each company has" many people. */
+  holdsOne: (singular: string) => `one ${singular}`,
+  holdsMany: (plural: string) => `many ${plural}`,
   /** The two questions of a relationship from an object to itself, by side. */
   thisSideHolds: 'This side holds',
   reverseSideHolds: 'The reverse side holds',
@@ -34,21 +34,6 @@ export const strings = {
     'The object on the other side. Records of the two objects can then link to each other. It can be the same object, such as a person’s manager.',
   aboutRelatedExample: 'Companies and People: link each person to the company they work at.',
 
-  /**
-   * One cardinality as a plain choice, phrased with both objects (spec 0014,
-   * AC-282): "Each person has one company, each company has many people".
-   */
-  choice: (
-    near: { readonly singular: string; readonly plural: string; readonly isOne: boolean },
-    far: { readonly singular: string; readonly plural: string; readonly isOne: boolean },
-  ) =>
-    `Each ${near.singular} has ${howMany(near.isOne, far.singular, far.plural)}, each ${far.singular} has ${howMany(far.isOne, near.singular, near.plural)}`,
-  /**
-   * One cardinality from an object to itself, by side: "This side holds one
-   * person, the reverse side holds many people".
-   */
-  selfChoice: (fromOne: boolean, toOne: boolean, singular: string, plural: string) =>
-    `This side holds ${howMany(fromOne, singular, plural)}, the reverse side holds ${howMany(toOne, singular, plural)}`,
   /** A side's name field: "Name on People". */
   nameOn: (plural: string) => `Name on ${plural}`,
   /** The second name field of a relationship from an object to itself. */

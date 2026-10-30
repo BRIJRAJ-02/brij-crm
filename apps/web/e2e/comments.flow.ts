@@ -8,7 +8,7 @@
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Page } from '@playwright/test';
-import { addPerson, checkScreen, newWorkspace, signInAgain } from './people.ts';
+import { addPerson, checkScreen, newWorkspace, openFullPage, signInAgain } from './people.ts';
 
 const ROOT = fileURLToPath(new URL('../../..', import.meta.url));
 /** The Release 1 bar is a second; CI's shared runners get some room over it. */
@@ -55,6 +55,7 @@ test('a mention reaches the other browser’s inbox live, opens its thread, and 
     .getByRole('rowheader', { name: /Grace Hopper/ })
     .getByText('Grace Hopper')
     .click();
+  await openFullPage(ada);
   await expect(ada).toHaveURL(RECORD_URL);
   await ada.getByRole('tab', { name: /Comments/ }).click();
   await expect(ada.getByText('No comments yet', { exact: true })).toBeVisible();

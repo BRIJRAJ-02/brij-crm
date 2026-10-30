@@ -28,6 +28,7 @@ New. The record panel (#17), notifications (#28) and the assistant (#54) open be
 - `subtitle` puts one quiet line under the title: what the subject belongs to and when (a form submission's form and its time, as Attio's side panel names the object under a record). Why a prop: a screen can't set a line under the panel's heading itself, and a bare "Submission" title said nothing about who sent it (22 October 2026).
 - `isStacked` lays the content out as a column of sections, `space-20` apart: a form submission's state, its answers, where it came from and the records it touched, each a FieldGroup. Why a variant: the body stacked its children with no space, so a screen's section headings sat on the line before them, and screens can't space blocks themselves (22 October 2026). It is for content that scrolls with the panel; `isFlush` content scrolls itself, so the two are never set together.
 - `isFlush` runs the content to the edges and gives it the panel's height, for Tabs and lists that scroll themselves.
+- `onStep` hears ↑ (`previous`) and ↓ (`next`) pressed inside the panel where nothing else owns the arrows (a field, contenteditable, tabs, a list, a grid, a menu, a radio group): the record panel steps through the list it was opened from (Twenty's side panel, the CRM flow pass, 31 October 2026). Why a prop: only the panel knows a key happened inside it, and a document listener would also hear keys meant for a dialog opened over it. The content swaps at once, with no motion, since it is a key pressed many times a day.
 - It is not modal: the page beside it stays usable, so focus can leave it with Tab or a click.
 
 ## States
@@ -36,7 +37,7 @@ Opening slides it in over `duration-modal` on `ease-drawer`; closing slides and 
 
 ## Keyboard
 
-Focus moves to the first thing in it when it opens. Esc closes it and focus returns to where it was before.
+Focus moves to the first thing in it when it opens. Esc closes it and focus returns to where it was before. With `onStep`, ↑ and ↓ step to the item above or below, except inside a field, tabs, a list, a grid or a menu, whose arrows stay theirs.
 
 ## Differences from the artifact
 

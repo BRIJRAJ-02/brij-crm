@@ -9,7 +9,7 @@
 // AC-445, AC-451).
 import { randomUUID } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
-import { addPerson, checkScreen, newWorkspace, signInAgain } from './people.ts';
+import { addPerson, checkScreen, newWorkspace, openFullPage, signInAgain } from './people.ts';
 
 const RECORD_URL = /\/w\/[^/]+\/objects\/people\/([0-9a-f-]{36})\/overview$/;
 
@@ -36,6 +36,7 @@ test('notes on a record: write, list, timeline, a second browser, delete and und
     .getByRole('rowheader', { name: /Grace Hopper/ })
     .getByText('Grace Hopper')
     .click();
+  await openFullPage(page);
   await expect(page).toHaveURL(RECORD_URL);
   const graceId = RECORD_URL.exec(page.url())?.[1] ?? '';
   const notesPath = `/w/${slug}/objects/people/${graceId}/notes`;

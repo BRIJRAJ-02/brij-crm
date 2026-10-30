@@ -49,6 +49,24 @@
     white-space: nowrap;
   }
 
+  /* The collapse button: always there for touch and keyboard, quiet for a pointer until the head is hovered. */
+  .collapse {
+    display: flex;
+    flex: none;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .collapse {
+      opacity: 0;
+      transition: opacity var(--duration-hover) var(--ease-hover);
+    }
+
+    .collapse:focus-within,
+    .head:hover .collapse {
+      opacity: 1;
+    }
+  }
+
   .count {
     color: var(--text-tertiary);
     font: var(--text-label);
