@@ -8,7 +8,10 @@
 // and stores its outcome, its record, what it replaced and the versions it
 // wrote beside the write. A refused row stores why, and the rest carry on. A
 // row whose outcome is no longer pending (a batch tried again after its
-// commit) is skipped, so no row is written twice.
+// commit) is skipped, so no row is written twice. An import into a list (spec
+// 0048, AC-4833) then adds the row's record to the list with the row's list
+// values, or, in an "Each record once" list already holding it, updates that
+// entry's values; the entry it added is kept on the row for the undo.
 import { and, eq, sql } from 'drizzle-orm';
 import * as z from 'zod';
 import { ImportSettings, type EngineRefusal } from '@crm/contracts';
@@ -20,9 +23,10 @@ import { objectLevel } from '../access/policy.ts';
 import { queueImportFinished } from '../emails/queue.ts';
 import { limitsOf, takeRecordSlots } from '../engine/limits.ts';
 import { insertRecord, readRecords, updateRecord } from '../engine/records.ts';
+import { addEntryIn, checkWritableList } from '../engine/lists.ts';
 import { isRefusal, refuse } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
-import { loadAttributes, type AttributeDef } from '../engine/values.ts';
+import { loadAttributes, loadListAttributes, type AttributeDef } from '../engine/values.ts';
 import type { WriteContext } from '../engine/write.ts';
 import { defineKind, MAX_ATTEMPTS, type ItemOutcome, type KindDefinition } from '../jobs/registry.ts';
 import {
@@ -67,6 +71,9 @@ interface ImportPlan {
   readonly fileName: string;
   readonly settings: ImportSettings;
   readonly attributes: ReadonlyMap<string, AttributeDef>;
+  /** The list the rows go into (spec 0048, AC-4833), and its fields, which take columns beside the object's. */
+  readonly listId?: string;
+  readonly listAttributes: ReadonlyMap<string, AttributeDef>;
   readonly far: ReadonlyMap<string, readonly FarObject[]>;
   /** Relation columns that make a far record for a name that links to none: the far object and its attributes. */
   readonly makes: ReadonlyMap<string, MakeTarget>;
@@ -163,7 +170,19 @@ async function loadPlan(tx: WorkspaceTx, scope: EngineScope, importId: string): 
       }
     }
   }
-  return { importId: row.id, objectId: row.objectId, fileName: row.fileName, settings, attributes, far, makes };
+  const listAttributes =
+    row.listId === null ? new Map<string, AttributeDef>() : await loadListAttributes(tx, row.listId);
+  return {
+    importId: row.id,
+    objectId: row.objectId,
+    fileName: row.fileName,
+    settings,
+    attributes,
+    ...(row.listId === null ? {} : { listId: row.listId }),
+    listAttributes,
+    far,
+    makes,
+  };
 }
 
 /** A row's staged values: plain ones by attribute, and each relation column's names. */
@@ -281,6 +300,7 @@ interface StoredOutcome {
   readonly before?: unknown;
   readonly written?: unknown;
   readonly made?: readonly Made[];
+  readonly entry_id?: string;
 }
 
 /** Takes every match key's lock of the batch in one order, so two imports of one new key meet in turn (two rows never both create). */
@@ -411,6 +431,49 @@ async function importRow(
   };
 }
 
+/** A row's values for the list's own fields (spec 0048, AC-4833), by attribute id; empty ones left out. */
+function listValuesOf(plan: ImportPlan, staged: unknown): Record<string, unknown> {
+  const given = typeof staged === 'object' && staged !== null ? (staged as Record<string, unknown>) : {};
+  return Object.fromEntries(
+    Object.entries(given).flatMap(([id, value]) => {
+      const attributeId = canonicalId(id);
+      return plan.listAttributes.has(attributeId) && !isEmpty(value) ? [[attributeId, value]] : [];
+    }),
+  );
+}
+
+/**
+ * Writes one row, then (into a list) its entry, inside the row's savepoint
+ * (AC-4833): the row's record added with the row's list values; in an "Each
+ * record once" list that holds it already (a second row for one record
+ * included), that entry's values updated. A row that changed only its entry
+ * counts as updated. A refused add refuses the row whole.
+ */
+async function importRowInto(
+  context: WriteContext,
+  plan: ImportPlan,
+  row: StagedRow,
+  batch: BatchState,
+): Promise<{ readonly result: RowResult; readonly stored: StoredOutcome; readonly made: ReadonlyMap<string, Made> }> {
+  const done = await importRow(context, plan, row, batch);
+  const recordId = done.stored.record_id;
+  if (plan.listId === undefined || recordId === undefined) return done;
+  const values = listValuesOf(plan, row.values);
+  const entry = await addEntryIn(context, { listId: plan.listId, recordId, values });
+  if (entry.existing) {
+    const next = Object.fromEntries(Object.entries(values).map(([id, value]) => [id, { value }]));
+    if (Object.keys(next).length === 0) return done;
+    const results = await updateRecord(context, { entryId: entry.entryId, values: next });
+    if (!Object.values(results).some((result) => result.versionId !== undefined)) return done;
+  }
+  const changed = done.result.outcome === 'skipped' ? 'updated' : done.result.outcome;
+  return {
+    result: { ...done.result, outcome: changed },
+    stored: { ...done.stored, outcome: changed, ...(entry.existing ? {} : { entry_id: entry.entryId }) },
+    made: done.made,
+  };
+}
+
 /** Stores the batch's outcomes in one statement (each row by its number). */
 async function storeOutcomes(tx: WorkspaceTx, scope: EngineScope, importId: string, stored: readonly StoredOutcome[]) {
   if (stored.length === 0) return;
@@ -422,10 +485,11 @@ async function storeOutcomes(tx: WorkspaceTx, scope: EngineScope, importId: stri
       error_message = v.error_message,
       before = coalesce(v.before, r.before),
       written = coalesce(v.written, r.written),
-      made = coalesce(v.made, r.made)
+      made = coalesce(v.made, r.made),
+      entry_id = coalesce(v.entry_id, r.entry_id)
     from jsonb_to_recordset(${JSON.stringify(stored)}::jsonb) as v(
       row_number int, outcome text, record_id uuid, error_code text, error_message text, before jsonb, written jsonb,
-      made jsonb
+      made jsonb, entry_id uuid
     )
     where r.workspace_id = ${scope.workspaceId} and r.import_id = ${importId} and r.row_number = v.row_number
   `);
@@ -587,7 +651,10 @@ export function recordsImport(rules?: RuleSource): KindDefinition<ImportJobParam
         await checkObject(tx, scope.access, plan.objectId, 'write');
         await liveImportObject(tx, plan.objectId);
         // The columns again, as the member stands now: a field gone hidden or read only ends the import.
-        checkSettings(scope, plan.settings, plan.attributes);
+        checkSettings(scope, plan.settings, new Map([...plan.attributes, ...plan.listAttributes]));
+        // Into a list: its row locked once a batch, first, in the one lock order (the list, then records), and a list
+        // archived or gone read only since ends the import with its words rather than refusing every row.
+        if (plan.listId !== undefined) await checkWritableList(context, plan.listId);
       } catch (error) {
         if (!isRefusal(error) || error.refusal.code === 'QUERY_CANCELLED') throw error;
         return { finished: false, failed: { code: error.refusal.code, message: error.refusal.message } };
@@ -614,7 +681,7 @@ export function recordsImport(rules?: RuleSource): KindDefinition<ImportJobParam
           outcomes.push({ position: item.position, state: row?.outcome === 'refused' ? 'refused' : 'skipped' });
           continue;
         }
-        const result = await context.perRecord((inner) => importRow(inner, plan, row, batch));
+        const result = await context.perRecord((inner) => importRowInto(inner, plan, row, batch));
         if (result.ok) {
           batch.stored.push(result.value.stored);
           // Far records this row made: later rows link them, and they count against the record limit.

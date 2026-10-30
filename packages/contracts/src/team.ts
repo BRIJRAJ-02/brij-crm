@@ -110,6 +110,12 @@ export const AUDIT_ACTIONS = [
   // "Preview as" (spec 0032, AC-858): an admin looked at an object as a member or a team would see it. The target is
   // that member or team; `after` holds the object and the name. Stored, never listed (a look changes nothing).
   'access.previewed',
+  // Lists (spec 0048): made, renamed or otherwise changed (its tile, Each record once), archived and restored. The
+  // target is the list; `before` and `after` hold its name.
+  'list.created',
+  'list.updated',
+  'list.archived',
+  'list.restored',
 ] as const;
 /** One action the audit log records. */
 export const AuditAction = z.enum(AUDIT_ACTIONS);

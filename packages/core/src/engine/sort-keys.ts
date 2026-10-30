@@ -65,6 +65,30 @@ export async function syncSortKey(tx: WorkspaceTx, ownerId: string, attribute: A
 }
 
 /**
+ * Writes the keys of many new owners for the given attributes in one
+ * statement (a batch add's default values, spec 0048): the owners are new, so
+ * nothing is deleted, and a key already there is brought in line.
+ */
+export async function syncNewSortKeys(
+  tx: WorkspaceTx,
+  ownerIds: readonly string[],
+  attributes: readonly AttributeDef[],
+): Promise<void> {
+  const keyed = attributes.filter(hasSortKey).map((attribute) => attribute.id);
+  if (ownerIds.length === 0 || keyed.length === 0) return;
+  await tx.execute(sql`
+    insert into sort_keys (${KEY_COLUMNS})
+    select ${KEY_COLUMNS} from sort_key_sources
+    where owner_id = any(${uuidArray(ownerIds)}) and attribute_id = any(${uuidArray(keyed)})
+    on conflict (workspace_id, owner_id, attribute_id) do update set
+      live = excluded.live, text_key = excluded.text_key, number_key = excluded.number_key,
+      code_key = excluded.code_key, date_key = excluded.date_key, time_key = excluded.time_key,
+      option_id = excluded.option_id, bool_key = excluded.bool_key
+    where ${CHANGED}
+  `);
+}
+
+/**
  * Marks a record's keys, and its entries' keys, as hidden (delete) or shown
  * again (restore). On restore, an entry's keys come back only if the entry
  * is still in its list.

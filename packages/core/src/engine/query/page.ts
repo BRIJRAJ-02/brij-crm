@@ -1614,7 +1614,8 @@ export async function countsWhole(
 export async function matchingIdsIn(
   tx: WorkspaceTx,
   scope: EngineScope,
-  query: { readonly objectId: string; readonly filter?: FilterGroup } & QueryClock,
+  /** An object's records, or a list's entries (spec 0048: their ids, the entries' own Added for `asOf`). */
+  query: ViewSource & { readonly filter?: FilterGroup } & QueryClock,
   page: {
     readonly after: string | undefined;
     readonly limit: number;
@@ -1701,7 +1702,7 @@ export async function orderedIdsIn(
 export async function checkMatching(
   tx: WorkspaceTx,
   scope: EngineScope,
-  query: { readonly objectId: string; readonly filter?: FilterGroup } & QueryClock,
+  query: ViewSource & { readonly filter?: FilterGroup } & QueryClock,
 ): Promise<void> {
   const { context, level } = await prepare(tx, scope, query, false);
   compileFilter(context, level, query.filter);

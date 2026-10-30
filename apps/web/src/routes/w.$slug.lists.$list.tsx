@@ -18,7 +18,11 @@ export const Route = createFileRoute('/w/$slug/lists/$list')({
     const list = lists.find((each) => each.apiSlug === params.list);
     if (list === undefined) return { missing: true as const };
     // An archived list says so, and its managers can restore it (AC-4831).
-    if (list.isArchived) return { archived: list };
+    if (list.isArchived) {
+      // Its object archived too (AC-4832): the page names the object, read with archived ones.
+      const objects = list.isObjectArchived === true ? await context.data.objects.all(params.slug).catch(() => []) : [];
+      return { archived: list, objectName: objects.find((each) => each.id === list.objectId)?.pluralName };
+    }
     const views = context.data.views.list(params.slug, list.objectId, list.id);
     await views.ready();
     const held = views.getSnapshot();
@@ -45,7 +49,11 @@ function ListMissing() {
   const params = Route.useParams();
   const { data, toasts } = Route.useRouteContext();
   const archived = loaded.archived;
-  if (archived !== undefined) return <ArchivedList data={data} toasts={toasts} slug={params.slug} list={archived} />;
+  if (archived !== undefined) {
+    return (
+      <ArchivedList data={data} toasts={toasts} slug={params.slug} list={archived} objectName={loaded.objectName} />
+    );
+  }
   return <WorkspacePage page={missingPage(strings.notFoundTitle, strings.notFoundText)} />;
 }
 

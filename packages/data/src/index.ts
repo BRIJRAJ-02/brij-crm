@@ -43,6 +43,7 @@ import type {
   BulkAction,
   BulkEdit,
   BulkTarget,
+  EntryTarget,
   BookingAvailability,
   CreateTimeBlockInput,
   TimeBlockOccurrence,
@@ -191,7 +192,7 @@ export type {
 export type { LimitsDraft, LimitsHeld, LimitsState, LimitsStore, MeetingLimits } from './scheduling/limits.ts';
 export type { LimitsAt } from '@crm/contracts';
 // Lists and their entries (spec 0048).
-export type { EntryView, ListTemplate, ListView } from '@crm/contracts';
+export type { EntryTarget, EntryView, ListTemplate, ListView } from '@crm/contracts';
 export type {
   AddManyOutcome,
   AddOutcome,
@@ -4551,6 +4552,57 @@ export function createDataLayer({
       },
       /** A list's entries and boards, and their writes (`src/lists/entries.ts`), loaded with the first list screen. */
       entries: entriesLayer,
+      /**
+       * Starts a list's bulk change as a background job (spec 0048, AC-4817,
+       * AC-4825), as `records.startBulk` does: `add` takes records (more than
+       * 500 ticked, or every record an object view matches), `remove` entries
+       * (more than 500, or every entry a list view matches), and `undo` takes
+       * back a finished add or removal of this member's, with no confirm. Mint
+       * `id` once (`jobs.newId`). This browser follows the job and hears its
+       * end (`onJobFinished`). Rejects with a `DataError`, raising no toast.
+       */
+      startJob: async (
+        workspace: string,
+        input:
+          | { readonly kind: 'add'; readonly id: string; readonly listId: string; readonly target: BulkTarget }
+          | { readonly kind: 'remove'; readonly id: string; readonly listId: string; readonly target: EntryTarget }
+          | { readonly kind: 'undo'; readonly id: string; readonly jobId: string },
+      ): Promise<JobView> => {
+        const mutationId = mintId();
+        mutations.sent(mutationId);
+        try {
+          const job = await delivered(
+            () =>
+              call((options) =>
+                input.kind === 'add'
+                  ? api.entries.addMatching(
+                      {
+                        workspace,
+                        mutationId,
+                        id: input.id,
+                        listId: input.listId,
+                        target: input.target,
+                        timeZone: zoneOf(workspace),
+                      },
+                      options,
+                    )
+                  : input.kind === 'remove'
+                    ? api.entries.removeMatching(
+                        { workspace, mutationId, id: input.id, listId: input.listId, target: input.target },
+                        options,
+                      )
+                    : api.entries.undoJob({ workspace, mutationId, id: input.id, jobId: input.jobId }, options),
+              ),
+            resendAfter,
+          );
+          mutations.answered(mutationId, 1);
+          jobs.track(workspace, job);
+          return job;
+        } catch (error) {
+          mutations.forget(mutationId);
+          throw toDataError(error);
+        }
+      },
     },
     usage: {
       /**
@@ -6462,6 +6514,8 @@ export function createDataLayer({
         input: {
           readonly id: string;
           readonly objectId: string;
+          /** Into one of the object's lists (spec 0048, AC-4833): each row adds or updates an entry there. */
+          readonly listId?: string;
           readonly fileName: string;
           readonly rowCount: number;
           readonly errorRows: number;

@@ -23,9 +23,9 @@ export interface SentenceWords {
   readonly invitation: (target: Extract<AuditEntryView['target'], { type: 'invitation' }>) => string;
   /** A booking as "Intro call on 24 Oct, 3:30 pm" in the reader's zone, or "a deleted booking". */
   readonly booking: (target: Extract<AuditEntryView['target'], { type: 'booking' }>) => string;
-  /** A round robin, form or booking page by its name, or "a deleted round robin". */
+  /** A round robin, form, booking page or list by its name, or "a deleted round robin". */
   readonly thing: (target: {
-    readonly type: 'rotation' | 'form' | 'booking_page';
+    readonly type: 'rotation' | 'form' | 'booking_page' | 'list';
     readonly name?: string;
     readonly isGone: boolean;
   }) => string;
@@ -186,6 +186,11 @@ const SENTENCES: SentenceTemplates = {
     ),
   'form.owner_changed': (entry, w) => actor(`changed who gets ${w.thing(entry.target)}’s leads`),
   'form.notify_changed': (entry, w) => actor(`changed who is emailed ${w.thing(entry.target)}’s new submissions`),
+  // Lists (spec 0048): "Ada made the list Sales pipeline".
+  'list.created': (entry, w) => actor(`made the list ${w.thing(entry.target)}`),
+  'list.updated': (entry, w) => actor(`changed the list ${w.thing(entry.target)}`),
+  'list.archived': (entry, w) => actor(`archived the list ${w.thing(entry.target)}`),
+  'list.restored': (entry, w) => actor(`restored the list ${w.thing(entry.target)}`),
   'booking.no_show': (entry, w) => actor(`marked ${w.booking(entry.target)} as a no show`),
   'booking.no_show_undone': (entry, w) => actor(`took back the no show on ${w.booking(entry.target)}`),
   'booking.record_linked': (entry, w) => actor(`linked ${w.booking(entry.target)} to a record`),
@@ -301,6 +306,8 @@ export const strings = {
     /** A deleted account, inside a sentence ("removed a deleted user from the workspace"). */
     deletedTarget: 'a deleted user',
   },
+  /** A list the reader can't read (spec 0048): it is there, but never named. */
+  someList: 'a list',
   /** What the log can't name any more (AC-4607). */
   gone: {
     /** An invitation whose address is gone: purged, or the member it made deleted their account. */
@@ -309,6 +316,7 @@ export const strings = {
     booking: 'a deleted booking',
     rotation: 'a deleted round robin',
     form: 'a deleted form',
+    list: 'a deleted list',
     booking_page: 'a deleted booking page',
   },
   /** "Intro call on 24 Oct, 3:30 pm". */

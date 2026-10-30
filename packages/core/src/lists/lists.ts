@@ -4,7 +4,7 @@
 // follows its object (decision 2): reading it needs read on the object,
 // changing its entries write. Every read and write goes through the scope the
 // access door made, and the engine's own checks.
-import { and, asc, eq, inArray, isNull, like, or } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, like, or, sql } from 'drizzle-orm';
 import type { ListTemplate, ListView } from '@crm/contracts';
 import { freeApiSlug, toApiSlug, type FilterGroup, type SortRules } from '@crm/contracts/values';
 import { schema, type WorkspaceTx } from '@crm/db';
@@ -14,7 +14,6 @@ import {
   addEntry,
   changeEntries,
   changeList,
-  getRecordEntries,
   insertList,
   readEntriesById,
   setListArchived,
@@ -92,6 +91,7 @@ function viewOf(scope: EngineScope, row: ListRow, activeMakers: ReadonlySet<stri
     hue: row.hue as ListView['hue'],
     allowsDuplicates: row.allowsDuplicates,
     isArchived: row.archivedAt !== null || row.objectArchivedAt !== null,
+    ...(row.objectArchivedAt === null ? {} : { isObjectArchived: true }),
     ...(row.defaultViewId === null ? {} : { defaultViewId: row.defaultViewId }),
     ...(row.createdByMemberId === null ? {} : { createdByMemberId: row.createdByMemberId }),
     canWrite: writesList(scope.access, row),
@@ -537,38 +537,42 @@ export const MAX_RECORD_ENTRIES = 100;
  * Every live entry of one record in a list the caller may read (AC-4822),
  * by list name, then when it was added; at most 100. A list that is archived,
  * or whose object is, is left out, and so is one the caller can't read, with no
- * gap or count. A record the caller can't see is `NOT_FOUND`.
+ * gap or count. A record the caller can't see is `NOT_FOUND`. One transaction:
+ * the record's check, its object's live lists, then the first 100 entries in
+ * the readable ones, in order, read with their values.
  */
 export async function entriesForRecord(
   scope: EngineScope,
   input: { readonly recordId: string },
 ): Promise<readonly EntryView[]> {
   const recordId = checkId(input.recordId, 'That record does not exist.');
-  const found = await inWorkspace(scope, async (tx) => {
+  return inWorkspace(scope, async (tx) => {
     const [seen] = await readRecords(tx, scope.access, [recordId], { attributeIds: [] });
     if (seen === undefined) throw refuse('NOT_FOUND', 'That record does not exist.');
+    const candidates = await tx
+      .select({ id: lists.id })
+      .from(lists)
+      .innerJoin(objects, and(eq(objects.workspaceId, lists.workspaceId), eq(objects.id, lists.objectId)))
+      .where(and(eq(lists.objectId, seen.objectId), isNull(lists.archivedAt), isNull(objects.archivedAt)));
+    // The record is visible, so its entries are wherever their list is (a list follows its object, decision 2).
+    const readable = candidates
+      .map((row) => row.id)
+      .filter((id) => readsList(scope.access, { id, objectId: seen.objectId }));
+    if (readable.length === 0) return [];
     const rows = await tx
-      .select({ id: listEntries.id, listName: lists.name })
+      .select({ id: listEntries.id })
       .from(listEntries)
       .innerJoin(lists, and(eq(lists.workspaceId, listEntries.workspaceId), eq(lists.id, listEntries.listId)))
-      .innerJoin(objects, and(eq(objects.workspaceId, lists.workspaceId), eq(objects.id, lists.objectId)))
       .where(
-        and(
-          eq(listEntries.recordId, recordId),
-          isNull(listEntries.deletedAt),
-          isNull(lists.archivedAt),
-          isNull(objects.archivedAt),
-        ),
-      );
-    return rows;
+        and(eq(listEntries.recordId, recordId), inArray(listEntries.listId, readable), isNull(listEntries.deletedAt)),
+      )
+      .orderBy(sql`lower(${lists.name})`, asc(listEntries.createdAt), asc(listEntries.id))
+      .limit(MAX_RECORD_ENTRIES);
+    return readEntriesById(
+      tx,
+      scope.access,
+      rows.map((row) => row.id),
+      true,
+    );
   });
-  const entries = await getRecordEntries(scope, { recordId });
-  const live = new Map(found.map((row) => [row.id, row.listName] as const));
-  return entries
-    .filter((entry) => live.has(entry.id))
-    .sort((a, b) => {
-      const byList = (live.get(a.id) ?? '').localeCompare(live.get(b.id) ?? '', 'en', { sensitivity: 'base' });
-      return byList !== 0 ? byList : a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0;
-    })
-    .slice(0, MAX_RECORD_ENTRIES);
 }

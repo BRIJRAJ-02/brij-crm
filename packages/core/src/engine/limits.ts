@@ -181,7 +181,11 @@ export async function takeEntrySlots(
   listId: string,
   amount: number,
 ): Promise<void> {
-  const [row] = await tx.select({ entryCount: lists.entryCount }).from(lists).where(eq(lists.id, listId)).for('update');
+  const [row] = await tx
+    .select({ entryCount: lists.entryCount })
+    .from(lists)
+    .where(eq(lists.id, listId))
+    .for('no key update');
   if (row === undefined) throw refuse('NOT_FOUND', 'That list does not exist.');
   const limit = limitsOf(scope).entriesPerList;
   if (amount > 0 && row.entryCount + amount > limit) {

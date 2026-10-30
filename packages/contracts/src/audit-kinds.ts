@@ -38,7 +38,15 @@ export const AUDIT_KINDS = {
     'join_request.approved',
     'join_request.declined',
   ],
-  workspace: ['workspace.updated', 'workspace.deleted', 'workspace.restored'],
+  workspace: [
+    'workspace.updated',
+    'workspace.deleted',
+    'workspace.restored',
+    'list.created',
+    'list.updated',
+    'list.archived',
+    'list.restored',
+  ],
   // Who may see and edit an object's records (spec 0032) is a security setting.
   security: ['workspace_security.changed', 'workspace_security.signed_out_everyone', 'access.rule_set'],
   scheduling: [

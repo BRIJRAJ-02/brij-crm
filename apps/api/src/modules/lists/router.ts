@@ -14,6 +14,9 @@ import {
   removeEntries,
   restoreEntries,
   restoreList,
+  startAddMatching,
+  startRemoveMatching,
+  undoEntriesJob,
   updateList,
   type EntryOutcome,
   type WrittenEntry,
@@ -214,4 +217,35 @@ export const entriesRouter = member.entries.router({
     );
     return outcomesView(result, echoes);
   }),
+  // A list's bulk changes as jobs (AC-4817, AC-4825): counted, then confirmed with jobs.confirm; an undo runs at once.
+  addMatching: member.entries.addMatching.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+      startAddMatching(
+        context.scope,
+        context.jobs,
+        {
+          id: input.id,
+          listId: input.listId,
+          target: input.target,
+          ...(input.timeZone === undefined ? {} : { timeZone: input.timeZone }),
+        },
+        hooks,
+      ),
+    ),
+  ),
+  removeMatching: member.entries.removeMatching.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+      startRemoveMatching(
+        context.scope,
+        context.jobs,
+        { id: input.id, listId: input.listId, target: input.target },
+        hooks,
+      ),
+    ),
+  ),
+  undoJob: member.entries.undoJob.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+      undoEntriesJob(context.scope, context.jobs, { id: input.id, jobId: input.jobId }, hooks),
+    ),
+  ),
 });

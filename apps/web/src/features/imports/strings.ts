@@ -26,6 +26,8 @@ export const strings = {
   /** The bulk bar's export of the ticked rows, and what its toast calls them. */
   exportSelected: (count: number) => `Export ${n(count)} selected`,
   title: (pluralName: string) => `Import ${pluralName.toLowerCase()}`,
+  /** A list's field in the column picker (spec 0048, AC-4833): where the value goes, by its list. */
+  listField: (list: string, field: string) => `${list}: ${field}`,
   stepsLabel: 'Import steps',
   steps: {
     upload: 'Upload',

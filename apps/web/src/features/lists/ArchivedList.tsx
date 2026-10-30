@@ -1,6 +1,7 @@
 // Brief
 // Purpose: what a list's address shows once the list is archived (spec 0048, AC-4831).
-// Main task: say "<List> is archived", and let its managers Restore it, which opens it again.
+// Main task: say "<List> is archived", and let its managers Restore it, which opens it again. A list whose object is
+// archived says so instead, with no Restore: it comes back with the object (AC-4832).
 // Leaves out: its entries (they come back with it) and settings (Settings › Lists).
 import { isDataError, type DataLayer, type ListView } from '@crm/data';
 import { Button, EmptyState, TopBar, type Toasts } from '@crm/ui';
@@ -16,10 +17,12 @@ export interface ArchivedListProps {
   readonly toasts: Toasts;
   readonly slug: string;
   readonly list: ListView;
+  /** The list's object's plural name, said when the object is what is archived. */
+  readonly objectName?: string | undefined;
 }
 
 /** "Sales pipeline is archived", with Restore for whoever manages the list. */
-export function ArchivedList({ data, toasts, slug, list }: ArchivedListProps) {
+export function ArchivedList({ data, toasts, slug, list, objectName }: ArchivedListProps) {
   const navigate = useNavigate();
   const [isBusy, setBusy] = useState(false);
   const restore = () => {
@@ -45,7 +48,7 @@ export function ArchivedList({ data, toasts, slug, list }: ArchivedListProps) {
           <EmptyState
             icon="archive"
             title={strings.archivedTitle(list.name)}
-            {...(list.canManage
+            {...(list.canManage && list.isObjectArchived !== true
               ? {
                   actions: (
                     <Button icon="archive-restore" isPending={isBusy} onPress={restore}>
@@ -55,7 +58,9 @@ export function ArchivedList({ data, toasts, slug, list }: ArchivedListProps) {
                 }
               : {})}
           >
-            {strings.archivedText}
+            {list.isObjectArchived === true && objectName !== undefined
+              ? strings.objectArchivedText(objectName)
+              : strings.archivedText}
           </EmptyState>
         ),
       }}
