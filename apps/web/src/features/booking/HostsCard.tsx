@@ -139,7 +139,8 @@ export function HostsCard({
   return (
     <Card
       title={strings.hosts}
-      description={strings.hostsLine(fixed.map(nameOf), linked.map(rotationName))}
+      // With everyone on, the switch says who books; the line would only repeat it.
+      {...(isEveryone ? {} : { description: strings.hostsLine(fixed.map(nameOf), linked.map(rotationName)) })}
       actions={<Link href={roundRobinHref(slug)}>{strings.manageRotations}</Link>}
     >
       <SettingsStack>

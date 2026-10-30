@@ -102,6 +102,8 @@ async function checkEverywhere(name: string, target: () => HTMLElement | null = 
     await page.viewport(width, 900);
     for (const theme of THEMES) {
       applyTheme(theme);
+      // A dialog still growing in reads as faded: settle every animation before axe measures contrast and size.
+      for (const animation of document.getAnimations()) animation.finish();
       expect(await axeViolations(), `${name} at ${String(width)} in ${theme}`).toEqual([]);
       const element = target();
       if (SHOTS !== undefined && element !== null) {
@@ -131,7 +133,8 @@ describe('Booking pages › New: Everyone on the roster', () => {
       { data, pattern: '/w/$slug/captures/links', at: '/w/acme/captures/links' },
     );
     await userEvent.fill(page.getByRole('textbox', { name: strings.title }), 'Talk to us');
-    await userEvent.click(page.getByRole('radio', { name: new RegExp(rotationStrings.bookEveryone) }));
+    // The radio itself sits under its card's label, which takes the press.
+    await userEvent.click(page.getByRole('radio', { name: new RegExp(rotationStrings.bookEveryone) }), { force: true });
     await expect.element(page.getByText(rotationStrings.bookEveryoneLine)).toBeVisible();
     // Nothing else to choose: the hosts are the workspace's, each booked by their own hours.
     expect(page.getByRole('button', { name: new RegExp(rotationStrings.rotation) }).elements()).toHaveLength(0);
@@ -215,7 +218,7 @@ describe('Everyone on the roster: its dialog', () => {
     const kim = PEOPLE[3];
     const kimSwitch = page.getByRole('switch').elements()[3];
     if (kim === undefined || kimSwitch === undefined) throw new Error('Kim’s row is missing.');
-    await userEvent.click(kimSwitch);
+    await userEvent.click(kimSwitch, { force: true });
     await userEvent.click(page.getByRole('button', { name: rotationStrings.save }));
     await vi.waitFor(() => expect(update).toHaveBeenCalled());
     expect(update).toHaveBeenCalledWith(
@@ -256,7 +259,7 @@ describe('A workspace link’s Hosts', () => {
     expect(page.getByText(rotationStrings.addFixed).elements()).toHaveLength(0);
     await checkEverywhere('hosts-everyone');
     // Off: nothing is saved until a group is picked; the pickers show.
-    await userEvent.click(everyone);
+    await userEvent.click(everyone, { force: true });
     await expect.element(page.getByText(rotationStrings.addFixed).first()).toBeVisible();
     expect(update).not.toHaveBeenCalled();
     await checkEverywhere('hosts-picked');

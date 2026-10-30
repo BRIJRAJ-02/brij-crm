@@ -181,14 +181,14 @@ export const strings = {
   bookMe: 'Me',
   bookRotation: 'A round robin group',
   bookEveryone: 'Workspace link',
-  bookEveryoneLine: 'Everyone in the workspace takes turns; guests book whoever is free. It’s on nobody’s profile.',
+  bookEveryoneLine: 'Books whoever in the workspace is free, in turn. It’s on nobody’s profile.',
   bookMeLine: 'One on one: guests book you, by your hours.',
   bookRotationLine: 'One host from a group you pick, in turn.',
   rosterNote: (on: number, all: number) =>
     `${String(on)} of ${String(all)} on. Everyone in the workspace except guests is in this group, and new members join by themselves. Switch someone off to keep them out.`,
   everyoneSwitch: 'Everyone in the workspace, including people who join later',
   everyoneSwitchOn: (on: number) =>
-    `${String(on)} ${on === 1 ? 'person takes' : 'people take'} turns. Switch people off in Everyone on the roster.`,
+    `${String(on)} ${on === 1 ? 'person takes' : 'people take'} turns. Leave someone out in Manage round robin.`,
   everyoneSwitchOff: 'Pick the group and fixed hosts this link books instead.',
   switchOffRefused: (name: string) => `Switch ${name} off`,
   rosterSummary: (on: number, pages: number) =>
