@@ -16,6 +16,7 @@ import { countMatches, queryPage } from '../engine/query/page.ts';
 import { isRefusal } from '../engine/refusals.ts';
 import { createRecord, getRecords, setValues } from '../engine/records.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
+import { editRecord } from '../records/records.ts';
 import { changeTeamMembers, createTeam } from '../teams/teams.ts';
 import { testScope } from '../testing.ts';
 import { audiences } from './audiences.ts';
@@ -409,6 +410,50 @@ describe('the change itself (AC-851, AC-852)', () => {
     expect(keyOf(ada)).toBe(OPEN_KEY);
     expect(keyOf(w.memberId)).toBe(OPEN_KEY);
     expect(keyOf(bea)).not.toBe(OPEN_KEY);
+  });
+});
+
+describe('a record handed to someone out of reach (AC-848)', () => {
+  it('saves, and tells its maker who owns it now and that they can no longer see it', async () => {
+    const w = await world();
+    const ada = await w.add('Ada');
+    const grace = await w.add('Grace Hopper');
+    await setObjectAccess(w.owner, {
+      objectId: w.companies,
+      subject: MEMBER,
+      rule: { level: 'write', records: 'own' },
+    });
+    const member = await w.enter(ada);
+    const owner = w.attribute('owner');
+    const mine = await createRecord(member, {
+      objectId: w.companies,
+      values: { [w.attribute('name')]: 'Mine' },
+    }).then((made) => made.recordId);
+    expect(await w.names(member)).toContain(mine);
+    // Setting the Owner to a colleague works, and says so.
+    const refusal = await refusalOf(
+      editRecord(member, { recordId: mine, values: { [owner]: { value: { type: 'member', id: grace } } } }),
+    );
+    expect(refusal).toEqual({
+      code: 'RECORD_OUT_OF_SCOPE',
+      message: "Saved. It's owned by Grace Hopper, so you can no longer see it.",
+    });
+    expect(await w.names(member)).not.toContain(mine);
+    expect(await w.names(w.owner)).toContain(mine);
+    // A write that doesn't touch the owner of a record that is gone is not this: it is just not there.
+    expect(await refusalOf(editRecord(member, { recordId: mine, values: {} }))).toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('says nothing of the sort to someone no rule limits', async () => {
+    const w = await world();
+    const ada = await w.add('Ada');
+    const grace = await w.add('Grace');
+    const acme = await w.company('Acme', ada);
+    const written = await editRecord(await w.enter(ada), {
+      recordId: acme,
+      values: { [w.attribute('owner')]: { value: { type: 'member', id: grace } } },
+    });
+    expect(written.record.id).toBe(acme);
   });
 });
 

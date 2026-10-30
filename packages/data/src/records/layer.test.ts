@@ -900,6 +900,18 @@ describe('editing a cell', () => {
     expect(queries).toHaveLength(2);
   });
 
+  it('drops a record its own rule now hides, and says what the server said as news, not a failure (AC-848)', async () => {
+    const { layer, view, edits, frame, notices } = await readyView();
+    void layer.setValues(WS, [change('Paris')]);
+    await settle();
+    const said = "Saved. It's owned by Grace Hopper, so you can no longer see it.";
+    edits[0]?.fail(dataError('RECORD_OUT_OF_SCOPE', said));
+    await settle();
+    frame();
+    expect(view.getSnapshot().source.getItem(1)).toBeUndefined();
+    expect(notices).toEqual([{ tone: 'success', message: said }]);
+  });
+
   it('names a cell read with no version as never set, and leaves out one never read', async () => {
     const { layer, edits } = await readyView();
     void layer.setValues(WS, [

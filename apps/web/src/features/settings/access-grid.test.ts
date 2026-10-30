@@ -1,6 +1,6 @@
 import type { ObjectAccess, RuleSubject } from '@crm/data';
 import { describe, expect, it } from 'vitest';
-import { expected, keyOf } from './access-grid.ts';
+import { expected, fieldChoices, fieldState, keyOf, limitedCount, withField } from './access-grid.ts';
 
 const OBJECT = '00000000-0000-7000-8000-00000000000a';
 const SALES = '00000000-0000-7000-8000-0000000000c1';
@@ -8,9 +8,19 @@ const SUPPORT = '00000000-0000-7000-8000-0000000000c2';
 const MEMBER: RuleSubject = { type: 'role', role: 'member' };
 const team = (teamId: string): RuleSubject => ({ type: 'team', teamId });
 
+const SALARY = '00000000-0000-7000-8000-0000000000f1';
+const NAME = '00000000-0000-7000-8000-0000000000f2';
+const FIELDS = [
+  { id: NAME, title: 'Name', isPrimary: true },
+  { id: SALARY, title: 'Salary', isPrimary: false },
+];
+
 const start: ObjectAccess = {
   objectId: OBJECT,
-  subjects: [{ subject: MEMBER, level: 'write', records: 'all', defaultLevel: 'write', isDefault: true, people: 4 }],
+  fields: FIELDS,
+  subjects: [
+    { subject: MEMBER, level: 'write', records: 'all', defaultLevel: 'write', isDefault: true, fields: {}, people: 4 },
+  ],
 };
 
 describe('what the grid shows before the server answers', () => {
@@ -21,7 +31,15 @@ describe('what the grid shows before the server answers', () => {
   it('shows the Member role changed, and back at its default when it is put back', () => {
     const none = expected(start, MEMBER, { level: 'none', records: 'all' });
     expect(none.subjects).toEqual([
-      { subject: MEMBER, level: 'none', records: 'all', defaultLevel: 'write', isDefault: false, people: 4 },
+      {
+        subject: MEMBER,
+        level: 'none',
+        records: 'all',
+        defaultLevel: 'write',
+        isDefault: false,
+        fields: {},
+        people: 4,
+      },
     ]);
     expect(expected(none, MEMBER, null).subjects).toEqual(start.subjects);
     // Saying the default out loud is the default too.
@@ -68,5 +86,52 @@ describe('what the grid shows before the server answers', () => {
     const before = JSON.stringify(start);
     expected(start, MEMBER, { level: 'none', records: 'all' });
     expect(JSON.stringify(start)).toBe(before);
+  });
+});
+
+describe('field rules in the grid (AC-846, AC-856)', () => {
+  it('keeps a subject’s field rules through a change that leaves them out, and drops them with the rule', () => {
+    const hidden = expected(start, MEMBER, { level: 'write', records: 'all', fields: { [SALARY]: 'hidden' } });
+    expect(hidden.subjects[0]).toMatchObject({ isDefault: false, fields: { [SALARY]: 'hidden' } });
+    // A level change that names no fields leaves them be.
+    expect(expected(hidden, MEMBER, { level: 'read', records: 'all' }).subjects[0]).toMatchObject({
+      level: 'read',
+      fields: { [SALARY]: 'hidden' },
+    });
+    expect(expected(hidden, MEMBER, null).subjects).toEqual(start.subjects);
+    // Taking the last field rule away puts the role back at its default.
+    expect(expected(hidden, MEMBER, { level: 'write', records: 'all', fields: {} }).subjects).toEqual(start.subjects);
+  });
+
+  it('reads a field’s state from its rule, never above the object', () => {
+    expect(fieldState('write', {}, SALARY)).toBe('visible');
+    expect(fieldState('write', { [SALARY]: 'read' }, SALARY)).toBe('read');
+    expect(fieldState('write', { [SALARY]: 'hidden' }, SALARY)).toBe('hidden');
+    // View makes every field read only; none makes them all absent.
+    expect(fieldState('read', {}, SALARY)).toBe('read');
+    expect(fieldState('read', { [SALARY]: 'hidden' }, SALARY)).toBe('hidden');
+    expect(fieldState('none', {}, SALARY)).toBe('hidden');
+  });
+
+  it('sets and clears one field without touching the others, or the object it came from', () => {
+    const rules = { [NAME]: 'read' } as const;
+    const set = withField(rules, SALARY, 'hidden');
+    expect(set).toEqual({ [NAME]: 'read', [SALARY]: 'hidden' });
+    expect(rules).toEqual({ [NAME]: 'read' });
+    expect(withField(set, SALARY, 'visible')).toEqual({ [NAME]: 'read' });
+  });
+
+  it('offers a field the states it can be in: the record’s name is never hidden, and a viewer has no Visible', () => {
+    const [name, salary] = FIELDS;
+    if (name === undefined || salary === undefined) throw new Error('Two fields.');
+    expect(fieldChoices('write', salary)).toEqual(['visible', 'read', 'hidden']);
+    expect(fieldChoices('write', name)).toEqual(['visible', 'read']);
+    expect(fieldChoices('read', salary)).toEqual(['read', 'hidden']);
+    expect(fieldChoices('read', name)).toEqual(['read']);
+  });
+
+  it('counts the live fields a subject limits, not rules for fields since archived', () => {
+    expect(limitedCount({ [SALARY]: 'hidden', '00000000-0000-7000-8000-0000000000f9': 'read' }, FIELDS)).toBe(1);
+    expect(limitedCount({}, FIELDS)).toBe(0);
   });
 });

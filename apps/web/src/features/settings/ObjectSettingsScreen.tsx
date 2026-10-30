@@ -8,6 +8,7 @@ import {
   isDataError,
   type AttributeDefinition,
   type MemberSummary,
+  type MemberView,
   type ObjectAccess,
   type ObjectSummary,
   type TeamView,
@@ -51,10 +52,11 @@ export interface AttributesPage {
   readonly members: readonly MemberSummary[];
 }
 
-/** What the Access tab loaded: the object's access and the workspace's teams. */
+/** What the Access tab loaded: the object's access, the workspace's teams and its members (for Preview as). */
 export interface AccessPage {
   readonly access: ObjectAccess;
   readonly teams: readonly TeamView[];
+  readonly members: readonly MemberView[];
 }
 
 /** Props for an object's settings: what its route loaded through the data layer. */
@@ -246,6 +248,7 @@ export function ObjectSettingsScreen({
                 object={object}
                 access={accessPage.access}
                 teams={accessPage.teams}
+                members={accessPage.members}
               />
             ))}
         </TabPanel>

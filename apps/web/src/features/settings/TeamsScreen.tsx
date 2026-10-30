@@ -6,11 +6,12 @@
 // Leaves out: what a team may see (an object's Access tab), team pages and team calendars, and guests.
 import { isDataError, type DataLayer, type MemberView, type TeamView } from '@crm/data';
 import { AvatarStack, Button, Callout, EmptyState, Table, type TableColumn, type Toasts } from '@crm/ui';
-import { useRouter } from '@tanstack/react-router';
+import { useNavigate, useRouter } from '@tanstack/react-router';
 import { useEffect, useMemo, useState } from 'react';
 import { useCan } from '../workspace/WorkspacePage.tsx';
 import { focusTitle } from '../navigation/focus-title.ts';
 import { strings as membersStrings } from './members-strings.ts';
+import { objectSettingsHref } from './nav.ts';
 import { SettingsPage } from './SettingsPage.tsx';
 import { TeamDialog } from './TeamDialog.tsx';
 import { strings } from './teams-strings.ts';
@@ -43,6 +44,7 @@ const messageOf = (error: unknown) => (isDataError(error) ? error.message : stri
 /** The Teams page: one list with each team's people as a row of faces, and the dialog that changes a team. */
 export function TeamsScreen({ data, toasts, slug, teams, members, canManage }: TeamsScreenProps) {
   const router = useRouter();
+  const navigate = useNavigate();
   // The dialog: whether it is open, and the team it opened on (none for a new one). The team stays while it closes.
   const [isOpen, setOpen] = useState(false);
   const [editing, setEditing] = useState<TeamView | undefined>(undefined);
@@ -121,9 +123,47 @@ export function TeamsScreen({ data, toasts, slug, teams, members, canManage }: T
       },
       (error: unknown) => {
         setDeleting(undefined);
+        // A team an access rule names stays, and the toast opens the rule that holds it (the first object's Access).
+        if (isDataError(error) && error.code === 'IN_USE') {
+          void blocker(team).then((href) => {
+            toasts.toast({
+              tone: 'danger',
+              message: error.message,
+              ...(href === undefined
+                ? {}
+                : {
+                    action: {
+                      label: strings.openAccess,
+                      onAction: () => {
+                        void navigate({ to: href });
+                      },
+                    },
+                  }),
+            });
+          });
+          return;
+        }
         toasts.toast({ tone: 'danger', message: messageOf(error) });
       },
     );
+  };
+
+  /** The Access tab of the first object whose rules name the team, or none when they can't be read (the toast then stands alone). */
+  const blocker = async (team: TeamView): Promise<string | undefined> => {
+    const objects = await data.objects.all(slug).catch(() => []);
+    const reads = await Promise.all(
+      objects.map((object) =>
+        data.accessRules.get(slug, object.id).then(
+          (access) =>
+            access.subjects.some((each) => each.subject.type === 'team' && each.subject.teamId === team.id)
+              ? object
+              : undefined,
+          () => undefined,
+        ),
+      ),
+    );
+    const found = reads.find((object) => object !== undefined);
+    return found === undefined ? undefined : objectSettingsHref(slug, found, 'access');
   };
 
   const cell = (team: TeamView, column: string) => {

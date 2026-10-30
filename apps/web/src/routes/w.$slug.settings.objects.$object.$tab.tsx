@@ -23,7 +23,7 @@ function objectSettingsSearch(search: Record<string, unknown>): ObjectSettingsSe
 // (archived ones too), and on the Attributes tab all its attributes (archived
 // ones too), the usage for the meter and the members for a Member default;
 // on the Configuration tab its live attributes, for its name attribute; on the Access tab (spec 0032) its access
-// and the teams.
+// and the teams and members (for Preview as).
 // An unknown object or tab shows "not found" inside the frame.
 export const Route = createFileRoute('/w/$slug/settings/objects/$object/$tab')({
   validateSearch: objectSettingsSearch,
@@ -61,8 +61,10 @@ export const Route = createFileRoute('/w/$slug/settings/objects/$object/$tab')({
             await Promise.all([
               context.data.accessRules.get(params.slug, object.id),
               context.data.teams.list(params.slug),
+              // Preview as is an extra: no members leaves it out, never the tab failed.
+              context.data.members.list(params.slug).catch(() => []),
             ]).then(
-              ([access, teams]) => ({ access, teams }),
+              ([access, teams, members]) => ({ access, teams, members }),
               () => 'failed' as const,
             )
           : ('no-access' as const)

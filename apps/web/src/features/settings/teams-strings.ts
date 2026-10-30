@@ -69,6 +69,44 @@ export const strings = {
   scopeWhere: (field: string, scope: 'own' | 'team') =>
     scope === 'own' ? `${field} is them` : `${field} is on their team`,
   ruleFailed: 'That didn’t save.',
+  /** Fields (spec 0032, AC-846, AC-856): which fields a subject sees or changes. */
+  fieldsTitle: 'Fields',
+  fieldsFor: 'For',
+  fieldsTable: 'Fields',
+  fieldColumn: 'Field',
+  accessColumn: 'Access',
+  fieldFor: (field: string, who: string) => `${field} for ${who}`,
+  fieldStates: { visible: 'Visible', read: 'Read only', hidden: 'Hidden' } as const,
+  /** A subject who can't see the object has no fields to rule. */
+  fieldsNone: (who: string, object: string) => `${who} can’t see ${object}.`,
+  fieldsChanged: 'Fields changed.',
+  /** Under a field's picker: why the record's name has no Hidden. */
+  nameStays: 'Names always show.',
+  /** What a change took away from people who had it (AC-850): a chip row, and Undo. */
+  lessTitle: 'Less access',
+  lessPeople: (count: number) => `${String(count)} ${count === 1 ? 'person' : 'people'}`,
+  lessViews: (count: number) => `${String(count)} shared ${count === 1 ? 'view' : 'views'}`,
+  lessForms: (count: number) => `${String(count)} ${count === 1 ? 'form' : 'forms'}`,
+  /** Preview as (AC-858). */
+  previewAs: 'Preview as',
+  previewMembers: 'People',
+  previewTeams: 'Teams',
+  previewNoOne: 'No one to preview yet.',
+  previewTitle: (name: string) => `Previewing as ${name}`,
+  previewReadOnly: 'Read only',
+  previewSees: 'Sees',
+  previewRecordsLabel: 'Records',
+  previewExit: 'Exit preview',
+  previewFailed: 'That preview didn’t load.',
+  previewRecords: (count: number) => `${String(count)} ${count === 1 ? 'record' : 'records'}`,
+  previewFields: (count: number) => `${String(count)} ${count === 1 ? 'field' : 'fields'}`,
+  previewLevel: { none: 'Can’t see', read: 'Can view', write: 'Can edit' } as const satisfies Record<
+    ObjectAccessLevel,
+    string
+  >,
+  previewLoading: 'Loading preview',
+  /** A team delete an access rule refused: the toast's way to the blocking object. */
+  openAccess: 'Open access',
   /** The one line that says the result, in pieces (access-summary.ts joins them). */
   summary: {
     everyone: (object: string) => `Everyone can edit ${object}.`,
