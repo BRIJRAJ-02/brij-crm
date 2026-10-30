@@ -40,6 +40,7 @@ import { useMemberPicker } from '../records/members.ts';
 import { AttributeDialog } from '../settings/AttributeDialog.tsx';
 import { NewRecordDialog } from '../workspace/NewRecordDialog.tsx';
 import { createEditors } from '../workspace/RecordsScreen.tsx';
+import { createdToast } from '../workspace/created.ts';
 import { strings as workspaceStrings } from '../workspace/strings.ts';
 import { useCan, WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import type { BoardOutcome, BoardPlan } from './plan.ts';
@@ -304,24 +305,17 @@ export function BoardScreen(props: BoardScreenProps) {
               singularName={object.singularName}
               objectKey={object.standardKey ?? object.apiSlug}
               memberPicker={memberPicker}
-              onCreated={(record) => {
-                setCreating(false);
+              onCreated={(record, keepOpen) => {
+                if (!keepOpen) setCreating(false);
                 // Its column may be scrolled off or hidden while empty: say it was made, with a way to it.
-                const name =
-                  record.display.name === '' ? workspaceStrings.unnamed(object.singularName) : record.display.name;
-                toasts.toast({
-                  tone: 'success',
-                  message: strings.created(name),
-                  action: {
-                    label: strings.open,
-                    onAction: () => {
-                      void navigate({
-                        to: '/w/$slug/objects/$object/$recordId/$tab',
-                        params: { slug, object: object.apiSlug, recordId: record.id, tab: 'overview' },
-                      });
-                    },
-                  },
-                });
+                toasts.toast(
+                  createdToast(record, object.singularName, () => {
+                    void navigate({
+                      to: '/w/$slug/objects/$object/$recordId/$tab',
+                      params: { slug, object: object.apiSlug, recordId: record.id, tab: 'overview' },
+                    });
+                  }),
+                );
               }}
             />
           </>

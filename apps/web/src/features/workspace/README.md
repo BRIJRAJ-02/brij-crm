@@ -40,7 +40,7 @@ Spec 0005, milestones 1 to 3; spec 0012 makes the object pages generic. Every pa
 ## New record (NewRecordDialog)
 
 - **Purpose**: add one record of any object without leaving the table.
-- **Main task**: fill the primary attribute and every required one, open "Add more fields" for the rest (by position, defaults prefilled), then Create <singular>; the row shows at once, and takes focus once the server agrees.
+- **Main task**: fill the primary attribute and every required one, open "Add more fields" for the rest (by position, defaults prefilled), then Create <singular>; the row shows at once, and takes focus once the server agrees. A toast says "<Name> created" with Open (its page; `created.ts`, the board's too). "Create more" (a Switch at the footer's start, Modal's `footerStart`, kept across openings while the screen stays) keeps the dialog open after Create: the form starts afresh with a new id, its first field focused, and the toast says each one.
 - **Leaves out**: references and members (edited in the table until #15), files (#32), duplicate checks and templates.
 
 ## The table's schema entry points (spec 0012)

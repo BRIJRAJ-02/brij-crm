@@ -117,6 +117,11 @@ export const strings = {
   valueMissing: (title: string) => `${title} is required. Give it a value.`,
   /** The create dialog's primary ("Create person"). */
   createRecord: (singularName: string) => `Create ${singularName.toLowerCase()}`,
+  /** New record's footer Switch: Create keeps the dialog open, emptied, for the next one (as Attio's). */
+  createMore: 'Create more',
+  /** The toast once a new record is made, with Open to its page. */
+  recordCreated: (name: string) => `${name} created`,
+  openRecord: 'Open',
   /** The create dialog's way to the attributes that aren't asked for first. */
   addMoreFields: 'Add more fields',
   /** While another filter's or order's first rows load (spec 0006, AC-57; spec 0020). */
