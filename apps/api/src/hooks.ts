@@ -7,8 +7,9 @@
 // through here. The audit log (#36) joins the hooks here. So does the first
 // record milestone (spec 0010, AC-176): stored in the write's transaction, its
 // product event queued only once the write has committed.
-import { milestoneHook, outboxHook, type AfterWrite, type ReachedMilestone } from '@crm/core';
+import { automationHook, milestoneHook, outboxHook, type AfterWrite, type ReachedMilestone } from '@crm/core';
 import { type MilestoneSender, sendMilestones } from './monitoring/milestones.ts';
+import { errorFields, log } from './log.ts';
 import type { RequestContext } from './orpc.ts';
 
 /** What a write needs from its request: the relay's poke, and what sending a milestone's event needs. */
@@ -18,6 +19,14 @@ export type WriteRequest = Pick<RequestContext, 'wakeRelay'> & MilestoneSender;
 export interface WriteMeta {
   /** Echoed in the write's change event, so the browser that made it skips its own echo. */
   readonly mutationId: string;
+}
+
+/**
+ * Where the automation hook reports a failure it swallowed (parity #53): the write goes on and commits, and the
+ * failure is logged with its error name only.
+ */
+function automationFault(error: unknown): void {
+  log.error('automation.hook.failed', errorFields(error));
 }
 
 /**
@@ -33,7 +42,11 @@ function writeHooks(
   onStored: (count: number) => void,
   onReached: (reached: readonly ReachedMilestone[]) => void,
 ): readonly AfterWrite[] {
-  return [outboxHook({ mutationId: meta.mutationId, onStored }), milestoneHook(onReached)];
+  return [
+    outboxHook({ mutationId: meta.mutationId, onStored }),
+    milestoneHook(onReached),
+    automationHook(automationFault),
+  ];
 }
 
 /**
@@ -43,7 +56,7 @@ function writeHooks(
  * imports this app.
  */
 export function backgroundHooks(): readonly AfterWrite[] {
-  return [outboxHook()];
+  return [outboxHook(), automationHook(automationFault)];
 }
 
 /**

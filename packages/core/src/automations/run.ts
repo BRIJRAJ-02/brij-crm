@@ -128,10 +128,11 @@ async function claim(system: EngineScope): Promise<Claimed | undefined> {
       object_id: string | null;
       version_id: string | null;
     }>(sql`
-      update automation_runs r set status = 'running', claimed_at = now()
-      from (
+      with next as materialized (
         select id from automation_runs where status = 'queued' order by created_at, id limit 1 for update skip locked
-      ) next
+      )
+      update automation_runs r set status = 'running', claimed_at = now()
+      from next
       where r.id = next.id
       returning r.id::text as id, r.automation_id::text as automation_id, r.subject_kind, r.subject_id::text as subject_id,
         r.object_id::text as object_id, r.version_id::text as version_id
