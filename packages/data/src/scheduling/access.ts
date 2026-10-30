@@ -20,11 +20,13 @@ import { toDataError, type DataError } from '../errors.ts';
 import type { MutationLog } from '../live/mutations.ts';
 import type { Notice } from '../notice.ts';
 import { refusalSummary } from '../refusals.ts';
+import { createLimitsStore, type LimitsApi, type LimitsDraft } from './limits.ts';
 import { createTimeOffStore, type TimeOffApi, type TimeOffDraft } from './time-off.ts';
 import { createTeamWeekStore, type TeamWeekApi } from './team-week.ts';
 import type {
   BulkHoursResult,
   DayHours,
+  MeetingLimits,
   SetDayResult,
   TeamWeek,
   TimeOffList,
@@ -71,6 +73,8 @@ export interface SchedulingAccessApi {
   readonly timeOff?: TimeOffApi;
   /** The Team week's calls (spec 0037, job J6): its store loads in this same chunk. Absent in tests that don't need it. */
   readonly teamWeek?: TeamWeekApi;
+  /** Meeting limits' calls (spec 0037, job J7): its store loads in this same chunk. Absent in tests that don't need it. */
+  readonly limits?: LimitsApi;
 }
 
 /**
@@ -117,6 +121,13 @@ export interface SchedulingAccessWire<O> {
         input: { readonly workspace: string; readonly id: string; readonly mutationId: string },
         options: O,
       ): Promise<unknown>;
+    };
+    readonly limits: {
+      get(input: { readonly workspace: string; readonly memberId?: string }, options: O): Promise<MeetingLimits>;
+      set(
+        input: { readonly workspace: string; readonly memberId?: string; readonly mutationId: string } & LimitsDraft,
+        options: O,
+      ): Promise<MeetingLimits>;
     };
     readonly availability: {
       teamWeek(
@@ -208,6 +219,11 @@ export function wireApi<O>({
         echoed((mutationId) => call((options) => client.timeOff.delete({ ...input, mutationId }, options))).then(
           () => undefined,
         ),
+    },
+    limits: {
+      get: (input) => beforeRead(input.workspace).then(() => call((options) => client.limits.get(input, options))),
+      // Its own `time_off` echo is skipped: the store already shows the answer.
+      set: (input) => echoed((mutationId) => call((options) => client.limits.set({ ...input, mutationId }, options))),
     },
     teamWeek: {
       read: (input) =>
@@ -326,6 +342,14 @@ export function createSchedulingAccessStore(deps: SchedulingAccessDeps) {
     ...(deps.now === undefined ? {} : { now: deps.now }),
   });
 
+  // Meeting limits (spec 0037, job J7), in this same chunk: Availability shows them beside time off.
+  const limits = createLimitsStore({
+    api: deps.api.limits ?? { get: notWired, set: notWired },
+    notify: deps.notify,
+    ...(deps.watch === undefined ? {} : { watch: deps.watch }),
+    ...(deps.now === undefined ? {} : { now: deps.now }),
+  });
+
   function make(workspace: string, scope: DelegationsScope) {
     let state: DelegationsState = { status: 'loading' };
     let reading: Promise<void> | undefined;
@@ -431,6 +455,8 @@ export function createSchedulingAccessStore(deps: SchedulingAccessDeps) {
   return {
     /** A member's time off (spec 0037, AC-1286): held per workspace and member, Availability's Time off section. */
     timeOff,
+    /** A member's meeting limits (spec 0037, AC-1299): held per workspace and member, Availability's Limits section. */
+    limits,
     /**
      * The Team week (spec 0037, AC-1289 to AC-1296): weeks of the roster held per workspace, week and search; a cell's
      * change shows at once and is put back if refused; Copy week and Set usual hours wait, then the weeks read again.
@@ -563,6 +589,7 @@ export function createSchedulingAccessStore(deps: SchedulingAccessDeps) {
       visibles.delete(workspace);
       teamWeek.changed(workspace);
       timeOff.changed(workspace);
+      limits.changed(workspace);
       for (const [key, list] of lists) if (key.startsWith(`${workspace}\u0000`)) list.reread();
     },
     /** Signed out: forgets every workspace's. */
@@ -571,6 +598,7 @@ export function createSchedulingAccessStore(deps: SchedulingAccessDeps) {
       visibles.clear();
       timeOff.clear();
       teamWeek.clear();
+      limits.clear();
     },
   };
 }

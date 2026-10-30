@@ -50,6 +50,7 @@ import {
 } from './slots.ts';
 import { ensureManageToken, managePath, type ManageLinkKey } from './tokens.ts';
 import { bookingAccess, bookingReaderIn, bookingReaderOf, pageManagerOf } from './seen.ts';
+import { limitChecks } from '../scheduling/limits.ts';
 
 const { bookings, bookingHosts } = schema;
 
@@ -239,6 +240,8 @@ async function slotsFor(
     new Date(range.from.getTime() - BUSY_MARGIN_MS),
     new Date(range.to.getTime() + BUSY_MARGIN_MS),
   );
+  // The host's meeting limits (spec 0037, AC-1298), the booking being moved not counted against its new time.
+  const limits = await limitChecks(tx, [row.hostMemberId], range.from, range.to, row.id);
   return pageSlots(page, {
     duration: minutesOf(row),
     from: range.from,
@@ -247,6 +250,7 @@ async function slotsFor(
     busy: withoutOwn(busy, row),
     bookings: held,
     closed,
+    underLimit: limits.get(row.hostMemberId),
   });
 }
 

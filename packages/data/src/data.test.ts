@@ -542,6 +542,10 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       update: os.timeOff.update.handler(notServed),
       delete: os.timeOff.delete.handler(notServed),
     },
+    limits: {
+      get: os.limits.get.handler(notServed),
+      set: os.limits.set.handler(notServed),
+    },
     availability: {
       teamWeek: os.availability.teamWeek.handler(notServed),
       setDay: os.availability.setDay.handler(notServed),

@@ -5,10 +5,12 @@ import {
   setDayHours,
   setUsualHours,
   deleteTimeOff,
+  getLimits,
   grantDelegation,
   listDelegations,
   listTimeOff,
   revokeDelegation,
+  setLimits,
   updateTimeOff,
 } from '@crm/core';
 import { commitWrite } from '../../hooks.ts';
@@ -125,6 +127,25 @@ export const availabilityRouter = member.availability.router({
   setUsualHours: member.availability.setUsualHours.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
       setUsualHours(context.scope, { memberIds: input.memberIds, weekly: input.weekly }, hooks),
+    ),
+  ),
+});
+
+// Meeting limits (spec 0037, AC-1297 to AC-1299): at most N meetings a day and a week per person, across every page.
+// Who may read and set whose is packages/core's (`scheduling/limits.ts`); a change stores its audit row, one
+// `time_off` outbox row naming nothing (limits share time off's event) and, for someone else's, the member's notice.
+export const limitsRouter = member.limits.router({
+  get: member.limits.get.handler(({ context, input }) =>
+    getLimits(context.scope, { now }, { memberId: input.memberId }),
+  ),
+  set: member.limits.set.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+      setLimits(
+        context.scope,
+        { now },
+        { memberId: input.memberId, perDay: input.perDay, perWeek: input.perWeek },
+        hooks,
+      ),
     ),
   ),
 });

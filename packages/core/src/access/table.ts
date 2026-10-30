@@ -436,6 +436,10 @@ export const ACCESS_TABLE = {
   createTimeOff: { scheduling: 'manage' },
   updateTimeOff: { scheduling: 'manage' },
   deleteTimeOff: { scheduling: 'manage' },
+  // Meeting limits (spec 0037, AC-1297, AC-1299): read with See, set with Manage over the member's hours (their own
+  // with `availability.own`).
+  getLimits: { scheduling: 'view' },
+  setLimits: { scheduling: 'manage' },
   // The Team week (spec 0037, AC-1289 to AC-1293): rows from the reader's See reach (themself at least); a cell, a
   // copied week and usual hours need Manage over each member's hours (their own with `availability.own`).
   readTeamWeek: { filtered: 'schedulingReach' },

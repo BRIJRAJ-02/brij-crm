@@ -13,8 +13,9 @@
 // before and last after, drops what ends as it began, and queues one
 // `scheduling_changed` email through the workspace email queue. Nothing is
 // sent when the changes cancel out. Today the rows are a schedule's
-// (`schedule.changed`) and time off's (`time_off.*`); limits, personal pages
-// and rotations add their actions to `NOTICE_ACTIONS` as their jobs land.
+// (`schedule.changed`), time off's (`time_off.*`) and meeting limits'
+// (`limits.changed`); personal pages and rotations add their actions to
+// `NOTICE_ACTIONS` as their jobs land.
 import { sql } from 'drizzle-orm';
 import { clockLabel } from '@crm/contracts/hours';
 import type { SchedulingChangedEmail } from '@crm/contracts/emails';
@@ -43,7 +44,13 @@ export type ScheduleAuditEntry = { readonly id: string; readonly name: string } 
 >;
 
 /** The audit actions a notice tells (AC-1264). */
-export const NOTICE_ACTIONS = ['schedule.changed', 'time_off.created', 'time_off.changed', 'time_off.deleted'] as const;
+export const NOTICE_ACTIONS = [
+  'schedule.changed',
+  'time_off.created',
+  'time_off.changed',
+  'time_off.deleted',
+  'limits.changed',
+] as const;
 
 /** How long a notice gathers changes, from the first (AC-1264); the queue function holds the same. */
 export const NOTICE_WINDOW_MINUTES = 10;
@@ -263,6 +270,34 @@ export function timeOffLines(rows: readonly { readonly before: unknown; readonly
   return lines.map(fitted);
 }
 
+/** One side of a `limits.changed` row, read defensively: each limit set, or none. */
+function limitsOf(side: unknown): { readonly perDay?: number; readonly perWeek?: number } {
+  if (typeof side !== 'object' || side === null) return {};
+  const { perDay, perWeek } = side as Record<string, unknown>;
+  return {
+    ...(typeof perDay === 'number' ? { perDay } : {}),
+    ...(typeof perWeek === 'number' ? { perWeek } : {}),
+  };
+}
+
+/**
+ * The lines a notice lists for a run of `limits.changed` rows, oldest first (pure, AC-1264): the first before
+ * against the last after, a line per limit that ends differently. "Meetings a day: at most 4 (was no limit)";
+ * "Meetings a week: no limit (was at most 20)".
+ */
+export function limitsLines(rows: readonly { readonly before: unknown; readonly after: unknown }[]): string[] {
+  const first = rows[0];
+  const last = rows.at(-1);
+  if (first === undefined || last === undefined) return [];
+  const was = limitsOf(first.before);
+  const now = limitsOf(last.after);
+  const words = (value: number | undefined) => (value === undefined ? 'no limit' : `at most ${String(value)}`);
+  const lines: string[] = [];
+  if (was.perDay !== now.perDay) lines.push(`Meetings a day: ${words(now.perDay)} (was ${words(was.perDay)})`);
+  if (was.perWeek !== now.perWeek) lines.push(`Meetings a week: ${words(now.perWeek)} (was ${words(was.perWeek)})`);
+  return lines.map(fitted);
+}
+
 /** What one notice run did: queued the email, found it queued already, had nothing to tell, or the member left. */
 export type SchedulingNoticeOutcome = 'queued' | 'exists' | 'nothing' | 'gone' | 'refused';
 
@@ -325,6 +360,7 @@ export async function runSchedulingNotice(
     const lines = [
       ...noticeLines(rows.rows.filter((row) => row.action === 'schedule.changed')),
       ...timeOffLines(rows.rows.filter((row) => row.action.startsWith('time_off.'))),
+      ...limitsLines(rows.rows.filter((row) => row.action === 'limits.changed')),
     ];
     if (lines.length === 0) return 'nothing';
     const params: SchedulingChangedEmail = {

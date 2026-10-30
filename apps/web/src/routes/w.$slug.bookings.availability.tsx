@@ -46,6 +46,12 @@ export const Route = createFileRoute('/w/$slug/bookings/availability')({
         ?.timeOff.held(params.slug, member)
         .ready()
         .catch(() => undefined),
+      // Meeting limits (spec 0037, AC-1299), the same way.
+      context.data.scheduling
+        .loaded()
+        ?.limits.held(params.slug, member)
+        .ready()
+        .catch(() => undefined),
     ]);
     return {
       view: 'mine' as const,

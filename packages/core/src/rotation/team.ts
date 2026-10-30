@@ -31,6 +31,7 @@ import {
   type MembersClosed,
   type PageRecord,
 } from '../booking/slots.ts';
+import { limitChecks, type LimitCheck } from '../scheduling/limits.ts';
 import { intersectSlots, unionSlots } from './combine.ts';
 import { capStarts, windowCounts, windowStart, type WindowCount } from './ledger.ts';
 import { evenWaiting, hallHolds, type Candidate, type PickRules } from './pick.ts';
@@ -305,13 +306,18 @@ export interface TeamReads {
   readonly closed: ReadonlyMap<string, MembersClosed>;
   /** By rotation id (round robin only). */
   readonly standing: ReadonlyMap<string, RotationStanding>;
+  /**
+   * Each limited member's meeting limits (spec 0037, AC-1298): a day or week at a limit offers nothing of theirs, so a
+   * rotation skips them and a collective page closes. Members with no limit are absent.
+   */
+  readonly limits?: ReadonlyMap<string, LimitCheck>;
 }
 
 /** One member's slots of one length in [from, to): the page's rules, the member's hours, busy times and bookings. */
 export function memberSlots(
   page: PageRecord,
   memberId: string,
-  reads: Pick<TeamReads, 'hours' | 'busy' | 'bookings' | 'closed'>,
+  reads: Pick<TeamReads, 'hours' | 'busy' | 'bookings' | 'closed' | 'limits'>,
   input: { readonly duration: number; readonly from: Date; readonly to: Date; readonly now: Date },
 ): readonly Span[] {
   const busy = reads.busy.get(memberId) ?? { busy: [], blocked: false, noCalendar: true };
@@ -322,6 +328,7 @@ export function memberSlots(
       busy,
       bookings: reads.bookings.get(memberId) ?? [],
       closed: reads.closed.get(memberId) ?? { busy: [], openHolds: [] },
+      underLimit: reads.limits?.get(memberId),
     },
   );
 }
@@ -541,5 +548,6 @@ export async function readTeam(
     ),
     closed: await memberClosed(tx, memberIds, page, from, to),
     standing,
+    limits: await limitChecks(tx, memberIds, range.from, range.to, range.except),
   };
 }

@@ -723,6 +723,8 @@ describe('the walk: a principal without the access is refused', () => {
       );
       return core.deleteTimeOff(scope, { id: made.entry.id });
     },
+    getLimits: (scope, ownerId) => core.getLimits(scope, { now: () => new Date() }, { memberId: ownerId }),
+    setLimits: (scope, ownerId) => core.setLimits(scope, { now: () => new Date() }, { memberId: ownerId, perDay: 3 }),
     reassignUpcoming: (scope, ownerId) => core.reassignUpcoming(scope, { rotationId: core.newId(), memberId: ownerId }),
     // The Team week's writes (spec 0037, AC-1291, AC-1292): a cell, a copied week, usual hours for several.
     setDayHours: (scope, ownerId) =>

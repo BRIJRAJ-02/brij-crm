@@ -29,6 +29,7 @@ import { NewScheduleDialog } from './NewScheduleDialog.tsx';
 import { RenameScheduleDialog } from './RenameScheduleDialog.tsx';
 import { ScheduleEditor, ScheduleEditorPending } from './ScheduleEditor.tsx';
 import { AvailabilityViewSwitch } from './TeamWeekScreen.tsx';
+import { LimitsCard, LimitsCardPending } from './LimitsCard.tsx';
 import { TimeOffCard, TimeOffCardPending } from './TimeOffCard.tsx';
 import type { StandinChoice } from './TimeOffDialog.tsx';
 import { ScheduleSwitcher } from './ScheduleSwitcher.tsx';
@@ -152,18 +153,22 @@ export function AvailabilityScreen({
       failed(scheduleStrings.duplicateFailed(schedule.name)),
     );
   };
-  // Time off (spec 0037, AC-1286): the person's, beside whichever schedule is open.
+  const whose = member === undefined || owner === undefined ? undefined : { id: member, name: owner };
+  // Time off (spec 0037, AC-1286) and meeting limits (AC-1299): the person's, beside whichever schedule is open.
   const timeOff = (
-    <TimeOffCard
-      data={data}
-      slug={slug}
-      member={member === undefined || owner === undefined ? undefined : { id: member, name: owner }}
-      me={me}
-      nameOf={nameOf}
-      people={people}
-      onNotice={toast}
-      onOpenBookings={() => void navigate({ href: bookingsHref(slug) })}
-    />
+    <>
+      <TimeOffCard
+        data={data}
+        slug={slug}
+        member={whose}
+        me={me}
+        nameOf={nameOf}
+        people={people}
+        onNotice={toast}
+        onOpenBookings={() => void navigate({ href: bookingsHref(slug) })}
+      />
+      <LimitsCard data={data} slug={slug} member={whose} />
+    </>
   );
   const switcher =
     current === undefined ? (
@@ -447,7 +452,14 @@ export function AvailabilityPending() {
             {slot !== null && createPortal(tools, slot)}
             {actionSlot !== null && createPortal(waiting, actionSlot)}
             {slot === null && tools}
-            <ScheduleEditorPending timeOff={<TimeOffCardPending />} />
+            <ScheduleEditorPending
+              timeOff={
+                <>
+                  <TimeOffCardPending />
+                  <LimitsCardPending />
+                </>
+              }
+            />
           </>
         ),
       }}

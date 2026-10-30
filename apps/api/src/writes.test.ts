@@ -169,6 +169,8 @@ const READS: ReadonlySet<string> = new Set([
   'schedules.members',
   'schedules.list',
   'timeOff.list',
+  // Meeting limits (spec 0037): a member's limits and this day's and week's counts.
+  'limits.get',
   // The Team week (spec 0037): the roster over everyone's default schedules.
   'availability.teamWeek',
   'schedules.get',
@@ -1706,6 +1708,11 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
       { kind: 'time_off', item_ids: [] },
       { kind: 'time_off', item_ids: [], mutation_id: mutationId },
     ];
+  },
+  // Meeting limits (spec 0037): limits share time off's `time_off` row naming nothing, so open Limits sections read again.
+  'limits.set': async (m, mutationId) => {
+    await m.client.limits.set({ workspace: m.slug, perDay: 4, perWeek: 20, mutationId });
+    return [{ kind: 'time_off', item_ids: [], mutation_id: mutationId }];
   },
   // The Team week (spec 0037): every write goes through the schedules' write path, so each stores a `schedules` row.
   'availability.setDay': async (m, mutationId) => {

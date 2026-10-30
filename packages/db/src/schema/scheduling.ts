@@ -7,7 +7,18 @@
 // slice 8, whose migration adds it (AC-1443); until then core refuses a team
 // target. `created_by` is who granted it; `updated_by` who last set its level.
 import { sql } from 'drizzle-orm';
-import { boolean, check, foreignKey, index, pgTable, primaryKey, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import {
+  boolean,
+  check,
+  foreignKey,
+  index,
+  pgTable,
+  primaryKey,
+  smallint,
+  text,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core';
 import { auditColumns, id, workspaceId } from './common.ts';
 import { actorConstraints, members } from './workspaces.ts';
 
@@ -63,6 +74,43 @@ export const scheduleDelegations = pgTable(
       memberId: t.createdByMemberId,
     }),
     ...actorConstraints('schedule_delegations', 'updated_by', t.workspaceId, {
+      type: t.updatedByType,
+      id: t.updatedById,
+      memberId: t.updatedByMemberId,
+    }),
+  ],
+);
+
+/**
+ * A member's meeting limits across every page (spec 0037, AC-1297): at most `per_day` meetings a day (1 to 50) and
+ * `per_week` a week (1 to 200), each optional, counted in their default schedule's zone, weeks from Monday. One row
+ * per member; a row with neither limit is deleted rather than kept.
+ */
+export const memberBookingLimits = pgTable(
+  'member_booking_limits',
+  {
+    workspaceId: workspaceId(),
+    memberId: uuid('member_id').notNull(),
+    perDay: smallint('per_day'),
+    perWeek: smallint('per_week'),
+    ...auditColumns(),
+  },
+  (t) => [
+    primaryKey({ name: 'member_booking_limits_pkey', columns: [t.workspaceId, t.memberId] }),
+    foreignKey({
+      name: 'member_booking_limits_member',
+      columns: [t.workspaceId, t.memberId],
+      foreignColumns: [members.workspaceId, members.id],
+    }),
+    check('member_booking_limits_per_day', sql`${t.perDay} is null or ${t.perDay} between 1 and 50`),
+    check('member_booking_limits_per_week', sql`${t.perWeek} is null or ${t.perWeek} between 1 and 200`),
+    check('member_booking_limits_some', sql`num_nonnulls(${t.perDay}, ${t.perWeek}) > 0`),
+    ...actorConstraints('member_booking_limits', 'created_by', t.workspaceId, {
+      type: t.createdByType,
+      id: t.createdById,
+      memberId: t.createdByMemberId,
+    }),
+    ...actorConstraints('member_booking_limits', 'updated_by', t.workspaceId, {
       type: t.updatedByType,
       id: t.updatedById,
       memberId: t.updatedByMemberId,

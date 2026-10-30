@@ -79,6 +79,7 @@ import {
 } from './slots.ts';
 import { lockKey } from './locks.ts';
 import { chooseHosts, lockHosts, lockRotations, SLOT_TAKEN_MESSAGE, type ChosenHosts } from '../rotation/assign.ts';
+import { limitChecks } from '../scheduling/limits.ts';
 import { writeAssignment } from '../rotation/ledger.ts';
 import { loadTeam, memberBusy, readTeam, teamMemberIds, teamSlots, type Team } from '../rotation/team.ts';
 import { buildBookingIcs } from './ics.ts';
@@ -755,11 +756,23 @@ export async function readPublicSlots(
     new Date(to.getTime() + BUSY_MARGIN_MS),
   );
   const margin = { from: new Date(from.getTime() - BUSY_MARGIN_MS), to: new Date(to.getTime() + BUSY_MARGIN_MS) };
-  const { booked, closed } = await inWorkspace(entry.scope, async (tx) => ({
+  const host = pickHost(page, memberIds);
+  const { booked, closed, limits } = await inWorkspace(entry.scope, async (tx) => ({
     booked: await bookedSpans(tx, memberIds, page.id, from, to),
     closed: await membersClosed(tx, memberIds, page, margin.from, margin.to),
+    // The host's meeting limits (spec 0037, AC-1298): a day or week at a limit offers nothing.
+    limits: await limitChecks(tx, [host], from, to),
   }));
-  const slots = pageSlots(page, { duration: query.duration, from, to, now, busy, bookings: booked, closed });
+  const slots = pageSlots(page, {
+    duration: query.duration,
+    from,
+    to,
+    now,
+    busy,
+    bookings: booked,
+    closed,
+    underLimit: limits.get(host),
+  });
   return {
     slots: slots.map((slot) => ({ start: slot.start.toISOString(), end: slot.end.toISOString() })),
     calendar: busy.blocked ? 'unreachable' : 'ok',
@@ -1030,10 +1043,12 @@ export async function bookPublicSlot(
         if (again !== undefined) return again;
         const held = await bookedSpans(tx, memberIds, page.id, dayFrom, dayTo);
         const closed = await membersClosed(tx, memberIds, page, busyFrom, busyTo);
-        if (!offeredAt(pageSlots(page, { ...range, busy, bookings: held, closed }))) {
+        host = pickHost(page, memberIds);
+        // Counted again under the host lock (spec 0037, AC-1298): two guests never both take the last one.
+        const limits = await limitChecks(tx, [host], dayFrom, dayTo);
+        if (!offeredAt(pageSlots(page, { ...range, busy, bookings: held, closed, underLimit: limits.get(host) }))) {
           throw refuse('SLOT_TAKEN', SLOT_TAKEN_MESSAGE);
         }
-        host = pickHost(page, memberIds);
         hosts = [host];
       }
       const blockStart = new Date(start.getTime() - page.bufferBefore * 60_000);

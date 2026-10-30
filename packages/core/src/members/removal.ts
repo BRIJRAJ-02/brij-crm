@@ -15,6 +15,7 @@ import { navRemoval } from '../navigation/navigation.ts';
 import { notificationsRemoval } from '../notifications/inbox.ts';
 import { rotationsRemoval } from '../rotation/removal.ts';
 import { delegationsRemoval } from '../scheduling/delegations.ts';
+import { limitsRemoval } from '../scheduling/limits.ts';
 import { recentsRemoval } from '../search/recents.ts';
 import { viewsRemoval } from '../views/manage.ts';
 import type { AuditSource } from './audit.ts';
@@ -114,6 +115,8 @@ export const REMOVAL_EFFECTS: readonly RemovalEffect[] = [
   formsOwnerRemoval,
   // Spec 0037, AC-1269: their delegations both ways, with an `access` row for each delegate who lost reach.
   delegationsRemoval,
+  // Spec 0037, AC-814 widened: their meeting limits.
+  limitsRemoval,
 ];
 
 /**

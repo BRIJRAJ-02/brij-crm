@@ -276,6 +276,9 @@ const FIXTURES: Record<ListedAuditAction, readonly AuditRow[]> = {
   'time_off.deleted': [
     row('time_off.deleted', 'member', bea, { before: { memberId: bea, timeOffId: newId(), reason: 'travel' } }),
   ],
+  'limits.changed': [
+    row('limits.changed', 'member', bea, { before: { memberId: bea }, after: { memberId: bea, perDay: 4 } }),
+  ],
   'block.removed': [
     row('block.removed', 'member', bea, { before: { memberId: bea, blockId: newId(), kind: 'busy', repeat: 'once' } }),
   ],

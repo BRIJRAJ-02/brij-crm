@@ -21,6 +21,7 @@ import { schema, type WorkspaceTx } from '@crm/db';
 import { resolveMany, virtualDefault, type ResolvedSchedule } from '../availability/resolve.ts';
 import { FREE_BUSY_MAX_DAYS } from '../calendar/events.ts';
 import { refuse } from '../engine/refusals.ts';
+import type { LimitCheck } from '../scheduling/limits.ts';
 import { blockedTime } from './blocks.ts';
 import type { BusyReader } from './calendar.ts';
 import { computeSlots, type BookedSpan, type DateOverride, type Span, type WeeklyRule } from './engine.ts';
@@ -373,12 +374,17 @@ export function pageSlots(
     readonly bookings: readonly BookedSpan[];
     /** The members' own blocks and holds; none when absent. */
     readonly closed?: MembersClosed;
+    /**
+     * The host's meeting limits (spec 0037, AC-1298): a slot on a day or in a week they are at their limit is not
+     * offered. None when absent.
+     */
+    readonly underLimit?: LimitCheck | undefined;
   },
 ): readonly Span[] {
   if (input.busy.blocked) return [];
   const { rules, overrides } = engineHours(page.availability);
   const closed = input.closed ?? { busy: [], openHolds: [] };
-  return computeSlots({
+  const slots = computeSlots({
     rules,
     overrides,
     busy: [...input.busy.busy, ...closed.busy],
@@ -396,4 +402,6 @@ export function pageSlots(
     ...(page.dailyLimit === null ? {} : { dailyLimit: page.dailyLimit }),
     ...(page.slotStep === null ? {} : { slotStepMinutes: page.slotStep }),
   });
+  const { underLimit } = input;
+  return underLimit === undefined ? slots : slots.filter((slot) => underLimit(slot.start));
 }

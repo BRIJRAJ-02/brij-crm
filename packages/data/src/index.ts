@@ -175,6 +175,7 @@ export type {
   TimeOffState,
   TimeOffStore,
 } from './scheduling/time-off.ts';
+export type { LimitsDraft, LimitsHeld, LimitsState, LimitsStore, MeetingLimits } from './scheduling/limits.ts';
 export type {
   DayHours,
   TeamWeek,
@@ -1858,6 +1859,8 @@ export function createDataLayer({
         timeOffDue.delete(workspace);
         accessLoaded?.teamWeek.changed(workspace);
         accessLoaded?.timeOff.changed(workspace);
+        // Meeting limits share time off's event (spec 0037, job J7).
+        accessLoaded?.limits.changed(workspace);
         refreshBookings(workspace);
       },
       100 + Math.round(random() * 300),
