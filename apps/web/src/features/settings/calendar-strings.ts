@@ -101,7 +101,7 @@ export const strings = {
     private: 'Shown as “Private meeting” with the time',
   },
   sharingInfo:
-    'Controls what other members of this workspace see of meetings from this calendar account, on their calendar and in Bookings. You always see everything.',
+    'Controls what other members of this workspace see of meetings from this calendar account, on their calendar and in Bookings. On the Team day, people who manage schedules see them as Busy, never their titles. You always see everything.',
   reconnect: 'Reconnect',
   /** Local development only: Google's notices can't reach a laptop, so sync waits for the 15 minute poll. */
   syncNow: 'Sync now',
