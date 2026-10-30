@@ -40,7 +40,7 @@ describe('the sidebar’s routes (AC-944)', () => {
   it('draws one Bookings row and one Captures row, as round 6 did (the owner, 22 October 2026)', () => {
     // Link page leads: it is the surface a member opens most, and it answered inside Settings › Account › Profile
     // until 25 October 2026 (the owner). The inbox follows: a mention or an assignment lands there (spec 0038).
-    expect(Object.keys(PAGE_LINKS)).toEqual(['linkPage', 'inbox', 'tasks', 'bookings', 'captures']);
+    expect(Object.keys(PAGE_LINKS)).toEqual(['linkPage', 'inbox', 'tasks', 'notes', 'bookings', 'captures']);
     expect(PAGE_LINKS.linkPage?.href('acme')).toBe('/w/acme/link-page');
     expect(PAGE_LINKS.inbox?.href('acme')).toBe('/w/acme/inbox');
     expect(PAGE_LINKS.bookings?.href('acme')).toBe('/w/acme/bookings/calendar');

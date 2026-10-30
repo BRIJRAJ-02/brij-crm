@@ -264,7 +264,7 @@ import type {
 } from './records/layer.ts';
 
 export type { GlobalSearch, GlobalSearchState } from './search/global.ts';
-export type { RecentItem, RecordHit, SearchMatch, ViewHit } from '@crm/contracts';
+export type { NoteHit, RecentItem, RecordHit, SearchMatch, TaskHit, ViewHit } from '@crm/contracts';
 // The operator console (spec 0047): the super admin's read only analytics.
 export type {
   OperatorHeld,
@@ -4868,6 +4868,8 @@ export function createDataLayer({
        */
       forRecord: async (workspace: string, recordId: string, objectId?: string): Promise<NoteList> =>
         (await notesStore()).forRecord(workspace, recordId, objectId),
+      /** The workspace's Notes page: every note the person may see, last edited first, with its record. Live. */
+      forWorkspace: async (workspace: string): Promise<NoteList> => (await notesStore()).forWorkspace(workspace),
       /**
        * The note window's session (AC-439 to AC-443): an existing note, or a
        * new one with the id the window minted, which stores nothing until it

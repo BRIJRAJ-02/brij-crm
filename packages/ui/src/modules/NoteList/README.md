@@ -27,6 +27,7 @@ New (spec 0019). No list in the library shows a document summary (a title, a two
 
 - A note is `{ id, title, excerpt, author: ActorDisplay, updatedAt }`. An empty title reads "Untitled note" in the secondary colour; an empty excerpt draws no line.
 - The order is the screen's (last edited first).
+- A note may carry its `record` (a `RecordRefDisplay`): a flat RecordChip leads its line, before the author, for a list that mixes notes of many records (the workspace's Notes page; story `WithRecords`). Why a variant: the row is the same, and only the record it is on is new; a record's own tab leaves it out.
 - `toolbar` draws above the list in every state, so "New note" is there when the list is empty or failed.
 - `emptyTitle` and `emptyBody` say what an empty list means in the screen's own words.
 - `emptyActions` puts the way to start inside the empty state, under its words (a record's "New note"), as Attio and Twenty do; the screen then leaves its toolbar's New note out while the list is empty, so there is one button, where the eye lands. Why a prop: the toolbar's button sat away from the empty words that asked for it.
@@ -35,7 +36,7 @@ New (spec 0019). No list in the library shows a document summary (a title, a two
 
 ## States
 
-Default (rows), untitled, rows still loading, a long list, loading, empty (the library's words or the screen's own), with a toolbar, failed (with Try again), no access. Hover on a row (pointer only), focus (the inset ring).
+Default (rows), with records, untitled, rows still loading, a long list, loading, empty (the library's words or the screen's own), with a toolbar, failed (with Try again), no access. Hover on a row (pointer only), focus (the inset ring).
 
 ## Keyboard
 

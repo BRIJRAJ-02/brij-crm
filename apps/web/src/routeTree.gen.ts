@@ -25,6 +25,7 @@ import { Route as WSlugCapturesRouteImport } from './routes/w.$slug.captures.tsx
 import { Route as WSlugHomeRouteImport } from './routes/w.$slug.home.tsx'
 import { Route as WSlugInboxRouteImport } from './routes/w.$slug.inbox.tsx'
 import { Route as WSlugLinkPageRouteImport } from './routes/w.$slug.link-page.tsx'
+import { Route as WSlugNotesRouteImport } from './routes/w.$slug.notes.tsx'
 import { Route as WSlugSettingsRouteImport } from './routes/w.$slug.settings.tsx'
 import { Route as WSlugTasksRouteImport } from './routes/w.$slug.tasks.tsx'
 import { Route as WSlugTrashRouteImport } from './routes/w.$slug.trash.tsx'
@@ -163,6 +164,11 @@ const WSlugInboxRoute = WSlugInboxRouteImport.update({
 const WSlugLinkPageRoute = WSlugLinkPageRouteImport.update({
   id: '/link-page',
   path: '/link-page',
+  getParentRoute: () => WSlugRoute,
+} as any)
+const WSlugNotesRoute = WSlugNotesRouteImport.update({
+  id: '/notes',
+  path: '/notes',
   getParentRoute: () => WSlugRoute,
 } as any)
 const WSlugSettingsRoute = WSlugSettingsRouteImport.update({
@@ -512,6 +518,7 @@ export interface FileRoutesByFullPath {
   '/w/$slug/home': typeof WSlugHomeRoute
   '/w/$slug/inbox': typeof WSlugInboxRoute
   '/w/$slug/link-page': typeof WSlugLinkPageRoute
+  '/w/$slug/notes': typeof WSlugNotesRoute
   '/w/$slug/settings': typeof WSlugSettingsRouteWithChildren
   '/w/$slug/tasks': typeof WSlugTasksRoute
   '/w/$slug/trash': typeof WSlugTrashRoute
@@ -586,6 +593,7 @@ export interface FileRoutesByTo {
   '/w/$slug/home': typeof WSlugHomeRoute
   '/w/$slug/inbox': typeof WSlugInboxRoute
   '/w/$slug/link-page': typeof WSlugLinkPageRoute
+  '/w/$slug/notes': typeof WSlugNotesRoute
   '/w/$slug/tasks': typeof WSlugTasksRoute
   '/w/$slug/trash': typeof WSlugTrashRoute
   '/w/$slug': typeof WSlugIndexRoute
@@ -663,6 +671,7 @@ export interface FileRoutesById {
   '/w/$slug/home': typeof WSlugHomeRoute
   '/w/$slug/inbox': typeof WSlugInboxRoute
   '/w/$slug/link-page': typeof WSlugLinkPageRoute
+  '/w/$slug/notes': typeof WSlugNotesRoute
   '/w/$slug/settings': typeof WSlugSettingsRouteWithChildren
   '/w/$slug/tasks': typeof WSlugTasksRoute
   '/w/$slug/trash': typeof WSlugTrashRoute
@@ -742,6 +751,7 @@ export interface FileRouteTypes {
     | '/w/$slug/home'
     | '/w/$slug/inbox'
     | '/w/$slug/link-page'
+    | '/w/$slug/notes'
     | '/w/$slug/settings'
     | '/w/$slug/tasks'
     | '/w/$slug/trash'
@@ -816,6 +826,7 @@ export interface FileRouteTypes {
     | '/w/$slug/home'
     | '/w/$slug/inbox'
     | '/w/$slug/link-page'
+    | '/w/$slug/notes'
     | '/w/$slug/tasks'
     | '/w/$slug/trash'
     | '/w/$slug'
@@ -892,6 +903,7 @@ export interface FileRouteTypes {
     | '/w/$slug/home'
     | '/w/$slug/inbox'
     | '/w/$slug/link-page'
+    | '/w/$slug/notes'
     | '/w/$slug/settings'
     | '/w/$slug/tasks'
     | '/w/$slug/trash'
@@ -1079,6 +1091,13 @@ declare module '@tanstack/react-router' {
       path: '/link-page'
       fullPath: '/w/$slug/link-page'
       preLoaderRoute: typeof WSlugLinkPageRouteImport
+      parentRoute: typeof WSlugRoute
+    }
+    '/w/$slug/notes': {
+      id: '/w/$slug/notes'
+      path: '/notes'
+      fullPath: '/w/$slug/notes'
+      preLoaderRoute: typeof WSlugNotesRouteImport
       parentRoute: typeof WSlugRoute
     }
     '/w/$slug/settings': {
@@ -1623,6 +1642,7 @@ interface WSlugRouteChildren {
   WSlugHomeRoute: typeof WSlugHomeRoute
   WSlugInboxRoute: typeof WSlugInboxRoute
   WSlugLinkPageRoute: typeof WSlugLinkPageRoute
+  WSlugNotesRoute: typeof WSlugNotesRoute
   WSlugSettingsRoute: typeof WSlugSettingsRouteWithChildren
   WSlugTasksRoute: typeof WSlugTasksRoute
   WSlugTrashRoute: typeof WSlugTrashRoute
@@ -1648,6 +1668,7 @@ const WSlugRouteChildren: WSlugRouteChildren = {
   WSlugHomeRoute: WSlugHomeRoute,
   WSlugInboxRoute: WSlugInboxRoute,
   WSlugLinkPageRoute: WSlugLinkPageRoute,
+  WSlugNotesRoute: WSlugNotesRoute,
   WSlugSettingsRoute: WSlugSettingsRouteWithChildren,
   WSlugTasksRoute: WSlugTasksRoute,
   WSlugTrashRoute: WSlugTrashRoute,

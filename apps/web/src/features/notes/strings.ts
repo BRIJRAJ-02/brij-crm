@@ -5,6 +5,10 @@ export const strings = {
   untitled: 'Untitled note',
   /** The Notes tab with none yet. */
   noNotes: 'No notes yet',
+  /** The workspace's Notes page with none: where notes come from. */
+  noNotesBody: 'Notes written on a record show here.',
+  /** The Notes page's list didn't load. */
+  loadFailedList: 'Notes didn’t load',
   listLabel: 'Notes',
   // The note window.
   note: 'Note',

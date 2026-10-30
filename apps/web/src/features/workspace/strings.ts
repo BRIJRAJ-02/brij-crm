@@ -40,6 +40,7 @@ export const strings = {
   /** The tasks page's row (spec 0019), after the sections, as timefix has it; Tasks, as the page is named (owner, 21 October 2026). */
   inbox: 'Inbox',
   tasks: 'Tasks',
+  notes: 'Notes',
   /** The group above the sections holding Tasks (and Inbox once it exists), for screen readers. */
   yourWork: 'Your work',
   /** The sidebar's sections (spec 0034). */
