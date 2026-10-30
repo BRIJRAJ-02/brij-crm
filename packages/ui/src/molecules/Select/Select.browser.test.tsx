@@ -126,11 +126,41 @@ describe('a disabled option in a single choice', () => {
     expect(onChange).toHaveBeenCalledExactlyOnceWith('solo');
   });
 
+  it('is reached by typeahead in the open list, and still refused', async () => {
+    const { onChange, node } = single();
+    await render(node);
+    trigger().focus();
+    await userEvent.keyboard('{ArrowDown}');
+    await expect.poll(listbox).not.toBeNull();
+    await userEvent.keyboard('La');
+    await expect.poll(() => current()?.textContent).toContain('Large team');
+    expectAnnouncedDisabled();
+    await userEvent.keyboard('{Enter}');
+    await frame();
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('is not chosen from the closed trigger by an arrow or a typed letter, controlled or not', async () => {
+    for (const props of [{ value: 'small' }, { value: undefined, defaultValue: 'small' }]) {
+      const { onChange, node } = single(props);
+      await render(node);
+      trigger().focus();
+      await userEvent.keyboard('{ArrowRight}');
+      await userEvent.keyboard('L');
+      await frame();
+      expect(onChange).not.toHaveBeenCalled();
+      expect(listbox()).toBeNull();
+      expect(trigger().textContent).toContain('Small team');
+      for (const unmount of mounted.splice(0)) unmount();
+    }
+  });
+
   it('is not chosen by a click', async () => {
     const { onChange, node } = single({ defaultOpen: true });
     await render(node);
     await expect.poll(listbox).not.toBeNull();
-    await userEvent.click(optionNamed('Large team'));
+    // Forced: Playwright waits for an aria-disabled element to be enabled before it clicks.
+    await userEvent.click(optionNamed('Large team'), { force: true });
     await frame();
     expect(onChange).not.toHaveBeenCalled();
     expect(listbox()).not.toBeNull();
@@ -161,11 +191,21 @@ describe('a disabled option in a multiple choice', () => {
     expect(optionNamed('Large team').getAttribute('aria-selected')).toBe('false');
   });
 
+  it('is not chosen from the closed trigger by a typed letter', async () => {
+    const { onValuesChange, node } = multiple({ values: ['small'] });
+    await render(node);
+    trigger().focus();
+    await userEvent.keyboard('L');
+    await frame();
+    expect(onValuesChange).not.toHaveBeenCalled();
+  });
+
   it('is not checked by a click', async () => {
     const { onValuesChange, node } = multiple({ defaultOpen: true });
     await render(node);
     await expect.poll(listbox).not.toBeNull();
-    await userEvent.click(optionNamed('Large team'));
+    // Forced: Playwright waits for an aria-disabled element to be enabled before it clicks.
+    await userEvent.click(optionNamed('Large team'), { force: true });
     await frame();
     expect(onValuesChange).not.toHaveBeenCalled();
   });

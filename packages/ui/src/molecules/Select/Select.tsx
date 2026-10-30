@@ -1,4 +1,4 @@
-import { use, useLayoutEffect, useRef, useState, type ReactNode, type Ref } from 'react';
+import { use, useLayoutEffect, useRef, useState, type KeyboardEventHandler, type ReactNode, type Ref } from 'react';
 import {
   Autocomplete,
   Button as AriaButton,
@@ -178,17 +178,49 @@ const CREATE = '\u0000create';
  */
 function reachableWhileDisabled(item: SelectItem): Partial<ListBoxItemProps<SelectItem>> {
   if (item.isDisabled !== true) return {};
+  // Untyped on ListBoxItem, so it comes in through a spread; onChange's own refusal is the backstop if React Stately
+  // ever reads it differently.
   const selectionOnly = { disabledBehavior: 'selection' };
   return {
     ...selectionOnly,
+    // With the search on, focus stays in the search and React Aria hands the option Enter and Space itself, and its
+    // press then empties the choice for a key it can't select (and closes a single choice). The option swallows
+    // them, so the list stays open on it with the choice as it was.
     render: (props) =>
       'href' in props ? (
-        <a {...props} aria-disabled="true" data-disabled="">
+        <a
+          {...props}
+          role="option"
+          aria-selected={props['aria-selected']}
+          aria-disabled="true"
+          data-disabled=""
+          onKeyDown={refusingChoiceKeys(props.onKeyDown)}
+        >
           {props.children}
         </a>
       ) : (
-        <div {...props} aria-disabled="true" data-disabled="" />
+        <div
+          {...props}
+          role="option"
+          aria-selected={props['aria-selected']}
+          aria-disabled="true"
+          data-disabled=""
+          onKeyDown={refusingChoiceKeys(props.onKeyDown)}
+        />
       ),
+  };
+}
+
+/** A disabled option's key handler: Enter and Space do nothing (not even their default), every other key goes on. */
+function refusingChoiceKeys<E extends HTMLElement>(
+  onKeyDown: KeyboardEventHandler<E> | undefined,
+): KeyboardEventHandler<E> {
+  return (event) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      return;
+    }
+    onKeyDown?.(event);
   };
 }
 
@@ -284,7 +316,10 @@ export function Select({
   const isInPopover = use(InPopover);
   const [query, setQuery] = useState(defaultSearch ?? '');
   const isMultiple = selectionMode === 'multiple';
-  const current = isMultiple ? null : (value ?? defaultValue ?? null);
+  // Without a `value`, the Select keeps its own, so a refused choice (a disabled option) never changes it: React
+  // Aria's own uncontrolled value would take any key its trigger's arrows or typeahead land on.
+  const [own, setOwn] = useState<string | null>(defaultValue ?? null);
+  const current = isMultiple ? null : value === undefined ? own : value;
   const chosen = items.find((item) => item.id === current);
   // Every chosen id: the one in a single choice, all of them in a multiple one.
   const chosenIds: readonly string[] = isMultiple ? (values ?? []) : current === null ? [] : [current];
@@ -461,8 +496,7 @@ export function Select({
       // React Aria opens no list with nothing in it; a list that creates opens anyway, to take the first one typed.
       {...(onCreate === undefined ? {} : { allowsEmptyCollection: true })}
       {...(isMultiple ? { value: [...chosenIds] } : {})}
-      {...(isMultiple || value === undefined ? {} : { value })}
-      {...(isMultiple || defaultValue === undefined ? {} : { defaultValue })}
+      {...(isMultiple ? {} : { value: current })}
       {...(defaultOpen === undefined ? {} : { defaultOpen })}
       {...(autoFocus ? { autoFocus: true } : {})}
       // Each opening searches afresh (from the key that opened a cell's list, when one did).
@@ -471,8 +505,12 @@ export function Select({
         onOpenChange?.(isOpen);
       }}
       onChange={(next) => {
+        // A disabled option is refused here too: inside the list React Aria refuses it (it stays in disabledKeys),
+        // but the closed trigger's arrows and typeahead set the value without asking, and they now reach it.
         if (Array.isArray(next)) {
           const picked = new Set(next.map(String));
+          if (items.some((item) => item.isDisabled === true && picked.has(item.id) && !chosenIds.includes(item.id)))
+            return;
           onValuesChange?.(items.filter((item) => picked.has(item.id)).map((item) => item.id));
           return;
         }
@@ -480,7 +518,10 @@ export function Select({
           if (canCreate) onCreate(typed);
           return;
         }
-        onChange?.(next === CLEAR || next === null ? null : String(next));
+        const id = next === CLEAR || next === null ? null : String(next);
+        if (items.some((item) => item.isDisabled === true && item.id === id && id !== current)) return;
+        setOwn(id);
+        onChange?.(id);
       }}
     >
       {!isLabelHidden && <FieldLabel label={label} aside={labelAside} info={info} isDisabled={isDisabled} />}

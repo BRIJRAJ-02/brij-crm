@@ -244,13 +244,14 @@
     box-shadow: var(--shadow-focus-inset);
   }
 
-  .option[data-disabled] {
+  /* A disabled option fades what it shows, not itself, so the keyboard's ring on it keeps its full contrast. */
+  .option[data-disabled] > * {
     opacity: var(--opacity-disabled);
   }
 
-  /* A disabled option takes the keyboard's focus, so its reason is read, but the pointer passing over it marks
-     nothing: it looks as it did when the keyboard skipped it, and only the keyboard's ring says where focus is. */
-  .option[data-disabled][data-focused]:not([data-focus-visible]) {
+  /* A disabled option takes the keyboard's focus, so its reason is read, but nothing fills it: the pointer passing
+     over it marks nothing, as when the keyboard skipped it, and only the keyboard's ring says where focus is. */
+  .option[data-disabled][data-focused] {
     background: none;
   }
 
@@ -326,9 +327,14 @@
       color: HighlightText;
     }
 
-    .option[data-disabled][data-focused]:not([data-focus-visible]) {
+    .option[data-disabled][data-focused] {
       background: Canvas;
       color: GrayText;
+    }
+
+    .option[data-disabled][data-focus-visible] {
+      outline: var(--border-width-thick) solid Highlight;
+      outline-offset: calc(-1 * var(--border-width-thick));
     }
   }
 }
