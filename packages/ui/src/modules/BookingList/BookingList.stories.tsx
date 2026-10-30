@@ -67,7 +67,7 @@ export const Default: Story = {
     await expect(canvas.getByRole('link', { name: 'Grace Hopper' })).toBeInTheDocument();
     await expect(canvas.getByText('Cancelled')).toBeInTheDocument();
     await userEvent.click(canvas.getByRole('button', { name: 'Site visit' }));
-    await expect(args.onOpen).toHaveBeenCalledWith('alan');
+    await expect(args.onOpen).toHaveBeenCalledWith('alan', expect.any(HTMLElement));
     // Each title says which meeting it opens: its time and who it is with describe it.
     await expect(canvas.getByRole('button', { name: 'Quick chat' })).toHaveAccessibleDescription(
       /4:00 – 4:30 PM.*You and Grace Hopper/,

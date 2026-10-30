@@ -590,8 +590,10 @@
   }
 
   .root[data-view='team'] .column {
-    /* A column focused from the keyboard scrolls clear of the pinned axis. */
+    /* A column focused from the keyboard scrolls clear of the pinned axis; a sideways scroll comes to rest on a
+       column's edge, never halfway through a person. */
     scroll-margin-inline-start: calc(var(--axis) * 2);
+    scroll-snap-align: start;
   }
 
   /* The day view: the selected day across the width, as the narrow week below, the head still the week's days. */
@@ -604,16 +606,18 @@
     display: none;
   }
 
-  /* The team view (TeamDay): a column per person, each at least 160px, scrolling sideways under a head pinned to the
-     top and an hour axis pinned to the start, as Google Calendar's day of several people and Fresha's staff columns. */
+  /* The team view (TeamDay): a column per person, each at least a table column's 200px (never squeezed to fit),
+     scrolling sideways under a head pinned to the top and an hour axis pinned to the start, as Google Calendar's day
+     of several people and Fresha's staff columns. */
   .root[data-view='team'] {
     --columns: 1;
-    --team-column: calc(var(--size-column-narrow) + var(--space-32) + var(--space-8));
+    --team-column: var(--size-column);
   }
 
   .root[data-view='team'] .scroller {
     overflow: auto;
     overscroll-behavior-inline: contain;
+    scroll-snap-type: x proximity;
     /* What is focused or scrolled to lands clear of the pinned heads and hour axis. */
     scroll-padding-block-start: var(--size-toolbar);
     scroll-padding-inline-start: calc(var(--axis) * 2);
@@ -658,21 +662,33 @@
     display: none;
   }
 
-  /* Time off across a column: the yellow tag's surface (the Team week's Away), its word at its top, under every block. */
+  /* Time off across a column: a quiet wash of the Team week's Away yellow, so what sits on it still reads, and its
+     word once, as the Team week's Away chip, pinned under the heads while the hours scroll. */
   .band {
     position: absolute;
     inset-block-start: calc(var(--start) / 60 * var(--hour));
     inset-inline: 0;
     block-size: calc(var(--length) / 60 * var(--hour));
-    background: var(--tag-yellow-bg);
     pointer-events: none;
+  }
+
+  .band::before {
+    position: absolute;
+    inset: 0;
+    background: var(--tag-yellow-bg);
+    content: '';
+    opacity: var(--opacity-disabled);
   }
 
   .bandLabel {
     position: sticky;
-    inset-block-start: var(--size-toolbar);
-    display: block;
-    padding: var(--space-4) var(--space-8);
+    inset-block-start: calc(var(--size-toolbar) + var(--space-4));
+    display: inline-block;
+    margin: var(--space-4) var(--space-6);
+    padding: 0 var(--space-6);
+    border: var(--border-width-hairline) solid var(--tag-yellow-border);
+    border-radius: var(--radius-sm);
+    background: var(--tag-yellow-bg);
     color: var(--tag-yellow-text);
     font: var(--text-label-strong);
     letter-spacing: var(--tracking-label-strong);

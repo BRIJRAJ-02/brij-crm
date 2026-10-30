@@ -221,6 +221,16 @@ export function TeamDayView(props: TeamDayViewProps) {
     return found;
   }, [answer]);
   const nowMs = props.now.getTime();
+  // The reader's own events carry their calendar's mark, as on their week; bookings carry Timefix's.
+  const markOf = useMemo(
+    () =>
+      new Map(
+        props.connections.map(
+          (connection) => [connection.id, connection.provider === 'google' ? 'google-calendar' : 'outlook'] as const,
+        ),
+      ),
+    [props.connections],
+  );
   const placed = useMemo((): readonly Placed[] => {
     if (answer === undefined) return [];
     return answer.columns.flatMap((column) =>
@@ -240,19 +250,16 @@ export function TeamDayView(props: TeamDayViewProps) {
         if (booking !== undefined) {
           const isLive = booking.status === 'confirmed';
           const issue = issueOf.get(`${column.memberId}:${booking.id}`);
+          // Needs a host and Host away say so once, in the strip over the grid, not again on the block.
           const status = !isLive
             ? undefined
             : booking.noShow === true
               ? strings.noShow
-              : booking.needsHost
-                ? strings.needsHost
-                : booking.hostAway === true && Date.parse(booking.endsAt) > nowMs
-                  ? strings.hostAway
-                  : issue === 'clash'
-                    ? strings.clash
-                    : issue === 'outsideHours'
-                      ? strings.outsideHours
-                      : undefined;
+              : issue === 'clash'
+                ? strings.clash
+                : issue === 'outsideHours'
+                  ? strings.outsideHours
+                  : undefined;
           return [
             {
               kind: 'booking',
@@ -264,6 +271,8 @@ export function TeamDayView(props: TeamDayViewProps) {
                 detail: booking.visitorName,
                 kind: 'booking',
                 hue: linkHue(booking.pageId),
+                // Every booking came through Timefix: its mark, beside the title (synced calendar time has none).
+                provider: 'timefix',
                 isCancelled: !isLive,
                 ...(status === undefined ? {} : { status }),
               },
@@ -310,16 +319,23 @@ export function TeamDayView(props: TeamDayViewProps) {
         if (item.kind !== 'event') return [];
         // An all day event of the reader's own would close the whole column: their week keeps those to the list.
         if (item.event.allDay) return [];
+        const mark = markOf.get(item.event.connectionId);
         return [
           {
             kind: 'event',
             event: item.event,
-            block: { ...base, id: `${column.memberId}:event:${item.event.id}`, title: item.event.title, kind: 'event' },
+            block: {
+              ...base,
+              id: `${column.memberId}:event:${item.event.id}`,
+              title: item.event.title,
+              kind: 'event',
+              ...(mark === undefined ? {} : { provider: mark }),
+            },
           },
         ];
       }),
     );
-  }, [answer, byBooking, issueOf, locale, timeZone, nowMs]);
+  }, [answer, byBooking, issueOf, locale, timeZone, markOf]);
   const blocks = useMemo(() => placed.map((each) => each.block), [placed]);
   // Each column's open hours in minutes, once per answer (the grid asks for them on every draw).
   const openByColumn = useMemo(() => {
@@ -565,7 +581,7 @@ export function TeamDayView(props: TeamDayViewProps) {
       ? null
       : createPortal(
           <MenuTrigger>
-            <Button variant="ghost" icon="triangle-alert">
+            <Button variant="warning" icon="triangle-alert" iconRight="chevron-down">
               {strings.issuesCount(issues.length)}
             </Button>
             <Menu

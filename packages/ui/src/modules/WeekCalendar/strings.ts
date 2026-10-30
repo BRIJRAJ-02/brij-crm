@@ -4,10 +4,21 @@ export const strings = {
   dayBlocks: (day: string, count: number) =>
     count === 0 ? `${day}, nothing on` : count === 1 ? `${day}, 1 item` : `${day}, ${String(count)} items`,
   dayLoading: (day: string) => `${day}, loading`,
-  /** A block's name: its title, its status when unusual, its time, who it is with and whether it was called off. */
-  blockName: (title: string, time: string, detail?: string, isCancelled?: boolean, status?: string) =>
+  /**
+   * A block's name: its title, its status when unusual, its time, who it is with, whether it was called off, and
+   * "Timefix booking" for one that came through Timefix (its mark says so on screen).
+   */
+  blockName: (
+    title: string,
+    time: string,
+    detail?: string,
+    isCancelled?: boolean,
+    status?: string,
+    isTimefix?: boolean,
+  ) =>
     [
       title,
+      ...(isTimefix === true ? ['Timefix booking'] : []),
       ...(status === undefined ? [] : [status]),
       time,
       ...(detail === undefined ? [] : [detail]),

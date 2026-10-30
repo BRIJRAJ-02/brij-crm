@@ -1,9 +1,11 @@
-/* TeamDay: the Needs a host lane at the start (only when it holds something; BookingList's rows), then WeekCalendar's
-   team view filling the rest. Below 480px of its container the lane sits over the grid, a few rows high. */
+/* TeamDay: Needs a host as one slim strip over the grid (only when it holds something), then WeekCalendar's team view
+   with the whole width and height under it. Below 480px of its container the strip is one chip that lists them. */
 @layer components {
   .root {
     display: flex;
     flex: 1;
+    flex-direction: column;
+    min-inline-size: 0;
     min-block-size: 0;
     container-type: inline-size;
   }
@@ -16,26 +18,138 @@
     min-block-size: 0;
   }
 
-  /* The lane: pinned at the start, a menu's width, as Jobber's Unscheduled and timefix's Unassigned column. */
-  .lane {
+  /* One row, never taller: the lead, then the chips scrolling sideways. */
+  .strip {
+    display: flex;
     flex: none;
-    inline-size: var(--size-menu);
-    padding-block: var(--space-8);
-    overflow-y: auto;
-    border-inline-end: var(--border-width-hairline) solid var(--border);
+    align-items: center;
+    gap: var(--space-8);
+    min-inline-size: 0;
+    padding: var(--space-6) var(--space-12);
+    border-block-end: var(--border-width-hairline) solid var(--border-subtle);
     background: var(--surface-raised);
   }
 
+  /* The warning: the orange tag's colours, as a state that asks for action. */
+  .lead {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: var(--space-4);
+    block-size: var(--size-control);
+    padding-inline: var(--space-8);
+    border-radius: var(--radius-full);
+    background: var(--tag-orange-bg);
+    color: var(--tag-orange-text);
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label-strong);
+    white-space: nowrap;
+  }
+
+  .count {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .chips {
+    display: flex;
+    flex: 1;
+    gap: var(--space-6);
+    min-inline-size: 0;
+    margin: 0;
+    padding: var(--space-2);
+    overflow-x: auto;
+    list-style: none;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: thin;
+  }
+
+  .item {
+    display: flex;
+    flex: none;
+  }
+
+  /* A booking: its time, title and guest on one line, a hairline in the warning's colour round it. */
+  .chip,
+  .summary {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-6);
+    block-size: var(--size-control);
+    padding-inline: var(--space-8);
+    border: var(--border-width-hairline) solid var(--tag-orange-border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--text);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+    white-space: nowrap;
+    transition:
+      background-color var(--duration-hover) var(--ease-hover),
+      border-color var(--duration-hover) var(--ease-hover);
+  }
+
+  /* One chip for them all: only in a narrow window. */
+  .summary {
+    display: none;
+    color: var(--tag-orange-text);
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label-strong);
+  }
+
+  .chip:focus-visible,
+  .summary:focus-visible {
+    box-shadow: var(--shadow-focus);
+    outline: none;
+  }
+
+  .chip[data-open] {
+    border-color: var(--accent-line);
+    background: var(--surface-selected);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .chip:hover,
+    .summary:hover {
+      background: var(--surface-hover);
+    }
+  }
+
+  .time {
+    font: var(--text-label-strong);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: var(--tracking-label-strong);
+  }
+
+  .title {
+    max-inline-size: var(--size-column);
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .who {
+    color: var(--text-secondary);
+  }
+
   @container (inline-size < 480px) {
-    .root {
-      flex-direction: column;
+    .strip {
+      padding-inline: var(--space-8);
     }
 
-    .lane {
-      inline-size: auto;
-      max-block-size: calc(var(--size-toolbar) * 4);
-      border-inline-end: none;
-      border-block-end: var(--border-width-hairline) solid var(--border);
+    .lead,
+    .chips {
+      display: none;
+    }
+
+    .summary {
+      display: inline-flex;
+    }
+  }
+
+  @media (forced-colors: active) {
+    .lead,
+    .chip,
+    .summary {
+      border: var(--border-width-hairline) solid ButtonText;
     }
   }
 }

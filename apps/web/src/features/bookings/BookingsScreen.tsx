@@ -1611,9 +1611,11 @@ function WeekView(props: BookingsCalendarScreenProps) {
               ? strings.withHost(booking.visitorName, booking.hostName)
               : booking.visitorName,
           kind: 'booking',
-          // Its booking link's colour, as on Links; no mark (every booking is one) and no status while confirmed, so
-          // a block says only what is news: a no show, a booking with no host, or struck through when cancelled.
+          // Its booking link's colour, as on Links, and Timefix's mark (the owner, 31 October 2026: what came through
+          // Timefix shows at a glance beside synced events); no status while confirmed, so a block says only what is
+          // news: a no show, a booking with no host, or struck through when cancelled.
           hue: linkHue(booking.pageId),
+          provider: 'timefix',
           isCancelled: booking.status === 'cancelled',
           ...(booking.status !== 'confirmed'
             ? {}

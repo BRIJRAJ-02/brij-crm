@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { focusLater } from '../../lib/focus-later.ts';
 import { Modal } from '../../molecules/Modal/Modal.tsx';
@@ -16,12 +16,12 @@ export type TeamDayTone = 'booked' | 'free' | 'off' | 'away';
 export interface TeamDayPerson {
   readonly id: string;
   readonly name: string;
-  /** Their day in a word or two: "3 booked", "Free", "Off", "Away". First on the line under the name. */
+  /** Their day in a word or two: "3 booked", "Free", "Off", "Away". The one line under the name, in its tone's colour. */
   readonly status: string;
   readonly tone: TeamDayTone;
-  /** Their zone's offset, only when it differs from the reader's ("UTC+1"): after the status. */
+  /** Their zone's offset, only when it differs from the reader's ("UTC+1"): in the head's tooltip. */
   readonly badge?: string;
-  /** Their job title, last on the line, so it is what gets cut when the column is narrow. */
+  /** Their job title: first in the head's tooltip. */
   readonly title?: string;
   /** At the head's end: their calendar's trouble chip, when there is any. */
   readonly extra?: ReactNode;
@@ -49,8 +49,9 @@ export interface TeamDayProps extends Omit<
   /** A block or column to focus (WeekCalendar's `focusDay`), the person's id as the day. */
   readonly focusPerson?: WeekCalendarProps['focusDay'];
   /**
-   * The Needs a host lane, pinned at the start (AC-1435): only when it holds something. Its rows are BookingList's;
-   * pressing one opens `detail` beside it (its booking's card, with Reassign), or as a sheet on a phone.
+   * Needs a host (AC-1435): one slim strip over the grid, only when it holds something, one chip a booking (its time,
+   * title and guest) scrolling sideways; pressing one opens `detail` under it (its booking's card, with Reassign). In a
+   * narrow window the strip is one "2 need a host" chip that lists them in a sheet. Rows are BookingList's.
    */
   readonly lane?: {
     readonly rows: readonly BookingListRow[];
@@ -75,10 +76,17 @@ function columnName(person: TeamDayPerson): string {
     .join(', ');
 }
 
+/** The head's tooltip: what the one line leaves out (title, offset, trouble), after the name. */
+function headHint(person: TeamDayPerson): string {
+  return [person.name, person.title, person.status, person.badge, person.extraLabel]
+    .filter((part) => part !== undefined && part !== '')
+    .join(strings.hintSeparator);
+}
+
 /**
  * The Team day (spec 0030): one day, one column per person across, the hours down, on WeekCalendar's `team` view (its
- * blocks, drawing, cards and keys), each column headed by the person, with time off as a band down it, and the Needs a
- * host lane pinned at the start when there is something to hand on.
+ * blocks, drawing, cards and keys), each column headed by the person, with time off as a band down it, and Needs a
+ * host as one slim strip over the grid when there is something to hand on, so the columns keep the whole width.
  */
 export function TeamDay({ people, selectedPerson, onSelectPerson, focusPerson, lane, ...calendar }: TeamDayProps) {
   const days = useMemo(
@@ -94,13 +102,10 @@ export function TeamDay({ people, selectedPerson, onSelectPerson, focusPerson, l
           <PersonLine
             id={person.id}
             name={person.name}
-            meta={[
-              person.status,
-              ...(person.badge === undefined ? [] : [person.badge]),
-              ...(person.title === undefined ? [] : [person.title]),
-            ]}
-            tone={person.tone === 'away' ? 'away' : 'quiet'}
+            meta={person.status === '' ? [] : [person.status]}
+            tone={person.tone}
             size="sm"
+            hint={headHint(person)}
             isDecorative
             {...(person.canAct === false || person.extra !== undefined
               ? {
@@ -122,7 +127,7 @@ export function TeamDay({ people, selectedPerson, onSelectPerson, focusPerson, l
   const rows = lane?.rows ?? [];
   return (
     <div className={styles.root} data-team-day="">
-      {lane !== undefined && rows.length > 0 && <Lane lane={{ ...lane, rows }} />}
+      {lane !== undefined && rows.length > 0 && <Strip lane={{ ...lane, rows }} />}
       <div className={styles.grid}>
         <WeekCalendar
           {...calendar}
@@ -137,7 +142,7 @@ export function TeamDay({ people, selectedPerson, onSelectPerson, focusPerson, l
   );
 }
 
-/** Whether the lane sits in a container narrower than `bp-container-md` (a phone): its card opens as a sheet. */
+/** Whether the strip sits in a container narrower than `bp-container-md` (a phone): a card opens as a sheet there. */
 function isNarrow(element: HTMLElement): boolean {
   const root = element.closest('[data-team-day]');
   if (!(root instanceof HTMLElement)) return false;
@@ -145,35 +150,101 @@ function isNarrow(element: HTMLElement): boolean {
   return Number.isFinite(narrow) && root.clientWidth < narrow;
 }
 
-/** The lane: its bookings as BookingList's rows, each opening its booking's card beside it (a sheet on a phone). */
-function Lane({ lane }: { readonly lane: NonNullable<TeamDayProps['lane']> }) {
+/** A chip's name: the booking's title, its time and its guest, as the chip shows them. */
+function chipName(row: BookingListRow): string {
+  return [row.title, row.date, row.guestName, row.badge].filter((part) => part !== undefined && part !== '').join(', ');
+}
+
+/**
+ * The strip: "Needs a host · 2", then a chip a booking, one row that scrolls sideways; a chip opens its booking's
+ * card under it. Narrow, one chip says how many and lists them in a sheet, and a booking picked there opens as one.
+ */
+function Strip({ lane }: { readonly lane: NonNullable<TeamDayProps['lane']> }) {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const [isSheet, setSheet] = useState(false);
+  const [isListOpen, setListOpen] = useState(false);
+  const summary = useRef<HTMLButtonElement>(null);
   const anchorRef = useMemo(() => ({ current: anchor }), [anchor]);
+  const count = lane.rows.length;
   const isOpen = lane.openId !== undefined && lane.rows.some((row) => row.id === lane.openId) && anchor !== null;
-  /** Closed by Escape, a press outside or the sheet's close: focus goes back to the row's button. */
+  /** Closed by Escape, a press outside or the sheet's close: focus goes back to what opened it. */
   const close = () => {
     const from = anchor;
     lane.onClose();
-    focusLater(() => from?.querySelector('button') ?? undefined);
+    focusLater(() => from);
+  };
+  const open = (id: string, from: HTMLElement) => {
+    setAnchor(from);
+    setSheet(isNarrow(from));
+    lane.onOpen(id);
   };
   return (
-    <section className={styles.lane} aria-label={strings.laneLabel(lane.rows.length)}>
-      <BookingList
-        label={strings.laneLabel(lane.rows.length)}
-        placement="card"
-        groups={[{ id: 'lane', label: strings.laneTitle(lane.rows.length), rows: lane.rows }]}
-        {...(lane.openId === undefined ? {} : { openId: lane.openId })}
-        onOpen={(id, row) => {
-          if (id === lane.openId) {
-            lane.onClose();
-            return;
-          }
-          setAnchor(row);
-          setSheet(isNarrow(row));
-          lane.onOpen(id);
-        }}
-      />
+    <section className={styles.strip} aria-label={strings.laneLabel(count)}>
+      <span className={styles.lead} aria-hidden="true">
+        <Icon name="user-x" size="sm" />
+        <span className={styles.count}>{strings.laneCount(count)}</span>
+      </span>
+      <ul className={styles.chips}>
+        {lane.rows.map((row) => (
+          <li key={row.id} className={styles.item}>
+            <button
+              type="button"
+              className={styles.chip}
+              aria-label={chipName(row)}
+              aria-haspopup="dialog"
+              aria-expanded={row.id === lane.openId}
+              data-open={row.id === lane.openId || undefined}
+              onClick={(event) => {
+                if (row.id === lane.openId) {
+                  lane.onClose();
+                  return;
+                }
+                open(row.id, event.currentTarget);
+              }}
+            >
+              <span className={styles.time}>{row.date}</span>
+              <span className={styles.title}>{row.title}</span>
+              {row.guestName !== undefined && <span className={styles.who}>{row.guestName}</span>}
+            </button>
+          </li>
+        ))}
+      </ul>
+      {/* A narrow window: one chip for them all, opening their list. */}
+      <button
+        ref={summary}
+        type="button"
+        className={styles.summary}
+        aria-haspopup="dialog"
+        aria-expanded={isListOpen}
+        onClick={() => setListOpen(true)}
+      >
+        <Icon name="user-x" size="sm" />
+        {strings.laneSummary(count)}
+      </button>
+      {isListOpen && (
+        <Modal
+          variant="sheet"
+          title={strings.laneTitle}
+          isOpen
+          isDismissable
+          onOpenChange={(next) => {
+            if (next) return;
+            setListOpen(false);
+            focusLater(() => summary.current);
+          }}
+        >
+          <BookingList
+            // Its own name: the strip's region keeps "Needs a host, N bookings", and two landmarks never share one.
+            label={strings.laneTitle}
+            placement="card"
+            groups={[{ id: 'lane', label: strings.laneTitle, rows: lane.rows }]}
+            onOpen={(id) => {
+              setListOpen(false);
+              if (summary.current !== null) open(id, summary.current);
+            }}
+          />
+        </Modal>
+      )}
       {isOpen &&
         lane.detail !== undefined &&
         (isSheet ? (
@@ -182,8 +253,8 @@ function Lane({ lane }: { readonly lane: NonNullable<TeamDayProps['lane']> }) {
             title={strings.details}
             isOpen
             isDismissable
-            onOpenChange={(open) => {
-              if (!open) close();
+            onOpenChange={(next) => {
+              if (!next) close();
             }}
           >
             {lane.detail}
@@ -192,10 +263,10 @@ function Lane({ lane }: { readonly lane: NonNullable<TeamDayProps['lane']> }) {
           <Popover
             triggerRef={anchorRef}
             isOpen
-            onOpenChange={(open) => {
-              if (!open) close();
+            onOpenChange={(next) => {
+              if (!next) close();
             }}
-            placement="end top"
+            placement="bottom start"
             label={strings.details}
           >
             {lane.detail}
