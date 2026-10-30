@@ -5,6 +5,7 @@ import {
   listCalendarConnections,
   listMemberCalendars,
   readCalendarHealth,
+  askToReconnect,
   readPageDestination,
   refreshCalendarConnection,
   setCalendarDestination,
@@ -17,8 +18,19 @@ import {
   updateCalendarConnection,
   updateCalendarSettings,
 } from '@crm/core';
+import { apiError } from '../../errors.ts';
 import { commitWrite } from '../../hooks.ts';
 import { member, type RequestContext } from '../../orpc.ts';
+
+/** A wait in words, rounded up: "5 hours", "1 hour", "20 minutes". */
+function waitWords(seconds: number): string {
+  if (seconds >= 3600) {
+    const hours = Math.ceil(seconds / 3600);
+    return hours === 1 ? '1 hour' : `${String(hours)} hours`;
+  }
+  const minutes = Math.max(1, Math.ceil(seconds / 60));
+  return minutes === 1 ? '1 minute' : `${String(minutes)} minutes`;
+}
 
 /** The door's scope, as the services take it. */
 type DoorScope = Parameters<typeof listMemberCalendars>[0];
@@ -143,6 +155,19 @@ export const calendarRouter = member.calendar.router({
   health: member.calendar.health.handler(async ({ context, input }) => ({
     members: [...(await readCalendarHealth(context.scope, { memberIds: input.memberIds }))],
   })),
+  // Spec 0037 (AC-1309): an email to a colleague in See reach; the wait is thrown inside the write, so nothing pokes.
+  askReconnect: member.calendar.askReconnect.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, async (hooks) => {
+      const asked = await askToReconnect(context.scope, { memberId: input.memberId }, hooks);
+      if (asked.outcome === 'wait') {
+        throw apiError(
+          'RATE_LIMITED',
+          `${asked.name} was asked to reconnect in the last day. You can ask again in ${waitWords(asked.retryAfterSeconds)}.`,
+        );
+      }
+      return { askedAt: asked.askedAt };
+    }),
+  ),
   meetings: {
     forRecord: member.calendar.meetings.forRecord.handler(({ context, input }) =>
       listMeetingsForRecord(context.scope, {

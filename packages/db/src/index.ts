@@ -32,6 +32,7 @@ export {
   jobKey,
   openQueueConnection,
   STALE_LOCK_SECONDS,
+  type CalendarHealthSweep,
   type DigestMember,
   type QueueConnection,
   type SleepCheck,

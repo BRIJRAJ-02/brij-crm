@@ -5,7 +5,12 @@
 import { EMAIL_KIND_TOPICS, type EmailKind, type EmailParams, type EmailTopic } from '@crm/contracts/emails';
 import type { EmailMedium } from './links.ts';
 import type { Template } from './template.ts';
-import { bookingCalendarRemoved, calendarDisconnected, signInAlert } from './templates/account.ts';
+import {
+  bookingCalendarRemoved,
+  calendarDisconnected,
+  calendarReconnectAsked,
+  signInAlert,
+} from './templates/account.ts';
 import { formConfirmation, formSubmission } from './templates/forms.ts';
 import { memberInvite } from './templates/invite.ts';
 import { importFinished, jobFailed, schedulingChanged, standinCovering } from './templates/team.ts';
@@ -70,6 +75,14 @@ export const CATALOG: Catalog = {
       provider: 'google',
       accountEmail: 'ada@acme.example',
       reason: 'expired',
+      settingsPath: '/w/acme/settings/scheduling/calendars',
+    },
+  },
+  calendar_reconnect_asked: {
+    template: calendarReconnectAsked,
+    medium: 'email_calendar_alert',
+    sample: {
+      actorName: 'Priya Shah',
       settingsPath: '/w/acme/settings/scheduling/calendars',
     },
   },

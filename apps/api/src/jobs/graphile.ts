@@ -29,6 +29,7 @@
 // minutes on, the last at the token's hour), so the tries cover the hour.
 import { QueuePayload } from '@crm/contracts';
 import type { Runner } from '@crm/core';
+import { CALENDAR_HEALTH, isMassOutage } from '@crm/core/system';
 import type { CalendarSyncInput, CalendarSyncOutcome, DailyCleanupInput, DailyCleanupReport } from '@crm/core/system';
 import type { DigestMember, QueueConnection } from '@crm/db';
 import { Logger, run, type Runner as GraphileRunner, type Task } from 'graphile-worker';
@@ -39,6 +40,12 @@ import { BOOKING_MAIL_TASK } from './booking-mail.ts';
 import { EMAIL_TASK, EmailPayload, type EmailRun, type EmailTry } from './email.ts';
 import { NOTIFICATION_EMAIL_TASK } from './notification-email.ts';
 import { SCHEDULING_NOTICE_TASK } from './scheduling-notice.ts';
+import {
+  CALENDAR_HEALTH_CRONTAB,
+  CALENDAR_HEALTH_EMAIL_TASK,
+  CALENDAR_HEALTH_TASK,
+  calendarHealthEmailKey,
+} from './calendar-health.ts';
 
 /** The two lanes: their task and how many slices each runs at once (AC-108). */
 export const LANES = {
@@ -77,6 +84,8 @@ export const RUNNER_TASKS: readonly string[] = [
   NOTIFICATION_EMAIL_TASK,
   DIGEST_TASK,
   SCHEDULING_NOTICE_TASK,
+  CALENDAR_HEALTH_TASK,
+  CALENDAR_HEALTH_EMAIL_TASK,
 ];
 
 /**
@@ -188,6 +197,15 @@ export interface JobRunnersOptions {
    */
   readonly schedulingNotice?: (payload: unknown) => Promise<void>;
   /**
+   * Calendar health (spec 0037, AC-1310, AC-1311): one episode's email (`runCalendarHealthEmailTask`), and who hears
+   * a held sweep (Sentry's warning). With it, the light runner takes `crm_calendar_health_email` and holds the
+   * `crm_cron_calendar_health` crontab line.
+   */
+  readonly calendarHealth?: {
+    readonly email: (payload: unknown) => Promise<void>;
+    readonly held: (counts: { readonly checked: number; readonly newlyBroken: number }) => void;
+  };
+  /**
    * The durable cut off (late trap #41): one queued `crm_realtime_cutoff`
    * (`runCutOff` with the worker's Centrifugo), told which try this is. With
    * it, the light runner takes that task; a `retry` is queued again under the
@@ -269,6 +287,44 @@ export function digestTask(
     // More than a call reads: the rest in a continuation, after the last member reached.
     await helpers.addJob(DIGEST_TASK, { after }, { jobKey: 'crm-digest-continue', maxAttempts: 5 });
     log.info('notification.digest.continues', { queued });
+  };
+}
+
+/**
+ * The calendar health sweep (spec 0037, AC-1310, AC-1311): the connections owed an email, across workspaces, ids and
+ * counts only. In a mass outage it queues nothing and tells `held` once; otherwise one email job each, at most 200,
+ * keyed by connection, episode and which email, so a sweep run twice queues each once.
+ */
+export function calendarHealthSweepTask(
+  queue: Pick<QueueConnection, 'calendarHealthDue'>,
+  log: {
+    info(message: string, fields?: Record<string, unknown>): void;
+    warn(message: string, fields?: Record<string, unknown>): void;
+  },
+  held: (counts: { readonly checked: number; readonly newlyBroken: number }) => void,
+): Task {
+  return async (_payload, helpers) => {
+    const sweep = await queue.calendarHealthDue(CALENDAR_HEALTH.emailsPerSweep);
+    const counts = { checked: sweep.checked, newlyBroken: sweep.newlyBroken };
+    if (sweep.due.length === 0) return;
+    if (isMassOutage(sweep.checked, sweep.newlyBroken)) {
+      log.warn('calendar.health.held', counts);
+      held(counts);
+      return;
+    }
+    for (const due of sweep.due) {
+      const payload = {
+        workspaceId: due.workspaceId,
+        connectionId: due.connectionId,
+        episode: due.episode,
+        reminder: due.reminder,
+      };
+      await helpers.addJob(CALENDAR_HEALTH_EMAIL_TASK, payload, {
+        jobKey: calendarHealthEmailKey(payload),
+        maxAttempts: 5,
+      });
+    }
+    log.info('calendar.health.queued', { ...counts, queued: sweep.due.length });
   };
 }
 
@@ -544,6 +600,7 @@ export async function startJobRunners(options: JobRunnersOptions): Promise<JobRu
       const email = lane === LANES.light ? options.email : undefined;
       const notificationEmail = lane === LANES.light ? options.notificationEmail : undefined;
       const schedulingNotice = lane === LANES.light ? options.schedulingNotice : undefined;
+      const calendarHealth = lane === LANES.light ? options.calendarHealth : undefined;
       const cutOff = lane === LANES.light ? options.cutOff : undefined;
       runners.push(
         watch(
@@ -586,17 +643,33 @@ export async function startJobRunners(options: JobRunnersOptions): Promise<JobRu
                       options.onActivity,
                     ),
                   }),
+              ...(calendarHealth === undefined
+                ? {}
+                : {
+                    [CALENDAR_HEALTH_TASK]: counted(
+                      calendarHealthSweepTask(options.queue, options.log, calendarHealth.held),
+                      inFlight,
+                      options.onActivity,
+                    ),
+                    [CALENDAR_HEALTH_EMAIL_TASK]: counted(
+                      (payload) => calendarHealth.email(payload),
+                      inFlight,
+                      options.onActivity,
+                    ),
+                  }),
               ...(cutOff === undefined
                 ? {}
                 : { [CUTOFF_TASK]: counted(cutOffTask(options, cutOff), inFlight, options.onActivity) }),
             },
-            // The daily cleanup's line, and the digest's hourly one beside the email task that sends it.
-            ...(daily === undefined && notificationEmail === undefined
+            // The daily cleanup's line, the digest's hourly one beside the email task that sends it, and the calendar
+            // health sweep's quarter hourly one beside its email task.
+            ...(daily === undefined && notificationEmail === undefined && calendarHealth === undefined
               ? {}
               : {
                   crontab: [
                     ...(daily === undefined ? [] : [DAILY_CRONTAB]),
                     ...(notificationEmail === undefined ? [] : [DIGEST_CRONTAB]),
+                    ...(calendarHealth === undefined ? [] : [CALENDAR_HEALTH_CRONTAB]),
                   ].join('\n'),
                 }),
             // Completions and failures go through Graphile's batcher (with no wait), which a stop flushes before

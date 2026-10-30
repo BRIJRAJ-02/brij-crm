@@ -102,6 +102,14 @@ export const calendarConnections = pgTable(
      * them first (a new connection, or Refresh), and the sync lists them again once a day.
      */
     calendarsListedAt: timestamptz('calendars_listed_at'),
+    /**
+     * A broken episode (spec 0037, AC-1310): when the connection moved to `expired` or `failed`, and when its member's
+     * first email and its one reminder went. Kept by `crm_calendar_health_episode` (migration 0134): set on the move,
+     * all three cleared when the connection is `connected` again, so a later break is a new episode.
+     */
+    healthBrokenAt: timestamptz('health_broken_at'),
+    healthNotifiedAt: timestamptz('health_notified_at'),
+    healthRemindedAt: timestamptz('health_reminded_at'),
     ...auditColumns(),
     updatedByType: calendarActorType('updated_by'),
   },

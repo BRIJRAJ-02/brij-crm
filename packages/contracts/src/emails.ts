@@ -136,6 +136,11 @@ export const CalendarDisconnectedEmail = z.strictObject({
   reason: z.enum(['expired', 'failed']),
   /** Where the member reconnects it. */
   settingsPath: AppPath,
+  /**
+   * The episode's one reminder, 7 days after the first email, while it is still broken (spec 0037, AC-1310). Absent
+   * is the first email.
+   */
+  reminder: z.literal(true).optional(),
 });
 /** A member's calendar stopped syncing. */
 export type CalendarDisconnectedEmail = z.infer<typeof CalendarDisconnectedEmail>;
@@ -346,11 +351,26 @@ export const StandinCoveringEmail = z.strictObject({
 /** The covering for someone email's params. */
 export type StandinCoveringEmail = z.infer<typeof StandinCoveringEmail>;
 
+/**
+ * Asked to reconnect (spec 0037, AC-1309): to a member whose calendar needs them, when a colleague who can see their
+ * scheduling, or an admin, pressed "Ask to reconnect". "Priya asked you to reconnect your calendar." Never which
+ * account or calendar: the member sees that in Settings.
+ */
+export const CalendarReconnectAskedEmail = z.strictObject({
+  /** Who asked, by name. */
+  actorName: Name,
+  /** Settings › Calendars, where the member reconnects. */
+  settingsPath: AppPath,
+});
+/** The asked to reconnect email's params. */
+export type CalendarReconnectAskedEmail = z.infer<typeof CalendarReconnectAskedEmail>;
+
 /** Every email with a template, and its params' schema. The sign in code is drawn on its own (`renderSignInCode`). */
 export const EMAIL_PARAMS = {
   form_submission: FormSubmissionEmail,
   form_confirmation: FormConfirmationEmail,
   calendar_disconnected: CalendarDisconnectedEmail,
+  calendar_reconnect_asked: CalendarReconnectAskedEmail,
   booking_calendar_removed: BookingCalendarRemovedEmail,
   member_invite: MemberInviteEmail,
   sign_in_alert: SignInAlertEmail,
@@ -380,6 +400,7 @@ export const QUEUED_EMAIL_KINDS = [
   'form_submission',
   'form_confirmation',
   'calendar_disconnected',
+  'calendar_reconnect_asked',
   'booking_calendar_removed',
   'import_finished',
   'job_failed',

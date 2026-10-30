@@ -218,6 +218,8 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   'queueFormSubmissionNotice',
   'queueFormConfirmation',
   'queueCalendarDisconnected',
+  // The calendar health sweep's hold (spec 0037, AC-1311): pure, two counts in.
+  'isMassOutage',
   'queueBookingCalendarRemoved',
   'queueImportFinished',
   'loadEmail',
@@ -724,6 +726,8 @@ describe('the walk: a principal without the access is refused', () => {
       return core.deleteTimeOff(scope, { id: made.entry.id });
     },
     getLimits: (scope, ownerId) => core.getLimits(scope, { now: () => new Date() }, { memberId: ownerId }),
+    // Ask to reconnect (spec 0037, AC-1309): See over the member.
+    askToReconnect: (scope, ownerId) => core.askToReconnect(scope, { memberId: ownerId }),
     setLimits: (scope, ownerId) => core.setLimits(scope, { now: () => new Date() }, { memberId: ownerId, perDay: 3 }),
     reassignUpcoming: (scope, ownerId) => core.reassignUpcoming(scope, { rotationId: core.newId(), memberId: ownerId }),
     // The Team week's writes (spec 0037, AC-1291, AC-1292): a cell, a copied week, usual hours for several.

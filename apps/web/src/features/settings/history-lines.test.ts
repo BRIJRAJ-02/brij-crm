@@ -382,6 +382,10 @@ const SENTENCES: readonly (readonly [AuditEntryView, string])[] = [
     'Ada Lovelace changed Bea Rao’s meeting limits',
   ],
   [
+    { ...base, action: 'calendar.reconnect_asked', target: member(bea), params: {} },
+    'Ada Lovelace asked Bea Rao to reconnect their calendar',
+  ],
+  [
     { ...base, action: 'booking.changed_for', target: booking, params: { host: bea, change: 'moved' } },
     'Ada Lovelace moved Intro call on dayTime(2026-10-24T09:30) for Bea Rao',
   ],

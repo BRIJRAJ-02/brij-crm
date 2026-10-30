@@ -324,6 +324,10 @@ export const ACCESS_TABLE = {
   // Spec 0037 (AC-1307): any member, for the members in their reach; everyone else is left out, never refused.
   // Spec 0037, AC-1307: statuses for the members in See reach, everyone else left out.
   readCalendarHealth: { filtered: 'schedulingReach' },
+  // Spec 0037, AC-1309: See over the member (owners and admins see everyone); the 24 hour limit inside.
+  askToReconnect: { scheduling: 'view' },
+  // Spec 0037, AC-1310: one episode's first email or reminder, the worker's task.
+  runCalendarHealthEmail: { system: true },
   // A meeting a booking made shows its details only to who may see that booking (`booking/seen.ts`), else Busy.
   listMeetingsForRecord: { data: 'read' },
   meetingFacts: { system: true },

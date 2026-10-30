@@ -188,6 +188,7 @@ export function createJobDrain(options: JobDrainOptions): JobDrain {
         ...(tasks.email === undefined ? {} : { email: tasks.email }),
         notificationEmail: tasks.notificationEmail,
         schedulingNotice: tasks.schedulingNotice,
+        calendarHealth: tasks.calendarHealth,
         daily: tasks.daily(unrelayedSweep(queue)),
         ...(tasks.calendar === undefined ? {} : { calendar: tasks.calendar }),
         ...(options.onFault === undefined ? {} : { onFault: options.onFault }),

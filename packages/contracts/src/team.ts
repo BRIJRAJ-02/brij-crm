@@ -96,6 +96,9 @@ export const AUDIT_ACTIONS = [
   // Someone's meeting limits set, changed or cleared (spec 0037, AC-1297): the target is the member whose they are;
   // `before` and `after` hold the limits.
   'limits.changed',
+  // Someone asked a member to reconnect their calendar (spec 0037, AC-1309): the target is that member; the row is
+  // what holds the 24 hour limit, and keeps nothing of their calendars.
+  'calendar.reconnect_asked',
   // A booking made, moved or cancelled by someone other than its host: the target is the booking, `memberId` the host.
   'booking.changed_for',
 ] as const;

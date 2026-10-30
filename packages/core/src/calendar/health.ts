@@ -21,6 +21,7 @@
 // active member, is left out of the answer, never refused, so the answer never
 // says who exists.
 import { sql } from 'drizzle-orm';
+import type { WorkspaceTx } from '@crm/db';
 import type { CalendarHealthStatus, MemberCalendarHealth } from '@crm/contracts';
 import { checkScope, type EngineScope } from '../access/mint.ts';
 import { inWorkspace } from '../access/run.ts';
@@ -31,7 +32,7 @@ import { isUuid, uuidList } from '../engine/ids.ts';
 const STOPPED: ReadonlySet<string> = new Set(['expired', 'revoked', 'failed']);
 
 /** One account or calendar as the health fold reads it. */
-interface HealthRow extends Record<string, unknown> {
+export interface HealthRow extends Record<string, unknown> {
   readonly member_id: string;
   readonly connection_status: string | null;
   readonly connection_failing_since: string | null;
@@ -99,29 +100,42 @@ export async function readCalendarHealth(
   const { asked, rows } = await inWorkspace(scope, async (tx) => {
     const reach = await schedulingReach(tx, scope);
     const inReach = named.filter((id) => canActFor(reach, id, 'view'));
-    if (inReach.length === 0) return { asked: inReach, rows: { rows: [] as HealthRow[] } };
-    const read = await tx.execute<HealthRow>(sql`
-      select m.id::text as member_id, c.status::text as connection_status,
-        to_char(c.failing_since at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as connection_failing_since,
-        to_char(c.updated_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as connection_changed_at,
-        k.id::text as calendar_id, k.check_conflicts, k.is_destination,
-        (k.last_error ->> 'source' in ('busy', 'sync')) is true as calendar_failing,
-        to_char(k.failing_since at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as calendar_failing_since
-      from members m
-      left join calendar_connections c on c.workspace_id = m.workspace_id and c.member_id = m.id
-      left join calendar_calendars k on k.workspace_id = c.workspace_id and k.connection_id = c.id
-        and (k.check_conflicts or k.is_destination)
-      where m.id = any(${uuidList(inReach)}) and m.status = 'active'
-    `);
-    return { asked: inReach, rows: read };
+    if (inReach.length === 0) return { asked: inReach, rows: [] as readonly HealthRow[] };
+    return { asked: inReach, rows: await healthRows(tx, inReach) };
   });
-  const found = new Set(rows.rows.map((row) => row.member_id));
+  return foldMembers(asked, rows);
+}
+
+/**
+ * The health rows of some members (active ones only), in one query, with no reach check: the caller has checked it
+ * (`readCalendarHealth`, `askToReconnect`). Statuses, flags and times only, never a name, an address or an error.
+ */
+export async function healthRows(tx: WorkspaceTx, memberIds: readonly string[]): Promise<readonly HealthRow[]> {
+  const read = await tx.execute<HealthRow>(sql`
+    select m.id::text as member_id, c.status::text as connection_status,
+      to_char(c.failing_since at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as connection_failing_since,
+      to_char(c.updated_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as connection_changed_at,
+      k.id::text as calendar_id, k.check_conflicts, k.is_destination,
+      (k.last_error ->> 'source' in ('busy', 'sync')) is true as calendar_failing,
+      to_char(k.failing_since at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as calendar_failing_since
+    from members m
+    left join calendar_connections c on c.workspace_id = m.workspace_id and c.member_id = m.id
+    left join calendar_calendars k on k.workspace_id = c.workspace_id and k.connection_id = c.id
+      and (k.check_conflicts or k.is_destination)
+    where m.id = any(${uuidList(memberIds)}) and m.status = 'active'
+  `);
+  return read.rows;
+}
+
+/** Each asked member with any row folded to their health, in the order asked (pure). */
+export function foldMembers(asked: readonly string[], rows: readonly HealthRow[]): readonly MemberCalendarHealth[] {
+  const found = new Set(rows.map((row) => row.member_id));
   return asked
     .filter((id) => found.has(id))
     .map((id) =>
       foldHealth(
         id,
-        rows.rows.filter((row) => row.member_id === id),
+        rows.filter((row) => row.member_id === id),
       ),
     );
 }

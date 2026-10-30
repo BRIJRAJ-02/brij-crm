@@ -491,6 +491,96 @@ describe('the daily digest’s members (spec 0038, AC-1178)', () => {
   });
 });
 
+describe('the calendar health sweep (spec 0037, AC-1310, AC-1311)', () => {
+  /** One connection of the member's in `status`, as a connect leaves it. */
+  async function connection(workspaceId: string, memberId: string, status: string) {
+    const id = randomUUID();
+    await db.withWorkspace(workspaceId, (tx) =>
+      tx.execute(sql`
+        insert into calendar_connections (workspace_id, id, member_id, provider, account_email, status, tokens,
+          created_by_type, created_by_id, created_by_member_id, updated_by_type, updated_by_id, updated_by_member_id)
+        values (${workspaceId}, ${id}, ${memberId}, 'google', ${`${id}@example.com`}, ${status}::calendar_status,
+          '\\x00'::bytea, 'member', ${memberId}, ${memberId}, 'member', ${memberId}, ${memberId})
+      `),
+    );
+    return id;
+  }
+  const episodeOf = async (workspaceId: string, id: string) =>
+    (
+      await db.withWorkspace(workspaceId, (tx) =>
+        tx.execute<{ broken: string | null; notified: string | null; reminded: string | null }>(sql`
+          select health_broken_at::text as broken, health_notified_at::text as notified,
+            health_reminded_at::text as reminded
+          from calendar_connections where id = ${id}::uuid
+        `),
+      )
+    ).rows[0];
+  const set = (workspaceId: string, id: string, assignments: ReturnType<typeof sql>) =>
+    db.withWorkspace(workspaceId, (tx) =>
+      tx.execute(sql`update calendar_connections set ${assignments} where id = ${id}::uuid`),
+    );
+
+  it('opens an episode on a break, keeps it through failed then expired, and closes it on connected', async () => {
+    const { workspaceId, memberId } = await workspaceWithMember('health-episode');
+    const id = await connection(workspaceId, memberId, 'connected');
+    expect(await episodeOf(workspaceId, id)).toEqual({ broken: null, notified: null, reminded: null });
+    await set(workspaceId, id, sql`status = 'failed'`);
+    const opened = await episodeOf(workspaceId, id);
+    expect(opened?.broken).not.toBeNull();
+    await set(workspaceId, id, sql`health_notified_at = now()`);
+    // Failed then expired is one episode: its start and its email stay.
+    await set(workspaceId, id, sql`status = 'expired'`);
+    expect(await episodeOf(workspaceId, id)).toMatchObject({
+      broken: opened?.broken,
+      notified: expect.any(String) as string,
+    });
+    // Reconnecting goes through syncing first: still the same episode until it is connected.
+    await set(workspaceId, id, sql`status = 'syncing'`);
+    expect((await episodeOf(workspaceId, id))?.broken).toBe(opened?.broken);
+    await set(workspaceId, id, sql`status = 'connected'`);
+    expect(await episodeOf(workspaceId, id)).toEqual({ broken: null, notified: null, reminded: null });
+    await set(workspaceId, id, sql`status = 'expired'`);
+    const again = await episodeOf(workspaceId, id);
+    expect(again).toMatchObject({ notified: null, reminded: null });
+    expect(again?.broken).not.toBeNull();
+    expect(again?.broken).not.toBe(opened?.broken);
+  });
+
+  it('names a first email, then nothing, then the reminder 7 days on, then nothing, on the worker login', async () => {
+    const { workspaceId, memberId } = await workspaceWithMember('health-sweep');
+    const healthy = await connection(workspaceId, memberId, 'connected');
+    const broken = await connection(workspaceId, memberId, 'connected');
+    await set(workspaceId, broken, sql`status = 'expired'`);
+    const queue = openQueueConnection({ url: workerUrl, applicationName: 'crm-queue-tests', max: 1 });
+    const mine = async () => (await queue.calendarHealthDue(200)).due.filter((row) => row.workspaceId === workspaceId);
+    try {
+      const sweep = await queue.calendarHealthDue(200);
+      // Every other test's connections count too, so only lower bounds hold for the counts.
+      expect(sweep.checked).toBeGreaterThanOrEqual(2);
+      expect(sweep.newlyBroken).toBeGreaterThanOrEqual(1);
+      const [first, ...rest] = await mine();
+      expect(rest).toEqual([]);
+      expect(first).toMatchObject({ connectionId: broken, reminder: false });
+      expect(Date.parse(first?.episode ?? '')).not.toBeNaN();
+      expect((await mine()).map((row) => row.connectionId)).not.toContain(healthy);
+      await set(workspaceId, broken, sql`health_notified_at = now()`);
+      expect(await mine()).toEqual([]);
+      await set(workspaceId, broken, sql`health_notified_at = now() - interval '7 days 1 minute'`);
+      expect(await mine()).toEqual([expect.objectContaining({ connectionId: broken, reminder: true })]);
+      await set(workspaceId, broken, sql`health_reminded_at = now()`);
+      expect(await mine()).toEqual([]);
+      // A deleted workspace's connections are nobody's to tell.
+      await set(workspaceId, broken, sql`status = 'connected'`);
+      await set(workspaceId, broken, sql`status = 'failed'`);
+      expect(await mine()).toHaveLength(1);
+      await owner.query('update workspaces set deleted_at = now() where id = $1', [workspaceId]);
+      expect(await mine()).toEqual([]);
+    } finally {
+      await queue.close();
+    }
+  });
+});
+
 describe('the check before the worker sleeps (spec 0008, milestone 3, AC-117)', () => {
   it('says whether a row is locked, when the next one is due, and whether an outbox row waits, on one clock', async () => {
     const { workspaceId, memberId } = await workspaceWithMember('queue-sleep');

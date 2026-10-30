@@ -279,6 +279,7 @@ const FIXTURES: Record<ListedAuditAction, readonly AuditRow[]> = {
   'limits.changed': [
     row('limits.changed', 'member', bea, { before: { memberId: bea }, after: { memberId: bea, perDay: 4 } }),
   ],
+  'calendar.reconnect_asked': [row('calendar.reconnect_asked', 'member', bea)],
   'block.removed': [
     row('block.removed', 'member', bea, { before: { memberId: bea, blockId: newId(), kind: 'busy', repeat: 'once' } }),
   ],

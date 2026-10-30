@@ -55,3 +55,11 @@ export { markEmailed, NOTIFICATION_EMAIL_MAX, queueNextEmail, releaseEmailed } f
 // The member told of someone else's change to their scheduling (spec 0037, AC-1264): the worker's
 // `crm_scheduling_notice` task.
 export { runSchedulingNotice, type SchedulingNoticeOutcome } from './scheduling/notice.ts';
+// Calendar health emails (spec 0037, AC-1310, AC-1311): the sweep's hold and the worker's
+// `crm_calendar_health_email` task, one episode's first email or reminder.
+export {
+  CALENDAR_HEALTH,
+  isMassOutage,
+  runCalendarHealthEmail,
+  type CalendarHealthEmailOutcome,
+} from './calendar/health-notices.ts';

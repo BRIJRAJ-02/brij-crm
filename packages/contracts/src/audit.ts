@@ -301,6 +301,8 @@ export const AuditEntryView = z.discriminatedUnion('action', [
   entry(['time_off.created', 'time_off.changed', 'time_off.deleted'], member, NoParams),
   /** Someone's meeting limits set, changed or cleared (spec 0037, AC-1297): the target is the member whose they are. */
   entry(['limits.changed'], member, NoParams),
+  /** Someone asked a member to reconnect their calendar (spec 0037, AC-1309): the target is that member. */
+  entry(['calendar.reconnect_asked'], member, NoParams),
   /** A booking made, moved or cancelled by someone other than its host (spec 0037, AC-1263). */
   entry(
     ['booking.changed_for'],

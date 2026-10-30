@@ -1439,6 +1439,26 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     await m.client.calendar.settings.update({ workspace: m.slug, createUnknownPeople: true, mutationId });
     return [];
   },
+  // Ask to reconnect (spec 0037, AC-1309): an audit row and an email to a colleague whose calendar broke (stored by
+  // hand, as a sync leaves it), no outbox row; one poke, which wakes the job drain to send it.
+  'calendar.askReconnect': async (m, mutationId) => {
+    const colleague = newId();
+    await testQuery(
+      ownerUrl,
+      `insert into members (workspace_id, id, name, email, role, created_by_type, updated_by_type)
+       values ($1, $2, 'Kim Park', 'kim@acme.dev', 'member', 'system', 'system')`,
+      [m.workspace.id, colleague],
+    );
+    await testQuery(
+      ownerUrl,
+      `insert into calendar_connections (workspace_id, id, member_id, provider, account_email, status, tokens,
+         created_by_type, created_by_id, created_by_member_id, updated_by_type, updated_by_id, updated_by_member_id)
+       values ($1, $2, $3, 'google', 'kim@acme.dev', 'expired', '\\x00'::bytea, 'member', $3, $3, 'member', $3, $3)`,
+      [m.workspace.id, newId(), colleague],
+    );
+    await m.client.calendar.askReconnect({ workspace: m.slug, memberId: colleague, mutationId });
+    return [];
+  },
   // Booking pages (spec 0025): settings, not CRM data, so no outbox row; still one poke per write.
   'bookingPages.create': async (m, mutationId) => {
     await m.client.bookingPages.create({ workspace: m.slug, id: newId(), title: 'Intro', timeZone: 'UTC', mutationId });

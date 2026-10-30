@@ -26,6 +26,8 @@ import { runEmail, type EmailRun, type EmailTry } from './email.ts';
 import { runnerTasks } from './graphile.ts';
 import { runNotificationEmail } from './notification-email.ts';
 import { runSchedulingNoticeTask } from './scheduling-notice.ts';
+import { runCalendarHealthEmailTask } from './calendar-health.ts';
+import { raiseIssue } from '../monitoring/sentry.ts';
 import { createJobRunner } from './runner.ts';
 
 /** The gap between sends: under Resend's 2 requests a second, with room for the api's. */
@@ -70,6 +72,14 @@ export interface JobTasks {
   readonly notificationEmail: (payload: unknown) => Promise<void>;
   /** One member's scheduling notice (spec 0037), as the system: it queues a `scheduling_changed` email. */
   readonly schedulingNotice: (payload: unknown) => Promise<void>;
+  /**
+   * Calendar health (spec 0037, AC-1310, AC-1311): one episode's email as the system, and the held sweep's one
+   * Sentry warning (`CALENDAR_OUTAGE`, counts only).
+   */
+  readonly calendarHealth: {
+    readonly email: (payload: unknown) => Promise<void>;
+    readonly held: (counts: { readonly checked: number; readonly newlyBroken: number }) => void;
+  };
   /** The daily cleanup's fan out on an open queue connection (only crm_worker may sweep). */
   readonly daily: (sweep: QueueConnection) => (input: DailyCleanupInput) => Promise<DailyCleanupReport>;
   /** The task identifiers these runners take: only their rows count as due. */
@@ -217,6 +227,16 @@ export function composeJobTasks(options: JobTasksOptions): JobTasks {
   const schedulingNotice = (payload: unknown) =>
     runSchedulingNoticeTask({ systemScope: (workspaceId) => systemScope(db, workspaceId), log }, payload);
 
+  // Calendar health (spec 0037, AC-1310): the system queues an episode's email for `crm_email` to send; a sweep held
+  // for a mass outage (AC-1311) raises one warning with its counts.
+  const calendarHealth = {
+    email: (payload: unknown) =>
+      runCalendarHealthEmailTask({ systemScope: (workspaceId) => systemScope(db, workspaceId), log }, payload),
+    held: (counts: { readonly checked: number; readonly newlyBroken: number }) => {
+      raiseIssue('CALENDAR_OUTAGE', { checked: counts.checked, newly_broken: counts.newlyBroken });
+    },
+  };
+
   return {
     registry,
     runner,
@@ -225,6 +245,7 @@ export function composeJobTasks(options: JobTasksOptions): JobTasks {
     email,
     notificationEmail,
     schedulingNotice,
+    calendarHealth,
     // The daily cleanup (milestone 3): the outbox, the dead queue rows, then one maintenance job a workspace.
     daily: (sweep) => (input) =>
       runDailyCleanup(

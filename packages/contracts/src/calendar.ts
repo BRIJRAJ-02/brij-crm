@@ -13,7 +13,9 @@
 // bookings go; `calendar.connections.refresh` lists an account's calendars
 // again. Spec 0037's `calendar.health` (AC-1307) is the only calendar read
 // about other members: a status and when it began, never an account's
-// address, a calendar's name, a provider's words or an event.
+// address, a calendar's name, a provider's words or an event, and
+// `calendar.askReconnect` (AC-1309) the one calendar write about another
+// member: an email asking them to reconnect, and nothing of theirs changed.
 import { oc } from '@orpc/contract';
 import * as z from 'zod';
 import { Timestamp } from './values/attribute-values.ts';
@@ -230,6 +232,23 @@ export type CalendarHealthInput = z.infer<typeof CalendarHealthInput>;
 export const CalendarHealth = z.object({ members: z.array(MemberCalendarHealth) });
 /** The asked members' calendar health. */
 export type CalendarHealth = z.infer<typeof CalendarHealth>;
+
+/**
+ * Ask to reconnect (spec 0037, AC-1309): emails a colleague whose calendar is Reconnect needed or Some calendars
+ * skipped, naming who asked. For someone with See over them, owners and admins over anyone; once per member per 24
+ * hours, whoever asks (429 `RATE_LIMITED` with the wait).
+ */
+export const AskReconnectInput = WorkspaceScoped.extend({
+  memberId: Uuid,
+  mutationId: Uuid,
+});
+/** Asking a colleague to reconnect their calendar. */
+export type AskReconnectInput = z.infer<typeof AskReconnectInput>;
+
+/** When the ask went: the next is possible a day later. */
+export const ReconnectAsked = z.object({ askedAt: Timestamp });
+/** When the ask went. */
+export type ReconnectAsked = z.infer<typeof ReconnectAsked>;
 
 /**
  * A booking page's own "Add events to" (AC-997): the calendar it names (one of the page owner's), and whether
@@ -466,6 +485,7 @@ export const calendarContract = {
     set: oc.input(SetPageDestinationInput).output(PageDestinationView),
   },
   health: oc.input(CalendarHealthInput).output(CalendarHealth),
+  askReconnect: oc.input(AskReconnectInput).output(ReconnectAsked),
   meetings: {
     forRecord: oc.input(MeetingsForRecordInput).output(MeetingPage),
     addAttendee: oc.input(AddMeetingAttendeeInput).output(AddedMeetingAttendee),

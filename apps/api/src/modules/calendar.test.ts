@@ -548,6 +548,39 @@ describe('Outlook, calendars and health (spec 0024 milestones 4 and 5, spec 0037
     expect(health).toEqual({ members: [{ memberId: self?.id, status: 'connected' }] });
     expect(JSON.stringify(health)).not.toContain('acme.dev');
   });
+
+  it('asks a colleague to reconnect once a day, 429 with the wait after, and tells the colleague nothing of theirs (spec 0037, AC-1309, AC-1425)', async () => {
+    const m = await memberWithWorkspace(app);
+    const kim = newId();
+    await testQuery(
+      ownerUrl,
+      `insert into members (workspace_id, id, name, email, role, created_by_type, updated_by_type)
+       values ($1, $2, 'Kim Park', 'kim@acme.dev', 'member', 'system', 'system')`,
+      [m.workspace.id, kim],
+    );
+    await testQuery(
+      ownerUrl,
+      `insert into calendar_connections (workspace_id, id, member_id, provider, account_email, status, tokens,
+         created_by_type, created_by_id, created_by_member_id, updated_by_type, updated_by_id, updated_by_member_id)
+       values ($1, $2, $3, 'google', 'kim.private@gmail.com', 'expired', '\\x00'::bytea, 'member', $3, $3, 'member', $3, $3)`,
+      [m.workspace.id, newId(), kim],
+    );
+    // Each read and write a colleague can call about Kim answers no account, calendar or error (AC-1425).
+    const health = await m.client.calendar.health({ workspace: m.slug, memberIds: [kim] });
+    expect(health).toEqual({ members: [{ memberId: kim, status: 'reconnect', since: expect.any(String) as string }] });
+    const asked = await m.client.calendar.askReconnect({ workspace: m.slug, memberId: kim, mutationId: newId() });
+    expect(Object.keys(asked)).toEqual(['askedAt']);
+    expect(JSON.stringify([health, asked])).not.toMatch(/gmail|kim\.private/);
+    const again = await failure(() =>
+      m.client.calendar.askReconnect({ workspace: m.slug, memberId: kim, mutationId: newId() }),
+    );
+    expect({ code: again.code, status: again.status }).toEqual({ code: 'RATE_LIMITED', status: 429 });
+    expect(again.message).toBe('Kim Park was asked to reconnect in the last day. You can ask again in 24 hours.');
+    const nobody = await failure(() =>
+      m.client.calendar.askReconnect({ workspace: m.slug, memberId: newId(), mutationId: newId() }),
+    );
+    expect(nobody.code).toBe('NOT_FOUND');
+  });
 });
 
 describe('a deleted workspace, and what each notice did (spec 0031, AC-823; spec 0024, AC-602)', () => {

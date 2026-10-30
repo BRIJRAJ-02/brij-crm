@@ -21,6 +21,25 @@ export interface DigestMember {
   readonly memberId: string;
 }
 
+/** One health sweep's read (spec 0037, AC-1310, AC-1311): the connections owed an email, and the sweep's counts. */
+export interface CalendarHealthSweep {
+  /** Every connection of an active member in a live workspace, revoked ones aside. */
+  readonly checked: number;
+  /** Broken in the last hour with no email yet: what the mass outage hold weighs. */
+  readonly newlyBroken: number;
+  /** Oldest first, first emails ahead of reminders; ids and the episode's start only. */
+  readonly due: readonly {
+    readonly workspaceId: string;
+    readonly connectionId: string;
+    /**
+     * When the episode began (`health_broken_at`, as Postgres writes it, to the microsecond), so a job keyed by it
+     * never tells a later episode.
+     */
+    readonly episode: string;
+    readonly reminder: boolean;
+  }[];
+}
+
 export interface QueueConnection {
   /** The pool Graphile's runners share (LISTEN included): at most `max` connections. */
   readonly pool: pg.Pool;
@@ -55,6 +74,12 @@ export interface QueueConnection {
    * `crm_notification_digests_due`.
    */
   digestsDue(after: DigestMember | undefined, max: number): Promise<readonly DigestMember[]>;
+  /**
+   * The calendar health sweep's read (spec 0037, AC-1310, AC-1311), across every workspace, ids and counts only: at
+   * most `max` (1 to 200) broken connections owed their first email or their reminder, and the sweep's counts
+   * (`crm_calendar_health_candidates`). With nothing owed, both counts read 0: there is nothing to hold.
+   */
+  calendarHealthDue(max: number): Promise<CalendarHealthSweep>;
   /** Deleted workspaces past their window, oldest first, at most `max` (1 to 50): `crm_workspaces_to_purge` (spec 0031). */
   workspacesToPurge(max: number): Promise<readonly string[]>;
   /** One outbox prune batch (`pruneOutbox`, spec 0007) on this connection: only crm_worker may run it. */
@@ -205,6 +230,31 @@ export function openQueueConnection(options: {
         [after?.workspaceId ?? null, after?.memberId ?? null, max],
       );
       return result.rows.map((row) => ({ workspaceId: row.workspace_id, memberId: row.member_id }));
+    },
+    async calendarHealthDue(max) {
+      const result = await pool.query<{
+        workspace_id: string;
+        connection_id: string;
+        episode: string;
+        reminder: boolean;
+        checked: number;
+        newly_broken: number;
+      }>(
+        `select workspace_id, connection_id, to_json(episode) #>> '{}' as episode, reminder, checked, newly_broken
+         from public.crm_calendar_health_candidates($1)`,
+        [max],
+      );
+      const [first] = result.rows;
+      return {
+        checked: first?.checked ?? 0,
+        newlyBroken: first?.newly_broken ?? 0,
+        due: result.rows.map((row) => ({
+          workspaceId: row.workspace_id,
+          connectionId: row.connection_id,
+          episode: row.episode,
+          reminder: row.reminder,
+        })),
+      };
     },
     async workspacesToPurge(max) {
       const result = await pool.query<{ id: string }>('select id from public.crm_workspaces_to_purge($1) as w(id)', [

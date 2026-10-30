@@ -422,22 +422,15 @@ describe('syncing (AC-601, AC-603 to AC-607, AC-610)', () => {
     const [expired] = await listCalendarConnections(w.owner);
     expect(expired).toMatchObject({ status: 'expired', lastError: { code: 'CALENDAR_AUTH_REVOKED' } });
     expect(await w.sync(connection.id)).toEqual({ kind: 'stopped', reason: 'not-syncing' });
-    // Its member is told once, in the failure's own write: the alert queued for them, ids in its key, no address.
-    const alerts = await w.query<{ to_member_id: string; to_address: string | null; key: string; params: unknown }>(
-      sql`select to_member_id::text, to_address, key, params from emails where kind = 'calendar_disconnected'`,
+    // The move opens a broken episode (spec 0037, AC-1310), and the health sweep tells the member, never the sync:
+    // nothing is queued in the failure's own write, so a provider's outage can hold the emails.
+    const alerts = await w.query(sql`select 1 from emails where kind = 'calendar_disconnected'`);
+    expect(alerts).toHaveLength(0);
+    const [episode] = await w.query<{ broken: boolean; notified: boolean }>(
+      sql`select health_broken_at is not null as broken, health_notified_at is not null as notified
+        from calendar_connections where id = ${connection.id}::uuid`,
     );
-    expect(alerts).toHaveLength(1);
-    expect(alerts[0]).toMatchObject({
-      to_member_id: w.ownerId,
-      to_address: null,
-      params: {
-        provider: 'google',
-        accountEmail: 'ada@acme.dev',
-        reason: 'expired',
-        settingsPath: `/w/${w.slug}/settings/scheduling/calendars`,
-      },
-    });
-    expect(alerts[0]?.key).toMatch(new RegExp(`^calendar_disconnected:${connection.id}:expired:\\d+$`));
+    expect(episode).toEqual({ broken: true, notified: false });
   });
 });
 

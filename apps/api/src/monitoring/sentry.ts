@@ -414,6 +414,8 @@ export function heartbeat(): void {
 /** The issues the processes raise themselves, each with its one fixed fingerprint and message. */
 export const ISSUES = {
   RELAY_LAGGING: 'Live updates are behind: the oldest unpublished change has waited over 30 seconds',
+  // Spec 0037, AC-1311: a quarter or more of the calendar connections, and at least 4, broke at once.
+  CALENDAR_OUTAGE: 'Calendar health emails held: many calendar connections broke at once, likely a provider outage',
 } as const;
 
 /** One of the codes in `ISSUES`. */
@@ -423,6 +425,8 @@ export type IssueCode = keyof typeof ISSUES;
 export interface IssueNumbers {
   /** The relay's unpublished rows, and how long the oldest has waited, in seconds. */
   readonly RELAY_LAGGING: { readonly pending: number; readonly oldest_age_s: number };
+  /** The sweep's connections checked, and how many of them broke in the last hour with no email yet. */
+  readonly CALENDAR_OUTAGE: { readonly checked: number; readonly newly_broken: number };
 }
 
 /**

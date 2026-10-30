@@ -37,7 +37,6 @@
 import { sql } from 'drizzle-orm';
 import type { EngineScope } from '../access/mint.ts';
 import { inWorkspace } from '../access/run.ts';
-import { queueCalendarDisconnected } from '../emails/queue.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
 import { applyEvents, dropBusyTimes, dropSources } from './apply.ts';
 import { CALENDARS_LIST_EVERY_MS, isPulled, moveDestinationOff, storeCalendars } from './calendars.ts';
@@ -212,9 +211,9 @@ interface FailureRow extends Record<string, unknown> {
 /**
  * Records a failure on the connection: its code and message, and since when.
  * A refused grant marks it `expired` (AC-619); any failure once failures
- * have lasted 6 hours marks it `failed` (AC-620). The moment it becomes one
- * of those, its member is told by email (`calendar_disconnected`), queued in
- * the same transaction, once per failing spell and reason.
+ * have lasted 6 hours marks it `failed` (AC-620). The move opens a broken
+ * episode (migration 0134's trigger), and the health sweep emails the member
+ * (spec 0037, AC-1310): never from here, so a provider's outage can hold them.
  */
 async function recordFailure(
   scope: EngineScope,
@@ -244,21 +243,6 @@ async function recordFailure(
         c.provider::text as provider
     `);
     const [row] = stored.rows;
-    if (row !== undefined && (row.status === 'expired' || row.status === 'failed') && row.was !== row.status) {
-      const workspace = await tx.execute<{ slug: string }>(sql`select slug from workspaces`);
-      await queueCalendarDisconnected(tx, {
-        connectionId,
-        memberId: row.member_id,
-        reason: row.status,
-        since: new Date(row.since),
-        params: {
-          provider: row.provider,
-          accountEmail: row.account_email,
-          reason: row.status,
-          settingsPath: `/w/${encodeURIComponent(workspace.rows[0]?.slug ?? '')}/settings/scheduling/calendars`,
-        },
-      });
-    }
     // A stopped account no longer takes bookings: they move to the member's other account, and they are told.
     if (row?.status === 'expired' || row?.status === 'failed') await moveDestinationOff(tx, connectionId);
     return stored;

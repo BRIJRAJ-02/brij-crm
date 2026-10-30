@@ -49,7 +49,7 @@ export type QueuedEmail =
   | { readonly outcome: 'refused'; readonly code: 'PARAMS_INVALID' };
 
 /** An id in a key: a uuid, a count or time in digits, or a word from the closed list a kind keys by. */
-const Id = z.union([z.uuid(), z.string().regex(/^\d{1,12}$/), z.enum(['expired', 'failed'])]);
+const Id = z.union([z.uuid(), z.string().regex(/^\d{1,16}$/), z.enum(['expired', 'failed', 'first', 'reminder'])]);
 
 /** An email's idempotency key: its kind and the ids, `form_submission:<submission>:<member>`. Never a value. */
 export function emailKey(kind: QueuedEmailKind, ids: readonly string[]): string {
@@ -199,25 +199,24 @@ export function queueFormConfirmation(
 }
 
 /**
- * A member's calendar stopped syncing (spec 0024): once per failing spell of
- * a connection (`since`, when the failures began) and reason, so a reconnect
- * and a later failure tell them again, and access withdrawn after 6 hours of
- * failures says so too.
+ * A member's calendar stopped syncing (spec 0024; spec 0037, AC-1310): the health sweep's first email of a broken
+ * episode, or its one reminder. Keyed by the connection, the episode's start (`health_broken_at`, in microseconds)
+ * and which email, so a retried job makes one email, and a later episode tells them again.
  */
 export function queueCalendarDisconnected(
   tx: WorkspaceTx,
   input: {
     readonly connectionId: string;
     readonly memberId: string;
-    /** Why: `failed` (6 hours of failures), or `expired` (access withdrawn), which can follow it in one spell. */
-    readonly reason: CalendarDisconnectedEmail['reason'];
-    readonly since: Date;
+    /** When the episode began, in microseconds since 1970 (as Postgres keeps it). */
+    readonly episodeMicros: string;
+    readonly reminder: boolean;
     readonly params: CalendarDisconnectedEmail;
   },
 ): Promise<QueuedEmail> {
   return queueEmail(tx, {
     kind: 'calendar_disconnected',
-    ids: [input.connectionId, input.reason, String(Math.floor(input.since.getTime() / 1000))],
+    ids: [input.connectionId, input.episodeMicros, input.reminder ? 'reminder' : 'first'],
     to: { memberId: input.memberId },
     params: input.params,
   });

@@ -363,6 +363,8 @@ export {
 export { readPageDestination, setPageDestination, type PageDestination } from './calendar/page-destination.ts';
 // Calendar health for a team (spec 0037, AC-1307): statuses only.
 export { readCalendarHealth } from './calendar/health.ts';
+// Ask to reconnect (spec 0037, AC-1309): a colleague in See reach, once per member per 24 hours.
+export { askToReconnect, CALENDAR_HEALTH, type ReconnectAskOutcome } from './calendar/health-notices.ts';
 export { nearestHue } from './calendar/hues.ts';
 export { listMeetingsForRecord, type ListMeetingsInput } from './calendar/meetings.ts';
 export {

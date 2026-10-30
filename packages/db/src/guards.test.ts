@@ -164,6 +164,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_booking_page_by_key', owner: 'crm_booking_lookup' },
       { name: 'crm_booking_profile_pages', owner: 'crm_booking_lookup' },
       { name: 'crm_calendar_account_shared', owner: 'crm_calendar_lookup' },
+      // The calendar health sweep's read across workspaces, ids and counts only (spec 0037, migration 0134).
+      { name: 'crm_calendar_health_candidates', owner: 'crm_sweep' },
       { name: 'crm_claim_workspace_address', owner: 'crm_address' },
       { name: 'crm_count_item_press', owner: 'crm_handle' },
       { name: 'crm_count_profile_view', owner: 'crm_handle' },
@@ -250,6 +252,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_booking_page_by_key', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_booking_profile_pages', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_calendar_account_shared', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      { name: 'crm_calendar_health_candidates', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       // A plpgsql body: it raises the unique violation a taken address is refused with.
       { name: 'crm_claim_workspace_address', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_count_item_press', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
@@ -388,9 +391,13 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
     ],
     [
       'crm_sweep',
-      ['crm_workspace_ids', 'crm_notification_digests_due'],
-      ['crm_workspace_ids(uuid, integer)', 'crm_notification_digests_due(uuid, uuid, integer)'],
-      ['worker', 'worker'],
+      ['crm_workspace_ids', 'crm_notification_digests_due', 'crm_calendar_health_candidates'],
+      [
+        'crm_workspace_ids(uuid, integer)',
+        'crm_notification_digests_due(uuid, uuid, integer)',
+        'crm_calendar_health_candidates(integer)',
+      ],
+      ['worker', 'worker', 'worker'],
     ],
     [
       'crm_purge',
@@ -950,7 +957,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
   });
 
   describe('crm_workspace_ids (spec 0008, milestone 3, AC-112, AC-115)', () => {
-    it('gives crm_sweep select on workspaces.id and deleted_at, and the digest’s columns, and nothing else', async () => {
+    it('gives crm_sweep select on workspaces.id and deleted_at, the digest’s columns and the calendar health sweep’s, and nothing else', async () => {
       // From the catalog, by every route, as for crm_relay: no table privilege, two column grants, no role.
       const tables = await owner.query<{ table: string }>(`
         select n.nspname || '.' || c.relname as table
@@ -967,6 +974,14 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         where a.grantee = 'crm_sweep'::regrole order by 1
       `);
       expect(columns.rows).toEqual([
+        // The calendar health sweep's (spec 0037, migration 0134).
+        { column: 'calendar_connections.health_broken_at', privilege: 'SELECT' },
+        { column: 'calendar_connections.health_notified_at', privilege: 'SELECT' },
+        { column: 'calendar_connections.health_reminded_at', privilege: 'SELECT' },
+        { column: 'calendar_connections.id', privilege: 'SELECT' },
+        { column: 'calendar_connections.member_id', privilege: 'SELECT' },
+        { column: 'calendar_connections.status', privilege: 'SELECT' },
+        { column: 'calendar_connections.workspace_id', privilege: 'SELECT' },
         { column: 'members.id', privilege: 'SELECT' },
         { column: 'members.status', privilege: 'SELECT' },
         { column: 'members.workspace_id', privilege: 'SELECT' },
