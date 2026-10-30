@@ -1,6 +1,8 @@
 /* A booking page's month: square tiles that fill their columns with one even
-   gap. Open days are filled and read at full strength, closed days are quiet
-   text, the chosen day is the accent, and a day holding a Best time carries a dot. */
+   gap. Open days are tinted in the accent with bold link coloured numbers, so
+   bookable reads as an action (Calendly's); closed days are quiet text, the
+   chosen day is the accent, today is ringed, and a day holding a Best time
+   carries a dot. */
 @layer components {
   .root {
     display: flex;
@@ -73,8 +75,8 @@
     padding: 0;
     border: none;
     border-radius: var(--radius-md);
-    background: var(--surface-selected);
-    color: var(--text);
+    background: var(--accent-soft);
+    color: var(--link);
     font: var(--text-body-strong);
     letter-spacing: var(--tracking-body-strong);
     font-variant-numeric: tabular-nums;
@@ -90,6 +92,12 @@
     color: var(--text-tertiary);
     font: var(--text-body);
     cursor: default;
+  }
+
+  /* Today: the calendars' one today mark, a hairline accent ring (open or closed alike). */
+  .day[data-today] {
+    outline: var(--border-width-hairline) solid var(--accent-line);
+    outline-offset: calc(-1 * var(--border-width-hairline));
   }
 
   /* A day's place while the times load: the month reads, and the tiles wait
@@ -130,8 +138,10 @@
   }
 
   @media (hover: hover) and (pointer: fine) {
+    /* The text steps to the text colour on hover: the link colour on accent-border is under 4.5:1 in dark. */
     .day:not(:disabled, [aria-pressed='true']):hover {
       background: var(--accent-border);
+      color: var(--text);
     }
   }
 

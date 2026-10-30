@@ -32,13 +32,22 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** A month: open days filled, closed days quiet, today chosen with its dot. */
+/** A month: open days tinted with link coloured numbers, closed days quiet, today chosen. */
 export const Default: Story = {
   parameters: { crm: { preview: true } },
   render: (args) => <Interactive {...args} />,
   play: async ({ canvas }) => {
     await userEvent.click(canvas.getByRole('button', { name: /Monday, October 12/ }));
     await expect(canvas.getByRole('button', { name: /Monday, October 12/ })).toHaveAttribute('aria-pressed', 'true');
+  },
+};
+
+/** Today ringed (the calendars' one today mark) while another day is chosen. */
+export const TodayRing: Story = {
+  args: { value: '2026-10-13' },
+  render: (args) => <Interactive {...args} />,
+  play: async ({ canvasElement }) => {
+    await expect(canvasElement.querySelector('[data-today]')).toHaveTextContent('8');
   },
 };
 

@@ -1,6 +1,6 @@
 # MonthTiles
 
-A booking page's month (spec 0025, AC-665): every day a square tile that fills its column, open days filled and read at full strength, closed days quiet, the chosen day in the accent (the owner, 20 October 2026). One dot only ever means Best: with the visitor’s calendar on (spec 0028), a day holding a Best time carries it; today is said to screen readers, not marked.
+A booking page's month (spec 0025, AC-665): every day a square tile that fills its column, open days tinted in the accent (`accent-soft`) with bold link coloured numbers so bookable reads as an action, as Calendly's (30 October 2026; they were a grey fill), closed days quiet, the chosen day in the accent (the owner, 20 October 2026). One dot only ever means Best: with the visitor’s calendar on (spec 0028), a day holding a Best time carries it. Today takes the calendars' one today mark, a hairline `accent-line` ring, and is said to screen readers too (decided 30 October 2026; until then it was said, not marked). Look only: what a tile does is unchanged. Contrast: `link` on `accent-soft` holds 4.5:1 in both themes (a guarded pair); under a pointer the tile's text steps to `text`, since `link` on `accent-border` is under 4.5:1 in dark.
 
 ## Why it exists
 

@@ -409,12 +409,14 @@ function ChatLoading() {
 const NO_DAYS: ReadonlySet<string> = new Set();
 
 /** Every zone this browser knows, the current one first, each with its offset. */
-function zoneItems(current: string, at: number): readonly DeferredSelectItem[] {
+function zoneItems(current: string, at: number, clock: string): readonly DeferredSelectItem[] {
   const listed = typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : [];
   return [current, ...listed.filter((zone) => zone !== current)].map((zone) => ({
     id: zone,
     label: zoneName(zone),
-    description: offsetLabel(zone, at),
+    // The zone in use shows its time now beside its offset ("GMT+7 · 14:06"), as Calendly's does, so a visitor
+    // checks the zone at a glance. Look only: what the zone does is unchanged.
+    description: zone === current ? `${offsetLabel(zone, at)} · ${clock}` : offsetLabel(zone, at),
   }));
 }
 
@@ -550,7 +552,9 @@ function Booking({
   const [matchOpen, setMatchOpen] = useState(connected === 'connected');
   // Book by chat's conversation (spec 0042), kept while the length, the zone or the view changes.
   const [chatMemory, setChatMemory] = useState<ChatMemory | undefined>(undefined);
-  const zones = useMemo(() => zoneItems(zone, now()), [zone, now]);
+  // The time now in the zone in use, on the page's clock (12 or 24 hours), beside its name.
+  const clockNow = timeLabel(new Date(now()).toISOString(), zone, locale, hour12);
+  const zones = useMemo(() => zoneItems(zone, now(), clockNow), [zone, now, clockNow]);
   // The tab names the meeting and the host: "Intro call with Ada · Timefix".
   useEffect(() => {
     document.title = `${page.title} with ${page.hostName} · ${strings.product}`;
@@ -798,7 +802,7 @@ function Booking({
       id: 'zone',
       icon: 'globe',
       children: isDetails ? (
-        zoneDisplay(zone, now())
+        `${zoneDisplay(zone, now())} · ${clockNow}`
       ) : (
         // The picker's list loads on the first hover, focus or press (or once the page is idle): a visitor rarely
         // opens it, and its code was a tenth of the page's first load styles. Until then the same trigger stands in.
