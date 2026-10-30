@@ -271,7 +271,7 @@ export const strings = {
   ownFormTitle: 'Your own HTML',
   ownFormSnippet: 'Form HTML',
   taggingText:
-    'The form names your workspace, this form and its version. Each field’s name is its question’s key, so renaming a question never breaks your page. With each post the script sends the page, its title, the visit’s first page and referrer, and the UTM tags, shown on the submission as Came from.',
+    'Each field’s name is its question’s key, so a rename never breaks your page. Each post adds the page, referrer and UTM tags.',
   /** The consent line, with its code names drawn by `code` so they read and copy exactly. */
   taggingConsent: <T>(code: (text: string) => T): readonly (string | T)[] => [
     'No cookie is set until your site allows it: add ',
@@ -305,8 +305,7 @@ export const strings = {
   unsignedAllowed: 'Unsigned posts are taken again.',
   refuseUnsigned: 'Refuse unsigned posts',
   signedTitle: 'Signed posts',
-  refuseUnsignedHint:
-    'Turn on Refuse unsigned posts when only your server posts to the form. Each post must then carry a signature made with the secret, so your own HTML in a browser is refused. The hosted page and embeds keep working.',
+  refuseUnsignedHint: 'For forms only your server posts to. The hosted page and embeds keep working.',
   /** How to sign, with its code names drawn by `code`. */
   signHowText: <T>(code: (text: string) => T): readonly (string | T)[] => [
     'On your server, take the exact body you send, make its HMAC with SHA 256 and the signing secret, and send it in the ',
@@ -390,25 +389,25 @@ export const strings = {
   exportFilter: 'What this filter shows, every answer as a column',
   exportShown: 'What the table shows for this search, every answer as a column',
   exportPicked: (n: number) => `The ${count(n, 'picked submission', 'picked submissions')}, every answer as a column`,
-  exportStarted: 'Preparing your CSV. A Download button shows here when it is ready.',
+  exportStarted: 'Preparing your CSV…',
   exportReady: (file: string) => `${file} is ready.`,
   download: 'Download',
   addToCrm: 'Add to CRM',
   addQueued: (queued: number, skipped: number) =>
     skipped === 0
       ? `Adding ${count(queued, 'submission', 'submissions')} to the CRM.`
-      : `Adding ${count(queued, 'submission', 'submissions')} to the CRM. ${String(skipped)} skipped: already in it or held.`,
+      : `Adding ${count(queued, 'submission', 'submissions')} to the CRM. ${String(skipped)} skipped.`,
   nothingToAdd: 'Nothing to add: these are already in the CRM or held.',
   /** Asks before many submissions go to the CRM at once: "Add 12 submissions to the CRM?". */
   addManyTitle: (n: number, max: number) => `Add ${count(Math.min(n, max), 'submission', 'submissions')} to the CRM?`,
   addManyText: (n: number, max: number) =>
     n > max
-      ? `Each is filed the way the form files now, making new records or updating the ones it matches. The first ${String(max)} go now; add the rest after.`
-      : 'Each is filed the way the form files now, making new records or updating the ones it matches.',
+      ? `Adds ${String(max)} now, the way the form files. Run it again for the rest.`
+      : 'Each is added the way the form files now.',
   addDone: (done: number, refused: number) =>
     refused === 0
       ? `${count(done, 'submission', 'submissions')} added to the CRM.`
-      : `${count(done, 'submission', 'submissions')} added to the CRM; ${String(refused)} couldn’t be.`,
+      : `${count(done, 'submission', 'submissions')} added, ${String(refused)} failed.`,
   jobFailed: (label: string) => `${label} didn’t finish. Background jobs in Settings says why.`,
   syncOld: 'Sync earlier submissions',
   syncOldText: 'File earlier submissions the way the form files now',
@@ -461,8 +460,7 @@ export const strings = {
   notSavedMark: 'Not saved',
   /** Above the answers of a submission our spam check caught, when it carries a file: kept for a release. */
   spamFilesTitle: 'Our spam check caught this',
-  spamFiles: (day: string) =>
-    `Open its files only if you trust the sender. They’re removed on ${day}. Choose Not spam to keep them.`,
+  spamFiles: (day: string) => `Open files only if you trust the sender. Removed on ${day} unless marked Not spam.`,
   /** Over the answers filing left off the record, each with why (late trap #50). */
   notSavedTitle: (count: number) =>
     count === 1 ? 'One answer wasn’t saved on the record' : `${String(count)} answers weren’t saved on the record`,
@@ -470,8 +468,7 @@ export const strings = {
   questionList: (labels: readonly string[]) =>
     new Intl.ListFormat('en', { style: 'long', type: 'conjunction' }).format(labels),
   /** The way forward under them: put the field back or file the question elsewhere, then file again. */
-  notSavedNext:
-    'To save them, restore the field or save the question to another one, then sync earlier submissions. Or copy the answer onto the record.',
+  notSavedNext: 'Restore the field or pick another, then sync earlier submissions.',
   /** After Answers, once for the section: what went to the CRM. */
   answersKeptOnly: 'Not added to the CRM',
   answersNotInCrm: 'Not in the CRM',
