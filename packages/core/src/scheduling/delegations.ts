@@ -5,8 +5,10 @@
 // an owner, and over an admin only when they are an owner; a delegate may take
 // back their own. Every grant, change and removal writes one audit row and one
 // `access` outbox row naming the delegate, so their open screens read their
-// reach again (AC-1257, AC-1274). The reach these rows give is read by
-// `access/scheduling.ts` alone.
+// reach again (AC-1257, AC-1274), and the people it concerns are emailed in
+// the same transaction (the delegate, and the member when someone else
+// granted it; the delegate again when someone else took it back). The reach
+// these rows give is read by `access/scheduling.ts` alone.
 //
 // The actor's role is read again under lock, as the owner rules do, so someone
 // demoted since the request came in acts with their role now. Two grants at
@@ -29,6 +31,7 @@ import { can, isRole } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
 import { parseSchedulingLevel, type SchedulingLevel } from '../access/scheduling.ts';
 import { lockKey } from '../booking/locks.ts';
+import { queueEmail } from '../emails/queue.ts';
 import { audit, touched } from '../engine/definitions.ts';
 import { checkId, newId, uuidList } from '../engine/ids.ts';
 import { inputInvalid, refuse } from '../engine/refusals.ts';
@@ -37,7 +40,7 @@ import { runWrite, type AfterWrite, type WriteContext } from '../engine/write.ts
 import { writeAudit, type AuditSource } from '../members/audit.ts';
 import type { RemovalEffect } from '../members/removal-effect.ts';
 
-const { members, scheduleDelegations } = schema;
+const { members, scheduleDelegations, workspaces } = schema;
 
 /** A member who isn't here, or isn't the caller's to ask about: the same sentence (timefix's wording). */
 const NO_PERSON = 'That person isn’t in this workspace.';
@@ -273,6 +276,9 @@ export async function grantDelegation(
           options.source,
         );
         context.record({ access: [delegate] });
+        if (existing.level !== level) {
+          await tellGranted(tx, scope.workspaceId, { id: changed.id, actor, holder, over, level, overSelf });
+        }
         return toViewOrThrow(changed);
       }
       await checkCaps(tx, scope.workspaceId, holder, over);
@@ -300,6 +306,7 @@ export async function grantDelegation(
       );
       // The delegate's open screens read their reach again (AC-1257, AC-1274).
       context.record({ access: [delegate] });
+      await tellGranted(tx, scope.workspaceId, { id: made.id, actor, holder, over, level, overSelf });
       return toViewOrThrow(made);
     },
     hooks,
@@ -390,9 +397,88 @@ export async function revokeDelegation(
         options.source,
       );
       context.record({ access: [row.delegateMemberId] });
+      // The delegate is told when someone else took it back (the index's Emails table).
+      const level = parseSchedulingLevel(row.level);
+      if (row.delegateMemberId !== me && level !== undefined) {
+        const over =
+          row.targetType === 'member' && row.targetMemberId !== null
+            ? await namedMember(tx, scope.workspaceId, row.targetMemberId)
+            : undefined;
+        await queueEmail(tx, {
+          kind: 'scheduling_access_removed',
+          ids: [row.id, newId()],
+          to: { memberId: row.delegateMemberId },
+          params: { level, byName: actor.name, ...(over === undefined ? {} : { memberName: over.name }) },
+        });
+      }
     },
     hooks,
   );
+}
+
+/** A member by id, whatever their status: the name an email gives them. */
+async function namedMember(
+  tx: WorkspaceTx,
+  workspaceId: string,
+  memberId: string,
+): Promise<{ readonly name: string } | undefined> {
+  const [row] = await tx
+    .select({ name: members.name })
+    .from(members)
+    .where(and(eq(members.workspaceId, workspaceId), eq(members.id, memberId)));
+  return row;
+}
+
+/**
+ * The emails a grant or a level change sends (AC-1257, the index's Emails table): the delegate learns what they can
+ * now see or manage, unless they granted it themself; the member learns who can now, when someone else granted it.
+ * Each is its own email (a fresh id in its key), so a later change of level is told again.
+ */
+async function tellGranted(
+  tx: WorkspaceTx,
+  workspaceId: string,
+  grant: {
+    readonly id: string;
+    readonly actor: { readonly id: string; readonly name: string };
+    readonly holder: { readonly id: string; readonly name: string };
+    readonly over: { readonly id: string; readonly name: string } | undefined;
+    readonly level: SchedulingLevel;
+    readonly overSelf: boolean;
+  },
+): Promise<void> {
+  const { actor, holder, over, level, overSelf } = grant;
+  const [place] = await tx.select({ slug: workspaces.slug }).from(workspaces).where(eq(workspaces.id, workspaceId));
+  if (place === undefined) return;
+  const availability = `/w/${place.slug}/bookings/availability`;
+  if (holder.id !== actor.id) {
+    await queueEmail(tx, {
+      kind: 'scheduling_access_given',
+      ids: [grant.id, newId()],
+      to: { memberId: holder.id },
+      params: {
+        to: 'delegate',
+        level,
+        otherName: over?.name ?? actor.name,
+        everyone: over === undefined,
+        ...(overSelf ? {} : { byName: actor.name }),
+        path: over === undefined ? `${availability}?view=team` : `${availability}?member=${over.id}`,
+      },
+    });
+  }
+  if (over !== undefined && !overSelf) {
+    await queueEmail(tx, {
+      kind: 'scheduling_access_given',
+      ids: [grant.id, newId()],
+      to: { memberId: over.id },
+      params: {
+        to: 'member',
+        level,
+        otherName: holder.name,
+        everyone: false,
+        path: `/w/${place.slug}/settings/account/scheduling`,
+      },
+    });
+  }
 }
 
 /** Whether an actor with `role` (now) may change a delegation over `targetMemberId` (or everyone) as a manager. */

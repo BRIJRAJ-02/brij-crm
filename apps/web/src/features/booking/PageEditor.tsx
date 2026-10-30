@@ -27,6 +27,7 @@ import {
 } from '@crm/data';
 import { useCalendar, useCaptureList, usePageDestination, useSchedules } from '@crm/data/react';
 import {
+  Badge,
   Button,
   ButtonLink,
   Callout,
@@ -405,8 +406,6 @@ export function PageEditor({
   );
   const peopleObject = liveObjects.find((object) => object.standardKey === 'people');
   const answersObject = draft.answersObjectId ?? peopleObject?.id ?? null;
-  const answersObjectName =
-    liveObjects.find((object) => object.id === answersObject)?.pluralName ?? choices.objectName ?? '';
   const [isMovingAnswers, setMovingAnswers] = useState(false);
   // The objects a booking can't file onto, said in the list rather than refused after the pick (crm-f7's booking
   // walk, 28 Oct 2026): a booking knows the guest by email alone, so the object needs a unique email field to find or
@@ -746,10 +745,14 @@ export function PageEditor({
             crumbs={[{ id: 'links', label: strings.linksTitle, href: linksHref(slug) }]}
             // Live or Paused, as a form's; the ⋯ menu's Pause or Resume changes it.
             meta={
-              <EditorStatus
-                tone={page.status === 'live' ? 'live' : 'paused'}
-                text={page.status === 'live' ? strings.statusLive : strings.statusOff}
-              />
+              <>
+                <EditorStatus
+                  tone={page.status === 'live' ? 'live' : 'paused'}
+                  text={page.status === 'live' ? strings.statusLive : strings.statusOff}
+                />
+                {/* Someone else's page (spec 0037, AC-1273): whose it is, beside its status. */}
+                {page.ownerName !== undefined && <Badge text={strings.editingFor(page.ownerName)} />}
+              </>
             }
           >
             <EditorActions
@@ -893,7 +896,7 @@ export function PageEditor({
                         {/* The view the page opens in (the owner, 25 Oct 2026): the host's default, which a
                           visitor's own remembered choice still wins over. A FieldGroup, as Who can book is, so the
                           line under it is read with the choices; the phone beside this switches to the view at once. */}
-                        <FieldGroup label={strings.opensIn} hint={strings.opensInLine}>
+                        <FieldGroup label={strings.opensIn}>
                           <RadioGroup
                             label={strings.opensIn}
                             isLabelHidden
@@ -1155,6 +1158,7 @@ export function PageEditor({
                         destination={data.calendar.pageDestination(slug, page.id)}
                         calendars={data.calendar.calendars(slug)}
                         isReadOnly={isLocked}
+                        {...(page.ownerName === undefined ? {} : { ownerName: page.ownerName })}
                         onChange={(calendarId) => void data.calendar.setPageDestination(slug, page.id, calendarId)}
                         settingsHref={calendarsHref(slug)}
                       />
@@ -1164,7 +1168,6 @@ export function PageEditor({
                       <Card title={strings.afterBooking}>
                         <Switch
                           label={strings.addToCrm}
-                          description={strings.addToCrmLine}
                           isSelected={draft.fileToCrm}
                           isReadOnly={isLocked}
                           onChange={(fileToCrm) => change({ fileToCrm })}
@@ -1205,13 +1208,7 @@ export function PageEditor({
                         </Callout>
                       )}
                       {liveObjects.length > 0 && (
-                        <Card
-                          title={strings.answersObject}
-                          {...(answersObjectName === ''
-                            ? {}
-                            : { description: strings.answersObjectLine(answersObjectName) })}
-                          isBusy={isMovingAnswers}
-                        >
+                        <Card title={strings.answersObject} isBusy={isMovingAnswers}>
                           <Select
                             savesOnPick
                             label={strings.answersObject}
