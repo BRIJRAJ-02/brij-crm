@@ -1,7 +1,8 @@
 // Brief
 // Purpose: Settings, Objects: every object, standard and custom, in the workspace's order, and the archived ones.
 // Main task: owners and admins create, reorder (drag, or Move up and down), archive and restore objects, or open one.
-// Leaves out: an object's attributes and names (its own page), the schema map (#56) and usage beyond the meter.
+// Leaves out: an object's attributes and names (its own page), the schema map (#56) and usage beyond the meter and
+// the record counts.
 import { isDataError, type ObjectSummary, type Usage } from '@crm/data';
 import {
   Badge,
@@ -37,11 +38,14 @@ export interface ObjectsScreenProps {
   /** Every object the person can see, archived ones too. */
   readonly objects: readonly ObjectSummary[];
   readonly usage: Usage;
+  /** Each object's live records, by id, in one read; undefined when it failed (the column says nothing). */
+  readonly recordCounts: Readonly<Record<string, number>> | undefined;
 }
 
 const COLUMNS: readonly TableColumn[] = [
   { id: 'object', label: strings.objectColumn, isRowHeader: true, isInline: true },
   { id: 'kind', label: strings.kindColumn },
+  { id: 'records', label: strings.recordsColumn, align: 'end' },
   { id: 'attributes', label: strings.attributesColumn, align: 'end' },
   { id: 'actions', label: strings.actionsColumn, isLabelHidden: true, align: 'end' },
 ];
@@ -69,7 +73,7 @@ function ObjectName({ object }: { readonly object: ObjectSummary }) {
 }
 
 /** Settings, Objects: the meter, the live objects in order, and the Archived section. */
-export function ObjectsScreen({ slug, objects, usage }: ObjectsScreenProps) {
+export function ObjectsScreen({ slug, objects, usage, recordCounts }: ObjectsScreenProps) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
   // Only owners and admins change the schema (spec 0009, AC-136); the server refuses anyone else on its own.
@@ -129,12 +133,20 @@ export function ObjectsScreen({ slug, objects, usage }: ObjectsScreenProps) {
     return used === undefined ? <Skeleton width="short" /> : strings.attributeCount(used, number(used));
   };
 
+  // Under a record rule the count is left out (the stored rows count records the person may not see).
+  const recordCount = (object: ObjectSummary) => {
+    const count = recordCounts?.[object.id];
+    return count === undefined ? strings.recordsUnknown : strings.recordCount(count, number(count));
+  };
+
   const liveCell = (object: ObjectSummary, column: string) => {
     switch (column) {
       case 'object':
         return <ObjectName object={object} />;
       case 'kind':
         return <Badge text={object.isStandard ? strings.standard : strings.custom} />;
+      case 'records':
+        return recordCount(object);
       case 'attributes':
         return attributeCount(object);
       default: {
@@ -186,6 +198,8 @@ export function ObjectsScreen({ slug, objects, usage }: ObjectsScreenProps) {
         return <ObjectName object={object} />;
       case 'kind':
         return <Badge text={object.isStandard ? strings.standard : strings.custom} />;
+      case 'records':
+        return recordCount(object);
       case 'attributes':
         return attributeCount(object);
       default:

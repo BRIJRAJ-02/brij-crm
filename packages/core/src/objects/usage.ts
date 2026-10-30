@@ -4,13 +4,13 @@
 // an object they can't see is absent with its count, a per object count
 // counts only the attributes they can see, and the custom object total is
 // answered only to `schema.manage`.
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import type { Usage } from '@crm/contracts';
 import { schema } from '@crm/db';
 import { countAttributesByObject, countCustomObjects, limitsOf, objectAttributeRows } from '../engine/limits.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import { inWorkspace } from '../access/run.ts';
-import { can, isOpen, objectLevel } from '../access/policy.ts';
+import { can, isOpen, objectLevel, recordRule } from '../access/policy.ts';
 import { attributeVisible } from '../access/visibility.ts';
 
 const { objects } = schema;
@@ -49,5 +49,37 @@ export async function getUsage(scope: EngineScope): Promise<Usage> {
       ),
       optionsPerAttribute: limits.optionsPerAttribute,
     };
+  });
+}
+
+/**
+ * How many live records each object the caller can see holds, in one grouped, index only count (`records_live`)
+ * rather than one `records.count` per object: Settings › Objects' Records column (flow pass, 30 October 2026). An
+ * object under a record rule is left out, since the stored rows count records the caller may not see (its own
+ * `records.count` counts those through the capped path), and so is one the caller can't see at all. Bounded at 3
+ * seconds; a read only, it writes nothing.
+ */
+export async function countRecordsByObject(scope: EngineScope): Promise<Readonly<Record<string, number>>> {
+  return inWorkspace(scope, async (tx) => {
+    await tx.execute(sql`set local statement_timeout = '3s'`);
+    const rows = await tx.execute<{ object_id: string; n: number }>(sql`
+      select object_id::text as object_id, count(*)::int as n
+      from records
+      where workspace_id = ${scope.workspaceId} and deleted_at is null
+      group by object_id
+    `);
+    const workspaceObjects = await tx
+      .select({ id: objects.id })
+      .from(objects)
+      .where(eq(objects.workspaceId, scope.workspaceId));
+    const counted = new Map(rows.rows.map((row) => [row.object_id, row.n]));
+    return Object.fromEntries(
+      workspaceObjects
+        .filter(
+          (object) =>
+            objectLevel(scope.access, object.id) !== 'none' && recordRule(scope.access, object.id) === undefined,
+        )
+        .map((object) => [object.id, counted.get(object.id) ?? 0]),
+    );
   });
 }

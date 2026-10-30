@@ -16,7 +16,8 @@ import type { EngineScope } from '../engine/scope.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
 import { rescope, testScope } from '../testing.ts';
 import { archiveObject, createObject, editObject, listObjects, moveObject, restoreObject } from './objects.ts';
-import { getUsage } from './usage.ts';
+import { deleteRecords } from '../engine/trash.ts';
+import { countRecordsByObject, getUsage } from './usage.ts';
 
 const { appUrl } = inject('testDatabase');
 let db: Database;
@@ -358,6 +359,35 @@ describe('usage (AC-243)', () => {
     const usage = await getUsage(hidden);
     expect(Object.keys(usage.attributes)).not.toContain(people);
     expect((await listObjects(hidden)).map((object) => object.id)).not.toContain(people);
+  });
+});
+
+describe('record counts by object (Settings › Objects’ Records column)', () => {
+  it('counts each visible object’s live records in one read, the trash and hidden objects left out', async () => {
+    const { scope, objects } = await workspace();
+    const people = objects.people ?? '';
+    const deals = objects.deals ?? '';
+    const name = (await listObjectAttributes(scope, people)).find((attribute) => attribute.isPrimary)?.id ?? '';
+    const made = await Promise.all(
+      ['Ada', 'Grace', 'Edsger'].map((first) =>
+        createRecord(scope, { objectId: people, values: { [name]: { firstName: first, lastName: 'X' } } }),
+      ),
+    );
+    await deleteRecords(scope, { objectId: people, recordIds: [made[0]?.recordId ?? ''], batchId: newId() });
+    const counts = await countRecordsByObject(scope);
+    expect(counts[people]).toBe(2);
+    expect(counts[deals]).toBe(0);
+    const hidden = rescope(await memberIn(scope, 'member'), {
+      rules: {
+        levels: [
+          { subject: { type: 'role', role: 'member' }, target: { type: 'object', objectId: people }, level: 'none' },
+        ],
+        records: [],
+      },
+    });
+    const theirs = await countRecordsByObject(hidden);
+    expect(Object.keys(theirs)).not.toContain(people);
+    expect(theirs[deals]).toBe(0);
   });
 });
 
