@@ -18,15 +18,15 @@ import {
   touched,
   type InitialOption,
 } from './definitions.ts';
-import { RESTORE_WINDOW, takeEntrySlots, takeList } from './limits.ts';
+import { limitsOf, RESTORE_WINDOW, takeEntrySlots, takeList } from './limits.ts';
 import { bucketItems, initialValues, writeAll, type AttributeResult } from './records.ts';
-import { canonicalId, checkId, isUuid, isUuidV7, newId } from './ids.ts';
+import { canonicalId, checkId, isUuid, isUuidV7, newId, uuidArray } from './ids.ts';
 import { isRefusal, postgresError, refuse, refuseOn, type RefusalError } from './refusals.ts';
 import { actorRow, type Actor, type EngineScope } from './scope.ts';
-import { setEntryKeysLive } from './sort-keys.ts';
+import { setEntryKeysLive, syncNewSortKeys } from './sort-keys.ts';
 import { holdUniqueKeys, releaseUniqueKeys } from './unique.ts';
 import { checkEntryAccess, currentItems, loadListAttributes, lockRecord } from './values.ts';
-import { runWrite, type AfterWrite, type WriteContext } from './write.ts';
+import { runWrite, type AfterWrite, type ValueChange, type WriteContext } from './write.ts';
 import { inWorkspace } from '../access/run.ts';
 import { requirePermission } from '../access/check.ts';
 import { isOpen, objectLevel, type Access } from '../access/policy.ts';
@@ -498,6 +498,7 @@ interface LockedList {
   readonly objectId: string;
   readonly name: string;
   readonly allowsDuplicates: boolean;
+  readonly entryCount: number;
 }
 
 /**
@@ -512,6 +513,7 @@ async function lockWritableList(context: WriteContext, listId: string): Promise<
       objectId: lists.objectId,
       name: lists.name,
       allowsDuplicates: lists.allowsDuplicates,
+      entryCount: lists.entryCount,
       archivedAt: lists.archivedAt,
       objectArchivedAt: sql<Date | null>`(select o.archived_at from objects o where o.workspace_id = ${lists.workspaceId} and o.id = ${lists.objectId})`,
     })
@@ -640,14 +642,21 @@ export interface AddOutcome {
 }
 
 /**
- * Adds up to 500 records to one list in one write (spec 0048, AC-4825), each
- * on its own savepoint: a record already in an "Each record once" list
- * (`ENTRY_EXISTS`), one in the trash, one the caller can't see, a missing
- * required list field or a full list keeps that record out and says why,
- * never failing the rest. The list is locked once, then records are taken in
- * id order, so two batches lock in one order. `ids` are the entries' client
- * minted UUID v7s, one per record: the same batch again answers the entries it
- * made. The list's own checks (hidden, read only, archived) refuse the call.
+ * Adds up to 500 records to one list in one write (spec 0048, AC-4825). Each
+ * record answers on its own: one the caller can't see answers `NOT_FOUND`
+ * exactly as an unknown id, before anything else is said of it, so a hidden
+ * record never reads as "already in"; then one in the trash, another
+ * object's, one already in an "Each record once" list (`ENTRY_EXISTS`), a
+ * missing required list field, or a full list keeps that record out and says
+ * why, never failing the rest. The list's own checks (hidden, read only,
+ * archived) refuse the call. `ids` are the entries' client minted UUID v7s,
+ * one per record: the same batch again answers the entries it made.
+ *
+ * Set based: the list is locked once, then the records (in id order, the one
+ * lock order), their visibility, earlier ids and existing entries are read in
+ * one statement each, every new entry is inserted in one, and the list's
+ * defaults are written for all of them in a few more, so a batch of 500 costs
+ * about ten statements rather than eight a record.
  */
 export async function addEntries(
   scope: EngineScope,
@@ -674,25 +683,8 @@ export async function addEntries(
     scope,
     async (context) => {
       const list = await lockWritableList(context, listId);
-      const outcomes = new Map<string, AddOutcome>();
+      const outcomes = await addMany(context, list, listId, asked, input.timeZone ?? 'UTC');
       const unknown = { code: 'NOT_FOUND' as const, message: 'That record does not exist.' };
-      // Id order, the one lock order; a record named twice is added once.
-      const valid = asked.filter((each) => isUuid(each.raw));
-      const order = [...valid].sort((a, b) => (canonicalId(a.raw) < canonicalId(b.raw) ? -1 : 1));
-      for (const each of order) {
-        const recordId = canonicalId(each.raw);
-        if (outcomes.has(recordId)) continue;
-        const done = await context.perRecord((part) =>
-          addIn(part, { listId, recordId, id: each.id, values: undefined, timeZone: input.timeZone }, list),
-        );
-        const [refusal] = done.ok ? [] : done.refusals;
-        outcomes.set(
-          recordId,
-          done.ok
-            ? { recordId, entryId: done.value.entryId }
-            : { recordId, ...(refusal === undefined ? {} : { refusal }) },
-        );
-      }
       return asked.map(
         (each): AddOutcome =>
           (isUuid(each.raw) ? outcomes.get(canonicalId(each.raw)) : undefined) ?? {
@@ -704,6 +696,245 @@ export async function addEntries(
     hooks,
   );
   return result;
+}
+
+/** One record a batch add was asked for: as given, and its entry's client id. */
+interface AskedAdd {
+  readonly raw: string;
+  readonly id: string | undefined;
+}
+
+/** The parsed defaults every new entry of a list starts with. */
+type Defaults = Awaited<ReturnType<typeof initialValues>>;
+
+/**
+ * The set based body of `addEntries`, inside its write with the list locked:
+ * each record's outcome by its canonical id. A record named twice is added once.
+ */
+async function addMany(
+  context: WriteContext,
+  list: LockedList,
+  listId: string,
+  asked: readonly AskedAdd[],
+  timeZone: string,
+): Promise<ReadonlyMap<string, AddOutcome>> {
+  const { tx, scope } = context;
+  const outcomes = new Map<string, AddOutcome>();
+  const refuseOne = (recordId: string, code: RefusalError['refusal']['code'], message: string) =>
+    outcomes.set(recordId, { recordId, refusal: { code, message } });
+  // The first client id given for each record.
+  const clientId = new Map<string, string | undefined>();
+  for (const each of asked) {
+    if (!isUuid(each.raw)) continue;
+    const recordId = canonicalId(each.raw);
+    if (!clientId.has(recordId)) clientId.set(recordId, each.id);
+  }
+  const recordIds = [...clientId.keys()].sort();
+  if (recordIds.length === 0) return outcomes;
+
+  // 1. The records, locked as lockRecord locks one, in id order.
+  const found = await tx
+    .select({ id: records.id, objectId: records.objectId, deletedAt: records.deletedAt })
+    .from(records)
+    .where(inArray(records.id, recordIds))
+    .orderBy(asc(records.id))
+    .for('no key update');
+  const foundById = new Map(found.map((row) => [row.id, row]));
+  // 2. Which the caller may see. A hidden record answers as a missing one, before any other check names it.
+  const seen = await visibleRecords(
+    tx,
+    scope.access,
+    found.map((row) => ({ objectId: row.objectId, recordId: row.id })),
+  );
+  const open: string[] = [];
+  for (const recordId of recordIds) {
+    const row = foundById.get(recordId);
+    if (row === undefined || !seen.has(recordId)) refuseOne(recordId, 'NOT_FOUND', 'That record does not exist.');
+    else if (row.deletedAt !== null) {
+      refuseOne(recordId, 'RECORD_DELETED', 'That record is in the trash. Restore it first.');
+    } else open.push(recordId);
+  }
+
+  // 3. Client ids used before: the caller's own try answers its entry; any other is refused.
+  const givenIds = open.flatMap((recordId) => {
+    const id = clientId.get(recordId);
+    return id === undefined ? [] : [id];
+  });
+  const earlier =
+    givenIds.length === 0
+      ? []
+      : await tx
+          .select({
+            id: listEntries.id,
+            listId: listEntries.listId,
+            recordId: listEntries.recordId,
+            deletedAt: listEntries.deletedAt,
+            createdByType: listEntries.createdByType,
+            createdById: listEntries.createdById,
+          })
+          .from(listEntries)
+          .where(inArray(listEntries.id, givenIds));
+  const earlierById = new Map(earlier.map((row) => [row.id, row]));
+  const fresh: string[] = [];
+  for (const recordId of open) {
+    const id = clientId.get(recordId);
+    const before = id === undefined ? undefined : earlierById.get(id);
+    if (id !== undefined && before !== undefined) {
+      const isOwnTry =
+        before.listId === listId &&
+        before.recordId === recordId &&
+        before.deletedAt === null &&
+        before.createdByType === scope.actor.type &&
+        before.createdById === scope.actor.id;
+      if (isOwnTry) outcomes.set(recordId, { recordId, entryId: id });
+      else refuseOne(recordId, 'CONFIG_INVALID', ENTRY_ID_USED);
+    } else if (foundById.get(recordId)?.objectId !== list.objectId) {
+      refuseOne(recordId, 'CONFIG_INVALID', "That record can't go in this list; it holds another object's records.");
+    } else fresh.push(recordId);
+  }
+
+  // 4. Each record once: those already in, in one statement. The list's lock holds the answer until commit.
+  const alreadyIn = new Set<string>();
+  if (!list.allowsDuplicates && fresh.length > 0) {
+    const rows = await tx
+      .selectDistinct({ recordId: listEntries.recordId })
+      .from(listEntries)
+      .where(and(eq(listEntries.listId, listId), inArray(listEntries.recordId, fresh), isNull(listEntries.deletedAt)));
+    for (const row of rows) alreadyIn.add(row.recordId);
+  }
+  const toAdd: string[] = [];
+  for (const recordId of fresh) {
+    if (alreadyIn.has(recordId)) refuseOne(recordId, 'ENTRY_EXISTS', 'That record is already in this list.');
+    else toAdd.push(recordId);
+  }
+  if (toAdd.length === 0) return outcomes;
+
+  // 5. The list's defaults, the same for every new entry; a missing required field refuses them all.
+  const refuseAllOf = (ids: readonly string[], refusals: readonly RefusalError['refusal'][]) => {
+    const [first] = refusals;
+    for (const recordId of ids)
+      outcomes.set(recordId, { recordId, ...(first === undefined ? {} : { refusal: first }) });
+  };
+  let defaults: Defaults;
+  try {
+    defaults = await initialValues(tx, scope, await loadListAttributes(tx, listId), {}, timeZone);
+  } catch (error) {
+    if (!isRefusal(error)) throw error;
+    refuseAllOf(toAdd, error.refusals);
+    return outcomes;
+  }
+  // A unique or linking default can't be copied from one entry to the next: such a list takes one record at a time.
+  if (defaults.some(({ attribute }) => attribute.isUnique || attribute.type === 'record_reference')) {
+    for (const recordId of toAdd) {
+      const done = await context.perRecord((part) =>
+        addIn(part, { listId, recordId, id: clientId.get(recordId), values: undefined, timeZone }, list),
+      );
+      const [refusal] = done.ok ? [] : done.refusals;
+      outcomes.set(
+        recordId,
+        done.ok
+          ? { recordId, entryId: done.value.entryId }
+          : { recordId, ...(refusal === undefined ? {} : { refusal }) },
+      );
+    }
+    return outcomes;
+  }
+
+  // 6. A full list keeps the ones past its room out, in id order.
+  const limit = limitsOf(scope).entriesPerList;
+  const room = Math.max(0, limit - list.entryCount);
+  const fits = toAdd.slice(0, room);
+  for (const recordId of toAdd.slice(room)) {
+    refuseOne(recordId, 'LIMIT_REACHED', `A list holds at most ${limit.toLocaleString('en')} entries.`);
+  }
+  if (fits.length === 0) return outcomes;
+
+  // 7. Every entry in one insert, their slots in one update, the defaults for all of them in a few more.
+  const done = await context.perRecord(async (part) => {
+    const rows = await part.tx
+      .insert(listEntries)
+      .values(
+        fits.map((recordId) => {
+          const id = clientId.get(recordId);
+          return {
+            ...(id === undefined ? {} : { id }),
+            workspaceId: scope.workspaceId,
+            listId,
+            recordId,
+            ...audit(scope),
+          };
+        }),
+      )
+      .returning({ id: listEntries.id, recordId: listEntries.recordId });
+    await takeEntrySlots(part.tx, scope, listId, rows.length);
+    part.record({
+      createdEntries: rows.map((row) => ({ entryId: row.id, listId, recordId: row.recordId, objectId: list.objectId })),
+    });
+    await writeDefaults(
+      part,
+      rows.map((row) => row.id),
+      defaults,
+    );
+    return rows;
+  });
+  if (!done.ok) {
+    refuseAllOf(fits, done.refusals);
+    return outcomes;
+  }
+  for (const row of done.value) outcomes.set(row.recordId, { recordId: row.recordId, entryId: row.id });
+  return outcomes;
+}
+
+/**
+ * Writes the same default values onto many new entries: the first through
+ * the one value write (its checks, its hold on the definitions, its sort
+ * keys), then every other entry's rows copied from the first's in one
+ * statement, each (entry, attribute) under a version of its own, and their
+ * sort keys in one more.
+ */
+async function writeDefaults(context: WriteContext, entryIds: readonly string[], defaults: Defaults): Promise<void> {
+  const [first, ...rest] = entryIds;
+  if (first === undefined || defaults.length === 0) return;
+  const { tx } = context;
+  const results = await writeAll(context, 'entry', first, defaults);
+  const written = defaults.filter(({ attribute }) => results[attribute.id]?.versionId !== undefined);
+  if (rest.length === 0 || written.length === 0) return;
+  const attributeIds = written.map(({ attribute }) => attribute.id);
+  const copied = await tx.execute<{ owner_id: string; attribute_id: string; version_id: string }>(sql`
+    with targets as (
+      select owner_id, attribute_id, uuidv7() as version_id
+      from unnest(${uuidArray(rest)}) as owner_id
+      cross join unnest(${uuidArray(attributeIds)}) as attribute_id
+    ), inserted as (
+      insert into "values" (
+        workspace_id, version_id, attribute_id, entry_id, owner_id, position, is_cleared, text_value, number_value,
+        date_value, timestamp_value, bool_value, option_id, actor_type, actor_id, actor_member_id, json_value,
+        active_from, set_by_type, set_by_id, set_by_member_id
+      )
+      select v.workspace_id, t.version_id, v.attribute_id, t.owner_id, t.owner_id, v.position, v.is_cleared,
+        v.text_value, v.number_value, v.date_value, v.timestamp_value, v.bool_value, v.option_id, v.actor_type,
+        v.actor_id, v.actor_member_id, v.json_value, v.active_from, v.set_by_type, v.set_by_id, v.set_by_member_id
+      from "values" v join targets t on t.attribute_id = v.attribute_id
+      where v.owner_id = ${first}::uuid and v.attribute_id = any(${uuidArray(attributeIds)}) and v.active_until is null
+      returning owner_id, attribute_id, version_id
+    )
+    select distinct owner_id::text, attribute_id::text, version_id::text from inserted
+  `);
+  await syncNewSortKeys(
+    tx,
+    rest,
+    written.map(({ attribute }) => attribute),
+  );
+  const listOf = new Map(written.map(({ attribute }) => [attribute.id, attribute.listId ?? '']));
+  context.record({
+    values: copied.rows.map((row): ValueChange => ({
+      ownerKind: 'entry',
+      ownerId: row.owner_id,
+      attributeId: row.attribute_id,
+      versionId: row.version_id,
+      listId: listOf.get(row.attribute_id) ?? '',
+    })),
+  });
 }
 
 /**
