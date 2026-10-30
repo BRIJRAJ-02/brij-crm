@@ -149,7 +149,8 @@ export function Modal({
   // A confirm asks in its body: no title bar, the question over its one line of consequence.
   const isConfirm = variant === 'confirm';
   const bodyId = useId();
-  // The footer's submit shows ↵, or ⌘↵ while the dialog holds a long text or an editor, where Enter writes a line.
+  // The footer's submit shows ↵, or ⌘↵ while the dialog holds a long text or an editor, where Enter writes a line
+  // (a field turned editable later counts too), and always for a library Form's submit (`submitForm`).
   const [holdsLongText, setHoldsLongText] = useState(false);
   const watchBody = useCallback((body: HTMLDivElement | null) => {
     if (body === null) return;
@@ -158,7 +159,7 @@ export function Modal({
     };
     check();
     const observer = new MutationObserver(check);
-    observer.observe(body, { childList: true, subtree: true });
+    observer.observe(body, { childList: true, subtree: true, attributes: true, attributeFilter: ['contenteditable'] });
     return () => {
       observer.disconnect();
     };
@@ -166,12 +167,17 @@ export function Modal({
   const footerKeys: FooterKeys = {
     close: strings.closeKey,
     submit: holdsLongText ? strings.submitLongKey : strings.submitKey,
+    submitForm: strings.submitLongKey,
+    // A plain confirm (Sign out) opens on its primary, so Enter answers it; an alert keeps focus on itself.
+    ...(isConfirm && !isAlert ? { primary: strings.submitKey } : {}),
   };
   return (
     <ModalOverlay
       className={styles.scrim}
       data-variant={variant}
       data-alert={isAlert || undefined}
+      // A form holding input dims the page fully, as an alert does: it is waiting on an answer, not a glance.
+      data-holds-input={(!isDismissable && !isAlert) || undefined}
       isDismissable={!isAlert && isDismissable && !isBusy && isClosable}
       isKeyboardDismissDisabled={isBusy || !isClosable}
       data-opened-by={isFocusVisible ? 'keyboard' : 'pointer'}

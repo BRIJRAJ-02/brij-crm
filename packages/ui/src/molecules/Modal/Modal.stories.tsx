@@ -77,6 +77,8 @@ export const Confirm: Story = {
       'Their notes, tasks and history are deleted too. This can’t be undone.',
     );
     await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true));
+    // Enter never destroys: focus stays off the commit.
+    await expect(within(dialog as HTMLElement).getByRole('button', { name: 'Delete records' })).not.toHaveFocus();
     await userEvent.keyboard('{Escape}');
     await waitFor(() => expect(document.querySelector('[role="alertdialog"]')).toBeNull());
     await waitFor(() => expect(trigger).toHaveFocus());
@@ -184,7 +186,10 @@ export const Window: Story = {
   },
 };
 
-/** A short form: a title bar with the close button, Cancel with its Esc keycap and Create with ↵, both by default. */
+/**
+ * A short form: a title bar with the close button, Cancel with its Esc keycap and Create with ⌘↵ (it submits a
+ * library Form, which ⌘↵ submits from any control), both by default.
+ */
 function NewPersonDialog() {
   const [error, setError] = useState<string | undefined>(undefined);
   return (
@@ -225,6 +230,8 @@ export const FormDialog: Story = {
   play: async ({ userEvent }) => {
     const dialog = await openDialog();
     await expect(dialog.querySelector('button[aria-label="Close"]')).not.toBeNull();
+    const submit = within(dialog as HTMLElement).getByRole('button', { name: 'Create' });
+    await expect(submit.getAttribute('aria-keyshortcuts')).toMatch(/^(Meta|Control)\+Enter$/u);
     // Settled after its entrance, then measured.
     await new Promise((resolve) => setTimeout(resolve, 400));
     const centred = async (): Promise<void> => {
@@ -518,7 +525,10 @@ export const ConfirmShape: Story = {
   },
 };
 
-/** A confirm for an end that destroys nothing (Sign out): a plain dialog, so a click outside still dismisses it. */
+/**
+ * A confirm for an end that destroys nothing (Sign out): a plain dialog, so a click outside still dismisses it. It
+ * opens on its primary, which shows ↵, so Enter answers it.
+ */
 export const ConfirmPlain: Story = {
   render: () => (
     <Stage>
@@ -544,6 +554,25 @@ export const ConfirmPlain: Story = {
   play: async () => {
     const dialog = await openDialog();
     await expect(dialog).toHaveAttribute('role', 'dialog');
+    const signOut = within(dialog as HTMLElement).getByRole('button', { name: 'Sign out' });
+    await waitFor(() => expect(signOut).toHaveFocus());
+    await expect(signOut).toHaveAttribute('aria-keyshortcuts', 'Enter');
+  },
+};
+
+/** A form holding input (`isDismissable={false}`) dims the page with the full scrim, as an alert does. */
+export const HoldsInput: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage>
+      <Modal title="New person" isOpen isDismissable={false} actions={<Button slot="close">Cancel</Button>}>
+        Something typed.
+      </Modal>
+    </Stage>
+  ),
+  play: async () => {
+    await openDialog();
+    await expect(document.querySelector('[data-holds-input]')).not.toBeNull();
   },
 };
 

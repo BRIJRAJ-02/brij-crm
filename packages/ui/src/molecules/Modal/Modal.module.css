@@ -9,7 +9,8 @@
    hairline. Header, body and footer share one side inset, overlay-inset
    (styles/base.css); callers never pad inside the body. A dialog, form and
    window dim the page lightly (scrim-soft), letting the shadow lift them, as
-   Attio's do; a peek, a sheet, the palette and an alert keep the full scrim. */
+   Attio's do; a peek, a sheet, the palette, an alert and a form holding input
+   (isDismissable false) keep the full scrim. */
 @layer components {
   /* The viewport's width, less its padding, for the footer's phone layout (a media query takes only the page
      breakpoint). */
@@ -25,6 +26,7 @@
   }
 
   .scrim[data-alert],
+  .scrim[data-holds-input],
   .scrim[data-variant='peek'],
   .scrim[data-variant='sheet'],
   .scrim[data-variant='palette'] {
