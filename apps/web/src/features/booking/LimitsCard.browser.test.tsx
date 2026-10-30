@@ -82,6 +82,11 @@ const mine = (over: Partial<MeetingLimits> = {}): MeetingLimits => ({
   ...over,
 });
 
+/** The day's Switch, pressed: its label hidden, the Switch's own hit area sits over the input. */
+const toggleDay = () => {
+  (page.getByRole('switch', { name: 'Limit meetings a day' }).element() as HTMLElement).click();
+};
+
 describe('Meeting limits', () => {
   it('shows each limit with this day’s and week’s count beside it (AC-1299)', async () => {
     await render(mine({ perWeek: 20 }));
@@ -94,7 +99,7 @@ describe('Meeting limits', () => {
 
   it('turns a limit on with a starting number, saves a typed one on Enter, and refuses one out of range', async () => {
     const made = await render(mine());
-    await page.getByRole('switch', { name: 'Limit meetings a day' }).click();
+    toggleDay();
     expect(made.saved).toEqual([{ perDay: 8, perWeek: undefined }]);
     const field = page.getByRole('textbox', { name: 'Meetings a day' });
     await expect.element(field).toHaveValue('8');
@@ -107,7 +112,7 @@ describe('Meeting limits', () => {
     expect(made.saved.at(-1)).toEqual({ perDay: 5, perWeek: undefined });
     await expect.element(page.getByText('2 of 5 today')).toBeVisible();
     // Off clears it.
-    await page.getByRole('switch', { name: 'Limit meetings a day' }).click();
+    toggleDay();
     expect(made.saved.at(-1)).toEqual({ perDay: undefined, perWeek: undefined });
   });
 
