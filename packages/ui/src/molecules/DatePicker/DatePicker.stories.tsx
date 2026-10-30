@@ -54,9 +54,9 @@ export const QuickPick: Story = {
   play: async ({ canvas, args, userEvent }) => {
     await userEvent.click(canvas.getByRole('button', { name: /Open calendar/ }));
     const calendar = await dialog();
-    // Each pick shows the day it means at its end ("Tomorrow Fri 9 Oct").
-    const tomorrow = [...calendar.querySelectorAll('button')].find((button) =>
-      button.textContent.startsWith('Tomorrow'),
+    // The picks are an inline menu; each shows the day it means at its end ("Tomorrow Fri 9 Oct").
+    const tomorrow = [...calendar.querySelectorAll('[role="menuitem"]')].find((item) =>
+      item.textContent.startsWith('Tomorrow'),
     );
     if (tomorrow === undefined) throw new Error('no Tomorrow pick');
     await userEvent.click(tomorrow);
@@ -211,15 +211,40 @@ export const TypeADate: Story = {
     await waitFor(() => expect(typed).toHaveFocus());
     await userEvent.keyboard('next fri');
     await waitFor(() => expect(calendar).toHaveTextContent(/16/));
+    // The day it names is the field's description, not a live region.
+    await expect(typed).toHaveAccessibleDescription(/16/);
     await userEvent.keyboard('{Enter}');
     await expect(args.onChange).toHaveBeenCalledWith('2026-10-16');
     await waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeNull());
   },
 };
 
-/** The month's title opens its year's months; choosing one shows its days. Today comes back to this month. */
+/** An Enter that names no day says "No match" once, and keeps the popover open. */
+export const TypeADateMissing: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage width="narrow">
+      <DatePicker {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas, args }) => {
+    await userEvent.click(canvas.getByRole('button', { name: /Open calendar/ }));
+    const calendar = await dialog();
+    const typed = calendar.querySelector('input');
+    if (typed === null) throw new Error('no Type a date field');
+    await waitFor(() => expect(typed).toHaveFocus());
+    await userEvent.keyboard('zzz{Enter}');
+    await waitFor(() => expect(calendar.querySelector('[role="status"]')).toHaveTextContent('No match'));
+    await expect(args.onChange).not.toHaveBeenCalled();
+  },
+};
+
+/**
+ * The month's title opens its year's months; choosing one shows its days. Today comes back to this month. Without
+ * quick picks (which hold their own Today) the header offers it.
+ */
 export const MonthJump: Story = {
-  args: { defaultOpen: true },
+  args: { defaultOpen: true, showQuickPicks: false },
   render: (args) => (
     <Stage width="narrow">
       <DatePicker {...args} />
@@ -260,9 +285,61 @@ export const RangePresets: Story = {
   },
   play: async ({ canvas }) => {
     const calendar = await dialog();
-    const preset = [...calendar.querySelectorAll('button')].find((button) => button.textContent === 'Last 7 days');
+    const preset = [...calendar.querySelectorAll('[role="menuitem"]')].find((item) =>
+      item.textContent.startsWith('Last 7 days'),
+    );
     if (preset === undefined) throw new Error('no Last 7 days');
     await userEvent.click(preset);
     await waitFor(() => expect(canvas.getByText('2026-10-02 to 2026-10-08')).toBeInTheDocument());
+  },
+};
+
+/** A range that matches a preset (This month) shows it checked. */
+export const RangePresetChecked: Story = {
+  render: () => (
+    <Stage width="narrow">
+      <DateRangePicker label="Period" defaultValue={{ start: '2026-10-01', end: '2026-10-31' }} defaultOpen />
+    </Stage>
+  ),
+  play: async () => {
+    const calendar = await dialog();
+    const thisMonth = [...calendar.querySelectorAll('[role="menuitem"]')].find((item) =>
+      item.textContent.startsWith('This month'),
+    );
+    await expect(thisMonth).toHaveTextContent('Current');
+  },
+};
+
+/**
+ * The keyboard through the popover: Down from Type a date reaches the days; the months move with the arrows from one
+ * tab stop, and Esc goes back to the days with the popover still open. With quick picks, the header has no Today.
+ */
+export const Keyboard: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage width="narrow">
+      <DatePicker {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await userEvent.click(canvas.getByRole('button', { name: /Open calendar/ }));
+    const calendar = await dialog();
+    const typed = calendar.querySelector('input');
+    if (typed === null) throw new Error('no Type a date field');
+    await waitFor(() => expect(typed).toHaveFocus());
+    await userEvent.keyboard('{ArrowDown}');
+    await waitFor(() => expect(document.activeElement).toHaveTextContent('15'));
+    const title = calendar.querySelector<HTMLElement>('[aria-expanded]');
+    if (title === null) throw new Error('no month title');
+    await userEvent.click(title);
+    await waitFor(() => expect(document.activeElement).toHaveAttribute('aria-current', 'true'));
+    // One tab stop: the month on show.
+    await expect(calendar.querySelectorAll('[role="group"] button[tabindex="0"]')).toHaveLength(1);
+    await userEvent.keyboard('{ArrowUp}');
+    await expect(document.activeElement).toHaveTextContent(/Jul/);
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(title).toHaveAttribute('aria-expanded', 'false'));
+    await expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+    await expect([...calendar.querySelectorAll('button')].some((button) => button.textContent === 'Today')).toBe(false);
   },
 };

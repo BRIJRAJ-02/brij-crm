@@ -1,5 +1,6 @@
 import {
   use,
+  useId,
   useLayoutEffect,
   useRef,
   type KeyboardEvent as ReactKeyboardEvent,
@@ -73,6 +74,11 @@ export interface FieldProps {
   readonly prefix?: ReactNode;
   /** Something at the end of the box: a clear button, a picker trigger. */
   readonly suffix?: ReactNode;
+  /**
+   * The suffix says something about the value (Type a date's "Fri 16 Oct"): screen readers hear it after the field,
+   * as its description, rather than as a live region that talks over the typing.
+   */
+  readonly isSuffixDescribing?: boolean;
   /**
    * Controls beside the box, outside it, on the box's line: a row's own role Select and remove button in a list
    * of invites. The box takes the room left; the label, hint and error stay the box's.
@@ -186,6 +192,7 @@ export function Field({
   error,
   prefix,
   suffix,
+  isSuffixDescribing = false,
   after,
   icon,
   isMultiline = false,
@@ -244,6 +251,8 @@ export function Field({
       view.removeEventListener('resize', place);
     };
   }, [isErrorFloating, error]);
+  const suffixId = useId();
+  const describesBySuffix = isSuffixDescribing && suffix !== undefined;
   const isTextArea = isMultiline || isWrapping;
   // The limit, once the text is near enough to it that a count helps.
   const countedMax =
@@ -320,6 +329,7 @@ export function Field({
       {...(error === undefined ? {} : { isInvalid: true })}
       type={type}
       {...(isLabelHidden ? { 'aria-label': label } : {})}
+      {...(describesBySuffix ? { 'aria-describedby': suffixId } : {})}
       {...(value === undefined ? {} : { value })}
       {...(defaultValue === undefined ? {} : { defaultValue })}
       {...(onChange === undefined
@@ -382,7 +392,11 @@ export function Field({
                 <Icon name="lock" size="xs" label={strings.readOnly} />
               </span>
             )}
-            {suffix !== undefined && <span className={styles.suffix}>{suffix}</span>}
+            {suffix !== undefined && (
+              <span className={styles.suffix} {...(describesBySuffix ? { id: suffixId } : {})}>
+                {suffix}
+              </span>
+            )}
             {isCopy && (
               <span className={styles.copy}>
                 <CopyButton

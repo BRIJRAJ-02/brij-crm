@@ -403,52 +403,12 @@
     color: var(--text-tertiary);
   }
 
-  /* The quick picks (or a range's presets) as a list under a hairline, each row its day at the end. */
+  /* The quick picks (or a range's presets): the library's inline Menu, under a hairline, to the popover's edges. */
   .picks {
-    display: flex;
-    flex-direction: column;
     margin-block-start: var(--space-8);
     margin-inline: calc(-1 * var(--space-8));
     margin-block-end: calc(-1 * var(--space-8));
-    padding: var(--space-4);
     border-block-start: var(--border-width-hairline) solid var(--border-subtle);
-  }
-
-  .pick {
-    display: flex;
-    align-items: center;
-    gap: var(--space-8);
-    min-block-size: var(--size-nav-item);
-    padding-block: 0;
-    padding-inline: var(--space-8);
-    border: none;
-    border-radius: var(--radius-sm);
-    background: transparent;
-    color: var(--text);
-    font: var(--text-body);
-    letter-spacing: var(--tracking-body);
-    text-align: start;
-    outline: none;
-  }
-
-  @media (hover: hover) and (pointer: fine) {
-    .pick[data-hovered] {
-      background: var(--surface-hover);
-    }
-  }
-
-  .pick[data-focus-visible] {
-    background: var(--surface-hover);
-    box-shadow: var(--shadow-focus-inset);
-  }
-
-  .pickLabel {
-    flex: 1;
-  }
-
-  .pickDate {
-    color: var(--text-tertiary);
-    font-variant-numeric: tabular-nums;
   }
 
   @media (forced-colors: active) {

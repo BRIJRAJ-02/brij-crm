@@ -121,3 +121,20 @@ export function dayLabels(
     short: format({ weekday: 'short', day: 'numeric', month: 'short' }),
   };
 }
+
+/** How far each arrow moves among a year's months laid out three across: a month along a row, a row up or down. */
+const MONTH_STEPS: Readonly<Record<string, number>> = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -3, ArrowDown: 3 };
+
+/**
+ * The month (0 to 11) a key moves to from `index` among a year's twelve, three across: the arrows step, Home and End
+ * go to the year's ends, and an arrow off the edge stays put. Left and right swap in a right to left language.
+ * Undefined for any other key.
+ */
+export function monthStep(index: number, key: string, isRightToLeft = false): number | undefined {
+  if (key === 'Home') return 0;
+  if (key === 'End') return 11;
+  const step = MONTH_STEPS[key];
+  if (step === undefined) return undefined;
+  const next = index + (isRightToLeft && (key === 'ArrowLeft' || key === 'ArrowRight') ? -step : step);
+  return next < 0 || next > 11 ? index : next;
+}

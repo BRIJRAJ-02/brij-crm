@@ -443,3 +443,27 @@ export const SearchLarge: Story = {
     await expect(`${String(Math.round(height))}px`).toBe(bar);
   },
 };
+
+/** Inline with each item's `meta` at its end and a check on what is in effect: DatePicker's quick picks and presets. */
+export const InlinePicks: Story = {
+  render: () => (
+    <Stage width="narrow">
+      <Menu label="Quick picks" isInline>
+        <MenuItem id="today" meta="Thu 8 Oct" isChecked>
+          Today
+        </MenuItem>
+        <MenuItem id="tomorrow" meta="Fri 9 Oct">
+          Tomorrow
+        </MenuItem>
+        <MenuItem id="no-date" icon="x">
+          No date
+        </MenuItem>
+      </Menu>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const items = canvas.getAllByRole('menuitem');
+    await expect(items).toHaveLength(3);
+    await expect(items[1]).toHaveTextContent('Fri 9 Oct');
+  },
+};

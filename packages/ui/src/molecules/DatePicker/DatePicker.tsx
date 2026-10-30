@@ -9,6 +9,7 @@ import {
   type CalendarDate,
 } from '@internationalized/date';
 import { use, useContext, useState } from 'react';
+import { useLocale } from 'react-aria';
 import {
   Button as AriaButton,
   Calendar,
@@ -34,12 +35,14 @@ import {
 } from 'react-aria-components';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
+import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { memoIntl } from '../../lib/intl-memo.ts';
-import { firstDayOfWeek, weekStartDay, type WeekStart } from '../../lib/month.ts';
+import { firstDayOfWeek, monthStep, weekStartDay, type WeekStart } from '../../lib/month.ts';
 import { parseDateText } from '../../lib/parse-date-text.ts';
 import { parseDateInput } from '../../lib/parse-input.ts';
 import { useFormatSettings, useNow } from '../../provider/context.ts';
 import { Field } from '../Field/Field.tsx';
+import { Menu, MenuItem, type MenuKey } from '../Menu/Menu.tsx';
 import { InPopover, Popover } from '../Popover/Popover.tsx';
 import styles from './DatePicker.module.css';
 import { strings } from './strings.ts';
@@ -122,14 +125,17 @@ function useCalendarState() {
 
 /**
  * The month's title, which opens the months of its year to jump to (as Square's and Calendly's "Aug 2026 ⌄"), then
- * Today when the month on show isn't today's, then the arrows: a month either way, or a year while choosing a month.
+ * Today when the month on show isn't today's (unless the quick picks under it already offer Today), then the arrows:
+ * a month either way, or a year while choosing a month.
  */
 function MonthHeader({
   today,
+  hasTodayPick,
   isPickingMonth,
   onPickingMonthChange,
 }: {
   readonly today: CalendarDate;
+  readonly hasTodayPick: boolean;
   readonly isPickingMonth: boolean;
   readonly onPickingMonthChange: (isPicking: boolean) => void;
 }) {
@@ -159,7 +165,7 @@ function MonthHeader({
         <span aria-live="polite">{isPickingMonth ? String(shown.year) : title}</span>
         <Icon name={isPickingMonth ? 'chevron-up' : 'chevron-down'} size="xs" tone="muted" />
       </AriaButton>
-      {!isTodaysMonth && (
+      {!isTodaysMonth && !hasTodayPick && (
         <Button
           variant="ghost"
           onPress={() => {
@@ -201,11 +207,19 @@ function MonthHeader({
   );
 }
 
-/** The twelve months of the year on show, three across: choosing one shows its days, focused. */
+/**
+ * The twelve months of the year on show, three across, one tab stop (the month on show) with the arrows, Home and
+ * End moving among them: choosing one shows its days, focused. Esc goes back to the days, leaving the popover open.
+ */
 function MonthPicker({ today, onPicked }: { readonly today: CalendarDate; readonly onPicked: () => void }) {
   const state = useCalendarState();
   const { locale } = useFormatSettings();
+  const { direction } = useLocale();
   if (state === null) return null;
+  const backToDays = () => {
+    state.setFocused(true);
+    onPicked();
+  };
   const shown = state.visibleRange.start;
   const format = memoIntl(
     `date-picker-month-short:${locale}`,
@@ -221,13 +235,29 @@ function MonthPicker({ today, onPicked }: { readonly today: CalendarDate; readon
             key={index}
             className={styles.monthCell}
             data-today={(month.year === today.year && month.month === today.month) || undefined}
-            aria-current={isShown ? 'date' : undefined}
+            aria-current={isShown ? 'true' : undefined}
+            excludeFromTabOrder={!isShown}
             // eslint-disable-next-line jsx-a11y-x/no-autofocus -- the month on show takes focus as the months open
             autoFocus={isShown}
+            onKeyDown={(event) => {
+              // React Aria stops a key handled here, so Esc goes back to the days and never closes the popover.
+              if (event.key === 'Escape') {
+                backToDays();
+                return;
+              }
+              const next = monthStep(index, event.key, direction === 'rtl');
+              const group = event.currentTarget instanceof HTMLElement ? event.currentTarget.parentElement : null;
+              const target = next === undefined ? undefined : group?.querySelectorAll<HTMLElement>('button')[next];
+              if (target === undefined) {
+                event.continuePropagation();
+                return;
+              }
+              event.preventDefault();
+              target.focus();
+            }}
             onPress={() => {
               state.setFocusedDate(state.focusedDate.set({ year: month.year, month: month.month }));
-              state.setFocused(true);
-              onPicked();
+              backToDays();
             }}
           >
             {format.format(month.toDate('UTC'))}
@@ -283,14 +313,22 @@ function Grid({
 function CalendarBody({
   today,
   shown,
+  hasTodayPick = false,
 }: {
   readonly today: CalendarDate;
   readonly shown?: { readonly start: CalendarDate; readonly end: CalendarDate } | undefined;
+  /** The quick picks under it hold Today, so the header leaves its own out. */
+  readonly hasTodayPick?: boolean;
 }) {
   const [isPickingMonth, setPickingMonth] = useState(false);
   return (
     <>
-      <MonthHeader today={today} isPickingMonth={isPickingMonth} onPickingMonthChange={setPickingMonth} />
+      <MonthHeader
+        today={today}
+        hasTodayPick={hasTodayPick}
+        isPickingMonth={isPickingMonth}
+        onPickingMonthChange={setPickingMonth}
+      />
       {isPickingMonth ? (
         <MonthPicker
           today={today}
@@ -307,13 +345,16 @@ function CalendarBody({
 
 /**
  * "Type a date" at the popover's top, as Linear's and Twenty's: words or numbers ("tomorrow", "next fri", "in 2
- * weeks", "Oct 8", "8/10"), the day they name shown live at the end, and Enter chooses it.
+ * weeks", "Oct 8", "8/10"), the day they name shown at the end (the field's description, not a live region), and
+ * Enter chooses it; an Enter that names no day says "No match" once. Down moves to the days.
  */
 function TypeDate({ today, startText = '' }: { readonly today: CalendarDate; readonly startText?: string }) {
   const state = useContext(DatePickerStateContext);
   const { locale, weekStart } = useFormatSettings();
   const dayLabel = useDayLabel();
   const [text, setText] = useState(startText);
+  // The text an Enter found no day in: said once, until the text changes.
+  const [missed, setMissed] = useState<string | undefined>(undefined);
   if (state === null) return null;
   const found = parseDateText(text, {
     today: today.toString(),
@@ -333,80 +374,112 @@ function TypeDate({ today, startText = '' }: { readonly today: CalendarDate; rea
         onChange={setText}
         // eslint-disable-next-line jsx-a11y-x/no-autofocus -- the popover opens to type, as Linear's does
         autoFocus
+        isSuffixDescribing
         suffix={
-          <span
-            className={styles.resolved}
-            aria-live="polite"
-            data-missing={(isTyped && day === undefined) || undefined}
-          >
+          <span className={styles.resolved} data-missing={(isTyped && day === undefined) || undefined}>
             {day !== undefined ? dayLabel(day) : isTyped ? strings.noDateFound : ''}
           </span>
         }
+        onKeyDown={(event) => {
+          // Down goes to the days, on the day that has focus there, so the keyboard never has to Tab past the month.
+          if (event.key !== 'ArrowDown') return;
+          const focusedDay = event.currentTarget
+            .closest('[role="dialog"]')
+            ?.querySelector<HTMLElement>('[role="grid"] [tabindex="0"]');
+          if (focusedDay === null || focusedDay === undefined) return;
+          event.preventDefault();
+          focusedDay.focus();
+        }}
         onSubmit={() => {
-          if (day === undefined) return;
+          if (day === undefined) {
+            setMissed(text);
+            return;
+          }
           state.setValue(day);
           state.close();
         }}
       />
+      <VisuallyHidden>
+        <span role="status">{missed !== undefined && missed === text ? strings.noDateFound : ''}</span>
+      </VisuallyHidden>
     </div>
   );
 }
 
-/** Quick picks as a list, each with the day it means at the end ("Tomorrow · Sat 31 Oct"), and No date last. */
+/** The key of the last quick pick, No date. Never a pick's label. */
+const NO_DATE = 'no-date';
+
+/**
+ * Quick picks as an inline menu, one tab stop with the arrows, each with the day it means at the end ("Tomorrow ·
+ * Sat 31 Oct"), and No date last.
+ */
 function QuickPicks({ isClearable, today }: { readonly isClearable: boolean; readonly today: CalendarDate }) {
   const state = useContext(DatePickerStateContext);
   const { locale, weekStart } = useFormatSettings();
   const dayLabel = useDayLabel();
   if (state === null) return null;
+  const picks = quickPicks(today, locale, weekStart);
+  const choose = (key: MenuKey) => {
+    const pick = picks.find((each) => each.label === key);
+    if (key === NO_DATE) state.setValue(null);
+    else if (pick !== undefined) state.setValue(pick.date);
+    else return;
+    state.close();
+  };
   return (
-    <div className={styles.picks} role="group" aria-label={strings.quickPicks}>
-      {quickPicks(today, locale, weekStart).map((pick) => (
-        <AriaButton
-          key={pick.label}
-          className={styles.pick}
-          onPress={() => {
-            state.setValue(pick.date);
-            state.close();
-          }}
-        >
-          <span className={styles.pickLabel}>{pick.label}</span>
-          <span className={styles.pickDate}>{dayLabel(pick.date)}</span>
-        </AriaButton>
-      ))}
-      {isClearable && state.value !== null && (
-        <AriaButton
-          className={styles.pick}
-          onPress={() => {
-            state.setValue(null);
-            state.close();
-          }}
-        >
-          <Icon name="x" size="sm" tone="muted" />
-          <span className={styles.pickLabel}>{strings.noDate}</span>
-        </AriaButton>
-      )}
+    <div className={styles.picks}>
+      <Menu label={strings.quickPicks} isInline onAction={choose}>
+        {picks.map((pick) => (
+          <MenuItem key={pick.label} id={pick.label} meta={dayLabel(pick.date)}>
+            {pick.label}
+          </MenuItem>
+        ))}
+        {isClearable && state.value !== null && (
+          <MenuItem id={NO_DATE} icon="x">
+            {strings.noDate}
+          </MenuItem>
+        )}
+      </Menu>
     </div>
   );
 }
 
-/** The range presets as a list under the calendar: Last 7 days, This month, Last month, This quarter. */
+/** Whether a range runs exactly from `start` to `end`. */
+function isRange(
+  value: { readonly start: DateValue | null; readonly end: DateValue | null } | null,
+  start: CalendarDate,
+  end: CalendarDate,
+): boolean {
+  if (value === null || value.start === null || value.end === null) return false;
+  return isSameDay(value.start, start) && isSameDay(value.end, end);
+}
+
+/**
+ * The range presets as an inline menu under the calendar: Last 7 days, This month, Last month, This quarter. The
+ * one the range matches is checked.
+ */
 function RangePresets({ today }: { readonly today: CalendarDate }) {
   const state = useContext(DateRangePickerStateContext);
   if (state === null) return null;
+  const presets = rangePresets(today);
   return (
-    <div className={styles.picks} role="group" aria-label={strings.presets}>
-      {rangePresets(today).map((preset) => (
-        <AriaButton
-          key={preset.label}
-          className={styles.pick}
-          onPress={() => {
-            state.setValue({ start: preset.start, end: preset.end });
-            state.close();
-          }}
-        >
-          <span className={styles.pickLabel}>{preset.label}</span>
-        </AriaButton>
-      ))}
+    <div className={styles.picks}>
+      <Menu
+        label={strings.presets}
+        isInline
+        onAction={(key) => {
+          const preset = presets.find((each) => each.label === key);
+          if (preset === undefined) return;
+          state.setValue({ start: preset.start, end: preset.end });
+          state.close();
+        }}
+      >
+        {presets.map((preset) => (
+          <MenuItem key={preset.label} id={preset.label} isChecked={isRange(state.value, preset.start, preset.end)}>
+            {preset.label}
+          </MenuItem>
+        ))}
+      </Menu>
     </div>
   );
 }
@@ -559,7 +632,7 @@ export function DatePicker({
           {...(showQuickPicks ? { autoFocus: false } : {})}
           {...firstDay(weekStart)}
         >
-          <CalendarBody today={today} />
+          <CalendarBody today={today} hasTodayPick={showQuickPicks} />
         </Calendar>
         {showQuickPicks && <QuickPicks isClearable={look.isRequired !== true} today={today} />}
       </Popover>
