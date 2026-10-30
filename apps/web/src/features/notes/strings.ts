@@ -5,6 +5,10 @@ export const strings = {
   untitled: 'Untitled note',
   /** The Notes tab with none yet. */
   noNotes: 'No notes yet',
+  /** The workspace's Notes page with none: where notes come from. */
+  noNotesBody: 'Notes written on a record show here.',
+  /** The Notes page's list didn't load. */
+  loadFailedList: 'Notes didn’t load',
   listLabel: 'Notes',
   // The note window.
   note: 'Note',
@@ -19,10 +23,6 @@ export const strings = {
   linkCopied: 'Link copied',
   copyFailed: 'Couldn’t copy the link. Copy it from the address bar.',
   deleteNote: 'Delete note',
-  /** The delete's confirm (the owner's rule of 21 October 2026): its question names the note. */
-  deleteQuestion: (title: string) => (title.trim() === '' ? 'Delete this note?' : `Delete ${title.trim()}?`),
-  deleteText: 'The note is deleted for everyone and skips the Trash, so you can undo it for 10 seconds only.',
-  cancel: 'Cancel',
   noteDeleted: 'Note deleted',
   undo: 'Undo',
   notDeleted: 'The note wasn’t deleted.',

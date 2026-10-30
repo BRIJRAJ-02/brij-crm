@@ -1,10 +1,11 @@
 // Notes (spec 0019, a record's Notes tab): each note's title, a two line
 // excerpt, its author and when it was last edited; a row opens the note.
 // Notes come through a ListSource, and only the rows on screen draw.
-import type { ActorDisplay } from '@crm/contracts/values';
+import type { ActorDisplay, RecordRefDisplay } from '@crm/contracts/values';
 import { useMemo, type ReactNode } from 'react';
 import { GridList, GridListItem, ListLayout, Virtualizer } from 'react-aria-components';
 import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
+import { RecordChip } from '../../atoms/RecordChip/RecordChip.tsx';
 import { RelativeTime } from '../../atoms/RelativeTime/RelativeTime.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { TruncatedText } from '../../atoms/TruncatedText/TruncatedText.tsx';
@@ -31,6 +32,8 @@ export interface NoteListItem {
   readonly author: ActorDisplay;
   /** When it was last edited, ISO 8601 in UTC. */
   readonly updatedAt: string;
+  /** The record it is on, where notes of many records mix (the workspace's Notes page): a flat chip first in its line. */
+  readonly record?: RecordRefDisplay;
 }
 
 /** Props for NoteList. */
@@ -160,6 +163,14 @@ function NoteListContent({
           </span>
         )}
         <span className={styles.meta}>
+          {note.record !== undefined && (
+            <>
+              <span className={styles.record}>
+                <RecordChip display={note.record} isFlat />
+              </span>
+              <span aria-hidden="true">{strings.separator}</span>
+            </>
+          )}
           <Avatar
             name={note.author.name}
             id={note.author.id ?? note.author.name}

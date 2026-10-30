@@ -60,7 +60,8 @@ export const NOTE_WORDS = {
 export interface NotesApi {
   readonly list: (input: {
     readonly workspace: string;
-    readonly recordId: string;
+    /** Absent: the workspace's Notes page. */
+    readonly recordId?: string;
     readonly cursor?: string;
     readonly limit?: number;
   }) => Promise<NotePage>;
@@ -203,6 +204,9 @@ const hasText = (title: string, doc: unknown) =>
   title.trim() !== '' || (doc !== undefined && richTextToPlain(doc).trim() !== '');
 
 /** The notes store: every workspace's note lists and open notes. */
+/** The workspace's Notes page's list, in the place of a record id (record ids are uuids). */
+const EVERY_RECORD = '';
+
 export function createNotesStore(deps: NotesDeps) {
   const later = deps.later ?? defaultLater;
   const now = deps.now ?? Date.now;
@@ -233,10 +237,20 @@ export function createNotesStore(deps: NotesDeps) {
     return known === undefined || known === objectId;
   };
 
-  /** Every loaded list of this record reads its pages again soon. */
+  /** Every loaded list of this record (and the Notes page's) reads its pages again soon. */
   const dirtyRecord = (workspace: string, recordId: string) => {
-    for (const list of listsOf(workspace)) if (list.recordId === recordId) list.dirty();
+    for (const list of listsOf(workspace))
+      if (list.recordId === recordId || list.recordId === EVERY_RECORD) list.dirty();
   };
+  /** The record's own lists take the note at once; the Notes page's reads again (its rows carry the record's chip). */
+  const putNote = (workspace: string, recordId: string, note: NoteSummary) => {
+    for (const list of listsOf(workspace)) {
+      if (list.recordId === recordId) list.put(note);
+      else if (list.recordId === EVERY_RECORD) list.dirty();
+    }
+  };
+  /** The record's lists, the Notes page's among them, as the API asks for them. */
+  const scopeOf = (recordId: string) => (recordId === EVERY_RECORD ? {} : { recordId });
 
   function makeList(workspace: string, recordId: string) {
     let items: NoteSummary[] = [];
@@ -309,7 +323,7 @@ export function createNotesStore(deps: NotesDeps) {
         do {
           const page = await deps.api.list({
             workspace,
-            recordId,
+            ...scopeOf(recordId),
             limit: Math.min(NOTE_PAGE_MAX, Math.max(NOTE_PAGE, upTo - read.length)),
             ...(next === undefined ? {} : { cursor: next }),
           });
@@ -345,7 +359,7 @@ export function createNotesStore(deps: NotesDeps) {
       loadingMore = true;
       const mine = turn;
       try {
-        const page = await deps.api.list({ workspace, recordId, cursor });
+        const page = await deps.api.list({ workspace, ...scopeOf(recordId), cursor });
         if (mine !== turn) return;
         const have = new Set(items.map((note) => note.id));
         items = [...items, ...page.items.filter((note) => !have.has(note.id))];
@@ -627,7 +641,7 @@ export function createNotesStore(deps: NotesDeps) {
             if (pending.doc === sent.doc) delete pending.doc;
             if (answer.overwrote !== undefined) notice = { kind: 'overwrote', by: answer.overwrote.by };
             saveState = hasPending() ? 'saving' : 'saved';
-            for (const list of listsOf(workspace)) if (list.recordId === recordId) list.put(answer.note);
+            putNote(workspace, recordId, answer.note);
             deps.timelines(workspace, [recordId]);
             announce();
             // Anything typed meanwhile waits its own turn (300 ms, at most 2 s), never straight after this save.
@@ -810,6 +824,19 @@ export function createNotesStore(deps: NotesDeps) {
      * asks. `objectId` names the record's object, so a background job's changes
      * to another object's records leave the list (and its windows) alone.
      */
+    /**
+     * The workspace's Notes page: every note the person may see, last edited
+     * first, each with its record's chip; live as a record's list is (any
+     * notes event, and a record trashed or restored, reads it again).
+     */
+    forWorkspace(workspace: string): NoteList {
+      const key = keyOf(workspace, EVERY_RECORD);
+      const found = lists.get(key);
+      if (found !== undefined) return found.api;
+      const made = makeList(workspace, EVERY_RECORD);
+      lists.set(key, made);
+      return made.api;
+    },
     forRecord(workspace: string, recordId: string, objectId?: string): NoteList {
       const key = keyOf(workspace, recordId);
       if (objectId !== undefined) recordObjects.set(key, objectId);
@@ -856,7 +883,9 @@ export function createNotesStore(deps: NotesDeps) {
      * its open window shows it again, with anything unsaved sent after all).
      */
     async remove(workspace: string, recordId: string, noteId: string): Promise<DataError | undefined> {
-      for (const list of listsOf(workspace)) if (list.recordId === recordId) list.forget(noteId);
+      for (const list of listsOf(workspace)) {
+        if (list.recordId === recordId || list.recordId === EVERY_RECORD) list.forget(noteId);
+      }
       sessions.get(keyOf(workspace, noteId))?.gone();
       const mutationId = deps.mintId();
       deps.mutations.sent(mutationId);
@@ -880,7 +909,7 @@ export function createNotesStore(deps: NotesDeps) {
         const note = await deps.api.restore({ workspace, noteId, mutationId });
         deps.mutations.answered(mutationId, 1);
         sessions.delete(keyOf(workspace, noteId));
-        for (const list of listsOf(workspace)) if (list.recordId === recordId) list.put(note);
+        putNote(workspace, recordId, note);
         dirtyRecord(workspace, recordId);
         deps.timelines(workspace, [recordId]);
         return undefined;
@@ -899,7 +928,9 @@ export function createNotesStore(deps: NotesDeps) {
       const coarse = event.coarse === true;
       const records = new Set(event.recordIds);
       const notes = new Set(event.noteIds);
-      for (const list of listsOf(workspace)) if (coarse || records.has(list.recordId)) list.dirty();
+      for (const list of listsOf(workspace)) {
+        if (coarse || records.has(list.recordId) || list.recordId === EVERY_RECORD) list.dirty();
+      }
       for (const each of sessionsOf(workspace)) if (coarse || notes.has(each.noteId)) each.changedElsewhere();
       deps.timelines(workspace, coarse ? 'all' : event.recordIds);
     },
@@ -915,7 +946,7 @@ export function createNotesStore(deps: NotesDeps) {
       if (!coarse && lifecycle.size === 0) return;
       const touches = (recordId: string) =>
         coarse ? mayBeOf(workspace, recordId, event.objectId) : lifecycle.has(recordId);
-      for (const list of listsOf(workspace)) if (touches(list.recordId)) list.dirty();
+      for (const list of listsOf(workspace)) if (list.recordId === EVERY_RECORD || touches(list.recordId)) list.dirty();
       for (const each of sessionsOf(workspace)) if (touches(each.recordId)) each.recordChanged();
     },
     /** Everything held of the workspace is read again (a resync after a gap the outbox no longer covers). */

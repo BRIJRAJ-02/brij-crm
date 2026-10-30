@@ -1,9 +1,8 @@
 // The note window's delete in Chromium (spec 0019, AC-445, and the owner's
-// rule of 21 October 2026): a note can't come back from the Trash, so "Delete
-// note" asks first. Cancel (or Esc) changes nothing and leaves the window
-// open; Delete note runs the delete once, closes the window and offers Undo;
-// a refused delete stays in the confirm with its reason. The editor's chunk
-// is stubbed: its own behaviour is the library's stories'.
+// rule: Undo deletes never ask first): Delete note runs the delete once,
+// closes the window at once and offers Undo; a refused delete takes the toast
+// back and says why. The editor's chunk is stubbed: its own behaviour is the
+// library's stories'.
 import { dataError, type DataError, type DataLayer, type NoteSession, type NoteSessionState } from '@crm/data';
 import { createToasts, UiProvider, type Toasts } from '@crm/ui';
 import {
@@ -130,51 +129,17 @@ async function renderWindow(answer: () => Promise<DataError | undefined> = () =>
   return { remove, restore, onClose };
 }
 
-/** Opens the window's More menu and picks Delete note: the confirm opens over the window. */
-async function askToDelete() {
+/** Opens the window's More menu and picks Delete note. */
+async function deleteNote() {
   await userEvent.click(page.getByRole('button', { name: 'More actions' }));
   await userEvent.click(page.getByRole('menuitem', { name: 'Delete note' }));
-  await expect.element(page.getByRole('alertdialog', { name: 'Delete Kickoff call?' })).toBeVisible();
 }
 
 describe('deleting a note from its window', () => {
-  it('asks first: Cancel, or Esc, changes nothing and leaves the note open', async () => {
-    const { remove, onClose } = await renderWindow();
-    await askToDelete();
-    const confirm = page.getByRole('alertdialog', { name: 'Delete Kickoff call?' });
-    await expect
-      .element(confirm)
-      .toMatchTextContent(
-        /The note is deleted for everyone and skips the Trash, so you can undo it for 10 seconds only\./,
-      );
-    await userEvent.click(confirm.getByRole('button', { name: /Cancel/ }));
-    await expect.element(confirm).not.toBeInTheDocument();
-    await askToDelete();
-    await userEvent.keyboard('{Escape}');
-    await expect.element(page.getByRole('alertdialog')).not.toBeInTheDocument();
-    await expect.element(page.getByRole('dialog', { name: 'Kickoff call' })).toBeVisible();
-    expect(remove).not.toHaveBeenCalled();
-    expect(onClose).not.toHaveBeenCalled();
-  });
-
-  it('deletes once on Delete note, busy until it lands, then closes the window and offers Undo', async () => {
-    let land: (refusal: DataError | undefined) => void = () => undefined;
-    const { remove, restore, onClose } = await renderWindow(
-      () =>
-        new Promise((resolve) => {
-          land = resolve;
-        }),
-    );
-    await askToDelete();
-    const commit = page.getByRole('alertdialog').getByRole('button', { name: 'Delete note' });
-    await userEvent.click(commit);
-    // Busy while the server works: a second press sends nothing more, and Cancel waits too.
-    await expect.element(commit).toHaveAttribute('data-pending', 'true');
-    await expect.element(page.getByRole('alertdialog').getByRole('button', { name: /Cancel/ })).toBeDisabled();
-    await userEvent.click(commit, { force: true });
-    expect(remove).toHaveBeenCalledTimes(1);
-    expect(onClose).not.toHaveBeenCalled();
-    land(undefined);
+  it('deletes at once with no confirm, closes the window and offers Undo', async () => {
+    const { remove, restore, onClose } = await renderWindow();
+    await deleteNote();
+    expect(page.getByRole('alertdialog', { name: /^Delete / }).query()).toBeNull();
     await vi.waitFor(() => {
       expect(onClose).toHaveBeenCalledTimes(1);
     });
@@ -182,20 +147,19 @@ describe('deleting a note from its window', () => {
     expect(remove).toHaveBeenCalledWith('acme', RECORD.recordId, NOTE);
     await expect.element(page.getByText('Note deleted')).toBeVisible();
     await userEvent.click(page.getByRole('button', { name: 'Undo' }));
-    expect(restore).toHaveBeenCalledWith('acme', RECORD.recordId, NOTE);
+    await vi.waitFor(() => {
+      expect(restore).toHaveBeenCalledWith('acme', RECORD.recordId, NOTE);
+    });
   });
 
-  it('keeps the confirm open with the reason when the delete is refused', async () => {
-    const { remove, onClose } = await renderWindow(() =>
+  it('says why when the delete is refused', async () => {
+    const { remove } = await renderWindow(() =>
       Promise.resolve(dataError('FORBIDDEN', 'You can view this note but not change it.')),
     );
-    await askToDelete();
-    await userEvent.click(page.getByRole('alertdialog').getByRole('button', { name: 'Delete note' }));
+    await deleteNote();
     await expect
-      .element(page.getByRole('alertdialog'))
-      .toMatchTextContent(/The note wasn’t deleted\. You can view this note but not change it\./);
-    await expect.element(page.getByRole('alertdialog').getByRole('button', { name: 'Delete note' })).toBeEnabled();
+      .element(page.getByText('The note wasn’t deleted. You can view this note but not change it.'))
+      .toBeVisible();
     expect(remove).toHaveBeenCalledTimes(1);
-    expect(onClose).not.toHaveBeenCalled();
   });
 });

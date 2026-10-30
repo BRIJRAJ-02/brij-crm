@@ -14,12 +14,15 @@ export const strings = {
   earlierThreads: 'Show earlier threads',
   loadingThreads: 'Loading comments',
   resolvedThreads: 'Resolved threads',
+  /** The toast once a thread is resolved, with Undo. */
+  threadResolved: 'Thread resolved',
+  undo: 'Undo',
   resolvedFailed: 'Resolved threads didn’t load.',
   moreResolved: 'Show more resolved threads',
   formerMember: 'Former member',
   // The delete confirm (AC-1156): a delete has no Undo, so it asks first.
   deleteTitle: 'Delete this comment?',
-  deleteText: 'It leaves the thread for everyone and can’t be brought back.',
+  deleteText: 'This can’t be undone.',
   keep: 'Keep',
   delete: 'Delete',
 } as const;

@@ -4,14 +4,20 @@ export const strings = {
   commandMenu: 'Command menu',
   search: 'Search',
   /** The field's name and hint. */
-  searchLabel: 'Search records, views, pages and actions',
-  searchOnlyLabel: 'Search records, views and pages',
+  searchLabel: 'Search records, notes, tasks, pages and actions',
+  searchOnlyLabel: 'Search records, notes, tasks and pages',
   placeholder: 'Type a command or search…',
-  searchPlaceholder: 'Search records, views and pages…',
+  searchPlaceholder: 'Search records, notes and tasks…',
   /** Section headings (AC-1075, decision 6). */
   recent: 'Recent',
   records: 'Records',
   views: 'Views',
+  notes: 'Notes',
+  tasks: 'Tasks',
+  /** A note row's kind, and an untitled one's name. */
+  note: 'Note',
+  untitledNote: 'Untitled note',
+  task: 'Task',
   pages: 'Pages',
   goTo: 'Go to',
   settingsSection: 'Settings',
@@ -47,6 +53,10 @@ export const strings = {
   signInTerms: ['security', 'password', 'two factor', 'sessions', 'devices', 'sign out'],
   /** Actions (AC-1086, AC-1087). */
   create: (singular: string) => `Create a ${singular.toLocaleLowerCase()}`,
+  /** Nothing matched: make it, with what was typed as its name. */
+  createNamed: (singular: string, name: string) => `Create ${singular.toLocaleLowerCase()} named “${name}”`,
+  /** Anywhere: a new task, on the page when it can hold the dialog, else on Tasks. */
+  createTask: 'Create a task',
   newWord: 'new',
   /** The record page's own actions, named after it. */
   newNoteOn: (name: string) => `New note on ${name}`,

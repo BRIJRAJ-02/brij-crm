@@ -1,11 +1,17 @@
 // Brief
 // Purpose: what happened to a record, newest first, on its page's Activity tab (and Overview's Recent activity).
-// Main task: read who changed what and when, and which records were linked, as it happens.
-// Leaves out: notes (#19 milestone 3) and comments (#29), filters, and the record's own delete and restore (#36).
-import type { ActivityEntryShape, ActivityFeed as ActivityFeedSource, ActivityState, EntrySource } from '@crm/data';
+// Main task: read who changed what and when (one save's changes as one entry), with its notes, tasks, threads and meetings, as it happens.
+// Leaves out: emails (#43), a restore's own entry (the record keeps no history of it), and which job made a change.
+import type {
+  ActivityEntryShape,
+  ActivityFeed as ActivityFeedSource,
+  ActivityKind,
+  ActivityState,
+  EntrySource,
+} from '@crm/data';
 import { useActivity } from '@crm/data/react';
-import { ActivityFeed, type ActivityFeedLayout, type MeetingAttendee, type MeetingEntry } from '@crm/ui';
-import { useMemo } from 'react';
+import { ActivityFeed, Select, type ActivityFeedLayout, type MeetingAttendee, type MeetingEntry } from '@crm/ui';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { strings } from './strings.ts';
 import { linkedSource, type RecordLink, type TaskLink } from './timeline.ts';
 
@@ -28,17 +34,79 @@ export interface ActivityTabProps {
   readonly layout?: ActivityFeedLayout;
   /** Adds a meeting's unknown attendee as a person (spec 0024, AC-609): the meeting's id and the attendee. */
   readonly onAddPerson?: (meetingId: string, attendee: MeetingAttendee) => Promise<void>;
+  /** The timeline cut to some kinds: given, the tab shows its filter (All, Changes, Notes, Tasks, Comments, Meetings). */
+  readonly feedFor?: (kinds: readonly ActivityKind[]) => Promise<ActivityFeedSource>;
+}
+
+/** The filter's choices and the kinds each reads; All reads the whole feed. */
+const FILTERS: readonly { readonly id: string; readonly label: string; readonly kinds?: readonly ActivityKind[] }[] = [
+  { id: 'all', label: strings.filterAll },
+  { id: 'changes', label: strings.filterChanges, kinds: ['created', 'change', 'links', 'deleted', 'submission'] },
+  { id: 'notes', label: strings.filterNotes, kinds: ['note'] },
+  { id: 'tasks', label: strings.filterTasks, kinds: ['task'] },
+  { id: 'comments', label: strings.filterComments, kinds: ['comment'] },
+  { id: 'meetings', label: strings.filterMeetings, kinds: ['meeting'] },
+];
+
+/**
+ * The Activity tab: the filter over the timeline. All shows the whole feed the
+ * page holds; another choice reads its own feed (live as the whole one is),
+ * which shows loading in place until it arrives.
+ */
+export function ActivityTab(props: ActivityTabProps) {
+  const { feed, feedFor } = props;
+  const [filter, setFilter] = useState('all');
+  const [filtered, setFiltered] = useState<{ readonly id: string; readonly feed: ActivityFeedSource } | undefined>(
+    undefined,
+  );
+  const kinds = FILTERS.find((each) => each.id === filter)?.kinds;
+  useEffect(() => {
+    if (kinds === undefined || feedFor === undefined) return;
+    let isLive = true;
+    void feedFor(kinds).then(
+      (made) => {
+        if (isLive) setFiltered({ id: filter, feed: made });
+      },
+      () => undefined,
+    );
+    return () => {
+      isLive = false;
+    };
+  }, [filter, kinds, feedFor]);
+  if (feedFor === undefined) return <Timeline {...props} />;
+  const shown = kinds === undefined ? feed : filtered?.id === filter ? filtered.feed : undefined;
+  return (
+    <Timeline
+      {...props}
+      feed={shown ?? feed}
+      isSwitching={shown === undefined}
+      toolbar={
+        <Select
+          label={strings.activityFilter}
+          isLabelHidden
+          size="sm"
+          items={FILTERS.map(({ id, label }) => ({ id, label }))}
+          value={filter}
+          onChange={(next) => {
+            if (typeof next === 'string') setFilter(next);
+          }}
+        />
+      }
+    />
+  );
 }
 
 /** A record's timeline, paging as it scrolls and live, with Try again when it fails. */
-export function ActivityTab({
+function Timeline({
   feed,
   link,
   taskHref,
   label = strings.activity,
   layout = 'feed',
   onAddPerson,
-}: ActivityTabProps) {
+  toolbar,
+  isSwitching = false,
+}: ActivityTabProps & { readonly toolbar?: ReactNode; readonly isSwitching?: boolean }) {
   const state = useActivity(feed);
   // One linked copy per entry while the links stay the same, so an entry draws again only when it changes.
   const linking = useMemo(() => {
@@ -62,8 +130,10 @@ export function ActivityTab({
       label={label}
       entries={source}
       layout={layout}
-      status={feedStatus(state)}
+      // A filter's own feed on its way: the feed loads in place, never showing the last choice's entries as this one's.
+      status={isSwitching ? 'loading' : feedStatus(state)}
       onRetry={feed.retry}
+      {...(toolbar === undefined ? {} : { toolbar })}
       {...(addPerson === undefined ? {} : { onAddPerson: addPerson })}
     />
   );

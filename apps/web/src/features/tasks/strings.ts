@@ -32,6 +32,10 @@ export const strings = {
   more: 'More actions',
   deleteTask: 'Delete task',
   taskDeleted: 'Task deleted',
+  taskCreated: 'Task created',
+  taskCompleted: 'Task completed',
+  /** The created toast's action: the task's dialog. */
+  openTask: 'Open',
   undo: 'Undo',
   notDeleted: 'The task wasn’t deleted.',
   notRestored: 'Couldn’t restore the task.',

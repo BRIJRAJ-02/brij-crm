@@ -61,10 +61,37 @@ export const ViewHit = z.object({
 /** One view found. */
 export type ViewHit = z.infer<typeof ViewHit>;
 
-/** What a search found, each list in rank order (AC-1079, AC-1081). */
+/** The most notes, and tasks, one search answers. */
+export const MAX_GLOBAL_ITEMS = 5;
+
+/** One note found by its title: its record (the window opens over the record's page). */
+export const NoteHit = z.object({
+  id: Uuid,
+  title: z.string(),
+  record: RecordRefDisplay,
+});
+/** One note found. */
+export type NoteHit = z.infer<typeof NoteHit>;
+
+/** One task found by its title. */
+export const TaskHit = z.object({
+  id: Uuid,
+  title: z.string(),
+  isDone: z.boolean(),
+});
+/** One task found. */
+export type TaskHit = z.infer<typeof TaskHit>;
+
+/**
+ * What a search found, each list in rank order (AC-1079, AC-1081). Notes and
+ * tasks match on their title, newest edit first, only those the reader may
+ * see (a note's record, the task rule); absent from an older server's answer.
+ */
 export const GlobalSearchResults = z.object({
   records: z.array(RecordHit),
   views: z.array(ViewHit),
+  notes: z.array(NoteHit).optional(),
+  tasks: z.array(TaskHit).optional(),
 });
 /** What a search found. */
 export type GlobalSearchResults = z.infer<typeof GlobalSearchResults>;

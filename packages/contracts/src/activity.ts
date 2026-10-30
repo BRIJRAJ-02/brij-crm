@@ -27,9 +27,20 @@ export const MAX_ACTIVITY_CURSOR = 512;
 
 /**
  * The kinds of timeline entry: #19 adds notes and tasks, #29 comments, spec
- * 0024 meetings, spec 0023 form submissions; a client ignores a kind it doesn't map.
+ * 0024 meetings, spec 0023 form submissions, and `deleted` while the record
+ * is in the trash; a client ignores a kind it doesn't map.
  */
-export const ActivityKind = z.enum(['created', 'change', 'links', 'note', 'task', 'comment', 'meeting', 'submission']);
+export const ActivityKind = z.enum([
+  'created',
+  'change',
+  'links',
+  'note',
+  'task',
+  'comment',
+  'meeting',
+  'submission',
+  'deleted',
+]);
 /** A kind of timeline entry. */
 export type ActivityKind = z.infer<typeof ActivityKind>;
 
@@ -93,6 +104,8 @@ export type ActivityCursor = z.infer<typeof ActivityCursor>;
 export const RecordActivityInput = WorkspaceScoped.extend({
   recordId: Uuid,
   cursor: z.string().min(1).max(MAX_ACTIVITY_CURSOR).optional(),
+  /** Only these kinds (the Activity tab's filter); every kind when absent. A cursor belongs to its filter. */
+  kinds: z.array(ActivityKind).min(1).max(ActivityKind.options.length).optional(),
   limit: z
     .number()
     .int()

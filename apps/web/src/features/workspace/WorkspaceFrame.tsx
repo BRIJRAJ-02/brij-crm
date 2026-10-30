@@ -64,7 +64,7 @@ const DEFAULT_NAV: NavState = {
   rail: false,
   version: 0,
   favourites: [],
-  top: ['tasks'],
+  top: ['tasks', 'notes'],
   scheduling: ['bookings', 'captures'],
 };
 

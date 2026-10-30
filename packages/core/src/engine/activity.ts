@@ -2,9 +2,10 @@
 // stored, read from the history the engine already keeps. Each source answers
 // its newest entries past the cursor, at most `limit + 1`, in key order; the
 // service merges them and keeps the first `limit`. The creation, every value
-// version and every link moment (`activity-sources.ts`) are registered here;
-// notes and tasks (#19) and comments (#29) join `ACTIVITY_SOURCES` with the
-// same contract, and nothing else changes.
+// version and every link moment (`activity-sources.ts`) are registered here,
+// with notes and tasks (#19), comments, meetings, form submissions and the
+// record's move to the trash; a filter (`kinds`) reads only the sources that
+// answer those kinds.
 import { sql } from 'drizzle-orm';
 import {
   ACTIVITY_PAGE,
@@ -14,6 +15,7 @@ import {
   compareActivityKeys,
   parseActivityKey,
   type ActivityItem,
+  type ActivityKind,
 } from '@crm/contracts';
 import type { WorkspaceTx } from '@crm/db';
 import { checkId } from './ids.ts';
@@ -33,6 +35,7 @@ import { isArchivedNow, loadAttributes, type AttributeDef } from './values.ts';
 import { meetingSource } from '../calendar/activity.ts';
 import { noteSource } from '../notes/activity.ts';
 import { taskSource } from '../tasks/activity.ts';
+import { commentSource } from '../comments/activity.ts';
 import { submissionSource } from '../forms/activity.ts';
 
 /** What a cursor the server can't read answers, on the `cursor` field. */
@@ -42,6 +45,8 @@ export const ACTIVITY_CURSOR_MESSAGE = 'That activity cursor is not valid here. 
 export interface ActivityQuery {
   readonly recordId: string;
   readonly cursor?: string;
+  /** Only these kinds; every kind when absent. */
+  readonly kinds?: readonly ActivityKind[];
   /** 1 to 50; 50 when not given. */
   readonly limit?: number;
 }
@@ -66,6 +71,8 @@ export interface ActivityRecord {
    * is the record's Updated by, and a create's own entries its Created by.
    */
   readonly hidesActors: boolean;
+  /** While it is in the trash: when it moved there (microseconds), and who moved it unless actors are hidden. */
+  readonly deleted?: { readonly at: string; readonly by?: Actor };
 }
 
 /** Where the last page ended: its last entry's moment (with microseconds), rank and id. */
@@ -134,16 +141,63 @@ const creationSource: ActivitySource = ({ record, after }) => {
   });
 };
 
+/**
+ * The trash entry (`deleted`, rank 8): while the record is in the trash, the
+ * moment it moved there and who moved it. A restore clears the record's
+ * delete columns, so a restored record shows none (its history of moves isn't
+ * kept: that needs columns of its own).
+ */
+const deletionSource: ActivitySource = ({ record, after }) => {
+  const deleted = record.deleted;
+  if (deleted === undefined) return Promise.resolve({ entries: [] });
+  const id = `deleted:${record.id}`;
+  const parts = { at: deleted.at, rank: ACTIVITY_RANKS.deleted, id };
+  if (!isPastBound(parts, after)) return Promise.resolve({ entries: [] });
+  return Promise.resolve({
+    entries: [
+      {
+        id,
+        key: activityKey(parts),
+        at: toMillis(deleted.at),
+        ...(deleted.by === undefined ? {} : { actor: deleted.by }),
+        kind: 'deleted',
+      },
+    ],
+  });
+};
+
 /** The timeline's sources, read in this order and merged by key. #19, #29, spec 0024 and spec 0023 add theirs here. */
 export const ACTIVITY_SOURCES: readonly ActivitySource[] = [
   creationSource,
   valueSource,
   linkSource,
+  commentSource,
   noteSource,
   taskSource,
   meetingSource,
   submissionSource,
+  deletionSource,
 ];
+
+/** The kinds each source answers, so a filter reads only the sources it shows. */
+const SOURCE_KINDS: ReadonlyMap<ActivitySource, readonly ActivityKind[]> = new Map([
+  [creationSource, ['created']],
+  [valueSource, ['change']],
+  [linkSource, ['change', 'links']],
+  [commentSource, ['comment']],
+  [noteSource, ['note']],
+  [taskSource, ['task']],
+  [meetingSource, ['meeting']],
+  [submissionSource, ['submission']],
+  [deletionSource, ['deleted']],
+]);
+
+/** The sources a filter reads: every one without one, else those answering a kind it names. */
+export function sourcesFor(kinds?: readonly ActivityKind[]): readonly ActivitySource[] {
+  if (kinds === undefined) return ACTIVITY_SOURCES;
+  const wanted = new Set(kinds);
+  return ACTIVITY_SOURCES.filter((source) => (SOURCE_KINDS.get(source) ?? []).some((kind) => wanted.has(kind)));
+}
 
 /** Encodes where a page ended as the opaque cursor: base64url JSON. */
 export function encodeActivityCursor(bound: ActivityBound): string {
@@ -170,6 +224,9 @@ interface CheckedRow extends Record<string, unknown> {
   readonly created_at: string;
   readonly created_by_type: Actor['type'];
   readonly created_by_id: string | null;
+  readonly deleted_at: string | null;
+  readonly deleted_by_type: Actor['type'] | null;
+  readonly deleted_by_id: string | null;
   readonly object_archived: boolean;
 }
 
@@ -187,7 +244,9 @@ async function checkedRecord(
   const result = await tx.execute<CheckedRow>(sql`
     select r.id::text as id, r.object_id::text as object_id,
       to_char(r.created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as created_at,
-      r.created_by_type, r.created_by_id::text as created_by_id, o.archived_at is not null as object_archived
+      r.created_by_type, r.created_by_id::text as created_by_id,
+      to_char(r.deleted_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as deleted_at,
+      r.deleted_by_type, r.deleted_by_id::text as deleted_by_id, o.archived_at is not null as object_archived
     from records r join objects o on o.workspace_id = r.workspace_id and o.id = r.object_id
     where r.id = ${recordId}::uuid
   `);
@@ -202,6 +261,17 @@ async function checkedRecord(
     !isOpen(scope.access) &&
     all.some((attribute) => attribute.systemColumn === column && !attributeVisible(scope.access, attribute));
   const hidesCreator = hides('created_by');
+  const hidesAll = hidesActors(scope.access, all);
+  // Who moved it to the trash reads like Updated by: nobody named while a field rule hides the actors.
+  const deleted =
+    row.deleted_at === null
+      ? undefined
+      : {
+          at: row.deleted_at,
+          ...(hidesAll || row.deleted_by_type === null
+            ? {}
+            : { by: { type: row.deleted_by_type, id: row.deleted_by_id } }),
+        };
   const attributes = all.filter(
     (attribute) => !attribute.isSystem && !isArchivedNow(attribute) && attributeVisible(scope.access, attribute),
   );
@@ -211,7 +281,8 @@ async function checkedRecord(
       objectId: row.object_id,
       createdAt: row.created_at,
       ...(hidesCreator ? {} : { createdBy: { type: row.created_by_type, id: row.created_by_id } }),
-      hidesActors: hidesActors(scope.access, all),
+      hidesActors: hidesAll,
+      ...(deleted === undefined ? {} : { deleted }),
     },
     attributes,
   };
@@ -238,7 +309,7 @@ export async function getActivity(scope: EngineScope, input: ActivityQuery): Pro
     // Where the source that stopped soonest stopped: the page can't go past it.
     let stop: string | undefined;
     // One after another: the sources share the read's one transaction.
-    for (const source of ACTIVITY_SOURCES) {
+    for (const source of sourcesFor(input.kinds)) {
       const input = { tx, scope, record, attributes, ...(after === undefined ? {} : { after }), limit };
       const answer = await source(input);
       answered.push(...answer.entries);

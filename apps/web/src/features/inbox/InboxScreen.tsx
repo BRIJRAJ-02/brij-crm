@@ -12,7 +12,6 @@ import {
   SegmentedControl,
   Select,
   Switch,
-  Tooltip,
   TopBar,
   type IconName,
   type ListSource,
@@ -146,6 +145,8 @@ export function InboxScreen({ slug, search, list, objects, members, meId }: Inbo
   const kindLabel = search.kind === undefined ? undefined : KINDS.find((each) => each.value === search.kind)?.label;
   // Mark all as read marks the tab and kind shown: on while something there is unread, as far as it has loaded.
   const hasUnread = unread > 0 && (state.hasMore || state.items.some((each) => each.readAt === undefined));
+  // Mark all done empties the inbox tab (and kind) shown: there while it holds anything.
+  const hasItems = status === 'inbox' && state.items.length > 0;
   const tabLabel = status === 'done' ? strings.done : strings.inbox;
   let emptyTitle: string | undefined;
   if (isFiltered) emptyTitle = strings.emptyFiltered;
@@ -157,7 +158,8 @@ export function InboxScreen({ slug, search, list, objects, members, meId }: Inbo
       page={{
         topBar: (
           <TopBar title={strings.inbox} icon="inbox">
-            {hasUnread ? (
+            {/* Each shows only while it would do something: no disabled button to explain. */}
+            {hasUnread && (
               <Button
                 icon="check"
                 onPress={() => {
@@ -166,13 +168,16 @@ export function InboxScreen({ slug, search, list, objects, members, meId }: Inbo
               >
                 {strings.markAllRead}
               </Button>
-            ) : (
-              // Off with nothing unread here, and says so on hover and focus.
-              <Tooltip content={strings.nothingUnread}>
-                <Button icon="check" isDisabled>
-                  {strings.markAllRead}
-                </Button>
-              </Tooltip>
+            )}
+            {hasItems && (
+              <Button
+                icon="circle-check"
+                onPress={() => {
+                  void data.inbox.markAllRead(slug, status, kind, true);
+                }}
+              >
+                {strings.markAllDone}
+              </Button>
             )}
           </TopBar>
         ),
@@ -269,6 +274,10 @@ export function InboxScreen({ slug, search, list, objects, members, meId }: Inbo
                 members={members}
                 meId={meId}
                 onClose={closeTask}
+                onOpenTask={(taskId) => {
+                  openedHere.current = true;
+                  go({ ...filtersOnly({}), task: taskId }, true);
+                }}
               />
             )}
           </>

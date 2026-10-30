@@ -11,7 +11,7 @@ export const notesRouter = member.notes.router({
   get: member.notes.get.handler(({ context, input }) => getNote(context.scope, { noteId: input.noteId })),
   list: member.notes.list.handler(({ context, input }) =>
     listNotes(context.scope, {
-      recordId: input.recordId,
+      ...(input.recordId === undefined ? {} : { recordId: input.recordId }),
       ...(input.cursor === undefined ? {} : { cursor: input.cursor }),
       ...(input.limit === undefined ? {} : { limit: input.limit }),
     }),

@@ -62,6 +62,14 @@
     letter-spacing: var(--tracking-label);
   }
 
+  /* The record a note is on (the workspace's Notes page): never wider than half the line. */
+  .record {
+    display: flex;
+    flex: none;
+    max-inline-size: 50%;
+    min-inline-size: 0;
+  }
+
   .author {
     min-inline-size: 0;
     overflow: hidden;

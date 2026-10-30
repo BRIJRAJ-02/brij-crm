@@ -1,29 +1,35 @@
 // Brief
 // Purpose: the command menu (spec 0039): go anywhere, find any record or view, and run an action, from the keyboard.
-// Main task: type to search records, views, pages, Settings pages and actions at once, in sections; Enter opens or runs.
-// Leaves out: notes and comments (a later milestone of #33), match highlighting, and anything that ends something.
+// Main task: type to search records, views, notes, tasks, pages and actions at once, in sections; Enter opens or runs.
+// Leaves out: comments and the text inside notes (#33), match highlighting, and anything that ends something.
 import type {
   DataLayer,
   GlobalSearch,
   GlobalSearchState,
+  NoteHit,
   ObjectSummary,
   RecentItem,
   RecordHit,
+  TaskHit,
   ViewHit,
 } from '@crm/data';
 import { Avatar, CommandPalette, type PaletteItem, type PaletteSection } from '@crm/ui';
 import type { ThemeChoice } from '@crm/ui/theme';
-import { useMatch, useNavigate, useParams, useRouteContext } from '@tanstack/react-router';
+import { useLocation, useMatch, useNavigate, useParams, useRouteContext } from '@tanstack/react-router';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { noteHref } from '../notes/entries.ts';
 import { recordHref } from '../records/details.ts';
 import { InviteTeamDialog } from '../settings/InviteTeamDialog.tsx';
 import {
   actionCommands,
+  createNamedCommand,
+  createTaskCommand,
   matchCommands,
   orderSections,
   pageCommands,
   recordCommands,
   settingsCommands,
+  taskDialogHref,
   viewHref,
   type Command,
   type CommandMode,
@@ -73,11 +79,14 @@ export function CommandMenu({ slug, mode, isOpen, onOpenChange, record }: Comman
   const here = objects.find((object) => object.apiSlug === params.object);
   const canInvite = permissions?.includes('members.invite') === true;
   const viewId = params.viewId;
+  const pathname = useLocation({ select: (location) => location.pathname });
   const actions = useMemo(
     () =>
       mode === 'commands'
         ? [
             ...recordCommands(record),
+            // A record page's own New task links the record; elsewhere one Create a task.
+            ...(record === undefined ? [createTaskCommand(slug, pathname)] : []),
             ...actionCommands(slug, objects, {
               ...(here === undefined ? {} : { object: here }),
               ...(viewId === undefined ? {} : { viewId }),
@@ -85,17 +94,25 @@ export function CommandMenu({ slug, mode, isOpen, onOpenChange, record }: Comman
             }),
           ]
         : [],
-    [mode, slug, objects, here, viewId, canInvite, record],
+    [mode, slug, objects, here, viewId, canInvite, record, pathname],
   );
   // Invite members opens the one Invite dialog over the page, as Home's setup step does.
   const [isInviting, setInviting] = useState(false);
+  const text = query.trim();
+  // Nothing matched: one row makes it, named as typed (the page's object, else People).
+  const createNamed = useMemo(() => createNamedCommand(slug, objects, here, text), [slug, objects, here, text]);
   const commands = useMemo(
-    () => new Map([...pages, ...settings, ...actions].map((command) => [command.id, command])),
-    [pages, settings, actions],
+    () =>
+      new Map(
+        [...pages, ...settings, ...actions, ...(createNamed === undefined ? [] : [createNamed])].map((command) => [
+          command.id,
+          command,
+        ]),
+      ),
+    [pages, settings, actions, createNamed],
   );
 
   const found = useSearchState(search);
-  const text = query.trim();
   const sections = useMemo((): readonly PaletteSection[] => {
     const row = (command: Command) => commandRow(command, themeChoice);
     // The server's answer counts only once it is in for what is typed now. Until then Records holds only its
@@ -117,7 +134,24 @@ export function CommandMenu({ slug, mode, isOpen, onOpenChange, record }: Comman
       pages: matchCommands(pages, text),
       settings: matchCommands(settings, text),
       actions: matchCommands(actions, text),
+      notes: isIn ? found.notes : [],
+      tasks: isIn ? found.tasks : [],
     };
+    const isNothing =
+      isIn &&
+      [
+        matched.records,
+        matched.views,
+        matched.pages,
+        matched.settings,
+        matched.actions,
+        matched.notes,
+        matched.tasks,
+      ].every((each) => each === undefined || each.length === 0);
+    // Nothing anywhere: no dead end, one row that makes it.
+    if (isNothing && createNamed !== undefined) {
+      return [{ id: 'actions', label: strings.actions, items: [row(createNamed)] }];
+    }
     const byId: Readonly<Record<SectionId, PaletteSection>> = {
       recent: {
         id: 'recent',
@@ -134,9 +168,11 @@ export function CommandMenu({ slug, mode, isOpen, onOpenChange, record }: Comman
       pages: { id: 'pages', label: text === '' ? strings.goTo : strings.pages, items: matched.pages.map(row) },
       settings: { id: 'settings', label: strings.settingsSection, items: matched.settings.map(row) },
       actions: { id: 'actions', label: strings.actions, items: matched.actions.map(row) },
+      notes: { id: 'notes', label: strings.notes, items: matched.notes.map((note) => noteRow(note)) },
+      tasks: { id: 'tasks', label: strings.tasks, items: matched.tasks.map((task) => taskRow(task)) },
     };
     return orderSections(matched, text).map((id) => byId[id]);
-  }, [text, found, hasFailed, recents, actions, pages, settings, byObject, themeChoice]);
+  }, [text, found, hasFailed, recents, actions, pages, settings, byObject, themeChoice, createNamed]);
 
   const choose = (item: PaletteItem) => {
     const close = () => {
@@ -156,7 +192,7 @@ export function CommandMenu({ slug, mode, isOpen, onOpenChange, record }: Comman
       void navigate({ href: command.run.href });
       return;
     }
-    const href = hrefOf(item.id, slug, byObject, found?.records ?? [], found?.views ?? [], recents);
+    const href = hrefOf(item.id, slug, byObject, found, recents, pathname);
     close();
     if (href !== undefined) void navigate({ href });
   };
@@ -315,6 +351,27 @@ function viewRow(view: ViewHit, objects: ReadonlyMap<string, ObjectSummary>, pre
   };
 }
 
+/** A note as a row: its title ("Untitled note" without one), and its record's name as the quiet line. */
+function noteRow(note: NoteHit): PaletteItem {
+  return {
+    id: `note:${note.id}`,
+    name: note.title.trim() === '' ? strings.untitledNote : note.title,
+    icon: 'notebook',
+    description: note.record.name,
+    kind: strings.note,
+  };
+}
+
+/** A task as a row: its title, with a ticked box once done. */
+function taskRow(task: TaskHit): PaletteItem {
+  return {
+    id: `task:${task.id}`,
+    name: task.title,
+    icon: task.isDone ? 'circle-check' : 'square-check',
+    kind: strings.task,
+  };
+}
+
 /** A recent item as a row (AC-1076). */
 function recentRow(item: RecentItem, objects: ReadonlyMap<string, ObjectSummary>): PaletteItem {
   return item.kind === 'record'
@@ -322,16 +379,29 @@ function recentRow(item: RecentItem, objects: ReadonlyMap<string, ObjectSummary>
     : viewRow(item.view, objects, 'recent-view');
 }
 
-/** Where a record or view row goes (AC-1085): a record its page, a view its object's page on that view. */
+/**
+ * Where a found row goes (AC-1085): a record its page, a view its object's page on that view, a note its window
+ * over its record, a task its dialog over the page (or Tasks).
+ */
 function hrefOf(
   id: string,
   slug: string,
   objects: ReadonlyMap<string, ObjectSummary>,
-  records: readonly RecordHit[],
-  views: readonly ViewHit[],
+  found: GlobalSearchState | undefined,
   recents: readonly RecentItem[],
+  pathname: string,
 ): string | undefined {
+  const records: readonly RecordHit[] = found?.records ?? [];
+  const views: readonly ViewHit[] = found?.views ?? [];
   const [kind, target] = splitId(id);
+  if (kind === 'note') {
+    const note = found?.notes.find((each) => each.id === target);
+    const object = note === undefined ? undefined : objects.get(note.record.objectId);
+    return note === undefined || object === undefined
+      ? undefined
+      : noteHref(slug, object.apiSlug, note.record.recordId, note.id);
+  }
+  if (kind === 'task') return taskDialogHref(slug, pathname, target);
   if (kind === 'record' || kind === 'recent-record') {
     const ref =
       records.find((hit) => hit.ref.recordId === target)?.ref ??

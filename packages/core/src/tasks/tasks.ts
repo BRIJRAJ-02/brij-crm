@@ -19,6 +19,7 @@ import {
   TASK_RECORDS_MAX,
   TASK_TITLE_MAX,
   TaskCursor,
+  type TaskHit,
   type TaskMine,
   type TaskPage,
   type TaskStatus,
@@ -737,6 +738,29 @@ function taskVisibleSql(scope: Pick<EngineScope, 'access' | 'actor'>): SQL {
     sql`(not t.links_purged and (select count(*) from task_records l where l.workspace_id = t.workspace_id and l.task_id = t.id) = 0)`,
   ];
   return sql`(${sql.join(parts, sql` or `)})`;
+}
+
+/**
+ * The command menu's tasks (spec 0039's search, the flow pass of 30 Oct
+ * 2026): live tasks the reader may see (the task rule) whose title contains
+ * the text, open ones first, then newest, at most `limit`, in the search's
+ * own transaction. A principal that reaches nothing finds none.
+ */
+export async function searchTasks(
+  tx: WorkspaceTx,
+  scope: Pick<EngineScope, 'access' | 'actor'>,
+  text: string,
+  limit: number,
+): Promise<readonly TaskHit[]> {
+  if (text === '' || !principalReaches(scope.access, 'read')) return [];
+  const rows = await tx.execute<{ id: string; title: string; is_done: boolean }>(sql`
+    select t.id::text as id, t.title, t.is_done
+    from tasks t
+    where t.deleted_at is null and strpos(lower(t.title), lower(${text})) > 0 and ${taskVisibleSql(scope)}
+    order by t.is_done, t.created_at desc, t.id
+    limit ${limit}
+  `);
+  return rows.rows.map((row) => ({ id: row.id, title: row.title, isDone: row.is_done }));
 }
 
 /**

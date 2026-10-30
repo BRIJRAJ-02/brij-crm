@@ -107,7 +107,7 @@ describe('the command menu’s search', () => {
     expect(calls).toHaveLength(2);
     search.ask('  ');
     expect(calls[1]?.signal.aborted).toBe(true);
-    expect(search.getSnapshot()).toEqual({ query: '', status: 'idle', records: [], views: [] });
+    expect(search.getSnapshot()).toEqual({ query: '', status: 'idle', records: [], views: [], notes: [], tasks: [] });
   });
 
   it('tells its listeners, and stops what is out when disposed', () => {

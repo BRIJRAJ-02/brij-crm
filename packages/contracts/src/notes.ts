@@ -10,6 +10,7 @@ import { ActorReferenceValue, Timestamp } from './values/attribute-values.ts';
 import { RichTextDoc, RichTextDocBody } from './values/rich-text.ts';
 import { NOTE_PAGE_MAX, NOTE_TITLE_MAX } from './note-limits.ts';
 import { TaskTotal } from './tasks.ts';
+import { RecordRefDisplay } from './values/options.ts';
 import { WorkspaceScoped } from './workspaces.ts';
 import { Uuid, uuidV7 } from './values/ids.ts';
 
@@ -48,6 +49,8 @@ export const NoteSummary = z.object({
   createdBy: ActorReferenceValue,
   updatedAt: Timestamp,
   updatedBy: ActorReferenceValue,
+  /** Its record as a chip shows it: on the workspace's Notes page only, where notes of many records mix. */
+  record: RecordRefDisplay.optional(),
 });
 /** A note as its list shows it. */
 export type NoteSummary = z.infer<typeof NoteSummary>;
@@ -92,9 +95,13 @@ export const GetNoteInput = WorkspaceScoped.extend({ noteId: Uuid });
 /** One note by id. */
 export type GetNoteInput = z.infer<typeof GetNoteInput>;
 
-/** One page of a record's notes, last edited first. */
+/**
+ * One page of a record's notes, last edited first; with no `recordId`, the
+ * workspace's Notes page: every note on a live record the reader may see,
+ * each with its record's display, and no total.
+ */
 export const ListNotesInput = WorkspaceScoped.extend({
-  recordId: Uuid,
+  recordId: Uuid.optional(),
   cursor: z.string().min(1).max(MAX_NOTE_CURSOR).optional(),
   limit: z
     .number()

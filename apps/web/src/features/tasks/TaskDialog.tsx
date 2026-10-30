@@ -39,6 +39,7 @@ import { useRouteContext } from '@tanstack/react-router';
 import { useEffect, useId, useState, type ReactNode } from 'react';
 import { memberDisplay } from './entries.ts';
 import { deleteWithUndo } from './undo-delete.ts';
+import { taskCreatedToast } from './toasts.ts';
 import { strings } from './strings.ts';
 import { editorSearch, useRecordSearch } from '../records/links.ts';
 
@@ -58,6 +59,8 @@ export interface TaskDialogProps {
   readonly onClose: () => void;
   /** The list the dialog opened from, by its name: it takes focus back after a delete. */
   readonly listLabel?: string;
+  /** Opens a task's dialog: the "Task created" toast's Open. */
+  readonly onOpenTask?: (taskId: string) => void;
 }
 
 /** The member a member editor committed, or null when it was cleared. */
@@ -445,8 +448,17 @@ function SavedTask({
 }
 
 /** A new task: its fields held here until Create, which closes the dialog at once (optimistic). */
-function NewTask({ slug, pageRecord, objects, startObjectId, members, meId, onClose }: Omit<TaskDialogProps, 'task'>) {
-  const { data } = useRouteContext({ from: '__root__' });
+function NewTask({
+  slug,
+  pageRecord,
+  objects,
+  startObjectId,
+  members,
+  meId,
+  onClose,
+  onOpenTask,
+}: Omit<TaskDialogProps, 'task'>) {
+  const { data, toasts } = useRouteContext({ from: '__root__' });
   const formId = useId();
   // One id per opening, sent again on Retry.
   const [id] = useState(() => data.tasks.newId());
@@ -470,6 +482,14 @@ function NewTask({ slug, pageRecord, objects, startObjectId, members, meId, onCl
       ...(meId === undefined ? {} : { createdBy: meId }),
     });
     onClose();
+    // Says it was made, with Open: a task made off its list (⌘K, another page) would otherwise vanish unseen.
+    if (onOpenTask !== undefined) {
+      toasts.toast(
+        taskCreatedToast(() => {
+          onOpenTask(id);
+        }),
+      );
+    }
   };
   return (
     <TaskModal

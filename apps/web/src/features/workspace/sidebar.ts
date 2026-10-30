@@ -5,11 +5,11 @@
 import type { NavEntry, NavPage, NavPrefs, NavSectionKey, NavState, NavUniverse, ObjectSummary } from '@crm/data';
 import { navKey, sectionItems, sectionOrder } from '@crm/data/navigation';
 import type { IconName } from '@crm/ui';
-import { bookingsHref, capturesHref, inboxHref, linkPageHref, navObjects, tasksHref } from './objects.ts';
+import { bookingsHref, capturesHref, inboxHref, linkPageHref, navObjects, notesHref, tasksHref } from './objects.ts';
 import { strings } from './strings.ts';
 
 /** A page the sidebar marks current that isn't an object's: Tasks, Bookings and Captures (the trash is in Settings). */
-export type SidebarPage = 'home' | 'linkPage' | 'inbox' | 'tasks' | 'bookings' | 'captures';
+export type SidebarPage = 'home' | 'linkPage' | 'inbox' | 'tasks' | 'notes' | 'bookings' | 'captures';
 
 /** One page the sidebar links to: its name, its icon and its address. */
 export interface SidebarPageLink {
@@ -30,6 +30,7 @@ export const PAGE_LINKS: { readonly [Page in NavPage]?: SidebarPageLink } = {
   // The inbox (spec 0038) had a page and an unread count but no row, so a mention reached nobody (QA, 22 October 2026).
   inbox: { label: strings.inbox, icon: 'inbox', href: inboxHref },
   tasks: { label: strings.tasks, icon: 'square-check', href: tasksHref },
+  notes: { label: strings.notes, icon: 'notebook', href: notesHref },
   bookings: { label: strings.bookings, icon: 'calendar-days', href: bookingsHref },
   captures: { label: strings.captures, icon: 'link', href: capturesHref },
 };

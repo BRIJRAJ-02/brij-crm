@@ -25,6 +25,8 @@ export const trashHref = (slug: string) => `/w/${slug}/settings/trash`;
 
 /** My tasks' address (spec 0019). */
 export const tasksHref = (slug: string) => `/w/${slug}/tasks`;
+/** The workspace's Notes page: every note the person may see, last edited first. */
+export const notesHref = (slug: string) => `/w/${slug}/notes`;
 /** The member's inbox: mentions, assignments and replies (spec 0038). */
 export const inboxHref = (slug: string) => `/w/${slug}/inbox`;
 

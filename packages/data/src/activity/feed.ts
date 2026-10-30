@@ -9,6 +9,7 @@
 // record page, so it stays out of the first load.
 import type {
   ActivityItem,
+  ActivityKind,
   ActorDisplay,
   AttributeDefinition,
   MemberSummary,
@@ -16,6 +17,7 @@ import type {
   RecordRefDisplay,
 } from '@crm/contracts';
 import { ACTIVITY_PAGE, ACTIVITY_RECENT, compareActivityKeys } from '@crm/contracts/activity-keys';
+import { bodySegments } from '@crm/contracts/mentions';
 import { toDataError, type DataError } from '../errors.ts';
 import { toFieldAttribute, type FieldAttributeShape } from '../fields.ts';
 
@@ -120,6 +122,27 @@ export type ActivityEntryShape =
       readonly answers?: readonly { readonly label: string; readonly text: string }[];
     })
   | (EntryBase & {
+      /** A thread started on the record: its first comment's start, mentions named; the screen adds the thread's address. */
+      readonly kind: 'comment';
+      /** The thread's id, for the screen to open it (`?thread=<id>`). */
+      readonly itemId: string;
+      readonly excerpt: string;
+      readonly href?: string;
+    })
+  | (EntryBase & {
+      /** The record moved to the trash (while it is there): who moved it, and when. */
+      readonly kind: 'deleted';
+    })
+  | (EntryBase & {
+      /**
+       * One actor's changes made in the same second (one save, an import's
+       * row, a bulk edit), drawn as one "changed N attributes" entry with Show
+       * all; newest first, as the feed reads them.
+       */
+      readonly kind: 'changes';
+      readonly changes: readonly ChangeEntryShape[];
+    })
+  | (EntryBase & {
       /** A form submission that touched the record (spec 0023): the form is the actor, with what it did. */
       readonly kind: 'submission';
       /** The submission's id. */
@@ -128,6 +151,53 @@ export type ActivityEntryShape =
       /** The submission's address, which the screen adds. */
       readonly href?: string;
     });
+
+/** One value's change, as a `changes` entry holds it. */
+export type ChangeEntryShape = Extract<ActivityEntryShape, { kind: 'change' }>;
+
+/** The second an entry happened in, and who did it: changes sharing both group into one entry. */
+const momentOf = (entry: ChangeEntryShape) => `${entry.at.slice(0, 19)}|${entry.actor.type}|${entry.actor.id ?? ''}`;
+
+/**
+ * The feed's entries with each run of one actor's changes in the same second
+ * grouped into one `changes` entry (two or more; one stays as it is). Keyed by
+ * its oldest change, which stays put as newer ones join. Pure.
+ */
+export function groupChanges(entries: readonly ActivityEntryShape[]): readonly ActivityEntryShape[] {
+  const out: ActivityEntryShape[] = [];
+  let run: ChangeEntryShape[] = [];
+  const flush = () => {
+    const [first] = run;
+    const last = run.at(-1);
+    if (first === undefined || last === undefined) return;
+    if (run.length === 1) out.push(first);
+    else out.push({ id: `changes:${last.id}`, at: first.at, actor: first.actor, kind: 'changes', changes: run });
+    run = [];
+  };
+  for (const entry of entries) {
+    if (entry.kind === 'change') {
+      const [first] = run;
+      if (first !== undefined && momentOf(first) !== momentOf(entry)) flush();
+      run.push(entry);
+      continue;
+    }
+    flush();
+    out.push(entry);
+  }
+  flush();
+  return out;
+}
+
+/** A comment's text with each mention as "@Name" (a member the list doesn't hold reads as "@Former member"). */
+function namedMentions(body: string, members: readonly MemberSummary[] | undefined): string {
+  return bodySegments(body)
+    .map((segment) => {
+      if (segment.kind === 'text') return segment.text;
+      const member = members?.find((each) => each.id.toLowerCase() === segment.memberId);
+      return `@${member?.name ?? ACTOR_WORDS.formerMember}`;
+    })
+    .join('');
+}
 
 /** A meeting's attendee as the library's `MeetingAttendee`: a person's or member's chip (the screen adds its page), else an address. */
 export interface MeetingAttendeeShape {
@@ -181,8 +251,13 @@ export interface ActivityFeed {
 
 /** What the feeds need from the data layer. */
 export interface ActivityFeedsOptions {
-  /** A page of a record's timeline (`records.activity`). */
-  readonly page: (workspace: string, recordId: string, cursor?: string) => Promise<RecordActivity>;
+  /** A page of a record's timeline (`records.activity`), only `kinds` when given. */
+  readonly page: (
+    workspace: string,
+    recordId: string,
+    cursor?: string,
+    kinds?: readonly ActivityKind[],
+  ) => Promise<RecordActivity>;
   /** The workspace's members, cached; `fresh` reads them again (someone who joined since). */
   readonly members: (workspace: string, fresh: boolean) => Promise<readonly MemberSummary[]>;
   /** An object's live attributes, cached (the definitions store), to name and draw each change. */
@@ -260,6 +335,16 @@ function actorValueDisplay(value: unknown, members: readonly MemberSummary[] | u
 export function toActivityEntry(item: ActivityItem, context: EntryContext): ActivityEntryShape | undefined {
   const base = { id: item.id, at: item.at, actor: actorDisplay(item.actor, context.members, context.forms) };
   if (item.kind === 'created') return { ...base, kind: 'created' };
+  if (item.kind === 'deleted') return { ...base, kind: 'deleted' };
+  if (item.kind === 'comment') {
+    if (item.itemId === undefined) return undefined;
+    return {
+      ...base,
+      kind: 'comment',
+      itemId: item.itemId,
+      excerpt: namedMentions(item.excerpt ?? '', context.members),
+    };
+  }
   if (item.kind === 'submission') {
     if (item.itemId === undefined || item.action === undefined) return undefined;
     return { ...base, kind: 'submission', itemId: item.itemId, action: item.action };
@@ -302,7 +387,7 @@ export function toActivityEntry(item: ActivityItem, context: EntryContext): Acti
       ...(item.answers === undefined || item.answers.length === 0 ? {} : { answers: item.answers }),
     };
   }
-  if (item.kind !== 'change' && item.kind !== 'links') return undefined;
+  // What is left is a change or a side's links.
   const definition = item.attributeId === undefined ? undefined : context.attributes.get(item.attributeId);
   if (definition === undefined) return undefined;
   const attribute = toFieldAttribute(definition);
@@ -375,7 +460,8 @@ const timeout = (run: () => void, ms: number) => {
   };
 };
 
-const keyOf = (workspace: string, recordId: string) => `${workspace}\u0000${recordId}`;
+const keyOf = (workspace: string, recordId: string, kinds?: readonly ActivityKind[]) =>
+  `${workspace}\u0000${recordId}\u0000${kinds === undefined ? '' : [...kinds].sort().join(',')}`;
 
 /** The longest wait between tries of a page that failed, in ms. */
 const MORE_RETRY_MAX_MS = 30_000;
@@ -410,8 +496,13 @@ export function createActivityFeeds({
   // so records made by people who have left don't reread the list (shared with every screen) on each open.
   const membersReadAt = new Map<string, number>();
 
-  function open(workspace: string, recordId: string, objectId: string | undefined): Feed {
-    const key = keyOf(workspace, recordId);
+  function open(
+    workspace: string,
+    recordId: string,
+    objectId: string | undefined,
+    kinds: readonly ActivityKind[] | undefined,
+  ): Feed {
+    const key = keyOf(workspace, recordId, kinds);
     const listeners = new Set<() => void>();
     let status: ActivityStatus = 'loading';
     let error: DataError | undefined;
@@ -447,7 +538,8 @@ export function createActivityFeeds({
       if (range.end >= held.length - LOAD_AHEAD) loadMore();
     };
     const stateOf = (cut?: number): ActivityState => {
-      const shown = (cut === undefined ? held : held.slice(0, cut)).map((each) => each.entry);
+      // One actor's changes in the same second read as one entry (Show all opens them).
+      const shown = groupChanges((cut === undefined ? held : held.slice(0, cut)).map((each) => each.entry));
       const more = cut === undefined ? cursor !== undefined : held.length > cut || cursor !== undefined;
       // The full feed draws one entry still loading past the loaded ones while there are more.
       const tail = cut === undefined && cursor !== undefined ? 1 : 0;
@@ -542,7 +634,7 @@ export function createActivityFeeds({
         error = undefined;
         announce();
       }
-      page(workspace, recordId)
+      page(workspace, recordId, undefined, kinds)
         .then(async (answer) => ({ answer, ...(await mapped(answer)) }))
         .then(
           ({ answer, rows }) => {
@@ -587,7 +679,7 @@ export function createActivityFeeds({
       loadingMore = true;
       const mine = epoch;
       const after = cursor;
-      page(workspace, recordId, after)
+      page(workspace, recordId, after, kinds)
         .then(async (answer) => ({ answer, ...(await mapped(answer)) }))
         .then(
           ({ answer, rows }) => {
@@ -639,7 +731,7 @@ export function createActivityFeeds({
           readHead();
         }
       };
-      page(workspace, recordId)
+      page(workspace, recordId, undefined, kinds)
         .then(async (answer) => ({ answer, ...(await mapped(answer)) }))
         .then(
           ({ answer, rows, lastKey }) => {
@@ -773,14 +865,26 @@ export function createActivityFeeds({
     return feed;
   }
 
-  const feedOf = (workspace: string, recordId: string, objectId: string | undefined): Feed =>
-    feeds.get(keyOf(workspace, recordId)) ?? open(workspace, recordId, objectId);
+  const feedOf = (
+    workspace: string,
+    recordId: string,
+    objectId: string | undefined,
+    kinds?: readonly ActivityKind[],
+  ): Feed => feeds.get(keyOf(workspace, recordId, kinds)) ?? open(workspace, recordId, objectId, kinds);
   const inWorkspace = (workspace: string) => [...feeds.values()].filter((feed) => feed.workspace === workspace);
 
   return {
-    /** A record's whole timeline, newest first (the Activity tab); `objectId` names its attributes. */
-    forRecord: (workspace: string, recordId: string, objectId?: string): ActivityFeed =>
-      feedOf(workspace, recordId, objectId).full,
+    /**
+     * A record's whole timeline, newest first (the Activity tab); `objectId`
+     * names its attributes. With `kinds`, only those (the tab's filter): a
+     * feed of its own, live as the whole one is.
+     */
+    forRecord: (
+      workspace: string,
+      recordId: string,
+      objectId?: string,
+      kinds?: readonly ActivityKind[],
+    ): ActivityFeed => feedOf(workspace, recordId, objectId, kinds).full,
     /** Its newest five entries (Overview's "Recent activity"), sharing the first page with `forRecord`. */
     recent: (workspace: string, recordId: string, objectId?: string): ActivityFeed =>
       feedOf(workspace, recordId, objectId).recent,

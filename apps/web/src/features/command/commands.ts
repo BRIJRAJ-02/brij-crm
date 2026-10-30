@@ -2,8 +2,9 @@
 // actions it lists, each with the words it also answers to, how what is typed
 // matches them (AC-1077, AC-1082), the order its sections show in, and where
 // each goes. Pure, so the node
-// tests cover it, the address walk of AC-1104 among them. Records and views
-// come from the server through the data layer; nothing here reads data.
+// tests cover it, the address walk of AC-1104 among them. Records, views,
+// notes and tasks come from the server through the data layer; nothing here
+// reads data.
 import type { ObjectSummary, Permission, RecordHit, ViewHit } from '@crm/data';
 import type { IconName } from '@crm/ui';
 import type { ThemeChoice } from '@crm/ui/theme';
@@ -276,6 +277,54 @@ export function createHref(slug: string, object: Pick<ObjectSummary, 'apiSlug'>)
   return `${objectHref(slug, object)}?new=1`;
 }
 
+/** The page a task dialog opens over from the menu: the one shown when it holds `?task=` (Tasks, the inbox, a record), else Tasks. */
+export function taskDialogHref(slug: string, pathname: string, task: string): string {
+  const prefix = `/w/${slug}/`;
+  const rest = pathname.startsWith(prefix) ? pathname.slice(prefix.length) : undefined;
+  const holds =
+    rest !== undefined &&
+    (rest === 'tasks' || rest === 'inbox' || /^objects\/[^/]+\/[0-9a-f-]{36}(\/[a-z]+)?$/i.test(rest));
+  return `${holds ? pathname : tasksHref(slug)}?task=${encodeURIComponent(task)}`;
+}
+
+/**
+ * Create a task (the flow pass of 30 Oct 2026): a new task from anywhere, its
+ * dialog over the page when the page holds one, else over Tasks. A record
+ * page has its own "New task on <name>", which links the record, so none.
+ */
+export function createTaskCommand(slug: string, pathname: string): Command {
+  return {
+    id: 'create:task',
+    name: strings.createTask,
+    icon: 'square-check',
+    terms: strings.taskTerms,
+    run: go(taskDialogHref(slug, pathname, 'new')),
+  };
+}
+
+/**
+ * When nothing matches (the flow pass of 30 Oct 2026): Create <object> named
+ * "<text>", for the object whose page is open, else People, opening its new
+ * record dialog with the name filled. None when that object can't be written.
+ */
+export function createNamedCommand(
+  slug: string,
+  objects: readonly ObjectSummary[],
+  here: ObjectSummary | undefined,
+  text: string,
+): Command | undefined {
+  const name = text.trim();
+  const object = here ?? objects.find((each) => each.apiSlug === 'people');
+  if (name === '' || object === undefined || object.access !== 'write' || object.isArchived) return undefined;
+  return {
+    id: `create-named:${object.id}`,
+    name: strings.createNamed(object.singularName, name),
+    icon: 'plus',
+    terms: [],
+    run: { kind: 'create', href: `${createHref(slug, object)}&name=${encodeURIComponent(name)}` },
+  };
+}
+
 /** A view of an object. */
 export function viewHref(slug: string, objectSlug: string, viewId: string): string {
   return `/w/${slug}/objects/${objectSlug}/views/${viewId}`;
@@ -300,8 +349,11 @@ export function matchCommands(commands: readonly Command[], query: string): read
 /** The menu's sections: Recent with nothing typed, then the results by kind (decision 6). */
 export type SectionId = 'recent' | ResultSectionId;
 
-/** The sections of results, in kind order (decision 6): the order that breaks a tie between equally good matches. */
-const RESULT_SECTIONS = ['records', 'views', 'pages', 'settings', 'actions'] as const;
+/**
+ * The sections of results, in kind order (decision 6): the order that breaks a tie between equally good matches.
+ * Notes and tasks come last: they show only when their titles match, and then rank by them.
+ */
+const RESULT_SECTIONS = ['records', 'views', 'pages', 'settings', 'actions', 'notes', 'tasks'] as const;
 type ResultSectionId = (typeof RESULT_SECTIONS)[number];
 
 /** With nothing typed (AC-1075): Recent, Actions, then Go to (every page). */
@@ -318,6 +370,9 @@ export interface Found {
   readonly pages: readonly Command[];
   readonly settings: readonly Command[];
   readonly actions: readonly Command[];
+  /** Notes and tasks by title: none while the search is out. */
+  readonly notes?: readonly { readonly title: string }[];
+  readonly tasks?: readonly { readonly title: string }[];
 }
 
 /**
@@ -344,6 +399,8 @@ export function orderSections(found: Found, query: string): readonly SectionId[]
     pages: ofCommands(found.pages),
     settings: ofCommands(found.settings),
     actions: ofCommands(found.actions),
+    notes: best((found.notes ?? []).map((note) => onScale(nameRank(note.title, text)))),
+    tasks: best((found.tasks ?? []).map((task) => onScale(nameRank(task.title, text)))),
   };
   return RESULT_SECTIONS.map((id, index) => ({ id, index }))
     .sort((a, b) => strength[a.id] - strength[b.id] || a.index - b.index)

@@ -6,6 +6,7 @@
 // screen first asks for records), patched in place by live change events
 // while a screen shows a workspace (the realtime client loads with the first).
 import type {
+  ActivityKind,
   RecordsExportView,
   StartExportInput,
   ImportLinks,
@@ -264,7 +265,7 @@ import type {
 } from './records/layer.ts';
 
 export type { GlobalSearch, GlobalSearchState } from './search/global.ts';
-export type { RecentItem, RecordHit, SearchMatch, ViewHit } from '@crm/contracts';
+export type { NoteHit, RecentItem, RecordHit, SearchMatch, TaskHit, ViewHit } from '@crm/contracts';
 // The operator console (spec 0047): the super admin's read only analytics.
 export type {
   OperatorHeld,
@@ -459,11 +460,13 @@ export type {
   SocialLinkNetwork,
   WorkspaceSettings,
 } from '@crm/contracts';
+export type { ActivityKind } from '@crm/contracts';
 export type {
   ActivityEntryShape,
   ActivityFeed,
   ActivityState,
   ActivityStatus,
+  ChangeEntryShape,
   EntrySource,
   LinkedRecordShape,
   MeetingAttendeeShape,
@@ -2756,10 +2759,18 @@ export function createDataLayer({
       // A hidden tab's timelines read nothing; what changed meanwhile is read when it is shown again.
       const isHidden = () => typeof document !== 'undefined' && document.visibilityState === 'hidden';
       const feeds = createActivityFeeds({
-        page: (workspace, recordId, cursor) =>
+        page: (workspace, recordId, cursor, kinds) =>
           beforeRead(workspace).then(() =>
             call((options) =>
-              api.records.activity({ workspace, recordId, ...(cursor === undefined ? {} : { cursor }) }, options),
+              api.records.activity(
+                {
+                  workspace,
+                  recordId,
+                  ...(cursor === undefined ? {} : { cursor }),
+                  ...(kinds === undefined ? {} : { kinds: [...kinds] }),
+                },
+                options,
+              ),
             ),
           ),
         members: (workspace, fresh) => {
@@ -4784,8 +4795,12 @@ export function createDataLayer({
        * feed scrolls, and kept live (a change naming the record, this tab's own
        * writes). One per record, shared with `recent`. Read it through `useActivity`.
        */
-      forRecord: async (workspace: string, recordId: string, objectId?: string): Promise<ActivityFeed> =>
-        (await activityFeeds()).forRecord(workspace, recordId, objectId),
+      forRecord: async (
+        workspace: string,
+        recordId: string,
+        objectId?: string,
+        kinds?: readonly ActivityKind[],
+      ): Promise<ActivityFeed> => (await activityFeeds()).forRecord(workspace, recordId, objectId, kinds),
       /** The same timeline cut to its newest five entries (Overview's "Recent activity"), sharing the first page. */
       recent: async (workspace: string, recordId: string, objectId?: string): Promise<ActivityFeed> =>
         (await activityFeeds()).recent(workspace, recordId, objectId),
@@ -4877,6 +4892,8 @@ export function createDataLayer({
        */
       forRecord: async (workspace: string, recordId: string, objectId?: string): Promise<NoteList> =>
         (await notesStore()).forRecord(workspace, recordId, objectId),
+      /** The workspace's Notes page: every note the person may see, last edited first, with its record. Live. */
+      forWorkspace: async (workspace: string): Promise<NoteList> => (await notesStore()).forWorkspace(workspace),
       /**
        * The note window's session (AC-439 to AC-443): an existing note, or a
        * new one with the id the window minted, which stores nothing until it
@@ -4964,12 +4981,13 @@ export function createDataLayer({
       /** Marks notifications read or unread, done or back in the inbox, at once (AC-1171). */
       mark: async (workspace: string, ids: readonly string[], mark: InboxMark): Promise<DataError | undefined> =>
         (await inboxStore()).mark(workspace, ids, mark),
-      /** Marks every unread notification of a tab (and kind) read. */
+      /** Marks every unread notification of a tab (and kind) read; with `done`, every one of the inbox done (Mark all done). */
       markAllRead: async (
         workspace: string,
         status: NotificationStatus,
         kind?: NotificationKind,
-      ): Promise<DataError | undefined> => (await inboxStore()).markAllRead(workspace, status, kind),
+        done?: boolean,
+      ): Promise<DataError | undefined> => (await inboxStore()).markAllRead(workspace, status, kind, done),
       /** The member's email settings for the workspace (AC-1179). Read it through `useNotificationSettings`. */
       settings: async (workspace: string): Promise<InboxSettings> => (await inboxStore()).settings(workspace),
       /** Saves some switches at once; a refusal puts them back with a toast. */

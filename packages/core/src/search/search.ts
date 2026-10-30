@@ -18,7 +18,7 @@
 import { sql, type SQL } from 'drizzle-orm';
 import type { WorkspaceTx } from '@crm/db';
 import type { GlobalSearchResults, RecordHit, SearchMatch, ViewHit } from '@crm/contracts';
-import { MAX_GLOBAL_QUERY, MAX_GLOBAL_RECORDS } from '@crm/contracts';
+import { MAX_GLOBAL_ITEMS, MAX_GLOBAL_QUERY, MAX_GLOBAL_RECORDS } from '@crm/contracts';
 import { isUuid, uuidArray, uuidList } from '../engine/ids.ts';
 import { searchedAttributes } from '../engine/record-search.ts';
 import { readRecords } from '../engine/records.ts';
@@ -29,6 +29,8 @@ import { isAborted, withCancel } from '../engine/query/cancel.ts';
 import { objectLevel, recordRule } from '../access/policy.ts';
 import { attributeVisible, farVisibleSql } from '../access/visibility.ts';
 import { memberOf } from '../views/views.ts';
+import { searchNotes } from '../notes/notes.ts';
+import { searchTasks } from '../tasks/tasks.ts';
 
 /** The most views one search answers (AC-1081). */
 export const MAX_GLOBAL_VIEWS = 8;
@@ -411,7 +413,11 @@ export async function searchWorkspace(
         { text },
         MAX_GLOBAL_VIEWS,
       );
-      return { records, views: [...foundViews] };
+      checkpoint();
+      // Notes and tasks by title, each through its own rule (a note follows its record; the task rule).
+      const notes = await searchNotes(tx, scope.access, text, MAX_GLOBAL_ITEMS);
+      const tasks = await searchTasks(tx, scope, text, MAX_GLOBAL_ITEMS);
+      return { records, views: [...foundViews], notes: [...notes], tasks: [...tasks] };
     });
   } catch (error) {
     if (postgresError(error)?.code === '57014') {

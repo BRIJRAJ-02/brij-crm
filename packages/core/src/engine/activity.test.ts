@@ -13,6 +13,7 @@ import { createRecord } from './records.ts';
 import { isInputError, isRefusal } from './refusals.ts';
 import { createWorkspace } from './workspaces.ts';
 import { readTrashedRecord } from '../records/records.ts';
+import { createComment } from '../comments/comments.ts';
 import { rescope, testScope } from '../testing.ts';
 
 const { appUrl } = inject('testDatabase');
@@ -195,7 +196,10 @@ describe('the record check (spec 0017, AC-376, AC-382, AC-387)', () => {
       values: { [world.id('people.name')]: { firstName: 'Gone' } },
     });
     await deleteRecord(world.scope, { recordId });
-    expect((await getActivity(world.scope, { recordId })).entries.map((each) => each.kind)).toEqual(['created']);
+    expect((await getActivity(world.scope, { recordId })).entries.map((each) => each.kind)).toEqual([
+      'deleted',
+      'created',
+    ]);
     const { recordId: deal } = await createRecord(world.scope, {
       objectId: world.people,
       values: { [world.id('people.name')]: { firstName: 'Archived' } },
@@ -322,5 +326,37 @@ describe('a record in the trash (spec 0017, AC-376)', () => {
     expect(Object.hasOwn(trashed.record.values, world.id('people.job_title'))).toBe(false);
     await setObjectArchived(world.scope, { objectId: world.people, archived: true });
     expect(await refusalOf(readTrashedRecord(world.scope, recordId))).toMatchObject({ code: 'NOT_FOUND' });
+  });
+});
+
+describe('threads, the trash entry and the kind filter (the flow pass of 30 Oct 2026)', () => {
+  it('reads a thread start with its excerpt, the move to the trash, and only the kinds asked for', async () => {
+    const world = await workspace();
+    const { recordId } = await createRecord(world.scope, {
+      objectId: world.companies,
+      values: { [world.id('companies.name')]: 'Acme' },
+    });
+    const thread = newId();
+    await createComment(world.scope, { id: thread, recordId, body: 'Renewal is in March.' });
+    // A reply stays in its thread: one entry per thread.
+    await createComment(world.scope, { id: newId(), recordId, threadId: thread, body: 'Noted.' });
+    const live = await getActivity(world.scope, { recordId });
+    const comments = live.entries.filter((entry) => entry.kind === 'comment');
+    expect(comments).toEqual([
+      expect.objectContaining({
+        itemId: thread,
+        excerpt: 'Renewal is in March.',
+        actor: { type: 'member', id: world.ownerId },
+      }),
+    ]);
+    const onlyComments = await getActivity(world.scope, { recordId, kinds: ['comment'] });
+    expect(onlyComments.entries.map((entry) => entry.kind)).toEqual(['comment']);
+    await deleteRecord(world.scope, { recordId });
+    const trashed = await getActivity(world.scope, { recordId });
+    expect(trashed.entries[0]).toMatchObject({ kind: 'deleted', actor: { type: 'member', id: world.ownerId } });
+    // A record in the trash shows none of its threads.
+    expect(trashed.entries.some((entry) => entry.kind === 'comment')).toBe(false);
+    const changes = await getActivity(world.scope, { recordId, kinds: ['created', 'change', 'links', 'deleted'] });
+    expect(changes.entries.map((entry) => entry.kind)).toEqual(['deleted', 'created']);
   });
 });

@@ -4,7 +4,7 @@
 // it at once. Results are displays (a record's chip, a view's name), never
 // record bodies: nothing here goes into the record store (AC-1100). Loaded
 // with `import()` when the menu first opens, never in the first load.
-import type { GlobalSearchResults, RecordHit, ViewHit } from '@crm/contracts';
+import type { GlobalSearchResults, NoteHit, RecordHit, TaskHit, ViewHit } from '@crm/contracts';
 import { SEARCH_DELAY_MS } from '../records/search.ts';
 
 /** How many answered queries one menu keeps; past it the oldest goes. */
@@ -31,6 +31,9 @@ export interface GlobalSearchState {
   readonly status: 'idle' | 'loading' | 'ready' | 'error';
   readonly records: readonly RecordHit[];
   readonly views: readonly ViewHit[];
+  /** Notes and tasks by title (absent from an older server's answer: none). */
+  readonly notes: readonly NoteHit[];
+  readonly tasks: readonly TaskHit[];
 }
 
 /** One menu's search: ask as the person types, and read the state. */
@@ -62,7 +65,15 @@ const timeout = (run: () => void, ms: number) => {
   };
 };
 
-const IDLE: GlobalSearchState = { query: '', status: 'idle', records: [], views: [] };
+const IDLE: GlobalSearchState = { query: '', status: 'idle', records: [], views: [], notes: [], tasks: [] };
+
+/** What an answer shows. */
+const found = (results: GlobalSearchResults) => ({
+  records: results.records,
+  views: results.views,
+  notes: results.notes ?? [],
+  tasks: results.tasks ?? [],
+});
 
 /** A search for one opening of the command menu (see the file's opening). */
 export function createGlobalSearch({
@@ -97,7 +108,14 @@ export function createGlobalSearch({
     }
   };
   const start = (query: string) => {
-    set({ query, status: 'loading', records: state.records, views: state.views });
+    set({
+      query,
+      status: 'loading',
+      records: state.records,
+      views: state.views,
+      notes: state.notes,
+      tasks: state.tasks,
+    });
     const attempt = (tries: number, wait: number) => {
       cancelTimer = later(() => {
         cancelTimer = undefined;
@@ -108,7 +126,7 @@ export function createGlobalSearch({
             if (mine.signal.aborted) return;
             controller = undefined;
             keep(query, results);
-            if (state.query === query) set({ query, status: 'ready', records: results.records, views: results.views });
+            if (state.query === query) set({ query, status: 'ready', ...found(results) });
           },
           (error: unknown) => {
             if (mine.signal.aborted || state.query !== query) return;
@@ -119,7 +137,7 @@ export function createGlobalSearch({
               attempt(tries + 1, busy * (1 + random() / 2));
               return;
             }
-            set({ query, status: 'error', records: [], views: [] });
+            set({ query, status: 'error', records: [], views: [], notes: [], tasks: [] });
           },
         );
       }, wait);
@@ -138,7 +156,7 @@ export function createGlobalSearch({
       }
       const kept = answers.get(query);
       if (kept !== undefined && now() - kept.at < KEPT_FOR_MS) {
-        set({ query, status: 'ready', records: kept.results.records, views: kept.results.views });
+        set({ query, status: 'ready', ...found(kept.results) });
         return;
       }
       start(query);

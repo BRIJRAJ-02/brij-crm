@@ -8,11 +8,14 @@ import { describe, expect, it } from 'vitest';
 import {
   actionCommands,
   createHref,
+  createNamedCommand,
+  createTaskCommand,
   matchCommands,
   orderSections,
   pageCommands,
   recordCommands,
   settingsCommands,
+  taskDialogHref,
   viewHref,
 } from './commands.ts';
 import { commandKey, isCommandMenuKey, isSearchKey } from './keys.ts';
@@ -177,7 +180,8 @@ describe('the order of the sections (AC-1075, AC-1079, decision 6)', () => {
         actions: matchCommands(actions, text),
       },
       text,
-    );
+      // Notes and tasks found nothing here, so they go last: their own test ranks them.
+    ).filter((id) => id !== 'notes' && id !== 'tasks');
 
   it('shows Recent, Actions and Go to with nothing typed', () => {
     expect(order('')).toEqual(['recent', 'actions', 'pages']);
@@ -297,7 +301,41 @@ describe('every address the menu lists is a route (AC-1104)', () => {
     ].flatMap((command) => ('href' in command.run ? [command.run.href] : []));
     expect(hrefs.filter((href) => !isRoute(href))).toEqual([]);
     expect(isRoute(createHref('acme', { apiSlug: 'people' }))).toBe(true);
+    expect(isRoute(taskDialogHref('acme', '/w/acme/home', 'new'))).toBe(true);
+    expect(isRoute('/w/acme/notes')).toBe(true);
     expect(isRoute(viewHref('acme', 'people', '0199a6f2-0000-7000-8000-000000000001'))).toBe(true);
     expect(isRoute('/w/acme/nowhere')).toBe(false);
+  });
+});
+
+describe('notes, tasks and making what nothing matched (the flow pass of 30 Oct 2026)', () => {
+  it('ranks notes and tasks by their titles, after the kinds they tie with', () => {
+    const found = { records: [], views: [], pages: [], settings: [], actions: [] };
+    expect(orderSections({ ...found, notes: [{ title: 'Renewal call' }] }, 'renewal')[0]).toBe('notes');
+    expect(orderSections({ ...found, tasks: [{ title: 'Call back about renewal' }] }, 'renewal')[0]).toBe('tasks');
+    expect(orderSections(found, 'renewal').slice(-2)).toEqual(['notes', 'tasks']);
+  });
+
+  it('opens a task over the page when it holds the dialog, else over Tasks', () => {
+    const record = '/w/acme/objects/people/0199a6f2-0000-7000-8000-0000000000b1/overview';
+    expect(taskDialogHref('acme', record, 'new')).toBe(`${record}?task=new`);
+    expect(taskDialogHref('acme', '/w/acme/inbox', 'new')).toBe('/w/acme/inbox?task=new');
+    expect(taskDialogHref('acme', '/w/acme/objects/people/views/0199a6f2-0000-7000-8000-000000000001', 'x')).toBe(
+      '/w/acme/tasks?task=x',
+    );
+    expect(createTaskCommand('acme', '/w/acme/home')).toMatchObject({
+      name: 'Create a task',
+      run: { kind: 'go', href: '/w/acme/tasks?task=new' },
+    });
+  });
+
+  it('offers to make what nothing matched on the open object, else People, where it may be written', () => {
+    expect(createNamedCommand('acme', OBJECTS, undefined, ' Ada Lovelace ')).toMatchObject({
+      name: 'Create person named “Ada Lovelace”',
+      run: { kind: 'create', href: '/w/acme/objects/people?new=1&name=Ada%20Lovelace' },
+    });
+    expect(createNamedCommand('acme', OBJECTS, OBJECTS[1], 'Globex')?.name).toBe('Create company named “Globex”');
+    expect(createNamedCommand('acme', OBJECTS, OBJECTS[2], 'Big deal')).toBeUndefined();
+    expect(createNamedCommand('acme', OBJECTS, undefined, '  ')).toBeUndefined();
   });
 });

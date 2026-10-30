@@ -171,6 +171,52 @@
     min-inline-size: 0;
   }
 
+  /* A run of changes at one moment: the names on one line, or each change on its own (Show all), the button after. */
+  .changes {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    align-items: flex-start;
+    min-inline-size: 0;
+  }
+
+  .changesNames {
+    min-inline-size: 0;
+    color: var(--text-secondary);
+  }
+
+  .changesRow {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-6);
+    align-items: center;
+    min-inline-size: 0;
+  }
+
+  /* With a toolbar (the Activity tab's filter): one column filling the slot, the feed taking what it leaves. */
+  .framed {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    inline-size: 100%;
+    block-size: 100%;
+    min-block-size: 0;
+  }
+
+  .toolbarRow {
+    display: flex;
+    flex: none;
+    gap: var(--space-8);
+    align-items: center;
+  }
+
+  .framedBody {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-block-size: 0;
+  }
+
   .card {
     display: flex;
     flex-direction: column;

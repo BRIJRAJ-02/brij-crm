@@ -4,6 +4,7 @@
 // search param names a note or a new one.
 import type { ActorDisplay, MemberSummary, NoteSummary } from '@crm/data';
 import type { NoteListItem } from '@crm/ui';
+import { recordHref } from '../records/details.ts';
 import { strings as taskStrings } from '../tasks/strings.ts';
 import { strings } from './strings.ts';
 
@@ -32,7 +33,25 @@ export function toNoteItem(note: NoteSummary, members: readonly MemberSummary[])
     excerpt: note.excerpt,
     author: actorDisplay(members, note.createdBy),
     updatedAt: note.updatedAt,
+    ...(note.record === undefined ? {} : { record: note.record }),
   };
+}
+
+/** A note's window over its record's Notes tab (the workspace's Notes page and ⌘K open it there). */
+export function noteHref(slug: string, objectSlug: string, recordId: string, noteId: string): string {
+  return `${recordHref(slug, objectSlug, recordId, 'notes')}?note=${noteId}`;
+}
+
+/** A loaded note of a list, by id; undefined when it isn't loaded. */
+export function findLoaded<Note extends { readonly id: string }>(
+  source: { readonly count: number; readonly getItem: (index: number) => Note | undefined },
+  id: string,
+): Note | undefined {
+  for (let index = 0; index < source.count; index += 1) {
+    const note = source.getItem(index);
+    if (note?.id === id) return note;
+  }
+  return undefined;
 }
 
 /** Whether a `note` search param names a note (a uuid) or a new one. */

@@ -59,18 +59,32 @@ export interface LinkedRecord {
   readonly href?: string;
 }
 
+/** A value changed: its attribute, and the value before and after, with their display shapes. */
+export type ChangeEntry = EntryBase & {
+  readonly kind: 'change';
+  readonly attribute: FieldAttribute;
+  readonly from: unknown;
+  readonly to: unknown;
+  readonly fromDisplay?: unknown;
+  readonly toDisplay?: unknown;
+};
+
 /** One thing that happened to the record. */
 export type ActivityEntry =
+  | ChangeEntry
   | (EntryBase & {
-      /** A value changed: its attribute, and the value before and after, with their display shapes. */
-      readonly kind: 'change';
-      readonly attribute: FieldAttribute;
-      readonly from: unknown;
-      readonly to: unknown;
-      readonly fromDisplay?: unknown;
-      readonly toDisplay?: unknown;
+      /**
+       * One actor's changes at one moment (a save of several fields, an
+       * import's row): "changed 3 attributes", their names, and Show all.
+       */
+      readonly kind: 'changes';
+      readonly changes: readonly ChangeEntry[];
     })
   | (EntryBase & { readonly kind: 'created' })
+  | (EntryBase & {
+      /** The record moved to the trash: "moved this record to the trash". */
+      readonly kind: 'deleted';
+    })
   | (EntryBase & {
       /**
        * Records one write linked and unlinked on a relationship side: up to 3
@@ -172,10 +186,14 @@ export interface ActivityFeedProps {
    * spins until the promise settles; the screen says how it went.
    */
   readonly onAddPerson?: (meeting: MeetingEntry, attendee: MeetingAttendee) => Promise<void>;
+  /** Drawn above the feed in every state (the Activity tab's filter); the feed takes the height left. */
+  readonly toolbar?: ReactNode;
 }
 
 const KIND_ICONS: Readonly<Record<Exclude<ActivityEntry['kind'], 'change' | 'links'>, IconName>> = {
   created: 'plus',
+  changes: 'pencil',
+  deleted: 'trash',
   note: 'notebook',
   task: 'square-check',
   comment: 'message-square',
@@ -207,6 +225,10 @@ function verbOf(entry: ActivityEntry): string {
       return isEmptyValue(entry.to) ? strings.verbs.cleared : strings.verbs.changed;
     case 'created':
       return strings.verbs.created;
+    case 'deleted':
+      return strings.verbs.deleted;
+    case 'changes':
+      return strings.verbs.changedMany(entry.changes.length);
     case 'links':
       return entry.addedCount > 0 ? strings.verbs.added : strings.verbs.removed;
     case 'task':
@@ -299,14 +321,27 @@ function useKeepReading({ entries, isActive, isScrolling, scrollRef, virtualizer
  * layout only the entries on screen draw, and those not loaded yet draw as
  * skeletons.
  */
-export function ActivityFeed({
+export function ActivityFeed({ toolbar, ...props }: ActivityFeedProps) {
+  if (toolbar === undefined) return <FeedContent {...props} />;
+  return (
+    <div className={styles.framed}>
+      <div className={styles.toolbarRow}>{toolbar}</div>
+      <div className={styles.framedBody}>
+        <FeedContent {...props} />
+      </div>
+    </div>
+  );
+}
+
+/** The feed itself, in whichever state it is. */
+function FeedContent({
   label,
   entries,
   layout = 'feed',
   status = 'ready',
   onRetry,
   onAddPerson,
-}: ActivityFeedProps) {
+}: Omit<ActivityFeedProps, 'toolbar'>) {
   const isInline = layout === 'inline';
   const { locale, timeZone, weekStart } = useFormatSettings();
   const now = useNow();
@@ -800,8 +835,10 @@ function tabbableBeside(feed: HTMLElement, side: 'after' | 'before'): HTMLElemen
 function hasDetail(entry: ActivityEntry): boolean {
   if (isToggle(entry)) return false;
   if (entry.kind === 'change') return !isEmptyValue(entry.from) || !isEmptyValue(entry.to);
-  if (entry.kind === 'meeting') return true;
-  if (entry.kind === 'created' || entry.kind === 'links' || entry.kind === 'submission') return false;
+  if (entry.kind === 'meeting' || entry.kind === 'changes') return true;
+  if (entry.kind === 'created' || entry.kind === 'deleted' || entry.kind === 'links' || entry.kind === 'submission') {
+    return false;
+  }
   return entry.title !== undefined || entry.excerpt !== undefined;
 }
 
@@ -839,6 +876,53 @@ function ChangeDetail({
   );
 }
 
+/**
+ * A run of changes at one moment: their attributes' names on one line, and
+ * Show all, which lays each change out as the single entry draws it (its name,
+ * then the old value, the arrow and the new). The choice is the entry's own,
+ * so it resets when the entry scrolls out of the window.
+ */
+function ChangesDetail({
+  entry,
+  detailId,
+}: {
+  readonly entry: Extract<ActivityEntry, { kind: 'changes' }>;
+  readonly detailId: string;
+}) {
+  const [isOpen, setOpen] = useState(false);
+  const names = [...new Set(entry.changes.map((change) => change.attribute.name))].join(strings.nameSeparator);
+  return (
+    <span id={detailId} className={styles.changes}>
+      {isOpen ? (
+        entry.changes.map((change) => (
+          <span key={change.id} className={styles.changesRow}>
+            <span className={styles.attribute}>{change.attribute.name}</span>
+            {isToggle(change) ? (
+              <span>{change.to === true ? strings.verbs.checked : strings.verbs.unchecked}</span>
+            ) : (
+              <ChangeDetail entry={change} detailId={`${detailId}-${change.id}`} />
+            )}
+          </span>
+        ))
+      ) : (
+        <span className={styles.changesNames}>{names}</span>
+      )}
+      <span>
+        <Button
+          variant="ghost"
+          size="sm"
+          isExpanded={isOpen}
+          onPress={() => {
+            setOpen((open) => !open);
+          }}
+        >
+          {isOpen ? strings.showLess : strings.showAll}
+        </Button>
+      </span>
+    </span>
+  );
+}
+
 /** One entry: its marker on the rail, the actor and verb, the time, and what changed or was added. */
 /** Drawn again only when its entry changes, not with every scroll step of the feed. */
 const Entry = memo(function Entry({ entry, lineId, endsRail, onAddPerson }: EntryProps) {
@@ -847,16 +931,21 @@ const Entry = memo(function Entry({ entry, lineId, endsRail, onAddPerson }: Entr
   if (entry.kind === 'change') {
     // A checkbox's change draws nothing under its line: the verb says checked or unchecked.
     detail = isToggle(entry) ? undefined : <ChangeDetail entry={entry} detailId={`${lineId}-detail`} />;
+  } else if (entry.kind === 'changes') {
+    detail = <ChangesDetail entry={entry} detailId={`${lineId}-detail`} />;
   } else if (entry.kind === 'meeting') {
     detail = <MeetingDetail entry={entry} detailId={`${lineId}-detail`} onAddPerson={onAddPerson} />;
   } else if (entry.kind === 'task' && entry.title !== undefined) {
     detail = <TaskRow entry={entry} title={entry.title} detailId={`${lineId}-detail`} />;
   } else if (
     entry.kind !== 'created' &&
+    entry.kind !== 'deleted' &&
     entry.kind !== 'links' &&
     entry.kind !== 'submission' &&
     (entry.title !== undefined || entry.excerpt !== undefined)
   ) {
+    // With no title (a comment), the text itself is the way to it.
+    const excerptHref = entry.title === undefined ? entry.href : undefined;
     detail = (
       <span id={`${lineId}-detail`} className={styles.card}>
         {entry.title !== undefined &&
@@ -865,7 +954,14 @@ const Entry = memo(function Entry({ entry, lineId, endsRail, onAddPerson }: Entr
           ) : (
             <Link href={entry.href}>{entry.title}</Link>
           ))}
-        {entry.excerpt !== undefined && <span className={styles.excerpt}>{entry.excerpt}</span>}
+        {entry.excerpt !== undefined &&
+          (excerptHref !== undefined ? (
+            <Link href={excerptHref}>
+              <span className={styles.excerpt}>{entry.excerpt}</span>
+            </Link>
+          ) : (
+            <span className={styles.excerpt}>{entry.excerpt}</span>
+          ))}
       </span>
     );
   }

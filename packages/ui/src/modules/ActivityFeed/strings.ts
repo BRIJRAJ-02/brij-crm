@@ -2,7 +2,12 @@
 export const strings = {
   loading: 'Loading activity',
   empty: 'No activity yet',
-  emptyBody: 'Changes, notes, tasks, emails and meetings show here as they happen.',
+  emptyBody: 'Changes, notes, tasks, comments and meetings show here as they happen.',
+  /** A run of changes at one moment: open each, and fold them again. */
+  showAll: 'Show all',
+  showLess: 'Show less',
+  /** Between the names of the attributes a run of changes touched. */
+  nameSeparator: ', ',
   failed: 'Activity didn’t load',
   noAccess: 'You can’t see this activity',
   noAccessBody: 'Ask a workspace admin for access.',
@@ -22,6 +27,9 @@ export const strings = {
     checked: 'checked',
     unchecked: 'unchecked',
     created: 'created this record',
+    deleted: 'moved this record to the trash',
+    /** One actor's changes at one moment, counted. */
+    changedMany: (count: number) => `changed ${String(count)} attributes`,
     note: 'added a note',
     task: 'added a task',
     taskDone: 'completed a task',

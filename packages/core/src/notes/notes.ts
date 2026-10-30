@@ -8,7 +8,7 @@
 // a repeat of the same save after a lost answer writes nothing, and a save
 // that started from an older version is told whose it replaced (AC-443). The
 // body is checked against 200 KB here, the one layer that does (AC-441).
-import { sql } from 'drizzle-orm';
+import { sql, type SQL } from 'drizzle-orm';
 import {
   NOTE_CONTENT_MAX_BYTES,
   NOTE_COUNT_CAP,
@@ -24,11 +24,13 @@ import {
   type Note,
   type NotePage,
   type NoteSummary,
+  type NoteHit,
   type SaveNoteResult,
 } from '@crm/contracts';
 import { RichTextDocBody, type RichTextDoc } from '@crm/contracts/values';
 import type { WorkspaceTx } from '@crm/db';
-import { canonicalId, checkId, isUuid, isUuidV7 } from '../engine/ids.ts';
+import { canonicalId, checkId, isUuid, isUuidV7, uuidArray } from '../engine/ids.ts';
+import { readRecords } from '../engine/records.ts';
 import { inputInvalid, refuse, refuseOn } from '../engine/refusals.ts';
 import type { Actor, EngineScope } from '../engine/scope.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
@@ -36,7 +38,7 @@ import { notifyNoteMentions } from '../notifications/notify.ts';
 import { checkScope } from '../access/mint.ts';
 import { isOpen, objectLevel, type Access } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
-import { UNKNOWN_RECORD, visibleRecords } from '../access/visibility.ts';
+import { farVisibleSql, UNKNOWN_RECORD, visibleRecords } from '../access/visibility.ts';
 
 /** What a note the reader can't see (or one that doesn't exist, or was deleted) answers. */
 export const UNKNOWN_NOTE = 'That note does not exist.';
@@ -353,7 +355,7 @@ function decodeNoteCursor(cursor: string): NoteCursor {
  */
 export async function listNotes(
   scope: EngineScope,
-  input: { readonly recordId: string; readonly cursor?: string; readonly limit?: number },
+  input: { readonly recordId?: string; readonly cursor?: string; readonly limit?: number },
 ): Promise<NotePage> {
   checkScope(scope);
   const limit = input.limit ?? NOTE_PAGE;
@@ -361,6 +363,7 @@ export async function listNotes(
     throw inputInvalid('limit', `Ask for 1 to ${String(NOTE_PAGE_MAX)} notes.`);
   }
   const after = input.cursor === undefined ? undefined : decodeNoteCursor(input.cursor);
+  if (input.recordId === undefined) return listWorkspaceNotes(scope, after, limit);
   const recordId = checkId(input.recordId, UNKNOWN_RECORD);
   return inWorkspace(scope, async (tx) => {
     const record = await liveRecord(tx, recordId, undefined);
@@ -396,6 +399,101 @@ export async function listNotes(
       ...(nextCursor === undefined ? {} : { nextCursor }),
       total: { count: Math.min(n, NOTE_COUNT_CAP), atLeast: n > NOTE_COUNT_CAP },
     };
+  });
+}
+
+/**
+ * The notes the reader may see, over a note aliased `n` joined to its record
+ * `r` and object `o` (`LIVE_RECORD`): live, on a live record of a live object
+ * the reader may read, inside that object's record rule (AC-447: a note
+ * follows its record). Undefined when the reader may read no object at all.
+ */
+async function readableNotesSql(tx: WorkspaceTx, access: Access): Promise<SQL | undefined> {
+  const objects = await tx.execute<{ id: string }>(
+    sql`select o.id::text as id from objects o where o.archived_at is null`,
+  );
+  const readable = objects.rows.map((row) => row.id).filter((id) => objectLevel(access, id) !== 'none');
+  if (readable.length === 0) return undefined;
+  const rule = farVisibleSql(access, readable, 'r');
+  return sql`n.deleted_at is null and r.deleted_at is null and o.archived_at is null
+    and r.object_id = any(${uuidArray(readable)})${rule === undefined ? sql`` : sql` and ${rule}`}`;
+}
+
+/** Each note's record as a chip shows it, read as every record read names it (its ids passed the note rule). */
+async function recordDisplays(tx: WorkspaceTx, access: Access, ids: readonly string[]) {
+  const views = await readRecords(tx, access, [...new Set(ids)], { attributeIds: [], visibleAlready: true });
+  return new Map(views.map((view) => [view.id, view.display]));
+}
+
+/**
+ * The workspace's Notes page: every note the reader may see
+ * (`readableNotesSql`), last edited first (then id), each with its record's
+ * display; no total. Scans the workspace's notes in edit order: a workspace
+ * index on `updated_at` comes with the next notes migration.
+ */
+async function listWorkspaceNotes(scope: EngineScope, after: NoteCursor | undefined, limit: number): Promise<NotePage> {
+  return inWorkspace(scope, async (tx) => {
+    const readable = await readableNotesSql(tx, scope.access);
+    if (readable === undefined) return { items: [] };
+    const bound =
+      after === undefined
+        ? sql``
+        : sql` and (n.updated_at < ${after.updatedAt}::timestamptz or (n.updated_at = ${after.updatedAt}::timestamptz and n.id > ${after.id}::uuid))`;
+    const page = await tx.execute<NoteRow>(sql`
+      select ${NOTE_COLUMNS} from notes n ${LIVE_RECORD}
+      where ${readable}${bound}
+      order by n.updated_at desc nulls last, n.id
+      limit ${limit + 1}
+    `);
+    const rows = page.rows.slice(0, limit);
+    const last = rows.at(-1);
+    const nextCursor =
+      page.rows.length > limit && last !== undefined
+        ? Buffer.from(JSON.stringify({ updatedAt: last.cursor_at, id: last.id } satisfies NoteCursor)).toString(
+            'base64url',
+          )
+        : undefined;
+    const displays = await recordDisplays(
+      tx,
+      scope.access,
+      rows.map((row) => row.record_id),
+    );
+    const items = rows.flatMap((row): NoteSummary[] => {
+      const record = displays.get(row.record_id);
+      return record === undefined ? [] : [{ ...summaryOf(row, scope.access), record }];
+    });
+    return { items, ...(nextCursor === undefined ? {} : { nextCursor }) };
+  });
+}
+
+/**
+ * The command menu's notes (spec 0039's search, the flow pass of 30 Oct
+ * 2026): those the reader may see whose title contains the text, last edited
+ * first, at most `limit`, in the search's own transaction.
+ */
+export async function searchNotes(
+  tx: WorkspaceTx,
+  access: Access,
+  text: string,
+  limit: number,
+): Promise<readonly NoteHit[]> {
+  const readable = await readableNotesSql(tx, access);
+  if (readable === undefined || text === '') return [];
+  const rows = await tx.execute<{ id: string; record_id: string; title: string }>(sql`
+    select n.id::text as id, n.record_id::text as record_id, n.title
+    from notes n ${LIVE_RECORD}
+    where ${readable} and strpos(lower(n.title), lower(${text})) > 0
+    order by n.updated_at desc, n.id
+    limit ${limit}
+  `);
+  const displays = await recordDisplays(
+    tx,
+    access,
+    rows.rows.map((row) => row.record_id),
+  );
+  return rows.rows.flatMap((row): NoteHit[] => {
+    const record = displays.get(row.record_id);
+    return record === undefined ? [] : [{ id: row.id, title: row.title, record }];
   });
 }
 

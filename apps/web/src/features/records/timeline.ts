@@ -6,8 +6,8 @@ import { strings as noteStrings } from '../notes/strings.ts';
 import type { ActivityEntryShape, EntrySource, ObjectSummary } from '@crm/data';
 import { recordHref } from './details.ts';
 
-/** A task's dialog over the page (spec 0019): the page's address with `?task=<id>`. */
-export type TaskLink = (itemId: string, kind?: 'task' | 'note') => string;
+/** A task's dialog over the page (spec 0019): the page's address with `?task=<id>`; a note's `?note=`, a thread's `?thread=`. */
+export type TaskLink = (itemId: string, kind?: 'task' | 'note' | 'thread') => string;
 
 /** A record's page from its object's id, or undefined when the object isn't one the person can open. */
 export type RecordLink = (objectId: string, recordId: string) => string | undefined;
@@ -24,6 +24,10 @@ export function recordLinks(slug: string, objects: readonly ObjectSummary[]): Re
 /** A link entry with each named record's page, a task entry with its dialog's, a meeting's people with theirs. */
 export function withLinks(entry: ActivityEntryShape, link: RecordLink, taskLink?: TaskLink): ActivityEntryShape {
   if (entry.kind === 'task') return taskLink === undefined ? entry : { ...entry, href: taskLink(entry.itemId) };
+  // A thread (spec 0038): its place on the Comments tab.
+  if (entry.kind === 'comment') {
+    return taskLink === undefined ? entry : { ...entry, href: taskLink(entry.itemId, 'thread') };
+  }
   // A note (spec 0019, AC-444): its window's address, and "Untitled note" for one with no title.
   if (entry.kind === 'note') {
     const titled = entry.title === '' ? { ...entry, title: noteStrings.untitled } : entry;
@@ -67,7 +71,11 @@ export function linkedSource(
       const entry = source.getItem(index);
       if (
         entry === undefined ||
-        (entry.kind !== 'links' && entry.kind !== 'task' && entry.kind !== 'note' && entry.kind !== 'meeting')
+        (entry.kind !== 'links' &&
+          entry.kind !== 'task' &&
+          entry.kind !== 'note' &&
+          entry.kind !== 'comment' &&
+          entry.kind !== 'meeting')
       ) {
         return entry;
       }

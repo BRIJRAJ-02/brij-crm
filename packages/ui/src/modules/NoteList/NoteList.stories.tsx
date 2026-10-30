@@ -3,6 +3,7 @@ import { expect, fn, waitFor } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { arraySource, type ListRange, type ListSource } from '../../lib/list-source.ts';
 import type { LoadStatus } from '../../lib/load-status.ts';
+import { SAMPLE_COMPANIES } from '../../workbench/field-samples.ts';
 import { ADA, GRACE } from '../../workbench/record-samples.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { NoteList, type NoteListItem } from './NoteList.tsx';
@@ -64,6 +65,8 @@ interface SampleProps {
   readonly emptyTitle?: string;
   readonly withToolbar?: boolean;
   readonly withEmptyAction?: boolean;
+  /** Each note carries its record, as the workspace's Notes page shows them. */
+  readonly withRecords?: boolean;
 }
 
 /** The list in a fixed height slot, as the Notes tab holds it. */
@@ -77,10 +80,17 @@ function SampleNotes({
   emptyTitle,
   withToolbar = false,
   withEmptyAction = false,
+  withRecords = false,
 }: SampleProps) {
+  const sample = withRecords
+    ? sampleNotes().map((note, index) => {
+        const record = SAMPLE_COMPANIES[index % SAMPLE_COMPANIES.length];
+        return record === undefined ? note : { ...note, record };
+      })
+    : sampleNotes();
   const notes = isLong
     ? longSource(onRangeChange ?? (() => undefined))
-    : arraySource(isEmpty ? [] : sampleNotes(), (note) => note.id);
+    : arraySource(isEmpty ? [] : sample, (note) => note.id);
   return (
     <Stage height="grid">
       <NoteList
@@ -119,6 +129,14 @@ export const Default: Story = {
 };
 
 /** By keyboard: the arrows move between rows and Enter opens one. */
+/** The workspace's Notes page: each row leads with the record it is on. */
+export const WithRecords: Story = {
+  args: { withRecords: true },
+  play: async ({ canvas }) => {
+    await expect(canvas.getAllByRole('row')).toHaveLength(3);
+  },
+};
+
 export const Keyboard: Story = {
   args: { onAction: fn() },
   parameters: { crm: { screenshot: false } },
