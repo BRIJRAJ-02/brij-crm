@@ -101,6 +101,12 @@ export const AUDIT_ACTIONS = [
   'calendar.reconnect_asked',
   // A booking made, moved or cancelled by someone other than its host: the target is the booking, `memberId` the host.
   'booking.changed_for',
+  // Lists (spec 0048): made, renamed or otherwise changed (its tile, Each record once), archived and restored. The
+  // target is the list; `before` and `after` hold its name.
+  'list.created',
+  'list.updated',
+  'list.archived',
+  'list.restored',
 ] as const;
 /** One action the audit log records. */
 export const AuditAction = z.enum(AUDIT_ACTIONS);

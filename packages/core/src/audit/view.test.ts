@@ -32,6 +32,7 @@ const form = newId();
 const page = newId();
 const booking = newId();
 const record = newId();
+const listId = newId();
 
 const names: AuditNames = {
   members: new Map([
@@ -51,6 +52,7 @@ const names: AuditNames = {
   forms: new Map([[form, { name: 'Contact us', isGone: false }]]),
   bookingPages: new Map([[page, { name: 'Intro call', isGone: false }]]),
   bookings: new Map([[booking, { pageTitle: 'Intro call', startsAt: '2026-10-24T09:30:00.000000Z' }]]),
+  lists: new Map([[listId, { name: 'Deals', isGone: false }]]),
 };
 
 /** A stored row as the page statement reads it. */
@@ -230,6 +232,10 @@ const FIXTURES: Record<ListedAuditAction, readonly AuditRow[]> = {
     }),
   ],
   'booking.no_show': [row('booking.no_show', 'booking', booking)],
+  'list.created': [row('list.created', 'list', listId)],
+  'list.updated': [row('list.updated', 'list', listId, { before: { name: 'Sales' }, after: { name: 'Deals' } })],
+  'list.archived': [row('list.archived', 'list', listId)],
+  'list.restored': [row('list.restored', 'list', listId)],
   'booking.no_show_undone': [row('booking.no_show_undone', 'booking', booking)],
   'booking.record_linked': [
     row('booking.record_linked', 'booking', booking, { before: { recordId: null }, after: { recordId: record } }),

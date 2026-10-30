@@ -32,6 +32,7 @@ import { requirePermission } from '../access/check.ts';
 import { isOpen, objectLevel, type Access } from '../access/policy.ts';
 import { attributeVisible, checkList, checkObject, UNKNOWN_LIST, visibleRecords } from '../access/visibility.ts';
 import { canManageList, listManagersSentence } from '../lists/manager.ts';
+import { writeAudit } from '../members/audit.ts';
 
 const { attributes, listEntries, lists, members, objects, records, views } = schema;
 
@@ -311,6 +312,13 @@ export async function insertList(context: WriteContext, input: ListInput): Promi
   await tx.update(lists).set({ defaultViewId }).where(eq(lists.id, listId));
   // The list slot last, as every write takes the workspace counter row; a full workspace rolls the list back.
   await takeList(tx, scope);
+  // Its audit row (spec 0048), for Settings › History; a retry that found the list made returned above, writing none.
+  await writeAudit(tx, scope.workspaceId, scope.actor, {
+    action: 'list.created',
+    targetType: 'list',
+    targetId: listId,
+    after: { name },
+  });
   context.record({ definitions: [{ listId, objectId, attributeIds: [] }] });
   return { listId, defaultViewId, replayed: false };
 }
@@ -418,6 +426,13 @@ export async function changeList(scope: EngineScope, input: ListUpdate, hooks: r
         }
       }
       const name = input.name?.trim();
+      const renamed = name !== undefined && name !== list.name;
+      await writeAudit(tx, scope.workspaceId, scope.actor, {
+        action: 'list.updated',
+        targetType: 'list',
+        targetId: listId,
+        ...(renamed ? { before: { name: list.name }, after: { name } } : {}),
+      });
       await listGuard(name ?? list.name, async () => {
         await tx
           .update(lists)
@@ -461,6 +476,11 @@ export async function setListArchived(
       }
       const isArchived = list.archivedAt !== null;
       if (isArchived === input.archived) return { listId };
+      await writeAudit(tx, scope.workspaceId, scope.actor, {
+        action: input.archived ? 'list.archived' : 'list.restored',
+        targetType: 'list',
+        targetId: listId,
+      });
       await tx
         .update(lists)
         .set({ archivedAt: input.archived ? sql`clock_timestamp()` : null, ...touched(scope) })

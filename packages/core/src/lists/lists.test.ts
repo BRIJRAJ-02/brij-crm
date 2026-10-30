@@ -514,6 +514,22 @@ describe('list settings, archive and restore (AC-4829 to AC-4832)', () => {
     });
     // An admin changes any list (AC-4834).
     expect((await updateList(world.owner, { listId: list.id, name: 'Talent' })).name).toBe('Talent');
+    await archiveList(world.owner, { listId: list.id });
+    await restoreList(world.owner, { listId: list.id });
+    // Each change has its audit row, for Settings › History (spec 0046); a rename keeps both names.
+    const rows = await db.withWorkspace(world.workspaceId, (tx) =>
+      tx.execute<{ action: string; before: unknown; after: unknown }>(
+        sql`select action, before, after from audit_events where target_id = ${list.id} order by at, id`,
+      ),
+    );
+    expect(rows.rows.map((row) => row.action)).toEqual([
+      'list.created',
+      'list.updated',
+      'list.updated',
+      'list.archived',
+      'list.restored',
+    ]);
+    expect(rows.rows[2]).toMatchObject({ before: { name: 'Recruiting' }, after: { name: 'Talent' } });
   });
 
   it('refuses turning Each record once on while a record is in twice, naming the count to an open reader', async () => {

@@ -180,6 +180,12 @@ async function readNames(tx: WorkspaceTx, workspaceId: string, ids: AuditNameIds
       select 'booking_page', p.id::text, p.title, case when p.deleted_at is null then 'live' else 'gone' end, null::text
       from booking_pages p where p.workspace_id = ${ws} and p.id = any(${uuidList(ids.bookingPages)})`);
   }
+  if (ids.lists.length > 0) {
+    // An archived list is still the list: its name, never gone (lists are archived, not deleted).
+    branches.push(sql`
+      select 'list', l.id::text, l.name, 'live', null::text
+      from lists l where l.workspace_id = ${ws} and l.id = any(${uuidList(ids.lists)})`);
+  }
   if (ids.bookings.length > 0) {
     branches.push(sql`
       select 'booking', b.id::text, p.title, 'live',
@@ -196,6 +202,7 @@ async function readNames(tx: WorkspaceTx, workspaceId: string, ids: AuditNameIds
   const forms = new Map<string, AuditThingName>();
   const bookingPages = new Map<string, AuditThingName>();
   const bookings = new Map<string, { readonly pageTitle: string; readonly startsAt: string }>();
+  const lists = new Map<string, AuditThingName>();
   for (const row of found.rows) {
     const name = row.name ?? '';
     const thing = { name, isGone: row.state === 'gone' };
@@ -224,11 +231,14 @@ async function readNames(tx: WorkspaceTx, workspaceId: string, ids: AuditNameIds
       case 'booking':
         if (row.extra !== null) bookings.set(row.id, { pageTitle: name, startsAt: row.extra });
         break;
+      case 'list':
+        lists.set(row.id, thing);
+        break;
       default:
         break;
     }
   }
-  return { members, invitations, joinRequests, rotations, forms, bookingPages, bookings };
+  return { members, invitations, joinRequests, rotations, forms, bookingPages, bookings, lists };
 }
 
 const NO_NAMES: AuditNames = {
@@ -239,6 +249,7 @@ const NO_NAMES: AuditNames = {
   forms: new Map(),
   bookingPages: new Map(),
   bookings: new Map(),
+  lists: new Map(),
 };
 
 /**

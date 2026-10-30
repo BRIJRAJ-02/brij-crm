@@ -299,6 +299,22 @@ const SENTENCES: readonly (readonly [AuditEntryView, string])[] = [
     'Ada Lovelace changed who is emailed Contact us’s new submissions',
   ],
   [
+    { ...base, action: 'list.created', target: { type: 'list', id: ID, name: 'Sales', isGone: false }, params: {} },
+    'Ada Lovelace made the list Sales',
+  ],
+  [
+    { ...base, action: 'list.updated', target: { type: 'list', id: ID, name: 'Sales', isGone: false }, params: {} },
+    'Ada Lovelace changed the list Sales',
+  ],
+  [
+    { ...base, action: 'list.archived', target: { type: 'list', id: ID, name: 'Sales', isGone: false }, params: {} },
+    'Ada Lovelace archived the list Sales',
+  ],
+  [
+    { ...base, action: 'list.restored', target: { type: 'list', id: ID, isGone: true }, params: {} },
+    'Ada Lovelace restored the list a deleted list',
+  ],
+  [
     { ...base, action: 'booking.no_show', target: booking, params: {} },
     'Ada Lovelace marked Intro call on dayTime(2026-10-24T09:30) as a no show',
   ],

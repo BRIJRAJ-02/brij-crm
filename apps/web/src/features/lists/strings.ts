@@ -101,7 +101,6 @@ export const strings = {
   actionsColumn: 'Actions',
   look: 'Icon and colour',
   eachRecordOnce: 'Each record once',
-  eachRecordOnceHint: 'A record can be in this list one time.',
   save: 'Save',
   saved: (name: string) => `${name} saved`,
   saveFailed: 'The list wasn’t saved. Try again.',
