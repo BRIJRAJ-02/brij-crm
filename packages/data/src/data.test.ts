@@ -488,6 +488,10 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       update: os.workspace.update.handler(notServed),
       delete: os.workspace.delete.handler(notServed),
     },
+    brand: {
+      get: os.brand.get.handler(notServed),
+      save: os.brand.save.handler(notServed),
+    },
     deletedWorkspace: {
       deleted: os.deletedWorkspace.deleted.handler(notServed),
       restore: os.deletedWorkspace.restore.handler(notServed),
@@ -500,6 +504,8 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       pageChoices: os.profile.pageChoices.handler(notServed),
       formChoices: os.profile.formChoices.handler(notServed),
       saveTheme: os.profile.saveTheme.handler(notServed),
+      look: os.profile.look.handler(notServed),
+      saveAccent: os.profile.saveAccent.handler(notServed),
       setIndexable: os.profile.setIndexable.handler(notServed),
       setShareImage: os.profile.setShareImage.handler(notServed),
       walletLink: os.profile.walletLink.handler(notServed),

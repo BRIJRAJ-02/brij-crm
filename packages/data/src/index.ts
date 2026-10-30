@@ -217,7 +217,17 @@ export type {
 import type { SchedulesView } from './schedules/store.ts';
 import { createPictureChoiceStore, type PictureChoiceHeld } from './profile/picture.ts';
 import type { LinkPageStore } from './link-page/store.ts';
+import type { BrandStore } from './brand/store.ts';
 export type { BlockDraft, BlockProblems, LinkPageHeld, LinkPageState, LinkPageStore } from './link-page/store.ts';
+export type {
+  BrandColours,
+  BrandHeld,
+  BrandHeldState,
+  BrandKit,
+  BrandStore,
+  BrandVariablePairs,
+  PageLookExtras,
+} from './brand/store.ts';
 export type { PictureChoiceHeld, PictureChoiceState } from './profile/picture.ts';
 import type { SocialLinksAccess, SocialLinksStore } from './profile/socials.ts';
 export type { SocialLinksAccess, SocialLinksHeld, SocialLinksState } from './profile/socials.ts';
@@ -1286,6 +1296,9 @@ export function createDataLayer({
     void linkPage?.then((made) => {
       made.clear();
     });
+    void brand?.then((made) => {
+      made.clear();
+    });
     socialLinks?.clear();
   };
   /** Sign in, sign out or an account deleted: the caches go, and the app hears who is signed in now. */
@@ -2220,6 +2233,34 @@ export function createDataLayer({
   // rules load with the first screen that asks, never in the first load; the store builds its calls from the
   // profile procedures and the one call path, in its own chunk.
   let linkPage: Promise<LinkPageStore> | undefined;
+  // Settings › Brand and the link page's Design panel (spec 0060): the workspace's kit and a page's own colour and
+  // photos, loaded with the first screen that asks, never in the first load.
+  let brand: Promise<BrandStore> | undefined;
+  /** An image to or from one of our own upload routes, for the workspace `x-crm-workspace` names (spec 0060). */
+  const sendImage = async (
+    path: string,
+    workspace: string,
+    body?: Blob,
+  ): Promise<{ readonly version?: string; readonly removed?: boolean }> => {
+    const response = await fetch(new URL(path, origin).href, {
+      method: body === undefined ? 'DELETE' : 'POST',
+      headers: {
+        'x-crm-workspace': workspace,
+        ...(body === undefined ? {} : { 'content-type': body.type }),
+      },
+      ...(body === undefined ? {} : { body }),
+      credentials: 'include',
+    }).catch((error: unknown) => {
+      throw toDataError(error);
+    });
+    const answer: unknown = await response.json().catch(() => undefined);
+    const fields = typeof answer === 'object' && answer !== null ? (answer as Record<string, unknown>) : {};
+    if (!response.ok) throw toDataError({ ...fields, status: response.status });
+    return {
+      ...(typeof fields.version === 'string' ? { version: fields.version } : {}),
+      ...(typeof fields.removed === 'boolean' ? { removed: fields.removed } : {}),
+    };
+  };
   // Settings › Account › Profile: whether the person's picture shows on their public pages, read with the profile.
   const pictureChoice = createPictureChoiceStore({
     api: {
@@ -4389,6 +4430,16 @@ export function createDataLayer({
                 ),
             },
           }),
+        )),
+    },
+    /**
+     * The workspace's brand kit (Settings › Brand) and a link page's own colour and photos (its Design panel), spec
+     * 0060: the store, loaded on first use with the colour guard it previews with.
+     */
+    brand: {
+      load: (): Promise<BrandStore> =>
+        (brand ??= import('./brand/store.ts').then(({ openBrand }) =>
+          openBrand({ brand: api.brand, profile: api.profile, call, mintId, send: sendImage }),
         )),
     },
     /** Settings › Account › Profile (spec 0031, AC-821): the caller's own name and time zone in a workspace. */

@@ -3,6 +3,7 @@
 // themselves.
 import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import type { BoardStatus, BoardStore } from './records/board.ts';
+import type { BrandHeld, BrandHeldState } from './brand/store.ts';
 import type { DataError } from './errors.ts';
 import type { OperatorHeld } from './operator/store.ts';
 import type { RecordFacts, RecordFactsState } from './records/facts.ts';
@@ -437,6 +438,11 @@ export function useScheduling<State>(held: Retained<State>): State {
 
 /** The person's link page blocks (Settings › Account › Link page, spec 0051), read when first held. */
 export function useLinkPage(held: LinkPageHeld): LinkPageState {
+  return useRetained(held);
+}
+
+/** The brand kit or a link page's own colour and photos (spec 0060), held while the screen shows it. */
+export function useBrand<Value>(held: BrandHeld<BrandHeldState<Value>>): BrandHeldState<Value> {
   return useRetained(held);
 }
 
