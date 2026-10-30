@@ -295,7 +295,17 @@ export function ObjectsScreen({ slug, objects, usage }: ObjectsScreenProps) {
         onClose={() => setArchiving(undefined)}
         onArchived={(object) => {
           setArchiving(undefined);
-          toasts.toast({ tone: 'success', message: strings.archivedToast(object.pluralName) });
+          // Undo restores it through the same call as the Archived section's Restore.
+          toasts.toast({
+            tone: 'success',
+            message: strings.archivedToast(object.pluralName),
+            action: {
+              label: strings.undo,
+              onAction: () => {
+                restore(object);
+              },
+            },
+          });
           // Its row left the live table, and the menu that opened the confirm with it.
           focusTitle();
         }}

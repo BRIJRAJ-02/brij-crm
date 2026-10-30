@@ -132,6 +132,10 @@ export const strings = {
   archiving: 'Archiving',
   archivedToast: (plural: string) => `${plural} archived.`,
   restoredToast: (plural: string) => `${plural} restored.`,
+  /** An archive toast's way back (the same restore as the Archived section's). */
+  undo: 'Undo',
+  /** An object's settings' way to its records ("Open Projects"). */
+  openRecords: (plural: string) => `Open ${plural}`,
   /** An address in settings that names nothing. */
   missingTitle: 'Page not found',
   missingText: 'There’s nothing at this address.',

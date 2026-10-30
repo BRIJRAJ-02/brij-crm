@@ -1,11 +1,13 @@
 // Brief
 // Purpose: one object's settings, standard or custom alike: its Attributes and Configuration tabs.
-// Main task: add, edit, move, archive and restore its attributes, and rename, restyle, archive or restore it.
+// Main task: add, edit, move, archive and restore its attributes, and rename, restyle, archive or restore it; Open
+// <Plural> goes to its records.
 // Leaves out: types with setup and options (spec 0012, milestone 3), and the schema map (#56).
 import type { AttributeDefinition, MemberSummary, ObjectSummary, Usage } from '@crm/data';
 import {
   Badge,
   Button,
+  ButtonLink,
   Callout,
   Card,
   Skeleton,
@@ -18,6 +20,7 @@ import {
 } from '@crm/ui';
 import { useNavigate, useParams } from '@tanstack/react-router';
 import { useState } from 'react';
+import { objectHref } from '../workspace/objects.ts';
 import { useCan } from '../workspace/WorkspacePage.tsx';
 import { strings as attributeStrings } from './attribute-strings.ts';
 import { AttributesTab } from './AttributesTab.tsx';
@@ -84,15 +87,23 @@ export function ObjectSettingsScreen({
       icon={object.icon}
       hue={object.hue}
       meta={<ObjectBadges object={object} />}
-      {...(showsNew
+      {...(showsNew || !object.isArchived
         ? {
             actions: (
               <>
                 {/* A move waits for the server (definition writes are never optimistic): say it is under way. */}
-                {isMoving && <Spinner label={attributeStrings.moving} />}
-                <Button variant="primary" icon="plus" onPress={() => setCreating(true)}>
-                  {attributeStrings.newAttribute}
-                </Button>
+                {showsNew && isMoving && <Spinner label={attributeStrings.moving} />}
+                {/* A new object opens here: its records are one press away (an archived one has no table). */}
+                {!object.isArchived && (
+                  <ButtonLink href={objectHref(slug, object)} icon="arrow-right">
+                    {strings.openRecords(object.pluralName)}
+                  </ButtonLink>
+                )}
+                {showsNew && (
+                  <Button variant="primary" icon="plus" onPress={() => setCreating(true)}>
+                    {attributeStrings.newAttribute}
+                  </Button>
+                )}
               </>
             ),
           }
