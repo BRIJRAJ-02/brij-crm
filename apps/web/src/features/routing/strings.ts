@@ -57,26 +57,25 @@ export const strings = {
 
   // Show when on a question
   showWhen: 'Show when',
-  showWhenHint: 'Show this question only when earlier answers match. Hidden answers are not kept.',
+  showWhenHint: 'Hidden answers aren’t kept.',
   alwaysShown: 'Always shown',
   addShowWhen: 'Add a condition',
   clearShowWhen: 'Always show it',
-  noEarlier: 'Add a question before this one to show it by its answer.',
-  readsLater: 'A condition reads a question that is no longer before this one. Pick another, or remove it.',
+  noEarlier: 'Add an earlier question first.',
+  readsLater: 'A condition uses a later question. Pick another, or remove it.',
   shownWhen: (line: string) => `Shows when ${line}`,
 
   // Rules
   routing: 'Routing',
   formRoutingLine: (count: number) =>
     count === 0
-      ? 'Send people somewhere else by their answers. Without a rule, After sending applies.'
-      : `${String(count)} ${count === 1 ? 'rule' : 'rules'}, tried in order. When none matches, After sending applies.`,
+      ? 'Send people elsewhere by their answers.'
+      : `${String(count)} ${count === 1 ? 'rule' : 'rules'}, top first. No match: After sending applies.`,
   pageRoutingLine: (count: number) =>
     count === 0
-      ? 'Pick who takes a booking by what you know about the visitor. Without a rule, the whole rotation shares them.'
-      : `${String(count)} ${count === 1 ? 'rule' : 'rules'}, tried in order. When none matches, or nobody it picks is free, the whole rotation shares it.`,
-  routingTip:
-    'Rules are tried from the top; the first that matches decides. Use them to send qualified leads to a longer meeting and others to a message.',
+      ? 'Pick who takes a booking by the visitor’s answers.'
+      : `${String(count)} ${count === 1 ? 'rule' : 'rules'}, top first. No match: the whole rotation shares it.`,
+  routingTip: 'The first rule that matches decides.',
   routingTipExample: 'When Budget is Over $10k, book Intro call with Sam or Bea, and tag Qualified.',
   addRule: 'Add a rule',
   ruleLimit: 'A form or page holds 20 rules.',
@@ -94,14 +93,14 @@ export const strings = {
   /** What removing a rule does, in the card's own words for where people go when no rule matches. */
   removeText: (kind: 'form' | 'page') =>
     kind === 'form'
-      ? 'Leads it would have matched go to the next rule, or After sending applies.'
-      : 'Leads it would have matched go to the next rule, or the whole rotation shares them.',
+      ? 'Its leads go to the next rule, or After sending.'
+      : 'Its leads go to the next rule, or the whole rotation.',
   typeValue: 'Set value…',
   removeAction: 'Remove rule',
   cancel: 'Cancel',
   saving: 'Saving',
   saved: 'Routing saved',
-  waitsForPublish: 'Changes here go live when you publish.',
+  waitsForPublish: 'Live on publish.',
   noPages: 'Make a booking page first, then send people to it.',
 
   // The rule dialog
@@ -109,7 +108,7 @@ export const strings = {
   editRule: (title: string) => `Edit rule: ${title}`,
   name: 'Name',
   namePlaceholder: 'Enterprise',
-  nameHint: 'Optional. Shown in the list and the report.',
+  nameHint: 'Optional.',
   then: 'Then',
   routeKind: 'Send them to',
   routeBook: 'A booking page',
@@ -118,12 +117,10 @@ export const strings = {
   page: 'Booking page',
   pageItem: (title: string, minutes: number) => `${title} · ${String(minutes)} min`,
   hosts: 'Who can take it',
-  hostsOptional: 'Who can take it (none picked: anyone in the rotation)',
-  poolEmpty: 'Add people to this page’s rotation first, then pick who takes these leads.',
+  hostsOptional: 'Who can take it (none: anyone)',
+  poolEmpty: 'Add people to this page’s rotation first.',
   noQuestions: 'Add a question to the form first.',
-  noFields: 'The person’s and company’s fields couldn’t be read. Reload the page to try again.',
-  hostsHint: 'Only these people get the booking. When none of them is free, the rotation picks.',
-  hostsAll: 'Anyone in the rotation',
+  noFields: 'Couldn’t read the fields. Reload the page.',
   hostsNeeded: 'Pick at least one person.',
   message: 'Message',
   messageHint: 'Shown after they send the form.',
@@ -158,7 +155,6 @@ export const strings = {
   fallback: 'None matched',
   removedRule: 'A removed rule',
   reportEmpty: 'Nothing routed yet',
-  reportEmptyText: 'Counts show here once leads are routed.',
   reportFailed: 'The report couldn’t load.',
   share: (count: number, of: number) =>
     of === 0 ? String(count) : `${String(count)} (${String(Math.round((count / of) * 100))}%)`,
