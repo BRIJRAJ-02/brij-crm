@@ -52,6 +52,7 @@ import type { ShownColumn, ShownLayout } from '../views/layout.ts';
 import { avatarAttribute } from './columns.ts';
 import { groupingGap, groupPlan, useGroupedRows } from './grouped.ts';
 import { createdToast } from './created.ts';
+import { namePreset } from './name-preset.ts';
 import { NewRecordDialog } from './NewRecordDialog.tsx';
 import { strings } from './strings.ts';
 import { editToast, isClear } from './undo.ts';
@@ -110,6 +111,8 @@ export interface RecordsScreenProps {
   readonly announce?: (count: WindowCount) => string | undefined;
   /** The command menu's Create a <object> (spec 0039, AC-1086): open the new record dialog once, as New does. */
   readonly isCreateRequested?: boolean;
+  /** The name that dialog starts with (the command menu's Create <object> named …). */
+  readonly createName?: string;
   /** The request was taken: the route drops it from the address. */
   readonly onCreateRequestTaken?: () => void;
   /** What the table says when the view's filter matches nothing; the object's own empty state otherwise. */
@@ -235,6 +238,7 @@ export function RecordsScreen({
   filteredEmpty,
   onTickedChange,
   isCreateRequested = false,
+  createName,
   onCreateRequestTaken,
   groupBy,
 }: RecordsScreenProps) {
@@ -450,7 +454,10 @@ export function RecordsScreen({
   const rowHeader = object.primaryAttributeId ?? columns[0]?.id ?? '';
   const newRecord = strings.newRecord(object.singularName);
 
+  // The name the menu's Create <object> named … typed, for the dialog it opened; New starts empty.
+  const [createPreset, setCreatePreset] = useState<Readonly<Record<string, unknown>> | undefined>(undefined);
   const openCreate = () => {
+    setCreatePreset(undefined);
     setCreating(true);
   };
   // Asked for from the command menu: the same dialog as New, once; a member who may only read gets the table.
@@ -458,7 +465,11 @@ export function RecordsScreen({
   const [requestSeen, setRequestSeen] = useState(false);
   if (isCreateRequested !== requestSeen) {
     setRequestSeen(isCreateRequested);
-    if (isCreateRequested && object.access === 'write') setCreating(true);
+    if (isCreateRequested && object.access === 'write') {
+      const primary = attributes.find((attribute) => attribute.id === object.primaryAttributeId);
+      setCreatePreset(namePreset(primary, createName));
+      setCreating(true);
+    }
   }
   // The callback is read through a ref, so a new one each render never hands the request back twice.
   const takeRequest = useRef(onCreateRequestTaken);
@@ -732,6 +743,7 @@ export function RecordsScreen({
               singularName={object.singularName}
               objectKey={objectKey}
               memberPicker={memberPicker}
+              {...(createPreset === undefined ? {} : { preset: createPreset })}
               onCreated={(record, keepOpen) => {
                 toasts.toast(
                   createdToast(record, object.singularName, () => {

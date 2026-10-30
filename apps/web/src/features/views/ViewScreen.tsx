@@ -96,6 +96,8 @@ export interface ViewScreenProps {
   readonly writeParam: (param: string | undefined, replace: boolean) => void;
   /** The command menu's Create a <object> (spec 0039, AC-1086): open the new record dialog once the table shows. */
   readonly isCreateRequested?: boolean;
+  /** The name that dialog starts with (the command menu's Create <object> named …). */
+  readonly createName?: string;
   /** The request was taken (the dialog opened, or this view can't): drop it from the address. */
   readonly onCreateRequestTaken?: () => void;
   /** The command menu's Export this view or Create a view, run once the view shows. */
@@ -926,6 +928,7 @@ export function ViewScreen(props: ViewScreenProps) {
       <RecordsScreen
         slug={slug}
         {...(props.isCreateRequested === true ? { isCreateRequested: true } : {})}
+        {...(props.createName === undefined ? {} : { createName: props.createName })}
         {...(props.onCreateRequestTaken === undefined ? {} : { onCreateRequestTaken: props.onCreateRequestTaken })}
         object={object}
         attributes={attributes}

@@ -38,7 +38,10 @@ export const Route = createFileRoute('/w/$slug/objects/$object')({
     if (list.status === 'error') throw list.error ?? new Error('The views did not load.');
     // The command menu's Create a <object> (spec 0039, AC-1086) rides along as `new`, so the view opens its dialog:
     // on a table, since a board has none.
-    const isNew = (location.search as { readonly new?: unknown }).new !== undefined;
+    const asked = location.search as { readonly new?: unknown; readonly name?: unknown };
+    const isNew = asked.new !== undefined;
+    // The command menu's Create <object> named …: the name rides along to the dialog.
+    const name = isNew && typeof asked.name === 'string' && asked.name.trim() !== '' ? asked.name : undefined;
     const table = isNew && list.status === 'ready' ? createView(list) : undefined;
     // Only boards here: they have no new record dialog, so the menu's request says so rather than doing nothing.
     if (isNew && table === undefined) {
@@ -49,7 +52,7 @@ export const Route = createFileRoute('/w/$slug/objects/$object')({
       throw redirect({
         to: '/w/$slug/objects/$object/views/$viewId',
         params: { slug: params.slug, object: params.object, viewId },
-        search: table === undefined ? {} : { new: true },
+        search: table === undefined ? {} : { new: true, ...(name === undefined ? {} : { name }) },
         replace: true,
       });
     }

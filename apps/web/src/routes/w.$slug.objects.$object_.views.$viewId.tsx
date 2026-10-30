@@ -36,6 +36,8 @@ interface ViewSearch {
   readonly draft?: string;
   /** Open the new record dialog once the table shows (the command menu's Create a <object>, spec 0039). */
   readonly new?: true;
+  /** The name the new record dialog starts with (the command menu's Create <object> named …). */
+  readonly name?: string;
   /** Export this view, or open Create view, once it shows (the command menu's actions). */
   readonly do?: ViewRequest;
 }
@@ -44,6 +46,7 @@ export const Route = createFileRoute('/w/$slug/objects/$object_/views/$viewId')(
   validateSearch: (search: Record<string, unknown>): ViewSearch => ({
     ...(typeof search.draft === 'string' && search.draft !== '' ? { draft: search.draft } : {}),
     ...(search.new === true || search.new === 1 || search.new === '1' || search.new === 'true' ? { new: true } : {}),
+    ...(typeof search.name === 'string' && search.name.trim() !== '' ? { name: search.name.slice(0, 200) } : {}),
     ...(search.do === 'export' || search.do === 'new-view' ? { do: search.do } : {}),
   }),
   loaderDeps: () => ({}),
@@ -191,6 +194,7 @@ function ViewRoute() {
         });
       }}
       isCreateRequested={search.new === true}
+      {...(search.new === true && search.name !== undefined ? { createName: search.name } : {})}
       onCreateRequestTaken={() => {
         void navigate({
           to: '/w/$slug/objects/$object/views/$viewId',
