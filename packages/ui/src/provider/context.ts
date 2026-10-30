@@ -4,8 +4,6 @@
 import { createContext, useContext, useSyncExternalStore } from 'react';
 import type { KeyboardPlatform } from '../atoms/Kbd/shortcuts.ts';
 import type { DateFormat } from '../lib/format.ts';
-import { memoIntl } from '../lib/intl-memo.ts';
-import { regionDefaults } from '../lib/region-defaults.ts';
 import type { WeekStart } from '../lib/month.ts';
 import type { Clock } from './clock.ts';
 import type { Toasts } from './toasts.tsx';
@@ -38,47 +36,6 @@ export function useFormatSettings(): FormatSettings {
   return settings;
 }
 
-/**
- * The country and currency a value starts in when its attribute names none:
- * the workspace's (FormatScope), else the language's region's (en-IN is IN
- * and INR), else the US's. A new Currency attribute and a new phone number
- * start here instead of always in USD and the US.
- */
-export function useRegionDefaults(): { readonly country: string; readonly currency: string } {
-  const { locale, country, currency } = useFormatSettings();
-  return regionDefaults(locale, { country, currency });
-}
-
-/** Today (`YYYY-MM-DD`) in the zone at `now`: Swedish writes a date as YYYY-MM-DD, with no date library in the first load. */
-function dayKeyIn(now: number, timeZone: string): string {
-  return memoIntl(
-    `dayKey:${timeZone}`,
-    () => new Intl.DateTimeFormat('sv-SE', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }),
-  ).format(now);
-}
-
-/**
- * Reads "today" (`YYYY-MM-DD`, in the provider's time zone) when called, without re-rendering on each tick: a
- * paste or an import reads "tomorrow" against it once, so a grid of thousands of cells never redraws for the clock.
- */
-export function useTodayReader(): () => string {
-  const clock = useContext(ClockContext);
-  const { timeZone } = useFormatSettings();
-  if (clock === undefined) throw new Error('Wrap the app in <UiProvider> to read today.');
-  return () => dayKeyIn(clock.now(), timeZone);
-}
-
-/**
- * Today (`YYYY-MM-DD`, in the provider's time zone), re-rendering only when the day changes: the snapshot is the
- * day's text, so the clock's 30 second ticks leave a grid of dates alone until midnight.
- */
-export function useToday(): string {
-  const clock = useContext(ClockContext);
-  const { timeZone } = useFormatSettings();
-  if (clock === undefined) throw new Error('Wrap the app in <UiProvider> to read today.');
-  return useSyncExternalStore(clock.subscribe, () => dayKeyIn(clock.now(), timeZone));
-}
-
 /** The shared clock's time, in milliseconds. Re-renders on each tick (every 30 seconds). */
 export function useNow(): number {
   const clock = useContext(ClockContext);
@@ -106,15 +63,4 @@ export const FileLinksContext = createContext<((fileId: string) => string) | und
 /** The download address of a stored file, when the app says where files download from; undefined draws no link. */
 export function useFileHref(): ((fileId: string) => string) | undefined {
   return useContext(FileLinksContext);
-}
-
-/**
- * A site's icon by its host ("acme.com"), served from the app's own origin: the web app supplies it for the
- * open workspace, and a domain or link chip shows it before its words. Undefined draws no icon.
- */
-export const SiteIconsContext = createContext<((host: string) => string | undefined) | undefined>(undefined);
-
-/** The icon address for a host, when the app says where site icons come from. */
-export function useSiteIcons(): ((host: string) => string | undefined) | undefined {
-  return useContext(SiteIconsContext);
 }

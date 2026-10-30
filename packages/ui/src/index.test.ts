@@ -169,6 +169,7 @@ describe('@crm/ui', () => {
       'SettingsStack',
       'SetupChecklist',
       'ShortcutHelp',
+      'ShortcutTooltip',
       'Sidebar',
       'SignInForm',
       'SiteIconsContext',

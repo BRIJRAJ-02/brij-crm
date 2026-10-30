@@ -51,8 +51,8 @@ import {
   useFormatSettings,
   useKeyboardPlatform,
   focusLater,
+  ShortcutTooltip,
   Skeleton,
-  Tooltip,
   WeekCalendar,
   type BookingListGroup,
   type Hue,
@@ -1263,7 +1263,7 @@ function WeekView(props: BookingsCalendarScreenProps) {
       start={
         <>
           {/* Secondary: the page's one primary is New (the owner, 22 October 2026). */}
-          <Tooltip content={strings.goToToday} kbd={WEEK_KEYS.today}>
+          <ShortcutTooltip content={strings.goToToday} kbd={WEEK_KEYS.today}>
             <Button variant="secondary" onPress={() => go('today')}>
               {isThisWeek
                 ? strings.today
@@ -1271,23 +1271,26 @@ function WeekView(props: BookingsCalendarScreenProps) {
                     new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', timeZone }).format(now),
                   )}
             </Button>
-          </Tooltip>
-          <Tooltip content={view === 'day' ? strings.previousDay : strings.previousWeek} kbd={WEEK_KEYS.previous}>
+          </ShortcutTooltip>
+          <ShortcutTooltip
+            content={view === 'day' ? strings.previousDay : strings.previousWeek}
+            kbd={WEEK_KEYS.previous}
+          >
             <Button
               variant="ghost"
               icon="chevron-left"
               label={view === 'day' ? strings.previousDay : strings.previousWeek}
               onPress={() => go('previous')}
             />
-          </Tooltip>
-          <Tooltip content={view === 'day' ? strings.nextDay : strings.nextWeek} kbd={WEEK_KEYS.next}>
+          </ShortcutTooltip>
+          <ShortcutTooltip content={view === 'day' ? strings.nextDay : strings.nextWeek} kbd={WEEK_KEYS.next}>
             <Button
               variant="ghost"
               icon="chevron-right"
               label={view === 'day' ? strings.nextDay : strings.nextWeek}
               onPress={() => go('next')}
             />
-          </Tooltip>
+          </ShortcutTooltip>
           <Button
             ref={jumpRef}
             variant="ghost"

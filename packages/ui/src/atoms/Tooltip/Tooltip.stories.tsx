@@ -4,6 +4,7 @@ import { Button } from '../Button/Button.tsx';
 import { hoverFresh, shownTooltip as tooltip } from '../../workbench/pointer.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { LockReason } from './LockReason.tsx';
+import { ShortcutTooltip } from './ShortcutTooltip.tsx';
 import { Tooltip } from './Tooltip.tsx';
 
 const meta = {
@@ -54,13 +55,13 @@ export const Default: Story = {
   },
 };
 
-/** `kbd`: the button's shortcut as a keycap after the line, "Search ⌘K". */
+/** ShortcutTooltip's `kbd`: the button's shortcut as a keycap after the line, "Search ⌘K". */
 export const WithKbd: Story = {
   render: () => (
     <Stage>
-      <Tooltip content="Search" kbd="⌘K">
+      <ShortcutTooltip content="Search" kbd="⌘K">
         <Button icon="search" label="Search" />
-      </Tooltip>
+      </ShortcutTooltip>
     </Stage>
   ),
   play: async ({ canvas, userEvent }) => {

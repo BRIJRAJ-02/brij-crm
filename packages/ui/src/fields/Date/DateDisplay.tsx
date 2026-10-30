@@ -2,7 +2,8 @@ import { Tooltip } from '../../atoms/Tooltip/Tooltip.tsx';
 import { TruncatedText } from '../../atoms/TruncatedText/TruncatedText.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { formatDate, formatDayNear } from '../../lib/format.ts';
-import { useFormatSettings, useToday } from '../../provider/context.ts';
+import { useFormatSettings } from '../../provider/context.ts';
+import { useToday } from '../../provider/today.ts';
 import { EmptyValue } from '../parts.tsx';
 import type { DisplayProps } from '../types.ts';
 

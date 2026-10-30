@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { FieldSurfaces } from '../../workbench/FieldSurfaces/FieldSurfaces.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { FIELD_SAMPLES } from '../../workbench/field-samples.ts';
-import { SiteIconsContext } from '../../provider/context.ts';
+import { SiteIconsContext } from '../../provider/site-icons.ts';
 import { AttributeDisplay } from '../AttributeDisplay.tsx';
 import { AttributeEditor } from '../AttributeEditor.tsx';
 import { expect, fn } from 'storybook/test';

@@ -1,4 +1,4 @@
-import { useRef, type ReactElement, type RefObject } from 'react';
+import { useRef, type ReactElement, type ReactNode, type RefObject } from 'react';
 import { useFocusable, useFocusVisible } from 'react-aria';
 import {
   Tooltip as AriaTooltip,
@@ -6,7 +6,6 @@ import {
   TooltipTriggerStateContext,
   type TooltipTriggerState,
 } from 'react-aria-components';
-import { Kbd } from '../Kbd/Kbd.tsx';
 import { TooltipKbdContext } from './tooltip-kbd.ts';
 import styles from './Tooltip.module.css';
 
@@ -25,11 +24,6 @@ export type TooltipPlacement = 'top' | 'bottom' | 'start' | 'end';
 export interface TooltipProps {
   /** One short line: the full text of something cut short, an exact time, why a control is disabled. */
   readonly content: string;
-  /**
-   * The control's shortcut, as a keycap after the line ("Search ⌘K"), written with Mac symbols: icon buttons teach
-   * their keys this way. A library Button inside states it as its `aria-keyshortcuts` by itself.
-   */
-  readonly kbd?: string;
   /**
    * What it describes. A library control (Button) works as it is; plain text
    * passes `isTextTrigger` so hovering it shows the tooltip.
@@ -65,11 +59,21 @@ function TextTrigger({ children, isShared }: { readonly children: ReactElement; 
 /**
  * A short label that appears after a pause on hover, or at once on keyboard
  * focus. It adds to a control's name and never replaces it: an icon only
- * button still has its own `label`.
+ * button still has its own `label`. ShortcutTooltip adds a keycap.
  */
-export function Tooltip({
+export function Tooltip(props: TooltipProps) {
+  return <TooltipFrame {...props} />;
+}
+
+/**
+ * Tooltip with a shortcut: `kbd` is the shortcut, which a library Button inside states as its
+ * `aria-keyshortcuts`, and `keycap` draws it after the line. Not exported from the library: ShortcutTooltip
+ * passes the keycap, so this module never imports Kbd (see ShortcutTooltip.tsx).
+ */
+export function TooltipFrame({
   content,
   kbd,
+  keycap,
   children,
   placement = 'top',
   isTextTrigger = false,
@@ -77,7 +81,7 @@ export function Tooltip({
   isDisabled,
   isOpen,
   onOpenChange,
-}: TooltipProps) {
+}: TooltipProps & { readonly kbd?: string; readonly keycap?: ReactNode }) {
   const { isFocusVisible } = useFocusVisible();
   return (
     <TooltipTrigger
@@ -99,11 +103,7 @@ export function Tooltip({
         data-kbd={kbd === undefined ? undefined : ''}
       >
         {content}
-        {kbd !== undefined && (
-          <span aria-hidden="true">
-            <Kbd tone="onInverse">{kbd}</Kbd>
-          </span>
-        )}
+        {keycap !== undefined && <span aria-hidden="true">{keycap}</span>}
       </AriaTooltip>
     </TooltipTrigger>
   );

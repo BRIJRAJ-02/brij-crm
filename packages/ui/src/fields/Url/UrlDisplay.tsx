@@ -1,5 +1,5 @@
 import { LinkChip } from '../../atoms/LinkChip/LinkChip.tsx';
-import { useSiteIcons } from '../../provider/context.ts';
+import { useSiteIcons } from '../../provider/site-icons.ts';
 import { ChipRow, EmptyValue, ValueActions } from '../parts.tsx';
 import type { DisplayProps } from '../types.ts';
 import { asList, isFlatSurface } from '../values.ts';

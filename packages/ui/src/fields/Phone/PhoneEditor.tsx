@@ -2,7 +2,7 @@ import type { PhoneValue } from '@crm/contracts/values';
 import { useState } from 'react';
 import { countryOfNumber, withoutDialCode } from '../../lib/countries.ts';
 import { PHONE_PROBLEMS, PhoneField, type PhoneFieldValue } from '../../molecules/PhoneField/PhoneField.tsx';
-import { useRegionDefaults } from '../../provider/context.ts';
+import { useRegionDefaults } from '../../provider/region.ts';
 import { ListEditor, type CheckedOne } from '../ListEditor.tsx';
 import type { EditorProps } from '../types.ts';
 import { asList, escapesHere, isCompactSurface, toCommittable } from '../values.ts';

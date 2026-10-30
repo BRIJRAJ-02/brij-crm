@@ -60,6 +60,7 @@ export { Switch, type SwitchProps } from './atoms/Switch/Switch.tsx';
 export { Tag, TagList, type TagItem, type TagListProps, type TagProps } from './atoms/Tag/Tag.tsx';
 export { LockReason, type LockReasonProps } from './atoms/Tooltip/LockReason.tsx';
 export { Tooltip, type TooltipPlacement, type TooltipProps } from './atoms/Tooltip/Tooltip.tsx';
+export { ShortcutTooltip, type ShortcutTooltipProps } from './atoms/Tooltip/ShortcutTooltip.tsx';
 export { TruncatedText, type TruncatedTextProps } from './atoms/TruncatedText/TruncatedText.tsx';
 export { Variable, type VariableProps } from './atoms/Variable/Variable.tsx';
 export { VisuallyHidden, type VisuallyHiddenProps } from './atoms/VisuallyHidden/VisuallyHidden.tsx';
@@ -571,6 +572,7 @@ export { UiProvider, useKeyboardPlatform, type FormatSettings, type UiProviderPr
 export { LOADING_TIMING, useDelayedLoading, type LoadingTiming } from './provider/useDelayedLoading.ts';
 export { LoadingNow, type LoadingNowProps } from './provider/LoadingNow.tsx';
 export { FormatScope, type FormatScopeProps } from './provider/FormatScope.tsx';
-export { FileLinksContext, SiteIconsContext, useFileHref, useFormatSettings } from './provider/context.ts';
+export { FileLinksContext, useFileHref, useFormatSettings } from './provider/context.ts';
+export { SiteIconsContext } from './provider/site-icons.ts';
 export { formatDate, formatDay, type DateFormat } from './lib/format.ts';
 export { firstDayOfWeek, type WeekStart } from './lib/month.ts';
