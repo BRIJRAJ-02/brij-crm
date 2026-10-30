@@ -1,13 +1,13 @@
 import type { PointerEvent, ReactNode } from 'react';
 import { usePlaneItem } from '../../lib/drag/plane.tsx';
-import styles from './WeekCalendar.module.css';
 
-/** What a movable block's button gets: where to bind it, how a press grabs it, and the edge that changes its length. */
+/** What a movable block's button gets: where to bind it, how a press grabs it, and the same for the edge that changes its length. */
 export interface BlockWire {
   readonly bind: (element: HTMLElement | null) => void;
   readonly onPointerDown: (event: PointerEvent<HTMLElement>) => void;
-  /** The edge at the block's foot: grabbed, it changes the block's length. Draw it inside the block. */
-  readonly edge: ReactNode;
+  /** The edge at the block's foot: grabbed, it changes the block's length. The week draws it inside the block. */
+  readonly bindEdge: (element: HTMLElement | null) => void;
+  readonly onEdgePointerDown: (event: PointerEvent<HTMLElement>) => void;
 }
 
 /**
@@ -24,9 +24,5 @@ export function MovableBlock({
 }) {
   const { bind, onPointerDown } = usePlaneItem(id, 'move');
   const { bind: bindEdge, onPointerDown: onEdgePointerDown } = usePlaneItem(id, 'resize');
-  return children({
-    bind,
-    onPointerDown,
-    edge: <span ref={bindEdge} className={styles.edge} aria-hidden="true" onPointerDown={onEdgePointerDown} />,
-  });
+  return children({ bind, onPointerDown, bindEdge, onEdgePointerDown });
 }
