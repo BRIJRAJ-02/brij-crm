@@ -1474,6 +1474,7 @@ function WeekView(props: BookingsCalendarScreenProps) {
             pageDestination={props.pageDestination}
             peopleSearch={props.peopleSearch}
             newBookingKey={newBookingKey}
+            limitsAt={props.limitsAt}
             onBookAsHost={onBookAsHost}
             onBlock={team.onBlock}
             onRemoveBlock={onRemoveBlock}

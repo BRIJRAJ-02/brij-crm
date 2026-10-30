@@ -443,7 +443,6 @@ export const strings = {
   leftWorkspace: 'Left the workspace',
   laneDetail: (guest: string, host: string) => `${guest} · ${host}`,
   laneLabel: (title: string, time: string, guest: string, status: string) => `${title}, ${time}, ${guest}, ${status}`,
-  seeOnlyColumn: (name: string) => `You can see ${name}’s scheduling but not change it.`,
   teamPeople: 'People',
   teamEveryone: 'Everyone you can see',
   onlyBooked: 'Only people with bookings',

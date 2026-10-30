@@ -30,6 +30,11 @@ export interface TeamDayPerson {
   readonly label: string;
   /** Time off over the day, as a band down the column: its word, and its minutes on the reader's clock. */
   readonly band?: WeekCalendarDay['band'];
+  /**
+   * False when the reader may only See this person (spec 0037): empty time on their column draws nothing, and shows
+   * no crosshair. Absent, it draws as the grid does.
+   */
+  readonly canAct?: boolean;
 }
 
 /** One booking in the Needs a host lane. */
@@ -89,6 +94,7 @@ export function TeamDay({ people, selectedPerson, onSelectPerson, focusPerson, l
         isPast: false,
         head: <PersonHead person={person} />,
         ...(person.band === undefined ? {} : { band: person.band }),
+        ...(person.canAct === false ? { canDraw: false } : {}),
       })),
     [people],
   );
