@@ -22,8 +22,13 @@ import type { FileStore } from '../storage/blob.ts';
 import { BOOKING_LIMITS, type PublicLimiter } from './limits.ts';
 import { pictureResponse } from './picture.ts';
 
-/** How long a brand stylesheet or image is kept: an hour, in the browser and at the edge (its path is versioned). */
-export const BRAND_CACHE_CONTROL = 'public, max-age=3600, s-maxage=3600';
+/**
+ * How long a booking page's or form's brand stylesheet or logo is kept: five minutes, in the browser and at the edge,
+ * as a public picture is. The path is versioned, so a new kit is a new path at once; the five minutes bound how long
+ * a removed logo, or one on a deleted page, can still be served from a copy, since these answers carry no cache tag
+ * a change could purge.
+ */
+export const BRAND_CACHE_CONTROL = 'public, max-age=300, s-maxage=300';
 
 /** A public key (a booking page's or a form's) as the doors take it. */
 const PUBLIC_KEY = /^[A-Za-z0-9_-]{16}$/;

@@ -10,6 +10,7 @@ import { checkScope, type EngineScope } from '../access/mint.ts';
 import { can } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
 import { inputInvalid, refuse } from '../engine/refusals.ts';
+import { writeAudit } from '../members/audit.ts';
 
 const { workspaceBrands } = schema;
 
@@ -53,6 +54,26 @@ function memberOf(scope: EngineScope): string {
   return principal.memberId;
 }
 
+/**
+ * Audits a change to the kit in its own transaction (owners and admins only, so who changed the look every public
+ * page wears is on record). Logged as a workspace change, with the kit's fields under their own names, which
+ * History shows as "changed the workspace" until the kit has an audit action of its own.
+ */
+function auditBrand(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  before: Readonly<Record<string, unknown>>,
+  after: Readonly<Record<string, unknown>>,
+): Promise<void> {
+  return writeAudit(tx, scope.workspaceId, scope.actor, {
+    action: 'workspace.updated',
+    targetType: 'workspace',
+    targetId: scope.workspaceId,
+    before,
+    after,
+  });
+}
+
 /** A checked hex or null, refused on `field` otherwise. */
 function hexOrNull(value: string | null, field: string): string | null {
   if (value === null) return null;
@@ -92,6 +113,7 @@ export async function saveWorkspaceBrand(
   if (accentDark !== null && accent === null)
     throw inputInvalid('accentDark', 'Pick the main colour before a dark one.');
   const row = await inWorkspace(scope, async (tx) => {
+    const was = await brandRowOf(tx, scope.workspaceId);
     await tx
       .insert(workspaceBrands)
       .values({ workspaceId: scope.workspaceId, accent, accentDark, updatedBy: by })
@@ -99,6 +121,14 @@ export async function saveWorkspaceBrand(
         target: workspaceBrands.workspaceId,
         set: { accent, accentDark, updatedBy: by, updatedAt: sql`now()` },
       });
+    if ((was?.accent ?? null) !== accent || (was?.accentDark ?? null) !== accentDark) {
+      await auditBrand(
+        tx,
+        scope,
+        { brandAccent: was?.accent ?? null, brandAccentDark: was?.accentDark ?? null },
+        { brandAccent: accent, brandAccentDark: accentDark },
+      );
+    }
     return brandRowOf(tx, scope.workspaceId);
   });
   return toBrand(row, true);
@@ -137,6 +167,12 @@ export async function saveBrandLogo(scope: EngineScope, logo: StoredLogo): Promi
       .insert(workspaceBrands)
       .values({ workspaceId: scope.workspaceId, ...values })
       .onConflictDoUpdate({ target: workspaceBrands.workspaceId, set: { ...values, updatedAt: sql`now()` } });
+    await auditBrand(
+      tx,
+      scope,
+      { brandLogo: before[0]?.path === undefined ? null : 'set' },
+      { brandLogo: logo.version },
+    );
     return before[0]?.path ?? undefined;
   });
   return previous === undefined || previous === logo.path ? {} : { previous };
@@ -157,7 +193,9 @@ export async function clearBrandLogo(scope: EngineScope): Promise<{ readonly pre
           where b.workspace_id = ${scope.workspaceId}::uuid
           returning before.logo_path as previous`,
     );
-    return cleared.rows[0]?.previous ?? undefined;
+    const gone = cleared.rows[0]?.previous ?? undefined;
+    if (gone !== undefined) await auditBrand(tx, scope, { brandLogo: 'set' }, { brandLogo: null });
+    return gone;
   });
   return previous === undefined ? {} : { previous };
 }

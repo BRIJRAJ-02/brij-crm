@@ -125,7 +125,8 @@ set local role crm_handle;
 --> statement-breakpoint
 -- One membership's link page accent and photos: for its owner's Design panel, its public look stylesheet and its
 -- image routes, and its personal booking pages' accent. No row unless that person is an active member of that
--- workspace. The paths are the server's own; nothing here is a member's email or anything typed but a checked hex.
+-- workspace, and none outside the transaction's own workspace (`app.workspace_id`). The paths are the server's own;
+-- nothing here is a member's email or anything typed but a checked hex.
 create function crm_profile_look(owner uuid, workspace uuid)
   returns table (accent text, accent_dark text, cover_path text, cover_type text, cover_version text,
     ground_path text, ground_type text, ground_version text)
@@ -140,6 +141,7 @@ begin atomic
   from auth.public_profiles p
   where p.user_id = crm_profile_look.owner
     and p.workspace_id = crm_profile_look.workspace
+    and p.workspace_id = nullif(pg_catalog.current_setting('app.workspace_id', true), '')::uuid
     and public.crm_workspace_member(p.user_id, p.workspace_id);
 end;
 --> statement-breakpoint
