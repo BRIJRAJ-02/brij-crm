@@ -52,16 +52,16 @@ export const AwayWithEnd: Story = {
   ),
 };
 
-/** A calendar head's day in its colour: booked, free and off, one short line each, the rest in the tooltip. */
+/** A calendar head's day: booked quiet, free in green, off quieter, one short line each, the title in the tooltip. */
 export const DayTones: Story = {
   render: (args) => (
     <Stage direction="column" width="narrow">
-      <PersonLine {...args} size="sm" tone="booked" meta={['3 booked']} hint="Ada Lovelace · Head of sales" />
+      <PersonLine {...args} size="sm" meta={['3 booked']} hint="Ada Lovelace · Head of sales" />
       <PersonLine {...args} size="sm" tone="free" meta={['Free']} hint="Ada Lovelace · Head of sales" />
       <PersonLine {...args} size="sm" tone="off" meta={['Off']} hint="Ada Lovelace · Head of sales" />
     </Stage>
   ),
   play: async ({ canvasElement }) => {
-    await expect(canvasElement.querySelector('[title="Ada Lovelace · Head of sales"]')).not.toBeNull();
+    await expect(within(canvasElement).getByText('Free')).toBeVisible();
   },
 };

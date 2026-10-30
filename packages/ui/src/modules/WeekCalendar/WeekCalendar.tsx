@@ -209,7 +209,7 @@ export interface WeekCalendarProps {
    * `week` (the default) draws the seven days; `day` draws only the selected one across the width, its head still
    * the week's days to pick from, as a phone's narrow week does. In `day`, `emptyHint` shows while that day is empty.
    * `team` (TeamDay) draws any number of columns (each a person, its `head` drawn in place of a date), at least
-   * `size-column-narrow` plus `space-32` and `space-8` wide each, scrolling sideways under a head and an hour axis that stay put;
+   * `size-column` wide each (never squeezed to fit), scrolling sideways under a head and an hour axis that stay put;
    * the now line shows in every column, and below 480px one column shows at a time, with Previous and Next.
    */
   readonly view?: 'week' | 'day' | 'team';

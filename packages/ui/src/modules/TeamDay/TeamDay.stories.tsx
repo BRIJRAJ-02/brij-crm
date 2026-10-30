@@ -220,7 +220,7 @@ export const LaneOpen: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const row = canvas.getByRole('button', { name: /^Discovery, 4:30 PM/ });
+    const row = canvas.getByRole('button', { name: /^4:30 PM · Discovery/ });
     await userEvent.click(row);
     await settleAnimations();
     await expect(within(document.body).getByRole('dialog')).toBeVisible();
@@ -288,6 +288,41 @@ export const Phone: Story = {
     await expect(canvas.getByRole('button', { name: '2 need a host' })).toBeVisible();
     await userEvent.click(canvas.getByRole('button', { name: 'Next person' }));
     await expect(args.onSelectPerson).toHaveBeenCalledWith(GRACE);
+  },
+};
+
+/** A phone's strip: "2 need a host" lists them in a sheet; one picked there opens its card, and the list closes. */
+export const PhoneList: Story = {
+  render: (args) => (
+    <Stage width="phone" height="page">
+      <TeamDay
+        {...args}
+        people={people()}
+        blocks={blocks()}
+        openHours={hours}
+        lane={{ rows: lane(), onOpen: args.onOpen, onClose: args.onClose }}
+      />
+    </Stage>
+  ),
+  play: async ({ canvas, args }) => {
+    await userEvent.click(canvas.getByRole('button', { name: '2 need a host' }));
+    await settleAnimations();
+    const sheet = within(document.body).getByRole('dialog');
+    await expect(sheet).toBeVisible();
+    await userEvent.click(within(sheet).getByRole('button', { name: 'Discovery' }));
+    await expect(args.onOpen).toHaveBeenCalledWith('n1');
+  },
+};
+
+/** Ordered by job title (AC-1438): each head's line carries the title, so the order explains itself. */
+export const TitleOrder: Story = {
+  render: (args) => (
+    <Stage width="fill" height="page">
+      <TeamDay {...args} people={people()} blocks={blocks()} openHours={hours} isTitleShown />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getAllByText(/Head of sales/).length).toBeGreaterThan(0);
   },
 };
 
