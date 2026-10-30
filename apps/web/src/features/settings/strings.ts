@@ -114,6 +114,21 @@ export const strings = {
   /** The Configuration tab's IDs, apart from what Save changes. */
   /** The Configuration tab's quiet fold at the foot: the API name and object ID. */
   developer: 'Developer',
+  idsSection: 'Identifiers',
+  /** The attribute that names the object's records (late trap #15), saved as it is picked. */
+  recordNameSection: 'Record names',
+  /** A toast's way back: an archive's restore, or the record name's change. */
+  undo: 'Undo',
+  recordNameTitle: 'Name attribute',
+  recordNameText: 'Names each record in chips, page titles and search.',
+  recordNameStandard: (title: string) =>
+    `People, Companies and Deals are always named by their ${title === '' ? 'Name' : title}.`,
+  recordNameNone:
+    'To name records by something else, add a text, email, domain, link or personal name attribute that holds one value.',
+  recordNameUnavailable: "Couldn't load this object's attributes. Reload to choose one.",
+  recordNameChanged: (plural: string, title: string) => `${plural} are now named by ${title}.`,
+  recordNameFailed: (why: string) => `Couldn't change the name attribute. ${why}`,
+  recordNameUndoStale: 'The name attribute changed again since, so nothing was undone.',
   dangerArchive: (plural: string) => `Archive ${plural}`,
   dangerArchiveText: 'It leaves the sidebar and every picker. Its records, values and history are kept.',
   dangerRestore: (plural: string) => `Restore ${plural}`,
@@ -133,8 +148,6 @@ export const strings = {
   archiving: 'Archiving',
   archivedToast: (plural: string) => `${plural} archived.`,
   restoredToast: (plural: string) => `${plural} restored.`,
-  /** An archive toast's way back (the same restore as the Archived section's). */
-  undo: 'Undo',
   /** An object's settings' way to its records ("Open Projects"). */
   openRecords: (plural: string) => `Open ${plural}`,
   /** An address in settings that names nothing. */

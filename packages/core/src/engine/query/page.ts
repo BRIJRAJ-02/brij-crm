@@ -1636,6 +1636,60 @@ export async function matchingIdsIn(
 }
 
 /**
+ * How long `orderedIdsIn` may run: it sorts every matching row, so longer than
+ * a page, but short enough that the batch around it ends within the 30 seconds
+ * the Vercel drain gives one batch.
+ */
+const ORDERED_TIMEOUT = '15s';
+
+/**
+ * Every record id a view matches, in the view's own order (its sorts, empties
+ * last, then the id), at most `cap`: an export's snapshot (late trap #40). One
+ * statement, so one moment's rows: a record that changes while the ids are
+ * read can't be both missed and counted. Compiled through the access door as
+ * a page is (hidden attributes refused, the record rule applied), so a record
+ * the principal can't see is never listed. The filter first, then the sort,
+ * the order a page that can't drive from an index reads in. Undefined when
+ * the sort ran past 15 seconds (the transaction stays usable). A read only.
+ */
+export async function orderedIdsIn(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  query: { readonly objectId: string; readonly filter?: FilterGroup; readonly sorts?: SortRules } & QueryClock,
+  cap: number,
+): Promise<readonly string[] | undefined> {
+  const before = await tx.execute<{ timeout: string }>(sql`select current_setting('statement_timeout') as timeout`);
+  // Set first, so the searches the filter runs while it is prepared are bounded too.
+  await tx.execute(sql`set local statement_timeout = ${sql.raw(`'${ORDERED_TIMEOUT}'`)}`);
+  const { context, level } = await prepare(tx, scope, query);
+  const keys = compileSorts(context, level, query.sorts ?? []);
+  const filter = compileFilter(context, level, query.filter);
+  const { tables, where } = fromParts(context, level);
+  const joins = sql.join(
+    keys.flatMap((key) => (key.join === undefined ? [] : [key.join])),
+    sql` `,
+  );
+  // Under a savepoint, so a sort that runs out of time leaves the transaction usable for the caller's answer.
+  await tx.execute(sql`savepoint crm_ordered`);
+  let ids: readonly string[] | undefined;
+  try {
+    const rows = await tx.execute<{ id: string }>(sql`
+      select r.id::text as id from ${tables} ${joins}
+      where ${where} and ${filter}
+      order by ${orderBy(keys, tieDirection(keys))}
+      limit ${cap}
+    `);
+    await tx.execute(sql`release savepoint crm_ordered`);
+    ids = rows.rows.map((row) => row.id);
+  } catch (error) {
+    if (postgresError(error)?.code !== '57014') throw error;
+    await tx.execute(sql`rollback to savepoint crm_ordered`);
+  }
+  await tx.execute(sql`select set_config('statement_timeout', ${before.rows[0]?.timeout ?? STATEMENT_TIMEOUT}, true)`);
+  return ids;
+}
+
+/**
  * Checks an "all matching" filter the way its snapshot will run it (spec
  * 0022): the object visible, every attribute along the filter visible and
  * live, each operand well formed. Refuses `FILTER_INVALID` or `NOT_FOUND`;

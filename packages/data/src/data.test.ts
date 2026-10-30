@@ -1815,6 +1815,29 @@ describe('live updates', () => {
     expect((await data.objects.list('acme'))[0]?.pluralName).toBe('Contacts');
   });
 
+  it('reads the open views again when an object’s name attribute changed, and not for a rename (late trap #15)', async () => {
+    let reads = 0;
+    const { api, client, data } = await liveLayer({
+      objects: () => {
+        reads += 1;
+        if (reads === 1) return [PEOPLE];
+        if (reads === 2) return [{ ...PEOPLE, pluralName: 'Contacts' }];
+        return [{ ...PEOPLE, pluralName: 'Contacts', primaryAttributeId: TITLE.id }];
+      },
+    });
+    await data.objects.list('acme');
+    const counts = () => count(api.calls, '/api/rpc/records/count');
+    const before = counts();
+    // Renamed: the names of its records stand, so nothing is read again.
+    client.channel().onPublication({ seq: 1, at: AT, kind: 'definitions', objectId: PEOPLE.id });
+    await settled();
+    expect(counts()).toBe(before);
+    // Named by another attribute: every record's name changed, so the view on screen settles now.
+    client.channel().onPublication({ seq: 2, at: AT, kind: 'definitions', objectId: PEOPLE.id });
+    await settled();
+    expect(counts()).toBe(before + 1);
+  });
+
   it('reads the members again on a members change, and the person’s own access when it names them (AC-82)', async () => {
     const BEA: MemberView = {
       id: '0199a6f2-0000-7000-8000-0000000000b0',
@@ -2527,6 +2550,25 @@ describe('objects in settings (spec 0012)', () => {
     expect((await data.objects.list('acme')).map((object) => object.apiSlug)).toEqual(['people', 'projects']);
     await data.usage.get('acme');
     expect(count(api.calls, '/api/rpc/usage/get')).toBe(2);
+  });
+
+  it('reads the object’s attributes again once its name attribute changed, and reloads the pages once', async () => {
+    let changes = 0;
+    const api = fakeApi({ objectWrite: () => ({ ...PROJECTS, isArchived: false }) });
+    const { data } = layer(api, '/w/acme/settings/objects', {
+      onDefinitionsChange: () => {
+        changes += 1;
+      },
+    });
+    await data.attributes.list('acme', PROJECTS.id);
+    const lists = count(api.calls, '/api/rpc/attributes/list');
+    await data.objects.update('acme', PROJECTS.id, { primaryAttributeId: TITLE.id });
+    // Read again at once: which attribute is the primary moved, so the tables and settings show it now.
+    expect(count(api.calls, '/api/rpc/attributes/list')).toBe(lists + 1);
+    expect(changes).toBe(1);
+    // A rename reads none.
+    await data.objects.update('acme', PROJECTS.id, { pluralName: 'Ventures' });
+    expect(count(api.calls, '/api/rpc/attributes/list')).toBe(lists + 1);
   });
 
   it('rejects a refused object write with its refusals, and reloads nothing', async () => {

@@ -58,6 +58,14 @@ export const forms = pgTable(
      * 0023 AC-1050); applies at once. At most one of the two is set.
      */
     ownerRotationId: uuid('owner_rotation_id'),
+    /**
+     * Who is told about each new submission besides the lead's owner (AC-568, AC-1047); applies at once. A new form
+     * lists its maker. A member who has left is skipped when a notice is sent. At most 20.
+     */
+    notifyMemberIds: uuid('notify_member_ids')
+      .array()
+      .notNull()
+      .default(sql`'{}'::uuid[]`),
     /** The sites that may post their own form's answers here ("Your own form"), as origins. */
     allowedOrigins: text('allowed_origins')
       .array()
@@ -106,6 +114,7 @@ export const forms = pgTable(
     index('forms_by_owner_rotation')
       .on(t.workspaceId, t.ownerRotationId)
       .where(sql`${t.ownerRotationId} is not null`),
+    check('forms_notify_member_ids', sql`cardinality(${t.notifyMemberIds}) <= 20`),
     check('forms_one_owner', sql`${t.ownerMemberId} is null or ${t.ownerRotationId} is null`),
     check(
       'forms_live_version',

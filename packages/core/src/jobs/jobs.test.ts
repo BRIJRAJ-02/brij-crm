@@ -298,6 +298,10 @@ describe('the runner (AC-103 to AC-107, AC-113, AC-120)', () => {
           jobLabel: 'Background job',
           reason: 'This job stopped after repeated errors. What it finished is kept.',
           jobsPath: expect.stringMatching(/^\/w\/[^/]+\/settings\/jobs$/) as unknown,
+          // When they started it, in their zone (the workspace's, as they set none), and how far it got.
+          startedAt: expect.stringMatching(/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/) as unknown,
+          timeZone: 'UTC',
+          progress: { done: 0, total: 2 },
         },
       },
     ]);

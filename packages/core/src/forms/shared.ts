@@ -40,6 +40,8 @@ export interface FormRow {
   readonly ownerMemberId: string | null;
   /** The rotation that gives each new lead its owner (spec 0029 milestone 3); null when a member or nobody does. */
   readonly ownerRotationId: string | null;
+  /** Who is told about each new submission besides the lead's owner, in the list's order, members who left left out. */
+  readonly notifyMemberIds: readonly string[];
   readonly allowedOrigins: readonly string[];
   readonly requireSignature: boolean;
   readonly signingSecret: string;
@@ -82,6 +84,10 @@ const FORM_COLUMNS = {
   revision: forms.revision,
   ownerMemberId: forms.ownerMemberId,
   ownerRotationId: forms.ownerRotationId,
+  notifyMemberIds: sql<
+    string[]
+  >`array(select m.id::text from members m, unnest(${forms.notifyMemberIds}) with ordinality as n(id, position)
+    where m.workspace_id = ${forms.workspaceId} and m.id = n.id and m.status = 'active' order by n.position)`,
   allowedOrigins: forms.allowedOrigins,
   requireSignature: forms.requireSignature,
   signingSecret: forms.signingSecret,
@@ -95,6 +101,16 @@ export async function loadForm(tx: WorkspaceTx, formId: string, lock = false): P
   const query = tx.select(FORM_COLUMNS).from(forms).where(eq(forms.id, formId));
   const [row] = lock ? await query.for('update') : await query;
   return row;
+}
+
+/** Forms by id, in one statement (unknown ids left out). */
+export async function loadForms(tx: WorkspaceTx, formIds: readonly string[]): Promise<ReadonlyMap<string, FormRow>> {
+  if (formIds.length === 0) return new Map();
+  const rows = await tx
+    .select(FORM_COLUMNS)
+    .from(forms)
+    .where(inArray(forms.id, [...new Set(formIds)]));
+  return new Map(rows.map((row) => [row.id, row]));
 }
 
 /** A version as the services read it: its number, its document (parsed), who saved it last, and whether it is published. */

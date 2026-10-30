@@ -112,7 +112,7 @@ export async function savePublicProfile(
       throw refuseOn('SLUG_TAKEN', 'That handle is taken. Pick another.', 'handle');
     }
     if (pg?.code === '54000') {
-      // Only with 20 live pages: an old handle makes room for a new one (late trap #76, migration 0128).
+      // Only with 20 live pages: an old handle makes room for a new one (late trap #76, migration 0124).
       throw refuseOn('LIMIT_REACHED', 'You have link pages in 20 workspaces, the most one person can have.', 'handle');
     }
     if (pg?.code === '42501') throw refuse('FORBIDDEN', 'You’re not a member of this workspace.');

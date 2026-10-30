@@ -306,7 +306,7 @@ export const workspaceAddresses = auth.table(
  * it is unique across every workspace, and an old handle keeps finding its person (the public page then moves to
  * the current one); none is freed while its person exists, nor for 90 days after their account is deleted
  * (migration 0126: the person cleared, `releasedAt` stamped, then `crm_sweep_released_handles` frees it). At 20, a
- * person's oldest handle no page uses goes into that same hold to make room for a new one (migration 0128). Written
+ * person's oldest handle no page uses goes into that same hold to make room for a new one (migration 0124). Written
  * only through `crm_save_public_profile` (migration 0086) and `crm_ensure_public_profile`, which makes a new
  * membership's first one (migration 0115).
  */

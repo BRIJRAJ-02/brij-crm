@@ -23,6 +23,8 @@
 // one queued booking email kind, its retries Graphile's (5 tries); and
 // `crm_email` (the emails lane): one queued email, 8 tries with Graphile's
 // backoff, the try told to the task so its last records the email failed.
+// On the worker with the relay on, it also takes `crm_realtime_cutoff` (late
+// trap #41): removed members cut off the live channel, which the relay queues.
 import { QueuePayload } from '@crm/contracts';
 import type { Runner } from '@crm/core';
 import type { CalendarSyncInput, CalendarSyncOutcome, DailyCleanupInput, DailyCleanupReport } from '@crm/core/system';
@@ -30,6 +32,7 @@ import type { DigestMember, QueueConnection } from '@crm/db';
 import { Logger, run, type Runner as GraphileRunner, type Task } from 'graphile-worker';
 import * as z from 'zod';
 import { errorFields } from '../log.ts';
+import { CUTOFF_TASK, type CutOffTry } from '../realtime/cutoff.ts';
 import { BOOKING_MAIL_TASK } from './booking-mail.ts';
 import { EMAIL_TASK, EmailPayload, type EmailRun, type EmailTry } from './email.ts';
 import { NOTIFICATION_EMAIL_TASK } from './notification-email.ts';
@@ -182,6 +185,13 @@ export interface JobRunnersOptions {
    * retry.
    */
   readonly schedulingNotice?: (payload: unknown) => Promise<void>;
+  /**
+   * The durable cut off (late trap #41): one queued `crm_realtime_cutoff`
+   * (`runCutOff` with the worker's Centrifugo), told which try this is. With
+   * it, the light runner takes that task; it throws plainly for a retry. Only
+   * the worker passes it, beside its relay, which queues the rows.
+   */
+  readonly cutOff?: (payload: unknown, attempt: CutOffTry) => Promise<unknown>;
   /**
    * Hears every task call start and end (the worker's idle clock starts
    * again, spec 0008's sleep): a slice, or the daily task.
@@ -428,6 +438,21 @@ function emailTask(options: JobRunnersOptions, email: NonNullable<JobRunnersOpti
 }
 
 /**
+ * The cut off task: one try, told which it is. `runCutOff` logs its own
+ * failure with ids only and throws a plain message, so anything thrown is
+ * thrown on as a plain one for Graphile's backoff.
+ */
+function cutOffTask(cutOff: NonNullable<JobRunnersOptions['cutOff']>): Task {
+  return async (payload, helpers) => {
+    try {
+      await cutOff(payload, { attempt: helpers.job.attempts, maxAttempts: helpers.job.max_attempts });
+    } catch {
+      throw new Error('Cutting removed members off the live channel failed; the worker log has the workspace id.');
+    }
+  };
+}
+
+/**
  * Starts the two runners on the queue pool. Graphile's `run()` calls its
  * migrate step; its migrations ran before deploy (as the owner), so here that
  * step only reads Graphile's `migrations` table, the one right `crm_worker`
@@ -486,6 +511,7 @@ export async function startJobRunners(options: JobRunnersOptions): Promise<JobRu
       const email = lane === LANES.light ? options.email : undefined;
       const notificationEmail = lane === LANES.light ? options.notificationEmail : undefined;
       const schedulingNotice = lane === LANES.light ? options.schedulingNotice : undefined;
+      const cutOff = lane === LANES.light ? options.cutOff : undefined;
       runners.push(
         watch(
           await run({
@@ -527,6 +553,9 @@ export async function startJobRunners(options: JobRunnersOptions): Promise<JobRu
                       options.onActivity,
                     ),
                   }),
+              ...(cutOff === undefined
+                ? {}
+                : { [CUTOFF_TASK]: counted(cutOffTask(cutOff), inFlight, options.onActivity) }),
             },
             // The daily cleanup's line, and the digest's hourly one beside the email task that sends it.
             ...(daily === undefined && notificationEmail === undefined

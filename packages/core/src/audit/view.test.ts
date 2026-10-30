@@ -223,6 +223,12 @@ const FIXTURES: Record<ListedAuditAction, readonly AuditRow[]> = {
       after: { ownerMemberId: null, ownerRotationId: rotation },
     }),
   ],
+  'form.notify_changed': [
+    row('form.notify_changed', 'form', form, {
+      before: { notifyMemberIds: [ada] },
+      after: { notifyMemberIds: [ada, bea] },
+    }),
+  ],
   'booking.no_show': [row('booking.no_show', 'booking', booking)],
   'booking.no_show_undone': [row('booking.no_show_undone', 'booking', booking)],
   'booking.record_linked': [

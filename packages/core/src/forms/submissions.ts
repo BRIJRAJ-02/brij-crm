@@ -35,9 +35,10 @@ import { inWorkspace } from '../access/run.ts';
 import { attributeVisible, visibleRecords } from '../access/visibility.ts';
 import type { JobRegistry } from '../jobs/registry.ts';
 import { startJob } from '../jobs/service.ts';
+import { withdrawSubmissionNotices } from '../notifications/notify.ts';
 import { UNKNOWN_FORM } from './forms.ts';
 import { FORMS_PROCESS, requiredFieldFailure, siteFieldFailure } from './process.ts';
-import { canSeeForm, loadForm, loadVersions, millis } from './shared.ts';
+import { canSeeForm, loadForm, loadForms, loadVersions, millis } from './shared.ts';
 
 const { formSubmissionRecords, formSubmissions, records } = schema;
 
@@ -333,6 +334,51 @@ async function failureFor(
   return titles.length === 0 ? stored : requiredFieldFailure(titles);
 }
 
+/** What an inbox row or an email says of a submission its reader may open: the form, and the record it filed. */
+export interface SubmissionNotice {
+  readonly formId: string;
+  readonly formName: string;
+  /** The main record, when it was filed and the reader may see it. */
+  readonly record?: RecordRefDisplay;
+}
+
+/**
+ * The submissions among `ids` the reader may open, as `viewIn` decides it (the form, then the submission's main
+ * record, or `forms.manage` while it has none), each with its form's name and its record's display, in a few
+ * statements however many (the inbox's notifications of new submissions, spec 0023 AC-568). Absent: one they can't.
+ */
+export async function submissionNotices(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  ids: readonly string[],
+): Promise<ReadonlyMap<string, SubmissionNotice>> {
+  const unique = [...new Set(ids)];
+  if (unique.length === 0) return new Map();
+  const rows = await tx.select(COLUMNS).from(formSubmissions).where(inArray(formSubmissions.id, unique));
+  const forms = await loadForms(
+    tx,
+    rows.map((row) => row.formId),
+  );
+  const seenForm = rows.filter((row) => {
+    const form = forms.get(row.formId);
+    return form !== undefined && canSeeForm(scope.access, form);
+  });
+  const visible = await visibleRows(tx, scope, seenForm);
+  const names = await displays(
+    tx,
+    scope,
+    visible.flatMap((row) => (row.mainRecordId === null ? [] : [row.mainRecordId])),
+  );
+  return new Map(
+    visible.flatMap((row): [string, SubmissionNotice][] => {
+      const form = forms.get(row.formId);
+      if (form === undefined) return [];
+      const record = row.mainRecordId === null ? undefined : names.get(row.mainRecordId);
+      return [[row.id, { formId: form.id, formName: form.name, ...(record === undefined ? {} : { record }) }]];
+    }),
+  );
+}
+
 /** One submission in full, as the reader may see it, read inside an open transaction (NOT_FOUND for one they can't). */
 export async function viewIn(tx: WorkspaceTx, scope: EngineScope, submissionId: string): Promise<SubmissionView> {
   const [row] = await tx
@@ -596,8 +642,11 @@ export async function deleteSubmission(
   requirePermission(scope, 'forms.manage');
   await runWrite(
     scope,
-    async ({ tx }) => {
+    async (context) => {
+      const { tx } = context;
       const row = await lockedSubmission(tx, scope, input.submissionId);
+      // Its notifications go with it: the inboxes showing one hear of it.
+      await withdrawSubmissionNotices(context, sql`n.submission_id = ${row.id}`);
       await tx.delete(formSubmissions).where(eq(formSubmissions.id, row.id));
     },
     hooks,

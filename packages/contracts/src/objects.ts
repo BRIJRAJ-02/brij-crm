@@ -78,16 +78,22 @@ export const CreateObjectInput = WorkspaceScoped.extend({
 /** A new object. */
 export type CreateObjectInput = z.infer<typeof CreateObjectInput>;
 
-/** An object's names and look, changed (AC-224). Its API name never changes. */
+/**
+ * An object's names and look, changed (AC-224), and the attribute that names
+ * its records (`primaryAttributeId`, late trap #15): one of its own live
+ * attributes that `canNameRecords` takes, on a custom object only. Its API
+ * name never changes.
+ */
 export const UpdateObjectInput = WorkspaceScoped.extend({
   objectId: Uuid,
   singularName: ObjectName.optional(),
   pluralName: ObjectName.optional(),
   icon: ObjectIcon.optional(),
   hue: Hue.optional(),
+  primaryAttributeId: Uuid.optional(),
   mutationId: Uuid,
 });
-/** An object's names and look, changed. */
+/** An object's names, look and name attribute, changed. */
 export type UpdateObjectInput = z.infer<typeof UpdateObjectInput>;
 
 /** An object moved to `position` in the workspace's order (AC-225); the others close up around it. */
@@ -114,7 +120,9 @@ export type ObjectWriteInput = z.infer<typeof ObjectWriteInput>;
  * stores a `definitions` event. `create` refuses `SLUG_TAKEN` (on `apiSlug`),
  * `NAME_TAKEN` (on the name it names), `CONFIG_INVALID` (on its field),
  * `LIMIT_REACHED` and `ID_TAKEN`; `update` refuses `NAME_TAKEN` and
- * `CONFIG_INVALID`; `reorder` answers the whole list in its new order. A non
+ * `CONFIG_INVALID` (a name attribute that isn't one of the object's live,
+ * single value text like attributes, or any on a standard object, on
+ * `primaryAttributeId`); `reorder` answers the whole list in its new order. A non
  * member, or an object they can't see, gets 404 `NOT_FOUND`.
  */
 export const objectsContract = {

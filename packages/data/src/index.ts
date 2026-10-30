@@ -581,6 +581,8 @@ export {
   type GuessedType,
   type PickerType,
 } from '@crm/contracts/picker';
+/** Which attributes can name an object's records (late trap #15): the settings choice offers only these. */
+export { canNameRecords } from '@crm/contracts/record-name';
 export {
   MAX_PENDING_OPTIONS,
   withPendingOptions,
@@ -878,6 +880,8 @@ export interface ObjectChanges {
   readonly pluralName?: string;
   readonly icon?: ObjectSummary['icon'];
   readonly hue?: ObjectSummary['hue'];
+  /** The attribute that names its records (late trap #15): a custom object's, one `canNameRecords` takes. */
+  readonly primaryAttributeId?: string;
 }
 
 /** An attribute's default (spec 0012, AC-234): a value, the member creating the record, or today plus days. */
@@ -1428,8 +1432,25 @@ export function createDataLayer({
     const changed = await refreshHeld(objects, workspace, () => allObjects(workspace));
     if (!changed) return false;
     const after = await objects.get(workspace)?.catch(() => undefined);
-    if (archivedIds(before) !== archivedIds(after)) await refreshAttributes(workspace);
+    // A name attribute moved (late trap #15): which attribute is the primary changed too, and every record's name.
+    const renamed = primaries(before) !== primaries(after);
+    if (renamed || archivedIds(before) !== archivedIds(after)) await refreshAttributes(workspace);
+    if (renamed) renameRecords(workspace);
     return true;
+  };
+
+  /** Each object's name attribute in a held list, to tell when one moved (late trap #15). */
+  const primaries = (list: readonly ObjectSummary[] | undefined): string =>
+    (list ?? [])
+      .map((object) => object.id + (object.primaryAttributeId ?? ''))
+      .sort()
+      .join();
+
+  /** An object's records are named by another attribute: every held record and linked name is read again. */
+  const renameRecords = (workspace: string): void => {
+    void records?.then((layer) => {
+      layer.renamed(workspace);
+    });
   };
 
   /**
@@ -2615,6 +2636,11 @@ export function createDataLayer({
       readonly archives?: boolean;
       /** The workspace's objects as the answer already holds them (a move answers the whole new order). */
       readonly objectsOf?: (answer: T) => ObjectSummary[];
+      /**
+       * A new name attribute (late trap #15): the held attribute lists are read again (which one is the primary
+       * moved), and so is every record this tab holds, since each one's name changed.
+       */
+      readonly renames?: boolean;
     } = {},
   ) {
     const mutationId = mintId();
@@ -2626,10 +2652,11 @@ export function createDataLayer({
       if (known === undefined) objects.delete(workspace);
       else objects.set(workspace, Promise.resolve(known));
       usage.delete(workspace);
-      if (effects.archives === true) {
+      if (effects.archives === true || effects.renames === true) {
         dropAllAttributes(workspace);
         await refreshAttributes(workspace);
       }
+      if (effects.renames === true) renameRecords(workspace);
       onDefinitionsChange();
       return answer;
     } catch (error) {
@@ -3942,10 +3969,16 @@ export function createDataLayer({
             options,
           ),
         ),
-      /** Renames or restyles an object (AC-224), waiting for the server. Refusals: `NAME_TAKEN`, `CONFIG_INVALID`. */
+      /**
+       * Renames or restyles an object (AC-224), or names its records by another attribute (late trap #15), waiting
+       * for the server; a new name attribute reads the records this tab holds again. Refusals: `NAME_TAKEN`,
+       * `CONFIG_INVALID` (on its field, `primaryAttributeId` included).
+       */
       update: (workspace: string, objectId: string, changes: ObjectChanges): Promise<ObjectSummary> =>
-        writeObject(workspace, (mutationId, options) =>
-          api.objects.update({ workspace, objectId, ...changes, mutationId }, options),
+        writeObject(
+          workspace,
+          (mutationId, options) => api.objects.update({ workspace, objectId, ...changes, mutationId }, options),
+          { renames: changes.primaryAttributeId !== undefined },
         ),
       /** Moves an object to `position` in the workspace's order (AC-225), archived objects counted. */
       reorder: (workspace: string, objectId: string, position: number): Promise<ObjectSummary[]> =>
@@ -5397,7 +5430,10 @@ export function createDataLayer({
             call((options) => api.forms.publish({ workspace, formId, ...input, mutationId: mintId() }, options)),
           land: landForm(formId),
         }),
-      /** The settings that apply at once: name, address, owner (a member or a rotation), the sites that may post, signatures. */
+      /**
+       * The settings that apply at once: name, address, owner (a member or a rotation), who hears of each submission,
+       * the sites that may post, signatures.
+       */
       updateSettings: (
         workspace: string,
         formId: string,
@@ -5408,6 +5444,7 @@ export function createDataLayer({
           readonly ownerRotationId?: string | null;
           readonly allowedOrigins?: readonly string[];
           readonly requireSignature?: boolean;
+          readonly notifyMemberIds?: readonly string[];
         },
       ) =>
         formLists.write(workspace, {
@@ -5419,6 +5456,7 @@ export function createDataLayer({
                   formId,
                   ...settings,
                   allowedOrigins: settings.allowedOrigins === undefined ? undefined : [...settings.allowedOrigins],
+                  notifyMemberIds: settings.notifyMemberIds === undefined ? undefined : [...settings.notifyMemberIds],
                   mutationId: mintId(),
                 },
                 options,

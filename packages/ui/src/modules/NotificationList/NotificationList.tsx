@@ -1,6 +1,8 @@
 // The inbox's rows (spec 0038, AC-1169 to AC-1171, the inventory's
-// NotificationInbox): who did what ("Ada mentioned you"), the record, the
-// comment's start or the task's title, when, and an unread dot. Pressing a row
+// NotificationInbox): who did what ("Ada mentioned you"), or a form's new
+// submission ("Contact us got a new submission", spec 0023) under the form's
+// mark, the record, the comment's start or the task's title, when, and an
+// unread dot. Pressing a row
 // (or Enter) opens what it is about; each row's menu, and U and E on a focused
 // row, mark it read or unread, done or back in the inbox. Rows come through a
 // ListSource, and only the rows on screen draw.
@@ -9,7 +11,8 @@ import { useMemo, type KeyboardEvent, type ReactNode } from 'react';
 import { GridList, GridListItem, ListLayout, Virtualizer } from 'react-aria-components';
 import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
-import { RecordChip } from '../../atoms/RecordChip/RecordChip.tsx';
+import { Icon } from '../../atoms/Icon/Icon.tsx';
+import { ACTOR_ICONS, RecordChip } from '../../atoms/RecordChip/RecordChip.tsx';
 import { RelativeTime } from '../../atoms/RelativeTime/RelativeTime.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
@@ -27,7 +30,7 @@ import styles from './NotificationList.module.css';
 import { strings } from './strings.ts';
 
 /** Why a member was notified. */
-export type NotificationItemKind = 'mention' | 'reply' | 'task_assigned' | 'join_request';
+export type NotificationItemKind = 'mention' | 'reply' | 'task_assigned' | 'form_submission' | 'join_request';
 
 /** One notification, as the inbox shows it. */
 export interface NotificationItem {
@@ -43,6 +46,8 @@ export interface NotificationItem {
   readonly record?: RecordRefDisplay;
   /** A mention in a note, not a comment: the sentence says so. */
   readonly isNote?: boolean;
+  /** A form's new submission: the form's name, which its sentence names ("New submission to Contact us"). */
+  readonly formName?: string;
   /** The comment's start (mention tokens kept), or the task's title. */
   readonly excerpt: string;
 }
@@ -176,7 +181,11 @@ export function NotificationList({
       );
     }
     const sentence =
-      item.isNote === true ? strings.mentionInNote(item.actor.name) : strings.sentence[item.kind](item.actor.name);
+      item.kind === 'form_submission'
+        ? strings.submission(item.formName ?? strings.someForm)
+        : item.isNote === true
+          ? strings.mentionInNote(item.actor.name)
+          : strings.sentence[item.kind](item.actor.name);
     return (
       <GridListItem
         id={row.id}
@@ -188,14 +197,26 @@ export function NotificationList({
       >
         <RowShown index={row.index} onShown={onShown} />
         <span className={styles.dot} data-unread={!item.isRead || undefined} aria-hidden="true" />
-        <Avatar
-          name={item.actor.name}
-          id={item.actor.id ?? item.actor.name}
-          size="sm"
-          isDecorative
-          {...(item.actor.imageSrc === undefined ? {} : { src: item.actor.imageSrc })}
-          {...(item.actor.hue === undefined ? {} : { hue: item.actor.hue })}
-        />
+        {item.actor.type === 'member' ? (
+          <Avatar
+            name={item.actor.name}
+            id={item.actor.id ?? item.actor.name}
+            size="sm"
+            isDecorative
+            {...(item.actor.imageSrc === undefined ? {} : { src: item.actor.imageSrc })}
+            {...(item.actor.hue === undefined ? {} : { hue: item.actor.hue })}
+          />
+        ) : (
+          // Not a person (a form, the system): its mark on the soft gray tile, so it reads beside people's tints.
+          <Avatar
+            name={item.actor.name}
+            size="sm"
+            shape="square"
+            hue="gray"
+            mark={<Icon name={ACTOR_ICONS[item.actor.type]} size="xs" />}
+            isDecorative
+          />
+        )}
         <span className={styles.main}>
           <span className={styles.line}>
             {!item.isRead && <VisuallyHidden>{`${strings.unread} `}</VisuallyHidden>}

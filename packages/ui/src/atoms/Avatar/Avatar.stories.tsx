@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, waitFor } from 'storybook/test';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
+import { Icon } from '../Icon/Icon.tsx';
 import { Avatar, AvatarStack } from './Avatar.tsx';
 
 const meta = {
@@ -52,6 +53,23 @@ export const Sizes: Story = {
   play: async ({ canvasElement }) => {
     const shown = [...canvasElement.querySelectorAll('[role="img"]')].map((avatar) => avatar.textContent);
     await expect(shown).toEqual(['M', 'J', 'PR', 'LM', 'AL', 'AT', 'GH', 'N', 'AL', 'G', 'I']);
+  },
+};
+
+/** A mark in place of initials, for a face that isn't a person: a form, the system, on the neutral square. */
+export const Mark: Story = {
+  render: () => (
+    <Stage>
+      <Avatar name="Contact us" mark={<Icon name="clipboard-list" size="xs" />} shape="square" hue="gray" size="xs" />
+      <Avatar name="Contact us" mark={<Icon name="clipboard-list" size="xs" />} shape="square" hue="gray" size="sm" />
+      <Avatar name="System" mark={<Icon name="server" size="sm" />} shape="square" hue="gray" size="md" />
+      <Avatar name="System" mark={<Icon name="server" size="md" />} shape="square" hue="gray" size="lg" />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    // Named as the thing it stands for, with no initials drawn.
+    const [form] = canvas.getAllByRole('img', { name: 'Contact us' });
+    await expect(form).not.toHaveTextContent(/C/u);
   },
 };
 

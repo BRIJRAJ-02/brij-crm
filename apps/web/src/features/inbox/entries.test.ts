@@ -1,6 +1,7 @@
 import type { NotificationView } from '@crm/data';
 import { describe, expect, it } from 'vitest';
-import { inboxSearch, notificationKind, targetOf, toNotificationItem } from './entries.ts';
+import { targetOf, toNotificationItem } from './entries.ts';
+import { inboxSearch, notificationKind } from './search.ts';
 
 const ID = '11111111-1111-4111-8111-111111111111';
 const OBJECT = '22222222-2222-4222-8222-222222222222';
@@ -30,6 +31,7 @@ describe('inboxSearch', () => {
 
   it('maps the address kind to the data layer kind', () => {
     expect(notificationKind('assignments')).toBe('task_assigned');
+    expect(notificationKind('submissions')).toBe('form_submission');
     expect(notificationKind(undefined)).toBeUndefined();
   });
 });
@@ -56,6 +58,13 @@ describe('targetOf', () => {
       taskId: ID,
     });
     expect(targetOf('acme', mention, new Map())).toBeUndefined();
+  });
+
+  it('opens a new submission on its form’s Submissions tab, even with no record', () => {
+    const { record: _record, threadId: _thread, ...rest } = mention;
+    expect(
+      targetOf('acme', { ...rest, kind: 'form_submission', submissionId: THREAD, formId: OBJECT, excerpt: '' }, slugs),
+    ).toEqual({ kind: 'href', href: `/w/acme/captures/forms/${OBJECT}?tab=submissions&submission=${THREAD}` });
   });
 });
 
