@@ -3,7 +3,7 @@
 // Main task: see what is planned and Add time off; each row's menu edits or deletes it (Delete asks first, AC-1445).
 // Leaves out: a colleague's reason, note and stand in for someone who may only See them ("Away" and the days alone), and the Team week (a follow up).
 import type { DataLayer, TimeOffEntry, TimeOffSaved } from '@crm/data';
-import { useTimeOff } from '@crm/data/react';
+import { useScheduling } from '@crm/data/react';
 import {
   Button,
   Card,
@@ -80,7 +80,7 @@ function Loaded({
 }: TimeOffCardProps & { readonly store: NonNullable<ReturnType<DataLayer['scheduling']['loaded']>>['timeOff'] }) {
   const { locale, timeZone } = useFormatSettings();
   const held = store.held(slug, member?.id);
-  const state = useTimeOff(held);
+  const state = useScheduling(held);
   const [isAdding, setAdding] = useState(false);
   const [editing, setEditing] = useState<TimeOffEntry | undefined>(undefined);
   const [deleting, setDeleting] = useState<TimeOffEntry | undefined>(undefined);

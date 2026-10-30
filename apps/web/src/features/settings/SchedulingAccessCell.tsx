@@ -14,7 +14,7 @@ import type {
   SchedulingLevel,
 } from '@crm/data';
 import { ROLE_LABELS } from '@crm/data';
-import { useDelegations } from '@crm/data/react';
+import { useScheduling } from '@crm/data/react';
 import {
   Avatar,
   Button,
@@ -126,7 +126,7 @@ function Reach({
   member,
 }: SchedulingAccessCellProps & { readonly store: SchedulingAccessStore }) {
   const held = store.delegations(slug, 'everyone');
-  const state = useDelegations(held);
+  const state = useScheduling(held);
   const members = useMemberList(data, slug);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [isOpen, setOpen] = useState(false);
