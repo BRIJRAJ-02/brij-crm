@@ -1,6 +1,6 @@
 // The settings journey's edges (flow pass, 30 October 2026): a new attribute named like an archived one is made
-// with a free API name, or the archived one restored instead; Hide from sidebar says so with Undo;
-// Favourites stays while empty, saying how to fill it; archiving an object or an attribute toasts with Undo; an
+// with a free API name, or the archived one restored instead; Hide from sidebar says so with Undo, and the
+// sidebar draws no Favourites (owner, 30 October 2026); archiving an object or an attribute toasts with Undo; an
 // object's settings open its records; and the Invite dialog copies the invite link, turning it on when off.
 import { randomUUID } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
@@ -70,12 +70,12 @@ test.describe('the settings journey’s edges', () => {
     await expect(page.getByText('Price added.')).toBeVisible();
   });
 
-  test('Hide from sidebar says so with Undo, and Favourites stays while empty', async ({ page }) => {
+  test('Hide from sidebar says so with Undo, and the sidebar draws no Favourites', async ({ page }) => {
     test.setTimeout(120_000);
     const slug = await fresh(page, 'sidehide');
     await page.goto(`/w/${slug}/home`);
-    await expect(nav(page).getByRole('button', { name: 'Favourites', exact: true })).toBeVisible();
-    await expect(nav(page).getByText('Star a view or record to pin it here.')).toBeVisible();
+    await expect(nav(page).getByRole('button', { name: 'Records', exact: true })).toBeVisible();
+    await expect(nav(page).getByRole('button', { name: 'Favourites', exact: true })).toHaveCount(0);
 
     const deals = nav(page).getByRole('link', { name: 'Deals', exact: true });
     await deals.hover();

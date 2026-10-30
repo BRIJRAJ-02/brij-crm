@@ -41,7 +41,6 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { BoardScreen } from '../board/BoardScreen.tsx';
 import { planBoard } from '../board/plan.ts';
 import { strings as boardStrings } from '../board/strings.ts';
-import { FavouriteButton } from '../workspace/FavouriteButton.tsx';
 import type { ViewRequest } from '../command/commands.ts';
 import { RecordsScreen } from '../workspace/RecordsScreen.tsx';
 import { strings as tableStrings } from '../workspace/strings.ts';
@@ -806,7 +805,6 @@ export function ViewScreen(props: ViewScreenProps) {
   // The view bar's end before View settings: the lock line. View settings is the bar's one button, then Table or
   // Board (the owner, 21 and 22 October 2026: the view's actions live in the switcher's menu, as in Attio, and
   // Add attribute under View settings).
-  // The favourite star follows (spec 0034, AC-934).
   const viewActions: ReactNode =
     view === undefined ? undefined : (
       <>
@@ -817,7 +815,6 @@ export function ViewScreen(props: ViewScreenProps) {
               : strings.lockedBy(memberName(members, view.lockedBy))}
           </Callout>
         )}
-        <FavouriteButton data={data} slug={slug} kind="view" id={view.id} />
         <TransferMenu
           slug={slug}
           object={object}

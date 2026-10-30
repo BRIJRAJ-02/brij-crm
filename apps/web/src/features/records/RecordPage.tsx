@@ -61,7 +61,6 @@ import { OpenTasksCard } from '../tasks/OpenTasksCard.tsx';
 import { strings as taskStrings } from '../tasks/strings.ts';
 import { TaskDialog } from '../tasks/TaskDialog.tsx';
 import { TasksTab } from '../tasks/TasksTab.tsx';
-import { FavouriteButton } from '../workspace/FavouriteButton.tsx';
 import { objectHref } from '../workspace/objects.ts';
 import { strings as workspaceStrings } from '../workspace/strings.ts';
 import { useCan, WorkspacePage } from '../workspace/WorkspacePage.tsx';
@@ -864,7 +863,6 @@ function RecordScreen({
                       }
                     : {})}
                 >
-                  <FavouriteButton data={data} slug={slug} kind="record" id={recordId} />
                   <CopyButton
                     variant="ghost"
                     value={pageLink}

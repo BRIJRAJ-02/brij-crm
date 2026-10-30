@@ -1,7 +1,7 @@
 // Brief
 // Purpose: the Customise sidebar dialog for the open workspace (spec 0034, AC-933), from a section's menu or Settings › Preferences.
 // Main task: show or hide each page and object, or reset the sidebar to its default after a confirm.
-// Leaves out: the order (the sidebar's grips) and favourites (removed from their own menu); it loads lazily, outside the first load.
+// Leaves out: the order (the sidebar's grips); it loads lazily, outside the first load.
 import type { DataLayer, NavEntry, NavState, ObjectSummary } from '@crm/data';
 import { navKey } from '@crm/data/navigation';
 import { CustomiseSidebar, type CustomiseSidebarItem, type CustomiseSidebarSection } from '@crm/ui';
@@ -44,8 +44,7 @@ export function CustomiseSidebarDialog({
     }
     return [];
   };
-  // Your work (Tasks), then each section in the member's order; favourites are removed, never hidden, so they aren't
-  // listed, and a section with nothing to switch is left out.
+  // Your work (Tasks), then each section drawn in the member's order; a section with nothing to switch is left out.
   const top: CustomiseSidebarSection = {
     id: 'top',
     title: strings.yourWork,
@@ -53,9 +52,11 @@ export function CustomiseSidebarDialog({
   };
   const sections: CustomiseSidebarSection[] = [
     top,
-    ...drawnSections(nav, universe)
-      .filter((section) => section.key !== 'favourites')
-      .map((section) => ({ id: section.key, title: section.title, items: section.entries.flatMap(rowOf) })),
+    ...drawnSections(nav, universe).map((section) => ({
+      id: section.key,
+      title: section.title,
+      items: section.entries.flatMap(rowOf),
+    })),
   ].filter((section) => section.items.length > 0);
   return (
     <CustomiseSidebar

@@ -8,7 +8,7 @@ export const strings = {
   /** The reset's confirm: the question, what it does, Cancel, then the verb. */
   resetQuestion: 'Reset your sidebar?',
   resetText:
-    'This puts back the default order, shows every item and opens every section. Your favourites stay, and the sidebar keeps its width. You can’t undo this.',
+    'This puts back the default order, shows every item and opens every section. The sidebar keeps its width. You can’t undo this.',
   resetConfirm: 'Reset sidebar',
   resetting: 'Resetting',
   resetFailed: 'Your sidebar wasn’t reset. Try again.',

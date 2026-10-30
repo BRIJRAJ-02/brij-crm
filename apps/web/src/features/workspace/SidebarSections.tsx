@@ -1,21 +1,12 @@
 // Brief
-// Purpose: the main sidebar's sections in the member's order (spec 0034): Favourites, Records, Lists and Scheduling.
-// Main task: go to a favourite, an object or a Scheduling page; fold, reorder and hide (with Undo), and remove a favourite, each kept for the member on every device.
-// Leaves out: the workspace menu and the pages above the sections (the frame's), and the foot (Trash, Settings, Help).
-import type {
-  DataLayer,
-  NavEntry,
-  NavFavourite,
-  NavOperation,
-  NavSectionKey,
-  NavState,
-  NavUniverse,
-  ObjectSummary,
-} from '@crm/data';
+// Purpose: the main sidebar's sections in the member's order (spec 0034): Records, Lists and Scheduling.
+// Main task: go to an object or a Scheduling page; fold, reorder and hide (with Undo), each kept for the member on every device.
+// Leaves out: the workspace menu and the pages above the sections (the frame's), the foot (Trash, Settings, Help), and
+// Favourites (no longer drawn, owner 30 October 2026).
+import type { DataLayer, NavEntry, NavOperation, NavSectionKey, NavState, NavUniverse, ObjectSummary } from '@crm/data';
 import { moveIndexFor, navKey, sectionOrder } from '@crm/data/navigation';
 import { Menu, MenuItem, NavGroup, NavItem, NavSection, type Toasts } from '@crm/ui';
-import { recordHref } from '../records/details.ts';
-import { objectHref, viewHref } from './objects.ts';
+import { objectHref } from './objects.ts';
 import { drawnSections, PAGE_LINKS, prefsOf, sectionMoveIndex, type SidebarPage } from './sidebar.ts';
 import { strings } from './strings.ts';
 
@@ -39,8 +30,8 @@ export interface SidebarSectionsProps {
 
 /**
  * The sections in the member's order (AC-931, AC-932, AC-933): each folds from its label, moves by its grip or its
- * menu (Move up, Move down, Customise sidebar), and its items reorder by their grips and hide or leave the
- * favourites from their menus, each change kept for the member.
+ * menu (Move up, Move down, Customise sidebar), and its items reorder by their grips and hide from their menus,
+ * each change kept for the member.
  */
 export function SidebarSections({
   data,
@@ -71,8 +62,7 @@ export function SidebarSections({
     });
   };
   const objectOf = new Map((objects ?? []).map((object) => [object.id, object]));
-  const favouriteOf = new Map(nav.favourites.map((favourite) => [navKey(favourite), favourite]));
-  const context: ItemContext = { slug, objectOf, favouriteOf, currentObject, currentPage, change, hideObject };
+  const context: ItemContext = { slug, objectOf, currentObject, currentPage, change, hideObject };
   const sections = drawnSections(nav, universe);
   const order = sectionOrder(prefsOf(nav));
   const drawn = sections.map((section) => section.key);
@@ -94,7 +84,6 @@ export function SidebarSections({
             title={section.title}
             isLoading={section.key === 'records' && objects === undefined}
             {...(section.key === 'records' ? { emptyLabel: strings.noObjects } : {})}
-            {...(section.key === 'favourites' ? { emptyLabel: strings.noFavourites } : {})}
             isFolded={section.isFolded}
             onFoldChange={(isFolded) => {
               change({ op: 'fold', section: section.key, folded: isFolded });
@@ -147,7 +136,7 @@ export function SidebarSections({
   );
 }
 
-/** An item's one menu: Hide from sidebar for a page or an object, Remove from favourites for a favourite. */
+/** An item's one menu: Hide from sidebar for a page or an object. */
 export function itemMenu(name: string, label: string, onAction: () => void) {
   return (
     <Menu label={strings.itemOptions(name)} onAction={onAction}>
@@ -160,18 +149,14 @@ export function itemMenu(name: string, label: string, onAction: () => void) {
 interface ItemContext {
   readonly slug: string;
   readonly objectOf: ReadonlyMap<string, ObjectSummary>;
-  readonly favouriteOf: ReadonlyMap<string, NavFavourite>;
   readonly currentObject: string | undefined;
   readonly currentPage: SidebarPage | undefined;
   readonly change: (op: NavOperation) => void;
   readonly hideObject: (object: ObjectSummary) => void;
 }
 
-/** One entry as its NavItem: an object, a Scheduling page, or a favourite view or record; nothing it can't draw. */
-function itemOf(
-  entry: NavEntry,
-  { slug, objectOf, favouriteOf, currentObject, currentPage, change, hideObject }: ItemContext,
-) {
+/** One entry as its NavItem: an object or a Scheduling page; nothing it can't draw. */
+function itemOf(entry: NavEntry, { slug, objectOf, currentObject, currentPage, change, hideObject }: ItemContext) {
   const key = navKey(entry);
   const hide = () => {
     change({ op: 'hide', kind: entry.kind, id: entry.id });
@@ -211,32 +196,6 @@ function itemOf(
       </NavItem>,
     ];
   }
-  if (entry.kind === 'view' || entry.kind === 'record') {
-    const favourite = favouriteOf.get(key);
-    if (favourite === undefined) return [];
-    const name = favourite.label === '' ? strings.unnamedRecord(favourite.objectSingularName) : favourite.label;
-    const unstar = () => {
-      change({ op: 'unstar', kind: favourite.kind, id: favourite.id });
-    };
-    return [
-      <NavItem
-        key={key}
-        id={key}
-        menu={itemMenu(name, strings.removeFavourite, unstar)}
-        icon={favourite.icon}
-        hue={favourite.hue}
-        href={
-          favourite.kind === 'view'
-            ? viewHref(slug, favourite.objectSlug, favourite.id)
-            : recordHref(slug, favourite.objectSlug, favourite.id)
-        }
-        // A view says which object it shows; a record's name beside its object's tile is enough (AC-925).
-        {...(favourite.kind === 'view' ? { meta: favourite.objectName } : {})}
-      >
-        {name}
-      </NavItem>,
-    ];
-  }
-  // Lists (#51) have no page yet: nothing to draw.
+  // Views and records (the favourites, which `drawnSections` leaves out) and lists (#51) aren't drawn.
   return [];
 }
