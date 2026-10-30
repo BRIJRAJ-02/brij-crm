@@ -12,7 +12,7 @@ export const strings = {
   newForm: 'New form',
   newButton: 'New',
   noForms: 'No forms yet',
-  noFormsText: 'A form collects submissions from a link or your site, and can add each one to your CRM.',
+  noFormsText: 'Share a form by link or on your site.',
   failedTitle: 'Forms didn’t load',
   failedText: 'Something went wrong. Try again.',
   formFailedTitle: 'This form didn’t load',
