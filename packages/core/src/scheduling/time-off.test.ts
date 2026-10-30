@@ -285,6 +285,8 @@ describe('time off for someone else (AC-1282, AC-1285, AC-1286, AC-1287)', () =>
         .sort(),
     ).toEqual([one.bookingId, two.bookingId].sort());
     expect(listed.every((each) => each.status === 'confirmed')).toBe(true);
+    // No stand in named: Reassign goes to the next in the group.
+    expect(listed.some((each) => each.hostAwayStandinId !== undefined)).toBe(false);
     // Audited once, naming the doctor, with the reason code and never the note.
     const rows = await w.audit('time_off.created');
     expect(rows).toHaveLength(1);
@@ -309,6 +311,15 @@ describe('time off for someone else (AC-1282, AC-1285, AC-1286, AC-1287)', () =>
     );
     expect(today.members.find((each) => each.memberId === doctor)?.away).toBe(true);
     expect(today.members.find((each) => each.memberId === manager)?.away).toBeUndefined();
+    // Named, the stand in rides on each flagged booking for the host and for Manage over them.
+    await updateTimeOff(w.as(doctor), { ...saved.entry, standinMemberId: manager });
+    for (const reader of [w.as(doctor), w.as(manager)]) {
+      const again = await listWorkspaceBookings(reader, { when: 'upcoming', hosts: 'all' }, NOW);
+      expect(again.filter((each) => each.hostAway === true).map((each) => each.hostAwayStandinId)).toEqual([
+        manager,
+        manager,
+      ]);
+    }
   });
 
   it('shows See "Away" and the dates alone and refuses a change; no reach finds nothing', async () => {

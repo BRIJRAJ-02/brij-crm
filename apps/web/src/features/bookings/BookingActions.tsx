@@ -98,10 +98,10 @@ function dayOf(instant: string, zone: string): string {
 }
 
 /**
- * A dialog the card's buttons open: Reschedule, Cancel booking (a confirm), Reassign (drawn by its screen), or Link
- * to a record.
+ * A dialog the card's buttons open: Reschedule, Cancel booking (a confirm), Reassign and Host away's Reassign (both
+ * drawn by its screen), or Link to a record.
  */
-export type BookingAsk = 'move' | 'cancel' | 'reassign' | 'link';
+export type BookingAsk = 'move' | 'cancel' | 'reassign' | 'reassignAway' | 'link';
 
 /**
  * The card's changes in its footer, one row as Google Calendar's and Cal.com's event cards hold them (Join, before

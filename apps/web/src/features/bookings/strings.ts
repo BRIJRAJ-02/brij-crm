@@ -336,6 +336,18 @@ export const strings = {
   reassign: 'Reassign',
   reassigning: 'Reassigning',
   reassigned: 'Reassigned. The guest and both hosts are emailed.',
+  /** Reassign from Host away (spec 0037, AC-1284): to the time off's stand in, else the next in the group. */
+  awayReassignTitle: (page: string, visitor: string) => `Reassign ${page} with ${visitor}?`,
+  awayToStandin: (standin: string, host: string) =>
+    `${standin} takes it, as ${host}’s stand in while they’re away. The guest, ${standin} and ${host} are emailed.`,
+  awayStandinOutside: (host: string, rotation: string) =>
+    `${host}’s stand in isn’t in ${rotation}, so whoever is free then and next in it takes it. The guest and both hosts are emailed.`,
+  awayToNext: (rotation: string) =>
+    `Whoever is free then and next in ${rotation} takes it. The guest and both hosts are emailed.`,
+  awayStandinUnknown: (host: string) =>
+    `${host}’s stand in takes it while they’re away. The guest and both hosts are emailed.`,
+  theGroup: 'its round robin group',
+  reassignedTo: (member: string) => `Reassigned to ${member}. The guest and both hosts are emailed.`,
   assignedIn: (rotation: string) => `Assigned in ${rotation}`,
   assignedLine: (member: string, why: string) => `${member} ${why}`,
   noLongerCounts: (line: string) => `${line} (no longer counts)`,

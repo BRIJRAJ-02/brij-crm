@@ -297,6 +297,11 @@ export const BookingListItem = BookingView.extend({
   needsHost: z.boolean(),
   /** Its host has time off over it (spec 0037, AC-1285): "Host away", for someone to move or reassign it. */
   hostAway: z.boolean().optional(),
+  /**
+   * With Host away, the stand in that time off names (spec 0037, AC-1284), for Reassign to hand it to: only for the
+   * host and Manage over them, and only while the stand in is still an active non guest member.
+   */
+  hostAwayStandinId: Uuid.optional(),
   /** Marked as a no show after it (spec 0043, AC-1613). */
   noShow: z.boolean().optional(),
   /**

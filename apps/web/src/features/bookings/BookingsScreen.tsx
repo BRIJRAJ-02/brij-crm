@@ -82,6 +82,7 @@ import { instantOf, spanNames, type DrawnSpan } from './span.ts';
 import type { BookingsSearch } from './search.ts';
 import { useCan, useMyAccess } from '../workspace/WorkspacePage.tsx';
 import { assignedItems } from './assignment.ts';
+import { AwayReassignDialog } from './AwayReassignDialog.tsx';
 import { ReassignDialog } from './ReassignDialog.tsx';
 import { BookingDialog, useBookingActions, type BookingAsk, type HostBookingActions } from './BookingActions.tsx';
 import { strings } from './strings.ts';
@@ -330,6 +331,8 @@ function BookingCard({
   const me = useMyAccess()?.memberId;
   const isColleagues = me !== undefined && booking.hostMemberId !== me && booking.hostName !== '';
   const [reassigning, setReassigning] = useState(false);
+  // Host away's Reassign (spec 0037, AC-1284): to the stand in, else the next in the group, after a confirm.
+  const [awayReassigning, setAwayReassigning] = useState(false);
   const [isChatOpen, setChatOpen] = useState(false);
   const chatId = useId();
   const footer = useBookingActions({
@@ -368,6 +371,9 @@ function BookingCard({
                 action: <Button variant="ghost" icon="x" label={strings.unlink(record.name)} onPress={unlink} />,
               }),
         };
+  // Only while it hasn't started: a reassign moves an upcoming booking only.
+  const canReassignAway =
+    actions !== undefined && canReassign && seats.length > 0 && Date.parse(booking.startsAt) > now.getTime();
   const hasNotice =
     isSeeOnly ||
     booking.hostRemoved === true ||
@@ -383,7 +389,25 @@ function BookingCard({
         </Callout>
       )}
       {booking.hostAway === true && isConfirmed && !booking.needsHost && (
-        <Callout tone="warning" title={strings.hostAway}>
+        <Callout
+          tone="warning"
+          title={strings.hostAway}
+          {...(canReassignAway
+            ? {
+                actions: (
+                  <Button
+                    icon="users-round"
+                    onPress={() => {
+                      if (onAsk !== undefined) onAsk('reassignAway', seats);
+                      else setAwayReassigning(true);
+                    }}
+                  >
+                    {strings.reassignAction}
+                  </Button>
+                ),
+              }
+            : {})}
+        >
           {strings.hostAwayText}
         </Callout>
       )}
@@ -525,6 +549,20 @@ function BookingCard({
           }}
           onReassigned={() => {
             setReassigning(false);
+            setReads((count) => count + 1);
+          }}
+        />
+      )}
+      {awayReassigning && actions !== undefined && (
+        <AwayReassignDialog
+          booking={booking}
+          seats={seats}
+          actions={actions}
+          onClose={() => {
+            setAwayReassigning(false);
+          }}
+          onReassigned={() => {
+            setAwayReassigning(false);
             setReads((count) => count + 1);
           }}
         />
@@ -1600,9 +1638,24 @@ function WeekView(props: BookingsCalendarScreenProps) {
           }}
         />
       )}
+      {lastAsked?.kind === 'reassignAway' && asking === lastAsked && props.actions !== undefined && (
+        <AwayReassignDialog
+          key={lastAsked.opening}
+          booking={byBooking.get(lastAsked.booking.id) ?? lastAsked.booking}
+          seats={lastAsked.seats ?? []}
+          actions={props.actions}
+          onClose={() => {
+            dismiss(lastAsked);
+          }}
+          onReassigned={() => {
+            done(lastAsked);
+          }}
+        />
+      )}
       {lastAsked !== undefined &&
         lastAsked.kind !== 'remove' &&
         lastAsked.kind !== 'reassign' &&
+        lastAsked.kind !== 'reassignAway' &&
         props.actions !== undefined && (
           <BookingDialog
             key={lastAsked.opening}

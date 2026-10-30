@@ -154,22 +154,41 @@ async function seeOnlyOf(
 
 /**
  * Whether the booking's host has time off over it (spec 0037, AC-1285): "Host away", flagged for someone to move or
- * reassign it, never moved by itself. Plain comparisons on the stored ends reach the blocks' btree index.
+ * reassign it, never moved by itself. Null when no time off covers it; else the stand in that time off names, when
+ * they are still an active non guest member, or '' with none (the latest begun entry naming one wins, as `awayAt`
+ * reads it). Plain comparisons on the stored ends reach the blocks' btree index.
  */
-const hostAwayColumn = sql<boolean>`exists (
-  select 1 from booking_time_blocks a
+const hostAwayColumn = sql<string | null>`(
+  select coalesce(s.id::text, '') from booking_time_blocks a
+  left join members s on s.workspace_id = a.workspace_id and s.id = a.standin_member_id
+    and s.status = 'active' and s.role::text <> 'guest'
   where a.workspace_id = ${bookings.workspaceId} and a.member_id = ${bookings.hostMemberId}
     and a.repeat = 'once' and a.kind = 'away'
     and a.ends_at > ${bookings.startsAt} and a.starts_at < ${bookings.endsAt}
+  order by (s.id is null), a.starts_at desc, a.id
+  limit 1
 )`;
 
 /**
  * Whom a reader may see as away (spec 0037, AC-1286): themself, and hosts in their scheduling reach. A page's owner or
- * a co-host without reach over the host sees the booking, never the host's time off.
+ * a co-host without reach over the host sees the booking, never the host's time off. The stand in, as the time off
+ * entry itself shows it, only to the host and to Manage over them.
  */
-function awayShownTo(reader: BookingReader): (hostId: string) => boolean {
-  return (hostId) =>
-    reader.admin || reader.everyone !== undefined || hostId === reader.member || (reader.sees ?? []).includes(hostId);
+interface AwayShown {
+  readonly away: (hostId: string) => boolean;
+  readonly standin: (hostId: string) => boolean;
+}
+
+function awayShownTo(reader: BookingReader): AwayShown {
+  return {
+    away: (hostId) =>
+      reader.admin || reader.everyone !== undefined || hostId === reader.member || (reader.sees ?? []).includes(hostId),
+    standin: (hostId) =>
+      reader.admin ||
+      reader.everyone === 'manage' ||
+      hostId === reader.member ||
+      (reader.manages ?? []).includes(hostId),
+  };
 }
 
 /** A booking row and its page as Bookings shows it. */
@@ -187,16 +206,23 @@ function itemOf(
     readonly location: unknown;
     readonly hostStatus?: string | null;
     readonly hostName: string | null;
-    readonly hostAway?: boolean;
+    readonly hostAway?: string | null;
   },
   seen: ReadonlySet<string>,
   linked: ReadonlyMap<string, RecordRefDisplay>,
   answersOf: (stored: unknown) => BookingListItem['answers'],
   seeOnly: ReadonlySet<string> = new Set(),
-  showsAway: (hostId: string) => boolean = () => false,
+  shows: AwayShown = { away: () => false, standin: () => false },
 ): BookingListItem {
   const place = BookingLocation.safeParse(location);
-  const away = hostAway === true && row.status === 'confirmed' && showsAway(row.hostMemberId) ? { hostAway: true } : {};
+  const isAway =
+    hostAway !== undefined && hostAway !== null && row.status === 'confirmed' && shows.away(row.hostMemberId);
+  const away = isAway
+    ? {
+        hostAway: true,
+        ...(hostAway !== '' && shows.standin(row.hostMemberId) ? { hostAwayStandinId: hostAway } : {}),
+      }
+    : {};
   // See over the host (spec 0037, AC-1262): the guest's name, the page's title, the time and status only.
   if (seeOnly.has(row.id)) {
     return {
