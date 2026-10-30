@@ -25,6 +25,10 @@ export const strings = {
   choose: (name: string) => `Choose ${name}…`,
   search: (name: string) => `Search ${name}`,
   addAnother: 'Add another',
+  /** A pasted number whose one separator reads two ways ("1.200"): which did they mean. */
+  ambiguousNumber: (asDecimal: string, asGrouped: string) => `Is it ${asDecimal} or ${asGrouped}?`,
+  /** Under a number or amount field, what the typed text will save as, when it reads differently ("1.2k"). */
+  readsAs: (shown: string) => `Saves as ${shown}.`,
   /** A record picker's last row when the search found none by that name: makes it and picks it. */
   createNamed: (label: string) => `Create "${label}"`,
   /** A record picker's last row when the far object needs more than a name: opens its full form. */

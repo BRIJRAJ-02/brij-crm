@@ -5,7 +5,7 @@
 // each editor and each type's `fromText` call these. Pure, tested in Node.
 import { CURRENCY_CODES, toCanonicalDecimal } from '@crm/contracts/values';
 import { CURRENCY_SYMBOLS, codeOfSymbol } from '../fields/Currency/symbols.ts';
-import { parseLocaleDecimal } from './decimal.ts';
+import { decimalSigns, parseLocaleDecimal } from './decimal.ts';
 import { parseDateText } from './parse-date-text.ts';
 
 const CODES: ReadonlySet<string> = new Set<string>(CURRENCY_CODES);
@@ -130,6 +130,52 @@ function parseLooseDecimal(digits: string, places: number): string | undefined {
   const [, whole = '', fraction = ''] = match;
   if (fraction.length > places + 4) return undefined;
   return fraction === '' ? whole : `${whole}.${fraction}`;
+}
+
+/** The two ways an ambiguous number reads: the sign as the point (1.2) and as a thousands mark (1,200), canonical. */
+export interface AmbiguousAmount {
+  readonly asDecimal: string;
+  readonly asGrouped: string;
+}
+
+/**
+ * Whether pasted text could mean two numbers: its only separator is the
+ * language's decimal sign, with exactly three digits after it and a whole part
+ * that isn't 0 ("1.200" in US English is 1.2 here but 1,200 in Germany; "1,200"
+ * in German the other way round). A suffix ("1.200k") or a whole part of 0
+ * ("0.125") reads one way only. Undefined when it reads one way.
+ */
+export function ambiguousAmount(text: string, locale: string): AmbiguousAmount | undefined {
+  const plain = cleanText(text);
+  if (/\d\s*(?:k|mm|mn|m|bn|b)$/iu.test(plain)) return undefined;
+  const cores = plain.match(/\d[\d.,'\s]*\d|\d/gu) ?? [];
+  if (cores.length !== 1) return undefined;
+  const { decimal } = decimalSigns(locale);
+  const [whole, fraction, ...rest] = cores.join('').split(decimal);
+  if (rest.length > 0 || whole === undefined || fraction === undefined) return undefined;
+  if (!/^\d+$/u.test(whole) || !/^\d{3}$/u.test(fraction) || /^0+$/u.test(whole)) return undefined;
+  const asDecimal = toCanonicalDecimal(`${whole}.${fraction}`);
+  const asGrouped = toCanonicalDecimal(`${whole}${fraction}`);
+  return asDecimal === undefined || asGrouped === undefined ? undefined : { asDecimal, asGrouped };
+}
+
+/**
+ * Whether typed text saves as a number whose digits differ from the ones typed:
+ * "1.2k" saves as 1200 and "1.200" (US English) as 1.2, while "$1,200" is 1200
+ * as typed. An editor says what it saves as only then, never repeating the text.
+ */
+export function readsDifferently(text: string, amount: string): boolean {
+  const digits = (value: string) => value.replaceAll(/\D/gu, '').replace(/^0+/u, '');
+  return digits(text) !== digits(amount);
+}
+
+/**
+ * A canonical decimal as text that reads back one way in any language: one with
+ * exactly three decimals gains a trailing 0 ("1.234" is written "1.2340"), so a
+ * copied cell pastes back as itself, never refused as ambiguous nor read as 1,234.
+ */
+export function unambiguousDecimal(decimal: string): string {
+  return /\.\d{3}$/u.test(decimal) ? `${decimal}0` : decimal;
 }
 
 /**

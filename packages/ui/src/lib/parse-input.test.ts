@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { cleanEmail, cleanText, parseAmount, parseDateInput, splitPasted } from './parse-input.ts';
+import {
+  ambiguousAmount,
+  cleanEmail,
+  cleanText,
+  parseAmount,
+  parseDateInput,
+  readsDifferently,
+  splitPasted,
+  unambiguousDecimal,
+} from './parse-input.ts';
 
 describe('cleanText', () => {
   it('drops zero width marks, plain spaces for odd ones, and one pair of wrapping quotes', () => {
@@ -100,5 +109,48 @@ describe('parseDateInput', () => {
     expect(parseDateInput('08/10/2026', { locale: 'en-GB' })).toBe('2026-10-08');
     expect(parseDateInput('tomorrow', { locale: 'en-GB' })).toBeUndefined();
     expect(parseDateInput('Oct 8', { locale: 'en-GB' })).toBeUndefined();
+  });
+});
+
+describe('ambiguousAmount', () => {
+  it('flags the decimal sign before exactly three digits in US English', () => {
+    expect(ambiguousAmount('1.200', 'en-US')).toEqual({ asDecimal: '1.2', asGrouped: '1200' });
+    expect(ambiguousAmount('$12.500', 'en-US')).toEqual({ asDecimal: '12.5', asGrouped: '12500' });
+  });
+
+  it('flags the comma before exactly three digits in German', () => {
+    expect(ambiguousAmount('1,200', 'de-DE')).toEqual({ asDecimal: '1.2', asGrouped: '1200' });
+    expect(ambiguousAmount('1,200 €', 'de-DE')).toEqual({ asDecimal: '1.2', asGrouped: '1200' });
+  });
+
+  it('leaves what reads one way alone', () => {
+    expect(ambiguousAmount('1,200', 'en-US')).toBeUndefined();
+    expect(ambiguousAmount('1.200', 'de-DE')).toBeUndefined();
+    expect(ambiguousAmount('0.125', 'en-US')).toBeUndefined();
+    expect(ambiguousAmount('1.25', 'en-US')).toBeUndefined();
+    expect(ambiguousAmount('1.2345', 'en-US')).toBeUndefined();
+    expect(ambiguousAmount('1,200.500', 'en-US')).toBeUndefined();
+    expect(ambiguousAmount('1.200k', 'en-US')).toBeUndefined();
+    expect(ambiguousAmount('1200', 'en-US')).toBeUndefined();
+  });
+});
+
+describe('readsDifferently', () => {
+  it('is true only when the saved digits differ from the typed ones', () => {
+    expect(readsDifferently('1.2k', '1200')).toBe(true);
+    expect(readsDifferently('1.200', '1.2')).toBe(true);
+    expect(readsDifferently('$1,200', '1200')).toBe(false);
+    expect(readsDifferently('(300)', '-300')).toBe(false);
+  });
+});
+
+describe('unambiguousDecimal', () => {
+  it('writes three decimals with a trailing 0, so a copy pastes back as itself', () => {
+    expect(unambiguousDecimal('1.234')).toBe('1.2340');
+    expect(unambiguousDecimal('-12.500')).toBe('-12.5000');
+    expect(unambiguousDecimal('1.2')).toBe('1.2');
+    expect(unambiguousDecimal('1200')).toBe('1200');
+    expect(ambiguousAmount(unambiguousDecimal('1.234'), 'en-US')).toBeUndefined();
+    expect(parseAmount(unambiguousDecimal('1.234'), { locale: 'de-DE' })?.amount).toBe('1.234');
   });
 });

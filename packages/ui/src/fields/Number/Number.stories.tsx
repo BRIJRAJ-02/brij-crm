@@ -98,6 +98,39 @@ export const Compact: Story = {
   },
 };
 
+/** Rounded to fewer decimals than it holds: "1,235" for 1,234.56, the exact number in a tooltip and for screen readers. */
+export const Rounded: Story = {
+  args: { attribute: { ...sample.attribute, name: 'Revenue', decimals: 0 }, value: '1234.56' },
+  render: (args) => (
+    <Stage width="narrow">
+      <AttributeDisplay attribute={args.attribute} value={args.value} surface="panel" />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('1,235')).toBeInTheDocument();
+    await expect(canvas.getByText('1,234.56')).toBeInTheDocument();
+  },
+};
+
+/** Typed text that saves differently says so before it saves: "1.2k" shows "Saves as 1,200." under the field. */
+export const SavesAs: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: {},
+  render: (args) => (
+    <Stage width="narrow">
+      <AttributeEditor {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('textbox', { name: 'Employees' }));
+    await userEvent.keyboard('1.2k');
+    await expect(canvas.getByText('Saves as 1,200.')).toBeInTheDocument();
+    await userEvent.clear(canvas.getByRole('textbox', { name: 'Employees' }));
+    await userEvent.keyboard('1,200');
+    await expect(canvas.queryByText(/Saves as/)).toBeNull();
+  },
+};
+
 /** Forgiving input: "1.2k" reads as 1,200, and "(300)" as minus 300. */
 export const Forgiving: Story = {
   parameters: { crm: { screenshot: false } },

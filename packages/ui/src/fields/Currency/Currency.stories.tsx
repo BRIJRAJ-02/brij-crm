@@ -92,3 +92,20 @@ export const SymbolTyped: Story = {
     await expect(args.onCommit).toHaveBeenCalledWith({ amount: '1200', currency: 'EUR' });
   },
 };
+
+/** A pasted symbol that moves the picker says so under the field: "Currency changed to EUR." */
+export const CurrencyChanged: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { value: null },
+  render: (args) => (
+    <Stage width="narrow">
+      <AttributeEditor {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('textbox', { name: 'Deal value' }));
+    await userEvent.paste('€500');
+    await userEvent.tab();
+    await expect(canvas.getByText('Currency changed to EUR.')).toBeInTheDocument();
+  },
+};

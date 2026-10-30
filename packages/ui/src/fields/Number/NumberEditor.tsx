@@ -1,6 +1,7 @@
 import { formatDecimal } from '../../lib/format.ts';
-import { parseAmount } from '../../lib/parse-input.ts';
+import { parseAmount, readsDifferently } from '../../lib/parse-input.ts';
 import { useFormatSettings } from '../../provider/context.ts';
+import { strings as fieldStrings } from '../strings.ts';
 import { TextLikeEditor } from '../TextLikeEditor.tsx';
 import type { EditorProps } from '../types.ts';
 import { isCompactSurface, toCommittable } from '../values.ts';
@@ -24,6 +25,13 @@ export function NumberEditor(props: EditorProps<'number'>) {
       {...(props.attribute.isPercent === true ? { suffix: strings.percentSign } : {})}
       placeholder={example}
       {...(isCompactSurface(props.surface) ? {} : { hint: strings.hint(example) })}
+      // What the typed text saves as, before it saves, when it reads differently: "1.200" as 1.2, "1.2k" as 1,200.
+      hintOf={(draft) => {
+        const read = draft.trim() === '' ? undefined : parseAmount(draft, { locale })?.amount;
+        return read === undefined || !readsDifferently(draft, read)
+          ? undefined
+          : fieldStrings.readsAs(formatDecimal(read, locale));
+      }}
       check={(draft) => {
         if (draft.trim() === '') return toCommittable<'number'>(props.attribute, null);
         const parsed = parseAmount(draft, { locale });

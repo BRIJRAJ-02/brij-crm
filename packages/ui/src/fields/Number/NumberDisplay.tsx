@@ -11,8 +11,9 @@ import { strings } from './strings.ts';
  * Number: the exact decimal in the language's grouping, in tabular figures
  * (end aligned in cells); a percent attribute adds the sign to the number as
  * typed (12.5 shows "12.5%"). An attribute's Decimals fixes how many show,
- * and Compact writes it short ("1.2M"), the exact number in a tooltip and
- * read by screen readers in its place.
+ * and Compact writes it short ("1.2M"); whenever what shows drops digits
+ * (compact, or rounded to fewer decimals), the exact number is in a tooltip
+ * and read by screen readers in its place.
  */
 export function NumberDisplay({ attribute, value, surface }: DisplayProps<'number'>) {
   const { locale } = useFormatSettings();
@@ -20,8 +21,9 @@ export function NumberDisplay({ attribute, value, surface }: DisplayProps<'numbe
   const exact = value as string;
   const shown = formatNumber(exact, locale, { decimals: attribute.decimals, isCompact: attribute.isCompact });
   const text = attribute.isPercent === true ? strings.percent(shown) : shown;
-  const full = formatDecimal(exact, locale);
-  if (attribute.isCompact !== true || full === shown) return <TruncatedText isNumeric>{text}</TruncatedText>;
+  // The exact number, padded to the same decimals: a tooltip only when what shows drops something (compact, rounded).
+  const full = formatDecimal(exact, locale, attribute.decimals ?? 0);
+  if (full === shown) return <TruncatedText isNumeric>{text}</TruncatedText>;
   return (
     <Tooltip content={full} isTextTrigger>
       <>

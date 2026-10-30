@@ -1,7 +1,9 @@
 import { CURRENCY_CODES, type CurrencyValue } from '@crm/contracts/values';
-import { parseAmount } from '../../lib/parse-input.ts';
+import { formatDecimal } from '../../lib/format.ts';
+import { ambiguousAmount, parseAmount, unambiguousDecimal } from '../../lib/parse-input.ts';
 import { withEmpty } from '../operators.ts';
 import type { AttributeTypeDef } from '../types.ts';
+import { strings } from '../strings.ts';
 import { refuse } from '../values.ts';
 import { CurrencyDisplay } from './CurrencyDisplay.tsx';
 import { CurrencyEditor } from './CurrencyEditor.tsx';
@@ -17,10 +19,20 @@ export const currencyType: AttributeTypeDef<'currency'> = {
   operators: () => withEmpty(['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'between']),
   toText: (value) => {
     const one = value as CurrencyValue;
-    return `${one.currency} ${one.amount}`;
+    return `${one.currency} ${unambiguousDecimal(one.amount)}`;
   },
   fromText: (given, context) => {
-    // "$1,200", "900 €", "1,200 USD", "1.2k" and "(300)" read as the editor reads them (`parseAmount`).
+    // "$1,200", "900 €", "1,200 USD", "1.2k" and "(300)" read as the editor reads them (`parseAmount`); "1.200"
+    // could be 1.2 or 1,200, so it is refused with both.
+    const twoWays = ambiguousAmount(given, context.locale);
+    if (twoWays !== undefined) {
+      return refuse(
+        strings.ambiguousNumber(
+          formatDecimal(twoWays.asDecimal, context.locale),
+          formatDecimal(twoWays.asGrouped, context.locale),
+        ),
+      );
+    }
     const parsed = parseAmount(given, { locale: context.locale, defaultCurrency: context.attribute.defaultCurrency });
     if (parsed === undefined) return refuse(`“${given.trim()}” isn’t an amount.`);
     const code = parsed.currency ?? context.attribute.defaultCurrency ?? '';

@@ -20,6 +20,11 @@ export interface TextLikeEditorProps<T extends AttributeType> extends EditorProp
   readonly type?: FieldProps['type'];
   readonly hint?: string;
   /**
+   * The hint for the text being typed, before it saves: a number shows what "1.2k" saves as. Undefined falls back
+   * to `hint`. Only where a hint shows (outside a cell, a panel row and a filter).
+   */
+  readonly hintOf?: (draft: string) => string | undefined;
+  /**
    * The type's example ("ada@example.com"), shown in the empty field of a
    * form or a preview. A cell, a panel row or a filter hides the label, so it
    * keeps "Set <Attribute>…" there, and the refusal names the example.
@@ -46,6 +51,7 @@ export function TextLikeEditor<T extends AttributeType>({
   inputMode,
   type,
   hint,
+  hintOf,
   placeholder,
   prefix,
   suffix,
@@ -64,6 +70,7 @@ export function TextLikeEditor<T extends AttributeType>({
     ...(error === undefined ? {} : { error }),
   });
   const isCompact = isCompactSurface(surface);
+  const shownHint = isCompact ? hint : (hintOf?.(fieldProps.value) ?? hint);
   return (
     <Field
       label={attribute.name}
@@ -84,7 +91,7 @@ export function TextLikeEditor<T extends AttributeType>({
       {...fieldProps}
       {...(inputMode === undefined ? {} : { inputMode })}
       {...(type === undefined ? {} : { type })}
-      {...(hint === undefined ? {} : { hint })}
+      {...(shownHint === undefined ? {} : { hint: shownHint })}
       {...(prefix === undefined ? {} : { prefix })}
       {...(suffix === undefined ? {} : { suffix })}
       {...(maxLength === undefined ? {} : { maxLength })}
