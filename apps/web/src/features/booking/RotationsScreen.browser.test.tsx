@@ -51,6 +51,15 @@ const SALES: RotationView = {
   })),
 };
 
+/** Everyone's calendar works (spec 0037): the chips stay quiet. */
+const allConnected = {
+  held: (_workspace: string, memberId: string) => {
+    const state = { status: 'ready' as const, health: { memberId, status: 'connected' as const }, asked: false };
+    return { subscribe: () => () => undefined, getSnapshot: () => state, retain: () => () => undefined };
+  },
+  ask: () => Promise.resolve(true),
+};
+
 /** The groups as the data layer holds them: ready, never changing. */
 function groups(items: readonly RotationView[]) {
   const state = { status: 'ready' as const, items, pendingIds: new Set<string>() };
@@ -67,6 +76,7 @@ function groups(items: readonly RotationView[]) {
 function layerWith(items: readonly RotationView[], answer: () => Promise<RotationView> = () => Promise.resolve(SALES)) {
   const view = groups(items);
   return {
+    scheduling: { loaded: () => ({ health: allConnected }), open: () => new Promise(() => undefined) },
     rotations: {
       view: () => view,
       newId: () => '0199a6f2-0000-7000-8000-0000000000n1',

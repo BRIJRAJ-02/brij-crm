@@ -116,6 +116,27 @@ const stillLoading = {
 
 /** The workspace's delegations, read and empty (the Scheduling access column). */
 const NO_DELEGATIONS = { status: 'ready', delegations: [] } as const;
+/** Calendar health as the store holds it (spec 0037, AC-1308): Linus's calendar needs reconnecting, Ada's works. */
+const healthAsks: string[] = [];
+const healthOf = (memberId: string) => {
+  const state =
+    memberId === LINUS.id
+      ? {
+          status: 'ready' as const,
+          health: { memberId, status: 'reconnect' as const, since: '2026-10-29T09:00:00.000Z' },
+          asked: false,
+        }
+      : { status: 'ready' as const, health: { memberId, status: 'connected' as const }, asked: false };
+  return { subscribe: () => () => undefined, getSnapshot: () => state, retain: () => () => undefined };
+};
+const health = {
+  held: (_workspace: string, memberId: string) => healthOf(memberId),
+  ask: (_workspace: string, memberId: string) => {
+    healthAsks.push(memberId);
+    return Promise.resolve(true);
+  },
+};
+
 const noDelegations = {
   subscribe: () => () => undefined,
   getSnapshot: () => NO_DELEGATIONS,
@@ -165,7 +186,7 @@ function layerWith(answer: () => Promise<void>, startLink: InviteLinkView = LINK
     nav: { source: () => stillLoading, change: () => undefined },
     tasks: { due: () => stillLoading },
     // The Scheduling access column (spec 0037, AC-1267): nobody holds a delegation.
-    scheduling: { loaded: () => ({ delegations: () => noDelegations }) },
+    scheduling: { loaded: () => ({ delegations: () => noDelegations, health }) },
     members: {
       watch: () => () => undefined,
       // The remove dialog reads what the removal does and who could take over (spec 0031, slice 5).
@@ -433,6 +454,19 @@ describe('removing a member asks first', () => {
     await renderMembers(counted.layer);
     await expect.element(page.getByRole('button', { name: 'Actions for Linus Torvalds' })).toBeVisible();
     expect(page.getByRole('button', { name: 'Actions for Ada Lovelace' }).elements()).toHaveLength(0);
+  });
+});
+
+describe('calendar health (spec 0037, AC-1308, AC-1309)', () => {
+  it('shows each person’s status in words, and asks a broken calendar’s owner to reconnect from their menu', async () => {
+    const counted = layerWith(() => Promise.resolve());
+    await renderMembers(counted.layer);
+    await expect.element(page.getByRole('columnheader', { name: 'Calendar' })).toBeVisible();
+    await expect.element(page.getByText('Reconnect needed')).toBeVisible();
+    await expect.element(page.getByText('Connected')).toBeVisible();
+    await page.getByRole('button', { name: 'Actions for Linus Torvalds' }).click();
+    await page.getByRole('menuitem', { name: 'Ask to reconnect' }).click();
+    expect(healthAsks).toEqual([LINUS.id]);
   });
 });
 

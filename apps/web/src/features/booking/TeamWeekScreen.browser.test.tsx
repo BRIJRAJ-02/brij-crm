@@ -89,6 +89,15 @@ afterEach(() => {
   resetTheme();
 });
 
+/** Everyone's calendar works (spec 0037): the chips stay quiet. */
+const allConnected = {
+  held: (_workspace: string, memberId: string) => {
+    const state = { status: 'ready' as const, health: { memberId, status: 'connected' as const }, asked: false };
+    return { subscribe: () => () => undefined, getSnapshot: () => state, retain: () => () => undefined };
+  },
+  ask: () => Promise.resolve(true),
+};
+
 function fake(week: TeamWeek = WEEK) {
   const state: TeamWeekState = { status: 'ready', week, more: 'idle' };
   const held: TeamWeekHeld = {
@@ -106,7 +115,7 @@ function fake(week: TeamWeek = WEEK) {
     copyWeek: vi.fn(() => Promise.resolve(1)),
     setUsualHours: vi.fn(() => Promise.resolve(2)),
   };
-  const data = { scheduling: { loaded: () => ({ teamWeek }) } } as unknown as DataLayer;
+  const data = { scheduling: { loaded: () => ({ teamWeek, health: allConnected }) } } as unknown as DataLayer;
   return { data, teamWeek };
 }
 

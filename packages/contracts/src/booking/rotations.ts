@@ -79,8 +79,12 @@ export const RotationMemberView = RotationMemberInput.extend({
   count: z.number().optional(),
   /** Their upcoming bookings this rotation seats them on (AC-750), shown with `count`. */
   upcoming: z.number().int().min(0).optional(),
-  /** They have a calendar connected; without one they are booked from their hours and bookings only (warning). */
-  hasCalendar: z.boolean(),
+  /**
+   * They have a calendar connected; without one they are booked from their hours and bookings only (warning). Only
+   * for `booking.admin` and about the reader themself: a rotation gives no reads about its members' calendars (spec
+   * 0037, AC-1315); the screen asks `calendar.health`, through See reach, instead.
+   */
+  hasCalendar: z.boolean().optional(),
 });
 /** One member of a rotation. */
 export type RotationMemberView = z.infer<typeof RotationMemberView>;

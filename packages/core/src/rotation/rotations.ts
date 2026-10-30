@@ -149,7 +149,8 @@ async function viewsOf(
         dailyCap: member.dailyCap,
         weeklyCap: member.weeklyCap,
         isOn: member.isOn,
-        hasCalendar: member.hasCalendar,
+        // Spec 0037, AC-1315: nothing about a colleague's calendar unless the reader is an admin.
+        ...(everyone || member.memberId === me ? { hasCalendar: member.hasCalendar } : {}),
         ...(everyone || member.memberId === me
           ? {
               count: (counts.get(`${row.id}:${member.memberId}`) ?? 0) + (calibrated[index] ?? member.calibration),

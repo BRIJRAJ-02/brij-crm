@@ -2,10 +2,9 @@
 // Purpose: Settings › Scheduling › Round robin (spec 0029, AC-728, AC-752, AC-758): the groups of people round robin pages share meetings across (rotations in code), with a How round robin works help beside the title.
 // Main task: an admin makes a group and changes or deletes one; a member sees the groups they are in and their own share.
 // Leaves out: editing in place, the share bars and the reassign offer (milestone 2), and a rotation's history (spec 0037).
-import type { DataLayer, MemberSummary, RotationView } from '@crm/data';
+import type { CalendarHealthState, DataLayer, MemberSummary, RotationView } from '@crm/data';
 import { useCaptureList } from '@crm/data/react';
 import {
-  Badge,
   Button,
   ButtonLink,
   InfoTip,
@@ -22,7 +21,6 @@ import {
   Table,
   TabPanel,
   Tabs,
-  Tooltip,
   type TableColumn,
   RecordChip,
 } from '@crm/ui';
@@ -33,6 +31,7 @@ import { useBookingsActionSlot } from '../bookings/toolbarSlot.ts';
 import { linksHref } from '../captures/tabs.ts';
 import { InviteTeamDialog } from '../settings/InviteTeamDialog.tsx';
 import { membersSettingsHref } from '../settings/nav.ts';
+import { CalendarHealthChip, useCalendarHealth, useSchedulingStore } from './CalendarHealth.tsx';
 import { SettingsPage } from '../settings/SettingsPage.tsx';
 import { useCan } from '../workspace/WorkspacePage.tsx';
 import { DistributionPanel } from './DistributionPanel.tsx';
@@ -80,18 +79,17 @@ interface Handing {
 
 type Member = RotationView['members'][number];
 
-/** One member's cell. */
-function cell(member: Member, column: string) {
+/**
+ * One member's cell. Their calendar's trouble shows beside their name (spec 0037, AC-1314), and only to readers who
+ * may see their scheduling: anyone else reads Hidden (AC-1315).
+ */
+function cell(member: Member, column: string, health: ReadonlyMap<string, CalendarHealthState>) {
   switch (column) {
     case 'member':
       return (
         <>
           <RecordChip display={{ type: 'member', id: member.memberId, name: member.name }} isFlat />
-          {!member.hasCalendar && (
-            <Tooltip content={strings.noCalendarHint} isTextTrigger>
-              <Badge text={strings.noCalendar} />
-            </Tooltip>
-          )}
+          <CalendarHealthChip state={health.get(member.memberId)} name={member.name} isQuiet showsHidden />
         </>
       );
     case 'share':
@@ -156,6 +154,15 @@ export function RotationsScreen({ data, slug, people, canManage, inFrame = false
   // Invite teammates opens the one Invite dialog in place for someone who may invite; anyone else is sent to
   // Settings › Members, which says who can.
   const canInvite = useCan('members.invite');
+  // Each member's calendar health, through the reader's See reach (spec 0037, AC-1314, AC-1315).
+  const healthStore = useSchedulingStore(data);
+  const health = useCalendarHealth(healthStore, slug, [
+    ...new Set(
+      (state.status === 'ready' ? state.items : []).flatMap((rotation) =>
+        rotation.members.map((member) => member.memberId),
+      ),
+    ),
+  ]);
   // Where the frame wants this tab's one primary action, when the frame is Bookings rather than Settings.
   const actionSlot = useBookingsActionSlot();
   const [isInviting, setInviting] = useState(false);
@@ -187,7 +194,7 @@ export function RotationsScreen({ data, slug, people, canManage, inFrame = false
   };
   const rowCell = (rotation: RotationView) => (member: Member, column: string) =>
     column !== 'actions' ? (
-      cell(member, column)
+      cell(member, column, health)
     ) : member.isOn || (member.upcoming ?? 0) === 0 ? null : (
       <Button
         variant="ghost"

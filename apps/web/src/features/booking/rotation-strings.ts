@@ -48,8 +48,6 @@ export const strings = {
   },
   shareOf: (count: number) => (count === 1 ? '1 meeting' : `${String(Math.round(count))} meetings`),
   hidden: 'Only admins see this',
-  noCalendar: 'No calendar',
-  noCalendarHint: 'Booked from their hours and bookings only, until they connect a calendar.',
   priorities: ['Lowest', 'Low', 'Medium', 'High', 'Highest'] as const,
   noCap: 'No cap',
   isOn: 'On',

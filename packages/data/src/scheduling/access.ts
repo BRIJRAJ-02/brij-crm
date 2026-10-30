@@ -9,6 +9,7 @@
 // AC-1274) reads every held list again and forgets `visible`, so a delegation someone else gave or took back
 // reaches the open screen. Delegations are settings, as bookings are: no outbox kind of their own beyond that.
 import type {
+  CalendarHealth,
   DelegationTarget,
   DelegationView,
   DelegationsList,
@@ -20,6 +21,7 @@ import { toDataError, type DataError } from '../errors.ts';
 import type { MutationLog } from '../live/mutations.ts';
 import type { Notice } from '../notice.ts';
 import { refusalSummary } from '../refusals.ts';
+import { createCalendarHealthStore, type CalendarHealthApi } from './health.ts';
 import { createLimitsStore, type LimitsApi, type LimitsDraft } from './limits.ts';
 import { createTimeOffStore, type TimeOffApi, type TimeOffDraft } from './time-off.ts';
 import { createTeamWeekStore, type TeamWeekApi } from './team-week.ts';
@@ -75,6 +77,8 @@ export interface SchedulingAccessApi {
   readonly teamWeek?: TeamWeekApi;
   /** Meeting limits' calls (spec 0037, job J7): its store loads in this same chunk. Absent in tests that don't need it. */
   readonly limits?: LimitsApi;
+  /** Calendar health's calls (spec 0037, job J8): its store loads in this same chunk. Absent in tests that don't need it. */
+  readonly health?: CalendarHealthApi;
 }
 
 /**
@@ -119,6 +123,13 @@ export interface SchedulingAccessWire<O> {
       ): Promise<TimeOffSaved>;
       delete(
         input: { readonly workspace: string; readonly id: string; readonly mutationId: string },
+        options: O,
+      ): Promise<unknown>;
+    };
+    readonly calendar: {
+      health(input: { readonly workspace: string; readonly memberIds: string[] }, options: O): Promise<CalendarHealth>;
+      askReconnect(
+        input: { readonly workspace: string; readonly memberId: string; readonly mutationId: string },
         options: O,
       ): Promise<unknown>;
     };
@@ -224,6 +235,16 @@ export function wireApi<O>({
       get: (input) => beforeRead(input.workspace).then(() => call((options) => client.limits.get(input, options))),
       // Its own `time_off` echo is skipped: the store already shows the answer.
       set: (input) => echoed((mutationId) => call((options) => client.limits.set({ ...input, mutationId }, options))),
+    },
+    // Calendar health (spec 0037, job J8): a colleague's status; Ask to reconnect stores no event, so no echo to skip.
+    health: {
+      read: (input) =>
+        beforeRead(input.workspace).then(() =>
+          call((options) =>
+            client.calendar.health({ workspace: input.workspace, memberIds: [...input.memberIds] }, options),
+          ),
+        ),
+      ask: (input) => call((options) => client.calendar.askReconnect({ ...input, mutationId: mintId() }, options)),
     },
     teamWeek: {
       read: (input) =>
@@ -349,10 +370,20 @@ export function createSchedulingAccessStore(deps: SchedulingAccessDeps) {
     ...(deps.watch === undefined ? {} : { watch: deps.watch }),
     ...(deps.now === undefined ? {} : { now: deps.now }),
   });
-  // The counts beside each limit move as meetings are booked, with no event: a tab shown again reads them again.
+  // Calendar health (spec 0037, job J8), in this same chunk: the Members page, the Team week and rotations chip it.
+  const health = createCalendarHealthStore({
+    api: deps.api.health ?? { read: notWired, ask: notWired },
+    notify: deps.notify,
+    ...(deps.now === undefined ? {} : { now: deps.now }),
+  });
+  // The counts beside each limit move as meetings are booked, and a colleague's calendar breaks, with no event: a tab
+  // shown again reads both again.
   if (typeof document !== 'undefined') {
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') limits.shown();
+      if (document.visibilityState === 'visible') {
+        limits.shown();
+        health.shown();
+      }
     });
   }
 
@@ -463,6 +494,11 @@ export function createSchedulingAccessStore(deps: SchedulingAccessDeps) {
     timeOff,
     /** A member's meeting limits (spec 0037, AC-1299): held per workspace and member, Availability's Limits section. */
     limits,
+    /**
+     * Colleagues' calendar health (spec 0037, AC-1307 to AC-1309): a status per member, read together per page, hidden
+     * outside the reader's See reach; `ask` is Ask to reconnect.
+     */
+    health,
     /**
      * The Team week (spec 0037, AC-1289 to AC-1296): weeks of the roster held per workspace, week and search; a cell's
      * change shows at once and is put back if refused; Copy week and Set usual hours wait, then the weeks read again.
@@ -596,6 +632,7 @@ export function createSchedulingAccessStore(deps: SchedulingAccessDeps) {
       teamWeek.changed(workspace);
       timeOff.changed(workspace);
       limits.changed(workspace);
+      health.changed(workspace);
       for (const [key, list] of lists) if (key.startsWith(`${workspace}\u0000`)) list.reread();
     },
     /** Signed out: forgets every workspace's. */
@@ -605,6 +642,7 @@ export function createSchedulingAccessStore(deps: SchedulingAccessDeps) {
       timeOff.clear();
       teamWeek.clear();
       limits.clear();
+      health.clear();
     },
   };
 }

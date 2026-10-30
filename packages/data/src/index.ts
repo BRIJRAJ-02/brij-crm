@@ -177,6 +177,13 @@ export type {
 } from './scheduling/time-off.ts';
 export type { LimitsDraft, LimitsHeld, LimitsState, LimitsStore, MeetingLimits } from './scheduling/limits.ts';
 export type {
+  CalendarHealthHeld,
+  CalendarHealthState,
+  CalendarHealthStatus,
+  CalendarHealthStore,
+  MemberCalendarHealth,
+} from './scheduling/health.ts';
+export type {
   DayHours,
   TeamWeek,
   TeamWeekDay,
@@ -3638,7 +3645,11 @@ export function createDataLayer({
               : {
                   members: change.members.map((member) => {
                     const before = rotation.members.find((each) => each.memberId === member.memberId);
-                    return { ...member, name: before?.name ?? '', hasCalendar: before?.hasCalendar ?? false };
+                    return {
+                      ...member,
+                      name: before?.name ?? '',
+                      ...(before?.hasCalendar === undefined ? {} : { hasCalendar: before.hasCalendar }),
+                    };
                   }),
                 }),
           })),

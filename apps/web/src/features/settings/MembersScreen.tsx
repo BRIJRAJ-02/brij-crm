@@ -58,6 +58,15 @@ import { MemberConfirm, type MemberQuestion } from './MemberConfirm.tsx';
 import { RemoveMemberDialog } from './RemoveMemberDialog.tsx';
 import { hasGuide, RoleGuide } from './RoleGuide.tsx';
 import { SCHEDULING_ACCESS_COLUMN, SchedulingAccessCell } from './SchedulingAccessCell.tsx';
+import {
+  askReconnect,
+  askReconnectItem,
+  CalendarHealthChip,
+  offersAsk,
+  useCalendarHealth,
+  useSchedulingStore,
+} from '../booking/CalendarHealth.tsx';
+import { calendarHealthStrings } from '../booking/calendar-health-strings.ts';
 import { canRemove, grantableRoles, invitableRoles } from './members.ts';
 import { strings } from './members-strings.ts';
 import { SettingsPage } from './SettingsPage.tsx';
@@ -109,6 +118,8 @@ const MEMBER_COLUMNS_WITH_FACTOR: readonly TableColumn[] = [
   ...MEMBER_COLUMNS.slice(0, 3),
   { id: 'twoFactor', label: strings.columns.twoFactor },
   SCHEDULING_ACCESS_COLUMN,
+  // Each person's calendar health (spec 0037, AC-1308): a status, never an account or a calendar.
+  { id: 'calendar', label: calendarHealthStrings.column },
   ...MEMBER_COLUMNS.slice(3),
 ];
 
@@ -203,6 +214,9 @@ export function MembersScreen({
   const labelOf = (role: Role) => roles.roles.find((option) => option.builtIn === role)?.label ?? ROLE_LABELS[role];
   const held = more.from === page ? more : { from: page, members: [], cursor: page.nextCursor };
   const rows = [...page.members, ...held.members];
+  // Calendar health for the rows shown, read together, for holders of `members.manage` (AC-1308).
+  const healthStore = useSchedulingStore(data, canManage);
+  const health = useCalendarHealth(healthStore, slug, canManage ? rows.map((member) => member.id) : []);
 
   const showMore = () => {
     const { cursor } = held;
@@ -376,14 +390,19 @@ export function MembersScreen({
         return member.twoFactor === true ? strings.twoFactorOn : strings.twoFactorOff;
       case 'scheduling':
         return <SchedulingAccessCell data={data} toasts={toasts} slug={slug} me={access.memberId} member={member} />;
+      case 'calendar':
+        return <CalendarHealthChip state={health.get(member.id)} name={member.name} />;
       case 'joined':
         return <RelativeTime value={member.joinedAt} />;
       default: {
         // Only an owner hands the workspace on, to someone who isn't one yet (AC-813).
         const mayTransfer = !isMe && actor === 'owner' && member.role !== 'owner';
         const mayRemove = canRemove(actor, member.role, isMe);
+        // Ask to reconnect (spec 0037, AC-1309): a colleague whose calendar needs them.
+        const calendar = isMe ? undefined : health.get(member.id);
+        const mayAsk = offersAsk(calendar);
         // No menu at all for a row the reader can't act on, rather than a locked one.
-        if (!mayTransfer && !mayRemove) return null;
+        if (!mayTransfer && !mayRemove && !mayAsk) return null;
         return (
           <MenuTrigger>
             <Button variant="ghost" icon="ellipsis" label={strings.rowActions(member.name)} />
@@ -392,8 +411,11 @@ export function MembersScreen({
               onAction={(key) => {
                 if (key === 'transfer') transfer(member);
                 if (key === 'remove') remove(member);
+                if (key === 'ask-reconnect') askReconnect(healthStore, slug, member.id, member.name);
               }}
             >
+              {askReconnectItem(calendar)}
+              {mayAsk && (mayTransfer || mayRemove) && <MenuSeparator />}
               {mayTransfer && (
                 <MenuItem id="transfer" icon="crown">
                   {strings.transfer}

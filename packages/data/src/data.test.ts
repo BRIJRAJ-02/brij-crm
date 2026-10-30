@@ -663,6 +663,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
         set: os.calendar.pageDestination.set.handler(notServed),
       },
       health: os.calendar.health.handler(notServed),
+      askReconnect: os.calendar.askReconnect.handler(notServed),
       meetings: {
         forRecord: os.calendar.meetings.forRecord.handler(() => ({ items: [] })),
         addAttendee: os.calendar.meetings.addAttendee.handler(notServed),

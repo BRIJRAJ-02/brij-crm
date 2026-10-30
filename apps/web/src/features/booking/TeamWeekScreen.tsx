@@ -5,6 +5,7 @@
 import {
   clockLabel,
   isDataError,
+  type CalendarHealthState,
   type DataLayer,
   type DayHours,
   type TeamWeek as Week,
@@ -40,10 +41,11 @@ import {
   type TeamWeekPerson,
 } from '@crm/ui';
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useBookingsToolbarSlot } from '../bookings/toolbarSlot.ts';
-import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
+import { useMyAccess, WorkspacePage } from '../workspace/WorkspacePage.tsx';
+import { askReconnect, askReconnectItem, CalendarHealthChip, offersAsk, useCalendarHealth } from './CalendarHealth.tsx';
 import { todayIn } from './hours.ts';
 import { availabilityHref } from './links.ts';
 import { teamWeekHref } from './team-week-links.ts';
@@ -208,6 +210,29 @@ function badgeOf(parts: readonly (string | undefined)[]): { readonly badge?: str
   return shown.length === 0 ? {} : { badge: shown.join(words.metaSeparator) };
 }
 
+/**
+ * What goes under a person's name: their calendar's trouble (spec 0037, AC-1314) and the link to their other
+ * schedules, either, both or neither.
+ */
+function extraOf(
+  chip: ReactNode,
+  state: CalendarHealthState | undefined,
+  link: ReactNode | undefined,
+): { readonly extra?: ReactNode } {
+  const troubled = state?.status === 'ready' && state.health.status !== 'connected';
+  if (!troubled) return link === undefined ? {} : { extra: link };
+  return {
+    extra:
+      link === undefined ? (
+        chip
+      ) : (
+        <>
+          {chip} {link}
+        </>
+      ),
+  };
+}
+
 /** Time off's reason in words, as Availability's Time off section says it. */
 const awayReason = (reason: keyof typeof timeOffStrings.reasons): string => timeOffStrings.reasons[reason];
 
@@ -312,6 +337,15 @@ function Loaded({
   const rowOf = (memberId: string) => shown?.rows.find((row) => row.memberId === memberId);
   const isLatest = shown !== undefined && week >= shown.latest;
   const anyChangeable = (shown?.rows ?? []).some((row) => row.canChange);
+  // Each person's calendar health (spec 0037, AC-1308, AC-1314): only trouble shows, under their name, and their menu
+  // offers Ask to reconnect (AC-1309).
+  const healthStore = data.scheduling.loaded();
+  const me = useMyAccess()?.memberId;
+  const health = useCalendarHealth(
+    healthStore,
+    slug,
+    (shown?.rows ?? []).map((row) => row.memberId),
+  );
   const people: TeamWeekPerson[] = useMemo(
     () =>
       (shown?.rows ?? []).map((row) => ({
@@ -324,14 +358,14 @@ function Loaded({
           row.offsetMinutes === viewerOffset ? undefined : words.offset(row.offsetMinutes),
           !row.canChange && !isPast && anyChangeable ? words.viewOnly : undefined,
         ]),
-        ...(row.otherSchedules === 0
-          ? {}
-          : {
-              extra: (
-                <Link href={availabilityHref(slug, row.memberId)}>{words.otherSchedules(row.otherSchedules)}</Link>
-              ),
-            }),
-        ...(row.canChange
+        ...extraOf(
+          <CalendarHealthChip state={health.get(row.memberId)} name={row.name} isQuiet />,
+          health.get(row.memberId),
+          row.otherSchedules === 0 ? undefined : (
+            <Link href={availabilityHref(slug, row.memberId)}>{words.otherSchedules(row.otherSchedules)}</Link>
+          ),
+        ),
+        ...(row.canChange || offersAsk(health.get(row.memberId))
           ? {
               actions: (
                 <MenuTrigger>
@@ -341,16 +375,20 @@ function Loaded({
                     onAction={(key) => {
                       if (key === 'copy') onCopy([row]);
                       else if (key === 'usual') onUsualFor([row.memberId]);
+                      else if (key === 'ask-reconnect') askReconnect(healthStore, slug, row.memberId, row.name);
                     }}
                   >
-                    {isPast || isLatest ? null : (
+                    {!row.canChange || isPast || isLatest ? null : (
                       <MenuItem id="copy" icon="copy">
                         {words.copyToNext}
                       </MenuItem>
                     )}
-                    <MenuItem id="usual" icon="clock">
-                      {words.setUsual}
-                    </MenuItem>
+                    {row.canChange ? (
+                      <MenuItem id="usual" icon="clock">
+                        {words.setUsual}
+                      </MenuItem>
+                    ) : null}
+                    {row.memberId === me ? null : askReconnectItem(health.get(row.memberId))}
                   </Menu>
                 </MenuTrigger>
               ),
@@ -359,7 +397,7 @@ function Loaded({
         cells: row.days.map((day) => cellOf(row, day, locale)),
         isEditable: row.canChange && !isPast,
       })),
-    [shown, locale, viewerOffset, isPast, isLatest, anyChangeable, slug, onCopy, onUsualFor],
+    [shown, locale, viewerOffset, isPast, isLatest, anyChangeable, slug, onCopy, onUsualFor, health, healthStore, me],
   );
   const anyEditable = people.some((person) => person.isEditable);
   // Copy week from the toolbar: everyone on this page the reader may change, one confirm for all (Deputy's and
