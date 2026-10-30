@@ -8,6 +8,15 @@ export const AGGREGATE_FNS = ['count', 'count_empty', 'sum', 'avg', 'min', 'max'
 /** One calculation. */
 export type AggregateFn = (typeof AGGREGATE_FNS)[number];
 
+/** The most calculations one `records.aggregate` call answers, in one transaction and one statement. */
+export const MAX_AGGREGATE_ASKS = 50;
+
+/** The most calculations one `records.aggregateGroups` call answers per board column. */
+export const MAX_GROUP_AGGREGATE_ASKS = 5;
+
+/** The most currencies one amount names: a column holding more answers `tooMany` rather than a part. */
+export const AGGREGATE_CURRENCIES = 200;
+
 /** The calculations that read amounts: numbers and currency only. */
 export const NUMERIC_AGGREGATES: readonly AggregateFn[] = ['sum', 'avg', 'min', 'max'];
 

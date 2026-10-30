@@ -1,7 +1,15 @@
 // `@crm/contracts/values`: the attribute value shapes and their companions, in
 // a pure Zod entry with no oRPC and no I/O, so packages/ui can parse what its
 // editors emit (spec 0003).
-export { AGGREGATE_FNS, aggregatesFor, NUMERIC_AGGREGATES, type AggregateFn } from './aggregates.ts';
+export {
+  AGGREGATE_CURRENCIES,
+  AGGREGATE_FNS,
+  aggregatesFor,
+  MAX_AGGREGATE_ASKS,
+  MAX_GROUP_AGGREGATE_ASKS,
+  NUMERIC_AGGREGATES,
+  type AggregateFn,
+} from './aggregates.ts';
 export {
   ActorReferenceValue,
   ATTRIBUTE_VALUE_INVALID,
