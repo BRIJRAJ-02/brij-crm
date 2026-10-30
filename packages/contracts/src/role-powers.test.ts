@@ -39,6 +39,7 @@ describe('what a role can do', () => {
     const member = rolePowers('member');
     expect(member.flatMap((area) => area.held)).toEqual([
       'Export records',
+      'Make lists and pipelines',
       'Make booking pages',
       'Change their own hours',
     ]);

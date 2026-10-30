@@ -100,6 +100,9 @@ export const ACCESS_TABLE = {
   restoreObject: { permission: 'schema.manage' },
   defineAttribute: { permission: 'schema.manage' },
   updateAttribute: { permission: 'schema.manage' },
+  // Changing an attribute's type in place, and what it would do (the field types lane).
+  changeAttributeType: { permission: 'schema.manage' },
+  checkTypeChange: { permission: 'schema.manage' },
   archiveAttribute: { permission: 'schema.manage' },
   restoreAttribute: { permission: 'schema.manage' },
   reorderAttribute: { permission: 'schema.manage' },
@@ -338,6 +341,7 @@ export const ACCESS_TABLE = {
   saveNote: { data: 'write' },
   deleteNote: { data: 'write' },
   restoreNote: { data: 'write' },
+  linkNote: { data: 'write' },
   // Comments (spec 0038): a thread follows its record; reading the record is enough to read and to comment (AC-1152).
   listThreads: { data: 'read' },
   getThreads: { data: 'read' },

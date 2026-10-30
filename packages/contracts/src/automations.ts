@@ -80,7 +80,7 @@ const VALUE_MAX = 4_000;
 function isSmallValue(value: unknown): boolean {
   if (value === undefined) return false;
   try {
-    return (JSON.stringify(value)).length <= VALUE_MAX;
+    return JSON.stringify(value).length <= VALUE_MAX;
   } catch {
     return false;
   }
