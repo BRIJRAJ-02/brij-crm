@@ -2,7 +2,8 @@
 // the sidebar, and anyone else the same NOT_FOUND as an unknown address; the
 // object writes and usage.get (spec 0012): schema.manage for every write (a
 // member's 403 writes nothing), refusals on their fields, and usage through
-// the caller's access. A real session against a real Postgres.
+// the caller's access, and a custom object's name attribute (late trap #15).
+// A real session against a real Postgres.
 import { randomUUID } from 'node:crypto';
 import { ORPCError } from '@orpc/client';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
@@ -230,6 +231,39 @@ describe('the object writes (spec 0012)', () => {
     expect((await member.objects.list({ workspace: workspace.slug })).map((object) => object.pluralName)).toContain(
       'People',
     );
+  });
+
+  it("changes a custom object's name attribute, and answers a standard object's 422 on primaryAttributeId", async () => {
+    const { client, workspace, people } = await withPeople();
+    const made = await client.objects.create({
+      workspace: workspace.slug,
+      id: newId(),
+      singularName: 'Project',
+      pluralName: 'Projects',
+      icon: 'folder',
+      hue: 'blue',
+      attributes: [{ title: 'Code', type: 'text' }],
+      mutationId: newId(),
+    });
+    const attributes = await client.attributes.list({ workspace: workspace.slug, objectId: made.id });
+    const code = attributes.find((attribute) => attribute.title === 'Code')?.id ?? '';
+    const edited = await client.objects.update({
+      workspace: workspace.slug,
+      objectId: made.id,
+      primaryAttributeId: code,
+      mutationId: newId(),
+    });
+    expect(edited.primaryAttributeId).toBe(code);
+    const locked = await failure(() =>
+      client.objects.update({
+        workspace: workspace.slug,
+        objectId: people.id,
+        primaryAttributeId: code,
+        mutationId: newId(),
+      }),
+    );
+    expect({ code: locked.code, status: locked.status }).toEqual({ code: 'CONFIG_INVALID', status: 422 });
+    expect(refusalsOf(locked)[0]).toMatchObject({ field: 'primaryAttributeId' });
   });
 
   it('moves an object in every member’s order', async () => {

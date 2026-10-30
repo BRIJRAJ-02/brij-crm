@@ -20,13 +20,14 @@ import {
   type AttributeType,
   type ValidationRuleInput,
 } from '@crm/contracts/values';
+import { canNameRecords } from '@crm/contracts/record-name';
 import { checkId, isUuid, isUuidV7, uuidArray } from './ids.ts';
 import { checkAttributeRoom, limitsOf, lockAttributeParent, takeCustomObject, type AttributeParent } from './limits.ts';
 import { checkHue, checkLabel, checkTarget, hasStageSettings, type OptionOutcome } from './option-rules.ts';
 import { isRefusal, postgresError, refuse, refuseOn } from './refusals.ts';
 import { actorRow, type EngineScope } from './scope.ts';
 import { clearUniqueKeys, fillUniqueKeys, UNIQUE_TYPES } from './unique.ts';
-import { ARCHIVED_BY, loadAttribute, type AttributeDef } from './values.ts';
+import { ARCHIVED_BY, isArchivedNow, loadAttribute, type AttributeDef } from './values.ts';
 import { runWrite, type AfterWrite, type WriteContext } from './write.ts';
 import { writeRules } from '../validation/rules.ts';
 import { seedDefaultView } from '../views/seed.ts';
@@ -125,13 +126,15 @@ export interface AttributeUpdate {
   readonly rules?: readonly ValidationRuleInput[];
 }
 
-/** What an object's names and look may change to. */
+/** What an object's names and look may change to, and the attribute that names its records. */
 export interface ObjectUpdate {
   readonly objectId: string;
   readonly singularName?: string;
   readonly pluralName?: string;
   readonly icon?: string;
   readonly hue?: string;
+  /** One of its own live attributes that `canNameRecords` takes (late trap #15); a custom object only. */
+  readonly primaryAttributeId?: string;
 }
 
 /** The read only attributes every object has, each reading a `records` column. */
@@ -1306,7 +1309,77 @@ export async function reorderAttribute(
   return result;
 }
 
-/** Changes an object's names, icon or hue. */
+/** Where a name attribute's refusals point: the settings field that chooses it. */
+const NAME_FIELD = 'primaryAttributeId';
+
+/**
+ * The attribute an object's records are to be named by (late trap #15),
+ * locked for the rest of the write so an archive of it waits (and then finds
+ * it is the name), and the one it replaces, when another. Refuses
+ * `CONFIG_INVALID` on `primaryAttributeId`: a standard object (People,
+ * Companies and Deals keep Name, which their matching, enrichment and booking
+ * read), an attribute that isn't one of this object's the actor can see (one
+ * answer for both, so it says nothing of another object's), an archived one,
+ * and one `canNameRecords` refuses.
+ */
+async function nameAttributeFor(
+  tx: WorkspaceTx,
+  access: Access,
+  objectId: string,
+  attributeId: string,
+): Promise<{ readonly attribute: AttributeDef; readonly before: AttributeDef | undefined }> {
+  const [object] = await tx
+    .select({ isStandard: objects.isStandard, primaryAttributeId: objects.primaryAttributeId })
+    .from(objects)
+    .where(eq(objects.id, objectId))
+    .for('update');
+  if (object === undefined) throw refuse('NOT_FOUND', 'That object does not exist.');
+  if (object.isStandard) {
+    throw refuseOn('CONFIG_INVALID', 'People, Companies and Deals are always named by their Name.', NAME_FIELD);
+  }
+  const notHere = () => refuseOn('CONFIG_INVALID', "Pick one of this object's attributes.", NAME_FIELD);
+  const attribute = await loadAttribute(tx, attributeId, true).catch((error: unknown) => {
+    throw isRefusal(error) && error.refusal.code === 'NOT_FOUND' ? notHere() : error;
+  });
+  if (attribute.objectId !== objectId || !attributeVisible(access, attribute)) throw notHere();
+  if (isArchivedNow(attribute)) {
+    throw refuseOn('CONFIG_INVALID', `${attribute.title} is archived. Restore it first.`, NAME_FIELD);
+  }
+  if (!canNameRecords(attribute)) {
+    throw refuseOn(
+      'CONFIG_INVALID',
+      `${attribute.title} can't name records. Pick a text, email, domain, link or personal name that holds one value.`,
+      NAME_FIELD,
+    );
+  }
+  const before =
+    object.primaryAttributeId === null || object.primaryAttributeId === attribute.id
+      ? undefined
+      : // Locked too: a Required turned on at the same moment either waits and sees it is no longer the name, or
+        // is seen here.
+        await loadAttribute(tx, object.primaryAttributeId, true);
+  return { attribute, before };
+}
+
+/**
+ * Refuses a name change that leaves the old name a wall for a live booking
+ * page (late trap #11's twin): a booking fills an object's name attribute and
+ * nothing else of it, so a required old name with no default would leave
+ * every guest out of the CRM. The pages' check reads the object as the write
+ * left it.
+ */
+async function checkStillFilled(tx: WorkspaceTx, access: Access, before: AttributeDef): Promise<void> {
+  if (!isUnfillableRequired(before, ANONYMOUS)) return;
+  // A name attribute hidden from the actor is never named in the refusal (spec 0009, AC-141).
+  const named = attributeVisible(access, before) ? before : { ...before, title: 'the current name attribute' };
+  await checkLivePagesFill(tx, named).catch((error: unknown) => {
+    throw isRefusal(error) && error.refusal.code === 'CONFIG_INVALID'
+      ? refuseOn('CONFIG_INVALID', error.refusal.message, NAME_FIELD)
+      : error;
+  });
+}
+
+/** Changes an object's names, icon, hue or name attribute. */
 export async function updateObject(scope: EngineScope, input: ObjectUpdate, hooks: readonly AfterWrite[] = []) {
   requirePermission(scope, 'schema.manage');
   checkId(input.objectId, 'That object does not exist.');
@@ -1319,6 +1392,10 @@ export async function updateObject(scope: EngineScope, input: ObjectUpdate, hook
       if (input.singularName !== undefined) checkName(input.singularName, 'singular name', 'singularName');
       if (input.pluralName !== undefined) checkName(input.pluralName, 'plural name', 'pluralName');
       checkLook(input.icon, input.hue);
+      const named =
+        input.primaryAttributeId === undefined
+          ? undefined
+          : await nameAttributeFor(tx, context.scope.access, input.objectId.toLowerCase(), input.primaryAttributeId);
       const updated = await objectGuard(input, () =>
         tx
           .update(objects)
@@ -1327,6 +1404,7 @@ export async function updateObject(scope: EngineScope, input: ObjectUpdate, hook
             ...(input.pluralName === undefined ? {} : { pluralName: input.pluralName.trim() }),
             ...(input.icon === undefined ? {} : { icon: input.icon }),
             ...(input.hue === undefined ? {} : { hue: input.hue }),
+            ...(named === undefined ? {} : { primaryAttributeId: named.attribute.id }),
             ...touched(scope),
           })
           .where(eq(objects.id, input.objectId))
@@ -1334,6 +1412,10 @@ export async function updateObject(scope: EngineScope, input: ObjectUpdate, hook
       );
       const [object] = updated;
       if (object === undefined) throw refuse('NOT_FOUND', 'That object does not exist.');
+      // The old name stops being filled at bookings: refused when that leaves a live page's guests out of the CRM.
+      if (named?.before !== undefined) await checkStillFilled(tx, context.scope.access, named.before);
+      // Every record's name changes with a new name attribute: a whole object change, so every tab reads the
+      // objects again, and the data layer then reads the records it holds again wherever their names show.
       context.record({ definitions: [{ objectId: object.id, attributeIds: [] }] });
     },
     hooks,

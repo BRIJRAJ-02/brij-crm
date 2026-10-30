@@ -3751,6 +3751,18 @@ export function createRecordsLayer({
     },
 
     /**
+     * An object's records are named by another attribute now (late trap #15):
+     * every name changed without a record changing. The workspace's names of
+     * linked records are read again, and every view and record page settles
+     * now, since a row of any object may show a chip of that one.
+     */
+    renamed: (workspace: string): void => {
+      names.forgetAll(workspace);
+      for (const entry of viewsOf(workspace)) entry.reread();
+      subscriptions.reload(workspace);
+    },
+
+    /**
      * One record with the attributes a screen shows (spec 0006, `records.one`):
      * served from the same store as every table (one body), holding it while
      * subscribed, reading only what the body lacks (everything asked when no

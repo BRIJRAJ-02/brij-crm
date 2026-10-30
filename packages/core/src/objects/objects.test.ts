@@ -2,15 +2,18 @@
 // app role: the workspace's order, creating with a client id and replays,
 // names unique ignoring case, the reserved API names, moving, archiving and
 // restoring (with the archived by object rule on the far end's attributes),
-// and usage through the caller's access.
+// usage through the caller's access, and choosing the attribute a custom
+// object's records are named by.
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDatabase, type Database } from '@crm/db';
 import { listObjectAttributes } from '../attributes/attributes.ts';
+import { archiveAttribute, defineAttribute } from '../engine/definitions.ts';
 import { newId } from '../engine/ids.ts';
 import { outboxHook } from '../engine/outbox.ts';
 import { queryPage } from '../engine/query/page.ts';
-import { createRecord, setValues } from '../engine/records.ts';
+import { searchRecords } from '../engine/record-search.ts';
+import { createRecord, getRecords, setValues } from '../engine/records.ts';
 import { isRefusal } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
@@ -255,6 +258,118 @@ describe('editing an object (AC-224)', () => {
       code: 'CONFIG_INVALID',
       field: 'icon',
     });
+  });
+});
+
+describe('the name attribute (late trap #15)', () => {
+  /** A custom object with a record named Apollo, and a Code text attribute holding APL-1. */
+  async function named() {
+    const w = await workspace();
+    const made = await createObject(w.scope, projects());
+    const { attributeId: code } = await defineAttribute(w.scope, {
+      objectId: made.id,
+      apiSlug: 'code',
+      title: 'Code',
+      type: 'text',
+    });
+    const name = made.primaryAttributeId ?? '';
+    const { recordId } = await createRecord(w.scope, {
+      objectId: made.id,
+      values: { [name]: 'Apollo', [code]: 'APL-1' },
+    });
+    return { ...w, objectId: made.id, name, code, recordId };
+  }
+
+  it("names every record by the new attribute, in reads and the picker's search, and stores one definitions row", async () => {
+    const { scope, objectId, name, code, recordId } = await named();
+    const before = await outboxCount(scope);
+    const edited = await editObject(scope, { objectId, primaryAttributeId: code }, [
+      outboxHook({ mutationId: newId() }),
+    ]);
+    expect(edited.primaryAttributeId).toBe(code);
+    expect(await outboxCount(scope)).toBe(before + 1);
+    const [record] = await getRecords(scope, { ids: [recordId] });
+    expect(record?.display.name).toBe('APL-1');
+    const found = await searchRecords(scope, { objectId, query: 'APL' });
+    expect(found.map((result) => result.ref.name)).toEqual(['APL-1']);
+    const attributes = await listObjectAttributes(scope, objectId);
+    expect(attributes.filter((attribute) => attribute.isPrimary).map((attribute) => attribute.id)).toEqual([code]);
+    // The new name can't be archived; the old one now can.
+    expect(await refusalOf(archiveAttribute(scope, code))).toMatchObject({ code: 'CONFIG_INVALID' });
+    await archiveAttribute(scope, name);
+  });
+
+  it('refuses a standard object, another object’s attribute, an archived one and a type that can’t name, on its field', async () => {
+    const { scope, objects, objectId, code } = await named();
+    const people = objects.people ?? '';
+    const jobTitle = (await listObjectAttributes(scope, people)).find((attribute) => attribute.apiSlug === 'job_title');
+    expect(await refusalOf(editObject(scope, { objectId: people, primaryAttributeId: jobTitle?.id ?? '' }))).toEqual({
+      code: 'CONFIG_INVALID',
+      message: 'People, Companies and Deals are always named by their Name.',
+      field: 'primaryAttributeId',
+    });
+    const notHere = {
+      code: 'CONFIG_INVALID',
+      message: "Pick one of this object's attributes.",
+      field: 'primaryAttributeId',
+    };
+    expect(await refusalOf(editObject(scope, { objectId, primaryAttributeId: jobTitle?.id ?? '' }))).toEqual(notHere);
+    expect(await refusalOf(editObject(scope, { objectId, primaryAttributeId: newId() }))).toEqual(notHere);
+    const system = (await listObjectAttributes(scope, objectId)).find((attribute) => attribute.apiSlug === 'record_id');
+    const kinds = [
+      { apiSlug: 'budget', title: 'Budget', type: 'number' },
+      { apiSlug: 'notes', title: 'Notes', type: 'long_text' },
+      { apiSlug: 'phone', title: 'Phone', type: 'phone' },
+      { apiSlug: 'emails', title: 'Emails', type: 'email', isMulti: true },
+    ] as const;
+    for (const kind of kinds) {
+      const { attributeId } = await defineAttribute(scope, { objectId, ...kind });
+      expect(await refusalOf(editObject(scope, { objectId, primaryAttributeId: attributeId }))).toMatchObject({
+        code: 'CONFIG_INVALID',
+        field: 'primaryAttributeId',
+      });
+    }
+    expect(await refusalOf(editObject(scope, { objectId, primaryAttributeId: system?.id ?? '' }))).toMatchObject({
+      code: 'CONFIG_INVALID',
+      field: 'primaryAttributeId',
+    });
+    await archiveAttribute(scope, code);
+    expect(await refusalOf(editObject(scope, { objectId, primaryAttributeId: code }))).toEqual({
+      code: 'CONFIG_INVALID',
+      message: 'Code is archived. Restore it first.',
+      field: 'primaryAttributeId',
+    });
+    // Nothing changed: the record keeps its old name attribute.
+    expect((await listObjects(scope)).find((object) => object.id === objectId)?.primaryAttributeId).not.toBe(code);
+  });
+
+  it('refuses a member without schema.manage, and an attribute hidden from the caller as one not here', async () => {
+    const { scope, objectId, name, code } = await named();
+    const before = await outboxCount(scope);
+    const member = await memberIn(scope, 'member');
+    const hooks = [outboxHook({ mutationId: newId() })];
+    expect(await refusalOf(editObject(member, { objectId, primaryAttributeId: code }, hooks))).toMatchObject({
+      code: 'FORBIDDEN',
+    });
+    const blind = rescope(await memberIn(scope, 'admin'), {
+      rules: {
+        levels: [
+          {
+            subject: { type: 'role', role: 'admin' },
+            target: { type: 'attribute', objectId, attributeId: code },
+            level: 'hidden',
+          },
+        ],
+        records: [],
+      },
+    });
+    expect(await refusalOf(editObject(blind, { objectId, primaryAttributeId: code }, hooks))).toEqual({
+      code: 'CONFIG_INVALID',
+      message: "Pick one of this object's attributes.",
+      field: 'primaryAttributeId',
+    });
+    expect(await outboxCount(scope)).toBe(before);
+    expect((await listObjects(scope)).find((object) => object.id === objectId)?.primaryAttributeId).toBe(name);
   });
 });
 

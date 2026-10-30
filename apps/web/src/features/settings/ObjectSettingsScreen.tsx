@@ -43,6 +43,11 @@ export interface ObjectSettingsScreenProps {
   readonly tab: ObjectTab;
   /** The Attributes tab's reads; undefined on the other tab and while the object is archived. */
   readonly attributesPage: AttributesPage | undefined;
+  /**
+   * The Configuration tab's live attributes, for the name attribute: `unavailable` when they couldn't be read,
+   * undefined on the other tab and while the object is archived.
+   */
+  readonly nameAttributes: readonly AttributeDefinition[] | 'unavailable' | undefined;
   /** `?attribute=<id>` (AC-231). */
   readonly selectedAttribute: string | undefined;
   readonly onSelectAttribute: (attributeId: string | undefined, replace?: boolean) => void;
@@ -65,6 +70,7 @@ export function ObjectSettingsScreen({
   objects,
   tab,
   attributesPage,
+  nameAttributes,
   selectedAttribute,
   onSelectAttribute,
 }: ObjectSettingsScreenProps) {
@@ -132,7 +138,9 @@ export function ObjectSettingsScreen({
             ))}
         </TabPanel>
         <TabPanel id="configuration">
-          {tab === 'configuration' && <ConfigurationTab slug={slug} object={object} configuration={configuration} />}
+          {tab === 'configuration' && (
+            <ConfigurationTab slug={slug} object={object} configuration={configuration} attributes={nameAttributes} />
+          )}
         </TabPanel>
       </Tabs>
     </SettingsPage>

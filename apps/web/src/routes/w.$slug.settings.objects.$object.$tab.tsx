@@ -21,7 +21,8 @@ function objectSettingsSearch(search: Record<string, unknown>): ObjectSettingsSe
 // One object's settings tab (spec 0012, screens), by the object's API name, so
 // links survive renames: the object from every object the person can see
 // (archived ones too), and on the Attributes tab all its attributes (archived
-// ones too), the usage for the meter and the members for a Member default.
+// ones too), the usage for the meter and the members for a Member default;
+// on the Configuration tab its live attributes, for its name attribute.
 // An unknown object or tab shows "not found" inside the frame.
 export const Route = createFileRoute('/w/$slug/settings/objects/$object/$tab')({
   validateSearch: objectSettingsSearch,
@@ -44,7 +45,13 @@ export const Route = createFileRoute('/w/$slug/settings/objects/$object/$tab')({
             context.data.members.list(params.slug).catch(() => []),
           ]).then(([attributes, usage, members]) => ({ attributes, usage, members }))
         : undefined;
-    return { page: { object, objects, tab: params.tab, attributesPage } };
+    // The Configuration tab's name attribute choice: the live attributes, cached with the tables'. An extra too: a
+    // failure shows the choice read only, saying so, never the tab failed.
+    const nameAttributes =
+      params.tab === 'configuration' && !object.isArchived
+        ? await context.data.attributes.list(params.slug, object.id).catch(() => 'unavailable' as const)
+        : undefined;
+    return { page: { object, objects, tab: params.tab, attributesPage, nameAttributes } };
   },
   pendingComponent: () => (
     <LoadingNow>
