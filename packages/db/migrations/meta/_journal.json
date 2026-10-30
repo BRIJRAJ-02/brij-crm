@@ -953,6 +953,13 @@
       "when": 1795500100000,
       "tag": "0136_activity_links",
       "breakpoints": true
+    },
+    {
+      "idx": 141,
+      "version": "7",
+      "when": 1795600400000,
+      "tag": "0141_log_activity",
+      "breakpoints": true
     }
   ]
 }

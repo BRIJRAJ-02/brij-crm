@@ -12,11 +12,21 @@
 // record first): it shows on each one's Notes tab and timeline, but its own
 // record alone still decides who may see and change it, and a link needs
 // `write` on the linked record's object, as a task's does.
+// A call or a meeting logged on a record is a note with a `kind` (migration
+// 0141): it also holds when it happened (`occurred_at`, default now, never a
+// day ahead), an optional duration and an optional outcome from its kind's own
+// set, and it is listed where it happened, not where it was last edited. The
+// kind never changes, and a plain note takes none of the details.
 import { sql, type SQL } from 'drizzle-orm';
 import {
+  ACTIVITY_AHEAD_MS,
+  ACTIVITY_DURATION_MAX,
+  ACTIVITY_KIND_FIXED,
+  ACTIVITY_TOO_FAR,
   NOTE_CONTENT_MAX_BYTES,
   NOTE_COUNT_CAP,
   NOTE_EMPTY,
+  NOTE_KINDS,
   NOTE_PAGE,
   NOTE_PAGE_MAX,
   NOTE_RECORDS_MAX,
@@ -25,8 +35,11 @@ import {
   NoteCursor,
   noteBytes,
   noteExcerpt,
+  outcomesFor,
   richTextToPlain,
   type Note,
+  type NoteKind,
+  type NoteOutcome,
   type NotePage,
   type NoteSummary,
   type NoteHit,
@@ -83,14 +96,28 @@ export interface SaveNoteInput {
   readonly title?: string;
   /** Parsed here too, so any caller is held to the document's rules; the size is checked apart. */
   readonly content?: unknown;
+  /** A call or meeting logged on the record (a new note only); a plain note when absent. */
+  readonly kind?: NoteKind;
+  /** When a call or meeting happened: now when absent on a new one, never a day ahead. */
+  readonly occurredAt?: string;
+  /** A call's or meeting's length in minutes (1 to 1,440); null clears it. */
+  readonly durationMinutes?: number | null;
+  /** How a call or meeting went, from its kind's own set; null clears it. */
+  readonly outcome?: NoteOutcome | null;
   /** The version this save started from: null or absent for a new note. */
   readonly baseVersion?: number | null;
 }
 
 /** A moment as fixed width UTC text with milliseconds, as the shapes carry it. */
-const millis = (column: string) => sql.raw(`to_char(${column} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`);
+const millis = (column: string) => sql.raw(`to_char((${column}) at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`);
 /** A moment with microseconds, for cursors. */
-const micros = (column: string) => sql.raw(`to_char(${column} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`);
+const micros = (column: string) => sql.raw(`to_char((${column}) at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`);
+
+/**
+ * The moment a note is listed at, over a note aliased `n`: a plain note's last edit, a call's or meeting's when it
+ * happened (migration 0141). The Notes tab and the Notes page sort on it, and their cursors carry it.
+ */
+const LISTED = "case when n.kind = 'note' then n.updated_at else n.occurred_at end";
 
 /** A note's stored row, as the shapes need it (its text only as far as the excerpt reads). */
 interface NoteRow extends Record<string, unknown> {
@@ -100,6 +127,10 @@ interface NoteRow extends Record<string, unknown> {
   readonly title: string;
   readonly head: string;
   readonly version: number;
+  readonly kind: NoteKind;
+  readonly occurred_at: string;
+  readonly duration_minutes: number | null;
+  readonly outcome: NoteOutcome | null;
   readonly created_at: string;
   readonly created_by_type: Actor['type'];
   readonly created_by_id: string | null;
@@ -111,9 +142,10 @@ interface NoteRow extends Record<string, unknown> {
 
 /** The columns of `NoteRow`, over a note aliased `n` joined to its record aliased `r`. */
 const NOTE_COLUMNS = sql`n.id::text as id, n.record_id::text as record_id, r.object_id::text as object_id, n.title,
-  left(n.content_text, 600) as head, n.version, ${millis('n.created_at')} as created_at, n.created_by_type,
+  left(n.content_text, 600) as head, n.version, n.kind, ${millis('n.occurred_at')} as occurred_at, n.duration_minutes,
+  n.outcome, ${millis('n.created_at')} as created_at, n.created_by_type,
   n.created_by_id::text as created_by_id, ${millis('n.updated_at')} as updated_at, n.updated_by_type,
-  n.updated_by_id::text as updated_by_id, ${micros('n.updated_at')} as cursor_at`;
+  n.updated_by_id::text as updated_by_id, ${micros(LISTED)} as cursor_at`;
 
 /** A note's record, live on a live object: what every note read joins. */
 const LIVE_RECORD = sql`join records r on r.workspace_id = n.workspace_id and r.id = n.record_id
@@ -133,6 +165,10 @@ function summaryOf(row: NoteRow, access: Access): NoteSummary {
     title: row.title,
     excerpt: noteExcerpt(row.head),
     version: row.version,
+    kind: row.kind,
+    occurredAt: row.occurred_at,
+    ...(row.duration_minutes === null ? {} : { durationMinutes: row.duration_minutes }),
+    ...(row.outcome === null ? {} : { outcome: row.outcome }),
     canChange: canWrite(access, row.object_id),
     createdAt: row.created_at,
     createdBy: actorOf(row.created_by_type, row.created_by_id),
@@ -243,6 +279,60 @@ function checkContent(content: unknown): RichTextDoc {
   return parsed.data;
 }
 
+/** The typed details of a save, as given: only the ones the caller named. */
+interface Details {
+  readonly occurredAt?: string;
+  readonly durationMinutes?: number | null;
+  readonly outcome?: NoteOutcome | null;
+}
+
+/**
+ * The details a save names, checked against the note's kind: a plain note takes none (a null that clears nothing is
+ * let through); a call or meeting takes a time that is a moment, a whole duration of 1 to 1,440 minutes and an
+ * outcome from its kind's own set. Refused on the field, 400 `INPUT_INVALID`. Whether the time is a day ahead is
+ * the database's clock (`checkNotAhead`), not this process's.
+ */
+function checkDetails(kind: NoteKind, input: Details): Details {
+  const { occurredAt, durationMinutes, outcome } = input;
+  if (kind === 'note') {
+    if (occurredAt !== undefined) throw inputInvalid('occurredAt', 'A note has no time of its own.');
+    if (durationMinutes !== undefined && durationMinutes !== null) {
+      throw inputInvalid('durationMinutes', 'A note has no duration.');
+    }
+    if (outcome !== undefined && outcome !== null) throw inputInvalid('outcome', 'A note has no outcome.');
+    return {};
+  }
+  const moment = occurredAt === undefined ? Number.NaN : Date.parse(occurredAt);
+  if (occurredAt !== undefined && Number.isNaN(moment)) {
+    throw inputInvalid('occurredAt', 'Give the time as a date and time.');
+  }
+  if (
+    durationMinutes !== undefined &&
+    durationMinutes !== null &&
+    (!Number.isInteger(durationMinutes) || durationMinutes < 1 || durationMinutes > ACTIVITY_DURATION_MAX)
+  ) {
+    throw inputInvalid('durationMinutes', `A duration is 1 to ${String(ACTIVITY_DURATION_MAX)} minutes.`);
+  }
+  if (outcome !== undefined && outcome !== null && !outcomesFor(kind).includes(outcome)) {
+    throw inputInvalid('outcome', `That isn’t an outcome a ${kind} can have.`);
+  }
+  return {
+    // Written back as ISO 8601 in UTC, so what reaches SQL is a moment Postgres reads as this process did.
+    ...(occurredAt === undefined ? {} : { occurredAt: new Date(moment).toISOString() }),
+    ...(durationMinutes === undefined ? {} : { durationMinutes }),
+    ...(outcome === undefined ? {} : { outcome }),
+  };
+}
+
+/** Refuses a moment more than a day ahead of the database's clock (`occurredAt`): logging is for what happened. */
+async function checkNotAhead(tx: WorkspaceTx, occurredAt: string | undefined): Promise<void> {
+  if (occurredAt === undefined) return;
+  const rows = await tx.execute<{ ahead: boolean }>(
+    sql`select ${occurredAt}::timestamptz > now() + make_interval(secs => ${ACTIVITY_AHEAD_MS / 1000}) as ahead`,
+  );
+  if (rows.rows[0]?.ahead === true) throw inputInvalid('occurredAt', ACTIVITY_TOO_FAR);
+}
+
 /**
  * Saves a note (AC-439 to AC-443, AC-449): an upsert by the browser's id.
  * New: its record live, visible and on an object the writer may change, and a
@@ -251,7 +341,10 @@ function checkContent(content: unknown): RichTextDoc {
  * `NOT_FOUND`), the given fields written, the version one more, and when
  * `baseVersion` isn't the stored version, `overwrote` names whose save it
  * replaced. Nothing changed writes nothing (a repeated first save after a
- * lost answer included). One `notes` outbox row per change.
+ * lost answer included). One `notes` outbox row per change. A call or
+ * meeting (`kind`, a new note's only, for life; migration 0141) needs no text,
+ * and takes `occurredAt`, `durationMinutes` and `outcome` as `checkDetails`
+ * says; a plain note takes none.
  */
 export async function saveNote(
   scope: EngineScope,
@@ -264,6 +357,7 @@ export async function saveNote(
   const recordId = checkId(input.recordId, UNKNOWN_RECORD);
   const title = input.title === undefined ? undefined : checkTitle(input.title);
   const content = input.content === undefined ? undefined : checkContent(input.content);
+  if (input.kind !== undefined && !NOTE_KINDS.includes(input.kind)) throw inputInvalid('kind', ACTIVITY_KIND_FIXED);
   const { result } = await runWrite(
     scope,
     async (context): Promise<SaveNoteResult> => {
@@ -288,19 +382,44 @@ export async function saveNote(
           if (linked.rows.length === 0) throw refuse('ID_TAKEN', 'A note with that id already exists.');
         }
         if (!canWrite(scope.access, stored.object_id)) throw refuse('FORBIDDEN', NOTE_READ_ONLY);
-        const changes = await tx.execute<{ title_changed: boolean; content_changed: boolean; content: unknown }>(sql`
+        // The kind is for life, and only a call or meeting has details (seen and changeable first, so a note the
+        // writer can't see never says what it is).
+        if (input.kind !== undefined && input.kind !== stored.kind) throw inputInvalid('kind', ACTIVITY_KIND_FIXED);
+        const details = checkDetails(stored.kind, input);
+        await checkNotAhead(tx, details.occurredAt);
+        const changes = await tx.execute<{
+          title_changed: boolean;
+          content_changed: boolean;
+          occurred_changed: boolean;
+          duration_changed: boolean;
+          outcome_changed: boolean;
+          content: unknown;
+        }>(sql`
           select ${title === undefined ? sql`false` : sql`title <> ${title}`} as title_changed,
             ${content === undefined ? sql`false` : sql`content <> ${JSON.stringify(content)}::jsonb`} as content_changed,
+            ${details.occurredAt === undefined ? sql`false` : sql`occurred_at <> ${details.occurredAt}::timestamptz`} as occurred_changed,
+            ${details.durationMinutes === undefined ? sql`false` : sql`duration_minutes is distinct from ${details.durationMinutes}::smallint`} as duration_changed,
+            ${details.outcome === undefined ? sql`false` : sql`outcome is distinct from ${details.outcome}::text`} as outcome_changed,
             content
           from notes where id = ${id}::uuid
         `);
         const changed = changes.rows[0];
-        if (changed === undefined || (!changed.title_changed && !changed.content_changed)) {
+        if (
+          changed === undefined ||
+          (!changed.title_changed &&
+            !changed.content_changed &&
+            !changed.occurred_changed &&
+            !changed.duration_changed &&
+            !changed.outcome_changed)
+        ) {
           return { note: summaryOf(stored, scope.access) };
         }
         await tx.execute(sql`
           update notes set
             ${changed.title_changed && title !== undefined ? sql`title = ${title},` : sql``}
+            ${changed.occurred_changed && details.occurredAt !== undefined ? sql`occurred_at = ${details.occurredAt}::timestamptz,` : sql``}
+            ${changed.duration_changed && details.durationMinutes !== undefined ? sql`duration_minutes = ${details.durationMinutes}::smallint,` : sql``}
+            ${changed.outcome_changed && details.outcome !== undefined ? sql`outcome = ${details.outcome}::text,` : sql``}
             ${
               changed.content_changed && content !== undefined
                 ? sql`content = ${JSON.stringify(content)}::jsonb, content_text = ${richTextToPlain(content)},`
@@ -342,12 +461,21 @@ export async function saveNote(
         if (!canWrite(scope.access, record.objectId)) throw refuse('FORBIDDEN', NOTE_READ_ONLY);
         const body = content ?? EMPTY_DOC;
         const text = richTextToPlain(body);
-        if ((title ?? '').trim() === '' && text.trim() === '') throw refuseOn('CONFIG_INVALID', NOTE_EMPTY, 'content');
+        const kind = input.kind ?? 'note';
+        // A plain note needs a title or text; a logged call or meeting is its type, time and outcome, text or none.
+        if (kind === 'note' && (title ?? '').trim() === '' && text.trim() === '') {
+          throw refuseOn('CONFIG_INVALID', NOTE_EMPTY, 'content');
+        }
+        const details = checkDetails(kind, input);
+        await checkNotAhead(tx, details.occurredAt);
         const inserted = await tx.execute(sql`
-          insert into notes (workspace_id, id, record_id, title, content, content_text,
+          insert into notes (workspace_id, id, record_id, title, content, content_text, kind, occurred_at,
+            duration_minutes, outcome,
             created_by_type, created_by_id, created_by_member_id, updated_by_type, updated_by_id, updated_by_member_id)
           values (${scope.workspaceId}::uuid, ${id}::uuid, ${recordId}::uuid, ${title ?? ''}, ${JSON.stringify(body)}::jsonb,
-            ${text}, ${actor.type}, ${actor.id}::uuid, ${memberId}::uuid, ${actor.type}, ${actor.id}::uuid, ${memberId}::uuid)
+            ${text}, ${kind}, coalesce(${details.occurredAt ?? null}::timestamptz, now()),
+            ${details.durationMinutes ?? null}::smallint, ${details.outcome ?? null}::text,
+            ${actor.type}, ${actor.id}::uuid, ${memberId}::uuid, ${actor.type}, ${actor.id}::uuid, ${memberId}::uuid)
           on conflict (workspace_id, id) do nothing
         `);
         // Another try of this first save (a retry after a lost answer) committed meanwhile: read it, with its lock,
@@ -418,7 +546,7 @@ function decodeNoteCursor(cursor: string): NoteCursor {
   }
   const bound = NoteCursor.safeParse(parsed);
   if (!bound.success) throw inputInvalid('cursor', NOTE_CURSOR_MESSAGE);
-  const moment = bound.data.updatedAt;
+  const moment = bound.data.at;
   // A moment the server wrote: fixed width UTC with microseconds that round trips, so a forged one never reaches a cast.
   const stamp = Date.parse(moment);
   if (
@@ -467,19 +595,17 @@ export async function listNotes(
     const bound =
       after === undefined
         ? sql``
-        : sql` and (n.updated_at < ${after.updatedAt}::timestamptz or (n.updated_at = ${after.updatedAt}::timestamptz and n.id > ${after.id}::uuid))`;
+        : sql` and (${sql.raw(LISTED)} < ${after.at}::timestamptz or (${sql.raw(LISTED)} = ${after.at}::timestamptz and n.id > ${after.id}::uuid))`;
     const page = await tx.execute<NoteRow>(sql`
       select ${NOTE_COLUMNS} ${from}${bound}
-      order by n.updated_at desc nulls last, n.id
+      order by ${sql.raw(LISTED)} desc nulls last, n.id
       limit ${limit + 1}
     `);
     const rows = page.rows.slice(0, limit);
     const last = rows.at(-1);
     const nextCursor =
       page.rows.length > limit && last !== undefined
-        ? Buffer.from(JSON.stringify({ updatedAt: last.cursor_at, id: last.id } satisfies NoteCursor)).toString(
-            'base64url',
-          )
+        ? Buffer.from(JSON.stringify({ at: last.cursor_at, id: last.id } satisfies NoteCursor)).toString('base64url')
         : undefined;
     const items = rows.map((row) => summaryOf(row, scope.access));
     if (after !== undefined) return { items, ...(nextCursor === undefined ? {} : { nextCursor }) };
@@ -531,20 +657,18 @@ async function listWorkspaceNotes(scope: EngineScope, after: NoteCursor | undefi
     const bound =
       after === undefined
         ? sql``
-        : sql` and (n.updated_at < ${after.updatedAt}::timestamptz or (n.updated_at = ${after.updatedAt}::timestamptz and n.id > ${after.id}::uuid))`;
+        : sql` and (${sql.raw(LISTED)} < ${after.at}::timestamptz or (${sql.raw(LISTED)} = ${after.at}::timestamptz and n.id > ${after.id}::uuid))`;
     const page = await tx.execute<NoteRow>(sql`
       select ${NOTE_COLUMNS} from notes n ${LIVE_RECORD}
       where ${readable}${bound}
-      order by n.updated_at desc nulls last, n.id
+      order by ${sql.raw(LISTED)} desc nulls last, n.id
       limit ${limit + 1}
     `);
     const rows = page.rows.slice(0, limit);
     const last = rows.at(-1);
     const nextCursor =
       page.rows.length > limit && last !== undefined
-        ? Buffer.from(JSON.stringify({ updatedAt: last.cursor_at, id: last.id } satisfies NoteCursor)).toString(
-            'base64url',
-          )
+        ? Buffer.from(JSON.stringify({ at: last.cursor_at, id: last.id } satisfies NoteCursor)).toString('base64url')
         : undefined;
     const displays = await recordDisplays(
       tx,

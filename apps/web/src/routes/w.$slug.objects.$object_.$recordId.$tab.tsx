@@ -1,7 +1,14 @@
 import { isDataError } from '@crm/data';
 import { LoadingNow } from '@crm/ui';
 import { createFileRoute, redirect, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
-import { isNoteParam, isRecordId, isRecordTab, isTaskParam, isThreadParam } from '../features/records/params.ts';
+import {
+  isLogParam,
+  isNoteParam,
+  isRecordId,
+  isRecordTab,
+  isTaskParam,
+  isThreadParam,
+} from '../features/records/params.ts';
 import { RecordPage, RecordPendingPage } from '../features/records/RecordPage.tsx';
 import { failedPage, missingPage } from '../features/workspace/ObjectScreen.tsx';
 import { strings } from '../features/workspace/strings.ts';
@@ -19,10 +26,14 @@ import { useWorkspaceName, WorkspacePage } from '../features/workspace/Workspace
 // and reads the person's member id (a new task is theirs). Spec 0017
 // milestone 3 starts each side that holds many as a section source (the
 // sidebar's section and Overview's card share it), never waiting for them.
-/** `?task=<id>` or `?task=new`: the task dialog; `?note=<id>` or `?note=new`: the note window. Anything else is dropped. */
+/**
+ * `?task=<id>` or `?task=new`: the task dialog; `?note=<id>` or `?note=new`: the note window; `?log=<id>`, `?log=new`,
+ * `?log=call` or `?log=meeting`: the Log activity dialog. Anything else is dropped.
+ */
 interface RecordSearch {
   readonly task?: string;
   readonly note?: string;
+  readonly log?: string;
   readonly thread?: string;
 }
 
@@ -31,6 +42,7 @@ function recordSearch(search: Record<string, unknown>): RecordSearch {
   return {
     ...(isTaskParam(search.task) ? { task: search.task } : {}),
     ...(isNoteParam(search.note) ? { note: search.note } : {}),
+    ...(isLogParam(search.log) ? { log: search.log } : {}),
     ...(isThreadParam(search.thread) ? { thread: search.thread } : {}),
   };
 }
@@ -160,6 +172,7 @@ function RecordRoute() {
       recordId={params.recordId}
       {...(search.task === undefined ? {} : { task: search.task })}
       {...(search.note === undefined ? {} : { note: search.note })}
+      {...(search.log === undefined ? {} : { log: search.log })}
       {...(search.thread === undefined ? {} : { thread: search.thread })}
       {...page}
     />

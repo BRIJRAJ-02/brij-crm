@@ -4,9 +4,7 @@
 // Leaves out: writing together in real time and versions (#27), comments on a passage (#29), moving a note to another
 // record (its own record stays), templates.
 import {
-  NOTE_RECORDS_MAX,
   NOTE_TITLE_MAX,
-  refusalSummary,
   type ActorDisplay,
   type MemberSummary,
   type NoteSession,
@@ -17,7 +15,6 @@ import {
 } from '@crm/data';
 import { useNoteSession } from '@crm/data/react';
 import {
-  AttributeEditor,
   Button,
   Callout,
   EmptyState,
@@ -29,14 +26,13 @@ import {
   RelativeTime,
   Skeleton,
   Tooltip,
-  type FieldAttribute,
 } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { editorSearch, useRecordSearch } from '../records/links.ts';
 import { deleteWithUndo } from '../tasks/undo-delete.ts';
 import { NoteEditor } from './editor.ts';
 import { actorDisplay } from './entries.ts';
+import { LinksField } from './LinksField.tsx';
 import { strings } from './strings.ts';
 
 /** Props for the note window. */
@@ -88,112 +84,6 @@ const LOADING_SESSION: NoteSession = {
 
 /** A chip's href, when there is one. */
 const hrefProps = (href: string | undefined) => (href === undefined ? {} : { href });
-
-/** The linked records field's attribute, through the field set's own record editor (one field design). */
-function linksAttribute(readOnlyReason: string | undefined): FieldAttribute {
-  return {
-    id: 'note-links',
-    name: strings.linkedRecords,
-    type: 'record_reference',
-    allowMultiple: true,
-    cardinality: 'many',
-    isRequired: false,
-    isUnique: false,
-    isReadOnly: readOnlyReason !== undefined,
-    ...(readOnlyReason === undefined ? {} : { readOnlyReason }),
-  };
-}
-
-/**
- * The records a note links besides its own (migration 0136), as the task
- * dialog's Records field: chips with Remove, and a picker over the objects
- * the person may change, starting on the page's. Changes show at once; a
- * refusal puts them back and says why under the field.
- */
-function NoteLinksField({
-  slug,
-  session,
-  links,
-  objects,
-  startObjectId,
-  isEditable,
-  autoOpen,
-}: {
-  readonly slug: string;
-  readonly session: NoteSession;
-  readonly links: readonly RecordRefDisplay[];
-  readonly objects: readonly ObjectSummary[];
-  readonly startObjectId: string;
-  readonly isEditable: boolean;
-  readonly autoOpen: boolean;
-}) {
-  const writable = objects.filter((object) => object.access === 'write');
-  const [objectId, setObjectId] = useState(
-    writable.find((object) => object.id === startObjectId)?.id ?? writable[0]?.id ?? '',
-  );
-  const search = useRecordSearch(slug, objectId);
-  const [error, setError] = useState<string | undefined>(undefined);
-  const byId = new Map(objects.map((object) => [object.id, object]));
-  const readOnlyReason = !isEditable ? strings.readOnly : writable.length === 0 ? strings.linkForbidden : undefined;
-  const shownError = error ?? (search.failed ? strings.searchFailed : undefined);
-  return (
-    <AttributeEditor
-      attribute={linksAttribute(readOnlyReason)}
-      value={links.map((link) => ({ objectId: link.objectId, recordId: link.recordId }))}
-      display={links}
-      surface="form"
-      autoOpen={autoOpen}
-      onSearch={editorSearch(search.onSearch)}
-      objectSwitcher={{
-        objects: writable.map((object) => ({
-          id: object.id,
-          label: object.pluralName,
-          icon: object.icon,
-          hue: object.hue,
-        })),
-        objectId,
-        onObjectChange: setObjectId,
-      }}
-      onCommit={(value) => {
-        const next = (Array.isArray(value) ? value : []) as readonly {
-          readonly objectId: string;
-          readonly recordId: string;
-        }[];
-        const held = new Set(links.map((link) => link.recordId));
-        const nextIds = new Set(next.map((ref) => ref.recordId));
-        const added = next.filter((ref) => !held.has(ref.recordId));
-        // Linking needs write on the record's object: said under the field, nothing sent.
-        if (added.some((ref) => byId.get(ref.objectId)?.access !== 'write')) {
-          setError(strings.linkForbidden);
-          return;
-        }
-        // Its own record counts as one of the 20.
-        if (next.length + 1 > NOTE_RECORDS_MAX) {
-          setError(strings.linksFull(NOTE_RECORDS_MAX));
-          return;
-        }
-        setError(undefined);
-        void session
-          .setLinks({
-            add: added.map(
-              (ref) =>
-                search.displayOf(ref.recordId) ?? {
-                  objectId: ref.objectId,
-                  recordId: ref.recordId,
-                  name: '',
-                  kind: 'other',
-                },
-            ),
-            remove: links.filter((link) => !nextIds.has(link.recordId)).map((link) => link.recordId),
-          })
-          .then((failure) => {
-            if (failure !== undefined) setError(refusalSummary(failure));
-          });
-      }}
-      {...(shownError === undefined ? {} : { error: shownError })}
-    />
-  );
-}
 
 /**
  * The bar's word on the note: its save state while it saves ("Saving…",
@@ -379,14 +269,14 @@ export function NoteWindow(props: NoteWindowProps) {
         )}
         {!state.canChange && <Callout tone="info">{strings.readOnly}</Callout>}
         {!state.isNew && (state.links.length > 0 || isLinking) && (
-          <NoteLinksField
+          <LinksField
             slug={slug}
-            session={session}
             links={state.links}
             objects={objects}
             startObjectId={record.objectId}
             isEditable={isEditable}
             autoOpen={isLinking && state.links.length === 0}
+            onChange={session.setLinks}
           />
         )}
         {state.notice !== undefined && (

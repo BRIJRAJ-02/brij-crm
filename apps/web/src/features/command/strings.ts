@@ -61,6 +61,10 @@ export const strings = {
   /** The record page's own actions, named after it. */
   newNoteOn: (name: string) => `New note on ${name}`,
   newTaskOn: (name: string) => `New task on ${name}`,
+  logCallOn: (name: string) => `Log a call on ${name}`,
+  logMeetingOn: (name: string) => `Log a meeting on ${name}`,
+  callTerms: ['call', 'phone', 'log', 'activity', 'rang', 'spoke'],
+  meetingTerms: ['meeting', 'met', 'log', 'activity', 'visit'],
   noteTerms: ['note', 'write', 'add', 'create'],
   taskTerms: ['task', 'todo', 'to do', 'follow up', 'add', 'create'],
   addWord: 'add',

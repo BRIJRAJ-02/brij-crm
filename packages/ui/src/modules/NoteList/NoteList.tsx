@@ -1,13 +1,15 @@
 // Notes (spec 0019, a record's Notes tab): each note's title, a two line
 // excerpt, its author and when it was last edited; a row opens the note.
 // Notes come through a ListSource, and only the rows on screen draw.
-import type { ActorDisplay, RecordRefDisplay } from '@crm/contracts/values';
+import type { ActorDisplay, Hue, RecordRefDisplay } from '@crm/contracts/values';
 import { useMemo, type ReactNode } from 'react';
 import { GridList, GridListItem, ListLayout, Virtualizer } from 'react-aria-components';
 import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
+import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { RecordChip } from '../../atoms/RecordChip/RecordChip.tsx';
 import { RelativeTime } from '../../atoms/RelativeTime/RelativeTime.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
+import { Tag } from '../../atoms/Tag/Tag.tsx';
 import { TruncatedText } from '../../atoms/TruncatedText/TruncatedText.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { useFontsSettled } from '../../lib/fonts-settled.ts';
@@ -20,6 +22,17 @@ import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
 import { useDelayedLoading } from '../../provider/useDelayedLoading.ts';
 import styles from './NoteList.module.css';
 import { strings } from './strings.ts';
+
+/** A call or meeting logged on a record (migration 0141), as a note's row shows it. */
+export interface NoteListActivity {
+  readonly kind: 'call' | 'meeting';
+  /** When it happened, ISO 8601 in UTC: the row shows this in place of "Edited …". */
+  readonly occurredAt: string;
+  /** Its length, already worded by the screen ("30 min"). */
+  readonly duration?: string;
+  /** How it went, as a coloured tag: the label already worded by the screen. */
+  readonly outcome?: { readonly label: string; readonly hue: Hue };
+}
 
 /** One note, as a list shows it. */
 export interface NoteListItem {
@@ -34,6 +47,8 @@ export interface NoteListItem {
   readonly updatedAt: string;
   /** The record it is on, where notes of many records mix (the workspace's Notes page): a flat chip first in its line. */
   readonly record?: RecordRefDisplay;
+  /** A logged call or meeting: its icon leads the title, its outcome tags it, and its line tells when and how long. */
+  readonly activity?: NoteListActivity;
 }
 
 /** Props for NoteList. */
@@ -150,13 +165,31 @@ function NoteListContent({
         </GridListItem>
       );
     }
-    const title = note.title.trim() === '' ? strings.untitled : note.title;
+    const activity = note.activity;
+    const isUntitled = note.title.trim() === '';
+    const title = !isUntitled
+      ? note.title
+      : activity === undefined
+        ? strings.untitled
+        : activity.kind === 'call'
+          ? strings.call
+          : strings.meeting;
     return (
       <GridListItem id={row.id} className={styles.row} textValue={title} data-pressable="">
         <RowShown index={row.index} onShown={onShown} />
-        <span className={styles.title} data-untitled={note.title.trim() === '' || undefined}>
-          <TruncatedText>{title}</TruncatedText>
-        </span>
+        {activity === undefined ? (
+          <span className={styles.title} data-untitled={isUntitled || undefined}>
+            <TruncatedText>{title}</TruncatedText>
+          </span>
+        ) : (
+          <span className={styles.heading}>
+            <Icon name={activity.kind === 'call' ? 'phone' : 'users'} size="sm" tone="muted" />
+            <span className={styles.title}>
+              <TruncatedText>{title}</TruncatedText>
+            </span>
+            {activity.outcome !== undefined && <Tag hue={activity.outcome.hue}>{activity.outcome.label}</Tag>}
+          </span>
+        )}
         {note.excerpt !== '' && (
           <span className={styles.excerpt}>
             <TruncatedText lines={2}>{note.excerpt}</TruncatedText>
@@ -183,8 +216,17 @@ function NoteListContent({
           <span className={styles.author}>{note.author.name}</span>
           <span aria-hidden="true">{strings.separator}</span>
           <span className={styles.time}>
-            {`${strings.edited} `}
-            <RelativeTime value={note.updatedAt} />
+            {activity === undefined ? (
+              <>
+                {`${strings.edited} `}
+                <RelativeTime value={note.updatedAt} />
+              </>
+            ) : (
+              <>
+                <RelativeTime value={activity.occurredAt} />
+                {activity.duration !== undefined && ` ${strings.separator} ${activity.duration}`}
+              </>
+            )}
           </span>
         </span>
       </GridListItem>

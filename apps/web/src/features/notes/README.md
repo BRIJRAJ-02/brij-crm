@@ -14,6 +14,18 @@ Spec 0019, milestones 3 and 4: notes on a record. The side panel's Notes tab wai
 - **Main task**: write what was learned, and trust that it's saved; link the other records it is about.
 - **Leaves out**: versions and shared editing (#27), moving a note to another record (its own record stays and decides who sees it), a page of its own (so no "Open as full page": there is no note route).
 
+## Log activity (LogActivityDialog)
+
+- **Purpose**: log a call or a meeting on a record (parity with Attio, HubSpot and Twenty), or open one logged.
+- **Main task**: two clicks and a save: Call is chosen and the time is now, so the common case is an outcome chip and ⌘↵.
+- **Leaves out**: attendees and a calendar event (the calendar owns meetings ahead, so a time more than a day ahead is refused), a title, changing a call into a meeting, email and AI.
+
+- A logged call or meeting is a note with a `kind` and the moment it happened (`occurred_at`, migration 0141), so it keeps linking to up to 20 records, mentions, access, the 30 day delete and the timeline. The record's Notes tab offers Log activity beside New note; ⌘K on a record offers "Log a call on <name>" and "Log a meeting on <name>" (`?log=call`, `?log=meeting`); `?log=new` opens it on Call and `?log=<id>` reopens an entry to edit.
+- The dialog is one `Form` in a Modal, saved with ⌘↵ (Ctrl+Enter elsewhere) or the footer's Log call or Log meeting: Call or Meeting as two segments with icons, When as the Date picker (its typed row takes "yesterday") and a time list in five minute steps, Duration as chips (15 min, 30 min, 1 h, and Custom in a popover), Outcome as chips from the kind's own set (calls: Connected, No answer, Left message; meetings: Held, Cancelled, No show), then **Add: Notes, Records**, two dashed buttons that reveal the note editor and the linked records field (open already when the entry has them).
+- A new entry stores nothing until Save; the save waits for the server (`data.notes.logActivity`), a refusal stays in the dialog as a danger Callout with everything typed, and a failed link step is a toast ("Logged, but the other records weren't linked") over an entry that is stored. A time more than a day ahead is said under When before anything is sent, and Log call is off.
+- An entry reopened (`updateActivity`, from the version the dialog read) shows Delete in the title bar: one click, the dialog closes and "Call deleted" offers Undo. The kind is fixed for life. A person who may only read sees it all, read only, with Close.
+- On the Notes tab and the workspace's Notes page a logged entry's row leads with the phone or people icon, reads "Call" or "Meeting" (its notes' start under it), tags its outcome and says "2 days ago · 30 min"; it sorts where it happened, a plain note by its last edit. On the Activity timeline it reads "logged a call" at the moment it happened, with the same facts; the filter has Calls, and Meetings reads calendar and logged meetings alike. Both open the same dialog.
+
 ## Notes
 
 - Every list and the window read the data layer's notes store (`data.notes.forRecord`, `open`, `remove`, `restore`), never the network. The route's loader starts the record's notes with the page, so the tab's count arrives with it.

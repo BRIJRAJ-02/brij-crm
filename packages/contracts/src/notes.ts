@@ -8,13 +8,31 @@ import { oc } from '@orpc/contract';
 import * as z from 'zod';
 import { ActorReferenceValue, Timestamp } from './values/attribute-values.ts';
 import { RichTextDoc, RichTextDocBody } from './values/rich-text.ts';
-import { NOTE_PAGE_MAX, NOTE_RECORDS_MAX, NOTE_TITLE_MAX } from './note-limits.ts';
+import {
+  ACTIVITY_DURATION_MAX,
+  CALL_OUTCOMES,
+  MEETING_OUTCOMES,
+  NOTE_KINDS,
+  NOTE_PAGE_MAX,
+  NOTE_RECORDS_MAX,
+  NOTE_TITLE_MAX,
+} from './note-limits.ts';
 import { TaskTotal } from './tasks.ts';
 import { RecordRefDisplay } from './values/options.ts';
 import { WorkspaceScoped } from './workspaces.ts';
 import { Uuid, uuidV7 } from './values/ids.ts';
 
 export {
+  ACTIVITY_AHEAD_MS,
+  ACTIVITY_DURATION_MAX,
+  ACTIVITY_KIND_FIXED,
+  ACTIVITY_TOO_FAR,
+  CALL_OUTCOMES,
+  MEETING_OUTCOMES,
+  NOTE_KINDS,
+  outcomesFor,
+  type NoteKind,
+  type NoteOutcome,
   NOTE_CONTENT_MAX_BYTES,
   NOTE_COUNT_CAP,
   NOTE_EMPTY,
@@ -33,6 +51,9 @@ export {
 /** The longest cursor `notes.list` takes. */
 export const MAX_NOTE_CURSOR = 256;
 
+/** What a call or a meeting can say about how it went: the outcomes of both kinds (each kind takes its own). */
+export const NoteOutcomeValue = z.enum([...CALL_OUTCOMES, ...MEETING_OUTCOMES]);
+
 /**
  * A note as its list shows it: the title ("" shows as "Untitled note"), the
  * first 200 characters of its text, its version, and who made and last
@@ -44,6 +65,14 @@ export const NoteSummary = z.object({
   title: z.string(),
   excerpt: z.string(),
   version: z.number().int().min(1),
+  /** A plain note, or a call or meeting logged on the record (migration 0141). */
+  kind: z.enum(NOTE_KINDS),
+  /** When it happened: a plain note's is its creation; a logged call's or meeting's may be earlier. */
+  occurredAt: Timestamp,
+  /** A call's or meeting's length in minutes, when it has one. */
+  durationMinutes: z.number().int().min(1).max(ACTIVITY_DURATION_MAX).optional(),
+  /** How a call or meeting went, when it says. */
+  outcome: NoteOutcomeValue.optional(),
   /** Whether the reader may edit or delete it (`write` on its record's object). */
   canChange: z.boolean(),
   createdAt: Timestamp,
@@ -66,7 +95,11 @@ export type Note = z.infer<typeof Note>;
 
 /**
  * One save of a note: its first (the id is new: the record, and a title or
- * text) or a later one (only the fields given). `content` is parsed without
+ * text, or for a logged call or meeting its `kind`) or a later one (only the
+ * fields given). A logged call or meeting (migration 0141) takes `occurredAt`
+ * (default now, at most a day ahead), `durationMinutes` and an `outcome` from
+ * its kind's own set, `null` to clear one; a plain note takes none of them, and
+ * a kind never changes. `content` is parsed without
  * the 200 KB cap, which the service checks itself, so an oversized note is
  * one answer, 422 `CONFIG_INVALID` on `content`. `baseVersion` is the version
  * this save started from (null for a new note).
@@ -80,6 +113,10 @@ export const SaveNoteInput = WorkspaceScoped.extend({
     .refine((title) => !title.includes('\u0000'), { error: 'This text holds a character that can’t be stored.' })
     .optional(),
   content: RichTextDocBody.optional(),
+  kind: z.enum(NOTE_KINDS).optional(),
+  occurredAt: Timestamp.optional(),
+  durationMinutes: z.number().int().min(1).max(ACTIVITY_DURATION_MAX).nullable().optional(),
+  outcome: NoteOutcomeValue.nullable().optional(),
   baseVersion: z.number().int().min(1).nullable().optional(),
   mutationId: Uuid,
 });
@@ -100,7 +137,7 @@ export const GetNoteInput = WorkspaceScoped.extend({ noteId: Uuid });
 export type GetNoteInput = z.infer<typeof GetNoteInput>;
 
 /**
- * One page of a record's notes, last edited first; with no `recordId`, the
+ * One page of a record's notes, last edited first (a logged call or meeting where it happened); with no `recordId`, the
  * workspace's Notes page: every note on a live record the reader may see,
  * each with its record's display, and no total.
  */
@@ -126,8 +163,11 @@ export const NotePage = z.object({
 /** A page of notes. */
 export type NotePage = z.infer<typeof NotePage>;
 
-/** Where a page of notes ends, inside the opaque cursor: the last note's edit moment and id. Strict. */
-export const NoteCursor = z.strictObject({ updatedAt: z.string().max(40), id: Uuid });
+/**
+ * Where a page of notes ends, inside the opaque cursor: the last note's listed moment (its last edit; a logged call's
+ * or meeting's, when it happened) and id. Strict.
+ */
+export const NoteCursor = z.strictObject({ at: z.string().max(40), id: Uuid });
 /** Where a page of notes ends. */
 export type NoteCursor = z.infer<typeof NoteCursor>;
 

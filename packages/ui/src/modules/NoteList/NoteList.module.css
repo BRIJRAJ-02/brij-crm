@@ -43,6 +43,18 @@
     letter-spacing: var(--tracking-body-strong);
   }
 
+  /* A logged call or meeting: its icon, its name and its outcome tag on one line. */
+  .heading {
+    display: flex;
+    gap: var(--space-6);
+    align-items: center;
+    min-inline-size: 0;
+  }
+
+  .heading > .title {
+    flex: 0 1 auto;
+  }
+
   .title[data-untitled] {
     color: var(--text-secondary);
   }

@@ -532,3 +532,275 @@ describe('a note on several records (migration 0136)', () => {
     expect(left.rows[0]).toEqual({ notes: 0, links: 0 });
   });
 });
+
+describe('a call or meeting logged on a record (migration 0141)', () => {
+  const hoursAgo = (hours: number) => new Date(Date.now() - hours * 3_600_000).toISOString();
+  const timeline = async (scope: Parameters<typeof getActivity>[0], recordId: string) =>
+    (await getActivity(scope, { recordId })).entries.filter(
+      (entry) => entry.kind === 'note' || entry.kind === 'call' || entry.kind === 'logged_meeting',
+    );
+
+  it('logs a call with no text, a time in the past, a duration and an outcome; a plain note has none of them', async () => {
+    const w = await workspace();
+    const acme = await w.company('Acme');
+    const id = newId();
+    const yesterday = hoursAgo(26);
+    const saved = await saveNote(
+      w.scope,
+      { id, recordId: acme, kind: 'call', occurredAt: yesterday, durationMinutes: 30, outcome: 'connected' },
+      hooks(),
+    );
+    expect(saved.note).toMatchObject({
+      id,
+      kind: 'call',
+      occurredAt: yesterday,
+      durationMinutes: 30,
+      outcome: 'connected',
+      title: '',
+      excerpt: '',
+      version: 1,
+    });
+    const plain = await saveNote(w.scope, { id: newId(), recordId: acme, content: doc('Hello.') });
+    expect(plain.note).toMatchObject({ kind: 'note', occurredAt: plain.note.createdAt });
+    expect(plain.note.durationMinutes).toBeUndefined();
+    expect(plain.note.outcome).toBeUndefined();
+    // A plain note still needs text; a call with none is a call.
+    expect(await refusalOf(saveNote(w.scope, { id: newId(), recordId: acme, title: ' ' }))).toMatchObject({
+      code: 'CONFIG_INVALID',
+      field: 'content',
+    });
+    const meeting = await saveNote(w.scope, { id: newId(), recordId: acme, kind: 'meeting', outcome: 'no_show' });
+    expect(meeting.note).toMatchObject({ kind: 'meeting', outcome: 'no_show' });
+    // No time given: now, to the moment it was made.
+    expect(meeting.note.occurredAt).toBe(meeting.note.createdAt);
+  });
+
+  it('refuses a detail its kind does not take, a duration out of range, a kind that changes and a time a day ahead', async () => {
+    const w = await workspace();
+    const acme = await w.company('Acme');
+    const field = (name: string): unknown => expect.objectContaining({ code: 'INPUT_INVALID', field: name });
+    const id = newId();
+    await saveNote(w.scope, { id, recordId: acme, kind: 'call', durationMinutes: 15 });
+    // A call takes its own outcomes, never a meeting's.
+    expect(await refusalOf(saveNote(w.scope, { id: newId(), recordId: acme, kind: 'call', outcome: 'held' }))).toEqual(
+      field('outcome'),
+    );
+    expect(
+      await refusalOf(saveNote(w.scope, { id: newId(), recordId: acme, kind: 'meeting', outcome: 'connected' })),
+    ).toEqual(field('outcome'));
+    for (const minutes of [0, 1441, 2.5]) {
+      expect(
+        await refusalOf(saveNote(w.scope, { id: newId(), recordId: acme, kind: 'call', durationMinutes: minutes })),
+      ).toEqual(field('durationMinutes'));
+    }
+    // A plain note has no time, duration or outcome of its own.
+    for (const details of [{ occurredAt: hoursAgo(5) }, { durationMinutes: 10 }, { outcome: 'held' as const }]) {
+      const refused = await refusalOf(
+        saveNote(w.scope, { id: newId(), recordId: acme, content: doc('Plain.'), ...details }),
+      );
+      expect(refused).toMatchObject({ code: 'INPUT_INVALID' });
+    }
+    // Logging is for what happened: a day ahead is the most.
+    expect(
+      await refusalOf(
+        saveNote(w.scope, {
+          id: newId(),
+          recordId: acme,
+          kind: 'call',
+          occurredAt: new Date(Date.now() + 2 * 86_400_000).toISOString(),
+        }),
+      ),
+    ).toEqual(field('occurredAt'));
+    const soon = await saveNote(w.scope, {
+      id: newId(),
+      recordId: acme,
+      kind: 'call',
+      occurredAt: new Date(Date.now() + 3_600_000).toISOString(),
+    });
+    expect(soon.note.kind).toBe('call');
+    // A kind is for life.
+    expect(await refusalOf(saveNote(w.scope, { id, recordId: acme, kind: 'meeting' }))).toEqual(field('kind'));
+    // Nothing the refusals tried was stored: the first call and the one an hour ahead.
+    expect((await listNotes(w.scope, { recordId: acme })).items).toHaveLength(2);
+  });
+
+  it('edits the time, duration and outcome of an entry, clears them with null, and writes nothing when nothing changed', async () => {
+    const w = await workspace();
+    const acme = await w.company('Acme');
+    const id = newId();
+    const first = hoursAgo(30);
+    const second = hoursAgo(3);
+    await saveNote(w.scope, {
+      id,
+      recordId: acme,
+      kind: 'call',
+      occurredAt: first,
+      durationMinutes: 15,
+      outcome: 'no_answer',
+    });
+    const edited = await saveNote(
+      w.scope,
+      {
+        id,
+        recordId: acme,
+        kind: 'call',
+        occurredAt: second,
+        durationMinutes: 45,
+        outcome: 'left_message',
+        baseVersion: 1,
+      },
+      hooks(),
+    );
+    expect(edited.note).toMatchObject({ version: 2, occurredAt: second, durationMinutes: 45, outcome: 'left_message' });
+    const same = await saveNote(
+      w.scope,
+      { id, recordId: acme, occurredAt: second, durationMinutes: 45, outcome: 'left_message' },
+      hooks(),
+    );
+    expect(same.note.version).toBe(2);
+    const cleared = await saveNote(w.scope, { id, recordId: acme, durationMinutes: null, outcome: null });
+    expect(cleared.note).toMatchObject({ version: 3, occurredAt: second });
+    expect(cleared.note.durationMinutes).toBeUndefined();
+    expect(cleared.note.outcome).toBeUndefined();
+    // A repeat of the first save after a lost answer writes nothing.
+    const replay = await saveNote(w.scope, { id, recordId: acme, kind: 'call', occurredAt: second });
+    expect(replay.note.version).toBe(3);
+  });
+
+  it('sits at the moment it happened on the timeline, on every record it is on, and a filter reads only its kinds', async () => {
+    const w = await workspace();
+    const acme = await w.company('Acme');
+    const globex = await w.company('Globex');
+    const call = newId();
+    const note = newId();
+    const meeting = newId();
+    const yesterday = hoursAgo(26);
+    await saveNote(w.scope, { id: note, recordId: acme, title: 'Today', content: doc('Made just now.') });
+    await saveNote(w.scope, {
+      id: call,
+      recordId: acme,
+      kind: 'call',
+      occurredAt: yesterday,
+      durationMinutes: 20,
+      outcome: 'connected',
+      content: doc('Talked renewal.'),
+    });
+    await saveNote(w.scope, {
+      id: meeting,
+      recordId: acme,
+      kind: 'meeting',
+      occurredAt: hoursAgo(50),
+      outcome: 'held',
+    });
+    // Linked a moment ago, it still sits where it happened on the other record.
+    await linkNote(w.scope, { noteId: call, addRecordIds: [globex] });
+    const all = await timeline(w.scope, acme);
+    expect(all.map((entry) => [entry.kind, entry.itemId])).toEqual([
+      ['note', note],
+      ['call', call],
+      ['logged_meeting', meeting],
+    ]);
+    expect(all[1]).toMatchObject({
+      durationMinutes: 20,
+      outcome: 'connected',
+      excerpt: 'Talked renewal.',
+      actor: { type: 'member', id: w.ownerId },
+    });
+    expect(Date.parse(all[1]?.key.split('|')[0] ?? '')).toBe(Date.parse(yesterday));
+    const there = await timeline(w.scope, globex);
+    expect(there).toMatchObject([{ kind: 'call', itemId: call, durationMinutes: 20 }]);
+    expect(Date.parse(there[0]?.key.split('|')[0] ?? '')).toBe(Date.parse(yesterday));
+    // A filter reads only the kinds it names: Calls, Meetings (a logged one is a meeting) and Notes alone.
+    const only = async (kinds: ('note' | 'call' | 'logged_meeting')[]) =>
+      (await getActivity(w.scope, { recordId: acme, kinds })).entries.map((entry) => entry.itemId);
+    expect(await only(['call'])).toEqual([call]);
+    expect(await only(['logged_meeting'])).toEqual([meeting]);
+    expect(await only(['note'])).toEqual([note]);
+    expect(await only(['call', 'logged_meeting'])).toEqual([call, meeting]);
+  });
+
+  it('lists a call where it happened and a note where it was last edited, with a cursor that holds the same order', async () => {
+    const w = await workspace();
+    const acme = await w.company('Acme');
+    const call = newId();
+    const oldCall = newId();
+    const note = newId();
+    await saveNote(w.scope, { id: oldCall, recordId: acme, kind: 'call', occurredAt: hoursAgo(72) });
+    await saveNote(w.scope, { id: call, recordId: acme, kind: 'call', occurredAt: hoursAgo(26) });
+    await saveNote(w.scope, { id: note, recordId: acme, title: 'Fresh', content: doc('Just now.') });
+    const whole = await listNotes(w.scope, { recordId: acme });
+    expect(whole.items.map((item) => item.id)).toEqual([note, call, oldCall]);
+    // Editing a call does not move it: it is listed by when it happened.
+    await saveNote(w.scope, { id: oldCall, recordId: acme, content: doc('Added notes later.') });
+    expect((await listNotes(w.scope, { recordId: acme })).items.map((item) => item.id)).toEqual([note, call, oldCall]);
+    // Paged one at a time, the cursor carries the listed moment: nothing repeats, nothing is skipped.
+    const seen: string[] = [];
+    let cursor: string | undefined;
+    for (let page = 0; page < 3; page += 1) {
+      const got = await listNotes(w.scope, { recordId: acme, limit: 1, ...(cursor === undefined ? {} : { cursor }) });
+      seen.push(...got.items.map((item) => item.id));
+      cursor = got.nextCursor;
+    }
+    expect(seen).toEqual([note, call, oldCall]);
+    expect(cursor).toBeUndefined();
+    // The workspace's Notes page lists them in the same order.
+    expect((await listNotes(w.scope, {})).items.map((item) => item.id)).toEqual([note, call, oldCall]);
+  });
+
+  it('follows its record’s access: a member who may only read cannot log, edit or delete, and one who sees none sees none of it', async () => {
+    const w = await workspace();
+    const acme = await w.company('Acme');
+    const id = newId();
+    await saveNote(w.scope, { id, recordId: acme, kind: 'call', durationMinutes: 10, outcome: 'connected' });
+    const reader = w.as(w.level('read'));
+    // Read: it shows (with its details), and cannot be changed.
+    expect((await getNote(reader, { noteId: id })).canChange).toBe(false);
+    expect(await refusalOf(saveNote(reader, { id: newId(), recordId: acme, kind: 'call' }))).toMatchObject({
+      code: 'FORBIDDEN',
+    });
+    expect(await refusalOf(saveNote(reader, { id, recordId: acme, outcome: 'no_answer' }))).toMatchObject({
+      code: 'FORBIDDEN',
+    });
+    expect(await refusalOf(deleteNote(reader, { noteId: id }))).toMatchObject({ code: 'FORBIDDEN' });
+    // None: it is absent, whatever kind, duration or outcome it has.
+    const none = w.as(w.level('none'));
+    expect(await refusalOf(getNote(none, { noteId: id }))).toMatchObject({ code: 'NOT_FOUND' });
+    expect(await refusalOf(saveNote(none, { id: newId(), recordId: acme, kind: 'call' }))).toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    expect(await refusalOf(listNotes(none, { recordId: acme }))).toMatchObject({ code: 'NOT_FOUND' });
+    expect(await refusalOf(getActivity(none, { recordId: acme }))).toMatchObject({ code: 'NOT_FOUND' });
+    // A record rule: a call on a record the member may not see is absent, one on a record they own is theirs.
+    const beas = await w.ownedCompany('Bea’s', w.bea);
+    const mine = newId();
+    await saveNote(w.scope, { id: mine, recordId: beas, kind: 'meeting', outcome: 'held' });
+    const rule = w.as(w.ownCompanies);
+    expect(await refusalOf(getNote(rule, { noteId: id }))).toMatchObject({ code: 'NOT_FOUND' });
+    expect(await getNote(rule, { noteId: mine })).toMatchObject({ kind: 'meeting', outcome: 'held' });
+    expect((await timeline(rule, beas)).map((entry) => entry.itemId)).toEqual([mine]);
+  });
+
+  it('deletes with one call, and Undo brings back the time, duration, outcome and text exactly', async () => {
+    const w = await workspace();
+    const acme = await w.company('Acme');
+    const id = newId();
+    const at = hoursAgo(10);
+    await saveNote(w.scope, {
+      id,
+      recordId: acme,
+      kind: 'meeting',
+      occurredAt: at,
+      durationMinutes: 60,
+      outcome: 'held',
+      content: doc('Agreed the scope.'),
+    });
+    await deleteNote(w.scope, { noteId: id }, hooks());
+    expect(await timeline(w.scope, acme)).toEqual([]);
+    expect((await listNotes(w.scope, { recordId: acme })).items).toEqual([]);
+    const back = await restoreNote(w.scope, { noteId: id }, hooks());
+    expect(back).toMatchObject({ kind: 'meeting', occurredAt: at, durationMinutes: 60, outcome: 'held' });
+    expect(await timeline(w.scope, acme)).toMatchObject([
+      { kind: 'logged_meeting', itemId: id, excerpt: 'Agreed the scope.', durationMinutes: 60 },
+    ]);
+  });
+});

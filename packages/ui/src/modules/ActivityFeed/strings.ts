@@ -31,6 +31,9 @@ export const strings = {
     /** One actor's changes at one moment, counted. */
     changedMany: (count: number) => `changed ${String(count)} attributes`,
     note: 'added a note',
+    /** A call or meeting a person logged on the record (migration 0141). */
+    call: 'logged a call',
+    logged_meeting: 'logged a meeting',
     task: 'added a task',
     taskDone: 'completed a task',
     comment: 'commented',
