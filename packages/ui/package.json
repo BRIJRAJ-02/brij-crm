@@ -11,6 +11,7 @@
     "./theme": "./src/theme/theme.ts",
     "./vite": "./src/vite.ts",
     "./grid": "./src/grid.ts",
+    "./alignment-probe": "./src/lib/alignment-probe.ts",
     "./editor": "./src/editor/index.ts",
     "./public-form": "./src/public-form/hosted-form.ts",
     "./public-booking": "./src/public-booking/booking.ts",
