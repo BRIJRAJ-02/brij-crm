@@ -2718,6 +2718,45 @@ describe('options (spec 0012, milestone 3)', () => {
     expect(count(api.calls, '/api/rpc/attributes/list')).toBe(2);
   });
 
+  it('makes an option from a form at once: its id answered, its label pending until the server agrees', async () => {
+    // The server answers once the test has seen the pending option.
+    let answer: () => void = () => undefined;
+    const answered = new Promise<void>((resolve) => {
+      answer = resolve;
+    });
+    const api = fakeApi({
+      attributes: () => [TITLE, TIER],
+      optionWrite: async () => {
+        await answered;
+        return SILVER;
+      },
+    });
+    const { data } = layer(api);
+    await data.attributes.list('acme', PEOPLE.id);
+    expect(data.options.make('acme', PEOPLE.id, TIER.id, '  ')).toBeUndefined();
+    const making = data.options.make('acme', PEOPLE.id, TIER.id, ' Gold ');
+    await settled();
+    const [pending] = data.options.pending.getSnapshot().get(`acme/${TIER.id}`) ?? [];
+    expect(pending).toMatchObject({ id: making?.id, label: 'Gold', hue: 'red' });
+    answer();
+    await making?.made;
+    expect(api.sent.at(-1)).toMatchObject({ id: making?.id, label: 'Gold', hue: 'red' });
+  });
+
+  it('drops a form option the server refuses, and rejects', async () => {
+    const api = fakeApi({
+      attributes: () => [TITLE, TIER],
+      optionWrite: () => {
+        throw new ORPCError('FORBIDDEN', { status: 403, message: 'No.' });
+      },
+    });
+    const { data } = layer(api);
+    await data.attributes.list('acme', PEOPLE.id);
+    const making = data.options.make('acme', PEOPLE.id, TIER.id, 'Gold');
+    await expect(making?.made).rejects.toThrow();
+    expect(data.options.pending.getSnapshot().get(`acme/${TIER.id}`)).toBeUndefined();
+  });
+
   it('makes an option from a cell as one optimistic write: the label at once, newOption sent, then read again', async () => {
     const created: { id?: string } = {};
     // The server answers once the test has seen the cell's optimistic state.

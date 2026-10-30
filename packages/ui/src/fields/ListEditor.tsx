@@ -186,8 +186,8 @@ export function ListEditor<T extends AttributeType, V>({
     isCompact || placeholder === undefined ? fieldStrings.setAttribute(attribute.name) : placeholder;
   // On a form the name leads, over the chips, as FieldGroup labels what a form shows (as every field's label sits over
   // its value); the add field under them keeps the name for screen readers. A cell or a panel row names it already.
-  const isLabelledAbove = !isCompact && shown.length > 0;
   const shown = values.flatMap((value, index) => (index === editingIndex ? [] : [{ value, index }]));
+  const isLabelledAbove = !isCompact && shown.length > 0;
   const chips = shown.length > 0 && (
     <ul className={styles.list} aria-label={attribute.name}>
       {shown.map(({ value, index }) => (

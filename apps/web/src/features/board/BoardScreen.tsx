@@ -334,6 +334,7 @@ export function BoardScreen(props: BoardScreenProps) {
               onCreate={(id, values) => data.records.create(slug, object.id, id, values)}
               singularName={object.singularName}
               objectKey={object.standardKey ?? object.apiSlug}
+              objectId={object.id}
               memberPicker={memberPicker}
               {...(preset === undefined ? {} : { preset })}
               onCreated={(record, keepOpen) => {

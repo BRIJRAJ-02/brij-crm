@@ -116,21 +116,24 @@ export function RecordDetails({
     );
   // Create an option from a select or status here as in a cell (spec 0012, AC-238): one optimistic write that makes
   // it and sets it on this record, its label shown at once.
+  // Keyed on the record's id, not the record: a live edit to it must not hand every editor a new context value.
+  const recordId = record?.id;
+  const canCommit = onCommit !== undefined;
   const actions = useMemo<FieldActions | undefined>(
     () =>
-      schemaObject === undefined || record === undefined || onCommit === undefined
+      schemaObject === undefined || recordId === undefined || !canCommit
         ? undefined
         : {
             createOption: (attribute, label) => {
               void data.records.createOption(slug, {
                 objectId: schemaObject.id,
-                recordId: record.id,
+                recordId,
                 attributeId: attribute.id,
                 label,
               });
             },
           },
-    [schemaObject, record, onCommit, data, slug],
+    [schemaObject, recordId, canCommit, data, slug],
   );
   if (record === undefined) return <AttributeList label={strings.details} sections={[]} isLoading />;
   const items = fields.map(({ definition, attribute }) => {

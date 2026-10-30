@@ -8,6 +8,7 @@ import {
   opTakesValue,
   refusalSummary,
   toFieldAttribute,
+  withPendingOptions,
   type AttributeDefinition,
   type BulkEditResult,
   type BulkOp,
@@ -26,9 +27,11 @@ import {
   Select,
   type FormRefusal,
 } from '@crm/ui';
-import { useParams } from '@tanstack/react-router';
+import { usePendingOptions } from '@crm/data/react';
+import { useParams, useRouteContext } from '@tanstack/react-router';
 import { useEffect, useId, useMemo, useState } from 'react';
 import type { MemberPicker } from '../records/members.ts';
+import { withOption, withoutOption } from '../records/option-values.ts';
 import { useOptionMaker } from '../records/options.ts';
 import { bulkStrings, recordsWord } from './bulk.ts';
 
@@ -234,6 +237,9 @@ function BulkEditForm({
   const [value, setValue] = useState<unknown>(null);
   const { slug = '' } = useParams({ strict: false });
   const makeOption = useOptionMaker(slug, object.id);
+  // An option made here shows by its label at once, from the data layer's pending options.
+  const { data } = useRouteContext({ from: '__root__' });
+  const pendingOptions = usePendingOptions(data.options.pending);
   const [fieldError, setFieldError] = useState<string | undefined>(undefined);
   const [valueError, setValueError] = useState<string | undefined>(undefined);
   const [refusals, setRefusals] = useState<readonly FormRefusal[]>([]);
@@ -370,11 +376,15 @@ function BulkEditForm({
           {!isCheckbox && opTakesValue(shownOp) && !isRuledOut && (
             <AttributeEditor
               key={`${definition.id}:${shownOp === 'set' || shownOp === 'replace' ? 'whole' : 'items'}`}
-              attribute={{
-                ...toFieldAttribute(definition, undefined, object.standardKey ?? object.apiSlug),
-                name: bulkStrings.value,
-                isRequired: true,
-              }}
+              attribute={withPendingOptions(
+                {
+                  ...toFieldAttribute(definition, undefined, object.standardKey ?? object.apiSlug),
+                  name: bulkStrings.value,
+                  isRequired: true,
+                },
+                slug,
+                pendingOptions,
+              )}
               value={value ?? null}
               surface="form"
               {...(definition.type === 'actor_reference'
@@ -388,13 +398,15 @@ function BulkEditForm({
               {...(makeOption === undefined
                 ? {}
                 : {
+                    // Chosen at once, from what is held when it lands (never a pick made meanwhile overwritten),
+                    // and dropped again on a refusal.
                     onCreateOption: (label: string) => {
-                      void makeOption(definition.id, label).then((optionId) => {
-                        if (optionId === undefined) return;
-                        const kept = Array.isArray(value) ? (value as readonly unknown[]) : [];
-                        setValue(definition.isMulti ? [...kept, optionId] : optionId);
-                        setValueError(undefined);
+                      const optionId = makeOption(definition.id, label, (refused) => {
+                        setValue((held: unknown) => withoutOption(held, refused));
                       });
+                      if (optionId === undefined) return;
+                      setValue((held: unknown) => withOption(held, optionId, definition.isMulti));
+                      setValueError(undefined);
                     },
                   })}
               {...(valueError === undefined ? {} : { error: valueError })}

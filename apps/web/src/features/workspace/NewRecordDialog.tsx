@@ -9,6 +9,7 @@ import {
   refusalFor,
   refusalSummary,
   toFieldAttribute,
+  withPendingOptions,
   type AttributeDefinition,
   type RecordView,
 } from '@crm/data';
@@ -23,11 +24,13 @@ import {
   type FieldActions,
   type FormRefusal,
 } from '@crm/ui';
-import { useParams } from '@tanstack/react-router';
-import { useId, useRef, useState } from 'react';
+import { usePendingOptions } from '@crm/data/react';
+import { useParams, useRouteContext } from '@tanstack/react-router';
+import { useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { refsOf } from '../records/details.ts';
 import { useLinkEditing } from '../records/links.ts';
 import type { MemberPicker } from '../records/members.ts';
+import { withOption, withoutOption } from '../records/option-values.ts';
 import { useOptionMaker } from '../records/options.ts';
 import { strings } from './strings.ts';
 
@@ -45,6 +48,8 @@ export interface NewRecordDialogProps {
   readonly singularName: string;
   /** The object's standard key, else its API name: a network's editor tells a company from a person by it. */
   readonly objectKey?: string;
+  /** The object's id: an option made here ("Create "<typed>"") is made on its attribute. */
+  readonly objectId: string;
   /** The screen's member picker: an Owner is chosen with it, "Me" first, and a "current user" default shows as Me. */
   readonly memberPicker: MemberPicker;
   /** Mints the new record's id, once per opening: a second press after a lost answer sends the same one. */
@@ -156,6 +161,7 @@ export function NewRecordDialog({
   title,
   singularName,
   objectKey,
+  objectId,
   memberPicker,
   first,
   more,
@@ -206,6 +212,7 @@ export function NewRecordDialog({
         label={title}
         singularName={singularName}
         {...(objectKey === undefined ? {} : { objectKey })}
+        objectId={objectId}
         memberPicker={memberPicker}
         newId={newId}
         first={first}
@@ -226,7 +233,7 @@ export function NewRecordDialog({
 /** Props for the dialog's form. */
 interface NewRecordFormProps extends Pick<
   NewRecordDialogProps,
-  'first' | 'more' | 'onCreate' | 'singularName' | 'newId' | 'objectKey' | 'memberPicker' | 'preset'
+  'first' | 'more' | 'onCreate' | 'singularName' | 'newId' | 'objectKey' | 'objectId' | 'memberPicker' | 'preset'
 > {
   readonly onCreated: (record: RecordView) => void;
   readonly formId: string;
@@ -241,6 +248,7 @@ function NewRecordForm({
   label,
   singularName,
   objectKey,
+  objectId,
   memberPicker,
   newId,
   first,
@@ -275,8 +283,11 @@ function NewRecordForm({
   const [refusals, setRefusals] = useState<readonly FormRefusal[]>([]);
   // A refusal or a typed value in a hidden field opens "Add more fields", so nothing is out of sight.
   const [isMoreOpen, setMoreOpen] = useState(false);
-  // "Create "<typed>"" in a select or status (schema managers only): the option is made, then chosen here.
-  const makeOption = useOptionMaker(slug, editors[0]?.objectId ?? '');
+  // "Create "<typed>"" in a select or status (schema managers only): the option is chosen here at once, its label
+  // shown from the data layer's pending options until the attribute lists it, and dropped again on a refusal.
+  const makeOption = useOptionMaker(slug, objectId);
+  const { data } = useRouteContext({ from: '__root__' });
+  const pendingOptions = usePendingOptions(data.options.pending);
 
   /** One editor's value committed: what it shows, and what Create sends (a list where the attribute holds one). */
   const commitValue = (definition: AttributeDefinition, value: unknown) => {
@@ -289,22 +300,29 @@ function NewRecordForm({
       setFieldErrors(new Map([...fieldErrors].filter(([key]) => key !== definition.id)));
     }
   };
-  const actions: FieldActions | undefined =
-    makeOption === undefined
-      ? undefined
-      : {
-          createOption: (attribute, label) => {
-            const definition = editors.find((editor) => editor.id === attribute.id);
-            if (definition === undefined) return;
-            void makeOption(definition.id, label).then((optionId) => {
-              if (optionId === undefined) return;
-              // A multi select adds it to what it holds; one choice is replaced by it.
-              const held = sending.current[definition.id] ?? values[definition.id];
-              const kept = Array.isArray(held) ? (held as readonly unknown[]) : [];
-              commitValue(definition, definition.isMulti ? [...kept, optionId] : optionId);
-            });
-          },
-        };
+  // The latest commit and values, for the memoised actions below: one context value per opening, not per keystroke.
+  const latest = useRef({ commitValue, values });
+  useLayoutEffect(() => {
+    latest.current = { commitValue, values };
+  });
+  const actions = useMemo<FieldActions | undefined>(() => {
+    if (makeOption === undefined) return undefined;
+    const heldBy = (definition: AttributeDefinition) =>
+      sending.current[definition.id] ?? latest.current.values[definition.id];
+    return {
+      createOption: (attribute, label) => {
+        const definition = [...first, ...more].find((editor) => editor.id === attribute.id);
+        if (definition === undefined) return;
+        const optionId = makeOption(definition.id, label, (refused) => {
+          latest.current.commitValue(definition, withoutOption(heldBy(definition), refused));
+        });
+        // A multi select adds it to what it holds; one choice is replaced by it.
+        if (optionId !== undefined) {
+          latest.current.commitValue(definition, withOption(heldBy(definition), optionId, definition.isMulti));
+        }
+      },
+    };
+  }, [makeOption, first, more]);
 
   const create = () => {
     if (isBusy) return;
@@ -367,7 +385,7 @@ function NewRecordForm({
     return (
       <AttributeEditor
         key={definition.id}
-        attribute={askedFor(definition, objectKey)}
+        attribute={withPendingOptions(askedFor(definition, objectKey), slug, pendingOptions)}
         value={values[definition.id] ?? null}
         surface="form"
         {...(definition.type === 'actor_reference' ? { display: memberPicker.displays, ...memberPicker.extras } : {})}

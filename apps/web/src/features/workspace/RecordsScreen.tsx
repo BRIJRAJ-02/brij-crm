@@ -819,6 +819,7 @@ export function RecordsScreen({
               onCreate={(id, values) => data.records.create(slug, object.id, id, values)}
               singularName={object.singularName}
               objectKey={objectKey}
+              objectId={object.id}
               memberPicker={memberPicker}
               {...(createPreset === undefined ? {} : { preset: createPreset })}
               onCreated={(record, keepOpen) => {

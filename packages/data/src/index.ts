@@ -4553,6 +4553,51 @@ export function createDataLayer({
             options,
           ),
         ),
+      /**
+       * Makes an option from a form's "Create "<typed>"" (New record, Bulk
+       * edit), optimistic as a cell's (AC-238): its id is answered at once for
+       * the form to set, its label and next hue pending until the attribute
+       * lists it; `made` settles with the server, and a refusal drops the
+       * pending option and rejects. Undefined for an empty label: nothing to make.
+       */
+      make: (
+        workspace: string,
+        objectId: string,
+        attributeId: string,
+        label: string,
+      ): { readonly id: string; readonly made: Promise<AttributeOption> } | undefined => {
+        const trimmed = label.trim();
+        if (trimmed === '') return undefined;
+        const id = mintId();
+        // Pending with the next hue after every option it holds or is making now, as the server will pick it: at
+        // once when the object's attributes are held (a form showing the attribute holds them), else once read.
+        const pend = (list: readonly AttributeDefinition[]) => {
+          const definition = list.find((each) => each.id === attributeId);
+          const waiting = pendingOptions.getSnapshot().get(`${workspace}/${attributeId}`) ?? [];
+          const hue = nextHue([...(definition?.options ?? []), ...waiting]);
+          pendingOptions.add(workspace, { attributeId, id, label: trimmed, hue });
+          return hue;
+        };
+        const held = definitionsOf(workspace, objectId);
+        const pended = held instanceof Promise ? held.then(pend) : Promise.resolve(pend(held));
+        const made = pended
+          .then((hue) =>
+            writeOption(workspace, objectId, (mutationId, options) =>
+              api.options.create({ workspace, attributeId, id, label: trimmed, hue, mutationId }, options),
+            ),
+          )
+          .then(
+            (option) => {
+              pendingOptions.resolve(workspace, attributeId, id, option.id);
+              return option;
+            },
+            (error: unknown) => {
+              pendingOptions.remove(workspace, attributeId, id);
+              throw error;
+            },
+          );
+        return { id, made };
+      },
       /** Renames or recolours an option, or a stage's outcome or target (AC-236). Refusals: `CONFIG_INVALID` on `label`. */
       update: (
         workspace: string,
