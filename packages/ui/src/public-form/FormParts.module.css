@@ -193,6 +193,19 @@
     animation: grow var(--duration-modal) var(--ease-out) var(--duration-hover) both;
   }
 
+  /* What was sent (spec 0058, AC-19): the answers read back in one quiet box, on the card's own left edge, so the
+     thank you is a receipt rather than a blank. */
+  .sent {
+    box-sizing: border-box;
+    inline-size: 100%;
+    margin-block-start: var(--space-8);
+    padding: var(--space-12) var(--space-16);
+    border: var(--border-width-hairline) solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    background: var(--surface-subtle);
+    text-align: start;
+  }
+
   /* What follows a confirmation: Send another, or Book now beside Stay here. */
   .again {
     display: flex;

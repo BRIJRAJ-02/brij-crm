@@ -69,9 +69,10 @@ function show() {
   });
 }
 
-/** The view the page says it is in: the chosen segment of its view switch. */
+/** The view the page says it is in: the chosen segment of its view switch (the clock's sits beside it, AC-24). */
 function chosenView(): string | undefined {
-  return host?.querySelector<HTMLInputElement>('input[type="radio"]:checked')?.value;
+  return host?.querySelector<HTMLInputElement>('[aria-label="Choose how to view times"] input[type="radio"]:checked')
+    ?.value;
 }
 
 /** Waits for the page's facts to land and the card to be drawn with them. */
