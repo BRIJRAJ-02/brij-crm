@@ -5,6 +5,7 @@ import { attributesContract } from './attributes.ts';
 import { bookingPagesContract, bookingsContract } from './booking/pages.ts';
 import { schedulesContract } from './booking/schedules.ts';
 import { timeOffContract } from './booking/time-off.ts';
+import { availabilityContract } from './booking/team-week.ts';
 import { preferencesContract } from './preferences.ts';
 import { rotationsContract } from './booking/rotations.ts';
 import { bulkRecordsContract } from './bulk.ts';
@@ -50,6 +51,7 @@ export * from './booking/blocks.ts';
 export * from './booking/pages.ts';
 export * from './booking/schedules.ts';
 export * from './booking/time-off.ts';
+export * from './booking/team-week.ts';
 export * from './booking/rotations.ts';
 export * from './bulk.ts';
 export * from './bulk-ops.ts';
@@ -150,6 +152,8 @@ export const contract = {
   schedules: schedulesContract,
   // Time off (spec 0037, AC-1281 to AC-1288): whole days away, with a reason and a stand in.
   timeOff: timeOffContract,
+  // The Team week (spec 0037, AC-1289 to AC-1296): the roster over everyone's default schedules.
+  availability: availabilityContract,
   rotations: rotationsContract,
   search: searchContract,
   recents: recentsContract,
