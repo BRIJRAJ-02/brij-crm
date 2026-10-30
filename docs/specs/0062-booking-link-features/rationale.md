@@ -54,6 +54,7 @@ Option 2 gives hosts the features they ask for soonest, on code that is already 
 
 Spec 0037 (team scheduling and access, on `wip/specs-teamsched`, built by the crm-6a session) already plans:
 - **J13 Round robin beyond**: fixed hosts plus up to 3 rotations, Even, weekly caps, team rotations, last host, adjustments, Distribution. Making a collective page is a page with fixed hosts and no rotation, so "collective as a creatable kind" belongs to J13 and is left out of 0062.
+- **J14 Editors**: `scheduling_editors` and a Sharing section in PageEditor. Left out of 0062.
 - **J15 Managed booking pages**: templates, member pages, locks and propagation. Left out of 0062.
 - **J16 and J17 Routing**: routing forms, CRM facts, ranking, form leads. 0062 adds no routing.
 - **J18 Outcomes**: No show and its learning. 0062's follow up email only reads the existing no show mark.
@@ -61,6 +62,8 @@ Spec 0037 (team scheduling and access, on `wip/specs-teamsched`, built by the cr
 - **J4 reach**: 0062 uses Manage and See reach for confirm, decline, links, words and stats, and does not add permissions.
 
 0062 builds on 0037 in two places: Confirm and Decline follow 0037's reach, and seats and repeats apply to personal pages and to collective pages as J13 defines them (never round robin in this release). If crm-6a's map of what is left moves any of these, this section follows it.
+
+**Landing order (agreed with crm-6a, 31 Oct):** `wip/team-day`, `fix/roster-editor`, 0037 J13, J14, J15, then 0062 L1 to L5. Every 0062 lane rebases onto the tip after J15, because the booking engine, slots, public, pages and PageEditor are shared. 0058 Lane A also waits for `wip/team-day`, which edits `TimeOffDialog.tsx`.
 
 ### Choices made without asking (industry standard)
 
