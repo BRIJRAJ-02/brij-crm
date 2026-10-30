@@ -696,7 +696,7 @@ function ListTable(
                   {bulkJob.note.text}
                 </Callout>
               )}
-              {!isAllMatching && ticked.length <= BULK_INLINE_MAX && (
+              {!isAllMatching && ticked.length > 0 && ticked.length <= BULK_INLINE_MAX && (
                 <Button
                   icon="pencil"
                   onPress={() => {
@@ -706,16 +706,18 @@ function ListTable(
                   {bulkStrings.edit}
                 </Button>
               )}
-              <Button
-                icon="minus"
-                onPress={() => {
-                  // Up to 500 go at once, with Undo (Undo over a confirm); more, or all matching, are counted first.
-                  if (isAllMatching || ticked.length > BULK_INLINE_MAX) removeAsJob();
-                  else remove(ticked);
-                }}
-              >
-                {strings.removeSelected}
-              </Button>
+              {selected > 0 && (
+                <Button
+                  icon="minus"
+                  onPress={() => {
+                    // Up to 500 go at once, with Undo (Undo over a confirm); more, or all matching, are counted first.
+                    if (isAllMatching || ticked.length > BULK_INLINE_MAX) removeAsJob();
+                    else remove(ticked);
+                  }}
+                >
+                  {strings.removeSelected}
+                </Button>
+              )}
             </BulkActionBar>
           ) : undefined
         }

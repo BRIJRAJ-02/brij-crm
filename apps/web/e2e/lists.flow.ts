@@ -3,6 +3,8 @@
 // out after a confirm; a Pipeline made over Deals opening on its board grouped by Stage, a deal added from a column's
 // "+" landing in that column, and the list's Table view a click away. Milestones 3 and 4: a record's Lists section,
 // the bulk bar's and the command menu's Add to list, Settings › Lists with archive and restore, and the Toolbar.
+// The lists3 lane: two or more taken out at once with Undo (no confirm), the list view menu, the empty state's and the
+// top bar's Import into the list, the archived object's page, and Each record once's refusal under its switch.
 import { randomUUID } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
 import { newWorkspace } from './people.ts';
@@ -81,15 +83,15 @@ test.describe('lists and pipelines', () => {
     await page.getByRole('button', { name: 'Undo' }).click();
     await expect(grid.getByRole('row').filter({ hasText: 'Apollo' })).toHaveCount(1);
 
-    // Two or more ask first.
+    // Two or more go at once too, with Undo (Undo over a confirm): no dialog.
     await grid.getByRole('row').filter({ hasText: 'Borealis' }).getByRole('checkbox').click();
     await grid.getByRole('row').filter({ hasText: 'Cassini' }).getByRole('checkbox').click();
     await page.getByRole('button', { name: 'Remove from list' }).click();
-    const confirm = page.getByRole('dialog', { name: 'Remove 2 entries from Hot deals?' });
-    await expect(confirm).toContainText('Undo brings them back with their values.');
-    await confirm.getByRole('button', { name: 'Remove', exact: true }).click();
+    await expect(page.getByRole('alertdialog')).toHaveCount(0);
     await expect(grid.getByRole('row').filter({ hasText: 'Borealis' })).toHaveCount(0);
     await expect(grid.getByRole('row').filter({ hasText: 'Cassini' })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Undo' }).click();
+    await expect(grid.getByRole('row').filter({ hasText: 'Borealis' })).toHaveCount(1);
   });
 
   test('a name another list holds is refused on Name', async ({ page }) => {
@@ -270,6 +272,104 @@ test.describe('lists around the record, settings and archive (milestones 3 and 4
     await page.getByRole('button', { name: 'Filter' }).click();
     await expect(
       page.getByRole('dialog', { name: /Filter/ }).or(page.getByRole('group', { name: /Filter/ })),
+    ).toBeVisible();
+  });
+});
+
+test.describe('lists: the view menu, import, bulk Edit and settings (the lists3 lane)', () => {
+  test.skip(({ viewport }) => (viewport?.width ?? 0) < 1000, 'The table runs at desktop width.');
+
+  test('a list view renames and duplicates from the switcher’s menu, and Set as default is there', async ({ page }) => {
+    test.setTimeout(240_000);
+    const tag = randomUUID().slice(0, 8);
+    const slug = `listviews-${tag}`;
+    await newWorkspace(page, `listviews-${tag}@example.com`, slug);
+    await page.goto(`/w/${slug}/objects/deals`);
+    await newList(page, 'Renewals', 'Deals', 'Blank');
+    await page
+      .getByRole('button', { name: /All entries/ })
+      .first()
+      .click();
+    await page.getByRole('menuitem', { name: 'Rename' }).click();
+    const rename = page.getByRole('dialog', { name: /Rename/ });
+    await rename.getByLabel('Name', { exact: true }).fill('Everything');
+    await rename.getByRole('button', { name: /Rename|Save/ }).click();
+    await expect(page.getByRole('button', { name: /Everything/ }).first()).toBeVisible();
+    await page
+      .getByRole('button', { name: /Everything/ })
+      .first()
+      .click();
+    await page.getByRole('menuitem', { name: 'Duplicate' }).click();
+    await expect(page.getByRole('button', { name: /Everything copy/ }).first()).toBeVisible();
+    await page
+      .getByRole('button', { name: /Everything copy/ })
+      .first()
+      .click();
+    await expect(page.getByRole('menuitem', { name: 'Delete view' })).toBeVisible();
+    await expect(page.getByRole('menuitem', { name: 'Open trash' })).toHaveCount(0);
+  });
+
+  test('an empty list offers Import, which opens the import page aimed at the list with its fields', async ({
+    page,
+  }) => {
+    test.setTimeout(180_000);
+    const tag = randomUUID().slice(0, 8);
+    const slug = `listimport-${tag}`;
+    await newWorkspace(page, `listimport-${tag}@example.com`, slug);
+    await page.goto(`/w/${slug}/objects/deals`);
+    await newList(page, 'Inbound', 'Deals', 'Pipeline');
+    await page.getByRole('radio', { name: 'Table' }).click();
+    await expect(page.getByText('No deals in this list yet.')).toBeVisible();
+    await page.getByRole('main').getByRole('button', { name: 'Import' }).last().click();
+    await expect(page).toHaveURL(new RegExp(`/w/${slug}/lists/inbound/import$`));
+    await expect(page.getByRole('heading', { level: 1, name: 'Import inbound' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Inbound' })).toBeVisible();
+  });
+
+  test('the bulk bar edits the ticked rows’ records, and selects all matching', async ({ page }) => {
+    test.setTimeout(240_000);
+    const tag = randomUUID().slice(0, 8);
+    const slug = `listbulk-${tag}`;
+    await newWorkspace(page, `listbulk-${tag}@example.com`, slug);
+    await newDeal(page, slug, 'Apollo');
+    await newDeal(page, slug, 'Borealis');
+    await newList(page, 'Quarter', 'Deals', 'Blank');
+    await addEntry(page, 'Add deal', 'Apollo');
+    await addEntry(page, 'Add deal', 'Borealis');
+    const grid = page.getByRole('grid', { name: 'Quarter' });
+    await grid.getByRole('row').filter({ hasText: 'Apollo' }).getByRole('checkbox').click();
+    await grid.getByRole('row').filter({ hasText: 'Borealis' }).getByRole('checkbox').click();
+    await page.getByRole('button', { name: 'Edit', exact: true }).click();
+    await expect(page.getByRole('dialog', { name: /^Edit 2 deals/ })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: /Select all/ }).click();
+    // All matching takes the counted path: Edit stays away, Remove from list counts first.
+    await expect(page.getByRole('button', { name: 'Edit', exact: true })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Remove from list' }).click();
+    await page.getByRole('button', { name: 'Review' }).click();
+    const confirm = page.getByRole('dialog', { name: 'Remove 2 entries from Quarter?' });
+    await expect(confirm).toContainText('Undo brings them back with their values.');
+    await confirm.getByRole('button', { name: 'Cancel' }).click();
+  });
+
+  test('Each record once says why it can’t turn on, under its switch', async ({ page }) => {
+    test.setTimeout(240_000);
+    const tag = randomUUID().slice(0, 8);
+    const slug = `listonce-${tag}`;
+    await newWorkspace(page, `listonce-${tag}@example.com`, slug);
+    await newDeal(page, slug, 'Apollo');
+    await newList(page, 'Visits', 'Deals', 'Blank');
+    await page.goto(`/w/${slug}/settings/lists`);
+    await page.getByRole('row').filter({ hasText: 'Visits' }).click();
+    await page.getByRole('switch', { name: 'Each record once' }).click();
+    await page.goto(`/w/${slug}/lists/visits`);
+    await addEntry(page, 'Add deal', 'Apollo');
+    await addEntry(page, 'Add deal', 'Apollo');
+    await page.goto(`/w/${slug}/settings/lists`);
+    await page.getByRole('row').filter({ hasText: 'Visits' }).click();
+    await page.getByRole('switch', { name: 'Each record once' }).click();
+    await expect(
+      page.getByText('1 record is in this list more than once. Remove the extra entries first.'),
     ).toBeVisible();
   });
 });
