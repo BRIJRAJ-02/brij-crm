@@ -589,6 +589,11 @@
     text-align: end;
   }
 
+  .root[data-view='team'] .column {
+    /* A column focused from the keyboard scrolls clear of the pinned axis. */
+    scroll-margin-inline-start: calc(var(--axis) * 2);
+  }
+
   /* The day view: the selected day across the width, as the narrow week below, the head still the week's days. */
   .root[data-view='day'] .body {
     grid-template-columns: calc(var(--axis) * 2) minmax(0, 1fr);
@@ -599,9 +604,97 @@
     display: none;
   }
 
+  /* The team view (TeamDay): a column per person, each at least 160px, scrolling sideways under a head pinned to the
+     top and an hour axis pinned to the start, as Google Calendar's day of several people and Fresha's staff columns. */
+  .root[data-view='team'] {
+    --columns: 1;
+    --team-column: calc(var(--size-column-narrow) + var(--space-32) + var(--space-8));
+  }
+
+  .root[data-view='team'] .scroller {
+    overflow: auto;
+    overscroll-behavior-inline: contain;
+  }
+
+  .root[data-view='team'] .head,
+  .root[data-view='team'] .body {
+    grid-template-columns: calc(var(--axis) * 2) repeat(var(--columns), minmax(var(--team-column), 1fr));
+    min-inline-size: calc(var(--axis) * 2 + var(--columns) * var(--team-column));
+  }
+
+  .root[data-view='team'] .head {
+    position: sticky;
+    inset-block-start: 0;
+    z-index: var(--z-sticky);
+    background: var(--surface-raised);
+  }
+
+  /* The corner and the axis stay at the start as the columns scroll, over them. */
+  .root[data-view='team'] .corner,
+  .root[data-view='team'] .axis {
+    position: sticky;
+    inset-inline-start: 0;
+    z-index: var(--z-sticky);
+    background: var(--surface-raised);
+  }
+
+  /* A person's head: whatever TeamDay draws (their picture, name and status), with the day head's own breathing room. */
+  .personHead {
+    display: flex;
+    align-items: center;
+    min-inline-size: 0;
+    padding: var(--space-6) var(--space-8);
+    border-inline-start: var(--border-width-hairline) solid var(--border-subtle);
+  }
+
+  /* Previous and Next: only one person at a time (a phone), below. */
+  .stepper {
+    display: none;
+  }
+
+  /* Time off across a column: the yellow tag's surface (the Team week's Away), its word at its top, under every block. */
+  .band {
+    position: absolute;
+    inset-block-start: calc(var(--start) / 60 * var(--hour));
+    inset-inline: 0;
+    block-size: calc(var(--length) / 60 * var(--hour));
+    background: var(--tag-yellow-bg);
+    pointer-events: none;
+  }
+
+  .bandLabel {
+    position: sticky;
+    inset-block-start: calc(var(--size-table-header) + var(--space-32));
+    display: block;
+    padding: var(--space-4) var(--space-8);
+    color: var(--tag-yellow-text);
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label-strong);
+  }
+
   @container (inline-size < 480px) {
     .body {
       grid-template-columns: calc(var(--axis) * 2) minmax(0, 1fr);
+    }
+
+    .root[data-view='team'] .head,
+    .root[data-view='team'] .body {
+      grid-template-columns: calc(var(--axis) * 2) minmax(0, 1fr);
+      min-inline-size: 0;
+    }
+
+    .personHead:not([data-selected]) {
+      display: none;
+    }
+
+    /* The corner holds Previous and Next instead of the zone, which the column's head already implies. */
+    .root[data-view='team'] .stepper {
+      display: flex;
+      align-items: center;
+    }
+
+    .root[data-view='team'] .corner {
+      display: none;
     }
 
     .column:not([data-selected]),

@@ -365,6 +365,13 @@ export {
   type TeamWeekTotal,
 } from './modules/TeamWeek/TeamWeek.tsx';
 export {
+  TeamDay,
+  type TeamDayLaneItem,
+  type TeamDayPerson,
+  type TeamDayProps,
+  type TeamDayTone,
+} from './modules/TeamDay/TeamDay.tsx';
+export {
   SetupChecklist,
   type SetupChecklistProps,
   type SetupChecklistStep,

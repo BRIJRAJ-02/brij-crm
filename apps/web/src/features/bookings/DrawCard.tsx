@@ -57,6 +57,13 @@ export interface DrawCardProps {
   readonly onBook?: () => void;
   /** The colleagues the member Manages: Block this time shows For (Me first) when there is anyone (AC-1272). */
   readonly forPeople?: readonly ForPerson[];
+  /**
+   * Whose time For starts on (a colleague's column on the Team day, spec 0030, AC-773): one of `forPeople`. Their time
+   * can be blocked, not reserved (a hold is for the member's own link only pages), so Reserve is left out.
+   */
+  readonly initialFor?: string;
+  /** Time off for whoever the span is for (the Team day): opens its dialog; absent, the card offers none. */
+  readonly onTimeOff?: () => void;
 }
 
 type Mode = { readonly kind: 'choose' } | { readonly kind: 'block' } | { readonly kind: 'hold' };
@@ -78,6 +85,8 @@ export function DrawCard({
   onClose,
   onBook,
   forPeople = [],
+  initialFor,
+  onTimeOff,
 }: DrawCardProps) {
   const [mode, setMode] = useState<Mode>({ kind: 'choose' });
   // Saving: the span, Back and the form wait, so nothing changes under the save.
@@ -103,6 +112,7 @@ export function DrawCard({
           onPending={setPending}
           onClose={onClose}
           forPeople={isHold ? [] : forPeople}
+          {...(initialFor === undefined || isHold ? {} : { initialFor })}
         />
       </SpanCard>
     );
@@ -112,7 +122,19 @@ export function DrawCard({
       ? []
       : [{ id: 'book', label: strings.bookSomeoneIn, icon: 'user-plus' as const, onPress: onBook }]),
     { id: 'block', label: strings.blockThisTime, icon: 'circle-slash', onPress: () => setMode({ kind: 'block' }) },
-    { id: 'hold', label: strings.holdThisTime, icon: 'bookmark', onPress: () => setMode({ kind: 'hold' }) },
+    ...(initialFor === undefined
+      ? [
+          {
+            id: 'hold',
+            label: strings.holdThisTime,
+            icon: 'bookmark' as const,
+            onPress: () => setMode({ kind: 'hold' }),
+          },
+        ]
+      : []),
+    ...(onTimeOff === undefined
+      ? []
+      : [{ id: 'away', label: strings.addTimeOff, icon: 'calendar-days' as const, onPress: onTimeOff }]),
   ];
   return <SpanCard title={title} meta={meta} choices={choices} focusKey="choose" />;
 }
@@ -130,8 +152,10 @@ function CloseForm({
   onPending,
   onClose,
   forPeople,
+  initialFor,
 }: {
   readonly forPeople: readonly ForPerson[];
+  readonly initialFor?: string;
   readonly weekday: string;
   readonly isHold: boolean;
   readonly privatePages: readonly { readonly id: string; readonly title: string }[];
@@ -143,7 +167,7 @@ function CloseForm({
   const [repeat, setRepeat] = useState<TimeBlockRepeat>('once');
   const [page, setPage] = useState(ANY_PAGE);
   const [label, setLabel] = useState('');
-  const [forId, setForId] = useState(ME);
+  const [forId, setForId] = useState(initialFor ?? ME);
   const [failure, setFailure] = useState<string | undefined>(undefined);
   const submit = () => {
     // Enter in Why while saving would send it twice.

@@ -129,6 +129,8 @@ export interface NewMeetingDialogProps {
    * (spec 0037, job J7): at or past one, a warning shows before Book it, which still books. Left out, no warning.
    */
   readonly limitsAt?: ((input: { readonly memberId?: string; readonly at: string }) => Promise<LimitsAt>) | undefined;
+  /** Whom For starts on: a colleague's column on the Team day (spec 0030, AC-773), one of `forPeople`. */
+  readonly initialFor?: string | undefined;
 }
 
 /** How long the time and host rest before their limits are read, so dragging the times reads once. */
@@ -248,6 +250,7 @@ export function NewMeetingDialog({
   pageDestination,
   forPeople = [],
   limitsAt,
+  initialFor,
 }: NewMeetingDialogProps) {
   const formId = useId();
   const listId = useId();
@@ -258,7 +261,9 @@ export function NewMeetingDialog({
   // The member's zone draws the span; the guest's zone starts as theirs too, until it is picked.
   const { timeZone: memberTimeZone } = useFormatSettings();
   const [timeZone, setTimeZone] = useState(memberTimeZone);
-  const [forId, setForId] = useState(ME);
+  const [forId, setForId] = useState(
+    initialFor !== undefined && forPeople.some((person) => person.id === initialFor) ? initialFor : ME,
+  );
   const forName = forId === ME ? undefined : forPeople.find((person) => person.id === forId)?.name;
   // For a colleague, only their pages (the server books on one of theirs alone); for the member, theirs as before.
   // A workspace link is nobody's page, whoever made it.

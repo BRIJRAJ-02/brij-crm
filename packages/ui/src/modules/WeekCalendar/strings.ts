@@ -18,5 +18,8 @@ export const strings = {
   moreName: (count: number, at: string) =>
     count === 1 ? `1 more item at ${at}` : `${String(count)} more items at ${at}`,
   moreList: 'More items at this time',
+  /** The team view's steppers on a phone, one person at a time. */
+  previousColumn: 'Previous person',
+  nextColumn: 'Next person',
   drawHint: 'Press Enter to add time here, or drag across the day.',
 } as const;

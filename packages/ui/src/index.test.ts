@@ -194,6 +194,7 @@ describe('@crm/ui', () => {
       'Tag',
       'TagList',
       'TaskList',
+      'TeamDay',
       'TeamList',
       'TeamWeek',
       'ThemeSwitch',
