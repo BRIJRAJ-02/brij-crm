@@ -14,6 +14,9 @@ export const strings = {
   earlierThreads: 'Show earlier threads',
   loadingThreads: 'Loading comments',
   resolvedThreads: 'Resolved threads',
+  /** The toast once a thread is resolved, with Undo. */
+  threadResolved: 'Thread resolved',
+  undo: 'Undo',
   resolvedFailed: 'Resolved threads didn’t load.',
   moreResolved: 'Show more resolved threads',
   formerMember: 'Former member',

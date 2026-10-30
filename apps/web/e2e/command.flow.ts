@@ -18,7 +18,7 @@ test('the command menu finds a record, opens it, and keeps a slash in a text fie
   await page.keyboard.press('ControlOrMeta+k');
   const menu = page.getByRole('dialog', { name: 'Command menu' });
   await expect(menu).toBeVisible();
-  const field = menu.getByLabel('Search records, views, pages and actions');
+  const field = menu.getByLabel('Search records, notes, tasks, pages and actions');
   await expect(field).toBeFocused();
   await expect(menu.getByRole('group', { name: 'Actions' })).toBeVisible();
   await checkScreen(page, 'command-menu');

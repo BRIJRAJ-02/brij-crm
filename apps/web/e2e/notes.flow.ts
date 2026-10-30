@@ -3,8 +3,8 @@
 // it (the address then names it); the Notes tab lists it with its count and
 // Activity reads "added a note", which opens it again; a second browser that
 // has the note open while it is saved here shows the new version with the
-// notice; deleting it from the window's menu asks first, then takes it away
-// with Undo, which brings it back; and a task is deleted from its dialog and
+// notice; deleting it from the window's menu takes it away at once with
+// Undo, which brings it back; and a task is deleted from its dialog and
 // undone. axe in light and dark on the tab and the window (AC-439 to
 // AC-445, AC-451).
 import { randomUUID } from 'node:crypto';
@@ -102,21 +102,14 @@ test('notes on a record: write, list, timeline, a second browser, delete and und
   if (live) await expect(reader.getByText(/edited this note, so it now shows their version/)).toBeVisible();
   await other.close();
 
-  // Delete from the window's menu asks first (a note can't come back from the Trash): Cancel changes nothing; Delete
-  // note takes it away, with Undo, which brings it back.
+  // Delete from the window's menu is one click (Undo deletes never ask first): the note goes, with Undo, which
+  // brings it back.
   await page.keyboard.press('Escape');
   await page.getByRole('tab', { name: /Notes/ }).click();
   await list.getByRole('row', { name: /Kickoff call/ }).click();
-  const confirm = page.getByRole('alertdialog', { name: 'Delete Kickoff call?' });
   await window.getByRole('button', { name: 'More actions' }).click();
   await page.getByRole('menuitem', { name: 'Delete note' }).click();
-  await expect(confirm).toBeVisible();
-  await confirm.getByRole('button', { name: /Cancel/ }).click();
-  await expect(confirm).toHaveCount(0);
-  await expect(window).toBeVisible();
-  await window.getByRole('button', { name: 'More actions' }).click();
-  await page.getByRole('menuitem', { name: 'Delete note' }).click();
-  await confirm.getByRole('button', { name: 'Delete note' }).click();
+  await expect(page.getByRole('alertdialog', { name: /^Delete / })).toHaveCount(0);
   await expect(window).toHaveCount(0);
   await expect(list.getByRole('row', { name: /Kickoff call/ })).toHaveCount(0);
   await page.getByRole('button', { name: 'Undo' }).click();

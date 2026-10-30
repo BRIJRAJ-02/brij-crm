@@ -541,3 +541,53 @@ export const FromAForm: Story = {
     await expect(created).toHaveAccessibleName(/Contact us created this record/);
   },
 };
+
+/** One actor's changes at one moment as one entry (Show all lays them out), a thread started, and the trash. */
+export const GroupedChanges: Story = {
+  render: () => {
+    const at = '2026-10-08T12:00:00.000Z';
+    const job = attributeOf('text', 'Job title');
+    const entries: ActivityEntry[] = [
+      { id: 'deleted', at: '2026-10-08T13:30:00.000Z', actor: GRACE, kind: 'deleted' },
+      {
+        id: 'comment',
+        at: '2026-10-08T13:00:00.000Z',
+        actor: GRACE,
+        kind: 'comment',
+        excerpt: '@Ada Lovelace their renewal is in March.',
+        href: '#thread',
+      },
+      {
+        id: 'changes',
+        at,
+        actor: ADA,
+        kind: 'changes',
+        changes: [
+          {
+            id: 'c1',
+            at,
+            actor: ADA,
+            kind: 'change',
+            attribute: STAGE,
+            from: SAMPLE_STAGES[0].id,
+            to: SAMPLE_STAGES[1].id,
+          },
+          { id: 'c2', at, actor: ADA, kind: 'change', attribute: job, from: null, to: 'CTO' },
+        ],
+      },
+    ];
+    return (
+      <Stage height="grid">
+        <ActivityFeed label="Activity" entries={arraySource(entries, (entry) => entry.id)} />
+      </Stage>
+    );
+  },
+  play: async ({ canvas, userEvent }) => {
+    const [deleted, comment, changes] = canvas.getAllByRole('article');
+    await expect(deleted).toHaveAccessibleName(/Grace Hopper moved this record to the trash/);
+    await expect(comment).toHaveAccessibleName(/Grace Hopper commented/);
+    await expect(changes).toHaveAccessibleName(/Ada Lovelace changed 2 attributes/);
+    await userEvent.click(canvas.getByRole('button', { name: 'Show all' }));
+    await expect(canvas.getByRole('button', { name: 'Show less' })).toHaveAttribute('aria-expanded', 'true');
+  },
+};

@@ -6,7 +6,14 @@
 import type { ActivityItem, AttributeDefinition, MemberSummary, RecordActivity } from '@crm/contracts';
 import { activityKey } from '@crm/contracts/activity-keys';
 import { describe, expect, it } from 'vitest';
-import { ACTIVITY_REFRESH_MS, createActivityFeeds, mergeHead, toActivityEntry } from './feed.ts';
+import {
+  ACTIVITY_REFRESH_MS,
+  createActivityFeeds,
+  groupChanges,
+  mergeHead,
+  toActivityEntry,
+  type ActivityEntryShape,
+} from './feed.ts';
 
 const WS = 'acme';
 const RECORD = '0199a6f2-0000-7000-8000-0000000000aa';
@@ -553,5 +560,40 @@ describe('the reviews of milestone 2', () => {
     // The first page holds only the entry it can't draw; the next one comes without a scroll.
     expect(api.calls.slice(0, 2)).toEqual([undefined, '1']);
     expect(ids()[0]).toBe(change(1).id);
+  });
+});
+
+describe('threads, the trash and grouped changes (the flow pass of 30 Oct 2026)', () => {
+  const context = {
+    members: [{ id: ADA, name: 'Ada Lovelace', email: 'ada@example.com' }] as unknown as readonly MemberSummary[],
+    attributes: new Map(DEFINITIONS.map((each) => [each.id, each])),
+  };
+  const { attributeId: _attribute, from: _from, to: _to, ...plain } = change(1);
+
+  it('names a thread’s mentions, and reads the trash entry', () => {
+    const thread = '0199a6f2-0000-7000-8000-0000000009cc';
+    expect(
+      toActivityEntry(
+        { ...plain, kind: 'comment', itemId: thread, excerpt: `<@${ADA}> and <@${GONE}>, see this` },
+        context,
+      ),
+    ).toMatchObject({ kind: 'comment', itemId: thread, excerpt: '@Ada Lovelace and @Former member, see this' });
+    expect(toActivityEntry({ ...plain, kind: 'deleted' }, context)).toMatchObject({ kind: 'deleted' });
+  });
+
+  it('groups one actor’s changes in the same second into one entry, and leaves the rest alone', () => {
+    const entry = (id: string, at: string, actor = ADA): ActivityEntryShape => {
+      const mapped = toActivityEntry({ ...change(2), id, at, actor: { type: 'member', id: actor } }, context);
+      if (mapped === undefined) throw new Error('Not mapped.');
+      return mapped;
+    };
+    const a = entry('a', '2026-10-08T10:00:01.900Z');
+    const b = entry('b', '2026-10-08T10:00:01.100Z');
+    const c = entry('c', '2026-10-08T10:00:01.050Z', GONE);
+    const d = entry('d', '2026-10-08T10:00:00.900Z');
+    const grouped = groupChanges([a, b, c, d]);
+    expect(grouped.map((each) => each.kind)).toEqual(['changes', 'change', 'change']);
+    expect(grouped[0]).toMatchObject({ id: 'changes:b', at: a.at, changes: [a, b] });
+    expect(groupChanges([a])).toEqual([a]);
   });
 });

@@ -6,6 +6,7 @@
 // screen first asks for records), patched in place by live change events
 // while a screen shows a workspace (the realtime client loads with the first).
 import type {
+  ActivityKind,
   RecordsExportView,
   StartExportInput,
   ImportLinks,
@@ -459,11 +460,13 @@ export type {
   SocialLinkNetwork,
   WorkspaceSettings,
 } from '@crm/contracts';
+export type { ActivityKind } from '@crm/contracts';
 export type {
   ActivityEntryShape,
   ActivityFeed,
   ActivityState,
   ActivityStatus,
+  ChangeEntryShape,
   EntrySource,
   LinkedRecordShape,
   MeetingAttendeeShape,
@@ -2755,10 +2758,18 @@ export function createDataLayer({
       // A hidden tab's timelines read nothing; what changed meanwhile is read when it is shown again.
       const isHidden = () => typeof document !== 'undefined' && document.visibilityState === 'hidden';
       const feeds = createActivityFeeds({
-        page: (workspace, recordId, cursor) =>
+        page: (workspace, recordId, cursor, kinds) =>
           beforeRead(workspace).then(() =>
             call((options) =>
-              api.records.activity({ workspace, recordId, ...(cursor === undefined ? {} : { cursor }) }, options),
+              api.records.activity(
+                {
+                  workspace,
+                  recordId,
+                  ...(cursor === undefined ? {} : { cursor }),
+                  ...(kinds === undefined ? {} : { kinds: [...kinds] }),
+                },
+                options,
+              ),
             ),
           ),
         members: (workspace, fresh) => {
@@ -4775,8 +4786,12 @@ export function createDataLayer({
        * feed scrolls, and kept live (a change naming the record, this tab's own
        * writes). One per record, shared with `recent`. Read it through `useActivity`.
        */
-      forRecord: async (workspace: string, recordId: string, objectId?: string): Promise<ActivityFeed> =>
-        (await activityFeeds()).forRecord(workspace, recordId, objectId),
+      forRecord: async (
+        workspace: string,
+        recordId: string,
+        objectId?: string,
+        kinds?: readonly ActivityKind[],
+      ): Promise<ActivityFeed> => (await activityFeeds()).forRecord(workspace, recordId, objectId, kinds),
       /** The same timeline cut to its newest five entries (Overview's "Recent activity"), sharing the first page. */
       recent: async (workspace: string, recordId: string, objectId?: string): Promise<ActivityFeed> =>
         (await activityFeeds()).recent(workspace, recordId, objectId),

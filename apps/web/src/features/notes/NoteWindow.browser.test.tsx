@@ -139,7 +139,7 @@ describe('deleting a note from its window', () => {
   it('deletes at once with no confirm, closes the window and offers Undo', async () => {
     const { remove, restore, onClose } = await renderWindow();
     await deleteNote();
-    expect(page.getByRole('alertdialog').query()).toBeNull();
+    expect(page.getByRole('alertdialog', { name: /^Delete / }).query()).toBeNull();
     await vi.waitFor(() => {
       expect(onClose).toHaveBeenCalledTimes(1);
     });

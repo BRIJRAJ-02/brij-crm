@@ -10,7 +10,7 @@ async function runCommand(page: Page, name: string) {
   await page.keyboard.press('ControlOrMeta+k');
   const menu = page.getByRole('dialog', { name: 'Command menu' });
   await expect(menu).toBeVisible();
-  await menu.getByLabel('Search records, views, pages and actions').fill(name);
+  await menu.getByLabel('Search records, notes, tasks, pages and actions').fill(name);
   await menu.getByRole('menuitem', { name, exact: true }).click();
 }
 
@@ -99,7 +99,7 @@ test.describe('the data journey’s edges', () => {
     await page.goto(`/w/${slug}/objects/people`);
     await page.keyboard.press('ControlOrMeta+k');
     const menu = page.getByRole('dialog', { name: 'Command menu' });
-    await menu.getByLabel('Search records, views, pages and actions').fill('go to trash');
+    await menu.getByLabel('Search records, notes, tasks, pages and actions').fill('go to trash');
     await menu.getByRole('menuitem', { name: 'Open trash' }).click();
     await expect(page).toHaveURL(new RegExp(`/w/${slug}/settings/trash`));
   });

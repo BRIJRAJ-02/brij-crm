@@ -1,7 +1,7 @@
 // Brief
 // Purpose: the team's conversation about this record, on its page's Comments tab.
 // Main task: start a thread or reply in one, mentioning a member with @, and resolve it when it's settled.
-// Leaves out: mentions in notes (round 4), attachments, comments on a single field.
+// Leaves out: attachments, comments on a single field, and telling the record's task assignees of a new thread.
 import type { MemberSummary, RecordComments, ShownThread } from '@crm/data';
 import { useComments } from '@crm/data/react';
 import {
@@ -19,6 +19,7 @@ import {
 } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { UNDO_MS } from '../tasks/undo-delete.ts';
 import { memberDisplays, toThreadItem } from './entries.ts';
 import { strings } from './strings.ts';
 
@@ -70,7 +71,7 @@ export function LoadingThreads() {
  * at once; a delete asks first.
  */
 export function CommentsTab({ slug, recordId, comments, members, meId, isReadOnly, thread }: CommentsTabProps) {
-  const { data } = useRouteContext({ from: '__root__' });
+  const { data, toasts } = useRouteContext({ from: '__root__' });
   const state = useComments(comments);
   const item = useThreadItems(members);
   const displays = useMemo(() => memberDisplays(members), [members]);
@@ -126,6 +127,22 @@ export function CommentsTab({ slug, recordId, comments, members, meId, isReadOnl
     onResolve: (resolved: boolean) => {
       void data.comments.resolve(slug, recordId, shown.id, resolved);
       refocus();
+      // The thread folds out of sight: the toast says where it went, with Undo to bring it back.
+      if (resolved) {
+        toasts.toast(
+          {
+            tone: 'success',
+            message: strings.threadResolved,
+            action: {
+              label: strings.undo,
+              onAction: () => {
+                void data.comments.resolve(slug, recordId, shown.id, false);
+              },
+            },
+          },
+          { timeout: UNDO_MS },
+        );
+      }
     },
     onReact: (commentId: string, emoji: Parameters<typeof data.comments.react>[3], on: boolean) => {
       if (meId !== undefined) void data.comments.react(slug, recordId, commentId, emoji, on, meId);

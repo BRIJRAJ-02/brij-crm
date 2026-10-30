@@ -4,6 +4,7 @@
 // Leaves out: presence (#26), editing related records' own values. Delete is in the header's More menu; a trashed
 // record's banner offers Restore.
 import type {
+  ActivityKind,
   ActivityFeed as ActivityFeedSource,
   AttributeDefinition,
   MemberSummary,
@@ -472,9 +473,15 @@ function RecordScreen({
   };
   // Kept while the page's address stays, so the timeline's links and the task rows don't draw again with each render.
   const taskHref = useCallback(
-    (itemId: string, kind: 'task' | 'note' = 'task') =>
-      `${recordHref(slug, object.apiSlug, recordId, tab)}?${kind}=${itemId}`,
+    (itemId: string, kind: 'task' | 'note' | 'thread' = 'task') =>
+      // A thread opens where it lives, on the Comments tab.
+      `${recordHref(slug, object.apiSlug, recordId, kind === 'thread' ? 'comments' : tab)}?${kind}=${itemId}`,
     [slug, object.apiSlug, recordId, tab],
+  );
+  // The Activity tab's filter: the record's timeline cut to some kinds, a feed of its own through the data layer.
+  const feedFor = useCallback(
+    (kinds: readonly ActivityKind[]) => data.activity.forRecord(slug, recordId, object.id, kinds),
+    [data, slug, recordId, object.id],
   );
   // The note window (spec 0019), opened and closed as the task dialog is: pushed, so Back closes it.
   const noteOpenedHere = useRef(false);
@@ -563,7 +570,7 @@ function RecordScreen({
   }, [commandMenu, commandName, slug, object.apiSlug, recordId]);
   let tabContent: ReactNode;
   if (tab === 'activity') {
-    tabContent = <ActivityTab feed={feed} link={link} taskHref={taskHref} onAddPerson={addPerson} />;
+    tabContent = <ActivityTab feed={feed} feedFor={feedFor} link={link} taskHref={taskHref} onAddPerson={addPerson} />;
   } else if (tab === 'comments') {
     tabContent = (
       <CommentsTab

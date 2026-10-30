@@ -20,6 +20,14 @@ export const strings = {
   tabs: 'Record',
   overview: 'Overview',
   activity: 'Activity',
+  /** The Activity tab's filter: its name, and its choices. */
+  activityFilter: 'Filter',
+  filterAll: 'All activity',
+  filterChanges: 'Changes',
+  filterNotes: 'Notes',
+  filterTasks: 'Tasks',
+  filterComments: 'Comments',
+  filterMeetings: 'Meetings',
   details: 'Details',
   recentActivity: 'Recent activity',
   /** The stat strip under the header (the tabs keep the counts): when it last changed, its next meeting, its stage. */
