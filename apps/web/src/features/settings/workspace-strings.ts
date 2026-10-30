@@ -8,6 +8,11 @@ export const strings = {
   name: 'Workspace name',
   timeZone: 'Time zone',
   timeZoneInfo: 'New booking pages and members start in this time zone. Each person can pick their own.',
+  currency: 'Currency',
+  country: 'Country',
+  /** What a cleared currency or country shows: the language's region's, as before it was set. */
+  automatic: 'Automatic',
+  regionInfo: 'New money and phone fields start here. Automatic follows the browser’s language.',
   copyAddress: 'Copy address',
   /** The address row: the whole link, read only; owners and admins change the part after /w/ in its dialog. */
   webAddress: 'Web address',
@@ -43,9 +48,15 @@ export const strings = {
   nameChanged: 'Name changed.',
   yourNameMissing: 'Enter your name.',
   zoneChanged: (zone: string) => `Time zone is now ${zone}.`,
+  /** The workspace's currency or country saved: `to` is the code, or undefined for Automatic. */
+  regionChanged: (what: 'currency' | 'country', to: string | undefined) =>
+    to === undefined
+      ? `${what === 'currency' ? 'Currency' : 'Country'} is automatic.`
+      : `${what === 'currency' ? 'Currency' : 'Country'} is now ${to}.`,
   undo: 'Undo',
   /** An Undo pressed after the name or time zone changed again (here or by another admin): the newer one stays. */
-  undoStale: (what: 'name' | 'time zone') => `The ${what} changed again since, so nothing was undone.`,
+  undoStale: (what: 'name' | 'time zone' | 'currency' | 'country') =>
+    `The ${what} changed again since, so nothing was undone.`,
   /** Said once, at the top of the page, to readers without `workspace.manage`; the fields keep their locks. */
   readOnly: 'Only owners and admins can change this.',
   failed: 'Couldn’t load the settings',

@@ -214,6 +214,8 @@ export type {
   PreferencesState,
   WeekStart,
 } from './preferences/store.ts';
+import { createRegionStore, regionOf, type RegionHeld } from './workspace-region.ts';
+export type { RegionHeld, WorkspaceRegion } from './workspace-region.ts';
 import type { SchedulesView } from './schedules/store.ts';
 import { createPictureChoiceStore, type PictureChoiceHeld } from './profile/picture.ts';
 import type { LinkPageStore } from './link-page/store.ts';
@@ -1281,6 +1283,7 @@ export function createDataLayer({
     formLists.clear();
     schedules.clear();
     preferences.clear();
+    region.clear();
     accessLoaded?.clear();
     pictureChoice.clear();
     void linkPage?.then((made) => {
@@ -2215,6 +2218,10 @@ export function createDataLayer({
     },
     mintId,
     notify,
+  });
+  // The workspace's default currency and country (Settings › Workspace › General), read when a screen holds it.
+  const region = createRegionStore({
+    read: (workspace) => beforeRead(workspace).then(() => call((options) => api.workspace.get({ workspace }, options))),
   });
   // Settings › Account › Link page (spec 0051): the person's own blocks, the same in every workspace. Its store and
   // rules load with the first screen that asks, never in the first load; the store builds its calls from the
@@ -4340,27 +4347,40 @@ export function createDataLayer({
       get: (workspace: string): Promise<WorkspaceSettings> =>
         call((options) => api.workspace.get({ workspace }, options)),
       /**
-       * Renames it, changes its time zone, or moves it to a new address (the
-       * answer's `slug`). Refusals: `FORBIDDEN`, `INPUT_INVALID`, `SLUG_TAKEN`
-       * (field `slug`). A new address drops what was cached under the old one
-       * and reads the person's workspaces again, so the switcher and every
-       * page take the new one; the old address still finds the workspace.
+       * Renames it, changes its time zone, its default currency or country
+       * (`null` takes one back to the language's region's), or moves it to a
+       * new address (the answer's `slug`). Refusals: `FORBIDDEN`,
+       * `INPUT_INVALID`, `SLUG_TAKEN` (field `slug`). A new address drops what
+       * was cached under the old one and reads the person's workspaces again,
+       * so the switcher and every page take the new one; the old address still
+       * finds the workspace. A saved currency or country reaches every page
+       * (`region`) at once.
        */
       async update(
         workspace: string,
-        change: { readonly name?: string; readonly timeZone?: string; readonly slug?: string },
+        change: {
+          readonly name?: string;
+          readonly timeZone?: string;
+          readonly slug?: string;
+          readonly currency?: string | null;
+          readonly country?: string | null;
+        },
       ): Promise<WorkspaceSettings> {
         const updated = await call((options) =>
           api.workspace.update({ workspace, ...change, mutationId: mintId() }, options),
         );
+        region.set(updated.slug, regionOf(updated));
         if (updated.slug !== workspace) {
           objects.delete(workspace);
           access.delete(workspace);
           members.delete(workspace);
+          region.drop(workspace);
         }
         if (change.name !== undefined || updated.slug !== workspace) me = undefined;
         return updated;
       },
+      /** The workspace's default currency and country, read when a screen holds it; absent keeps the language's region's. */
+      region: (workspace: string): RegionHeld => region.of(workspace),
       /** Deletes it, softly, for 30 days. Refusals: `FORBIDDEN`, `CONFIRM_MISMATCH`. */
       async delete(workspace: string, confirmName: string): Promise<DeletedWorkspace> {
         const deleted = await call((options) =>
@@ -4370,6 +4390,7 @@ export function createDataLayer({
         objects.delete(workspace);
         access.delete(workspace);
         members.delete(workspace);
+        region.drop(workspace);
         me = undefined;
         return deleted;
       },

@@ -31,6 +31,10 @@ export const workspaces = pgTable(
     logoUrl: text('logo_url'),
     /** The default time zone for the workspace's people and pages (spec 0031, AC-822). */
     timeZone: text('time_zone').notNull().default('UTC'),
+    /** The default currency (ISO 4217) of new Currency attributes and imported amounts; none keeps the language's region's. */
+    currency: text('currency'),
+    /** The default country (ISO 3166 alpha 2) of new phone numbers; none keeps the language's region's. */
+    country: text('country'),
     /** When a deleted workspace's purge may take it; set with `deleted_at`, cleared on restore (AC-823). */
     purgeAfter: timestamptz('purge_after'),
     ...auditColumns(),
@@ -38,6 +42,8 @@ export const workspaces = pgTable(
   (t) => [
     check('workspaces_purge_after', sql`${t.purgeAfter} is null or ${t.deletedAt} is not null`),
     check('workspaces_time_zone', sql`char_length(${t.timeZone}) between 1 and 64`),
+    check('workspaces_currency', sql`${t.currency} is null or ${t.currency} ~ '^[A-Z]{3}$'`),
+    check('workspaces_country', sql`${t.country} is null or ${t.country} ~ '^[A-Z]{2}$'`),
     uniqueIndex('workspaces_slug')
       .on(t.slug)
       .where(sql`${t.deletedAt} is null`),
