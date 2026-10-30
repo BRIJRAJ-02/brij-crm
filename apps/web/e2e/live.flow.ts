@@ -20,7 +20,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { expect, firefox, test, webkit, type Browser, type Page, type WebSocketRoute } from '@playwright/test';
-import { addPerson, cellAt, checkScreen, newWorkspace, showColumn, signInAgain } from './people.ts';
+import { addPerson, cellAt, checkScreen, chooseNewAttribute, newWorkspace, showColumn, signInAgain } from './people.ts';
 
 const SHOTS = process.env.FLOW_SCREENSHOTS;
 const REALTIME = /\/connection\/websocket/;
@@ -193,6 +193,7 @@ test.describe('live updates between two browsers', () => {
     const echoRefetches = writerRefetches;
     const columns = Number(await readerGrid.getAttribute('aria-colcount'));
     await writer.getByRole('button', { name: 'Add attribute' }).first().click();
+    await chooseNewAttribute(writer);
     const dialog = writer.getByRole('dialog', { name: 'New attribute' });
     await dialog.getByLabel('Name', { exact: true }).fill(`Nickname ${tag}`);
     const addedAt = Date.now();

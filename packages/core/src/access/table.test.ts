@@ -1056,6 +1056,17 @@ const DATA_CASES: Readonly<Record<string, DataCase>> = {
   queryGroups: refused('NOT_FOUND', (scope, world) =>
     core.queryGroups(scope, { objectId: world.people, groupBy: world.stage, groupIds: [null] }),
   ),
+  aggregateMatches: refused('NOT_FOUND', (scope, world) =>
+    core.aggregateMatches(scope, { objectId: world.people, asks: [{ attributeId: world.jobTitle, fn: 'count' }] }),
+  ),
+  aggregateGroups: refused('NOT_FOUND', (scope, world) =>
+    core.aggregateGroups(scope, {
+      objectId: world.people,
+      asks: [{ attributeId: world.jobTitle, fn: 'count' }],
+      groupBy: world.stage,
+      groupIds: [null],
+    }),
+  ),
   getHistory: refused('NOT_FOUND', (scope, world) =>
     core.getHistory(scope, { recordId: world.recordId, attributeId: world.jobTitle }),
   ),

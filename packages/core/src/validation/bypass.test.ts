@@ -50,6 +50,8 @@ const NO_RECORD_VALUES = [
 
 /** Reads, helpers and hooks: they write nothing of their own. */
 const NOT_WRITES = [
+  'aggregateGroups',
+  'aggregateMatches',
   'capChange',
   'cappedHook',
   'countMatches',

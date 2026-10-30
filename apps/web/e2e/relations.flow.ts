@@ -9,7 +9,7 @@
 // live (AC-282 to AC-285, AC-305, AC-307).
 import { randomUUID } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
-import { checkScreen, newWorkspace, signInAgain } from './people.ts';
+import { checkScreen, chooseNewAttribute, newWorkspace, signInAgain } from './people.ts';
 
 /** How long a change may take to show in the other browser (AC-282 says 1 second; the flow allows for a busy machine). */
 const LIVE_MS = 5_000;
@@ -57,6 +57,7 @@ async function expectHeader(page: Page, grid: string, column: string, timeout = 
 /** Opens Add attribute, types a name, and picks Relationship: the relationship dialog takes over. */
 async function newRelationship(page: Page, name: string) {
   await page.getByRole('button', { name: 'Add attribute' }).first().click();
+  await chooseNewAttribute(page);
   const attribute = page.getByRole('dialog', { name: 'New attribute' });
   await attribute.getByLabel('Name', { exact: true }).fill(name);
   await attribute.getByRole('button', { name: /Type$/ }).click();

@@ -662,7 +662,7 @@ describe('records.groups (spec 0021)', () => {
     ).toMatchObject({
       code: 'CONFIG_INVALID',
       status: 422,
-      message: 'Boards group by a status or single select field.',
+      message: 'Boards group by a status, a single select, a checkbox or a member field.',
     });
     const thirteen = Array.from({ length: 13 }, () => newId());
     expect(

@@ -42,6 +42,8 @@ const READS: ReadonlySet<string> = new Set([
   'workspaces.slugAvailable',
   'objects.list',
   'attributes.list',
+  // What an attribute's change would touch, read before the change (the flow pass).
+  'attributes.impact',
   'members.list',
   // Invitations (spec 0031): the open list, and the invitation page's look (no session).
   'invitations.list',
@@ -578,8 +580,8 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
       { kind: 'access', item_ids: [mate.memberId], mutation_id: mutationId },
     ];
   },
-  // Domain join (slice 6, AC-819, AC-820): settings and requests nobody's screen follows live, so no row, until an
-  // approval brings someone in (one members row).
+  // Domain join (slice 6, AC-819, AC-820): settings nobody's screen follows live, so no row; a request tells the
+  // admins in their inbox (one notifications row), and an approval brings someone in (one members row).
   'joinRequests.setDomains': async (m, mutationId) => {
     await m.client.joinRequests.setDomains({ workspace: m.slug, domains: ['example.com'], mutationId });
     return [];
@@ -588,7 +590,7 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     await m.client.joinRequests.setDomains({ workspace: m.slug, domains: ['example.com'], mutationId: newId() });
     const asker = await signIn(app);
     await rpcClient(app, asker.cookie).join.request({ workspaceId: m.workspace.id });
-    return [];
+    return [{ kind: 'notifications' }];
   },
   'joinRequests.decide': async (m, mutationId) => {
     await m.client.joinRequests.setDomains({ workspace: m.slug, domains: ['example.com'], mutationId: newId() });
@@ -596,7 +598,7 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     await rpcClient(app, asker.cookie).join.request({ workspaceId: m.workspace.id });
     const [request] = await m.client.joinRequests.list({ workspace: m.slug });
     await m.client.joinRequests.decide({ workspace: m.slug, requestId: request?.id ?? '', approve: true, mutationId });
-    return [{ kind: 'members', mutation_id: mutationId }];
+    return [{ kind: 'notifications' }, { kind: 'members', mutation_id: mutationId }];
   },
   // Slice 7: the workspace's own settings and delete, and its restore, which nobody's screen follows live; a
   // profile change reaches every member's list (one members row).

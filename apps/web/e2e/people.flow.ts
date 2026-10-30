@@ -6,7 +6,7 @@
 // light and a dark picture of each, per project. Verifies AC-34 to AC-37.
 import { randomUUID } from 'node:crypto';
 import { expect, test } from '@playwright/test';
-import { addPerson, cellAt, checkScreen, newWorkspace, showColumn } from './people.ts';
+import { addPerson, cellAt, checkScreen, chooseNewAttribute, newWorkspace, showColumn } from './people.ts';
 
 test.describe('the People table', () => {
   test.skip(({ viewport }) => (viewport?.width ?? 0) < 1000, 'The table flow runs at desktop width.');
@@ -26,6 +26,7 @@ test.describe('the People table', () => {
     // Add attribute (spec 0012, AttributeSettings): a name and a type; the column appears once the server agrees.
     const columnsBefore = Number(await grid.getAttribute('aria-colcount'));
     await page.getByRole('button', { name: 'Add attribute' }).first().click();
+    await chooseNewAttribute(page);
     const addDialog = page.getByRole('dialog', { name: 'New attribute' });
     await expect(addDialog).toBeVisible();
     await addDialog.getByLabel('Name', { exact: true }).fill('Nickname');
@@ -38,6 +39,7 @@ test.describe('the People table', () => {
 
     // The same name again would take the same API name: refused on the Name field before anything is sent.
     await page.getByRole('button', { name: 'Add attribute' }).first().click();
+    await chooseNewAttribute(page);
     await addDialog.getByLabel('Name', { exact: true }).fill('Nickname');
     await addDialog.getByRole('button', { name: /Type$/ }).click();
     await page.getByRole('option', { name: 'Rating' }).click();

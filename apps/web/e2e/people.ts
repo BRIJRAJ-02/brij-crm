@@ -217,3 +217,15 @@ export async function openTrash(page: Page): Promise<void> {
   await page.getByRole('navigation').getByRole('link', { name: 'Trash', exact: true }).click();
   await expect(page.getByRole('grid', { name: 'Trash' })).toBeVisible();
 }
+
+/**
+ * After the table's "+" (Add attribute): a view that hides columns opens a menu listing them first (the flow
+ * pass), whose last item, New attribute…, opens the dialog; a view hiding none opens the dialog at once.
+ */
+export async function chooseNewAttribute(page: Page): Promise<void> {
+  const dialog = page.getByRole('dialog', { name: 'New attribute' });
+  const item = page.getByRole('menuitem', { name: 'New attribute…' });
+  await expect(dialog.or(item).first()).toBeVisible();
+  if (await item.isVisible()) await item.click();
+  await expect(dialog).toBeVisible();
+}

@@ -75,6 +75,8 @@ export type AccessEntry =
 export const ACCESS_TABLE = {
   // Definitions: schema.manage (AC-135).
   defineObject: { permission: 'schema.manage' },
+  // What an attribute's change would touch (the flow pass), shown in its settings before the change.
+  attributeImpact: { permission: 'schema.manage' },
   updateObject: { permission: 'schema.manage' },
   setObjectArchived: { permission: 'schema.manage' },
   reorderObject: { permission: 'schema.manage' },
@@ -190,6 +192,10 @@ export const ACCESS_TABLE = {
   countMatches: { data: 'read' },
   // A board's first load (spec 0021): object read, and the filter's field checks through the compiler.
   queryGroups: { data: 'read' },
+  // A view's footer calculations and a board's column totals (the CRM flow pass): object read, and the filter's
+  // field checks through the compiler.
+  aggregateMatches: { data: 'read' },
+  aggregateGroups: { data: 'read' },
   getHistory: { data: 'read' },
   getValuesAsOf: { data: 'read' },
   getTimeInStages: { data: 'read' },
