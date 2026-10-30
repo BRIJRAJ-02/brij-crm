@@ -335,6 +335,8 @@ function LoadedPeek(props: RecordPeekProps & { readonly sources: PeekSources }) 
           record={display}
           recordHref={recordHref(slug, object.apiSlug, recordId, 'notes')}
           members={members}
+          objects={sources.objects}
+          hrefOf={chipHref}
           canChange={canEdit}
           onStored={setNote}
           onClose={() => {
