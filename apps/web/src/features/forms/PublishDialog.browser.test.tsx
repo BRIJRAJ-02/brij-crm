@@ -139,6 +139,19 @@ describe('the first publish, in one step (AC-13)', () => {
     expect(question?.kept).toBe(true);
   });
 
+  it('makes nothing when New object is picked: it waits for Publish, and says what it will make', async () => {
+    await open();
+    await userEvent.click(page.getByRole('button', { name: /Save to$/ }));
+    await userEvent.click(page.getByRole('listbox').getByRole('option', { name: /^New object “Apply”/ }));
+    // Picking it only chose it (the fake data layer has no objects.create, so a call would have failed loudly).
+    await expect
+      .element(page.getByRole('button', { name: /Save to$/ }))
+      .toHaveTextContent(/1 field from its questions/);
+    // Every question gets its own field, so there are no rows to match.
+    expect(page.getByRole('button', { name: /saved as$/ }).query()).toBeNull();
+    expect(page.getByRole('alert').query()).toBeNull();
+  });
+
   it('says in one line that Publish makes the email unique, before it happens (late trap #36)', async () => {
     await open();
     await expect.element(page.getByText(SAID)).toBeVisible();

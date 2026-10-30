@@ -69,7 +69,7 @@ const BUILT_TYPE: Readonly<Record<AnswerType, 'text' | 'email' | 'phone' | 'url'
     file: 'text',
   };
 
-/** Save to's choice that builds an object out of the form, and its last: keep submissions only. */
+/** Save to's choice that builds an object out of the form as Publish starts, and its last: keep submissions only. */
 const BUILD = 'build';
 const NO_CRM = 'none';
 
@@ -98,6 +98,8 @@ export function PublishDialog(props: PublishDialogProps) {
   const [error, setError] = useState<string | undefined>(undefined);
   const [live, setLive] = useState<FormView | undefined>(undefined);
   const [embed, setEmbed] = useState<EmbedMode | null>(null);
+  // New object is a choice until Publish: nothing is made if the dialog is cancelled or another object is picked.
+  const [isBuildChosen, setBuildChosen] = useState(false);
 
   // Each answer meets a field with its label as the dialog opens, so a normal form goes live with one press; the
   // table shows every match, and each stays changeable. Once: a choice made here is never matched over.
@@ -184,49 +186,49 @@ export function PublishDialog(props: PublishDialogProps) {
   const uniqueTitle = target.items.find((item) => item.attributeId === makesUnique)?.title;
   const formName = name.trim() === '' ? strings.untitledForm : name.trim();
 
-  // New object: an object named after the form, one attribute per question (the email unique).
-  const build = async () => {
-    setBusy(BUILD);
-    setError(undefined);
-    try {
-      const object = await data.objects.create(slug, {
-        id: data.objects.newId(),
-        singularName: formName,
-        pluralName: formName,
-        icon: 'inbox',
-        hue: 'blue',
+  /**
+   * New object, made as Publish starts: an object named after the form, one attribute per question (the email
+   * unique), the form pointed at it and each question filed on its own field. Answers the draft and choices to publish.
+   */
+  const build = async (): Promise<{ readonly document: FormDocument; readonly choices: FormTargetChoices }> => {
+    const object = await data.objects.create(slug, {
+      id: data.objects.newId(),
+      singularName: formName,
+      pluralName: formName,
+      icon: 'inbox',
+      hue: 'blue',
+    });
+    const made = new Map<string, string>();
+    for (const question of draft.questions) {
+      if (question.answerType === 'file') continue;
+      const attribute = await data.attributes.create(slug, {
+        id: data.attributes.newId(),
+        objectId: object.id,
+        title: question.label === '' ? question.key : question.label,
+        type: BUILT_TYPE[question.answerType],
+        ...(question.answerType === 'email' ? { isUnique: true } : {}),
+        ...(BUILT_TYPE[question.answerType] === 'select'
+          ? {
+              options: (question.choices ?? [])
+                .filter((choice) => choice.trim() !== '')
+                .map((label) => ({ id: data.attributes.newId(), label, hue: 'gray' as const })),
+            }
+          : {}),
       });
-      const made = new Map<string, string>();
-      for (const question of draft.questions) {
-        if (question.answerType === 'file') continue;
-        const attribute = await data.attributes.create(slug, {
-          id: data.attributes.newId(),
-          objectId: object.id,
-          title: question.label === '' ? question.key : question.label,
-          type: BUILT_TYPE[question.answerType],
-          ...(question.answerType === 'email' ? { isUnique: true } : {}),
-          ...(BUILT_TYPE[question.answerType] === 'select'
-            ? {
-                options: (question.choices ?? [])
-                  .filter((choice) => choice.trim() !== '')
-                  .map((label) => ({ id: data.attributes.newId(), label, hue: 'gray' as const })),
-              }
-            : {}),
-        });
-        made.set(question.id, attribute.id);
-      }
-      const revision = await flush();
-      const view = await data.forms.setTarget(slug, form.id, object.id, revision);
-      const choices = await data.forms.attributes(slug, form.id);
-      onTargetChange(view, choices);
-      let next = view.draft;
-      for (const [questionId, attributeId] of made) next = changeQuestion(next, questionId, { filedOn: attributeId });
-      onDraftChange(next);
-      setBusy(undefined);
-    } catch (failure) {
-      setBusy(undefined);
-      setError(firstRefusal(failure).message);
+      made.set(question.id, attribute.id);
     }
+    const revision = await flush();
+    const view = await data.forms.setTarget(slug, form.id, object.id, revision);
+    const choices = await data.forms.attributes(slug, form.id);
+    onTargetChange(view, choices);
+    let document = view.draft;
+    for (const [questionId, attributeId] of made) {
+      document = changeQuestion(document, questionId, { filedOn: attributeId });
+    }
+    onDraftChange(document);
+    // Built: the object is now the form's own, so a refusal later never builds a second one.
+    setBuildChosen(false);
+    return { document, choices };
   };
 
   /**
@@ -238,11 +240,11 @@ export function PublishDialog(props: PublishDialogProps) {
    * sent to an object with no email attribute could not be published at all, and said only "Keep an email question"
    * about a question that was already there (the owner, 27 October 2026).
    */
-  const fileTheRest = async (): Promise<ReadyMatch> => {
-    const objectId = draft.targets.main?.objectId;
-    const plans = planNewAttributes(draft.questions, target.items, canBuild && objectId !== undefined);
-    let document = draft;
-    let choices = target;
+  const fileTheRest = async (start: FormDocument, startChoices: FormTargetChoices): Promise<ReadyMatch> => {
+    const objectId = start.targets.main?.objectId;
+    const plans = planNewAttributes(start.questions, startChoices.items, canBuild && objectId !== undefined);
+    let document = start;
+    let choices = startChoices;
     if (objectId !== undefined && plans.length > 0) {
       const made = await createPlannedAttributes(data, slug, objectId, plans);
       // A field that couldn't be made leaves its question unfiled: said, never published quietly (late trap #37).
@@ -252,7 +254,7 @@ export function PublishDialog(props: PublishDialogProps) {
           tone: 'danger',
           message: questionStrings.notCreated(
             missed.map((plan) => plan.title),
-            target.objectName ?? '',
+            startChoices.objectName ?? '',
             'submission',
           ),
         });
@@ -260,7 +262,7 @@ export function PublishDialog(props: PublishDialogProps) {
       if (made.length > 0) {
         document = made.reduce(
           (next, each) => changeQuestion(next, each.questionId, { filedOn: each.attributeId }),
-          draft,
+          start,
         );
         onDraftChange(document);
         choices = await data.forms.attributes(slug, form.id);
@@ -283,7 +285,8 @@ export function PublishDialog(props: PublishDialogProps) {
     setError(undefined);
     let ready: ReadyMatch;
     try {
-      ready = await fileTheRest();
+      const from = isBuildChosen ? await build() : { document: draft, choices: target };
+      ready = await fileTheRest(from.document, from.choices);
     } catch (failure) {
       setBusy(undefined);
       setError(firstRefusal(failure).message);
@@ -336,7 +339,8 @@ export function PublishDialog(props: PublishDialogProps) {
     const shown = live.live ?? live.draft;
     return (
       <Modal
-        title={live.name}
+        // Said as the dialog's name once Done takes focus: the success is heard, not only seen.
+        title={strings.liveTitle}
         variant="form"
         isOpen
         onOpenChange={(isOpen) => {
@@ -351,7 +355,7 @@ export function PublishDialog(props: PublishDialogProps) {
         }
       >
         <ReadyPanel
-          title={strings.liveTitle}
+          title={live.name}
           message={strings.liveText}
           link={data.forms.hostedUrl(live.publicKey)}
           shareTitle={live.name}
@@ -429,7 +433,7 @@ export function PublishDialog(props: PublishDialogProps) {
       }}
       // An email field the object already has becomes unique on Publish (late trap #36): said before it happens,
       // beside the Publish it is about, in one line.
-      {...(uniqueTitle !== undefined && target.objectName !== undefined
+      {...(!isBuildChosen && uniqueTitle !== undefined && target.objectName !== undefined
         ? { hint: strings.willMakeUnique(uniqueTitle, target.objectName) }
         : {})}
       actions={
@@ -462,6 +466,7 @@ export function PublishDialog(props: PublishDialogProps) {
         // eslint-disable-next-line jsx-a11y-x/no-autofocus
         autoFocus
         onChange={rename}
+        onSubmit={() => void goLive()}
       />
       <Field
         label={strings.address}
@@ -473,20 +478,23 @@ export function PublishDialog(props: PublishDialogProps) {
           setAddressTyped(true);
           setChosenAddress(text.toLowerCase());
         }}
+        onSubmit={() => void goLive()}
         {...(addressError === undefined || address === '' ? {} : { error: addressError })}
       />
       <Select
         label={strings.whichObject}
         items={objectItems}
-        value={targetId ?? NO_CRM}
+        value={isBuildChosen ? BUILD : (targetId ?? NO_CRM)}
+        // New object says what it makes ("3 fields from its questions") once chosen.
+        showsDescription
         isDisabled={busy !== undefined}
-        {...(busy === BUILD ? { hint: strings.building } : {})}
         onChange={(id) => {
-          if (id === BUILD) void build();
-          else if (id !== null) moveTo(id === NO_CRM ? null : id);
+          setBuildChosen(id === BUILD);
+          if (id !== null && id !== BUILD) moveTo(id === NO_CRM ? null : id);
         }}
       />
-      {!isKeptOnly && draft.questions.length > 0 && (
+      {/* New object gives every question its own field, so there is nothing to match until it exists. */}
+      {!isKeptOnly && !isBuildChosen && draft.questions.length > 0 && (
         <Table
           label={strings.mappingLabel}
           columns={[
@@ -580,6 +588,8 @@ function SavedAs({
       label={strings.savedAsOf(labelOf(question))}
       isLabelHidden
       size="sm"
+      // In a row of the table, a stray letter on a closed trigger never remaps an answer.
+      savesOnPick
       items={items}
       value={filed ?? (plannedTitle === undefined ? KEPT : CREATE)}
       isReadOnly={isLocked}

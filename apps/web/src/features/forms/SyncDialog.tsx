@@ -77,6 +77,9 @@ export function SyncDialog({ slug, formId, reason, isOpen, onClose, onStarted }:
   // A scope just changed and its preview is on its way.
   const shown: PreviewState = state.scope === scope ? state : { status: 'loading', scope };
   const preview = shown.status === 'ready' ? shown.preview : undefined;
+  // The last counts read, so a scope switch holds the row's shape while the next ones load.
+  const [lastPreview, setLastPreview] = useState<SyncPreview | undefined>(undefined);
+  if (preview !== undefined && preview !== lastPreview) setLastPreview(preview);
 
   const start = () => {
     if (isStarting) return;
@@ -95,18 +98,17 @@ export function SyncDialog({ slug, formId, reason, isOpen, onClose, onStarted }:
     );
   };
 
-  // Only what would happen: a count of none says nothing.
-  const counts =
-    preview === undefined
-      ? []
-      : [
-          { id: 'creates', label: strings.syncCreates, count: preview.creates },
-          { id: 'updates', label: strings.syncUpdates, count: preview.updates },
-          { id: 'unchanged', label: strings.syncUnchanged, count: preview.unchanged },
-          { id: 'failures', label: strings.syncFailures, count: preview.failures },
-        ]
-          .filter((each) => each.count > 0)
-          .map((each) => ({ id: each.id, label: each.label, value: number.format(each.count) }));
+  // Only what would happen: a count of none says nothing. While loading, the last counts hold the row's shape (all
+  // four before any are known), drawn as skeletons.
+  const counted = preview ?? lastPreview;
+  const counts = [
+    { id: 'creates', label: strings.syncCreates, count: counted?.creates ?? 1 },
+    { id: 'updates', label: strings.syncUpdates, count: counted?.updates ?? 1 },
+    { id: 'unchanged', label: strings.syncUnchanged, count: counted?.unchanged ?? 1 },
+    { id: 'failures', label: strings.syncFailures, count: counted?.failures ?? 1 },
+  ]
+    .filter((each) => each.count > 0)
+    .map((each) => ({ id: each.id, label: each.label, value: number.format(each.count) }));
 
   return (
     <Modal
@@ -125,7 +127,11 @@ export function SyncDialog({ slug, formId, reason, isOpen, onClose, onStarted }:
           </Button>
           {preview?.total !== 0 && (
             <Button variant="primary" isPending={isStarting} isDisabled={preview === undefined} onPress={start}>
-              {isStarting ? strings.syncStarting : strings.syncStart(preview?.total ?? 0)}
+              {isStarting
+                ? strings.syncStarting
+                : preview === undefined
+                  ? strings.syncStartPlain
+                  : strings.syncStart(preview.total)}
             </Button>
           )}
         </>

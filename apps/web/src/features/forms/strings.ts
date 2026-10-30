@@ -84,7 +84,8 @@ export const strings = {
   madeUnique: (field: string, objectName: string) => `${field} is now unique on ${objectName}: one record per email.`,
   viewField: 'View field',
   /** The first publish's one line on the match (spec 0058, AC-13), said before Publish makes it so. */
-  willMakeUnique: (field: string, objectName: string) => `${field} becomes unique on ${objectName}.`,
+  willMakeUnique: (field: string, objectName: string) =>
+    `${field} becomes unique on ${objectName}: one record per email.`,
   changedBy: (name: string) => `${name} changed this form.`,
   someoneChanged: 'Someone else changed this form.',
   loadTheirs: 'Load their version',
@@ -114,14 +115,13 @@ export const strings = {
   liveText: 'Share the link, or put it on your site.',
   name: 'Name',
   address: 'Link',
-  addressTaken: 'That address is taken',
-  addressInvalid: 'The address needs 2 to 40 lowercase letters, numbers or hyphens.',
+  addressTaken: 'That link is taken',
+  addressInvalid: 'The link needs 2 to 40 lowercase letters, numbers or hyphens.',
   done: 'Done',
   noCrm: 'Don’t add to the CRM',
-  /** The Save to list's way to make an object out of the form, one field per question. */
+  /** The Save to list's way to make an object out of the form, one field per question, made as Publish starts. */
   buildObjectItem: (name: string) => `New object “${name}”`,
   buildObjectText: (fields: number) => `${count(fields, 'field', 'fields')} from its questions`,
-  building: 'Making the object…',
   /** Each mapping row's Select, named by its question for screen readers. */
   savedAsOf: (question: string) => `${question}, saved as`,
   /** A field Publish will make for the question. */
@@ -192,7 +192,7 @@ export const strings = {
   retargetTitle: 'Change which object submissions are saved to?',
   retargetOffTitle: 'Stop saving submissions to the CRM?',
   /** One line each (spec 0058, AC-18): what the change loses. */
-  retargetText: (to: string) => `Only questions matching a ${to} field stay saved.`,
+  retargetText: (to: string) => `Only questions matching a field on ${to} stay saved.`,
   retargetOffText: 'New submissions make no record. Answers stay with them.',
   thisObject: 'this object',
   savingWaits: (objectName: string) =>
@@ -418,8 +418,8 @@ export const strings = {
       : `${count(done, 'submission', 'submissions')} synced; ${String(refused)} couldn’t be.`,
   // Sync earlier submissions (spec 0058, AC-14): one line, the scope, the counts, one button
   syncTitle: 'Sync earlier submissions?',
-  syncTextPublished: 'File earlier submissions the new way too.',
-  syncTextMenu: 'File earlier submissions the way the form files now.',
+  syncTextPublished: 'Save earlier submissions the new way too.',
+  syncTextMenu: 'Save earlier submissions the way the form saves now.',
   syncTextConnected: 'Add earlier submissions to the CRM too.',
   syncNothing: 'Nothing to sync',
   syncNothingText: 'Every earlier submission already follows the form.',
@@ -436,6 +436,8 @@ export const strings = {
   syncCapped: (checked: number) => `Counts cover the newest ${new Intl.NumberFormat().format(checked)}.`,
   /** The one button, with the count it starts on: "Sync 42 submissions". */
   syncStart: (total: number) => `Sync ${count(total, 'submission', 'submissions')}`,
+  /** The button before the count is known (loading, or the preview failed). */
+  syncStartPlain: 'Sync',
   syncStarting: 'Starting',
   notNow: 'Not now',
   tryAgain: 'Try again',
