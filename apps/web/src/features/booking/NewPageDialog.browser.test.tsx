@@ -101,6 +101,8 @@ describe('New booking page', () => {
     await userEvent.click(page.getByRole('button', { name: strings.createPage }));
     const ready = page.getByRole('dialog', { name: 'Intro call' });
     await expect.element(ready.getByRole('heading', { name: strings.readyTitle })).toBeVisible();
+    // Focus moves on to Copy link, the panel's one primary, so it never drops to the page.
+    await expect.element(ready.getByRole('button', { name: 'Copy link' })).toHaveFocus();
     await expect.element(ready.getByText(`${location.origin}/b/k3x9k3x9k3x9k3x9`)).toBeVisible();
     await expect.element(ready.getByRole('button', { name: 'Copy link' })).toBeVisible();
     await expect.element(ready.getByRole('img', { name: 'QR code for the link' })).toBeVisible();

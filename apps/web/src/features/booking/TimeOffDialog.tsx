@@ -198,21 +198,20 @@ function TimeOffForm({
         }
       >
         <Callout tone="warning" title={first === undefined ? strings.inside(count) : strings.insideFor(first, count)}>
-          {strings.insideKept}
+          {first !== undefined && saved.moreInside > 0
+            ? `${strings.insideKept} ${strings.insideMore(saved.moreInside)}`
+            : strings.insideKept}
         </Callout>
         {/* The reader's own meetings are a press away on Bookings; a colleague's aren't there, so they're listed here. */}
         {first !== undefined && (
-          <>
-            <DescriptionList
-              layout="compact"
-              items={saved.bookingsInside.map((booking) => ({
-                id: booking.id,
-                term: when(booking.startsAt, locale, timeZone),
-                description: `${booking.visitorName} · ${booking.pageTitle}`,
-              }))}
-            />
-            {saved.moreInside > 0 && <p>{strings.insideMore(saved.moreInside)}</p>}
-          </>
+          <DescriptionList
+            layout="compact"
+            items={saved.bookingsInside.map((booking) => ({
+              id: booking.id,
+              term: when(booking.startsAt, locale, timeZone),
+              description: `${booking.visitorName} · ${booking.pageTitle}`,
+            }))}
+          />
         )}
       </Modal>
     );
@@ -274,6 +273,8 @@ function TimeOffForm({
         )}
         <DateRangePicker
           label={strings.days}
+          // A colleague's days are in their zone: the one hint kept, as it stops a wrong entry.
+          {...(first === undefined ? {} : { hint: strings.daysZoneFor(first) })}
           value={range}
           isRequired
           onChange={(next) => {
