@@ -146,6 +146,11 @@
     box-shadow: var(--shadow-focus-inset);
   }
 
+  /* The card whose record is open in the panel beside the board. */
+  .card[data-open] {
+    background: var(--surface-selected);
+  }
+
   .card[data-dragging] {
     opacity: var(--opacity-busy);
   }
@@ -179,6 +184,7 @@
 
   @media (forced-colors: active) {
     .card[data-focus-visible],
+    .card[data-open],
     .cards[data-focus-visible],
     .root[data-over] {
       outline: var(--border-width-thick) solid Highlight;

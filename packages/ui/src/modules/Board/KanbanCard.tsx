@@ -3,6 +3,7 @@
 // their one display on the card surface.
 import { memo } from 'react';
 import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
+import { Badge } from '../../atoms/Badge/Badge.tsx';
 import { DragHandle } from '../../atoms/DragHandle/DragHandle.tsx';
 import { LockReason } from '../../atoms/Tooltip/LockReason.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
@@ -44,6 +45,9 @@ export const KanbanCard = memo(function KanbanCard({ card, fields, grip }: Kanba
           {...(record.hue === undefined ? {} : { hue: record.hue })}
         />
         <span className={styles.name}>{record.name}</span>
+        {card.openThreads !== undefined && card.openThreads > 0 && (
+          <Badge count={card.openThreads} icon="message-square" label={strings.openThreads(card.openThreads)} />
+        )}
         {card.readOnlyReason !== undefined && <LockReason reason={card.readOnlyReason} />}
         {grip !== undefined && <DragHandle label={strings.move(record.name)} drag={grip} />}
       </span>

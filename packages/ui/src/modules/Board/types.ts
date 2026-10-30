@@ -12,6 +12,8 @@ export interface BoardCard {
   readonly displays?: Readonly<Record<string, unknown>>;
   /** Set when this card can't be moved: shown in its tooltip, and it has no handle. */
   readonly readOnlyReason?: string;
+  /** The record's open comment threads: a comment mark and the count after its name; nothing for 0 or absent. */
+  readonly openThreads?: number;
 }
 
 /** One column: an option of the grouping attribute. */

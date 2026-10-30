@@ -37,6 +37,8 @@ const CARDS: readonly (BoardCard & { readonly stage: string })[] = STAGE_OF.map(
     values: row.values,
     displays: row.displays,
     ...(index === 4 ? { readOnlyReason: 'You can view this deal but not change it.' } : {}),
+    // The first two carry open comment threads.
+    ...(index < 2 ? { openThreads: index + 1 } : {}),
   };
 });
 
@@ -56,6 +58,8 @@ interface SampleProps {
   readonly startCollapsed?: readonly string[];
   /** "+ Add stage" at the end: a name typed makes a column (one taken is refused). */
   readonly canAddColumn?: boolean;
+  /** The card whose record is open in the panel beside the board. */
+  readonly activeId?: string;
 }
 
 /** The board holding its own cards, as the data layer would: a move rewrites the card's stage. */
@@ -71,6 +75,7 @@ function SampleBoard({
   canCollapse = false,
   startCollapsed = [],
   canAddColumn = false,
+  activeId,
 }: SampleProps) {
   const [cards, setCards] = useState(CARDS);
   const [showEmpty, setShowEmpty] = useState(startShowingEmpty);
@@ -98,6 +103,7 @@ function SampleBoard({
         {...(status === undefined ? {} : { status })}
         {...(onRetry === undefined ? {} : { onRetry })}
         {...(onAddCard === undefined ? {} : { onAddCard })}
+        {...(activeId === undefined ? {} : { activeId })}
         {...(canCollapse
           ? {
               collapsedIds: collapsed,
@@ -207,6 +213,21 @@ export const LockedCard: Story = {
     await expect(canvas.queryByRole('button', { name: `Move ${name}` })).not.toBeInTheDocument();
     await expect(canvas.getByRole('button', { name: 'You can view this deal but not change it.' })).toBeInTheDocument();
     await expect(canvas.queryByText('Archived. Cards can’t move here.')).not.toBeInTheDocument();
+  },
+};
+
+/** The card whose record is open beside the board is tinted and marked current; cards with open threads carry a comment mark and count. */
+export const OpenCardAndComments: Story = {
+  args: { activeId: CARDS[1]?.id ?? '' },
+  play: async ({ canvas }) => {
+    const first = String(sampleRowAt(0).values.name);
+    const second = String(sampleRowAt(1).values.name);
+    const open = canvas.getByRole('row', { name: new RegExp(second) });
+    await expect(open.querySelector('[aria-current="true"]')).not.toBeNull();
+    await expect(open).toHaveTextContent('2 open comment threads');
+    const other = canvas.getByRole('row', { name: new RegExp(first) });
+    await expect(other.querySelector('[aria-current]')).toBeNull();
+    await expect(other).toHaveTextContent('1 open comment thread');
   },
 };
 

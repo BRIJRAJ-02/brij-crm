@@ -5,8 +5,10 @@ import type { RecordRefDisplay } from '@crm/contracts/values';
 import { useEffect, useRef, type ReactNode } from 'react';
 import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
+import { ProgressBar } from '../../atoms/ProgressBar/ProgressBar.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import type { LoadStatus } from '../../lib/load-status.ts';
+import { useDelayedLoading } from '../../provider/useDelayedLoading.ts';
 import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
 import { Panel, type PanelWidth } from '../../molecules/Panel/Panel.tsx';
 import { RecordStats, type RecordStat } from '../../molecules/RecordStats/RecordStats.tsx';
@@ -49,6 +51,12 @@ export interface RecordPanelProps {
    * state). The header keeps Close and Open full page.
    */
   readonly empty?: ReactNode;
+  /**
+   * A step is on its way: the next record is loading while this one stays. After the loading delay a thin
+   * progress line shows along the top of the body and the tabs dim a little, with no change of layout; a step
+   * that lands quickly shows nothing. Marks the body busy for screen readers.
+   */
+  readonly isStepping?: boolean;
 }
 
 /**
@@ -75,7 +83,9 @@ export function RecordPanel({
   stats = [],
   notice,
   empty,
+  isStepping = false,
 }: RecordPanelProps) {
+  const showStepping = useDelayedLoading(isStepping);
   const hasSteps = onPrevious !== undefined || onNext !== undefined;
   const previousRef = useRef<HTMLButtonElement>(null);
   const nextRef = useRef<HTMLButtonElement>(null);
@@ -173,7 +183,12 @@ export function RecordPanel({
       }
     >
       {content ?? (
-        <div className={styles.body}>
+        <div className={styles.body} data-stepping={showStepping || undefined} aria-busy={isStepping || undefined}>
+          {showStepping && (
+            <div className={styles.stepping}>
+              <ProgressBar label={strings.loading} isLabelHidden isIndeterminate />
+            </div>
+          )}
           {notice !== undefined && <div className={styles.notice}>{notice}</div>}
           {stats.length > 0 && record !== undefined && (
             <div className={styles.stats}>

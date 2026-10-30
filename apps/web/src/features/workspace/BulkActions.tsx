@@ -313,7 +313,7 @@ export function useBulkActions({
   const definitionOf = (attributeId: string) => attributes.find((each) => each.id === attributeId);
 
   /** One field's bulk edit; a field archived or hidden while the dialog was open sends nothing. */
-  const sendOne = (recordIds: readonly string[], choice: BulkEditChoice): Promise<BulkEditResult> => {
+  const sendOne = (recordIds: readonly string[], choice: BulkEditChoice, group: string): Promise<BulkEditResult> => {
     const definition = definitionOf(choice.attributeId);
     if (definition === undefined) {
       return Promise.resolve({ kind: 'done', updated: 0, unchanged: 0, refused: 0 });
@@ -323,64 +323,51 @@ export function useBulkActions({
       type: definition.type,
       isMulti: definition.isMulti,
       op: choice.op,
+      group,
       ...(Object.hasOwn(choice, 'value') ? { value: choice.value } : {}),
     });
   };
 
   /**
    * The fields in order, one bulk edit each (the server's edit takes one field), stopping at the first refused
-   * whole: the edits before it landed, and the toast's Undo takes them back.
+   * whole: the edits before it landed. They share a group on the undo stack, so the toast's Undo and Cmd+Z take
+   * them all back as one step.
    */
   const sendInOrder = async (
     recordIds: readonly string[],
     choices: readonly BulkEditChoice[],
+    group: string,
     sent: readonly BulkEditResult[] = [],
   ): Promise<readonly BulkEditResult[]> => {
     const [first, ...rest] = choices;
     if (first === undefined) return sent;
-    const result = await sendOne(recordIds, first);
+    const result = await sendOne(recordIds, first, group);
     const all = [...sent, result];
-    return result.kind === 'done' ? sendInOrder(recordIds, rest, all) : all;
-  };
-
-  /** Undoes several fields' edits, newest first (each only while it is the newest); the oldest's toast says so. */
-  const undoAll = (undoIds: readonly string[]) => {
-    const [oldest] = undoIds;
-    if (oldest === undefined) return;
-    undoIds
-      .slice(1)
-      .toReversed()
-      .reduce<Promise<unknown>>((chain, undoId) => chain.then(() => data.undo.run(slug, undoId)), Promise.resolve())
-      .then(
-        () => {
-          runUndo(data, toasts, slug, oldest);
-        },
-        () => {
-          toasts.toast({ tone: 'danger', message: bulkStrings.somethingWrong });
-        },
-      );
+    return result.kind === 'done' ? sendInOrder(recordIds, rest, group, all) : all;
   };
 
   const edit = async (
     recordIds: readonly string[],
     choices: readonly BulkEditChoice[],
     fromToast = false,
+    // A Retry from the toast carries on the same step, so one Undo still takes the whole Apply back.
+    group: string = data.records.newId(),
   ): Promise<BulkApplied> => {
-    const results = await sendInOrder(recordIds, choices);
+    const results = await sendInOrder(recordIds, choices, group);
     const landed = results.filter((each) => each.kind === 'done');
     const stop = results.find((each) => each.kind !== 'done');
-    const { result, undoIds } = combineEditResults(landed);
+    const { result } = combineEditResults(landed);
     // One toast for every field that changed, its Undo taking them all back; a refusal of the whole edit before any
     // landed is said where it was asked (the dialog), or here from a toast's Retry.
     const toast = bulkEditToast(
       stop !== undefined && landed.length === 0 ? stop : result,
       object,
-      () => {
-        undoAll(undoIds);
+      (undoId) => {
+        runUndo(data, toasts, slug, undoId);
       },
       () => {
         // Again from the field that was refused: the ones before it landed.
-        void edit(recordIds, choices.slice(landed.length), true);
+        void edit(recordIds, choices.slice(landed.length), true, group);
       },
       { fromToast },
     );

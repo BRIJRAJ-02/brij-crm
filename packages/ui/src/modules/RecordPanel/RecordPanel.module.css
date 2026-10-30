@@ -4,10 +4,19 @@
 @layer components {
   /* The stat strip over the tabs, then the tabs filling what is left. */
   .body {
+    position: relative;
     display: flex;
     flex-direction: column;
     block-size: 100%;
     min-block-size: 0;
+  }
+
+  /* A step on its way: a thin line over the body's top edge, out of the flow so nothing moves. */
+  .stepping {
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline: 0;
+    z-index: var(--z-raised);
   }
 
   /* A notice (the record no longer available) and the stat strip sit over the tabs, padded as the content is. */
@@ -22,6 +31,11 @@
     flex: 1;
     flex-direction: column;
     min-block-size: 0;
+  }
+
+  /* The next record is on its way: the tabs a little dimmer. */
+  .body[data-stepping] .tabs {
+    opacity: var(--opacity-busy);
   }
 
   .content {

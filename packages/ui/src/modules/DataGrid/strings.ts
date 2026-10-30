@@ -7,6 +7,8 @@ export const strings = {
   /** The "+" menu's last item, under the hidden columns. */
   newColumnItem: 'New attribute…',
   untitled: 'Untitled',
+  /** What a row's comment count counts, read after the number. */
+  openThreads: (count: number) => (count === 1 ? 'open comment thread' : 'open comment threads'),
   columnOptions: (name: string) => `${name} options`,
   moveLeft: 'Move left',
   moveRight: 'Move right',
