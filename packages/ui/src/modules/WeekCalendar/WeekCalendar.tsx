@@ -44,6 +44,11 @@ export interface WeekCalendarDay {
    * off). Decoration: the column's `label` says it in words.
    */
   readonly band?: { readonly label: string; readonly startMinute: number; readonly endMinute: number };
+  /**
+   * False keeps this column from drawing (a colleague the reader may only See on TeamDay): no crosshair, no span, no
+   * Enter to draw, so the cue matches what it does. Absent, it draws whenever `onDraw` is given.
+   */
+  readonly canDraw?: boolean;
 }
 
 /** One block on the grid: a booking, one of the member's own calendar events, or time they closed. */
@@ -447,7 +452,12 @@ export function WeekCalendar({
     /** What Up and Down walk, in order: the day's blocks and "+N" chips by start. */
     order: readonly string[],
   ) => {
-    if (onDraw !== undefined && event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) {
+    if (
+      onDraw !== undefined &&
+      day.canDraw !== false &&
+      event.target === event.currentTarget &&
+      (event.key === 'Enter' || event.key === ' ')
+    ) {
       event.preventDefault();
       drawnBy.current = 'keyboard';
       onDraw(defaultSpan(day.key, drawStartMinute?.(day.key) ?? 9 * 60));
@@ -616,7 +626,7 @@ export function WeekCalendar({
                 }}
                 role="group"
                 aria-label={isLoading ? strings.dayLoading(day.label) : strings.dayBlocks(day.label, ofDay.length)}
-                {...(onDraw === undefined
+                {...(onDraw === undefined || day.canDraw === false
                   ? {}
                   : { 'aria-description': strings.drawHint, 'aria-keyshortcuts': 'Enter' })}
                 tabIndex={day.key === selectedDay ? 0 : -1}
@@ -624,9 +634,9 @@ export function WeekCalendar({
                 data-selected={day.key === selectedDay || undefined}
                 data-today={day.isToday || undefined}
                 data-past={day.isPast || undefined}
-                data-drawable={onDraw === undefined ? undefined : true}
+                data-drawable={onDraw === undefined || day.canDraw === false ? undefined : true}
                 onKeyDown={(event) => onColumnKey(event, day, orderOf(day.key))}
-                {...(onDraw === undefined
+                {...(onDraw === undefined || day.canDraw === false
                   ? {}
                   : {
                       onPointerDown: (event: PointerEvent<HTMLDivElement>) => {

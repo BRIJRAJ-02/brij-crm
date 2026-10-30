@@ -53,7 +53,7 @@ import { AwayReassignDialog } from './AwayReassignDialog.tsx';
 import { BookingDialog, type BookingAsk, type HostBookingActions } from './BookingActions.tsx';
 import { BlockCard, BookingCard, BusyCard, EventCard, RemoveBlockDialog, usePersonHref } from './BookingsScreen.tsx';
 import { DrawCard, type ForPerson } from './DrawCard.tsx';
-import { NewMeetingDialog, type NewMeeting } from './NewMeetingDialog.tsx';
+import { NewMeetingDialog, type NewMeeting, type NewMeetingDialogProps } from './NewMeetingDialog.tsx';
 import { ReassignDialog } from './ReassignDialog.tsx';
 import { instantOf, spanNames, type DrawnSpan } from './span.ts';
 import { strings } from './strings.ts';
@@ -81,6 +81,8 @@ export interface TeamDayViewProps {
   readonly pageDestination?: ((pageId: string) => CalendarsHeld<PageDestinationState>) | undefined;
   readonly peopleSearch?: (() => RecordSearch) | undefined;
   readonly newBookingKey: () => string;
+  /** The meeting limits a time lands against, for New meeting's warning (spec 0037, J7). */
+  readonly limitsAt?: NewMeetingDialogProps['limitsAt'];
   readonly onBookAsHost: (meeting: NewMeeting) => Promise<{ readonly notInCrm?: string }>;
   /** Closes a span on someone's column: its preview shows at once there (and on the reader's own week). */
   readonly onBlock: (
@@ -323,6 +325,8 @@ export function TeamDayView(props: TeamDayViewProps) {
       tone,
       ...(differs ? { badge: offsetLabel(column.timeZone, at) } : {}),
       ...(chip === undefined ? {} : { extra: <CalendarHealthChip state={chip} name={column.name} isQuiet /> }),
+      // Only people the reader Manages, and themself, take a drawn span (AC-773): the rest are See only.
+      canAct: column.memberId === me || column.canManage,
       label: strings.columnLabel(column.name, column.jobTitle, reason === undefined ? status : `${status}, ${reason}`),
       ...(column.away === undefined || answer === undefined
         ? {}
@@ -494,11 +498,8 @@ export function TeamDayView(props: TeamDayViewProps) {
           const column = columnOf(span.dayKey);
           if (column === undefined) return;
           setOpenId(undefined);
-          // See only (AC-773): nothing to act on, and the reader is told why rather than nothing happening.
-          if (column.memberId !== me && !column.canManage) {
-            toasts.toast({ tone: 'info', message: strings.seeOnlyColumn(column.name) });
-            return;
-          }
+          // See only (AC-773): the column draws nothing (`canAct`); the server refuses it anyway.
+          if (column.memberId !== me && !column.canManage) return;
           setDrawCount((count) => count + 1);
           setDraft({ memberId: column.memberId, span });
         }}
@@ -666,6 +667,7 @@ export function TeamDayView(props: TeamDayViewProps) {
           forPeople={forPeople}
           {...(meeting.memberId === me ? {} : { initialFor: meeting.memberId })}
           newKey={props.newBookingKey}
+          limitsAt={props.limitsAt}
           people={props.peopleSearch}
           calendars={props.calendars}
           pageDestination={props.pageDestination}
