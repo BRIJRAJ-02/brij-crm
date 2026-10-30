@@ -10,6 +10,7 @@ import { Tooltip } from './Tooltip.tsx';
 const meta = {
   title: 'Atoms/Tooltip',
   component: Tooltip,
+  subcomponents: { ShortcutTooltip },
   args: { content: 'Archive record', children: <Button icon="archive" label="Archive" /> },
 } satisfies Meta<typeof Tooltip>;
 
