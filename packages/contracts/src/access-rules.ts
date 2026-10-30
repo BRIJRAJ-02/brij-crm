@@ -44,6 +44,18 @@ export const RuleSubject = z.discriminatedUnion('type', [
 /** Who a rule is about. */
 export type RuleSubject = z.infer<typeof RuleSubject>;
 
+/** What a field rule can say: read only, or hidden. A field with no rule is as open as its object (AC-846). */
+export const FIELD_RULE_LEVELS = ['read', 'hidden'] as const;
+/** What a field rule can say: read only, or hidden. */
+export const FieldRuleLevel = z.enum(FIELD_RULE_LEVELS);
+/** What a field rule can say. */
+export type FieldRuleLevel = z.infer<typeof FieldRuleLevel>;
+
+/** A subject's field rules on an object: attribute id to level; a field not named is as open as the object. */
+export const FieldRules = z.record(Uuid, FieldRuleLevel);
+/** A subject's field rules on an object. */
+export type FieldRules = z.infer<typeof FieldRules>;
+
 /** One subject's standing on an object. */
 export const SubjectAccess = z.object({
   subject: RuleSubject,
@@ -53,6 +65,8 @@ export const SubjectAccess = z.object({
   defaultLevel: ObjectAccessLevel,
   /** True while no rule is stored (the subject is at its default); a team row always has one. */
   isDefault: z.boolean(),
+  /** Its field rules on the object; a field not named is as open as the object's level. */
+  fields: FieldRules,
   /** How many active people the subject covers. */
   people: z.number().int().nonnegative(),
 });
@@ -64,9 +78,16 @@ export const OwnerAttribute = z.object({ id: Uuid, title: z.string() });
 /** The field a record scope reads. */
 export type OwnerAttribute = z.infer<typeof OwnerAttribute>;
 
+/** A field an object's access rules can name: a live attribute, with whether it is the record's name (never hidden). */
+export const RuleField = z.object({ id: Uuid, title: z.string(), isPrimary: z.boolean() });
+/** A field an object's access rules can name. */
+export type RuleField = z.infer<typeof RuleField>;
+
 /** An object's access: each rule role in the roles list's order, then each team with a rule. */
 export const ObjectAccess = z.object({
   objectId: Uuid,
+  /** The object's live fields in their order, for the field checklist. */
+  fields: z.array(RuleField),
   /** What `own` and `team` read; absent when the object has no Member field, so neither can be offered. */
   ownerAttribute: OwnerAttribute.optional(),
   subjects: z.array(SubjectAccess),
@@ -85,14 +106,71 @@ export type ObjectAccessRead = z.infer<typeof ObjectAccessRead>;
  */
 export const SetObjectAccessInput = ObjectAccessRead.extend({
   subject: RuleSubject,
-  rule: z.object({ level: ObjectAccessLevel, records: RecordScope }).nullable(),
+  rule: z
+    .object({
+      level: ObjectAccessLevel,
+      records: RecordScope,
+      /** Replaces the subject's field rules; left out, they stay as they are. */
+      fields: FieldRules.optional(),
+    })
+    .nullable(),
   mutationId: Uuid,
 });
 /** Setting one subject's access to an object. */
 export type SetObjectAccessInput = z.infer<typeof SetObjectAccessInput>;
 
-/** The access rules namespace; both need `access.manage`. */
+/**
+ * What a change takes away from people who had it (spec 0032, AC-850): how many people lose some access (a lower
+ * level, fewer records, a field hidden or made read only), how many shared views name a field that went from some of
+ * them, and how many live forms file onto one. All zero for a change that only opens things up.
+ */
+export const AccessImpact = z.object({
+  people: z.number().int().nonnegative(),
+  views: z.number().int().nonnegative(),
+  forms: z.number().int().nonnegative(),
+});
+/** What a change takes away. */
+export type AccessImpact = z.infer<typeof AccessImpact>;
+
+/** What a set answers: the object's access as it stands, and what the change took away. */
+export const SetObjectAccessResult = z.object({ access: ObjectAccess, impact: AccessImpact });
+/** What a set answers. */
+export type SetObjectAccessResult = z.infer<typeof SetObjectAccessResult>;
+
+/** Who "Preview as" shows the object to: a person, or someone in a team (a Member who is in it). */
+export const PreviewAs = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('member'), memberId: Uuid }),
+  z.object({ type: z.literal('team'), teamId: Uuid }),
+]);
+/** Who "Preview as" shows the object to. */
+export type PreviewAs = z.infer<typeof PreviewAs>;
+
+/** Previewing an object as someone. */
+export const AccessPreviewInput = ObjectAccessRead.extend({ as: PreviewAs });
+/** Previewing an object as someone. */
+export type AccessPreviewInput = z.infer<typeof AccessPreviewInput>;
+
+/** How many records a preview names, at most. */
+export const PREVIEW_SAMPLE = 5;
+
+/**
+ * The object as someone sees it, read through the access door as them (spec 0032, AC-858): what they may do, the
+ * fields they have (hidden ones are absent), how many records they see and the first few by name. Never a write.
+ */
+export const AccessPreview = z.object({
+  /** Who is shown: the person's name, or the team's. */
+  name: z.string(),
+  level: ObjectAccessLevel,
+  fields: z.array(z.object({ id: Uuid, title: z.string(), canEdit: z.boolean() })),
+  count: z.number().int().nonnegative(),
+  sample: z.array(z.object({ id: Uuid, name: z.string() })).max(PREVIEW_SAMPLE),
+});
+/** The object as someone sees it. */
+export type AccessPreview = z.infer<typeof AccessPreview>;
+
+/** The access rules namespace; every one needs `access.manage`. */
 export const accessRulesContract = {
   get: oc.input(ObjectAccessRead).output(ObjectAccess),
-  set: oc.input(SetObjectAccessInput).output(ObjectAccess),
+  set: oc.input(SetObjectAccessInput).output(SetObjectAccessResult),
+  preview: oc.input(AccessPreviewInput).output(AccessPreview),
 };

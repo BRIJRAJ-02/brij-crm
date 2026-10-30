@@ -23,9 +23,8 @@ describe('the kinds of change', () => {
     expect(AUDIT_NOT_LISTED).toEqual([
       'member.preferences_changed',
       'booking_page.profile_reordered',
-      // Teams and access rules (specs 0031 and 0032) are stored; History lists them later.
-      'team.changed',
-      'access.rule_set',
+      // A preview (spec 0032, AC-858) is stored and never listed.
+      'access.previewed',
     ]);
     // Spec 0037's scheduling rows (AC-1263) are listed with their sentences since J5.
     expect(auditKindOf('schedule.changed')).toBe('scheduling');

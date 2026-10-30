@@ -230,6 +230,32 @@ const SENTENCES: SentenceTemplates = {
   'time_off.deleted': (entry, w) => actor(`removed ${w.persons(entry.target.person)} time off`),
   'limits.changed': (entry, w) => actor(`changed ${w.persons(entry.target.person)} meeting limits`),
   'calendar.reconnect_asked': (entry, w) => actor(`asked ${w.person(entry.target.person)} to reconnect their calendar`),
+  'team.changed': (entry) => {
+    const { team, joined, left } = entry.params;
+    switch (entry.params.change) {
+      case 'created':
+        return actor(`made the ${team} team`);
+      case 'renamed':
+        return actor(
+          `renamed the ${team} team to ${entry.changes[0]?.after?.kind === 'text' ? entry.changes[0].after.text : 'a new name'}`,
+        );
+      case 'deleted':
+        return actor(`deleted the ${team} team`);
+      case 'members': {
+        if (joined > 0 && left > 0) return actor(`changed who is in the ${team} team`);
+        if (left > 0) return actor(`took ${String(left)} ${left === 1 ? 'person' : 'people'} out of the ${team} team`);
+        return actor(`added ${String(joined)} ${joined === 1 ? 'person' : 'people'} to the ${team} team`);
+      }
+    }
+  },
+  'access.rule_set': (entry) => {
+    const { object, who, level, records, fields, isDefault } = entry.params;
+    if (isDefault) return actor(`set ${who} back to the default access to ${object}`);
+    const what = { none: 'can’t see', read: 'can view', write: 'can edit' }[level];
+    const which = records === 'all' ? '' : records === 'own' ? ', their own only' : ', their team’s only';
+    const more = fields === 0 ? '' : `, ${String(fields)} ${fields === 1 ? 'field' : 'fields'} limited`;
+    return actor(`changed access to ${object}: ${who} ${what}${level === 'none' ? '' : which}${more}`);
+  },
   'booking.changed_for': (entry, w) => {
     const verb = { made: 'booked', moved: 'moved', cancelled: 'cancelled' }[entry.params.change];
     return actor(`${verb} ${w.booking(entry.target)} for ${w.person(entry.params.host)}`);

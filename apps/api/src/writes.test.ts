@@ -49,6 +49,8 @@ const READS: ReadonlySet<string> = new Set([
   'teams.list',
   // An object's access, as its Access tab reads it (spec 0032).
   'accessRules.get',
+  // Preview as (spec 0032, AC-858): reads as someone else through the policy; its one write is an audit row, no outbox.
+  'accessRules.preview',
   // Invitations (spec 0031): the open list, and the invitation page's look (no session).
   'invitations.list',
   'invitations.peek',

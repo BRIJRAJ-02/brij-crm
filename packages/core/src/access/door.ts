@@ -29,10 +29,13 @@ import {
   SIGN_IN_AGAIN_MESSAGE,
   SLUG_PATTERN,
   TWO_FACTOR_REQUIRED_MESSAGE,
+  type PreviewAs,
   type PublicSocialLink,
 } from '@crm/contracts';
 import { publicSocialsOf } from '../booking/socials.ts';
 import type { EmailLink } from '../emails/preferences.ts';
+import { requirePermission } from './check.ts';
+import { workspaceRules } from './stored-rules.ts';
 import { checkScope, mintFormBeside, mintPageBeside, mintScope, rescope, type EngineScope } from './mint.ts';
 import { inWorkspace } from './run.ts';
 import {
@@ -63,7 +66,7 @@ export type RuleSource = (
 /** No rules and no teams, with no query: for tests; production reads `storedRules`. */
 export const NO_RULE_SOURCE: RuleSource = () => Promise.resolve(NO_RULES);
 
-const { members, objects, workspaces, workspaceSecurity } = schema;
+const { members, objects, teamMembers, teams, workspaces, workspaceSecurity } = schema;
 
 /** Where the door reports a member row it refused for a role the code doesn't know (the member id only). */
 export interface DoorLog {
@@ -482,6 +485,84 @@ export function enterAsForm(scope: EngineScope, formId: string, access: Access):
     throw new Error('Only system work acts as a form, with that form’s own access.');
   }
   return rescope(scope, { type: 'form', id: formId }, access);
+}
+
+/** The nil member id: the stand in for "someone in this team" in a team preview, who owns no record. */
+const NIL_MEMBER = '00000000-0000-0000-0000-000000000000';
+
+/**
+ * A scope for "Preview as" (spec 0032, AC-858): the access of the chosen member (as the door would give it them), or of
+ * a Member who is in the chosen team and nothing else, on the previewer's own actor and database. For `access.manage`
+ * only, and in this workspace only: a member or team of another workspace is no one here (NOT_FOUND). The scope reads
+ * through the same policy as a real request, so what it finds is what they would; its one caller (`previewAccess`)
+ * only reads with it, and it is never handed out. Answers the name to show.
+ */
+export async function previewScope(
+  scope: EngineScope,
+  as: PreviewAs,
+): Promise<{ readonly scope: EngineScope; readonly name: string }> {
+  requirePermission(scope, 'access.manage');
+  const found = await inWorkspace(scope, async (tx) => {
+    const all = await workspaceRules(tx);
+    if (as.type === 'member') {
+      if (!isUuid(as.memberId)) return undefined;
+      const [row] = await tx
+        .select({ id: members.id, name: members.name, role: members.role })
+        .from(members)
+        .where(
+          and(eq(members.workspaceId, scope.workspaceId), eq(members.id, as.memberId), eq(members.status, 'active')),
+        );
+      if (row === undefined || !isRole(row.role)) return undefined;
+      const rules = all.forMember(row.id);
+      const access = roleAccess(
+        {
+          kind: 'member',
+          memberId: row.id,
+          role: row.role,
+          teamIds: rules.teamIds ?? [],
+          teamMemberIds: rules.teamMemberIds ?? [],
+        },
+        rules,
+      );
+      return { access, name: row.name };
+    }
+    if (!isUuid(as.teamId)) return undefined;
+    const [team] = await tx
+      .select({ name: teams.name })
+      .from(teams)
+      .where(and(eq(teams.workspaceId, scope.workspaceId), eq(teams.id, as.teamId)));
+    if (team === undefined) return undefined;
+    const mates = await tx
+      .select({ id: teamMembers.memberId })
+      .from(teamMembers)
+      .innerJoin(members, and(eq(members.workspaceId, teamMembers.workspaceId), eq(members.id, teamMembers.memberId)))
+      .where(
+        and(
+          eq(teamMembers.workspaceId, scope.workspaceId),
+          eq(teamMembers.teamId, as.teamId),
+          eq(members.status, 'active'),
+        ),
+      );
+    const rules: AccessRules = {
+      levels: all.levels,
+      records: all.records,
+      teamIds: [as.teamId],
+      teamMemberIds: mates.map((row) => row.id),
+    };
+    const access = roleAccess(
+      {
+        kind: 'member',
+        memberId: NIL_MEMBER,
+        role: 'member',
+        teamIds: [as.teamId],
+        teamMemberIds: rules.teamMemberIds ?? [],
+      },
+      rules,
+    );
+    return { access, name: team.name };
+  });
+  if (found === undefined) throw refuse('NOT_FOUND', "That person or team doesn't exist.");
+  return { scope: rescope(scope, scope.actor, found.access), name: found.name };
 }
 
 /**

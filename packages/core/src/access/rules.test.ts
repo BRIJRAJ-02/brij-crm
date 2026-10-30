@@ -8,18 +8,20 @@ import type { Role } from '@crm/contracts';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDatabase, type Database } from '@crm/db';
 import { testQuery } from '@crm/db/testing';
-import { archiveAttribute } from '../engine/definitions.ts';
+import { listObjectAttributes } from '../attributes/attributes.ts';
+import { archiveAttribute, defineAttribute, listAttributes, restoreAttribute } from '../engine/definitions.ts';
 import { newId } from '../engine/ids.ts';
 import { outboxHook } from '../engine/outbox.ts';
 import { countMatches, queryPage } from '../engine/query/page.ts';
 import { isRefusal } from '../engine/refusals.ts';
-import { createRecord } from '../engine/records.ts';
+import { createRecord, getRecords, setValues } from '../engine/records.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
 import { changeTeamMembers, createTeam } from '../teams/teams.ts';
 import { testScope } from '../testing.ts';
 import { audiences } from './audiences.ts';
 import { enterAsActor, systemScope } from './door.ts';
 import { objectLevel, OPEN_KEY } from './policy.ts';
+import { previewAccess } from './preview.ts';
 import { getObjectAccess, setObjectAccess } from './rules.ts';
 import { storedRules } from './stored-rules.ts';
 
@@ -110,7 +112,15 @@ describe('reading an object’s access (AC-851)', () => {
     const access = await getObjectAccess(w.owner, { objectId: w.companies });
     expect(access.ownerAttribute).toEqual({ id: w.attribute('owner'), title: 'Owner' });
     expect(access.subjects).toEqual([
-      { subject: MEMBER, level: 'write', records: 'all', defaultLevel: 'write', isDefault: true, people: 2 },
+      {
+        subject: MEMBER,
+        level: 'write',
+        records: 'all',
+        defaultLevel: 'write',
+        isDefault: true,
+        fields: {},
+        people: 2,
+      },
     ]);
   });
 
@@ -154,8 +164,24 @@ describe('the Member role restricts and a team grants (AC-843, AC-844)', () => {
     });
     const access = await getObjectAccess(w.owner, { objectId: w.companies });
     expect(access.subjects).toEqual([
-      { subject: MEMBER, level: 'none', records: 'all', defaultLevel: 'write', isDefault: false, people: 2 },
-      { subject: team(sales.id), level: 'write', records: 'all', defaultLevel: 'none', isDefault: false, people: 1 },
+      {
+        subject: MEMBER,
+        level: 'none',
+        records: 'all',
+        defaultLevel: 'write',
+        isDefault: false,
+        fields: {},
+        people: 2,
+      },
+      {
+        subject: team(sales.id),
+        level: 'write',
+        records: 'all',
+        defaultLevel: 'none',
+        isDefault: false,
+        fields: {},
+        people: 1,
+      },
     ]);
     // Ada, in Sales, edits; Bea, in no team, finds nothing (absent, not locked); the admin and owner see it all.
     const inSales = await w.enter(ada);
@@ -175,7 +201,15 @@ describe('the Member role restricts and a team grants (AC-843, AC-844)', () => {
     await setObjectAccess(w.owner, { objectId: w.companies, subject: MEMBER, rule: null });
     expect(await w.names(await w.enter(bea))).toEqual([acme]);
     expect((await getObjectAccess(w.owner, { objectId: w.companies })).subjects).toEqual([
-      { subject: MEMBER, level: 'write', records: 'all', defaultLevel: 'write', isDefault: true, people: 2 },
+      {
+        subject: MEMBER,
+        level: 'write',
+        records: 'all',
+        defaultLevel: 'write',
+        isDefault: true,
+        fields: {},
+        people: 2,
+      },
     ]);
   });
 
@@ -375,5 +409,311 @@ describe('the change itself (AC-851, AC-852)', () => {
     expect(keyOf(ada)).toBe(OPEN_KEY);
     expect(keyOf(w.memberId)).toBe(OPEN_KEY);
     expect(keyOf(bea)).not.toBe(OPEN_KEY);
+  });
+});
+
+describe('one field for every record rule of an object (AC-847)', () => {
+  it('keeps reading the field the rules were made with when an Owner field appears later', async () => {
+    const w = await world();
+    // The Owner goes, another Member field takes its place, a rule reads that, and the Owner comes back.
+    await archiveAttribute(w.owner, w.attribute('owner'));
+    const manager = (
+      await defineAttribute(w.owner, {
+        objectId: w.companies,
+        apiSlug: 'account_manager',
+        title: 'Account manager',
+        type: 'actor_reference',
+      })
+    ).attributeId;
+    await setObjectAccess(w.owner, {
+      objectId: w.companies,
+      subject: MEMBER,
+      rule: { level: 'write', records: 'own' },
+    });
+    await restoreAttribute(w.owner, w.attribute('owner'));
+    const sales = await createTeam(w.owner, { name: 'Sales', memberIds: [] });
+    const { access } = await setObjectAccess(w.owner, {
+      objectId: w.companies,
+      subject: team(sales.id),
+      rule: { level: 'write', records: 'team' },
+    });
+    // The tab names the field the rules read, and the second rule reads the same one, never the Owner that would win now.
+    expect(access.ownerAttribute).toEqual({ id: manager, title: 'Account manager' });
+    const rows = await testQuery<{ attribute_id: string }>(
+      ownerUrl,
+      `select attribute_id::text from record_rules where workspace_id = $1 and object_id = $2`,
+      [w.workspaceId, w.companies],
+    );
+    expect(rows.map((row) => row.attribute_id)).toEqual([manager, manager]);
+    // With no record rule left the next one reads the Owner again.
+    await setObjectAccess(w.owner, { objectId: w.companies, subject: team(sales.id), rule: null });
+    await setObjectAccess(w.owner, { objectId: w.companies, subject: MEMBER, rule: null });
+    expect((await getObjectAccess(w.owner, { objectId: w.companies })).ownerAttribute?.id).toBe(w.attribute('owner'));
+  });
+});
+
+describe('field rules (AC-846, AC-853, AC-854, AC-855)', () => {
+  it('hides a field from the Member role everywhere the door reads, and an owner still sees it', async () => {
+    const w = await world();
+    const ada = await w.add('Ada');
+    const description = w.attribute('description');
+    const acme = await createRecord(w.owner, {
+      objectId: w.companies,
+      values: { [w.attribute('name')]: 'Acme', [description]: 'Secret plans' },
+    }).then((made) => made.recordId);
+    const { access } = await setObjectAccess(w.owner, {
+      objectId: w.companies,
+      subject: MEMBER,
+      rule: { level: 'write', records: 'all', fields: { [description]: 'hidden' } },
+    });
+    expect(access.subjects[0]).toMatchObject({ isDefault: false, level: 'write', fields: { [description]: 'hidden' } });
+    const member = await w.enter(ada);
+    // Absent from the attribute list, the record and a write that names it; present for the owner.
+    expect((await listAttributes(member, w.companies)).map((each) => each.id)).not.toContain(description);
+    const [seen] = await getRecords(member, { ids: [acme] });
+    expect(Object.keys(seen?.values ?? {})).not.toContain(description);
+    expect(
+      await refusalOf(setValues(member, { recordId: acme, values: { [description]: { value: 'x' } } })),
+    ).toMatchObject({ code: 'NOT_FOUND' });
+    expect((await listAttributes(w.owner, w.companies)).map((each) => each.id)).toContain(description);
+    const [asOwner] = await getRecords(w.owner, { ids: [acme] });
+    expect(Object.keys(asOwner?.values ?? {})).toContain(description);
+  });
+
+  it('makes a field read only with the reason, and a team can lift it', async () => {
+    const w = await world();
+    const ada = await w.add('Ada');
+    const bea = await w.add('Bea');
+    const phone = w.attribute('phone');
+    const acme = await w.company('Acme', undefined);
+    await setObjectAccess(w.owner, {
+      objectId: w.companies,
+      subject: MEMBER,
+      rule: { level: 'write', records: 'all', fields: { [phone]: 'read' } },
+    });
+    const sales = await createTeam(w.owner, { name: 'Sales', memberIds: [bea] });
+    expect(
+      await refusalOf(setValues(await w.enter(ada), { recordId: acme, values: { [phone]: { value: [] } } })),
+    ).toMatchObject({ code: 'ATTRIBUTE_READ_ONLY', message: "Your role can't change Phone." });
+    // Sales gets the object at edit with no field rule: its view is the most open, so Bea can change it again.
+    await setObjectAccess(w.owner, {
+      objectId: w.companies,
+      subject: team(sales.id),
+      rule: { level: 'write', records: 'all' },
+    });
+    const beaListed = await listObjectAttributes(await w.enter(bea), w.companies);
+    expect(beaListed.find((each) => each.id === phone)?.readOnly).toBeUndefined();
+    const adaListed = await listObjectAttributes(await w.enter(ada), w.companies);
+    expect(adaListed.find((each) => each.id === phone)?.readOnly).toEqual({ reason: "Your role can't change Phone." });
+  });
+
+  it('keeps a subject’s field rules when a later change leaves them out, and clears them with the rule', async () => {
+    const w = await world();
+    const description = w.attribute('description');
+    await setObjectAccess(w.owner, {
+      objectId: w.companies,
+      subject: MEMBER,
+      rule: { level: 'write', records: 'all', fields: { [description]: 'hidden' } },
+    });
+    const { access } = await setObjectAccess(w.owner, {
+      objectId: w.companies,
+      subject: MEMBER,
+      rule: { level: 'read', records: 'all' },
+    });
+    expect(access.subjects[0]).toMatchObject({ level: 'read', fields: { [description]: 'hidden' } });
+    const cleared = await setObjectAccess(w.owner, { objectId: w.companies, subject: MEMBER, rule: null });
+    expect(cleared.access.subjects[0]).toMatchObject({ isDefault: true, fields: {} });
+    // The same rule twice writes one audit row, with the field named by its title.
+    const rule = { level: 'write', records: 'all', fields: { [description]: 'read' } } as const;
+    await setObjectAccess(w.owner, { objectId: w.companies, subject: MEMBER, rule });
+    await setObjectAccess(w.owner, { objectId: w.companies, subject: MEMBER, rule });
+    const rows = await w.audit();
+    expect(rows).toHaveLength(4);
+    expect(rows[3]?.after).toMatchObject({ fields: { Description: 'read' } });
+  });
+
+  it('refuses hiding the record’s name, a field of another object or workspace, and a level the code doesn’t know', async () => {
+    const w = await world();
+    const other = await world();
+    const name = w.attribute('name');
+    expect(
+      await refusalOf(
+        setObjectAccess(w.owner, {
+          objectId: w.companies,
+          subject: MEMBER,
+          rule: { level: 'write', records: 'all', fields: { [name]: 'hidden' } },
+        }),
+      ),
+    ).toMatchObject({ code: 'CONFIG_INVALID', message: "A record's name can't be hidden." });
+    // Read only is fine for it.
+    await setObjectAccess(w.owner, {
+      objectId: w.companies,
+      subject: MEMBER,
+      rule: { level: 'write', records: 'all', fields: { [name]: 'read' } },
+    });
+    for (const foreign of [other.attribute('description'), newId()]) {
+      expect(
+        await refusalOf(
+          setObjectAccess(w.owner, {
+            objectId: w.companies,
+            subject: MEMBER,
+            rule: { level: 'write', records: 'all', fields: { [foreign]: 'hidden' } },
+          }),
+        ),
+      ).toMatchObject({ code: 'CONFIG_INVALID' });
+    }
+    await expect(
+      setObjectAccess(w.owner, {
+        objectId: w.companies,
+        subject: MEMBER,
+        rule: { level: 'write', records: 'all', fields: { [w.attribute('phone')]: 'write' as never } },
+      }),
+    ).rejects.toMatchObject({ inputProblem: { field: 'rule' } });
+  });
+
+  it('fails closed on a field level stored that the code doesn’t know, and shows it hidden', async () => {
+    const w = await world();
+    const ada = await w.add('Ada');
+    const description = w.attribute('description');
+    await testQuery(
+      ownerUrl,
+      `insert into access_rules (workspace_id, subject_type, subject_role, object_id, attribute_id, level, created_by_type, updated_by_type)
+       values ($1, 'role', 'member', $2, $3, 'manage', 'system', 'system')`,
+      [w.workspaceId, w.companies, description],
+    );
+    expect((await listAttributes(await w.enter(ada), w.companies)).map((each) => each.id)).not.toContain(description);
+    const read = await getObjectAccess(w.owner, { objectId: w.companies });
+    expect(read.subjects[0]?.fields).toEqual({ [description]: 'hidden' });
+  });
+});
+
+describe('what a change takes away (AC-850)', () => {
+  it('counts the people who lose something, and nothing for a change that only opens things up', async () => {
+    const w = await world();
+    const ada = await w.add('Ada');
+    await w.add('Bea');
+    await w.add('Ana', 'admin');
+    const sales = await createTeam(w.owner, { name: 'Sales', memberIds: [ada] });
+    const closing = await setObjectAccess(w.owner, {
+      objectId: w.companies,
+      subject: MEMBER,
+      rule: { level: 'none', records: 'all' },
+    });
+    // Two members lose Companies (and with it its default view, which is shared); the admin is not in the role.
+    expect(closing.impact).toEqual({ people: 2, views: 1, forms: 0 });
+    // Sales gets it back: nobody loses anything.
+    const granting = await setObjectAccess(w.owner, {
+      objectId: w.companies,
+      subject: team(sales.id),
+      rule: { level: 'write', records: 'all' },
+    });
+    expect(granting.impact).toEqual({ people: 0, views: 0, forms: 0 });
+    // The Member role getting it back does not cost Ada anything either.
+    const reopening = await setObjectAccess(w.owner, { objectId: w.companies, subject: MEMBER, rule: null });
+    expect(reopening.impact.people).toBe(0);
+    // Taking away what a team grants costs only the team's people, and Ada is the only one who had it.
+    await setObjectAccess(w.owner, { objectId: w.companies, subject: MEMBER, rule: { level: 'none', records: 'all' } });
+    const removing = await setObjectAccess(w.owner, { objectId: w.companies, subject: team(sales.id), rule: null });
+    expect(removing.impact.people).toBe(1);
+  });
+
+  it('counts a field hidden from people who could see it', async () => {
+    const w = await world();
+    await w.add('Ada');
+    const description = w.attribute('description');
+    const hide = {
+      objectId: w.companies,
+      subject: MEMBER,
+      rule: { level: 'write', records: 'all', fields: { [description]: 'hidden' } },
+    } as const;
+    const first = await setObjectAccess(w.owner, hide);
+    expect(first.impact).toEqual({ people: 1, views: 0, forms: 0 });
+    // The same change again takes nothing more away.
+    expect((await setObjectAccess(w.owner, hide)).impact.people).toBe(0);
+    // Read only counts too: they could change it, and now can't.
+    const readOnly = await setObjectAccess(w.owner, {
+      objectId: w.companies,
+      subject: MEMBER,
+      rule: { level: 'write', records: 'all', fields: { [w.attribute('phone')]: 'read', [description]: 'hidden' } },
+    });
+    expect(readOnly.impact.people).toBe(1);
+  });
+
+  it('narrowing which records counts the people it narrows', async () => {
+    const w = await world();
+    await w.add('Ada');
+    const narrowed = await setObjectAccess(w.owner, {
+      objectId: w.companies,
+      subject: MEMBER,
+      rule: { level: 'write', records: 'own' },
+    });
+    expect(narrowed.impact.people).toBe(1);
+  });
+});
+
+describe('Preview as (AC-858)', () => {
+  it('shows an object as a member would see it, through the door, and only to those who set access', async () => {
+    const w = await world();
+    const ada = await w.add('Ada');
+    const description = w.attribute('description');
+    await w.company('Acme', ada);
+    await w.company('Globex', undefined);
+    await setObjectAccess(w.owner, {
+      objectId: w.companies,
+      subject: MEMBER,
+      rule: { level: 'read', records: 'own', fields: { [description]: 'hidden' } },
+    });
+    const preview = await previewAccess(w.owner, { objectId: w.companies, as: { type: 'member', memberId: ada } });
+    expect(preview.name).toBe('Ada');
+    expect(preview.level).toBe('read');
+    expect(preview.count).toBe(1);
+    expect(preview.sample.map((each) => each.name)).toEqual(['Acme']);
+    expect(preview.fields.map((each) => each.id)).not.toContain(description);
+    expect(preview.fields.every((each) => !each.canEdit)).toBe(true);
+    // The member may not ask, for themself or anyone.
+    expect(
+      await refusalOf(
+        previewAccess(await w.enter(ada), { objectId: w.companies, as: { type: 'member', memberId: ada } }),
+      ),
+    ).toMatchObject({ code: 'FORBIDDEN' });
+    // It wrote no record, and one audit row.
+    const rows = await testQuery<{ n: string }>(
+      ownerUrl,
+      `select count(*)::text as n from audit_events where workspace_id = $1 and action = 'access.previewed'`,
+      [w.workspaceId],
+    );
+    expect(rows[0]?.n).toBe('1');
+  });
+
+  it('previews a team as a Member in it, and refuses a person, team or object of another workspace', async () => {
+    const w = await world();
+    const other = await world();
+    const ada = await w.add('Ada');
+    const outsider = await other.add('Zed');
+    const sales = await createTeam(w.owner, { name: 'Sales', memberIds: [ada] });
+    await w.company('Acme', ada);
+    await setObjectAccess(w.owner, { objectId: w.companies, subject: MEMBER, rule: { level: 'none', records: 'all' } });
+    await setObjectAccess(w.owner, {
+      objectId: w.companies,
+      subject: team(sales.id),
+      rule: { level: 'read', records: 'team' },
+    });
+    const asTeam = await previewAccess(w.owner, { objectId: w.companies, as: { type: 'team', teamId: sales.id } });
+    expect(asTeam).toMatchObject({ name: 'Sales', level: 'read', count: 1 });
+    // A member outside the team sees nothing: the object is absent, not locked.
+    const bea = await w.add('Bea');
+    expect(
+      await previewAccess(w.owner, { objectId: w.companies, as: { type: 'member', memberId: bea } }),
+    ).toMatchObject({ level: 'none', fields: [], count: 0, sample: [] });
+    expect(
+      await refusalOf(previewAccess(w.owner, { objectId: w.companies, as: { type: 'member', memberId: outsider } })),
+    ).toMatchObject({ code: 'NOT_FOUND' });
+    const theirTeam = await createTeam(other.owner, { name: 'Other', memberIds: [] });
+    expect(
+      await refusalOf(previewAccess(w.owner, { objectId: w.companies, as: { type: 'team', teamId: theirTeam.id } })),
+    ).toMatchObject({ code: 'NOT_FOUND' });
+    expect(
+      await refusalOf(previewAccess(w.owner, { objectId: other.companies, as: { type: 'member', memberId: ada } })),
+    ).toMatchObject({ code: 'NOT_FOUND' });
   });
 });

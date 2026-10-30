@@ -474,6 +474,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
     accessRules: {
       get: os.accessRules.get.handler(notServed),
       set: os.accessRules.set.handler(notServed),
+      preview: os.accessRules.preview.handler(notServed),
     },
     workspaceSecurity: {
       get: os.workspaceSecurity.get.handler(() => behaviour.workspaceSecurityGet()),

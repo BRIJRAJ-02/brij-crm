@@ -73,11 +73,15 @@ import type {
   Me,
   MemberView,
   MyAccess,
+  AccessPreview,
+  FieldRules,
   ObjectAccess,
   ObjectAccessLevel,
   ObjectSummary,
+  PreviewAs,
   RecordScope,
   RuleSubject,
+  SetObjectAccessResult,
   SetRoleResult,
   TeamView,
   RecordView,
@@ -429,9 +433,16 @@ export type {
   MembersPage,
   MemberView,
   MyAccess,
+  AccessImpact,
+  AccessPreview,
+  FieldRuleLevel,
+  FieldRules,
   ObjectAccess,
   ObjectAccessLevel,
   OwnerAttribute,
+  PreviewAs,
+  RuleField,
+  SetObjectAccessResult,
   RecordScope,
   RuleRole,
   RuleSubject,
@@ -4292,14 +4303,28 @@ export function createDataLayer({
     accessRules: {
       get: (workspace: string, objectId: string): Promise<ObjectAccess> =>
         beforeRead(workspace).then(() => call((options) => api.accessRules.get({ workspace, objectId }, options))),
-      /** Sets one subject's access to the object; `null` clears it. Answers the object's access as it stands. */
+      /**
+       * Sets one subject's access to the object; `null` clears it. `fields` replaces the subject's field rules; left
+       * out they stay. Answers the object's access as it stands and what the change took away from people who had it
+       * (how many, and the shared views and live forms naming a field they lost).
+       */
       set: (
         workspace: string,
         objectId: string,
         subject: RuleSubject,
-        rule: { readonly level: ObjectAccessLevel; readonly records: RecordScope } | null,
-      ): Promise<ObjectAccess> =>
+        rule: {
+          readonly level: ObjectAccessLevel;
+          readonly records: RecordScope;
+          readonly fields?: FieldRules;
+        } | null,
+      ): Promise<SetObjectAccessResult> =>
         call((options) => api.accessRules.set({ workspace, objectId, subject, rule, mutationId: mintId() }, options)),
+      /**
+       * The object as a member, or someone in a team, would see it: read through the access door as them, never a
+       * write. For `access.manage`; read fresh each time.
+       */
+      preview: (workspace: string, objectId: string, as: PreviewAs): Promise<AccessPreview> =>
+        call((options) => api.accessRules.preview({ workspace, objectId, as }, options)),
     },
     /**
      * A workspace's sign in rules (spec 0033, milestone 4): settings, not CRM

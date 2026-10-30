@@ -69,7 +69,15 @@ describe('access rules (AC-843, AC-844, AC-851, AC-854)', () => {
     const read = await owner.client.accessRules.get({ workspace, objectId: owner.people.id });
     expect(read.ownerAttribute?.title).toBe('Owner');
     expect(read.subjects).toEqual([
-      { subject: MEMBER, level: 'write', records: 'all', defaultLevel: 'write', isDefault: true, people: 1 },
+      {
+        subject: MEMBER,
+        level: 'write',
+        records: 'all',
+        defaultLevel: 'write',
+        isDefault: true,
+        fields: {},
+        people: 1,
+      },
     ]);
 
     // Members lose People: it is absent from the member's objects, not shown locked.
@@ -96,7 +104,7 @@ describe('access rules (AC-843, AC-844, AC-851, AC-854)', () => {
       rule: { level: 'write', records: 'own' },
       mutationId: newId(),
     });
-    expect(answer.subjects.map((each) => [each.level, each.records])).toEqual([
+    expect(answer.access.subjects.map((each) => [each.level, each.records])).toEqual([
       ['none', 'all'],
       ['write', 'own'],
     ]);

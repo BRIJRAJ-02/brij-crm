@@ -19,6 +19,7 @@ export {
 export { storedRules } from './access/stored-rules.ts';
 // An object's access rules (spec 0032): what the Member role and each team may do with its records.
 export { getObjectAccess, ownerAttributeOf, setObjectAccess } from './access/rules.ts';
+export { previewAccess } from './access/preview.ts';
 export type { AccessRuleOptions, ObjectAccessRule } from './access/rules.ts';
 export {
   EVENT_KINDS,
