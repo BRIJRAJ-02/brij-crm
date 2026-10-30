@@ -29,6 +29,8 @@ export const LIMITS = {
   sharedViewsPerObject: 100,
   /** One member's private views on one object (spec 0020, AC-472). */
   privateViewsPerObject: 50,
+  /** Saved reports in one workspace (the reports lane, spec 0050 reserved). */
+  reportsPerWorkspace: 200,
   /** Seats: active non guest members plus open non guest email invitations (spec 0031, AC-809). Unlimited until #38. */
   seats: SEAT_LIMIT,
   /** Open invitations at once (spec 0031, AC-808). */

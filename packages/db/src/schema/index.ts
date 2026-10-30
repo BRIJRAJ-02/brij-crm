@@ -12,6 +12,7 @@ export { jobItems, jobItemState, jobLane, jobs, jobStatus } from './jobs.ts';
 export { workspaceMilestones } from './milestones.ts';
 export { validationRuleKind, validationRules } from './validation.ts';
 export { memberViewState, viewKind, views, viewVisibility } from './views.ts';
+export { REPORT_CONFIG_MAX_BYTES, reports } from './reports.ts';
 export { notes } from './notes.ts';
 export { memberNavPrefs, NAV_ITEMS_MAX } from './navigation.ts';
 export { taskRecords, tasks } from './tasks.ts';

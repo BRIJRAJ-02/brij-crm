@@ -289,6 +289,17 @@ export {
   type CreateViewInput,
   type UpdateViewInput,
 } from './views/manage.ts';
+// Saved reports (the reports lane, spec 0050 reserved): a chart's definition, read and changed through the door.
+export {
+  createReport,
+  deleteReport,
+  listReports,
+  REPORT_NOT_FOUND,
+  REPORT_NOT_YOURS,
+  updateReport,
+  type NewReport,
+  type ReportChange,
+} from './reports/reports.ts';
 // The sidebar (spec 0034): each member's own row, read through the door and changed one operation at a time.
 export { changeNav, readNav } from './navigation/navigation.ts';
 export {

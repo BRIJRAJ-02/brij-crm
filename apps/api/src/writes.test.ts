@@ -114,6 +114,12 @@ const READS: ReadonlySet<string> = new Set([
   'views.get',
   // The one view write with no outbox row (spec 0020, AC-488): the member's own last opened view.
   'views.markOpened',
+  // Saved reports (the reports lane): a chart's definition holds no records, so its writes store no outbox row, as
+  // `views.markOpened` stores none; another tab reads the list again when it opens it. The service tests prove them.
+  'reports.list',
+  'reports.create',
+  'reports.update',
+  'reports.delete',
   // The command menu (spec 0039): its search, and the member's own recent items (no outbox row, like markOpened).
   'search.query',
   'recents.list',

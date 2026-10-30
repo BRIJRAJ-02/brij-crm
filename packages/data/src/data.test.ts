@@ -328,6 +328,12 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
         sent.push(input);
       }),
     },
+    reports: {
+      list: os.reports.list.handler(() => notServed()),
+      create: os.reports.create.handler(() => notServed()),
+      update: os.reports.update.handler(() => notServed()),
+      delete: os.reports.delete.handler(() => notServed()),
+    },
     attributes: {
       list: os.attributes.list.handler(() => behaviour.attributes()),
       create: os.attributes.create.handler(({ input }) => {

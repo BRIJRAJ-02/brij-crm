@@ -923,11 +923,21 @@ async function dataWorld() {
             ${core.recordFilePath(workspaceId, recordId, recordFileId, '.pdf')}, 'cv.pdf', 1024, 'application/pdf')`,
     ),
   );
+  // A report on People (the reports lane), so the walk has one the principal at none must not see.
+  const reportId = (
+    await core.createReport(owner, {
+      id: core.newId(),
+      objectId: people,
+      name: 'People by stage',
+      config: { measure: { fn: 'count' }, groupBy: { attributeId: stage }, chart: 'bar' },
+    })
+  ).id;
   return {
     owner,
     hidden,
     readOnly,
     people,
+    reportId,
     formId: form.id,
     submissionId,
     fileId,
@@ -1194,6 +1204,24 @@ const DATA_CASES: Readonly<Record<string, DataCase>> = {
   moveView: refused('NOT_FOUND', (scope, world) => core.moveView(scope, { viewId: world.peopleView, direction: 'up' })),
   deleteView: refused('NOT_FOUND', (scope, world) => core.deleteView(scope, { viewId: world.peopleView })),
   markViewOpened: refused('NOT_FOUND', (scope, world) => core.markViewOpened(scope, { viewId: world.peopleView })),
+  // Saved reports (the reports lane): a report on an object the principal can't see is absent, and can't be made.
+  listReports: empty(
+    (scope) => core.listReports(scope),
+    (value, world) =>
+      (value as { reports: { objectId: string }[] }).reports.every((each) => each.objectId !== world.people),
+  ),
+  createReport: refused('NOT_FOUND', (scope, world) =>
+    core.createReport(scope, {
+      id: core.newId(),
+      objectId: world.people,
+      name: 'Mine',
+      config: { measure: { fn: 'count' }, groupBy: { attributeId: world.stage }, chart: 'bar' },
+    }),
+  ),
+  updateReport: refused('NOT_FOUND', (scope, world) =>
+    core.updateReport(scope, { reportId: world.reportId, name: 'X' }),
+  ),
+  deleteReport: refused('NOT_FOUND', (scope, world) => core.deleteReport(scope, { reportId: world.reportId })),
   queryTrash: empty((scope, world) =>
     core.queryTrash(scope, {}).then((page) => page.items.filter((item) => item.recordId === world.trashedId)),
   ),

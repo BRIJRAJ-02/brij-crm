@@ -38,6 +38,7 @@ import type { PendingOptions } from './options.ts';
 import type { RecordsView, ViewReader, ViewState } from './records/layer.ts';
 import type { RecordState, RecordSubscription } from './records/one.ts';
 import type { AggregateSource, AggregateState } from './records/aggregate-source.ts';
+import type { ReportFiguresSource, ReportFiguresState } from './reports/figures-source.ts';
 import type { RecordSearch, RecordSearchState } from './records/search.ts';
 import type { TrashedSource, TrashedState } from './records/trashed.ts';
 import type { SavedViewSnapshot, SavedViewSource, ViewsListSnapshot, ViewsListSource } from './views/store.ts';
@@ -208,6 +209,15 @@ function useRetained<State>(source: Retained<State>): State {
  * the answers shown stay while a newer read is out.
  */
 export function useAggregates(source: AggregateSource): AggregateState {
+  return useRetained(source);
+}
+
+/**
+ * A report's figures (the reports lane, `data.reports.figures`): loading, error or the bars, points or number,
+ * re-rendering when they change. Held while the screen is mounted, so they read again after a change that may move
+ * them; the figures shown stay while a newer read is out.
+ */
+export function useReportFigures(source: ReportFiguresSource): ReportFiguresState {
   return useRetained(source);
 }
 

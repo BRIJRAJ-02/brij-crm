@@ -271,6 +271,12 @@ export const ACCESS_TABLE = {
   // Locking a view and choosing the default (AC-475).
   setViewLocked: { permission: 'views.manage' },
   setDefaultView: { permission: 'views.manage' },
+  // Saved reports (the reports lane): shared with the workspace, shown to whoever may read the object and every
+  // field the report names; changed by its maker or a holder of views.manage.
+  listReports: { data: 'read' },
+  createReport: { data: 'read' },
+  updateReport: { data: 'read' },
+  deleteReport: { data: 'read' },
   // The relay's reads (`@crm/core/system`).
   audiences: { system: true },
   viewFacts: { system: true },
