@@ -173,6 +173,8 @@ export const automationRuns = pgTable(
     index('automation_runs_claimed')
       .on(t.workspaceId, t.claimedAt)
       .where(sql`${t.claimedAt} is not null`),
+    // The cleanup's batch of runs past their week.
+    index('automation_runs_by_age').on(t.workspaceId, t.createdAt),
     // The cascade from an automation, and one automation's own log.
     index('automation_runs_by_automation').on(t.workspaceId, t.automationId, t.createdAt.desc()),
   ],

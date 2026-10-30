@@ -35,10 +35,15 @@ export async function runAutomationTask(deps: AutomationTaskDeps, payload: unkno
   const { workspaceId, due } = parsed.data;
   if (due === true) {
     const queued = await queueDueAutomations(deps, workspaceId);
-    const pruned = await pruneAutomations(deps, workspaceId);
-    deps.log.info('automation.due', { workspaceId, queued, ...pruned });
+    deps.log.info('automation.due', { workspaceId, queued });
   }
   const { ran, more } = await runAutomationQueue(deps, workspaceId);
   if (ran > 0) deps.onStored?.();
-  if (more) await deps.again(workspaceId);
+  if (more) {
+    await deps.again(workspaceId);
+    return;
+  }
+  // Caught up: one batch of old runs and long deleted automations goes (an indexed probe when there is none).
+  const pruned = await pruneAutomations(deps, workspaceId);
+  if (pruned.runs + pruned.automations > 0) deps.log.info('automation.pruned', { workspaceId, ...pruned });
 }

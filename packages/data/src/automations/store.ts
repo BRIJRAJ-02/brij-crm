@@ -167,7 +167,7 @@ export function createAutomationsStore(deps: AutomationsDeps) {
     const write = async (
       shownNow: (() => void) | undefined,
       send: () => Promise<Automation | undefined>,
-      before: readonly Automation[] | undefined,
+      undo: (() => void) | undefined,
     ): Promise<boolean> => {
       begin();
       shownNow?.();
@@ -176,7 +176,7 @@ export function createAutomationsStore(deps: AutomationsDeps) {
         if (saved !== undefined) replace(saved);
         return true;
       } catch (error) {
-        if (before !== undefined) show(before);
+        undo?.();
         stale();
         deps.notify({ tone: 'danger', message: refusalSummary(toDataError(error)) });
         return false;
@@ -224,28 +224,41 @@ export function createAutomationsStore(deps: AutomationsDeps) {
       update: (id, definition) =>
         write(undefined, () => deps.api.update({ workspace, automationId: id, definition }), undefined),
       setEnabled(id, enabled) {
-        const before = ready()?.automations;
+        const before = ready()?.automations.find((one) => one.id === id);
         return write(
           () => {
-            if (before === undefined) return;
+            const current = ready();
+            if (current === undefined) return;
             // Switching on clears the reason at once; the answer says who it runs as.
-            show(before.map((one) => (one.id === id ? switched(one, enabled) : one)));
+            show(current.automations.map((one) => (one.id === id ? switched(one, enabled) : one)));
           },
           () => deps.api.setEnabled({ workspace, automationId: id, enabled }),
-          before,
+          // Only this one goes back: another edit still out keeps its own place.
+          () => {
+            const current = ready();
+            if (current !== undefined && before !== undefined) {
+              show(current.automations.map((one) => (one.id === id ? before : one)));
+            }
+          },
         );
       },
       async remove(id) {
-        const before = ready()?.automations;
+        const before = ready()?.automations.find((one) => one.id === id);
         const landed = await write(
           () => {
-            if (before !== undefined) show(before.filter((one) => one.id !== id));
+            const current = ready();
+            if (current !== undefined) show(current.automations.filter((one) => one.id !== id));
           },
           async () => {
             await deps.api.remove({ workspace, automationId: id });
             return undefined;
           },
-          before,
+          () => {
+            const current = ready();
+            if (current !== undefined && before !== undefined && !current.automations.some((one) => one.id === id)) {
+              show([...current.automations, before].sort((a, b) => a.createdAt.localeCompare(b.createdAt)));
+            }
+          },
         );
         if (landed) {
           deps.notify({

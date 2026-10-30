@@ -457,8 +457,13 @@ export async function pruneAutomations(
   workspaceId: string,
 ): Promise<{ readonly runs: number; readonly automations: number }> {
   return inWorkspace(deps.systemScope(workspaceId), async (tx) => {
+    // In batches of 1,000 through the age index, so a backlog never holds one long statement.
     const runs = await tx.execute(sql`
-      delete from automation_runs where created_at < now() - interval '7 days' and status in ('done', 'failed', 'skipped')
+      delete from automation_runs where (workspace_id, id) in (
+        select workspace_id, id from automation_runs
+        where created_at < now() - interval '7 days' and status in ('done', 'failed', 'skipped')
+        order by created_at limit 1000
+      )
     `);
     const removed = await tx.execute(sql`
       delete from automations where deleted_at is not null and deleted_at < now() - interval '30 days'

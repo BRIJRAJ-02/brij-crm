@@ -138,7 +138,7 @@ async function visibleViews(
   const recordIds = rows.flatMap((row) => (row.task_id === null && row.record_id !== null ? [row.record_id] : []));
   const submissionIds = rows.flatMap((row) => (row.submission_id === null ? [] : [row.submission_id]));
   const submissions = await submissionNotices(tx, scope, submissionIds);
-  const taskIds = rows.flatMap((row) => (row.task_id === null ? [] : [row.task_id]));
+  const taskIds = rows.flatMap((row) => [row.task_id, row.due_task_id].flatMap((id) => (id === null ? [] : [id])));
   const records: ReadonlyMap<string, RecordRefDisplay> =
     recordIds.length === 0 ? new Map() : await linkedDisplays(tx, scope.access, recordIds);
   const tasks = new Map(
@@ -157,15 +157,17 @@ async function visibleViews(
       // An automation's notice: shown while the automation lives, its record reads for the reader and its due task
       // exists. The words are the automation's own (its first notify message), else the due task's title.
       const record = row.record_id === null ? undefined : records.get(row.record_id);
+      // A due task shows only while the task rule lets the reader see it (the title is the task's).
+      const dueTask = row.due_task_id === null ? undefined : tasks.get(row.due_task_id);
       const gone =
-        (row.record_id !== null && record === undefined) || (row.due_task_id !== null && row.due_title === null);
-      if (gone || (row.automation_message === null && row.due_title === null && record === undefined)) return [];
+        (row.record_id !== null && record === undefined) || (row.due_task_id !== null && dueTask === undefined);
+      if (gone || (row.automation_message === null && dueTask === undefined && record === undefined)) return [];
       return [
         {
           ...base,
           ...(record === undefined ? {} : { record }),
           ...(row.due_task_id === null ? {} : { taskId: row.due_task_id }),
-          excerpt: excerptOf(row.automation_message ?? row.due_title ?? '', NOTIFICATION_EXCERPT),
+          excerpt: excerptOf(row.automation_message ?? dueTask?.title ?? '', NOTIFICATION_EXCERPT),
         },
       ];
     }

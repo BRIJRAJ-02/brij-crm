@@ -14,6 +14,7 @@ import type { AfterWrite } from '../engine/write.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
 import { rescope, testScope } from '../testing.ts';
 import { createTask, listTasks } from '../tasks/tasks.ts';
+import { listNotifications } from '../notifications/inbox.ts';
 import { automationHook } from './hook.ts';
 import { derivedTaskId, queueDueAutomations, runAutomationQueue, type AutomationRunDeps } from './run.ts';
 import {
@@ -245,6 +246,40 @@ describe('what an automation does', () => {
     const rows = await w.q<{ due_task_id: string }>(sql`select due_task_id::text from notifications`);
     expect(rows).toEqual([{ due_task_id: due.id }]);
     expect(old.id).not.toBe(due.id);
+  });
+});
+
+describe('the inbox', () => {
+  it('shows a due task’s notice to a member who may see the task, and to no one who may not', async () => {
+    const w = await world();
+    const bea = newId();
+    await w.q(
+      sql`insert into members (workspace_id, id, name, email, role, created_by_type, updated_by_type) values (${w.workspaceId}, ${bea}, 'Bea', 'bea@example.com', 'member', 'system', 'system')`,
+    );
+    const dealId = await w.deal('Secret');
+    const today = new Date().toISOString().slice(0, 10);
+    await w.make({
+      trigger: { kind: 'task_due' },
+      actions: [{ kind: 'notify', who: { kind: 'member', memberId: bea } }],
+    });
+    // A task linked to a deal; Bea may not read deals.
+    await createTask(w.owner, { id: newId(), title: 'Hidden title', dueOn: today, recordIds: [dealId] });
+    await createTask(w.owner, { id: newId(), title: 'Open title', dueOn: today });
+    await queueDueAutomations(w.deps, w.workspaceId);
+    await w.run();
+    const rules = {
+      levels: [
+        {
+          subject: { type: 'role' as const, role: 'member' },
+          target: { type: 'object' as const, objectId: w.deals },
+          level: 'none',
+        },
+      ],
+      records: [],
+    };
+    const asBea = rescope(w.owner, { actor: { type: 'member', id: bea }, role: 'member', rules });
+    const { items } = await listNotifications(asBea, { status: 'inbox' });
+    expect(items.map((item) => item.excerpt)).toEqual(['Open title']);
   });
 });
 

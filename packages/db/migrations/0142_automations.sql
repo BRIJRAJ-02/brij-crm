@@ -116,6 +116,7 @@ CREATE INDEX "automation_runs_queue" ON "automation_runs" USING btree ("workspac
 CREATE INDEX "automation_runs_running" ON "automation_runs" USING btree ("workspace_id","claimed_at") WHERE "automation_runs"."status" = 'running';--> statement-breakpoint
 CREATE INDEX "automation_runs_log" ON "automation_runs" USING btree ("workspace_id","created_at" DESC NULLS LAST,"id") WHERE "automation_runs"."status" <> 'skipped';--> statement-breakpoint
 CREATE INDEX "automation_runs_claimed" ON "automation_runs" USING btree ("workspace_id","claimed_at") WHERE "automation_runs"."claimed_at" is not null;--> statement-breakpoint
+CREATE INDEX "automation_runs_by_age" ON "automation_runs" USING btree ("workspace_id","created_at");--> statement-breakpoint
 CREATE INDEX "automation_runs_by_automation" ON "automation_runs" USING btree ("workspace_id","automation_id","created_at" DESC NULLS LAST);--> statement-breakpoint
 ALTER TABLE "automation_runs" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "automation_runs" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
