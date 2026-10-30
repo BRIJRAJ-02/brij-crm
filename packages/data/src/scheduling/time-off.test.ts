@@ -37,13 +37,22 @@ function setup(initial: readonly TimeOffEntry[], refuseDelete = false) {
         ? Promise.reject(Object.assign(new Error('No.'), { code: 'FORBIDDEN', message: 'No.' }))
         : Promise.resolve(),
   };
-  const store = createTimeOffStore({ api, mintId: () => 'id', notify: (notice) => notices.push(notice), now: () => NOW });
+  const store = createTimeOffStore({
+    api,
+    mintId: () => 'id',
+    notify: (notice) => notices.push(notice),
+    now: () => NOW,
+  });
   return { store, notices };
 }
 
 describe('time off store', () => {
   it('sorts upcoming soonest first and past latest first', () => {
-    const list = listOf([entry('b', '2026-12-01', '2026-12-02'), entry('a', '2026-11-03', '2026-11-07'), entry('p', '2026-10-01', '2026-10-02')]);
+    const list = listOf([
+      entry('b', '2026-12-01', '2026-12-02'),
+      entry('a', '2026-11-03', '2026-11-07'),
+      entry('p', '2026-10-01', '2026-10-02'),
+    ]);
     expect(list.upcoming.map((each) => each.id)).toEqual(['a', 'b']);
     expect(list.past.map((each) => each.id)).toEqual(['p']);
   });
