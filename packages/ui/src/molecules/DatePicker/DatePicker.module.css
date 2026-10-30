@@ -1,7 +1,9 @@
 /* DatePicker: the Field's label and 30px box holding the typed segments and a
-   calendar button. The calendar is 256px: month and arrows, a 7 column grid
-   of 28px days (today has a dot, the chosen day is the accent), and the quick
-   picks under a hairline. */
+   calendar button. The popover holds "Type a date", then the 240px calendar
+   (the month, which opens its year's months, Today, the arrows, and six
+   weeks of round 28px days: today the link colour in a hairline ring, the
+   chosen day the accent, days outside the month faded), then the quick picks
+   as a list under a hairline. */
 @layer components {
   .root {
     display: flex;
@@ -155,16 +157,82 @@
     margin-block-end: var(--space-4);
   }
 
+  /* The month's title, a button that opens its year's months ("October 2026 ⌄"). */
   .month {
-    flex: 1;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-4);
+    block-size: var(--size-control);
     margin: 0;
-    padding-inline-start: var(--space-6);
+    margin-inline-end: auto;
+    padding-inline: var(--space-6);
+    border: none;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text);
     font: var(--text-body-strong);
     letter-spacing: var(--tracking-body-strong);
+    outline: none;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .month[data-hovered] {
+      background: var(--surface-hover);
+    }
+  }
+
+  .month[data-focus-visible] {
+    box-shadow: var(--shadow-focus-inset);
   }
 
   .arrows {
     display: inline-flex;
+  }
+
+  /* Six weeks tall whatever the month, so paging never moves what is under it. */
+  .weeks {
+    min-block-size: calc(var(--space-24) + 6 * var(--size-nav-item));
+  }
+
+  /* The year's months, three across, while the title is open. */
+  .months {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-4);
+    min-block-size: calc(var(--space-24) + 6 * var(--size-nav-item));
+    align-content: start;
+  }
+
+  .monthCell {
+    block-size: var(--size-input);
+    border: none;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    outline: none;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .monthCell[data-hovered] {
+      background: var(--surface-hover);
+    }
+  }
+
+  .monthCell[data-today] {
+    color: var(--link);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+  }
+
+  .monthCell[aria-current] {
+    background: var(--accent);
+    color: var(--on-accent);
+  }
+
+  .monthCell[data-focus-visible] {
+    box-shadow: var(--shadow-focus-inset);
   }
 
   .grid {
@@ -179,25 +247,23 @@
     letter-spacing: var(--tracking-label-strong);
   }
 
+  /* A round day, as WeekCalendar's date is: a square size-nav-item cell, fully rounded, in the middle of its column. */
   .day {
-    position: relative;
     display: grid;
     place-items: center;
+    inline-size: var(--size-nav-item);
     block-size: var(--size-nav-item);
-    border-radius: var(--radius-sm);
+    margin-inline: auto;
+    border-radius: var(--radius-full);
     color: var(--text);
-    font: var(--text-body-strong);
-    letter-spacing: var(--tracking-body-strong);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
     font-variant-numeric: tabular-nums;
     outline: none;
   }
 
-  .day[data-outside-month] {
-    display: none;
-  }
-
   @media (hover: hover) and (pointer: fine) {
-    .day[data-hovered]:not([data-selected]) {
+    .day[data-hovered]:not([data-selected], [data-disabled]) {
       background: var(--surface-hover);
     }
   }
@@ -206,22 +272,18 @@
     box-shadow: var(--shadow-focus-inset);
   }
 
-  .today {
-    position: absolute;
-    inset-block-end: var(--space-2);
-    inline-size: var(--space-4);
-    block-size: var(--space-4);
-    border-radius: var(--radius-full);
-    background: var(--accent);
+  /* Today, one mark everywhere (WeekCalendar and MonthTiles too): the link colour inside a hairline accent ring. */
+  .day[data-today-mark] {
+    color: var(--link);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+    outline: var(--border-width-hairline) solid var(--accent-line);
+    outline-offset: calc(-1 * var(--border-width-hairline));
   }
 
   .day[data-selected] {
     background: var(--accent);
     color: var(--on-accent);
-  }
-
-  .day[data-selected] .today {
-    background: var(--on-accent);
   }
 
   .day[data-selection-start],
@@ -230,15 +292,38 @@
     color: var(--on-accent);
   }
 
-  .calendar[data-range] .day[data-selected]:not([data-selection-start], [data-selection-end]) {
+  /* A range is one unbroken band: its days fill their columns, square inside, round at the two ends. */
+  .calendar[data-range] .day[data-selected] {
+    inline-size: 100%;
     border-radius: 0;
+  }
+
+  .calendar[data-range] .day[data-selected]:not([data-selection-start], [data-selection-end]) {
     background: var(--accent-soft);
     color: var(--text);
+  }
+
+  .calendar[data-range] .day[data-selection-start] {
+    border-start-start-radius: var(--radius-full);
+    border-end-start-radius: var(--radius-full);
+  }
+
+  .calendar[data-range] .day[data-selection-end] {
+    border-start-end-radius: var(--radius-full);
+    border-end-end-radius: var(--radius-full);
   }
 
   .day[data-disabled],
   .day[data-unavailable] {
     color: var(--text-tertiary);
+  }
+
+  /* Outside the month: faded, never marked, so the grid keeps its shape and the month reads first. */
+  .day[data-outside-month] {
+    background: transparent;
+    color: var(--text-tertiary);
+    font: var(--text-body);
+    outline: none;
   }
 
   .day[data-invalid] {
@@ -268,37 +353,102 @@
   }
 
   .calendar[data-inline] .day {
+    inline-size: var(--size-control);
     block-size: var(--size-control);
     font: var(--text-label);
     letter-spacing: var(--tracking-label);
   }
 
-  /* The days the view beside it shows: one band in the selected surface, its ends rounded, the chosen day still accent. */
+  .calendar[data-inline] .weeks {
+    min-block-size: calc(var(--space-20) + 6 * var(--size-control));
+  }
+
+  .calendar[data-inline] .months {
+    min-block-size: calc(var(--space-20) + 6 * var(--size-control));
+  }
+
+  /* The days the view beside it shows: one band in the selected surface filling its columns, its ends round, the
+     chosen day still accent. */
   .calendar[data-inline] .day[data-shown]:not([data-selected]) {
+    inline-size: 100%;
     border-radius: 0;
     background: var(--surface-selected);
   }
 
   .calendar[data-inline] .day[data-shown-start]:not([data-selected]) {
-    border-start-start-radius: var(--radius-sm);
-    border-end-start-radius: var(--radius-sm);
+    border-start-start-radius: var(--radius-full);
+    border-end-start-radius: var(--radius-full);
   }
 
   .calendar[data-inline] .day[data-shown-end]:not([data-selected]) {
-    border-start-end-radius: var(--radius-sm);
-    border-end-end-radius: var(--radius-sm);
+    border-start-end-radius: var(--radius-full);
+    border-end-end-radius: var(--radius-full);
   }
 
-  .quick {
+  /* "Type a date" over the calendar: the day it names at the field's end, quiet. */
+  .typed {
+    inline-size: var(--size-menu);
+    margin-block-end: var(--space-8);
+  }
+
+  .resolved {
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .resolved[data-missing] {
+    color: var(--text-tertiary);
+  }
+
+  /* The quick picks (or a range's presets) as a list under a hairline, each row its day at the end. */
+  .picks {
     display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-2);
+    flex-direction: column;
     margin-block-start: var(--space-8);
     margin-inline: calc(-1 * var(--space-8));
     margin-block-end: calc(-1 * var(--space-8));
-    padding-block: var(--space-6);
-    padding-inline: var(--space-8);
+    padding: var(--space-4);
     border-block-start: var(--border-width-hairline) solid var(--border-subtle);
+  }
+
+  .pick {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    min-block-size: var(--size-nav-item);
+    padding-block: 0;
+    padding-inline: var(--space-8);
+    border: none;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    text-align: start;
+    outline: none;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .pick[data-hovered] {
+      background: var(--surface-hover);
+    }
+  }
+
+  .pick[data-focus-visible] {
+    background: var(--surface-hover);
+    box-shadow: var(--shadow-focus-inset);
+  }
+
+  .pickLabel {
+    flex: 1;
+  }
+
+  .pickDate {
+    color: var(--text-tertiary);
+    font-variant-numeric: tabular-nums;
   }
 
   @media (forced-colors: active) {

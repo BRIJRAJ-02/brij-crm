@@ -791,6 +791,31 @@ export const EmptyWeek: Story = {
   },
 };
 
+/** An empty week with a way on (`emptyAction`): "Next booking: Tue 13 Oct" jumps to it, the one press the note takes. */
+export const EmptyWeekNext: Story = {
+  args: { onSelectDay: fn() },
+  render: (args) => (
+    <Stage width="fill">
+      <WeekCalendar
+        {...args}
+        days={days()}
+        blocks={[]}
+        emptyHint="No meetings this week"
+        emptyAction={{
+          label: 'Next booking: Tue 13 Oct',
+          onPress: () => {
+            args.onSelectDay('2026-10-13');
+          },
+        }}
+      />
+    </Stage>
+  ),
+  play: async ({ canvas, args }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Next booking: Tue 13 Oct' }));
+    await expect(args.onSelectDay).toHaveBeenCalledWith('2026-10-13');
+  },
+};
+
 /** On a phone a block's card is a sheet at the window's foot, not a popover over the day; Escape closes it. */
 export const PhoneCard: Story = {
   parameters: { crm: { screenshot: false } },

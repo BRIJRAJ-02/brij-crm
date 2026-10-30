@@ -11,6 +11,7 @@ import {
   type ReactNode,
   type Ref,
 } from 'react';
+import { Button } from '../../atoms/Button/Button.tsx';
 import { ProviderMark, type ProviderName } from '../../atoms/ProviderMark/ProviderMark.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { focusLater } from '../../lib/focus-later.ts';
@@ -176,6 +177,11 @@ export interface WeekCalendarProps {
   readonly openHours?: (dayKey: string) => readonly WeekCalendarRange[] | undefined;
   /** A quiet line in the middle of the grid when the week has nothing on it ("No meetings this week"). */
   readonly emptyHint?: string;
+  /**
+   * A way on from an empty week, under `emptyHint`, as Attio's "Next day with meetings": "Next booking: Tue 3 Nov",
+   * which jumps to it.
+   */
+  readonly emptyAction?: { readonly label: string; readonly onPress: () => void };
 }
 
 /** The parts of a day outside its open hours, in order. */
@@ -278,6 +284,7 @@ export function WeekCalendar({
   focusDay,
   openHours,
   emptyHint,
+  emptyAction,
 }: WeekCalendarProps) {
   const scroller = useRef<HTMLDivElement>(null);
   const columns = useRef(new Map<string, HTMLDivElement>());
@@ -752,7 +759,18 @@ export function WeekCalendar({
           })}
         </div>
       </div>
-      {emptyHint !== undefined && !isLoading && blocks.length === 0 && <p className={styles.empty}>{emptyHint}</p>}
+      {emptyHint !== undefined && !isLoading && blocks.length === 0 && (
+        <div className={styles.empty} data-action={emptyAction === undefined ? undefined : ''}>
+          <p className={styles.emptyHint}>{emptyHint}</p>
+          {emptyAction !== undefined && (
+            <span className={styles.emptyAction}>
+              <Button variant="ghost" iconRight="arrow-right" onPress={emptyAction.onPress}>
+                {emptyAction.label}
+              </Button>
+            </span>
+          )}
+        </div>
+      )}
       {draft !== undefined && dragging === null && draftCard !== undefined && ghost !== null && (
         <Popover
           triggerRef={ghostRef}

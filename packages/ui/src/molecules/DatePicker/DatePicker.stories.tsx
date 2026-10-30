@@ -22,7 +22,10 @@ function dialog() {
   });
 }
 
-/** Open, on 15 October; today (the stories' 8 October) has a dot. */
+/**
+ * Open, on 15 October: "Type a date" on top, today (the stories' 8 October) in a ring, six weeks with the days outside
+ * October faded, and the quick picks as a list with their days.
+ */
 export const Default: Story = {
   parameters: { crm: { preview: true } },
   args: { defaultOpen: true },
@@ -33,8 +36,10 @@ export const Default: Story = {
   ),
   play: async () => {
     const calendar = await dialog();
-    await expect(calendar.querySelector('[data-today-mark]')?.parentElement).toHaveTextContent('8');
+    await expect(calendar.querySelector('[data-today-mark]')).toHaveTextContent('8');
     await expect(calendar.querySelector('[data-selected]')).toHaveTextContent('15');
+    // October 2026 starts on a Thursday: the days before it show, faded, so the grid keeps its shape.
+    await expect(calendar.querySelectorAll('[data-outside-month]').length).toBeGreaterThan(0);
   },
 };
 
@@ -49,7 +54,10 @@ export const QuickPick: Story = {
   play: async ({ canvas, args, userEvent }) => {
     await userEvent.click(canvas.getByRole('button', { name: /Open calendar/ }));
     const calendar = await dialog();
-    const tomorrow = [...calendar.querySelectorAll('button')].find((button) => button.textContent === 'Tomorrow');
+    // Each pick shows the day it means at its end ("Tomorrow Fri 9 Oct").
+    const tomorrow = [...calendar.querySelectorAll('button')].find((button) =>
+      button.textContent.startsWith('Tomorrow'),
+    );
     if (tomorrow === undefined) throw new Error('no Tomorrow pick');
     await userEvent.click(tomorrow);
     await expect(args.onChange).toHaveBeenCalledWith('2026-10-09');
@@ -184,5 +192,77 @@ export const SubmitsOnEnter: Story = {
     await userEvent.click(month);
     await userEvent.keyboard('{Enter}');
     await waitFor(() => expect(args.onChange).toHaveBeenCalled());
+  },
+};
+
+/** "Type a date": words resolve live at the field's end, and Enter chooses the day. */
+export const TypeADate: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage width="narrow">
+      <DatePicker {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas, args }) => {
+    await userEvent.click(canvas.getByRole('button', { name: /Open calendar/ }));
+    const calendar = await dialog();
+    const typed = calendar.querySelector('input');
+    if (typed === null) throw new Error('no Type a date field');
+    await waitFor(() => expect(typed).toHaveFocus());
+    await userEvent.keyboard('next fri');
+    await waitFor(() => expect(calendar).toHaveTextContent(/16/));
+    await userEvent.keyboard('{Enter}');
+    await expect(args.onChange).toHaveBeenCalledWith('2026-10-16');
+    await waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeNull());
+  },
+};
+
+/** The month's title opens its year's months; choosing one shows its days. Today comes back to this month. */
+export const MonthJump: Story = {
+  args: { defaultOpen: true },
+  render: (args) => (
+    <Stage width="narrow">
+      <DatePicker {...args} />
+    </Stage>
+  ),
+  play: async () => {
+    const calendar = await dialog();
+    const title = calendar.querySelector<HTMLElement>('[aria-expanded]');
+    if (title === null) throw new Error('no month title');
+    await userEvent.click(title);
+    await expect(title).toHaveAttribute('aria-expanded', 'true');
+    const months = [...calendar.querySelectorAll<HTMLElement>('[role="group"] button')];
+    await expect(months).toHaveLength(12);
+    const january = months[0];
+    if (january === undefined) throw new Error('no January');
+    await userEvent.click(january);
+    await waitFor(() => expect(title).toHaveAttribute('aria-expanded', 'false'));
+    await expect(title).toHaveTextContent('2026');
+    // Away from today's month, Today shows and brings it back.
+    const today = [...calendar.querySelectorAll('button')].find((button) => button.textContent === 'Today');
+    if (today === undefined) throw new Error('no Today');
+    await userEvent.click(today);
+    await waitFor(() => expect(calendar.querySelector('[data-today-mark]')).not.toBeNull());
+  },
+};
+
+/** The range's presets under its calendar: Last 7 days sets the week up to today and closes. */
+export const RangePresets: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: function Render() {
+    const [range, setRange] = useState<{ start: string; end: string } | null>(null);
+    return (
+      <Stage width="narrow">
+        <DateRangePicker label="Period" value={range} onChange={setRange} defaultOpen />
+        <span>{range === null ? 'None' : `${range.start} to ${range.end}`}</span>
+      </Stage>
+    );
+  },
+  play: async ({ canvas }) => {
+    const calendar = await dialog();
+    const preset = [...calendar.querySelectorAll('button')].find((button) => button.textContent === 'Last 7 days');
+    if (preset === undefined) throw new Error('no Last 7 days');
+    await userEvent.click(preset);
+    await waitFor(() => expect(canvas.getByText('2026-10-02 to 2026-10-08')).toBeInTheDocument());
   },
 };

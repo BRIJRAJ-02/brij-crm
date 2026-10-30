@@ -3,11 +3,12 @@ import {
   fromAbsolute,
   isSameDay,
   parseDate,
+  startOfMonth,
   startOfWeek,
   toCalendarDate,
   type CalendarDate,
 } from '@internationalized/date';
-import { use, useContext } from 'react';
+import { use, useContext, useState } from 'react';
 import {
   Button as AriaButton,
   Calendar,
@@ -16,23 +17,28 @@ import {
   CalendarGridBody,
   CalendarGridHeader,
   CalendarHeaderCell,
+  CalendarStateContext,
   DateInput,
   DatePicker as AriaDatePicker,
   DatePickerStateContext,
   DateRangePicker as AriaDateRangePicker,
+  DateRangePickerStateContext,
   DateSegment,
   FieldError,
   Group,
-  Heading,
   Label,
   RangeCalendar,
+  RangeCalendarStateContext,
   Text,
   type DateValue,
 } from 'react-aria-components';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
-import { weekStartDay, type WeekStart } from '../../lib/month.ts';
+import { memoIntl } from '../../lib/intl-memo.ts';
+import { firstDayOfWeek, weekStartDay, type WeekStart } from '../../lib/month.ts';
+import { parseDateText } from '../../lib/parse-date-text.ts';
 import { useFormatSettings, useNow } from '../../provider/context.ts';
+import { Field } from '../Field/Field.tsx';
 import { InPopover, Popover } from '../Popover/Popover.tsx';
 import styles from './DatePicker.module.css';
 import { strings } from './strings.ts';
@@ -82,21 +88,158 @@ export function quickPicks(
   ];
 }
 
-function MonthHeader() {
+/** A calendar day as a short label in the language: "Fri 6 Nov" (en-GB), "Fri, Nov 6" (en-US). */
+function useDayLabel(): (date: CalendarDate) => string {
+  const { locale } = useFormatSettings();
+  const format = memoIntl(
+    `date-picker-day:${locale}`,
+    () => new Intl.DateTimeFormat(locale, { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }),
+  );
+  return (date) => format.format(date.toDate('UTC'));
+}
+
+/** The range presets from `today`: the last 7 days, this month, last month and this quarter, ends included. */
+export function rangePresets(
+  today: CalendarDate,
+): readonly { readonly label: string; readonly start: CalendarDate; readonly end: CalendarDate }[] {
+  const lastMonth = startOfMonth(today).subtract({ months: 1 });
+  const quarterStart = startOfMonth(today).set({ month: Math.floor((today.month - 1) / 3) * 3 + 1 });
+  return [
+    { label: strings.lastSevenDays, start: today.subtract({ days: 6 }), end: today },
+    { label: strings.thisMonth, start: startOfMonth(today), end: endOfMonth(today) },
+    { label: strings.lastMonth, start: lastMonth, end: endOfMonth(lastMonth) },
+    { label: strings.thisQuarter, start: quarterStart, end: endOfMonth(quarterStart.add({ months: 2 })) },
+  ];
+}
+
+/** The calendar's state, single or range: both page and focus the same way. */
+function useCalendarState() {
+  const single = useContext(CalendarStateContext);
+  const range = useContext(RangeCalendarStateContext);
+  return single ?? range;
+}
+
+/**
+ * The month's title, which opens the months of its year to jump to (as Square's and Calendly's "Aug 2026 ⌄"), then
+ * Today when the month on show isn't today's, then the arrows: a month either way, or a year while choosing a month.
+ */
+function MonthHeader({
+  today,
+  isPickingMonth,
+  onPickingMonthChange,
+}: {
+  readonly today: CalendarDate;
+  readonly isPickingMonth: boolean;
+  readonly onPickingMonthChange: (isPicking: boolean) => void;
+}) {
+  const state = useCalendarState();
+  const { locale } = useFormatSettings();
+  if (state === null) return null;
+  const shown = state.visibleRange.start;
+  const title = memoIntl(
+    `date-picker-month:${locale}`,
+    () => new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric', timeZone: 'UTC' }),
+  ).format(shown.toDate('UTC'));
+  const isTodaysMonth = shown.year === today.year && shown.month === today.month;
+  const goToYear = (years: number) => {
+    state.setFocusedDate(state.focusedDate.add({ years }));
+  };
   return (
     // A plain block, not a header: inline (MonthCalendar) a header would be a page banner landmark.
     <div className={styles.nav}>
-      <Heading className={styles.month} />
+      <AriaButton
+        className={styles.month}
+        aria-expanded={isPickingMonth}
+        aria-label={strings.chooseMonth(title)}
+        onPress={() => {
+          onPickingMonthChange(!isPickingMonth);
+        }}
+      >
+        <span aria-live="polite">{isPickingMonth ? String(shown.year) : title}</span>
+        <Icon name={isPickingMonth ? 'chevron-up' : 'chevron-down'} size="xs" tone="muted" />
+      </AriaButton>
+      {!isTodaysMonth && (
+        <Button
+          variant="ghost"
+          onPress={() => {
+            onPickingMonthChange(false);
+            state.setFocusedDate(today);
+          }}
+        >
+          {strings.today}
+        </Button>
+      )}
       <span className={styles.arrows}>
-        <Button slot="previous" variant="ghost" icon="chevron-left" label={strings.previousMonth} />
-        <Button slot="next" variant="ghost" icon="chevron-right" label={strings.nextMonth} />
+        {isPickingMonth ? (
+          <>
+            <Button
+              variant="ghost"
+              icon="chevron-left"
+              label={strings.previousYear}
+              onPress={() => {
+                goToYear(-1);
+              }}
+            />
+            <Button
+              variant="ghost"
+              icon="chevron-right"
+              label={strings.nextYear}
+              onPress={() => {
+                goToYear(1);
+              }}
+            />
+          </>
+        ) : (
+          <>
+            <Button slot="previous" variant="ghost" icon="chevron-left" label={strings.previousMonth} />
+            <Button slot="next" variant="ghost" icon="chevron-right" label={strings.nextMonth} />
+          </>
+        )}
       </span>
     </div>
   );
 }
 
+/** The twelve months of the year on show, three across: choosing one shows its days, focused. */
+function MonthPicker({ today, onPicked }: { readonly today: CalendarDate; readonly onPicked: () => void }) {
+  const state = useCalendarState();
+  const { locale } = useFormatSettings();
+  if (state === null) return null;
+  const shown = state.visibleRange.start;
+  const format = memoIntl(
+    `date-picker-month-short:${locale}`,
+    () => new Intl.DateTimeFormat(locale, { month: 'short', timeZone: 'UTC' }),
+  );
+  return (
+    <div className={styles.months} role="group" aria-label={String(shown.year)}>
+      {Array.from({ length: 12 }, (_, index) => {
+        const month = shown.set({ month: index + 1, day: 1 });
+        const isShown = index + 1 === shown.month;
+        return (
+          <AriaButton
+            key={index}
+            className={styles.monthCell}
+            data-today={(month.year === today.year && month.month === today.month) || undefined}
+            aria-current={isShown ? 'date' : undefined}
+            // eslint-disable-next-line jsx-a11y-x/no-autofocus -- the month on show takes focus as the months open
+            autoFocus={isShown}
+            onPress={() => {
+              state.setFocusedDate(state.focusedDate.set({ year: month.year, month: month.month }));
+              state.setFocused(true);
+              onPicked();
+            }}
+          >
+            {format.format(month.toDate('UTC'))}
+          </AriaButton>
+        );
+      })}
+    </div>
+  );
+}
+
 /**
- * The month grid. Today's dot comes from the provider's clock, not React Aria's own reading of the machine's date.
+ * The month grid, always six weeks tall so paging never resizes it. Days outside the month show faded. Today, by the
+ * provider's clock (not React Aria's reading of the machine's date), is the link colour inside a hairline ring.
  * `shown` (MonthCalendar's) tints the days the view beside it shows, its ends rounded.
  */
 function Grid({
@@ -107,69 +250,163 @@ function Grid({
   readonly shown?: { readonly start: CalendarDate; readonly end: CalendarDate } | undefined;
 }) {
   return (
-    <CalendarGrid className={styles.grid} weekdayStyle="short">
-      <CalendarGridHeader>
-        {(day) => <CalendarHeaderCell className={styles.weekday}>{day}</CalendarHeaderCell>}
-      </CalendarGridHeader>
-      <CalendarGridBody>
-        {(date) => {
-          const isShown = shown !== undefined && date.compare(shown.start) >= 0 && date.compare(shown.end) <= 0;
-          return (
-            <CalendarCell
-              date={date}
-              className={styles.day}
-              data-shown={isShown ? '' : undefined}
-              // A week running over the month's edge ends its band at the month's first or last day, the rest hidden.
-              data-shown-start={isShown && (isSameDay(date, shown.start) || date.day === 1) ? '' : undefined}
-              data-shown-end={
-                isShown && (isSameDay(date, shown.end) || date.add({ days: 1 }).day === 1) ? '' : undefined
-              }
-            >
-              {({ formattedDate }) => (
-                <>
-                  {formattedDate}
-                  {isSameDay(date, today) && <span className={styles.today} data-today-mark="" />}
-                </>
-              )}
-            </CalendarCell>
-          );
-        }}
-      </CalendarGridBody>
-    </CalendarGrid>
+    <div className={styles.weeks}>
+      <CalendarGrid className={styles.grid} weekdayStyle="short">
+        <CalendarGridHeader>
+          {(day) => <CalendarHeaderCell className={styles.weekday}>{day}</CalendarHeaderCell>}
+        </CalendarGridHeader>
+        <CalendarGridBody>
+          {(date) => {
+            const isShown = shown !== undefined && date.compare(shown.start) >= 0 && date.compare(shown.end) <= 0;
+            return (
+              <CalendarCell
+                date={date}
+                className={styles.day}
+                data-today-mark={isSameDay(date, today) ? '' : undefined}
+                data-shown={isShown ? '' : undefined}
+                // A week running over the month's edge ends its band at the month's first or last day.
+                data-shown-start={isShown && (isSameDay(date, shown.start) || date.day === 1) ? '' : undefined}
+                data-shown-end={
+                  isShown && (isSameDay(date, shown.end) || date.add({ days: 1 }).day === 1) ? '' : undefined
+                }
+              />
+            );
+          }}
+        </CalendarGridBody>
+      </CalendarGrid>
+    </div>
   );
 }
 
+/** A calendar's inside: its header, then the days, or the months while the title is open. */
+function CalendarBody({
+  today,
+  shown,
+}: {
+  readonly today: CalendarDate;
+  readonly shown?: { readonly start: CalendarDate; readonly end: CalendarDate } | undefined;
+}) {
+  const [isPickingMonth, setPickingMonth] = useState(false);
+  return (
+    <>
+      <MonthHeader today={today} isPickingMonth={isPickingMonth} onPickingMonthChange={setPickingMonth} />
+      {isPickingMonth ? (
+        <MonthPicker
+          today={today}
+          onPicked={() => {
+            setPickingMonth(false);
+          }}
+        />
+      ) : (
+        <Grid today={today} shown={shown} />
+      )}
+    </>
+  );
+}
+
+/**
+ * "Type a date" at the popover's top, as Linear's and Twenty's: words or numbers ("tomorrow", "next fri", "in 2
+ * weeks", "Oct 8", "8/10"), the day they name shown live at the end, and Enter chooses it.
+ */
+function TypeDate({ today }: { readonly today: CalendarDate }) {
+  const state = useContext(DatePickerStateContext);
+  const { locale, weekStart } = useFormatSettings();
+  const dayLabel = useDayLabel();
+  const [text, setText] = useState('');
+  if (state === null) return null;
+  const found = parseDateText(text, {
+    today: today.toString(),
+    locale,
+    firstDayOfWeek: firstDayOfWeek(locale, weekStart),
+  });
+  const day = found === undefined ? undefined : parseDate(found);
+  const isTyped = text.trim() !== '';
+  return (
+    <div className={styles.typed}>
+      <Field
+        label={strings.typeDate}
+        isLabelHidden
+        size="sm"
+        placeholder={strings.typeDatePlaceholder}
+        value={text}
+        onChange={setText}
+        // eslint-disable-next-line jsx-a11y-x/no-autofocus -- the popover opens to type, as Linear's does
+        autoFocus
+        suffix={
+          <span
+            className={styles.resolved}
+            aria-live="polite"
+            data-missing={(isTyped && day === undefined) || undefined}
+          >
+            {day !== undefined ? dayLabel(day) : isTyped ? strings.noDateFound : ''}
+          </span>
+        }
+        onSubmit={() => {
+          if (day === undefined) return;
+          state.setValue(day);
+          state.close();
+        }}
+      />
+    </div>
+  );
+}
+
+/** Quick picks as a list, each with the day it means at the end ("Tomorrow · Sat 31 Oct"), and No date last. */
 function QuickPicks({ isClearable, today }: { readonly isClearable: boolean; readonly today: CalendarDate }) {
   const state = useContext(DatePickerStateContext);
   const { locale, weekStart } = useFormatSettings();
+  const dayLabel = useDayLabel();
   if (state === null) return null;
   return (
-    <footer className={styles.quick}>
+    <div className={styles.picks} role="group" aria-label={strings.quickPicks}>
       {quickPicks(today, locale, weekStart).map((pick) => (
-        <Button
+        <AriaButton
           key={pick.label}
-          variant="ghost"
+          className={styles.pick}
           onPress={() => {
             state.setValue(pick.date);
             state.close();
           }}
         >
-          {pick.label}
-        </Button>
+          <span className={styles.pickLabel}>{pick.label}</span>
+          <span className={styles.pickDate}>{dayLabel(pick.date)}</span>
+        </AriaButton>
       ))}
       {isClearable && state.value !== null && (
-        <Button
-          variant="ghost"
-          icon="x"
+        <AriaButton
+          className={styles.pick}
           onPress={() => {
             state.setValue(null);
             state.close();
           }}
         >
-          {strings.clear}
-        </Button>
+          <Icon name="x" size="sm" tone="muted" />
+          <span className={styles.pickLabel}>{strings.noDate}</span>
+        </AriaButton>
       )}
-    </footer>
+    </div>
+  );
+}
+
+/** The range presets as a list under the calendar: Last 7 days, This month, Last month, This quarter. */
+function RangePresets({ today }: { readonly today: CalendarDate }) {
+  const state = useContext(DateRangePickerStateContext);
+  if (state === null) return null;
+  return (
+    <div className={styles.picks} role="group" aria-label={strings.presets}>
+      {rangePresets(today).map((preset) => (
+        <AriaButton
+          key={preset.label}
+          className={styles.pick}
+          onPress={() => {
+            state.setValue({ start: preset.start, end: preset.end });
+            state.close();
+          }}
+        >
+          <span className={styles.pickLabel}>{preset.label}</span>
+        </AriaButton>
+      ))}
+    </div>
   );
 }
 
@@ -199,7 +436,7 @@ export interface DatePickerProps extends DateFieldLook {
   readonly value?: DateString | null;
   readonly defaultValue?: DateString | null;
   readonly onChange?: (value: DateString | null) => void;
-  /** Today, Tomorrow, Next week and End of month under the calendar. On by default. */
+  /** "Type a date" above the calendar, and Today, Tomorrow, Next week and End of month under it. On by default. */
   readonly showQuickPicks?: boolean;
 }
 
@@ -285,13 +522,15 @@ export function DatePicker({ value, defaultValue, onChange, showQuickPicks = tru
       </Group>
       <FieldParts look={look} />
       <Popover label={strings.calendar}>
+        {showQuickPicks && <TypeDate today={today} />}
         <Calendar
           className={styles.calendar}
           defaultFocusedValue={controlled ?? initial ?? today}
+          // The typed row takes focus as it opens; Tab reaches the days. Without it the chosen day does.
+          {...(showQuickPicks ? { autoFocus: false } : {})}
           {...firstDay(weekStart)}
         >
-          <MonthHeader />
-          <Grid today={today} />
+          <CalendarBody today={today} />
         </Calendar>
         {showQuickPicks && <QuickPicks isClearable={look.isRequired !== true} today={today} />}
       </Popover>
@@ -317,7 +556,10 @@ function toRange(value: DateRange | null | undefined) {
   return value === null ? null : { start: parseDate(value.start), end: parseDate(value.end) };
 }
 
-/** DatePicker's range variant, for filters and dashboards: a start and an end day, picked on one calendar. */
+/**
+ * DatePicker's range variant, for filters and dashboards: a start and an end day, picked on one calendar as one
+ * unbroken band, or from the presets under it.
+ */
 export function DateRangePicker({ value, defaultValue, onChange, ...look }: DateRangePickerProps) {
   const isInPopover = use(InPopover);
   const controlled = toRange(value);
@@ -358,9 +600,9 @@ export function DateRangePicker({ value, defaultValue, onChange, ...look }: Date
           defaultFocusedValue={controlled?.start ?? initial?.start ?? today}
           {...firstDay(weekStart)}
         >
-          <MonthHeader />
-          <Grid today={today} />
+          <CalendarBody today={today} />
         </RangeCalendar>
+        <RangePresets today={today} />
       </Popover>
     </AriaDateRangePicker>
   );
@@ -388,7 +630,7 @@ export interface MonthCalendarProps {
 /**
  * DatePicker's calendar on its own, inline rather than in a popover and compact: a small month for jumping to a
  * date beside a view (Bookings' calendars panel, as Google Calendar keeps one over its calendars). The month, its
- * arrows, its keys, today's dot and the chosen day are DatePicker's; the days are shorter, to fit a side column.
+ * arrows, its keys, today's ring and the chosen day are DatePicker's; the days are shorter, to fit a side column.
  */
 export function MonthCalendar({ label, value, onChange, shown, autoFocus = false }: MonthCalendarProps) {
   const today = useToday();
@@ -407,8 +649,7 @@ export function MonthCalendar({ label, value, onChange, shown, autoFocus = false
       }}
       {...firstDay(weekStart)}
     >
-      <MonthHeader />
-      <Grid
+      <CalendarBody
         today={today}
         shown={shown === undefined ? undefined : { start: parseDate(shown.start), end: parseDate(shown.end) }}
       />

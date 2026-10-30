@@ -4,8 +4,8 @@
    (placeBlocks.ts): a region (--left, --width, fractions of the column),
    pushed in --indent steps of --nest, then --lane of --lanes, --span wide. Bookings are a soft fill in their link's
    hue with a bar of it, the member's own calendar events neutral with a thin edge in their calendar's hue, the time they closed hatched (a solid
-   edge for a block, dashed for a hold), cancelled ones struck through; today's
-   date is a small accent circle (Google Calendar's), its column untinted.
+   edge for a block, dashed for a hold), cancelled ones struck through, a past day's bookings quieter; today's
+   date is the link colour in a hairline ring (one today mark everywhere), its column untinted.
    Hours outside the member's open hours are sunken. Below 480px of its
    container only the selected day's column shows. */
 @layer components {
@@ -82,13 +82,15 @@
     background: var(--surface-selected);
   }
 
+  /* Today: the one today mark (DatePicker's and MonthTiles' too), the link colour inside a hairline accent ring. */
   .dayButton[data-today] .dayNumber {
-    background: var(--accent);
-    color: var(--on-accent);
+    color: var(--link);
+    outline: var(--border-width-hairline) solid var(--accent-line);
+    outline-offset: calc(-1 * var(--border-width-hairline));
   }
 
   @media (hover: hover) and (pointer: fine) {
-    .dayButton:hover:not([data-today], [aria-pressed='true']) .dayNumber {
+    .dayButton:hover:not([aria-pressed='true']) .dayNumber {
       background: var(--surface-hover);
     }
   }
@@ -129,11 +131,16 @@
     pointer-events: none;
   }
 
-  /* A week with nothing on it: one quiet line in the middle of the grid, never in the way of drawing. */
+  /* A week with nothing on it: one quiet line in the middle of the grid, never in the way of drawing; with a way on
+     ("Next booking: Tue 3 Nov") a small card, its button the one thing that takes a press. */
   .empty {
     position: absolute;
     inset-block-start: 50%;
     inset-inline-start: 50%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-2);
     margin: 0;
     padding: var(--space-4) var(--space-12);
     border: var(--border-width-hairline) solid var(--border);
@@ -146,6 +153,20 @@
     z-index: var(--z-sticky);
     pointer-events: none;
     translate: -50% -50%;
+  }
+
+  .empty[data-action] {
+    padding: var(--space-8) var(--space-12);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+  }
+
+  .emptyHint {
+    margin: 0;
+  }
+
+  .emptyAction {
+    pointer-events: auto;
   }
 
   .scroller {
@@ -419,6 +440,20 @@
     background: var(--surface-subtle);
     color: var(--text-tertiary);
     text-decoration: line-through;
+  }
+
+  /* A past day's bookings step back: a grey fill, their words secondary, the hue's bar kept. */
+  .column[data-past] .block[data-kind='booking']:not([data-open]) {
+    background: var(--surface-subtle);
+    color: var(--text-secondary);
+  }
+
+  /* Under a pointer a block lifts, as Google Calendar's do. */
+  @media (hover: hover) and (pointer: fine) {
+    .block:hover:not([data-open], [data-kind='more']) {
+      z-index: var(--z-raised);
+      box-shadow: var(--shadow-md);
+    }
   }
 
   .block[data-open],
