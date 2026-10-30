@@ -195,11 +195,7 @@ export function UserBody({
           renderCell={cell}
           isLoading={detail === undefined}
           isScrollable
-          emptyState={
-            <EmptyState icon="building" title={strings.noWorkspaces}>
-              {strings.noWorkspacesText}
-            </EmptyState>
-          }
+          emptyState={<EmptyState icon="building" title={strings.noWorkspaces} />}
         />
       </SettingsSection>
     </SettingsPage>
@@ -218,9 +214,7 @@ export function UserMissing() {
         icon="search"
         title={strings.userMissing}
         actions={<Link href={adminUsersHref(slug)}>{strings.backToUsers}</Link>}
-      >
-        {strings.userMissingText}
-      </EmptyState>
+      />
     </SettingsPage>
   );
 }
