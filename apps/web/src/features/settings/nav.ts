@@ -7,6 +7,7 @@
 import type { ObjectSummary, Permission } from '@crm/data';
 import { jobsHref, settingsHomeHref, trashHref } from '../workspace/objects.ts';
 import { historyHref } from './history-href.ts';
+import { strings as automations } from '../automations/strings.ts';
 import { strings as history } from './history-nav-strings.ts';
 import { strings as jobs } from './jobs-strings.ts';
 import { strings as members } from './members-strings.ts';
@@ -41,6 +42,9 @@ export const profileHref = (slug: string) => `/w/${slug}/settings/account/profil
 /** Settings › Workspace › General (spec 0031, AC-822): the workspace's name, time zone and address, and its delete. */
 export const generalSettingsHref = (slug: string) => `/w/${slug}/settings/general`;
 
+/** Settings › Workspace › Automations (parity #53): what the workspace does for itself. */
+export const automationsHref = (slug: string) => `/w/${slug}/settings/automations`;
+
 /** Settings › Workspace › Members (spec 0031): who is in the workspace, roles and invitations. */
 export const membersSettingsHref = (slug: string) => `/w/${slug}/settings/members`;
 
@@ -65,6 +69,7 @@ export type SettingsPageId =
   | 'workspace-security'
   | 'objects'
   | 'jobs'
+  | 'automations'
   | 'history'
   | 'trash'
   | 'admin-overview'
@@ -98,6 +103,7 @@ export interface SettingsNavEntry {
     | 'lock'
     | 'box'
     | 'list-checks'
+    | 'zap'
     | 'clock'
     | 'users-round'
     | 'trash'
@@ -170,6 +176,14 @@ export function settingsNav(slug: string): readonly SettingsNavGroup[] {
           requires: 'security.manage',
         },
         { id: 'objects', label: strings.objects, href: objectsSettingsHref(slug), icon: 'box' },
+        // Automations (parity #53): for `automations.manage` alone, so nobody else sees the entry at all.
+        {
+          id: 'automations',
+          label: automations.navLabel,
+          href: automationsHref(slug),
+          icon: 'zap',
+          requires: 'automations.manage',
+        },
         { id: 'jobs', label: jobs.title, href: jobsHref(slug), icon: 'list-checks' },
         // History (spec 0046): every member opens it; Workspace changes inside it is for `audit.read` alone.
         { id: 'history', label: history.title, href: historyHref(slug), icon: 'clock' },
@@ -243,6 +257,7 @@ export function settingsPageOf(pathname: string): SettingsPageId | undefined {
   if (rest === 'account/sign-in' || rest === 'account/security') return 'security';
   if (rest === 'objects' || rest.startsWith('objects/')) return 'objects';
   if (rest === 'jobs') return 'jobs';
+  if (rest === 'automations') return 'automations';
   if (rest === 'history' || rest === 'history/changes' || rest === 'history/sign-ins') return 'history';
   if (rest === 'members') return 'members';
   if (rest === 'security') return 'workspace-security';

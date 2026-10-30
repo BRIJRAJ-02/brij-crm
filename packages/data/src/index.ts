@@ -154,6 +154,7 @@ import {
 } from './calendar/store.ts';
 import { lazySchedules } from './schedules/lazy.ts';
 import type { SchedulingAccessStore } from './scheduling/access.ts';
+import type { AutomationsHeld, AutomationsStore } from './automations/store.ts';
 export type {
   DelegationGrant,
   DelegationsHeld,
@@ -684,6 +685,24 @@ export type {
   TaskSubscriptionState,
 } from './tasks/store.ts';
 export { TASK_COUNT_CAP, TASK_RECORDS_MAX, TASK_TITLE_MAX } from '@crm/contracts/task-limits';
+export {
+  AUTOMATION_ACTIONS_MAX,
+  AUTOMATION_DUE_DAYS_MAX,
+  AUTOMATION_FAILURES_MAX,
+  AUTOMATION_MESSAGE_MAX,
+  AUTOMATION_RUNS_SHOWN,
+  AUTOMATION_TITLE_MAX,
+  AUTOMATIONS_MAX,
+} from '@crm/contracts/automation-limits';
+export type {
+  Automation,
+  AutomationAction,
+  AutomationDefinition,
+  AutomationRun,
+  AutomationTrigger,
+  AutomationWho,
+} from '@crm/contracts';
+export type { AutomationsHeld, AutomationsState } from './automations/store.ts';
 export { NOTE_TITLE_MAX, NOTE_TOO_LONG } from '@crm/contracts/note-limits';
 export type {
   NoteList,
@@ -1282,6 +1301,7 @@ export function createDataLayer({
     schedules.clear();
     preferences.clear();
     accessLoaded?.clear();
+    automationsLoaded?.clear();
     pictureChoice.clear();
     void linkPage?.then((made) => {
       made.clear();
@@ -1875,6 +1895,10 @@ export function createDataLayer({
       100 + Math.round(random() * 300),
     );
   });
+  // An automation, or a run's outcome, changed (parity #53): the held list and log read again, once for a burst.
+  router.on('automations', (workspace) => {
+    automationsLoaded?.changed(workspace);
+  });
   router.on('jobs', (workspace, event) => {
     jobs.changed(workspace, event);
   });
@@ -1932,6 +1956,7 @@ export function createDataLayer({
     schedules.changed(workspace);
     accessLoaded?.teamWeek.changed(workspace);
     accessLoaded?.timeOff.changed(workspace);
+    automationsLoaded?.changed(workspace);
     jobs.resync(workspace);
     views.resync(workspace);
     navStore?.resync(workspace);
@@ -2206,6 +2231,44 @@ export function createDataLayer({
         },
       });
       return accessLoaded;
+    }));
+  // Automations (parity #53): the workspace's automations and run log, one held copy per workspace, loaded with the
+  // first screen that asks (`import()`), never in the first load. Its writes keep a mutation id this tab knows, so
+  // each one's single `automations` echo is skipped; any other event reads the list and the log again.
+  let automationsLoading: Promise<AutomationsStore> | undefined;
+  let automationsLoaded: AutomationsStore | undefined;
+  const loadAutomations = (): Promise<AutomationsStore> =>
+    (automationsLoading ??= import('./automations/store.ts').then(({ createAutomationsStore }) => {
+      const echoed = async <T>(send: (mutationId: string) => Promise<T>): Promise<T> => {
+        const mutationId = mintId();
+        mutations.sent(mutationId);
+        try {
+          const answer = await send(mutationId);
+          mutations.answered(mutationId, 1);
+          return answer;
+        } catch (error) {
+          mutations.forget(mutationId);
+          throw error;
+        }
+      };
+      const { automations: calls } = api;
+      automationsLoaded = createAutomationsStore({
+        api: {
+          list: (workspace) => beforeRead(workspace).then(() => call((options) => calls.list({ workspace }, options))),
+          runs: (workspace) => call((options) => calls.runs({ workspace }, options)),
+          create: (input) => echoed((mutationId) => call((options) => calls.create({ ...input, mutationId }, options))),
+          update: (input) => echoed((mutationId) => call((options) => calls.update({ ...input, mutationId }, options))),
+          setEnabled: (input) =>
+            echoed((mutationId) => call((options) => calls.setEnabled({ ...input, mutationId }, options))),
+          remove: (input) => echoed((mutationId) => call((options) => calls.remove({ ...input, mutationId }, options))),
+          restore: (input) =>
+            echoed((mutationId) => call((options) => calls.restore({ ...input, mutationId }, options))),
+        },
+        mintId,
+        notify,
+        watch,
+      });
+      return automationsLoaded;
     }));
   // Settings › Account › Preferences: the member's own, one copy per workspace.
   const preferences = createPreferencesStore({
@@ -3387,6 +3450,15 @@ export function createDataLayer({
      * put back with a toast if refused; `visible` answers the members in the caller's See reach. An `access` change
      * naming the member reads them all again.
      */
+    /**
+     * Settings › Automations (parity #53): the workspace's automations and newest runs, a held copy per workspace
+     * (`automations/store.ts`). `open` loads the store (its own chunk, never the first load) and hands the held copy;
+     * a route's loader awaits its `ready()`. Changes show at once and are put back with a toast if refused; a delete
+     * says Undo. A live `automations` event (a run finished, a switch off, another tab) reads it again.
+     */
+    automations: {
+      open: async (workspace: string): Promise<AutomationsHeld> => (await loadAutomations()).held(workspace),
+    },
     scheduling: {
       /** Loads the store (its own chunk, never the first load): a route's loader awaits it before its screen draws. */
       open: (): Promise<SchedulingAccessStore> => schedulingAccess(),

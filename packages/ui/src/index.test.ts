@@ -160,6 +160,7 @@ describe('@crm/ui', () => {
       'SectionList',
       'SegmentedControl',
       'Select',
+      'Sentence',
       'Separator',
       'SettingsGrid',
       'SettingsLayout',

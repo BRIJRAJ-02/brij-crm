@@ -20,7 +20,7 @@ describe('settingsNav', () => {
     expect(groups.map((group) => group.label)).toEqual(['Account', 'Workspace', 'Super admin']);
     expect(groups.map((group) => group.entries.map((entry) => entry.label))).toEqual([
       ['Profile', 'Preferences', 'Sign in and devices', 'Notifications', 'Scheduling access'],
-      ['General', 'Members', 'Security', 'Objects', 'Background jobs', 'History', 'Trash'],
+      ['General', 'Members', 'Security', 'Objects', 'Automations', 'Background jobs', 'History', 'Trash'],
       ['Overview', 'Users', 'Booking pages', 'Website'],
     ]);
   });
@@ -37,6 +37,7 @@ describe('settingsNav', () => {
       members: '/w/acme/settings/members',
       'workspace-security': '/w/acme/settings/security',
       objects: '/w/acme/settings/objects',
+      automations: '/w/acme/settings/automations',
       jobs: '/w/acme/settings/jobs',
       history: '/w/acme/settings/history',
       // The trash opens inside Settings, its sidebar and trail kept (A120, 23 October 2026).
@@ -75,11 +76,13 @@ describe('visibleSettingsNav', () => {
     expect(visibleSettingsNav(settingsNav('acme'), ['booking.manage'])).toEqual(
       workspaceGroups.map((group) => ({
         ...group,
-        entries: group.entries.filter((entry) => entry.id !== 'workspace-security'),
+        entries: group.entries.filter((entry) => entry.id !== 'workspace-security' && entry.id !== 'automations'),
       })),
     );
     // Workspace › Security only for those who change sign in rules (spec 0033).
-    expect(visibleSettingsNav(settingsNav('acme'), ['booking.manage', 'security.manage'])).toEqual(workspaceGroups);
+    expect(
+      visibleSettingsNav(settingsNav('acme'), ['booking.manage', 'security.manage', 'automations.manage']),
+    ).toEqual(workspaceGroups);
     // Calendars and Round robin are tabs of Bookings (25 October 2026), so neither is in here to lose.
     expect(visibleSettingsNav(settingsNav('acme'), []).map((group) => group.entries.map((entry) => entry.id))).toEqual([
       ['profile', 'preferences', 'security', 'notifications', 'scheduling-access'],

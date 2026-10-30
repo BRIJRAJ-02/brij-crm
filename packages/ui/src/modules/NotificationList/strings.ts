@@ -11,6 +11,8 @@ export const strings = {
     task_assigned: (actor: string) => `${actor} assigned you a task`,
     /** The actor is the person asking (the screen names them), not whoever acted. */
     join_request: (actor: string) => `${actor} asks to join`,
+    /** The actor is "Automation"; the row's excerpt carries its message. */
+    automation: (actor: string) => `${actor} notified you`,
   },
   /** A form's new submission, its form first as the other rows lead with who acted: "Contact us got a new submission". */
   submission: (form: string) => `${form} got a new submission`,

@@ -8,6 +8,7 @@
 import type { ObjectSummary, Permission, RecordHit, ViewHit } from '@crm/data';
 import type { IconName } from '@crm/ui';
 import type { ThemeChoice } from '@crm/ui/theme';
+import { strings as automationStrings } from '../automations/strings.ts';
 import { settingsNav, visibleSettingsNav } from '../settings/nav.ts';
 import { availabilityHref, calendarsHref, linksHref, roundRobinHref } from '../booking/links.ts';
 import { formsHref } from '../forms/paths.ts';
@@ -132,6 +133,7 @@ const SETTINGS_TERMS: Readonly<Record<string, readonly string[]>> = {
   preferences: strings.preferencesTerms,
   objects: strings.objectsTerms,
   jobs: strings.jobsTerms,
+  automations: automationStrings.terms,
   security: strings.signInTerms,
 };
 
