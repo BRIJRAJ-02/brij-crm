@@ -1,8 +1,7 @@
 // Brief
 // Purpose: first run's Connect your calendar (spec 0036): meetings onto the people and companies a new member meets.
-// Main task: Connect Google Calendar (to Google and back here), or go on without one; then the last step.
-// Only Invite your team skips (the owner, 27 October 2026); this step can't be forced, since the connecting
-// happens at Google, so its way on says what it does rather than offering a skip.
+// Main task: Connect Google Calendar (to Google and back here), or Skip for now; then the last step. Skip is the
+// step's clear secondary action, in the same words as Invite your team's (spec 0058, AC-25).
 // Leaves out: choosing calendars and sharing (Settings › Calendars), and Outlook until spec 0024 milestone 4.
 import { Button, Callout, Tooltip } from '@crm/ui';
 import { useEffect, useRef } from 'react';
@@ -23,10 +22,9 @@ export interface CalendarStepProps {
 
 /**
  * Connect your calendar: what the last connect came back with, then Connect
- * Google Calendar (Google Calendar's mark), Connect Outlook (off: the step's
- * description says it is coming soon) and Continue without a calendar; once
- * connected, Continue. Focus starts on the first button that works, so Enter does the
- * step.
+ * Google Calendar (Google Calendar's mark), Connect Outlook (off: its tooltip
+ * says it is coming soon) and Skip for now; once connected, Continue. Focus
+ * starts on the first button that works, so Enter does the step.
  */
 export function CalendarStep({ result, onConnect, isConnecting, onFinish }: CalendarStepProps) {
   const first = useRef<HTMLButtonElement>(null);
@@ -67,7 +65,7 @@ export function CalendarStep({ result, onConnect, isConnecting, onFinish }: Cale
             </Button>
           </Tooltip>
           <Button variant="ghost" size="lg" isFullWidth="center" onPress={onFinish}>
-            {strings.calendarLater}
+            {strings.skipForNow}
           </Button>
         </>
       )}

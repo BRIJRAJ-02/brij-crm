@@ -67,7 +67,15 @@ export const Route = createFileRoute('/welcome')({
             (pages) =>
               pages
                 .filter((page) => page.status === 'live')
-                .map((page) => ({ id: page.id, title: page.title, minutes: page.durations[0] ?? 30 })),
+                .map((page) => ({
+                  id: page.id,
+                  title: page.title,
+                  minutes: page.durations[0] ?? 30,
+                  // What the Done step's booking link is made from (spec 0058, AC-7).
+                  slug: page.slug,
+                  publicKey: page.publicKey,
+                  isPrivate: page.isPrivate,
+                })),
             () => [],
           );
     const [calendarSync, roleRead, profile, bookingPages] = await Promise.all([

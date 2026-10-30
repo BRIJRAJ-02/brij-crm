@@ -20,7 +20,7 @@ import { AboutStep } from './AboutStep.tsx';
 import { BookingPagePreview } from './BookingPagePreview.tsx';
 import { BookingStep } from './BookingStep.tsx';
 import { squarePhoto } from './photo.ts';
-import { DoneStep } from './DoneStep.tsx';
+import { DoneStep, type DoneBookingPage } from './DoneStep.tsx';
 import { HandleStep } from './HandleStep.tsx';
 import { filledLinks, titleFromUrl } from './LinksFields.tsx';
 import { LinkPagePreview } from './LinkPagePreview.tsx';
@@ -54,12 +54,15 @@ const PREVIEW_GHOSTS = 3;
 /** The length a first booking page offers until its owner changes it. */
 const DEFAULT_MINUTES = 30;
 
-/** Each step's title and the line under it. */
-const COPY: Readonly<Record<WelcomeStep, { readonly title: string; readonly description: string }>> = {
-  about: { title: strings.aboutTitle, description: strings.aboutDescription },
+/**
+ * Each step's title and, where the step needs one, the line under it. Your name, Your link page and Your booking
+ * page have none: the page beside each shows where the words land (copy audit, 31 October 2026).
+ */
+const COPY: Readonly<Record<WelcomeStep, { readonly title: string; readonly description?: string }>> = {
+  about: { title: strings.aboutTitle },
   workspace: { title: strings.workspaceTitle, description: strings.workspaceDescription },
-  handle: { title: strings.handleTitle, description: strings.handleDescription },
-  booking: { title: strings.bookingTitle, description: strings.bookingDescription },
+  handle: { title: strings.handleTitle },
+  booking: { title: strings.bookingTitle },
   invite: { title: strings.inviteTitle, description: strings.inviteDescription },
   done: { title: strings.doneTitle, description: strings.doneDescription },
   calendar: { title: strings.calendarTitle, description: strings.calendarDescription },
@@ -109,9 +112,9 @@ export interface WelcomeScreenProps {
   readonly suggestedHandle?: string | undefined;
   /**
    * The live booking pages this workspace already has, newest first: they draw on the link page beside the steps,
-   * and having any means Your booking page isn't asked for.
+   * having any means Your booking page isn't asked for, and the first is the Done step's booking link.
    */
-  readonly bookingPages?: readonly { readonly id: string; readonly title: string; readonly minutes: number }[];
+  readonly bookingPages?: readonly DoneBookingPage[];
   /** Their account photo, as our own origin serves it: it draws on the pages the steps preview. */
   readonly image?: string;
 }
@@ -186,7 +189,7 @@ export function WelcomeScreen({
   const [pageRefusals, setPageRefusals] = useState<readonly WelcomeRefusal[]>([]);
   // The page made in this run: the loader doesn't read again on a step change, so the link page beside the later
   // steps would otherwise lose the page that was just made.
-  const [madePage, setMadePage] = useState<{ readonly title: string; readonly minutes: number } | undefined>(undefined);
+  const [madePage, setMadePage] = useState<DoneBookingPage | undefined>(undefined);
   const [isSignOutOpen, setSignOutOpen] = useState(false);
   const [isSigningOut, setSigningOut] = useState(false);
   const [signOutFailure, setSignOutFailure] = useState<string | undefined>(undefined);
@@ -234,7 +237,7 @@ export function WelcomeScreen({
   const previewPages =
     step === 'booking'
       ? [{ id: 'draft', title: pageTitle, minutes: pageMinutes }]
-      : [...(madePage === undefined ? [] : [{ id: 'made', ...madePage }]), ...bookingPages];
+      : [...(madePage === undefined ? [] : [madePage]), ...bookingPages.filter((page) => page.id !== madePage?.id)];
   const steps = welcomeSteps(calendarSync, leaveTo !== undefined, done);
   const back = leaveTo === undefined ? previousStep(step) : undefined;
   // The step this one was reached from by Continue: Back then goes back through the browser's history, so the
@@ -353,9 +356,17 @@ export function WelcomeScreen({
         settings: { durations: [pageMinutes], scheduleId: null },
       })
       .then(
-        () => {
+        (page) => {
           setCreatingPage(false);
-          setMadePage({ title: pageTitle.trim(), minutes: pageMinutes });
+          // Its address parts too, so the Done step hands out its link (spec 0058, AC-7).
+          setMadePage({
+            id: page.id,
+            title: pageTitle.trim(),
+            minutes: pageMinutes,
+            slug: page.slug,
+            publicKey: page.publicKey,
+            isPrivate: page.isPrivate,
+          });
           after('booking');
         },
         (failure: unknown) => {
@@ -419,7 +430,7 @@ export function WelcomeScreen({
 
   const { title, description } =
     leaveTo !== undefined && step === 'workspace'
-      ? { title: strings.anotherTitle, description: strings.anotherDescription }
+      ? { title: strings.anotherTitle, description: undefined }
       : COPY[step];
   return (
     <>
@@ -427,7 +438,7 @@ export function WelcomeScreen({
         productName={strings.product}
         logo={PRODUCT_LOGO}
         title={title}
-        description={description}
+        {...(description === undefined ? {} : { description })}
         eyebrow={
           <>
             {back !== undefined && <Button variant="ghost" icon="arrow-left" label={strings.back} onPress={goBack} />}
@@ -553,7 +564,9 @@ export function WelcomeScreen({
             }}
           />
         )}
-        {step === DONE && handle !== '' && <DoneStep handle={handle} onGo={openWorkspace} />}
+        {step === DONE && handle !== '' && (
+          <DoneStep handle={handle} bookingPage={madePage ?? bookingPages[0]} onGo={openWorkspace} />
+        )}
         {step === 'invite' && workspace !== undefined && (
           <InviteStep
             data={data}

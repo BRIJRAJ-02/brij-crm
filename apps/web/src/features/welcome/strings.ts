@@ -20,7 +20,6 @@ export const strings = {
   signOut: 'Sign out',
 
   aboutTitle: 'Your name',
-  aboutDescription: 'How people see you on your pages.',
   yourName: 'Your name',
   nameMissing: 'Enter your name.',
   /** The photo on Your name (27 October 2026), uploaded from their device. */
@@ -30,7 +29,6 @@ export const strings = {
   photoUnreadable: 'That picture couldn’t be read. Try a JPEG or PNG.',
 
   handleTitle: 'Your link page',
-  handleDescription: 'One link for everything you share.',
   handleLabel: 'Your link',
   handleMissing: 'Pick a link.',
   claim: 'Continue',
@@ -45,7 +43,6 @@ export const strings = {
   linkAdd: 'Add link',
 
   bookingTitle: 'Your booking page',
-  bookingDescription: 'Where people pick a time with you.',
   bookingName: 'Meeting name',
   bookingNamePlaceholder: 'Intro call',
   bookingNameMissing: 'Name the meeting.',
@@ -62,16 +59,22 @@ export const strings = {
 
   /** The end (27 October 2026): what first run made, before the workspace opens. */
   doneTitle: 'You’re live',
-  doneDescription: 'Share your link and people can book you.',
-  doneLink: 'Your link',
-  doneCopy: 'Copy link',
-  doneCopied: 'Link copied',
-  doneOpen: 'Open your page',
+  doneDescription: 'Share your links and people can book you.',
+  /** The two tiles (spec 0058, AC-7): the booking page and the link page, each with Copy link and Open. */
+  doneBooking: 'Booking page',
+  doneMinutes: (minutes: number) => `${String(minutes)} min`,
+  doneLinkOnly: 'Link only',
+  doneLinkPage: 'Your link page',
+  doneLinkPageFacts: 'Your links and booking pages',
+  doneOpenTip: 'Open in a new tab',
+  doneOpen: (title: string) => `Open ${title} in a new tab`,
   doneGo: 'Go to dashboard',
 
   inviteTitle: 'Invite your team',
   inviteDescription: 'They’ll get an email to join.',
   noEmails: 'Add an email, or skip for now.',
+  /** Calendar and Invite your team's secondary action, the same words on both (spec 0058, AC-25). */
+  skipForNow: 'Skip for now',
   invited: (count: number) =>
     count === 0 ? 'No invites sent.' : count === 1 ? 'Invite sent.' : `${String(count)} invites sent.`,
   invitedText: 'Invite more any time from Settings.',
@@ -81,7 +84,6 @@ export const strings = {
   workspaceTitle: 'Your workspace',
   workspaceDescription: 'Name it after your team or company.',
   anotherTitle: 'Create a workspace',
-  anotherDescription: 'A new workspace starts empty, with you as its owner.',
   workspaceName: 'Workspace name',
   webAddress: 'Web address',
   /** Before the address in its field. */
@@ -110,26 +112,23 @@ export const strings = {
   connectingGoogle: 'Opening Google',
   connectOutlook: 'Connect Outlook',
   outlookSoon: 'Outlook is coming soon.',
-  skipCalendar: 'Skip for now',
-  /** The calendar step's way on without connecting: it isn't a skip, since nothing here can be forced. */
-  calendarLater: 'Continue without a calendar',
   opening: 'Opening your workspace',
   /** What a connect that came back with `?calendar=` says. */
   results: {
     connected: {
       tone: 'success',
       title: 'Google Calendar is connected.',
-      text: 'Your meetings are syncing. They show on records within a few minutes.',
+      text: 'Your meetings are syncing.',
     },
     denied: {
       tone: 'info',
       title: 'Calendar not connected',
-      text: 'You didn’t give Timefix access. Connect again, or skip for now.',
+      text: 'You didn’t give Timefix access.',
     },
     scope: {
       tone: 'warning',
       title: 'Calendar not connected',
-      text: 'Timefix needs to see your events and when you’re busy. Connect again and leave both boxes ticked.',
+      text: 'Leave both boxes ticked at Google, then connect again.',
     },
     limit: {
       tone: 'warning',
@@ -144,7 +143,7 @@ export const strings = {
     failed: {
       tone: 'danger',
       title: 'Calendar not connected',
-      text: 'Something went wrong on the way back from Google. Try again.',
+      text: 'Couldn’t connect. Try again.',
     },
   } satisfies Record<ConnectResult, ConnectOutcome>,
 } as const;
