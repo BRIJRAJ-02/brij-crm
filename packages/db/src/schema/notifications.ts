@@ -120,6 +120,10 @@ export const notifications = pgTable(
     uniqueIndex('notifications_one_per_join_request')
       .on(t.workspaceId, t.memberId, t.joinRequestId)
       .where(sql`${t.joinRequestId} is not null`),
+    // The cascade from a join request's delete.
+    index('notifications_by_join_request')
+      .on(t.workspaceId, t.joinRequestId)
+      .where(sql`${t.joinRequestId} is not null`),
     uniqueIndex('notifications_one_per_note')
       .on(t.workspaceId, t.memberId, t.noteId)
       .where(sql`${t.noteId} is not null`),

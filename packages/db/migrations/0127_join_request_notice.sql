@@ -27,3 +27,6 @@ alter table notifications add constraint notifications_subject check (
 --> statement-breakpoint
 create unique index notifications_one_per_join_request on notifications (workspace_id, member_id, join_request_id)
   where join_request_id is not null;
+--> statement-breakpoint
+create index notifications_by_join_request on notifications (workspace_id, join_request_id)
+  where join_request_id is not null;

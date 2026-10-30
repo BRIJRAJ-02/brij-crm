@@ -3,7 +3,8 @@
 // option (an option's Archive asks where they go), how many records are empty (ticking Required) and how many
 // values are shared (ticking Unique). One read, for schema managers only, through the access door: the counts are
 // given only to someone who sees every record of the object (no record rule), as the unique refusal does
-// (spec 0009, AC-144); anyone else gets the uses alone. Writes nothing.
+// (spec 0009, AC-144), and only when they finish within a short timeout; anyone else gets the uses alone.
+// Writes nothing.
 import { sql } from 'drizzle-orm';
 import type { AttributeImpact } from '@crm/contracts';
 import type { WorkspaceTx } from '@crm/db';
@@ -29,7 +30,8 @@ async function viewsUsing(
       coalesce(strpos((v.config->'filter')::text, ${attribute.id}) > 0, false) as filtered,
       coalesce(strpos((v.config->'sorts')::text, ${attribute.id}) > 0, false) as sorted
     from views v
-    where v.object_id = ${attribute.objectId}
+    where (v.object_id = ${attribute.objectId}
+        or v.list_id in (select l.id from lists l where l.object_id = ${attribute.objectId}))
       and (v.visibility::text <> 'private' or v.creator_member_id = ${me ?? null}::uuid)
     order by v.position, v.id
   `);
@@ -131,7 +133,7 @@ export async function attributeImpact(
   input: { readonly attributeId: string },
 ): Promise<AttributeImpact> {
   requirePermission(scope, 'schema.manage');
-  return inWorkspace(scope, async (tx) => {
+  const uses = await inWorkspace(scope, async (tx) => {
     const attribute = await loadAttribute(tx, input.attributeId);
     const objectId = attribute.objectId;
     if (
@@ -142,19 +144,45 @@ export async function attributeImpact(
       throw refuse('NOT_FOUND', 'That attribute does not exist.', attribute.id);
     }
     const me = scope.actor.type === 'member' && scope.actor.id !== null ? scope.actor.id : undefined;
-    const uses = {
-      views: await viewsUsing(tx, attribute, me),
-      forms: await formsUsing(tx, attribute),
-      rules: await rulesUsing(tx, attribute),
-    };
-    // Counts only for someone who sees every record: a count over records they can't read would say something.
-    if (recordRule(scope.access, objectId) !== undefined || attribute.isSystem) return uses;
-    const takesOptions = attribute.type === 'select' || attribute.type === 'status';
     return {
-      ...uses,
-      emptyCount: await emptyCount(tx, attribute),
-      ...(takesOptions ? { optionCounts: await optionCounts(tx, attribute) } : {}),
-      ...(UNIQUE_TYPES.includes(attribute.type) ? { duplicateCount: await duplicateCount(tx, attribute) } : {}),
+      attribute,
+      objectId,
+      found: {
+        views: await viewsUsing(tx, attribute, me),
+        forms: await formsUsing(tx, attribute),
+        rules: await rulesUsing(tx, attribute),
+      },
     };
   });
+  const { attribute, objectId, found } = uses;
+  // Counts only for someone who sees every record: a count over records they can't read would say something.
+  if (recordRule(scope.access, objectId) !== undefined || attribute.isSystem) return found;
+  const takesOptions = attribute.type === 'select' || attribute.type === 'status';
+  // The counts read every record of the object: held to a short timeout in a transaction of their own, and left out
+  // when they run over (a very large object), so opening settings never holds a pooled connection long.
+  try {
+    const counts = await inWorkspace(scope, async (tx) => {
+      await tx.execute(sql`select set_config('statement_timeout', ${COUNTS_TIMEOUT}, true)`);
+      return {
+        emptyCount: await emptyCount(tx, attribute),
+        ...(takesOptions ? { optionCounts: await optionCounts(tx, attribute) } : {}),
+        ...(UNIQUE_TYPES.includes(attribute.type) ? { duplicateCount: await duplicateCount(tx, attribute) } : {}),
+      };
+    });
+    return { ...found, ...counts };
+  } catch (error) {
+    if (isStatementTimeout(error)) return found;
+    throw error;
+  }
+}
+
+/** How long the counts may take, all three together. */
+const COUNTS_TIMEOUT = '1500ms';
+
+/** Postgres's query_canceled (57014), as a statement timeout raises it, wherever the driver wraps it. */
+function isStatementTimeout(error: unknown): boolean {
+  for (let at: unknown = error; typeof at === 'object' && at !== null; at = (at as { cause?: unknown }).cause) {
+    if ((at as { code?: unknown }).code === '57014') return true;
+  }
+  return false;
 }
