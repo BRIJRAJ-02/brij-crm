@@ -310,7 +310,9 @@ function EditableCell({
       >
         <CellLines cell={cell} join={join} />
       </AriaButton>
-      <Popover label={editorLabel} triggerRef={trigger} placement="bottom start">
+      {/* A panel's width, never the content's: the day's HoursEditor sizes by a container query, so it has no
+          width of its own, and a day with no "Back to usual hours" line collapsed it and cut its times off. */}
+      <Popover label={editorLabel} triggerRef={trigger} placement="bottom start" width="panel">
         {renderEditor(() => setOpen(false))}
       </Popover>
     </DialogTrigger>
