@@ -8,7 +8,7 @@ import { oc } from '@orpc/contract';
 import * as z from 'zod';
 import { ActorReferenceValue, Timestamp } from './values/attribute-values.ts';
 import { RichTextDoc, RichTextDocBody } from './values/rich-text.ts';
-import { NOTE_PAGE_MAX, NOTE_TITLE_MAX } from './note-limits.ts';
+import { NOTE_PAGE_MAX, NOTE_RECORDS_MAX, NOTE_TITLE_MAX } from './note-limits.ts';
 import { TaskTotal } from './tasks.ts';
 import { RecordRefDisplay } from './values/options.ts';
 import { WorkspaceScoped } from './workspaces.ts';
@@ -21,6 +21,7 @@ export {
   NOTE_EXCERPT,
   NOTE_PAGE,
   NOTE_PAGE_MAX,
+  NOTE_RECORDS_MAX,
   NOTE_TEXT_MAX,
   NOTE_TITLE_MAX,
   NOTE_TOO_LONG,
@@ -55,8 +56,11 @@ export const NoteSummary = z.object({
 /** A note as its list shows it. */
 export type NoteSummary = z.infer<typeof NoteSummary>;
 
-/** A note with its body, as the note window opens it. */
-export const Note = NoteSummary.extend({ content: RichTextDoc });
+/**
+ * A note with its body, as the note window opens it, its own record's display in `record`, and the other records it
+ * links (migration 0136) that the reader may see, live, in link order.
+ */
+export const Note = NoteSummary.extend({ content: RichTextDoc, links: z.array(RecordRefDisplay) });
 /** A note with its body. */
 export type Note = z.infer<typeof Note>;
 
@@ -127,6 +131,30 @@ export const NoteCursor = z.strictObject({ updatedAt: z.string().max(40), id: Uu
 /** Where a page of notes ends. */
 export type NoteCursor = z.infer<typeof NoteCursor>;
 
+/**
+ * Links records to a note, or unlinks them (migration 0136), only the records given: a link the writer can't see is
+ * never removed, and the note's own record never is. Linking a record needs `write` on its object.
+ */
+export const LinkNoteInput = WorkspaceScoped.extend({
+  noteId: Uuid,
+  addRecordIds: z
+    .array(Uuid)
+    .max(NOTE_RECORDS_MAX, `A note links at most ${String(NOTE_RECORDS_MAX)} records.`)
+    .optional(),
+  removeRecordIds: z
+    .array(Uuid)
+    .max(NOTE_RECORDS_MAX, `A note links at most ${String(NOTE_RECORDS_MAX)} records.`)
+    .optional(),
+  mutationId: Uuid,
+});
+/** Links records to a note, or unlinks them. */
+export type LinkNoteInput = z.infer<typeof LinkNoteInput>;
+
+/** What a link change answers: the note's other linked records the writer may see, in link order. */
+export const NoteLinks = z.object({ noteId: Uuid, links: z.array(RecordRefDisplay) });
+/** What a link change answers. */
+export type NoteLinks = z.infer<typeof NoteLinks>;
+
 /** Deleting or restoring one note. */
 export const NoteLifecycleInput = WorkspaceScoped.extend({ noteId: Uuid, mutationId: Uuid });
 /** Deleting or restoring one note. */
@@ -139,4 +167,5 @@ export const notesContract = {
   list: oc.input(ListNotesInput).output(NotePage),
   delete: oc.input(NoteLifecycleInput).output(z.object({ ok: z.literal(true) })),
   restore: oc.input(NoteLifecycleInput).output(NoteSummary),
+  link: oc.input(LinkNoteInput).output(NoteLinks),
 };

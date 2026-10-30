@@ -344,14 +344,15 @@ function kindRows(change: CappedChange): OutboxEvent[] {
     const recordIds = [...new Set(change.tasks.flatMap((task) => task.recordIds))].sort(byId);
     rows.push({ kind: 'tasks', ...NO_IDS, itemIds: taskIds, recordIds, coarse: false });
   }
-  // One `notes` row per object (a save is one note on one record, so one row), naming the notes and their records.
+  // One `notes` row per object, naming its records, and the notes only where the row's object is a note's own
+  // record's (a note's own record alone decides who may know of it, migration 0136).
   for (const objectId of [...new Set(change.notes.map((note) => note.objectId))].sort(byId)) {
     const ofObject = change.notes.filter((note) => note.objectId === objectId);
     rows.push({
       kind: 'notes',
       objectId,
       ...NO_IDS,
-      itemIds: [...new Set(ofObject.map((note) => note.noteId))].sort(byId),
+      itemIds: [...new Set(ofObject.flatMap((note) => (note.linked === true ? [] : [note.noteId])))].sort(byId),
       recordIds: [...new Set(ofObject.map((note) => note.recordId))].sort(byId),
       coarse: false,
     });

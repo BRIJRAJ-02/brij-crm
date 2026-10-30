@@ -2,20 +2,22 @@
 // saving notes (nothing stored until there is text, replays, the clash
 // notice, the 200 KB refusal), their outbox rows, a record's list and its
 // cursors, the timeline's note entries, access with injected rules, and
-// deleting, restoring and the record's trash.
+// deleting, restoring and the record's trash, and a note linked to several
+// records (migration 0136).
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDatabase, type Database } from '@crm/db';
 import type { AccessRules } from '../access/policy.ts';
 import { getActivity } from '../engine/activity.ts';
-import { deleteRecord, restoreRecord } from '../engine/deletion.ts';
+import { deleteRecord, purgeRecords, restoreRecord } from '../engine/deletion.ts';
 import { newId } from '../engine/ids.ts';
 import { outboxHook } from '../engine/outbox.ts';
 import { isInputError, isRefusal } from '../engine/refusals.ts';
 import { createRecord } from '../engine/records.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
+import { runWrite } from '../engine/write.ts';
 import { rescope, testScope } from '../testing.ts';
-import { deleteNote, getNote, listNotes, restoreNote, saveNote } from './notes.ts';
+import { deleteNote, getNote, linkNote, listNotes, restoreNote, saveNote } from './notes.ts';
 
 const { appUrl } = inject('testDatabase');
 let db: Database;
@@ -94,7 +96,23 @@ async function workspace() {
       },
     ],
   };
-  return { scope, ownerId: created.memberId, bea, companies, company, level, as, outbox, ownedCompany, ownCompanies };
+  const people = created.objects.people ?? '';
+  const person = async (firstName: string) =>
+    (await createRecord(scope, { objectId: people, values: { [ids['people.name'] ?? '']: { firstName } } })).recordId;
+  return {
+    scope,
+    ownerId: created.memberId,
+    bea,
+    companies,
+    company,
+    people,
+    person,
+    level,
+    as,
+    outbox,
+    ownedCompany,
+    ownCompanies,
+  };
 }
 
 async function refusalOf(call: Promise<unknown>) {
@@ -393,5 +411,124 @@ describe('the security review (spec 0019, milestones 3 and 4)', () => {
         field: 'content',
       },
     );
+  });
+});
+
+describe('a note on several records (migration 0136)', () => {
+  const hooks = () => [outboxHook()];
+
+  it('links a record: the note shows on its Notes tab and timeline, saves from its page, and unlinks', async () => {
+    const w = await workspace();
+    const acme = await w.company('Acme');
+    const globex = await w.company('Globex');
+    const id = newId();
+    await saveNote(w.scope, { id, recordId: acme, title: 'Renewal', content: doc('Both teams.') }, hooks());
+    const linked = await linkNote(w.scope, { noteId: id, addRecordIds: [globex] }, hooks());
+    expect(linked.links.map((link) => link.recordId)).toEqual([globex]);
+    // One notes row naming both records, sorted, for the object's viewers.
+    expect((await w.outbox()).at(-1)).toMatchObject({ item_ids: [id], record_ids: [acme, globex].sort() });
+    expect(await getNote(w.scope, { noteId: id })).toMatchObject({
+      recordId: acme,
+      record: { recordId: acme },
+      links: [{ recordId: globex }],
+    });
+    const onGlobex = await listNotes(w.scope, { recordId: globex });
+    expect(onGlobex.items.map((note) => note.id)).toEqual([id]);
+    expect(onGlobex.total).toEqual({ count: 1, atLeast: false });
+    expect((await listNotes(w.scope, { recordId: acme })).items.map((note) => note.id)).toEqual([id]);
+    // The workspace's Notes page lists it once, on its own record.
+    expect((await listNotes(w.scope, {})).items.filter((note) => note.id === id)).toHaveLength(1);
+    const timeline = (await getActivity(w.scope, { recordId: globex })).entries.filter((each) => each.kind === 'note');
+    expect(timeline).toMatchObject([{ itemId: id, title: 'Renewal' }]);
+    // Saved from the linked record's page: the same note, its own record kept.
+    const saved = await saveNote(w.scope, { id, recordId: globex, content: doc('Changed.'), baseVersion: 1 }, hooks());
+    expect(saved.note).toMatchObject({ id, recordId: acme, version: 2 });
+    // Linking again changes nothing, and its own record can't be unlinked.
+    const again = await linkNote(w.scope, { noteId: id, addRecordIds: [globex], removeRecordIds: [acme] });
+    expect(again.links).toHaveLength(1);
+    await linkNote(w.scope, { noteId: id, removeRecordIds: [globex] }, hooks());
+    expect((await listNotes(w.scope, { recordId: globex })).items).toEqual([]);
+    expect(await getNote(w.scope, { noteId: id })).toMatchObject({ links: [] });
+  });
+
+  it('follows the note’s own record for access, and each link’s for linking', async () => {
+    const w = await workspace();
+    const hidden = await w.ownedCompany('Hidden', w.ownerId);
+    const beas = await w.ownedCompany('Bea’s', w.bea);
+    const id = newId();
+    await saveNote(w.scope, { id, recordId: hidden, content: doc('Private.') });
+    await linkNote(w.scope, { noteId: id, addRecordIds: [beas] });
+    // Bea sees her company but not the note's own record: the note is absent everywhere for her.
+    const bea = w.as(w.ownCompanies);
+    expect((await listNotes(bea, { recordId: beas })).items).toEqual([]);
+    expect(await refusalOf(getNote(bea, { noteId: id }))).toMatchObject({ code: 'NOT_FOUND' });
+    const timeline = (await getActivity(bea, { recordId: beas })).entries.filter((each) => each.kind === 'note');
+    expect(timeline).toEqual([]);
+    expect(await refusalOf(linkNote(bea, { noteId: id, removeRecordIds: [beas] }))).toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    // Saved from Bea's company's page, the note she can't see answers as absent, never as linked or not.
+    expect(await refusalOf(saveNote(bea, { id, recordId: beas, content: doc('Mine now.') }))).toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    // A reader of companies may not link; nobody may link a record they can't see, or one that doesn't exist.
+    const own = newId();
+    await saveNote(w.scope, { id: own, recordId: beas, content: doc('Mine.') });
+    const reader = w.as(w.level('read'));
+    expect(await refusalOf(linkNote(reader, { noteId: own, addRecordIds: [hidden] }))).toMatchObject({
+      code: 'FORBIDDEN',
+    });
+    expect(await refusalOf(linkNote(bea, { noteId: own, addRecordIds: [hidden] }))).toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    expect(await refusalOf(linkNote(w.scope, { noteId: own, addRecordIds: [newId()] }))).toMatchObject({
+      code: 'NOT_FOUND',
+    });
+  });
+
+  it('names the note only on its own record’s object: a linked object’s row names the record alone', async () => {
+    const w = await workspace();
+    const acme = await w.company('Acme');
+    const ada = await w.person('Ada');
+    const id = newId();
+    await saveNote(w.scope, { id, recordId: acme, content: doc('Both.') }, hooks());
+    await linkNote(w.scope, { noteId: id, addRecordIds: [ada] }, hooks());
+    const rows = (await w.outbox()).slice(-2);
+    expect(rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ object_id: w.companies, item_ids: [id], record_ids: [acme] }),
+        expect.objectContaining({ object_id: w.people, item_ids: [], record_ids: [ada] }),
+      ]),
+    );
+  });
+
+  it('links at most 20 records, and a purged link leaves the note on its own record', async () => {
+    const w = await workspace();
+    const acme = await w.company('Acme');
+    const id = newId();
+    await saveNote(w.scope, { id, recordId: acme, content: doc('Many.') });
+    const others: string[] = [];
+    for (let at = 0; at < 19; at += 1) others.push(await w.company(`Co ${String(at)}`));
+    await linkNote(w.scope, { noteId: id, addRecordIds: others });
+    const extra = await w.company('One too many');
+    expect(await refusalOf(linkNote(w.scope, { noteId: id, addRecordIds: [extra] }))).toMatchObject({
+      code: 'LIMIT_REACHED',
+    });
+    const [gone] = others;
+    if (gone === undefined) throw new Error('No record to purge.');
+    await deleteRecord(w.scope, { recordId: gone });
+    await runWrite(w.scope, (context) => purgeRecords(context, { recordIds: [gone] }));
+    const note = await getNote(w.scope, { noteId: id });
+    expect(note.links).toHaveLength(18);
+    expect(note.links.map((link) => link.recordId)).not.toContain(gone);
+    // Its own record purged takes the note, and its other links, with it.
+    await deleteRecord(w.scope, { recordId: acme });
+    await runWrite(w.scope, (context) => purgeRecords(context, { recordIds: [acme] }));
+    const left = await db.withWorkspace(w.scope.workspaceId, (tx) =>
+      tx.execute<{ notes: number; links: number }>(
+        sql`select (select count(*)::int from notes) as notes, (select count(*)::int from note_records) as links`,
+      ),
+    );
+    expect(left.rows[0]).toEqual({ notes: 0, links: 0 });
   });
 });

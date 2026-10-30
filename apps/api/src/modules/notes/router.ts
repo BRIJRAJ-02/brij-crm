@@ -1,4 +1,4 @@
-import { deleteNote, getNote, listNotes, restoreNote, saveNote } from '@crm/core';
+import { deleteNote, getNote, linkNote, listNotes, restoreNote, saveNote } from '@crm/core';
 import { withInputFields } from '../../errors.ts';
 import { commitWrite } from '../../hooks.ts';
 import { member } from '../../orpc.ts';
@@ -46,4 +46,22 @@ export const notesRouter = member.notes.router({
       restoreNote(context.scope, { noteId: input.noteId }, hooks),
     ),
   ),
+  // A note's links (migration 0136): the service applies the note's own record's access and each link's.
+  link: member.notes.link.handler(async ({ context, input }) => {
+    try {
+      return await commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+        linkNote(
+          context.scope,
+          {
+            noteId: input.noteId,
+            ...(input.addRecordIds === undefined ? {} : { addRecordIds: input.addRecordIds }),
+            ...(input.removeRecordIds === undefined ? {} : { removeRecordIds: input.removeRecordIds }),
+          },
+          hooks,
+        ),
+      );
+    } catch (error) {
+      throw withInputFields(error, { LIMIT_REACHED: 'addRecordIds' });
+    }
+  }),
 });

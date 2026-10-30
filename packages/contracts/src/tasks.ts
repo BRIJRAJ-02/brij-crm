@@ -7,12 +7,13 @@ import { oc } from '@orpc/contract';
 import * as z from 'zod';
 import { ActorReferenceValue, DateValue, Timestamp } from './values/attribute-values.ts';
 import { RecordRefDisplay } from './values/options.ts';
-import { TASK_GET_MAX, TASK_PAGE_MAX, TASK_RECORDS_MAX, TASK_TITLE_MAX } from './task-limits.ts';
+import { TASK_DESCRIPTION_MAX, TASK_GET_MAX, TASK_PAGE_MAX, TASK_RECORDS_MAX, TASK_TITLE_MAX } from './task-limits.ts';
 import { WorkspaceScoped } from './workspaces.ts';
 import { Uuid, uuidV7 } from './values/ids.ts';
 
 export {
   TASK_COUNT_CAP,
+  TASK_DESCRIPTION_MAX,
   TASK_DUE_CAP,
   TASK_GET_MAX,
   TASK_PAGE,
@@ -43,6 +44,18 @@ export const TaskTitle = z
 /** A task's title. */
 export type TaskTitle = z.infer<typeof TaskTitle>;
 
+/** A task's description (migration 0136): plain text, its ends trimmed, at most 5,000 characters; '' clears it. */
+export const TaskDescription = z
+  .string()
+  .trim()
+  .max(
+    TASK_DESCRIPTION_MAX,
+    `A task description holds at most ${TASK_DESCRIPTION_MAX.toLocaleString('en')} characters.`,
+  )
+  .refine((text) => !text.includes('\u0000'), { error: NUL_REFUSED });
+/** A task's description. */
+export type TaskDescription = z.infer<typeof TaskDescription>;
+
 /** Record ids, each once, at most `TASK_RECORDS_MAX`. */
 const RecordIds = z
   .array(Uuid)
@@ -59,6 +72,8 @@ const RecordIds = z
 export const TaskView = z.object({
   id: Uuid,
   title: z.string(),
+  /** Plain text; '' when it has none. */
+  description: z.string(),
   isDone: z.boolean(),
   doneAt: Timestamp.optional(),
   doneBy: ActorReferenceValue.optional(),
@@ -83,6 +98,7 @@ export type TaskView = z.infer<typeof TaskView>;
 export const CreateTaskInput = WorkspaceScoped.extend({
   id: uuidV7('The task id must be a UUID v7.'),
   title: TaskTitle,
+  description: TaskDescription.optional(),
   dueOn: DateValue.optional(),
   assigneeMemberId: Uuid.optional(),
   recordIds: RecordIds.optional(),
@@ -99,6 +115,7 @@ export type CreateTaskInput = z.infer<typeof CreateTaskInput>;
 export const UpdateTaskInput = WorkspaceScoped.extend({
   taskId: Uuid,
   title: TaskTitle.optional(),
+  description: TaskDescription.optional(),
   dueOn: DateValue.nullable().optional(),
   assigneeMemberId: Uuid.nullable().optional(),
   isDone: z.boolean().optional(),

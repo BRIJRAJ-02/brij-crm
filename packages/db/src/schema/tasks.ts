@@ -1,5 +1,5 @@
 // Tasks (spec 0019, milestone 1): their own tables beside the records engine,
-// not records. A task has a title, a due date, a done state, one assignee and
+// not records. A task has a title, a description (migration 0136), a due date, a done state, one assignee and
 // 0 to 20 linked records (`task_records`). A link's foreign key to its record
 // has no `on delete` action, so a record removed for good while a task still
 // links it fails, unless the purge registry (spec 0022) deleted the links
@@ -35,6 +35,8 @@ export const tasks = pgTable(
     id: uuid('id').notNull(),
     /** 1 to 2,000 characters, trimmed at its ends by the service. */
     title: text('title').notNull(),
+    /** Plain text, at most 5,000 characters; '' for none (migration 0136). */
+    description: text('description').notNull().default(''),
     isDone: boolean('is_done').notNull().default(false),
     doneAt: timestamptz('done_at'),
     doneByType: doneBy.type,
@@ -62,6 +64,7 @@ export const tasks = pgTable(
       foreignColumns: [members.workspaceId, members.id],
     }),
     check('tasks_title', sql`char_length(${t.title}) between 1 and 2000`),
+    check('tasks_description', sql`char_length(${t.description}) <= 5000`),
     check('tasks_done', sql`${t.isDone} = (${t.doneAt} is not null)`),
     check('tasks_done_actor', sql`(${t.doneAt} is null) = (${t.doneByType} is null)`),
     check('tasks_deleted', sql`(${t.deletedAt} is null) = (${t.deletedByType} is null)`),

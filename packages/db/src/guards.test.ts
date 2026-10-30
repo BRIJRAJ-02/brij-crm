@@ -1374,6 +1374,23 @@ describe('isolation', () => {
     await expect(
       db.withWorkspace(a.workspaceId, (tx) => tx.execute(sql`delete from records where id = ${inA.recordId}`)),
     ).rejects.toMatchObject({ cause: { code: '23503', constraint: 'notes_record' } });
+    // A note's links (migration 0136): its own workspace's only, and never to another workspace's record.
+    await db.withWorkspace(a.workspaceId, (tx) =>
+      tx.execute(
+        sql`insert into note_records (workspace_id, note_id, record_id, position, created_by_type) values (${a.workspaceId}, ${inA.noteId}, ${inA.recordId}, 0, 'system')`,
+      ),
+    );
+    const linksFromB = await db.withWorkspace(b.workspaceId, (tx) =>
+      tx.execute<{ note_id: string }>(sql`select note_id from note_records`),
+    );
+    expect(linksFromB.rows).toEqual([]);
+    await expect(
+      db.withWorkspace(a.workspaceId, (tx) =>
+        tx.execute(
+          sql`insert into note_records (workspace_id, note_id, record_id, position, created_by_type) values (${a.workspaceId}, ${inA.noteId}, ${inB.recordId}, 1, 'system')`,
+        ),
+      ),
+    ).rejects.toMatchObject({ cause: { code: '23503', constraint: 'note_records_record' } });
   });
 
   it("reads none of another workspace's comments or notifications, and refuses either on its record (spec 0038, AC-1182)", async () => {

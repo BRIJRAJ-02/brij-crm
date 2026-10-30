@@ -15,6 +15,9 @@
 //    and records that point at nothing any more, 500 rows a batch.
 // 1e. `notifications` (spec 0038, AC-1175): notifications marked done more
 //    than 90 days ago, 500 a batch. Unread and read ones stay until done.
+// 1e2. `task_due` (migration 0136): each active assignee of an open task due on
+//    the job's day (UTC) gets one `task_due` notification, 500 tasks a batch by
+//    id; a second run of the day finds them notified and writes nothing.
 // 1f. `views` (spec 0047): booking page view rows past a year.
 // 1g. `profile_counts` (spec 0051, AC-5128): link page views and presses past
 //    a year, the person's rather than the workspace's, through a definer.
@@ -45,6 +48,7 @@ import { sql } from 'drizzle-orm';
 import * as z from 'zod';
 import { purgeBatch, type RemovedCounts } from '../../engine/deletion.ts';
 import { pruneNavRows } from '../../navigation/navigation.ts';
+import { notifyTasksDue } from '../../notifications/notify.ts';
 import { SPAM_FILES_KEPT_DAYS, UPLOAD_KEPT_HOURS } from '@crm/contracts';
 import { ensureLinkPage, publicProfilesOf } from '../../booking/handles.ts';
 import { RESTORE_WINDOW } from '../../engine/limits.ts';
@@ -75,6 +79,7 @@ const PHASES = [
   'emails',
   'nav',
   'notifications',
+  'task_due',
   'views',
   'profile_counts',
   'link_pages',
@@ -122,6 +127,8 @@ const Totals = z.object({
   sidebars: Count.default(0),
   // Added by spec 0038.
   notifications: Count.default(0),
+  /** Assignees told a task is due today (migration 0136); 0 in an older checkpoint. */
+  tasksDue: Count.default(0),
   // Added by spec 0047: booking page view rows past a year.
   views: Count.default(0),
   // Added by spec 0051: link page view and press rows past a year.
@@ -157,6 +164,7 @@ const NO_TOTALS: Totals = {
   emails: 0,
   sidebars: 0,
   notifications: 0,
+  tasksDue: 0,
   views: 0,
   profileCounts: 0,
   linkPages: 0,
@@ -221,6 +229,7 @@ const plus = (totals: Totals, more: Partial<Totals>): Totals => ({
   emails: totals.emails + (more.emails ?? 0),
   sidebars: totals.sidebars + (more.sidebars ?? 0),
   notifications: totals.notifications + (more.notifications ?? 0),
+  tasksDue: totals.tasksDue + (more.tasksDue ?? 0),
   views: totals.views + (more.views ?? 0),
   profileCounts: totals.profileCounts + (more.profileCounts ?? 0),
   linkPages: totals.linkPages + (more.linkPages ?? 0),
@@ -327,6 +336,19 @@ async function oldNotifications(context: WriteContext, at: Checkpoint, limit: nu
   const count = removed.rowCount ?? 0;
   const totals = plus(at.totals, { notifications: count });
   return outcome(count >= limit ? { ...at, totals } : nextPhase(at, totals), at, totals, count);
+}
+
+/**
+ * Phase 1e2 (migration 0136): the open tasks due on the job's day, `limit` a
+ * batch by id, each active assignee told once (`notifyTasksDue`). Their
+ * inboxes hear of it through the write's `notifications` outbox row.
+ */
+async function tasksDue(context: WriteContext, at: Checkpoint, day: string, limit: number): Promise<StepOutcome> {
+  const batch = await notifyTasksDue(context, { day, ...(at.after === undefined ? {} : { after: at.after }), limit });
+  const totals = plus(at.totals, { tasksDue: batch.notified });
+  const next =
+    batch.picked === limit && batch.last !== undefined ? { ...at, totals, after: batch.last } : nextPhase(at, totals);
+  return outcome(next, at, totals, batch.notified);
 }
 
 /**
@@ -769,6 +791,8 @@ export function maintenanceDaily(queue?: QueueRows, uploads?: UploadStore): Kind
           return navRows(context, at, limit);
         case 'notifications':
           return oldNotifications(context, at, limit);
+        case 'task_due':
+          return tasksDue(context, at, job.params.day, limit);
         case 'views':
           return oldPageViews(context, at, limit);
         case 'profile_counts':

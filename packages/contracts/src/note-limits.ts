@@ -11,6 +11,9 @@ export const NOTE_CONTENT_MAX_BYTES = 200 * 1024;
 /** The longest plain text copy of a note the server keeps, in characters. */
 export const NOTE_TEXT_MAX = 100_000;
 
+/** The most records one note links, its own record included (migration 0136). */
+export const NOTE_RECORDS_MAX = 20;
+
 /** A page of notes when the caller names no limit. */
 export const NOTE_PAGE = 20;
 

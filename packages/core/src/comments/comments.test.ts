@@ -4,12 +4,13 @@
 // make (mentions, replies, never yourself, edits that add or remove a
 // mention), the inbox (list, count, marks, settings), access (a record the
 // reader can't see hides its comments and their notifications, which come
-// back with access), task assignments, the purge and a removed member.
+// back with access), task assignments, the purge and a removed member, and
+// (migration 0136) tasks due today and a task's description.
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { mentionToken } from '@crm/contracts';
 import { createDatabase, type Database } from '@crm/db';
-import { NO_RULE_SOURCE } from '../access/door.ts';
+import { NO_RULE_SOURCE, systemScope } from '../access/door.ts';
 import type { AccessRules } from '../access/policy.ts';
 import { deleteRecord, purgeRecords, restoreRecord } from '../engine/deletion.ts';
 import { newId } from '../engine/ids.ts';
@@ -31,7 +32,8 @@ import {
 } from '../notifications/inbox.ts';
 import { deleteNote, saveNote } from '../notes/notes.ts';
 import { prepareNotificationEmail } from '../notifications/email.ts';
-import { createTask, updateTask } from '../tasks/tasks.ts';
+import { notifyTasksDue } from '../notifications/notify.ts';
+import { createTask, deleteTask, updateTask } from '../tasks/tasks.ts';
 import { rescope, testScope } from '../testing.ts';
 import {
   commentVersions,
@@ -703,5 +705,79 @@ describe('mentions in notes (spec 0038 with spec 0019)', () => {
     await deleteNote(w.scope, { noteId }, hooks());
     expect((await listNotifications(w.as(w.cal), { status: 'inbox' })).items).toEqual([]);
     expect(await w.outbox('notifications')).not.toHaveLength(0);
+  });
+});
+
+describe('tasks due today (migration 0136)', () => {
+  /** The cleanup's day: today, in UTC, as the cron names it. */
+  const today = () => new Date().toISOString().slice(0, 10);
+  const tomorrow = () => new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
+
+  it('turns the assignee’s notice into the due one once on the due day, only for open, live tasks', async () => {
+    const w = await workspace();
+    const day = today();
+    const due = newId();
+    await createTask(w.scope, { id: due, title: 'Send the quote', dueOn: day, assigneeMemberId: w.bea }, hooks());
+    await createTask(w.scope, { id: newId(), title: 'Tomorrow', dueOn: tomorrow(), assigneeMemberId: w.bea });
+    await createTask(w.scope, { id: newId(), title: 'Unassigned', dueOn: day });
+    const done = newId();
+    await createTask(w.scope, { id: done, title: 'Done already', dueOn: day, assigneeMemberId: w.cal });
+    await updateTask(w.scope, { taskId: done, isDone: true });
+    const deleted = newId();
+    await createTask(w.scope, { id: deleted, title: 'Deleted', dueOn: day, assigneeMemberId: w.cal });
+    await deleteTask(w.scope, { taskId: deleted });
+    const system = systemScope(db, w.scope.workspaceId);
+    const first = await runWrite(system, (context) => notifyTasksDue(context, { day, limit: 500 }), hooks());
+    expect(first.result).toMatchObject({ picked: 1, notified: 1 });
+    // Bea holds one notice for the task: her assignment, turned into the due day, unread at the top again.
+    expect((await w.notifications()).filter((row) => row.task_id === due).map((row) => row.kind)).toEqual(['task_due']);
+    const [top] = (await listNotifications(w.as(w.bea), { status: 'inbox', kind: 'task_due' })).items;
+    expect(top).toMatchObject({ kind: 'task_due', taskId: due, excerpt: 'Send the quote', actor: { type: 'system' } });
+    expect((await w.outbox('notifications')).length).toBeGreaterThan(0);
+    // The same day again (a retry, a second run) writes nothing.
+    const again = await runWrite(system, (context) => notifyTasksDue(context, { day, limit: 500 }));
+    expect(again.result).toMatchObject({ picked: 1, notified: 0 });
+    // A reassignment takes the earlier assignee's unread notice with it, and the new one hears of the assignment.
+    await updateTask(w.scope, { taskId: due, assigneeMemberId: w.cal }, hooks());
+    const after = (await w.notifications()).filter((row) => row.task_id === due);
+    expect(after.map((row) => [row.member_id, row.kind])).toEqual([[w.cal, 'task_assigned']]);
+  });
+
+  it('pages by task id, so a day of many tasks goes in batches', async () => {
+    const w = await workspace();
+    const day = today();
+    const ids: string[] = [];
+    for (let at = 0; at < 3; at += 1) {
+      const id = newId();
+      ids.push(id);
+      await createTask(w.scope, { id, title: `Task ${String(at)}`, dueOn: day, assigneeMemberId: w.bea });
+    }
+    const system = systemScope(db, w.scope.workspaceId);
+    const one = await runWrite(system, (context) => notifyTasksDue(context, { day, limit: 2 }));
+    expect(one.result).toMatchObject({ picked: 2, notified: 1, last: [...ids].sort()[1] });
+    const two = await runWrite(system, (context) =>
+      notifyTasksDue(context, { day, limit: 2, ...(one.result.last === undefined ? {} : { after: one.result.last }) }),
+    );
+    expect(two.result).toMatchObject({ picked: 1, notified: 1 });
+    const kinds = (await w.notifications()).filter((row) => row.kind === 'task_due');
+    expect(kinds.map((row) => row.task_id).sort()).toEqual([...ids].sort());
+  });
+});
+
+describe('a task’s description (migration 0136)', () => {
+  it('is stored trimmed, read back on the task, changed or cleared, and refused past 5,000 characters', async () => {
+    const w = await workspace();
+    const id = newId();
+    const made = await createTask(w.scope, { id, title: 'Call Acme', description: '  Ask about seats.  ' });
+    expect(made.description).toBe('Ask about seats.');
+    const changed = await updateTask(w.scope, { taskId: id, description: 'Ask about seats and the price.' });
+    expect(changed.description).toBe('Ask about seats and the price.');
+    expect((await updateTask(w.scope, { taskId: id, description: '' })).description).toBe('');
+    expect(await refusalOf(updateTask(w.scope, { taskId: id, description: 'x'.repeat(5_001) }))).toMatchObject({
+      code: 'INPUT_INVALID',
+      field: 'description',
+    });
+    const plain = await createTask(w.scope, { id: newId(), title: 'No words' });
+    expect(plain.description).toBe('');
   });
 });

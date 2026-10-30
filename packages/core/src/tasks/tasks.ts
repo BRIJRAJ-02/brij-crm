@@ -12,6 +12,7 @@
 import { sql, type SQL } from 'drizzle-orm';
 import {
   TASK_COUNT_CAP,
+  TASK_DESCRIPTION_MAX,
   TASK_DUE_CAP,
   TASK_GET_MAX,
   TASK_PAGE,
@@ -60,6 +61,8 @@ export interface CreateTaskInput {
   /** A UUID v7 the browser minted: the retry key. */
   readonly id: string;
   readonly title: string;
+  /** Plain text; absent or '' for none. */
+  readonly description?: string;
   readonly dueOn?: string;
   /** Absent: unassigned. */
   readonly assigneeMemberId?: string;
@@ -70,6 +73,8 @@ export interface CreateTaskInput {
 export interface UpdateTaskInput {
   readonly taskId: string;
   readonly title?: string;
+  /** '' clears it. */
+  readonly description?: string;
   readonly dueOn?: string | null;
   readonly assigneeMemberId?: string | null;
   readonly isDone?: boolean;
@@ -116,6 +121,7 @@ function memberOf(access: Access): string | undefined {
 interface TaskRow extends Record<string, unknown> {
   readonly id: string;
   readonly title: string;
+  readonly description: string;
   readonly is_done: boolean;
   readonly done_at: string | null;
   readonly done_by_type: Actor['type'] | null;
@@ -132,7 +138,7 @@ interface TaskRow extends Record<string, unknown> {
   readonly links_purged: boolean;
 }
 
-const TASK_COLUMNS = sql`t.id::text as id, t.title, t.is_done, ${millis('t.done_at')} as done_at, t.done_by_type,
+const TASK_COLUMNS = sql`t.id::text as id, t.title, t.description, t.is_done, ${millis('t.done_at')} as done_at, t.done_by_type,
   t.done_by_id::text as done_by_id, t.due_on::text as due_on, t.assignee_member_id::text as assignee_member_id,
   ${millis('t.created_at')} as created_at, t.created_by_type, t.created_by_id::text as created_by_id,
   ${millis('t.updated_at')} as updated_at, t.links_purged,
@@ -248,6 +254,7 @@ function viewOf(
   return {
     id: row.id,
     title: row.title,
+    description: row.description,
     isDone: row.is_done,
     ...(row.done_at === null || row.done_by_type === null
       ? {}
@@ -301,6 +308,22 @@ function checkTitle(title: string): string {
   return trimmed;
 }
 
+/** A description trimmed at its ends ('' for none), refused on `description` past 5,000 characters. */
+function checkDescription(description: string): string {
+  const trimmed = description.trim();
+  // NUL can't be stored: refused as input (400), never a database error (500).
+  if (trimmed.includes('\u0000')) {
+    throw inputInvalid('description', 'This text holds a character that can’t be stored.');
+  }
+  if (trimmed.length > TASK_DESCRIPTION_MAX) {
+    throw inputInvalid(
+      'description',
+      `A task description holds at most ${TASK_DESCRIPTION_MAX.toLocaleString('en')} characters.`,
+    );
+  }
+  return trimmed;
+}
+
 /** A due date as `YYYY-MM-DD`, refused on `dueOn` otherwise. */
 function checkDueOn(dueOn: string): string {
   const parsed = DateValue.safeParse(dueOn);
@@ -332,8 +355,13 @@ async function checkAssignee(context: WriteContext, memberId: string): Promise<s
  * to the writer, else `NOT_FOUND`; each on an object the writer may change,
  * else `FORBIDDEN`. Locks each `for key share`, which blocks only its purge
  * (a trash goes ahead, and the read rules then hide the link), never an edit.
+ * A note's links (migration 0136) pass the same check, with their own words.
  */
-async function checkLinkable(context: WriteContext, recordIds: readonly string[]): Promise<void> {
+export async function checkLinkable(
+  context: WriteContext,
+  recordIds: readonly string[],
+  forbidden: string = LINK_FORBIDDEN,
+): Promise<void> {
   if (recordIds.length === 0) return;
   const { tx, scope } = context;
   const rows = await tx.execute<{ id: string; object_id: string }>(sql`
@@ -352,7 +380,7 @@ async function checkLinkable(context: WriteContext, recordIds: readonly string[]
   );
   if (seen.size < rows.rows.length) throw refuse('NOT_FOUND', UNKNOWN_RECORD);
   if (rows.rows.some((row) => objectLevel(scope.access, row.object_id) !== 'write')) {
-    throw refuse('FORBIDDEN', LINK_FORBIDDEN);
+    throw refuse('FORBIDDEN', forbidden);
   }
 }
 
@@ -385,6 +413,7 @@ export async function createTask(
   if (!isUuidV7(input.id)) throw inputInvalid('id', 'The task id must be a UUID v7.');
   const id = canonicalId(input.id);
   const title = checkTitle(input.title);
+  const description = input.description === undefined ? '' : checkDescription(input.description);
   const dueOn = input.dueOn === undefined ? undefined : checkDueOn(input.dueOn);
   const recordIds = checkRecordIds(input.recordIds);
   if (recordIds.length > TASK_RECORDS_MAX) throw refuse('LIMIT_REACHED', LINKS_FULL);
@@ -399,9 +428,9 @@ export async function createTask(
       const actor = scope.actor;
       const memberId = actor.type === 'member' ? actor.id : null;
       const inserted = await tx.execute(sql`
-        insert into tasks (workspace_id, id, title, due_on, assignee_member_id,
+        insert into tasks (workspace_id, id, title, description, due_on, assignee_member_id,
           created_by_type, created_by_id, created_by_member_id, updated_by_type, updated_by_id, updated_by_member_id)
-        values (${scope.workspaceId}::uuid, ${id}::uuid, ${title}, ${dueOn ?? null}::date, ${assignee ?? null}::uuid,
+        values (${scope.workspaceId}::uuid, ${id}::uuid, ${title}, ${description}, ${dueOn ?? null}::date, ${assignee ?? null}::uuid,
           ${actor.type}, ${actor.id}::uuid, ${memberId}::uuid, ${actor.type}, ${actor.id}::uuid, ${memberId}::uuid)
         on conflict (workspace_id, id) do nothing
       `);
@@ -456,6 +485,7 @@ export async function updateTask(
   if (!principalReaches(scope.access, 'write')) throw refuse('FORBIDDEN', NOT_FOR_KEYS);
   const taskId = checkId(input.taskId, UNKNOWN_TASK);
   const title = input.title === undefined ? undefined : checkTitle(input.title);
+  const description = input.description === undefined ? undefined : checkDescription(input.description);
   const dueOn = input.dueOn === undefined || input.dueOn === null ? input.dueOn : checkDueOn(input.dueOn);
   const adding = checkRecordIds(input.addRecordIds);
   const removing = checkRecordIds(input.removeRecordIds);
@@ -471,6 +501,9 @@ export async function updateTask(
 
       const sets: SQL[] = [];
       if (title !== undefined && title !== row.title) sets.push(sql`title = ${title}`);
+      if (description !== undefined && description !== row.description) {
+        sets.push(sql`description = ${description}`);
+      }
       if (dueOn !== undefined && dueOn !== row.due_on) sets.push(sql`due_on = ${dueOn}::date`);
       if (input.assigneeMemberId !== undefined) {
         const assignee = input.assigneeMemberId === null ? null : await checkAssignee(context, input.assigneeMemberId);
