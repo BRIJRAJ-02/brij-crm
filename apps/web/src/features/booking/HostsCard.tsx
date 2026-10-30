@@ -170,6 +170,7 @@ export function HostsCard({
         {!isEveryone && (
           <>
             <Select
+              savesOnPick
               label={strings.addFixed}
               hint={
                 isFull
@@ -244,6 +245,7 @@ export function HostsCard({
             {linked.map((rotationId, index) => (
               <SettingsStack key={rotationId}>
                 <Select
+                  savesOnPick
                   label={linked.length === 1 ? strings.rotation : strings.rotationAt(index)}
                   items={rotationItems(rotationId)}
                   value={rotationId}
@@ -270,6 +272,7 @@ export function HostsCard({
             ))}
             {linked.length < LIMITS.rotations && (
               <Select
+                savesOnPick
                 label={linked.length === 0 ? strings.rotation : strings.addRotation}
                 hint={isFull ? strings.hostsFull(LIMITS.hosts) : strings.rotationsHint}
                 placeholder={strings.pickRotation}

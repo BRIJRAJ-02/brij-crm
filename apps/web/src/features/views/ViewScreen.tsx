@@ -957,6 +957,7 @@ export function ViewScreen(props: ViewScreenProps) {
                 // A board's column total (the CRM flow pass): the sum of one currency field in each column header.
                 header: (
                   <Select
+                    savesOnPick
                     label={strings.showTotalOf}
                     size="sm"
                     items={totalChoices}
@@ -975,6 +976,7 @@ export function ViewScreen(props: ViewScreenProps) {
             ? {
                 header: (
                   <Select
+                    savesOnPick
                     label={strings.groupBy}
                     size="sm"
                     items={groupChoices}

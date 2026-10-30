@@ -71,6 +71,12 @@ export interface SelectProps {
   /** Called with the chosen id, or `null` when cleared. */
   readonly onChange?: (id: string | null) => void;
   /**
+   * The caller saves each change at once (a setting saved as it is picked): the value changes only by a choice in
+   * the open list, so the closed trigger's left and right arrows and a typed letter change nothing. One stray key
+   * on a focused trigger renamed every record of an object.
+   */
+  readonly savesOnPick?: boolean;
+  /**
    * `multiple` lets several options be chosen ("Country is any of Germany or France"): each chosen option is
    * checked, the list stays open while choosing, and the closed field names them all, in the list's order. `values`
    * and `onValuesChange` take the place of `value` and `onChange`; Clear and Create are for one choice only.
@@ -262,6 +268,7 @@ export function Select({
   value,
   defaultValue,
   onChange,
+  savesOnPick = false,
   selectionMode = 'single',
   values,
   onValuesChange,
@@ -497,8 +504,9 @@ export function Select({
           return;
         }
         // The closed trigger's typeahead tests the key the open list last rested on without asking whether it is
-        // disabled, so a disabled option (or Clear and Create, while closed) is refused here too.
-        if (next !== null && disabledKeys.includes(String(next))) return;
+        // disabled, so a disabled option (or Clear and Create, while closed) is refused here too; `savesOnPick`
+        // refuses every change while closed.
+        if ((next !== null && disabledKeys.includes(String(next))) || (savesOnPick && !isOpen)) return;
         if (next === CREATE) {
           if (canCreate) onCreate(typed);
           return;

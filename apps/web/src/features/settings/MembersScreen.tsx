@@ -357,6 +357,7 @@ export function MembersScreen({
         if (options.length === 0) return labelOf(role);
         return (
           <Select
+            savesOnPick
             label={strings.roleFor(member.name)}
             isLabelHidden
             // The role reads as text with its chevron, like the rows that can't change it, rather than a column of boxes.
