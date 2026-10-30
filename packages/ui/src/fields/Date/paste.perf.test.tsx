@@ -2,6 +2,9 @@
 // read through `dateType.fromText` in under 100 ms, the median of 3 runs after
 // a warm up. Each run reads today once, as the grid's paste does, so the cost
 // is the parser's alone. It logs its numbers, so the budget can be tuned.
+// It runs in the `perf` project (Chromium, one file at a time, as a paste runs in
+// the browser), not `unit`: beside the Node suite's parallel workers on a CI
+// machine its median swung from 46 to 106 ms with no change to the parser.
 import { describe, expect, it } from 'vitest';
 import { FIELD_SAMPLES } from '../../workbench/field-samples.ts';
 import type { TextContext } from '../types.ts';
