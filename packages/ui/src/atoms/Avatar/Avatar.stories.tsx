@@ -88,6 +88,39 @@ export const Picture: Story = {
   args: { src: PICTURE },
 };
 
+/** Bytes no browser can draw: a picture that fails as a company's logo does when its site has none (spec 0059). */
+const BROKEN_PICTURE = 'data:image/png;base64,AAAA';
+
+/**
+ * A picture that fails, as a company's logo does when its site has no icon (the logo route's 404, spec 0059
+ * AC-5901), beside the same avatar with no picture: the initials show in a tile of the same size, with no broken
+ * image. Not screenshotted: it looks exactly as the initials do in `Sizes`.
+ */
+export const FailedPicture: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage>
+      <Avatar name="Northwind" id="company_1" shape="square" size="sm" src={BROKEN_PICTURE} />
+      <Avatar name="Northwind" id="company_1" shape="square" size="sm" />
+      <Avatar name="Northwind Traders" id="company_1" shape="square" size="title" src={BROKEN_PICTURE} />
+      <Avatar name="Northwind Traders" id="company_1" shape="square" size="title" />
+    </Stage>
+  ),
+  play: async ({ canvas, canvasElement }) => {
+    await waitFor(() => {
+      if (canvasElement.querySelector('img') !== null) throw new Error('A picture is still showing.');
+    });
+    const avatars = canvas.getAllByRole('img');
+    await expect(avatars.map((avatar) => avatar.textContent)).toEqual(['N', 'N', 'NT', 'NT']);
+    const sizes = avatars.map((avatar) => {
+      const box = avatar.getBoundingClientRect();
+      return [box.width, box.height];
+    });
+    await expect(sizes[0]).toEqual(sizes[1]);
+    await expect(sizes[2]).toEqual(sizes[3]);
+  },
+};
+
 /**
  * The big sizes with a picture: it fades in over the initials once loaded, or shows at once when the browser
  * already holds it. Either way the initials go once it has loaded.
