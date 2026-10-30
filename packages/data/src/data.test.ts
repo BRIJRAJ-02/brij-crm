@@ -739,6 +739,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       listAll: os.bookings.listAll.handler(notServed),
       meetings: os.bookings.meetings.handler(notServed),
       calendar: os.bookings.calendar.handler(() => behaviour.bookingsCalendar()),
+      teamDay: os.bookings.teamDay.handler(notServed),
       hours: os.bookings.hours.handler(notServed),
       setHours: os.bookings.setHours.handler(notServed),
       bookAsHost: os.bookings.bookAsHost.handler(notServed),

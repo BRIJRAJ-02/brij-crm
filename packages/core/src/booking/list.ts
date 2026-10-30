@@ -355,6 +355,135 @@ interface EventRow extends Record<string, unknown> {
 const iso = (value: Date | string) => new Date(value).toISOString();
 
 /**
+ * The bookings `ids` names that `reader` may see (everyone's in their reach: `hosts: 'all'`), as Bookings shows them:
+ * See only ones masked, Host away where the reader may see it (the Team day's one read of its bookings, spec 0030).
+ */
+export async function bookingItemsOf(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  reader: BookingReader,
+  ids: readonly string[],
+): Promise<readonly BookingListItem[]> {
+  if (ids.length === 0) return [];
+  const rows = await tx
+    .select({
+      booking: bookings,
+      pageTitle: bookingPages.title,
+      pageOwner: pageManagerColumn,
+      location: bookingPages.location,
+      hostStatus: members.status,
+      hostName: members.name,
+      hostAway: hostAwayColumn,
+    })
+    .from(bookings)
+    .innerJoin(bookingPages, eq(bookingPages.id, bookings.pageId))
+    .leftJoin(members, and(eq(members.workspaceId, bookings.workspaceId), eq(members.id, bookings.hostMemberId)))
+    .where(and(sql`${bookings.id} = any(${uuidList(ids)})`, visibleTo(reader, 'all')))
+    .orderBy(asc(bookings.startsAt), asc(bookings.id));
+  const seen = await seenLinks(
+    tx,
+    scope.access,
+    rows.map(({ booking }) => booking),
+  );
+  const linked = await linkedRecords(
+    tx,
+    scope.access,
+    rows.map(({ booking }) => booking),
+  );
+  const answers = await shownAnswers(
+    tx,
+    scope.access,
+    rows.map(({ booking }) => booking.answers),
+  );
+  const seeOnly = await seeOnlyOf(tx, reader, rows);
+  return rows.map((row) => itemOf(row, seen, linked, answers, seeOnly, awayShownTo(reader)));
+}
+
+/**
+ * The reader's own calendar events overlapping [from, to) from the calendars they show on their week, leaving out
+ * those a booking made and a booking's own event synced back (the booking shows instead), and their own Busy times
+ * there (time with nobody else invited). Only ever the reader's own: never another member's calendar.
+ */
+export async function ownCalendarTime(
+  tx: WorkspaceTx,
+  member: string,
+  from: Date,
+  to: Date,
+): Promise<{
+  readonly events: readonly CalendarEventItem[];
+  readonly busy: readonly {
+    readonly connectionId: string;
+    readonly calendarId: string;
+    readonly startsAt: string;
+    readonly endsAt: string;
+  }[];
+}> {
+  const found = (
+    await tx.execute<EventRow>(sql`
+      select distinct on (m.id) m.id::text as id, s.connection_id::text as connection_id,
+        k.id::text as calendar_id, m.title, m.starts_at, m.ends_at, m.all_day, m.status, m.location,
+        m.video_url
+      from meetings m
+      join meeting_sources s on s.workspace_id = m.workspace_id and s.meeting_id = m.id
+      join calendar_connections c on c.workspace_id = s.workspace_id and c.id = s.connection_id
+      join calendar_calendars k on k.workspace_id = s.workspace_id and k.connection_id = s.connection_id
+        and k.provider_calendar_id = s.calendar_id and k.show_in_week
+      where c.member_id = ${member}::uuid
+        and m.starts_at < ${to.toISOString()}::timestamptz and m.ends_at > ${from.toISOString()}::timestamptz
+        and m.status <> 'cancelled' and ${shownAsEvent()}
+        -- A booking's own event, synced back from the calendar it was written to: the same host, start and
+        -- end, and the booking's video link or its visitor among the attendees. The booking shows instead.
+        and not exists (
+          select 1 from bookings b
+          where b.workspace_id = m.workspace_id and b.host_member_id = c.member_id
+            and b.status = 'confirmed' and b.starts_at = m.starts_at and b.ends_at = m.ends_at
+            and (
+              (b.video_url is not null and b.video_url = m.video_url)
+              or exists (
+                select 1 from meeting_attendees a
+                where a.workspace_id = m.workspace_id and a.meeting_id = m.id and a.email = b.visitor_email
+              )
+            )
+        )
+      order by m.id, c.created_at, k.is_primary desc, k.name
+      limit ${CALENDAR_EVENTS_MAX}
+    `)
+  ).rows;
+  const events = found
+    .map((row): CalendarEventItem => ({
+      id: row.id,
+      connectionId: row.connection_id,
+      calendarId: row.calendar_id,
+      title: row.title,
+      startsAt: iso(row.starts_at),
+      endsAt: iso(row.ends_at),
+      allDay: row.all_day,
+      status: row.status,
+      ...(row.location === null ? {} : { location: row.location }),
+      ...(row.video_url === null ? {} : { videoUrl: row.video_url }),
+    }))
+    .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+  const busy = (
+    await tx.execute<{ connection_id: string; calendar_id: string; starts_at: string; ends_at: string }>(sql`
+      select distinct b.connection_id::text as connection_id, k.id::text as calendar_id, b.starts_at, b.ends_at
+      from calendar_calendars k
+      join calendar_busy_times b on b.workspace_id = k.workspace_id and b.connection_id = k.connection_id
+        and b.calendar_id = k.provider_calendar_id
+      where k.member_id = ${member}::uuid and k.show_in_week
+        and b.ends_at > ${from.toISOString()}::timestamptz and b.starts_at < ${to.toISOString()}::timestamptz
+      order by b.starts_at, b.ends_at, connection_id, calendar_id
+      limit ${CALENDAR_EVENTS_MAX}
+    `)
+  ).rows.map((row) => ({
+    connectionId: row.connection_id,
+    calendarId: row.calendar_id,
+    startsAt: iso(row.starts_at),
+    endsAt: iso(row.ends_at),
+  }));
+  return { events, busy };
+}
+
+/**
  * Bookings' week (the calendar view): every booking the reader may see that
  * overlaps [from, to), cancelled ones too, and the reader's own calendar
  * events in it from their connected calendars (spec 0024's meetings held by
@@ -390,76 +519,10 @@ export async function readBookingsCalendar(
       .orderBy(asc(bookings.startsAt), asc(bookings.id))
       .limit(BOOKINGS_LIST_MAX);
     const member = reader.member;
-    const found =
-      member === undefined
-        ? []
-        : (
-            await tx.execute<EventRow>(sql`
-              select distinct on (m.id) m.id::text as id, s.connection_id::text as connection_id,
-                k.id::text as calendar_id, m.title, m.starts_at, m.ends_at, m.all_day, m.status, m.location,
-                m.video_url
-              from meetings m
-              join meeting_sources s on s.workspace_id = m.workspace_id and s.meeting_id = m.id
-              join calendar_connections c on c.workspace_id = s.workspace_id and c.id = s.connection_id
-              join calendar_calendars k on k.workspace_id = s.workspace_id and k.connection_id = s.connection_id
-                and k.provider_calendar_id = s.calendar_id and k.show_in_week
-              where c.member_id = ${member}::uuid
-                and m.starts_at < ${to.toISOString()}::timestamptz and m.ends_at > ${from.toISOString()}::timestamptz
-                and m.status <> 'cancelled' and ${shownAsEvent()}
-                -- A booking's own event, synced back from the calendar it was written to: the same host, start and
-                -- end, and the booking's video link or its visitor among the attendees. The booking shows instead.
-                and not exists (
-                  select 1 from bookings b
-                  where b.workspace_id = m.workspace_id and b.host_member_id = c.member_id
-                    and b.status = 'confirmed' and b.starts_at = m.starts_at and b.ends_at = m.ends_at
-                    and (
-                      (b.video_url is not null and b.video_url = m.video_url)
-                      or exists (
-                        select 1 from meeting_attendees a
-                        where a.workspace_id = m.workspace_id and a.meeting_id = m.id and a.email = b.visitor_email
-                      )
-                    )
-                )
-              order by m.id, c.created_at, k.is_primary desc, k.name
-              limit ${CALENDAR_EVENTS_MAX}
-            `)
-          ).rows;
-    const events = found
-      .map((row): CalendarEventItem => ({
-        id: row.id,
-        connectionId: row.connection_id,
-        calendarId: row.calendar_id,
-        title: row.title,
-        startsAt: iso(row.starts_at),
-        endsAt: iso(row.ends_at),
-        allDay: row.all_day,
-        status: row.status,
-        ...(row.location === null ? {} : { location: row.location }),
-        ...(row.video_url === null ? {} : { videoUrl: row.video_url }),
-      }))
-      .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
-    // The reader's own time with nobody else invited, as Busy (the owner's call, 20 October 2026): never anyone else's.
-    const busy =
-      member === undefined
-        ? []
-        : (
-            await tx.execute<{ connection_id: string; calendar_id: string; starts_at: string; ends_at: string }>(sql`
-              select distinct b.connection_id::text as connection_id, k.id::text as calendar_id, b.starts_at,
-                b.ends_at
-              from calendar_calendars k
-              join calendar_busy_times b on b.workspace_id = k.workspace_id and b.connection_id = k.connection_id
-                and b.calendar_id = k.provider_calendar_id
-              where k.member_id = ${member}::uuid and k.show_in_week
-                and b.ends_at > ${from.toISOString()}::timestamptz and b.starts_at < ${to.toISOString()}::timestamptz
-              order by b.starts_at, b.ends_at, connection_id, calendar_id
-              limit ${CALENDAR_EVENTS_MAX}
-            `)
-          ).rows.map((row) => ({
-            connectionId: row.connection_id,
-            calendarId: row.calendar_id,
-            startsAt: iso(row.starts_at),
-            endsAt: iso(row.ends_at),
-          }));
+    // The reader's own events, and their own time with nobody else invited as Busy (the owner's call, 20 October
+    // 2026): never anyone else's.
+    const { events, busy } =
+      member === undefined ? { events: [], busy: [] } : await ownCalendarTime(tx, member, from, to);
     // The reader's own closed time only (AC-712): another member's blocks never show, whatever the reader may see.
     const blocks = member === undefined ? [] : await blockOccurrences(tx, member, from, to);
     const seen = await seenLinks(
@@ -480,8 +543,8 @@ export async function readBookingsCalendar(
     const seeOnly = await seeOnlyOf(tx, reader, rows);
     return {
       bookings: rows.map((row) => itemOf(row, seen, linked, answers, seeOnly, awayShownTo(reader))),
-      events,
-      busy,
+      events: [...events],
+      busy: [...busy],
       blocks: [...blocks],
     };
   });

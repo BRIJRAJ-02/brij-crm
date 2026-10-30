@@ -11,7 +11,14 @@
 // a first read shows the failure. A change the member makes reads every held
 // one again (`reloadAll`); Sync now reads the held ones once it has run
 // (`refreshHeld`).
-import type { BookingHosts, BookingListItem, BookingsCalendarView, BookingsTab } from '@crm/contracts';
+import type {
+  BookingHosts,
+  BookingListItem,
+  BookingsCalendarView,
+  BookingsTab,
+  TeamDay,
+  TeamDayOrder,
+} from '@crm/contracts';
 import { toDataError } from '../errors.ts';
 import { keepFresh, type FreshDeps, type Freshness } from './fresh.ts';
 
@@ -27,6 +34,17 @@ export interface BookingsApi {
     readonly to: string;
     readonly hosts: BookingHosts;
   }) => Promise<BookingsCalendarView>;
+  /** The Team day (spec 0030): absent in tests that don't need it. */
+  readonly teamDay?: (input: { readonly workspace: string } & TeamDayQuery) => Promise<TeamDay>;
+}
+
+/** What one Team day asks for (spec 0030, AC-766): the day on the reader's clock, and its filters. */
+export interface TeamDayQuery {
+  readonly day: string;
+  readonly timeZone: string;
+  readonly memberIds?: readonly string[];
+  readonly withBookings?: true;
+  readonly order?: TeamDayOrder;
 }
 
 /** What the store needs: the calls, and what keeps a held read current (`fresh.ts`: the return signal, live's status). */
@@ -67,6 +85,12 @@ export type BookingsView = HeldView<BookingsState>;
 /** One workspace's range. */
 export type BookingsCalendarHeld = HeldView<BookingsCalendarState>;
 
+/** One Team day's state: its columns, bookings, lane and issues. */
+export type TeamDayState = HeldState<TeamDay>;
+
+/** One Team day, held while the screen shows it. */
+export type TeamDayHeld = HeldView<TeamDayState>;
+
 /** At most this many ranges are kept that no screen holds (the weeks paged past), the oldest dropped first. */
 const UNHELD_RANGES_MAX = 12;
 
@@ -89,6 +113,15 @@ export function createBookingsStore(deps: BookingsDeps) {
       readonly refresh: () => void;
       readonly isHeld: () => boolean;
       readonly patch: (edit: (shown: BookingsCalendarView) => BookingsCalendarView) => () => void;
+    }
+  >();
+
+  const teamDays = new Map<
+    string,
+    TeamDayHeld & {
+      readonly refresh: () => void;
+      readonly isHeld: () => boolean;
+      readonly patch: (edit: (shown: TeamDay) => TeamDay) => () => void;
     }
   >();
 
@@ -191,6 +224,53 @@ export function createBookingsStore(deps: BookingsDeps) {
       return made;
     },
     /**
+     * One Team day (spec 0030, AC-778): the day's columns for the reader's See reach, held while the screen shows it
+     * and kept current as the week is (`fresh.ts`, AC-781). Each day and filter is its own held read; the screen
+     * primes the days either side.
+     */
+    teamDay(workspace: string, query: TeamDayQuery): TeamDayHeld {
+      const key = [
+        workspace,
+        'team',
+        query.day,
+        query.timeZone,
+        query.memberIds?.toSorted().join(',') ?? '',
+        query.withBookings === true ? 'booked' : '',
+        query.order ?? 'name',
+      ].join(':');
+      const found = teamDays.get(key);
+      if (found !== undefined) return found;
+      const load = deps.api.teamDay;
+      const made = makeView(() =>
+        load === undefined
+          ? Promise.reject(new Error('The Team day is not wired.'))
+          : load({
+              workspace,
+              day: query.day,
+              timeZone: query.timeZone,
+              ...(query.memberIds === undefined ? {} : { memberIds: query.memberIds }),
+              ...(query.withBookings === undefined ? {} : { withBookings: query.withBookings }),
+              ...(query.order === undefined ? {} : { order: query.order }),
+            }),
+      );
+      teamDays.set(key, made);
+      const unheld = [...teamDays.entries()].filter(([, view]) => !view.isHeld());
+      for (const [old] of unheld.slice(0, Math.max(0, unheld.length - UNHELD_RANGES_MAX))) teamDays.delete(old);
+      return made;
+    },
+    /**
+     * Shows `edit` on every Team day of the workspace at once (a block drawn on a column, a booking handed to another
+     * host, AC-781); answers how to put them all back on a refusal.
+     */
+    patchTeamDays(workspace: string, edit: (shown: TeamDay) => TeamDay): () => void {
+      const restores = [...teamDays.entries()]
+        .filter(([key]) => key.startsWith(`${workspace}:`))
+        .map(([, view]) => view.patch(edit));
+      return () => {
+        for (const restore of restores) restore();
+      };
+    },
+    /**
      * Shows `edit` on every range of the workspace at once (an optimistic block
      * or removal, spec 0027); answers how to put them all back on a refusal.
      */
@@ -222,6 +302,9 @@ export function createBookingsStore(deps: BookingsDeps) {
         ...[...ranges.entries()]
           .filter(([key]) => key.startsWith(`${workspace}:`))
           .map(([, view]) => view.patch((shown) => ({ ...shown, bookings: each(shown.bookings) }))),
+        ...[...teamDays.entries()]
+          .filter(([key]) => key.startsWith(`${workspace}:`))
+          .map(([, view]) => view.patch((shown) => ({ ...shown, bookings: each(shown.bookings) }))),
       ];
       return () => {
         for (const restore of restores) restore();
@@ -229,7 +312,7 @@ export function createBookingsStore(deps: BookingsDeps) {
     },
     /** Reads every list and range a screen holds again (after the member changed a booking). */
     reloadAll(workspace: string): void {
-      for (const [key, view] of [...lists.entries(), ...ranges.entries()]) {
+      for (const [key, view] of [...lists.entries(), ...ranges.entries(), ...teamDays.entries()]) {
         if (key.startsWith(`${workspace}:`)) view.reload();
       }
     },
@@ -238,7 +321,7 @@ export function createBookingsStore(deps: BookingsDeps) {
      * (Sync now ran); one nobody holds reads when held again.
      */
     refreshHeld(workspace: string): void {
-      for (const [key, view] of [...lists.entries(), ...ranges.entries()]) {
+      for (const [key, view] of [...lists.entries(), ...ranges.entries(), ...teamDays.entries()]) {
         if (key.startsWith(`${workspace}:`)) view.refresh();
       }
     },

@@ -122,7 +122,14 @@ import { refusalFor, refusalSummary } from './refusals.ts';
 import { delivered } from './delivered.ts';
 import { stageChunks } from './imports/stage.ts';
 import { createJobsStore, type JobsScope, type JobsView, type TestJobSettings } from './jobs/store.ts';
-import { createBookingsStore, type BookingsCalendarHeld, type BookingsView } from './bookings/store.ts';
+import { blockedOnDay, reassignedOnDay, unblockedOnDay } from './bookings/team-day.ts';
+import {
+  createBookingsStore,
+  type BookingsCalendarHeld,
+  type BookingsView,
+  type TeamDayHeld,
+  type TeamDayQuery,
+} from './bookings/store.ts';
 import {
   createHomeStore,
   type HomeHeld,
@@ -510,7 +517,16 @@ export { RELATED_PREVIEW } from '@crm/contracts/activity-keys';
 // The link page's look (spec 0054): the default and the named starting points are values the editor presses, not
 // only types, so they come through the one data layer like every other shape a screen uses.
 export { DEFAULT_PAGE_THEME, PAGE_THEME_PRESETS, sameTheme } from '@crm/contracts';
-export type { BookingsCalendarHeld, BookingsCalendarState, BookingsState, BookingsView } from './bookings/store.ts';
+export type {
+  BookingsCalendarHeld,
+  BookingsCalendarState,
+  BookingsState,
+  BookingsView,
+  TeamDayHeld,
+  TeamDayQuery,
+  TeamDayState,
+} from './bookings/store.ts';
+export type { TeamDay, TeamDayColumn, TeamDayIssue, TeamDayItem, TeamDayOrder, TeamDaySpan } from '@crm/contracts';
 export type { HomeHeld, HomeMetricsState, HomeRecentsState, TeamTodayState } from './home/store.ts';
 export type {
   RoutingReportDays,
@@ -2106,6 +2122,15 @@ export function createDataLayer({
         beforeRead(input.workspace).then(() => call((options) => api.bookings.listAll(input, options))),
       calendar: (input) =>
         beforeRead(input.workspace).then(() => call((options) => api.bookings.calendar(input, options))),
+      teamDay: ({ memberIds, ...input }) =>
+        beforeRead(input.workspace).then(() =>
+          call((options) =>
+            api.bookings.teamDay(
+              { ...input, ...(memberIds === undefined ? {} : { memberIds: [...memberIds] }) },
+              options,
+            ),
+          ),
+        ),
     },
     ...bookingsFresh,
   });
@@ -3787,7 +3812,7 @@ export function createDataLayer({
       ): Promise<ReassignedBooking> => {
         // A named host shows at once, by name; "next in rotation" waits for the server to say who.
         const { memberId, memberName } = to;
-        const restore =
+        const restoreLists =
           memberId === undefined
             ? () => undefined
             : bookingsLists.patchBooking(workspace, bookingId, (booking) => ({
@@ -3796,6 +3821,15 @@ export function createDataLayer({
                 hostName: memberName ?? booking.hostName,
                 needsHost: false,
               }));
+        // On a Team day the booking leaves its host's column for the new host's, and the lane (AC-777, AC-1435).
+        const restoreDays =
+          memberId === undefined
+            ? () => undefined
+            : bookingsLists.patchTeamDays(workspace, (shown) => reassignedOnDay(shown, bookingId, memberId));
+        const restore = () => {
+          restoreLists();
+          restoreDays();
+        };
         try {
           const done = await call((options) =>
             api.bookings.reassign(
@@ -3856,6 +3890,12 @@ export function createDataLayer({
        */
       calendar: (workspace: string, from: string, to: string, hosts?: BookingHosts): BookingsCalendarHeld =>
         bookingsLists.calendar(workspace, from, to, hosts),
+      /**
+       * The Team day (spec 0030, as spec 0037 amends it): one day, one column per member in the reader's See reach,
+       * held while the screen shows it (`useTeamDay`) and kept current as the week is. Blocks drawn on a column and a
+       * booking handed to another host show in it at once (AC-781).
+       */
+      teamDay: (workspace: string, query: TeamDayQuery): TeamDayHeld => bookingsLists.teamDay(workspace, query),
       /**
        * Bookings' list: every meeting on a tab (bookings and the member's own calendar events), narrowed to a source
        * and the calendars panel's pick, a page at a time (`useMeetings`; More reads the next). While held, what it
@@ -3979,16 +4019,29 @@ export function createDataLayer({
           workspace: string,
           draft: Omit<CreateTimeBlockInput, 'workspace' | 'mutationId' | 'id'>,
           preview: readonly Omit<TimeBlockOccurrence, 'key' | 'blockId'>[],
+          /** Whose column a Team day shows `teamPreview` in (the member it is for, or the caller), AC-781. */
+          team?: {
+            readonly memberId: string;
+            readonly preview: readonly Omit<TimeBlockOccurrence, 'key' | 'blockId'>[];
+          },
         ): Promise<TimeBlockView> => {
           // One id for the preview and the block, so the preview can be opened (and removed) as the real thing.
           const id = mintId();
-          const restore = bookingsLists.patchRanges(workspace, (shown) => ({
+          const restoreRanges = bookingsLists.patchRanges(workspace, (shown) => ({
             ...shown,
             blocks: [
               ...shown.blocks,
               ...preview.map((turn) => ({ ...turn, blockId: id, key: `${id}:${turn.startsAt}` })),
             ],
           }));
+          const restoreDays =
+            team === undefined
+              ? () => undefined
+              : bookingsLists.patchTeamDays(workspace, (shown) => blockedOnDay(shown, team.memberId, id, team.preview));
+          const restore = () => {
+            restoreRanges();
+            restoreDays();
+          };
           try {
             const made = await call((options) =>
               api.bookings.blocks.create({ ...draft, id, workspace, mutationId: mintId() }, options),
@@ -4002,10 +4055,15 @@ export function createDataLayer({
         },
         /** Reopens a block's time (a weekly one every week): gone at once, back on a refusal. */
         remove: async (workspace: string, blockId: string): Promise<void> => {
-          const restore = bookingsLists.patchRanges(workspace, (shown) => ({
+          const restoreRanges = bookingsLists.patchRanges(workspace, (shown) => ({
             ...shown,
             blocks: shown.blocks.filter((turn) => turn.blockId !== blockId),
           }));
+          const restoreDays = bookingsLists.patchTeamDays(workspace, (shown) => unblockedOnDay(shown, blockId));
+          const restore = () => {
+            restoreRanges();
+            restoreDays();
+          };
           try {
             await call((options) =>
               api.bookings.blocks.remove({ workspace, id: blockId, mutationId: mintId() }, options),
@@ -4442,6 +4500,8 @@ export function createDataLayer({
         change: {
           readonly name?: string;
           readonly timeZone?: string | null;
+          /** Their job title in this workspace (spec 0037, AC-1441); empty clears it. */
+          readonly jobTitle?: string;
           readonly handle?: string;
           readonly bio?: string;
           /** Their whole set of social links, in order. */
