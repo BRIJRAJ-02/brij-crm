@@ -29,7 +29,8 @@ import { Kbd } from '../../atoms/Kbd/Kbd.tsx';
 import { keyShortcuts } from '../../atoms/Kbd/shortcuts.ts';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { Spinner } from '../../atoms/Spinner/Spinner.tsx';
-import { Tooltip } from '../../atoms/Tooltip/Tooltip.tsx';
+import { ShortcutTooltip } from '../../atoms/Tooltip/ShortcutTooltip.tsx';
+import { Tooltip, type TooltipProps } from '../../atoms/Tooltip/Tooltip.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import type { Hue } from '../../hue.ts';
 import { SortableList, useSortableItem } from '../../lib/drag/drag.tsx';
@@ -156,11 +157,7 @@ export function Sidebar(props: SidebarProps) {
   useArrowKeys(bodyRef, keyboard === 'arrows');
   const collapse =
     onCollapsedChange !== undefined && !isCollapsed ? (
-      <Tooltip
-        content={strings.collapse}
-        placement="bottom"
-        {...(collapseKbd === undefined ? {} : { kbd: collapseKbd })}
-      >
+      <TipWithKeys content={strings.collapse} placement="bottom" kbd={collapseKbd}>
         <Button
           variant="ghost"
           icon="panel-left-close"
@@ -169,7 +166,7 @@ export function Sidebar(props: SidebarProps) {
             onCollapsedChange(true);
           }}
         />
-      </Tooltip>
+      </TipWithKeys>
     ) : null;
   return (
     <SidebarContext value={{ isCollapsed }}>
@@ -399,6 +396,11 @@ export type NavItemProps = NavItemFace &
     | { readonly onPress: () => void; readonly href?: never; readonly isCurrent?: never }
   );
 
+/** A Tooltip, with the shortcut's keycap after its line when there is one (ShortcutTooltip). */
+function TipWithKeys({ kbd, ...props }: TooltipProps & { readonly kbd: string | undefined }) {
+  return kbd === undefined ? <Tooltip {...props} /> : <ShortcutTooltip {...props} kbd={kbd} />;
+}
+
 /** One size-nav-item row in the sidebar: a routed link with `aria-current` on the current page, or a button. */
 export function NavItem(props: NavItemProps) {
   const { children, icon, hue, leading, meta, badge, kbd } = props;
@@ -466,9 +468,9 @@ export function NavItem(props: NavItemProps) {
     );
   if (isCollapsed) {
     return (
-      <Tooltip content={railName} placement="end" {...(kbd === undefined ? {} : { kbd })}>
+      <TipWithKeys content={railName} placement="end" kbd={kbd}>
         {item}
-      </Tooltip>
+      </TipWithKeys>
     );
   }
   return <ItemRow id={props.id} name={children} item={item} menu={props.menu} />;

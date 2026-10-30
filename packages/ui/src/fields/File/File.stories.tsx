@@ -76,12 +76,13 @@ export const PasteUpload: Story = {
       <AttributeEditor {...args} />
     </Stage>
   ),
-  play: async ({ canvas, args }) => {
-    // The drop area holds two buttons (its own, for the keyboard, and "browse"); the paste reaches the field from either.
-    const drop = canvas.getByRole('button', { name: 'browse' });
+  play: async ({ canvas, args, userEvent }) => {
+    // The drop area holds two buttons (its own, for the keyboard, and "browse"); the paste reaches the field from
+    // either. Pasted through user-event, as Firefox's ClipboardEvent keeps no clipboardData handed to it.
+    canvas.getByRole('button', { name: 'browse' }).focus();
     const clipboardData = new DataTransfer();
     clipboardData.items.add(new File(['shot'], 'Screenshot.png', { type: 'image/png' }));
-    drop.dispatchEvent(new ClipboardEvent('paste', { clipboardData, bubbles: true, cancelable: true }));
+    await userEvent.paste(clipboardData);
     await expect(args.onUpload).toHaveBeenCalledTimes(1);
   },
 };
