@@ -271,6 +271,17 @@
       inset-inline-start: 0;
       background: var(--surface);
     }
+
+    /* Held names take their row's state, solid, so the days still scroll under them. */
+    .row[data-selected] > .cell[data-lead] {
+      background: var(--accent-soft);
+    }
+
+    @media (hover: hover) and (pointer: fine) {
+      .row:not([data-selected], [data-tone='total'])[data-hovered] > .cell[data-lead] {
+        background: var(--surface-hover);
+      }
+    }
   }
 
   .column[data-lead] {

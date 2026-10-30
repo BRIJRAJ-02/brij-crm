@@ -211,6 +211,10 @@
     min-inline-size: 0;
   }
 
+  .lines[data-continues] {
+    visibility: hidden;
+  }
+
   /* A range wraps at its spaces in a narrow day rather than widening it, never inside a time. */
   .line {
     overflow-wrap: break-word;

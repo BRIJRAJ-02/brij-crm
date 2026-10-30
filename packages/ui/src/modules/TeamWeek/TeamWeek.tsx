@@ -266,17 +266,19 @@ function PersonCell({ person }: { readonly person: TeamWeekPerson }) {
   );
 }
 
-/** A cell's lines as drawn (its label is what is heard). A day that continues an Away band draws no words again. */
+/**
+ * A cell's lines as drawn (its label is what is heard). A day that continues an Away band keeps its words' room but
+ * hides them, so the band stays one height and says it once.
+ */
 function CellLines({ cell, join }: { readonly cell: TeamWeekCell; readonly join: Join | undefined }) {
   const continues = join === 'before' || join === 'both';
   return (
-    <span aria-hidden="true" className={styles.lines}>
-      {!continues &&
-        cell.lines.map((line, index) => (
-          <span key={`${String(index)}-${line}`} className={styles.line} data-first={index === 0 || undefined}>
-            {line}
-          </span>
-        ))}
+    <span aria-hidden="true" className={styles.lines} data-continues={continues || undefined}>
+      {cell.lines.map((line, index) => (
+        <span key={`${String(index)}-${line}`} className={styles.line} data-first={index === 0 || undefined}>
+          {line}
+        </span>
+      ))}
       {cell.tone === 'override' && <span className={styles.dot} />}
     </span>
   );
