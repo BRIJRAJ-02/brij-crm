@@ -23,6 +23,7 @@ New. Home's metrics row needs figures read at a glance: a label, a large value a
 - `trend` draws an arrow before the comparison in the tertiary colour, never green or red: more open deals or more meetings is not always good news. Screen readers hear "Up from 8 last week". `same` draws no arrow.
 - `href` makes a figure's label a link to the records behind it (Home's New people opens People). Why: a figure that moved begged "which ones?", and the label is the one piece of text that says what the figure counts, so it is the link's name.
 - Values use tabular figures, so they line up as they change.
+- `size="large"` sets each value in the page's biggest type (`text-note-title`): one headline figure on its own. Why a variant: a report's big number is the same label and value, only larger, and a second figure component would have repeated the `dl`, the loading skeleton and the comparison line (the reports lane, 31 October 2026).
 
 ## States
 

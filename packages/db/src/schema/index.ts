@@ -13,6 +13,7 @@ export { workspaceMilestones } from './milestones.ts';
 export { validationRuleKind, validationRules } from './validation.ts';
 export { memberViewState, viewKind, views, viewVisibility } from './views.ts';
 export { noteRecords, notes } from './notes.ts';
+export { REPORT_CONFIG_MAX_BYTES, reports } from './reports.ts';
 export { memberNavPrefs, NAV_ITEMS_MAX } from './navigation.ts';
 export { taskRecords, tasks } from './tasks.ts';
 export { memberRecents } from './search.ts';

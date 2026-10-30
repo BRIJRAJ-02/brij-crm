@@ -26,6 +26,7 @@ import { Route as WSlugHomeRouteImport } from './routes/w.$slug.home.tsx'
 import { Route as WSlugInboxRouteImport } from './routes/w.$slug.inbox.tsx'
 import { Route as WSlugLinkPageRouteImport } from './routes/w.$slug.link-page.tsx'
 import { Route as WSlugNotesRouteImport } from './routes/w.$slug.notes.tsx'
+import { Route as WSlugReportsRouteImport } from './routes/w.$slug.reports.tsx'
 import { Route as WSlugSettingsRouteImport } from './routes/w.$slug.settings.tsx'
 import { Route as WSlugTasksRouteImport } from './routes/w.$slug.tasks.tsx'
 import { Route as WSlugTrashRouteImport } from './routes/w.$slug.trash.tsx'
@@ -174,6 +175,11 @@ const WSlugLinkPageRoute = WSlugLinkPageRouteImport.update({
 const WSlugNotesRoute = WSlugNotesRouteImport.update({
   id: '/notes',
   path: '/notes',
+  getParentRoute: () => WSlugRoute,
+} as any)
+const WSlugReportsRoute = WSlugReportsRouteImport.update({
+  id: '/reports',
+  path: '/reports',
   getParentRoute: () => WSlugRoute,
 } as any)
 const WSlugSettingsRoute = WSlugSettingsRouteImport.update({
@@ -552,6 +558,7 @@ export interface FileRoutesByFullPath {
   '/w/$slug/inbox': typeof WSlugInboxRoute
   '/w/$slug/link-page': typeof WSlugLinkPageRoute
   '/w/$slug/notes': typeof WSlugNotesRoute
+  '/w/$slug/reports': typeof WSlugReportsRoute
   '/w/$slug/settings': typeof WSlugSettingsRouteWithChildren
   '/w/$slug/tasks': typeof WSlugTasksRoute
   '/w/$slug/trash': typeof WSlugTrashRoute
@@ -632,6 +639,7 @@ export interface FileRoutesByTo {
   '/w/$slug/inbox': typeof WSlugInboxRoute
   '/w/$slug/link-page': typeof WSlugLinkPageRoute
   '/w/$slug/notes': typeof WSlugNotesRoute
+  '/w/$slug/reports': typeof WSlugReportsRoute
   '/w/$slug/tasks': typeof WSlugTasksRoute
   '/w/$slug/trash': typeof WSlugTrashRoute
   '/w/$slug': typeof WSlugIndexRoute
@@ -715,6 +723,7 @@ export interface FileRoutesById {
   '/w/$slug/inbox': typeof WSlugInboxRoute
   '/w/$slug/link-page': typeof WSlugLinkPageRoute
   '/w/$slug/notes': typeof WSlugNotesRoute
+  '/w/$slug/reports': typeof WSlugReportsRoute
   '/w/$slug/settings': typeof WSlugSettingsRouteWithChildren
   '/w/$slug/tasks': typeof WSlugTasksRoute
   '/w/$slug/trash': typeof WSlugTrashRoute
@@ -800,6 +809,7 @@ export interface FileRouteTypes {
     | '/w/$slug/inbox'
     | '/w/$slug/link-page'
     | '/w/$slug/notes'
+    | '/w/$slug/reports'
     | '/w/$slug/settings'
     | '/w/$slug/tasks'
     | '/w/$slug/trash'
@@ -880,6 +890,7 @@ export interface FileRouteTypes {
     | '/w/$slug/inbox'
     | '/w/$slug/link-page'
     | '/w/$slug/notes'
+    | '/w/$slug/reports'
     | '/w/$slug/tasks'
     | '/w/$slug/trash'
     | '/w/$slug'
@@ -962,6 +973,7 @@ export interface FileRouteTypes {
     | '/w/$slug/inbox'
     | '/w/$slug/link-page'
     | '/w/$slug/notes'
+    | '/w/$slug/reports'
     | '/w/$slug/settings'
     | '/w/$slug/tasks'
     | '/w/$slug/trash'
@@ -1161,6 +1173,13 @@ declare module '@tanstack/react-router' {
       path: '/notes'
       fullPath: '/w/$slug/notes'
       preLoaderRoute: typeof WSlugNotesRouteImport
+      parentRoute: typeof WSlugRoute
+    }
+    '/w/$slug/reports': {
+      id: '/w/$slug/reports'
+      path: '/reports'
+      fullPath: '/w/$slug/reports'
+      preLoaderRoute: typeof WSlugReportsRouteImport
       parentRoute: typeof WSlugRoute
     }
     '/w/$slug/settings': {
@@ -1747,6 +1766,7 @@ interface WSlugRouteChildren {
   WSlugInboxRoute: typeof WSlugInboxRoute
   WSlugLinkPageRoute: typeof WSlugLinkPageRoute
   WSlugNotesRoute: typeof WSlugNotesRoute
+  WSlugReportsRoute: typeof WSlugReportsRoute
   WSlugSettingsRoute: typeof WSlugSettingsRouteWithChildren
   WSlugTasksRoute: typeof WSlugTasksRoute
   WSlugTrashRoute: typeof WSlugTrashRoute
@@ -1775,6 +1795,7 @@ const WSlugRouteChildren: WSlugRouteChildren = {
   WSlugInboxRoute: WSlugInboxRoute,
   WSlugLinkPageRoute: WSlugLinkPageRoute,
   WSlugNotesRoute: WSlugNotesRoute,
+  WSlugReportsRoute: WSlugReportsRoute,
   WSlugSettingsRoute: WSlugSettingsRouteWithChildren,
   WSlugTasksRoute: WSlugTasksRoute,
   WSlugTrashRoute: WSlugTrashRoute,

@@ -261,6 +261,9 @@ import {
   upsertFirst,
   type CaptureListView,
 } from './captures/list.ts';
+import type { Report as ReportView, ReportConfig } from '@crm/contracts';
+import type { ReportPlan } from '@crm/contracts/reports';
+import { lazyFiguresSource, type ReportFiguresSource } from './reports/figures-source.ts';
 import type { NavOperation, NavUniverse } from '@crm/contracts/navigation';
 import type { NavChangeOptions, NavSnapshot, NavSource, NavStore } from './navigation/store.ts';
 import { draftParam, isSameQuery, readDraft, type DraftQuery } from './views/draft.ts';
@@ -662,6 +665,9 @@ export type {
 export type { JobsScope, JobsSnapshot, JobsView, TestJobSettings } from './jobs/store.ts';
 export { purgeLeftOf, type PurgeLeftEntry } from './jobs/left.ts';
 export type { View, ViewColumn, ViewConfig, ViewKind, ViewLayout, ViewSummary, ViewVisibility } from '@crm/contracts';
+// Saved reports (the reports lane): a chart's definition, and the figures its plan works out.
+export type { Report as ReportView, ReportConfig, ReportGroupBy, ReportMeasure } from '@crm/contracts';
+export type { ReportFigures, ReportFiguresSource, ReportFiguresState, ReportPoint } from './reports/figures-source.ts';
 export {
   CREATED_AT_SLUG,
   effectiveColumns,
@@ -1331,6 +1337,7 @@ export function createDataLayer({
     bookingPageLists.clear();
     pageRules.clear();
     formLists.clear();
+    reportLists.clear();
     schedules.clear();
     preferences.clear();
     accessLoaded?.clear();
@@ -2418,6 +2425,15 @@ export function createDataLayer({
     read: (workspace) =>
       call((options) => api.forms.list({ workspace, archived: false }, options)).then((page) => page.items),
   });
+  // Saved reports (the reports lane): one held list per workspace, patched by every report write below. Reports
+  // are settings with no change events of their own, so the list is read again when a screen holds it after a while.
+  const reportLists = createCaptureList<ReportView>({
+    read: (workspace) => call((options) => api.reports.list({ workspace }, options)).then((answer) => answer.reports),
+  });
+  /** A question's calculations as the records layer holds them: a report's figures ask through it. */
+  const aggregatesOf = (workspace: string, question: AggregateQuestion): AggregateSource =>
+    recordsLoaded?.aggregates(workspace, question) ??
+    lazyAggregateSource(recordsLayer().then((layer) => layer.aggregates(workspace, question)));
   /** A form write's answer as the list's row: the active list drops an archived form. */
   /** The three form writes Email signup makes, bound to this layer's client (`link-page/signup-form.ts`). */
   const signupWrites = {
@@ -5919,6 +5935,82 @@ export function createDataLayer({
       /** Sets a booking page's own "Add events to" (`null`: the owner's default): at once, put back if refused. */
       setPageDestination: (workspace: string, pageId: string, calendarId: string | null): Promise<boolean> =>
         calendars.setPageDestination(workspace, pageId, calendarId),
+    },
+    reports: {
+      /**
+       * The workspace's saved reports (the reports lane) as the held list the Reports page shows
+       * (`useCaptureList`), oldest first: every write here patches it, so a save, a rename or a delete shows at once.
+       * The list is read again when a screen holds it after a while away; another tab's change shows then.
+       */
+      view: (workspace: string): CaptureListView<ReportView> => reportLists.view(workspace),
+      /** A new report id: mint it once, and send the same one on a retry (and for Undo after a delete). */
+      newId: (): string => mintId(),
+      /** Saves a report, shown in the list at once and gone again if the server says no (rejects with the refusal). */
+      create: (
+        workspace: string,
+        report: {
+          readonly id: string;
+          readonly objectId: string;
+          readonly name: string;
+          readonly config: ReportConfig;
+        },
+      ): Promise<ReportView> => {
+        const stamp = new Date(Date.now()).toISOString();
+        const shown: ReportView = { ...report, createdAt: stamp, updatedAt: stamp };
+        return reportLists.write(workspace, {
+          send: () => call((options) => api.reports.create({ workspace, ...report }, options)),
+          show: (items) => (items.some((each) => each.id === report.id) ? items : [...items, shown]),
+          undo: dropItem<ReportView>(report.id),
+          land: (items, made) =>
+            items.some((each) => each.id === made.id)
+              ? items.map((each) => (each.id === made.id ? made : each))
+              : [...items, made],
+        });
+      },
+      /** Renames a report or replaces its settings, shown at once and put back if the server says no. */
+      update: (
+        workspace: string,
+        reportId: string,
+        change: { readonly name?: string; readonly config?: ReportConfig },
+      ): Promise<ReportView> =>
+        reportLists.write(workspace, {
+          send: () =>
+            call((options) =>
+              api.reports.update(
+                {
+                  workspace,
+                  reportId,
+                  ...(change.name === undefined ? {} : { name: change.name }),
+                  ...(change.config === undefined ? {} : { config: change.config }),
+                },
+                options,
+              ),
+            ),
+          ...shownPatch(reportLists.items(workspace), reportId, (each) => ({
+            ...each,
+            ...(change.name === undefined ? {} : { name: change.name }),
+            ...(change.config === undefined ? {} : { config: change.config }),
+          })),
+          land: (items, made) => items.map((each) => (each.id === made.id ? made : each)),
+        }),
+      /** Deletes a report, gone from the list at once and back on a refusal (Undo makes it again under its id). */
+      remove: (workspace: string, reportId: string): Promise<{ readonly deleted: true }> =>
+        reportLists.write(workspace, {
+          send: () => call((options) => api.reports.delete({ workspace, reportId }, options)),
+          ...shownDrop(reportLists.items(workspace), reportId),
+        }),
+      /**
+       * A plan's figures (`planReport` in `@crm/contracts/reports`) as a source (`useReportFigures`): each question
+       * goes through the records layer's calculations (`records.aggregates`), so it is read through the access
+       * door and the read gate, shared with any screen asking the same, and read again 1.5 seconds after a change
+       * that may move it. The module that works the figures out loads with the first report.
+       */
+      figures: (workspace: string, plan: ReportPlan): ReportFiguresSource =>
+        lazyFiguresSource(
+          import('./reports/figures.ts').then((module) =>
+            module.createFiguresSource(plan, (question) => aggregatesOf(workspace, question)),
+          ),
+        ),
     },
     forms: {
       /**

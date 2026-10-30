@@ -43,6 +43,7 @@ import { notesRouter } from './modules/notes/router.ts';
 import { notificationsRouter } from './modules/notifications/router.ts';
 import { tasksRouter } from './modules/tasks/router.ts';
 import { usageRouter } from './modules/usage/router.ts';
+import { reportsRouter } from './modules/reports/router.ts';
 import { viewsRouter } from './modules/views/router.ts';
 import { workspacesRouter } from './modules/workspaces/router.ts';
 import { accountRouter } from './modules/account/router.ts';
@@ -78,6 +79,7 @@ export const router = base.router({
   jobs: jobsRouter,
   usage: usageRouter,
   views: viewsRouter,
+  reports: reportsRouter,
   trash: trashRouter,
   tasks: tasksRouter,
   notes: notesRouter,

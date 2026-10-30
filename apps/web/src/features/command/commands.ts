@@ -14,6 +14,7 @@ import { formsHref } from '../forms/paths.ts';
 import { importHref } from '../imports/paths.ts';
 import { listHref } from '../lists/paths.ts';
 import { recordHref } from '../records/details.ts';
+import { reportsHref } from '../reports/search.ts';
 import { bookingsHref, homeHref, navObjects, objectHref, tasksHref, trashHref } from '../workspace/objects.ts';
 import { strings } from './strings.ts';
 
@@ -134,6 +135,13 @@ export function pageCommands(
       icon: 'clipboard-list',
       terms: strings.formsTerms,
       run: go(formsHref(slug)),
+    },
+    {
+      id: 'page:reports',
+      name: strings.reports,
+      icon: 'chart-bar',
+      terms: strings.reportsTerms,
+      run: go(reportsHref(slug)),
     },
     { id: 'page:trash', name: strings.trash, icon: 'trash', terms: strings.trashTerms, run: go(trashHref(slug)) },
     {

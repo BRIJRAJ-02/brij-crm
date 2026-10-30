@@ -1,6 +1,8 @@
 /** Home's copy (spec 0041): the workspace's landing page, ported from timefix's dashboard. */
 export const strings = {
   home: 'Home',
+  /** The link in the bar to the charts page (the reports lane). */
+  reports: 'Reports',
 
   // The greeting
   greeting: {

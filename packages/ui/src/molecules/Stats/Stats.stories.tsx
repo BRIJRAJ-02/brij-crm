@@ -37,6 +37,18 @@ export const Default: Story = {
   },
 };
 
+/** `size="large"`: one headline figure, a report's big number. */
+export const Large: Story = {
+  render: () => (
+    <Stage width="fill">
+      <Stats label="Open deals" size="large" items={[{ id: 'open', label: 'Open pipeline', value: '$412,000' }]} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('$412,000')).toBeVisible();
+  },
+};
+
 /** A figure with `href`: its label links to the records behind it. */
 export const Linked: Story = {
   args: {
