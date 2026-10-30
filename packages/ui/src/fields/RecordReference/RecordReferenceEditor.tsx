@@ -21,6 +21,8 @@ export function RecordReferenceEditor({
   objectSwitcher,
   describeResult,
   isDisabled = false,
+  onCreateRecord,
+  createFormNoun,
 }: EditorProps<'record_reference'>) {
   const displays = asList<RecordRefDisplay>(display);
   const [chosen, setChosen] = useState<readonly (typeof displays)[number][]>(() =>
@@ -51,6 +53,8 @@ export function RecordReferenceEditor({
       {...(shown === undefined ? {} : { error: shown })}
       {...(objectSwitcher === undefined ? {} : objectSwitcher)}
       {...(describeResult === undefined ? {} : { describeResult })}
+      {...(onCreateRecord === undefined ? {} : { onCreate: onCreateRecord })}
+      {...(createFormNoun === undefined ? {} : { createFormNoun })}
       onChange={(next) => {
         const records = next.map((item) => ({ objectId: item.objectId, recordId: item.recordId }));
         const result = toCommittable<'record_reference'>(

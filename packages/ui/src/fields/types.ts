@@ -7,6 +7,7 @@ import type {
   AttributeValueOf,
   DisplayFor,
   FilterOperator,
+  RecordRefDisplay,
   SelectOption,
 } from '@crm/contracts/values';
 import type { ComponentType } from 'react';
@@ -125,6 +126,14 @@ export interface EditorProps<T extends AttributeType> {
    * name ("At Acme") and whether it is linked already, shown as chosen.
    */
   readonly describeResult?: (display: DisplayFor<T> & object) => ResultState | undefined;
+  /**
+   * Record references: offers "Create "<typed>"" last in the search when no
+   * result has that name, and picks the display it returns (ReferencePicker's
+   * `onCreate`). Only for someone who may make records of the far object.
+   */
+  readonly onCreateRecord?: (label: string) => RecordRefDisplay | undefined;
+  /** Record references, with `onCreateRecord`: the far object needs more than a name, so the row opens its full form ("Create deal…"). */
+  readonly createFormNoun?: string;
 }
 
 /** A pasted or imported text the type can't take, and why ("No option called 'Hot'"). */

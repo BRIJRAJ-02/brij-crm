@@ -6,6 +6,14 @@ import { RecordChip } from '../../atoms/RecordChip/RecordChip.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import type { ResultState } from '../../fields/ReferencePicker.tsx';
+import {
+  CREATE_ROW_KEY,
+  createRowFor,
+  createRowText,
+  isCreateRow,
+  withCreateRow,
+  type CreateRow,
+} from '../../fields/create-row.ts';
 import { focusLater } from '../../lib/focus-later.ts';
 import { arraySource, type ListSource } from '../../lib/list-source.ts';
 import type { LoadStatus } from '../../lib/load-status.ts';
@@ -27,6 +35,15 @@ export interface RelatedRecordsPicker {
   /** A result's note ("At Acme") and whether it is linked already (its check; picking it again does nothing). */
   readonly describeResult?: (display: RecordRefDisplay) => ResultState | undefined;
   readonly onPick: (display: RecordRefDisplay) => void;
+  /**
+   * Offers "Create "<typed>"" last when no result has that name (ignoring
+   * case), as ReferencePicker's `onCreate` does, and hands the label over for
+   * the screen to make and link. Only for someone who may make records of the
+   * far object.
+   */
+  readonly onCreate?: (label: string) => void;
+  /** With `onCreate`, the far object needs more than a name: the row reads "Create <noun>…" and opens the screen's form. */
+  readonly createFormNoun?: string;
 }
 
 /** What a screen can do with a section: move focus to it ("View all" on Overview). */
@@ -101,6 +118,14 @@ function AddPicker({
   // Searched only while the menu is open: a screen's pickers keep one search at a time, so a closed Add on each
   // side asking on every draw would take the search from the others, and each answer would draw them all again.
   const results = isOpen ? picker.onSearch(query) : NO_RESULTS;
+  const { onCreate, createFormNoun } = picker;
+  const createRow = createRowFor(
+    results,
+    query,
+    (display) => display.name,
+    onCreate === undefined ? undefined : createFormNoun === undefined ? {} : { formNoun: createFormNoun },
+  );
+  const listed = withCreateRow<RecordRefDisplay>(results, createRow);
   return (
     <MenuTrigger
       isOpen={isOpen}
@@ -116,11 +141,19 @@ function AddPicker({
       ) : (
         <Button variant="ghost" icon="plus" label={strings.addTo(title)} />
       )}
-      <Menu<RecordRefDisplay>
+      <Menu<RecordRefDisplay | CreateRow>
         label={strings.addTo(title)}
-        search={{ label: strings.search(noun), onSearch: setQuery }}
-        source={results}
+        search={{
+          label: strings.search(noun),
+          onSearch: setQuery,
+          // A lone "Create "<typed>"" isn't focused first, so one Enter on a typo makes nothing.
+          ...(createRow !== undefined && createRow.formNoun === undefined && listed.count === 1
+            ? { isFirstUnfocused: true }
+            : {}),
+        }}
+        source={listed}
         renderItem={(display) => {
+          if (isCreateRow(display)) return { children: createRowText(display), icon: 'plus' };
           const state = picker.describeResult?.(display);
           return {
             children: display.name === '' ? strings.unnamed : display.name,
@@ -129,6 +162,10 @@ function AddPicker({
           };
         }}
         onAction={(key) => {
+          if (key === CREATE_ROW_KEY) {
+            if (createRow !== undefined) onCreate?.(createRow.label);
+            return;
+          }
           const found = Array.from({ length: results.count }, (_, index) => results.getItem(index)).find(
             (item) => item !== undefined && results.getKey(item) === String(key),
           );
@@ -268,6 +305,14 @@ export function RelatedRecords({
                       pickedWhenEmpty.current = true;
                       picker.onPick(display);
                     },
+                    ...(picker.onCreate === undefined
+                      ? {}
+                      : {
+                          onCreate: (label: string) => {
+                            pickedWhenEmpty.current = true;
+                            picker.onCreate?.(label);
+                          },
+                        }),
                   }}
                   isLabelled
                 />

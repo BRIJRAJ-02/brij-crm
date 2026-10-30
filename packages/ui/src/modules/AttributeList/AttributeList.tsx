@@ -38,7 +38,10 @@ export interface AttributeSection {
 }
 
 /** What reference and file editors need from the screen. */
-export type AttributeEditorExtras = Pick<EditorProps<AttributeType>, 'onSearch' | 'onUpload' | 'me' | 'describeResult'>;
+export type AttributeEditorExtras = Pick<
+  EditorProps<AttributeType>,
+  'onSearch' | 'onUpload' | 'me' | 'describeResult' | 'onCreateRecord' | 'createFormNoun'
+>;
 
 /** Props for AttributeList. */
 export interface AttributeListProps {

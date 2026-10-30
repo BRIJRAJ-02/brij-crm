@@ -651,10 +651,24 @@ export type LinkOutcome =
   | { readonly kind: 'done'; readonly changed: boolean; readonly undoId?: string }
   | { readonly kind: 'refused'; readonly error: DataError };
 
+/** The record ids a reference value names (one link or a list of them); nothing for any other value. */
+function recordIdsIn(value: unknown): readonly string[] {
+  const list: readonly unknown[] = Array.isArray(value) ? value : [value];
+  return list.flatMap((each) =>
+    typeof each === 'object' && each !== null && 'recordId' in each && typeof each.recordId === 'string'
+      ? [each.recordId]
+      : [],
+  );
+}
+
 /** The words the records layer raises itself. */
 export const RECORD_WORDS = {
   retry: 'Retry',
   draftRefused: 'That record wasn’t created, so the change to it wasn’t saved.',
+  /** A link to a record made in the same breath, whose create was refused (its own message says why). */
+  linkTargetRefused: 'That record wasn’t created, so it wasn’t linked.',
+  /** A create naming a record made in the same breath, whose own create was refused. */
+  linkedRecordRefused: 'A record this one links to wasn’t created, so this one wasn’t either.',
   /** A multi select's new option on a cell whose values haven't loaded yet: sending it would replace them. */
   optionNotReady: 'That cell is still loading. Try again in a moment.',
   /** A column just shown whose values couldn't be read for the rows on screen (spec 0006, AC-55). */
@@ -2504,7 +2518,14 @@ export function createRecordsLayer({
       () => undefined,
       () => undefined,
     );
-    const mine = turn.then(() => sendLink(workspace, change, mutationId, layer, held, options));
+    // A record being made (a picker's "Create …") is linked once it exists; refused, the link goes with it.
+    const made = change.kind === 'add' ? creating.get(change.target.recordId) : undefined;
+    const mine = turn.then(async () => {
+      if (made === undefined || (await made)) return sendLink(workspace, change, mutationId, layer, held, options);
+      mutations.forget(mutationId);
+      layer.refuse();
+      return { kind: 'refused', error: dataError('NOT_FOUND', RECORD_WORDS.linkTargetRefused) } as const;
+    });
     sending.set(recordId, mine);
     void mine.finally(() => {
       if (sending.get(recordId) === mine) sending.delete(recordId);
@@ -3486,9 +3507,23 @@ export function createRecordsLayer({
       values: Readonly<Record<string, unknown>>,
       id: string = mintId(),
     ): Promise<RecordView> => {
+      // Known as being made from the first moment, before any wait: a link to it asked for at once (a picker's
+      // "Create …") waits for it rather than reaching the server first.
+      let settle: (made: boolean) => void = () => undefined;
+      creating.set(
+        id,
+        new Promise<boolean>((resolve) => {
+          settle = resolve;
+        }),
+      );
+      const refusedEarly = (error: unknown): never => {
+        settle(false);
+        creating.delete(id);
+        throw error;
+      };
       // Every rule of the object, before the draft shows (spec 0013, AC-257): a refusal rejects as the server's would.
       const asked = checkInTurn(checkWith(workspace, objectId, new Set(Object.keys(values)), true));
-      const check = asked instanceof Promise ? await asked : asked;
+      const check = asked instanceof Promise ? await asked.catch(refusedEarly) : asked;
       if (check !== undefined) {
         const failures = checkInBrowser({
           rules: check.rules,
@@ -3500,9 +3535,11 @@ export function createRecordsLayer({
           pattern: check.pattern,
         });
         if (failures.length > 0) {
-          throw dataError('VALIDATION_FAILED', rulesSummary(failures.length, failures[0]?.message), {
-            refusals: refusalsOfRules(failures),
-          });
+          refusedEarly(
+            dataError('VALIDATION_FAILED', rulesSummary(failures.length, failures[0]?.message), {
+              refusals: refusalsOfRules(failures),
+            }),
+          );
         }
       }
       const mutationId = mintId();
@@ -3526,14 +3563,17 @@ export function createRecordsLayer({
       mutations.sent(mutationId);
       const placed = viewsOf(workspace).filter((entry) => entry.objectId === objectId && entry.isRetained());
       for (const entry of placed) entry.created(id);
-      let settle: (made: boolean) => void = () => undefined;
-      creating.set(
-        id,
-        new Promise<boolean>((resolve) => {
-          settle = resolve;
-        }),
-      );
+      // Links to records being made in the same breath (a create form's "Create …") wait for them to exist.
+      const linkedMade = Object.values(values)
+        .flatMap(recordIdsIn)
+        .flatMap((target) => {
+          const pending = target === id ? undefined : creating.get(target);
+          return pending === undefined ? [] : [pending];
+        });
       try {
+        if (linkedMade.length > 0 && !(await Promise.all(linkedMade)).every(Boolean)) {
+          throw dataError('NOT_FOUND', RECORD_WORDS.linkedRecordRefused);
+        }
         const {
           echoes,
           written: _written,
