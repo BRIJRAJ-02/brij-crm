@@ -217,6 +217,29 @@ function Picker({ onChange }: { readonly onChange?: (id: string) => void }) {
 }
 
 /** Choose by sight: marks over short names, one tile chosen with a ring and a tick. Every tile is one size. */
+/** First run's Done: two tiles that ease in, one a moment after the other (spec 0058, AC-21). */
+export const Entering: Story = {
+  args: { fill: 'fill', isEntering: true },
+  render: (args) => (
+    <Stage>
+      <TileGrid {...args}>
+        <Card title="Booking link">
+          <Skeleton lines={2} isStill />
+        </Card>
+        <Card title="Link page">
+          <Skeleton lines={2} isStill />
+        </Card>
+      </TileGrid>
+    </Stage>
+  ),
+  play: async ({ canvasElement }) => {
+    await settleAnimations();
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText('Booking link')).toBeVisible();
+    await expect(canvas.getByText('Link page')).toBeVisible();
+  },
+};
+
 export const Choice: Story = {
   parameters: { crm: { preview: true } },
   render: () => <Picker />,

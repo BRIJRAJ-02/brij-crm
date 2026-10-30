@@ -21,6 +21,12 @@ export interface CardTileGridProps {
    * panel's width: two on a wide page, one on a phone or a narrow window (Home's sections).
    */
   readonly columns?: 'auto' | 'two';
+  /**
+   * Eases each tile in when the grid mounts: a fade and a short rise, one tile a moment after the other, for a
+   * moment worth marking (first run's Done, spec 0058 AC-21). Transform and opacity only, a fade alone under reduced
+   * motion, and the tiles take input at once. Leave it off for grids that load or refresh, where motion is noise.
+   */
+  readonly isEntering?: boolean;
 }
 
 /**
@@ -36,12 +42,13 @@ export type TileGridProps = CardTileGridProps | ChoiceTilesProps;
  */
 export function TileGrid(props: TileGridProps) {
   if (props.variant === 'choice') return <ChoiceTiles {...props} />;
-  const { children, fill = 'fit', columns = 'auto' } = props;
+  const { children, fill = 'fit', columns = 'auto', isEntering = false } = props;
   return (
     <div
       className={styles.root}
       data-fill={fill === 'fill' ? fill : undefined}
       data-columns={columns === 'two' ? columns : undefined}
+      data-entering={isEntering || undefined}
     >
       {children}
     </div>

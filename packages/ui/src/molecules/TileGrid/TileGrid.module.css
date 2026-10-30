@@ -26,4 +26,37 @@
     /* Side by side, a pair shares one height, so two cards in a row end on one line (Home). */
     align-items: stretch;
   }
+
+  /* Entering (first run's Done): each tile fades in and rises a step, the next a press later. Only translate and
+     opacity move, so layout never shifts, and the tiles take input from the first frame. */
+  .root[data-entering] > * {
+    animation: tile-rise var(--duration-modal) var(--ease-out) both;
+  }
+
+  .root[data-entering] > :nth-child(2) {
+    animation-delay: var(--duration-press);
+  }
+
+  .root[data-entering] > :nth-child(n + 3) {
+    animation-delay: calc(var(--duration-press) * 2);
+  }
+
+  @keyframes tile-rise {
+    from {
+      opacity: 0;
+      translate: 0 var(--space-8);
+    }
+  }
+
+  @keyframes tile-fade {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .root[data-entering] > * {
+      animation-name: tile-fade;
+    }
+  }
 }
