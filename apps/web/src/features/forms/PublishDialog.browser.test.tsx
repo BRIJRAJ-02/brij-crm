@@ -1,5 +1,7 @@
-// A form's first publish in Chromium (late trap #36): when the object's email field isn't unique yet, Publish makes it
-// unique, which changes how imports and every other form match there; the Where the answers go step says so first.
+// A form's first publish in Chromium (spec 0058, AC-13 and AC-6): one step with the name, the link, where submissions
+// are saved and each question's field as a row that stays changeable; the one line that says an email field becomes
+// unique before Publish makes it so (late trap #36); then the Ready panel with the link, its QR and three embed tiles,
+// and no code until a tile is picked.
 import type { DataLayer, FormAttributeChoice, FormDocument, FormTargetChoices, FormView } from '@crm/data';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
@@ -32,6 +34,9 @@ const DRAFT: FormDocument = {
   spam: { minFillMs: 2_000, scoreThreshold: 0.3 },
 };
 
+/** The same form once its email is the match: nothing more to ask before Publish. */
+const MATCHED: FormDocument = { ...DRAFT, targets: { main: { objectId: DESIGNERS, matchAttributeId: EMAIL } } };
+
 const email = (isUnique: boolean): FormAttributeChoice => ({
   attributeId: EMAIL,
   title: 'Work email',
@@ -55,8 +60,14 @@ const FORM = {
   draft: DRAFT,
 } as unknown as FormView;
 
+const LIVE = { ...FORM, live: MATCHED, draft: MATCHED, liveVersionNumber: 1 } as unknown as FormView;
+
 const data = {
-  forms: { hostedUrl: (key: string) => `https://app.example.com/f/${key}` },
+  forms: {
+    hostedUrl: (key: string) => `https://app.example.com/f/${key}`,
+    embedUrl: () => 'https://app.example.com/embed/v1.js',
+    publish: () => Promise.resolve(LIVE),
+  },
 } as unknown as DataLayer;
 
 let shown: InApp | undefined;
@@ -70,18 +81,28 @@ afterEach(() => {
   shown = undefined;
 });
 
-async function openStepTwo(choices: FormTargetChoices, canBuild: boolean) {
+/** Opens the dialog; answers every draft it hands back, last first. */
+async function open(
+  options: {
+    readonly draft?: FormDocument;
+    readonly choices?: FormTargetChoices;
+    readonly canBuild?: boolean;
+  } = {},
+) {
+  const changes: FormDocument[] = [];
   shown = await renderInApp(
     () => (
       <PublishDialog
         slug="acme"
         form={FORM}
-        draft={DRAFT}
-        target={choices}
+        draft={options.draft ?? DRAFT}
+        target={options.choices ?? target(false)}
         objects={[]}
-        canBuild={canBuild}
+        canBuild={options.canBuild ?? true}
         flush={() => Promise.resolve(1)}
-        onDraftChange={() => undefined}
+        onDraftChange={(next) => {
+          changes.unshift(next);
+        }}
         onTargetChange={() => undefined}
         onPublished={() => undefined}
         onClose={() => undefined}
@@ -89,25 +110,72 @@ async function openStepTwo(choices: FormTargetChoices, canBuild: boolean) {
     ),
     { data, pattern: '/w/$slug/captures/forms/$formId', at: '/w/acme/captures/forms/form-1' },
   );
-  await userEvent.click(page.getByRole('button', { name: 'Next' }));
+  return changes;
 }
 
-const SAID =
-  'Publishing makes Work email unique on Graphic Designers: one record per email. Submissions, imports and other forms then update that record instead of adding another.';
+const SAID = 'Work email becomes unique on Graphic Designers.';
 
-describe('the first publish of a form whose email field isn’t unique (late trap #36)', () => {
-  it('says Publish makes it unique, before it happens', async () => {
-    await openStepTwo(target(false), true);
+describe('the first publish, in one step (AC-13)', () => {
+  it('shows the name, the link, where submissions go and each answer’s field at once, with no Next', async () => {
+    await open();
+    const dialog = page.getByRole('dialog', { name: 'Publish your form' });
+    await expect.element(dialog).toBeVisible();
+    await expect.element(dialog.getByLabelText('Name')).toHaveValue('Apply');
+    await expect.element(dialog.getByRole('textbox', { name: /^Link/ })).toHaveValue('apply');
+    await expect.element(dialog.getByRole('button', { name: /Save to$/ })).toBeVisible();
+    // The answer's row names its question and the field it fills, as a chip that opens a choice.
+    const row = dialog.getByRole('row', { name: /Work email/ });
+    await expect.element(row.getByRole('button', { name: /saved as$/ })).toHaveTextContent('Work email');
+    expect(dialog.getByRole('button', { name: 'Next' }).query()).toBeNull();
+    await expect.element(dialog.getByRole('button', { name: 'Publish', exact: true })).toBeEnabled();
+  });
+
+  it('keeps each row changeable: an answer can stay with the submission only', async () => {
+    const changes = await open();
+    await userEvent.click(page.getByRole('button', { name: /Work email, saved as$/ }));
+    await userEvent.click(page.getByRole('listbox').getByRole('option', { name: 'Submission only' }));
+    const question = changes[0]?.questions[0];
+    expect(question?.filedOn).toBeUndefined();
+    expect(question?.kept).toBe(true);
+  });
+
+  it('says in one line that Publish makes the email unique, before it happens (late trap #36)', async () => {
+    await open();
     await expect.element(page.getByText(SAID)).toBeVisible();
+    // One line: no word count past the limit, and no second sentence.
+    expect(SAID.split(' ').length).toBeLessThan(12);
   });
 
   it('says nothing when it is unique already, or when the publisher may not change fields', async () => {
-    await openStepTwo(target(true), true);
-    await expect.element(page.getByRole('button', { name: 'Publish' })).toBeVisible();
+    await open({ choices: target(true) });
+    await expect.element(page.getByRole('button', { name: 'Publish', exact: true })).toBeVisible();
     expect(page.getByText(SAID).query()).toBeNull();
     shown?.unmount();
-    await openStepTwo(target(false), false);
-    await expect.element(page.getByRole('button', { name: 'Publish' })).toBeVisible();
+    await open({ canBuild: false });
+    await expect.element(page.getByRole('button', { name: 'Publish', exact: true })).toBeVisible();
     expect(page.getByText(SAID).query()).toBeNull();
+  });
+});
+
+describe('the Ready panel after the first publish (AC-6)', () => {
+  it('shows the link, Copy, the QR and three embed tiles, and no code until a tile is picked', async () => {
+    await open({ draft: MATCHED, choices: target(true) });
+    await userEvent.click(page.getByRole('button', { name: 'Publish', exact: true }));
+    await expect.element(page.getByRole('heading', { name: 'Your form is live' })).toBeVisible();
+    await expect.element(page.getByText('https://app.example.com/f/apply')).toBeVisible();
+    await expect.element(page.getByRole('button', { name: /Copy link/ })).toBeVisible();
+    await expect.element(page.getByRole('img', { name: 'QR code for the link' })).toBeVisible();
+    const tiles = page.getByRole('radiogroup', { name: 'Put it on your site' });
+    await expect.element(tiles).toBeVisible();
+    expect(tiles.getByRole('radio').all()).toHaveLength(3);
+    expect(page.getByRole('textbox', { name: /Embed snippet/ }).query()).toBeNull();
+    // Done takes focus as Publish leaves, so Esc and the dialog's name stay with it.
+    await expect.element(page.getByRole('button', { name: /^Done/ })).toHaveFocus();
+
+    await userEvent.click(tiles.getByRole('radio', { name: 'Popup' }));
+    const snippet = page.getByRole('textbox', { name: /Embed snippet/ });
+    await expect.element(snippet).toBeVisible();
+    const code = snippet.element();
+    expect(code instanceof HTMLTextAreaElement ? code.value : '').toContain('data-timefix-mode="popup"');
   });
 });

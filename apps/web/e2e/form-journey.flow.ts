@@ -1,5 +1,5 @@
 // The form journey end to end (flow walks, 29 October 2026): Captures › Forms › New form; a question added and
-// mapped onto People's Job title; the first publish's three steps; a visitor sends it; the answer lands on the
+// mapped onto People's Job title; the first publish, in one step; a visitor sends it; the answer lands on the
 // person's Job title in People; and changing which object the form saves to asks first, Cancel keeping People.
 import { randomUUID } from 'node:crypto';
 import { expect, test } from '@playwright/test';
@@ -36,16 +36,13 @@ test.describe('the form journey', () => {
     await expect(page.getByRole('listbox')).toBeHidden();
     await expect(page.getByText('Person › Job title').first()).toBeVisible();
 
-    // The first publish: name it, check where the answers go, publish.
+    // The first publish, in one step: name it, check where the answers go, publish.
     await page.getByRole('button', { name: 'Publish', exact: true }).click();
-    const setUp = page.getByRole('dialog', { name: 'Set up your form' });
-    await setUp.getByLabel('Name').fill(`Talk to us ${tag}`);
-    await setUp.getByRole('button', { name: 'Next' }).click();
-    const answers = page.getByRole('dialog', { name: 'Where the answers go' });
-    await expect(answers.getByRole('button', { name: /Where submissions go/ })).toContainText('People');
-    await answers.getByRole('button', { name: 'Publish', exact: true }).click();
-    const live = page.getByRole('dialog', { name: 'Your form is live' });
-    await expect(live).toBeVisible({ timeout: 30_000 });
+    const publish = page.getByRole('dialog', { name: 'Publish your form' });
+    await publish.getByLabel('Name').fill(`Talk to us ${tag}`);
+    await expect(publish.getByRole('button', { name: /Save to$/ })).toContainText('People');
+    await publish.getByRole('button', { name: 'Publish', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Your form is live' })).toBeVisible({ timeout: 30_000 });
     await page.keyboard.press('Escape');
     await expect(page.getByText(/Live · v1/).first()).toBeVisible();
     // Its public address, from Settings › Details › Link.

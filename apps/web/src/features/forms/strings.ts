@@ -82,8 +82,8 @@ export const strings = {
   published: (version: number) => `Published version ${String(version)}.`,
   madeUnique: (field: string, objectName: string) => `${field} is now unique on ${objectName}: one record per email.`,
   viewField: 'View field',
-  willMakeUnique: (field: string, objectName: string) =>
-    `Publishing makes ${field} unique on ${objectName}: one record per email. Submissions, imports and other forms then update that record instead of adding another.`,
+  /** The first publish's one line on the match (spec 0058, AC-13), said before Publish makes it so. */
+  willMakeUnique: (field: string, objectName: string) => `${field} becomes unique on ${objectName}.`,
   changedBy: (name: string) => `${name} changed this form.`,
   someoneChanged: 'Someone else changed this form.',
   loadTheirs: 'Load their version',
@@ -103,34 +103,31 @@ export const strings = {
 
   // Questions: the shared editor's words (`features/questions/strings.ts`), and the form's own
   ...questionStrings,
-  emailStays: 'The email question stays while the form files onto People: it is how a submission becomes a person.',
+  emailStays: 'The form matches records by this email.',
   /** Publish couldn't make the email the match: two records on the object already share one (27 October 2026). */
-  matchHasDuplicates: (objectName: string) =>
-    `Some ${objectName} share an email already, so email can’t tell them apart yet. Give each its own, then publish.`,
+  matchHasDuplicates: (objectName: string) => `Duplicate emails on ${objectName}. Fix them, then publish.`,
 
-  // First publish
-  setUpTitle: 'Set up your form',
-  answersTitle: 'Where the answers go',
+  // First publish (spec 0058, AC-13): one step, then the Ready panel (AC-6)
+  publishTitle: 'Publish your form',
   liveTitle: 'Your form is live',
-  stepOf: (step: number, of: number) => `Step ${String(step)} of ${String(of)}`,
+  liveText: 'Share the link, or put it on your site.',
   name: 'Name',
   address: 'Link',
-  addressHint: 'Lowercase letters, numbers and hyphens',
   addressTaken: 'That address is taken',
   addressInvalid: 'The address needs 2 to 40 lowercase letters, numbers or hyphens.',
-  next: 'Next',
-  back: 'Back',
-  close: 'Close',
-  fileOnto: 'Where submissions go',
-  fileOntoHint: 'Each submission adds or updates one of these, matched by email.',
+  done: 'Done',
   noCrm: 'Don’t add to the CRM',
-  keptOnlyHint: 'Submissions stay in the form’s Submissions tab. You can add them to the CRM later, from Settings.',
-  buildObject: 'Build one out of this form',
-  buildObjectButton: (name: string, attributes: number) =>
-    `Make an object named “${name}” with ${count(attributes, 'attribute', 'attributes')}`,
+  /** The Save to list's way to make an object out of the form, one field per question. */
+  buildObjectItem: (name: string) => `New object “${name}”`,
+  buildObjectText: (fields: number) => `${count(fields, 'field', 'fields')} from its questions`,
   building: 'Making the object…',
-  liveText: 'Share the link, or put it on your site.',
-  ownFormLater: 'To use your own design, take the form HTML from Install.',
+  /** Each mapping row's Select, named by its question for screen readers. */
+  savedAsOf: (question: string) => `${question}, saved as`,
+  /** A field Publish will make for the question. */
+  newField: 'New',
+  /** A question kept off the CRM, with the submission only. */
+  submissionOnly: 'Submission only',
+  embedTiles: 'Put it on your site',
   ownFormThanks: 'Thank you. That is with us.',
 
   // Settings tab
@@ -247,8 +244,7 @@ export const strings = {
   readOnlyTitle: 'You can view this form',
   readOnlyText: 'Only people who manage forms can change it.',
   shareTitle: 'Share',
-  shareTip:
-    'Use the link in an email, a chat or a post: it opens the form on a page of its own. To keep people on your site, put the form there with the snippet below.',
+  shareTip: 'Opens the form on its own page.',
   link: 'Link',
   copy: 'Copy',
   copyLink: 'Copy link',
@@ -257,19 +253,20 @@ export const strings = {
   copyFormHtml: 'Copy form HTML',
   copySecret: 'Copy signing secret',
   websiteTitle: 'Put it on your site',
-  websiteTip:
-    'Paste the snippet where the form should show. One script tag serves every form and booking page on your site, so add it once.',
+  websiteTip: 'Paste it where the form should show. One script tag serves every form.',
   embedMode: 'How it shows',
   embedInline: 'In the page',
   embedPopup: 'Popup',
   embedFloating: 'Corner button',
-  embedInlineHint: 'Fills its space and grows with the form.',
+  /** Each embed tile's tooltip (spec 0058, AC-11): what the visitor sees. */
+  embedInlineHint: 'Sits in your page and grows with the form.',
   embedPopupHint: 'Your own button opens it in a dialog.',
-  embedFloatingHint: 'A corner button on every page opens it. Change its words in data-timefix-text.',
+  embedFloatingHint: 'A button in the corner of every page opens it.',
+  /** Under the corner button's snippet: the one thing a site may want to change. */
+  embedFloatingWords: 'Change its words in data-timefix-text.',
   /** The words on the popup's and the corner's button, until the site changes them. */
   embedButtonText: 'Contact us',
   embedSnippet: 'Embed snippet',
-  embedText: 'Put the form on a page of your own site.',
   advancedTitle: 'For developers',
   ownFormTitle: 'Your own HTML',
   ownFormSnippet: 'Form HTML',
@@ -320,7 +317,7 @@ export const strings = {
     ' and the hex digest.',
   ],
   secret: 'Signing secret',
-  secretReason: 'Keep it on your server only. Anyone who has it can post as your site.',
+  secretReason: 'Keep it on your server. Anyone with it can post as you.',
   secretReveal: 'Reveal',
   secretHide: 'Hide',
   secretRotate: 'Rotate secret',

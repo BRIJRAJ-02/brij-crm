@@ -1,10 +1,8 @@
-// A form's first publish (spec 0023, Publishing) is one dialog in three steps,
-// each named by its title: Set up your form, Where the answers go, then Your
-// form is live. Each step's buttons replace the one just pressed, so focus is
-// put back inside the dialog at every step, and Esc closes it at the last one,
-// leaving focus on the editor's More actions, beside where Publish was
-// (merge A's smoke, 21 October 2026: the last step had lost focus, so it was
-// read with no name and Esc did nothing).
+// A form's first publish is one step (spec 0058, AC-13): Publish your form holds the name, the link, where
+// submissions are saved and each question's field, and its Publish turns the same dialog into the Ready panel (AC-6),
+// headed Your form is live. Publish gives way to Done, so focus is put back inside the dialog there, and Esc closes
+// it, leaving focus on the editor's More actions, beside where Publish was (merge A's smoke, 21 October 2026: the
+// last step had lost focus, so it was read with no name and Esc did nothing).
 import { randomUUID } from 'node:crypto';
 import { expect, test } from '@playwright/test';
 import { newWorkspace } from './people.ts';
@@ -12,7 +10,7 @@ import { newWorkspace } from './people.ts';
 test.describe('a form’s first publish', () => {
   test.skip(({ viewport }) => (viewport?.width ?? 0) < 1000, 'One width is enough for the publish dialog.');
 
-  test('names each step, keeps focus inside it, and closes on Esc with focus beside Publish', async ({ page }) => {
+  test('is one step, keeps focus inside the dialog, and closes on Esc with focus beside Publish', async ({ page }) => {
     test.setTimeout(180_000);
     const tag = randomUUID().slice(0, 8);
     const slug = `publish-${tag}`;
@@ -22,22 +20,19 @@ test.describe('a form’s first publish', () => {
     await expect(page).toHaveURL(/\/captures\/forms\/[0-9a-f-]{36}/, { timeout: 30_000 });
 
     await page.getByRole('button', { name: 'Publish', exact: true }).click();
-    const setUp = page.getByRole('dialog', { name: 'Set up your form' });
-    await expect(setUp).toBeVisible();
-    await expect(setUp.getByLabel('Name')).toBeFocused();
-    await setUp.getByLabel('Name').fill(`Publish flow ${tag}`);
-    await setUp.getByRole('button', { name: 'Next' }).click();
+    const publish = page.getByRole('dialog', { name: 'Publish your form' });
+    await expect(publish).toBeVisible();
+    await expect(publish.getByLabel('Name')).toBeFocused();
+    await publish.getByLabel('Name').fill(`Publish flow ${tag}`);
+    // Where submissions go and each answer's field are already there: no second step.
+    await expect(publish.getByRole('button', { name: /Save to$/ })).toBeVisible();
+    await expect(publish.getByRole('button', { name: 'Next' })).toHaveCount(0);
+    await publish.getByRole('button', { name: 'Publish', exact: true }).click();
 
-    const answers = page.getByRole('dialog', { name: 'Where the answers go' });
-    await expect(answers).toBeVisible();
-    // Next gave way to Publish: focus moved to the step's first choice, inside the dialog.
-    await expect(answers.getByRole('button', { name: /Where submissions go/ })).toBeFocused();
-    await answers.getByRole('button', { name: 'Publish', exact: true }).click();
-
-    const live = page.getByRole('dialog', { name: 'Your form is live' });
-    await expect(live).toBeVisible({ timeout: 30_000 });
-    // Publish gave way to Close: focus is on it, inside the dialog, so the dialog is said with its name.
-    await expect(live.getByRole('button', { name: 'Close' }).last()).toBeFocused();
+    const ready = page.getByRole('heading', { name: 'Your form is live' });
+    await expect(ready).toBeVisible({ timeout: 30_000 });
+    // Publish gave way to Done: focus is on it, inside the dialog, so the dialog is said with its name.
+    await expect(page.getByRole('dialog').getByRole('button', { name: /^Done/ })).toBeFocused();
     await page.keyboard.press('Escape');
     await expect(page.getByRole('dialog')).toHaveCount(0);
     // Publish left once the form went live; focus is on More actions, beside where it was.

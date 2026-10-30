@@ -1,15 +1,26 @@
 // Brief
 // Purpose: a form's Install tab (spec 0023, 0023-embeds.md), in the order a person needs it: share the link, then put
-// it on a website (in the page, a popup, or a corner button), then (rarely) the advanced ways for a developer.
+// it on a website (in the page, a popup, or a corner button, picked as tiles), then the developer material, closed.
 // Main task: press Copy link, or pick how it shows and copy its snippet. Nothing else needs touching for it to work.
 // Leaves out: a QR code and analytics; the booking page's own embed lives with the booking page.
 import type { FormView } from '@crm/data';
-import { Button, Card, Code, DescriptionList, Disclosure, Field, InfoTip, SegmentedControl, Switch } from '@crm/ui';
+import {
+  Button,
+  Card,
+  Code,
+  DescriptionList,
+  Disclosure,
+  Field,
+  InfoTip,
+  Switch,
+  TileGrid,
+  type ChoiceTile,
+} from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useState } from 'react';
 import { RemoveSiteDialog, RotateSecretDialog } from './FormConfirms.tsx';
 import { firstRefusal } from './refusals.ts';
-import { embedSnippet, EMBED_MODES, ownFormHtml, type EmbedMode } from './snippets.ts';
+import { embedSnippet, ownFormHtml, type EmbedMode } from './snippets.ts';
 import { strings } from './strings.ts';
 
 /** Props for the Install tab. */
@@ -20,12 +31,17 @@ export interface InstallTabProps {
   readonly onFormChange: (view: FormView) => void;
 }
 
-/** Each mode's segment name and the line under its snippet. */
-const MODE_WORDS: Readonly<Record<EmbedMode, { readonly label: string; readonly hint: string }>> = {
-  inline: { label: strings.embedInline, hint: strings.embedInlineHint },
-  popup: { label: strings.embedPopup, hint: strings.embedPopupHint },
-  floating: { label: strings.embedFloating, hint: strings.embedFloatingHint },
-};
+/**
+ * The three ways a site shows the form, as tiles picked by sight (spec 0058, AC-11), in `EMBED_MODES` order: each a
+ * small picture and a name, what the visitor sees in its tooltip. The Install tab and the first publish's Ready panel
+ * draw the same tiles. The pictures are marks the icon registry already holds (each new mark costs every page's first
+ * load).
+ */
+export const EMBED_TILES: readonly (ChoiceTile & { readonly id: EmbedMode })[] = [
+  { id: 'inline', name: strings.embedInline, icon: 'file-text', description: strings.embedInlineHint },
+  { id: 'popup', name: strings.embedPopup, icon: 'layers', description: strings.embedPopupHint },
+  { id: 'floating', name: strings.embedFloating, icon: 'message-square', description: strings.embedFloatingHint },
+];
 
 /** The most sites a form lists (the contract's cap). */
 const SITES_MAX = 20;
@@ -43,7 +59,7 @@ export function siteOrigin(typed: string): { readonly origin?: string; readonly 
   return { origin: url.origin };
 }
 
-/** Share your form, Put it on your website, then Advanced (closed): your own HTML, the sites and the secret. */
+/** Share, Put it on your site (the embed tiles and the snippet), then For developers, closed: own HTML, sites, secret. */
 export function InstallTab({ slug, form, isReadOnly, onFormChange }: InstallTabProps) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
   const link = data.forms.hostedUrl(form.publicKey);
@@ -140,18 +156,19 @@ export function InstallTab({ slug, form, isReadOnly, onFormChange }: InstallTabP
       </Card>
       {/* One way to copy: the code block's own Copy, as the owner asked (no second button under it). */}
       <Card title={strings.websiteTitle} actions={<InfoTip label={strings.websiteTitle}>{strings.websiteTip}</InfoTip>}>
-        <SegmentedControl
+        <TileGrid
+          variant="choice"
           label={strings.embedMode}
-          segments={EMBED_MODES.map((each) => ({ value: each, label: MODE_WORDS[each].label }))}
+          tiles={EMBED_TILES}
           value={mode}
-          onChange={(value) => {
-            const next = EMBED_MODES.find((each) => each === value);
-            if (next !== undefined) setMode(next);
+          onChange={(id) => {
+            const tile = EMBED_TILES.find((each) => each.id === id);
+            if (tile !== undefined) setMode(tile.id);
           }}
         />
         <Field
           label={strings.embedSnippet}
-          hint={MODE_WORDS[mode].hint}
+          {...(mode === 'floating' ? { hint: strings.embedFloatingWords } : {})}
           variant="copy"
           isMultiline
           copyLabel={strings.copyEmbed}
