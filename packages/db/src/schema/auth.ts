@@ -346,11 +346,11 @@ export const publicProfiles = auth.table(
     workspaceId: uuid('workspace_id').notNull(),
     handle: text('handle').notNull(),
     bio: text('bio').notNull().default(''),
-    /** The link page's look (spec 0054): six names from closed sets, never a colour or a size. */
+    /** The link page's look (spec 0054, spec 0060): ten names from closed sets, never a colour or a size. */
     theme: jsonb('theme')
       .notNull()
       .default(
-        sql`'{"ground":"plain","hue":"blue","mode":"light","shape":"soft","fill":"plain","font":"sans"}'::jsonb`,
+        sql`'{"ground":"plain","hue":"blue","mode":"light","shape":"soft","fill":"plain","font":"sans","gradient":"dawn","pattern":"dots","header":"centred","avatar":"circle"}'::jsonb`,
       ),
     /** Whether search engines may show the link page (spec 0055, AC-5506): on until its owner says otherwise. */
     indexable: boolean('indexable').notNull().default(true),
@@ -373,6 +373,23 @@ export const publicProfiles = auth.table(
      * made for them they haven't touched; once set, nothing but the switch changes whether the page is public.
      */
     claimedAt: timestamptz('claimed_at'),
+    /**
+     * The link page's own accent pair (spec 0060, AC-14): checked hexes, null to follow the workspace's brand (and,
+     * for the dark one, to lift the light one). Its personal booking pages wear it too. Written only by
+     * `crm_save_profile_accent`.
+     */
+    accent: text('accent'),
+    accentDark: text('accent_dark'),
+    /**
+     * The cover photo and the photo ground (spec 0060, AC-10, AC-13): a store path the server made, its type and a
+     * short version for the path that serves it, all three or none. Written only by `crm_save_profile_image`.
+     */
+    coverPath: text('cover_path'),
+    coverType: text('cover_type'),
+    coverVersion: text('cover_version'),
+    groundPath: text('ground_path'),
+    groundType: text('ground_type'),
+    groundVersion: text('ground_version'),
     updatedAt: updatedAt(),
   },
   (t) => [
@@ -381,19 +398,41 @@ export const publicProfiles = auth.table(
     check('public_profiles_bio', sql`char_length(${t.bio}) <= 160`),
     check(
       'public_profiles_theme',
-      // Postgres refuses a subquery in a check constraint, so "no key but these six" is the six taken away leaving
-      // an empty object. A check whose expression is NULL passes, so "all six present" needs `coalesce` — which
-      // makes the whole thing false for a person who has never picked a look, hence `is null or`.
+      // Postgres refuses a subquery in a check constraint, so "no key but these ten" is the ten taken away leaving
+      // an empty object. A check whose expression is NULL passes, so "all ten present" needs `coalesce`.
       sql`${t.theme} is null or (
         jsonb_typeof(${t.theme}) = 'object'
-        and ${t.theme} - 'ground' - 'hue' - 'mode' - 'shape' - 'fill' - 'font' = '{}'::jsonb
-        and coalesce(${t.theme} ->> 'ground', '') in ('plain', 'paper', 'tint', 'ink')
+        and ${t.theme} - 'ground' - 'hue' - 'mode' - 'shape' - 'fill' - 'font' - 'gradient' - 'pattern' - 'header' - 'avatar' = '{}'::jsonb
+        and coalesce(${t.theme} ->> 'ground', '') in ('plain', 'paper', 'tint', 'ink', 'gradient', 'pattern', 'image')
         and coalesce(${t.theme} ->> 'hue', '') in ('gray', 'red', 'orange', 'yellow', 'lime', 'green', 'sky', 'blue', 'purple')
-        and coalesce(${t.theme} ->> 'mode', '') in ('light', 'dark')
+        and coalesce(${t.theme} ->> 'mode', '') in ('light', 'dark', 'system')
         and coalesce(${t.theme} ->> 'shape', '') in ('soft', 'pill', 'square')
         and coalesce(${t.theme} ->> 'fill', '') in ('plain', 'soft', 'outline', 'solid')
-        and coalesce(${t.theme} ->> 'font', '') in ('sans', 'mono')
+        and coalesce(${t.theme} ->> 'font', '') in ('sans', 'mono', 'grotesk', 'editorial', 'classic', 'friendly', 'geometric', 'display')
+        and coalesce(${t.theme} ->> 'gradient', '') in ('dawn', 'dusk', 'mint', 'ocean', 'peach', 'grape', 'sand', 'graphite')
+        and coalesce(${t.theme} ->> 'pattern', '') in ('dots', 'grid', 'lines', 'waves')
+        and coalesce(${t.theme} ->> 'header', '') in ('centred', 'cover', 'left')
+        and coalesce(${t.theme} ->> 'avatar', '') in ('circle', 'rounded', 'none')
       )`,
+    ),
+    check(
+      'public_profiles_accent',
+      sql`(${t.accent} is null or ${t.accent} ~ '^#[0-9a-f]{6}$')
+        and (${t.accentDark} is null or (${t.accentDark} ~ '^#[0-9a-f]{6}$' and ${t.accent} is not null))`,
+    ),
+    check(
+      'public_profiles_cover',
+      sql`(${t.coverPath} is null and ${t.coverType} is null and ${t.coverVersion} is null)
+        or (${t.coverPath} ~ ('^profile-images/' || ${t.userId}::text || '/' || ${t.workspaceId}::text || '/[0-9a-f-]{36}[.](png|jpg|webp)$')
+          and ${t.coverType} in ('image/png', 'image/jpeg', 'image/webp')
+          and ${t.coverVersion} ~ '^[0-9a-f]{12}$')`,
+    ),
+    check(
+      'public_profiles_ground',
+      sql`(${t.groundPath} is null and ${t.groundType} is null and ${t.groundVersion} is null)
+        or (${t.groundPath} ~ ('^profile-images/' || ${t.userId}::text || '/' || ${t.workspaceId}::text || '/[0-9a-f-]{36}[.](png|jpg|webp)$')
+          and ${t.groundType} in ('image/png', 'image/jpeg', 'image/webp')
+          and ${t.groundVersion} ~ '^[0-9a-f]{12}$')`,
     ),
     foreignKey({ name: 'public_profiles_user_fk', columns: [t.userId], foreignColumns: [user.id] }).onDelete('cascade'),
     // The handle is one this same membership holds (migration 0113).

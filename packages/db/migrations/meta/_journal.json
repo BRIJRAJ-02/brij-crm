@@ -953,6 +953,13 @@
       "when": 1795400200000,
       "tag": "0135_link_page_switch",
       "breakpoints": true
+    },
+    {
+      "idx": 136,
+      "version": "7",
+      "when": 1795400300000,
+      "tag": "0136_brand_kit",
+      "breakpoints": true
     }
   ]
 }

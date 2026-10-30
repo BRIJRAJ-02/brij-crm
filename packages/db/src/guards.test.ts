@@ -206,13 +206,16 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_profile_items', owner: 'crm_handle' },
       { name: 'crm_profile_items_archived', owner: 'crm_handle' },
       { name: 'crm_profile_items_public', owner: 'crm_handle' },
+      { name: 'crm_profile_look', owner: 'crm_handle' },
       // The picture a pasted link shows instead of the drawn card (spec 0055, migration 0112).
       { name: 'crm_profile_share_image', owner: 'crm_handle' },
       { name: 'crm_public_profiles_of', owner: 'crm_handle' },
       { name: 'crm_purge_workspace_begin', owner: 'crm_purge' },
       { name: 'crm_purge_workspace_end', owner: 'crm_purge' },
       { name: 'crm_save_picture_hidden', owner: 'crm_handle' },
+      { name: 'crm_save_profile_accent', owner: 'crm_handle' },
       { name: 'crm_save_profile_indexable', owner: 'crm_handle' },
+      { name: 'crm_save_profile_image', owner: 'crm_handle' },
       { name: 'crm_save_profile_item', owner: 'crm_handle' },
       { name: 'crm_save_profile_share_image', owner: 'crm_handle' },
       // The look of the page (spec 0054, migration 0105).
@@ -297,13 +300,18 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_profile_items', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_profile_items_archived', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_profile_items_public', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      { name: 'crm_profile_look', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_profile_share_image', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_public_profiles_of', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_purge_workspace_begin', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_purge_workspace_end', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_save_picture_hidden', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
-      // A plpgsql body: it raises PROFILE_ITEM_LIMIT, PROFILE_ITEM_DATA and PROFILE_ITEM_MISSING.
+      // A plpgsql body: it checks the workspace and the membership, and raises PROFILE_MISSING (spec 0060).
+      { name: 'crm_save_profile_accent', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_save_profile_indexable', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
+      // A plpgsql body: as crm_save_profile_accent, and answers the path it replaced (spec 0060).
+      { name: 'crm_save_profile_image', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
+      // A plpgsql body: it raises PROFILE_ITEM_LIMIT, PROFILE_ITEM_DATA and PROFILE_ITEM_MISSING.
       { name: 'crm_save_profile_item', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       // A plpgsql body: it raises PROFILE_MISSING for a person who has no page to share.
       { name: 'crm_save_profile_share_image', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
@@ -1137,6 +1145,39 @@ describe('isolation', () => {
       expect(members.rowCount).toBe(0);
     } finally {
       await pool.end();
+    }
+  });
+
+  it("reads none of another workspace's brand kit, and its checks refuse a colour or path that isn't one (spec 0060)", async () => {
+    const a = await workspaceWithMember('brand-iso-a');
+    const b = await workspaceWithMember('brand-iso-b');
+    for (const w of [a, b]) {
+      await db.withWorkspace(w.workspaceId, (tx) =>
+        tx.execute(
+          sql`insert into workspace_brands (workspace_id, accent, updated_by) values (${w.workspaceId}, '#1f5fd6', ${w.memberId})`,
+        ),
+      );
+    }
+    const seen = await db.withWorkspace(a.workspaceId, (tx) =>
+      tx.execute<{ workspace_id: string }>(sql`select workspace_id from workspace_brands`),
+    );
+    expect(seen.rows.map((row) => row.workspace_id)).toEqual([a.workspaceId]);
+    for (const bad of ['#12345g', 'red', '#123456;}', '#1234567', '#ABCDEF']) {
+      await expect(
+        db.withWorkspace(a.workspaceId, (tx) =>
+          tx.execute(sql`update workspace_brands set accent = ${bad} where workspace_id = ${a.workspaceId}`),
+        ),
+      ).rejects.toMatchObject({ cause: { code: '23514' } });
+    }
+    // A logo path the server didn't make for this workspace: another's folder, or a climb out of it.
+    for (const path of [`logos/${b.workspaceId}/${randomUUID()}.png`, `logos/${a.workspaceId}/../x.png`]) {
+      await expect(
+        db.withWorkspace(a.workspaceId, (tx) =>
+          tx.execute(
+            sql`update workspace_brands set logo_path = ${path}, logo_type = 'image/png', logo_version = 'abcdef012345' where workspace_id = ${a.workspaceId}`,
+          ),
+        ),
+      ).rejects.toMatchObject({ cause: { code: '23514' } });
     }
   });
 
