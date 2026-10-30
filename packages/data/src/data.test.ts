@@ -1848,6 +1848,29 @@ describe('live updates', () => {
     expect(counts()).toBe(before + 1);
   });
 
+  it('reads no views again when a teammate makes an object, which names no record anew (late trap #15)', async () => {
+    const MADE = {
+      ...PEOPLE,
+      id: '0199a6f2-0000-7000-8000-0000000000e1',
+      apiSlug: 'deals',
+      primaryAttributeId: TITLE.id,
+    };
+    let reads = 0;
+    const { api, client, data } = await liveLayer({
+      objects: () => {
+        reads += 1;
+        return reads === 1 ? [PEOPLE] : [PEOPLE, MADE];
+      },
+    });
+    await data.objects.list('acme');
+    const counts = () => count(api.calls, '/api/rpc/records/count');
+    const before = counts();
+    client.channel().onPublication({ seq: 1, at: AT, kind: 'definitions', objectId: MADE.id });
+    await settled();
+    expect(count(api.calls, '/api/rpc/objects/list')).toBe(2);
+    expect(counts()).toBe(before);
+  });
+
   it('reads the members again on a members change, and the person’s own access when it names them (AC-82)', async () => {
     const BEA: MemberView = {
       id: '0199a6f2-0000-7000-8000-0000000000b0',

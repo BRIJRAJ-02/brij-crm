@@ -1441,43 +1441,45 @@ export function createDataLayer({
     if (!changed) return false;
     const after = await objects.get(workspace)?.catch(() => undefined);
     // A name attribute moved (late trap #15): which attribute is the primary changed too, and every record's name.
-    const renamed = primaries(before) !== primaries(after);
-    if (renamed || archivedIds(before) !== archivedIds(after)) await refreshAttributes(workspace);
-    if (renamed) renameRecords(workspace, renamedObjects(before, after), false);
+    // An object made or gone names no record anew.
+    const renamed = renamedObjects(before, after);
+    if (renamed.length > 0 || archivedIds(before) !== archivedIds(after)) await refreshAttributes(workspace);
+    if (renamed.length > 0) renameRecords(workspace, renamed, false);
     return true;
   };
 
-  /** Each object's name attribute in a held list, to tell when one moved (late trap #15). */
-  const primaries = (list: readonly ObjectSummary[] | undefined): string =>
-    (list ?? [])
-      .map((object) => object.id + (object.primaryAttributeId ?? ''))
-      .sort()
-      .join();
-
-  /** The objects whose name attribute differs between two held lists (late trap #15). */
+  /** The objects held in both lists whose name attribute differs between them (late trap #15). */
   const renamedObjects = (
     before: readonly ObjectSummary[] | undefined,
     after: readonly ObjectSummary[] | undefined,
   ): string[] => {
     const was = new Map((before ?? []).map((object) => [object.id, object.primaryAttributeId]));
     return (after ?? [])
-      .filter((object) => was.get(object.id) !== object.primaryAttributeId)
+      .filter((object) => was.has(object.id) && was.get(object.id) !== object.primaryAttributeId)
       .map((object) => object.id);
   };
 
   /**
    * Objects' records are named by another attribute: every held record and linked name is read again, and so are
-   * the open timelines (their link entries name far records). The related sections listing those objects' records
-   * read again for this tab's own write only: another tab's comes as a `definitions` event for the object, which
-   * already reads them (`definitionsChanged`), so they are not read twice.
+   * the open timelines (their link entries name far records; for another tab's write, spread a random moment so a
+   * whole team doesn't read in step). The related sections listing those objects' records read again for this
+   * tab's own write only: another tab's comes as a `definitions` event for the object, which already reads them
+   * (`definitionsChanged`), so they are not read twice.
    */
   const renameRecords = (workspace: string, objectIds: readonly string[], isOwn: boolean): void => {
     void records?.then((layer) => {
       layer.renamed(workspace);
     });
-    void activity?.then((feeds) => {
-      feeds.ownWrite(workspace);
-    });
+    const timelines = activity;
+    if (timelines !== undefined) {
+      const tell = () => {
+        void timelines.then((feeds) => {
+          feeds.ownWrite(workspace);
+        });
+      };
+      if (isOwn) tell();
+      else spread(`activity renamed ${workspace}`, tell);
+    }
     if (!isOwn) return;
     void sections?.then((held) => {
       held.renamed(workspace, objectIds);
