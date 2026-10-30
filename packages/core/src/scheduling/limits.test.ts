@@ -10,6 +10,7 @@ import { testQuery } from '@crm/db/testing';
 import { enterBookingPage, systemScope } from '../access/door.ts';
 import { saveDefaultHours } from '../availability/schedules.ts';
 import type { BookingCalendar } from '../booking/calendar.ts';
+import { bookAsHost } from '../booking/host.ts';
 import { createBookingPage } from '../booking/pages.ts';
 import { bookPublicSlot, readPublicSlots } from '../booking/public.ts';
 import { newId } from '../engine/ids.ts';
@@ -18,7 +19,7 @@ import { createWorkspace } from '../engine/workspaces.ts';
 import { createRotation } from '../rotation/rotations.ts';
 import { testScope } from '../testing.ts';
 import { grantDelegation } from './delegations.ts';
-import { getLimits, limitCheck, setLimits } from './limits.ts';
+import { getLimits, limitCheck, limitsAt, setLimits } from './limits.ts';
 import { limitsLines, runSchedulingNotice } from './notice.ts';
 
 const { appUrl, ownerUrl } = inject('testDatabase');
@@ -321,5 +322,70 @@ describe('who may read and set whose limits (AC-1297, AC-1299)', () => {
         { before: {}, after: { perDay: 2 } },
       ]),
     ).toEqual([]);
+  });
+});
+
+describe('the limits a meeting lands against, for New meeting’s warning (job J7)', () => {
+  it('counts the meeting’s day and week, books in past a limit anyway, and answers only for self or Manage', async () => {
+    const w = await world();
+    const bea = await w.add('Bea Rao');
+    const max = await w.add('Max Manager');
+    const sue = await w.add('Sue See');
+    const out = await w.add('Ola Out');
+    await grantDelegation(w.as(bea), {
+      delegateMemberId: max,
+      target: { type: 'member', memberId: bea },
+      level: 'manage',
+    });
+    await grantDelegation(w.as(bea), {
+      delegateMemberId: sue,
+      target: { type: 'member', memberId: bea },
+      level: 'view',
+    });
+    const monday = new Date('2026-11-02T15:00:00.000Z');
+    // No limits: nothing, not even a count.
+    expect(await limitsAt(w.as(bea), { now }, { at: monday })).toEqual({});
+    await setLimits(w.as(bea), { now }, { perDay: 1, perWeek: 3 });
+    const intro = await createBookingPage(w.as(bea), { id: newId(), title: 'Intro', timeZone: 'UTC' }, NOW);
+    await bookPublicSlot(await enterBookingPage({ db }, intro.publicKey), deps, bookInput('2026-11-02T09:00:00.000Z'));
+    expect(await limitsAt(w.as(bea), { now }, { at: monday })).toEqual({
+      day: { limit: 1, count: 1 },
+      week: { limit: 3, count: 1 },
+    });
+    // Tuesday is a fresh day in the same week.
+    expect(await limitsAt(w.as(max), { now }, { memberId: bea, at: new Date('2026-11-03T10:00:00.000Z') })).toEqual({
+      day: { limit: 1, count: 0 },
+      week: { limit: 3, count: 1 },
+    });
+    // Booking her in past the day limit still books: the warning is all it gets.
+    const booked = await bookAsHost(w.as(max), deps, {
+      idempotencyKey: newId(),
+      pageId: intro.id,
+      start: monday,
+      minutes: 30,
+      name: 'Guest',
+      email: 'guest@client.example',
+      timeZone: 'UTC',
+      guests: [],
+      forMemberId: bea,
+    });
+    expect(booked.replayed).toBe(false);
+    expect(await limitsAt(w.as(bea), { now }, { at: monday })).toMatchObject({ day: { limit: 1, count: 2 } });
+    // A day gone by (nothing can be booked into it) or past a year ahead reads nothing back.
+    const later = () => new Date('2026-11-03T00:00:00.000Z');
+    expect(await limitsAt(w.as(max), { now: later }, { memberId: bea, at: monday })).toEqual({});
+    expect(await limitsAt(w.as(bea), { now }, { at: new Date('2027-12-01T10:00:00.000Z') })).toEqual({});
+    // Without booking.manage (a key), nothing at all, not even for its own.
+    const key = testScope({ db, workspaceId: w.workspaceId, actor: { type: 'api_key', id: newId() }, scopes: [] });
+    expect(await refusalOf(limitsAt(key, { now }, { memberId: bea, at: monday }))).toMatchObject({
+      code: 'FORBIDDEN',
+    });
+    // See only can't book her in, so it can't read this either; no reach finds nobody.
+    expect(await refusalOf(limitsAt(w.as(sue), { now }, { memberId: bea, at: monday }))).toMatchObject({
+      code: 'FORBIDDEN',
+    });
+    expect(await refusalOf(limitsAt(w.as(out), { now }, { memberId: bea, at: monday }))).toMatchObject({
+      code: 'NOT_FOUND',
+    });
   });
 });

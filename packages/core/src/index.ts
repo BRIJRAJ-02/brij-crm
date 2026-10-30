@@ -511,7 +511,7 @@ export {
 export { listVisibleMembers } from './scheduling/visible.ts';
 export { copyWeek, readTeamWeek, setDayHours, setUsualHours } from './availability/team-week.ts';
 export { createTimeOff, deleteTimeOff, listTimeOff, updateTimeOff } from './scheduling/time-off.ts';
-export { getLimits, setLimits } from './scheduling/limits.ts';
+export { getLimits, limitsAt, setLimits } from './scheduling/limits.ts';
 export { PREFERENCES_MEMBERS_ONLY, readMyPreferences, updateMyPreferences } from './members/preferences.ts';
 export { outboxEvent, stubEvent, wireEvent } from './realtime/events.ts';
 export {

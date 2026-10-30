@@ -729,6 +729,8 @@ describe('the walk: a principal without the access is refused', () => {
     // Ask to reconnect (spec 0037, AC-1309): See over the member.
     askToReconnect: (scope, ownerId) => core.askToReconnect(scope, { memberId: ownerId }),
     setLimits: (scope, ownerId) => core.setLimits(scope, { now: () => new Date() }, { memberId: ownerId, perDay: 3 }),
+    limitsAt: (scope, ownerId) =>
+      core.limitsAt(scope, { now: () => new Date() }, { memberId: ownerId, at: new Date(Date.now() + 86_400_000) }),
     reassignUpcoming: (scope, ownerId) => core.reassignUpcoming(scope, { rotationId: core.newId(), memberId: ownerId }),
     // The Team week's writes (spec 0037, AC-1291, AC-1292): a cell, a copied week, usual hours for several.
     setDayHours: (scope, ownerId) =>

@@ -7,6 +7,7 @@ import {
   deleteTimeOff,
   getLimits,
   grantDelegation,
+  limitsAt,
   listDelegations,
   listTimeOff,
   revokeDelegation,
@@ -137,6 +138,10 @@ export const availabilityRouter = member.availability.router({
 export const limitsRouter = member.limits.router({
   get: member.limits.get.handler(({ context, input }) =>
     getLimits(context.scope, { now }, { memberId: input.memberId }),
+  ),
+  // New meeting's warning before booking someone in past a limit (booking in still goes through).
+  at: member.limits.at.handler(({ context, input }) =>
+    limitsAt(context.scope, { now }, { memberId: input.memberId, at: new Date(input.at) }),
   ),
   set: member.limits.set.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, (hooks) =>

@@ -15,8 +15,9 @@
 // again) and, when someone else made it, queues the member's scheduling notice (AC-1264).
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { DateTime } from 'luxon';
-import { isTimeZone, MEETING_LIMITS, PERMISSIONS, type MeetingLimits } from '@crm/contracts';
+import { isTimeZone, MEETING_LIMITS, PERMISSIONS, type LimitsAt, type MeetingLimits } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
+import { requirePermission } from '../access/check.ts';
 import { inWorkspace } from '../access/run.ts';
 import type { EngineScope } from '../access/mint.ts';
 import { actingFor, canActFor } from '../access/scheduling.ts';
@@ -34,6 +35,9 @@ import { queueSchedulingNotice } from './notice.ts';
 const { memberBookingLimits } = schema;
 
 const DAY_MS = 86_400_000;
+
+/** How far ahead `limitsAt` reads: a year, past any booking window. */
+const LIMITS_AT_AHEAD_DAYS = 366;
 
 /** One member's limits; absent is no limit. */
 export interface LimitValues {
@@ -194,7 +198,7 @@ export async function limitChecks(
   );
 }
 
-/** Today's and this week's counts for one member, in their zone at `now`. */
+/** The counts of one member's day and week holding `now` (today's, or a meeting's start), in their zone. */
 async function countsNow(
   tx: WorkspaceTx,
   memberId: string,
@@ -295,6 +299,38 @@ export async function getLimits(
     const canChange = canActFor(reach, member, 'manage', 'hours');
     // "Changed by" with Manage, as time off shows it (AC-1265).
     return viewOf(tx, member, canChange, deps.now(), canChange);
+  });
+}
+
+/**
+ * The limits a meeting starting at `at` would land against (job J7's follow up): for each limit the member has, the
+ * limit and the confirmed meetings they already host that day or week (their zone, weeks from Monday). New meeting
+ * reads it to warn before booking someone in past a limit, which booking in still allows. Needs `booking.manage`,
+ * and only for the caller or a colleague they Manage, the reach booking in for someone takes (outside it NOT_FOUND,
+ * See only FORBIDDEN, as `actingFor` answers). A member with no limits answers nothing, so no count is read; so
+ * does a time booking in can't take (gone by) or past a year ahead, so it never reads back a past day's count.
+ */
+export async function limitsAt(
+  scope: EngineScope,
+  deps: { readonly now: () => Date },
+  input: { readonly memberId?: string | undefined; readonly at: Date },
+): Promise<LimitsAt> {
+  requirePermission(scope, 'booking.manage');
+  const actor = actorOf(scope);
+  const member = input.memberId ?? actor;
+  const now = deps.now().getTime();
+  const isBookable = input.at.getTime() >= now && input.at.getTime() <= now + LIMITS_AT_AHEAD_DAYS * DAY_MS;
+  return inWorkspace(scope, async (tx) => {
+    if (member !== actor) await actingFor(tx, scope, member, 'manage');
+    if (!isBookable) return {};
+    const values = (await memberLimits(tx, [member])).get(member);
+    if (values === undefined) return {};
+    const zone = (await limitZones(tx, [member])).get(member) ?? 'UTC';
+    const counts = await countsNow(tx, member, zone, input.at);
+    return {
+      ...(values.perDay === undefined ? {} : { day: { limit: values.perDay, count: counts.today } }),
+      ...(values.perWeek === undefined ? {} : { week: { limit: values.perWeek, count: counts.thisWeek } }),
+    };
   });
 }
 

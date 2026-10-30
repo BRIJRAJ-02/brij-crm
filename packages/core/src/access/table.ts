@@ -444,6 +444,8 @@ export const ACCESS_TABLE = {
   // with `availability.own`).
   getLimits: { scheduling: 'view' },
   setLimits: { scheduling: 'manage' },
+  // New meeting's warning (job J7's follow up): Manage, the reach booking in for someone takes.
+  limitsAt: { scheduling: 'manage' },
   // The Team week (spec 0037, AC-1289 to AC-1293): rows from the reader's See reach (themself at least); a cell, a
   // copied week and usual hours need Manage over each member's hours (their own with `availability.own`).
   readTeamWeek: { filtered: 'schedulingReach' },

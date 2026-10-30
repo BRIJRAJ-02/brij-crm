@@ -211,6 +211,7 @@ function NewMeetingFromTopBar({
       people={peopleSearchOf(data, slug, objects)}
       calendars={calendarList}
       pageDestination={(pageId) => data.calendar.pageDestination(slug, pageId)}
+      limitsAt={(input) => data.bookings.limitsAt(slug, input)}
       onBook={async (input) => {
         const booked = await data.bookings.bookAsHost(slug, { ...input, guests: [...input.guests] });
         toasts.toast(

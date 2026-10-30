@@ -26,6 +26,7 @@ import type {
   AttributeDefinition,
   AttributeImpact,
   BookAsHostInput,
+  LimitsAt,
   BookingAssignment,
   ReassignedBooking,
   RotationAdjustment,
@@ -176,6 +177,7 @@ export type {
   TimeOffStore,
 } from './scheduling/time-off.ts';
 export type { LimitsDraft, LimitsHeld, LimitsState, LimitsStore, MeetingLimits } from './scheduling/limits.ts';
+export type { LimitsAt } from '@crm/contracts';
 export type {
   CalendarHealthHeld,
   CalendarHealthState,
@@ -3891,6 +3893,13 @@ export function createDataLayer({
         reloadBookings(workspace);
         return booked;
       },
+      /**
+       * The meeting limits a meeting starting `at` would land against, for the member or (`memberId`) a colleague
+       * they Manage (spec 0037, job J7): New meeting's warning that booking in goes over one. Not held: read again
+       * as the time or host changes. Each limit only when set.
+       */
+      limitsAt: (workspace: string, input: { readonly memberId?: string; readonly at: string }): Promise<LimitsAt> =>
+        beforeRead(workspace).then(() => call((options) => api.limits.at({ ...input, workspace }, options))),
       /** A new booking's idempotency key: mint it once per dialog. */
       newKey: () => mintId(),
       /**

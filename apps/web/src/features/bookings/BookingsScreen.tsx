@@ -78,7 +78,7 @@ import {
 } from './CalendarsAside.tsx';
 import { ALL_CALENDARS, CalendarSwitch, showsOf, switchCalendars, useCalendarChoice } from './CalendarSwitch.tsx';
 import { DrawCard, type ForPerson } from './DrawCard.tsx';
-import { NewMeetingDialog, type NewMeeting } from './NewMeetingDialog.tsx';
+import { NewMeetingDialog, type NewMeeting, type NewMeetingDialogProps } from './NewMeetingDialog.tsx';
 import { instantOf, spanNames, type DrawnSpan } from './span.ts';
 import type { BookingsSearch } from './search.ts';
 import { useCan, useMyAccess } from '../workspace/WorkspacePage.tsx';
@@ -973,6 +973,8 @@ export interface BookingsCalendarScreenProps {
   readonly peopleSearch?: (() => RecordSearch) | undefined;
   /** A booking page's own "Add events to", which New meeting's Calendar starts on. */
   readonly pageDestination?: ((pageId: string) => CalendarsHeld<PageDestinationState>) | undefined;
+  /** The meeting limits New meeting's time lands against, for its warning (spec 0037, job J7). */
+  readonly limitsAt?: NewMeetingDialogProps['limitsAt'];
   /** Mints a new booking's idempotency key, once per New meeting dialog. */
   readonly newBookingKey: () => string;
   /** Where the member's day starts, for a span drawn from the keyboard (their hours; 9:00 when unknown). */
@@ -1846,6 +1848,7 @@ function WeekView(props: BookingsCalendarScreenProps) {
           forPeople={canBookForOthers ? forPeople : NO_PEOPLE}
           newKey={newBookingKey}
           people={props.peopleSearch}
+          limitsAt={props.limitsAt}
           calendars={calendarList}
           pageDestination={props.pageDestination}
           onBook={async (input) => {

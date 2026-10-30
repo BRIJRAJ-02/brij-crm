@@ -341,4 +341,77 @@ describe('New meeting', () => {
     await expect.element(page.getByRole('textbox', { name: 'With' })).toHaveFocus();
     expect(page.getByRole('button', { name: /Calendar$/ }).elements()).toEqual([]);
   });
+
+  it('warns before booking a colleague in past their meeting limit, and still books', async () => {
+    const sam = '0190f0f0-0000-7000-8000-0000000000d1';
+    const samsPage = { ...intro, id: '0190f0f0-0000-7000-8000-000000000003', ownerMemberId: sam, scope: 'member' };
+    const limitsAt = vi.fn<NonNullable<NewMeetingDialogProps['limitsAt']>>((input) =>
+      Promise.resolve(input.memberId === sam ? { day: { limit: 5, count: 5 }, week: { limit: 30, count: 12 } } : {}),
+    );
+    const { onBook } = await open({
+      pages: [intro, samsPage as BookingPageView],
+      forPeople: [{ id: sam, name: 'Sam' }],
+      limitsAt,
+    });
+    // The member's own time: no limit, no warning.
+    await expect.poll(() => limitsAt.mock.calls.length).toBe(1);
+    expect(limitsAt).toHaveBeenLastCalledWith({ at: '2026-10-23T09:30:00.000Z' });
+    expect(page.getByText(/limit of/).elements()).toEqual([]);
+    // For Sam, at his limit that day: said before Book it, politely.
+    await userEvent.click(page.getByRole('button', { name: /For$/ }));
+    await userEvent.click(page.getByRole('option', { name: 'Sam' }));
+    const warning = page.getByRole('status').filter({ hasText: 'Sam is at their limit of 5 meetings that day.' });
+    await expect
+      .element(warning)
+      .toHaveTextContent('Sam is at their limit of 5 meetings that day. Booking anyway goes over it.');
+    expect(limitsAt).toHaveBeenLastCalledWith({ memberId: sam, at: '2026-10-23T09:30:00.000Z' });
+    // Book it still books.
+    await userEvent.fill(page.getByRole('textbox', { name: 'With' }), 'Ada');
+    await userEvent.fill(page.getByRole('textbox', { name: 'Email' }), 'ada@example.com');
+    await userEvent.click(page.getByRole('button', { name: 'Book it' }));
+    expect(onBook).toHaveBeenCalledWith(expect.objectContaining({ forMemberId: sam, pageId: samsPage.id }));
+  });
+
+  it('words each of the member’s own limits, and keeps the warning in place as the time moves on that day', async () => {
+    const limitsAt = vi.fn<NonNullable<NewMeetingDialogProps['limitsAt']>>(() =>
+      Promise.resolve({ day: { limit: 4, count: 6 }, week: { limit: 20, count: 20 } }),
+    );
+    await open({ limitsAt });
+    const words =
+      'You’re past your limit of 4 meetings that day and at your limit of 20 meetings that week. Booking anyway goes over both.';
+    const warning = page.getByRole('status').filter({ hasText: 'past your limit' });
+    await expect.element(warning).toHaveTextContent(words);
+    const shown = warning.element();
+    // An hour later the same day: read again, and the same warning stays put (it neither blinks nor is said again).
+    await act(async () => {
+      mounted?.root.render(
+        <UiProvider locale="en-GB" timeZone="UTC" toasts={createToasts()} navigate={() => undefined}>
+          <NewMeetingDialog
+            span={{ dayKey: '2026-10-23', startMinute: 10 * 60 + 30, endMinute: 11 * 60 + 15 }}
+            onSpanChange={() => undefined}
+            locale="en-GB"
+            hasCalendar={false}
+            pages={[intro]}
+            newKey={() => 'key'}
+            onBook={() => Promise.resolve()}
+            onClose={() => undefined}
+            limitsAt={limitsAt}
+          />
+        </UiProvider>,
+      );
+      await Promise.resolve();
+    });
+    expect(shown.isConnected).toBe(true);
+    await expect.poll(() => limitsAt.mock.calls.length).toBe(2);
+    expect(limitsAt).toHaveBeenLastCalledWith({ at: '2026-10-23T10:30:00.000Z' });
+    expect(shown.isConnected).toBe(true);
+  });
+
+  it('says nothing when the limits can’t be read', async () => {
+    const limitsAt = vi.fn<NonNullable<NewMeetingDialogProps['limitsAt']>>(() => Promise.reject(new Error('offline')));
+    await open({ limitsAt });
+    await expect.poll(() => limitsAt.mock.calls.length).toBe(1);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(page.getByText(/limit of/).elements()).toEqual([]);
+  });
 });

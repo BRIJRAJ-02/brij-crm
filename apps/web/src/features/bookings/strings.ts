@@ -209,6 +209,28 @@ export const strings = {
   timeBlockedFor: (name: string) => `Time blocked on ${name}’s calendar.`,
   noPagesFor: (name: string) => `${name} has no live booking pages you can book on.`,
   forHint: (name: string) => `On ${name}’s calendar. ${name} is told.`,
+  /**
+   * Booking in at or past a meeting limit (spec 0037, job J7): a warning before Book it, never a block. `name` is
+   * the colleague booked for, absent for the member; each limit only when this meeting would go over it.
+   */
+  overLimit: (
+    name: string | undefined,
+    day: { readonly limit: number; readonly count: number } | undefined,
+    week: { readonly limit: number; readonly count: number } | undefined,
+  ): string => {
+    const meetings = (count: number) => (count === 1 ? '1 meeting' : `${String(count)} meetings`);
+    const their = name === undefined ? 'your' : 'their';
+    // Each limit worded on its own: at it, or already past it (lowered under what is booked, or booked in before).
+    const part = (use: { readonly limit: number; readonly count: number }, unit: string) =>
+      `${use.count > use.limit ? 'past' : 'at'} ${their} limit of ${meetings(use.limit)} that ${unit}`;
+    const parts = [
+      ...(day === undefined ? [] : [part(day, 'day')]),
+      ...(week === undefined ? [] : [part(week, 'week')]),
+    ];
+    if (parts.length === 0) return '';
+    const who = name === undefined ? 'You’re' : `${name} is`;
+    return `${who} ${parts.join(' and ')}. Booking anyway goes over ${parts.length === 1 ? 'it' : 'both'}.`;
+  },
   bookSomeoneIn: 'Book someone in',
   newMeeting: 'New meeting',
   /** The TopBar's New: it reads New, as Captures' does, and is named New meeting. */

@@ -171,6 +171,8 @@ const READS: ReadonlySet<string> = new Set([
   'timeOff.list',
   // Meeting limits (spec 0037): a member's limits and this day's and week's counts.
   'limits.get',
+  // The limits a meeting at a time lands against: New meeting's warning (read only).
+  'limits.at',
   // The Team week (spec 0037): the roster over everyone's default schedules.
   'availability.teamWeek',
   'schedules.get',

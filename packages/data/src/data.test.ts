@@ -544,6 +544,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
     },
     limits: {
       get: os.limits.get.handler(notServed),
+      at: os.limits.at.handler(notServed),
       set: os.limits.set.handler(notServed),
     },
     availability: {

@@ -7,6 +7,7 @@ import {
   type BookingPageView,
   type CalendarListState,
   type CalendarsHeld,
+  type LimitsAt,
   type PageDestinationState,
   type RecordSearch,
   type RecordSearchState,
@@ -123,6 +124,58 @@ export interface NewMeetingDialogProps {
    * For a colleague the booking goes on one of their pages, on their calendars (never one the member picks).
    */
   readonly forPeople?: readonly { readonly id: string; readonly name: string }[] | undefined;
+  /**
+   * The meeting limits the chosen time lands against, for the member or (`memberId`) the colleague booked for
+   * (spec 0037, job J7): at or past one, a warning shows before Book it, which still books. Left out, no warning.
+   */
+  readonly limitsAt?: ((input: { readonly memberId?: string; readonly at: string }) => Promise<LimitsAt>) | undefined;
+}
+
+/** How long the time and host rest before their limits are read, so dragging the times reads once. */
+const LIMITS_READ_MS = 250;
+
+/**
+ * The limits warning's words for the time and host chosen: read as they change (the latest answer only), nothing
+ * while unread, on a failure, or under every limit. A new time on the same day keeps the answer shown until the
+ * next one lands (the day's and week's counts rarely differ), so the warning never blinks and isn't said again; a
+ * new host or day drops it at once. Booking in goes over a limit freely; this only says so first.
+ */
+function useOverLimit(
+  limitsAt: NewMeetingDialogProps['limitsAt'],
+  memberId: string | undefined,
+  name: string | undefined,
+  at: string,
+  dayKey: string,
+): string | undefined {
+  const key = `${memberId ?? ''}|${dayKey}`;
+  const [answer, setAnswer] = useState<{ readonly key: string; readonly limits: LimitsAt } | undefined>(undefined);
+  // The latest call, so a parent drawing again (a new function each time) never restarts the wait.
+  const read = useRef(limitsAt);
+  useEffect(() => {
+    read.current = limitsAt;
+  }, [limitsAt]);
+  const isWired = limitsAt !== undefined;
+  useEffect(() => {
+    if (!isWired) return undefined;
+    let isCurrent = true;
+    const timer = setTimeout(() => {
+      read.current?.({ ...(memberId === undefined ? {} : { memberId }), at }).then(
+        (limits) => {
+          if (isCurrent) setAnswer({ key, limits });
+        },
+        () => undefined,
+      );
+    }, LIMITS_READ_MS);
+    return () => {
+      isCurrent = false;
+      clearTimeout(timer);
+    };
+  }, [isWired, memberId, at, key]);
+  if (answer === undefined || answer.key !== key) return undefined;
+  const reached = (use: LimitsAt['day']) => (use !== undefined && use.count >= use.limit ? use : undefined);
+  const day = reached(answer.limits.day);
+  const week = reached(answer.limits.week);
+  return day === undefined && week === undefined ? undefined : strings.overLimit(name, day, week);
 }
 
 /** The For picker's own choice: the member themself. */
@@ -194,6 +247,7 @@ export function NewMeetingDialog({
   calendars,
   pageDestination,
   forPeople = [],
+  limitsAt,
 }: NewMeetingDialogProps) {
   const formId = useId();
   const listId = useId();
@@ -221,6 +275,8 @@ export function NewMeetingDialog({
   const [refusals, setRefusals] = useState<readonly FormRefusal[]>([]);
   const start = instantOf(span.dayKey, span.startMinute, memberTimeZone);
   const minutes = span.endMinute - span.startMinute;
+  // At or past the host's meeting limit that day or week: said before Book it, which still books (job J7).
+  const overLimit = useOverLimit(limitsAt, forId === ME ? undefined : forId, forName, start.toISOString(), span.dayKey);
   // Once anything is typed, a stray click outside won't throw it away; Cancel and Esc still do.
   const isDirty = [name, email, message].some((value) => value.trim() !== '') || guests.length > 0;
   const zones = useMemo(() => zoneItems(timeZone, new Date()), [timeZone]);
@@ -481,6 +537,12 @@ export function NewMeetingDialog({
         )}
         {forName !== undefined && choices.length === 0 && (
           <Callout tone="warning">{strings.noPagesFor(forName)}</Callout>
+        )}
+        {/* After the time and the host it is about; announced, since it comes and goes as they change. */}
+        {overLimit !== undefined && (
+          <Callout tone="warning" isAnnounced>
+            {overLimit}
+          </Callout>
         )}
         {choices.length > 1 && (
           <Select

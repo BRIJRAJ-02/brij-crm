@@ -164,6 +164,7 @@ function Calendar({ objects, pages, connections, availability, forPeople }: Cale
       openHours={(dayKey) => openHoursOf(availability, dayKey, timeZone)}
       onBookAsHost={(meeting) => data.bookings.bookAsHost(slug, { ...meeting, guests: [...meeting.guests] })}
       peopleSearch={peopleSearchOf(data, slug, objects)}
+      limitsAt={(input) => data.bookings.limitsAt(slug, input)}
       pageDestination={(pageId) => data.calendar.pageDestination(slug, pageId)}
       newBookingKey={data.bookings.newKey}
       forPeople={forPeople}

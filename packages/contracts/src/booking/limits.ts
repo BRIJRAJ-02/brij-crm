@@ -61,12 +61,30 @@ export const MeetingLimits = z.object({
 /** A member's meeting limits. */
 export type MeetingLimits = z.infer<typeof MeetingLimits>;
 
+/** `limits.at`: the limits a meeting starting `at` lands against, for the caller or (`memberId`) a colleague they Manage. */
+export const LimitsAtInput = WorkspaceScoped.extend({ memberId: Uuid.optional(), at: Timestamp });
+/** `limits.at`'s input. */
+export type LimitsAtInput = z.infer<typeof LimitsAtInput>;
+
+/** One limit and the confirmed meetings already in its day or week. */
+const LimitUse = z.object({ limit: z.number().int().min(1), count: z.number().int().min(0) });
+
+/**
+ * The limits a meeting at a time lands against: the day's and the week's (in the member's zone, weeks from Monday),
+ * each only when the member has that limit. New meeting warns when a count has reached its limit.
+ */
+export const LimitsAt = z.object({ day: LimitUse.optional(), week: LimitUse.optional() });
+/** What `limits.at` answers. */
+export type LimitsAt = z.infer<typeof LimitsAt>;
+
 /**
  * The limits namespace (spec 0037's Services). `get`: self, or See over the member (404 outside it). `set`: self
  * with `availability.own`, or Manage over the member's hours (403 for See, 404 outside it); 422 for a number out of
- * range.
+ * range. `at`: with `booking.manage`, self, or Manage over the member (403 for See, 404 outside it), the reach
+ * booking in for someone takes.
  */
 export const limitsContract = {
   get: oc.input(GetLimitsInput).output(MeetingLimits),
   set: oc.input(SetLimitsInput).output(MeetingLimits),
+  at: oc.input(LimitsAtInput).output(LimitsAt),
 };
