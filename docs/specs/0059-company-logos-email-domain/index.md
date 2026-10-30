@@ -24,9 +24,9 @@ Two parity items from the owner's 30 October list, both free and with no new ven
 - **AC-5901**: A company record whose Domains attribute holds at least one value shows that domain's site icon wherever its picture shows (record chip, record header, board card, record panel, relation cells, search, mentions) in place of its coloured initial. A company with no domain, or whose site gives no usable icon, keeps its coloured initial, with no broken image and no layout shift.
 - **AC-5902**: The icon comes from the first Domains value (the value shown first). When that value changes, the next read shows the new domain's icon, because the picture's address names the domain.
 - **AC-5903**: The browser loads the icon from our own origin only. The Content Security Policy (`img-src 'self' data: blob:`) is unchanged, and no request leaves the browser for the company's site.
-- **AC-5904**: The server picks the best icon the site offers: the largest icon the home page's head declares (`apple-touch-icon`, `icon`, by `sizes`), else `/favicon.ico`. Every fetch goes through the one outside fetch door (spec 0055, AC-5531): https only, private and internal addresses refused before connecting and after each redirect, 3 seconds in all, 128 kB at most, image types only.
-- **AC-5905**: An icon, or the answer that a site has none, is kept for 7 days in the browser and at the edge, so one domain costs at most one fetch per edge region per 7 days, whichever workspaces show it.
-- **AC-5906**: Only a signed in user gets an icon fetched; without a session the route answers 404 unless the edge already holds the icon. A domain that is not a valid public host name answers 404 without a fetch. A user may make at most 300 icon requests a minute; past that the route answers 429.
+- **AC-5904**: The server picks the best icon the site offers: the smallest icon the home page's head declares at 96 px or more, else the largest it declares (`apple-touch-icon` without `sizes` counts as 180 px, any other icon without `sizes` as 0, SVG skipped), else `/favicon.ico`. Every fetch goes through the one outside fetch door (spec 0055, AC-5531): https only, private and internal addresses refused before connecting and after each redirect, one shared 3 second deadline for the page and the images together (the link page fetch now shares it too), 128 kB at most, image types only.
+- **AC-5905**: An icon is kept for 7 days in the browser and at the edge, so one domain costs at most one fetch per edge region per 7 days, whichever workspaces show it. The answer that a site has no icon is kept a day, and a timeout or network failure 5 minutes.
+- **AC-5906**: Only a signed in user gets an icon fetched; without a session the route answers 404 unless the edge already holds the icon. A domain that is not a valid public host name, uses a special use TLD, is not in canonical lowercase form, or comes with a query string answers 404 without a fetch. The session is read without renewal, so a cacheable answer never carries `Set-Cookie`. A user may make at most 300 icon requests a minute; past that the route answers 429.
 - **AC-5907**: Hidden means absent: when the reader cannot see a company's Domains attribute (a field rule hides it), the company's display carries no picture address, so the domain never reaches that reader.
 
 *Company from email domain*
@@ -63,7 +63,7 @@ Logos reuse the link page icon fetch (spec 0055's outside door and `@crm/core` f
 
 | Endpoint | Method | Key inputs | Key outputs | Auth | Key errors |
 |---|---|---|---|---|---|
-| `/api/logos/:domain` | GET | `domain` (lowercase host, path) | image bytes, `content-type`, `cache-control: public, max-age=604800, s-maxage=604800` | signed in session (Better Auth cookie) | 404 no icon, invalid host or no session (cached a day: `public, max-age=86400, s-maxage=86400`), 429 over 300 a minute per user |
+| `/api/logos/:domain` | GET | `domain` (lowercase host, path) | image bytes, `content-type`, `cache-control: public, max-age=604800, s-maxage=604800` | signed in session (Better Auth cookie) | 404 no icon (`public, max-age=86400, s-maxage=86400`; a timeout or network failure 5 minutes), 404 invalid host or no session (`private, no-store`, so the edge is never poisoned), 429 over 300 a minute per user (`private, max-age=<retry after>`) |
 | `records.create`, `records.update`, `records.setValues` (existing oRPC) | POST | unchanged | adds `filedCompany?: { recordId, name, made: boolean, linkVersionId }` | unchanged | unchanged |
 
 **Value sourcing**
@@ -71,7 +71,7 @@ Logos reuse the link page icon fetch (spec 0055's outside door and `@crm/core` f
 | Action | Value produced / displayed | Source |
 |---|---|---|
 | read records (`readRecords`, `engine/records.ts`) | company `imageSrc` | `/api/logos/<domain>`, where `<domain>` is the record's first current `domains` value (lowest position), lowercased; only when the reader can see `domains` (AC-5907) |
-| logo route | which icon URL | home page `https://<domain>/` head via `declaredIcon`, changed to prefer the largest `sizes`; else `https://<domain>/favicon.ico` (`faviconSources`) |
+| logo route | which icon URL | home page `https://<domain>/` head via `declaredIcon`, with a `'logo'` preference (smallest at 96 px or more, else largest, per AC-5904); else `https://<domain>/favicon.ico` (`faviconSources`) |
 | logo route | the user | Better Auth session (`deps.auth.session`), as `/api/files/:fileId` reads it |
 | logo route | rate limit key | `logos:<userId>`, the api's existing limiter |
 | filing | the email | the person's first current `email_addresses` value (lowest position) whose domain is not free |
@@ -150,6 +150,10 @@ Tracer Bullet: one thin thread for each half, end to end, then thicken.
 
 - [ ] Scope: no scope row covers this (feature #47 Enrichment is dropped). Enroll it with `/scope`, or note it beside the CRM parity list.
 - [ ] Spec 0024 (calendar sync) and spec 0025 (booking) should gain a line pointing here for companies created from attendees and visitors.
+- [ ] Risk to note: anyone can probe the shared edge cache to learn whether some user viewed a domain's logo in the last 7 days. Accepted with edge sharing; revisit if a customer objects.
+- [ ] Declared icons and redirects may name any public https host, so the route is a weak GET reflector (300 a minute per user), the same as the link page icon route.
+- [ ] Tables in `packages/data` do not read Domains, so another person's domain change does not refresh a table row's logo live.
+- [ ] Look: transparent favicons on the dark mode hue tile may read poorly; a neutral plate under a loaded picture is the owner's call.
 - [ ] A workspace switch to turn filing off was declined (owner, 31 October 2026); revisit only if someone asks.
 
 ## Rationale
