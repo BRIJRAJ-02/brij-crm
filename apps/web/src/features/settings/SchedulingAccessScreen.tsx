@@ -202,11 +202,7 @@ export function SchedulingAccessScreen({ scheduling, toasts, slug, access, membe
             </SettingsRow>
           );
         })}
-        {!roleReach && held.length === 0 && (
-          <EmptyState layout="row" icon="calendar-clock" title={strings.onlyYours}>
-            {strings.onlyYoursText}
-          </EmptyState>
-        )}
+        {!roleReach && held.length === 0 && <EmptyState layout="row" icon="calendar-clock" title={strings.onlyYours} />}
       </Card>
     );
   }

@@ -141,8 +141,14 @@ export function AddDelegateDialog({ isOpen, people, hoursSetByOthers, onClose, o
             isSearchable
           />
           <LevelControl value={level} onChange={setLevel} />
-          <p>{level === 'manage' ? strings.manageDescription : strings.seeDescription}</p>
-          {level === 'manage' && hoursSetByOthers && <Callout tone="info">{strings.hoursStaySet}</Callout>}
+          {/* One line for the level chosen; with hours set by others, Manage says it can't change them. */}
+          <p>
+            {level === 'view'
+              ? strings.seeDescription
+              : hoursSetByOthers
+                ? strings.manageNoHours
+                : strings.manageDescription}
+          </p>
         </>
       )}
     </Modal>

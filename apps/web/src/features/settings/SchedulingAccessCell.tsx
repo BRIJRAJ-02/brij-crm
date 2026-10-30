@@ -276,7 +276,7 @@ function Editor({
         leading={<Icon name="shield-check" tone="muted" />}
         leadingAlign="center"
         title={ROLE_LABELS[member.role]}
-        description={theirs.length === 0 ? strings.roleOwnOnly : strings.roleOwn}
+        description={strings.roleOwn}
       />
       {theirs.map((delegation) => {
         const name = targetName(delegation.target, nameOf);
