@@ -341,3 +341,9 @@ A late trap is a change that saves fine, then breaks something later somewhere e
 - The purge of a deleted workspace removes its stored files (form uploads, record files) from the store first, only paths in its own folder (#84), and its members' link pages, holding their handles 90 days as an account deletion does (migration 0123) (#86).
 - Restoring a deleted workspace emails every member who was told it was deleted, except the one who restored it (#89). Queued emails stop once a workspace is deleted (#7). An account deletion that would leave a deleted workspace with no owner is warned in the dialog (#23). A reassignment ends failed with the reason when the remover loses the right mid run (#24).
 - Guests (slice 9), when they ship, get no link page made for them: guests in Slack or Calendly have no public profile (#77).
+
+## Calls made fixing late traps, round 2, 30 October 2026 (shipped, main 1cdb46072 and after)
+
+The same rules as the section above: each line says what the product does now, and the trap it closes.
+
+- Cutting a removed member's live connection (AC-817) no longer depends on one call from the relay. The relay still tries at once, without waiting, and a durable task (`realtime_cutoff`, keyed by the outbox row) makes sure: it asks Centrifugo to unsubscribe that user from the workspace's channels, and from the third try also disconnects them (code 4501, `removed`, which makes their other tabs refresh their token and reconnect). It keeps trying, at most 5 minutes apart, until any token issued before the removal has expired (the token's hour, read from the issuer's own constant), then ends `lapsed`, logged at error when every try failed. A user who rejoined since is skipped. Logs hold ids and counts only (#41).
