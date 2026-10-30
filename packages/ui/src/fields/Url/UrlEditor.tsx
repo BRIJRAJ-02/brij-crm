@@ -1,3 +1,4 @@
+import { cleanText } from '../../lib/parse-input.ts';
 import { ListEditor } from '../ListEditor.tsx';
 import { TextLikeEditor } from '../TextLikeEditor.tsx';
 import type { EditorProps, FieldAttribute } from '../types.ts';
@@ -16,9 +17,10 @@ export function checkUrl(
   attribute?: Pick<FieldAttribute, 'apiSlug' | 'objectKey' | 'name'>,
 ): { readonly ok: true; readonly value: string } | { readonly ok: false; readonly message: string } {
   const network = attribute === undefined ? undefined : networkOfAttribute(attribute);
+  const text = cleanText(draft);
   return attribute === undefined || network === undefined
-    ? checkLink(draft)
-    : checkSocial(network, draft, { label: attribute.name, kind: profileKindOf(attribute) });
+    ? checkLink(text)
+    : checkSocial(network, text, { label: attribute.name, kind: profileKindOf(attribute) });
 }
 
 /** The placeholder and hint for this attribute: a network's handle, or an example domain. */

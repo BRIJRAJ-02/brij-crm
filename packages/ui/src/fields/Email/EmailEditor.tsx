@@ -1,3 +1,4 @@
+import { cleanEmail } from '../../lib/parse-input.ts';
 import { EmailValue } from '@crm/contracts/values';
 import { ListEditor } from '../ListEditor.tsx';
 import { TextLikeEditor } from '../TextLikeEditor.tsx';
@@ -10,7 +11,8 @@ import { strings } from './strings.ts';
 export function checkEmail(
   draft: string,
 ): { readonly ok: true; readonly value: string } | { readonly ok: false; readonly message: string } {
-  const parsed = EmailValue.safeParse(draft);
+  // What an email client pastes ("Ada <ada@x.com>", "mailto:…", a trailing ".") reads as the address.
+  const parsed = EmailValue.safeParse(cleanEmail(draft));
   return parsed.success
     ? { ok: true, value: parsed.data }
     : { ok: false, message: parsed.error.issues[0]?.message ?? strings.invalid };

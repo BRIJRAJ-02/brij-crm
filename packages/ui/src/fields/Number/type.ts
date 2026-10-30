@@ -1,5 +1,4 @@
-import { toCanonicalDecimal } from '@crm/contracts/values';
-import { parseLocaleDecimal } from '../../lib/decimal.ts';
+import { parseAmount } from '../../lib/parse-input.ts';
 import { withEmpty } from '../operators.ts';
 import type { AttributeTypeDef } from '../types.ts';
 import { refuse } from '../values.ts';
@@ -14,10 +13,9 @@ export const numberType: AttributeTypeDef<'number'> = {
   Editor: NumberEditor,
   operators: () => withEmpty(['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'between']),
   toText: (value) => (typeof value === 'string' ? value : value.join(', ')),
-  fromText: (text, context) => {
-    const value = parseLocaleDecimal(text, context.locale) ?? toCanonicalDecimal(text);
-    return value ?? refuse(`“${text.trim()}” isn’t a number.`);
-  },
+  // A spreadsheet's "1,200", "1.2k", "(300)" or "12%" reads as the editor reads it (`parseAmount`).
+  fromText: (text, context) =>
+    parseAmount(text, { locale: context.locale })?.amount ?? refuse(`“${text.trim()}” isn’t a number.`),
   align: 'end',
   editIn: 'cell',
   width: 'narrow',

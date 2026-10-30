@@ -3,6 +3,7 @@
 // config never gets stored.
 import * as z from 'zod';
 import type { AttributeType } from './attribute-values.ts';
+import { COUNTRY_CODES } from './countries.ts';
 import { CURRENCY_CODES } from './currencies.ts';
 
 const none = z.strictObject({});
@@ -11,7 +12,11 @@ const none = z.strictObject({});
 export const AttributeConfig = {
   text: none,
   long_text: none,
-  number: z.strictObject({ display: z.enum(['plain', 'percent']).default('plain') }),
+  // `compact` shows 1.2M for 1,200,000; `decimals` fixes how many decimals show (0 to 4), all of them when absent.
+  number: z.strictObject({
+    display: z.enum(['plain', 'percent', 'compact']).default('plain'),
+    decimals: z.number().int().min(0).max(4).optional(),
+  }),
   currency: z.strictObject({
     defaultCurrency: z.enum(CURRENCY_CODES, { error: 'Pick the default currency, such as USD.' }),
   }),
@@ -22,7 +27,10 @@ export const AttributeConfig = {
   status: none,
   rating: none,
   email: none,
-  phone: none,
+  // The country a number typed without its code is read in; the workspace's when absent.
+  phone: z.strictObject({
+    defaultCountry: z.enum(COUNTRY_CODES, { error: 'Pick a country, such as GB.' }).optional(),
+  }),
   domain: none,
   url: none,
   location: none,

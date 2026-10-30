@@ -37,6 +37,7 @@ import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { memoIntl } from '../../lib/intl-memo.ts';
 import { firstDayOfWeek, weekStartDay, type WeekStart } from '../../lib/month.ts';
 import { parseDateText } from '../../lib/parse-date-text.ts';
+import { parseDateInput } from '../../lib/parse-input.ts';
 import { useFormatSettings, useNow } from '../../provider/context.ts';
 import { Field } from '../Field/Field.tsx';
 import { InPopover, Popover } from '../Popover/Popover.tsx';
@@ -308,11 +309,11 @@ function CalendarBody({
  * "Type a date" at the popover's top, as Linear's and Twenty's: words or numbers ("tomorrow", "next fri", "in 2
  * weeks", "Oct 8", "8/10"), the day they name shown live at the end, and Enter chooses it.
  */
-function TypeDate({ today }: { readonly today: CalendarDate }) {
+function TypeDate({ today, startText = '' }: { readonly today: CalendarDate; readonly startText?: string }) {
   const state = useContext(DatePickerStateContext);
   const { locale, weekStart } = useFormatSettings();
   const dayLabel = useDayLabel();
-  const [text, setText] = useState('');
+  const [text, setText] = useState(startText);
   if (state === null) return null;
   const found = parseDateText(text, {
     today: today.toString(),
@@ -438,6 +439,8 @@ export interface DatePickerProps extends DateFieldLook {
   readonly onChange?: (value: DateString | null) => void;
   /** "Type a date" above the calendar, and Today, Tomorrow, Next week and End of month under it. On by default. */
   readonly showQuickPicks?: boolean;
+  /** What "Type a date" starts with: the key that opened a grid cell's editor, so "t" then "omorrow" reads on. */
+  readonly startText?: string;
 }
 
 function FieldParts({ look }: { readonly look: DateFieldLook }) {
@@ -475,11 +478,61 @@ function lookProps(look: DateFieldLook, isInPopover: boolean) {
 }
 
 /**
+ * The typed date's box: its segments and the calendar button. A pasted day ("8 Oct 2026", "2026-10-08T09:00Z",
+ * "tomorrow") fills it whole, read as Type a date reads text (`parseDateInput`), since a segment takes only digits.
+ */
+function DateBox({ look, today }: { readonly look: DateFieldLook; readonly today: CalendarDate }) {
+  const state = useContext(DatePickerStateContext);
+  const { locale, weekStart } = useFormatSettings();
+  return (
+    <Group
+      className={styles.box}
+      onPaste={(event) => {
+        if (state === null || look.isReadOnly === true || look.isDisabled === true) return;
+        const found = parseDateInput(event.clipboardData.getData('text/plain'), {
+          locale,
+          today: today.toString(),
+          firstDayOfWeek: firstDayOfWeek(locale, weekStart),
+        });
+        if (found === undefined) return;
+        event.preventDefault();
+        state.setValue(parseDate(found));
+      }}
+      // Enter in the date submits its form, as it does in any text field (a day off's Add). On the way down,
+      // since a segment keeps its keys to itself.
+      onKeyDownCapture={(event) => {
+        if (event.key !== 'Enter' || !(event.target instanceof HTMLElement) || event.target.closest('button') !== null)
+          return;
+        event.target.closest('form')?.requestSubmit();
+      }}
+    >
+      <DateInput className={styles.input}>
+        {(segment) => <DateSegment segment={segment} className={styles.segment} />}
+      </DateInput>
+      {look.isReadOnly === true ? (
+        <Icon name="lock" size="xs" tone="muted" label={strings.readOnly} />
+      ) : (
+        <AriaButton className={styles.open} aria-label={strings.openCalendar}>
+          <Icon name="calendar" size="sm" />
+        </AriaButton>
+      )}
+    </Group>
+  );
+}
+
+/**
  * A calendar day, typed in the language's order or picked from a calendar with
  * quick picks. The calendar's first day follows the language, and "today" is
  * today in the provider's time zone. It is the date attribute's editor.
  */
-export function DatePicker({ value, defaultValue, onChange, showQuickPicks = true, ...look }: DatePickerProps) {
+export function DatePicker({
+  value,
+  defaultValue,
+  onChange,
+  showQuickPicks = true,
+  startText,
+  ...look
+}: DatePickerProps) {
   const isInPopover = use(InPopover);
   const controlled = toDate(value);
   const initial = toDate(defaultValue);
@@ -495,34 +548,10 @@ export function DatePicker({ value, defaultValue, onChange, showQuickPicks = tru
       }}
     >
       {look.isLabelHidden !== true && <Label className={styles.label}>{look.label}</Label>}
-      <Group
-        className={styles.box}
-        // Enter in the date submits its form, as it does in any text field (a day off's Add). On the way down,
-        // since a segment keeps its keys to itself.
-        onKeyDownCapture={(event) => {
-          if (
-            event.key !== 'Enter' ||
-            !(event.target instanceof HTMLElement) ||
-            event.target.closest('button') !== null
-          )
-            return;
-          event.target.closest('form')?.requestSubmit();
-        }}
-      >
-        <DateInput className={styles.input}>
-          {(segment) => <DateSegment segment={segment} className={styles.segment} />}
-        </DateInput>
-        {look.isReadOnly === true ? (
-          <Icon name="lock" size="xs" tone="muted" label={strings.readOnly} />
-        ) : (
-          <AriaButton className={styles.open} aria-label={strings.openCalendar}>
-            <Icon name="calendar" size="sm" />
-          </AriaButton>
-        )}
-      </Group>
+      <DateBox look={look} today={today} />
       <FieldParts look={look} />
       <Popover label={strings.calendar}>
-        {showQuickPicks && <TypeDate today={today} />}
+        {showQuickPicks && <TypeDate today={today} {...(startText === undefined ? {} : { startText })} />}
         <Calendar
           className={styles.calendar}
           defaultFocusedValue={controlled ?? initial ?? today}

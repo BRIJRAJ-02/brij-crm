@@ -1,3 +1,4 @@
+import { parseDateInput } from '../../lib/parse-input.ts';
 import { withEmpty } from '../operators.ts';
 import type { AttributeTypeDef } from '../types.ts';
 import { refuse } from '../values.ts';
@@ -13,8 +14,11 @@ export const dateType: AttributeTypeDef<'date'> = {
   Editor: DateEditor,
   operators: () => withEmpty(['is', 'before', 'after', 'within', 'within_next', 'more_than_ago']),
   toText: (value) => (typeof value === 'string' ? value : value.join(', ')),
+  // The editor's reading (`parseDateInput`): "8 Oct 2026", an ISO instant, and with today "tomorrow" or "Oct 8".
   fromText: (text, context) =>
-    parseLocaleDate(text, context.locale) ?? refuse(`“${text.trim()}” isn’t a date. Use 2026-10-08.`),
+    parseDateInput(text, { locale: context.locale, today: context.today }) ??
+    parseLocaleDate(text, context.locale) ??
+    refuse(`“${text.trim()}” isn’t a date. Use 2026-10-08.`),
   align: 'start',
   editIn: 'popover',
   closesOnCommit: true,

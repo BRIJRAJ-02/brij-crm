@@ -33,6 +33,10 @@ export interface FieldAttribute {
   readonly defaultCurrency?: string;
   /** Number: shown as a percent (spec 0012, AC-230): "12.5%", the number as typed with a percent sign. */
   readonly isPercent?: boolean;
+  /** Number: shown short (1.2M for 1,200,000), the exact number on hover. */
+  readonly isCompact?: boolean;
+  /** Number: how many decimals show, 0 to 4; every one the value has when absent. */
+  readonly decimals?: number;
   /** Phone: the country numbers without a code are read in. */
   readonly defaultCountry?: string;
   /** Record reference: whether it holds one record or several. */
@@ -154,6 +158,8 @@ export interface PhoneParser {
 export interface TextContext {
   readonly locale: string;
   readonly timeZone: string;
+  /** Today (`YYYY-MM-DD`) in the time zone, so a pasted "tomorrow" or "Oct 8" reads; without it only a full date does. */
+  readonly today?: string;
   readonly attribute: FieldAttribute;
   readonly members?: readonly ActorDisplay[];
   readonly defaultCountry?: string;

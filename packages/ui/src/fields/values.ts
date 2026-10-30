@@ -1,6 +1,7 @@
 // Pure helpers every field type shares: lists, parsing an editor's candidate
 // value with its schema before it may leave (AC-5), and text refusals.
 import { parseAttributeValue, type AttributeType } from '@crm/contracts/values';
+import { splitPasted } from '../lib/parse-input.ts';
 import { strings } from './strings.ts';
 import type { FieldAttribute, FieldValue, Surface, TextRefusal } from './types.ts';
 
@@ -46,18 +47,28 @@ export function isRefusal(value: unknown): value is TextRefusal {
   return typeof value === 'object' && value !== null && (value as { code?: unknown }).code === 'TEXT_REFUSED';
 }
 
-/** Splits pasted text for a list attribute: commas, semicolons or line breaks. */
-export function splitList(text: string): readonly string[] {
-  return text
-    .split(/[,;\n]/)
-    .map((part) => part.trim())
-    .filter((part) => part !== '');
+/**
+ * Splits pasted text for a list attribute (`splitPasted`): commas, semicolons,
+ * tabs or line breaks, never inside a quoted name or angle brackets, and
+ * spaces too with `onSpaces` (emails, domains, links never hold one).
+ */
+export function splitList(text: string, options: { readonly onSpaces?: boolean } = {}): readonly string[] {
+  return splitPasted(text, options);
+}
+
+/** The list types whose values never hold a space, so a pasted "a.com b.com" is two. */
+export function splitsOnSpaces(type: AttributeType): boolean {
+  return type === 'email' || type === 'domain' || type === 'url';
 }
 
 /** Runs `fromText` for one value over each part of a list, refusing the whole list when one part is refused. */
-export function listFromText<V>(text: string, one: (part: string) => V | TextRefusal): readonly V[] | TextRefusal {
+export function listFromText<V>(
+  text: string,
+  one: (part: string) => V | TextRefusal,
+  options: { readonly onSpaces?: boolean } = {},
+): readonly V[] | TextRefusal {
   const values: V[] = [];
-  for (const part of splitList(text)) {
+  for (const part of splitList(text, options)) {
     const value = one(part);
     if (isRefusal(value)) return value;
     values.push(value);

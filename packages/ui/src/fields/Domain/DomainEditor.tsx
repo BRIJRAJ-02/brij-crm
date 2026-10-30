@@ -1,3 +1,4 @@
+import { cleanText } from '../../lib/parse-input.ts';
 import { DomainValue } from '@crm/contracts/values';
 import { ListEditor } from '../ListEditor.tsx';
 import { TextLikeEditor } from '../TextLikeEditor.tsx';
@@ -22,8 +23,7 @@ export function checkDomain(
 ): { readonly ok: true; readonly value: string } | { readonly ok: false; readonly message: string } {
   // Strip what people paste with a domain: the protocol and anything after the name.
   const name =
-    draft
-      .trim()
+    cleanText(draft)
       .replace(/^[a-z][a-z\d+.-]*:\/\//i, '')
       .split(/[/?#]/)[0] ?? '';
   const parsed = DomainValue.safeParse(hostnameOf(name));

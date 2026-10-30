@@ -40,7 +40,7 @@ import { memoIntl } from '../../lib/intl-memo.ts';
 import type { ListSource } from '../../lib/list-source.ts';
 import { sizeToken, spaceToken } from '../../lib/token-values.ts';
 import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
-import { useFormatSettings, useKeyboardPlatform, useToasts } from '../../provider/context.ts';
+import { useFormatSettings, useKeyboardPlatform, useTodayReader, useToasts } from '../../provider/context.ts';
 import { useDelayedLoading } from '../../provider/useDelayedLoading.ts';
 import type { ActorDisplay } from '@crm/contracts/values';
 import styles from './DataGrid.module.css';
@@ -375,6 +375,7 @@ export function DataGrid<Row>({
   focusColumn,
 }: DataGridProps<Row>) {
   const { locale, timeZone } = useFormatSettings();
+  const readToday = useTodayReader();
   const toasts = useToasts();
   const platform = useKeyboardPlatform();
   const { isFocusVisible } = useFocusVisible();
@@ -611,6 +612,8 @@ export function DataGrid<Row>({
   const textContext = (attribute: FieldAttribute, display?: unknown): TextContext => ({
     locale,
     timeZone,
+    // A pasted "tomorrow" or "Oct 8" reads against today here, read once per paste.
+    today: readToday(),
     attribute,
     ...(members === undefined ? {} : { members }),
     ...(phone === undefined ? {} : { phone }),

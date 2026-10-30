@@ -12,7 +12,15 @@ const DIGIT = /^[1-5]$/;
  * draft that Enter commits and Esc drops, so moving across the stars writes
  * nothing; a click commits at once.
  */
-export function RatingEditor({ attribute, value, surface, onCommit, onCancel, startText }: EditorProps<'rating'>) {
+export function RatingEditor({
+  attribute,
+  value,
+  surface,
+  onCommit,
+  onCancel,
+  startText,
+  isDisabled = false,
+}: EditorProps<'rating'>) {
   const initial = typeof value === 'number' ? value : null;
   const [draft, setDraft] = useState(startText !== undefined && DIGIT.test(startText) ? Number(startText) : initial);
   const isPointer = useRef(false);
@@ -28,7 +36,9 @@ export function RatingEditor({ attribute, value, surface, onCommit, onCancel, st
       else event.continuePropagation();
     },
   });
-  if (surface !== 'cell') return <Rating label={attribute.name} value={initial} onChange={commit} />;
+  if (surface !== 'cell') {
+    return <Rating label={attribute.name} value={initial} onChange={commit} isDisabled={isDisabled} />;
+  }
   return (
     <span
       {...keyboardProps}
@@ -40,6 +50,7 @@ export function RatingEditor({ attribute, value, surface, onCommit, onCancel, st
         label={attribute.name}
         variant="cell"
         value={draft}
+        isDisabled={isDisabled}
         onChange={(next) => {
           setDraft(next);
           if (isPointer.current) commit(next);

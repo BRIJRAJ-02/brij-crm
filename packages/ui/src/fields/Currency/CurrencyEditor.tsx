@@ -1,27 +1,35 @@
 import { CURRENCY_CODES, type CurrencyValue } from '@crm/contracts/values';
 import { useState } from 'react';
 import { Button } from '../../atoms/Button/Button.tsx';
-import { parseLocaleDecimal } from '../../lib/decimal.ts';
 import { formatDecimal } from '../../lib/format.ts';
+import { parseAmount } from '../../lib/parse-input.ts';
 import { Menu, MenuItem, MenuTrigger } from '../../molecules/Menu/Menu.tsx';
-import { useFormatSettings } from '../../provider/context.ts';
+import { useFormatSettings, useRegionDefaults } from '../../provider/context.ts';
 import { TextLikeEditor } from '../TextLikeEditor.tsx';
 import type { EditorProps } from '../types.ts';
 import { isCompactSurface, toCommittable } from '../values.ts';
 import { strings } from './strings.ts';
 
-/** Currency: the amount in a Field, with its currency code as a searchable picker in front. */
+const CODES: ReadonlySet<string> = new Set<string>(CURRENCY_CODES);
+
+/**
+ * Currency: the amount in a Field, with its currency code as a searchable
+ * picker in front. A new amount starts in the attribute's default, else the
+ * workspace's currency. The amount forgives what people paste ("$1,200",
+ * "1.2k", "(300)"), and a symbol or code typed with it moves the picker.
+ */
 export function CurrencyEditor(props: EditorProps<'currency'>) {
   const { locale } = useFormatSettings();
+  const region = useRegionDefaults();
   const current = props.value === null || Array.isArray(props.value) ? undefined : (props.value as CurrencyValue);
-  const [currency, setCurrency] = useState(current?.currency ?? props.attribute.defaultCurrency ?? 'USD');
+  const [currency, setCurrency] = useState(current?.currency ?? props.attribute.defaultCurrency ?? region.currency);
   const [amount, setAmount] = useState(current?.amount);
   const names = new Intl.DisplayNames(locale, { type: 'currency' });
   const example = formatDecimal('1234.5', locale);
 
   const picker = (
     <MenuTrigger>
-      <Button variant="ghost" iconRight="chevron-down">
+      <Button variant="ghost" iconRight="chevron-down" isDisabled={props.isDisabled === true}>
         {currency}
       </Button>
       <Menu
@@ -60,10 +68,12 @@ export function CurrencyEditor(props: EditorProps<'currency'>) {
       {...(isCompactSurface(props.surface) ? {} : { hint: strings.hint })}
       check={(draft) => {
         if (draft.trim() === '') return toCommittable<'currency'>(props.attribute, null);
-        const canonical = parseLocaleDecimal(draft, locale);
-        if (canonical === undefined) return { ok: false, message: strings.invalid(example) };
-        setAmount(canonical);
-        return toCommittable<'currency'>(props.attribute, { amount: canonical, currency });
+        const parsed = parseAmount(draft, { locale, defaultCurrency: currency });
+        if (parsed === undefined) return { ok: false, message: strings.invalid(example) };
+        const code = parsed.currency !== undefined && CODES.has(parsed.currency) ? parsed.currency : currency;
+        if (code !== currency) setCurrency(code);
+        setAmount(parsed.amount);
+        return toCommittable<'currency'>(props.attribute, { amount: parsed.amount, currency: code });
       }}
     />
   );

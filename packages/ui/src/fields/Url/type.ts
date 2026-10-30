@@ -20,7 +20,7 @@ export const urlType: AttributeTypeDef<'url'> = {
   toText: (value) => (typeof value === 'string' ? value : value.join(', ')),
   fromText: (text, context) =>
     context.attribute.allowMultiple
-      ? listFromText(text, (item) => one(item, context.attribute))
+      ? listFromText(text, (item) => one(item, context.attribute), { onSpaces: true })
       : one(text, context.attribute),
   align: 'start',
   editIn: 'cell',

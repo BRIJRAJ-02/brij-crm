@@ -37,6 +37,12 @@ export interface FieldAttributeShape {
   readonly defaultCurrency?: string;
   /** A number shown as a percent (its Display setting, spec 0012). */
   readonly isPercent?: boolean;
+  /** A number shown short, 1.2M for 1,200,000 (its Display setting). */
+  readonly isCompact?: boolean;
+  /** How many decimals a number shows, 0 to 4 (its Decimals setting); every one it has when absent. */
+  readonly decimals?: number;
+  /** A phone attribute's default country, for a number typed without its code. */
+  readonly defaultCountry?: string;
   /** A select's options or a status attribute's stages, in order, archived ones marked (spec 0012). */
   readonly options?: readonly {
     readonly id: string;
@@ -109,6 +115,13 @@ export function toFieldAttribute(
     ...(definition.type === 'record_reference' ? { cardinality: definition.isMulti ? 'many' : 'one' } : {}),
     ...(typeof currency === 'string' ? { defaultCurrency: currency } : {}),
     ...(definition.type === 'number' && definition.config.display === 'percent' ? { isPercent: true } : {}),
+    ...(definition.type === 'number' && definition.config.display === 'compact' ? { isCompact: true } : {}),
+    ...(definition.type === 'number' && typeof definition.config.decimals === 'number'
+      ? { decimals: definition.config.decimals }
+      : {}),
+    ...(definition.type === 'phone' && typeof definition.config.defaultCountry === 'string'
+      ? { defaultCountry: definition.config.defaultCountry }
+      : {}),
     // Options inline (spec 0006, AC-59; spec 0012), so a select or status cell never fetches.
     ...(definition.options === undefined
       ? {}

@@ -3,7 +3,8 @@
 // toast region (and the Button it draws).
 import { createContext, useContext, useSyncExternalStore } from 'react';
 import type { KeyboardPlatform } from '../atoms/Kbd/shortcuts.ts';
-import type { DateFormat } from '../lib/format.ts';
+import { todayIn, type DateFormat } from '../lib/format.ts';
+import { regionDefaults } from '../lib/region-defaults.ts';
 import type { WeekStart } from '../lib/month.ts';
 import type { Clock } from './clock.ts';
 import type { Toasts } from './toasts.tsx';
@@ -18,6 +19,10 @@ export interface FormatSettings {
   readonly dateFormat?: DateFormat;
   /** The day a week starts on (the member's preference); the language's own when absent. */
   readonly weekStart?: WeekStart;
+  /** The workspace's currency, for an amount whose attribute names none; the language's region's when absent. */
+  readonly currency?: string;
+  /** The workspace's country, for a phone number or an address that names none; the language's region when absent. */
+  readonly country?: string;
 }
 
 export const FormatContext = createContext<FormatSettings | undefined>(undefined);
@@ -30,6 +35,28 @@ export function useFormatSettings(): FormatSettings {
   const settings = useContext(FormatContext);
   if (settings === undefined) throw new Error('Wrap the app in <UiProvider> to format dates and numbers.');
   return settings;
+}
+
+/**
+ * The country and currency a value starts in when its attribute names none:
+ * the workspace's (FormatScope), else the language's region's (en-IN is IN
+ * and INR), else the US's. A new Currency attribute and a new phone number
+ * start here instead of always in USD and the US.
+ */
+export function useRegionDefaults(): { readonly country: string; readonly currency: string } {
+  const { locale, country, currency } = useFormatSettings();
+  return regionDefaults(locale, { country, currency });
+}
+
+/**
+ * Reads "today" (`YYYY-MM-DD`, in the provider's time zone) when called, without re-rendering on each tick: a
+ * paste or an import reads "tomorrow" against it once, so a grid of thousands of cells never redraws for the clock.
+ */
+export function useTodayReader(): () => string {
+  const clock = useContext(ClockContext);
+  const { timeZone } = useFormatSettings();
+  if (clock === undefined) throw new Error('Wrap the app in <UiProvider> to read today.');
+  return () => todayIn(clock.now(), timeZone);
 }
 
 /** The shared clock's time, in milliseconds. Re-renders on each tick (every 30 seconds). */

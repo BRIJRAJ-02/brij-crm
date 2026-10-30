@@ -17,7 +17,8 @@ export const emailType: AttributeTypeDef<'email'> = {
   Editor: EmailEditor,
   operators: () => withEmpty(['is', 'contains']),
   toText: (value) => (typeof value === 'string' ? value : value.join(', ')),
-  fromText: (text, context) => (context.attribute.allowMultiple ? listFromText(text, one) : one(text)),
+  fromText: (text, context) =>
+    context.attribute.allowMultiple ? listFromText(text, one, { onSpaces: true }) : one(text),
   align: 'start',
   editIn: 'cell',
   width: 'default',

@@ -227,3 +227,55 @@ export function formatRelative(
   }
   return formatDay(timestamp, locale, timeZone, dateFormat);
 }
+
+/**
+ * A number as its attribute shows it: `decimals` fixes how many show (0 to 4,
+ * rounded for show only, the value stays exact), and `isCompact` writes it
+ * short in the language ("1.2M", "12K", "1,2 Mio." in German). Plain, it is
+ * `formatDecimal`.
+ */
+export function formatNumber(
+  value: string,
+  locale: string,
+  options: { readonly decimals?: number | undefined; readonly isCompact?: boolean | undefined } = {},
+): string {
+  const { decimals, isCompact = false } = options;
+  if (!isCompact && decimals === undefined) return formatDecimal(value, locale);
+  return memoIntl(
+    `numberStyled:${locale}:${String(decimals)}:${isCompact ? 'c' : 'p'}`,
+    () =>
+      new Intl.NumberFormat(locale, {
+        ...(isCompact ? { notation: 'compact' as const } : {}),
+        minimumFractionDigits: decimals ?? 0,
+        maximumFractionDigits: decimals ?? (isCompact ? 1 : 4),
+      }),
+  ).format(value as DecimalString);
+}
+
+/** The calendar day `now` (milliseconds) falls on in the time zone, `YYYY-MM-DD`: what "today" means there. */
+export function todayIn(now: number, timeZone: string): string {
+  return toCalendarDate(fromAbsolute(now, timeZone)).toString();
+}
+
+/** Calendar days from `from` to `to`, both `YYYY-MM-DD`: 1 for tomorrow, -1 for yesterday. */
+function daysBetween(from: string, to: string): number {
+  const [fromYear, fromMonth, fromDay] = parts(from);
+  const [toYear, toMonth, toDay] = parts(to);
+  return Math.round((Date.UTC(toYear, toMonth - 1, toDay) - Date.UTC(fromYear, fromMonth - 1, fromDay)) / DAY);
+}
+
+/**
+ * A calendar day near today as a word, as Attio and Linear show dates:
+ * "Today", "Tomorrow", "Yesterday", "In 3 days", "3 days ago", within a
+ * week either way; undefined past that, where the date itself reads better.
+ * Capitalised, since it stands alone where a date would.
+ */
+export function formatDayNear(date: string, today: string, locale: string): string | undefined {
+  const days = daysBetween(today, date);
+  if (Math.abs(days) > 7) return undefined;
+  const word = memoIntl(`relative:${locale}`, () => new Intl.RelativeTimeFormat(locale, { numeric: 'auto' })).format(
+    days,
+    'day',
+  );
+  return `${word.charAt(0).toLocaleUpperCase(locale)}${word.slice(1)}`;
+}

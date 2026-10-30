@@ -72,7 +72,8 @@ export interface SelectProps {
   /**
    * `multiple` lets several options be chosen ("Country is any of Germany or France"): each chosen option is
    * checked, the list stays open while choosing, and the closed field names them all, in the list's order. `values`
-   * and `onValuesChange` take the place of `value` and `onChange`; Clear and Create are for one choice only.
+   * and `onValuesChange` take the place of `value` and `onChange`; Clear is for one choice only, while Create
+   * hands its label over in either (the new option is the caller's to add to the values).
    */
   readonly selectionMode?: 'single' | 'multiple';
   /** With `selectionMode="multiple"`: the chosen ids. */
@@ -314,9 +315,9 @@ export function Select({
   const disabledKeys = items
     .filter((item) => item.isDisabled === true || (item.isArchived === true && !chosenIds.includes(item.id)))
     .map((item) => item.id);
+  // Several chosen take Create too (a multi select's new tag): it hands the label over, as one choice does.
   const canCreate =
     onCreate !== undefined &&
-    !isMultiple &&
     typed !== '' &&
     !items.some((item) => item.isArchived !== true && item.label.trim().toLowerCase() === typed.toLowerCase());
   const options: readonly SelectItem[] = [
@@ -446,6 +447,10 @@ export function Select({
       onChange={(next) => {
         if (Array.isArray(next)) {
           const picked = new Set(next.map(String));
+          if (picked.has(CREATE)) {
+            if (canCreate) onCreate(typed);
+            return;
+          }
           onValuesChange?.(items.filter((item) => picked.has(item.id)).map((item) => item.id));
           return;
         }
