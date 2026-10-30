@@ -399,6 +399,22 @@ export function createSchedulingAccessStore(deps: SchedulingAccessDeps) {
      * change shows at once and is put back if refused; Copy week and Set usual hours wait, then the weeks read again.
      */
     teamWeek,
+    /**
+     * What Availability › Team's loader needs, in this chunk so the first load carries none of it: the week (`date`'s
+     * Monday, else this week's in `timeZone`), its first read settled (a failure shows in the screen), and the members
+     * in the reader's See reach for "Set usual hours for…".
+     */
+    async openTeamWeek(workspace: string, date: string | undefined, search: string, timeZone: string) {
+      const week = teamWeek.weekOf(date, timeZone);
+      const [members] = await Promise.all([
+        this.visible(workspace),
+        teamWeek
+          .held(workspace, week, search)
+          .ready()
+          .catch(() => undefined),
+      ]);
+      return { week, members };
+    },
     /** A held list of delegations: the member's own both ways, or the workspace's (`members.manage`). */
     delegations: (workspace: string, scope: DelegationsScope): DelegationsHeld => of(workspace, scope).held,
     /**

@@ -81,15 +81,12 @@
     color: var(--tag-yellow-text);
   }
 
+  /* A control's edge (3.5:1), as a Button's: the cell is pressable. Nothing shrinks on press (rule 8). */
   .cell[data-editable] {
+    border-color: var(--border);
     transition:
       background-color var(--duration-hover) var(--ease-hover),
-      border-color var(--duration-hover) var(--ease-hover),
-      transform var(--duration-press) var(--ease-out);
-  }
-
-  .cell[data-editable][data-pressed] {
-    transform: scale(0.97);
+      border-color var(--duration-hover) var(--ease-hover);
   }
 
   .cell[data-editable][data-focus-visible] {
@@ -155,11 +152,5 @@
     font: var(--text-label);
     letter-spacing: var(--tracking-label);
     color: var(--text-secondary);
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .cell[data-editable][data-pressed] {
-      transform: none;
-    }
   }
 }

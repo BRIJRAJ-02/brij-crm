@@ -125,7 +125,7 @@ const SAM_TUESDAY = 'Tuesday 3 November, Sam Lee: 10:00 am to 2:00 pm, this week
 describe('the Team week', () => {
   it('names every cell, shows the offset only where it differs, and counts the footer', async () => {
     await render();
-    await expect.element(page.getByRole('grid', { name: /^Team week, / })).toBeVisible();
+    await expect.element(page.getByRole('grid', { name: /^Roster, / })).toBeVisible();
     await expect.element(page.getByRole('button', { name: SAM_TUESDAY })).toBeVisible();
     await expect.element(page.getByText('UTC+5:30')).toBeVisible();
     await expect.element(page.getByText('2 pages use other schedules')).toBeVisible();
@@ -163,7 +163,10 @@ describe('the Team week', () => {
     await userEvent.keyboard('{Escape}');
     await expect.poll(() => document.activeElement).toBe(tuesday);
     await userEvent.keyboard('{Enter}');
-    await page.getByRole('button', { name: 'Off this day' }).click();
+    // Save waits for a change; the day's switch turns it off, and Save sends it.
+    await expect.element(page.getByRole('button', { name: 'Save' })).toBeDisabled();
+    (page.getByRole('switch', { name: 'Tue 3' }).element() as HTMLElement).click();
+    await page.getByRole('button', { name: 'Save' }).click();
     expect(teamWeek.setDay).toHaveBeenCalledWith('acme', expect.objectContaining({ memberId: SAM }), dates[1], 'off');
   });
 

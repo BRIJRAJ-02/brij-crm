@@ -23,7 +23,8 @@ import { useBookingsActionSlot, useBookingsToolbarSlot } from '../bookings/toolb
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { DeleteScheduleDialog } from './DeleteScheduleDialog.tsx';
 import { memberZone } from './zone.ts';
-import { availabilityHref, bookingsHref, scheduleHref, teamWeekHref } from './links.ts';
+import { availabilityHref, bookingsHref, scheduleHref } from './links.ts';
+import { teamWeekHref } from './team-week-links.ts';
 import { NewScheduleDialog } from './NewScheduleDialog.tsx';
 import { RenameScheduleDialog } from './RenameScheduleDialog.tsx';
 import { ScheduleEditor, ScheduleEditorPending } from './ScheduleEditor.tsx';

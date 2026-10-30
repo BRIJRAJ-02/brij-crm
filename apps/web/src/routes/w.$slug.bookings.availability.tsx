@@ -22,18 +22,10 @@ export const Route = createFileRoute('/w/$slug/bookings/availability')({
   loader: async ({ context, params, deps }) => {
     // `?view=team`: the Team week, the Roster (spec 0037, job J6), from the scheduling chunk's store.
     if (deps.view === 'team') {
-      const [scheduling, members] = await Promise.all([
-        context.data.scheduling.open(),
-        context.data.scheduling.open().then((store) => store.visible(params.slug)),
-      ]);
       const zone = memberZone(context.data, params.slug);
-      const week = scheduling.teamWeek.weekOf(deps.week, zone);
-      // A failed read shows in the screen, with Try again.
-      await scheduling.teamWeek
-        .held(params.slug, week, deps.q ?? '')
-        .ready()
-        .catch(() => undefined);
-      return { view: 'team' as const, week, q: deps.q ?? '', zone, members };
+      const q = deps.q ?? '';
+      const team = await (await context.data.scheduling.open()).openTeamWeek(params.slug, deps.week, q, zone);
+      return { view: 'team' as const, q, zone, ...team };
     }
     // Whose schedules the reader may see comes from the server's reach (`members.visible`, spec 0037, AC-1268): a
     // colleague outside it opens the reader's own. The workspace's members name whoever changed a schedule last.
@@ -71,8 +63,8 @@ export const Route = createFileRoute('/w/$slug/bookings/availability')({
 });
 
 function AvailabilityRoutePending() {
-  const { view } = Route.useSearch();
-  return <LoadingNow>{view === 'team' ? <TeamWeekPending /> : <AvailabilityPending />}</LoadingNow>;
+  const { view, week } = Route.useSearch();
+  return <LoadingNow>{view === 'team' ? <TeamWeekPending week={week} /> : <AvailabilityPending />}</LoadingNow>;
 }
 
 function AvailabilityRoute() {

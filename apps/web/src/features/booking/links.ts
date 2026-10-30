@@ -88,14 +88,6 @@ export function availabilitySearch(search: Record<string, unknown>): {
   };
 }
 
-/** Availability's Team week (the Roster): a week by its Monday (else this week) and a name search. */
-export const teamWeekHref = (slug: string, week?: string, q?: string) => {
-  const query = new URLSearchParams({ view: 'team' });
-  if (week !== undefined) query.set('week', week);
-  if (q !== undefined && q.trim() !== '') query.set('q', q.trim());
-  return `/w/${slug}/bookings/availability?${query.toString()}`;
-};
-
 /**
  * Where the public booking addresses are served: `VITE_BOOKING_PUBLIC_ORIGIN` (Timefix's own domain, beside the
  * app's), else this app's origin. The same deployment answers on both.
