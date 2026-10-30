@@ -3391,7 +3391,7 @@ export function createDataLayer({
                       ...(page.kind === 'round_robin' && page.hosts !== undefined
                         ? { kind: 'round_robin' as const, hosts: page.hosts }
                         : {}),
-                      ...(page.scope === 'workspace' ? { scope: page.scope } : {}),
+                      scope: page.scope,
                       mutationId: mintId(),
                     },
                     options,
