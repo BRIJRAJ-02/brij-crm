@@ -108,9 +108,12 @@ export const PressableDone: Story = {
       <Steps {...args} steps={args.steps.map(({ id, label }) => ({ id, label }))} />
     </Stage>
   ),
-  play: async ({ args, canvas, userEvent }) => {
+  play: async ({ args, canvas, canvasElement, userEvent }) => {
     await expect(canvas.getAllByRole('button')).toHaveLength(2);
     await userEvent.click(canvas.getByRole('button', { name: /Map columns/ }));
     await expect(args.onStepPress).toHaveBeenCalledWith('map');
+    // The pointer leaves the step, so the screenshot shows its focus ring alone, never the hover's underline
+    // (it came and went with how fast the shot was taken).
+    await userEvent.hover(canvasElement);
   },
 };
