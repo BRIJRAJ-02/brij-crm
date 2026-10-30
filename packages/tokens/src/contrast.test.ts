@@ -51,7 +51,7 @@ describe('contrast (AC-4)', () => {
   });
 
   it('measures every pair in the table, in both themes', () => {
-    expect(checkContrast(tokens.color)).toHaveLength(124);
+    expect(checkContrast(tokens.color)).toHaveLength(126);
   });
 
   it('catches the pairs that missed in artifact version 8', () => {

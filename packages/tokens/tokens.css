@@ -74,6 +74,7 @@
     --surface-inverse: #18191d;
     --on-inverse: #fdfdff;
     --inverse-hover: #ffffff26;
+    --border-inverse: #77787c;
     --scrim: #1c1d1f33;
     --scrim-soft: #1c1d1f14;
     --on-accent-kbd: #ffffff33;
@@ -159,6 +160,7 @@
     --surface-inverse: #ebedef;
     --on-inverse: #18191c;
     --inverse-hover: #1c1d1f1f;
+    --border-inverse: #77787c;
     --scrim: #0000008c;
     --scrim-soft: #00000066;
     --on-accent-kbd: #ffffff33;
@@ -245,6 +247,7 @@
       --surface-inverse: #ebedef;
       --on-inverse: #18191c;
       --inverse-hover: #1c1d1f1f;
+      --border-inverse: #77787c;
       --scrim: #0000008c;
       --scrim-soft: #00000066;
       --on-accent-kbd: #ffffff33;
@@ -349,6 +352,8 @@
     --tracking-note-title: -0.02em;
     --text-title: 600 15px/20px var(--font-sans);
     --tracking-title: 0;
+    --text-title-regular: 400 15px/20px var(--font-sans);
+    --tracking-title-regular: 0;
     --text-body-strong: 500 13px/20px var(--font-sans);
     --tracking-body-strong: 0;
     --text-body: 400 13px/20px var(--font-sans);

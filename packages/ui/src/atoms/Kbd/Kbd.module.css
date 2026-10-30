@@ -34,10 +34,10 @@
     color: var(--on-accent);
   }
 
-  /* Inside a tooltip, on surface-inverse: edged with the inverse divider, the label in on-inverse (17:1 light,
+  /* Inside a tooltip, on surface-inverse: edged with border-inverse (3.9:1), the label in on-inverse (17:1 light,
      15:1 dark). */
   .root[data-tone='onInverse'] {
-    border-color: var(--inverse-hover);
+    border-color: var(--border-inverse);
     background: transparent;
     box-shadow: none;
     color: var(--on-inverse);

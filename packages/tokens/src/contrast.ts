@@ -35,6 +35,8 @@ export function contrastRules(color: ColorFamily): ContrastRule[] {
     { foregrounds: ['link'], backgrounds: ['surface', 'surface-raised', 'accent-soft'], minimum: 4.5 },
     { foregrounds: ['on-accent'], backgrounds: ['accent', 'accent-hover'], minimum: 4.5 },
     { foregrounds: ['on-inverse'], backgrounds: ['surface-inverse'], minimum: 4.5 },
+    // A keycap's edge in a tooltip.
+    { foregrounds: ['border-inverse'], backgrounds: ['surface-inverse'], minimum: 3.5 },
     {
       foregrounds: ['danger'],
       backgrounds: ['surface', 'surface-subtle', 'surface-raised', 'surface-hover', 'surface-selected'],

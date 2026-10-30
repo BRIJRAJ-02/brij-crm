@@ -206,9 +206,8 @@
   }
 
   .searchable[data-size='lg'] .input {
-    font: var(--text-title);
-    font-weight: normal;
-    letter-spacing: var(--tracking-title);
+    font: var(--text-title-regular);
+    letter-spacing: var(--tracking-title-regular);
   }
 
   .searchable[data-size='lg'] .item {
