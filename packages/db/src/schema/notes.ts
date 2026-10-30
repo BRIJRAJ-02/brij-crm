@@ -56,6 +56,10 @@ export const notes = pgTable(
     /** How it went, from the kind's own set; never on a plain note. */
     outcome: text('outcome').$type<NoteOutcome>(),
     ...auditColumns(),
+    /** The moment it is listed at: a plain note's last edit, a call's or meeting's when it happened (generated). */
+    listedAt: timestamptz('listed_at').generatedAlwaysAs(
+      sql`case when kind = 'note' then updated_at else occurred_at end`,
+    ),
     deletedAt: timestamptz('deleted_at'),
     deletedByType: deletedBy.type,
     deletedById: deletedBy.id,
@@ -88,6 +92,10 @@ export const notes = pgTable(
     index('notes_by_record').on(t.workspaceId, t.recordId, t.updatedAt.desc(), t.id),
     // The timeline's "added a note", "logged a call", by when each happened (migration 0141; a plain note's moment is
     // its creation).
+    index('notes_by_workspace_listed')
+      .on(t.workspaceId, t.listedAt.desc(), t.id)
+      .where(sql`${t.deletedAt} is null`),
+    index('notes_by_record_listed').on(t.workspaceId, t.recordId, t.listedAt.desc(), t.id),
     index('notes_by_record_occurred').on(t.workspaceId, t.recordId, t.occurredAt.desc(), t.id),
     index('notes_trashed')
       .on(t.workspaceId, t.deletedAt)

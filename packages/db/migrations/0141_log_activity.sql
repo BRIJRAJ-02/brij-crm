@@ -51,6 +51,15 @@ alter table notes add constraint notes_outcome check (
   or (kind = 'meeting' and outcome in ('held', 'cancelled', 'no_show'))
 );
 --> statement-breakpoint
+-- The moment a note is listed at (the Notes tab and page): a plain note's last edit, a call's or meeting's when it
+-- happened. Stored, so the workspace's Notes page and a record's list sort and page on an index.
+alter table notes add column listed_at timestamp (6) with time zone
+  generated always as (case when kind = 'note' then updated_at else occurred_at end) stored;
+--> statement-breakpoint
+CREATE INDEX "notes_by_workspace_listed" ON "notes" USING btree ("workspace_id","listed_at" DESC NULLS LAST,"id") WHERE "notes"."deleted_at" is null;
+--> statement-breakpoint
+CREATE INDEX "notes_by_record_listed" ON "notes" USING btree ("workspace_id","record_id","listed_at" DESC NULLS LAST,"id");
+--> statement-breakpoint
 CREATE INDEX "notes_by_record_occurred" ON "notes" USING btree ("workspace_id","record_id","occurred_at" DESC NULLS LAST,"id");
 --> statement-breakpoint
 DROP INDEX "notes_by_record_created";

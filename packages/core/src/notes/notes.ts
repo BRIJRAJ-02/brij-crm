@@ -117,7 +117,7 @@ const micros = (column: string) => sql.raw(`to_char((${column}) at time zone 'UT
  * The moment a note is listed at, over a note aliased `n`: a plain note's last edit, a call's or meeting's when it
  * happened (migration 0141). The Notes tab and the Notes page sort on it, and their cursors carry it.
  */
-const LISTED = "case when n.kind = 'note' then n.updated_at else n.occurred_at end";
+const LISTED = 'n.listed_at';
 
 /** A note's stored row, as the shapes need it (its text only as far as the excerpt reads). */
 interface NoteRow extends Record<string, unknown> {
@@ -303,7 +303,8 @@ function checkDetails(kind: NoteKind, input: Details): Details {
     return {};
   }
   const moment = occurredAt === undefined ? Number.NaN : Date.parse(occurredAt);
-  if (occurredAt !== undefined && Number.isNaN(moment)) {
+  // A moment Postgres reads the same: a real one between 1970 and the end of 9999.
+  if (occurredAt !== undefined && !(moment >= 0 && moment < Date.UTC(10000, 0, 1))) {
     throw inputInvalid('occurredAt', 'Give the time as a date and time.');
   }
   if (
@@ -397,7 +398,7 @@ export async function saveNote(
         }>(sql`
           select ${title === undefined ? sql`false` : sql`title <> ${title}`} as title_changed,
             ${content === undefined ? sql`false` : sql`content <> ${JSON.stringify(content)}::jsonb`} as content_changed,
-            ${details.occurredAt === undefined ? sql`false` : sql`occurred_at <> ${details.occurredAt}::timestamptz`} as occurred_changed,
+            ${details.occurredAt === undefined ? sql`false` : sql`date_trunc('milliseconds', occurred_at) <> ${details.occurredAt}::timestamptz`} as occurred_changed,
             ${details.durationMinutes === undefined ? sql`false` : sql`duration_minutes is distinct from ${details.durationMinutes}::smallint`} as duration_changed,
             ${details.outcome === undefined ? sql`false` : sql`outcome is distinct from ${details.outcome}::text`} as outcome_changed,
             content

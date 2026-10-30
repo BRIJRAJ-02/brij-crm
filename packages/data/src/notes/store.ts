@@ -989,8 +989,14 @@ export function createNotesStore(deps: NotesDeps) {
       }
     }
     const shownOn = [input.recordId, ...input.add.map((link) => link.recordId), ...input.remove];
-    for (const each of new Set(shownOn)) putNote(workspace, each, answer.note);
-    for (const list of listsOf(workspace)) list.dirty();
+    // A plain note's place is the top; a call or meeting's is where it happened, so its lists read again instead.
+    // Records it was just unlinked from only read again.
+    if (answer.note.kind === 'note') {
+      for (const each of new Set([input.recordId, ...input.add.map((link) => link.recordId)])) {
+        putNote(workspace, each, answer.note);
+      }
+    }
+    for (const each of new Set(shownOn)) dirtyRecord(workspace, each);
     deps.timelines(workspace, [...new Set(shownOn)]);
     return {
       note: answer.note,
