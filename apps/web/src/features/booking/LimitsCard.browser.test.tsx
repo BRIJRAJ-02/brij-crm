@@ -111,6 +111,24 @@ describe('Meeting limits', () => {
     expect(made.saved.at(-1)).toEqual({ perDay: undefined, perWeek: undefined });
   });
 
+  it('saves when focus leaves, and Escape puts the saved number back', async () => {
+    const made = await render(mine({ perWeek: 20 }));
+    const field = page.getByRole('textbox', { name: 'Meetings a week' });
+    await field.fill('25');
+    await userEvent.keyboard('{Escape}');
+    await expect.element(field).toHaveValue('20');
+    expect(made.saved).toEqual([]);
+    await field.fill('12');
+    await userEvent.keyboard('{Tab}');
+    expect(made.saved).toEqual([{ perDay: undefined, perWeek: 12 }]);
+    await expect.element(page.getByText('4 of 12 this week')).toBeVisible();
+  });
+
+  it('says a day at its limit is closed', async () => {
+    await render(mine({ perDay: 2 }));
+    await expect.element(page.getByText('2 of 2 today. Pages offer no more times today.')).toBeVisible();
+  });
+
   it('shows a colleague the reader may only See read only, saying why', async () => {
     await render(mine({ memberId: SAM, perDay: 3, canChange: false }), { id: SAM, name: 'Sam Lee' });
     await expect.element(page.getByText(/You can see Sam’s meeting limits but not change them\./)).toBeVisible();

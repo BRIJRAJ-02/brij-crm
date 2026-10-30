@@ -17,10 +17,14 @@ export interface LimitsCardProps {
   readonly member: { readonly id: string; readonly name: string } | undefined;
 }
 
-/** The section: a Card with a Switch per limit, and its number once it is on. */
+/** The section: a Card with a row per limit, its number and the Switch that turns it on. */
 export function LimitsCard({ data, slug, member }: LimitsCardProps) {
   const store = data.scheduling.loaded()?.limits;
-  return store === undefined ? <LimitsCardPending /> : <Loaded store={store} slug={slug} member={member} />;
+  return store === undefined ? (
+    <LimitsCardPending member={member} />
+  ) : (
+    <Loaded store={store} slug={slug} member={member} />
+  );
 }
 
 type LimitsStore = NonNullable<ReturnType<DataLayer['scheduling']['loaded']>>['limits'];
@@ -28,7 +32,7 @@ type LimitsStore = NonNullable<ReturnType<DataLayer['scheduling']['loaded']>>['l
 function Loaded({ store, slug, member }: Omit<LimitsCardProps, 'data'> & { readonly store: LimitsStore }) {
   const held = store.held(slug, member?.id);
   const state = useScheduling(held);
-  if (state.status === 'loading') return <LimitsCardPending />;
+  if (state.status === 'loading') return <LimitsCardPending member={member} />;
   const description = member === undefined ? strings.description : strings.descriptionFor(firstName(member.name));
   if (state.status === 'error') {
     return (
@@ -78,7 +82,7 @@ export function parseLimit(text: string, kind: 'day' | 'week'): number | undefin
 }
 
 /**
- * One limit: its Switch (on saves the last number, or a starting one; off clears it), and once on its number,
+ * One limit: its Switch (on saves the last number, or a starting one; off clears it), and its number while on,
  * saved on Enter or when focus leaves, with the count as its hint.
  */
 function LimitRow({
@@ -113,50 +117,75 @@ function LimitRow({
     setError(undefined);
     if (parsed !== value) onSave(parsed);
   };
+  const label = kind === 'day' ? strings.dayField : strings.weekField;
+  const hint =
+    value === undefined
+      ? kind === 'day'
+        ? strings.dayBooked(count)
+        : strings.weekBooked(count)
+      : kind === 'day'
+        ? strings.dayCount(count, value)
+        : strings.weekCount(count, value);
+  // One row per limit: its number, and beside it the Switch that turns it on. Off, the box reads No limit with what
+  // is booked so far under it, so nothing moves when it turns on.
   return (
-    <>
-      <Switch
-        label={kind === 'day' ? strings.daySwitch : strings.weekSwitch}
-        {...(isOn ? {} : { description: kind === 'day' ? strings.dayBooked(count) : strings.weekBooked(count) })}
-        isSelected={isOn}
-        isReadOnly={isReadOnly}
-        onChange={(on) => {
-          setDraft(undefined);
-          setError(undefined);
-          onSave(on ? last : undefined);
-        }}
-      />
-      {value !== undefined && (
-        <Field
-          label={kind === 'day' ? strings.dayField : strings.weekField}
-          value={draft ?? String(value)}
-          inputMode="numeric"
-          autoComplete="off"
-          size="sm"
-          hint={kind === 'day' ? strings.dayCount(count, value) : strings.weekCount(count, value)}
-          {...(error === undefined ? {} : { error })}
+    <Field
+      label={label}
+      value={value === undefined ? '' : (draft ?? String(value))}
+      placeholder={strings.noLimit}
+      inputMode="numeric"
+      autoComplete="off"
+      maxLength={3}
+      hint={hint}
+      {...(error === undefined ? {} : { error })}
+      isReadOnly={isReadOnly}
+      isDisabled={!isOn && !isReadOnly}
+      onChange={(text) => {
+        setDraft(text);
+        if (error !== undefined) setError(undefined);
+      }}
+      onSubmit={commit}
+      onBlur={commit}
+      onEscape={() => {
+        setDraft(undefined);
+        setError(undefined);
+      }}
+      after={
+        <Switch
+          label={kind === 'day' ? strings.daySwitch : strings.weekSwitch}
+          isLabelHidden
+          isSelected={isOn}
           isReadOnly={isReadOnly}
-          onChange={(text) => {
-            setDraft(text);
-            if (error !== undefined) setError(undefined);
-          }}
-          onSubmit={commit}
-          onBlur={commit}
-          onEscape={() => {
+          onChange={(on) => {
             setDraft(undefined);
             setError(undefined);
+            onSave(on ? last : undefined);
           }}
         />
-      )}
-    </>
+      }
+    />
   );
 }
 
-/** The section while it loads, in its loaded anatomy: both Switches' places. */
-export function LimitsCardPending() {
+/** The section while it loads, in its loaded anatomy: both limits' rows, switched off. */
+export function LimitsCardPending({ member }: { readonly member?: { readonly name: string } | undefined } = {}) {
+  const row = (label: string, switchLabel: string) => (
+    <Field
+      label={label}
+      value=""
+      isDisabled
+      hint={strings.loading}
+      after={<Switch label={switchLabel} isLabelHidden isDisabled />}
+    />
+  );
   return (
-    <Card title={strings.title} description={strings.description} isBusy>
-      <EmptyState layout="row" isLoading title={strings.loading} />
+    <Card
+      title={strings.title}
+      description={member === undefined ? strings.description : strings.descriptionFor(firstName(member.name))}
+      isBusy
+    >
+      {row(strings.dayField, strings.daySwitch)}
+      {row(strings.weekField, strings.weekSwitch)}
     </Card>
   );
 }

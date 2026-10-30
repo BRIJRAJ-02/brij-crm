@@ -24,6 +24,7 @@ import { resolveMany } from '../availability/resolve.ts';
 import { mayEditOwnHours, ownHoursRefusal } from '../availability/schedules.ts';
 import { isUuid, uuidArray } from '../engine/ids.ts';
 import { refuse, refuseOn } from '../engine/refusals.ts';
+import { hostLockKey, lockKey } from '../booking/locks.ts';
 import { actorRow } from '../engine/scope.ts';
 import { runWrite, type AfterWrite, type WriteContext } from '../engine/write.ts';
 import type { RemovalEffect } from '../members/removal-effect.ts';
@@ -151,7 +152,10 @@ export async function hostedByDay(
     join bookings b on b.workspace_id = h.workspace_id and b.id = h.booking_id
     join (values ${zoneRows}) as z(member_id, zone) on z.member_id = h.member_id
     where h.member_id = any(${uuidArray(ids)}) and h.status = 'confirmed'
-      and h.starts_at < ${to.toISOString()}::timestamptz and h.ends_at > ${from.toISOString()}::timestamptz
+      -- Both ends on the host row's start (the index's column): it is the meeting's start less the page's buffer,
+      -- at most 60 minutes (booking_pages_buffers), so the member's history isn't walked.
+      and h.starts_at >= ${from.toISOString()}::timestamptz - interval '60 minutes'
+      and h.starts_at < ${to.toISOString()}::timestamptz
       and b.starts_at >= ${from.toISOString()}::timestamptz and b.starts_at < ${to.toISOString()}::timestamptz
       ${except === undefined || !isUuid(except) ? sql`` : sql`and h.booking_id <> ${except}::uuid`}
     group by 1, 2
@@ -319,6 +323,9 @@ export async function setLimits(
       } else {
         await actingFor(tx, scope, member, 'manage', 'hours');
       }
+      // Under the member's host lock: saves queue behind each other (each audit row's before is true) and land
+      // wholly before or after a booking's recheck.
+      await lockKey(tx, hostLockKey(scope.workspaceId, member));
       const before = await limitsRow(tx, member);
       const was = valuesOf(before);
       const next: LimitValues = {

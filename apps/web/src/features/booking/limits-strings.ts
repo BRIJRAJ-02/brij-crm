@@ -20,15 +20,23 @@ export const limitsStrings = {
   weekSwitch: 'Limit meetings a week',
   dayField: 'Meetings a day',
   weekField: 'Meetings a week',
+  noLimit: 'No limit',
   // The count beside each limit (AC-1299): "4 of 20 this week".
-  dayCount: (count: number, limit: number) => `${String(count)} of ${String(limit)} today`,
-  weekCount: (count: number, limit: number) => `${String(count)} of ${String(limit)} this week`,
+  // At the limit (or past it, when it was lowered under what is booked) the day or week is closed: say so.
+  dayCount: (count: number, limit: number) =>
+    count >= limit
+      ? `${String(count)} of ${String(limit)} today. Pages offer no more times today.`
+      : `${String(count)} of ${String(limit)} today`,
+  weekCount: (count: number, limit: number) =>
+    count >= limit
+      ? `${String(count)} of ${String(limit)} this week. Pages offer no more times this week.`
+      : `${String(count)} of ${String(limit)} this week`,
   // With no limit, what is booked so far.
   dayBooked: (count: number) => `${meetings(count)} today, no limit.`,
   weekBooked: (count: number) => `${meetings(count)} this week, no limit.`,
   dayRange: 'Use a whole number from 1 to 50.',
   weekRange: 'Use a whole number from 1 to 200.',
   // Read only (AC-1299): why it can't be changed here.
-  setByOthers: 'Your meeting limits are set by someone who manages your scheduling.',
+  setByOthers: 'Your meeting limits are set by others.',
   seeOnly: (first: string) => `You can see ${first}’s meeting limits but not change them.`,
 } as const;

@@ -349,6 +349,12 @@ export function createSchedulingAccessStore(deps: SchedulingAccessDeps) {
     ...(deps.watch === undefined ? {} : { watch: deps.watch }),
     ...(deps.now === undefined ? {} : { now: deps.now }),
   });
+  // The counts beside each limit move as meetings are booked, with no event: a tab shown again reads them again.
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') limits.shown();
+    });
+  }
 
   function make(workspace: string, scope: DelegationsScope) {
     let state: DelegationsState = { status: 'loading' };

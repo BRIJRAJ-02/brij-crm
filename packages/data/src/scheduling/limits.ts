@@ -207,6 +207,8 @@ export function createLimitsStore(deps: LimitsDeps) {
         return true;
       } catch (error) {
         if (isLatest() && before !== undefined) entry.show(before);
+        // What was put back may itself be an earlier change still out or refused: the server's limits read again.
+        entry.stale();
         deps.notify({ tone: 'danger', message: refusalSummary(toDataError(error)) });
         return false;
       } finally {
@@ -216,6 +218,13 @@ export function createLimitsStore(deps: LimitsDeps) {
     /** Someone's limits changed (a `time_off` event, a resync): every held limits of the workspace read again. */
     changed(workspace: string): void {
       for (const [key, entry] of held) if (key.startsWith(`${workspace}\u0000`)) entry.stale();
+    },
+    /**
+     * The tab is shown again: every held limits read again, since the counts move as meetings are booked and no
+     * event says so (spec 0037: settings read again when the window regains focus).
+     */
+    shown(): void {
+      for (const entry of held.values()) entry.stale();
     },
     /** Signed out: forgets every workspace's. */
     clear(): void {
