@@ -22,6 +22,7 @@ Ported from the artifact's FilterChip (part of the FilterBuilder card). The view
 - The group is named "Filter: Company Country is" for screen readers. `label` and `removeLabel` rename the group and its remove part, for another chip in this shape: the Toolbar's SortChip ("Sort: Created at, descending", "Remove sorts"). Why: the owner asked for sorts and filters to read and look alike (spec 0020, milestone 2), so the sort chip is a FilterChip rather than a second chip style.
 - Without `onRemove` there is no remove part: a view you can't edit shows its chips with nothing to remove.
 - `ref` reaches the chip's root, so a screen can anchor a Popover to it (the sort builder).
+- `tone="muted"` states something nobody chose: a dashed hairline, no surface or shadow, and secondary body text. SortChip's `isDefault` uses it for a view's default order ("Sorted by Created at"). Why a variant: that note sits among the person's own chips and must read apart from them, in the same shape (30 October 2026).
 
 ## States
 

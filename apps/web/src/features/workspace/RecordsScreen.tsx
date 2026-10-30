@@ -119,6 +119,11 @@ export interface RecordsScreenProps {
    */
   readonly onTickedChange?: (isTicked: boolean) => void;
   /**
+   * Ticked rows were cleared because the view's filter changed (a sort keeps them): the screen says so. Without it
+   * the table says so itself.
+   */
+  readonly onTicksCleared?: () => void;
+  /**
    * The view's grouping (13 Oct reference batch 4): a status or single select
    * attribute's id, and the rows run under a header per option.
    */
@@ -233,6 +238,7 @@ export function RecordsScreen({
   announce,
   filteredEmpty,
   onTickedChange,
+  onTicksCleared,
   isCreateRequested = false,
   onCreateRequestTaken,
   groupBy,
@@ -342,10 +348,24 @@ export function RecordsScreen({
   if (state.status === 'ready' && shown.key === wanted && announced.key !== wanted) {
     setAnnounced({ key: wanted, text: announce?.(state.count) });
   }
-  // The rows ticked (spec 0022, AC-522): a new view starts with none, and rows gone on the server leave.
-  const ticked = useTableSelection(view, state, (message) => {
-    toasts.toast({ tone: 'danger', message });
-  });
+  // The rows ticked (spec 0022, AC-522): a sort keeps them (the same rows), a new filter clears them and says so,
+  // another view starts with none, and rows gone on the server leave.
+  const ticked = useTableSelection(
+    view,
+    state,
+    (message) => {
+      toasts.toast({ tone: 'danger', message });
+    },
+    {
+      key: currentViewId,
+      filterKey: JSON.stringify(shown.query.filter ?? null),
+      onFilterCleared:
+        onTicksCleared ??
+        (() => {
+          toasts.toast({ tone: 'info', message: strings.selectionCleared });
+        }),
+    },
+  );
   // Paused only while the live connection is down; off (previews) shows nothing.
   const live = useLiveStatus(data.live);
   // Owner cells (spec 0003): a Menu of the workspace's members, "Me" first.
@@ -548,6 +568,20 @@ export function RecordsScreen({
               getValue={(row, columnId) => row.values[columnId] ?? null}
               isCellKnown={isCellKnown}
               rowNotes={state.rowNotes}
+              // The count under the name column, once known ("10,000+ records" past a filtered view's cap). Per
+              // column sums and averages wait for a server aggregate: the grid never computes over loaded rows.
+              {...(state.status === 'ready'
+                ? {
+                    footer: {
+                      [rowHeader]: strings.recordCount(
+                        `${state.count.count.toLocaleString()}${state.count.atLeast ? '+' : ''}`,
+                        state.count.count === 1 && !state.count.atLeast,
+                      ),
+                    },
+                  }
+                : {})}
+              // A ghost "+ New person" after the last row, for members who may create (Twenty's "+ Add New").
+              {...(object.access === 'write' ? { addRow: { label: newRecord, onAdd: openCreate } } : {})}
               floatingBar={bulk.bar}
               selection={ticked.selection}
               onSelectionChange={ticked.setSelection}

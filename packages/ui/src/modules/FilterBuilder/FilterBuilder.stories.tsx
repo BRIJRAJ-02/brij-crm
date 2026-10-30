@@ -50,17 +50,27 @@ interface SampleBuilderProps {
   readonly isReadOnly?: boolean;
   readonly isNarrow?: boolean;
   readonly onChange?: (next: FilterGroup) => void;
+  /** Relationships offer only is empty and is not empty (`operatorsOf`), as a view with no record search does. */
+  readonly isEmptyChecksOnly?: boolean;
 }
 
 /** The builder holding its own filters, as a view's filter popover would. */
-function SampleBuilder({ initial = FILTERS, isReadOnly = false, isNarrow = false, onChange }: SampleBuilderProps) {
+function SampleBuilder({
+  initial = FILTERS,
+  isReadOnly = false,
+  isNarrow = false,
+  onChange,
+  isEmptyChecksOnly = false,
+}: SampleBuilderProps) {
   const [value, setValue] = useState(initial);
   const me = SAMPLE_MEMBERS[0];
   return (
     <Stage {...(isNarrow ? { width: 'narrow' as const } : {})}>
       <FilterBuilder
         attributes={ATTRIBUTES}
-        relatedAttributes={(relation) => (relation.id === 'company' ? COMPANY_ATTRIBUTES : undefined)}
+        relatedAttributes={(relation) =>
+          relation.id === 'company' && !isEmptyChecksOnly ? COMPANY_ATTRIBUTES : undefined
+        }
         value={value}
         onChange={(next) => {
           setValue(next);
@@ -75,6 +85,12 @@ function SampleBuilder({ initial = FILTERS, isReadOnly = false, isNarrow = false
             : {}
         }
         isReadOnly={isReadOnly}
+        {...(isEmptyChecksOnly
+          ? {
+              operatorsOf: (attribute: FieldAttribute) =>
+                attribute.type === 'record_reference' ? (['is_empty', 'is_not_empty'] as const) : undefined,
+            }
+          : {})}
       />
     </Stage>
   );
@@ -164,6 +180,26 @@ export const AddAndChoose: Story = {
     await expect(args.onChange).toHaveBeenLastCalledWith({
       conjunction: 'and',
       conditions: [{ attributeId: 'stage', operator: 'is', value: undefined }],
+    });
+  },
+};
+
+/** A relationship narrowed to is empty and is not empty (`operatorsOf`): it starts on is empty and offers nothing else. */
+export const EmptyChecksOnly: Story = {
+  args: {
+    initial: { conjunction: 'and', conditions: [] },
+    onChange: fn(),
+    isEmptyChecksOnly: true,
+  },
+  parameters: { crm: { screenshot: false } },
+  play: async ({ args, canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Add filter' }));
+    await waitFor(() => expect(document.querySelector('[role="menu"]')).not.toBeNull());
+    await userEvent.keyboard('Company');
+    await userEvent.keyboard('{ArrowDown}{Enter}');
+    await expect(args.onChange).toHaveBeenLastCalledWith({
+      conjunction: 'and',
+      conditions: [{ attributeId: 'company', operator: 'is_empty' }],
     });
   },
 };

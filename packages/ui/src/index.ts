@@ -533,9 +533,11 @@ export { ViewSettings, type ViewField, type ViewSettingsProps } from './modules/
 export {
   SortChip,
   Toolbar,
+  ToolbarSearch,
   TopBar,
   ViewBar,
   type SortChipProps,
+  type ToolbarSearchProps,
   type ToolbarProps,
   type TopBarProps,
   type ViewAction,

@@ -37,6 +37,11 @@ export interface FilterChipProps {
   readonly removeLabel?: string;
   /** The chip's root, for a popover the screen opens from it (spec 0020: the sort builder). */
   readonly ref?: Ref<HTMLSpanElement>;
+  /**
+   * `muted` states something nobody chose (a view's default order): no surface or shadow, secondary text, so it
+   * reads as a note beside the chips a person set.
+   */
+  readonly tone?: 'muted';
 }
 
 /**
@@ -58,11 +63,13 @@ export function FilterChip({
   label,
   removeLabel = strings.remove,
   ref,
+  tone,
 }: FilterChipProps) {
   return (
     <span
       ref={ref}
       className={styles.root}
+      data-tone={tone}
       role="group"
       aria-label={label ?? strings.filter(attribute.join(' '), operator ?? '')}
     >

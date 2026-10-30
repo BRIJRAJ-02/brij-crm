@@ -27,6 +27,7 @@ import { flushSync } from 'react-dom';
 import { useFocusVisible } from 'react-aria';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { CheckboxMark } from '../../atoms/Checkbox/Checkbox.tsx';
+import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { AnchoredTooltip, Tooltip, TOOLTIP_DELAY_MS } from '../../atoms/Tooltip/Tooltip.tsx';
 import { SharedTooltipContext } from '../../atoms/TruncatedText/TruncatedText.tsx';
@@ -134,6 +135,12 @@ export interface DataGridProps<Row> {
   readonly cellErrors?: ReadonlyMap<string, string>;
   /** Calculations by column id, computed by the screen across all matching rows. */
   readonly footer?: Readonly<Record<string, ReactNode>>;
+  /**
+   * A ghost "+ New person" at the start of the footer, under the row header: a click, or Enter or Space on that
+   * footer cell, calls `onAdd`. It draws the footer even with no `footer`. Leave it out where the person may not
+   * create.
+   */
+  readonly addRow?: { readonly label: string; readonly onAdd: () => void };
   /**
    * A bar floating over the grid's foot (the BulkActionBar with
    * `placement="floating"` while rows are ticked), drawn in the grid's frame
@@ -324,6 +331,7 @@ export function DataGrid<Row>({
   confirmsPaste = true,
   cellErrors,
   footer,
+  addRow,
   floatingBar,
   status = 'ready',
   onRetry,
@@ -376,7 +384,7 @@ export function DataGrid<Row>({
   const count = status === 'ready' ? rows.count : 0;
   // The drawn lines: the rows, and each group's header before its first row.
   const lines = useMemo(() => groupMap(status === 'ready' ? (groups ?? []) : [], count), [groups, count, status]);
-  const hasFooter = footer !== undefined && count > 0;
+  const hasFooter = (footer !== undefined || addRow !== undefined) && count > 0;
   const hasFloatingBar = floatingBar !== undefined && floatingBar !== null && floatingBar !== false;
   const rowCount = count + (hasFooter ? 1 : 0);
 
@@ -1116,8 +1124,14 @@ export function DataGrid<Row>({
       }
       return;
     }
-    // The footer reads; nothing in it edits.
-    if (focus.row >= count) return;
+    // The footer reads; nothing in it edits. Its row header's "+ New" adds a row.
+    if (focus.row >= count) {
+      if (focus.col === 1 && addRow !== undefined && (event.key === 'Enter' || event.key === ' ')) {
+        event.preventDefault();
+        addRow.onAdd();
+      }
+      return;
+    }
     if (focus.col === 0) {
       if (event.key === ' ' || event.key === 'Enter') {
         event.preventDefault();
@@ -1656,6 +1670,7 @@ export function DataGrid<Row>({
       />
       {drawn.flatMap((each, index) => {
         const place = placeOf(each);
+        const adds = addRow !== undefined && place.col === 1;
         return [
           index === leadIndex ? <Spacer key="lead" width={leadSpacer} /> : null,
           <div
@@ -1664,6 +1679,15 @@ export function DataGrid<Row>({
             aria-colindex={place.col + 1}
             aria-readonly
             className={styles.total}
+            {...(adds
+              ? {
+                  'data-pressable': '',
+                  'data-add-row': '',
+                  onClick: () => {
+                    addRow.onAdd();
+                  },
+                }
+              : {})}
             data-cell={keyOf(count, place.col)}
             data-focused={isFocusedAt(count, place.col) || undefined}
             data-sticky={place.stickyOffset === undefined ? undefined : ''}
@@ -1674,7 +1698,13 @@ export function DataGrid<Row>({
               '--col-offset': `${String(place.stickyOffset ?? 0)}px`,
             }}
           >
-            {footer[each.column.id]}
+            {adds && (
+              <span className={styles.addRow}>
+                <Icon name="plus" size="sm" />
+                {addRow.label}
+              </span>
+            )}
+            {footer?.[each.column.id]}
           </div>,
         ];
       })}

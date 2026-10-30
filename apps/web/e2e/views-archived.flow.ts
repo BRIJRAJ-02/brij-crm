@@ -67,7 +67,7 @@ test.describe('a view filtered on an archived field', () => {
     await expect(grid(page).getByText('Alan Turing', { exact: true })).toBeVisible();
 
     // Only the sort changes, and is saved.
-    await toolbar(page).getByRole('button', { name: 'Sort', exact: true }).click();
+    await toolbar(page).getByRole('button', { name: 'Sorted by Created at' }).click();
     const sorts = page.getByRole('dialog', { name: 'Sorts' });
     await sorts.getByRole('button', { name: 'Add sort' }).click();
     await page.getByRole('menuitem', { name: 'Created at' }).click();

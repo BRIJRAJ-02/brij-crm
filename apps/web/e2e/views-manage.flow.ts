@@ -147,8 +147,11 @@ test.describe('saved views: many views and their layout', () => {
     await checkScreen(bea, 'views-locked');
 
     // Ada drafts a sort and keeps it as a view of its own from the Save menu (AC-466, AC-472).
-    // The default order runs with no chip, so the sort starts from Sort: Created at, which starts ascending.
-    await ada.getByRole('toolbar', { name: 'View options' }).getByRole('button', { name: 'Sort', exact: true }).click();
+    // The default order shows as a muted "Sorted by Created at" chip that opens the builder; Created at starts ascending.
+    await ada
+      .getByRole('toolbar', { name: 'View options' })
+      .getByRole('button', { name: 'Sorted by Created at' })
+      .click();
     const sorts = ada.getByRole('dialog', { name: 'Sorts' });
     await sorts.getByRole('button', { name: 'Add sort' }).click();
     await ada.getByRole('menuitem', { name: 'Created at' }).click();

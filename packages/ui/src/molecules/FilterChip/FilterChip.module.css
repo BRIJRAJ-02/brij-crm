@@ -17,6 +17,15 @@
     letter-spacing: var(--tracking-body-strong);
   }
 
+  .root[data-tone='muted'] {
+    border-style: dashed;
+    background: transparent;
+    box-shadow: none;
+    color: var(--text-secondary);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
   .segment {
     display: inline-flex;
     align-items: center;

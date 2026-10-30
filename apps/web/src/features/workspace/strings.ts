@@ -107,6 +107,10 @@ export const strings = {
   /** The TopBar's action and the new record dialog's title ("New person"). */
   newRecord: (singularName: string) => `New ${singularName.toLowerCase()}`,
   creating: 'Creating',
+  /** The table's footer, under the name column: how many records the view holds ("10,000+ records"). */
+  recordCount: (count: string, isOne: boolean) => (isOne ? `${count} record` : `${count} records`),
+  /** The person's own filter changed while rows were ticked: the old rows can't be known to match. */
+  selectionCleared: 'Selection cleared: the filter changed.',
   cancel: 'Cancel',
   addAttribute: 'Add attribute',
   /** After Add attribute: the new column often lands off screen, so say it was added. */

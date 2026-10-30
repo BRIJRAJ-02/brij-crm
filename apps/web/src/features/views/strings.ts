@@ -6,9 +6,8 @@ export const strings = {
   sorts: 'Sorts',
   filters: 'Filters',
   discard: 'Discard changes',
-  /** Discard asks first: the unsaved filters and sort go for good (the owner's rule for ending actions, 21 October 2026). */
-  discardTitle: (name: string) => `Discard changes to ${name}?`,
-  discardText: 'Your unsaved filters and sort go, and the view goes back to how it was saved.',
+  /** After Discard changes, with Undo (30 October 2026: Undo over a confirm). */
+  discarded: 'Changes discarded.',
   save: 'Save',
   saving: 'Saving',
   /** After Save: the view now runs this for everyone who sees it. */
@@ -35,6 +34,13 @@ export const strings = {
   noMatchesTitle: (plural: string) => `No ${plural.toLowerCase()} match these filters`,
   noMatchesText: 'Change the filters to see more.',
   editFilters: 'Edit filters',
+  /** The view's search (CRM flow pass): narrows by name, never saved. */
+  searchView: (plural: string) => `Search ${plural.toLowerCase()}`,
+  noSearchMatchesTitle: (plural: string, typed: string) => `No ${plural.toLowerCase()} match “${typed}”`,
+  clearSearch: 'Clear search',
+  /** A column hidden, moved or resized on a shared view: it changed for everyone at once (CRM flow pass). */
+  layoutForEveryone: (name: string) => `Changed for everyone on ${name}.`,
+  undo: 'Undo',
   /** The count after a filter, for screen readers (AC-487). */
   matching: (count: string, plural: string) => `${count} ${plural.toLowerCase()} match`,
   /** The clash dialog (AC-469). */
@@ -49,8 +55,6 @@ export const strings = {
   /** An object with no view this person may open (AC-462). */
   noViewsTitle: 'No views are available to you',
   noViewsText: 'Create one for yourself, or ask a workspace owner or admin about the shared views here.',
-  /** The column menu's Filter on a relationship, until record search (spec 0014). */
-  referenceFilterSoon: 'Filtering by a relationship arrives soon. Filter by its other fields for now.',
   saveFailed: 'Couldn’t save this view. Try again in a moment.',
   /** Milestone 2: making and managing views. */
   saveAsNew: 'Save as new view',

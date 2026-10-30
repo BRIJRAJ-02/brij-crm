@@ -91,6 +91,23 @@ export interface FilterBuilderProps {
   readonly displayOf?: (attributeId: string, value: unknown) => unknown;
   /** Shows the filters as sentences, with nothing to change: a view you can't edit. */
   readonly isReadOnly?: boolean;
+  /**
+   * Narrows an attribute's operators to these, in its type's order (undefined keeps them all): a relationship
+   * offers only is empty and is not empty where the screen has no record search for its operand.
+   */
+  readonly operatorsOf?: (attribute: FieldAttribute) => readonly FilterOperator[] | undefined;
+}
+
+/** The operators the builder offers on `attribute`: its type's, narrowed by `operatorsOf`. */
+function operatorsIn(builder: FilterBuilderProps, attribute: FieldAttribute) {
+  const all = operatorsFor(attribute);
+  const only = builder.operatorsOf?.(attribute);
+  return only === undefined ? all : all.filter((each) => only.includes(each.operator));
+}
+
+/** A new condition on `attribute`, starting on the first operator the builder offers. */
+function startOn(builder: FilterBuilderProps, attribute: FieldAttribute): LeafCondition {
+  return conditionOn(attribute, operatorsIn(builder, attribute)[0]?.operator);
 }
 
 interface Resolved {
@@ -199,7 +216,7 @@ export function FilterBuilder(props: FilterBuilderProps) {
                     builder={props}
                     label={strings.addFilter}
                     onPick={(path, attribute) => {
-                      structure.change(addItem(value, [], throughPath(path, conditionOn(attribute))), {
+                      structure.change(addItem(value, [], throughPath(path, startOn(props, attribute))), {
                         row: [0],
                         part: 'operator',
                       });
@@ -305,7 +322,7 @@ function GroupRows({ builder, group, path }: GroupRowsProps) {
             builder={builder}
             label={strings.addFilter}
             onPick={(relationPath, attribute) => {
-              structure.change(addItem(value, path, throughPath(relationPath, conditionOn(attribute))), {
+              structure.change(addItem(value, path, throughPath(relationPath, startOn(builder, attribute))), {
                 row: [...path, end],
                 part: 'operator',
               });
@@ -319,7 +336,7 @@ function GroupRows({ builder, group, path }: GroupRowsProps) {
                 structure.change(
                   addItem(value, path, {
                     conjunction: 'and',
-                    conditions: [throughPath(relationPath, conditionOn(attribute))],
+                    conditions: [throughPath(relationPath, startOn(builder, attribute))],
                   }),
                   { row: [...path, end, 0], part: 'operator' },
                 );
@@ -381,7 +398,7 @@ function ConditionRow({ builder, item, path, index }: ConditionRowProps) {
         builder={builder}
         current={{ icon, names }}
         onPick={(nextPath, attribute) => {
-          onChange(updateItem(value, path, () => throughPath(nextPath, conditionOn(attribute))));
+          onChange(updateItem(value, path, () => throughPath(nextPath, startOn(builder, attribute))));
         }}
       />
       {resolved !== undefined && (
@@ -398,7 +415,7 @@ function ConditionRow({ builder, item, path, index }: ConditionRowProps) {
                 replace(conditionOn(resolved.attribute, String(key) as FilterOperator));
               }}
             >
-              {operatorsFor(resolved.attribute).map((each) => (
+              {operatorsIn(builder, resolved.attribute).map((each) => (
                 <MenuItem key={each.operator} id={each.operator}>
                   {fieldStrings.operators[each.operator]}
                 </MenuItem>

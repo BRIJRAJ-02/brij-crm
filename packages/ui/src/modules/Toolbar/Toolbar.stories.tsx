@@ -11,7 +11,15 @@ import { Callout } from '../../molecules/Callout/Callout.tsx';
 import { Menu, MenuItem } from '../../molecules/Menu/Menu.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { LinkListToolbar } from '../LinkList/LinkList.tsx';
-import { SortChip, Toolbar, TopBar, ViewBar, type ViewChoice, type ViewLayoutSwitch } from './Toolbar.tsx';
+import {
+  SortChip,
+  Toolbar,
+  ToolbarSearch,
+  TopBar,
+  ViewBar,
+  type ViewChoice,
+  type ViewLayoutSwitch,
+} from './Toolbar.tsx';
 
 const VIEWS: readonly ViewChoice[] = [
   { id: 'all', name: 'All companies' },
@@ -378,6 +386,90 @@ export const SortChips: Story = {
     const readOnly = canvas.getByRole('group', { name: 'Sort: Updated by, descending' });
     await expect(within(readOnly).queryByRole('button', { name: /Remove/ })).toBeNull();
     await userEvent.click(canvas.getByRole('button', { name: '+2' }));
+  },
+};
+
+/** The default order nobody chose: a muted "Sorted by Created at" with no remove; pressing it opens the sort builder. */
+export const DefaultSortChip: Story = {
+  render: () => <DefaultChip />,
+  play: async ({ canvas, userEvent }) => {
+    const chip = canvas.getByRole('group', { name: 'Sort: Created at, descending, the default order' });
+    await expect(chip).toHaveTextContent('Sorted by Created at');
+    await expect(within(chip).queryByRole('button', { name: /Remove/ })).toBeNull();
+    await userEvent.click(within(chip).getByRole('button', { name: /Sorted by Created at/ }));
+    await waitFor(() => expect(canvas.getByText('Opened 1')).toBeInTheDocument());
+  },
+};
+
+/** The default order's chip, counting presses as a screen opening the sort builder would. */
+function DefaultChip() {
+  const [opened, setOpened] = useState(0);
+  return (
+    <Toolbar label="View options">
+      <SortChip
+        attribute="Created at"
+        direction="descending"
+        isDefault
+        onPress={() => {
+          setOpened((count) => count + 1);
+        }}
+      />
+      <Button variant="dashed" icon="list-filter">
+        Filter
+      </Button>
+      <span>{`Opened ${String(opened)}`}</span>
+    </Toolbar>
+  );
+}
+
+/** The view's search, holding its own text as a screen would. */
+function SearchBar() {
+  const [typed, setTyped] = useState('');
+  return (
+    <Toolbar label="View options" search={<ToolbarSearch label="Search people" value={typed} onChange={setTyped} />}>
+      <Button variant="dashed" icon="list-filter">
+        Filter
+      </Button>
+      <span>{`Typed ${typed}`}</span>
+    </Toolbar>
+  );
+}
+
+/** Search at the Toolbar's end: a button that opens into a focused field; Esc clears it and folds it back. */
+export const Search: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => <SearchBar />,
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Search people' }));
+    const field = await waitFor(() => canvas.getByRole('searchbox', { name: 'Search people' }));
+    await waitFor(() => expect(field).toHaveFocus());
+    await userEvent.keyboard('ada');
+    await expect(canvas.getByText('Typed ada')).toBeInTheDocument();
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(canvas.getByRole('button', { name: 'Search people' })).toHaveFocus());
+    await expect(canvas.getByText('Typed')).toBeInTheDocument();
+  },
+};
+
+/** Past seven views the switcher's menu gets a search field, which narrows the views as you type. */
+export const ManyViews: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <ViewBar
+      views={['All', 'Pipeline', 'Mine', 'Hot', 'Cold', 'London', 'Paris', 'Berlin'].map((name) => ({
+        id: name.toLowerCase(),
+        name,
+      }))}
+      currentViewId="all"
+      onViewChange={fn()}
+    />
+  ),
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'All' }));
+    const search = await within(document.body).findByRole('searchbox', { name: 'Search views' });
+    await userEvent.type(search, 'par');
+    await waitFor(() => expect(within(document.body).queryByRole('menuitemradio', { name: 'Berlin' })).toBeNull());
+    await expect(within(document.body).getByRole('menuitemradio', { name: 'Paris' })).toBeInTheDocument();
   },
 };
 

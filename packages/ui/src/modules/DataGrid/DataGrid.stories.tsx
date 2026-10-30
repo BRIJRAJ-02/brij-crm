@@ -31,6 +31,8 @@ interface SampleGridProps {
   readonly status?: GridStatus;
   readonly selected?: readonly string[];
   readonly footer?: Readonly<Record<string, ReactNode>>;
+  /** The footer's ghost "+ New company" under the row header. */
+  readonly addRow?: { readonly label: string; readonly onAdd: () => void };
   /** Rows at these indexes are still loading. */
   readonly isLoading?: (index: number) => boolean;
   readonly cellErrors?: ReadonlyMap<string, string>;
@@ -70,6 +72,7 @@ function SampleGrid({
   status = 'ready',
   selected = [],
   footer,
+  addRow,
   isLoading,
   cellErrors,
   onRowOpen,
@@ -167,6 +170,7 @@ function SampleGrid({
         editorProps={editorProps}
         onRetry={onRetry}
         {...(footer === undefined ? {} : { footer })}
+        {...(addRow === undefined ? {} : { addRow })}
         {...(cellErrors === undefined ? {} : { cellErrors })}
         {...(onRowOpen === undefined ? {} : { onRowOpen })}
         {...(confirmsPaste === undefined ? {} : { confirmsPaste })}
@@ -969,6 +973,24 @@ export const FloatingBarSpeaks: Story = {
     await press([' ']);
     await waitFor(() => expect(canvas.getByText('2 selected')).toBeInTheDocument());
     await expect(canvas.queryByText('2 rows selected')).toBeNull();
+  },
+};
+
+/** A ghost "+ New company" opens the footer under the row header, beside the count; a click or Enter adds a row. */
+export const AddRow: Story = {
+  args: {
+    count: 4,
+    footer: { name: '4 records' },
+    addRow: { label: 'New company', onAdd: fn() },
+  },
+  play: async ({ args, canvas, userEvent }) => {
+    const press = presser((keys) => userEvent.keyboard(keys));
+    const cell = canvas.getByRole('gridcell', { name: /New company/ });
+    await expect(cell).toHaveTextContent('4 records');
+    await userEvent.click(cell);
+    await expect(args.addRow?.onAdd).toHaveBeenCalledTimes(1);
+    await press(['{Enter}']);
+    await expect(args.addRow?.onAdd).toHaveBeenCalledTimes(2);
   },
 };
 
