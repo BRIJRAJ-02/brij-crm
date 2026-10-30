@@ -43,9 +43,11 @@ export function ModalTrigger({ children, isOpen, defaultOpen, onOpenChange }: Mo
  * and it never animates; `peek` for a page read and written in place (a
  * note): a large panel nearly the window's height, a quiet bar with the
  * context first as a crumb and no title drawn (the page shows its own), and
- * the body a centred writing column.
+ * the body a centred writing column; `drawer` for a long list or detail that belongs beside the page rather than
+ * over it (a rotation's member table): a full height panel at the end edge with the standard title bar and
+ * footer, that slides in from the end.
  */
-export type ModalVariant = 'dialog' | 'form' | 'confirm' | 'window' | 'palette' | 'peek' | 'sheet';
+export type ModalVariant = 'dialog' | 'form' | 'confirm' | 'window' | 'palette' | 'peek' | 'sheet' | 'drawer';
 
 /** Props for Modal. */
 export interface ModalProps {

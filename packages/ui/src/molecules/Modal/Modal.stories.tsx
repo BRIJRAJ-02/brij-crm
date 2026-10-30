@@ -503,6 +503,28 @@ export const Sheet: Story = {
   },
 };
 
+/** A drawer: a full height panel at the end edge for a long list, with the standard title bar and footer. */
+export const Drawer: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage>
+      <Modal variant="drawer" title="Members" isOpen actions={<Button slot="close">Done</Button>}>
+        Ada Lovelace, Grace Hopper and Alan Turing share this rotation.
+      </Modal>
+    </Stage>
+  ),
+  play: async () => {
+    const dialog = await openDialog();
+    await expect(dialog).toHaveAccessibleName('Members');
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    const panel = dialog.getBoundingClientRect();
+    // Full height, sitting on the end edge.
+    await expect(Math.round(panel.height)).toBe(globalThis.innerHeight);
+    await expect(Math.round(panel.right)).toBe(globalThis.innerWidth);
+    await expect(within(dialog as HTMLElement).getByRole('button', { name: 'Close' })).toBeInTheDocument();
+  },
+};
+
 /** The confirm's shape: no title bar, the question opening a 400px body, Cancel and the danger commit on one row. */
 export const ConfirmShape: Story = {
   render: () => (
