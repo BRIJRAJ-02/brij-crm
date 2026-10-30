@@ -1,4 +1,5 @@
 import { accessContract, rolesContract } from './access.ts';
+import { accessRulesContract } from './access-rules.ts';
 import { accountContract } from './account.ts';
 import { auditContract } from './audit.ts';
 import { attributesContract } from './attributes.ts';
@@ -43,6 +44,7 @@ import { profileContract } from './profile.ts';
 import { schedulingContract } from './scheduling.ts';
 
 export * from './access.ts';
+export * from './access-rules.ts';
 export * from './account.ts';
 export * from './activity.ts';
 export * from './attributes.ts';
@@ -134,7 +136,8 @@ export const contract = {
   join: joinContract,
   joinRequests: joinRequestsContract,
   access: accessContract,
-  // Teams (spec 0031, slice 8).
+  // Access rules by role and team (spec 0032), and teams (spec 0031, slice 8).
+  accessRules: accessRulesContract,
   teams: teamsContract,
   roles: rolesContract,
   // Scheduling access (spec 0037): delegations of See or Manage over someone's scheduling.

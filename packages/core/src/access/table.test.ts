@@ -84,6 +84,8 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   'periodDays',
   // The team change's audience: read inside the change's own transaction, after its door (spec 0031, AC-825).
   'membersAffectedByTeamChange',
+  // The field a record scope reads: asked inside the rules' own transaction, after its door (spec 0032).
+  'ownerAttributeOf',
   // Pure access functions.
   'can',
   // History's row mapping (spec 0046): a stored audit row and its names to an entry view, after the read's door.

@@ -73,8 +73,13 @@ import type {
   Me,
   MemberView,
   MyAccess,
+  ObjectAccess,
+  ObjectAccessLevel,
   ObjectSummary,
+  RecordScope,
+  RuleSubject,
   SetRoleResult,
+  TeamView,
   RecordView,
   SessionLengthDays,
   WorkspaceSecurity,
@@ -424,6 +429,14 @@ export type {
   MembersPage,
   MemberView,
   MyAccess,
+  ObjectAccess,
+  ObjectAccessLevel,
+  OwnerAttribute,
+  RecordScope,
+  RuleRole,
+  RuleSubject,
+  SubjectAccess,
+  TeamView,
   NotificationKind,
   NotificationSettings,
   NotificationStatus,
@@ -1133,6 +1146,8 @@ export function createDataLayer({
   let objects = new Map<string, Promise<ObjectSummary[]>>();
   let usage = new Map<string, Promise<Usage>>();
   let members = new Map<string, Promise<MemberView[]>>();
+  // The workspace's teams (spec 0031, slice 8), for the app load; a live `members` event reads them again.
+  let teams = new Map<string, Promise<TeamView[]>>();
   let access = new Map<string, Promise<MyAccess>>();
   // The audit log a History screen holds, per workspace (spec 0046): opening it again while held answers this one.
   const auditLogs = new Map<string, AuditLog>();
@@ -1227,6 +1242,7 @@ export function createDataLayer({
     objects = new Map();
     usage = new Map();
     members = new Map();
+    teams = new Map();
     access = new Map();
     auditLogs.clear();
     roles = new Map();
@@ -1688,6 +1704,10 @@ export function createDataLayer({
     return all;
   };
   const readMembers = (workspace: string) => cached(members, workspace, () => allMembers(workspace));
+  const readTeams = (workspace: string) =>
+    cached(teams, workspace, () =>
+      call((options) => api.teams.list({ workspace }, options)).then((read) => read.teams),
+    );
   const readAccess = (workspace: string) =>
     cached(access, workspace, () => call((options) => api.access.mine({ workspace }, options)));
   /** Whether `memberIds` names the person, by the access this tab holds (unknown counts as named). */
@@ -1811,7 +1831,11 @@ export function createDataLayer({
     accessLoaded?.forgetReach(workspace);
     // Every member's tab hears a role change at once: spread, and one read for a burst.
     spread(`members ${workspace}`, () => {
-      reloadIfChanged([refreshHeld(members, workspace, () => readMembers(workspace))]);
+      reloadIfChanged([
+        refreshHeld(members, workspace, () => readMembers(workspace)),
+        // Teams share the event (spec 0031, slice 8): a team made, renamed, filled or deleted names its people.
+        refreshHeld(teams, workspace, () => readTeams(workspace)),
+      ]);
     });
     // A role changed may be the person's own: their access is read again (the server checks every call anyway).
     void namesMe(workspace, event.memberIds).then((named) => {
@@ -1966,6 +1990,7 @@ export function createDataLayer({
     objects.delete(workspace);
     usage.delete(workspace);
     members.delete(workspace);
+    teams.delete(workspace);
     dropAllAttributes(workspace);
     onDefinitionsChange();
   });
@@ -4192,6 +4217,89 @@ export function createDataLayer({
         members.delete(workspace);
         access.delete(workspace);
       },
+    },
+    /**
+     * The workspace's teams (spec 0031, slice 8): flat groups of members that access rules name, by name, each with its
+     * people. Any member reads them. Cached for the app load; a live `members` event reads them again, so another
+     * admin's change shows here. Changes wait for the server (`teams.manage` and the name rules live there) and
+     * answer the team as it stands. Refusals: `FORBIDDEN`, `NAME_TAKEN` (on `name`), `NOT_FOUND`, `IN_USE` (a
+     * delete while a rule names the team), `LIMIT_REACHED`.
+     */
+    teams: {
+      list: (workspace: string): Promise<TeamView[]> => beforeRead(workspace).then(() => readTeams(workspace)),
+      /** Hears the workspace's changes while a teams screen is open, so another admin's change reads the list again. */
+      watch: (workspace: string): (() => void) => watch(workspace),
+      /** Makes a team, starting with `memberIds`. `id` is the caller's own, so an Undo of a delete brings the same team back. */
+      async create(
+        workspace: string,
+        team: { readonly id?: string; readonly name: string; readonly memberIds?: readonly string[] },
+      ): Promise<TeamView> {
+        const made = await call((options) =>
+          api.teams.create(
+            {
+              workspace,
+              id: team.id ?? mintId(),
+              name: team.name,
+              memberIds: [...(team.memberIds ?? [])],
+              mutationId: mintId(),
+            },
+            options,
+          ),
+        );
+        teams.delete(workspace);
+        return made;
+      },
+      async rename(workspace: string, teamId: string, name: string): Promise<TeamView> {
+        const renamed = await call((options) =>
+          api.teams.rename({ workspace, teamId, name, mutationId: mintId() }, options),
+        );
+        teams.delete(workspace);
+        return renamed;
+      },
+      /** Deletes a team and its memberships; refused `IN_USE` while an access rule names it. */
+      async delete(workspace: string, teamId: string): Promise<void> {
+        await call((options) => api.teams.delete({ workspace, teamId, mutationId: mintId() }, options));
+        teams.delete(workspace);
+      },
+      /** Adds people to a team and takes others out, in one change. The person's own access is read again after. */
+      async changeMembers(
+        workspace: string,
+        teamId: string,
+        change: { readonly add?: readonly string[]; readonly remove?: readonly string[] },
+      ): Promise<TeamView> {
+        const changed = await call((options) =>
+          api.teams.changeMembers(
+            {
+              workspace,
+              teamId,
+              add: [...(change.add ?? [])],
+              remove: [...(change.remove ?? [])],
+              mutationId: mintId(),
+            },
+            options,
+          ),
+        );
+        teams.delete(workspace);
+        access.delete(workspace);
+        return changed;
+      },
+    },
+    /**
+     * An object's access rules (spec 0032): what the Member role and each team may do with its records, for the
+     * object's Access tab. Settings, not CRM data: read fresh each time, no cache. `access.manage` (owners and
+     * admins) only; refusals `FORBIDDEN`, `NOT_FOUND`, `CONFIG_INVALID` (a record scope with no Member field to read).
+     */
+    accessRules: {
+      get: (workspace: string, objectId: string): Promise<ObjectAccess> =>
+        beforeRead(workspace).then(() => call((options) => api.accessRules.get({ workspace, objectId }, options))),
+      /** Sets one subject's access to the object; `null` clears it. Answers the object's access as it stands. */
+      set: (
+        workspace: string,
+        objectId: string,
+        subject: RuleSubject,
+        rule: { readonly level: ObjectAccessLevel; readonly records: RecordScope } | null,
+      ): Promise<ObjectAccess> =>
+        call((options) => api.accessRules.set({ workspace, objectId, subject, rule, mutationId: mintId() }, options)),
     },
     /**
      * A workspace's sign in rules (spec 0033, milestone 4): settings, not CRM

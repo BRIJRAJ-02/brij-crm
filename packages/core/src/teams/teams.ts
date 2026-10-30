@@ -130,7 +130,8 @@ async function requireActive(tx: WorkspaceTx, workspaceId: string, ids: readonly
   const found = await tx
     .select({ id: members.id })
     .from(members)
-    .where(and(eq(members.workspaceId, workspaceId), inArray(members.id, [...ids]), eq(members.status, 'active')));
+    .where(and(eq(members.workspaceId, workspaceId), inArray(members.id, [...ids]), eq(members.status, 'active')))
+    .for('share');
   if (found.length !== ids.length) throw refuse('NOT_FOUND', MEMBER_NOT_HERE);
 }
 
@@ -199,7 +200,8 @@ async function applyMembers(
 /**
  * Makes a team (spec 0031, AC-824): a name of 1 to 64 characters, unique ignoring case (409 `NAME_TAKEN` on `name`),
  * at most 100 teams (409 `LIMIT_REACHED`), starting with `memberIds`. `id` is the caller's own UUID v7 when given,
- * so a retry makes one team and an Undo of a delete brings the same team back. Needs `teams.manage`.
+ * so a retry (the same id and name) answers the team it made, and an Undo of a delete brings the same team back; an id
+ * another team holds is 409 `ID_TAKEN`. Needs `teams.manage`.
  */
 export async function createTeam(
   scope: EngineScope,
@@ -218,6 +220,16 @@ export async function createTeam(
     scope,
     async (context) => {
       const { tx } = context;
+      // A retry of a create that landed (the caller's own id): the same team, nothing written.
+      const [held] = await tx
+        .select({ name: teams.name })
+        .from(teams)
+        .where(and(eq(teams.workspaceId, scope.workspaceId), eq(teams.id, teamId)));
+      if (held !== undefined) {
+        const [again] = await readTeams(tx, scope.workspaceId, teamId);
+        if (again !== undefined && held.name.toLowerCase() === name.toLowerCase()) return again;
+        throw refuse('ID_TAKEN', 'That team id is already used.');
+      }
       const [counted] = await tx
         .select({ n: sql<number>`count(*)::int` })
         .from(teams)
@@ -354,7 +366,7 @@ export async function deleteTeam(
           targetType: 'team',
           targetId: teamId,
           before: { name: team.name },
-          after: { change: 'deleted' },
+          after: { change: 'deleted', left: former },
         },
         options.source,
       );

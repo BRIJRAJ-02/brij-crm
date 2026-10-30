@@ -130,6 +130,9 @@ export const ACCESS_TABLE = {
   renameTeam: { permission: 'teams.manage' },
   deleteTeam: { permission: 'teams.manage' },
   changeTeamMembers: { permission: 'teams.manage' },
+  // Access rules by role and team (spec 0032, AC-851): owners and admins read and set them.
+  getObjectAccess: { permission: 'access.manage' },
+  setObjectAccess: { permission: 'access.manage' },
   // Spec 0037, AC-1439: the roles every role picker offers.
   listRoles: { anyMember: true },
   // A workspace's sign in rules (spec 0033, milestone 4): owners only.

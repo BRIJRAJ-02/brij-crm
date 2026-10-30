@@ -120,6 +120,10 @@ describe('names', () => {
     expect((await listTeams(w.owner)).teams).toEqual([]);
     const back = await createTeam(w.owner, { id, name: 'Sales', memberIds: [ada] });
     expect(back).toEqual(first);
+    // A retry of a create that landed answers the team it made and writes nothing; another name on that id is taken.
+    expect(await createTeam(w.owner, { id, name: 'sales', memberIds: [ada] })).toEqual(first);
+    expect(await refusalOf(createTeam(w.owner, { id, name: 'Other' }))).toMatchObject({ code: 'ID_TAKEN' });
+    expect((await w.audit('team.changed')).filter((row) => row.after.change === 'created')).toHaveLength(2);
     expect(
       await refusalOf(createTeam(w.owner, { id: '00000000-0000-4000-8000-000000000001', name: 'Odd' })),
     ).toMatchObject({
@@ -199,7 +203,10 @@ describe('deleting', () => {
     const sales = await createTeam(w.owner, { name: 'Sales', memberIds: [ada] }, [outboxHook()]);
     await deleteTeam(w.owner, { teamId: sales.id }, [outboxHook()]);
     expect((await listTeams(w.owner)).teams).toEqual([]);
-    expect((await w.audit('team.changed')).map((row) => row.after.change)).toEqual(['created', 'members', 'deleted']);
+    const rows = await w.audit('team.changed');
+    expect(rows.map((row) => row.after.change)).toEqual(['created', 'members', 'deleted']);
+    // The delete says who it took out.
+    expect(rows[2]?.after).toMatchObject({ left: [ada] });
     expect(await refusalOf(deleteTeam(w.owner, { teamId: sales.id }))).toMatchObject({ code: 'NOT_FOUND' });
   });
 

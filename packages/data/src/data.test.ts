@@ -464,6 +464,17 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       transferOwnership: os.members.transferOwnership.handler(notServed),
       visible: os.members.visible.handler(notServed),
     },
+    teams: {
+      list: os.teams.list.handler(notServed),
+      create: os.teams.create.handler(notServed),
+      rename: os.teams.rename.handler(notServed),
+      delete: os.teams.delete.handler(notServed),
+      changeMembers: os.teams.changeMembers.handler(notServed),
+    },
+    accessRules: {
+      get: os.accessRules.get.handler(notServed),
+      set: os.accessRules.set.handler(notServed),
+    },
     workspaceSecurity: {
       get: os.workspaceSecurity.get.handler(() => behaviour.workspaceSecurityGet()),
       set: os.workspaceSecurity.set.handler(notServed),

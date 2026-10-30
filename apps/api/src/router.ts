@@ -41,6 +41,7 @@ import { commentsRouter } from './modules/comments/router.ts';
 import { notesRouter } from './modules/notes/router.ts';
 import { notificationsRouter } from './modules/notifications/router.ts';
 import { tasksRouter } from './modules/tasks/router.ts';
+import { accessRulesRouter } from './modules/access/rules-router.ts';
 import { teamsRouter } from './modules/teams/router.ts';
 import { usageRouter } from './modules/usage/router.ts';
 import { viewsRouter } from './modules/views/router.ts';
@@ -70,6 +71,7 @@ export const router = base.router({
   deletedWorkspace: deletedWorkspaceRouter,
   profile: profileRouter,
   access: accessRouter,
+  accessRules: accessRulesRouter,
   teams: teamsRouter,
   roles: rolesRouter,
   scheduling: schedulingRouter,
