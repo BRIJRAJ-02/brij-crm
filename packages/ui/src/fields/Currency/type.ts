@@ -5,6 +5,7 @@ import type { AttributeTypeDef } from '../types.ts';
 import { refuse } from '../values.ts';
 import { CurrencyDisplay } from './CurrencyDisplay.tsx';
 import { CurrencyEditor } from './CurrencyEditor.tsx';
+import { withCurrencyCode } from './symbols.ts';
 
 const CODES = new Set<string>(CURRENCY_CODES);
 
@@ -19,7 +20,9 @@ export const currencyType: AttributeTypeDef<'currency'> = {
     const one = value as CurrencyValue;
     return `${one.currency} ${one.amount}`;
   },
-  fromText: (text, context) => {
+  fromText: (given, context) => {
+    // "$1,200" and "900 €" read as "USD 1,200" and "EUR 900" (a spreadsheet's money column).
+    const text = withCurrencyCode(given, context.attribute.defaultCurrency);
     const match = /^\s*([a-z]{3})?\s*(.+?)\s*$/i.exec(text);
     const code = (match?.[1] ?? context.attribute.defaultCurrency ?? '').toUpperCase();
     if (!CODES.has(code)) return refuse(`Add a currency code, such as USD ${match?.[2] ?? ''}.`.trim());

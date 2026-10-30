@@ -104,6 +104,43 @@ describe('records exports', () => {
     expect(await refusalOf(exportFile(w.owner, { exportId: started.id }))).toMatchObject({ code: 'NOT_FOUND' });
   });
 
+  it('exports only the picked records the member may read, in the order picked, with one BOM at the start', async () => {
+    const w = await world();
+    const ada = await w.person('Ada', 'ada@example.com', 'Analyst', w.memberId);
+    const bob = await w.person('Bob', 'bob@example.com', 'Designer', w.memberId);
+    await w.person('Cy', 'cy@example.com', 'Chemist', w.memberId);
+    const secret = await w.person('Secret', 'secret@example.com', 'Spy', w.ownerId);
+    // The member sees only records they own.
+    const own: AccessRules = {
+      levels: [],
+      records: [
+        {
+          subject: { type: 'role', role: 'member' },
+          objectId: w.people,
+          kind: 'own',
+          attributeId: w.attribute('owner'),
+        },
+      ],
+    };
+    rulesByWorkspace.set(w.workspaceId, own);
+    const member = rescope(w.member, { rules: own });
+    const started = await startRecordsExport(member, registry, {
+      id: newId(),
+      objectId: w.people,
+      attributeIds: [w.attribute('job_title')],
+      // The hidden record, a missing id and a repeat are simply absent; Cy was not picked.
+      recordIds: [bob.recordId, secret.recordId, newId(), ada.recordId, bob.recordId],
+      timeZone: 'UTC',
+    });
+    expect(started.fileName).toMatch(/^People - Selected - \d{4}-\d{2}-\d{2}\.csv$/u);
+    expect((await drive(runnerFor(registry), w.workspaceId, started.jobId)).at(-1)).toBe('succeeded');
+    expect((await getRecordsExport(member, { exportId: started.id })).rowCount).toBe(2);
+    const text = await fileOf(member, started.id);
+    expect(text).toBe('﻿Name,Job title\r\nBob Test,Designer\r\nAda Test,Analyst\r\n');
+    expect(text.split('﻿')).toHaveLength(2);
+    rulesByWorkspace.delete(w.workspaceId);
+  });
+
   it('says a sorted export saw records change while it was written, and an unsorted one never (late trap #40)', async () => {
     const w = await world();
     const ada = await w.person('Ada', 'ada@example.com', 'Analyst');

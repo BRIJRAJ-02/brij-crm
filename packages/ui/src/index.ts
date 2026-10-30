@@ -383,6 +383,7 @@ export {
   AttributeSettings,
   type AttributeSettingsApiNames,
   type AttributeSettingsAttribute,
+  type AttributeSettingsDraft,
   type AttributeSettingsField,
   type AttributeSettingsOptionWrites,
   type AttributeSettingsProps,

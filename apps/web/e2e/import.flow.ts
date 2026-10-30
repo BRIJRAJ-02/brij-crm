@@ -1,6 +1,7 @@
 // Import (spec 0040, AC-1143): a People CSV end to end. The file is chosen,
-// its columns match themselves, the preview sets aside the row that can't be
-// read, the rows are sent and the job runs, and the summary says what it did;
+// its columns match themselves, Review values offers to leave the cell that
+// can't be read empty (kept as an error here), the preview sets that row
+// aside and says what the rows will do, the rows are sent and the job runs, and the summary says what it did;
 // the people are then in the table, and Undo takes them back. FLOW_IMPORT_ROWS sets the file's size
 // (5,000 by default, at 1280; the phone width checks the screens with 300).
 import { readFile } from 'node:fs/promises';
@@ -23,7 +24,7 @@ function peopleCsv(rows: number): string {
   return `${lines.join('\r\n')}\r\n`;
 }
 
-test('a People CSV imports through the four steps, and its summary says what it did', async ({ page }) => {
+test('a People CSV imports through its steps, and its summary says what it did', async ({ page }) => {
   test.setTimeout(2 * IMPORT_MS + 120_000);
   const rows = test.info().project.name === '375' ? Math.min(ROWS, PHONE_ROWS) : ROWS;
   // FLOW_PHONE_WIDTH draws the phone width at another size (the screenshots at 390).
@@ -34,9 +35,9 @@ test('a People CSV imports through the four steps, and its summary says what it 
   const slug = `import-${stamp}`;
   await newWorkspace(page, `import-${stamp}@example.com`, slug);
 
-  // The view's actions live in its switcher's menu (it was the More view actions button).
-  await page.getByRole('button', { name: 'All People', exact: true }).first().click();
-  await page.getByRole('menuitem', { name: 'Import CSV' }).click();
+  // Import and export live in the view bar's Import / Export button (the view's menu no longer repeats them).
+  await page.getByRole('button', { name: 'Import / Export' }).click();
+  await page.getByRole('menuitem', { name: 'Import people' }).click();
   await expect(page).toHaveURL(new RegExp(`/w/${slug}/objects/people/import$`));
   await expect(page.getByRole('heading', { level: 1, name: 'Import people' })).toBeVisible();
   await checkScreen(page, 'import-upload');
@@ -50,22 +51,25 @@ test('a People CSV imports through the four steps, and its summary says what it 
   await checkScreen(page, 'import-columns');
   await page.getByRole('button', { name: 'Continue' }).click();
 
-  // Match records: Email addresses finds people, and a match fills empty fields.
-  await expect(page.getByRole('button', { name: /Email addresses/u })).toBeVisible();
-  await expect(page.getByRole('radio', { name: 'Fill empty fields' })).toBeChecked();
-  await checkScreen(page, 'import-records');
+  // Review values: the one email that can't be read would be left empty; kept as an error here instead.
+  await expect(page.getByText('1 cell in E-mail can’t be read')).toBeVisible();
+  const leave = page.getByRole('checkbox', { name: 'Leave this cell empty' });
+  await expect(leave).toBeChecked();
+  await leave.uncheck();
+  await checkScreen(page, 'import-review');
   await page.getByRole('button', { name: 'Continue' }).click();
 
-  // Preview: the broken row is set aside with why.
+  // Preview: the broken row is set aside with why; Email addresses finds people, and each row is new.
   const readyRows = rows.toLocaleString('en-US');
   await expect(page.getByText(`${readyRows} ready, 1 with errors`)).toBeVisible();
+  await expect(page.getByRole('button', { name: /Email addresses/u })).toBeVisible();
+  await expect(page.getByText(`${readyRows} new. You can undo it for 7 days.`)).toBeVisible();
   await page.getByRole('radiogroup', { name: 'Show rows' }).getByText('With errors').click();
   await expect(page.getByRole('gridcell', { name: /^E-mail: /u })).toBeVisible();
   await checkScreen(page, 'import-preview');
 
+  // Start goes at once: Undo, not a second question, is the way back.
   await page.getByRole('button', { name: 'Start import' }).click();
-  const confirm = page.getByRole('dialog', { name: `Import ${readyRows} rows into People?` });
-  await confirm.getByRole('button', { name: 'Start import' }).click();
 
   // The summary: the job's progress, then what it did.
   await expect(page).toHaveURL(new RegExp(`/w/${slug}/objects/people/imports/[0-9a-f-]+$`), { timeout: IMPORT_MS });
@@ -79,9 +83,8 @@ test('a People CSV imports through the four steps, and its summary says what it 
   await expect(page.getByText(`person${String(rows - 1)}@import.test`)).toBeVisible();
 
   // Export CSV (AC-1130, AC-1131): the view comes back as a file, the name first, ready to import again.
-  // The view's actions live in its switcher's menu (it was the More view actions button).
-  await page.getByRole('button', { name: 'All People', exact: true }).first().click();
-  await page.getByRole('menuitem', { name: 'Export CSV' }).click();
+  await page.getByRole('button', { name: 'Import / Export' }).click();
+  await page.getByRole('menuitem', { name: /^Export view \(\d+ columns?\)/u }).click();
   const ready = page.getByRole('alertdialog', { name: /People - .* is ready/u });
   await expect(ready).toBeVisible({ timeout: IMPORT_MS });
   const downloading = page.waitForEvent('download');
@@ -101,6 +104,8 @@ test('a People CSV imports through the four steps, and its summary says what it 
   await expect(page.getByRole('heading', { name: 'Import undone' })).toBeVisible({ timeout: IMPORT_MS });
   await expect(page.getByRole('button', { name: 'Undo import' })).toHaveCount(0);
 
+  // View people opens the table on today's new records, newest first, as a draft.
   await page.getByRole('button', { name: 'View people' }).click();
+  await expect(page).toHaveURL(/[?&]draft=/u);
   await expect(page.getByText(`person${String(rows - 1)}@import.test`)).toHaveCount(0);
 });

@@ -1,6 +1,6 @@
 // Brief
 // Purpose: bring a spreadsheet of records into one object, seeing what each row will do before anything changes.
-// Main task: choose a CSV, check where its columns go and how rows find records, read the preview, then start.
+// Main task: choose a CSV, check where its columns go, settle any value that won't read, read the preview, start.
 // Leaves out: making far records of more than one object for a relation column, and file types other than CSV.
 import {
   isDataError,
@@ -22,6 +22,7 @@ import {
   Card,
   Checkbox,
   createPhoneParser,
+  Disclosure,
   EmptyState,
   Icon,
   FileDrop,
@@ -49,6 +50,7 @@ import {
 import { useBlocker, useNavigate } from '@tanstack/react-router';
 import { useMemo, useRef, useState } from 'react';
 import { focusTitle } from '../navigation/focus-title.ts';
+import { AttributeDialog } from '../settings/AttributeDialog.tsx';
 import { objectHref } from '../workspace/objects.ts';
 import { useCan, WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { saveCsv } from './download.ts';
@@ -62,8 +64,19 @@ import {
   type ImportChoice,
 } from './matching.ts';
 import { defaultDateOrder, longDay, numericDates, orderLocale, type DateOrder } from './date-order.ts';
-import { columnNames, missingOptions, suggestType } from './missing.ts';
+import { columnNames, missingOptions, suggestAttribute } from './missing.ts';
 import { importSummaryHref } from './paths.ts';
+import { RecentImports } from './RecentImports.tsx';
+import {
+  applyLabels,
+  cellGroups,
+  labelKey,
+  rowPlan,
+  type CellGroup,
+  type LabelChoice,
+  type RowMatch,
+} from './review.ts';
+import { ReviewStep, type LabelNote } from './ReviewStep.tsx';
 import {
   cellText,
   errorRowsCsv,
@@ -71,6 +84,7 @@ import {
   readCell,
   readRowsInSlices,
   type ErrorRow,
+  type ReadChoices,
   type ReadRows,
 } from './rows.ts';
 import { unmatchedRequired } from './required.ts';
@@ -85,6 +99,8 @@ export interface ImportScreenProps {
   readonly members: readonly MemberSummary[];
   /** The workspace's objects, for a relation column's far object (its name, and whether the member may make its records). */
   readonly objects: readonly ObjectSummary[];
+  /** Whether the object holds records already (undefined when the count didn't load): no match key then warns. */
+  readonly hasRecords?: boolean | undefined;
 }
 
 /** What looking up a relation column's names found (decision 7), by column. */
@@ -99,10 +115,16 @@ type LinkCheck =
       readonly ambiguous: readonly string[];
     };
 
-type Step = 'upload' | 'columns' | 'records' | 'preview';
+type Step = 'upload' | 'columns' | 'review' | 'preview';
 type Filter = 'all' | 'ready' | 'errors';
 
-/** The Select id for "Don't import", and the match Select's "Always create new records". */
+/** What the match column's lookup found for the ready rows, for the preview's new, update and skip. */
+type MatchCheck =
+  | { readonly status: 'checking' }
+  | { readonly status: 'failed' }
+  | { readonly status: 'done'; readonly answers: readonly RowMatch[] };
+
+/** The Select id for "Don't import", and the match Select's "Don't match, always add". */
 const NONE = 'none';
 /** The options a select or status attribute holds at most (the engine's limit, spec 0012). */
 const OPTION_LIMIT = 500;
@@ -113,6 +135,8 @@ const SAMPLE_READ = 50;
 const PAGE_SIZES = [25, 50, 100] as const;
 /** The file types the upload takes, by extension (FileDrop matches on it, and says them plainly). */
 const FILE_TYPES = ['.csv', '.tsv', '.txt'] as const;
+/** The picker's key for each type a column suggests, where the two differ. */
+const PICKER_KEYS: Readonly<Record<string, string>> = { url: 'link' };
 
 /** A file read and ready to match, with each column's first values (read once). */
 interface Loaded {
@@ -145,6 +169,10 @@ function refusalText(result: Exclude<CsvResult, { ok: true }>): string {
   }
 }
 
+/** An Excel file's refusal: how to save it as CSV; any other type keeps FileDrop's own sentence. */
+const excelRefusal = (fileName: string): string | undefined =>
+  /\.(xlsx|xlsm|xls)$/iu.test(fileName) ? strings.refusals.excel : undefined;
+
 /** A column's first few values that aren't empty. */
 function samplesOf(table: CsvTable, column: number, size: number): readonly string[] {
   const found: string[] = [];
@@ -171,14 +199,29 @@ interface PreviewRow {
   readonly error?: ErrorRow;
 }
 
-/** The import page (AC-1111 to AC-1123): four steps, then the rows sent and the import started. */
-export function ImportScreen({ data, slug, object, attributes: given, members, objects }: ImportScreenProps) {
+/** The field set's attribute for each definition, by id. */
+const fieldsOf = (attributes: readonly AttributeDefinition[]): ReadonlyMap<string, FieldAttribute> =>
+  new Map(attributes.map((attribute) => [attribute.id, toFieldAttribute(attribute) as FieldAttribute]));
+
+/**
+ * The import page (AC-1111 to AC-1123): Upload, Match columns, Review values
+ * (only when a value won't read as it is), then Preview, where the match key
+ * and the counts of what each row will do sit beside Start.
+ */
+export function ImportScreen({
+  data,
+  slug,
+  object,
+  attributes: given,
+  members,
+  objects,
+  hasRecords,
+}: ImportScreenProps) {
   const navigate = useNavigate();
   const canManage = useCan('schema.manage');
   // Read again after the page makes an attribute or options, so the columns and the preview use them.
   const [attributes, setAttributes] = useState(given);
   const [links, setLinks] = useState<ReadonlyMap<number, LinkCheck>>(new Map());
-  const [busyColumn, setBusyColumn] = useState<number | undefined>(undefined);
   const [columnsError, setColumnsError] = useState<string | undefined>(undefined);
   const linkRuns = useRef(new Map<number, number>());
   const [step, setStepNow] = useState<Step>('upload');
@@ -187,7 +230,8 @@ export function ImportScreen({ data, slug, object, attributes: given, members, o
   const [uploadError, setUploadError] = useState<string | undefined>(undefined);
   const [phone, setPhone] = useState<PhoneParser | undefined>(undefined);
   const [targets, setTargets] = useState<readonly (ImportTarget | undefined)[]>([]);
-  const [matchId, setMatchId] = useState<string>(NONE);
+  // Unchosen (undefined): the object's usual key, else the first unique attribute a column fills; NONE: always add.
+  const [matchId, setMatchId] = useState<string | undefined>(undefined);
   const [onMatch, setOnMatch] = useState<ImportOnMatch>('fill');
   const [onNoMatch, setOnNoMatch] = useState<ImportOnNoMatch>('create');
   const [result, setResult] = useState<ReadRows | undefined>(undefined);
@@ -195,22 +239,31 @@ export function ImportScreen({ data, slug, object, attributes: given, members, o
   const [filter, setFilter] = useState<Filter>('all');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<number>(PAGE_SIZES[0]);
-  const [isConfirming, setConfirming] = useState(false);
   const [sending, setSending] = useState<{ readonly sent: number; readonly total: number } | undefined>(undefined);
   const [isStopping, setStopping] = useState(false);
   const [isStopAsked, setStopAsked] = useState(false);
   const [notice, setNotice] = useState<Notice | undefined>(undefined);
+  // Review values: whether the file needs it (decided by the first read), the label choices changed from their
+  // defaults, the columns whose unreadable cells are kept as errors (the default leaves them empty), its groups.
+  const [needsReview, setNeedsReview] = useState(false);
+  const [labelChoices, setLabelChoices] = useState<ReadonlyMap<number, ReadonlyMap<string, LabelChoice>>>(new Map());
+  const [keptColumns, setKeptColumns] = useState<ReadonlySet<number>>(new Set());
+  const [groups, setGroups] = useState<readonly CellGroup[]>([]);
+  const [reviewError, setReviewError] = useState<string | undefined>(undefined);
+  const [isCreatingOptions, setCreatingOptions] = useState(false);
+  const [matches, setMatches] = useState<MatchCheck | undefined>(undefined);
+  // New attribute from a column: the attribute dialog, prefilled from the column.
+  const [newFor, setNewFor] = useState<number | undefined>(undefined);
+  const [now] = useState(() => Date.now());
   const stopped = useRef(false);
   const leaving = useRef(false);
   const checking = useRef(0);
+  const matchRun = useRef(0);
   // Read through a call: the member may stop the sending while it awaits.
   const isStopped = () => stopped.current;
 
   const choices = useMemo(() => importChoices(attributes), [attributes]);
-  const fields = useMemo(
-    () => new Map(attributes.map((attribute) => [attribute.id, toFieldAttribute(attribute) as FieldAttribute])),
-    [attributes],
-  );
+  const fields = useMemo(() => fieldsOf(attributes), [attributes]);
   const actors = useMemo(() => toActorDisplays(members), [members]);
   const byId = useMemo(() => new Map(attributes.map((attribute) => [attribute.id, attribute])), [attributes]);
   const locale = globalThis.navigator.languages[0] ?? 'en-US';
@@ -262,6 +315,49 @@ export function ImportScreen({ data, slug, object, attributes: given, members, o
   const context = contextFor(phone, dateLocales);
   const required = unmatchedRequired(attributes, targets);
 
+  // A select or status column's labels that name no option (a scan of every row), each with whether Create is offered.
+  const labelNotes = useMemo(
+    () =>
+      loaded === undefined
+        ? []
+        : targets.flatMap((target, column): readonly LabelNote[] => {
+            const attribute =
+              target === undefined || target.part !== undefined ? undefined : byId.get(target.attributeId);
+            if (attribute?.type !== 'select' && attribute?.type !== 'status') return [];
+            const labels = missingOptions(loaded.table.rows, column, attribute);
+            if (labels.length === 0) return [];
+            const held = (attribute.options ?? []).filter((option) => !option.isArchived).length;
+            return [{ column, attribute, labels, canCreate: canManage && held + labels.length <= OPTION_LIMIT }];
+          }),
+    [byId, canManage, loaded, targets],
+  );
+  /** A label's choice: the member's, else Create option where they may, else Leave empty. */
+  const choiceOf = (column: number, label: string): LabelChoice => {
+    const chosen = labelChoices.get(column)?.get(labelKey(label));
+    if (chosen !== undefined) return chosen;
+    return labelNotes.find((note) => note.column === column)?.canCreate === true
+      ? { kind: 'create' }
+      : { kind: 'empty' };
+  };
+  /** The review's choices as the reader takes them: each select column's labels, and the columns left empty. */
+  const readChoices = (withAttributes: ReadonlyMap<string, AttributeDefinition>): ReadChoices => {
+    const byColumn = new Map(
+      labelNotes.map((note) => [
+        note.column,
+        new Map(note.labels.map((label) => [labelKey(label), choiceOf(note.column, label)])),
+      ]),
+    );
+    return {
+      rewrite: (column, text) => {
+        const decided = byColumn.get(column);
+        const target = targets[column];
+        const attribute = target === undefined ? undefined : withAttributes.get(target.attributeId);
+        return decided === undefined || attribute === undefined ? text : applyLabels(text, attribute, decided);
+      },
+      emptyColumns: new Set(groups.map((group) => group.column).filter((column) => !keptColumns.has(column))),
+    };
+  };
+
   /** Moves to a step, focus to the page's title (the step's Card and the button pressed went away). */
   const setStep = (next: Step) => {
     setStepNow(next);
@@ -277,6 +373,14 @@ export function ImportScreen({ data, slug, object, attributes: given, members, o
     withResolver: true,
   });
 
+  /** Forgets everything read from the file's rows: the next Continue reads them again. */
+  const resetRead = () => {
+    setResult(undefined);
+    setNeedsReview(false);
+    setGroups([]);
+    setMatches(undefined);
+  };
+
   const choose = async (files: readonly File[]) => {
     const [file] = files;
     if (file === undefined || isReading) return;
@@ -289,7 +393,7 @@ export function ImportScreen({ data, slug, object, attributes: given, members, o
         needsPhone ? loadPhoneLibrary().catch(() => undefined) : Promise.resolve(undefined),
       ]);
       if (!read.ok) {
-        setUploadError(refusalText(read));
+        setUploadError(read.reason === 'type' ? (excelRefusal(file.name) ?? refusalText(read)) : refusalText(read));
         return;
       }
       const parser = library === undefined ? undefined : createPhoneParser(library);
@@ -312,9 +416,11 @@ export function ImportScreen({ data, slug, object, attributes: given, members, o
       setLoaded({ name: file.name, table, samples: samples.map((each) => each.slice(0, SAMPLES_SHOWN)) });
       setTargets(proposed);
       setDateOrders(new Map());
+      setLabelChoices(new Map());
+      setKeptColumns(new Set());
       checkLinks(table.rows, proposed, new Map());
-      setMatchId(defaultMatch(object, matchAttributes(attributes, proposed)) ?? NONE);
-      setResult(undefined);
+      setMatchId(undefined);
+      resetRead();
       setStep('columns');
     } catch {
       setUploadError(strings.refusals.failed);
@@ -367,97 +473,162 @@ export function ImportScreen({ data, slug, object, attributes: given, members, o
     return next;
   };
 
-  /** Makes an attribute from a column's header and values (AC-1116), and matches the column to it. */
-  const makeAttribute = async (column: number) => {
-    if (loaded === undefined || busyColumn !== undefined) return;
-    const header = (loaded.table.headers[column] ?? '').trim().slice(0, 100);
-    setBusyColumn(column);
-    setColumnsError(undefined);
-    try {
-      const base = header === '' ? strings.newAttributeTitle(column) : header;
-      const type = suggestType(samplesOf(loaded.table, column, SAMPLE_READ));
-      // A header an attribute already holds ("Email") takes "Email 2", then "Email 3", as its name.
-      const create = async (attempt: number): Promise<AttributeDefinition> => {
-        try {
-          return await data.attributes.create(slug, {
-            id: data.attributes.newId(),
-            objectId: object.id,
-            title: attempt === 1 ? base : `${base.slice(0, 95)} ${String(attempt)}`,
-            type,
-          });
-        } catch (error) {
-          if (attempt < 5 && isDataError(error) && error.code === 'SLUG_TAKEN') return create(attempt + 1);
-          throw error;
-        }
-      };
-      const made = await create(1);
-      await reread();
-      setTargets((current) => current.map((each, index) => (index === column ? { attributeId: made.id } : each)));
-      setResult(undefined);
-    } catch (error) {
-      setColumnsError(isDataError(error) ? error.message : strings.somethingWrong);
-    } finally {
-      setBusyColumn(undefined);
-    }
-  };
-
-  /** Adds a select or status column's missing labels as options (AC-1122), then reads the column again. */
-  const makeOptions = async (column: number, attributeId: string, labels: readonly string[]) => {
-    if (busyColumn !== undefined) return;
-    setBusyColumn(column);
-    setColumnsError(undefined);
-    try {
-      for (const label of labels) {
-        await data.options.create(slug, object.id, attributeId, { id: data.attributes.newId(), label });
-      }
-    } catch (error) {
-      setColumnsError(isDataError(error) ? error.message : strings.somethingWrong);
-    } finally {
-      await reread().catch(() => undefined);
-      setResult(undefined);
-      setBusyColumn(undefined);
-    }
+  /** Points a column at a target, forgetting what the rows read as before. */
+  const setTarget = (column: number, target: ImportTarget | undefined) => {
+    if (loaded === undefined) return;
+    const next = targets.map((each, index) => (index === column ? target : each));
+    setTargets(next);
+    resetRead();
+    checkLinks(loaded.table.rows, next, links);
   };
 
   const candidates = matchAttributes(attributes, targets);
-  const matchAttributeId = candidates.some((attribute) => attribute.id === matchId) ? matchId : undefined;
+  const matchAttributeId =
+    matchId === undefined
+      ? (defaultMatch(object, candidates) ?? candidates[0]?.id)
+      : candidates.some((attribute) => attribute.id === matchId)
+        ? matchId
+        : undefined;
   const matched = targets.filter((target) => target !== undefined).length;
 
-  // Every row read on the way to the preview, a slice at a time, in the browser's language and time zone (AC-1120).
-  // Kept until the file or a column's target changes, so Back and Continue never read it again.
-  const toPreview = () => {
-    if (loaded === undefined) return;
-    setPage(1);
-    setFilter('all');
-    setNotice(undefined);
-    if (result !== undefined) {
-      setStep('preview');
-      return;
-    }
+  /** Every row read, a slice at a time, in the browser's language and time zone (AC-1120). */
+  const readAll = (
+    withAttributes: readonly AttributeDefinition[],
+    readChoicesNow: ReadChoices,
+  ): Promise<ReadRows | undefined> => {
+    if (loaded === undefined) return Promise.resolve(undefined);
     const run = (checking.current += 1);
     setChecked(0);
-    void readRowsInSlices(
+    return readRowsInSlices(
       loaded.table.rows,
       loaded.table.headers,
       targets,
-      fields,
+      fieldsOf(withAttributes),
       context,
       (read) => {
         if (checking.current === run) setChecked(read);
       },
       () => checking.current !== run,
+      readChoicesNow,
     ).then((read) => {
-      if (read === undefined || checking.current !== run) return;
-      setResult(read);
+      if (checking.current !== run) return undefined;
       setChecked(undefined);
-      setStep('preview');
+      return read;
     });
+  };
+
+  /**
+   * Asks which ready rows' match values name a record (one lookup a 1,000
+   * values), so the preview says how many rows are new, update or skip
+   * before anything is sent. A newer ask drops an older answer.
+   */
+  const lookUpMatches = (read: ReadRows, attributeId: string | undefined) => {
+    const run = (matchRun.current += 1);
+    if (attributeId === undefined) {
+      setMatches(undefined);
+      return;
+    }
+    const withValue = read.ready.flatMap((row, index) =>
+      Object.hasOwn(row.values, attributeId) ? [{ index, value: row.values[attributeId] }] : [],
+    );
+    if (withValue.length === 0) {
+      setMatches({ status: 'done', answers: [] });
+      return;
+    }
+    setMatches({ status: 'checking' });
+    data.imports
+      .matches(
+        slug,
+        object.id,
+        attributeId,
+        withValue.map((each) => each.value),
+      )
+      .then(
+        (rows) => {
+          if (matchRun.current !== run) return;
+          const answers: RowMatch[] = read.ready.map(() => ({ keys: [], matched: false }));
+          withValue.forEach((each, at) => {
+            const answer = rows[at];
+            if (answer !== undefined) answers[each.index] = answer;
+          });
+          setMatches({ status: 'done', answers });
+        },
+        () => {
+          if (matchRun.current === run) setMatches({ status: 'failed' });
+        },
+      );
+  };
+
+  /** Shows the preview of rows read, with the match lookup on its way. */
+  const showPreview = (read: ReadRows) => {
+    setResult(read);
+    setPage(1);
+    setFilter('all');
+    setNotice(undefined);
+    lookUpMatches(read, matchAttributeId);
+    setStep('preview');
+  };
+
+  // Columns' Continue: every row read once with the label choices' defaults. Nothing to settle goes straight to the
+  // preview; a label that names no option, or a column with cells that don't read, opens Review values first.
+  // Kept until the file, a column's target or a choice changes, so Back and Continue never read it again.
+  const fromColumns = () => {
+    if (loaded === undefined) return;
+    if (result !== undefined) {
+      setStep(needsReview ? 'review' : 'preview');
+      return;
+    }
+    void readAll(attributes, { ...readChoices(byId), emptyColumns: new Set() }).then((read) => {
+      if (read === undefined) return;
+      const found = cellGroups(read.errors, new Set(labelNotes.map((note) => note.column)));
+      if (labelNotes.length === 0 && found.length === 0) {
+        setNeedsReview(false);
+        showPreview(read);
+        return;
+      }
+      setGroups(found);
+      setNeedsReview(true);
+      setReviewError(undefined);
+      setStep('review');
+    });
+  };
+
+  // Review's Continue: the labels chosen to be created become options, then every row is read with the choices.
+  const fromReview = async () => {
+    setReviewError(undefined);
+    let current = attributes;
+    const toCreate = labelNotes.flatMap((note) =>
+      note.labels
+        .filter((label) => choiceOf(note.column, label).kind === 'create')
+        .map((label) => ({ attributeId: note.attribute.id, label })),
+    );
+    if (toCreate.length > 0) {
+      setCreatingOptions(true);
+      try {
+        for (const each of toCreate) {
+          await data.options.create(slug, object.id, each.attributeId, {
+            id: data.attributes.newId(),
+            label: each.label,
+          });
+        }
+        current = await reread();
+      } catch (error) {
+        setReviewError(isDataError(error) ? error.message : strings.somethingWrong);
+        await reread().catch(() => undefined);
+        return;
+      } finally {
+        setCreatingOptions(false);
+      }
+    }
+    const withAttributes = new Map(current.map((attribute) => [attribute.id, attribute]));
+    const read = await readAll(current, readChoices(withAttributes));
+    if (read !== undefined) showPreview(read);
   };
 
   const steps = [
     { id: 'upload', label: strings.steps.upload },
     { id: 'columns', label: strings.steps.columns },
-    { id: 'records', label: strings.steps.records },
+    ...(needsReview ? [{ id: 'review', label: strings.steps.review }] : []),
     { id: 'preview', label: strings.steps.preview },
   ];
 
@@ -466,7 +637,6 @@ export function ImportScreen({ data, slug, object, attributes: given, members, o
     // A fresh id each start: an earlier one that failed or was stopped stays unstarted (the daily cleanup removes
     // it), and a retry inside one start reuses its own id.
     const id = data.imports.newId();
-    setConfirming(false);
     setNotice(undefined);
     stopped.current = false;
     setStopAsked(false);
@@ -519,37 +689,64 @@ export function ImportScreen({ data, slug, object, attributes: given, members, o
 
   const errors = result?.errors.length ?? 0;
   const readyCount = result?.ready.length ?? 0;
+  const plan =
+    result === undefined || (matchAttributeId !== undefined && matches?.status !== 'done')
+      ? undefined
+      : rowPlan(
+          result.ready,
+          matchAttributeId === undefined || matches?.status !== 'done' ? undefined : matches.answers,
+          onMatch,
+          matchAttributeId === undefined ? 'create' : onNoMatch,
+        );
+  const newColumn = newFor === undefined || loaded === undefined ? undefined : newFor;
+  const suggested =
+    newColumn === undefined || loaded === undefined
+      ? undefined
+      : suggestAttribute(loaded.table.rows.map((row) => cellText(row[newColumn])));
 
   const body = (
     <PageColumn>
-      <Steps label={strings.stepsLabel} steps={steps} current={step} orientation="horizontal" />
+      <Steps
+        label={strings.stepsLabel}
+        steps={steps}
+        current={step}
+        orientation="horizontal"
+        // A done step goes back to it; never while rows are on their way.
+        {...(sending === undefined && checked === undefined
+          ? { onStepPress: (id: string) => setStep(id as Step) }
+          : {})}
+      />
       {step === 'upload' && (
-        <Card description={strings.uploadText}>
-          <FileDrop
-            label={strings.dropLabel}
-            acceptedTypes={FILE_TYPES}
-            maxSize={TRANSFER_LIMITS.importBytes}
-            onFiles={(files) => void choose(files)}
-            isDisabled={isReading}
-          />
-          {isReading && <ProgressBar label={strings.reading} isIndeterminate />}
-          {/* A file's first row, as this object takes it: written here, nothing asked of the server. */}
-          <Button
-            variant="link"
-            icon="download"
-            onPress={() => {
-              const titles = choices.filter((choice) => choice.target.part === undefined).map(choiceLabel);
-              saveCsv(strings.sampleFile(object.pluralName), `${CSV_BOM}${csvLine(titles)}`);
-            }}
-          >
-            {strings.sampleCsv}
-          </Button>
-          {uploadError !== undefined && (
-            <Callout tone="danger" isAnnounced>
-              {uploadError}
-            </Callout>
-          )}
-        </Card>
+        <>
+          <Card description={strings.uploadText}>
+            <FileDrop
+              label={strings.dropLabel}
+              acceptedTypes={FILE_TYPES}
+              maxSize={TRANSFER_LIMITS.importBytes}
+              onFiles={(files) => void choose(files)}
+              isDisabled={isReading}
+              wrongTypeText={excelRefusal}
+            />
+            {isReading && <ProgressBar label={strings.reading} isIndeterminate />}
+            {/* A file's first row, as this object takes it: written here, nothing asked of the server. */}
+            <Button
+              variant="link"
+              icon="download"
+              onPress={() => {
+                const titles = choices.filter((choice) => choice.target.part === undefined).map(choiceLabel);
+                saveCsv(strings.sampleFile(object.pluralName), `${CSV_BOM}${csvLine(titles)}`);
+              }}
+            >
+              {strings.sampleCsv}
+            </Button>
+            {uploadError !== undefined && (
+              <Callout tone="danger" isAnnounced>
+                {uploadError}
+              </Callout>
+            )}
+          </Card>
+          <RecentImports data={data} slug={slug} object={object} members={members} now={now} />
+        </>
       )}
       {step === 'columns' && loaded !== undefined && (
         <ColumnsStep
@@ -561,16 +758,12 @@ export function ImportScreen({ data, slug, object, attributes: given, members, o
           objects={objects}
           links={links}
           canManage={canManage}
-          busyColumn={busyColumn}
           error={columnsError}
-          onTarget={(column, target) => {
-            const next = targets.map((each, index) => (index === column ? target : each));
-            setTargets(next);
-            setResult(undefined);
-            checkLinks(loaded.table.rows, next, links);
+          onTarget={setTarget}
+          onNewAttribute={(column) => {
+            setColumnsError(undefined);
+            setNewFor(column);
           }}
-          onNewAttribute={(column) => void makeAttribute(column)}
-          onCreateOptions={(column, attributeId, labels) => void makeOptions(column, attributeId, labels)}
           onCreateMissing={(column, isSelected) => {
             setTargets((current) =>
               current.map((each, index) =>
@@ -585,90 +778,73 @@ export function ImportScreen({ data, slug, object, attributes: given, members, o
           dates={dateColumns}
           onDateOrder={(column, order) => {
             setDateOrders((current) => new Map(current).set(column, order));
-            setResult(undefined);
+            resetRead();
           }}
           required={required}
           isCreating={onNoMatch === 'create'}
           onUpdateOnly={(isOnly) => {
             setOnNoMatch(isOnly ? 'skip' : 'create');
           }}
+          checked={checked}
           onBack={() => {
             setLoaded(undefined);
-            setResult(undefined);
+            resetRead();
             setStep('upload');
           }}
-          onContinue={() => setStep('records')}
+          onContinue={fromColumns}
         />
       )}
-      {step === 'records' && (
-        <Card
-          title={strings.steps.records}
-          actions={
-            <InfoTip label={strings.steps.records} example={strings.findByExample}>
-              {strings.findByInfo}
-            </InfoTip>
+      {step === 'review' && loaded !== undefined && (
+        <ReviewStep
+          headers={loaded.table.headers}
+          labelNotes={labelNotes}
+          choiceOf={choiceOf}
+          onLabelChoice={(column, label, choice) => {
+            setLabelChoices((current) =>
+              new Map(current).set(column, new Map(current.get(column) ?? []).set(labelKey(label), choice)),
+            );
+          }}
+          groups={groups}
+          isEmptied={(column) => !keptColumns.has(column)}
+          onEmptied={(column, isEmptied) => {
+            setKeptColumns((current) => {
+              const next = new Set(current);
+              if (isEmptied) next.delete(column);
+              else next.add(column);
+              return next;
+            });
+          }}
+          progress={
+            isCreatingOptions
+              ? { label: strings.review.creating }
+              : checked !== undefined
+                ? { label: strings.checking, value: checked, max: loaded.table.rows.length }
+                : undefined
           }
-          footer={
-            <>
-              <Button onPress={() => setStep('columns')}>{strings.back}</Button>
-              <Button variant="primary" isPending={checked !== undefined} onPress={toPreview}>
-                {strings.continue}
-              </Button>
-            </>
-          }
-        >
-          <Select
-            label={strings.findBy}
-            items={[
-              ...candidates.map((attribute) => ({ id: attribute.id, label: attribute.title })),
-              { id: NONE, label: strings.alwaysCreate },
-            ]}
-            value={matchAttributeId ?? NONE}
-            onChange={(id) => setMatchId(id ?? NONE)}
-            {...(candidates.length === 0 ? { hint: strings.noKeyHint } : {})}
-          />
-          {matchAttributeId !== undefined && (
-            <>
-              <RadioGroup
-                label={strings.onMatch}
-                value={onMatch}
-                onChange={(value) => setOnMatch(value as ImportOnMatch)}
-              >
-                {(['fill', 'overwrite', 'skip'] as const).map((choice) => (
-                  <Radio key={choice} value={choice}>
-                    {strings.onMatchChoices[choice]}
-                  </Radio>
-                ))}
-              </RadioGroup>
-              <RadioGroup
-                label={strings.onNoMatch}
-                value={onNoMatch}
-                onChange={(value) => setOnNoMatch(value as ImportOnNoMatch)}
-                orientation="horizontal"
-              >
-                {(['create', 'skip'] as const).map((choice) => (
-                  <Radio key={choice} value={choice}>
-                    {strings.onNoMatchChoices[choice]}
-                  </Radio>
-                ))}
-              </RadioGroup>
-            </>
-          )}
-          {checked !== undefined && loaded !== undefined && (
-            <ProgressBar label={strings.checking} value={checked} maxValue={Math.max(loaded.table.rows.length, 1)} />
-          )}
-        </Card>
+          error={reviewError}
+          onBack={() => setStep('columns')}
+          onContinue={() => void fromReview()}
+        />
       )}
       {step === 'preview' && loaded !== undefined && result !== undefined && (
         <Card
           title={strings.fileSummary(loaded.name, loaded.table.rows.length)}
           description={strings.totals(readyCount, errors)}
           actions={<InfoTip label={strings.rowColumn}>{strings.rowInfo}</InfoTip>}
+          footerNote={
+            readyCount === 0
+              ? undefined
+              : plan === undefined
+                ? matches?.status === 'failed'
+                  ? strings.undoNote
+                  : strings.planChecking
+                : `${strings.plan(plan.created, plan.updated, plan.skipped)}. ${strings.undoNote}`
+          }
           footer={
             sending === undefined ? (
               <>
-                <Button onPress={() => setStep('records')}>{strings.back}</Button>
-                <Button variant="primary" isDisabled={readyCount === 0} onPress={() => setConfirming(true)}>
+                <Button onPress={() => setStep(needsReview ? 'review' : 'columns')}>{strings.back}</Button>
+                <Button variant="primary" isDisabled={readyCount === 0} onPress={() => void start()}>
                   {strings.start}
                 </Button>
               </>
@@ -692,6 +868,53 @@ export function ImportScreen({ data, slug, object, attributes: given, members, o
             </Callout>
           )}
           {readyCount === 0 && <Callout tone="warning">{strings.nothingReady}</Callout>}
+          {/* How rows find their records: one line, the object's usual key chosen already (AC-1117). */}
+          <Select
+            label={strings.findBy}
+            items={[
+              ...candidates.map((attribute) => ({ id: attribute.id, label: attribute.title })),
+              { id: NONE, label: strings.alwaysCreate },
+            ]}
+            value={matchAttributeId ?? NONE}
+            isDisabled={sending !== undefined}
+            onChange={(id) => {
+              const next = id ?? NONE;
+              setMatchId(next);
+              // The lookup follows the key: a new one asks again, always add drops it.
+              lookUpMatches(result, candidates.some((attribute) => attribute.id === next) ? next : undefined);
+            }}
+            {...(candidates.length === 0 ? { hint: strings.noKeyHint } : {})}
+          />
+          {matchAttributeId === undefined && hasRecords === true && (
+            <Callout tone="warning">{strings.duplicates}</Callout>
+          )}
+          {matchAttributeId !== undefined && (
+            <Disclosure title={strings.moreSettings} variant="quiet">
+              <RadioGroup
+                label={strings.onMatch}
+                value={onMatch}
+                onChange={(value) => setOnMatch(value as ImportOnMatch)}
+              >
+                {(['fill', 'overwrite', 'skip'] as const).map((choice) => (
+                  <Radio key={choice} value={choice}>
+                    {strings.onMatchChoices[choice]}
+                  </Radio>
+                ))}
+              </RadioGroup>
+              <RadioGroup
+                label={strings.onNoMatch}
+                value={onNoMatch}
+                onChange={(value) => setOnNoMatch(value as ImportOnNoMatch)}
+                orientation="horizontal"
+              >
+                {(['create', 'skip'] as const).map((choice) => (
+                  <Radio key={choice} value={choice}>
+                    {strings.onNoMatchChoices[choice]}
+                  </Radio>
+                ))}
+              </RadioGroup>
+            </Disclosure>
+          )}
           {/* The filter leads, the download of the rows to fix sits at the end of the same row. */}
           <SectionBar
             start={
@@ -733,6 +956,7 @@ export function ImportScreen({ data, slug, object, attributes: given, members, o
             targets={targets}
             fields={fields}
             context={context}
+            choices={readChoices(byId)}
             errors={result.errors}
             filter={filter}
             page={page}
@@ -752,21 +976,37 @@ export function ImportScreen({ data, slug, object, attributes: given, members, o
           />
         </Card>
       )}
-      <Modal
-        title={strings.confirmTitle(readyCount, object.pluralName)}
-        isOpen={isConfirming}
-        onOpenChange={setConfirming}
-        actions={
-          <>
-            <Button slot="close">{strings.notYet}</Button>
-            <Button variant="primary" onPress={() => void start()}>
-              {strings.start}
-            </Button>
-          </>
+      <AttributeDialog
+        slug={slug}
+        objectId={object.id}
+        isOpen={newColumn !== undefined}
+        members={members}
+        canManage={canManage}
+        objectAttributes={attributes}
+        initialTypeKey={suggested === undefined ? undefined : (PICKER_KEYS[suggested.type] ?? suggested.type)}
+        initialDraft={
+          newColumn === undefined || loaded === undefined
+            ? undefined
+            : {
+                title:
+                  (loaded.table.headers[newColumn] ?? '').trim().slice(0, 100) || strings.newAttributeTitle(newColumn),
+                ...(suggested === undefined || suggested.options.length === 0
+                  ? {}
+                  : { optionLabels: suggested.options }),
+              }
         }
-      >
-        {strings.confirmText(errors)}
-      </Modal>
+        onClose={() => setNewFor(undefined)}
+        onSaved={(made) => {
+          const column = newFor;
+          setNewFor(undefined);
+          void reread().then(
+            () => {
+              if (column !== undefined) setTarget(column, { attributeId: made.id });
+            },
+            () => setColumnsError(strings.somethingWrong),
+          );
+        }}
+      />
       <Modal
         title={strings.stopTitle}
         tone="danger"
@@ -832,14 +1072,11 @@ interface ColumnsStepProps {
   readonly attributes: ReadonlyMap<string, AttributeDefinition>;
   readonly objects: readonly ObjectSummary[];
   readonly links: ReadonlyMap<number, LinkCheck>;
-  /** May make attributes and options (`schema.manage`): New attribute and Create options show only then. */
+  /** May make attributes (`schema.manage`): New attribute shows only then. */
   readonly canManage: boolean;
-  /** The column whose attribute or options are being made, its Select and buttons waiting. */
-  readonly busyColumn: number | undefined;
   readonly error: string | undefined;
   readonly onTarget: (column: number, target: ImportTarget | undefined) => void;
   readonly onNewAttribute: (column: number) => void;
-  readonly onCreateOptions: (column: number, attributeId: string, labels: readonly string[]) => void;
   readonly onCreateMissing: (column: number, isSelected: boolean) => void;
   /** The date columns whose values read either way round, each with its order and one value read by it. */
   readonly dates: readonly DateColumn[];
@@ -850,6 +1087,8 @@ interface ColumnsStepProps {
   readonly isCreating: boolean;
   /** Only update records already there: nothing is made, so nothing required is missing. */
   readonly onUpdateOnly: (isOnly: boolean) => void;
+  /** Rows read so far on the way on, while Continue reads them. */
+  readonly checked: number | undefined;
   readonly onBack: () => void;
   readonly onContinue: () => void;
 }
@@ -866,22 +1105,7 @@ const choiceLabel = (choice: ImportChoice): string =>
     ? choice.attribute.title
     : strings.namePart(choice.attribute.title, choice.target.part);
 
-/** What a matched column lacks, said under the columns. */
-type ColumnNote =
-  | {
-      readonly kind: 'options';
-      readonly column: number;
-      readonly attribute: AttributeDefinition;
-      readonly labels: readonly string[];
-    }
-  | {
-      readonly kind: 'links';
-      readonly column: number;
-      readonly attribute: AttributeDefinition;
-      readonly check: LinkCheck;
-    };
-
-/** Match columns (AC-1115, AC-1116, AC-1122): every column, its first values, where it goes, and what it lacks. */
+/** Match columns (AC-1115, AC-1116): every column, its first values, where it goes, and its relation's names. */
 function ColumnsStep({
   loaded,
   choices,
@@ -891,17 +1115,16 @@ function ColumnsStep({
   objects,
   links,
   canManage,
-  busyColumn,
   error,
   onTarget,
   onNewAttribute,
-  onCreateOptions,
   onCreateMissing,
   dates,
   onDateOrder,
   required,
   isCreating,
   onUpdateOnly,
+  checked,
   onBack,
   onContinue,
 }: ColumnsStepProps) {
@@ -916,7 +1139,6 @@ function ColumnsStep({
   const rows = headers.map((header, column) => ({ id: `column-${String(column)}`, header, column }));
   const itemsFor = (column: number): readonly SelectItem[] => {
     const others = targets.map((target, index) => (index === column ? undefined : target));
-    const type = suggestType(samplesOf(loaded.table, column, SAMPLE_READ));
     return [
       { id: NONE, label: strings.dontImport },
       ...choices.map((choice) => {
@@ -928,39 +1150,16 @@ function ColumnsStep({
           ...(holder >= 0 ? { description: strings.matchedTo(headers[holder] ?? '') } : {}),
         };
       }),
-      ...(canManage
-        ? [
-            {
-              id: NEW,
-              label: strings.newAttribute,
-              description: strings.newAttributeHint(strings.suggestedTypes[type] ?? strings.suggestedTypes.text ?? ''),
-            },
-          ]
-        : []),
+      ...(canManage ? [{ id: NEW, label: strings.newAttribute }] : []),
     ];
   };
-  // What each matched column lacks: a select's labels that name no option (a scan of every row, kept apart from
-  // the link answers so those never scan again), and a relation's names that link nothing.
-  const optionNotes = useMemo(
-    () =>
-      targets.flatMap((target, column): readonly ColumnNote[] => {
-        const attribute =
-          target === undefined || target.part !== undefined ? undefined : attributes.get(target.attributeId);
-        if (attribute?.type !== 'select' && attribute?.type !== 'status') return [];
-        const labels = missingOptions(loaded.table.rows, column, attribute);
-        return labels.length === 0 ? [] : [{ kind: 'options', column, attribute, labels }];
-      }),
-    [attributes, loaded.table.rows, targets],
-  );
-  const notes = [
-    ...optionNotes,
-    ...targets.flatMap((target, column): readonly ColumnNote[] => {
-      const attribute = target === undefined ? undefined : attributes.get(target.attributeId);
-      const check = links.get(column);
-      if (attribute?.type !== 'record_reference' || check?.attributeId !== attribute.id) return [];
-      return [{ kind: 'links', column, attribute, check }];
-    }),
-  ];
+  // A relation column's names that link nothing (looked up once per column and target).
+  const notes = targets.flatMap((target, column) => {
+    const attribute = target === undefined ? undefined : attributes.get(target.attributeId);
+    const check = links.get(column);
+    if (attribute?.type !== 'record_reference' || check?.attributeId !== attribute.id) return [];
+    return [{ column, attribute, check }];
+  });
   return (
     <Card
       title={strings.fileSummary(loaded.name, loaded.table.rows.length)}
@@ -976,7 +1175,7 @@ function ColumnsStep({
               </Button>
             </Tooltip>
           ) : (
-            <Button variant="primary" isDisabled={busyColumn !== undefined} onPress={onContinue}>
+            <Button variant="primary" isPending={checked !== undefined} onPress={onContinue}>
               {strings.continue}
             </Button>
           )}
@@ -989,7 +1188,6 @@ function ColumnsStep({
           {error}
         </Callout>
       )}
-      {busyColumn !== undefined && <ProgressBar label={strings.saving(headers[busyColumn] ?? '')} isIndeterminate />}
       {/* Guarded here, not at Start: a required field no column fills would refuse every new row. */}
       {isCreating &&
         required.map((attribute) => (
@@ -1027,6 +1225,9 @@ function ColumnsStep({
           onChange={onUpdateOnly}
         />
       )}
+      {checked !== undefined && (
+        <ProgressBar label={strings.checking} value={checked} maxValue={Math.max(loaded.table.rows.length, 1)} />
+      )}
       <Table
         label={strings.columnsLabel}
         columns={COLUMN_COLUMNS}
@@ -1048,7 +1249,7 @@ function ColumnsStep({
               value={target === undefined ? NONE : choiceId(target)}
               showsDescription
               isSearchable={choices.length > 10}
-              isDisabled={busyColumn !== undefined && busyColumn !== row.column}
+              isDisabled={checked !== undefined}
               onChange={(id) => {
                 if (id === NEW) {
                   onNewAttribute(row.column);
@@ -1086,35 +1287,6 @@ function ColumnsStep({
       ))}
       {notes.map((note) => {
         const header = headers[note.column] ?? '';
-        if (note.kind === 'options') {
-          const held = (note.attribute.options ?? []).filter((option) => !option.isArchived).length;
-          const fits = held + note.labels.length <= OPTION_LIMIT;
-          return (
-            <Callout
-              key={`options-${String(note.column)}`}
-              tone="warning"
-              title={strings.missingOptions(note.labels.length, note.attribute.title)}
-              {...(canManage && fits
-                ? {
-                    actions: (
-                      <Button
-                        size="sm"
-                        isPending={busyColumn === note.column}
-                        isDisabled={busyColumn !== undefined && busyColumn !== note.column}
-                        onPress={() => onCreateOptions(note.column, note.attribute.id, note.labels)}
-                      >
-                        {strings.createOptions(note.labels.length)}
-                      </Button>
-                    ),
-                  }
-                : {})}
-            >
-              {`${strings.missingOptionsText(note.labels)} ${
-                !canManage ? strings.missingOptionsNoManage : fits ? '' : strings.tooManyOptions(note.attribute.title)
-              }`.trim()}
-            </Callout>
-          );
-        }
         const { check } = note;
         if (check.status === 'checking') {
           return (
@@ -1186,6 +1358,8 @@ interface PreviewTableProps {
   readonly targets: readonly (ImportTarget | undefined)[];
   readonly fields: ReadonlyMap<string, FieldAttribute>;
   readonly context: (attribute: FieldAttribute) => TextContext;
+  /** Review's choices, so a cell shows as it will import (a label mapped, a cell left empty). */
+  readonly choices: ReadChoices;
   readonly errors: readonly ErrorRow[];
   readonly filter: Filter;
   readonly page: number;
@@ -1197,7 +1371,17 @@ interface PreviewTableProps {
  * row's reasons (in the row's accessible text), then each matched column's
  * value drawn by its one field design.
  */
-function PreviewTable({ loaded, targets, fields, context, errors, filter, page, pageSize }: PreviewTableProps) {
+function PreviewTable({
+  loaded,
+  targets,
+  fields,
+  context,
+  choices,
+  errors,
+  filter,
+  page,
+  pageSize,
+}: PreviewTableProps) {
   const { headers, rows: all } = loaded.table;
   const byRow = useMemo(() => new Map(errors.map((row) => [row.rowNumber, row])), [errors]);
   const shown = useMemo((): readonly PreviewRow[] => {
@@ -1248,7 +1432,8 @@ function PreviewTable({ loaded, targets, fields, context, errors, filter, page, 
         }
         const column = Number(columnId.slice('cell-'.length));
         const target = targets[column];
-        const text = cellText(row.cells[column]);
+        const written = cellText(row.cells[column]);
+        const text = written === '' || choices.rewrite === undefined ? written : choices.rewrite(column, written);
         const attribute = target === undefined ? undefined : fields.get(target.attributeId);
         if (text === '' || target === undefined || attribute === undefined) return text;
         // A name's part draws as the name it fills.
@@ -1258,11 +1443,9 @@ function PreviewTable({ loaded, targets, fields, context, errors, filter, page, 
           return <AttributeDisplay attribute={attribute} value={name} surface="preview" />;
         }
         const read = readCell(text, attribute, context);
-        return read.ok ? (
-          <AttributeDisplay attribute={attribute} value={read.value as never} surface="preview" />
-        ) : (
-          text
-        );
+        if (read.ok) return <AttributeDisplay attribute={attribute} value={read.value as never} surface="preview" />;
+        // A cell review chose to leave empty shows empty, as it will import.
+        return choices.emptyColumns?.has(column) === true ? '' : text;
       }}
     />
   );

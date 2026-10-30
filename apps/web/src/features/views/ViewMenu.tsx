@@ -16,9 +16,7 @@ import {
 } from '@crm/data';
 import { Button, Callout, Field, Form, Modal, type FormRefusal, type ViewAction as ViewMenuAction } from '@crm/ui';
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
-import { importHref } from '../imports/paths.ts';
 import { trashHref } from '../workspace/objects.ts';
-import { strings as importStrings } from '../imports/strings.ts';
 import { useId, useState, type ReactNode } from 'react';
 import { strings } from './strings.ts';
 
@@ -37,8 +35,6 @@ export interface ViewMenuProps {
   readonly copyLinkReason: string | undefined;
   /** Duplicate: the screen makes the copy and opens it. */
   readonly onDuplicate: () => void;
-  /** Export CSV (spec 0040, AC-1130): the view as it stands, for everyone who can read it. */
-  readonly onExport: () => void;
   /** A delete here starts (true) or was refused (false): the screen expects the view to go. */
   readonly onDeleting: (isDeleting: boolean) => void;
   /** The view was deleted here: the screen goes to the default view. */
@@ -81,7 +77,6 @@ export function useViewMenu({
   canManage,
   copyLinkReason,
   onDuplicate,
-  onExport,
   onDeleting,
   onDeleted,
 }: ViewMenuProps): ViewMenu {
@@ -194,21 +189,7 @@ export function useViewMenu({
         );
       },
     }),
-    // Export CSV (spec 0040): this view's rows as a CSV, after Copy link in the view's first group.
-    { id: 'export', label: importStrings.exportItem, icon: 'download', run: onExport },
-    // Import CSV (spec 0040, AC-1111): for members who may write the object; its page loads on its own.
-    ...(object.access === 'write' && !object.isArchived
-      ? [
-          {
-            id: 'import',
-            label: importStrings.menuItem,
-            icon: 'upload' as const,
-            run: () => {
-              void navigate({ href: importHref(slug, object) });
-            },
-          },
-        ]
-      : []),
+    // Import and Export CSV (spec 0040) live in the view bar's Import / Export button alone (owner, 30 Oct 2026).
     ...(canMove('up')
       ? [
           {

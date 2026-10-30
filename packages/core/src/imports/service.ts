@@ -7,9 +7,11 @@
 // `jobs.manage`) is the same NOT_FOUND as one that doesn't exist.
 import { and, eq, sql } from 'drizzle-orm';
 import {
+  IMPORT_MATCHES_PAGE,
   ImportSettings,
   type CreateImportInput,
   type ImportLinks,
+  type ImportMatches,
   type ImportRows,
   type ImportView,
   type StagedRow,
@@ -142,6 +144,36 @@ export async function checkImportLinks(
       else ambiguous.push(name);
     }
     return { missing, ambiguous };
+  });
+}
+
+/**
+ * Says which of a file's ready rows would update a record before the import
+ * starts (the preview's "X new, Y update"): each value's keys on the match
+ * attribute, worked out as staging does, and whether one names a live
+ * record the member can read. One read through the unique index for the
+ * whole call, then the record rule, so nothing is revealed that the import
+ * itself wouldn't. Write on the object, as only an importer asks. Read only.
+ */
+export async function checkImportMatches(
+  scope: EngineScope,
+  input: { readonly objectId: string; readonly attributeId: string; readonly values: readonly unknown[] },
+): Promise<ImportMatches> {
+  checkScope(scope);
+  if (input.values.length > IMPORT_MATCHES_PAGE) {
+    throw refuse('CONFIG_INVALID', `Ask about at most ${IMPORT_MATCHES_PAGE.toLocaleString('en')} values at a time.`);
+  }
+  return inWorkspace(scope, async (tx) => {
+    const objectId = await liveObject(tx, scope, input.objectId);
+    const attributes = await loadAttributes(tx, objectId);
+    const attribute = attributes.get(canonicalId(input.attributeId));
+    if (attribute === undefined || !importable(scope, attribute)) {
+      throw refuse('NOT_FOUND', 'That attribute does not exist.');
+    }
+    if (!attribute.isUnique) throw refuse('CONFIG_INVALID', `${attribute.title} isn’t unique, so it finds no records.`);
+    const keyed = input.values.map((value) => matchKeysOf(attribute, { [attribute.id]: value }));
+    const found = await readableMatches(tx, scope, objectId, attribute.id, [...new Set(keyed.flat())]);
+    return { rows: keyed.map((keys) => ({ keys, matched: keys.some((key) => found.has(key)) })) };
   });
 }
 

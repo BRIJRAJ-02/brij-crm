@@ -102,6 +102,7 @@ const READS: ReadonlySet<string> = new Set([
   'imports.get',
   'imports.rows',
   'imports.links',
+  'imports.matches',
   'exports.get',
   'usage.get',
   'views.list',

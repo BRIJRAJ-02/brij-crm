@@ -13,6 +13,17 @@ export interface CellProblem {
   readonly reason: string;
 }
 
+/**
+ * How the review step's choices change the reading: `rewrite` turns a cell's
+ * text first (a select's labels mapped or dropped), and a cell that doesn't
+ * read in a column of `emptyColumns` is left empty instead of holding its
+ * row back.
+ */
+export interface ReadChoices {
+  readonly rewrite?: (column: number, text: string) => string;
+  readonly emptyColumns?: ReadonlySet<number>;
+}
+
 /** A row with a cell that couldn't be read: none of its cells are imported (AC-1120). */
 export interface ErrorRow {
   /** Its line in the file: the first data row is 2. */
@@ -58,8 +69,8 @@ export function readCell(
 /**
  * Reads every data row (AC-1120): a ready row holds a value per matched
  * attribute (empty cells left out, so they never clear anything); a row with
- * any cell its type can't read is an error row, as is one with nothing to
- * import.
+ * any cell its type can't read is an error row, unless review chose to leave
+ * that column's unreadable cells empty, as is one with nothing to import.
  */
 export function readRows(
   rows: readonly (readonly string[])[],
@@ -68,6 +79,7 @@ export function readRows(
   attributes: ReadonlyMap<string, FieldAttribute>,
   context: (attribute: FieldAttribute) => TextContext,
   offset = 0,
+  choices: ReadChoices = {},
 ): ReadRows {
   const ready: StagedRow[] = [];
   const errors: ErrorRow[] = [];
@@ -79,7 +91,8 @@ export function readRows(
     targets.forEach((target, column) => {
       const attribute = target === undefined ? undefined : attributes.get(target.attributeId);
       if (target === undefined || attribute === undefined) return;
-      const text = cellText(cells[column]);
+      const written = cellText(cells[column]);
+      const text = written === '' || choices.rewrite === undefined ? written : choices.rewrite(column, written).trim();
       if (text === '') return;
       if (target.part !== undefined) {
         const name = names.get(target.attributeId) ?? {};
@@ -93,7 +106,8 @@ export function readRows(
       }
       const read = readCell(text, attribute, context);
       if (read.ok) values[target.attributeId] = read.value;
-      else problems.push({ column, header: headers[column] ?? '', reason: read.reason });
+      else if (choices.emptyColumns?.has(column) !== true)
+        problems.push({ column, header: headers[column] ?? '', reason: read.reason });
     });
     for (const [attributeId, name] of names) values[attributeId] = name;
     if (problems.length > 0) errors.push({ rowNumber, cells, problems });
@@ -120,11 +134,12 @@ export async function readRowsInSlices(
   context: (attribute: FieldAttribute) => TextContext,
   onProgress: (read: number) => void = () => undefined,
   isCancelled: () => boolean = () => false,
+  choices: ReadChoices = {},
 ): Promise<ReadRows | undefined> {
   const ready: StagedRow[] = [];
   const errors: ErrorRow[] = [];
   for (let start = 0; start < rows.length; start += SLICE_ROWS) {
-    const part = readRows(rows.slice(start, start + SLICE_ROWS), headers, targets, attributes, context, start);
+    const part = readRows(rows.slice(start, start + SLICE_ROWS), headers, targets, attributes, context, start, choices);
     for (const row of part.ready) ready.push(row);
     for (const row of part.errors) errors.push(row);
     onProgress(Math.min(rows.length, start + SLICE_ROWS));

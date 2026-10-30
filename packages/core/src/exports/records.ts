@@ -8,9 +8,14 @@
 // hidden fields are absent, and writes each value as `exportCell` does (the
 // text the importer reads back), formula guarded where the type can hold
 // text. More than 100,000 matching rows is refused before anything starts.
+// A table's ticked rows export the same way, by their ids instead of the
+// filter, read through the same door (one the member can't read is absent).
+// The file starts with a UTF-8 BOM, once, in its header chunk (part 0), so
+// Excel reads it as UTF-8.
 import { eq, inArray, sql } from 'drizzle-orm';
 import * as z from 'zod';
 import {
+  BULK_IDS_MAX,
   CSV_BOM,
   csvCell,
   csvJoin,
@@ -20,10 +25,11 @@ import {
   SortRules,
   TRANSFER_LIMITS,
   type ExportNames,
+  type RecordView,
 } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { fieldLevel } from '../access/policy.ts';
-import { checkId } from '../engine/ids.ts';
+import { canonicalId, checkId, isUuid } from '../engine/ids.ts';
 import { countIn, readPage } from '../engine/query/page.ts';
 import { readRecords } from '../engine/records.ts';
 import { refuse } from '../engine/refusals.ts';
@@ -59,6 +65,8 @@ export const RecordsSelection = z.object({
   filter: FilterGroup.optional(),
   sorts: SortRules.optional(),
   attributeIds: z.array(z.uuid()),
+  /** Exactly these records (a table's ticked rows), in this order; the filter and sorts are not used. */
+  recordIds: z.array(z.uuid()).optional(),
   timeZone: z.string(),
   now: z.string(),
 });
@@ -139,6 +147,10 @@ export function exportColumns(
  * and its `records.export` job, in one write. The same id again answers the
  * same export. Refuses `EXPORT_TOO_LARGE` past 100,000 matching rows, and
  * `LIMIT_REACHED` past five kept exports (the submissions export's cap).
+ * With `recordIds` (a table's ticked rows, at most `BULK_IDS_MAX`) it writes
+ * exactly those records instead of the view's filter, still read as the
+ * member: one they may not read, in the trash, of another object or missing
+ * is simply absent from the file.
  */
 export async function startRecordsExport(
   scope: EngineScope,
@@ -150,6 +162,7 @@ export async function startRecordsExport(
     readonly filter?: FilterGroup;
     readonly sorts?: SortRules;
     readonly attributeIds: readonly string[];
+    readonly recordIds?: readonly string[];
     readonly timeZone: string;
   },
   hooks: readonly AfterWrite[] = [],
@@ -157,6 +170,12 @@ export async function startRecordsExport(
   const me = memberIdOf(scope);
   const exportId = checkId(input.id, UNKNOWN_RECORDS_EXPORT);
   const objectId = checkId(input.objectId, 'That object does not exist.');
+  // Malformed ids name nothing; each id once, in the order asked.
+  const picked =
+    input.recordIds === undefined ? undefined : [...new Set(input.recordIds.filter(isUuid).map(canonicalId))];
+  if (picked !== undefined && picked.length > BULK_IDS_MAX) {
+    throw refuse('CONFIG_INVALID', `Export at most ${BULK_IDS_MAX.toLocaleString('en')} selected records at a time.`);
+  }
   const { result } = await runWrite(
     scope,
     async (context) => {
@@ -194,20 +213,30 @@ export async function startRecordsExport(
         ...(input.filter === undefined ? {} : { filter: input.filter }),
         ...(input.sorts === undefined ? {} : { sorts: input.sorts }),
         attributeIds: [...input.attributeIds],
+        ...(picked === undefined ? {} : { recordIds: picked }),
         timeZone: input.timeZone,
         now,
       });
       if (!asked.success)
         throw refuse('FILTER_INVALID', 'That view’s filter or sorts can’t be read. Check them and export again.');
       const selection = asked.data;
-      // Counted as the member, as the view counts (record rules apply), stopping one past the limit.
-      const counted = await countIn(
-        tx,
-        scope,
-        { objectId, now, timeZone: input.timeZone, ...(input.filter === undefined ? {} : { filter: input.filter }) },
-        () => undefined,
-        { cap: TRANSFER_LIMITS.exportRows + 1 },
-      );
+      // Counted as the member, as the view counts (record rules apply), stopping one past the limit. Picked records
+      // are at most `BULK_IDS_MAX`, far under it, so they are not counted.
+      const counted =
+        picked !== undefined
+          ? { count: picked.length, atLeast: false }
+          : await countIn(
+              tx,
+              scope,
+              {
+                objectId,
+                now,
+                timeZone: input.timeZone,
+                ...(input.filter === undefined ? {} : { filter: input.filter }),
+              },
+              () => undefined,
+              { cap: TRANSFER_LIMITS.exportRows + 1 },
+            );
       if (counted.count > TRANSFER_LIMITS.exportRows) {
         const shown = counted.atLeast
           ? `more than ${TRANSFER_LIMITS.exportRows.toLocaleString('en')}`
@@ -230,7 +259,7 @@ export async function startRecordsExport(
           selection,
           fileName: recordsFileName(
             object?.pluralName ?? 'Records',
-            view?.name ?? 'Unsaved view',
+            picked !== undefined ? 'Selected' : (view?.name ?? 'Unsaved view'),
             clock.rows[0]?.day ?? 'today',
           ),
           jobId,
@@ -336,6 +365,32 @@ async function namesFor(
   };
 }
 
+/**
+ * One page of a picked export (a table's ticked rows): the next `PAGE` ids
+ * after the offset `cursor` holds, read through the door as the member, so a
+ * record they may not read, in the trash or of another object is absent, and
+ * hidden fields with it. Answers them in the order picked, and the next offset.
+ */
+async function readPicked(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  objectId: string,
+  recordIds: readonly string[],
+  attributeIds: readonly string[],
+  cursor: string | undefined,
+): Promise<{ readonly records: readonly RecordView[]; readonly nextCursor?: string }> {
+  const from = cursor === undefined ? 0 : Math.max(0, Number.parseInt(cursor, 10) || 0);
+  const ids = recordIds.slice(from, from + PAGE);
+  const read = await readRecords(tx, scope.access, ids, { attributeIds });
+  const byId = new Map(read.filter((record) => record.objectId === objectId).map((record) => [record.id, record]));
+  const records = ids.flatMap((id) => {
+    const record = byId.get(id);
+    return record === undefined ? [] : [record];
+  });
+  const next = from + PAGE;
+  return next < recordIds.length ? { records, nextCursor: String(next) } : { records };
+}
+
 /** One batch of an export: the header first, then a page of the view's rows, appended as chunks. */
 async function exportStep(context: WriteContext, exportId: string, checkpoint: unknown): Promise<StepOutcome> {
   const { tx, scope } = context;
@@ -378,22 +433,25 @@ async function exportStep(context: WriteContext, exportId: string, checkpoint: u
     const attribute = attributes.get(id);
     return attribute === undefined ? [] : [attribute];
   });
-  const page = await readPage(
-    tx,
-    scope,
-    {
-      objectId: held.objectId,
-      now: selection.now,
-      timeZone: selection.timeZone,
-      limit: PAGE,
-      attributeIds: at.columns,
-      ...(selection.filter === undefined ? {} : { filter: selection.filter }),
-      ...(selection.sorts === undefined ? {} : { sorts: selection.sorts }),
-      ...(at.cursor === undefined ? {} : { cursor: at.cursor }),
-    },
-    {},
-    () => undefined,
-  );
+  const page =
+    selection.recordIds !== undefined
+      ? await readPicked(tx, scope, held.objectId, selection.recordIds, at.columns, at.cursor)
+      : await readPage(
+          tx,
+          scope,
+          {
+            objectId: held.objectId,
+            now: selection.now,
+            timeZone: selection.timeZone,
+            limit: PAGE,
+            attributeIds: at.columns,
+            ...(selection.filter === undefined ? {} : { filter: selection.filter }),
+            ...(selection.sorts === undefined ? {} : { sorts: selection.sorts }),
+            ...(at.cursor === undefined ? {} : { cursor: at.cursor }),
+          },
+          {},
+          () => undefined,
+        );
   const names = await namesFor(
     tx,
     scope,

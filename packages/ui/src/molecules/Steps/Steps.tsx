@@ -1,3 +1,4 @@
+import { Button as AriaButton } from 'react-aria-components';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import styles from './Steps.module.css';
@@ -37,12 +38,22 @@ export interface StepsProps {
   readonly variant?: StepsVariant;
   /** The list's direction: `vertical` (the default) or `horizontal`. */
   readonly orientation?: StepsOrientation;
+  /** Makes each done step a button that goes back to it (import's earlier steps); done steps are plain text without it. */
+  readonly onStepPress?: (id: string) => void;
 }
 
 type StepState = 'done' | 'current' | 'upcoming' | 'failed';
 
 /** Numbered steps through a flow (import, two factor setup, onboarding): done, current and still to come, or failed. */
-export function Steps({ label, steps, current, failed, variant = 'list', orientation = 'vertical' }: StepsProps) {
+export function Steps({
+  label,
+  steps,
+  current,
+  failed,
+  variant = 'list',
+  orientation = 'vertical',
+  onStepPress,
+}: StepsProps) {
   const currentIndex = steps.findIndex((step) => step.id === current);
   if (variant === 'count') {
     // One line, read where it stands; the flow's title names the step. A step not in the list counts from the first.
@@ -58,13 +69,8 @@ export function Steps({ label, steps, current, failed, variant = 'list', orienta
     <ol className={styles.root} aria-label={label} data-orientation={orientation}>
       {steps.map((step, index) => {
         const state = stateOf(index, step.id);
-        return (
-          <li
-            key={step.id}
-            className={styles.step}
-            data-state={state}
-            {...(state === 'current' ? { 'aria-current': 'step' as const } : {})}
-          >
+        const body = (
+          <>
             <span className={styles.marker} aria-hidden="true">
               {state === 'done' ? (
                 <Icon name="check" size="xs" />
@@ -79,6 +85,22 @@ export function Steps({ label, steps, current, failed, variant = 'list', orienta
               {step.description !== undefined && <span className={styles.description}>{step.description}</span>}
             </span>
             {state !== 'current' && state !== 'upcoming' && <VisuallyHidden> {strings[state]}</VisuallyHidden>}
+          </>
+        );
+        return (
+          <li
+            key={step.id}
+            className={styles.step}
+            data-state={state}
+            {...(state === 'current' ? { 'aria-current': 'step' as const } : {})}
+          >
+            {state === 'done' && onStepPress !== undefined ? (
+              <AriaButton className={styles.press} onPress={() => onStepPress(step.id)}>
+                {body}
+              </AriaButton>
+            ) : (
+              body
+            )}
           </li>
         );
       })}

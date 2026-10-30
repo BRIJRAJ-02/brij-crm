@@ -34,6 +34,11 @@ export interface FileDropProps {
   readonly variant?: 'zone' | 'button';
   /** With `variant="button"`: what was picked is on its way, so the button spins and takes no second press. */
   readonly isPending?: boolean;
+  /**
+   * The screen's own refusal for a file of a type it doesn't take, when it has a better one than "Choose .csv"
+   * (an Excel file: how to save it as CSV); undefined keeps the built in sentence.
+   */
+  readonly wrongTypeText?: (fileName: string) => string | undefined;
 }
 
 function accepts(file: File, types: readonly string[] | undefined): boolean {
@@ -58,6 +63,7 @@ export function FileDrop({
   isDisabled = false,
   variant = 'zone',
   isPending = false,
+  wrongTypeText,
 }: FileDropProps) {
   const { locale } = useFormatSettings();
   const [error, setError] = useState<string | undefined>(undefined);
@@ -66,7 +72,7 @@ export function FileDrop({
   const take = (files: readonly File[]) => {
     const wrongType = files.find((file) => !accepts(file, acceptedTypes));
     if (wrongType !== undefined) {
-      setError(strings.wrongType(wrongType.name, (acceptedTypes ?? []).join(', ')));
+      setError(wrongTypeText?.(wrongType.name) ?? strings.wrongType(wrongType.name, (acceptedTypes ?? []).join(', ')));
       return;
     }
     const tooBig = maxSize === undefined ? undefined : files.find((file) => file.size > maxSize);

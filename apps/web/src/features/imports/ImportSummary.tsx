@@ -1,7 +1,8 @@
 // Brief
 // Purpose: one import's page: its progress while it runs, then what it did, kept for its 7 day undo window.
 // Main task: see how many rows were created, updated and not imported, and why; undo the import if it was wrong.
-// Leaves out: editing the import's settings, running it again, and the imported records themselves (View records).
+// Leaves out: editing the import's settings, running it again, and the imported records themselves (View records
+// opens the table on today's new records, newest first, as a draft).
 import {
   isDataError,
   type DataLayer,
@@ -17,7 +18,6 @@ import {
   Callout,
   Card,
   DescriptionList,
-  InfoTip,
   Modal,
   PageColumn,
   ProgressBar,
@@ -29,7 +29,8 @@ import {
 import { useNavigate } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
 import { focusTitle } from '../navigation/focus-title.ts';
-import { objectHref } from '../workspace/objects.ts';
+import { createView } from '../views/query.ts';
+import { objectHref, viewHref } from '../workspace/objects.ts';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { saveCsv } from './download.ts';
 import { n, strings } from './strings.ts';
@@ -200,14 +201,47 @@ export function ImportSummary({ data, slug, object, initial, refused: firstRefus
     );
   };
 
+  /**
+   * View records: the object's table on the records made today, newest
+   * first, as an unsaved draft of its table view (no filter by import
+   * exists), so the rows just imported lead. The object's page when that
+   * can't be built.
+   */
+  const viewRecords = async () => {
+    const fallback = objectHref(slug, object);
+    try {
+      const views = data.views.list(slug, object.id);
+      const [, attributes] = await Promise.all([views.ready(), data.attributes.list(slug, object.id)]);
+      const list = views.getSnapshot();
+      const viewId = list.status === 'ready' ? createView(list) : undefined;
+      const created = attributes.find((attribute) => attribute.isSystem && attribute.apiSlug === 'created_at');
+      const draft =
+        created === undefined
+          ? undefined
+          : data.views.draftParam({
+              filter: {
+                conjunction: 'and',
+                conditions: [{ attributeId: created.id, operator: 'within', range: 'today' }],
+              },
+              sorts: [{ attributeId: created.id, direction: 'descending' }],
+            });
+      void navigate({
+        href:
+          viewId === undefined
+            ? fallback
+            : `${viewHref(slug, object.apiSlug, viewId)}${draft === undefined ? '' : `?draft=${draft}`}`,
+      });
+    } catch {
+      void navigate({ href: fallback });
+    }
+  };
+
   const { counts } = view;
-  // Only what happened: a count of none says nothing.
+  // Only what happened: a count of none says nothing. Rows skipped, refused or left out for errors are one figure.
   const summary = [
     { term: strings.counts.created, value: counts.created },
     { term: strings.counts.updated, value: counts.updated },
-    { term: strings.counts.skipped, value: counts.skipped },
-    { term: strings.counts.refused, value: counts.refused },
-    { term: strings.counts.errorRows, value: view.errorRows },
+    { term: strings.counts.refused, value: counts.skipped + counts.refused + view.errorRows },
     { term: strings.counts.undone, value: counts.undone },
   ]
     .filter((each) => each.value > 0)
@@ -254,11 +288,6 @@ export function ImportSummary({ data, slug, object, initial, refused: firstRefus
       ) : (
         <Card
           title={isUndoRunning ? strings.undoing : outcomeTitle(view, job, undoJob)}
-          actions={
-            <InfoTip label={strings.counts.refused} {...(view.canUndo ? { example: strings.undoInfo } : {})}>
-              {strings.countsInfo}
-            </InfoTip>
-          }
           footer={
             <>
               {view.canUndo && (
@@ -266,7 +295,7 @@ export function ImportSummary({ data, slug, object, initial, refused: firstRefus
                   {strings.undo}
                 </Button>
               )}
-              <Button variant="primary" onPress={() => void navigate({ href: objectHref(slug, object) })}>
+              <Button variant="primary" onPress={() => void viewRecords()}>
                 {strings.viewRecords(object.pluralName)}
               </Button>
             </>

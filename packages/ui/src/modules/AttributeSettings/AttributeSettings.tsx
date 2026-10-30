@@ -35,6 +35,7 @@ import { Field } from '../../molecules/Field/Field.tsx';
 import { Form, type FormRefusal } from '../../molecules/Form/Form.tsx';
 import { Modal } from '../../molecules/Modal/Modal.tsx';
 import { Select, type SelectItem } from '../../molecules/Select/Select.tsx';
+import { HUES } from '../../hue.ts';
 import { useFormatSettings } from '../../provider/context.ts';
 import type { FilterBuilderProps } from '../FilterBuilder/FilterBuilder.tsx';
 import { OptionsEditor, type OptionsEditorChange, type OptionsEditorOption } from '../OptionsEditor/OptionsEditor.tsx';
@@ -126,6 +127,12 @@ export interface AttributeSettingsValues {
   readonly changed: readonly AttributeSettingsField[];
 }
 
+/** What a new attribute's form starts with: its name, and a select's first options. */
+export interface AttributeSettingsDraft {
+  readonly title: string;
+  readonly optionLabels?: readonly string[];
+}
+
 /** Props for AttributeSettings. */
 export interface AttributeSettingsProps {
   readonly isOpen: boolean;
@@ -136,6 +143,11 @@ export interface AttributeSettingsProps {
   readonly typeKeys?: readonly string[];
   /** On create, the picker's entry chosen at the start (`select` where a board needs one); the first offered when absent. */
   readonly initialTypeKey?: string;
+  /**
+   * On create, what the form starts with (an import's column): its name, and
+   * a select's first options in order, each given the next data hue.
+   */
+  readonly initialDraft?: AttributeSettingsDraft;
   /**
    * Adds "Relationship" last to the picker (#15): choosing it calls
    * `onChoose` with the name typed so far, so the screen swaps in its own
@@ -274,6 +286,7 @@ export function AttributeSettings({
   attribute,
   typeKeys,
   initialTypeKey,
+  initialDraft,
   relationshipEntry,
   members = [],
   isBusy = false,
@@ -337,6 +350,7 @@ export function AttributeSettings({
           attribute={attribute}
           typeKeys={typeKeys}
           initialTypeKey={initialTypeKey}
+          initialDraft={initialDraft}
           relationshipEntry={relationshipEntry}
           members={members}
           isBusy={isBusy}
@@ -365,6 +379,7 @@ interface AttributeFormProps {
   readonly attribute: AttributeSettingsAttribute | undefined;
   readonly typeKeys: readonly string[] | undefined;
   readonly initialTypeKey: string | undefined;
+  readonly initialDraft: AttributeSettingsDraft | undefined;
   readonly relationshipEntry: AttributeSettingsProps['relationshipEntry'];
   readonly members: readonly ActorDisplay[];
   readonly isBusy: boolean;
@@ -388,6 +403,7 @@ function AttributeForm({
   attribute,
   typeKeys,
   initialTypeKey,
+  initialDraft,
   relationshipEntry,
   members,
   isBusy,
@@ -414,7 +430,7 @@ function AttributeForm({
   );
   const entry = PICKER_TYPES.find((each) => each.key === typeKey);
   const type: AttributeType = entry?.type ?? attribute?.type ?? 'text';
-  const [name, setName] = useState(attribute?.title ?? '');
+  const [name, setName] = useState(attribute?.title ?? initialDraft?.title ?? '');
   const [description, setDescription] = useState(attribute?.description ?? '');
   const [isRequired, setRequired] = useState(attribute?.isRequired ?? false);
   const [isUnique, setUnique] = useState(attribute?.isUnique ?? false);
@@ -423,7 +439,13 @@ function AttributeForm({
   const [config, setConfig] = useState<Readonly<Record<string, unknown>>>(() => attribute?.config ?? {});
   // A new select's options and a new status's stages, kept here until create sends them (AC-230).
   const [drafts, setDrafts] = useState<readonly OptionsEditorOption[]>(() =>
-    attribute === undefined && entry?.type === 'status' ? starterStages(newOptionId) : [],
+    attribute !== undefined
+      ? []
+      : entry?.type === 'status'
+        ? starterStages(newOptionId)
+        : entry?.type === 'select'
+          ? draftOptions(initialDraft?.optionLabels ?? [], newOptionId)
+          : [],
   );
   // Its rules as edited, kept until Save sends them (spec 0013, AC-252).
   const [rules, setRules] = useState<readonly RulesEditorRule[]>(() => (attribute?.rules ?? []).map(editorRuleOf));
@@ -956,6 +978,20 @@ function starterStages(newOptionId: (() => string) | undefined): readonly Option
     hue: stage.hue,
     isArchived: false,
     outcome: stage.outcome,
+  }));
+}
+
+/** A new select's first options from labels (an import column's values), each taking the next data hue. */
+function draftOptions(
+  labels: readonly string[],
+  newOptionId: (() => string) | undefined,
+): readonly OptionsEditorOption[] {
+  return labels.map((label, index) => ({
+    id: newOptionId?.() ?? `option-${String(index)}`,
+    label,
+    // The hues in turn, as Add option gives them.
+    hue: HUES[index % HUES.length] ?? 'gray',
+    isArchived: false,
   }));
 }
 

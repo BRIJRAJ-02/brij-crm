@@ -10,6 +10,7 @@ import type {
   RecordsExportView,
   StartExportInput,
   ImportLinks,
+  ImportMatches,
   ImportRows,
   ImportSettings,
   ImportView,
@@ -5576,6 +5577,28 @@ export function createDataLayer({
         }
         return { missing, ambiguous };
       },
+      /**
+       * Each value of a file's match column, in order: its keys as the import
+       * finds records by them, and whether one names a record the member can
+       * read (the preview's new and update counts). Asks 1,000 a call, in
+       * turn; a read, so a lost answer is asked again by the caller.
+       */
+      matches: async (
+        workspace: string,
+        objectId: string,
+        attributeId: string,
+        values: readonly unknown[],
+      ): Promise<ImportMatches['rows']> => {
+        const rows: ImportMatches['rows'][number][] = [];
+        for (let start = 0; start < values.length; start += 1_000) {
+          const part = values.slice(start, start + 1_000);
+          const answer = await call((options) =>
+            api.imports.matches({ workspace, objectId, attributeId, values: part }, options),
+          );
+          rows.push(...answer.rows);
+        }
+        return rows;
+      },
       /** The import a job this tab started belongs to (its import or its undo job), for the finish toast. */
       forJob: (jobId: string): string | undefined => importJobs.get(jobId),
       /** A new import id (UUID v7): mint it once per file, and send the same on a retry. */
@@ -5589,6 +5612,9 @@ export function createDataLayer({
        * is followed like any this tab started; `forJob` gives the export a
        * finished job wrote, for the toast's Download. Rejects with a
        * `DataError` (`EXPORT_TOO_LARGE` with the count, `LIMIT_REACHED`).
+       * `recordIds` exports exactly those records (a table's ticked rows,
+       * at most 10,000) instead of the filter; ones the member can't read are
+       * absent from the file.
        */
       start: async (
         workspace: string,
@@ -5599,15 +5625,18 @@ export function createDataLayer({
           readonly filter?: StartExportInput['filter'];
           readonly sorts?: StartExportInput['sorts'];
           readonly attributeIds: readonly string[];
+          readonly recordIds?: readonly string[];
         },
       ): Promise<RecordsExportView> => {
+        const { recordIds, ...rest } = input;
         const view = await sendImport(
           (mutationId) => (options) =>
             api.exports.start(
               {
                 workspace,
-                ...input,
+                ...rest,
                 attributeIds: [...input.attributeIds],
+                ...(recordIds === undefined ? {} : { recordIds: [...recordIds] }),
                 timeZone: zoneOf(workspace),
                 mutationId,
               },

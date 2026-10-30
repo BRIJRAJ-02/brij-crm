@@ -63,6 +63,8 @@ type StagedRow = {
 interface ImportPlan {
   readonly importId: string;
   readonly objectId: string;
+  /** The file's name, which the job's summary carries so a list of jobs can name the import. */
+  readonly fileName: string;
   readonly settings: ImportSettings;
   readonly attributes: ReadonlyMap<string, AttributeDef>;
   readonly far: ReadonlyMap<string, readonly FarObject[]>;
@@ -161,7 +163,7 @@ async function loadPlan(tx: WorkspaceTx, scope: EngineScope, importId: string): 
       }
     }
   }
-  return { importId: row.id, objectId: row.objectId, settings, attributes, far, makes };
+  return { importId: row.id, objectId: row.objectId, fileName: row.fileName, settings, attributes, far, makes };
 }
 
 /** A row's staged values: plain ones by attribute, and each relation column's names. */
@@ -644,7 +646,7 @@ export function recordsImport(rules?: RuleSource): KindDefinition<ImportJobParam
       await storeOutcomes(tx, scope, plan.importId, batch.stored);
       // The batch's record slots, taken last as every write takes the counter row.
       if (batch.created > 0) await takeRecordSlots(tx, scope, batch.created);
-      return { finished: false, items: outcomes, result: { importId: plan.importId } };
+      return { finished: false, items: outcomes, result: { importId: plan.importId, fileName: plan.fileName } };
     },
   });
 }

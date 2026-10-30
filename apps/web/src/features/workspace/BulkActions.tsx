@@ -31,6 +31,8 @@ import {
   bulkEditToast,
   recordsWord,
 } from './bulk.ts';
+import { runExport } from '../imports/export-run.ts';
+import { strings as importStrings } from '../imports/strings.ts';
 import { runUndo } from './useUndoShortcut.ts';
 import { isFocusLost, useBulkJob } from './useBulkJob.ts';
 
@@ -203,6 +205,8 @@ export interface BulkActionsOptions {
   readonly onClear: () => void;
   /** An inline delete went out: the rows left, so the table takes focus back where the first of them was. */
   readonly onDeleting: (recordIds: readonly string[]) => void;
+  /** The columns the view shows, in order: what Export N selected writes (spec 0040). */
+  readonly exportColumns: readonly string[];
 }
 
 /**
@@ -226,6 +230,7 @@ export function useBulkActions({
   query,
   onClear,
   onDeleting,
+  exportColumns,
 }: BulkActionsOptions): BulkActions {
   const { data, toasts } = useRouteContext({ from: '__root__' });
   const { selection, asOf } = ticked;
@@ -351,6 +356,36 @@ export function useBulkActions({
       : { kind: 'failed', error: failure };
   };
 
+  // Export N selected (spec 0040): the ticked rows' shown columns as a CSV, read as the member, with the export's
+  // one toast. Reading is enough, so it shows on an object the person may only read too. One export per press.
+  const exporting = useRef(false);
+  const exportButton =
+    selection.kind === 'some' && ids.length > 0 && exportColumns.length > 0 ? (
+      <Button
+        icon="download"
+        onPress={() => {
+          if (exporting.current) return;
+          exporting.current = true;
+          void runExport(
+            {
+              data,
+              toasts,
+              download: (path) => {
+                window.location.assign(path);
+              },
+            },
+            slug,
+            recordsWord(ids.length, object),
+            { objectId: object.id, attributeIds: exportColumns, recordIds: ids },
+          ).finally(() => {
+            exporting.current = false;
+          });
+        }}
+      >
+        {importStrings.exportSelected(ids.length)}
+      </Button>
+    ) : undefined;
+
   const { note, progress, isRunning } = bulkJob;
   // Up while rows are ticked, a change runs or a note shows; then it plays its exit before the grid gives back its room.
   const isWanted = count > 0 || isRunning || note !== undefined;
@@ -358,9 +393,12 @@ export function useBulkActions({
   if (isWanted && !isBarShown) setBarShown(true);
   const actions = !canWrite ? (
     // Spec 0009's words for an object the person may only read; the server refuses them anyway.
-    <Callout placement="bar" isAnnounced>
-      {bulkStrings.readOnly(object.pluralName)}
-    </Callout>
+    <>
+      <Callout placement="bar" isAnnounced>
+        {bulkStrings.readOnly(object.pluralName)}
+      </Callout>
+      {exportButton}
+    </>
   ) : note?.tone === 'info' ? (
     // A count of zero: said for a moment in the actions' place, while the selection it was for clears.
     <Callout placement="bar" isAnnounced>
@@ -382,6 +420,7 @@ export function useBulkActions({
       >
         {bulkStrings.edit}
       </Button>
+      {exportButton}
       <Button
         variant="danger"
         icon="trash"

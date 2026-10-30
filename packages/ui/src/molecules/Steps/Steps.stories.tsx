@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect } from 'storybook/test';
+import { expect, fn } from 'storybook/test';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { Steps } from './Steps.tsx';
 
@@ -97,5 +97,20 @@ export const Count: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByText('Step 2 of 3')).toBeInTheDocument();
     await expect(canvas.queryByRole('list')).toBeNull();
+  },
+};
+
+/** Done steps go back when pressed (the import page): each is a button, the current and upcoming ones are not. */
+export const PressableDone: Story = {
+  args: { current: 'review', orientation: 'horizontal', onStepPress: fn() },
+  render: (args) => (
+    <Stage>
+      <Steps {...args} steps={args.steps.map(({ id, label }) => ({ id, label }))} />
+    </Stage>
+  ),
+  play: async ({ args, canvas, userEvent }) => {
+    await expect(canvas.getAllByRole('button')).toHaveLength(2);
+    await userEvent.click(canvas.getByRole('button', { name: /Map columns/ }));
+    await expect(args.onStepPress).toHaveBeenCalledWith('map');
   },
 };

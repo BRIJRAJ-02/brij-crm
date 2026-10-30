@@ -4,6 +4,7 @@
 // the data layer's job store, the one the Background jobs page reads, so the
 // toast keeps going when the screen that started it is left.
 import { isDataError, type DataLayer, type JobView, type RecordsExportView } from '@crm/data';
+import { TRANSFER_LIMITS } from '@crm/data/imports';
 import type { ToastContent, Toasts } from '@crm/ui';
 import { strings } from './strings.ts';
 import { exportToast } from './toast.ts';
@@ -20,6 +21,15 @@ export function exportOutcome(job: Pick<JobView, 'status' | 'result'> | undefine
   if (job.status === 'succeeded') return job.result?.changedWhileWritten === true ? 'changed' : 'ready';
   if (job.status === 'failed' || job.status === 'cancelled') return 'failed';
   return 'working';
+}
+
+/**
+ * Whether a view holds more records than one export writes (100,000), from
+ * the count its table shows. A floor ("10,000+", a filtered view's capped
+ * count) can't say, so it never blocks: the server refuses with the count.
+ */
+export function isOverExportLimit(count: { readonly count: number; readonly atLeast: boolean } | undefined): boolean {
+  return count !== undefined && !count.atLeast && count.count > TRANSFER_LIMITS.exportRows;
 }
 
 /** What `runExport` needs from the app. */

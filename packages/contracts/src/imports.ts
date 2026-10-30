@@ -8,6 +8,7 @@
 // same NOT_FOUND as one that doesn't exist.
 import { oc } from '@orpc/contract';
 import * as z from 'zod';
+import { BULK_IDS_MAX } from './bulk.ts';
 import { ExportIdInput } from './forms/forms.ts';
 import { TRANSFER_LIMITS } from './transfer-limits.ts';
 import { Uuid, uuidV7 } from './values/ids.ts';
@@ -143,6 +144,34 @@ export const ImportLinks = z.object({
 /** Names that link to no record, or to several. */
 export type ImportLinks = z.infer<typeof ImportLinks>;
 
+/** The most values one `imports.matches` call asks about. */
+export const IMPORT_MATCHES_PAGE = 1_000;
+
+/**
+ * The match attribute's values of a file's ready rows, to say before the
+ * start how many rows update a record and how many add one: the import's
+ * object, its match attribute (unique, one a column goes to), and each row's
+ * value in the attribute's shape, in file order.
+ */
+export const ImportMatchesInput = WorkspaceScoped.extend({
+  objectId: Uuid,
+  attributeId: Uuid,
+  values: z.array(z.unknown()).min(1).max(IMPORT_MATCHES_PAGE),
+});
+/** Values to look up. */
+export type ImportMatchesInput = z.infer<typeof ImportMatchesInput>;
+
+/**
+ * Per value asked about, in order: its keys as the import finds records by
+ * them (so two rows of one file sharing a key are told apart from two that
+ * don't), and whether one names a live record the member can read.
+ */
+export const ImportMatches = z.object({
+  rows: z.array(z.object({ keys: z.array(z.string()), matched: z.boolean() })),
+});
+/** Which values name a record. */
+export type ImportMatches = z.infer<typeof ImportMatches>;
+
 /** Where an import is: rows arriving, its job started, or taken back. */
 export const ImportStatus = z.enum(['staging', 'started', 'undone']);
 /** Where an import is. */
@@ -220,6 +249,9 @@ export type ImportRows = z.infer<typeof ImportRows>;
  * (the retry key); the view by id when saved, with the filter and sorts on
  * screen (the unsaved ones when the member changed them); `attributeIds` the
  * visible columns in order; `timeZone` for relative dates in the filter.
+ * `recordIds` exports exactly those records (a table's ticked rows, at most
+ * `BULK_IDS_MAX`) in that order instead of the filter; one the member may
+ * not read is simply absent.
  */
 export const StartExportInput = WorkspaceScoped.extend({
   id: uuidV7('The export id must be a UUID v7.'),
@@ -228,6 +260,11 @@ export const StartExportInput = WorkspaceScoped.extend({
   filter: FilterGroup.optional(),
   sorts: SortRules.optional(),
   attributeIds: z.array(Uuid).min(1).max(TRANSFER_LIMITS.importColumns),
+  recordIds: z
+    .array(Uuid)
+    .min(1, 'Choose at least one record.')
+    .max(BULK_IDS_MAX, `Export at most ${BULK_IDS_MAX.toLocaleString('en')} selected records at a time.`)
+    .optional(),
   timeZone: z.string().min(1).max(64),
   mutationId: Uuid,
 });
@@ -269,6 +306,7 @@ export const importsContract = {
   rows: oc.input(ImportRowsInput).output(ImportRows),
   undo: oc.input(ImportWriteInput).output(ImportView),
   links: oc.input(ImportLinksInput).output(ImportLinks),
+  matches: oc.input(ImportMatchesInput).output(ImportMatches),
 };
 
 /**

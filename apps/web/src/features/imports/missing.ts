@@ -59,6 +59,32 @@ export function suggestType(samples: readonly string[]): PickerAttributeType {
   return found === undefined ? 'text' : found[0];
 }
 
+/** The most distinct values a column may hold for a new attribute to start as a Select of them. */
+export const SELECT_SUGGEST_MAX = 20;
+
+/**
+ * What a new attribute from a column starts as (the attribute dialog,
+ * prefilled): the type its values suggest, and a Select of its values when
+ * they read as text, repeat, and are 20 or fewer, each once as first written.
+ */
+export function suggestAttribute(texts: readonly string[]): {
+  readonly type: PickerAttributeType | 'select';
+  readonly options: readonly string[];
+} {
+  const given = texts.map((text) => text.trim()).filter((text) => text !== '');
+  const type = suggestType(given.slice(0, 50));
+  if (type !== 'text') return { type, options: [] };
+  const distinct = new Map<string, string>();
+  for (const text of given) {
+    const key = text.toLocaleLowerCase();
+    if (!distinct.has(key)) distinct.set(key, text.slice(0, 100));
+    if (distinct.size > SELECT_SUGGEST_MAX) return { type, options: [] };
+  }
+  return distinct.size > 0 && distinct.size < given.length
+    ? { type: 'select', options: [...distinct.values()] }
+    : { type, options: [] };
+}
+
 /** A relation column's distinct names across every row, each once ignoring case, as the job will look them up. */
 export function columnNames(rows: readonly (readonly string[])[], column: number, isMulti: boolean): readonly string[] {
   const names = new Map<string, string>();
