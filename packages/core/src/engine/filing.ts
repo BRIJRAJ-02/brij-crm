@@ -10,7 +10,7 @@
 import { sql } from 'drizzle-orm';
 import { domainOf, isPublicEmailDomain, type FiledCompany } from '@crm/contracts';
 import type { WorkspaceTx } from '@crm/db';
-import { takeRecordSlots } from './limits.ts';
+import { checkRecordRoom } from './limits.ts';
 import { refuse } from './refusals.ts';
 import type { EngineScope } from './scope.ts';
 import { loadAttributes, type AttributeDef } from './values.ts';
@@ -116,12 +116,13 @@ export function filingDomains(email: string): { readonly host: string; readonly 
 }
 
 /**
- * How a company filing makes counts against the record limit: `pending` records the write makes after it and
- * takes slots for then (a create's own), which must fit beside the company, whose slot it takes at once; or, in a
- * batch that takes its records' slots itself, last (an import, spec 0040), the `room` it has left, where the
- * company takes no slot and the batch counts it from the answer.
+ * How a company filing makes counts against the record limit: `deferred`, its slot counted with the write's and
+ * taken at the write's end (`WriteContext.deferSlots`), once there is room beside what the write counted so far; or,
+ * in a batch that takes its records' slots itself, last (an import, spec 0040), the `room` it has left, where the
+ * company takes no slot and the batch counts it from the answer. `off` files nothing: an undo putting old values
+ * back, so undoing an email change never links the person again.
  */
-export type FilingSlots = { readonly pending: number } | { readonly room: number };
+export type FilingSlots = 'deferred' | 'off' | { readonly room: number };
 
 /**
  * The record writes filing makes, passed in, so this module never imports `records.ts` (which calls it): a
@@ -180,20 +181,27 @@ async function standardObjects(tx: WorkspaceTx, objectId: string): Promise<strin
 }
 
 /**
- * Where a write to this object files companies: the standard Companies and the person's Company attribute, when
- * the object is the standard People with the attributes filing reads; undefined otherwise. A form's access widens
- * by exactly these (spec 0059, AC-5916), so a submission files as any other write does.
+ * Where a write to this object files companies: the standard Companies, the person's Company attribute, and the
+ * Companies attributes filing never writes (all but Domains and Name), when the object is the standard People with
+ * the attributes filing reads; undefined otherwise. A form's access widens by exactly these (spec 0059, AC-5916),
+ * so a submission files as any other write does and can write nothing else on Companies.
  */
 export async function companyFilingTarget(
   tx: WorkspaceTx,
   objectId: string,
   attributes: ReadonlyMap<string, AttributeDef>,
-): Promise<{ readonly companies: string; readonly companyAttributeId: string } | undefined> {
+): Promise<
+  { readonly companies: string; readonly companyAttributeId: string; readonly unwritten: readonly string[] } | undefined
+> {
   const email = bySlug(attributes, 'email_addresses');
   const company = bySlug(attributes, 'company');
   if (email?.type !== 'email' || company?.type !== 'record_reference') return undefined;
   const companies = await standardObjects(tx, objectId);
-  return companies === undefined ? undefined : { companies, companyAttributeId: company.id };
+  if (companies === undefined) return undefined;
+  const companyAttributes = await loadAttributes(tx, companies);
+  const filed = new Set([bySlug(companyAttributes, 'domains')?.id, bySlug(companyAttributes, 'name')?.id]);
+  const unwritten = [...companyAttributes.keys()].filter((id) => !filed.has(id));
+  return { companies, companyAttributeId: company.id, unwritten };
 }
 
 /** A company's name as the writer may read it: empty when the name field is hidden from them or not text. */
@@ -250,7 +258,12 @@ export async function fileCompany(
   const email = bySlug(input.attributes, 'email_addresses');
   const company = bySlug(input.attributes, 'company');
   // Not a person's write, or not one that changed their emails: nothing is read at all.
-  if (email?.type !== 'email' || company?.type !== 'record_reference' || !input.written.has(email.id)) {
+  if (
+    input.slots === 'off' ||
+    email?.type !== 'email' ||
+    company?.type !== 'record_reference' ||
+    !input.written.has(email.id)
+  ) {
     return undefined;
   }
   const companies = await standardObjects(tx, input.objectId);
@@ -259,18 +272,31 @@ export async function fileCompany(
   if (domain === undefined || (await hasCompany(tx, input.personId, company))) return undefined;
   const companyAttributes = await loadAttributes(tx, companies);
   const domains = bySlug(companyAttributes, 'domains');
-  if (domains?.type !== 'domain') return undefined;
+  // Matching reads Domains, so a writer who can't see it files nothing: which company holds a domain they may not
+  // see is never told to them by a link (hidden means absent).
+  if (domains?.type !== 'domain' || !attributeVisible(scope.access, domains)) return undefined;
+  // A batch's room for a company made now; undefined when its slot is counted with the write's.
+  const room = typeof input.slots === 'object' ? input.slots.room : undefined;
+  const holder = (tx: WorkspaceTx) =>
+    holderOf(tx, domains.id, domain.host).then(
+      async (found) =>
+        found ?? (domain.host === domain.registrable ? undefined : holderOf(tx, domains.id, domain.registrable)),
+    );
 
   const filed = await context.perRecord(async (step): Promise<FiledCompany | undefined> => {
-    await step.tx.execute(
-      sql`select pg_advisory_xact_lock(hashtextextended(${`company-domain:${scope.workspaceId}:${domain.registrable}`}, 0))`,
-    );
-    const held =
-      (await holderOf(step.tx, domains.id, domain.host)) ??
-      (domain.host === domain.registrable ? undefined : await holderOf(step.tx, domains.id, domain.registrable));
+    // A company that holds the domain is linked with no lock; only a write that may make one takes the domain's
+    // lock, then looks again, so it finds a company another write made meanwhile (READ COMMITTED).
+    let held = await holder(step.tx);
+    if (held === undefined) {
+      await step.tx.execute(
+        sql`select pg_advisory_xact_lock(hashtextextended(${`company-domain:${scope.workspaceId}:${domain.registrable}`}, 0))`,
+      );
+      held = await holder(step.tx);
+    }
     let recordId = held;
     if (recordId === undefined) {
-      if ('room' in input.slots && input.slots.room < 1) return undefined;
+      if (room === undefined) await checkRecordRoom(step.tx, step.scope, step.deferredSlots() + 1);
+      else if (room < 1) return undefined;
       await checkObject(step.tx, step.scope.access, companies, 'write');
       const made = await writes.insert(
         step,
@@ -280,7 +306,7 @@ export async function fileCompany(
         },
         { attributes: companyAttributes, countsSlots: true },
       );
-      if ('pending' in input.slots) await takeRecordSlots(step.tx, step.scope, 1, input.slots.pending);
+      if (room === undefined) step.deferSlots(1);
       recordId = made.recordId;
     }
     const reference = { objectId: companies, recordId };

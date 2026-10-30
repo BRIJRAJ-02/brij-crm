@@ -357,4 +357,82 @@ describe('filing with the actor’s own access (AC-5919)', () => {
     expect(made.filedCompany).toBeUndefined();
     expect(await w.companiesCount()).toBe(0);
   });
+
+  it('files nothing when Domains is hidden from the actor, or the holder is outside their record rule', async () => {
+    const w = await workspace();
+    await w.company('Newco', ['newco.io']);
+    const domainsHidden = rescope(w.scope, {
+      actor: { type: 'member', id: w.memberId },
+      role: 'member',
+      rules: {
+        levels: [
+          {
+            subject: { type: 'role', role: 'member' },
+            target: { type: 'attribute', objectId: w.companies, attributeId: w.id('companies.domains') },
+            level: 'hidden',
+          },
+        ],
+        records: [],
+      },
+    });
+    const hidden = await w.person(['fay@newco.io'], {}, domainsHidden);
+    expect(hidden.filedCompany).toBeUndefined();
+    expect(await w.linked(hidden.recordId)).toEqual([]);
+
+    // The member owns no company, so Newco is outside their rule: no link, and no second Newco either.
+    const ruled = rescope(w.scope, {
+      actor: { type: 'member', id: w.memberId },
+      role: 'member',
+      rules: {
+        levels: [],
+        records: [
+          {
+            subject: { type: 'role', role: 'member' },
+            objectId: w.companies,
+            kind: 'own',
+            attributeId: w.id('companies.owner'),
+          },
+        ],
+      },
+    });
+    const outside = await w.person(['gil@newco.io'], {}, ruled);
+    expect(outside.filedCompany).toBeUndefined();
+    expect(await w.holders('newco.io')).toHaveLength(1);
+  });
+
+  it('answers no name when Name is hidden from the actor', async () => {
+    const w = await workspace();
+    const nameHidden = rescope(w.scope, {
+      actor: { type: 'member', id: w.memberId },
+      role: 'member',
+      rules: {
+        levels: [
+          {
+            subject: { type: 'role', role: 'member' },
+            target: { type: 'attribute', objectId: w.companies, attributeId: w.id('companies.name') },
+            level: 'hidden',
+          },
+        ],
+        records: [],
+      },
+    });
+    await w.company('Newco', ['newco.io']);
+    const linked = await w.person(['hal@newco.io'], {}, nameHidden);
+    expect(linked.filedCompany).toMatchObject({ name: '', made: false });
+  });
+});
+
+describe('an undo’s write (spec 0059, AC-5920)', () => {
+  it('files nothing, so putting an old email back never links the person again', async () => {
+    const w = await workspace();
+    const { recordId } = await w.person([]);
+    const undone = await setRecordValues(
+      w.scope,
+      { recordId, values: { [w.id('people.email_addresses')]: { value: ['ivy@initech.com'] } } },
+      [],
+      { noFiling: true },
+    );
+    expect(undone.filedCompany).toBeUndefined();
+    expect(await w.linked(recordId)).toEqual([]);
+  });
 });

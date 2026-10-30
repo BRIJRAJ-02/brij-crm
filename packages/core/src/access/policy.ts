@@ -302,8 +302,9 @@ export function keyAccess(keyId: string, scopes: readonly string[]): Access {
  * hidden, and every other object out of reach. With no object (the public
  * endpoints, before processing) it reaches no data at all. A form filing
  * People also files the person's company by their email (spec 0059,
- * AC-5916): `filing` adds write on Companies and on the person's Company
- * attribute, and nothing else.
+ * AC-5916): `filing` adds write on Companies with every attribute filing
+ * never writes hidden (`unwritten`: all but Domains and Name), and on the
+ * person's Company attribute, and nothing else.
  */
 export function formAccess(
   formId: string,
@@ -311,16 +312,23 @@ export function formAccess(
     readonly objectId: string;
     readonly attributeIds: readonly string[];
     readonly writable: ReadonlySet<string>;
-    readonly filing?: { readonly companies: string; readonly companyAttributeId: string };
+    readonly filing?: {
+      readonly companies: string;
+      readonly companyAttributeId: string;
+      readonly unwritten: readonly string[];
+    };
   },
 ): Access {
   const filing = target?.filing;
-  const fields =
+  const fields: [string, FieldLevel][] =
     target === undefined
       ? []
-      : target.attributeIds.flatMap((id): [string, FieldLevel][] =>
-          target.writable.has(id) || id === filing?.companyAttributeId ? [] : [[id, 'hidden']],
-        );
+      : [
+          ...target.attributeIds.flatMap((id): [string, FieldLevel][] =>
+            target.writable.has(id) || id === filing?.companyAttributeId ? [] : [[id, 'hidden']],
+          ),
+          ...(filing?.unwritten ?? []).map((id): [string, FieldLevel] => [id, 'hidden']),
+        ];
   const objects: [string, ObjectLevel][] =
     target === undefined
       ? []

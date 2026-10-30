@@ -231,19 +231,37 @@ export function createUndoStack(depth: number = UNDO_DEPTH, cellBudget: number =
       const stack = stacks.get(workspace);
       if (stack === undefined || handOver.size === 0) return;
       const now = (cell: UndoCell) => handOver.get(`${cell.recordId}:${cell.attributeId}:${cell.writtenVersionId}`);
+      // A filed link the undo wrote over is handed on the same way (spec 0059), so a later press still takes it back.
+      const nowFiled = (link: FiledLink) => handOver.get(`${link.recordId}:${link.attributeId}:${link.linkVersionId}`);
+      const handed = (link: FiledLink): FiledLink => {
+        const to = nowFiled(link);
+        return to === undefined ? link : { ...link, linkVersionId: to };
+      };
       stacks.set(
         workspace,
-        stack.map((entry) =>
-          isCellsEntry(entry) && entry.cells.some((cell) => now(cell) !== undefined)
-            ? {
-                ...entry,
-                cells: entry.cells.map((cell) => {
-                  const to = now(cell);
-                  return to === undefined ? cell : { ...cell, writtenVersionId: to };
-                }),
-              }
-            : entry,
-        ),
+        stack.map((entry) => {
+          if (entry.kind === 'create') {
+            return entry.filed === undefined || nowFiled(entry.filed) === undefined
+              ? entry
+              : { ...entry, filed: handed(entry.filed) };
+          }
+          if (!isCellsEntry(entry)) return entry;
+          const filed = entry.filed ?? [];
+          if (
+            !entry.cells.some((cell) => now(cell) !== undefined) &&
+            !filed.some((link) => nowFiled(link) !== undefined)
+          ) {
+            return entry;
+          }
+          return {
+            ...entry,
+            cells: entry.cells.map((cell) => {
+              const to = now(cell);
+              return to === undefined ? cell : { ...cell, writtenVersionId: to };
+            }),
+            ...(entry.filed === undefined ? {} : { filed: entry.filed.map(handed) }),
+          };
+        }),
       );
     },
     pop: (workspace) => {

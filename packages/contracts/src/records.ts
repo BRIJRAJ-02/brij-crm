@@ -381,6 +381,11 @@ export const SetValuesInput = WorkspaceScoped.extend({
   values: z.record(z.uuid(), ValueChangeInput),
   timeZone: WriteTimeZone,
   mutationId: Uuid,
+  /**
+   * An undo putting old values back (spec 0059): it files no company, so
+   * undoing an email change never links the person again.
+   */
+  noFiling: z.boolean().optional(),
 });
 /** New values for one record. */
 export type SetValuesInput = z.infer<typeof SetValuesInput>;
@@ -442,6 +447,8 @@ export const SetValuesBatchInput = WorkspaceScoped.extend({
   items: z.array(BatchItem).max(MAX_BATCH_RECORDS * 2, `Change at most ${String(MAX_BATCH_RECORDS)} records at once.`),
   timeZone: WriteTimeZone,
   mutationId: Uuid,
+  /** An undo putting old values back (spec 0059): it files no company, as `SetValuesInput.noFiling`. */
+  noFiling: z.boolean().optional(),
 });
 /** New values for many records. */
 export type SetValuesBatchInput = z.infer<typeof SetValuesBatchInput>;

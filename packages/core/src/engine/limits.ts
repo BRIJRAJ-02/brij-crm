@@ -56,16 +56,8 @@ export function limitsOf(scope: EngineScope): Limits {
   return { ...LIMITS, ...scope.limits };
 }
 
-/**
- * Takes `amount` live record slots (or gives them back, when negative). With `reserved`, the records the write
- * makes after this and takes slots for then (a create's own, after its company filing, spec 0059) must fit too.
- */
-export async function takeRecordSlots(
-  tx: WorkspaceTx,
-  scope: EngineScope,
-  amount: number,
-  reserved = 0,
-): Promise<void> {
+/** Takes `amount` live record slots (or gives them back, when negative). */
+export async function takeRecordSlots(tx: WorkspaceTx, scope: EngineScope, amount: number): Promise<void> {
   const [row] = await tx
     .select({ liveRecords: workspaceCounters.liveRecords })
     .from(workspaceCounters)
@@ -73,13 +65,30 @@ export async function takeRecordSlots(
     .for('update');
   if (row === undefined) throw new Error('The workspace has no counters row.');
   const limit = limitsOf(scope).liveRecords;
-  if (amount > 0 && row.liveRecords + amount + reserved > limit) {
+  if (amount > 0 && row.liveRecords + amount > limit) {
     throw refuse('LIMIT_REACHED', `This workspace holds at most ${limit.toLocaleString('en')} records.`);
   }
   await tx
     .update(workspaceCounters)
     .set({ liveRecords: sql`${workspaceCounters.liveRecords} + ${amount}` })
     .where(eq(workspaceCounters.workspaceId, scope.workspaceId));
+}
+
+/**
+ * Refuses `LIMIT_REACHED` unless `amount` more records fit beside the live count, read without the counter row's
+ * lock (spec 0059): a write that defers its slots to its end (`WriteContext.deferSlots`) checks here as it makes
+ * each record, so a record past the limit is refused on its own, and the end's `takeRecordSlots` stays the
+ * guarantee under a race at the exact limit.
+ */
+export async function checkRecordRoom(tx: WorkspaceTx, scope: EngineScope, amount: number): Promise<void> {
+  const [row] = await tx
+    .select({ liveRecords: workspaceCounters.liveRecords })
+    .from(workspaceCounters)
+    .where(eq(workspaceCounters.workspaceId, scope.workspaceId));
+  const limit = limitsOf(scope).liveRecords;
+  if ((row?.liveRecords ?? 0) + amount > limit) {
+    throw refuse('LIMIT_REACHED', `This workspace holds at most ${limit.toLocaleString('en')} records.`);
+  }
 }
 
 /** Takes one custom object slot. */

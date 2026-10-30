@@ -13,7 +13,7 @@ import {
   type RecordRefDisplay,
 } from '@crm/contracts/values';
 import { fileCompany, type FilingSlots, type FilingWrites } from './filing.ts';
-import { takeRecordSlots } from './limits.ts';
+import { checkRecordRoom } from './limits.ts';
 import { decodeValue, encodeValue, sameItems } from './columns.ts';
 import { canonicalId, canonicalKeys, checkId, isUuid, isUuidV7 } from './ids.ts';
 import { isRefusal, postgresError, refuse, refuseAll, versionChangedMessage } from './refusals.ts';
@@ -428,11 +428,11 @@ export async function initialValues(
 
 /**
  * Creates one record inside a write (shared by single creates and batches).
- * Its record slot is taken last, after the record and its values are
- * written, as every write takes the workspace counter row last: the row is
- * held only for the end of the transaction, and a create never holds it
- * while it waits on another write's unique value. A full workspace refuses
- * there, and the refusal rolls the record and its values back.
+ * Its record slot is counted with the write's (`deferSlots`) and taken at
+ * the write's end, as every write takes the workspace counter row last: the
+ * row is held only for the end of the transaction, and a create never holds
+ * it while it waits on another write's unique value or a company filing's
+ * domain lock. A full workspace refuses the record here, with its values.
  */
 export async function insertRecord(context: WriteContext, input: RecordInput, known?: InsertKnown) {
   const { tx, scope } = context;
@@ -487,8 +487,13 @@ export async function insertRecord(context: WriteContext, input: RecordInput, kn
   // (up to 10 minutes is let through) would sort after later writes' versions, so those creates mint as any write
   // does, and their first values show as entries of their own.
   const versions = await writeAll(context, 'record', recordId, parsed, stampable ? recordId : undefined, hold);
-  // A person's company from their email (spec 0059), before the record's own slot: its lock comes before the
-  // counter row, as on an edit, and a company it makes leaves room for this record.
+  // The record's slot is counted now and taken at the write's end (spec 0059), so the counter row is the last
+  // lock this write takes; a record past the limit is still refused here, on its own.
+  if (known === undefined) {
+    await checkRecordRoom(tx, scope, context.deferredSlots() + 1);
+    context.deferSlots(1);
+  }
+  // A person's company from their email (spec 0059).
   const filedCompany = await fileCompany(
     context,
     {
@@ -496,11 +501,10 @@ export async function insertRecord(context: WriteContext, input: RecordInput, kn
       objectId,
       attributes,
       written: writtenIds(versions),
-      slots: known === undefined ? { pending: 1 } : { room: known.fileRoom ?? 0 },
+      slots: known === undefined ? 'deferred' : { room: known.fileRoom ?? 0 },
     },
     FILING_WRITES,
   );
-  if (known === undefined) await takeRecordSlots(tx, scope, 1);
   // The object's attributes go back too, so a read back after the write doesn't load them again.
   return { recordId, versions, objectId, attributes, ...(filedCompany === undefined ? {} : { filedCompany }) };
 }
@@ -595,7 +599,7 @@ async function updateOwner(
    */
   deltasOnly = false,
   /** How a company the person's filing makes is counted (spec 0059): its slot taken at once, unless a batch says. */
-  slots: FilingSlots = { pending: 0 },
+  slots: FilingSlots = 'deferred',
 ): Promise<{
   results: Record<string, AttributeResult>;
   objectId?: string;
@@ -790,8 +794,11 @@ export async function setRecordValues(
   scope: EngineScope,
   input: RecordValues,
   hooks: readonly AfterWrite[] = [],
-  /** Refuse a side that holds many, as the API's `records.setValues` does (spec 0014, AC-294). */
-  options: { readonly deltasOnly?: boolean } = {},
+  /**
+   * Refuse a side that holds many, as the API's `records.setValues` does (spec 0014, AC-294); with `noFiling`, an
+   * undo's write, file no company (spec 0059).
+   */
+  options: { readonly deltasOnly?: boolean; readonly noFiling?: boolean } = {},
 ): Promise<{
   readonly results: Record<string, AttributeResult>;
   readonly attributesByObject: ReadonlyMap<string, ReadonlyMap<string, AttributeDef>>;
@@ -800,7 +807,15 @@ export async function setRecordValues(
 }> {
   const { result } = await runWrite(
     scope,
-    (context) => updateOwner(context, input, undefined, true, options.deltasOnly === true),
+    (context) =>
+      updateOwner(
+        context,
+        input,
+        undefined,
+        true,
+        options.deltasOnly === true,
+        options.noFiling === true ? 'off' : 'deferred',
+      ),
     hooks,
   );
   const { objectId, filedCompany } = result;
@@ -847,7 +862,12 @@ export async function setValuesBatch(
  */
 export async function setRecordValuesBatch(
   scope: EngineScope,
-  input: { readonly items: readonly RecordValues[]; readonly timeZone?: string },
+  input: {
+    readonly items: readonly RecordValues[];
+    readonly timeZone?: string;
+    /** An undo's write: it files no company (spec 0059). */
+    readonly noFiling?: boolean;
+  },
   hooks: readonly AfterWrite[] = [],
 ): Promise<{
   readonly outcomes: readonly BatchResult[];
@@ -866,7 +886,14 @@ export async function setRecordValuesBatch(
       const visible = await batchVisible(context, input.items);
       for (const item of input.items) {
         const outcome = await context.perRecord((child) =>
-          updateOwner(child, input.timeZone === undefined ? item : { ...item, timeZone: input.timeZone }, visible),
+          updateOwner(
+            child,
+            input.timeZone === undefined ? item : { ...item, timeZone: input.timeZone },
+            visible,
+            false,
+            false,
+            input.noFiling === true ? 'off' : 'deferred',
+          ),
         );
         const recordId = canonicalId(item.recordId);
         if (outcome.ok && outcome.value.objectId !== undefined) {

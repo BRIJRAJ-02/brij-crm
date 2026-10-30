@@ -22,7 +22,7 @@ import { exportToast, isHere } from './features/imports/toast.ts';
 import { jobFinishedToast } from './features/settings/toast.ts';
 import { bulkActionOf } from './features/workspace/bulk-jobs.ts';
 import { jobsHref } from './features/workspace/objects.ts';
-import { FILED_TOAST_MS, filedToast, unfiledToast } from './features/workspace/filed.ts';
+import { FILED_TOAST_MS, filedStrings, filedToast, unfiledToast } from './features/workspace/filed.ts';
 import { replacedToast } from './features/workspace/replaced.ts';
 import { startMonitoring } from './monitoring/index.ts';
 import { routeTree } from './routeTree.gen.ts';
@@ -112,10 +112,15 @@ const data = createDataLayer({
   onFiled: (filed) => {
     toasts.toast(
       filedToast(filed, () => {
-        void filed.undo().then((outcome) => {
-          const toast = unfiledToast(outcome);
-          if (toast !== undefined) toasts.toast(toast);
-        });
+        void filed.undo().then(
+          (outcome) => {
+            const toast = unfiledToast(outcome);
+            if (toast !== undefined) toasts.toast(toast);
+          },
+          () => {
+            toasts.toast({ tone: 'danger', message: filedStrings.undoFailed });
+          },
+        );
       }),
       { timeout: FILED_TOAST_MS },
     );

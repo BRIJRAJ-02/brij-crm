@@ -205,6 +205,7 @@ export const recordsRouter = member.records.router({
           recordId: input.recordId,
           values: input.values,
           ...(input.timeZone === undefined ? {} : { timeZone: input.timeZone }),
+          ...(input.noFiling === true ? { noFiling: true } : {}),
         },
         hooks,
       ),
@@ -221,7 +222,11 @@ export const recordsRouter = member.records.router({
     const { result, echoes } = await commitCounted(context, { mutationId: input.mutationId }, (hooks) =>
       editRecords(
         context.scope,
-        { items: input.items, ...(input.timeZone === undefined ? {} : { timeZone: input.timeZone }) },
+        {
+          items: input.items,
+          ...(input.timeZone === undefined ? {} : { timeZone: input.timeZone }),
+          ...(input.noFiling === true ? { noFiling: true } : {}),
+        },
         hooks,
       ),
     );

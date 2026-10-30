@@ -14,11 +14,18 @@ export const filedStrings = {
   undo: 'Undo',
   linked: (name: string) => (name === '' ? 'Linked to their company.' : `Linked to ${name}.`),
   added: (name: string) => (name === '' ? 'Added their company and linked it.' : `Added ${name} and linked it.`),
-  linkedMany: (count: number) => `Linked ${String(count)} people to their companies.`,
+  linkedMany: (count: number, made: number) =>
+    made === 0
+      ? `Linked ${String(count)} people to their companies.`
+      : `Linked ${String(count)} people to companies, ${String(made)} of them new.`,
   /** The link taken back; with the company the write made, that went to the trash too. */
   unlinked: (name: string) => (name === '' ? 'Removed the company link.' : `Removed the link to ${name}.`),
-  unlinkedMany: (count: number) => `Removed ${String(count)} company links.`,
-  removed: (name: string) => (name === '' ? 'Removed the company it added.' : `Removed ${name}.`),
+  unlinkedMany: (count: number, trashed: number) =>
+    trashed === 0
+      ? `Removed ${String(count)} company links.`
+      : `Removed ${String(count)} company links and deleted ${String(trashed)} ${trashed === 1 ? 'company' : 'companies'} it added.`,
+  removed: (name: string) =>
+    name === '' ? 'Deleted the company it added and removed the link.' : `Deleted ${name} and removed the link.`,
   /** A company the write made, kept: something else links to it now. */
   inUse: (count: number) =>
     count === 1
@@ -28,14 +35,24 @@ export const filedStrings = {
   keptSince: (count: number) =>
     count === 1
       ? 'Company was changed since, so it was kept.'
-      : `${String(count)} people’s Company was changed since, so it was kept.`,
-  gone: 'That link can’t be undone any more.',
+      : `${String(count)} people’s Company values were changed since, so they were kept.`,
+  /** A company the write made that couldn't be deleted (no delete rights, the network): what to do next. */
+  notDeleted: (count: number) =>
+    count === 1
+      ? 'The company it added wasn’t deleted. Delete it from Companies if you don’t need it.'
+      : `${String(count)} companies it added weren’t deleted. Delete them from Companies if you don’t need them.`,
+  /** Its action was undone already (Cmd+Z takes the filing back with it), or it fell off the undo history. */
+  gone: 'Already undone.',
+  /** The Undo itself failed (the network): nothing was taken back. */
+  undoFailed: 'Couldn’t undo the link. Check your connection, then clear Company on the person.',
 } as const;
 
 /** "Linked to Acme." or "Added Acme and linked it.", or for a paste, how many people were linked. */
 function filedWords(notice: FiledNotice): string {
   const [only] = notice.companies;
-  if (notice.companies.length !== 1 || only === undefined) return filedStrings.linkedMany(notice.companies.length);
+  if (notice.companies.length !== 1 || only === undefined) {
+    return filedStrings.linkedMany(notice.companies.length, notice.companies.filter((each) => each.made).length);
+  }
   return only.made ? filedStrings.added(only.name) : filedStrings.linked(only.name);
 }
 
@@ -54,7 +71,7 @@ export function filedToast(notice: FiledNotice, onUndo: () => void): ToastConten
  * raised their own toast with Retry).
  */
 export function unfiledToast(outcome: UnfileOutcome): ToastContent | undefined {
-  if (outcome.kind === 'gone') return { tone: 'danger', message: filedStrings.gone };
+  if (outcome.kind === 'gone') return { tone: 'success', message: filedStrings.gone };
   const parts = [
     outcome.unlinked === 0
       ? undefined
@@ -62,10 +79,12 @@ export function unfiledToast(outcome: UnfileOutcome): ToastContent | undefined {
         ? filedStrings.removed(outcome.name)
         : outcome.unlinked === 1
           ? filedStrings.unlinked(outcome.name)
-          : filedStrings.unlinkedMany(outcome.unlinked),
+          : filedStrings.unlinkedMany(outcome.unlinked, outcome.trashed),
     outcome.inUse > 0 ? filedStrings.inUse(outcome.inUse) : undefined,
     outcome.kept > 0 ? filedStrings.keptSince(outcome.kept) : undefined,
+    outcome.failed > 0 ? filedStrings.notDeleted(outcome.failed) : undefined,
   ].filter((part) => part !== undefined);
   if (parts.length === 0) return undefined;
-  return { tone: outcome.unlinked === 0 ? 'danger' : 'success', message: parts.join(' ') };
+  // A company left behind for a failure asks for a step; one kept because Company changed is no failure (as undo.ts).
+  return { tone: outcome.failed > 0 ? 'danger' : 'success', message: parts.join(' ') };
 }

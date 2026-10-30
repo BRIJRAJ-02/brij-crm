@@ -3143,7 +3143,15 @@ describe('a company a write filed the person under (spec 0059, AC-5920)', () => 
     await settle();
     expect(deletes[0]?.input).toMatchObject({ objectId: COMPANIES, recordIds: [ACME], unlinkedOnly: true });
     deletes[0]?.answer([{ recordId: ACME, state: 'deleted' }]);
-    expect(await undoing).toEqual({ kind: 'unfiled', name: 'Acme', unlinked: 1, kept: 0, trashed: 1, inUse: 0 });
+    expect(await undoing).toEqual({
+      kind: 'unfiled',
+      name: 'Acme',
+      unlinked: 1,
+      kept: 0,
+      trashed: 1,
+      inUse: 0,
+      failed: 0,
+    });
     // The create is still on the stack, without its filing: Cmd+Z trashes the person alone.
     expect(layer.undo.depth(WS)).toBe(1);
     const undone = layer.undo.run(WS);
@@ -3197,6 +3205,8 @@ describe('a company a write filed the person under (spec 0059, AC-5920)', () => 
       [CITY]: { value: 'London', ifVersionId: version(2) },
       [COMPANY]: { value: null, ifVersionId: version(7) },
     });
+    // Putting an old email back never files the person again.
+    expect(edits[1]?.input.noFiling).toBe(true);
     edits[1]?.answer({
       ...rowOf(idAt(1), { [NAME]: 'P1', [CITY]: 'London', [COMPANY]: null }, { [CITY]: version(3) }, 3),
       written: { [CITY]: version(3), [COMPANY]: version(3) },
@@ -3222,7 +3232,15 @@ describe('a company a write filed the person under (spec 0059, AC-5920)', () => 
         refusals: [{ code: 'VERSION_CHANGED', message: 'Company changed.', attributeId: COMPANY }],
       }),
     );
-    expect(await undoing).toEqual({ kind: 'unfiled', name: 'Acme', unlinked: 0, kept: 1, trashed: 0, inUse: 0 });
+    expect(await undoing).toEqual({
+      kind: 'unfiled',
+      name: 'Acme',
+      unlinked: 0,
+      kept: 1,
+      trashed: 0,
+      inUse: 0,
+      failed: 0,
+    });
     expect(deletes).toHaveLength(0);
   });
 });

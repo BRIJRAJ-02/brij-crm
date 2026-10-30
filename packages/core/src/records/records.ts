@@ -275,6 +275,8 @@ export interface EditRecordInput {
   readonly values: Readonly<Record<string, ValueInput>>;
   /** The writer's time zone, for a rule's relative dates (spec 0013); UTC when absent. */
   readonly timeZone?: string | undefined;
+  /** An undo putting old values back: it files no company (spec 0059). */
+  readonly noFiling?: boolean | undefined;
 }
 
 /**
@@ -298,7 +300,7 @@ export async function editRecord(
       ...(input.timeZone === undefined ? {} : { timeZone: input.timeZone }),
     },
     hooks,
-    { deltasOnly: true },
+    { deltasOnly: true, ...(input.noFiling === true ? { noFiling: true } : {}) },
   );
   return {
     record: await freshRecord(scope, canonicalId(input.recordId), attributesByObject),
@@ -312,6 +314,8 @@ export interface EditRecordsInput {
   readonly items: readonly EditRecordInput[];
   /** The writer's time zone, for every record's rules (spec 0013); UTC when absent. */
   readonly timeZone?: string | undefined;
+  /** An undo putting old values back: it files no company (spec 0059). */
+  readonly noFiling?: boolean | undefined;
 }
 
 /** What a record that landed and then went to the trash before its read back answers. */
@@ -333,7 +337,11 @@ export async function editRecords(
 ): Promise<BatchRecordResult[]> {
   const { outcomes, attributesByObject } = await setRecordValuesBatch(
     scope,
-    { items: input.items, ...(input.timeZone === undefined ? {} : { timeZone: input.timeZone }) },
+    {
+      items: input.items,
+      ...(input.timeZone === undefined ? {} : { timeZone: input.timeZone }),
+      ...(input.noFiling === true ? { noFiling: true } : {}),
+    },
     hooks,
   );
   const landed = [...new Set(outcomes.flatMap((outcome) => (outcome.ok ? [outcome.recordId] : [])))];

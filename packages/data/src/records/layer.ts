@@ -49,6 +49,7 @@ import {
   createOwnVersions,
   createUndoStack,
   filedOf,
+  isCellsEntry,
   withoutFiled,
   type DeleteEntry,
   type FiledLink,
@@ -267,6 +268,8 @@ interface WriteOptions {
   readonly mutationId?: string;
   /** Refusals that roll back with no cell mark (an undo's `VERSION_CHANGED`, which its own toast counts). */
   readonly quiet?: ReadonlySet<string>;
+  /** An undo putting old values back: the server files no company for it (spec 0059). */
+  readonly noFiling?: boolean;
 }
 
 /** How one record's part of a write ended: landed (`row`), refused (`failure`), or gone on the server. */
@@ -320,6 +323,8 @@ export type DeleteResult =
       readonly reason?: string;
       readonly recordName?: string;
       readonly undoId?: string;
+      /** With `unlinkedOnly` (spec 0059): how many of the refused stayed because something links to them. */
+      readonly inUse?: number;
     };
 
 /**
@@ -439,6 +444,8 @@ export type UnfileOutcome =
       readonly kept: number;
       readonly trashed: number;
       readonly inUse: number;
+      /** Made companies that stayed for another reason (no delete rights, the network): never said to be in use. */
+      readonly failed: number;
     };
 
 /**
@@ -2095,8 +2102,16 @@ export function createRecordsLayer({
     void mine.then((outcomes) => {
       const landedIds = outcomes.flatMap((outcome) => (outcome.row === undefined ? [] : [outcome.recordId]));
       if (landedIds.length === 0) return;
+      // A filing's Company link moves rows too (a view filtered or sorted by Company, spec 0059).
       const written = new Set(
-        outcomes.flatMap((outcome) => (outcome.row === undefined ? [] : outcome.cells.map((cell) => cell.attributeId))),
+        outcomes.flatMap((outcome) =>
+          outcome.row === undefined
+            ? []
+            : [
+                ...outcome.cells.map((cell) => cell.attributeId),
+                ...(outcome.filed === undefined ? [] : [outcome.filed.attributeId]),
+              ],
+        ),
       );
       for (const entry of viewsOf(workspace)) {
         if (!landedIds.some((id) => entry.shows(id))) continue;
@@ -2239,14 +2254,26 @@ export function createRecordsLayer({
       const [only] = live;
       if (live.length === 1 && only !== undefined) {
         const answer = await delivered(() =>
-          api.setValues({ workspace, mutationId, timeZone: timeZone(workspace), ...itemOf(only) }),
+          api.setValues({
+            workspace,
+            mutationId,
+            timeZone: timeZone(workspace),
+            ...itemOf(only),
+            ...(options.noFiling === true ? { noFiling: true } : {}),
+          }),
         );
         const { echoes, written, filedCompany, ...row } = answer;
         mutations.answered(mutationId, echoes);
         return [...outcomes, landedAs(only, row, written, filedCompany)];
       }
       const answer = await delivered(() =>
-        api.setValuesBatch({ workspace, mutationId, timeZone: timeZone(workspace), items: live.map(itemOf) }),
+        api.setValuesBatch({
+          workspace,
+          mutationId,
+          timeZone: timeZone(workspace),
+          items: live.map(itemOf),
+          ...(options.noFiling === true ? { noFiling: true } : {}),
+        }),
       );
       mutations.answered(mutationId, answer.echoes);
       const results = new Map(answer.results.map((result) => [result.recordId, result]));
@@ -2847,7 +2874,8 @@ export function createRecordsLayer({
       workspace,
       objectId,
       [...byRecord].map(([recordId, writes]) => ({ recordId, cells: writes })),
-      { quiet },
+      // Putting an old email back never files the person again (spec 0059).
+      { quiet, noFiling: true },
     );
     let kept = 0;
     const retry: RecordWrite[] = [];
@@ -2866,7 +2894,7 @@ export function createRecordsLayer({
       kept += outcome.cells.length - rest.length;
       if (rest.length > 0) retry.push({ recordId: outcome.recordId, cells: rest });
     }
-    const second = retry.length === 0 ? [] : await writeInRuns(workspace, objectId, retry, { quiet });
+    const second = retry.length === 0 ? [] : await writeInRuns(workspace, objectId, retry, { quiet, noFiling: true });
     for (const outcome of second) {
       if (outcome.failure?.code === 'VERSION_CHANGED') kept += outcome.cells.length;
       else settled.push(outcome);
@@ -2941,6 +2969,8 @@ export function createRecordsLayer({
       [filed.recordId],
       undefined,
       filed.made ? { createdIds: [filed.recordId] } : {},
+      // Filing never renames a company: chips keep its name while it is read again.
+      true,
     );
   }
 
@@ -2972,7 +3002,7 @@ export function createRecordsLayer({
   async function trashFiled(
     workspace: string,
     filed: readonly FiledLink[],
-  ): Promise<{ readonly trashed: number; readonly inUse: number }> {
+  ): Promise<{ readonly trashed: number; readonly inUse: number; readonly failed: number }> {
     const byObject = new Map<string, string[]>();
     for (const each of filed) {
       if (!each.made) continue;
@@ -2980,16 +3010,19 @@ export function createRecordsLayer({
     }
     let trashed = 0;
     let inUse = 0;
+    let failed = 0;
     for (const [objectId, ids] of byObject) {
       const outcome = await trashRecords(workspace, objectId, ids, { undoable: false, unlinkedOnly: true });
       if (outcome.kind === 'done') {
         trashed += outcome.deleted;
-        inUse += ids.length - outcome.deleted;
+        inUse += outcome.inUse ?? 0;
+        // Refused for another reason (no delete rights, gone already): never said to be in use.
+        failed += outcome.refused - (outcome.inUse ?? 0);
       } else {
-        inUse += ids.length;
+        failed += ids.length;
       }
     }
-    return { trashed, inUse };
+    return { trashed, inUse, failed };
   }
 
   /**
@@ -3003,10 +3036,13 @@ export function createRecordsLayer({
       const entry = undo.find(workspace, id);
       const filed = entry === undefined ? [] : filedOf(entry);
       if (entry === undefined || filed.length === 0) return { kind: 'gone' };
-      undo.replace(workspace, withoutFiled(entry));
+      const rest = withoutFiled(entry);
+      // An edit that was only its filings leaves nothing to undo: it leaves the stack, so Cmd+Z skips nothing.
+      if (isCellsEntry(rest) && rest.cells.length === 0) undo.drop(workspace, id);
+      else undo.replace(workspace, rest);
       const { kept, landedKeys } = await undoCellsBack(workspace, entry.objectId, filedCells(filed));
       const cleared = filed.filter((each) => landedKeys.has(`${each.recordId}:${each.attributeId}`));
-      const { trashed, inUse } = await trashFiled(workspace, cleared);
+      const { trashed, inUse, failed } = await trashFiled(workspace, cleared);
       return {
         kind: 'unfiled',
         name: filed[0]?.company.name ?? '',
@@ -3014,6 +3050,7 @@ export function createRecordsLayer({
         kept,
         trashed,
         inUse,
+        failed,
       };
     });
   }
@@ -3130,6 +3167,7 @@ export function createRecordsLayer({
       ...(firstRefused?.refusal === undefined ? {} : { reason: firstRefused.refusal.message }),
       ...(recordName === undefined || deleted.length === 0 ? {} : { recordName }),
       ...(pushed ? { undoId: mutationId } : {}),
+      ...(unlinkedOnly ? { inUse: refused.filter((result) => result.refusal?.code === 'IN_USE').length } : {}),
     };
   }
 
@@ -3395,10 +3433,19 @@ export function createRecordsLayer({
         };
       }
       if (entry.kind === 'links') return undoLink(workspace, entry);
-      const [firstCell] = entry.cells;
-      if (firstCell === undefined) return { kind: 'nothing' };
-      // The edit's filings go back with it (spec 0059): each Company link in the same write as its record's cells.
       const filed = entry.filed ?? [];
+      const [firstCell] = entry.cells;
+      if (firstCell === undefined) {
+        // An edit whose cells were never read held only its filings (spec 0059): they go back on their own.
+        if (filed.length === 0) return { kind: 'nothing' };
+        const { landedKeys } = await undoCellsBack(workspace, entry.objectId, filedCells(filed));
+        await trashFiled(
+          workspace,
+          filed.filter((each) => landedKeys.has(`${each.recordId}:${each.attributeId}`)),
+        );
+        return { kind: 'nothing' };
+      }
+      // The edit's filings go back with it (spec 0059): each Company link in the same write as its record's cells.
       const own = new Set(entry.cells.map((cell) => `${cell.recordId}:${cell.attributeId}`));
       const { kept, failed, landedKeys } = await undoCellsBack(workspace, entry.objectId, [
         ...entry.cells,
