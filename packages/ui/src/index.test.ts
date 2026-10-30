@@ -192,6 +192,7 @@ describe('@crm/ui', () => {
       'TagList',
       'TaskList',
       'TeamList',
+      'TeamWeek',
       'ThemeSwitch',
       'TileGrid',
       'ToggleButton',

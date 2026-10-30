@@ -143,12 +143,7 @@ import {
   type StepUpResult,
 } from './account/security.ts';
 import { createAccountSessionsStore, type AccountSessionsView, type SignOutOthersResult } from './account/sessions.ts';
-import {
-  createEmailPreferences,
-  createEmailUnsubscribe,
-  type EmailPreferencesStore,
-  type EmailUnsubscribeStore,
-} from './email-preferences.ts';
+import type { EmailPreferencesStore, EmailUnsubscribeStore } from './email-preferences.ts';
 import {
   connectUrl,
   createCalendarStore,
@@ -180,6 +175,18 @@ export type {
   TimeOffState,
   TimeOffStore,
 } from './scheduling/time-off.ts';
+export type {
+  DayHours,
+  TeamWeek,
+  TeamWeekDay,
+  TeamWeekHeld,
+  TeamWeekRow,
+  TeamWeekSource,
+  TeamWeekState,
+  TeamWeekStore,
+  TeamWeekTotal,
+  WeeklyHours,
+} from './scheduling/team-week.ts';
 import {
   createPreferencesStore,
   type MemberPreferences,
@@ -1373,8 +1380,9 @@ export function createDataLayer({
 
   const auth = createAuth({ origin, fetch, reset, report: reportSafely });
   // Email preferences pages (the emails lane), one store per link's token for the app load, and the one click's.
-  const emailPreferenceStores = new Map<string, EmailPreferencesStore>();
-  const emailUnsubscribeStores = new Map<string, EmailUnsubscribeStore>();
+  // Their module loads with the page (`import()`), never in the first load: only an email's link opens it.
+  const emailPreferenceStores = new Map<string, Promise<EmailPreferencesStore>>();
+  const emailUnsubscribeStores = new Map<string, Promise<EmailUnsubscribeStore>>();
 
   /** Reads a per workspace list once, dropping it from the cache when it fails, so the next call asks again. */
   function cached<T>(cache: Map<string, Promise<T>>, key: string, load: () => Promise<T>): Promise<T> {
@@ -1807,6 +1815,8 @@ export function createDataLayer({
       () => {
         schedulesDue.delete(workspace);
         schedules.changed(workspace);
+        // The Team week reads the same schedules (spec 0037, job J6).
+        accessLoaded?.teamWeek.changed(workspace);
       },
       100 + Math.round(random() * 300),
     );
@@ -2125,6 +2135,7 @@ export function createDataLayer({
         api: wireApi({ client: api, call: (run) => call(run), beforeRead, mintId }),
         mintId,
         notify,
+        watch,
       });
       return accessLoaded;
     }));
@@ -6010,26 +6021,25 @@ export function createDataLayer({
     /**
      * A member's email preferences, opened by an email's link with no session
      * (the emails lane): one store per link's token, the page's one copy, its
-     * changes shown at once and put back on a refusal.
+     * changes shown at once and put back on a refusal. Its module loads on
+     * first use, so the store comes as a promise for the route's loader.
      */
-    emailPreferences: (token: string): EmailPreferencesStore => {
-      const held = emailPreferenceStores.get(token);
-      if (held !== undefined) return held;
-      const made = createEmailPreferences({ origin, fetch }, token);
-      emailPreferenceStores.set(token, made);
-      return made;
-    },
+    emailPreferences: (token: string): Promise<EmailPreferencesStore> =>
+      cached(emailPreferenceStores, token, () =>
+        import('./email-preferences.ts').then(({ createEmailPreferences }) =>
+          createEmailPreferences({ origin, fetch }, token),
+        ),
+      ),
     /**
      * An optional email's one click unsubscribe opened in a browser (the
      * emails lane): one store per link's token, which asks before it posts.
      */
-    emailUnsubscribe: (token: string): EmailUnsubscribeStore => {
-      const held = emailUnsubscribeStores.get(token);
-      if (held !== undefined) return held;
-      const made = createEmailUnsubscribe({ origin, fetch }, token);
-      emailUnsubscribeStores.set(token, made);
-      return made;
-    },
+    emailUnsubscribe: (token: string): Promise<EmailUnsubscribeStore> =>
+      cached(emailUnsubscribeStores, token, () =>
+        import('./email-preferences.ts').then(({ createEmailUnsubscribe }) =>
+          createEmailUnsubscribe({ origin, fetch }, token),
+        ),
+      ),
   };
 }
 

@@ -436,6 +436,12 @@ export const ACCESS_TABLE = {
   createTimeOff: { scheduling: 'manage' },
   updateTimeOff: { scheduling: 'manage' },
   deleteTimeOff: { scheduling: 'manage' },
+  // The Team week (spec 0037, AC-1289 to AC-1293): rows from the reader's See reach (themself at least); a cell, a
+  // copied week and usual hours need Manage over each member's hours (their own with `availability.own`).
+  readTeamWeek: { filtered: 'schedulingReach' },
+  setDayHours: { scheduling: 'manage' },
+  copyWeek: { scheduling: 'manage' },
+  setUsualHours: { scheduling: 'manage' },
   bookAsHost: { scheduling: 'manage' },
   // Changing a booking from Bookings (spec 0025, milestone 2): booking.manage first, then the booking's row.
   hostTarget: { bookingPages: true },

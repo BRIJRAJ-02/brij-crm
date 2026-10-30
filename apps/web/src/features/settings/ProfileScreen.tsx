@@ -40,7 +40,8 @@ import {
 } from './socials-slot.tsx';
 import { strings as socialsCopy } from './socials-strings.ts';
 import { strings as securityCopy } from './security-strings.ts';
-import { strings, type GooglePhotoResult } from './workspace-strings.ts';
+import type { GooglePhotoResult } from './google-photo-result.ts';
+import { strings } from './workspace-strings.ts';
 
 /** Props for the Profile page. */
 export interface ProfileScreenProps {

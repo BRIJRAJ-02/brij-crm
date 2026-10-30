@@ -15,7 +15,10 @@ import { and, asc, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
 import {
   DEFAULT_SCHEDULE_NAME,
   PERMISSIONS,
+  SCHEDULE_OVERRIDES_FULL,
+  SCHEDULE_OVERRIDES_MAX,
   SCHEDULES_MAX,
+  TEAM_WEEK,
   type BookingAvailability,
   type ScheduleList,
   type ScheduleMembers,
@@ -45,7 +48,8 @@ import { fallbackZoneOf } from '../booking/slots.ts';
 
 const { availabilitySchedules, bookingPageMembers, bookingPages, members } = schema;
 
-type ScheduleRow = typeof availabilitySchedules.$inferSelect;
+/** A stored schedule row. */
+export type ScheduleRow = typeof availabilitySchedules.$inferSelect;
 
 const NOT_FOUND_MESSAGE = 'That schedule doesn’t exist, or isn’t yours.';
 const LIMIT_MESSAGE = `You have ${String(SCHEDULES_MAX)} schedules. Delete one to make another.`;
@@ -64,7 +68,7 @@ export function mayEditOwnHours(scope: EngineScope): boolean {
 }
 
 /** Why the reader can't change their own hours: no `booking.manage`, or hours set by others (AC-1260). */
-function ownHoursRefusal(scope: EngineScope) {
+export function ownHoursRefusal(scope: EngineScope) {
   return can(scope.access, 'booking.manage')
     ? refuse('FORBIDDEN', HOURS_SET_BY_OTHERS)
     : refuse('FORBIDDEN', PERMISSIONS['booking.manage'].message);
@@ -128,7 +132,7 @@ async function targetMember(
  * What one schedule write changed, for the seam after it: whose schedules, the kind of write, and each schedule it
  * touched as it was and as it is now (no `before` on a schedule it made, no `after` on one it deleted).
  */
-interface ScheduleChange {
+export interface ScheduleChange {
   readonly kind: 'create' | 'update' | 'set_default' | 'duplicate' | 'delete' | 'default_hours';
   readonly memberId: string;
   readonly schedules: readonly { readonly id: string; readonly before?: ScheduleRow; readonly after?: ScheduleRow }[];
@@ -204,18 +208,22 @@ function scheduleAuditSides(
  * the outbox records its schedule ids (one `schedules` row) and `afterScheduleChange` sees it, in the same
  * transaction. A write that changes nothing (a retried create, the default set as default) answers no change.
  */
-async function writeSchedules<T>(
+export async function writeSchedules<T>(
   scope: EngineScope,
   hooks: readonly AfterWrite[],
-  body: (context: WriteContext) => Promise<{ readonly result: T; readonly change?: ScheduleChange }>,
+  body: (
+    context: WriteContext,
+  ) => Promise<{ readonly result: T; readonly change?: ScheduleChange | readonly ScheduleChange[] }>,
 ): Promise<T> {
   const { result } = await runWrite(
     scope,
     async (context) => {
       const { result: answer, change } = await body(context);
-      if (change !== undefined) {
-        context.record({ schedules: change.schedules.map((each) => each.id) });
-        await afterScheduleChange(context, scope, change);
+      // Several members' schedules in one write (the Team week's bulk actions): one audit row and notice each.
+      const changes: readonly ScheduleChange[] = change === undefined ? [] : 'kind' in change ? [change] : change;
+      if (changes.length > 0) {
+        context.record({ schedules: changes.flatMap((each) => each.schedules.map((one) => one.id)) });
+        for (const each of changes) await afterScheduleChange(context, scope, each);
       }
       return answer;
     },
@@ -225,7 +233,7 @@ async function writeSchedules<T>(
 }
 
 /** The lock on one member's schedules: every write to them takes it, so the limit, default and names hold. */
-const schedulesLock = (tx: WorkspaceTx, workspaceId: string, memberId: string) =>
+export const schedulesLock = (tx: WorkspaceTx, workspaceId: string, memberId: string) =>
   lockKey(tx, `availability:schedules:${workspaceId}:${memberId}`);
 
 /** The member's live pages and the schedule each names (null: the default), for "Used by" (AC-969). */
@@ -486,7 +494,7 @@ async function checkRoom(tx: WorkspaceTx, memberId: string, adding = 1): Promise
 }
 
 /** The member's stored default, if any. */
-async function storedDefault(tx: WorkspaceTx, memberId: string): Promise<ScheduleRow | undefined> {
+export async function storedDefault(tx: WorkspaceTx, memberId: string): Promise<ScheduleRow | undefined> {
   const [row] = await tx
     .select()
     .from(availabilitySchedules)
@@ -512,7 +520,71 @@ async function clearDefault(
   return after === undefined ? [] : [{ id: before.id, before, after }];
 }
 
-/** Inserts one schedule as the scope's actor. */
+/**
+ * The hours as a schedule write stores them (spec 0037, AC-1293): every date override dated more than 8 weeks before
+ * today dropped, so a member rostered week after week never fills the schedule; past `SCHEDULE_OVERRIDES_MAX` still,
+ * refused. Today is the database's own date (its session runs in UTC): a day either way is nothing against 8 weeks, and
+ * no zone Postgres might not know is ever handed to it.
+ */
+export async function keptHours(tx: WorkspaceTx, hours: BookingAvailability): Promise<BookingAvailability> {
+  let kept = hours;
+  if (hours.overrides.length > 0) {
+    const found = await tx.execute<{ cutoff: string }>(sql`
+      select (current_date - ${TEAM_WEEK.keptWeeks * 7}::int)::text as cutoff
+    `);
+    const cutoff = found.rows[0]?.cutoff;
+    if (cutoff !== undefined) {
+      const overrides = hours.overrides.filter((override) => override.date >= cutoff);
+      if (overrides.length !== hours.overrides.length) kept = { ...hours, overrides };
+    }
+  }
+  if (kept.overrides.length > SCHEDULE_OVERRIDES_MAX)
+    throw refuseOn('CONFIG_INVALID', SCHEDULE_OVERRIDES_FULL, 'availability');
+  return kept;
+}
+
+/**
+ * The Team week's write (spec 0037, AC-1291, AC-1292): new hours over a member's default schedule, under their
+ * schedules lock (the caller took it), kept by `keptHours`, as the actor; answers the change for the audit row and the
+ * notice, or undefined when nothing changed (a default this write stored always counts).
+ */
+export async function saveScheduleHours(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  target: { readonly row: ScheduleRow; readonly made: boolean },
+  hours: BookingAvailability,
+): Promise<{ readonly row: ScheduleRow; readonly change: ScheduleChange } | undefined> {
+  const availability = await keptHours(tx, hours);
+  const before = hoursOf(target.row.availability, availability.timeZone);
+  if (!target.made && JSON.stringify(before) === JSON.stringify(availability)) return undefined;
+  const by = actorRow(scope.actor);
+  const [updated] = await tx
+    .update(availabilitySchedules)
+    .set({
+      availability,
+      updatedAt: sql`greatest(now(), ${availabilitySchedules.updatedAt} + interval '1 microsecond')`,
+      updatedByType: by.type,
+      updatedById: by.id,
+      updatedByMemberId: by.memberId,
+    })
+    .where(eq(availabilitySchedules.id, target.row.id))
+    .returning();
+  if (updated === undefined) throw refuse('NOT_FOUND', 'That schedule doesn’t exist any more.');
+  return {
+    row: updated,
+    change: {
+      // A Team week write is an update of the default's hours, so History says it as one (spec 0046's lines).
+      kind: 'update',
+      memberId: updated.memberId,
+      // A default stored by this write shows as made, with the hours it now has.
+      schedules: [
+        target.made ? { id: updated.id, after: updated } : { id: updated.id, before: target.row, after: updated },
+      ],
+    },
+  };
+}
+
+/** Inserts one schedule as the scope's actor, its hours as `keptHours` stores them. */
 async function insertSchedule(
   tx: WorkspaceTx,
   scope: EngineScope,
@@ -525,12 +597,14 @@ async function insertSchedule(
   },
 ): Promise<ScheduleRow> {
   const by = actorRow(scope.actor);
+  const availability = await keptHours(tx, values.availability);
   try {
     const [row] = await tx
       .insert(availabilitySchedules)
       .values({
         workspaceId: scope.workspaceId,
         ...values,
+        availability,
         createdByType: by.type,
         createdById: by.id,
         createdByMemberId: by.memberId,
@@ -564,7 +638,7 @@ async function newestPageZone(tx: WorkspaceTx, memberId: string): Promise<string
  * 09:00 to 17:00 in `timeZone`, marked default. Should a schedule of theirs
  * already have that name, it takes the first free "Working hours 2", "… 3".
  */
-async function storeVirtualDefault(
+export async function storeVirtualDefault(
   tx: WorkspaceTx,
   scope: EngineScope,
   memberId: string,
@@ -673,10 +747,14 @@ export async function updateSchedule(
     }
     if (name !== undefined && name !== row.name) await checkNameFree(tx, row.memberId, name, row.id);
     const by = actorRow(scope.actor);
-    const availability =
+    const written =
       input.availability === undefined || row.memberId === memberOf(scope)
         ? input.availability
         : withNotesKept(input.availability, hoursOf(row.availability, input.availability.timeZone));
+    // Every write drops overrides older than 8 weeks (AC-1293), a rename's too: the stored hours go through it.
+    const stored = hoursOf(row.availability, 'UTC');
+    const pruned = written === undefined ? await keptHours(tx, stored) : undefined;
+    const availability = written !== undefined ? await keptHours(tx, written) : pruned === stored ? undefined : pruned;
     try {
       const [updated] = await tx
         .update(availabilitySchedules)
@@ -872,7 +950,7 @@ export async function saveDefaultHours(
     const [updated] = await tx
       .update(availabilitySchedules)
       .set({
-        availability: input.availability,
+        availability: await keptHours(tx, input.availability),
         updatedAt: sql`now()`,
         updatedByType: by.type,
         updatedById: by.id,

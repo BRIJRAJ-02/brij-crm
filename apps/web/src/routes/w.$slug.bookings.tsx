@@ -25,6 +25,8 @@ export const Route = createFileRoute('/w/$slug/bookings')({
 function BookingsRoute() {
   const { slug } = Route.useParams();
   const tab = useLocation({ select: (location) => bookingsTabOf(location.pathname) });
+  // The Roster (Availability's Team view) is a sidebar page of its own (spec 0037, the owner, 30 October 2026).
+  const isRoster = useLocation({ select: (location) => tab === 'availability' && location.search.view === 'team' });
   // A tab whose primary action is its own takes the TopBar's end in place of New meeting (one primary per
   // screen): Availability's New schedule, Round robin's New group, Calendars' Connect.
   const [actionSlot, setActionSlot] = useState<HTMLElement | null>(null);
@@ -40,7 +42,7 @@ function BookingsRoute() {
     <BookingsHosts value={hosts}>
       <BookingsActionSlot value={ownsAction ? actionSlot : null}>
         <WorkspacePage
-          currentPage="bookings"
+          currentPage={isRoster ? 'roster' : 'bookings'}
           page={{
             topBar: <BookingsTopBar slug={slug} actionSlot={ownsAction ? setActionSlot : undefined} />,
             body: (

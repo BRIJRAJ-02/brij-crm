@@ -538,6 +538,12 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       update: os.timeOff.update.handler(notServed),
       delete: os.timeOff.delete.handler(notServed),
     },
+    availability: {
+      teamWeek: os.availability.teamWeek.handler(notServed),
+      setDay: os.availability.setDay.handler(notServed),
+      copyWeek: os.availability.copyWeek.handler(notServed),
+      setUsualHours: os.availability.setUsualHours.handler(notServed),
+    },
     realtime: {
       connectionToken: os.realtime.connectionToken.handler(() => ({ token: 'connection-token' })),
       subscriptionToken: os.realtime.subscriptionToken.handler(({ input }) => ({

@@ -24,6 +24,14 @@ export const WEEKDAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as con
 export const BOOKING_RANGES_MAX = 6;
 /** At most this many date overrides on a page. */
 export const BOOKING_OVERRIDES_MAX = 120;
+/**
+ * At most this many date overrides on a schedule (spec 0037, AC-1293): above a page's 120, since the Team week writes
+ * one a day when someone is rostered week after week. Every schedule write drops overrides older than 8 weeks first.
+ */
+export const SCHEDULE_OVERRIDES_MAX = 400;
+/** What a schedule past `SCHEDULE_OVERRIDES_MAX` is refused with (spec 0037, AC-1293). */
+export const SCHEDULE_OVERRIDES_FULL =
+  'A schedule holds at most 400 date overrides. Remove some, or set usual hours instead.';
 /** The longest minimum notice: 14 days. */
 export const BOOKING_NOTICE_MAX = 14 * 24 * 60;
 
@@ -118,7 +126,9 @@ export const BookingAvailability = z.object({
   }),
   overrides: z
     .array(DateOverride)
-    .max(BOOKING_OVERRIDES_MAX, { error: `A page holds at most ${String(BOOKING_OVERRIDES_MAX)} date overrides.` })
+    // Schedules hold more than a page (AC-1293); a page's own hours are no longer written (spec 0035), so the one
+    // shape takes a schedule's limit and a stored schedule with more than 120 still reads.
+    .max(SCHEDULE_OVERRIDES_MAX, { error: SCHEDULE_OVERRIDES_FULL })
     .refine((overrides) => new Set(overrides.map((override) => override.date)).size === overrides.length, {
       error: 'Give each date once.',
     }),
