@@ -143,6 +143,7 @@ describe('@crm/ui', () => {
       'Radio',
       'RadioGroup',
       'Rating',
+      'ReadyPanel',
       'RecordChip',
       'RecordChipList',
       'RecordHeader',

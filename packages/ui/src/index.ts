@@ -335,6 +335,7 @@ export {
   type GuestsOutcome,
 } from './modules/BookingChanges/BookingChanges.tsx';
 export { DayStrip, type DayStripProps } from './modules/DayStrip/DayStrip.tsx';
+export { ReadyPanel, type ReadyPanelProps } from './modules/ReadyPanel/ReadyPanel.tsx';
 export { MonthTiles, type MonthTilesProps } from './modules/MonthTiles/MonthTiles.tsx';
 export { SlotList, type Slot, type SlotListProps } from './modules/SlotList/SlotList.tsx';
 export {
@@ -345,7 +346,14 @@ export {
 } from './modules/VisitorBar/VisitorBar.tsx';
 export { SectionBar, type SectionBarProps, type SectionBarVariant } from './molecules/SectionBar/SectionBar.tsx';
 export { PageColumn, type PageColumnProps } from './modules/PageColumn/PageColumn.tsx';
-export { TileGrid, type TileGridProps } from './molecules/TileGrid/TileGrid.tsx';
+export {
+  TileGrid,
+  type CardTileGridProps,
+  type ChoiceActionProps,
+  type ChoiceSelectProps,
+  type ChoiceTile,
+  type TileGridProps,
+} from './molecules/TileGrid/TileGrid.tsx';
 export { Stats, type StatItem, type StatsProps } from './molecules/Stats/Stats.tsx';
 export {
   RolePowers,
