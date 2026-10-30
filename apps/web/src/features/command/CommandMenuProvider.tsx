@@ -17,17 +17,22 @@ import {
   type ReactNode,
 } from 'react';
 import type { KeyTarget } from '../workspace/undo.ts';
-import type { CommandMode } from './commands.ts';
+import type { CommandMode, CommandRecord } from './commands.ts';
 import { commandKey } from './keys.ts';
 
 /** What the sidebar and any screen may do with the command menu (agreed with spec 0034's sidebar lane). */
 export interface CommandMenuControl {
   /** Opens the menu: everything (`commands`, the default: Quick actions, ⌘K) or search only (`search`, `/`). */
   readonly open: (mode?: CommandMode) => void;
+  /**
+   * The record page open now, for its own actions (New note on <name>, New task on <name>): a record page sets it
+   * while the person may add to it, and clears it as it goes.
+   */
+  readonly setRecord: (record: CommandRecord | undefined) => void;
 }
 
 /** Outside a workspace (a page still loading, an error page) there is no menu, and opening it does nothing. */
-const NO_MENU: CommandMenuControl = { open: () => undefined };
+const NO_MENU: CommandMenuControl = { open: () => undefined, setRecord: () => undefined };
 
 const CommandMenuContext = createContext<CommandMenuControl>(NO_MENU);
 
@@ -67,6 +72,7 @@ export function CommandMenuProvider({ slug, children }: CommandMenuProviderProps
   const platform = useKeyboardPlatform();
   const { data } = useRouteContext({ from: '__root__' });
   const [state, setState] = useState<MenuState>({ isOpen: false, mode: 'commands', opening: 0 });
+  const [record, setRecord] = useState<CommandRecord | undefined>(undefined);
   const open = useCallback((mode: CommandMode = 'commands') => {
     setState((now) => ({ isOpen: true, mode, opening: now.isOpen ? now.opening : now.opening + 1 }));
   }, []);
@@ -119,7 +125,7 @@ export function CommandMenuProvider({ slug, children }: CommandMenuProviderProps
     };
   }, [data]);
 
-  const control = useMemo<CommandMenuControl>(() => ({ open }), [open]);
+  const control = useMemo<CommandMenuControl>(() => ({ open, setRecord }), [open]);
   return (
     <CommandMenuContext.Provider value={control}>
       {children}
@@ -132,6 +138,7 @@ export function CommandMenuProvider({ slug, children }: CommandMenuProviderProps
             mode={state.mode}
             isOpen={state.isOpen}
             onOpenChange={setOpen}
+            {...(record === undefined ? {} : { record })}
           />
         </Suspense>
       )}

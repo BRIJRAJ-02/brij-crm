@@ -10,6 +10,7 @@ import type { ThemeChoice } from '@crm/ui/theme';
 import { settingsNav, visibleSettingsNav } from '../settings/nav.ts';
 import { availabilityHref, calendarsHref, linksHref, roundRobinHref } from '../booking/links.ts';
 import { formsHref } from '../forms/paths.ts';
+import { recordHref } from '../records/details.ts';
 import { bookingsHref, homeHref, navObjects, objectHref, tasksHref, trashHref } from '../workspace/objects.ts';
 import { strings } from './strings.ts';
 
@@ -168,6 +169,41 @@ export function actionCommands(slug: string, objects: readonly ObjectSummary[]):
     run: { kind: 'theme', choice },
   }));
   return [...creates, ...themes];
+}
+
+/** The record page open now, for its own actions; set by the page while the person may add notes and tasks to it. */
+export interface CommandRecord {
+  readonly slug: string;
+  readonly objectSlug: string;
+  readonly recordId: string;
+  /** Its name, as the page's header shows it. */
+  readonly name: string;
+}
+
+/**
+ * The open record's actions, first under Actions: New note on <name> and New
+ * task on <name>, each opening the record's own note window or task dialog
+ * (`?note=new`, `?task=new`) on its tab, as the tabs' buttons do.
+ */
+export function recordCommands(record: CommandRecord | undefined): readonly Command[] {
+  if (record === undefined) return [];
+  const { slug, objectSlug, recordId, name } = record;
+  return [
+    {
+      id: `record:note:${recordId}`,
+      name: strings.newNoteOn(name),
+      icon: 'notebook',
+      terms: strings.noteTerms,
+      run: go(`${recordHref(slug, objectSlug, recordId, 'notes')}?note=new`),
+    },
+    {
+      id: `record:task:${recordId}`,
+      name: strings.newTaskOn(name),
+      icon: 'list-checks',
+      terms: strings.taskTerms,
+      run: go(`${recordHref(slug, objectSlug, recordId, 'tasks')}?task=new`),
+    },
+  ];
 }
 
 /** An object's page with its new record dialog open (AC-1086): the object route carries `new` to the view it opens. */

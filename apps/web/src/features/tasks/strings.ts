@@ -10,9 +10,7 @@ export const strings = {
   viewAll: 'View all',
   /** Its accessible name, apart from Recent activity's "View all" beside it (starts with the visible words). */
   viewAllTasks: 'View all tasks',
-  /** The Tasks tab with nothing open. */
-  noOpenTasks: 'No open tasks. Add one above.',
-  /** Overview's block with nothing open. */
+  /** The Tasks tab and Overview's block with nothing open (New task sits under it on the tab). */
   noOpenTasksShort: 'No open tasks',
   noCompletedTasks: 'No completed tasks yet',
   /** A task linked to a removed member keeps them, by this name (owner decision 6). */

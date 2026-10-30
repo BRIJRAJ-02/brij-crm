@@ -50,6 +50,18 @@ export function NotesTab({ list, members, canAdd, onOpenNote }: NotesTabProps) {
   useEffect(() => {
     preloadNoteEditor();
   }, []);
+  const newNote = (
+    <Button
+      variant="primary"
+      onPress={() => {
+        onOpenNote('new');
+      }}
+    >
+      {strings.newNote}
+    </Button>
+  );
+  // Empty, New note sits in the empty state, under its words (as Attio and Twenty do); with notes, above them.
+  const isEmpty = state.status === 'ready' && notes.count === 0;
   return (
     <NoteList
       label={strings.listLabel}
@@ -57,22 +69,9 @@ export function NotesTab({ list, members, canAdd, onOpenNote }: NotesTabProps) {
       status={state.status === 'unavailable' ? 'no-access' : state.status}
       onRetry={list.retry}
       emptyTitle={strings.noNotes}
-      {...(canAdd ? { emptyBody: strings.noNotesText } : {})}
       onAction={onOpenNote}
-      {...(canAdd
-        ? {
-            toolbar: (
-              <Button
-                variant="primary"
-                onPress={() => {
-                  onOpenNote('new');
-                }}
-              >
-                {strings.newNote}
-              </Button>
-            ),
-          }
-        : {})}
+      {...(canAdd ? { emptyActions: newNote } : {})}
+      {...(canAdd && !isEmpty ? { toolbar: newNote } : {})}
     />
   );
 }

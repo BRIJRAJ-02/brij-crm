@@ -29,7 +29,7 @@ Spec 0019: tasks on a record (milestone 1), My tasks (milestone 2) and deleting 
 ## Notes
 
 - Every list reads the data layer's tasks store (`data.tasks.forRecord`, `one`, `create`, `update`, `setDone`), never the network. The route's loader starts the record's open tasks with the page, so the tab's count and Overview's block arrive with it (`useTaskTotal`, `useTaskList`). The tab's count is the open tasks, and none open shows no count rather than "0".
-- The quick add and "New task" are one composer row at the field's height (the button's `lg` size). With nothing open, the list says so in one row under it and Completed follows at once.
+- The quick add and "New task" are one composer row at the field's height (the button's `lg` size). With nothing open, the list says so in one row under it ("No open tasks", with New task under the words in place of the composer's button, as Attio and Twenty do) and Completed follows at once.
 - The quick add makes a task with the typed title, this record linked, assigned to the person (owner decision 1), no due date; it shows first with the "New" badge at once, and the field clears and keeps focus. The field stops typing at 2,000 characters (its count shows past 1,800), so it never sends a title the server refuses.
 - A tick shows at once; the task stays in the open list struck through until the list settles (1.5 seconds after the last change in it), then moves to Completed. A refused tick rolls back with a toast and Retry.
 - Completed is a Disclosure, closed by default; its done tasks are read when it first opens, newest done first, with their count.

@@ -21,10 +21,12 @@ import {
   matchCommands,
   orderSections,
   pageCommands,
+  recordCommands,
   settingsCommands,
   viewHref,
   type Command,
   type CommandMode,
+  type CommandRecord,
   type SectionId,
 } from './commands.ts';
 import { strings } from './strings.ts';
@@ -38,6 +40,8 @@ export interface CommandMenuProps {
   readonly mode: CommandMode;
   readonly isOpen: boolean;
   readonly onOpenChange: (isOpen: boolean) => void;
+  /** The record page open now: its New note and New task lead Actions. */
+  readonly record?: CommandRecord;
 }
 
 /**
@@ -46,7 +50,7 @@ export interface CommandMenuProps {
  * matched here as they type. Records and views come from the server through
  * `data.search`, and nothing enters the record store (AC-1100).
  */
-export function CommandMenu({ slug, mode, isOpen, onOpenChange }: CommandMenuProps) {
+export function CommandMenu({ slug, mode, isOpen, onOpenChange, record }: CommandMenuProps) {
   const { data, theme, toasts } = useRouteContext({ from: '__root__' });
   const loaded = useMatch({ from: '/w/$slug', shouldThrow: false, select: (match) => match.loaderData });
   const objects = useMemo(() => loaded?.objects ?? [], [loaded?.objects]);
@@ -63,7 +67,10 @@ export function CommandMenu({ slug, mode, isOpen, onOpenChange }: CommandMenuPro
   const byObject = useMemo(() => new Map(objects.map((object) => [object.id, object])), [objects]);
   const pages = useMemo(() => pageCommands(slug, objects, permissions), [slug, objects, permissions]);
   const settings = useMemo(() => settingsCommands(slug, permissions), [slug, permissions]);
-  const actions = useMemo(() => (mode === 'commands' ? actionCommands(slug, objects) : []), [mode, slug, objects]);
+  const actions = useMemo(
+    () => (mode === 'commands' ? [...recordCommands(record), ...actionCommands(slug, objects)] : []),
+    [mode, slug, objects, record],
+  );
   const commands = useMemo(
     () => new Map([...pages, ...settings, ...actions].map((command) => [command.id, command])),
     [pages, settings, actions],

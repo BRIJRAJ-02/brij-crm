@@ -1,7 +1,8 @@
 // Brief
 // Purpose: everything about one record in one place: its details, and what happened to it.
 // Main task: read and edit its details in place, and see who changed what and when, live.
-// Leaves out: deleting and restoring it (#22), presence (#26), editing related records' own values.
+// Leaves out: presence (#26), editing related records' own values. Delete is in the header's More menu; a trashed
+// record's banner offers Restore.
 import type {
   ActivityFeed as ActivityFeedSource,
   AttributeDefinition,
@@ -29,12 +30,14 @@ import {
 } from '@crm/data/react';
 import {
   ActivityFeed,
+  Badge,
   Button,
   Callout,
   Card,
   CopyButton,
   EmptyState,
   Link,
+  LockReason,
   RecordHeader,
   NoteList,
   RecordLayout,
@@ -46,6 +49,7 @@ import {
 } from '@crm/ui';
 import { useNavigate, useParams, useRouteContext, useRouter } from '@tanstack/react-router';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCommandMenu } from '../command/CommandMenuProvider.tsx';
 import { CommentsTab, LoadingThreads } from '../comments/CommentsTab.tsx';
 import { strings as commentStrings } from '../comments/strings.ts';
 import { NotesTab } from '../notes/NotesTab.tsx';
@@ -63,6 +67,7 @@ import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { ActivityTab } from './ActivityTab.tsx';
 import { isRecordTab, recordHref, recordName, type RecordTab } from './details.ts';
 import { OverviewTab } from './OverviewTab.tsx';
+import { RecordActions } from './RecordActions.tsx';
 import { RecordDetails } from './RecordDetails.tsx';
 import { PendingRelatedCard, RelatedCards, RelatedSections, type RelatedSource } from './RelatedSections.tsx';
 import { strings } from './strings.ts';
@@ -384,6 +389,8 @@ function RecordScreen({
     [data, slug, recordId, toasts],
   );
   const router = useRouter();
+  // The trashed banner's Restore: pending while it runs; once back, the record is read again and the page is normal.
+  const [isRestoring, setRestoring] = useState(false);
   // The narrow page's Details fold, opened by a Related card's "View all" before focus moves into it.
   const [isSidebarExpanded, setSidebarExpanded] = useState(false);
   const relatedHandles = useRef(new Map<string, RelatedRecordsHandle>());
@@ -544,6 +551,16 @@ function RecordScreen({
       : { ...shownRecord.display, name: recordName(shownRecord, object, strings.unnamed(object.singularName)) };
   })();
   const canAddTasks = object.access === 'write' && trashed?.status !== 'trashed' && state.status === 'ready';
+  // ⌘K offers New note and New task on this record while the person may add them (the tabs' own rule).
+  const commandMenu = useCommandMenu();
+  const commandName = canAddTasks ? pageRecord?.name : undefined;
+  useEffect(() => {
+    if (commandName === undefined) return;
+    commandMenu.setRecord({ slug, objectSlug: object.apiSlug, recordId, name: commandName });
+    return () => {
+      commandMenu.setRecord(undefined);
+    };
+  }, [commandMenu, commandName, slug, object.apiSlug, recordId]);
   let tabContent: ReactNode;
   if (tab === 'activity') {
     tabContent = <ActivityTab feed={feed} link={link} taskHref={taskHref} onAddPerson={addPerson} />;
@@ -696,6 +713,7 @@ function RecordScreen({
 
   const isLost = state.status === 'deleted' && state.isLost;
   const canEdit = !isTrashed && !isLost && object.access === 'write';
+  const isViewOnly = !isTrashed && !isLost && object.access !== 'write';
   const name = recordName(shown, object, unnamed);
   const display = { ...shown.display, name };
   const isFactsLoading = factState.status === 'loading';
@@ -756,10 +774,49 @@ function RecordScreen({
   // The library's CopyButton (A77): a check and "Copied" for two seconds, said to screen readers, a toast only on failure.
   const pageLink = new URL(recordHref(slug, object.apiSlug, recordId, tab), window.location.origin).href;
 
+  const restore = () => {
+    if (isRestoring) return;
+    setRestoring(true);
+    data.trash.restore(slug, [recordId]).then(
+      (summary) => {
+        setRestoring(false);
+        if (summary.kind === 'done' && summary.restored > 0) {
+          record.retry();
+          toasts.toast({ tone: 'success', message: strings.restored(name) });
+          return;
+        }
+        // Refused (a unique value now taken, an object read only): the server's reason, said in a toast.
+        const message =
+          summary.kind === 'done'
+            ? summary.reasons[0] || strings.restoreFailed
+            : summary.kind === 'failed'
+              ? summary.error.message || strings.restoreFailed
+              : strings.restoreFailed;
+        toasts.toast({ tone: 'danger', message });
+      },
+      () => {
+        setRestoring(false);
+        toasts.toast({ tone: 'danger', message: strings.restoreFailed });
+      },
+    );
+  };
   let notice: ReactNode;
   if (isTrashed) {
     notice = (
-      <Callout tone="danger" placement="banner">
+      <Callout
+        tone="danger"
+        placement="banner"
+        // Restore for someone who may change the object, as the Trash screen allows it.
+        {...(object.access === 'write'
+          ? {
+              actions: (
+                <Button variant="secondary" icon="archive-restore" isPending={isRestoring} onPress={restore}>
+                  {isRestoring ? strings.restoring : strings.restore}
+                </Button>
+              ),
+            }
+          : {})}
+      >
         {strings.wasDeleted(object.singularName)}
       </Callout>
     );
@@ -780,7 +837,22 @@ function RecordScreen({
           body: (
             <RecordLayout
               header={
-                <RecordHeader record={display} objectName={object.singularName} stats={stats}>
+                <RecordHeader
+                  record={display}
+                  objectName={object.singularName}
+                  stats={stats}
+                  // An object the person may only read says so, with why on its lock, rather than dropping editors.
+                  {...(isViewOnly
+                    ? {
+                        meta: (
+                          <>
+                            <Badge text={strings.viewOnly} isWhole />
+                            <LockReason size="sm" reason={strings.viewOnlyReason(object.pluralName)} />
+                          </>
+                        ),
+                      }
+                    : {})}
+                >
                   <FavouriteButton data={data} slug={slug} kind="record" id={recordId} />
                   <CopyButton
                     variant="ghost"
@@ -788,6 +860,14 @@ function RecordScreen({
                     label={strings.copyLink}
                     announcement={strings.linkCopied}
                     failureMessage={strings.copyFailed}
+                  />
+                  <RecordActions
+                    slug={slug}
+                    object={object}
+                    recordId={recordId}
+                    name={name}
+                    pageLink={pageLink}
+                    canDelete={canEdit}
                   />
                 </RecordHeader>
               }

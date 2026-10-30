@@ -48,6 +48,11 @@ export const strings = {
   /** Actions (AC-1086, AC-1087). */
   create: (singular: string) => `Create a ${singular.toLocaleLowerCase()}`,
   newWord: 'new',
+  /** The record page's own actions, named after it. */
+  newNoteOn: (name: string) => `New note on ${name}`,
+  newTaskOn: (name: string) => `New task on ${name}`,
+  noteTerms: ['note', 'write', 'add', 'create'],
+  taskTerms: ['task', 'todo', 'to do', 'follow up', 'add', 'create'],
   addWord: 'add',
   useTheme: { light: 'Use light theme', dark: 'Use dark theme', system: 'Use system theme' },
   themeTerms: ['theme', 'appearance', 'mode'],

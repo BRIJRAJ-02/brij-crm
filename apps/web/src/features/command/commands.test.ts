@@ -11,6 +11,7 @@ import {
   matchCommands,
   orderSections,
   pageCommands,
+  recordCommands,
   settingsCommands,
   viewHref,
 } from './commands.ts';
@@ -73,6 +74,17 @@ describe('what the menu lists (AC-1075, AC-1082, AC-1086)', () => {
     ]);
     expect(actions[0]?.run).toEqual({ kind: 'create', href: '/w/acme/objects/companies?new=1' });
     expect(actions[2]?.run).toEqual({ kind: 'theme', choice: 'light' });
+  });
+
+  it('offers a new note and a new task on the record page open, each opening on its tab', () => {
+    expect(recordCommands(undefined)).toEqual([]);
+    const commands = recordCommands({ slug: 'acme', objectSlug: 'people', recordId: 'r1', name: 'Ada Lovelace' });
+    expect(commands.map((command) => command.name)).toEqual(['New note on Ada Lovelace', 'New task on Ada Lovelace']);
+    expect(commands.map((command) => command.run)).toEqual([
+      { kind: 'go', href: '/w/acme/objects/people/r1/notes?note=new' },
+      { kind: 'go', href: '/w/acme/objects/people/r1/tasks?task=new' },
+    ]);
+    expect(matchCommands(commands, 'task').map((command) => command.id)).toEqual(['record:task:r1']);
   });
 
   it('lists the Settings pages the member may open, by their place in Settings', () => {

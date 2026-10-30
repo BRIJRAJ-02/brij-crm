@@ -207,6 +207,16 @@ export function TasksTab({ slug, record, open, members, meId, canAdd, recordHref
   const { data } = useRouteContext({ from: '__root__' });
   const state = useTaskList(open);
   const entries = useTaskEntries(state.source, members, record.recordId);
+  const isEmpty = state.status === 'ready' && entries.count === 0;
+  const newTask = (
+    <Button
+      onPress={() => {
+        onOpenTask('new');
+      }}
+    >
+      {strings.newTask}
+    </Button>
+  );
   return (
     <TaskList
       label={strings.openTasks}
@@ -214,8 +224,9 @@ export function TasksTab({ slug, record, open, members, meId, canAdd, recordHref
       status={state.status === 'unavailable' ? 'no-access' : state.status}
       onRetry={open.retry}
       newIds={state.newIds}
-      // "Add one above" only where the quick add is.
-      emptyTitle={canAdd ? strings.noOpenTasks : strings.noOpenTasksShort}
+      emptyTitle={strings.noOpenTasksShort}
+      // Empty, New task sits in the empty row, under its words (as Attio and Twenty do); with tasks, by the quick add.
+      {...(canAdd ? { emptyActions: newTask } : {})}
       recordHref={recordHref}
       onToggle={(task, isDone) => {
         void data.tasks.setDone(slug, task.id, isDone);
@@ -228,15 +239,17 @@ export function TasksTab({ slug, record, open, members, meId, canAdd, recordHref
             toolbar: (
               <>
                 <QuickAdd slug={slug} record={record} meId={meId} />
-                <Button
-                  // The composer's height: beside the 30px field.
-                  size="lg"
-                  onPress={() => {
-                    onOpenTask('new');
-                  }}
-                >
-                  {strings.newTask}
-                </Button>
+                {isEmpty ? null : (
+                  <Button
+                    // The composer's height: beside the 30px field.
+                    size="lg"
+                    onPress={() => {
+                      onOpenTask('new');
+                    }}
+                  >
+                    {strings.newTask}
+                  </Button>
+                )}
               </>
             ),
           }
