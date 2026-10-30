@@ -9,6 +9,7 @@ import {
   Button,
   Callout,
   Field,
+  focusLater,
   Link,
   Modal,
   PreviewFrame,
@@ -152,6 +153,8 @@ export function NewPageDialog({
           if (isWorkspace) data.rotations.view(slug).reload();
           reset();
           setCreated(page);
+          // Create page leaves with the form, so focus goes to the panel's first control, Copy link, never the page.
+          focusLater(() => document.querySelector<HTMLElement>('[role="dialog"] section[aria-labelledby] button'));
         },
         (error: unknown) => {
           setBusy(false);
@@ -184,9 +187,8 @@ export function NewPageDialog({
           if (!open) finish();
         }}
         actions={
-          <Button variant="primary" onPress={finish}>
-            {strings.readyEdit}
-          </Button>
+          // Copy link is the panel's one primary: sharing is what the moment is for.
+          <Button onPress={finish}>{strings.readyEdit}</Button>
         }
       >
         <ReadyPanel

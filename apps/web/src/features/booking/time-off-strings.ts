@@ -36,6 +36,8 @@ export const timeOffStrings = {
   // Remote's banner when someone with Manage acts for a colleague: one line (spec 0058, AC-15).
   onBehalf: (first: string) => `${first} gets an email about it.`,
   onBehalfEdit: (first: string) => `${first} gets an email about the change.`,
+  /** The one hint left (spec 0058, AC-15): acting for a colleague, whose zone the days are in. */
+  daysZoneFor: (first: string) => `In ${first}’s time zone.`,
   pickDays: 'Pick the days.',
   reason: 'Reason',
   standin: 'Who covers',
@@ -55,7 +57,7 @@ export const timeOffStrings = {
     count === 1 ? '1 meeting in this time off' : `${String(count)} meetings in this time off`,
   insideFor: (first: string, count: number) =>
     count === 1 ? `${first} has 1 meeting in this time off` : `${first} has ${String(count)} meetings in this time off`,
-  insideKept: 'They stay booked, marked Host away.',
+  insideKept: 'They stay booked, marked Host away on Bookings.',
   insideMore: (count: number) => (count === 1 ? 'And 1 more.' : `And ${String(count)} more.`),
   done: 'Done',
   openBookings: 'Open Bookings',
