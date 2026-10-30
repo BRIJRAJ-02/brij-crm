@@ -86,6 +86,8 @@ export type RestoreSummary =
       readonly refused: number;
       /** The records kept in the trash, each with its reason on its name cell: a screen keeps them ticked. */
       readonly refusedIds: readonly string[];
+      /** Each refused record's reason, in `refusedIds` order ("Another record now has Email ada@acme.com."). */
+      readonly reasons: readonly string[];
       /** The objects of the records restored, so their tables read again. */
       readonly objectIds: readonly string[];
     };
@@ -439,7 +441,8 @@ export function createTrash({
     restore: async (workspace: string, recordIds: readonly string[]): Promise<RestoreSummary> => {
       const ids = [...new Set(recordIds)];
       if (ids.length > MAX_RESTORE_RECORDS) return { kind: 'too-many', limit: MAX_RESTORE_RECORDS };
-      if (ids.length === 0) return { kind: 'done', restored: 0, refused: 0, refusedIds: [], objectIds: [] };
+      if (ids.length === 0)
+        return { kind: 'done', restored: 0, refused: 0, refusedIds: [], reasons: [], objectIds: [] };
       const nameCell = (id: string) => `${id}:${TRASH_NAME_COLUMN}`;
       setCellErrors(ids.map(nameCell));
       leaving = new Set([...leaving, ...ids]);
@@ -488,6 +491,7 @@ export function createTrash({
         restored: back.size,
         refused: refused.length,
         refusedIds: refused.map((result) => result.recordId),
+        reasons: refused.map((result) => result.refusal?.message ?? ''),
         objectIds,
       };
     },
