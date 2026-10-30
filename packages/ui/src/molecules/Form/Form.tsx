@@ -46,8 +46,10 @@ interface FormBase<R extends FormRefusal> {
   /**
    * Focuses the first field as the form mounts: a dialog that opens to be
    * filled in (New person). The dialog keeps that focus rather than its own.
+   * `select` also selects its text, so typing replaces it (Rename, right
+   * after a duplicate).
    */
-  readonly focusesFirstField?: boolean;
+  readonly focusesFirstField?: boolean | 'select';
   /**
    * `2` lays the fields out two to a row while each keeps at least a wide
    * column's width, one to a row when it can't: a settings form across the
@@ -302,11 +304,17 @@ export function Form<R extends FormRefusal = FormRefusal>({
   // ⌘↵ (Ctrl+Enter elsewhere) submits from anywhere in the form, a list or a long text included, as the
   // submit's keycap says. The field in use commits on blur first, so the value just typed is sent.
   // The first field takes focus as the form mounts, before its dialog would focus itself.
-  const shouldFocusFirst = useRef(focusesFirstField);
+  const shouldFocusFirst = useRef(focusesFirstField !== false);
   useEffect(() => {
     if (!shouldFocusFirst.current) return;
     shouldFocusFirst.current = false;
-    formRef.current?.querySelector<HTMLElement>('input:not([type="hidden"]), textarea, select')?.focus();
+    const first = formRef.current?.querySelector<HTMLElement>('input:not([type="hidden"]), textarea, select');
+    first?.focus();
+    if (focusesFirstField === 'select' && (first instanceof HTMLInputElement || first instanceof HTMLTextAreaElement)) {
+      first.select();
+    }
+    // Once, as the form mounts.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // React Aria's Form takes no key handler, so it listens on the document, for the form and its dialog.

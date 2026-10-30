@@ -213,6 +213,7 @@ import type { NavChangeOptions, NavSnapshot, NavSource, NavStore } from './navig
 import { draftParam, isSameQuery, readDraft, type DraftQuery } from './views/draft.ts';
 import {
   createViewsStore,
+  type KeptDraft,
   type NewView,
   type SavedViewSource,
   type SaveQueryInput,
@@ -616,6 +617,7 @@ export {
 } from '@crm/contracts/board';
 export { DRAFT_LINK_MAX, FILTER_EDIT_MS, type DraftQuery } from './views/draft.ts';
 export type {
+  KeptDraft,
   NewView,
   SavedViewSnapshot,
   SavedViewSource,
@@ -5770,6 +5772,16 @@ export function createDataLayer({
       markOpened: (workspace: string, viewId: string) => {
         views.markOpened(workspace, viewId);
       },
+      /**
+       * Keeps a view's unsaved filter and sorts for this tab, by view id
+       * (undefined forgets them): leaving the view keeps its draft, and opening
+       * it again brings it back.
+       */
+      keepDraft: (workspace: string, viewId: string, draft: KeptDraft | undefined) => {
+        views.keepDraft(workspace, viewId, draft);
+      },
+      /** The draft this tab kept for a view, if any. */
+      keptDraft: (workspace: string, viewId: string): KeptDraft | undefined => views.keptDraft(workspace, viewId),
       /** A draft's URL text (base64url of its canonical JSON), or undefined past `DRAFT_LINK_MAX`. */
       draftParam: (query: DraftQuery): string | undefined => draftParam(query),
       /** A link's draft, checked (loads the schemas on first use), or undefined when it can't be read. */

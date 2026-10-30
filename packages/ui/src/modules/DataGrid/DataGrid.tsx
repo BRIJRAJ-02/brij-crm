@@ -1084,6 +1084,17 @@ export function DataGrid<Row>({
       setMenuFor(column.id);
       return;
     }
+    // Alt with Left or Right on a header resizes its column, and stays in resize mode: then Left and Right alone step
+    // it (the column menu's Resize item went, 30 October 2026).
+    if (event.altKey && (event.key === 'ArrowLeft' || event.key === 'ArrowRight') && focus.row < 0) {
+      if (column !== undefined) {
+        event.preventDefault();
+        const forward = (event.key === 'ArrowRight') === (getComputedStyle(event.currentTarget).direction !== 'rtl');
+        setResizing(column.id);
+        resizeBy(column.id, forward ? RESIZE_STEP : -RESIZE_STEP);
+        return;
+      }
+    }
     // Up or Down onto a group's header line: focus goes to its fold button, a stop of its own in the column of lines.
     if (
       (event.key === 'ArrowUp' || event.key === 'ArrowDown') &&

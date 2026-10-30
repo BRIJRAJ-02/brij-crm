@@ -19,5 +19,6 @@ export const GRID_SHORTCUTS: ShortcutGroup = {
     { label: strings.shortcutPaste, keys: ['⌘', 'V'] },
     { label: strings.shortcutLink, keys: ['⌘', '↵'] },
     { label: strings.shortcutMenu, keys: ['⌥', '↓'] },
+    { label: strings.shortcutResize, keys: ['⌥', '←', '→'] },
   ],
 };

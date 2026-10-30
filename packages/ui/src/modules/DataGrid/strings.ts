@@ -14,7 +14,6 @@ export const strings = {
   sortAscending: 'Sort ascending',
   sortDescending: 'Sort descending',
   filter: 'Filter',
-  resize: 'Resize',
   /** Shown on the header while resizing, and announced as the width changes. */
   resizeHint: 'Left and Right change the width. Enter or Esc to finish.',
   /** What a group header's count counts, read after the number. */
@@ -76,4 +75,5 @@ export const strings = {
   shortcutPaste: 'Paste',
   shortcutLink: 'Follow the link in the cell',
   shortcutMenu: 'Open the column menu (on a header)',
+  shortcutResize: 'Resize the column (on a header)',
 } as const;

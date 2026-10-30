@@ -1,4 +1,12 @@
-import { createContext, useContext, useMemo, type ReactElement, type ReactNode, type RefObject } from 'react';
+import {
+  createContext,
+  useContext,
+  useMemo,
+  type KeyboardEvent,
+  type ReactElement,
+  type ReactNode,
+  type RefObject,
+} from 'react';
 import {
   Autocomplete,
   Header,
@@ -381,6 +389,11 @@ export interface MenuItemProps {
    * It takes the place of `isChecked`.
    */
   readonly isCheckAtEnd?: boolean;
+  /**
+   * The item can move among its neighbours (a saved view in the switcher): Alt with the up or down arrow asks to
+   * move it that way, and the menu keeps focus on it. Screen readers hear the keys (aria-keyshortcuts).
+   */
+  readonly onMove?: (direction: 'up' | 'down') => void;
 }
 
 interface ItemState {
@@ -389,9 +402,30 @@ interface ItemState {
   readonly hasSubmenu: boolean;
 }
 
-function itemProps({ id, children, isDanger = false, href, onAction, isDisabled, isPending = false }: MenuItemProps) {
+function itemProps({
+  id,
+  children,
+  isDanger = false,
+  href,
+  onAction,
+  isDisabled,
+  isPending = false,
+  onMove,
+}: MenuItemProps) {
   const safe = safeHref(href);
   return {
+    ...(onMove === undefined
+      ? {}
+      : {
+          'aria-keyshortcuts': 'Alt+ArrowUp Alt+ArrowDown',
+          onKeyDown: (event: KeyboardEvent<HTMLDivElement>) => {
+            if (!event.altKey || (event.key !== 'ArrowUp' && event.key !== 'ArrowDown')) return;
+            // The move, not the menu's own arrow: focus stays on this item as it moves.
+            event.preventDefault();
+            event.stopPropagation();
+            onMove(event.key === 'ArrowUp' ? 'up' : 'down');
+          },
+        }),
     id: id ?? children,
     textValue: children,
     className: styles.item,

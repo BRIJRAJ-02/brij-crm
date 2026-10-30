@@ -143,6 +143,9 @@ const CLEARED_TOLD_MS = 10_000;
 /** How long an Undo toast stays (a discarded draft, a shared view's columns), in ms. */
 const UNDO_MS = 8_000;
 
+/** How long a deleted view's Undo stays, in ms (its config is kept this long, in the toast's action). */
+const DELETE_UNDO_MS = 10_000;
+
 /** How long switching a board to Table waits for the first rows before showing the table loading in place. */
 const TABLE_GRACE_MS = 300;
 
@@ -229,6 +232,8 @@ export function ViewScreen(props: ViewScreenProps) {
   // A locked view the person may not change (AC-476): their filters, sorts and columns stay in this tab, unsaved.
   const isLockedForMe = view !== undefined && view.visibility === 'workspace' && view.isLocked && !canManage;
   const draft = useViewDraft({
+    slug,
+    viewId: view?.id,
     saved,
     savedVersion: followed.version,
     param,
@@ -535,24 +540,6 @@ export function ViewScreen(props: ViewScreenProps) {
       exporting.current = false;
     });
   };
-  // The command menu's Export this view and Create a view (`?do=`): run once, then dropped from the address. Read
-  // through refs, so a new callback each render never runs one twice.
-  const latest = useRef({ exportView, taken: props.onRequestTaken });
-  useEffect(() => {
-    latest.current = { exportView, taken: props.onRequestTaken };
-  });
-  const { request } = props;
-  // Create a view opens its dialog in render, as the create request does; the export runs after, once.
-  const [seenRequest, setSeenRequest] = useState<ViewRequest | undefined>(undefined);
-  if (request !== seenRequest) {
-    setSeenRequest(request);
-    if (request === 'new-view') setCreateMode('create');
-  }
-  useEffect(() => {
-    if (request === undefined) return;
-    if (request === 'export') latest.current.exportView();
-    latest.current.taken?.();
-  }, [request]);
   const [isDuplicating, setDuplicating] = useState(false);
   const duplicate = () => {
     // One copy per press: a second press while the first is on its way adds nothing.
@@ -572,7 +559,12 @@ export function ViewScreen(props: ViewScreenProps) {
       .then(
         (made) => {
           setDuplicating(false);
-          openView(made, strings.duplicated(made.name));
+          // The copy opens with Rename, its name selected: one step to name it, no "copy" kept by accident.
+          void navigate({
+            to: '/w/$slug/objects/$object/views/$viewId',
+            params: { slug, object: object.apiSlug, viewId: made.id },
+            search: { do: 'rename' },
+          });
         },
         (error: unknown) => {
           setDuplicating(false);
@@ -590,16 +582,6 @@ export function ViewScreen(props: ViewScreenProps) {
   const [filterOn, setFilterOn] = useState<{ readonly attributeId: string } | undefined>(undefined);
   const canSave = view !== undefined && !isLockedForMe;
   const filtered = running?.filter !== undefined || isSearching;
-  // The switcher (AC-473): the default, the other shared views, then a Private section; locked ones marked.
-  const choices: readonly ViewChoice[] = (list.views.length > 0 ? list.views : view === undefined ? [] : [view]).map(
-    (each) => ({
-      id: each.id,
-      name: each.name,
-      ...(each.visibility === 'workspace' && each.isLocked ? { isLocked: true } : {}),
-      ...(each.visibility === 'private' ? { section: strings.privateSection } : {}),
-    }),
-  );
-
   // Table or Board (spec 0021, AC-492): the view's kind, switched for everyone on it through `views.setLayout`
   // (on a locked view the person may not change, for this tab only). The first switch to Board fills the
   // defaults; with nothing to group by it saves the kind alone. Back to Table keeps the board settings.
@@ -701,12 +683,8 @@ export function ViewScreen(props: ViewScreenProps) {
     changeBoardLayout({ board: { ...boardPlan.settings, cardFields: ids } });
   };
   const switchView = (viewId: string) => {
-    // The view already open: nothing changes, and its draft stays.
+    // The view already open: nothing changes. Another view keeps this one's draft for when it opens again.
     if (viewId === view?.id) return;
-    // Another view drops this one's draft (AC-466); Back brings it back.
-    if (draft.isDraft && view !== undefined) {
-      toasts.toast({ tone: 'info', message: strings.draftLeft(view.name) });
-    }
     void navigate({
       to: '/w/$slug/objects/$object/views/$viewId',
       params: { slug, object: object.apiSlug, viewId },
@@ -731,8 +709,46 @@ export function ViewScreen(props: ViewScreenProps) {
       // This tab's own delete: the view going away is no news here.
       leaving.current = isDeleting;
     },
-    onDeleted: (name) => {
-      toasts.toast({ tone: 'success', message: strings.deleted(name) });
+    onDeleted: (gone) => {
+      // Undo makes it again from what it was, under the same id when the server takes it (a delete is hard, so the
+      // id is free again), else a new one; its place, lock and default don't come back.
+      const restore = (id: string) =>
+        data.views.create(slug, {
+          id,
+          objectId: gone.objectId,
+          name: gone.name,
+          kind: gone.kind,
+          visibility: gone.visibility,
+          config: gone.config,
+        });
+      toasts.toast(
+        {
+          tone: 'success',
+          message: strings.deleted(gone.name),
+          action: {
+            label: strings.undo,
+            onAction: () => {
+              restore(gone.id)
+                .catch((error: unknown) => {
+                  if (isDataError(error) && error.code === 'ID_TAKEN') return restore(data.views.newId());
+                  throw error;
+                })
+                .then(
+                  (made) => {
+                    openView(made, strings.restored(made.name));
+                  },
+                  (error: unknown) => {
+                    toasts.toast({
+                      tone: 'danger',
+                      message: isDataError(error) ? error.message : strings.actionFailed,
+                    });
+                  },
+                );
+            },
+          },
+        },
+        { timeout: DELETE_UNDO_MS },
+      );
       void navigate({
         to: '/w/$slug/objects/$object',
         params: { slug, object: object.apiSlug },
@@ -740,6 +756,35 @@ export function ViewScreen(props: ViewScreenProps) {
       });
     },
   });
+  // The command menu's Export this view and Create a view (`?do=`): run once, then dropped from the address. Read
+  // through refs, so a new callback each render never runs one twice.
+  const latest = useRef({ exportView, taken: props.onRequestTaken, rename: (): void => undefined });
+  useEffect(() => {
+    latest.current = { exportView, taken: props.onRequestTaken, rename: viewMenu.rename };
+  });
+  const { request } = props;
+  // Create a view opens its dialog in render, as the create request does; the export runs after, once.
+  const [seenRequest, setSeenRequest] = useState<ViewRequest | undefined>(undefined);
+  if (request !== seenRequest) {
+    setSeenRequest(request);
+    if (request === 'new-view') setCreateMode('create');
+  }
+  useEffect(() => {
+    if (request === undefined) return;
+    if (request === 'export') latest.current.exportView();
+    if (request === 'rename') latest.current.rename();
+    latest.current.taken?.();
+  }, [request]);
+  // The switcher (AC-473): the default, the other shared views, then a Private section; locked ones marked.
+  const choices: readonly ViewChoice[] = (list.views.length > 0 ? list.views : view === undefined ? [] : [view]).map(
+    (each) => ({
+      id: each.id,
+      name: each.name,
+      ...(each.visibility === 'workspace' && each.isLocked ? { isLocked: true } : {}),
+      ...(each.visibility === 'private' ? { section: strings.privateSection } : {}),
+      ...(viewMenu.isMovable(each.id) ? { isMovable: true } : {}),
+    }),
+  );
   // A table's "Add attribute" from View settings: asked of the table, which owns the attribute dialog.
   const [addRequest, setAddRequest] = useState<object | undefined>(undefined);
   // The view bar's end before View settings: the lock line. View settings is the bar's one button, then Table or

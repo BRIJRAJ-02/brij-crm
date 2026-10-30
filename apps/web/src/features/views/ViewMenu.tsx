@@ -41,8 +41,8 @@ export interface ViewMenuProps {
   readonly onExport: () => void;
   /** A delete here starts (true) or was refused (false): the screen expects the view to go. */
   readonly onDeleting: (isDeleting: boolean) => void;
-  /** The view was deleted here: the screen goes to the default view. */
-  readonly onDeleted: (name: string) => void;
+  /** The view was deleted here: the screen goes to the default view, offering Undo with the view as it was. */
+  readonly onDeleted: (deleted: View) => void;
 }
 
 /** A member's name, "A removed member" when they left, "the workspace" for a view nobody made. */
@@ -55,6 +55,12 @@ export function memberName(members: readonly MemberSummary[], memberId: string |
 export interface ViewMenu {
   readonly actions: readonly ViewMenuAction[];
   readonly onAction: (id: string) => void;
+  /** Whether a view in the switcher can move within its group now (Alt with an arrow on its item). */
+  readonly isMovable: (viewId: string) => boolean;
+  /** Opens Rename, its name selected (right after Duplicate, so no "copy" is kept by accident). */
+  readonly rename: () => void;
+  /** Moves a view up or down its group, from the switcher's keyboard reorder. */
+  readonly onMoveView: (viewId: string, direction: 'up' | 'down') => void;
   /** The Rename dialog and the Delete confirm, drawn by the screen beside the bar. */
   readonly dialogs: ReactNode;
 }
@@ -88,14 +94,21 @@ export function useViewMenu({
   const { data, toasts } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
   const [isRenaming, setRenaming] = useState(false);
-  const [isDeleting, setDeleting] = useState(false);
   const [isBusy, setBusy] = useState(false);
-  const [deleteFailure, setDeleteFailure] = useState<string | undefined>(undefined);
   // Make private ends everyone else's use of the view, so it asks first, as Delete does.
   const [isGoingPrivate, setGoingPrivate] = useState(false);
   const [isPrivateBusy, setPrivateBusy] = useState(false);
   const [privateFailure, setPrivateFailure] = useState<string | undefined>(undefined);
-  if (view === undefined) return { actions: [], onAction: () => undefined, dialogs: null };
+  if (view === undefined) {
+    return {
+      actions: [],
+      onAction: () => undefined,
+      isMovable: () => false,
+      onMoveView: () => undefined,
+      rename: () => undefined,
+      dialogs: null,
+    };
+  }
   const caller = {
     memberId,
     canManage,
@@ -107,11 +120,8 @@ export function useViewMenu({
     isLocked: view.isLocked,
     isDefault: list.defaultViewId === view.id,
   };
-  // An action's reason, or `null` when it can never apply here and is left out.
-  const reasonFor = (action: ViewAction): string | undefined | null => {
-    const reason: ViewRuleReason | undefined = viewRule(action, caller, facts);
-    if (reason === undefined) return undefined;
-    if (NEVER.has(reason)) return null;
+  // A reason's words, or `null` when it can never apply here and is left out.
+  const word = (reason: ViewRuleReason, action?: ViewAction): string | null => {
     switch (reason) {
       case 'locked':
         return strings.viewLocked;
@@ -133,12 +143,41 @@ export function useViewMenu({
         return null;
     }
   };
-  // Move up and down within its group (the shared views after the default, or this person's private ones), only
-  // where the view can go that way now.
-  const group = list.views.filter((each) => each.visibility === view.visibility && each.id !== list.defaultViewId);
-  const at = group.findIndex((each) => each.id === view.id);
-  const canMove = (direction: 'up' | 'down') =>
-    reasonFor('move') === undefined && at !== -1 && (direction === 'up' ? at > 0 : at < group.length - 1);
+  // An action's reason, or `null` when it can never apply here and is left out.
+  const reasonFor = (action: ViewAction): string | undefined | null => {
+    const reason: ViewRuleReason | undefined = viewRule(action, caller, facts);
+    if (reason === undefined) return undefined;
+    if (NEVER.has(reason)) return null;
+    return word(reason, action);
+  };
+  // Any view moves within its group (the shared views after the default, or this person's private ones) from the
+  // switcher's keyboard reorder, where the rules let this person move it (the menu's Move up and Move down went).
+  const groupOf = (summary: ViewsListSnapshot['views'][number]) =>
+    list.views.filter((each) => each.visibility === summary.visibility && each.id !== list.defaultViewId);
+  const isMovable = (viewId: string) => {
+    const summary = list.views.find((each) => each.id === viewId);
+    if (summary === undefined || summary.id === list.defaultViewId || groupOf(summary).length < 2) return false;
+    return (
+      viewRule('move', caller, {
+        visibility: summary.visibility,
+        creatorMemberId: summary.creatorMemberId,
+        isLocked: summary.isLocked,
+        isDefault: false,
+      }) === undefined
+    );
+  };
+  const onMoveView = (viewId: string, direction: 'up' | 'down') => {
+    const summary = list.views.find((each) => each.id === viewId);
+    if (summary === undefined || !isMovable(viewId)) return;
+    const group = groupOf(summary);
+    const at = group.findIndex((each) => each.id === viewId);
+    // Already first or last: nothing to do.
+    if (direction === 'up' ? at <= 0 : at >= group.length - 1) return;
+    run(
+      data.views.move(slug, object.id, viewId, direction),
+      direction === 'up' ? strings.movedUp(summary.name) : strings.movedDown(summary.name),
+    );
+  };
 
   const run = (work: Promise<unknown>, done?: string) => {
     work.then(
@@ -155,27 +194,67 @@ export function useViewMenu({
   /** An entry, or nothing when its action can never apply here. */
   const entry = (reason: string | undefined | null, rest: Omit<Entry, 'reason'>): readonly Entry[] =>
     reason === null ? [] : [{ ...rest, ...(reason === undefined ? {} : { reason }) }];
-  const sharing =
-    view.visibility === 'private'
-      ? entry(reasonFor('share'), {
-          id: 'share',
-          label: strings.shareWithEveryone,
-          icon: 'users',
-          startsGroup: true,
-          run: () => {
-            run(data.views.update(slug, view.id, { visibility: 'workspace' }), strings.shared(view.name));
+  // Who can see it (30 October 2026): one choice of three states in place of Share, Make private and Lock. A state
+  // the person could reach after a change stays, disabled, saying why; one they never could is left out.
+  const unlocked = { ...facts, isLocked: false };
+  const shown: 'private' | 'workspace' | 'locked' =
+    view.visibility === 'private' ? 'private' : view.isLocked ? 'locked' : 'workspace';
+  const reasonOf = (reason: ViewRuleReason | undefined): string | undefined | null => {
+    if (reason === undefined) return undefined;
+    if (NEVER.has(reason)) return null;
+    return word(reason, 'makePrivate');
+  };
+  const choiceReason = (to: 'private' | 'workspace' | 'locked'): string | undefined | null => {
+    if (to === shown) return undefined;
+    // Leaving the locked state unlocks first, which only owners and admins may do.
+    if (shown === 'locked' && !canManage) return null;
+    if (to === 'private') return reasonOf(viewRule('makePrivate', caller, canManage ? unlocked : facts));
+    if (to === 'workspace') return shown === 'private' ? reasonOf(viewRule('share', caller, facts)) : undefined;
+    // Locked: owners and admins only, and from private the view is shared first.
+    if (!canManage) return null;
+    return shown === 'private' ? reasonOf(viewRule('share', caller, facts)) : undefined;
+  };
+  const whoChoices = (['private', 'workspace', 'locked'] as const).flatMap((to) => {
+    const reason = choiceReason(to);
+    if (reason === null) return [];
+    return [
+      {
+        id: to,
+        label: to === 'private' ? strings.onlyMe : to === 'workspace' ? strings.everyone : strings.everyoneAdminsEdit,
+        ...(to === shown ? { isSelected: true } : {}),
+        ...(reason === undefined ? {} : { reason }),
+      },
+    ];
+  });
+  const sharing: readonly Entry[] =
+    whoChoices.length < 2
+      ? []
+      : [
+          {
+            id: 'who',
+            label: strings.whoCanSee,
+            icon: view.visibility === 'private' ? 'lock' : 'users',
+            startsGroup: true,
+            choices: whoChoices,
+            run: () => undefined,
           },
-        })
-      : entry(reasonFor('makePrivate'), {
-          id: 'make-private',
-          label: strings.makePrivate,
-          icon: 'lock',
-          startsGroup: true,
-          run: () => {
-            setPrivateFailure(undefined);
-            setGoingPrivate(true);
-          },
-        });
+        ];
+  const choose = (to: string) => {
+    if (to === shown) return;
+    if (to === 'private') {
+      setPrivateFailure(undefined);
+      setGoingPrivate(true);
+      return;
+    }
+    const share = shown === 'private' ? data.views.update(slug, view.id, { visibility: 'workspace' }) : undefined;
+    const lockTo = to === 'locked';
+    run(
+      (share ?? Promise.resolve()).then(() =>
+        lockTo || shown === 'locked' ? data.views.setLocked(slug, view.id, lockTo) : undefined,
+      ),
+      lockTo ? strings.locked(view.name) : shown === 'locked' ? strings.unlocked(view.name) : strings.shared(view.name),
+    );
+  };
   const entries: readonly Entry[] = [
     ...entry(reasonFor('edit'), { id: 'rename', label: strings.rename, icon: 'pencil', run: () => setRenaming(true) }),
     { id: 'duplicate', label: strings.duplicate, icon: 'copy', run: onDuplicate },
@@ -209,48 +288,10 @@ export function useViewMenu({
           },
         ]
       : []),
-    ...(canMove('up')
-      ? [
-          {
-            id: 'move-up',
-            label: strings.moveUp,
-            icon: 'arrow-up' as const,
-            startsGroup: true,
-            run: () => {
-              run(data.views.move(slug, object.id, view.id, 'up'), strings.movedUp(view.name));
-            },
-          },
-        ]
-      : []),
-    ...(canMove('down')
-      ? [
-          {
-            id: 'move-down',
-            label: strings.moveDown,
-            icon: 'arrow-down' as const,
-            startsGroup: !canMove('up'),
-            run: () => {
-              run(data.views.move(slug, object.id, view.id, 'down'), strings.movedDown(view.name));
-            },
-          },
-        ]
-      : []),
     ...sharing,
-    // Lock and the default are owners' and admins' (views.manage): absent for members, never disabled.
+    // The default is owners' and admins' (views.manage): absent for members, never disabled.
     ...(canManage
       ? [
-          ...entry(reasonFor('lock'), {
-            id: view.isLocked ? 'unlock' : 'lock',
-            label: view.isLocked ? strings.unlock : strings.lock,
-            icon: view.isLocked ? 'lock-open' : 'lock',
-            startsGroup: sharing.length === 0,
-            run: () => {
-              run(
-                data.views.setLocked(slug, view.id, !view.isLocked),
-                view.isLocked ? strings.unlocked(view.name) : strings.locked(view.name),
-              );
-            },
-          }),
           // Already the default: nothing to set, so it is left out.
           ...(facts.isDefault
             ? []
@@ -258,6 +299,7 @@ export function useViewMenu({
                 id: 'set-default',
                 label: strings.setDefault,
                 icon: 'star',
+                ...(sharing.length === 0 ? { startsGroup: true } : {}),
                 run: () => {
                   run(data.views.setDefault(slug, object.id, view.id), strings.isDefaultNow(view.name));
                 },
@@ -280,55 +322,62 @@ export function useViewMenu({
       icon: 'trash',
       isDanger: true,
       startsGroup: true,
+      // One click, with Undo in its toast (the owner, 30 October 2026: Undo over a confirm).
       run: () => {
-        setDeleteFailure(undefined);
-        setDeleting(true);
+        remove();
       },
     }),
   ];
   const runs = new Map(entries.map((each) => [each.id, each.run]));
-  const remove = () => {
-    if (isBusy) return;
+  function remove() {
+    if (isBusy || view === undefined) return;
+    const gone = view;
     setBusy(true);
-    setDeleteFailure(undefined);
     onDeleting(true);
-    data.views.remove(slug, object.id, view.id).then(
+    data.views.remove(slug, object.id, gone.id).then(
       () => {
         setBusy(false);
-        setDeleting(false);
-        onDeleted(view.name);
+        onDeleted(gone);
       },
       (error: unknown) => {
-        // The confirm stays open with what went wrong, so the person can try again or cancel.
         setBusy(false);
         onDeleting(false);
-        setDeleteFailure(isDataError(error) ? error.message : strings.actionFailed);
+        toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : strings.actionFailed });
       },
     );
-  };
+  }
 
   const makePrivate = () => {
     if (isPrivateBusy) return;
     setPrivateBusy(true);
     setPrivateFailure(undefined);
-    data.views.update(slug, view.id, { visibility: 'private' }).then(
-      () => {
-        setPrivateBusy(false);
-        setGoingPrivate(false);
-        toasts.toast({ tone: 'success', message: strings.madePrivate(view.name) });
-      },
-      (error: unknown) => {
-        // The confirm stays open with what went wrong, so the person can try again or cancel.
-        setPrivateBusy(false);
-        setPrivateFailure(isDataError(error) ? error.message : strings.actionFailed);
-      },
-    );
+    // A locked view is unlocked on the way (Who can see it goes straight from locked to only me).
+    (view.isLocked ? data.views.setLocked(slug, view.id, false) : Promise.resolve(view))
+      .then(() => data.views.update(slug, view.id, { visibility: 'private' }))
+      .then(
+        () => {
+          setPrivateBusy(false);
+          setGoingPrivate(false);
+          toasts.toast({ tone: 'success', message: strings.madePrivate(view.name) });
+        },
+        (error: unknown) => {
+          // The confirm stays open with what went wrong, so the person can try again or cancel.
+          setPrivateBusy(false);
+          setPrivateFailure(isDataError(error) ? error.message : strings.actionFailed);
+        },
+      );
   };
 
   return {
     actions: entries.map(({ run: _run, ...action }) => action),
     onAction: (id) => {
-      runs.get(id)?.();
+      if (id.startsWith('who/')) choose(id.slice('who/'.length));
+      else runs.get(id)?.();
+    },
+    isMovable,
+    onMoveView,
+    rename: () => {
+      setRenaming(true);
     },
     dialogs: (
       <>
@@ -338,32 +387,6 @@ export function useViewMenu({
           onClose={() => setRenaming(false)}
           onRename={(name) => data.views.update(slug, view.id, { name })}
         />
-        <Modal
-          title={
-            view.visibility === 'workspace'
-              ? strings.deleteSharedTitle(view.name)
-              : strings.deletePrivateTitle(view.name)
-          }
-          tone="danger"
-          isOpen={isDeleting}
-          isBusy={isBusy}
-          onOpenChange={(open) => {
-            if (!open && !isBusy) setDeleting(false);
-          }}
-          actions={
-            <>
-              <Button slot="close" isDisabled={isBusy} kbd="ESC">
-                {strings.cancel}
-              </Button>
-              <Button variant="danger-solid" isPending={isBusy} onPress={remove}>
-                {isBusy ? strings.deleting : strings.deleteView}
-              </Button>
-            </>
-          }
-        >
-          {deleteFailure !== undefined && <Callout tone="danger">{deleteFailure}</Callout>}
-          {view.visibility === 'workspace' ? strings.deleteSharedText : strings.deletePrivateText}
-        </Modal>
         <Modal
           title={strings.makePrivateTitle(view.name)}
           isOpen={isGoingPrivate}
@@ -458,7 +481,8 @@ function RenameForm({
       refusals={refusals}
       fieldFor={(refusal) => refusal.attributeId}
       label={strings.renameTitle}
-      focusesFirstField
+      // The name selected, so typing replaces it (Rename right after Duplicate).
+      focusesFirstField="select"
       onSubmit={() => {
         if (isBusy) return;
         if (value.trim() === '') {

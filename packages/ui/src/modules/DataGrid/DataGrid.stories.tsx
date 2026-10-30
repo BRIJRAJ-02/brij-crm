@@ -1159,7 +1159,7 @@ export const RatingKeys: Story = {
   },
 };
 
-/** Resize from the column menu: Left and Right step the width, which is announced, and any other key leaves (AC-8). */
+/** Resize from the header: Alt with Right starts it, then Left and Right step the width, announced; any other key leaves (AC-8). */
 export const ResizeByKeyboard: Story = {
   parameters: { crm: { screenshot: false } },
   play: async ({ canvas, userEvent }) => {
@@ -1168,9 +1168,7 @@ export const ResizeByKeyboard: Story = {
     await userEvent.tab();
     await press(['{ArrowRight}'], '0:2');
     await press(['{ArrowUp}'], '-1:2');
-    await press(['{Alt>}{ArrowDown}{/Alt}']);
-    await waitFor(() => expect(document.querySelector('[role="menu"]')).not.toBeNull());
-    await press(['{End}', '{Enter}'], '-1:2');
+    await press(['{Alt>}{ArrowRight}{/Alt}'], '-1:2');
     await waitFor(() => expect(width()).toBeGreaterThan(0));
     const before = width();
     await press(['{ArrowRight}']);
@@ -1191,7 +1189,7 @@ export const HideKeepsFocus: Story = {
     await press(['{ArrowUp}'], '-1:2');
     await press(['{Alt>}{ArrowDown}{/Alt}']);
     await waitFor(() => expect(document.querySelector('[role="menu"]')).not.toBeNull());
-    await press(['{End}', '{ArrowUp}', '{Enter}'], '-1:2');
+    await press(['{End}', '{Enter}'], '-1:2');
     await expect(cell(canvasElement, -1, 2)).toHaveTextContent('Employees');
   },
 };
@@ -1206,7 +1204,7 @@ export const PinFromMenu: Story = {
     await press(['{ArrowUp}'], '-1:2');
     await press(['{Alt>}{ArrowDown}{/Alt}']);
     await waitFor(() => expect(document.querySelector('[role="menu"]')).not.toBeNull());
-    await press(['{End}', '{ArrowUp}', '{ArrowUp}', '{Enter}'], '-1:2');
+    await press(['{End}', '{ArrowUp}', '{Enter}'], '-1:2');
     await waitFor(() => expect(cell(canvasElement, -1, 2)).toHaveAttribute('data-sticky'));
     await waitFor(() => expect(document.querySelector('[role="menu"]')).toBeNull());
   },

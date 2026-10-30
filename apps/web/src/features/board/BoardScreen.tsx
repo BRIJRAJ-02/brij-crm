@@ -76,7 +76,11 @@ export interface BoardScreenProps {
   /** The dialog that request opened has closed. */
   readonly onAddAttributeClosed?: () => void;
   /** The view's own actions, under "This view" in the switcher's menu, and what runs one (spec 0020). */
-  readonly viewMenu?: { readonly actions: readonly ViewAction[]; readonly onAction: (id: string) => void };
+  readonly viewMenu?: {
+    readonly actions: readonly ViewAction[];
+    readonly onAction: (id: string) => void;
+    readonly onMoveView?: (viewId: string, direction: 'up' | 'down') => void;
+  };
   /** The Table and Board switch, at the end of the view bar. */
   readonly layoutSwitch: ViewLayoutSwitch;
   /** The view's Toolbar (sorts, filters, Save) and any notice under it, given what to say to screen readers. */
@@ -223,6 +227,7 @@ export function BoardScreen(props: BoardScreenProps) {
             onViewChange={onViewChange}
             {...(onCreateView === undefined ? {} : { onCreateView })}
             {...(viewMenu === undefined ? {} : { actions: viewMenu.actions, onAction: viewMenu.onAction })}
+            {...(viewMenu?.onMoveView === undefined ? {} : { onMoveView: viewMenu.onMoveView })}
             {...(viewSettings === undefined ? {} : { settings: viewSettings })}
             layout={layoutSwitch}
           >
@@ -251,7 +256,7 @@ export function BoardScreen(props: BoardScreenProps) {
               <EmptyState
                 icon="kanban"
                 title={strings.nothingToGroupTitle(object.pluralName)}
-                // Only owners and admins change the schema (spec 0009, AC-136); others see the sentence alone.
+                // Only owners and admins change the schema (spec 0009, AC-136); others see the title alone.
                 {...(canChangeSchema
                   ? {
                       actions: (
@@ -261,9 +266,7 @@ export function BoardScreen(props: BoardScreenProps) {
                       ),
                     }
                   : {})}
-              >
-                {strings.nothingToGroupText}
-              </EmptyState>
+              />
             ) : outcome.kind === 'group-archived' ? (
               <EmptyState
                 icon="archive"

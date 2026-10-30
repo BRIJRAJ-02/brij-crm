@@ -85,7 +85,11 @@ export interface RecordsScreenProps {
   /** The view bar's View settings button, which opens the view's columns. */
   readonly viewSettings?: ViewSettingsTrigger;
   /** The view's own actions, under "This view" in the switcher's menu, and what runs one (spec 0020). */
-  readonly viewMenu?: { readonly actions: readonly ViewAction[]; readonly onAction: (id: string) => void };
+  readonly viewMenu?: {
+    readonly actions: readonly ViewAction[];
+    readonly onAction: (id: string) => void;
+    readonly onMoveView?: (viewId: string, direction: 'up' | 'down') => void;
+  };
   /**
    * Add attribute asked from View settings (it moved there from the view bar, 21 October 2026): a new object
    * each time opens the attribute dialog here, which owns it.
@@ -527,6 +531,7 @@ export function RecordsScreen({
             onViewChange={onViewChange ?? (() => undefined)}
             {...(onCreateView === undefined ? {} : { onCreateView })}
             {...(viewMenu === undefined ? {} : { actions: viewMenu.actions, onAction: viewMenu.onAction })}
+            {...(viewMenu?.onMoveView === undefined ? {} : { onMoveView: viewMenu.onMoveView })}
             {...(viewSettings === undefined ? {} : { settings: viewSettings })}
             {...(layoutSwitch === undefined ? {} : { layout: layoutSwitch })}
           >
