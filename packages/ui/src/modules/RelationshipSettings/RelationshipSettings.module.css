@@ -1,0 +1,56 @@
+/* RelationshipSettings: the two objects as two sunken Cards side by side,
+   space-8 apart with the link's arrow between them, each holding its side's
+   question; on a narrow dialog they stack, the arrow turned to run between
+   them. The fixed shape's line runs under both. */
+@layer components {
+  /* The slot the cards measure, so they stack by the dialog's width, not the window's. */
+  .shape {
+    container-type: inline-size;
+  }
+
+  .preview {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    gap: var(--space-8);
+    align-items: stretch;
+  }
+
+  .link {
+    display: flex;
+    align-items: center;
+    color: var(--text-tertiary);
+  }
+
+  /* A fixed side's question and its answer, in the body type, the answer a step stronger. */
+  .holds {
+    margin: 0;
+    color: var(--text-secondary);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
+  .answer {
+    color: var(--text);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+  }
+
+  .fixed {
+    grid-column: 1 / -1;
+    margin: 0;
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  @container (inline-size < 480px) {
+    .preview {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .link {
+      justify-content: center;
+      transform: rotate(90deg);
+    }
+  }
+}
