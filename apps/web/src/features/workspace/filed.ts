@@ -11,7 +11,11 @@ export const FILED_TOAST_MS = 10_000;
 
 /** The filed notice's words, and what its Undo did. */
 export const filedStrings = {
-  undo: 'Undo',
+  /**
+   * The toast's action: Unlink, not Undo, since it takes back only the link (and a company the write made) while the
+   * create or edit stays, and a paste's own toast beside it already says Undo for the whole action.
+   */
+  undo: 'Unlink',
   linked: (name: string) => (name === '' ? 'Linked to their company.' : `Linked to ${name}.`),
   added: (name: string) => (name === '' ? 'Added their company and linked it.' : `Added ${name} and linked it.`),
   linkedMany: (count: number, made: number) =>

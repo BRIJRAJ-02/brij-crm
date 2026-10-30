@@ -25,7 +25,7 @@ describe('filedToast', () => {
   it('names the company linked, or the company added, with Undo', () => {
     const onUndo = vi.fn();
     const linked = filedToast(notice([{ name: 'Acme', made: false }]), onUndo);
-    expect(linked).toMatchObject({ tone: 'success', message: 'Linked to Acme.', action: { label: 'Undo' } });
+    expect(linked).toMatchObject({ tone: 'success', message: 'Linked to Acme.', action: { label: 'Unlink' } });
     linked.action?.onAction();
     expect(onUndo).toHaveBeenCalledOnce();
     expect(filedToast(notice([{ name: 'Acme', made: true }]), onUndo).message).toBe('Added Acme and linked it.');
