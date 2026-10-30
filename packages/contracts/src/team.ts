@@ -101,6 +101,12 @@ export const AUDIT_ACTIONS = [
   'calendar.reconnect_asked',
   // A booking made, moved or cancelled by someone other than its host: the target is the booking, `memberId` the host.
   'booking.changed_for',
+  // Teams (spec 0031, AC-824): a team made, renamed or deleted, or its people changed. The target is the team; `after`
+  // holds `change`, the team's name and, for people, who joined and who left. Stored; History lists it later.
+  'team.changed',
+  // Access rules (spec 0032, AC-852): one subject's access to one object set or cleared. The target is the object;
+  // `before` and `after` hold the subject, its level and its record scope. Stored; History lists it later.
+  'access.rule_set',
 ] as const;
 /** One action the audit log records. */
 export const AuditAction = z.enum(AUDIT_ACTIONS);

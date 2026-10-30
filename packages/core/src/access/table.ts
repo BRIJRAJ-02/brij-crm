@@ -124,6 +124,12 @@ export const ACCESS_TABLE = {
   // Spec 0031, AC-813: an owner hands the workspace on; anyone else is refused.
   transferOwnership: { ownerRules: true },
   listMembers: { anyMember: true },
+  // Teams (spec 0031, slice 8, AC-824, AC-827): every member reads them; owners and admins change them.
+  listTeams: { anyMember: true },
+  createTeam: { permission: 'teams.manage' },
+  renameTeam: { permission: 'teams.manage' },
+  deleteTeam: { permission: 'teams.manage' },
+  changeTeamMembers: { permission: 'teams.manage' },
   // Spec 0037, AC-1439: the roles every role picker offers.
   listRoles: { anyMember: true },
   // A workspace's sign in rules (spec 0033, milestone 4): owners only.

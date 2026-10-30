@@ -343,6 +343,8 @@ export const MyAccess = z.object({
   role: Role,
   roleLabel: z.string(),
   permissions: z.array(Permission),
+  /** The teams the caller is in (spec 0031, AC-825); absent from an answer that predates teams. */
+  teamIds: z.array(Uuid).optional(),
   /**
    * Whose scheduling the caller reaches beyond their own (spec 0037, AC-1261), for the screens to show their
    * pickers: someone else at all (See, Manage), and everyone. The server checks every call through the reach anyway.

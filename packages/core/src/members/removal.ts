@@ -17,6 +17,7 @@ import { rotationsRemoval } from '../rotation/removal.ts';
 import { delegationsRemoval } from '../scheduling/delegations.ts';
 import { limitsRemoval } from '../scheduling/limits.ts';
 import { recentsRemoval } from '../search/recents.ts';
+import { teamsRemoval } from '../teams/teams.ts';
 import { viewsRemoval } from '../views/manage.ts';
 import type { AuditSource } from './audit.ts';
 import { countUnvouched, revokeUnvouched } from './invitations.ts';
@@ -117,6 +118,8 @@ export const REMOVAL_EFFECTS: readonly RemovalEffect[] = [
   delegationsRemoval,
   // Spec 0037, AC-814 widened: their meeting limits.
   limitsRemoval,
+  // Spec 0031, AC-814: their team memberships, and the teammates who read again.
+  teamsRemoval,
 ];
 
 /**

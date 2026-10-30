@@ -78,8 +78,13 @@ export type Principal =
       /** The signed in identity (`auth.user.id`); a member made without one has none. */
       readonly userId?: string;
       readonly role: Role;
-      /** The member's teams, empty until #23. */
+      /** The member's teams (spec 0031, AC-825), empty for a member in none. */
       readonly teamIds: readonly string[];
+      /**
+       * The active members of those teams, the member included: who a `team` record rule matches (spec 0032,
+       * AC-847). Absent or empty, a team rule matches the member alone.
+       */
+      readonly teamMemberIds?: readonly string[];
     }
   | { readonly kind: 'api_key'; readonly keyId: string; readonly scopes: readonly string[] }
   /** A form writing its submissions' records (spec 0023): only what its published mapping names. */
@@ -129,10 +134,18 @@ export interface RecordRuleRow {
   readonly attributeId: string;
 }
 
-/** The workspace's rules: empty until #24 stores them (tests inject them through the door). */
+/**
+ * The rules that apply to a member, as the door's `RuleSource` read them (spec 0032, AC-841), and the teams it read
+ * them for: the member's team ids and the active members of those teams (spec 0031, AC-825). Both are empty for
+ * rules a test injects by hand, which name teams in their subjects and put the member in them through the principal.
+ */
 export interface AccessRules {
   readonly levels: readonly LevelRule[];
   readonly records: readonly RecordRuleRow[];
+  /** The member's own teams, when the source read them. */
+  readonly teamIds?: readonly string[];
+  /** The active members of those teams, when the source read them. */
+  readonly teamMemberIds?: readonly string[];
 }
 
 /** No rules at all: every role writes every object and field, with no record rule. */

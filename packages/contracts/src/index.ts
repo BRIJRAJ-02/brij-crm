@@ -31,6 +31,7 @@ import { linksContract, relationshipsContract } from './relations.ts';
 import { recentsContract, searchContract } from './search.ts';
 import { systemContract } from './system.ts';
 import { invitationsContract, joinContract, joinRequestsContract } from './team.ts';
+import { teamsContract } from './teams.ts';
 import { trashContract } from './trash.ts';
 import { notesContract } from './notes.ts';
 import { tasksContract } from './tasks.ts';
@@ -89,6 +90,7 @@ export * from './notes.ts';
 export * from './tasks.ts';
 export * from './preferences.ts';
 export * from './team.ts';
+export * from './teams.ts';
 export * from './usage.ts';
 export * from './view-model.ts';
 export * from './views.ts';
@@ -132,6 +134,8 @@ export const contract = {
   join: joinContract,
   joinRequests: joinRequestsContract,
   access: accessContract,
+  // Teams (spec 0031, slice 8).
+  teams: teamsContract,
   roles: rolesContract,
   // Scheduling access (spec 0037): delegations of See or Manage over someone's scheduling.
   scheduling: schedulingContract,

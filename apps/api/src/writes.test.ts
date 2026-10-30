@@ -45,6 +45,8 @@ const READS: ReadonlySet<string> = new Set([
   // What an attribute's change would touch, read before the change (the flow pass).
   'attributes.impact',
   'members.list',
+  // Teams (spec 0031, slice 8): the list every member reads.
+  'teams.list',
   // Invitations (spec 0031): the open list, and the invitation page's look (no session).
   'invitations.list',
   'invitations.peek',
@@ -2285,6 +2287,10 @@ Object.assign(WRITES, {
 
 /** How many writes (each one poke) a case in WRITES makes before and with its own. */
 const WRITES_MADE: Readonly<Record<string, number>> = {
+  // A team made first, then the write (spec 0031, slice 8).
+  'teams.rename': 2,
+  'teams.delete': 2,
+  'teams.changeMembers': 2,
   // Imports (spec 0040): the import made (and its rows staged) first, then the write.
   'imports.stage': 2,
   'imports.start': 3,
@@ -2400,6 +2406,38 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'submissions.retry': 3,
   'submissions.delete': 3,
 };
+
+// Teams (spec 0031, slice 8): every team write stores a `members` row (everyone's team list reads again), naming the
+// people it changed and the writer; a change of people also stores the `access` row (their access, AC-825).
+Object.assign(WRITES, {
+  'teams.create': async (m: Member, mutationId: string) => {
+    const me = (await m.client.access.mine({ workspace: m.slug })).memberId;
+    await m.client.teams.create({ workspace: m.slug, name: 'Sales', mutationId });
+    return [{ kind: 'members', item_ids: [me], mutation_id: mutationId }];
+  },
+  'teams.rename': async (m: Member, mutationId: string) => {
+    const me = (await m.client.access.mine({ workspace: m.slug })).memberId;
+    const team = await m.client.teams.create({ workspace: m.slug, name: 'Sales', mutationId: newId() });
+    await m.client.teams.rename({ workspace: m.slug, teamId: team.id, name: 'Revenue', mutationId });
+    return [{ kind: 'members' }, { kind: 'members', item_ids: [me], mutation_id: mutationId }];
+  },
+  'teams.delete': async (m: Member, mutationId: string) => {
+    const me = (await m.client.access.mine({ workspace: m.slug })).memberId;
+    const team = await m.client.teams.create({ workspace: m.slug, name: 'Sales', mutationId: newId() });
+    await m.client.teams.delete({ workspace: m.slug, teamId: team.id, mutationId });
+    return [{ kind: 'members' }, { kind: 'members', item_ids: [me], mutation_id: mutationId }];
+  },
+  'teams.changeMembers': async (m: Member, mutationId: string) => {
+    const me = (await m.client.access.mine({ workspace: m.slug })).memberId;
+    const team = await m.client.teams.create({ workspace: m.slug, name: 'Sales', mutationId: newId() });
+    await m.client.teams.changeMembers({ workspace: m.slug, teamId: team.id, add: [me], mutationId });
+    return [
+      { kind: 'members' },
+      { kind: 'members', item_ids: [me], mutation_id: mutationId },
+      { kind: 'access', item_ids: [me], mutation_id: mutationId },
+    ];
+  },
+});
 
 describe('the one write path', () => {
   it('knows every procedure in the contract as a read or a write', () => {

@@ -75,6 +75,9 @@ export const AUDIT_KINDS = {
 export const AUDIT_NOT_LISTED = [
   'member.preferences_changed',
   'booking_page.profile_reordered',
+  // Teams and access rules (specs 0031 and 0032): stored with their before and after, listed by History later.
+  'team.changed',
+  'access.rule_set',
 ] as const satisfies readonly AuditAction[];
 
 /** An action Workspace changes lists: every catalog action outside `AUDIT_NOT_LISTED`. */
