@@ -14,7 +14,7 @@ import {
   type MemberSummary,
   type ObjectSummary,
 } from '@crm/data';
-import { readCsvFile, TRANSFER_LIMITS, type CsvResult, type CsvTable } from '@crm/data/imports';
+import { CSV_BOM, csvLine, readCsvFile, TRANSFER_LIMITS, type CsvResult, type CsvTable } from '@crm/data/imports';
 import {
   AttributeDisplay,
   Button,
@@ -61,6 +61,7 @@ import {
   matchAttributes,
   type ImportChoice,
 } from './matching.ts';
+import { defaultDateOrder, longDay, numericDates, orderLocale, type DateOrder } from './date-order.ts';
 import { columnNames, missingOptions, suggestType } from './missing.ts';
 import { importSummaryHref } from './paths.ts';
 import {
@@ -72,6 +73,7 @@ import {
   type ErrorRow,
   type ReadRows,
 } from './rows.ts';
+import { unmatchedRequired } from './required.ts';
 import { n, strings } from './strings.ts';
 
 /** Props for the import page: what its route loaded through the data layer. */
@@ -154,6 +156,14 @@ function samplesOf(table: CsvTable, column: number, size: number): readonly stri
   return found;
 }
 
+/** A date column whose values read either way round: the order chosen (or guessed), and one value read by it. */
+interface DateColumn {
+  readonly column: number;
+  readonly order: DateOrder;
+  readonly sample: string;
+  readonly reads: string | undefined;
+}
+
 /** One row of the preview: a ready row, or one with errors. */
 interface PreviewRow {
   readonly rowNumber: number;
@@ -205,16 +215,52 @@ export function ImportScreen({ data, slug, object, attributes: given, members, o
   const byId = useMemo(() => new Map(attributes.map((attribute) => [attribute.id, attribute])), [attributes]);
   const locale = globalThis.navigator.languages[0] ?? 'en-US';
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  // A date column's day and month order (chosen in Match columns), by column; unchosen, guessed from the file.
+  const [dateOrders, setDateOrders] = useState<ReadonlyMap<number, DateOrder>>(new Map());
+  /** Each column's values that read either way round (3/4/2025), read once per file. */
+  const numericByColumn = useMemo(
+    () =>
+      loaded === undefined
+        ? []
+        : loaded.table.headers.map((_, column) => numericDates(loaded.table.rows.map((row) => cellText(row[column])))),
+    [loaded],
+  );
+  const dateColumns: readonly DateColumn[] = targets.flatMap((target, column) => {
+    const attribute = target === undefined ? undefined : byId.get(target.attributeId);
+    const texts = numericByColumn[column] ?? [];
+    const [sample] = texts;
+    if (attribute?.type !== 'date' || sample === undefined) return [];
+    const order = dateOrders.get(column) ?? defaultDateOrder(texts, locale);
+    const field = fields.get(attribute.id);
+    const read =
+      field === undefined
+        ? undefined
+        : readCell(sample, field, (each) => ({
+            locale: orderLocale(order),
+            timeZone,
+            attribute: each,
+            members: actors,
+          }));
+    return [{ column, order, sample, reads: read?.ok === true ? longDay(read.value, locale) : undefined }];
+  });
+  // The date attributes' reading language, so the field set reads each column's dates the way round it says.
+  const dateLocales = new Map(
+    dateColumns.flatMap((each) => {
+      const target = targets[each.column];
+      return target === undefined ? [] : [[target.attributeId, orderLocale(each.order)] as const];
+    }),
+  );
   const contextFor =
-    (parser: PhoneParser | undefined) =>
+    (parser: PhoneParser | undefined, readsDates: ReadonlyMap<string, string> = new Map()) =>
     (attribute: FieldAttribute): TextContext => ({
-      locale,
+      locale: readsDates.get(attribute.id) ?? locale,
       timeZone,
       attribute,
       members: actors,
       ...(parser === undefined ? {} : { phone: parser }),
     });
-  const context = contextFor(phone);
+  const context = contextFor(phone, dateLocales);
+  const required = unmatchedRequired(attributes, targets);
 
   /** Moves to a step, focus to the page's title (the step's Card and the button pressed went away). */
   const setStep = (next: Step) => {
@@ -250,18 +296,22 @@ export function ImportScreen({ data, slug, object, attributes: given, members, o
       const reader = contextFor(parser);
       const { table } = read;
       const samples = table.headers.map((_, column) => samplesOf(table, column, SAMPLE_READ));
-      const proposed = autoMatch(
-        table.headers,
-        samples,
-        choices,
-        (choice, text) =>
-          choice.target.part !== undefined ||
-          choice.attribute.type === 'record_reference' ||
-          readCell(text, fields.get(choice.attribute.id) ?? toFieldAttribute(choice.attribute), reader).ok,
-      );
+      const proposed = autoMatch(table.headers, samples, choices, (choice, text) => {
+        if (choice.target.part !== undefined || choice.attribute.type === 'record_reference') return true;
+        const field = fields.get(choice.attribute.id) ?? toFieldAttribute(choice.attribute);
+        if (readCell(text, field, reader).ok) return true;
+        // A date reads either way round here; its order is chosen in Match columns.
+        return (
+          choice.attribute.type === 'date' &&
+          (['day-first', 'month-first'] as const).some(
+            (order) => readCell(text, field, contextFor(parser, new Map([[field.id, orderLocale(order)]]))).ok,
+          )
+        );
+      });
       setPhone(parser);
       setLoaded({ name: file.name, table, samples: samples.map((each) => each.slice(0, SAMPLES_SHOWN)) });
       setTargets(proposed);
+      setDateOrders(new Map());
       checkLinks(table.rows, proposed, new Map());
       setMatchId(defaultMatch(object, matchAttributes(attributes, proposed)) ?? NONE);
       setResult(undefined);
@@ -483,6 +533,17 @@ export function ImportScreen({ data, slug, object, attributes: given, members, o
             isDisabled={isReading}
           />
           {isReading && <ProgressBar label={strings.reading} isIndeterminate />}
+          {/* A file's first row, as this object takes it: written here, nothing asked of the server. */}
+          <Button
+            variant="link"
+            icon="download"
+            onPress={() => {
+              const titles = choices.filter((choice) => choice.target.part === undefined).map(choiceLabel);
+              saveCsv(strings.sampleFile(object.pluralName), `${CSV_BOM}${csvLine(titles)}`);
+            }}
+          >
+            {strings.sampleCsv}
+          </Button>
           {uploadError !== undefined && (
             <Callout tone="danger" isAnnounced>
               {uploadError}
@@ -520,6 +581,16 @@ export function ImportScreen({ data, slug, object, attributes: given, members, o
                     : { attributeId: each.attributeId },
               ),
             );
+          }}
+          dates={dateColumns}
+          onDateOrder={(column, order) => {
+            setDateOrders((current) => new Map(current).set(column, order));
+            setResult(undefined);
+          }}
+          required={required}
+          isCreating={onNoMatch === 'create'}
+          onUpdateOnly={(isOnly) => {
+            setOnNoMatch(isOnly ? 'skip' : 'create');
           }}
           onBack={() => {
             setLoaded(undefined);
@@ -770,6 +841,15 @@ interface ColumnsStepProps {
   readonly onNewAttribute: (column: number) => void;
   readonly onCreateOptions: (column: number, attributeId: string, labels: readonly string[]) => void;
   readonly onCreateMissing: (column: number, isSelected: boolean) => void;
+  /** The date columns whose values read either way round, each with its order and one value read by it. */
+  readonly dates: readonly DateColumn[];
+  readonly onDateOrder: (column: number, order: DateOrder) => void;
+  /** Required attributes no column fills and no default fills: each a danger row, and Continue waits. */
+  readonly required: readonly AttributeDefinition[];
+  /** Rows matching no record make one (the default), so the required attributes need a column. */
+  readonly isCreating: boolean;
+  /** Only update records already there: nothing is made, so nothing required is missing. */
+  readonly onUpdateOnly: (isOnly: boolean) => void;
   readonly onBack: () => void;
   readonly onContinue: () => void;
 }
@@ -817,9 +897,20 @@ function ColumnsStep({
   onNewAttribute,
   onCreateOptions,
   onCreateMissing,
+  dates,
+  onDateOrder,
+  required,
+  isCreating,
+  onUpdateOnly,
   onBack,
   onContinue,
 }: ColumnsStepProps) {
+  const isMissingRequired = isCreating && required.length > 0;
+  const freeColumns: readonly SelectItem[] = loaded.table.headers.flatMap((header, column) =>
+    targets[column] === undefined
+      ? [{ id: String(column), label: header === '' ? strings.newAttributeTitle(column) : header }]
+      : [],
+  );
   const { headers } = loaded.table;
   // Row ids never clash with the column ids, which share React Aria's one collection.
   const rows = headers.map((header, column) => ({ id: `column-${String(column)}`, header, column }));
@@ -877,9 +968,9 @@ function ColumnsStep({
       footer={
         <>
           <Button onPress={onBack}>{strings.chooseAnother}</Button>
-          {matched === 0 ? (
-            // Off until a column has somewhere to go, and says so on hover and focus.
-            <Tooltip content={strings.matchOneFirst}>
+          {matched === 0 || isMissingRequired ? (
+            // Off until a column has somewhere to go and every required field has one, and says so on hover and focus.
+            <Tooltip content={matched === 0 ? strings.matchOneFirst : strings.matchRequiredFirst}>
               <Button variant="primary" isDisabled>
                 {strings.continue}
               </Button>
@@ -899,6 +990,43 @@ function ColumnsStep({
         </Callout>
       )}
       {busyColumn !== undefined && <ProgressBar label={strings.saving(headers[busyColumn] ?? '')} isIndeterminate />}
+      {/* Guarded here, not at Start: a required field no column fills would refuse every new row. */}
+      {isCreating &&
+        required.map((attribute) => (
+          <Callout
+            key={`required-${attribute.id}`}
+            tone="danger"
+            isPolite
+            title={strings.requiredMissing(attribute.title)}
+            {...(choices.some((choice) => choice.attribute.id === attribute.id) && freeColumns.length > 0
+              ? {
+                  actions: (
+                    <Select
+                      label={strings.matchAColumn(attribute.title)}
+                      isLabelHidden
+                      placeholder={strings.matchAColumnShort}
+                      size="sm"
+                      items={freeColumns}
+                      value={null}
+                      onChange={(id) => {
+                        if (id !== null) onTarget(Number(id), { attributeId: attribute.id });
+                      }}
+                    />
+                  ),
+                }
+              : {})}
+          >
+            {strings.requiredMissingText}
+          </Callout>
+        ))}
+      {required.length > 0 && (
+        <Checkbox
+          label={strings.updateOnly}
+          description={strings.updateOnlyHint}
+          isSelected={!isCreating}
+          onChange={onUpdateOnly}
+        />
+      )}
       <Table
         label={strings.columnsLabel}
         columns={COLUMN_COLUMNS}
@@ -932,6 +1060,30 @@ function ColumnsStep({
           );
         }}
       />
+      {dates.map((date) => (
+        <Callout
+          key={`dates-${String(date.column)}`}
+          tone="info"
+          title={strings.datesTitle(headers[date.column] ?? '')}
+          actions={
+            <Select
+              label={strings.dateOrderLabel(headers[date.column] ?? '')}
+              isLabelHidden
+              size="sm"
+              items={[
+                { id: 'day-first', label: strings.dayFirst },
+                { id: 'month-first', label: strings.monthFirst },
+              ]}
+              value={date.order}
+              onChange={(id) => {
+                if (id === 'day-first' || id === 'month-first') onDateOrder(date.column, id);
+              }}
+            />
+          }
+        >
+          {date.reads === undefined ? strings.dateUnread(date.sample) : strings.dateReads(date.sample, date.reads)}
+        </Callout>
+      ))}
       {notes.map((note) => {
         const header = headers[note.column] ?? '';
         if (note.kind === 'options') {

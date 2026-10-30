@@ -58,6 +58,24 @@ export const strings = {
   targetLabel: (header: string) => `Where ${header} goes`,
   noSample: 'No values',
   needOneColumn: 'Match at least one column to continue.',
+  /** A required field no column fills (guarded here, not at Start). */
+  matchRequiredFirst: 'Match a column to each required field to go on.',
+  requiredMissing: (title: string) => `${title} is required`,
+  requiredMissingText: 'No column fills it, so no new record could be made.',
+  matchAColumn: (title: string) => `Match a column to ${title}`,
+  matchAColumnShort: 'Match a column',
+  updateOnly: 'Only update records I have',
+  updateOnlyHint: 'Rows that match no record are skipped, so nothing new is made.',
+  /** A date column whose values read either way round (03/04/2025). */
+  datesTitle: (header: string) => `Dates in ${header}`,
+  dateOrderLabel: (header: string) => `How ${header} writes dates`,
+  dayFirst: 'Day first',
+  monthFirst: 'Month first',
+  dateReads: (sample: string, day: string) => `${sample} → ${day}`,
+  dateUnread: (sample: string) => `${sample} isn’t a date this way round.`,
+  /** The upload step's sample file: this object's columns as its first row. */
+  sampleCsv: 'Download a sample CSV',
+  sampleFile: (pluralName: string) => `${pluralName} sample.csv`,
   // Milestone 5: new attributes (AC-1116), missing options (AC-1122) and relation columns (decision 7)
   newAttribute: 'New attribute',
   newAttributeHint: (type: string) => `Creates ${type} attribute from this column`,
