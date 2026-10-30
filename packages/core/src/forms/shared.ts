@@ -103,6 +103,16 @@ export async function loadForm(tx: WorkspaceTx, formId: string, lock = false): P
   return row;
 }
 
+/** Forms by id, in one statement (unknown ids left out). */
+export async function loadForms(tx: WorkspaceTx, formIds: readonly string[]): Promise<ReadonlyMap<string, FormRow>> {
+  if (formIds.length === 0) return new Map();
+  const rows = await tx
+    .select(FORM_COLUMNS)
+    .from(forms)
+    .where(inArray(forms.id, [...new Set(formIds)]));
+  return new Map(rows.map((row) => [row.id, row]));
+}
+
 /** A version as the services read it: its number, its document (parsed), who saved it last, and whether it is published. */
 export interface VersionRow {
   readonly id: string;

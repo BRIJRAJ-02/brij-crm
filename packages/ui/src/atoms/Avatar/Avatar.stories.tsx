@@ -55,6 +55,23 @@ export const Sizes: Story = {
   },
 };
 
+/** A mark in place of initials, for a face that isn't a person: a form, the system, on the neutral square. */
+export const Mark: Story = {
+  render: () => (
+    <Stage>
+      <Avatar name="Contact us" icon="clipboard-list" shape="square" hue="ink" size="xs" />
+      <Avatar name="Contact us" icon="clipboard-list" shape="square" hue="ink" size="sm" />
+      <Avatar name="System" icon="server" shape="square" hue="ink" size="md" />
+      <Avatar name="System" icon="server" shape="square" hue="ink" size="lg" />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    // Named as the thing it stands for, with no initials drawn.
+    const [form] = canvas.getAllByRole('img', { name: 'Contact us' });
+    await expect(form).not.toHaveTextContent(/C/u);
+  },
+};
+
 /** A picture from an outside origin is refused and the initials show (AC-14). */
 export const RefusedPicture: Story = {
   args: { src: 'https://images.example.com/ada.png' },

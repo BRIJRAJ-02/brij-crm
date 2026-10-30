@@ -7,6 +7,7 @@ import { isTaskParam } from '../tasks/entries.ts';
 import { actorDisplay } from '../notes/entries.ts';
 import { formHref } from '../forms/paths.ts';
 import { recordHref } from '../records/details.ts';
+import { strings } from './strings.ts';
 
 /** The kind filter as the address spells it. */
 export type InboxKind = 'mentions' | 'replies' | 'assignments' | 'submissions';
@@ -49,7 +50,11 @@ export function toNotificationItem(view: NotificationView, members: readonly Mem
   return {
     id: view.id,
     kind: view.kind,
-    actor: actorDisplay(members, view.actor),
+    // A form's new submission is the form's doing, drawn under its mark.
+    actor:
+      view.kind === 'form_submission'
+        ? { type: 'form', id: view.formId ?? null, name: view.formName ?? strings.someForm }
+        : actorDisplay(members, view.actor),
     createdAt: view.createdAt,
     isRead: view.readAt !== undefined,
     isDone: view.doneAt !== undefined,

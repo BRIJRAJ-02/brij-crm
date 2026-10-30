@@ -1,6 +1,8 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import type { Hue } from '../../hue.ts';
 import { safeImageSrc } from '../../lib/safe-image-src.ts';
+import { Icon, type IconSize } from '../Icon/Icon.tsx';
+import type { IconName } from '../Icon/icons.ts';
 import { initialsOf, stableHue } from '../../lib/stable-hue.ts';
 import { strings } from './strings.ts';
 import styles from './Avatar.module.css';
@@ -26,7 +28,23 @@ export interface AvatarProps {
   readonly shape?: 'circle' | 'square';
   /** Hides it from screen readers when the name is written right beside it. */
   readonly isDecorative?: boolean;
+  /**
+   * A mark in place of the initials, for something that isn't a person or a record (a form, the system): its face
+   * keeps the row's size and shape beside people's. A picture still wins when `src` is given.
+   */
+  readonly icon?: IconName;
 }
+
+/** The icon a mark takes on each avatar size: about 60% of the tile, from the icon scale. */
+const ICON_SIZES: Readonly<Record<AvatarSize, IconSize>> = {
+  xs: 'xs',
+  sm: 'xs',
+  md: 'sm',
+  lg: 'md',
+  title: 'md',
+  xl: 'md',
+  hero: 'md',
+};
 
 /**
  * The sizes whose picture fades in over the initials once it has loaded (29 Oct 2026): a page's one big picture (a
@@ -39,7 +57,7 @@ const FADES_IN: ReadonlySet<AvatarSize> = new Set<AvatarSize>(['title', 'xl', 'h
 const ONE_INITIAL: ReadonlySet<AvatarSize> = new Set<AvatarSize>(['xs', 'sm']);
 
 /** A person's or company's picture, or their initials on a hue tile: people are circles, companies squares. */
-export function Avatar({ name, id, src, hue, size = 'sm', shape = 'circle', isDecorative = false }: AvatarProps) {
+export function Avatar({ name, id, src, hue, size = 'sm', shape = 'circle', isDecorative = false, icon }: AvatarProps) {
   const [failed, setFailed] = useState<string | undefined>(undefined);
   // The picture that has loaded, and whether it was already in the browser's cache: one there shows at once.
   const [loaded, setLoaded] = useState<{ readonly src: string; readonly isCached: boolean } | undefined>(undefined);
@@ -59,7 +77,12 @@ export function Avatar({ name, id, src, hue, size = 'sm', shape = 'circle', isDe
     }
   }, [fades, image]);
   // One initial is the first word's: initialsOf on that word alone, so a letter built of several code points stays whole.
-  const initials = initialsOf(ONE_INITIAL.has(size) ? (name.trim().split(/\s+/u)[0] ?? '') : name);
+  const initials =
+    icon === undefined ? (
+      initialsOf(ONE_INITIAL.has(size) ? (name.trim().split(/\s+/u)[0] ?? '') : name)
+    ) : (
+      <Icon name={icon} size={ICON_SIZES[size]} />
+    );
   return (
     <span
       className={styles.root}

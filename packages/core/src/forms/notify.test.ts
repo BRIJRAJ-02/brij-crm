@@ -12,12 +12,13 @@ import { SYSTEM_ACTOR } from '../engine/scope.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
 import { runWrite } from '../engine/write.ts';
 import { jobKinds } from '../jobs/kinds/index.ts';
-import { listNotifications, unemailedNotifications } from '../notifications/inbox.ts';
+import { countUnread, listNotifications, unemailedNotifications } from '../notifications/inbox.ts';
 import { testScope } from '../testing.ts';
 import { createForm, getForm, NOTIFY_MEMBER_UNKNOWN, publishForm, saveFormDraft, updateFormSettings } from './forms.ts';
 import { answerWords } from './notify.ts';
 import { formsProcess, processSubmission } from './process.ts';
 import { submitForm } from './public.ts';
+import { deleteSubmission } from './submissions.ts';
 
 const { appUrl } = inject('testDatabase');
 let db: Database;
@@ -332,6 +333,11 @@ describe('the team’s notice of a new submission (AC-1047, late trap #19)', () 
     });
     expect((await listNotifications(shut, { status: 'inbox' })).items).toEqual([]);
     expect((await unemailedNotifications(shut, { digest: true })).items).toEqual([]);
+    expect(await countUnread(shut)).toEqual({ count: 0, atLeast: false });
+    expect(await countUnread(asMember(w.bea, 'member'))).toEqual({ count: 1, atLeast: false });
+    // Deleting the submission takes its notifications with it.
+    await deleteSubmission(asMember(w.ada, 'owner'), { submissionId: id });
+    expect(await w.query(sql`select 1 from notifications where kind::text = 'form_submission'`)).toEqual([]);
   });
 
   it('tells nobody from a registry built without rules (fail closed)', async () => {

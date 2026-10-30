@@ -1,6 +1,8 @@
 // The inbox's rows (spec 0038, AC-1169 to AC-1171, the inventory's
-// NotificationInbox): who did what ("Ada mentioned you"), the record, the
-// comment's start or the task's title, when, and an unread dot. Pressing a row
+// NotificationInbox): who did what ("Ada mentioned you"), or a form's new
+// submission ("Contact us got a new submission", spec 0023) under the form's
+// mark, the record, the comment's start or the task's title, when, and an
+// unread dot. Pressing a row
 // (or Enter) opens what it is about; each row's menu, and U and E on a focused
 // row, mark it read or unread, done or back in the inbox. Rows come through a
 // ListSource, and only the rows on screen draw.
@@ -9,7 +11,7 @@ import { useMemo, type KeyboardEvent, type ReactNode } from 'react';
 import { GridList, GridListItem, ListLayout, Virtualizer } from 'react-aria-components';
 import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
-import { RecordChip } from '../../atoms/RecordChip/RecordChip.tsx';
+import { ACTOR_ICONS, RecordChip } from '../../atoms/RecordChip/RecordChip.tsx';
 import { RelativeTime } from '../../atoms/RelativeTime/RelativeTime.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
@@ -194,14 +196,26 @@ export function NotificationList({
       >
         <RowShown index={row.index} onShown={onShown} />
         <span className={styles.dot} data-unread={!item.isRead || undefined} aria-hidden="true" />
-        <Avatar
-          name={item.actor.name}
-          id={item.actor.id ?? item.actor.name}
-          size="sm"
-          isDecorative
-          {...(item.actor.imageSrc === undefined ? {} : { src: item.actor.imageSrc })}
-          {...(item.actor.hue === undefined ? {} : { hue: item.actor.hue })}
-        />
+        {item.actor.type === 'member' ? (
+          <Avatar
+            name={item.actor.name}
+            id={item.actor.id ?? item.actor.name}
+            size="sm"
+            isDecorative
+            {...(item.actor.imageSrc === undefined ? {} : { src: item.actor.imageSrc })}
+            {...(item.actor.hue === undefined ? {} : { hue: item.actor.hue })}
+          />
+        ) : (
+          // Not a person (a form, the system): its mark on the neutral tile, as RecordChip draws it.
+          <Avatar
+            name={item.actor.name}
+            size="sm"
+            shape="square"
+            hue="ink"
+            icon={ACTOR_ICONS[item.actor.type]}
+            isDecorative
+          />
+        )}
         <span className={styles.main}>
           <span className={styles.line}>
             {!item.isRead && <VisuallyHidden>{`${strings.unread} `}</VisuallyHidden>}

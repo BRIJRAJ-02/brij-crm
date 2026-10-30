@@ -10,7 +10,7 @@
 // on, one waiting row per member). A form's new submission (spec 0023, AC-568)
 // is written by the processing job through `notifySubmission`, which emails it
 // itself, with its answers, or leaves it for the member's daily digest.
-import { sql } from 'drizzle-orm';
+import { sql, type SQL } from 'drizzle-orm';
 import type { NotificationKind } from '@crm/contracts';
 import type { WorkspaceTx } from '@crm/db';
 import { uuidList } from '../engine/ids.ts';
@@ -255,4 +255,18 @@ export async function notifySubmission(
   `);
   const [row] = made.rows;
   return row === undefined ? undefined : { digestOnly: row.digest_only };
+}
+
+/**
+ * Takes away the notifications of the submissions `which` names (a condition on `n`), before they are deleted, so
+ * the members whose inbox showed one hear of it through the write's `notifications` outbox row, rather than keep a
+ * row that opens to nothing until they reload.
+ */
+export async function withdrawSubmissionNotices(context: WriteContext, which: SQL): Promise<void> {
+  const gone = await context.tx.execute<{ member_id: string }>(sql`
+    delete from notifications n where n.submission_id is not null and ${which}
+    returning n.member_id::text as member_id
+  `);
+  const members = [...new Set(gone.rows.map((row) => row.member_id))];
+  if (members.length > 0) context.record({ notifications: members });
 }

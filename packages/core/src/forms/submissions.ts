@@ -35,9 +35,10 @@ import { inWorkspace } from '../access/run.ts';
 import { attributeVisible, visibleRecords } from '../access/visibility.ts';
 import type { JobRegistry } from '../jobs/registry.ts';
 import { startJob } from '../jobs/service.ts';
+import { withdrawSubmissionNotices } from '../notifications/notify.ts';
 import { UNKNOWN_FORM } from './forms.ts';
 import { FORMS_PROCESS, requiredFieldFailure, siteFieldFailure } from './process.ts';
-import { canSeeForm, loadForm, loadVersions, millis } from './shared.ts';
+import { canSeeForm, loadForm, loadForms, loadVersions, millis } from './shared.ts';
 
 const { formSubmissionRecords, formSubmissions, records } = schema;
 
@@ -354,8 +355,10 @@ export async function submissionNotices(
   const unique = [...new Set(ids)];
   if (unique.length === 0) return new Map();
   const rows = await tx.select(COLUMNS).from(formSubmissions).where(inArray(formSubmissions.id, unique));
-  const forms = new Map<string, Awaited<ReturnType<typeof loadForm>>>();
-  for (const formId of new Set(rows.map((row) => row.formId))) forms.set(formId, await loadForm(tx, formId));
+  const forms = await loadForms(
+    tx,
+    rows.map((row) => row.formId),
+  );
   const seenForm = rows.filter((row) => {
     const form = forms.get(row.formId);
     return form !== undefined && canSeeForm(scope.access, form);
@@ -639,8 +642,11 @@ export async function deleteSubmission(
   requirePermission(scope, 'forms.manage');
   await runWrite(
     scope,
-    async ({ tx }) => {
+    async (context) => {
+      const { tx } = context;
       const row = await lockedSubmission(tx, scope, input.submissionId);
+      // Its notifications go with it: the inboxes showing one hear of it.
+      await withdrawSubmissionNotices(context, sql`n.submission_id = ${row.id}`);
       await tx.delete(formSubmissions).where(eq(formSubmissions.id, row.id));
     },
     hooks,

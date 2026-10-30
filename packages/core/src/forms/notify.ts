@@ -172,6 +172,14 @@ async function tellOne(tx: WorkspaceTx, notice: Notice, memberId: string): Promi
     reason: memberId === row.lead_owner ? 'lead' : 'listed',
     filed: row.state === 'processed',
   };
-  await queueFormSubmissionNotice(tx, { submissionId, memberId, params });
+  const queued = await queueFormSubmissionNotice(tx, { submissionId, memberId, params });
+  if (queued.outcome === 'refused') {
+    // Its own email couldn't be queued: the notifications email carries it instead (a line and its link).
+    await tx.execute(sql`
+      update notifications set emailed_at = null
+      where member_id = ${memberId}::uuid and submission_id = ${submissionId}::uuid
+    `);
+    await tx.execute(sql`select crm_enqueue_notification_email(${memberId}::uuid)`);
+  }
   return true;
 }

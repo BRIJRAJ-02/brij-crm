@@ -42,6 +42,7 @@ import { changedRuleIds, checkFormAddresses, checkFormRoutes, rulesChanged } fro
 import { can, fieldLevel, objectLevel, type Access } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
 import { checkObject, UNKNOWN_OBJECT } from '../access/visibility.ts';
+import { withdrawSubmissionNotices } from '../notifications/notify.ts';
 import {
   canSeeForm,
   fileable,
@@ -1112,8 +1113,14 @@ export async function deleteForm(
   requirePermission(scope, 'forms.manage');
   await runWrite(
     scope,
-    async ({ tx }) => {
+    async (context) => {
+      const { tx } = context;
       const form = await visibleForm(tx, scope, input.formId, true);
+      // Its submissions' notifications go with them: the inboxes showing one hear of it.
+      await withdrawSubmissionNotices(
+        context,
+        sql`n.submission_id in (select id from form_submissions where form_id = ${form.id})`,
+      );
       await tx.delete(formSubmissions).where(eq(formSubmissions.formId, form.id));
       await tx.delete(forms).where(eq(forms.id, form.id));
     },

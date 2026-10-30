@@ -12,6 +12,8 @@ export const strings = {
   replies: 'Replies',
   assignments: 'Assignments',
   submissions: 'Form submissions',
+  /** A submission's form whose name didn't come with it. */
+  someForm: 'A form',
   unreadOnly: 'Unread only',
   markAllRead: 'Mark all as read',
   nothingUnread: 'Nothing here is unread.',

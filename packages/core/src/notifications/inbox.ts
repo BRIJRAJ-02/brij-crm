@@ -538,6 +538,17 @@ export async function setNotificationSettings(
           where member_id = ${me}::uuid and topic = 'mentions' and not subscribed
         `);
       }
+      // The digest turned off: the new submissions it was holding go in an email of their own instead, never lost.
+      if (before.digest && !next.digest) {
+        await tx.execute(sql`
+          select crm_enqueue_notification_email(${me}::uuid)
+          where exists (
+            select 1 from notifications
+            where member_id = ${me}::uuid and kind::text = 'form_submission' and emailed_at is null
+              and read_at is null and done_at is null
+          )
+        `);
+      }
       context.record({ notifications: [me] });
       const saved = settingsOf(rows.rows[0]);
       return saved.emailMentions && (await mentionsTopicOff(tx, me)) ? { ...saved, emailMentions: false } : saved;
@@ -594,8 +605,8 @@ export async function unemailedNotifications(
     `);
     const mentionsOn = offRows.rows.length === 0;
     // The digest holds every kind still unread (AC-1178); an email after a notification, the kinds switched on. A
-    // form's new submission is emailed on its own, with its answers, unless the member takes the digest: then only
-    // the digest holds it (`tellOne` marks it emailed when its own email goes).
+    // form's new submission is emailed on its own, with its answers, and marked emailed then (`tellOne`); one still
+    // unemailed here was waiting for a digest since turned off, or its own email was refused, so it goes in this one.
     const kinds: NotificationKind[] = (
       options.digest
         ? (['mention', 'reply', 'task_assigned', 'form_submission'] as const)
@@ -603,6 +614,7 @@ export async function unemailedNotifications(
             ...(settings.emailMentions ? (['mention'] as const) : []),
             ...(settings.emailReplies ? (['reply'] as const) : []),
             ...(settings.emailAssignments ? (['task_assigned'] as const) : []),
+            ...(settings.digest ? [] : (['form_submission'] as const)),
           ]
     ).filter((kind) => kind !== 'mention' || mentionsOn);
     if (kinds.length === 0) return { items: [], more: 0 };
