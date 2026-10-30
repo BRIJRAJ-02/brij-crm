@@ -3,6 +3,7 @@
 // Main task: open the sort or filter builder from its chip or button, then Save, Save as new view, or Discard the draft.
 // Leaves out: the view switcher, columns and view settings (the view bar).
 import {
+  CREATED_AT_SLUG,
   FILTER_EDIT_MS,
   searchMembers,
   toFieldAttribute,
@@ -19,20 +20,25 @@ import {
   conditionOn,
   FilterBuilder,
   focusLater,
-  Menu,
-  MenuItem,
   Popover,
   SortBuilder,
   SortChip,
-  SplitButton,
   Toolbar,
 } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { isDefaultSort } from './query.ts';
 import { strings } from './strings.ts';
 
 const NO_FILTER: FilterGroup = { conjunction: 'and', conditions: [] };
+
+/**
+ * What a relationship filters by here: is empty and is not empty. Its other operators need record search for their
+ * operand (spec 0014), which the view's builder doesn't have yet.
+ */
+const REFERENCE_OPERATORS = ['is_empty', 'is_not_empty'] as const;
+const operatorsOf = (field: { readonly type: string }) =>
+  field.type === 'record_reference' ? REFERENCE_OPERATORS : undefined;
 
 /** A filter without its operands: two that differ only by what was typed are the same shape. */
 function shapeOf(group: FilterGroup): string {
@@ -75,6 +81,8 @@ export interface ViewToolbarProps {
   readonly focusRequest?: object;
   /** A column's Filter: the builder opens with a new condition on it (none for an empty id). A new object each time it is asked. */
   readonly filterOn?: { readonly attributeId: string };
+  /** The view's search at the bar's end (a ToolbarSearch): it narrows the rows and is never saved. */
+  readonly search?: ReactNode;
 }
 
 /** The view's Toolbar: the sort chip, a chip per filter, Filter, and while there is a draft Discard and Save. */
@@ -96,14 +104,15 @@ export function ViewToolbar({
   filterOn,
   status,
   focusRequest,
+  search,
 }: ViewToolbarProps) {
   const { data } = useRouteContext({ from: '__root__' });
   const fields = useMemo(
     () => attributes.map((attribute) => toFieldAttribute(attribute, undefined, objectKey)),
     [attributes, objectKey],
   );
-  // The builder offers what it can edit: a record reference waits for record search (spec 0014); its chips still show.
-  const builderFields = useMemo(() => fields.filter((field) => field.type !== 'record_reference'), [fields]);
+  // The builder offers every field; a record reference only as is empty or is not empty (`operatorsOf`).
+  const builderFields = fields;
   const sortFields = useMemo(
     () => sortable.map((attribute) => toFieldAttribute(attribute, undefined, objectKey)),
     [sortable, objectKey],
@@ -171,15 +180,24 @@ export function ViewToolbar({
     const field = builderFields.find((each) => each.id === filterOn.attributeId);
     // No column named (an empty table's Edit filters): the builder opens as it stands.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    openFilter(field === undefined ? current : { ...current, conditions: [...current.conditions, conditionOn(field)] });
+    openFilter(
+      field === undefined
+        ? current
+        : { ...current, conditions: [...current.conditions, conditionOn(field, operatorsOf(field)?.[0])] },
+    );
     // Only a new request opens it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterOn]);
 
-  // The default order (Created at, newest first) applies silently: no chip, saved or not. A chip shows only for
-  // another order, and removing it goes back to the default.
+  // The default order (Created at, newest first) shows as a muted "Sorted by Created at" with no remove, so the order
+  // is never a mystery; another order shows its own chip, and removing it goes back to the default.
   const isDefaultOrder = isDefaultSort(query.sorts, attributes);
   const [first, ...rest] = isDefaultOrder ? [] : query.sorts;
+  const createdAt = attributes.find((attribute) => attribute.isSystem && attribute.apiSlug === CREATED_AT_SLUG);
+  const openSorts = () => {
+    pushed.current = false;
+    setSortOpen(true);
+  };
   const editorProps = (attribute: { readonly type: string }) =>
     attribute.type === 'actor_reference'
       ? {
@@ -197,6 +215,7 @@ export function ViewToolbar({
       <Toolbar
         label={strings.toolbar}
         {...(status === undefined ? {} : { status })}
+        {...(search === undefined ? {} : { search })}
         {...(isDraft
           ? {
               end: (
@@ -205,20 +224,15 @@ export function ViewToolbar({
                     {strings.discard}
                   </Button>
                   {canSave ? (
-                    <SplitButton
-                      onPress={onSave}
-                      isPending={isSaving}
-                      menuLabel={strings.saveMore}
-                      menu={
-                        <Menu label={strings.saveMore} onAction={onSaveAsNew}>
-                          <MenuItem id="save-as-new" icon="plus">
-                            {strings.saveAsNew}
-                          </MenuItem>
-                        </Menu>
-                      }
-                    >
-                      {isSaving ? strings.saving : strings.save}
-                    </SplitButton>
+                    // Two plain buttons, not a split button with a one item menu (30 October 2026).
+                    <>
+                      <Button variant="ghost" icon="plus" onPress={onSaveAsNew} isDisabled={isSaving}>
+                        {strings.saveAsNew}
+                      </Button>
+                      <Button variant="primary" onPress={onSave} isPending={isSaving}>
+                        {isSaving ? strings.saving : strings.save}
+                      </Button>
+                    </>
                   ) : (
                     // A locked view the person may not change (AC-476): their draft can only become a view of its own.
                     <Button variant="primary" icon="plus" onPress={onSaveAsNew}>
@@ -230,7 +244,9 @@ export function ViewToolbar({
             }
           : {})}
       >
-        {first === undefined ? (
+        {first === undefined && createdAt !== undefined ? (
+          <SortChip ref={sortAnchor} attribute={createdAt.title} direction="descending" isDefault onPress={openSorts} />
+        ) : first === undefined ? (
           <Button
             ref={(element) => {
               sortAnchor.current = element;
@@ -257,8 +273,9 @@ export function ViewToolbar({
             onRemove={() => {
               pushed.current = false;
               commit({ ...(query.filter === undefined ? {} : { filter: query.filter }), sorts: [] });
-              // The chip leaves with its remove part: focus goes to the dashed Sort that takes its place.
-              focusLater(() => sortAnchor.current);
+              // The chip leaves with its remove part: focus goes to what takes its place, the default order's chip
+              // (its first part) or the dashed Sort.
+              focusLater(() => sortAnchor.current?.querySelector('button') ?? sortAnchor.current);
             }}
           />
         )}
@@ -346,6 +363,7 @@ export function ViewToolbar({
           }}
           editorProps={editorProps}
           displayOf={displayOf}
+          operatorsOf={operatorsOf}
         />
       </Popover>
     </>

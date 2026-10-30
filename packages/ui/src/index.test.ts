@@ -196,6 +196,7 @@ describe('@crm/ui', () => {
       'TileGrid',
       'ToggleButton',
       'Toolbar',
+      'ToolbarSearch',
       'Tooltip',
       'TopBar',
       'TruncatedText',

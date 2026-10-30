@@ -12,6 +12,9 @@ import {
   savableQuery,
   savedQuery,
   toViewQuery,
+  VIEW_SORTS_MAX,
+  withHeaderSort,
+  withSearch,
 } from './query.ts';
 
 const attribute = (id: string, extra: Partial<AttributeDefinition> = {}): AttributeDefinition => ({
@@ -115,6 +118,70 @@ describe('createView (spec 0039, AC-1086)', () => {
     expect(createView({ views, lastOpenedViewId: 'board', defaultViewId: 'b' })).toBe('b');
     expect(createView({ views, lastOpenedViewId: 'board', defaultViewId: 'board' })).toBe('a');
     expect(createView({ views: [{ id: 'board', kind: 'board' }] })).toBeUndefined();
+  });
+});
+
+describe('withSearch', () => {
+  const sorts = [{ attributeId: 'name', direction: 'ascending' as const }];
+  const contains = { attributeId: 'name', operator: 'contains', value: 'ada' };
+
+  it('leaves the query alone with nothing typed or nothing to search', () => {
+    const query = { sorts };
+    expect(withSearch(query, 'name', '  ')).toBe(query);
+    expect(withSearch(query, undefined, 'ada')).toBe(query);
+  });
+
+  it('is the whole filter on an unfiltered view, trimmed', () => {
+    expect(withSearch({ sorts }, 'name', ' ada ')).toEqual({
+      sorts,
+      filter: { conjunction: 'and', conditions: [contains] },
+    });
+  });
+
+  it('joins an and filter, and wraps an or filter', () => {
+    const owner = { attributeId: 'owner', operator: 'is_me' as const };
+    expect(withSearch({ sorts, filter: { conjunction: 'and', conditions: [owner] } }, 'name', 'ada').filter).toEqual({
+      conjunction: 'and',
+      conditions: [owner, contains],
+    });
+    const either = { conjunction: 'or' as const, conditions: [owner, owner] };
+    expect(withSearch({ sorts, filter: either }, 'name', 'ada').filter).toEqual({
+      conjunction: 'and',
+      conditions: [either, contains],
+    });
+  });
+});
+
+describe('withHeaderSort', () => {
+  const up = (attributeId: string) => ({ attributeId, direction: 'ascending' as const });
+  const down = (attributeId: string) => ({ attributeId, direction: 'descending' as const });
+
+  it('puts a new column first and keeps the other sorts after it', () => {
+    expect(withHeaderSort([up('name'), down('company')], up('stage'), ATTRIBUTES)).toEqual([
+      up('stage'),
+      up('name'),
+      down('company'),
+    ]);
+  });
+
+  it('replaces the column’s own rule, moving it first in the direction asked', () => {
+    expect(withHeaderSort([up('name'), up('company')], down('company'), ATTRIBUTES)).toEqual([
+      down('company'),
+      up('name'),
+    ]);
+  });
+
+  it('never keeps the default order as a rule of its own', () => {
+    expect(withHeaderSort([down('created')], up('name'), ATTRIBUTES)).toEqual([up('name')]);
+    expect(withHeaderSort([], up('name'), ATTRIBUTES)).toEqual([up('name')]);
+  });
+
+  it('keeps at most the view’s limit, dropping the last', () => {
+    const many = ['a', 'b', 'c', 'd', 'e'].map(up);
+    const next = withHeaderSort(many, up('f'), ATTRIBUTES);
+    expect(next).toHaveLength(VIEW_SORTS_MAX);
+    expect(next[0]).toEqual(up('f'));
+    expect(next.at(-1)).toEqual(up('d'));
   });
 });
 

@@ -29,7 +29,6 @@ import {
   bulkStrings,
   deleteToast,
   bulkEditToast,
-  needsConfirm,
   recordsWord,
 } from './bulk.ts';
 import { runUndo } from './useUndoShortcut.ts';
@@ -47,10 +46,49 @@ export interface TableSelection {
 }
 
 /**
+ * What the ticked rows belong to: the view they were ticked on (`key`) and the filter it ran (`filterKey`). A new
+ * question with the same of both (only its sorts or columns moved) holds the same rows, so the ticks stay; a new
+ * filter on the same view clears them and calls `onFilterCleared` (the old rows can't be known to match it); another
+ * view starts with none, quietly.
+ */
+export interface SelectionScope {
+  readonly key: string;
+  readonly filterKey: string;
+  readonly onFilterCleared?: () => void;
+}
+
+/** What a selection is held for, beside the rows themselves. */
+export interface HeldSelection {
+  readonly view: RecordsView;
+  readonly selection: GridSelection;
+  readonly asOf?: string;
+  readonly key: string;
+  readonly filterKey: string;
+  /** Counts the times a filter change cleared ticked rows, so the screen hears each once. */
+  readonly dropped: number;
+}
+
+/** Whether anything is ticked. */
+const hasTicks = (selection: GridSelection) => selection.kind === 'all-matching' || selection.ids.size > 0;
+
+/**
+ * Where a selection held for one question goes when the view runs another (pure): kept as it is for the same view
+ * and filter (a sort is the same set of rows, all matching included), cleared for another filter or view.
+ * `dropped` counts up when ticked rows went with a filter change on the same view.
+ */
+export function carrySelection(held: HeldSelection, view: RecordsView, key: string, filterKey: string): HeldSelection {
+  if (held.key === key && held.filterKey === filterKey) return { ...held, view };
+  const isFilterChange = held.key === key && hasTicks(held.selection);
+  return { view, selection: noRows(), key, filterKey, dropped: held.dropped + (isFilterChange ? 1 : 0) };
+}
+
+/**
  * The rows ticked in a table (spec 0022, AC-522, AC-523): UI state, held by
- * the screen for the view it shows, so any new view (a sort, a filter,
- * another view, someone else's saved change to it) starts with nothing
- * ticked; rows gone on the server (`gone` from the view's state) leave it.
+ * the screen. Without a `scope` any new view (a sort, a filter, another view,
+ * someone else's saved change to it) starts with nothing ticked; with one, a
+ * sort keeps them (the same rows) and a filter change clears them with
+ * `onFilterCleared` (see `SelectionScope`). Rows gone on the server (`gone`
+ * from the view's state) leave it.
  * After a reload for changes too many to name, the ticked rows are read again
  * (the view merges and paces those reads), and the gone ones leave. At most
  * 10,000 one by one and 1,000 left out of all matching: past either,
@@ -60,14 +98,36 @@ export function useTableSelection(
   view: RecordsView,
   state: Pick<ViewState, 'gone' | 'reloads'>,
   onRefused: (message: string) => void = () => undefined,
+  scope?: SelectionScope,
 ): TableSelection {
   const { gone, reloads } = state;
-  const [held, setHeld] = useState<{
-    readonly view: RecordsView;
-    readonly selection: GridSelection;
-    readonly asOf?: string;
-  }>(() => ({ view, selection: noRows() }));
+  // Without a scope every view is its own: its object identity is the key.
+  const key = scope?.key ?? '';
+  const filterKey = scope?.filterKey ?? '';
+  const [held, setHeld] = useState<HeldSelection>(() => ({
+    view,
+    selection: noRows(),
+    key,
+    filterKey,
+    dropped: 0,
+  }));
+  // Another question's rows arrived: the ticks follow them or go (React's adjust state while rendering).
+  if (held.view !== view) {
+    setHeld(
+      scope === undefined
+        ? { view, selection: noRows(), key, filterKey, dropped: held.dropped }
+        : carrySelection(held, view, key, filterKey),
+    );
+  }
   const current = held.view === view ? held.selection : noRows();
+  // A filter change cleared ticked rows: say so once.
+  const told = useRef(held.dropped);
+  const onFilterCleared = scope?.onFilterCleared;
+  useEffect(() => {
+    if (told.current === held.dropped) return;
+    told.current = held.dropped;
+    onFilterCleared?.();
+  }, [held.dropped, onFilterCleared]);
   // Rows gone on the server leave the selection as soon as the view says so.
   const selection = useMemo((): GridSelection => {
     if (current.kind !== 'some' || current.ids.size === 0) return current;
@@ -81,6 +141,10 @@ export function useTableSelection(
     if (selection.kind === 'some' && selection.ids.size > 0) view.confirm([...selection.ids]);
   }, [reloads, selection, view]);
   const asOf = held.view === view ? held.asOf : undefined;
+  const hold = (next: GridSelection, at?: string) => {
+    const base = { view, selection: next, key, filterKey, dropped: held.dropped };
+    setHeld(at === undefined ? base : { ...base, asOf: at });
+  };
   return {
     selection,
     asOf,
@@ -94,21 +158,17 @@ export function useTableSelection(
         return;
       }
       if (next.kind !== 'all-matching') {
-        setHeld({ view, selection: next });
+        hold(next);
         return;
       }
       // Mod+A in the grid selects all matching too: it counts from the moment it was first pressed.
-      setHeld({
-        view,
-        selection: next,
-        asOf: selection.kind === 'all-matching' ? (asOf ?? new Date().toISOString()) : new Date().toISOString(),
-      });
+      hold(next, selection.kind === 'all-matching' ? (asOf ?? new Date().toISOString()) : new Date().toISOString());
     },
     selectAll: () => {
-      setHeld({ view, selection: allMatching(), asOf: new Date().toISOString() });
+      hold(allMatching(), new Date().toISOString());
     },
     clear: () => {
-      setHeld({ view, selection: noRows() });
+      hold(noRows());
     },
   };
 }
@@ -169,10 +229,6 @@ export function useBulkActions({
 }: BulkActionsOptions): BulkActions {
   const { data, toasts } = useRouteContext({ from: '__root__' });
   const { selection, asOf } = ticked;
-  // An inline delete of several waiting for its confirm (AC-525), and the last one asked, so it closes with its words.
-  const [asking, setAsking] = useState<readonly string[] | undefined>(undefined);
-  const [lastAsked, setLastAsked] = useState<readonly string[]>([]);
-  if (asking !== undefined && asking !== lastAsked) setLastAsked(asking);
   const count = selectedCount(selection, total);
   // The ticked ids, copied once per selection, not on every render (a selection holds up to 10,000).
   const ids = useMemo(() => (selection.kind === 'some' ? [...selection.ids] : []), [selection]);
@@ -336,8 +392,8 @@ export function useBulkActions({
             });
             return;
           }
-          if (needsConfirm(ids.length)) setAsking(ids);
-          else remove(ids);
+          // Up to 500 go at once, with Undo in the toast: an undoable delete never asks (30 October 2026).
+          remove(ids);
         }}
       >
         {bulkStrings.delete}
@@ -384,7 +440,6 @@ export function useBulkActions({
   const isEditJob = bulkJob.action === 'edit';
   const changed = jobChange === undefined ? undefined : definitionOf(jobChange.attributeId);
   const editShown = editing ?? lastEdited;
-  const deleteWords = recordsWord(lastAsked.length, object);
   const dialog = (
     <>
       <BulkEditDialog
@@ -407,35 +462,6 @@ export function useBulkActions({
             : editAsJob(choice)
         }
       />
-      {/* An inline delete of 2 to 500 asks first (AC-525). */}
-      <Modal
-        title={bulkStrings.confirmTitle(deleteWords)}
-        tone="danger"
-        isOpen={asking !== undefined}
-        onOpenChange={(isOpen) => {
-          if (!isOpen) setAsking(undefined);
-        }}
-        actions={
-          <>
-            <Button slot="close" kbd="ESC">
-              {bulkStrings.cancel}
-            </Button>
-            <Button
-              variant="danger-solid"
-              icon="trash"
-              onPress={() => {
-                const confirmed = asking;
-                setAsking(undefined);
-                if (confirmed !== undefined) remove(confirmed);
-              }}
-            >
-              {bulkStrings.confirmAction(deleteWords)}
-            </Button>
-          </>
-        }
-      >
-        {bulkStrings.confirmText}
-      </Modal>
       {/*
         A counted background change, opened by Review (AC-528, AC-531): the exact number, and for an edit the value
         it writes. Declining cancels it (nothing was changed); either way focus goes on to the bar, which keeps it.

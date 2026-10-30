@@ -1,17 +1,9 @@
 // Brief
-// Purpose: make a view of an object, for yourself or the workspace (spec 0020, AC-472), or save a draft as one.
-// Main task: name it, pick Table or Board, choose who sees it, start from this view or afresh, then Create view.
-// Leaves out: the board's own settings (they start from the defaults, spec 0021), and what the bars change later.
-import {
-  isDataError,
-  type BoardSettings,
-  type NewView,
-  type View,
-  type ViewConfig,
-  type ViewKind,
-  type ViewVisibility,
-} from '@crm/data';
-import { Button, Checkbox, Field, Form, InfoTip, Modal, Radio, RadioGroup, type FormRefusal } from '@crm/ui';
+// Purpose: make a view of an object for yourself (spec 0020, AC-472), or save a draft as one.
+// Main task: name it, pick Table or Board, then Create view; it starts from this view, private.
+// Leaves out: sharing (the view's menu shares it), the board's own settings (spec 0021's defaults), and later changes.
+import { isDataError, type BoardSettings, type NewView, type View, type ViewConfig, type ViewKind } from '@crm/data';
+import { Button, Field, Form, Modal, Radio, RadioGroup, type FormRefusal } from '@crm/ui';
 import { useId, useState } from 'react';
 import { strings } from './strings.ts';
 
@@ -26,7 +18,7 @@ export interface CreateViewDialogProps {
   readonly objectId: string;
   /** Mints the view's id, once per opening: a second press after a lost answer sends the same one. */
   readonly newId: () => string;
-  /** The config with "Start from this view's columns and filters" on, and off. */
+  /** The config starting from this view's columns and filters (true), or afresh (false, no view to start from). */
   readonly configFor: (fromThisView: boolean) => ViewConfig;
   /** Whether there is a view to start from (none on an object with no view for this person). */
   readonly canStartFromView: boolean;
@@ -40,7 +32,10 @@ export interface CreateViewDialogProps {
   readonly onCreated: (view: View) => void;
 }
 
-/** "Create view" (Modal + Form): Name, who can see it, and where it starts; Create waits for the server. */
+/**
+ * "Create view" (Modal + Form): Name and Type, nothing else (30 October 2026: fewer choices). A new view is the
+ * person's own and starts from this one; sharing it is one step in the view's menu. Create waits for the server.
+ */
 export function CreateViewDialog({ mode, onClose, ...rest }: CreateViewDialogProps) {
   const formId = useId();
   const [isBusy, setBusy] = useState(false);
@@ -99,8 +94,6 @@ function CreateViewForm({
   const [id] = useState(newId);
   const [name, setName] = useState('');
   const [kind, setKind] = useState<ViewKind>(mode === 'save-as' ? currentKind : 'table');
-  const [visibility, setVisibility] = useState<ViewVisibility>('private');
-  const [fromThisView, setFromThisView] = useState(canStartFromView);
   const [refusals, setRefusals] = useState<readonly FormRefusal[]>([]);
 
   const create = () => {
@@ -111,13 +104,13 @@ function CreateViewForm({
     }
     onBusyChange(true);
     setRefusals([]);
-    const config = configFor(mode === 'save-as' || fromThisView);
+    const config = configFor(mode === 'save-as' || canStartFromView);
     onCreate({
       id,
       objectId,
       name: name.trim(),
       kind,
-      visibility,
+      visibility: 'private',
       // A board starts from the defaults unless it brings this view's; with nothing to group by it has none.
       config:
         kind === 'board' && config.board === undefined && boardDefaults !== undefined
@@ -180,20 +173,6 @@ function CreateViewForm({
           <Radio value="table">{strings.typeTable}</Radio>
           <Radio value="board">{strings.typeBoard}</Radio>
         </RadioGroup>
-      )}
-      <RadioGroup
-        label={strings.whoCanSee}
-        info={<InfoTip label={strings.whoCanSee}>{strings.whoCanSeeHelp}</InfoTip>}
-        value={visibility}
-        onChange={(next) => {
-          if (next === 'private' || next === 'workspace') setVisibility(next);
-        }}
-      >
-        <Radio value="private">{strings.onlyMe}</Radio>
-        <Radio value="workspace">{strings.everyone}</Radio>
-      </RadioGroup>
-      {mode === 'create' && canStartFromView && (
-        <Checkbox label={strings.startFromView} isSelected={fromThisView} onChange={setFromThisView} />
       )}
     </Form>
   );

@@ -172,6 +172,26 @@
     white-space: nowrap;
   }
 
+  /* The row header's footer with "+ New": the ghost add first, the screen's count at the end. */
+  .total[data-add-row] {
+    justify-content: space-between;
+    gap: var(--space-8);
+  }
+
+  .addRow {
+    display: inline-flex;
+    gap: var(--space-4);
+    align-items: center;
+    min-inline-size: 0;
+    color: var(--text-secondary);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .total[data-add-row]:hover .addRow {
+      color: var(--text);
+    }
+  }
+
   .total[data-align='end'] {
     justify-content: flex-end;
   }

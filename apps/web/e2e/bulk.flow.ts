@@ -94,8 +94,8 @@ test.describe('bulk', () => {
 
     // The Trash (AC-534, AC-535): restore one, delete one forever, and empty the rest, owners only for the last two.
     for (const name of ['Ada Byron', 'Bea Stone', 'Cy Lane']) await tick(page, name).click();
+    // Up to 500 ticked go at once, Undo in the toast (30 October 2026: no confirm).
     await bar(page).getByRole('button', { name: 'Delete' }).click();
-    await dialog(page, 'Delete 3 people?').getByRole('button', { name: 'Delete 3 people' }).click();
     await expect(page.getByText('Deleted 3 people.')).toBeVisible();
     await openTrash(page);
     const trash = page.getByRole('grid', { name: 'Trash' });

@@ -259,10 +259,7 @@ export function useViewMenu({
                 label: strings.setDefault,
                 icon: 'star',
                 run: () => {
-                  run(
-                    data.views.setDefault(slug, object.id, view.id),
-                    strings.isDefaultNow(view.name, object.pluralName),
-                  );
+                  run(data.views.setDefault(slug, object.id, view.id), strings.isDefaultNow(view.name));
                 },
               })),
         ]

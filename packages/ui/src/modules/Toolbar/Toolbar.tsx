@@ -2,7 +2,7 @@
 // page title, ViewBar with the view switcher and the view's actions, and
 // Toolbar with the sorts and filters that shape the view, and Save when the
 // view has unsaved changes.
-import type { ReactNode, Ref } from 'react';
+import { useRef, useState, type ReactNode, type Ref } from 'react';
 import { Toolbar as AriaToolbar } from 'react-aria-components';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
@@ -11,7 +11,9 @@ import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import type { Hue } from '../../hue.ts';
 import { Breadcrumbs, type Crumb } from '../../molecules/Breadcrumbs/Breadcrumbs.tsx';
+import { Field } from '../../molecules/Field/Field.tsx';
 import { FilterChip } from '../../molecules/FilterChip/FilterChip.tsx';
+import { focusLater } from '../../lib/focus-later.ts';
 import { SegmentedControl, type Segment } from '../../molecules/SegmentedControl/SegmentedControl.tsx';
 import { Menu, MenuItem, MenuSection, MenuSeparator, MenuTrigger, type MenuKey } from '../../molecules/Menu/Menu.tsx';
 import { useDelayedLoading } from '../../provider/useDelayedLoading.ts';
@@ -23,6 +25,9 @@ import { strings } from './strings.ts';
 const CREATE = '\u0000create';
 const ACTION = '\u0000action:';
 const CURRENT = '\u0000current';
+
+/** Past this many views the switcher's menu gets a search field (Menu's own `search`). */
+const SWITCHER_SEARCH_FROM = 8;
 
 /** Props for TopBar. */
 export interface TopBarProps {
@@ -242,7 +247,13 @@ export function ViewBar(props: ViewBarProps) {
           <Button variant="ghost" icon={choiceIcon(current)} iconRight="chevron-down">
             {current.name}
           </Button>
-          <Menu label={strings.views} selectionMode="single" selectedKeys={[current.id]} onAction={onAction}>
+          <Menu
+            label={strings.views}
+            selectionMode="single"
+            selectedKeys={[current.id]}
+            onAction={onAction}
+            {...(views.length >= SWITCHER_SEARCH_FROM ? { search: { label: strings.searchViews } } : {})}
+          >
             {loose.map(item)}
             {named.map((section) => (
               <MenuSection key={section.label} label={section.label}>
@@ -318,6 +329,8 @@ export interface ToolbarProps {
   readonly children: ReactNode;
   /** Only while the view has unsaved changes: Discard changes (ghost), then Save (split primary). */
   readonly end?: ReactNode;
+  /** At the bar's end, before `end`: the view's search (`ToolbarSearch`). */
+  readonly search?: ReactNode;
   /**
    * What the view's condition now matches, for screen readers only ("124
    * people match"): spoken when it changes, never shown.
@@ -329,11 +342,16 @@ export interface ToolbarProps {
  * The size-toolbar tall bar that states how the view is shaped. A React Aria
  * toolbar: Tab enters it once, and the arrow keys move between its controls.
  */
-export function Toolbar({ label, children, end, status }: ToolbarProps) {
+export function Toolbar({ label, children, end, search, status }: ToolbarProps) {
   return (
     <AriaToolbar className={styles.toolbar} aria-label={label}>
       {children}
-      {end !== undefined && <div className={styles.end}>{end}</div>}
+      {(end !== undefined || search !== undefined) && (
+        <div className={styles.end}>
+          {search}
+          {end}
+        </div>
+      )}
       <VisuallyHidden>
         <span role="status">{status ?? ''}</span>
       </VisuallyHidden>
@@ -354,6 +372,11 @@ export interface SortChipProps {
   readonly onRemove?: () => void;
   /** The chip, for a popover the screen opens from it (spec 0020: the sort builder). */
   readonly ref?: Ref<HTMLSpanElement>;
+  /**
+   * The order nobody chose (a view with no sorts runs Created at, newest first): a muted "Sorted by Created at"
+   * with no direction part and no remove, so the order is never a mystery and never looks like a choice.
+   */
+  readonly isDefault?: boolean;
 }
 
 /**
@@ -362,9 +385,22 @@ export interface SortChipProps {
  * attribute, the direction in words, "+N" for the further sorts, and remove.
  * Every part opens the sort builder.
  */
-export function SortChip({ attribute, direction, more = 0, onPress, onRemove, ref }: SortChipProps) {
+export function SortChip({ attribute, direction, more = 0, onPress, onRemove, ref, isDefault = false }: SortChipProps) {
   const press =
     onPress === undefined ? {} : { onPressAttribute: onPress, onPressOperator: onPress, onPressValue: onPress };
+  if (isDefault) {
+    return (
+      <FilterChip
+        tone="muted"
+        icon={direction === 'ascending' ? 'arrow-up-narrow-wide' : 'arrow-down-wide-narrow'}
+        attribute={[strings.sortedBy(attribute)]}
+        hasValue={false}
+        label={strings.defaultSortName(attribute, direction)}
+        {...press}
+        {...(ref === undefined ? {} : { ref })}
+      />
+    );
+  }
   return (
     <FilterChip
       icon={direction === 'ascending' ? 'arrow-up-narrow-wide' : 'arrow-down-wide-narrow'}
@@ -378,5 +414,62 @@ export function SortChip({ attribute, direction, more = 0, onPress, onRemove, re
       {...(onRemove === undefined ? {} : { onRemove })}
       {...(ref === undefined ? {} : { ref })}
     />
+  );
+}
+
+/** Props for ToolbarSearch. */
+export interface ToolbarSearchProps {
+  /** What it searches, for screen readers and as the placeholder: "Search people". */
+  readonly label: string;
+  /** What is typed; the screen narrows the view by it. */
+  readonly value: string;
+  readonly onChange: (value: string) => void;
+}
+
+/**
+ * A view's search at the Toolbar's end: a ghost search button that opens into a search field, focused. Esc clears
+ * it and folds it back to the button, which takes focus; leaving it empty folds it too. Typed text keeps it open.
+ */
+export function ToolbarSearch({ label, value, onChange }: ToolbarSearchProps) {
+  const [isOpen, setOpen] = useState(false);
+  const button = useRef<HTMLButtonElement>(null);
+  const field = useRef<HTMLInputElement & HTMLTextAreaElement>(null);
+  if (!isOpen && value === '') {
+    return (
+      <Button
+        ref={button}
+        variant="ghost"
+        icon="search"
+        label={label}
+        onPress={() => {
+          setOpen(true);
+          focusLater(() => field.current);
+        }}
+      />
+    );
+  }
+  return (
+    <span className={styles.search}>
+      <Field
+        label={label}
+        isLabelHidden
+        placeholder={label}
+        variant="search"
+        size="sm"
+        type="search"
+        value={value}
+        autoComplete="off"
+        onChange={onChange}
+        ref={field}
+        onEscape={() => {
+          onChange('');
+          setOpen(false);
+          focusLater(() => button.current);
+        }}
+        onBlur={() => {
+          if (value === '') setOpen(false);
+        }}
+      />
+    </span>
   );
 }

@@ -1,7 +1,7 @@
 // The bulk bar's rules and words (spec 0022, AC-524 to AC-526, AC-541).
 import { dataError } from '@crm/data';
 import { describe, expect, it } from 'vitest';
-import type { JobView } from '@crm/data';
+import type { JobView, RecordsView } from '@crm/data';
 import {
   bulkEditToast,
   bulkJobToast,
@@ -9,9 +9,9 @@ import {
   deleteToast,
   jobProgress,
   lifecycleUndoToast,
-  needsConfirm,
   recordsWord,
 } from './bulk.ts';
+import { carrySelection } from './BulkActions.tsx';
 import { breaksUnique } from './BulkEditDialog.tsx';
 import { undoToast } from './undo.ts';
 
@@ -20,9 +20,7 @@ const RECORDS = { singularName: 'Record', pluralName: 'Records' };
 const OBJECT = '0199a6f2-0000-7000-8000-000000000003';
 
 describe('the bulk bar', () => {
-  it('deletes one at once and asks for two or more; past 500 it says so', () => {
-    expect(needsConfirm(1)).toBe(false);
-    expect(needsConfirm(2)).toBe(true);
+  it('deletes up to 500 at once; past 500 it says so', () => {
     expect(deleteOffer(500)).toBe('delete');
     expect(deleteOffer(501)).toBe('too-many');
     expect(recordsWord(1, PEOPLE)).toBe('1 person');
@@ -215,5 +213,31 @@ describe('the bulk edit dialog’s rules (AC-529)', () => {
       PEOPLE,
     );
     expect(undone?.message).toBe('Undid the edit of 2 people.');
+  });
+});
+
+describe('ticked rows across a new question', () => {
+  const before = {} as RecordsView;
+  const after = {} as RecordsView;
+  const ticked = { kind: 'some' as const, ids: new Set(['a', 'b']) };
+  const held = { view: before, selection: ticked, key: 'view-1', filterKey: 'f1', dropped: 0 };
+
+  it('keeps them through a sort on the same view and filter, all matching and its moment too', () => {
+    expect(carrySelection(held, after, 'view-1', 'f1')).toEqual({ ...held, view: after });
+    const all = { ...held, selection: { kind: 'all-matching' as const, except: new Set<string>() }, asOf: 'then' };
+    expect(carrySelection(all, after, 'view-1', 'f1')).toEqual({ ...all, view: after });
+  });
+
+  it('clears them on a filter change and counts it, so the screen says so once', () => {
+    const next = carrySelection(held, after, 'view-1', 'f2');
+    expect(next.selection).toEqual({ kind: 'some', ids: new Set() });
+    expect(next.dropped).toBe(1);
+    expect(next.filterKey).toBe('f2');
+  });
+
+  it('clears them quietly for another view, or when nothing was ticked', () => {
+    expect(carrySelection(held, after, 'view-2', 'f1').dropped).toBe(0);
+    const none = { ...held, selection: { kind: 'some' as const, ids: new Set<string>() } };
+    expect(carrySelection(none, after, 'view-1', 'f2').dropped).toBe(0);
   });
 });

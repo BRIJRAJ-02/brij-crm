@@ -1,6 +1,6 @@
 // The view bar's sort chip in Chromium (owner, 22 October 2026): the default order (Created at, newest first)
-// applies silently, with no chip, whether the view stores no sorts or stores exactly that one. Another order
-// shows a chip, and removing it goes back to the default rather than to no order at all.
+// shows as a muted "Sorted by Created at" with no remove (CRM flow pass, 30 October 2026), whether the view stores
+// no sorts or exactly that one. Another order shows a chip, and removing it goes back to the default.
 import type { AttributeDefinition, DataLayer, DraftQuery } from '@crm/data';
 import { useState } from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -78,15 +78,19 @@ async function render(start: DraftQuery): Promise<void> {
 }
 
 describe('the view bar sort chip', () => {
-  it('shows no chip for a view that stores the default order, only the Sort button', async () => {
-    await render(DEFAULT);
-    await expect.element(page.getByRole('button', { name: 'Sort', exact: true })).toBeVisible();
-    expect(page.getByRole('button', { name: 'Remove sort' }).elements()).toHaveLength(0);
+  it('shows the default order as a muted chip with nothing to remove, for no sorts or the default stored', async () => {
+    for (const start of [DEFAULT, { sorts: [] }]) {
+      await render(start);
+      await expect.element(page.getByRole('button', { name: 'Sorted by Created at' })).toBeVisible();
+      expect(page.getByRole('button', { name: 'Remove sort' }).elements()).toHaveLength(0);
+      app?.unmount();
+      app = undefined;
+    }
   });
 
   it('opens the Sort builder on the default that runs, and Add sort starts a sort of its own', async () => {
     await render(DEFAULT);
-    await userEvent.click(page.getByRole('button', { name: 'Sort', exact: true }));
+    await userEvent.click(page.getByRole('button', { name: 'Sorted by Created at' }));
     await expect.element(page.getByText('Newest records show first.')).toBeVisible();
     await userEvent.click(page.getByRole('button', { name: 'Add sort' }));
     await userEvent.click(page.getByRole('menuitem', { name: 'Name' }));
@@ -97,7 +101,7 @@ describe('the view bar sort chip', () => {
 
   it('keeps a row edited into the default order in the open builder, rather than dropping it', async () => {
     await render(DEFAULT);
-    await userEvent.click(page.getByRole('button', { name: 'Sort', exact: true }));
+    await userEvent.click(page.getByRole('button', { name: 'Sorted by Created at' }));
     await userEvent.click(page.getByRole('button', { name: 'Add sort' }));
     await userEvent.click(page.getByRole('menuitem', { name: 'Created at' }));
     // Created at starts ascending; turned descending it asks the default order, and its row stays in the builder.
@@ -106,12 +110,12 @@ describe('the view bar sort chip', () => {
     await expect.element(page.getByRole('button', { name: 'Remove the sort by Created at' })).toBeVisible();
   });
 
-  it('shows a chip for another order, and removing it goes back to the default with no chip', async () => {
+  it('shows a chip for another order, and removing it goes back to the default order’s chip', async () => {
     await render({ sorts: [{ attributeId: NAME.id, direction: 'ascending' }] });
     await expect.element(page.getByRole('button', { name: 'Remove sort' })).toBeVisible();
     await userEvent.click(page.getByRole('button', { name: 'Remove sort' }));
     expect(page.getByRole('button', { name: 'Remove sort' }).elements()).toHaveLength(0);
-    // Focus lands on the dashed Sort button that takes the chip's place.
-    await expect.element(page.getByRole('button', { name: 'Sort', exact: true })).toHaveFocus();
+    // Focus lands on the default order's chip that takes its place.
+    await expect.element(page.getByRole('button', { name: 'Sorted by Created at' })).toHaveFocus();
   });
 });

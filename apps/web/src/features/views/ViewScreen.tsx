@@ -1,9 +1,10 @@
 // Brief
 // Purpose: slice one object the way you work and keep it (spec 0020).
 // Main task: filter and sort the table, lay out its columns, then save it, or keep it as a view of its own.
-// Leaves out: grouping inside the table, view search, charts, and sharing outside the workspace.
+// Leaves out: grouping inside the table, saving a search, charts, and sharing outside the workspace.
 import {
   BOARD_MAX_CARD_FIELDS,
+  FILTER_EDIT_MS,
   boardDefaults,
   groupableAttributes,
   isDataError,
@@ -26,9 +27,9 @@ import {
   Callout,
   EmptyState,
   focusLater,
-  Modal,
   Popover,
   Select,
+  ToolbarSearch,
   ViewSettings,
   type ViewChoice,
   type ViewField,
@@ -43,6 +44,7 @@ import { strings as boardStrings } from '../board/strings.ts';
 import { FavouriteButton } from '../workspace/FavouriteButton.tsx';
 import type { ViewRequest } from '../command/commands.ts';
 import { RecordsScreen } from '../workspace/RecordsScreen.tsx';
+import { strings as tableStrings } from '../workspace/strings.ts';
 import { objectPendingPage } from '../workspace/ObjectScreen.tsx';
 import { useCan, useMyAccess, WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { CreateViewDialog } from './CreateViewDialog.tsx';
@@ -56,6 +58,8 @@ import {
   savedQuery,
   toViewQuery,
   withDefaultOrderAsNone,
+  withHeaderSort,
+  withSearch,
 } from './query.ts';
 import { runExport } from '../imports/export-run.ts';
 import { TransferMenu } from './TransferMenu.tsx';
@@ -129,6 +133,15 @@ function useFarAttributes(slug: string, objectIds: readonly string[]) {
   }, [data, slug, wanted]);
   return loaded;
 }
+
+/** The primary attribute types a view's search narrows by "contains" (each offers it in the filter builder). */
+const SEARCHABLE_TYPES: ReadonlySet<string> = new Set(['text', 'personal_name', 'email', 'domain', 'url', 'phone']);
+
+/** How long a follow toast that said the selection was cleared covers the clearing itself, in ms. */
+const CLEARED_TOLD_MS = 10_000;
+
+/** How long an Undo toast stays (a discarded draft, a shared view's columns), in ms. */
+const UNDO_MS = 8_000;
 
 /** How long switching a board to Table waits for the first rows before showing the table loading in place. */
 const TABLE_GRACE_MS = 300;
@@ -259,11 +272,44 @@ export function ViewScreen(props: ViewScreenProps) {
   const [lastReady, setLastReady] = useState(effective.status === 'ready' ? effective : undefined);
   if (effective.status === 'ready' && effective !== lastReady) setLastReady(effective);
   const running = effective.status === 'ready' ? effective : lastReady;
+  // The view's search (CRM flow pass): what is typed narrows the rows by the primary attribute, after a pause in
+  // typing, as one more condition on the query that runs. It is never part of the draft, so Save never keeps it,
+  // and another view starts without it.
+  const primary = attributes.find((attribute) => attribute.id === object.primaryAttributeId);
+  const searchOn = primary !== undefined && SEARCHABLE_TYPES.has(primary.type) ? primary.id : undefined;
+  const [typed, setTyped] = useState('');
+  const [searched, setSearched] = useState('');
+  const [searchFor, setSearchFor] = useState(view?.id);
+  if (searchFor !== view?.id) {
+    setSearchFor(view?.id);
+    setTyped('');
+    setSearched('');
+  }
+  // Cleared at once; typed text waits for a pause, as a filter's operand does.
+  const typeSearch = (text: string) => {
+    setTyped(text);
+    if (text.trim() === '') setSearched('');
+  };
+  useEffect(() => {
+    if (typed.trim() === '') return;
+    const timer = setTimeout(() => {
+      setSearched(typed.trim());
+    }, FILTER_EDIT_MS);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [typed]);
+  const isSearching = searchOn !== undefined && searched !== '';
   // Nothing ran yet (the far attributes still loading as the page opens): the loader's question, which kept the
   // through conditions unchecked, never an unfiltered table (late trap #45).
   const query = useMemo(
-    () => (running === undefined ? props.recordsQuery : toViewQuery(running)),
-    [running, props.recordsQuery],
+    () =>
+      withSearch(
+        running === undefined ? props.recordsQuery : toViewQuery(running),
+        searchOn,
+        searchOn === undefined ? '' : searched,
+      ),
+    [running, props.recordsQuery, searchOn, searched],
   );
   // The archived fields this person can see that the view's filter or sorts use, by title (AC-480). A draft is
   // built from the query that runs, so its first filter edit already leaves them out; the saved view's are named
@@ -293,6 +339,8 @@ export function ViewScreen(props: ViewScreenProps) {
   // Someone else saved this view's filters (AC-468): a tab with no draft follows, and says who, and that the
   // rows it had ticked were cleared with the old filters (owner decision 5).
   const seenVersion = useRef(view?.queryVersion);
+  // When a follow toast last said the selection was cleared: the table's own "Selection cleared" then stays quiet.
+  const toldCleared = useRef(0);
   useEffect(() => {
     if (view === undefined) return;
     const before = seenVersion.current;
@@ -300,6 +348,7 @@ export function ViewScreen(props: ViewScreenProps) {
     if (before === undefined || view.queryVersion <= before || draft.isDraft) return;
     if (view.querySavedBy === undefined || view.querySavedBy === access?.memberId) return;
     const name = members.find((member) => member.id === view.querySavedBy)?.name ?? strings.removedMember;
+    if (isTicked.current) toldCleared.current = Date.now();
     toasts.toast({
       tone: 'info',
       message: isTicked.current ? strings.changedByCleared(name) : strings.changedBy(name),
@@ -310,15 +359,25 @@ export function ViewScreen(props: ViewScreenProps) {
 
   // Asks the Toolbar to focus its Filter button when the focused control went away with its change.
   const [focusRequest, setFocusRequest] = useState<object | undefined>(undefined);
+  // Discard acts at once, with Undo bringing the draft back (owner, 30 October 2026: Undo over a confirm).
   const discard = () => {
+    const kept = draft.query;
     draft.discard();
     setShowDropped(false);
     setFocusRequest({});
-  };
-  // Discard throws the draft away for good, so it asks first (the owner's rule for ending actions).
-  const [isDiscarding, setDiscarding] = useState(false);
-  const askDiscard = () => {
-    setDiscarding(true);
+    toasts.toast(
+      {
+        tone: 'info',
+        message: strings.discarded,
+        action: {
+          label: strings.undo,
+          onAction: () => {
+            draft.set(kept, 'push');
+          },
+        },
+      },
+      { timeout: UNDO_MS },
+    );
   };
   const [isSaving, setSaving] = useState(false);
   const [clash, setClash] = useState<string | undefined>(undefined);
@@ -359,14 +418,33 @@ export function ViewScreen(props: ViewScreenProps) {
   // The view's columns (AC-470): a change shows at once and saves for everyone on the view, or stays in this tab on
   // a locked view. Leaving the view drops what stayed here.
   const layout = useMemo(() => viewColumns(view, object, attributes), [view, object, attributes]);
-  const changeLayout = (next: ShownLayout) => {
+  // A shared view's columns change for everyone at once, while filters and sorts wait for Save: the toast says so,
+  // with Undo putting back the columns as they were (one toast at a time, the latest change's).
+  const layoutToast = useRef<string | undefined>(undefined);
+  const changeLayout = (next: ShownLayout, isAnnounced = true) => {
     if (view === undefined) return;
+    const before = layout;
     // A layout kept in this tab replaces the one before it, so it carries the kind and board shown now.
     data.views.setLayout(
       slug,
       view.id,
       { ...boardLayout(view, {}, isLockedForMe), ...layoutOf(next.columns, next.pinnedCount) },
       { isLocal: isLockedForMe },
+    );
+    if (!isAnnounced || view.visibility !== 'workspace' || isLockedForMe) return;
+    if (layoutToast.current !== undefined) toasts.dismiss(layoutToast.current);
+    layoutToast.current = toasts.toast(
+      {
+        tone: 'info',
+        message: strings.layoutForEveryone(view.name),
+        action: {
+          label: strings.undo,
+          onAction: () => {
+            changeLayout(before, false);
+          },
+        },
+      },
+      { timeout: UNDO_MS },
     );
   };
   // The kind and the board settings (spec 0021, AC-492, AC-497), saved as any layout change is: for everyone at
@@ -511,7 +589,7 @@ export function ViewScreen(props: ViewScreenProps) {
   );
   const [filterOn, setFilterOn] = useState<{ readonly attributeId: string } | undefined>(undefined);
   const canSave = view !== undefined && !isLockedForMe;
-  const filtered = running?.filter !== undefined;
+  const filtered = running?.filter !== undefined || isSearching;
   // The switcher (AC-473): the default, the other shared views, then a Private section; locked ones marked.
   const choices: readonly ViewChoice[] = (list.views.length > 0 ? list.views : view === undefined ? [] : [view]).map(
     (each) => ({
@@ -706,7 +784,7 @@ export function ViewScreen(props: ViewScreenProps) {
         canSave={canSave}
         isSaving={isSaving}
         onChange={draft.set}
-        onDiscard={askDiscard}
+        onDiscard={discard}
         onSave={() => {
           save(false);
         }}
@@ -716,6 +794,13 @@ export function ViewScreen(props: ViewScreenProps) {
         {...(filterOn === undefined ? {} : { filterOn })}
         {...(focusRequest === undefined ? {} : { focusRequest })}
         {...(announced === undefined ? {} : { status: announced })}
+        {...(searchOn === undefined
+          ? {}
+          : {
+              search: (
+                <ToolbarSearch label={strings.searchView(object.pluralName)} value={typed} onChange={typeSearch} />
+              ),
+            })}
       />
       {archivedTitles.length > 0 && (
         // Spec 0020, AC-480: archived fields the view filters or sorts on are left out when it runs, so it shows
@@ -749,30 +834,6 @@ export function ViewScreen(props: ViewScreenProps) {
   const dialogs = (
     <>
       {viewMenu.dialogs}
-      <Modal
-        title={strings.discardTitle(view?.name ?? strings.thisView)}
-        tone="danger"
-        isOpen={isDiscarding}
-        onOpenChange={setDiscarding}
-        actions={
-          <>
-            <Button slot="close" kbd="ESC">
-              {strings.cancel}
-            </Button>
-            <Button
-              variant="danger-solid"
-              onPress={() => {
-                setDiscarding(false);
-                discard();
-              }}
-            >
-              {strings.discard}
-            </Button>
-          </>
-        }
-      >
-        {strings.discardText}
-      </Modal>
       <ViewChangedDialog
         sentence={clash}
         isReplacing={isSaving}
@@ -935,17 +996,17 @@ export function ViewScreen(props: ViewScreenProps) {
         {...(view?.config.groupBy === undefined ? {} : { groupBy: view.config.groupBy })}
         query={query}
         onSort={(rule) => {
+          // That column's sort goes first; the others stay after it (a header never wipes the sorts built).
           draft.set(
-            { ...(draft.query.filter === undefined ? {} : { filter: draft.query.filter }), sorts: [rule] },
+            {
+              ...(draft.query.filter === undefined ? {} : { filter: draft.query.filter }),
+              sorts: withHeaderSort(draft.query.sorts, rule, attributes),
+            },
             'push',
           );
         }}
         onFilter={(attributeId) => {
-          // A relationship's filter needs record search, which arrives with relationships (spec 0014).
-          if (attributes.find((attribute) => attribute.id === attributeId)?.type === 'record_reference') {
-            toasts.toast({ tone: 'info', message: strings.referenceFilterSoon });
-            return;
-          }
+          // A relationship starts on is empty: its builder offers only the empty checks (ViewToolbar).
           setFilterOn({ attributeId });
         }}
         views={choices}
@@ -955,7 +1016,7 @@ export function ViewScreen(props: ViewScreenProps) {
         onAttributeCreated={(attributeId) => {
           // A view that lists its columns shows the new one at its end; a seeded default shows it already.
           if (view !== undefined && (view.config.columns.length > 0 || !view.config.showNewAttributes)) {
-            changeLayout(withColumn(layout, attributeId));
+            changeLayout(withColumn(layout, attributeId), false);
           }
         }}
         viewActions={viewActions}
@@ -981,16 +1042,37 @@ export function ViewScreen(props: ViewScreenProps) {
         }
         toolbar={toolbarFor}
         onTickedChange={tickedChanged}
-        {...(filtered
+        onTicksCleared={() => {
+          // Someone else's saved filter already said the selection went with it.
+          if (Date.now() - toldCleared.current < CLEARED_TOLD_MS) return;
+          toasts.toast({ tone: 'info', message: tableStrings.selectionCleared });
+        }}
+        {...(isSearching
           ? {
               filteredEmpty: (
                 <EmptyState
-                  icon="list-filter"
-                  title={strings.noMatchesTitle(object.pluralName)}
+                  icon="search"
+                  title={strings.noSearchMatchesTitle(object.pluralName, searched)}
                   actions={
-                    draft.isDraft ? (
-                      <Button onPress={askDiscard}>{strings.discard}</Button>
-                    ) : (
+                    <Button
+                      onPress={() => {
+                        typeSearch('');
+                      }}
+                    >
+                      {strings.clearSearch}
+                    </Button>
+                  }
+                />
+              ),
+            }
+          : filtered
+            ? {
+                filteredEmpty: (
+                  <EmptyState
+                    icon="list-filter"
+                    title={strings.noMatchesTitle(object.pluralName)}
+                    actions={
+                      // One way out: the filters themselves (the Toolbar's Discard stays for a draft).
                       <Button
                         onPress={() => {
                           setFilterOn({ attributeId: '' });
@@ -998,14 +1080,13 @@ export function ViewScreen(props: ViewScreenProps) {
                       >
                         {strings.editFilters}
                       </Button>
-                    )
-                  }
-                >
-                  {strings.noMatchesText}
-                </EmptyState>
-              ),
-            }
-          : {})}
+                    }
+                  >
+                    {strings.noMatchesText}
+                  </EmptyState>
+                ),
+              }
+            : {})}
       />
       {dialogs}
     </>
