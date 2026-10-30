@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect } from 'storybook/test';
+import { expect, fn } from 'storybook/test';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { LinkChip } from './LinkChip.tsx';
 
@@ -118,12 +118,25 @@ export const Leads: Story = {
   },
 };
 
-/** Inside its own editor a chip keeps its look and is no link. */
-export const Static: Story = {
-  parameters: { crm: { screenshot: false } },
-  args: { isStatic: true },
-  play: async ({ canvas }) => {
+/** Inside its own editor a chip is a button with its look, never a link: a press calls `onPress`, with one focus ring. */
+export const Pressable: Story = {
+  args: { isPressable: true, label: 'Actions for ada@example.com', onPress: fn() },
+  play: async ({ canvas, args, userEvent }) => {
     await expect(canvas.queryByRole('link')).toBeNull();
-    await expect(canvas.getByText('ada@example.com')).toBeInTheDocument();
+    await userEvent.tab();
+    const chip = canvas.getByRole('button', { name: 'Actions for ada@example.com' });
+    await expect(chip).toHaveFocus();
+    await userEvent.keyboard('{Enter}');
+    await expect(args.onPress).toHaveBeenCalledTimes(1);
+  },
+};
+
+/** A pressable chip held while the form around it sends: it takes no press. */
+export const PressableDisabled: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { isPressable: true, isDisabled: true, onPress: fn() },
+  play: async ({ canvas, args, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button'));
+    await expect(args.onPress).not.toHaveBeenCalled();
   },
 };

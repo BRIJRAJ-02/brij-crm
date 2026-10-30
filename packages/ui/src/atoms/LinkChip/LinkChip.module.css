@@ -83,7 +83,9 @@
     }
   }
 
-  .root:focus-visible {
+  /* A pressable chip is React Aria's Button, which marks keyboard focus with data-focus-visible. */
+  .root:focus-visible,
+  .root[data-focus-visible] {
     border-color: var(--accent-line);
     box-shadow: var(--shadow-focus);
     outline: none;

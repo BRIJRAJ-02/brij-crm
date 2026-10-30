@@ -24,19 +24,8 @@
     min-inline-size: 0;
   }
 
-  /* The chip as its menu's button: no box of its own, the chip's focus ring on keyboard focus. */
-  .chip {
-    display: inline-flex;
-    min-inline-size: 0;
-    padding: 0;
-    border: none;
-    border-radius: var(--radius-sm);
-    background: none;
-    font: inherit;
-    outline: none;
-  }
-
-  .chip[data-focus-visible] {
-    box-shadow: var(--shadow-focus);
+  /* The add field's slot: ListEditor finds its input here to focus it after Edit. */
+  .add {
+    display: contents;
   }
 }

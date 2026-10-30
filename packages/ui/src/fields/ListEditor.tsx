@@ -2,13 +2,14 @@
 // domains, URLs): the values as removable chips, and a Field to add one more.
 // Each change commits the whole list, checked with the attribute's schema.
 // A pasted list adds each value; a chip's menu makes it the primary (first)
-// or puts it back in the add field to edit; chips here never navigate.
+// or edits it in the add field, where Enter puts it back in its place and Esc
+// or leaving it empty keeps the value as it was; chips here never navigate.
 import type { AttributeType } from '@crm/contracts/values';
-import { useState, type ReactNode } from 'react';
-import { Button as AriaButton } from 'react-aria-components';
+import { useRef, useState, type ReactNode } from 'react';
 import { Button } from '../atoms/Button/Button.tsx';
 import { LinkChip } from '../atoms/LinkChip/LinkChip.tsx';
 import type { ProviderName } from '../atoms/ProviderMark/ProviderMark.tsx';
+import { focusLater } from '../lib/focus-later.ts';
 import { splitPasted } from '../lib/parse-input.ts';
 import { Field, type FieldProps } from '../molecules/Field/Field.tsx';
 import { Menu, MenuItem, MenuTrigger } from '../molecules/Menu/Menu.tsx';
@@ -88,6 +89,10 @@ export function ListEditor<T extends AttributeType, V>({
   // Opened from a grid cell by typing: the add field starts with that key.
   const [draft, setDraft] = useState(startText ?? '');
   const [message, setMessage] = useState<string | undefined>(undefined);
+  // The value being edited in the add field: it stays in the list, hidden, until Enter replaces it in place.
+  const [editingIndex, setEditingIndex] = useState<number | undefined>(undefined);
+  const addRef = useRef<HTMLDivElement>(null);
+  const chipRefs = useRef(new Map<string, HTMLLIElement>());
   const commitList = (next: readonly V[]) => {
     const result = toCommittable<T>(attribute, next);
     if (!result.ok) {
@@ -107,9 +112,11 @@ export function ListEditor<T extends AttributeType, V>({
     if (parts.length === 0) return false;
     const added: V[] = [];
     let refusal: { readonly message: string; readonly rest: string } | undefined;
+    // The value being edited doesn't count toward the limit: what is added takes its place.
+    const kept = values.length - (editingIndex === undefined ? 0 : 1);
     for (const [index, part] of parts.entries()) {
       // At the list's limit, one more is refused here, and what was typed stays to move or fix.
-      if (attribute.limit !== undefined && values.length + added.length >= attribute.limit.count) {
+      if (attribute.limit !== undefined && kept + added.length >= attribute.limit.count) {
         refusal = { message: attribute.limit.message, rest: parts.slice(index).join(', ') };
         break;
       }
@@ -120,30 +127,55 @@ export function ListEditor<T extends AttributeType, V>({
       }
       added.push(one.value);
     }
-    if (added.length > 0 && !commitList([...values, ...added])) return true;
+    if (added.length > 0) {
+      const next =
+        editingIndex === undefined
+          ? [...values, ...added]
+          : [...values.slice(0, editingIndex), ...added, ...values.slice(editingIndex + 1)];
+      if (!commitList(next)) return true;
+      setEditingIndex(undefined);
+    }
     setDraft(refusal?.rest ?? '');
     if (refusal !== undefined) setMessage(refusal.message);
     return true;
   };
+  /** Ends an edit with the value as it was: the list never changed, so only the add field empties. */
+  const keepEdited = () => {
+    setEditingIndex(undefined);
+    setDraft('');
+    setMessage(undefined);
+  };
   const add = () => {
     if (draft.trim() !== '') addText(draft);
+    else if (editingIndex !== undefined) keepEdited();
+  };
+  const escape = () => {
+    if (editingIndex !== undefined) keepEdited();
+    else onCancel?.();
+  };
+  const focusAddField = () => {
+    focusLater(() => addRef.current?.querySelector('input'));
   };
   /** A pasted list adds at once; a single value is pasted as text, to be added with Enter. */
   const pasteText = (text: string): boolean => {
     if (splitPasted(text, { onSpaces: splitsOnSpaces(attribute.type) }).length < 2) return false;
     return addText(`${draft}${draft.trim() === '' ? '' : ', '}${text}`);
   };
-  /** The value at `index` first: the primary, as Attio and Twenty read a list's first value. */
+  /** The value at `index` first: the primary, as Attio and Twenty read a list's first value. Focus follows the chip. */
   const makePrimary = (index: number) => {
     const chosen = values[index];
     if (chosen === undefined) return;
-    commitList([chosen, ...values.filter((_, at) => at !== index)]);
+    if (!commitList([chosen, ...values.filter((_, at) => at !== index)])) return;
+    focusLater(() => chipRefs.current.get(labelOf(chosen))?.querySelector('button'));
   };
-  /** The value at `index` back in the add field, out of the list, to change and add again. */
+  /** The value at `index` into the add field to change: Enter puts it back in its place, Esc keeps it as it was. */
   const edit = (index: number) => {
     const chosen = values[index];
     if (chosen === undefined) return;
-    if (commitList(values.filter((_, at) => at !== index))) setDraft(labelOf(chosen));
+    setEditingIndex(index);
+    setDraft(labelOf(chosen));
+    setMessage(undefined);
+    focusAddField();
   };
   const isCompact = isCompactSurface(surface);
   const chipExtras = (value: V) => {
@@ -154,22 +186,31 @@ export function ListEditor<T extends AttributeType, V>({
     isCompact || placeholder === undefined ? fieldStrings.setAttribute(attribute.name) : placeholder;
   // On a form the name leads, over the chips, as FieldGroup labels what a form shows (as every field's label sits over
   // its value); the add field under them keeps the name for screen readers. A cell or a panel row names it already.
-  const isLabelledAbove = !isCompact && values.length > 0;
-  const chips = values.length > 0 && (
+  const isLabelledAbove = !isCompact && shown.length > 0;
+  const shown = values.flatMap((value, index) => (index === editingIndex ? [] : [{ value, index }]));
+  const chips = shown.length > 0 && (
     <ul className={styles.list} aria-label={attribute.name}>
-      {values.map((value, index) => (
-        <li key={`${String(index)}-${labelOf(value)}`} className={styles.item}>
+      {shown.map(({ value, index }) => (
+        // Keyed by the value, so a chip made primary moves with its focus instead of another chip taking its place.
+        <li
+          key={values.findIndex((each) => labelOf(each) === labelOf(value)) === index ? labelOf(value) : String(index)}
+          className={styles.item}
+          ref={(node) => {
+            if (node === null) chipRefs.current.delete(labelOf(value));
+            else chipRefs.current.set(labelOf(value), node);
+          }}
+        >
           {/* The chip opens its menu, never its link: a press inside an editor must not leave the page. */}
           <MenuTrigger>
-            <AriaButton
-              className={styles.chip}
-              aria-label={strings.valueActions(labelOf(value))}
+            <LinkChip
+              href={hrefOf(value)}
+              isPressable
+              label={strings.valueActions(labelOf(value))}
               isDisabled={isDisabled}
+              {...chipExtras(value)}
             >
-              <LinkChip href={hrefOf(value)} isStatic {...chipExtras(value)}>
-                {labelOf(value)}
-              </LinkChip>
-            </AriaButton>
+              {labelOf(value)}
+            </LinkChip>
             <Menu
               label={strings.valueActions(labelOf(value))}
               onAction={(key) => {
@@ -203,60 +244,63 @@ export function ListEditor<T extends AttributeType, V>({
   return (
     <div className={styles.root}>
       {isLabelledAbove ? <FieldGroup label={attribute.name}>{chips}</FieldGroup> : chips}
-      {renderAdd === undefined ? (
-        <Field
-          label={attribute.name}
-          isLabelHidden={isCompact || isLabelledAbove}
-          size={isCompact ? 'sm' : 'md'}
-          // The copy style's empty value, then an invitation to add one more.
-          placeholder={values.length === 0 ? emptyPlaceholder : strings.addAnotherPlaceholder}
-          value={draft}
-          onChange={(next) => {
-            setDraft(next);
-            setMessage(undefined);
-          }}
-          onSubmit={add}
-          // Enter with an address typed adds it, and only that: in a form (a create dialog, New meeting) it must not
-          // also submit the form around it. An empty add field lets Enter through, so the form still submits.
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' && !event.nativeEvent.isComposing && draft.trim() !== '') event.preventDefault();
-          }}
-          // A record's value, never the viewer's own: no browser autofill, and no password manager taking it for a login.
-          autoComplete="off"
-          onBlur={add}
-          onPaste={(event) => {
-            if (pasteText(event.clipboardData.getData('text/plain'))) event.preventDefault();
-          }}
-          // Opened from a grid cell: keys go to the add field, never to a chip's link.
-          // eslint-disable-next-line jsx-a11y-x/no-autofocus -- the editor was opened on purpose, from the cell
-          autoFocus={autoOpen}
-          isDisabled={isDisabled}
-          {...(onCancel === undefined ? {} : { onEscape: onCancel })}
-          {...((message ?? error) === undefined ? {} : { error: message ?? error })}
-          {...(inputMode === undefined ? {} : { inputMode })}
-          {...(type === undefined ? {} : { type })}
-          {...(hint === undefined ? {} : { hint })}
-          {...(prefix === undefined ? {} : { prefix })}
-        />
-      ) : (
-        renderAdd({
-          label: attribute.name,
-          isLabelHidden: isCompact || isLabelledAbove,
-          size: isCompact ? 'sm' : 'md',
-          placeholder: values.length === 0 ? emptyPlaceholder : strings.addAnotherPlaceholder,
-          value: draft,
-          onChange: (next) => {
-            setDraft(next);
-            setMessage(undefined);
-          },
-          onAdd: add,
-          onPasteText: pasteText,
-          autoFocus: autoOpen,
-          isDisabled,
-          ...(onCancel === undefined ? {} : { onEscape: onCancel }),
-          ...((message ?? error) === undefined ? {} : { error: message ?? error }),
-        })
-      )}
+      <div ref={addRef} className={styles.add}>
+        {renderAdd === undefined ? (
+          <Field
+            label={attribute.name}
+            isLabelHidden={isCompact || isLabelledAbove}
+            size={isCompact ? 'sm' : 'md'}
+            // The copy style's empty value, then an invitation to add one more.
+            placeholder={values.length === 0 ? emptyPlaceholder : strings.addAnotherPlaceholder}
+            value={draft}
+            onChange={(next) => {
+              setDraft(next);
+              setMessage(undefined);
+            }}
+            onSubmit={add}
+            // Enter with an address typed adds it, and only that: in a form (a create dialog, New meeting) it must not
+            // also submit the form around it. An empty add field lets Enter through, so the form still submits.
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' && !event.nativeEvent.isComposing && draft.trim() !== '')
+                event.preventDefault();
+            }}
+            // A record's value, never the viewer's own: no browser autofill, and no password manager taking it for a login.
+            autoComplete="off"
+            onBlur={add}
+            onPaste={(event) => {
+              if (pasteText(event.clipboardData.getData('text/plain'))) event.preventDefault();
+            }}
+            // Opened from a grid cell: keys go to the add field, never to a chip's link.
+            // eslint-disable-next-line jsx-a11y-x/no-autofocus -- the editor was opened on purpose, from the cell
+            autoFocus={autoOpen}
+            isDisabled={isDisabled}
+            {...(onCancel === undefined && editingIndex === undefined ? {} : { onEscape: escape })}
+            {...((message ?? error) === undefined ? {} : { error: message ?? error })}
+            {...(inputMode === undefined ? {} : { inputMode })}
+            {...(type === undefined ? {} : { type })}
+            {...(hint === undefined ? {} : { hint })}
+            {...(prefix === undefined ? {} : { prefix })}
+          />
+        ) : (
+          renderAdd({
+            label: attribute.name,
+            isLabelHidden: isCompact || isLabelledAbove,
+            size: isCompact ? 'sm' : 'md',
+            placeholder: values.length === 0 ? emptyPlaceholder : strings.addAnotherPlaceholder,
+            value: draft,
+            onChange: (next) => {
+              setDraft(next);
+              setMessage(undefined);
+            },
+            onAdd: add,
+            onPasteText: pasteText,
+            autoFocus: autoOpen,
+            isDisabled,
+            ...(onCancel === undefined && editingIndex === undefined ? {} : { onEscape: escape }),
+            ...((message ?? error) === undefined ? {} : { error: message ?? error }),
+          })
+        )}
+      </div>
     </div>
   );
 }

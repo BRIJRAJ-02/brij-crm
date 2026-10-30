@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { Link as AriaLink } from 'react-aria-components';
+import { Button as AriaButton, Link as AriaLink } from 'react-aria-components';
 import { isAppPath, safeHref } from '../../lib/safe-href.ts';
 import { linkTarget } from '../Link/Link.tsx';
 import { ProviderMark, type ProviderName } from '../ProviderMark/ProviderMark.tsx';
@@ -32,10 +32,18 @@ export interface LinkChipProps {
   /** A country's flag (an emoji, from `flagOf`) before a phone number, read by its number alone. */
   readonly flag?: string;
   /**
-   * The chip's look with no link: a value inside its own editor (a list of
-   * emails being edited), where a press must never leave the page.
+   * A button with the chip's look, never its link: a value inside its own
+   * editor (a list of emails being edited), where a press opens the value's
+   * menu (inside a MenuTrigger, which supplies the press) or calls `onPress`,
+   * and must never leave the page. One focus ring, the chip's.
    */
-  readonly isStatic?: boolean;
+  readonly isPressable?: boolean;
+  /** What a pressable chip does when pressed, outside a MenuTrigger. */
+  readonly onPress?: () => void;
+  /** A pressable chip's name for screen readers, when it says more than its words ("Actions for ada@x.com"). */
+  readonly label?: string;
+  /** A pressable chip that takes no press while the form around it sends. */
+  readonly isDisabled?: boolean;
 }
 
 /** The site's icon, or its first letter while it loads and when there is none. */
@@ -64,8 +72,19 @@ function SiteIcon({ src, label }: { readonly src: string; readonly label: string
 }
 
 /** An email, phone, domain or URL value as a link chip: the one display for those types. */
-export function LinkChip({ href, children, isFlat = false, mark, iconSrc, flag, isStatic = false }: LinkChipProps) {
-  const safe = isStatic ? undefined : safeHref(href);
+export function LinkChip({
+  href,
+  children,
+  isFlat = false,
+  mark,
+  iconSrc,
+  flag,
+  isPressable = false,
+  onPress,
+  label,
+  isDisabled = false,
+}: LinkChipProps) {
+  const safe = isPressable ? undefined : safeHref(href);
   const flat = isFlat ? { 'data-flat': '' } : {};
   const lead: ReactNode = (
     <>
@@ -78,9 +97,26 @@ export function LinkChip({ href, children, isFlat = false, mark, iconSrc, flag, 
       )}
     </>
   );
+  if (isPressable) {
+    return (
+      <AriaButton
+        className={styles.root}
+        data-pressable=""
+        isDisabled={isDisabled}
+        {...(onPress === undefined ? {} : { onPress })}
+        {...(label === undefined ? {} : { 'aria-label': label })}
+        {...flat}
+      >
+        {lead}
+        <span className={styles.label} data-truncated="">
+          {children}
+        </span>
+      </AriaButton>
+    );
+  }
   if (safe === undefined) {
     return (
-      <span className={styles.root} {...(isStatic ? { 'data-static': '' } : { 'data-plain': '' })} {...flat}>
+      <span className={styles.root} data-plain="" {...flat}>
         {lead}
         <span className={styles.label} data-truncated="">
           {children}

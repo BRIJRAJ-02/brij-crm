@@ -7,7 +7,7 @@ import { Form } from '../../molecules/Form/Form.tsx';
 import { AttributeDisplay } from '../AttributeDisplay.tsx';
 import { AttributeEditor } from '../AttributeEditor.tsx';
 import type { FieldAttribute } from '../types.ts';
-import { expect, fn, screen } from 'storybook/test';
+import { expect, fn, screen, waitFor } from 'storybook/test';
 
 const sample = FIELD_SAMPLES.email;
 
@@ -219,5 +219,38 @@ export const SeveralPasteAndPrimary: Story = {
     await userEvent.click(canvas.getByRole('button', { name: 'b@example.com options' }));
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Make primary' }));
     await expect(args.onCommit).toHaveBeenLastCalledWith(['b@example.com', 'ada@example.com']);
+  },
+};
+
+/**
+ * Edit puts a value in the add field, focused, and hides its chip: Esc keeps it as it was, and Enter puts the
+ * changed value back in its place, not at the end. Make primary keeps focus on the chip it moved.
+ */
+export const SeveralEditInPlace: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => <SeveralForm onSubmit={submitted} />,
+  play: async ({ canvas, userEvent }) => {
+    const list = () => canvas.getByRole('list', { name: 'Emails' });
+    const add = canvas.getByRole('textbox', { name: 'Emails' });
+    await userEvent.click(canvas.getByRole('button', { name: 'ada@example.com options' }));
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Edit' }));
+    await waitFor(() => expect(add).toHaveFocus());
+    await expect(add).toHaveValue('ada@example.com');
+    await expect(list().querySelectorAll('li')).toHaveLength(1);
+    await userEvent.keyboard('{Escape}');
+    await expect(add).toHaveValue('');
+    await expect(list().querySelectorAll('li')).toHaveLength(2);
+
+    await userEvent.click(canvas.getByRole('button', { name: 'ada@example.com options' }));
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Edit' }));
+    await waitFor(() => expect(add).toHaveFocus());
+    await userEvent.clear(add);
+    await userEvent.keyboard('ada@home.example.com{Enter}');
+    await expect(list().querySelectorAll('li')[0]).toHaveTextContent('ada@home.example.com');
+
+    await userEvent.click(canvas.getByRole('button', { name: 'ada@work.example.com options' }));
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Make primary' }));
+    await waitFor(() => expect(canvas.getByRole('button', { name: 'ada@work.example.com options' })).toHaveFocus());
+    await expect(list().querySelectorAll('li')[0]).toHaveTextContent('ada@work.example.com');
   },
 };
