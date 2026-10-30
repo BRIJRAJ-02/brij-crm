@@ -83,9 +83,7 @@ export function SiteBody({
   if (site !== undefined && !site.hasVisits) {
     return (
       <SettingsPage title={strings.website} actions={<PeriodSwitch period={period} />}>
-        <EmptyState icon="globe" title={strings.noVisits}>
-          {strings.noVisitsText}
-        </EmptyState>
+        <EmptyState icon="globe" title={strings.noVisits} />
       </SettingsPage>
     );
   }

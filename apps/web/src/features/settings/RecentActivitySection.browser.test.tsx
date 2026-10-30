@@ -134,9 +134,7 @@ describe('Recent activity', () => {
       at: '/w/acme/settings/account/sign-in',
     });
     await expect.element(page.getByRole('heading', { name: 'Recent activity' })).toBeVisible();
-    await expect
-      .element(page.getByText('Sign ins and changes to how you sign in, from the last 90 days.'))
-      .toBeVisible();
+    await expect.element(page.getByText('Last 90 days.')).toBeVisible();
     expect(document.querySelectorAll('[aria-busy="true"]')).toHaveLength(1);
     shown.unmount();
     shown = await renderInApp(() => <RecentActivityPending title="Your sign ins" />, {
@@ -145,8 +143,6 @@ describe('Recent activity', () => {
       at: '/w/acme/settings/account/sign-in',
     });
     await expect.element(page.getByRole('heading', { name: 'Your sign ins' })).toBeVisible();
-    await expect
-      .element(page.getByText('Sign ins and changes to how you sign in, from the last 90 days.'))
-      .toBeVisible();
+    await expect.element(page.getByText('Last 90 days.')).toBeVisible();
   });
 });

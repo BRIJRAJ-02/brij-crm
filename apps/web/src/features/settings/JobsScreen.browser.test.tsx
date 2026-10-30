@@ -191,7 +191,7 @@ describe('Cancel on a job', () => {
     await userEvent.click(page.getByRole('button', { name: 'Cancel', exact: true }));
     await expect.poll(alert).not.toBeNull();
     expect(alert()?.textContent).toContain('Cancel “Test job”?');
-    expect(alert()?.textContent).toContain('It stops before its next batch. What it already did stays done.');
+    expect(alert()?.textContent).toContain('It stops after this batch. Done work stays.');
     await userEvent.click(page.getByRole('button', { name: /^Keep job/ }));
     await expect.poll(dialog).toBeNull();
     expect(cancel).not.toHaveBeenCalled();

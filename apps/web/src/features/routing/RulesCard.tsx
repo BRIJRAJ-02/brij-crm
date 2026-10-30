@@ -371,7 +371,7 @@ function RuleReport({ data, slug, surface, rules }: RuleReportProps) {
           columns={REPORT_COLUMNS}
           rows={rows}
           getRowId={(row) => row.ruleId ?? 'fallback'}
-          emptyState={<EmptyState title={strings.reportEmpty}>{strings.reportEmptyText}</EmptyState>}
+          emptyState={<EmptyState title={strings.reportEmpty} />}
           renderCell={(row, column) => {
             switch (column) {
               case 'rule':

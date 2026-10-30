@@ -162,7 +162,7 @@ describe('Scheduling access', () => {
     const made = await render();
     await page.getByRole('button', { name: 'Remove Priya’s access' }).click();
     const dialog = page.getByRole('alertdialog', { name: 'Remove Priya’s access?' });
-    await expect.element(dialog.getByText('Priya will no longer be able to manage your scheduling.')).toBeVisible();
+    await expect.element(dialog.getByText('Priya can no longer manage your scheduling.')).toBeVisible();
     await dialog.getByRole('button', { name: 'Remove access' }).click();
     expect(made.revoked).toEqual(['priya-me']);
     await expect.element(page.getByText('Nobody else yet.', { exact: false })).toBeVisible();

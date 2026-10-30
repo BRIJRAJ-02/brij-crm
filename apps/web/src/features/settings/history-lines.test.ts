@@ -330,7 +330,7 @@ const SENTENCES: readonly (readonly [AuditEntryView, string])[] = [
       target: member(bea),
       params: { level: 'manage', from: 'view', over: gone },
     },
-    'Ada Lovelace changed what Bea Rao can do with a deleted user’s scheduling to manage it',
+    'Ada Lovelace now lets Bea Rao manage a deleted user’s scheduling',
   ],
   [
     { ...base, action: 'delegation.revoked', target: member(bea), params: { level: 'view' } },
