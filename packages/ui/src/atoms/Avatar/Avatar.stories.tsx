@@ -86,6 +86,12 @@ export const RefusedPicture: Story = {
 /** A picture on our origin. */
 export const Picture: Story = {
   args: { src: PICTURE },
+  // Its initial holds the tile until the picture has loaded: the shot waits for the picture.
+  play: async ({ canvasElement }) => {
+    await waitFor(() => {
+      if (canvasElement.querySelector('img[data-fade="waiting"]') !== null) throw new Error('Still loading.');
+    });
+  },
 };
 
 /** Bytes no browser can draw: a picture that fails as a company's logo does when its site has none (spec 0059). */
