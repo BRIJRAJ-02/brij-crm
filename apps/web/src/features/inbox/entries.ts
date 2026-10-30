@@ -1,49 +1,13 @@
-// The inbox as the library draws it, and its address (spec 0038, AC-1169 to
-// AC-1171): plain functions with no React, so they test in Node. The actor is
-// named from the members ("Former member" for one no longer active).
-import type { MemberSummary, NotificationKind, NotificationView } from '@crm/data';
+// The inbox as the library draws it (spec 0038, AC-1169 to AC-1171): plain
+// functions with no React, so they test in Node. The actor is named from the
+// members ("Former member" for one no longer active). Its address is
+// `search.ts`, apart, so the route's first load never carries these.
+import type { MemberSummary, NotificationView } from '@crm/data';
 import type { NotificationItem } from '@crm/ui';
-import { isTaskParam } from '../tasks/entries.ts';
 import { actorDisplay } from '../notes/entries.ts';
 import { formHref } from '../forms/paths.ts';
 import { recordHref } from '../records/details.ts';
 import { strings } from './strings.ts';
-
-/** The kind filter as the address spells it. */
-export type InboxKind = 'mentions' | 'replies' | 'assignments' | 'submissions';
-
-/** The inbox's address: the tab, the kind, unread only, and the task dialog. Defaults stay out. */
-export interface InboxSearch {
-  readonly status?: 'done';
-  readonly kind?: InboxKind;
-  readonly unread?: 1;
-  readonly task?: string;
-}
-
-const KINDS: Readonly<Record<InboxKind, NotificationKind>> = {
-  mentions: 'mention',
-  replies: 'reply',
-  assignments: 'task_assigned',
-  submissions: 'form_submission',
-};
-
-/** Whether the address's kind is one the filter knows. */
-const isInboxKind = (value: unknown): value is InboxKind =>
-  value === 'mentions' || value === 'replies' || value === 'assignments' || value === 'submissions';
-
-/** Reads the address: only the values it knows. */
-export function inboxSearch(search: Record<string, unknown>): InboxSearch {
-  return {
-    ...(search.status === 'done' ? { status: 'done' as const } : {}),
-    ...(isInboxKind(search.kind) ? { kind: search.kind } : {}),
-    ...(search.unread === 1 || search.unread === '1' ? { unread: 1 as const } : {}),
-    ...(isTaskParam(search.task) && search.task !== 'new' ? { task: search.task } : {}),
-  };
-}
-
-/** The data layer's kind for the address's. */
-export const notificationKind = (kind: InboxKind | undefined): NotificationKind | undefined =>
-  kind === undefined ? undefined : KINDS[kind];
 
 /** One notification as NotificationList's row. */
 export function toNotificationItem(view: NotificationView, members: readonly MemberSummary[]): NotificationItem {

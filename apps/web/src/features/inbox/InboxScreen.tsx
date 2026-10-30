@@ -22,7 +22,8 @@ import { useNavigate, useRouteContext, useRouter } from '@tanstack/react-router'
 import { useMemo, useRef } from 'react';
 import { TaskDialog } from '../tasks/TaskDialog.tsx';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
-import { notificationKind, targetOf, toNotificationItem, type InboxKind, type InboxSearch } from './entries.ts';
+import { targetOf, toNotificationItem } from './entries.ts';
+import { notificationKind, type InboxKind, type InboxSearch } from './search.ts';
 import { strings } from './strings.ts';
 
 /** How near the end of what is loaded the list asks for the next 50. */

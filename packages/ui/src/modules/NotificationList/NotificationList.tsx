@@ -207,12 +207,12 @@ export function NotificationList({
             {...(item.actor.hue === undefined ? {} : { hue: item.actor.hue })}
           />
         ) : (
-          // Not a person (a form, the system): its mark on the neutral tile, as RecordChip draws it.
+          // Not a person (a form, the system): its mark on the soft gray tile, so it reads beside people's tints.
           <Avatar
             name={item.actor.name}
             size="sm"
             shape="square"
-            hue="ink"
+            hue="gray"
             mark={<Icon name={ACTOR_ICONS[item.actor.type]} size="xs" />}
             isDecorative
           />
