@@ -2,15 +2,16 @@
 // Purpose: what the Link page opens on (the owner's design, 27 October 2026): the page as something to hand out,
 // not a builder. Its address to copy, its code to scan, and the page itself beside them.
 // Main task: share the page in a message or across a table; Edit page is the one way into the editor.
-// Leaves out: the blocks, the look and sharing settings, which Edit page opens; and the figures (phase 3).
+// Leaves out: the blocks, the look and sharing settings, which Edit page opens; the figures (phase 3); and whether
+// the page is live, which is the one switch in the bar above (spec 0058, AC-23).
 import type { DataLayer } from '@crm/data';
-import { Badge, Button, ButtonLink, Card, DescriptionList, Field, FieldGroup, QrCode, Separator } from '@crm/ui';
+import { Button, ButtonLink, Card, EmptyState, Field, FieldGroup, QrCode, Separator, SpotIllustration } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useRef, useState } from 'react';
 import { homeStrings } from './home-strings.ts';
 import { qrPng, saveFile } from './qr-png.ts';
 import { shareStrings } from './share-strings.ts';
-import { PrivatePage, useWalletLink } from './private-page.tsx';
+import { useWalletLink } from './private-page.tsx';
 import { strings } from './strings.ts';
 
 /** Props for the overview. */
@@ -21,26 +22,26 @@ export interface LinkPageOverviewProps {
   readonly handle: string;
   /** The page's whole address, scheme and all. */
   readonly address: string;
-  /** Whether anyone but its owner can open it; a private page shows no code to scan. */
+  /** Whether anyone but its owner can open it: the card's line says so, and a private page offers no wallet pass. */
   readonly isPublic: boolean;
-  /** The page went public here, so the screen holding this knows without reading the profile again. */
-  readonly onPublic: () => void;
-  /** The page holds nothing yet, so it is still worth saying what a link page is for. */
+  /** The page holds nothing yet: its first empty moment shows under the card, with the one way in. */
   readonly isEmpty: boolean;
   /** Opens the builder: the one way in, in the card's own header, as the design draws it. */
   readonly onEdit: () => void;
+  /** Opens the builder with Add already open: the empty page's one primary, so it adds rather than shows more empty. */
+  readonly onAdd: () => void;
 }
 
-/** Share online and Share in person, or the private page's one way out of being private. */
+/** Share online and Share in person, then, while the page holds nothing, its first empty moment. */
 export function LinkPageOverview({
   data,
   slug,
   handle,
   address,
   isPublic,
-  onPublic,
   isEmpty,
   onEdit,
+  onAdd,
 }: LinkPageOverviewProps) {
   const { toasts } = useRouteContext({ from: '__root__' });
   const codeRef = useRef<SVGSVGElement>(null);
@@ -56,38 +57,19 @@ export function LinkPageOverview({
       .catch(() => toasts.toast({ tone: 'danger', message: shareStrings.downloadFailed }))
       .finally(() => setSaving(false));
   };
-  if (!isPublic) {
-    return (
-      <Card
-        title={strings.yourPage}
-        description={strings.promise}
-        actions={
-          <>
-            <Badge text={homeStrings.private} dot="gray" />
-            <Button variant="primary" icon="pencil" onPress={onEdit}>
-              {strings.editPageAction}
-            </Button>
-          </>
-        }
-      >
-        <PrivatePage data={data} slug={slug} address={address} onPublic={onPublic} />
-      </Card>
-    );
-  }
   // One framed card holding both ways to share, as the owner's artboard draws it: the page is one thing to hand
-  // out, not a column of settings. Each way is a titled section inside it, with a rule between them.
+  // out, not a column of settings. Each way is a titled section inside it, with a rule between them. A private
+  // page keeps the same card (its owner can still open it, and turn it on from the bar), and its line says so.
   return (
     <>
       <Card
         title={strings.yourPage}
-        description={strings.promise}
+        description={isPublic ? strings.promise : strings.privateLine}
         actions={
-          <>
-            <Badge text={homeStrings.live} dot="green" />
-            <Button variant="primary" icon="pencil" onPress={onEdit}>
-              {strings.editPageAction}
-            </Button>
-          </>
+          // While the page is empty the start card below holds the one primary, so this one steps back.
+          <Button variant={isEmpty ? 'secondary' : 'primary'} icon="pencil" onPress={onEdit}>
+            {strings.editPageAction}
+          </Button>
         }
       >
         <FieldGroup
@@ -128,8 +110,18 @@ export function LinkPageOverview({
         </FieldGroup>
       </Card>
       {isEmpty && (
-        <Card title={strings.whyTitle}>
-          <DescriptionList layout="stacked" items={[...strings.whyPoints]} />
+        <Card>
+          <EmptyState
+            illustration={<SpotIllustration kind="link-page" />}
+            title={strings.startTitle}
+            actions={
+              <Button variant="primary" icon="plus" onPress={onAdd}>
+                {strings.startAction}
+              </Button>
+            }
+          >
+            {strings.startText}
+          </EmptyState>
         </Card>
       )}
     </>

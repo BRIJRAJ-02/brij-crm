@@ -46,12 +46,7 @@ export function SharingCard({ indexable, onChange, shareImage, onShareImage, ref
       description={strings.sharingText}
       {...(refusal === undefined ? {} : { footerNote: refusal.message })}
     >
-      <Switch
-        label={strings.indexable}
-        description={strings.indexableText}
-        isSelected={indexable}
-        onChange={onChange}
-      />
+      <Switch label={strings.indexable} isSelected={indexable} onChange={onChange} />
       <FileDrop
         label={shareImage === undefined ? strings.shareImageDrop : strings.shareImage}
         acceptedTypes={SHARE_IMAGE_TYPES}
