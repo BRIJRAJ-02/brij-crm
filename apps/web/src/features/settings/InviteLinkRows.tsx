@@ -1,10 +1,11 @@
 // Brief
 // Purpose: let an owner or admin share one link anyone can join the workspace through (spec 0031, AC-818).
-// Main task: turn the link on, copy it, and limit how long and how many; reset or turn it off (both ask first).
+// Main task: turn the link on, copy it, and (folded under Link settings) limit how long and how many; reset or turn it
+// off (both ask first).
 // The first Card of Members › Joining › Other ways to join, Company email's after it.
 // Leaves out: guests (slice 9), email domains (the row after it), and who joined (the Members tab).
 import { INVITE_LINK_DAYS, isDataError, type DataLayer, type InviteLinkDays, type InviteLinkView } from '@crm/data';
-import { Button, Callout, Field, InfoTip, Select, SettingsRow, Switch, type Toasts } from '@crm/ui';
+import { Button, Callout, Disclosure, Field, Select, SettingsRow, Switch, type Toasts } from '@crm/ui';
 import { useEffect, useRef, useState } from 'react';
 import { UNDO_MS } from '../tasks/undo-delete.ts';
 import type { MemberQuestion } from './MemberConfirm.tsx';
@@ -200,46 +201,46 @@ export function InviteLinkRows({ data, slug, link, ask, onChanged, toasts, onFai
             copyLabel={strings.linkCopy}
             hint={strings.linkUses(link.uses)}
           />
-          <SettingsRow title={strings.linkExpires}>
-            <Select
-              label={strings.linkExpires}
-              isLabelHidden
-              size="sm"
-              items={expiryItems}
-              value={expiry === undefined ? 'never' : 'current'}
-              isDisabled={busy !== undefined}
-              onChange={(id) => {
-                if (id === null || id === 'current') return;
-                change(
-                  'expiry',
-                  { enabled: true, expiresInDays: id === 'never' ? null : (Number(id) as InviteLinkDays) },
-                  // An expiry counts from now, so only Never comes back exactly; a date already set can't.
-                  expiry === undefined ? { enabled: true, expiresInDays: null } : undefined,
-                );
-              }}
-            />
-          </SettingsRow>
-          <SettingsRow
-            title={strings.linkMostUses}
-            meta={<InfoTip label={strings.linkMostUses}>{strings.linkMostUsesInfo}</InfoTip>}
-          >
-            <Select
-              label={strings.linkMostUses}
-              isLabelHidden
-              size="sm"
-              items={usesItems}
-              value={link.maxUses === undefined ? 'none' : String(link.maxUses)}
-              isDisabled={busy !== undefined}
-              onChange={(id) => {
-                if (id === null) return;
-                change(
-                  'uses',
-                  { enabled: true, maxUses: id === 'none' ? null : Number(id) },
-                  { enabled: true, maxUses: link.maxUses ?? null },
-                );
-              }}
-            />
-          </SettingsRow>
+          {/* The limits most links never need, folded (the owner, 30 October 2026: fewer choices). */}
+          <Disclosure title={strings.linkSettings} variant="quiet">
+            <SettingsRow title={strings.linkExpires}>
+              <Select
+                label={strings.linkExpires}
+                isLabelHidden
+                size="sm"
+                items={expiryItems}
+                value={expiry === undefined ? 'never' : 'current'}
+                isDisabled={busy !== undefined}
+                onChange={(id) => {
+                  if (id === null || id === 'current') return;
+                  change(
+                    'expiry',
+                    { enabled: true, expiresInDays: id === 'never' ? null : (Number(id) as InviteLinkDays) },
+                    // An expiry counts from now, so only Never comes back exactly; a date already set can't.
+                    expiry === undefined ? { enabled: true, expiresInDays: null } : undefined,
+                  );
+                }}
+              />
+            </SettingsRow>
+            <SettingsRow title={strings.linkMostUses}>
+              <Select
+                label={strings.linkMostUses}
+                isLabelHidden
+                size="sm"
+                items={usesItems}
+                value={link.maxUses === undefined ? 'none' : String(link.maxUses)}
+                isDisabled={busy !== undefined}
+                onChange={(id) => {
+                  if (id === null) return;
+                  change(
+                    'uses',
+                    { enabled: true, maxUses: id === 'none' ? null : Number(id) },
+                    { enabled: true, maxUses: link.maxUses ?? null },
+                  );
+                }}
+              />
+            </SettingsRow>
+          </Disclosure>
         </>
       )}
     </>

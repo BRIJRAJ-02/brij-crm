@@ -74,13 +74,13 @@ export interface DrawnSection {
 /**
  * The sections the sidebar draws, in the member's order: Records always (it has loading and empty states of its
  * own), Scheduling while the member has its pages (AC-928; never for a guest), Lists once lists exist (AC-927),
- * and Favourites once the member has starred something (AC-925).
+ * and Favourites always: empty, it says how to fill it, so a member finds the star (flow pass, 30 October 2026).
  */
 export function drawnSections(nav: NavState, universe: NavUniverse): DrawnSection[] {
   const prefs = prefsOf(nav);
   return sectionOrder(prefs).flatMap((key): DrawnSection[] => {
     const entries = sectionItems(prefs, universe, key);
-    if (key !== 'records' && entries.length === 0) return [];
+    if (key !== 'records' && key !== 'favourites' && entries.length === 0) return [];
     return [{ key, title: SECTION_TITLES[key], entries, isFolded: prefs.sections.folded.includes(key) }];
   });
 }
@@ -91,7 +91,7 @@ export const topEntries = (nav: NavState, universe: NavUniverse): NavEntry[] =>
 
 /**
  * The `toIndex` a section move takes when the member drops it at `visibleIndex` among the sections drawn: next to
- * the drawn section it was dropped beside, the sections not drawn (empty Favourites, Lists) keeping their places.
+ * the drawn section it was dropped beside, the sections not drawn (an empty Lists or Scheduling) keeping their places.
  */
 export function sectionMoveIndex(
   order: readonly NavSectionKey[],

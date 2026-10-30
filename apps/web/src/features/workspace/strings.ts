@@ -50,6 +50,10 @@ export const strings = {
   help: 'Help and shortcuts',
   /** Item and section menus (spec 0034, AC-932, AC-933). */
   hideFromSidebar: 'Hide from sidebar',
+  /** Hide from sidebar's toast on an object, with Undo. */
+  hiddenFromSidebar: (pluralName: string) => `${pluralName} hidden from sidebar`,
+  /** Favourites while nothing is starred: where the star is. */
+  noFavourites: 'Star a view or record to pin it here.',
   removeFavourite: 'Remove from favourites',
   /** The star on a record's or a view's header (AC-934). */
   addFavourite: 'Add to favourites',

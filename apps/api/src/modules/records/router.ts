@@ -2,6 +2,7 @@ import {
   addRecord,
   bulkEditRecords,
   countMatches,
+  countRecordsByObject,
   deleteRecords,
   editRecord,
   editRecords,
@@ -55,6 +56,12 @@ export const recordsRouter = member.records.router({
         signal,
       ),
     ),
+  ),
+  // Settings › Objects' Records column: every visible object's count in one grouped read, in the same read gate.
+  objectCounts: member.records.objectCounts.handler(({ context }) =>
+    context.readGate.run(context.scope.workspaceId, async () => ({
+      counts: await countRecordsByObject(context.scope),
+    })),
   ),
   // The record picker's search (spec 0014): cancelled with its request, in the same read gate.
   search: member.records.search.handler(({ context, input, signal }) =>

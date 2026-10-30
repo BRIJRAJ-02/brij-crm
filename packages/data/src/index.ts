@@ -4574,6 +4574,14 @@ export function createDataLayer({
       count: (workspace: string, objectId: string): Promise<{ readonly count: number; readonly atLeast: boolean }> =>
         beforeRead(workspace).then(() => call((options) => api.records.count({ workspace, objectId }, options))),
       /**
+       * How many live records each object holds, by object id, in one read (Settings › Objects' Records column).
+       * An object under a record rule is absent (its own `count` answers it). Never cached: asked once per visit.
+       */
+      objectCounts: (workspace: string): Promise<Readonly<Record<string, number>>> =>
+        beforeRead(workspace)
+          .then(() => call((options) => api.records.objectCounts({ workspace }, options)))
+          .then((answer) => answer.counts),
+      /**
        * Makes a record at once (see the records layer) with `id` (from
        * `newId`); rejects with the refusals when the server says no. Sending the
        * same id again after a lost answer gets the record already made.

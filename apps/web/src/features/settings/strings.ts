@@ -25,10 +25,14 @@ export const strings = {
   objectOrderInfo: 'Drag, or use Move up and Move down, to change the order objects show in the sidebar.',
   kindColumn: 'Type',
   attributesColumn: 'Attributes',
+  recordsColumn: 'Records',
+  /** Under a record rule, or when the counts didn't load: no number to give. */
+  recordsUnknown: '—',
   actionsColumn: 'Actions',
   standard: 'Standard',
   custom: 'Custom',
   attributeCount: (count: number, shown: string) => (count === 1 ? '1 attribute' : `${shown} attributes`),
+  recordCount: (count: number, shown: string) => (count === 1 ? '1 record' : `${shown} records`),
   rowActions: (plural: string) => `Actions for ${plural}`,
   open: 'Open',
   moveUp: 'Move up',
@@ -56,10 +60,10 @@ export const strings = {
   /** The New object dialog's single flow: the name, the guesses that follow it and the inline attributes. */
   objectName: 'Name',
   objectNamePlaceholder: 'Project, Partner, Invoice…',
-  followsName: (plural: string, slug: string) => `${plural}, API name ${slug}`,
+  followsName: (plural: string) => plural,
   /** A plural Name: the singular guessed from it, said beside the plural so nothing changes unseen. */
-  followsNames: (singular: string, plural: string, slug: string) => `One ${singular}, many ${plural}, API name ${slug}`,
-  namesAndApi: 'Names, API name and colour',
+  followsNames: (singular: string, plural: string) => `One ${singular}, many ${plural}`,
+  namesAndApi: 'More settings',
   firstAttributes: 'Attributes',
   nameIsAlways: 'Name is added for you',
   attributePlaceholder: 'Add an attribute, then press Enter',
@@ -76,10 +80,6 @@ export const strings = {
   apiNameLocked: 'API names never change, so links and integrations keep working.',
   objectId: 'Object ID',
   objectIdReason: 'Set by the system.',
-  /** The Identifiers' InfoTip, on API name: what the API name and the Object ID are for. */
-  idsHelp:
-    'Developers use it to point at this object from the API, a script or an integration. You only need it if someone asks.',
-  idsExample: 'People has the API name people, so a script asks the API for people.',
   copyApiName: 'Copy API name',
   copyObjectId: 'Copy object ID',
   icon: 'Icon',
@@ -104,7 +104,8 @@ export const strings = {
   typeColumn: 'Type',
   rulesColumn: 'Rules',
   noAttributes: 'No attributes yet',
-  archivedObjectAttributes: (plural: string) => `${plural} is archived. Restore it to see its attributes here.`,
+  /** An archived object's attributes tab, for everyone; owners and admins get Restore beside it. */
+  archivedObjectAttributes: (plural: string) => `${plural} is archived. Its records are kept.`,
   /** The Configuration tab's first section: the form. */
   lookSection: 'Names and look',
   /** The danger zone. */
@@ -112,7 +113,8 @@ export const strings = {
   /** The same section once the object is archived: bringing it back isn't dangerous. */
   restoreZone: 'Restore',
   /** The Configuration tab's IDs, apart from what Save changes. */
-  idsSection: 'Identifiers',
+  /** The Configuration tab's quiet fold at the foot: the API name and object ID. */
+  developer: 'Developer',
   dangerArchive: (plural: string) => `Archive ${plural}`,
   dangerArchiveText: 'It leaves the sidebar and every picker. Its records, values and history are kept.',
   dangerRestore: (plural: string) => `Restore ${plural}`,
@@ -132,6 +134,10 @@ export const strings = {
   archiving: 'Archiving',
   archivedToast: (plural: string) => `${plural} archived.`,
   restoredToast: (plural: string) => `${plural} restored.`,
+  /** An archive toast's way back (the same restore as the Archived section's). */
+  undo: 'Undo',
+  /** An object's settings' way to its records ("Open Projects"). */
+  openRecords: (plural: string) => `Open ${plural}`,
   /** An address in settings that names nothing. */
   missingTitle: 'Page not found',
   missingText: 'There’s nothing at this address.',

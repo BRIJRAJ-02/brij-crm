@@ -5,7 +5,6 @@ export const strings = {
   title: 'Preferences',
   appearance: 'Appearance',
   theme: 'Theme',
-  themeDescription: 'Only on this browser.',
   /** The theme that follows the device's light or dark setting. */
   system: 'Automatic',
   light: 'Light',
@@ -14,8 +13,6 @@ export const strings = {
   dates: 'Dates and time',
   timeZone: 'Time zone',
   timeZoneDescription: 'Dates and times across the app show in this zone.',
-  /** The Time zone row's InfoTip: where these three are kept, unlike the theme. */
-  timeZoneInfo: 'Time zone, date format and week start follow you on every device, in this workspace only.',
   dateFormat: 'Date format',
   weekStart: 'Week starts on',
   automatic: (example: string) => `Automatic (${example})`,

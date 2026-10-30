@@ -83,6 +83,7 @@ const READS: ReadonlySet<string> = new Set([
   'members.visible',
   'records.query',
   'records.count',
+  'records.objectCounts',
   'records.groups',
   'records.get',
   'records.activity',

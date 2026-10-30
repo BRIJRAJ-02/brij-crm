@@ -156,6 +156,14 @@ export const RecordCount = z.object({
 export type RecordCount = z.infer<typeof RecordCount>;
 
 /**
+ * How many live records each object holds, by object id, in one read (Settings › Objects' Records column): only
+ * objects the caller sees with no record rule, whose stored count is theirs to know (`records.count` answers the rest).
+ */
+export const ObjectRecordCounts = z.object({ counts: z.record(Uuid, z.number().int().min(0)) });
+/** Each object's live record count. */
+export type ObjectRecordCounts = z.infer<typeof ObjectRecordCounts>;
+
+/**
  * The first cards of a board's columns (spec 0021): the object's records in
  * the view's `filter` and `sorts`, split by the grouping attribute `groupBy`
  * (a status, or a select holding one value). `groupIds` names 1 to 12
@@ -460,6 +468,7 @@ export type TrashedRecord = z.infer<typeof TrashedRecord>;
 export const recordsContract = {
   query: oc.input(QueryRecordsInput).output(RecordPage),
   count: oc.input(CountRecordsInput).output(RecordCount),
+  objectCounts: oc.input(WorkspaceScoped).output(ObjectRecordCounts),
   groups: oc.input(RecordGroupsInput).output(RecordGroups),
   get: oc.input(GetRecordsInput).output(z.array(RecordView)),
   create: oc.input(CreateRecordInput).output(WrittenRecord),

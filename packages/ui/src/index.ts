@@ -381,6 +381,7 @@ export {
 } from './modules/HoursEditor/HoursEditor.tsx';
 export {
   AttributeSettings,
+  type AttributeSettingsApiNames,
   type AttributeSettingsAttribute,
   type AttributeSettingsField,
   type AttributeSettingsOptionWrites,

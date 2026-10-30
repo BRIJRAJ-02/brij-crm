@@ -389,7 +389,6 @@ function RelationshipForm({
           <>
             <RadioGroup
               label={isSelf ? strings.thisSideHolds : strings.eachHas(near.singular)}
-              info={<InfoTip label={strings.cardinality}>{strings.aboutCardinality}</InfoTip>}
               orientation="horizontal"
               value={holdsOne.from ? 'one' : 'many'}
               onChange={(next) => {
@@ -416,19 +415,6 @@ function RelationshipForm({
       )}
       {isShaped && nameField('from')}
       {isShaped && nameField('to')}
-      {isShaped && (
-        <Callout>
-          {isSelf
-            ? strings.selfSentence(
-                near.title,
-                { title: fromName.trim(), isOne: holdsOne.from },
-                { title: toName.trim(), isOne: holdsOne.to },
-                near.singular,
-                near.plural,
-              )
-            : `${strings.sideSentence(near.title, fromName.trim(), holdsOne.from, far.singular, far.plural)} ${strings.sideSentence(far.title, toName.trim(), holdsOne.to, near.singular, near.plural)}`}
-        </Callout>
-      )}
     </Form>
   );
 }

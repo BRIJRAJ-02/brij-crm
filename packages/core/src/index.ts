@@ -195,7 +195,7 @@ export {
   type CreateObjectInput,
   type EditObjectInput,
 } from './objects/objects.ts';
-export { getUsage } from './objects/usage.ts';
+export { countRecordsByObject, getUsage } from './objects/usage.ts';
 export {
   archiveAttributes,
   createAttribute,

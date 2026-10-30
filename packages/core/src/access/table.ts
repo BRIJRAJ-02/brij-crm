@@ -173,6 +173,7 @@ export const ACCESS_TABLE = {
   getMyAccess: { anyMember: true },
   // The limits' usage (spec 0012, AC-243): any member, filtered by their access inside.
   getUsage: { anyMember: true },
+  countRecordsByObject: { anyMember: true },
   // Change events (spec 0007): the head, and catch up through the caller's own audience.
   workspaceHead: { anyMember: true },
   catchUp: { anyMember: true },

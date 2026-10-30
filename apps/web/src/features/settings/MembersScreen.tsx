@@ -698,6 +698,7 @@ export function MembersScreen({
         data={data}
         slug={slug}
         workspaceName={workspaceName}
+        meId={access.memberId}
         member={removing}
         onClose={() => {
           setRemoving(undefined);

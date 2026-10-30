@@ -50,7 +50,7 @@ afterEach(() => {
 /** The Objects page with these objects, as someone holding `permissions`. */
 async function renderObjects(objects: readonly ObjectSummary[], permissions: readonly string[]) {
   const data = { objects: { newId: () => '0199f0a0-0000-7000-8000-0000000000ff' } } as unknown as DataLayer;
-  shown = await renderInApp(() => <ObjectsScreen slug="acme" objects={objects} usage={USAGE} />, {
+  shown = await renderInApp(() => <ObjectsScreen slug="acme" objects={objects} usage={USAGE} recordCounts={{}} />, {
     data,
     pattern: '/w/$slug/settings/objects',
     at: '/w/acme/settings/objects',

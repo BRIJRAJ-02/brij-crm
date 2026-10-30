@@ -8,7 +8,6 @@ import type { MemberPreferences, ObjectSummary, PreferencesChange, PreferencesSt
 import {
   Card,
   EmptyState,
-  InfoTip,
   Select,
   SettingsRow,
   SettingsSection,
@@ -77,7 +76,7 @@ export function PreferencesScreen({
     <SettingsPage title={strings.title}>
       <SettingsSection title={strings.appearance}>
         <Card>
-          <SettingsRow title={strings.theme} description={strings.themeDescription} control="field">
+          <SettingsRow title={strings.theme} control="field">
             <Select
               label={strings.theme}
               isLabelHidden
@@ -181,12 +180,7 @@ function MemberSections({
     <>
       <SettingsSection title={strings.dates}>
         <Card>
-          <SettingsRow
-            title={strings.timeZone}
-            description={strings.timeZoneDescription}
-            meta={<InfoTip label={strings.timeZone}>{strings.timeZoneInfo}</InfoTip>}
-            control="field"
-          >
+          <SettingsRow title={strings.timeZone} description={strings.timeZoneDescription} control="field">
             <Select
               label={strings.timeZone}
               isLabelHidden

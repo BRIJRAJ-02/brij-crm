@@ -9,7 +9,7 @@
 import { sql } from 'drizzle-orm';
 import type { ValidationRuleInput } from '@crm/contracts/values';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
-import { createDatabase, type Database } from '@crm/db';
+import { createDatabase, schema, type Database } from '@crm/db';
 import { newId } from '../engine/ids.ts';
 import { outboxHook } from '../engine/outbox.ts';
 import { createRecord, getRecords, setRecordValues, setValuesBatch } from '../engine/records.ts';
@@ -160,6 +160,40 @@ describe('rule writes', () => {
     // An empty list deletes them all.
     await editAttribute(w.scope, { attributeId: w.code.id, rules: [] });
     expect((await ruleCounts(w.scope, [w.code.id]))[w.code.id]).toEqual([0, 3]);
+  });
+
+  it('keeps a Required When rule through a save of the other rules, which the list can’t carry', async () => {
+    const w = await workspace();
+    const required = newId();
+    const condition = {
+      conjunction: 'and' as const,
+      conditions: [{ attributeId: w.stage.id, operator: 'is', value: w.won }],
+    };
+    // Stored as `required` will store it (milestone 2): the `rules` input refuses the kind.
+    await db.withWorkspace(w.scope.workspaceId, (tx) =>
+      tx.insert(schema.validationRules).values({
+        workspaceId: w.scope.workspaceId,
+        id: required,
+        objectId: w.objectId,
+        attributeId: w.code.id,
+        kind: 'required_when',
+        params: {},
+        condition,
+        position: 0,
+        createdByType: 'member',
+        createdById: w.memberId,
+        createdByMemberId: w.memberId,
+        updatedByType: 'member',
+        updatedById: w.memberId,
+        updatedByMemberId: w.memberId,
+      }),
+    );
+    // The settings dialog's Save: the rules it shows, never the Required When.
+    await editAttribute(w.scope, { attributeId: w.code.id, rules: [rule('length', { max: 8 })] });
+    await editAttribute(w.scope, { attributeId: w.code.id, rules: [] });
+    const code = (await listObjectAttributes(w.scope, w.objectId)).find((each) => each.id === w.code.id);
+    expect(code?.validation?.required).toBe('when');
+    expect(code?.validation?.rules.map((each) => [each.id, each.kind])).toEqual([[required, 'required_when']]);
   });
 
   it('makes rules with a new attribute, in the same write and one definitions event', async () => {

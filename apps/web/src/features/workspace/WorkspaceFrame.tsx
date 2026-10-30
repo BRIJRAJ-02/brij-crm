@@ -342,6 +342,7 @@ export function WorkspaceFrame({
                 objects={objects}
                 {...(currentObject === undefined ? {} : { currentObject })}
                 {...(currentPage === undefined ? {} : { currentPage })}
+                toasts={toasts}
                 onCustomise={openCustomise}
               />
             ))}
@@ -383,6 +384,7 @@ export function WorkspaceFrame({
       universe,
       objects,
       openCustomise,
+      toasts,
     ],
   );
   // A stored file's download address in this workspace (a form's file answer): the api checks the member on each.

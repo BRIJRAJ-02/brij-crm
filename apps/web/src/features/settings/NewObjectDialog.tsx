@@ -276,8 +276,8 @@ function NewObjectForm({ formId, objects, newId, isBusy, onBusyChange, onCreate,
           trimmed === ''
             ? undefined
             : singularShown === trimmed && pluralShown.trim() !== trimmed
-              ? strings.followsName(pluralShown, slugShown)
-              : strings.followsNames(singularShown, pluralShown.trim(), slugShown)
+              ? strings.followsName(pluralShown)
+              : strings.followsNames(singularShown, pluralShown.trim())
         }
       />
       <Disclosure title={strings.namesAndApi} isExpanded={isNamesOpen} onExpandedChange={setNamesOpen} variant="quiet">

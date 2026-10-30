@@ -44,3 +44,17 @@ export function toApiSlug(text: string, kind: ApiSlugKind): string {
   const slug = cut === '' ? kind : cut;
   return kind === 'object' && isReservedSlug(slug) ? `${slug}_object` : slug;
 }
+
+/**
+ * The first API name free of `taken`, made from `base`: `base` itself, else `base_2`, `base_3` and on, `base` cut
+ * so the whole stays within 63 characters. A new attribute named like an archived one gets one this way, so
+ * Create works while the archived one keeps its name (flow pass, 30 October 2026).
+ */
+export function freeApiSlug(base: string, taken: ReadonlySet<string>): string {
+  if (!taken.has(base)) return base;
+  for (let n = 2; ; n += 1) {
+    const suffix = `_${String(n)}`;
+    const candidate = `${base.slice(0, MAX_API_SLUG - suffix.length).replace(/_+$/, '')}${suffix}`;
+    if (!taken.has(candidate)) return candidate;
+  }
+}

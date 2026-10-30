@@ -66,8 +66,8 @@ function openDialog() {
 const inDialog = (dialog: HTMLElement, label: string) => within(dialog).getByLabelText(label);
 
 /**
- * Create: the name first and focused, the API name following it, the type
- * picker with the ten types without setup, Required, Unique for a text, and
+ * Create: the name first and focused, the type picker with the ten types
+ * without setup, and the rest folded under More settings: Required, Unique for a text, and
  * the default through the type's own editor. Create sends what was chosen.
  */
 export const Create: Story = {
@@ -78,7 +78,8 @@ export const Create: Story = {
     const name = inDialog(dialog, 'Name');
     await waitFor(() => expect(name).toHaveFocus());
     await userEvent.keyboard('Café orders');
-    await waitFor(() => expect(inDialog(dialog, 'API name')).toHaveValue('cafe_orders'));
+    // The API name is made from the name: no field for it on create.
+    await expect(within(dialog).queryByLabelText('API name')).toBeNull();
     await userEvent.keyboard('{Meta>}{Enter}{/Meta}');
     await waitFor(() =>
       expect(args.onSubmit).toHaveBeenCalledWith(
@@ -116,6 +117,7 @@ export const DateDefault: Story = {
       return found;
     });
     await userEvent.click(date);
+    await userEvent.click(within(dialog).getByRole('button', { name: 'More settings' }));
     const plusDays = await waitFor(() => within(dialog).getByRole('radio', { name: 'Today plus days' }));
     await userEvent.click(plusDays);
     const days = await waitFor(() => inDialog(dialog, 'Days from today'));
@@ -153,7 +155,6 @@ export const Edit: Story = {
   play: async ({ args, userEvent }) => {
     const dialog = await openDialog();
     await expect(dialog).toHaveAccessibleName('Edit attribute');
-    await expect(dialog).toHaveTextContent('Changing the type comes later.');
     await expect(inDialog(dialog, 'Copy the API name')).toBeInTheDocument();
     await waitFor(() => expect(inDialog(dialog, 'Name')).toHaveFocus());
     await userEvent.keyboard(' (work)');
@@ -197,6 +198,81 @@ export const Refused: Story = {
     const dialog = await openDialog();
     await expect(dialog).toHaveTextContent('An attribute here already uses this API name. Pick another.');
     await expect(dialog).toHaveTextContent('An object holds at most 250 attributes.');
+  },
+};
+
+const restoreArchived = fn();
+
+/**
+ * A name an archived attribute holds: Create quietly takes the next free API name (`price_2`), with a quiet way to
+ * restore the archived one instead. A name a live attribute holds is refused on the name.
+ */
+export const ArchivedApiName: Story = {
+  args: {
+    apiNames: { live: new Set(['name']), archived: new Set(['price']), onRestore: restoreArchived },
+  },
+  play: async ({ args, userEvent }) => {
+    const dialog = await openDialog();
+    await waitFor(() => expect(inDialog(dialog, 'Name')).toHaveFocus());
+    await userEvent.keyboard('Price');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Restore the archived Price' }));
+    await expect(restoreArchived).toHaveBeenCalledWith('price');
+    await userEvent.click(inDialog(dialog, 'Name'));
+    await userEvent.keyboard('{Meta>}{Enter}{/Meta}');
+    await waitFor(() =>
+      expect(args.onSubmit).toHaveBeenCalledWith(expect.objectContaining({ title: 'Price', apiSlug: 'price_2' })),
+    );
+    await userEvent.clear(inDialog(dialog, 'Name'));
+    await userEvent.keyboard('Name');
+    await userEvent.keyboard('{Meta>}{Enter}{/Meta}');
+    await waitFor(() => expect(dialog).toHaveTextContent('Another attribute here has this name. Pick another.'));
+  },
+};
+
+/** Unique refused for values records share: the reason on Unique, and the way to the table under it. */
+export const UniqueDuplicates: Story = {
+  args: {
+    attribute: {
+      type: 'text',
+      isMulti: false,
+      title: 'Code',
+      apiSlug: 'code',
+      isRequired: false,
+      isUnique: true,
+    },
+    refusals: [
+      {
+        code: 'UNIQUE_HAS_DUPLICATES',
+        message: 'Code can’t be unique yet: 3 values are used by more than one record. Merge or change them first.',
+        attributeId: 'isUnique',
+      },
+    ],
+    duplicatesLink: { label: 'Open Contracts', href: '/w/acme/objects/contracts' },
+  },
+  play: async () => {
+    const dialog = await openDialog();
+    await expect(dialog).toHaveTextContent('3 values are used by more than one record');
+    await expect(within(dialog).getByRole('link', { name: 'Open Contracts' })).toBeInTheDocument();
+  },
+};
+
+/** A Required When set through the API: one read only line under the rules, which the dialog never edits. */
+export const RulesNote: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: {
+    attribute: {
+      type: 'date',
+      isMulti: false,
+      title: 'Close date',
+      apiSlug: 'close_date',
+      isRequired: false,
+      isUnique: false,
+    },
+    rulesNote: 'Required when Stage matches (set through the API).',
+  },
+  play: async () => {
+    const dialog = await openDialog();
+    await expect(dialog).toHaveTextContent('Required when Stage matches (set through the API).');
   },
 };
 
