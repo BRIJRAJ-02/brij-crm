@@ -71,7 +71,8 @@ const WEEK: TeamWeek = {
   footer: dates.map((date, index) => ({
     date,
     working: index < 5 ? (index === 2 || index === 3 ? 2 : 3) : 0,
-    minutes: index < 5 ? 1200 : 0,
+    // Each working person's own hours added up: 3 × 8 h, 2 × 8 h while Priya is away.
+    minutes: index < 5 ? (index === 2 || index === 3 ? 960 : 1440) : 0,
   })),
 };
 
@@ -132,7 +133,7 @@ describe('the Team week', () => {
     // See only: Priya's cells are text, with Away read out.
     expect(document.querySelectorAll('button[aria-label*="Priya Shah"]')).toHaveLength(0);
     await expect.element(page.getByText('Wednesday 4 November, Priya Shah: Away')).toBeInTheDocument();
-    await expect.element(page.getByText('Monday 2 November: 3 people working, 20 h')).toBeInTheDocument();
+    await expect.element(page.getByText('Monday 2 November: 3 people working, 24 h added up')).toBeInTheDocument();
   });
 
   it('moves by the arrow keys, opens a cell with Enter, closes with Esc, and saves a day off', async () => {
