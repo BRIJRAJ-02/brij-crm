@@ -30,18 +30,12 @@ export const timeOffStrings = {
   someone: 'someone',
   // The dialog.
   days: 'Days',
-  // Fresha's line: what time off does, said where the days are picked.
-  daysHint: 'Whole days, in your time zone.',
-  daysHintFor: (first: string) => `Whole days, in ${first}’s time zone.`,
   /** Whose time off, for someone who Manages others (spec 0037, AC-1272): Me first, then them by name. */
   forLabel: 'For',
   forMe: 'Me',
-  // Workable's plain count, once the days are picked.
-  dayCount: (count: number) => (count === 1 ? '1 day off.' : `${String(count)} days off.`),
-  // Remote's banner when someone with Manage acts for a colleague.
-  onBehalf: (first: string) => `You’re adding time off on ${first}’s behalf. ${first} gets an email about it.`,
-  onBehalfEdit: (first: string) =>
-    `You’re changing ${first}’s time off on their behalf. ${first} gets an email about it.`,
+  // Remote's banner when someone with Manage acts for a colleague: one line (spec 0058, AC-15).
+  onBehalf: (first: string) => `${first} gets an email about it.`,
+  onBehalfEdit: (first: string) => `${first} gets an email about the change.`,
   pickDays: 'Pick the days.',
   reason: 'Reason',
   standin: 'Who covers',
@@ -56,21 +50,19 @@ export const timeOffStrings = {
   // The second step says the time off is saved; the meetings inside are what is left to do.
   savedTitle: 'Time off saved',
   savedTitleFor: (first: string) => `Time off for ${first} saved`,
-  // Deputy's warning: the meetings already booked in the period, listed (AC-1285).
+  // Deputy's warning: the meetings already booked in the period, as a count (AC-1285; spec 0058, AC-15).
   inside: (count: number) =>
-    count === 1 ? 'You have 1 meeting during this period.' : `You have ${String(count)} meetings during this period.`,
+    count === 1 ? '1 meeting in this time off' : `${String(count)} meetings in this time off`,
   insideFor: (first: string, count: number) =>
-    count === 1
-      ? `${first} has 1 meeting during this period.`
-      : `${first} has ${String(count)} meetings during this period.`,
-  insideKept: 'They stay booked and show Host away on Bookings, so you can move or reassign them.',
+    count === 1 ? `${first} has 1 meeting in this time off` : `${first} has ${String(count)} meetings in this time off`,
+  insideKept: 'They stay booked, marked Host away.',
   insideMore: (count: number) => (count === 1 ? 'And 1 more.' : `And ${String(count)} more.`),
   done: 'Done',
   openBookings: 'Open Bookings',
   // Delete (AC-1445).
   deleteTitle: (days: string) => `Delete time off, ${days}?`,
-  deleteBody: 'Online bookings can be placed on these days again.',
-  deleteBodyFor: (first: string) => `Online bookings can be placed with ${first} on these days again.`,
+  deleteBody: 'These days open for booking again.',
+  deleteBodyFor: (first: string) => `These days open for booking with ${first} again.`,
   deleteCommit: 'Delete time off',
   deleting: 'Deleting…',
   deleted: 'Time off deleted',
