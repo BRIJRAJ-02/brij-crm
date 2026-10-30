@@ -13,7 +13,7 @@ export const teamWeekStrings = {
   mine: 'Mine',
   team: 'Team',
   title: 'Roster',
-  grid: (range: string) => `Team week, ${range}`,
+  grid: (range: string) => `Roster, ${range}`,
   person: 'Team member',
   thisWeek: 'This week',
   previousWeek: 'Previous week',
@@ -43,8 +43,7 @@ export const teamWeekStrings = {
   editorLabel: (name: string, day: string) => `${name}, ${day}`,
   dayHours: (day: string) => `Hours on ${day}`,
   usualHours: 'Usual hours',
-  usualAre: (words: string) => `Usual hours: ${words}`,
-  setOff: 'Off this day',
+  backToUsual: (words: string) => `Back to usual hours (${words})`,
   cancel: 'Cancel',
   save: 'Save',
   saved: (name: string, day: string) => `${name}’s ${day} saved.`,
@@ -54,7 +53,7 @@ export const teamWeekStrings = {
   setUsualFor: 'Set usual hours for…',
   copyTitle: (name: string) => `Copy ${name}’s week to next week?`,
   copyBody: (name: string, range: string) =>
-    `This replaces ${name}’s hours for ${range} with this week’s. Days on usual hours go back to usual hours.`,
+    `This replaces ${name}’s hours for ${range} with this week’s. Days on usual hours this week are on usual hours next week too.`,
   copyAction: 'Copy week',
   copied: (name: string) => `${name}’s week copied to next week.`,
   usualTitle: (name: string | undefined) => (name === undefined ? 'Set usual hours' : `Set ${name}’s usual hours`),
@@ -69,7 +68,8 @@ export const teamWeekStrings = {
   usualDone: (count: number) =>
     count === 0 ? 'Their usual hours were already these.' : `Usual hours set for ${teamWeekStrings.people(count)}.`,
   readOnlyWeek: 'Weeks before this one are read only.',
-  explain: 'Change a day for that date only. Usual hours repeat every week. Bookings follow both.',
+  explain:
+    'A change to a day is for that date only, marked with a dot. Usual hours repeat every week. Booking pages offer these hours.',
   seesOnlyYou: 'You see your own hours. People who share their scheduling with you show here too.',
   failed: 'Couldn’t load the roster.',
   noMatch: 'No one matches',

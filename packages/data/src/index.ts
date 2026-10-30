@@ -1813,7 +1813,6 @@ export function createDataLayer({
   });
   router.onResync((workspace) => {
     schedules.changed(workspace);
-    accessLoaded?.teamWeek.changed(workspace);
     jobs.resync(workspace);
     views.resync(workspace);
     navStore?.resync(workspace);
@@ -2073,7 +2072,7 @@ export function createDataLayer({
         api: wireApi({ client: api, call: (run) => call(run), beforeRead, mintId }),
         mintId,
         notify,
-        watch: (workspace) => watch(workspace),
+        watch,
       });
       return accessLoaded;
     }));

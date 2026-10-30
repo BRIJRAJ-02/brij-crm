@@ -9,11 +9,10 @@ import { Table, type TableColumn } from '../../molecules/Table/Table.tsx';
 import { strings } from './strings.ts';
 import styles from './TeamWeek.module.css';
 
-/** One day's column: its short heading ("Mon 3"), its whole name for each cell's label, and whether it is today. */
+/** One day's column: its id and its short heading ("Mon 3"). */
 export interface TeamWeekDay {
   readonly id: string;
   readonly label: string;
-  readonly isToday?: boolean;
 }
 
 /**
@@ -139,16 +138,14 @@ export function TeamWeek({
           const index = days.findIndex((day) => day.id === columnId);
           const cell = person.cells[index];
           if (cell === undefined) return null;
-          const day = days[index];
           return person.isEditable && renderEditor !== undefined ? (
             <EditableCell
               cell={cell}
-              isToday={day?.isToday === true}
               editorLabel={editorLabel?.(person.id, index) ?? cell.label}
               renderEditor={(close) => renderEditor(person.id, index, close)}
             />
           ) : (
-            <span className={styles.cell} data-tone={cell.tone} data-today={day?.isToday === true ? '' : undefined}>
+            <span className={styles.cell} data-tone={cell.tone}>
               <VisuallyHidden>{cell.label}</VisuallyHidden>
               <CellLines cell={cell} />
             </span>
@@ -196,12 +193,10 @@ function CellLines({ cell }: { readonly cell: TeamWeekCell }) {
 /** An editable cell: a button the size of the cell, opening the editor in a Popover beside it. */
 function EditableCell({
   cell,
-  isToday,
   editorLabel,
   renderEditor,
 }: {
   readonly cell: TeamWeekCell;
-  readonly isToday: boolean;
   readonly editorLabel: string;
   readonly renderEditor: (close: () => void) => ReactNode;
 }) {
@@ -209,14 +204,7 @@ function EditableCell({
   const trigger = useRef<HTMLButtonElement>(null);
   return (
     <DialogTrigger isOpen={isOpen} onOpenChange={setOpen}>
-      <AriaButton
-        ref={trigger}
-        className={styles.cell}
-        data-tone={cell.tone}
-        data-today={isToday ? '' : undefined}
-        data-editable=""
-        aria-label={cell.label}
-      >
+      <AriaButton ref={trigger} className={styles.cell} data-tone={cell.tone} data-editable="" aria-label={cell.label}>
         <CellLines cell={cell} />
       </AriaButton>
       <Popover label={editorLabel} triggerRef={trigger} placement="bottom start">

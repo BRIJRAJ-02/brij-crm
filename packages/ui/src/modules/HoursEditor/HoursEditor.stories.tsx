@@ -258,3 +258,34 @@ export const AllDay: Story = {
     await expect(args.onChange).toHaveBeenCalledWith('mon', [['09:00', '17:00']]);
   },
 };
+
+/** One date's hours, held as the Team week's cell holds its draft. */
+function SingleDayEditor(props: Parameters<typeof HoursEditor>[0]) {
+  const [rows, setRows] = useState<HoursRow[]>([{ id: '2026-11-03', label: 'Tue 3', ranges: [['10:00', '14:00']] }]);
+  return (
+    <HoursEditor
+      {...props}
+      label="Hours on Tue 3"
+      rows={rows}
+      stepMinutes={15}
+      isSingleDay
+      onChange={(id, ranges) => setRows([{ id, label: 'Tue 3', ranges: [...ranges] }])}
+    />
+  );
+}
+
+/** One date's hours (the Team week's cell, spec 0037): the day's switch and windows, with no Copy and no Set all days. */
+export const SingleDay: Story = {
+  render: (args) => (
+    <Stage width="narrow">
+      <SingleDayEditor {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('switch', { name: 'Tue 3' })).toBeChecked();
+    await expect(canvas.queryByRole('button', { name: /Copy/ })).not.toBeInTheDocument();
+    await expect(canvas.queryByRole('button', { name: /Set all days/ })).not.toBeInTheDocument();
+    await userEvent.click(canvas.getByRole('switch', { name: 'Tue 3' }));
+    await expect(canvas.getByText('Unavailable')).toBeInTheDocument();
+  },
+};
