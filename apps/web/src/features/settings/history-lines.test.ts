@@ -295,6 +295,10 @@ const SENTENCES: readonly (readonly [AuditEntryView, string])[] = [
     'Ada Lovelace changed who gets Contact us’s leads',
   ],
   [
+    { ...base, action: 'form.notify_changed', target: form, params: {} },
+    'Ada Lovelace changed who is emailed Contact us’s new submissions',
+  ],
+  [
     { ...base, action: 'booking.no_show', target: booking, params: {} },
     'Ada Lovelace marked Intro call on dayTime(2026-10-24T09:30) as a no show',
   ],

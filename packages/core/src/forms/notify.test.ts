@@ -242,6 +242,37 @@ describe('the team’s notice of a new submission (AC-1047, late trap #19)', () 
     });
     // Bea, listed before she left, drops out of the list the form shows.
     expect((await getForm(ada, { formId: w.form.id })).notifyMemberIds).toEqual([]);
+    // Changing the list is audited, as it decides who reads visitors' answers.
+    const audited = await w.query<{ before: unknown; after: unknown }>(
+      sql`select before, after from audit_events where action = 'form.notify_changed' order by at, id`,
+    );
+    expect(audited).toEqual([
+      { before: { notifyMemberIds: [w.ada] }, after: { notifyMemberIds: [] } },
+      { before: { notifyMemberIds: [] }, after: { notifyMemberIds: [w.bea] } },
+    ]);
+  });
+
+  it('tells a listed member who can’t open the submission nothing', async () => {
+    const w = await world();
+    const ada = testScope({ db, workspaceId: w.workspaceId, actor: { type: 'member', id: w.ada } });
+    // Bea is listed, not the lead's owner, and People is closed to members.
+    await updateFormSettings(ada, { formId: w.form.id, ownerMemberId: null, notifyMemberIds: [w.ada, w.bea] });
+    rulesByWorkspace.set(w.workspaceId, {
+      levels: [
+        {
+          subject: { type: 'role', role: 'member' },
+          target: { type: 'object', objectId: w.form.mainObjectId ?? '' },
+          level: 'none',
+        },
+      ],
+      records: [],
+    });
+    const id = await submit(w.form.publicKey, { name: 'Asha Rao', email: 'asha@northwind.example' });
+    await runWrite(w.system, (context) => processSubmission(context, id, new Date(), undefined, rules));
+    const sent = await w.query<{ member: string }>(
+      sql`select to_member_id::text as member from emails where kind = 'form_submission'`,
+    );
+    expect(sent).toEqual([{ member: w.ada }]);
   });
 
   it('tells nobody from a registry built without rules (fail closed)', async () => {

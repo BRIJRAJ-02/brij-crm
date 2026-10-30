@@ -16,6 +16,7 @@ import type {
 } from '@crm/data';
 import { useCaptureList } from '@crm/data/react';
 import {
+  Avatar,
   ButtonLink,
   Callout,
   Card,
@@ -44,6 +45,9 @@ import { strings as routingStrings } from '../routing/strings.ts';
 import { useCan } from '../workspace/WorkspacePage.tsx';
 
 const NOBODY = 'nobody';
+
+/** The one option standing for the listed people the reader can't list. */
+const HIDDEN_NOTIFY = 'hidden-people';
 
 /** A round robin group's option id in the owner list, apart from a teammate's id. */
 const GROUP = 'group:';
@@ -321,7 +325,11 @@ export function SettingsTab({
   const takers = (rotation: (typeof rotationList)[number]) => rotation.members.filter((member) => member.isOn).length;
   const ownerItems = [
     { id: NOBODY, label: strings.nobody },
-    ...members.map((member) => ({ id: member.id, label: member.name })),
+    ...members.map((member) => ({
+      id: member.id,
+      label: member.name,
+      leading: <Avatar name={member.name} id={member.id} size="xs" isDecorative />,
+    })),
     ...rotationList.map((rotation) => ({
       id: groupOption(rotation.id),
       label: rotation.name,
@@ -333,12 +341,21 @@ export function SettingsTab({
       : []),
     ...(ownerLeft ? [{ id: settings.values.owner, label: strings.ownerFormer }] : []),
   ];
-  // Who is emailed each submission: any teammate; one listed whom the reader can't list stays shown as former.
+  // Who is emailed each submission: any teammate, drawn as people are. Those the form lists whom the reader can't
+  // list stay chosen as one "other people" option, so a save keeps them.
+  const hiddenNotify = settings.values.notify.filter((id) => !members.some((member) => member.id === id));
   const notifyItems = [
-    ...members.map((member) => ({ id: member.id, label: member.name })),
-    ...settings.values.notify
-      .filter((id) => !members.some((member) => member.id === id))
-      .map((id) => ({ id, label: strings.noticesFormer })),
+    ...members.map((member) => ({
+      id: member.id,
+      label: member.name,
+      description: member.email,
+      leading: <Avatar name={member.name} id={member.id} size="xs" isDecorative />,
+    })),
+    ...(hiddenNotify.length === 0 ? [] : [{ id: HIDDEN_NOTIFY, label: strings.noticesOthers(hiddenNotify.length) }]),
+  ];
+  const notifyValues = [
+    ...settings.values.notify.filter((id) => !hiddenNotify.includes(id)),
+    ...(hiddenNotify.length === 0 ? [] : [HIDDEN_NOTIFY]),
   ];
   // One line under it: who gets new records, or why nobody will.
   const ownerHint = ownerLeft
@@ -730,16 +747,23 @@ export function SettingsTab({
         <Select
           label={strings.noticesLabel}
           selectionMode="multiple"
-          placeholder={strings.noticesNobody}
+          placeholder={isFiling ? strings.noticesNobody : strings.nobody}
           hint={strings.noticesHint(isFiling)}
           items={notifyItems}
-          values={settings.values.notify}
+          values={notifyValues}
+          isSearchable={members.length > 8}
+          searchLabel={strings.noticesSearch}
           isReadOnly={isReadOnly}
           {...(settings.fieldError('notifyMemberIds') === undefined
             ? {}
             : { error: settings.fieldError('notifyMemberIds') ?? '' })}
           onValuesChange={(ids) => {
-            settings.set({ notify: ids });
+            settings.set({
+              notify: [
+                ...ids.filter((id) => id !== HIDDEN_NOTIFY),
+                ...(ids.includes(HIDDEN_NOTIFY) ? hiddenNotify : []),
+              ],
+            });
           }}
         />
       </Card>

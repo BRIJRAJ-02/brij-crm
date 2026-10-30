@@ -224,15 +224,16 @@ export const strings = {
   groupHidden: 'New records go to a round robin group you can’t see.',
   groupsFailed: 'Your round robin groups didn’t load.',
   // Who hears of each new submission (AC-568, AC-1047): the lead's owner always, and the people listed here.
-  noticesTitle: 'Notifications',
+  noticesTitle: 'Submission emails',
   noticesLabel: 'Email each new submission to',
   noticesNobody: 'Nobody else',
   noticesHint: (filing: boolean) =>
     filing
-      ? 'The new record’s owner is always emailed too. Each person sees only the answers they have access to.'
-      : 'Each person sees only the answers they have access to.',
-  /** Someone the form lists who has left, or whom the reader can't list. */
-  noticesFormer: 'Former member',
+      ? 'The new record’s owner is always emailed too. The email leaves out answers someone isn’t allowed to see.'
+      : 'The email leaves out answers someone isn’t allowed to see.',
+  noticesSearch: 'Search teammates',
+  /** The people the form lists whom the reader can't list (the server already drops those who left). */
+  noticesOthers: (count: number) => (count === 1 ? '1 other person' : `${String(count)} other people`),
   spamTitle: 'Spam',
   spamSummary: 'On. Doubtful sends wait for review.',
   detailsTitle: 'Details',

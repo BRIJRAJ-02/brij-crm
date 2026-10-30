@@ -303,11 +303,11 @@ describe('who is emailed each new submission (AC-568, AC-1047)', () => {
     await expect.poll(() => fake.saves).toEqual([{ notifyMemberIds: [ADA, BEA] }]);
   });
 
-  it('names someone listed who has left as a former member, and nobody as Nobody else', async () => {
+  it('keeps people the reader can’t list as one choice, and names nobody as Nobody else', async () => {
     await show(formView({ ownerMemberId: ADA }, ['0199a6f2-0000-7000-8000-0000000000ff']), []);
     await expect
       .element(page.getByRole('button', { name: /Email each new submission to$/ }))
-      .toHaveTextContent('Former member');
+      .toHaveTextContent('1 other person');
     shown?.unmount();
     await show(formView({ ownerMemberId: ADA }), []);
     await expect

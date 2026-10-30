@@ -855,6 +855,15 @@ export async function updateFormSettings(
           after: owner(changed),
         });
       }
+      if (notify !== undefined && JSON.stringify(form.notifyMemberIds) !== JSON.stringify(changed.notifyMemberIds)) {
+        await writeAudit(tx, scope.workspaceId, scope.actor, {
+          action: 'form.notify_changed',
+          targetType: 'form',
+          targetId: form.id,
+          before: { notifyMemberIds: form.notifyMemberIds },
+          after: { notifyMemberIds: changed.notifyMemberIds },
+        });
+      }
       return viewOf(tx, scope, changed);
     },
     hooks,
