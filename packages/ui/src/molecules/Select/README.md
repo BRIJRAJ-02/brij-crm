@@ -47,6 +47,7 @@ The inline Select whose list loads apart from the page's first paint: `<Deferred
 - While the stand in has the focus and no press waits, it stays the stand in: swapping the focused button would drop focus for a moment and a screen reader would read it twice. The real one takes over on the next press or once focus moves on.
 - A load that fails leaves the stand in showing the value, and opens nothing later; it is asked for again on the next hover, focus or press only (a browser may keep a failed import as failed). The left and right arrows and typing on the closed trigger, which change a loaded Select's value without opening it, do nothing on the stand in.
 - It is the `inline` variant only, with plain options (`DeferredSelectItem`: a label and a `description`, no icon, leading piece, badge or hue), and the caller names its empty state (`placeholder`), since Select's own default copy would load with it. Its stand in copies the inline trigger's rules (`DeferredSelect.module.css`): change the two together. Its stories hold the stand in to the loaded trigger's box, computed look, focus ring and name, and press the stand in itself through `DeferredSelectFrom`, which takes the loader (stories only).
+- `onCreate` works with `selectionMode="multiple"` too (30 October 2026): "Create "<typed>"" hands the label over and the values stay as they are; the caller adds the new option. A multi select outside a grid cell uses it, so its closed field shows the chosen tags.
 
 ## States
 

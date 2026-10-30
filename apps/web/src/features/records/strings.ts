@@ -82,4 +82,6 @@ export const strings = {
   unavailableRecord: 'Unavailable',
   /** Why a reference that can't link (one way, or its far object hidden) can't be edited here. */
   referenceReadOnly: 'You can’t change this here yet.',
+  /** A form's "Create "<typed>"" refused for a reason the server didn't name. */
+  optionNotMade: 'That option wasn’t made. Try again.',
 } as const;

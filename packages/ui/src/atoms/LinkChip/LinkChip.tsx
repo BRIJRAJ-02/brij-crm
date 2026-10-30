@@ -1,8 +1,10 @@
+import { useState, type ReactNode } from 'react';
 import { Link as AriaLink } from 'react-aria-components';
 import { isAppPath, safeHref } from '../../lib/safe-href.ts';
 import { linkTarget } from '../Link/Link.tsx';
 import { ProviderMark, type ProviderName } from '../ProviderMark/ProviderMark.tsx';
 import styles from './LinkChip.module.css';
+import { strings } from './strings.ts';
 
 /** Props for LinkChip. */
 export interface LinkChipProps {
@@ -21,17 +23,65 @@ export interface LinkChipProps {
    * labelled, so the link's name is "LinkedIn ada-lovelace".
    */
   readonly mark?: ProviderName;
+  /**
+   * The site's own icon (a domain's or a link's favicon), from our own origin.
+   * While it loads, or when the site has none, the chip's first letter stands
+   * in its place, so chips keep one width and a missing icon never shows broken.
+   */
+  readonly iconSrc?: string;
+  /** A country's flag (an emoji, from `flagOf`) before a phone number, read by its number alone. */
+  readonly flag?: string;
+  /**
+   * The chip's look with no link: a value inside its own editor (a list of
+   * emails being edited), where a press must never leave the page.
+   */
+  readonly isStatic?: boolean;
+}
+
+/** The site's icon, or its first letter while it loads and when there is none. */
+function SiteIcon({ src, label }: { readonly src: string; readonly label: string }) {
+  const [state, setState] = useState<'loading' | 'shown' | 'missing'>('loading');
+  return (
+    <span className={styles.icon} aria-hidden="true" data-state={state}>
+      {state !== 'shown' && <span className={styles.letter}>{label.charAt(0).toLocaleUpperCase()}</span>}
+      {state !== 'missing' && (
+        <img
+          className={styles.image}
+          src={src}
+          alt={strings.iconAlt}
+          loading="lazy"
+          decoding="async"
+          onLoad={() => {
+            setState('shown');
+          }}
+          onError={() => {
+            setState('missing');
+          }}
+        />
+      )}
+    </span>
+  );
 }
 
 /** An email, phone, domain or URL value as a link chip: the one display for those types. */
-export function LinkChip({ href, children, isFlat = false, mark }: LinkChipProps) {
-  const safe = safeHref(href);
+export function LinkChip({ href, children, isFlat = false, mark, iconSrc, flag, isStatic = false }: LinkChipProps) {
+  const safe = isStatic ? undefined : safeHref(href);
   const flat = isFlat ? { 'data-flat': '' } : {};
-  const brand = mark === undefined ? null : <ProviderMark provider={mark} size="sm" isLabelled />;
+  const lead: ReactNode = (
+    <>
+      {mark !== undefined && <ProviderMark provider={mark} size="sm" isLabelled />}
+      {mark === undefined && iconSrc !== undefined && <SiteIcon src={iconSrc} label={children} />}
+      {flag !== undefined && flag !== '' && (
+        <span className={styles.flag} aria-hidden="true">
+          {flag}
+        </span>
+      )}
+    </>
+  );
   if (safe === undefined) {
     return (
-      <span className={styles.root} data-plain="" {...flat}>
-        {brand}
+      <span className={styles.root} {...(isStatic ? { 'data-static': '' } : { 'data-plain': '' })} {...flat}>
+        {lead}
         <span className={styles.label} data-truncated="">
           {children}
         </span>
@@ -43,7 +93,7 @@ export function LinkChip({ href, children, isFlat = false, mark }: LinkChipProps
   if (!isAppPath(safe)) {
     return (
       <a className={styles.root} href={safe} {...linkTarget(safe)} {...flat}>
-        {brand}
+        {lead}
         <span className={styles.label} data-truncated="">
           {children}
         </span>
@@ -52,7 +102,7 @@ export function LinkChip({ href, children, isFlat = false, mark }: LinkChipProps
   }
   return (
     <AriaLink className={styles.root} href={safe} {...flat}>
-      {brand}
+      {lead}
       <span className={styles.label} data-truncated="">
         {children}
       </span>

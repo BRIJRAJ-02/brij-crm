@@ -13,6 +13,7 @@ Screens never import it; they render values through `AttributeDisplay` and `Attr
 - **Display**: "Oct 8, 2026" in the language, never shifted by a time zone.
 - **Editor**: the DatePicker: typed in the language's order or picked from the calendar, with Today, Tomorrow, Next week and End of month resolved in the provider's time zone. The grid edits it in a popover. Outside a cell a hint says the date can be typed or picked from the calendar.
 - **Text out / in** (copy, paste, CSV, the import preview): `2026-10-08` / ISO, or the language's numeric order (`08.10.2026` in German).
+- **Polish (30 October 2026)**: Within a week of today, in a cell, the panel and a card, the display reads as a word ("Tomorrow", "3 days ago") with the exact date in a tooltip and read after it. A day pasted into the editor's box ("8 Oct 2026", "tomorrow", an ISO instant) fills it whole, and a key typed in a grid cell opens Type a date with it. Paste and imports read the same words (`parseDateInput`, today from `TextContext.today`).
 - **Filter operators**: is, before, after, within, then is empty and is not empty.
 
 ## States

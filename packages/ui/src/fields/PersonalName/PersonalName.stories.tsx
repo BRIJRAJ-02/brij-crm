@@ -49,3 +49,20 @@ export const Editor: Story = {
     });
   },
 };
+
+/** A full name pasted into First splits into First and Last. */
+export const PasteFullName: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { value: null },
+  render: (args) => (
+    <Stage width="narrow">
+      <AttributeEditor {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('textbox', { name: 'First name' }));
+    await userEvent.paste('Grace Brewster Hopper');
+    await expect(canvas.getByRole('textbox', { name: 'First name' })).toHaveValue('Grace');
+    await expect(canvas.getByRole('textbox', { name: 'Last name' })).toHaveValue('Brewster Hopper');
+  },
+};

@@ -75,3 +75,20 @@ export const Guidance: Story = {
     await expect(canvas.getByText('Pick the currency, then type the amount.')).toBeInTheDocument();
   },
 };
+
+/** A symbol typed with the amount moves the picker: "€5" is five euros, whatever the default. */
+export const SymbolTyped: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { value: null },
+  render: (args) => (
+    <Stage width="narrow">
+      <AttributeEditor {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas, args, userEvent }) => {
+    await userEvent.click(canvas.getByRole('textbox', { name: 'Deal value' }));
+    await userEvent.keyboard('€1.2k');
+    await userEvent.tab();
+    await expect(args.onCommit).toHaveBeenCalledWith({ amount: '1200', currency: 'EUR' });
+  },
+};

@@ -2,7 +2,8 @@
 // Purpose: a record's details in the page's sidebar (and, with milestone 4, the side panel's Details tab).
 // Main task: read every attribute and edit it in place, saved through the data layer, a refusal said under the value.
 // Leaves out: relationship sections that hold many records (spec 0014, milestone 3) and attribute groups (#18).
-// Schema managers get a ⋯ at its foot: Add attribute (the attribute dialog here) and Manage attributes (settings).
+// Schema managers get a ⋯ at its foot: Add attribute (the attribute dialog here) and Manage attributes (settings),
+// and "Create "<typed>"" in a select or status, as a table cell offers it (FieldActionsContext).
 import {
   toFieldAttribute,
   type ObjectSummary,
@@ -15,7 +16,7 @@ import {
   type RecordView,
 } from '@crm/data';
 import { usePendingOptions } from '@crm/data/react';
-import { AttributeList, Button, Menu, MenuItem, MenuTrigger } from '@crm/ui';
+import { AttributeList, Button, FieldActionsContext, Menu, MenuItem, MenuTrigger, type FieldActions } from '@crm/ui';
 import { useParams, useRouteContext } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
 import { AttributeDialog } from '../settings/AttributeDialog.tsx';
@@ -113,6 +114,24 @@ export function RecordDetails({
         </Menu>
       </MenuTrigger>
     );
+  // Create an option from a select or status here as in a cell (spec 0012, AC-238): one optimistic write that makes
+  // it and sets it on this record, its label shown at once.
+  const actions = useMemo<FieldActions | undefined>(
+    () =>
+      schemaObject === undefined || record === undefined || onCommit === undefined
+        ? undefined
+        : {
+            createOption: (attribute, label) => {
+              void data.records.createOption(slug, {
+                objectId: schemaObject.id,
+                recordId: record.id,
+                attributeId: attribute.id,
+                label,
+              });
+            },
+          },
+    [schemaObject, record, onCommit, data, slug],
+  );
   if (record === undefined) return <AttributeList label={strings.details} sections={[]} isLoading />;
   const items = fields.map(({ definition, attribute }) => {
     const value = record.values[definition.id] ?? null;
@@ -133,7 +152,7 @@ export function RecordDetails({
     };
   });
   return (
-    <>
+    <FieldActionsContext value={actions}>
       <AttributeList
         // A new record starts its own fold: rows kept open for one record never carry over to the next.
         key={record.id}
@@ -175,6 +194,6 @@ export function RecordDetails({
           }}
         />
       )}
-    </>
+    </FieldActionsContext>
   );
 }

@@ -13,6 +13,7 @@ Screens never import it; they render values through `AttributeDisplay` and `Attr
 - **Display**: a mail or calendar icon (named "Email" or "Meeting"), the relative time ("3 hours ago", exact in a tooltip) and "by" who, from the data layer's `ActorDisplay`.
 - **Editor**: read only: the system records interactions (#43, #44).
 - **Text out / in** (copy, paste, CSV, the import preview): ISO time and kind / refused.
+- **Polish (30 October 2026)**: Empty, it says "No contact" (its `emptyWord`, as Attio's table writes it) rather than a dash, in every surface and in a record's details.
 - **Filter operators**: before, after, within the last, kind is, then is empty and is not empty.
 
 ## States

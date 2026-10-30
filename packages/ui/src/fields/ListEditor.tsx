@@ -1,18 +1,23 @@
 // The editor for link types that hold several values (emails, phones,
 // domains, URLs): the values as removable chips, and a Field to add one more.
 // Each change commits the whole list, checked with the attribute's schema.
+// A pasted list adds each value; a chip's menu makes it the primary (first)
+// or puts it back in the add field to edit; chips here never navigate.
 import type { AttributeType } from '@crm/contracts/values';
 import { useState, type ReactNode } from 'react';
+import { Button as AriaButton } from 'react-aria-components';
 import { Button } from '../atoms/Button/Button.tsx';
 import { LinkChip } from '../atoms/LinkChip/LinkChip.tsx';
 import type { ProviderName } from '../atoms/ProviderMark/ProviderMark.tsx';
+import { splitPasted } from '../lib/parse-input.ts';
 import { Field, type FieldProps } from '../molecules/Field/Field.tsx';
+import { Menu, MenuItem, MenuTrigger } from '../molecules/Menu/Menu.tsx';
 import { FieldGroup } from '../molecules/FieldGroup/FieldGroup.tsx';
 import { strings as fieldStrings } from '../molecules/Field/strings.ts';
 import styles from './ListEditor.module.css';
 import { strings } from './strings.ts';
 import type { EditorProps } from './types.ts';
-import { isCompactSurface, toCommittable } from './values.ts';
+import { isCompactSurface, splitsOnSpaces, toCommittable } from './values.ts';
 
 /** One checked value, or why the typed text isn't one. */
 export type CheckedOne<V> = { readonly ok: true; readonly value: V } | { readonly ok: false; readonly message: string };
@@ -49,6 +54,8 @@ export interface AddFieldProps {
   readonly onChange: (value: string) => void;
   /** Adds what is typed: Enter, or focus leaving. */
   readonly onAdd: () => void;
+  /** Text pasted into the add field: a list ("a@x.com, b@x.com") adds each value at once. */
+  readonly onPasteText: (text: string) => boolean;
   readonly onEscape?: () => void;
   readonly error?: string;
   readonly autoFocus: boolean;
@@ -91,19 +98,52 @@ export function ListEditor<T extends AttributeType, V>({
     onCommit(result.value);
     return true;
   };
+  /**
+   * Adds each value in `text` (one typed value, or a pasted list): the ones that check go in, in order; the first
+   * that doesn't stays in the add field with its sentence, with any after it, so nothing typed is lost.
+   */
+  const addText = (text: string): boolean => {
+    const parts = splitPasted(text, { onSpaces: splitsOnSpaces(attribute.type) });
+    if (parts.length === 0) return false;
+    const added: V[] = [];
+    let refusal: { readonly message: string; readonly rest: string } | undefined;
+    for (const [index, part] of parts.entries()) {
+      // At the list's limit, one more is refused here, and what was typed stays to move or fix.
+      if (attribute.limit !== undefined && values.length + added.length >= attribute.limit.count) {
+        refusal = { message: attribute.limit.message, rest: parts.slice(index).join(', ') };
+        break;
+      }
+      const one = checkOne(part);
+      if (!one.ok) {
+        refusal = { message: one.message, rest: parts.slice(index).join(', ') };
+        break;
+      }
+      added.push(one.value);
+    }
+    if (added.length > 0 && !commitList([...values, ...added])) return true;
+    setDraft(refusal?.rest ?? '');
+    if (refusal !== undefined) setMessage(refusal.message);
+    return true;
+  };
   const add = () => {
-    if (draft.trim() === '') return;
-    // At the list's limit, one more is refused here, and what was typed stays to move or fix.
-    if (attribute.limit !== undefined && values.length >= attribute.limit.count) {
-      setMessage(attribute.limit.message);
-      return;
-    }
-    const one = checkOne(draft);
-    if (!one.ok) {
-      setMessage(one.message);
-      return;
-    }
-    if (commitList([...values, one.value])) setDraft('');
+    if (draft.trim() !== '') addText(draft);
+  };
+  /** A pasted list adds at once; a single value is pasted as text, to be added with Enter. */
+  const pasteText = (text: string): boolean => {
+    if (splitPasted(text, { onSpaces: splitsOnSpaces(attribute.type) }).length < 2) return false;
+    return addText(`${draft}${draft.trim() === '' ? '' : ', '}${text}`);
+  };
+  /** The value at `index` first: the primary, as Attio and Twenty read a list's first value. */
+  const makePrimary = (index: number) => {
+    const chosen = values[index];
+    if (chosen === undefined) return;
+    commitList([chosen, ...values.filter((_, at) => at !== index)]);
+  };
+  /** The value at `index` back in the add field, out of the list, to change and add again. */
+  const edit = (index: number) => {
+    const chosen = values[index];
+    if (chosen === undefined) return;
+    if (commitList(values.filter((_, at) => at !== index))) setDraft(labelOf(chosen));
   };
   const isCompact = isCompactSurface(surface);
   const chipExtras = (value: V) => {
@@ -119,9 +159,34 @@ export function ListEditor<T extends AttributeType, V>({
     <ul className={styles.list} aria-label={attribute.name}>
       {values.map((value, index) => (
         <li key={`${String(index)}-${labelOf(value)}`} className={styles.item}>
-          <LinkChip href={hrefOf(value)} {...chipExtras(value)}>
-            {labelOf(value)}
-          </LinkChip>
+          {/* The chip opens its menu, never its link: a press inside an editor must not leave the page. */}
+          <MenuTrigger>
+            <AriaButton
+              className={styles.chip}
+              aria-label={strings.valueActions(labelOf(value))}
+              isDisabled={isDisabled}
+            >
+              <LinkChip href={hrefOf(value)} isStatic {...chipExtras(value)}>
+                {labelOf(value)}
+              </LinkChip>
+            </AriaButton>
+            <Menu
+              label={strings.valueActions(labelOf(value))}
+              onAction={(key) => {
+                if (key === 'primary') makePrimary(index);
+                if (key === 'edit') edit(index);
+              }}
+            >
+              {index > 0 && (
+                <MenuItem id="primary" icon="arrow-up">
+                  {strings.makePrimary}
+                </MenuItem>
+              )}
+              <MenuItem id="edit" icon="pencil">
+                {strings.editValue}
+              </MenuItem>
+            </Menu>
+          </MenuTrigger>
           <Button
             variant="ghost"
             icon="x"
@@ -159,6 +224,9 @@ export function ListEditor<T extends AttributeType, V>({
           // A record's value, never the viewer's own: no browser autofill, and no password manager taking it for a login.
           autoComplete="off"
           onBlur={add}
+          onPaste={(event) => {
+            if (pasteText(event.clipboardData.getData('text/plain'))) event.preventDefault();
+          }}
           // Opened from a grid cell: keys go to the add field, never to a chip's link.
           // eslint-disable-next-line jsx-a11y-x/no-autofocus -- the editor was opened on purpose, from the cell
           autoFocus={autoOpen}
@@ -182,6 +250,7 @@ export function ListEditor<T extends AttributeType, V>({
             setMessage(undefined);
           },
           onAdd: add,
+          onPasteText: pasteText,
           autoFocus: autoOpen,
           isDisabled,
           ...(onCancel === undefined ? {} : { onEscape: onCancel }),

@@ -26,8 +26,10 @@ import {
   Select,
   type FormRefusal,
 } from '@crm/ui';
+import { useParams } from '@tanstack/react-router';
 import { useEffect, useId, useMemo, useState } from 'react';
 import type { MemberPicker } from '../records/members.ts';
+import { useOptionMaker } from '../records/options.ts';
 import { bulkStrings, recordsWord } from './bulk.ts';
 
 /** An attribute the dialog offers, with the changes its type takes (AC-529). */
@@ -230,6 +232,8 @@ function BulkEditForm({
         ? op
         : (chosen.ops.find((each) => !breaksUnique(chosen.definition, each, count)) ?? chosen.ops[0]);
   const [value, setValue] = useState<unknown>(null);
+  const { slug = '' } = useParams({ strict: false });
+  const makeOption = useOptionMaker(slug, object.id);
   const [fieldError, setFieldError] = useState<string | undefined>(undefined);
   const [valueError, setValueError] = useState<string | undefined>(undefined);
   const [refusals, setRefusals] = useState<readonly FormRefusal[]>([]);
@@ -380,6 +384,19 @@ function BulkEditForm({
                 setValue(definition.isMulti && next !== null && !Array.isArray(next) ? [next] : next);
                 setValueError(undefined);
               }}
+              // "Create "<typed>"" in a select or status, for schema managers: made, then chosen as the value.
+              {...(makeOption === undefined
+                ? {}
+                : {
+                    onCreateOption: (label: string) => {
+                      void makeOption(definition.id, label).then((optionId) => {
+                        if (optionId === undefined) return;
+                        const kept = Array.isArray(value) ? (value as readonly unknown[]) : [];
+                        setValue(definition.isMulti ? [...kept, optionId] : optionId);
+                        setValueError(undefined);
+                      });
+                    },
+                  })}
               {...(valueError === undefined ? {} : { error: valueError })}
             />
           )}

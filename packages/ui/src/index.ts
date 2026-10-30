@@ -65,6 +65,7 @@ export { Variable, type VariableProps } from './atoms/Variable/Variable.tsx';
 export { VisuallyHidden, type VisuallyHiddenProps } from './atoms/VisuallyHidden/VisuallyHidden.tsx';
 export { AttributeDisplay, type AttributeDisplayProps } from './fields/AttributeDisplay.tsx';
 export { AttributeEditor, type AttributeEditorProps } from './fields/AttributeEditor.tsx';
+export { FieldActionsContext, type FieldActions } from './fields/actions.ts';
 export { createPhoneParser, loadPhoneLibrary } from './fields/Phone/phone-library.ts';
 export { columnWidthOf, FIELD_TYPES, fieldTypeOf, iconOf, isSystemOnly, typeLabelOf } from './fields/registry.ts';
 export type {
@@ -561,6 +562,6 @@ export { UiProvider, useKeyboardPlatform, type FormatSettings, type UiProviderPr
 export { LOADING_TIMING, useDelayedLoading, type LoadingTiming } from './provider/useDelayedLoading.ts';
 export { LoadingNow, type LoadingNowProps } from './provider/LoadingNow.tsx';
 export { FormatScope, type FormatScopeProps } from './provider/FormatScope.tsx';
-export { FileLinksContext, useFileHref, useFormatSettings } from './provider/context.ts';
+export { FileLinksContext, SiteIconsContext, useFileHref, useFormatSettings } from './provider/context.ts';
 export { formatDate, formatDay, type DateFormat } from './lib/format.ts';
 export { firstDayOfWeek, type WeekStart } from './lib/month.ts';

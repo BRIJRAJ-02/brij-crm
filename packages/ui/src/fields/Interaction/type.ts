@@ -2,6 +2,7 @@ import type { InteractionValue } from '@crm/contracts/values';
 import { withEmpty } from '../operators.ts';
 import type { AttributeTypeDef } from '../types.ts';
 import { refuse } from '../values.ts';
+import { strings } from './strings.ts';
 import { InteractionDisplay } from './InteractionDisplay.tsx';
 import { InteractionEditor } from './InteractionEditor.tsx';
 
@@ -19,5 +20,6 @@ export const interactionType: AttributeTypeDef<'interaction'> = {
   fromText: () => refuse('The system records interactions; they can’t be pasted.'),
   align: 'start',
   editIn: 'none',
+  emptyWord: strings.none,
   width: 'default',
 };

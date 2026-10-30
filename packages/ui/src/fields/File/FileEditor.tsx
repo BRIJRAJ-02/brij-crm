@@ -7,8 +7,18 @@ import { asList, toCommittable } from '../values.ts';
 import styles from './FileEditor.module.css';
 import { strings } from './strings.ts';
 
-/** File: a FileDrop that hands files to `onUpload` (#32 stores them), and the attached files with remove. */
-export function FileEditor({ attribute, value, onCommit, onUpload, autoOpen = false }: EditorProps<'file'>) {
+/**
+ * File: a FileDrop that hands files to `onUpload` (#32 stores them), and the attached files with remove. A file or
+ * screenshot pasted while focus is in it uploads too.
+ */
+export function FileEditor({
+  attribute,
+  value,
+  onCommit,
+  onUpload,
+  autoOpen = false,
+  isDisabled = false,
+}: EditorProps<'file'>) {
   const files = asList<FileValue>(value);
   const ref = useRef<HTMLDivElement>(null);
   // Opened from a grid cell, focus rests on the panel rather than its first
@@ -21,6 +31,13 @@ export function FileEditor({ attribute, value, onCommit, onUpload, autoOpen = fa
     <div
       ref={ref}
       className={styles.root}
+      // A screenshot or file pasted while focus is here uploads, as a drop would.
+      onPaste={(event) => {
+        const pasted = [...event.clipboardData.files];
+        if (pasted.length === 0 || onUpload === undefined || isDisabled) return;
+        event.preventDefault();
+        onUpload(attribute.allowMultiple ? pasted : pasted.slice(0, 1));
+      }}
       // A named group, so the focus that rests here says where it is.
       {...(autoOpen ? { tabIndex: -1, role: 'group', 'aria-label': attribute.name } : {})}
     >
@@ -41,7 +58,7 @@ export function FileEditor({ attribute, value, onCommit, onUpload, autoOpen = fa
         <FileDrop
           label={strings.upload(attribute.name)}
           allowsMultiple={attribute.allowMultiple}
-          isDisabled={onUpload === undefined}
+          isDisabled={onUpload === undefined || isDisabled}
           onFiles={(dropped) => onUpload?.(dropped)}
         />
       )}

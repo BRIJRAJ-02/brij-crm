@@ -10,7 +10,7 @@ import { strings } from './strings.ts';
 
 /** Interaction: a mail or calendar icon, when ("3 hours ago"), and who. */
 export function InteractionDisplay({ value, display, surface }: DisplayProps<'interaction'>) {
-  if (value === null || Array.isArray(value)) return <EmptyValue surface={surface} />;
+  if (value === null || Array.isArray(value)) return <EmptyValue surface={surface} word={strings.none} />;
   const interaction = value as InteractionValue;
   const by = actorDisplayOf(interaction.by, asList<ActorDisplay>(display));
   return (

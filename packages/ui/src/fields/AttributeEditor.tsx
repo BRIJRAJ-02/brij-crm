@@ -1,8 +1,10 @@
 // The only way anything edits an attribute value (AC-4): it hands the value to
 // its type's one editor. Read only, computed and system values show read only;
-// an AI value is edited as its result type, with Refresh beside it.
+// an AI value is edited as its result type, with Refresh beside it. Create
+// inline comes from the screen's FieldActionsContext unless the props say.
 import type { AttributeType } from '@crm/contracts/values';
 import { Button } from '../atoms/Button/Button.tsx';
+import { useFieldActions, type FieldActions } from './actions.ts';
 import { AttributeDisplay } from './AttributeDisplay.tsx';
 import styles from './AttributeEditor.module.css';
 import { ReadOnlyValue } from './parts.tsx';
@@ -16,13 +18,35 @@ export type AttributeEditorProps = EditorProps<AttributeType> & {
   readonly onRefresh?: () => void;
 };
 
+/** The screen's actions as this editor's props, for the types that take each, where its own props are silent. */
+function fromActions(props: AttributeEditorProps, actions: FieldActions | undefined): Partial<AttributeEditorProps> {
+  if (actions === undefined) return {};
+  const { attribute } = props;
+  const { createOption, createRecord, upload } = actions;
+  return {
+    ...((attribute.type === 'select' || attribute.type === 'status') &&
+    props.onCreateOption === undefined &&
+    createOption !== undefined
+      ? { onCreateOption: (label: string) => createOption(attribute, label) }
+      : {}),
+    ...(attribute.type === 'record_reference' && props.onCreateRecord === undefined && createRecord !== undefined
+      ? { onCreateRecord: (label: string) => createRecord(attribute, label) }
+      : {}),
+    ...(attribute.type === 'file' && props.onUpload === undefined && upload !== undefined
+      ? { onUpload: (files: readonly File[]) => upload(attribute, files) }
+      : {}),
+  };
+}
+
 /**
  * Edits any attribute value through its type's one editor. What it commits
  * always parses with the type's schema (AC-5). A cell commits on Enter, a form
  * is always in edit mode, and a value people can't edit shows read only with
  * the reason.
  */
-export function AttributeEditor({ onRefresh, ...props }: AttributeEditorProps) {
+export function AttributeEditor({ onRefresh, ...given }: AttributeEditorProps) {
+  const actions = useFieldActions();
+  const props = { ...given, ...fromActions(given, actions) };
   const { attribute } = props;
   const reason = readOnlyReasonOf(attribute);
   if (reason !== undefined) {

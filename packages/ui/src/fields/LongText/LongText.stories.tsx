@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { FieldSurfaces } from '../../workbench/FieldSurfaces/FieldSurfaces.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { FIELD_SAMPLES } from '../../workbench/field-samples.ts';
+import { AttributeDisplay } from '../AttributeDisplay.tsx';
 import { AttributeEditor } from '../AttributeEditor.tsx';
 import { expect, fn } from 'storybook/test';
 
@@ -41,5 +42,23 @@ export const Editor: Story = {
     await userEvent.keyboard('First line{Enter}Second line');
     await userEvent.tab();
     await expect(args.onCommit).toHaveBeenCalledWith('First line\nSecond line');
+  },
+};
+
+/** On the record panel a long note shows six lines, then Show more. */
+export const ClampedOnPanel: Story = {
+  render: () => (
+    <Stage width="narrow">
+      <AttributeDisplay
+        attribute={sample.attribute}
+        value={Array.from({ length: 12 }, (_, line) => `Line ${String(line + 1)} of the meeting notes.`).join('\n')}
+        surface="panel"
+      />
+    </Stage>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    const more = await canvas.findByRole('button', { name: 'Show more' });
+    await userEvent.click(more);
+    await expect(canvas.getByRole('button', { name: 'Show less' })).toBeInTheDocument();
   },
 };

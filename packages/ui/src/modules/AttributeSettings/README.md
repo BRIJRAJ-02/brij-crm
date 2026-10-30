@@ -40,6 +40,7 @@ New (from the inventory, `0003-inventory.md`, pulled forward from spec 0003's mi
 - **Unique refused for duplicates**: a refusal coded `UNIQUE_HAS_DUPLICATES` on `isUnique` lands on Unique, and `duplicatesLink` (`{ label, href }`, the object's table) shows as a Link under it, so the person can go and fix the shared values.
 - **`rulesNote`**: one read only line (a Callout) under the rules for a rule this dialog doesn't edit, a Required When set through the API. The screen keeps that rule; the line only says it is there.
 - It opens as a Modal `form` (560px, 30 October 2026), wide enough for a setting's label and its value, as Attio's Create attribute is.
+- **Type settings** (the field polish pass, 30 October 2026): a number's Display is a Select of Plain, Percent and Compact, each with its example ("1,234.5", "12.5%", "1.2M"), with Decimals under it (Auto, 0 to 4); a phone takes a Default country for numbers typed without their code (empty means the workspace's); a new Currency attribute starts in the workspace's currency (`useRegionDefaults`: the workspace's, else the language's region's), not USD.
 
 ## States
 

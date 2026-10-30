@@ -325,7 +325,7 @@ function Row({ item, onCommit, editorProps, isQuietEmpty }: RowProps) {
         {/* Nothing here and nothing to set: said in words, quietly, never a lone dash. */}
         {isEmpty ? (
           <span className={styles.placeholder} data-quiet={isQuietEmpty || undefined}>
-            {strings.notSet}
+            {definition.emptyWord ?? strings.notSet}
           </span>
         ) : (
           shown

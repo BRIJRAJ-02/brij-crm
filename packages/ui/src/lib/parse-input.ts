@@ -147,29 +147,6 @@ export function cleanEmail(text: string): string {
   return email.trim();
 }
 
-/** Common slips in an address's domain, and the domain meant: offered as a fix, never applied on its own. */
-const DOMAIN_SLIPS: Readonly<Record<string, string>> = {
-  'gmial.com': 'gmail.com',
-  'gmai.com': 'gmail.com',
-  'gmail.co': 'gmail.com',
-  'gamil.com': 'gmail.com',
-  'gnail.com': 'gmail.com',
-  'hotmial.com': 'hotmail.com',
-  'hotmai.com': 'hotmail.com',
-  'yahooo.com': 'yahoo.com',
-  'yaho.com': 'yahoo.com',
-  'outlok.com': 'outlook.com',
-  'iclod.com': 'icloud.com',
-};
-
-/** The address with a slipped common domain put right ("ada@gmial.com" is "ada@gmail.com"), or undefined when none slipped. */
-export function suggestEmail(email: string): string | undefined {
-  const at = email.lastIndexOf('@');
-  if (at === -1) return undefined;
-  const fixed = DOMAIN_SLIPS[email.slice(at + 1).toLowerCase()];
-  return fixed === undefined ? undefined : `${email.slice(0, at + 1)}${fixed}`;
-}
-
 /**
  * Pasted text for a list attribute, as its values: split on commas,
  * semicolons, tabs and line breaks, each cleaned, the empty ones dropped.

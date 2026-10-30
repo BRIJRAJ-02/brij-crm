@@ -100,3 +100,30 @@ export const WithMark: Story = {
     await expect(canvas.getByRole('link', { name: 'X @adalovelace' })).toBeInTheDocument();
   },
 };
+
+/** A site's icon leads a domain; its first letter stands in while it loads and when it fails. A phone leads with its flag. */
+export const Leads: Story = {
+  render: () => (
+    <Stage>
+      <LinkChip href="https://example.com" iconSrc="/missing-icon.png">
+        example.com
+      </LinkChip>
+      <LinkChip href="tel:+447700900123" flag="🇬🇧">
+        +44 7700 900123
+      </LinkChip>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(await canvas.findByText('E')).toBeInTheDocument();
+  },
+};
+
+/** Inside its own editor a chip keeps its look and is no link. */
+export const Static: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { isStatic: true },
+  play: async ({ canvas }) => {
+    await expect(canvas.queryByRole('link')).toBeNull();
+    await expect(canvas.getByText('ada@example.com')).toBeInTheDocument();
+  },
+};

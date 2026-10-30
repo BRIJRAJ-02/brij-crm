@@ -208,6 +208,11 @@ export interface AttributeTypeDef<T extends AttributeType> {
   readonly cleared?: FieldValue<T>;
   /** A new grid column's width tier. An attribute that holds several values is always `wide` (`columnWidthOf`). */
   readonly width: ColumnWidth;
+  /**
+   * What an empty value says, where a dash or "Not set" says too little: an interaction's "No contact", as
+   * Attio's table writes it. Its display shows it everywhere, and a record's details show it for the empty row.
+   */
+  readonly emptyWord?: string;
 }
 
 /** A grid column's width tier: `size-column-narrow`, `size-column` or `size-column-wide`. */

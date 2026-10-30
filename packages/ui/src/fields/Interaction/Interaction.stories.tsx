@@ -22,10 +22,12 @@ export const Display: Story = {
   render: () => <FieldSurfaces attribute={sample.attribute} value={sample.value} display={sample.display} />,
 };
 
-/** Empty: nothing in a cell, a dash elsewhere, and "Empty" for screen readers. */
+/** Empty, it says "No contact" on every surface, as Attio's table does, rather than a dash. */
 export const Empty: Story = {
-  parameters: { crm: { screenshot: false } },
   render: () => <FieldSurfaces attribute={sample.attribute} value={null} />,
+  play: async ({ canvas }) => {
+    await expect(canvas.getAllByText('No contact').length).toBeGreaterThan(0);
+  },
 };
 
 /** The one editor, in a form: what it commits parses with the type's schema (AC-5). */

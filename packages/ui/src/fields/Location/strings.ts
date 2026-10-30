@@ -8,4 +8,8 @@ export const strings = {
   countryCode: 'Country',
   chooseCountry: 'Choose a country',
   searchCountries: 'Search countries',
+  /** The first line's placeholder: a whole address pasted there fills every part. */
+  pastePlaceholder: 'Street, or paste a whole address',
+  /** The fold over the second line, region and postcode. */
+  more: 'More',
 } as const;

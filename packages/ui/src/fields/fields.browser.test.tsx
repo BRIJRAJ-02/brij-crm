@@ -180,7 +180,8 @@ describe('every type on every surface (AC-4)', () => {
       const host = await render(
         <AttributeDisplay attribute={FIELD_SAMPLES[type].attribute} value={null} surface="cell" />,
       );
-      expect(host.textContent).toContain('Empty');
+      // A type with its own empty word says it instead ("No contact"), to sight and screen readers alike.
+      expect(host.textContent).toContain(fieldTypeOf(type).emptyWord ?? 'Empty');
     });
   }
 });

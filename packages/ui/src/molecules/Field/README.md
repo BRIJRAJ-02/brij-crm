@@ -43,6 +43,7 @@ Ported from the artifact's Field card. Every text, number and link attribute is 
 
 - `autoComplete="off"` also puts the password managers' opt outs on the input (`data-1p-ignore`, `data-lpignore`, `data-bwignore`, `data-form-type="other"`): a contact's phone or a search is never a login, and one manager drew its icon in a phone cell (the owner, 21 October 2026).
 - `isVerbatim` is for a value typed exactly as shown, a backup code or a key: `autocapitalize`, `autocorrect` and `spellcheck` go off, so a phone's keyboard never capitalises the first letter of a code that checks its case (QA Q84, 23 October 2026).
+- `onPaste` sees text before it lands: a personal name's First splits "Ada Lovelace" into both fields, a location's first line fills its parts from a whole address, and a list's add field adds each value of a pasted list.
 
 ## States
 

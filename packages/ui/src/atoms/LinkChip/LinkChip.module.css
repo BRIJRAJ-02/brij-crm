@@ -24,6 +24,46 @@
     text-overflow: ellipsis;
   }
 
+  /* A site's icon before its words: the image over the first letter, which shows while it loads or when it fails. */
+  .icon {
+    display: inline-grid;
+    flex: none;
+    place-items: center;
+    inline-size: var(--size-icon-sm);
+    block-size: var(--size-icon-sm);
+    overflow: hidden;
+    border-radius: var(--radius-xs);
+    background: var(--surface-hover);
+  }
+
+  .icon[data-state='shown'] {
+    background: transparent;
+  }
+
+  .icon > * {
+    grid-area: 1 / 1;
+  }
+
+  .letter {
+    color: var(--text-secondary);
+    font: var(--text-label-strong);
+  }
+
+  .image {
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: contain;
+  }
+
+  .icon[data-state='loading'] .image {
+    opacity: 0;
+  }
+
+  .flag {
+    flex: none;
+    font: var(--text-label);
+  }
+
   .root[data-plain] {
     border-color: var(--border);
     background: var(--surface-hover);

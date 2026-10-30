@@ -83,6 +83,38 @@ export const Guidance: Story = {
     </Stage>
   ),
   play: async ({ canvas }) => {
-    await expect(canvas.getByText('Type the date, or pick it from the calendar.')).toBeInTheDocument();
+    await expect(canvas.getByText('Type a date, such as “next fri”, or pick one.')).toBeInTheDocument();
+  },
+};
+
+/** Near today (the stories' 8 October), in a cell, the panel and a card, a day reads as a word; elsewhere as the date. */
+export const NearDay: Story = {
+  render: () => (
+    <Stage direction="column">
+      <FieldSurfaces attribute={sample.attribute} value="2026-10-09" />
+      <FieldSurfaces attribute={sample.attribute} value="2026-10-05" />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getAllByText('Tomorrow').length).toBeGreaterThan(0);
+    await expect(canvas.getAllByText('3 days ago').length).toBeGreaterThan(0);
+  },
+};
+
+/** A day pasted into the box fills it whole, read as Type a date reads words. */
+export const Paste: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { value: null },
+  render: (args) => (
+    <Stage width="narrow">
+      <AttributeEditor {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas, args, userEvent }) => {
+    await userEvent.click(canvas.getAllByRole('spinbutton')[0] ?? canvas.getByRole('group'));
+    await userEvent.paste('8 Nov 2026');
+    await userEvent.tab();
+    await userEvent.tab();
+    await waitFor(() => expect(args.onCommit).toHaveBeenCalledWith('2026-11-08'));
   },
 };

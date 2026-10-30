@@ -114,3 +114,13 @@ export function isFlatSurface(surface: Surface): boolean {
 export function isPlainActorSurface(surface: Surface): boolean {
   return surface === 'panel';
 }
+
+/**
+ * Whether a value shows Copy beside it on hover or focus (`ValueActions`):
+ * on the record panel, where a value is read and passed on. Not in a grid
+ * cell (⌘C copies the cell), and not on a card, which is one row to press
+ * and drag, so a button inside it would split its keyboard stop.
+ */
+export function showsValueActions(surface: Surface): boolean {
+  return surface === 'panel';
+}

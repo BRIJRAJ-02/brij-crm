@@ -28,16 +28,18 @@ import { Radio, RadioGroup } from '../../atoms/Radio/Radio.tsx';
 import { AttributeEditor, type AttributeEditorProps } from '../../fields/AttributeEditor.tsx';
 import { fieldTypeOf, typeLabelOf } from '../../fields/registry.ts';
 import type { FieldAttribute } from '../../fields/types.ts';
+import { formatNumber } from '../../lib/format.ts';
 import { memoIntl } from '../../lib/intl-memo.ts';
 import { arraySource } from '../../lib/list-source.ts';
 import { Callout } from '../../molecules/Callout/Callout.tsx';
+import { CountryPicker } from '../../molecules/CountryPicker/CountryPicker.tsx';
 import { Disclosure } from '../../molecules/Disclosure/Disclosure.tsx';
 import { Field } from '../../molecules/Field/Field.tsx';
 import { Form, type FormRefusal } from '../../molecules/Form/Form.tsx';
 import { Modal } from '../../molecules/Modal/Modal.tsx';
 import { Select, type SelectItem } from '../../molecules/Select/Select.tsx';
 import { HUES } from '../../hue.ts';
-import { useFormatSettings } from '../../provider/context.ts';
+import { useFormatSettings, useRegionDefaults } from '../../provider/context.ts';
 import type { FilterBuilderProps } from '../FilterBuilder/FilterBuilder.tsx';
 import { OptionsEditor, type OptionsEditorChange, type OptionsEditorOption } from '../OptionsEditor/OptionsEditor.tsx';
 import type { DialogStep } from '../RelationshipSettings/RelationshipSettings.tsx';
@@ -490,6 +492,8 @@ function AttributeForm({
   const [isMulti, setMulti] = useState(attribute?.isMulti ?? entry?.isMulti ?? false);
   const [draft, setDraft] = useState<DefaultDraft>(() => draftOf(attribute?.defaultValue));
   const [config, setConfig] = useState<Readonly<Record<string, unknown>>>(() => attribute?.config ?? {});
+  // A new Currency attribute starts in the workspace's currency (its own, else its language's region's), not USD.
+  const region = useRegionDefaults();
   // A new select's options and a new status's stages, kept here until create sends them (AC-230).
   const [drafts, setDrafts] = useState<readonly OptionsEditorOption[]>(() =>
     attribute !== undefined
@@ -550,7 +554,7 @@ function AttributeForm({
     setDraft(NO_DEFAULT);
     setUnique(false);
     setMulti(next.isMulti);
-    setConfig(next.type === 'currency' ? { defaultCurrency: DEFAULT_CURRENCY } : {});
+    setConfig(next.type === 'currency' ? { defaultCurrency: region.currency } : {});
     // A select keeps its options between Select and Multi select; a status starts from the starter stages.
     setDrafts((before) =>
       next.type === 'status' ? starterStages(newOptionId) : next.type === 'select' && type === 'select' ? before : [],
@@ -617,7 +621,7 @@ function AttributeForm({
       isUnique: allowsUnique && isUnique,
       // A default naming an option removed before create names nothing: it goes.
       defaultValue: isCreating && takesOptions ? withinOptions(fallback, drafts) : fallback,
-      config: configFor(type, config),
+      config: configFor(type, config, region.currency),
       options: isCreating && takesOptions ? drafts : [],
       rules: rules.map(ruleOf),
       changed: [...changed],
@@ -741,6 +745,7 @@ function AttributeForm({
       <TypeSettings
         type={type}
         config={config}
+        defaultCurrency={region.currency}
         isReadOnly={isReadOnly}
         error={errorOf('config')}
         onChange={(next) => {
@@ -943,6 +948,9 @@ function DefaultSetting({
       isReadOnly,
       // The default is drawn as the value will be: a percent number with its sign, an amount in the chosen currency.
       ...(type === 'number' && config.display === 'percent' ? { isPercent: true } : {}),
+      ...(type === 'phone' && typeof config.defaultCountry === 'string'
+        ? { defaultCountry: config.defaultCountry }
+        : {}),
       ...(type === 'currency' && typeof config.defaultCurrency === 'string'
         ? { defaultCurrency: config.defaultCurrency }
         : {}),
@@ -1049,9 +1057,6 @@ function DefaultSetting({
   );
 }
 
-/** The currency a new currency attribute starts with (changeable; one is required). */
-const DEFAULT_CURRENCY = 'USD';
-
 /** The starter stages of a new status (AC-230), each with its own id. */
 function starterStages(newOptionId: (() => string) | undefined): readonly OptionsEditorOption[] {
   return STARTER_STAGES.map((stage, index) => ({
@@ -1077,14 +1082,37 @@ function draftOptions(
   }));
 }
 
-/** The settings a type takes: a number's display, a currency's default code; `{}` for the rest. */
-function configFor(type: AttributeType, config: Readonly<Record<string, unknown>>): Readonly<Record<string, unknown>> {
-  if (type === 'number') return { display: config.display === 'percent' ? 'percent' : 'plain' };
+/** A number's display setting as saved: plain, percent or compact. */
+function numberDisplayOf(config: Readonly<Record<string, unknown>>): 'plain' | 'percent' | 'compact' {
+  return config.display === 'percent' || config.display === 'compact' ? config.display : 'plain';
+}
+
+/**
+ * The settings a type takes: a number's display and decimals, a currency's default code (the workspace's when
+ * none was picked), a phone's default country; `{}` for the rest.
+ */
+function configFor(
+  type: AttributeType,
+  config: Readonly<Record<string, unknown>>,
+  defaultCurrency: string,
+): Readonly<Record<string, unknown>> {
+  if (type === 'number') {
+    return {
+      display: numberDisplayOf(config),
+      ...(typeof config.decimals === 'number' ? { decimals: config.decimals } : {}),
+    };
+  }
   if (type === 'currency') {
-    return { defaultCurrency: typeof config.defaultCurrency === 'string' ? config.defaultCurrency : DEFAULT_CURRENCY };
+    return { defaultCurrency: typeof config.defaultCurrency === 'string' ? config.defaultCurrency : defaultCurrency };
+  }
+  if (type === 'phone') {
+    return typeof config.defaultCountry === 'string' ? { defaultCountry: config.defaultCountry } : {};
   }
   return {};
 }
+
+/** The decimals a number may fix: Auto (as many as it has), then 0 to 4. */
+const DECIMALS = ['auto', '0', '1', '2', '3', '4'] as const;
 
 /** A select or status default with any option no longer among `options` dropped (a draft option removed). */
 function withinOptions(
@@ -1124,37 +1152,81 @@ function archivedDefaultNote(
 interface TypeSettingsProps {
   readonly type: AttributeType;
   readonly config: Readonly<Record<string, unknown>>;
+  /** The workspace's currency, shown while a currency attribute has none picked. */
+  readonly defaultCurrency: string;
   readonly isReadOnly: boolean;
   readonly error: string | undefined;
   readonly onChange: (config: Readonly<Record<string, unknown>>) => void;
 }
 
 /**
- * The type's settings (AC-230): a number shows plain or as a percent (a
- * RadioGroup, a saved setting), a currency needs its default code (a
- * searchable Select). Nothing for the other types.
+ * The type's settings (AC-230): a number's display (plain, percent or
+ * compact, each named by an example) and how many decimals it shows; a currency's default code (a searchable Select, the workspace's
+ * currency to start); a phone's default country, for numbers typed without
+ * their code (the workspace's when none). Nothing for the other types.
  */
-function TypeSettings({ type, config, isReadOnly, error, onChange }: TypeSettingsProps) {
+function TypeSettings({ type, config, defaultCurrency, isReadOnly, error, onChange }: TypeSettingsProps) {
   const { locale } = useFormatSettings();
   if (type === 'number') {
+    const decimals = typeof config.decimals === 'number' ? String(config.decimals) : 'auto';
     return (
-      <RadioGroup
-        label={strings.numberDisplay}
-        orientation="horizontal"
-        value={config.display === 'percent' ? 'percent' : 'plain'}
-        isReadOnly={isReadOnly}
-        onChange={(next) => {
-          onChange({ ...config, display: next === 'percent' ? 'percent' : 'plain' });
+      <>
+        <Select
+          label={strings.numberDisplay}
+          items={[
+            { id: 'plain', label: strings.plain, description: formatNumber('1234.5', locale) },
+            { id: 'percent', label: strings.percent, description: `${formatNumber('12.5', locale)}%` },
+            {
+              id: 'compact',
+              label: strings.compact,
+              description: formatNumber('1200000', locale, { isCompact: true }),
+            },
+          ]}
+          showsDescription
+          optionDescription="after"
+          value={numberDisplayOf(config)}
+          onChange={(next) => {
+            if (next !== null) onChange({ ...config, display: next });
+          }}
+          {...(isReadOnly ? { isReadOnly } : {})}
+        />
+        <Select
+          label={strings.decimals}
+          items={DECIMALS.map((each) => ({ id: each, label: each === 'auto' ? strings.decimalsAuto : each }))}
+          value={decimals}
+          onChange={(next) => {
+            if (next === null) return;
+            const { decimals: _old, ...rest } = config;
+            onChange(next === 'auto' ? rest : { ...rest, decimals: Number(next) });
+          }}
+          {...(isReadOnly ? { isReadOnly } : {})}
+          {...(error === undefined ? {} : { error })}
+        />
+      </>
+    );
+  }
+  if (type === 'phone') {
+    return (
+      <CountryPicker
+        label={strings.defaultCountry}
+        list="dialing"
+        isClearable
+        placeholder={strings.workspaceCountry}
+        searchLabel={strings.searchCountries}
+        hint={strings.defaultCountryHint}
+        value={typeof config.defaultCountry === 'string' ? config.defaultCountry : null}
+        onChange={(code) => {
+          const { defaultCountry: _old, ...rest } = config;
+          onChange(code === null ? rest : { ...rest, defaultCountry: code });
         }}
-      >
-        <Radio value="plain">{strings.plain}</Radio>
-        <Radio value="percent">{strings.percent}</Radio>
-      </RadioGroup>
+        {...(isReadOnly ? { isReadOnly } : {})}
+        {...(error === undefined ? {} : { error })}
+      />
     );
   }
   if (type !== 'currency') return null;
   const names = memoIntl(`currency-names:${locale}`, () => new Intl.DisplayNames(locale, { type: 'currency' }));
-  const code = typeof config.defaultCurrency === 'string' ? config.defaultCurrency : DEFAULT_CURRENCY;
+  const code = typeof config.defaultCurrency === 'string' ? config.defaultCurrency : defaultCurrency;
   return (
     <Select
       label={strings.defaultCurrency}

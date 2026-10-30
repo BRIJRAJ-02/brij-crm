@@ -3,6 +3,7 @@
 // Main task: fill the name and every required field, open "Add more fields" for the rest, then Create; the row shows at once.
 // "Create more" keeps the dialog open, emptied, for the next one.
 // Leaves out: duplicate checks and templates. References pick through the record picker and go with the create.
+// A select or status offers "Create "<typed>"" to schema managers, as a table cell does; the new option is set here.
 import {
   isDataError,
   refusalFor,
@@ -11,12 +12,23 @@ import {
   type AttributeDefinition,
   type RecordView,
 } from '@crm/data';
-import { AttributeEditor, Button, Disclosure, Form, Modal, Switch, type FormRefusal } from '@crm/ui';
+import {
+  AttributeEditor,
+  Button,
+  Disclosure,
+  FieldActionsContext,
+  Form,
+  Modal,
+  Switch,
+  type FieldActions,
+  type FormRefusal,
+} from '@crm/ui';
 import { useParams } from '@tanstack/react-router';
 import { useId, useRef, useState } from 'react';
 import { refsOf } from '../records/details.ts';
 import { useLinkEditing } from '../records/links.ts';
 import type { MemberPicker } from '../records/members.ts';
+import { useOptionMaker } from '../records/options.ts';
 import { strings } from './strings.ts';
 
 /** Props for the new record dialog. */
@@ -263,6 +275,36 @@ function NewRecordForm({
   const [refusals, setRefusals] = useState<readonly FormRefusal[]>([]);
   // A refusal or a typed value in a hidden field opens "Add more fields", so nothing is out of sight.
   const [isMoreOpen, setMoreOpen] = useState(false);
+  // "Create "<typed>"" in a select or status (schema managers only): the option is made, then chosen here.
+  const makeOption = useOptionMaker(slug, editors[0]?.objectId ?? '');
+
+  /** One editor's value committed: what it shows, and what Create sends (a list where the attribute holds one). */
+  const commitValue = (definition: AttributeDefinition, value: unknown) => {
+    sending.current = {
+      ...sending.current,
+      [definition.id]: definition.isMulti && value !== null && !Array.isArray(value) ? [value] : value,
+    };
+    setValues((shown) => ({ ...shown, [definition.id]: value }));
+    if (fieldErrors.has(definition.id)) {
+      setFieldErrors(new Map([...fieldErrors].filter(([key]) => key !== definition.id)));
+    }
+  };
+  const actions: FieldActions | undefined =
+    makeOption === undefined
+      ? undefined
+      : {
+          createOption: (attribute, label) => {
+            const definition = editors.find((editor) => editor.id === attribute.id);
+            if (definition === undefined) return;
+            void makeOption(definition.id, label).then((optionId) => {
+              if (optionId === undefined) return;
+              // A multi select adds it to what it holds; one choice is replaced by it.
+              const held = sending.current[definition.id] ?? values[definition.id];
+              const kept = Array.isArray(held) ? (held as readonly unknown[]) : [];
+              commitValue(definition, definition.isMulti ? [...kept, optionId] : optionId);
+            });
+          },
+        };
 
   const create = () => {
     if (isBusy) return;
@@ -331,14 +373,7 @@ function NewRecordForm({
         {...(definition.type === 'actor_reference' ? { display: memberPicker.displays, ...memberPicker.extras } : {})}
         {...(definition.type === 'record_reference' ? referenceProps(definition) : {})}
         onCommit={(value) => {
-          sending.current = {
-            ...sending.current,
-            [definition.id]: definition.isMulti && value !== null && !Array.isArray(value) ? [value] : value,
-          };
-          setValues((shown) => ({ ...shown, [definition.id]: value }));
-          if (fieldErrors.has(definition.id)) {
-            setFieldErrors(new Map([...fieldErrors].filter(([key]) => key !== definition.id)));
-          }
+          commitValue(definition, value);
         }}
         {...(error === undefined ? {} : { error })}
       />
@@ -346,19 +381,21 @@ function NewRecordForm({
   };
 
   return (
-    <Form id={formId} isBusy={isBusy} refusals={refusals} onSubmit={create} label={label} focusesFirstField>
-      {first.map(editorFor)}
-      {more.length > 0 && (
-        <Disclosure
-          variant="fields"
-          title={strings.addMoreFields}
-          count={more.length}
-          isExpanded={isMoreOpen}
-          onExpandedChange={setMoreOpen}
-        >
-          {more.map(editorFor)}
-        </Disclosure>
-      )}
-    </Form>
+    <FieldActionsContext value={actions}>
+      <Form id={formId} isBusy={isBusy} refusals={refusals} onSubmit={create} label={label} focusesFirstField>
+        {first.map(editorFor)}
+        {more.length > 0 && (
+          <Disclosure
+            variant="fields"
+            title={strings.addMoreFields}
+            count={more.length}
+            isExpanded={isMoreOpen}
+            onExpandedChange={setMoreOpen}
+          >
+            {more.map(editorFor)}
+          </Disclosure>
+        )}
+      </Form>
+    </FieldActionsContext>
   );
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cleanEmail, cleanText, parseAmount, parseDateInput, splitPasted, suggestEmail } from './parse-input.ts';
+import { cleanEmail, cleanText, parseAmount, parseDateInput, splitPasted } from './parse-input.ts';
 
 describe('cleanText', () => {
   it('drops zero width marks, plain spaces for odd ones, and one pair of wrapping quotes', () => {
@@ -64,11 +64,6 @@ describe('cleanEmail', () => {
     expect(cleanEmail('"Lovelace, Ada" <ada@x.com>')).toBe('ada@x.com');
     expect(cleanEmail('ada@x.com.')).toBe('ada@x.com');
     expect(cleanEmail('<ada@x.com>,')).toBe('ada@x.com');
-  });
-
-  it('offers the domain meant for a common slip', () => {
-    expect(suggestEmail('ada@gmial.com')).toBe('ada@gmail.com');
-    expect(suggestEmail('ada@acme.com')).toBeUndefined();
   });
 });
 

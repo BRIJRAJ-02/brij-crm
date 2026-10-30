@@ -51,3 +51,28 @@ export const Editor: Story = {
     await expect(args.onCommit).toHaveBeenLastCalledWith({ locality: 'London', countryCode: 'GB' });
   },
 };
+
+/** A whole address pasted into the first line fills every part; the second line, region and postcode wait behind More. */
+export const PasteAddress: Story = {
+  args: { value: null },
+  render: (args) => (
+    <Stage width="narrow">
+      <AttributeEditor {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas, args, userEvent }) => {
+    await userEvent.click(canvas.getByRole('textbox', { name: 'Address' }));
+    await userEvent.paste('10 Downing St, London SW1A 2AA, UK');
+    await expect(canvas.getByRole('textbox', { name: 'City' })).toHaveValue('London');
+    await expect(canvas.getByRole('textbox', { name: 'Postcode' })).toHaveValue('SW1A 2AA');
+    await userEvent.click(document.body);
+    await waitFor(() =>
+      expect(args.onCommit).toHaveBeenCalledWith({
+        line1: '10 Downing St',
+        locality: 'London',
+        postcode: 'SW1A 2AA',
+        countryCode: 'GB',
+      }),
+    );
+  },
+};

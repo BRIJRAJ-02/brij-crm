@@ -1,8 +1,23 @@
 /* Long text in the record panel, a form or a preview: the whole text with its
-   line breaks. */
+   line breaks; on the panel, six lines until Show more. */
 @layer components {
   .root {
     overflow-wrap: anywhere;
     white-space: pre-wrap;
+  }
+
+  .root[data-clamped] {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 6;
+  }
+
+  .clamped {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-2);
+    min-inline-size: 0;
   }
 }

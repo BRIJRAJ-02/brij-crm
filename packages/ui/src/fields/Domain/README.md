@@ -13,6 +13,7 @@ Screens never import it; they render values through `AttributeDisplay` and `Attr
 - **Display**: a LinkChip to `https://<domain>`; several values are a row of chips with "+N". On a card (a board card, a line of the timeline) the chip is flat, the link's text alone: a blue chip there read heavier than the words around it (the owner, 21 October 2026).
 - **Editor**: a Field checked on blur. A typed `https://` and any path, query or `#` are dropped (the hint says so), `www.` is kept, the name is lowercased and international names are stored as `xn--`. "exa mple.com" is refused with "Enter just the domain, such as example.com, with no spaces, path or protocol." On a form the placeholder is an example ("example.com") and a hint says a pasted link is cut down to its domain; a refusal reads "Enter a domain, such as example.com, with no spaces."
 - **Text out / in** (copy, paste, CSV, the import preview): the domain / the same clean up, then checked.
+- **Polish (30 October 2026)**: The chip leads with the site's icon when the app serves icons (`SiteIconsContext`), its first letter while it loads or when there is none; without the context, no icon. On the record panel each chip has Copy. A pasted list splits on commas, lines and spaces.
 - **Filter operators**: is, contains, is empty, is not empty.
 
 ## States

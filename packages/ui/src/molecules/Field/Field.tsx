@@ -5,6 +5,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
   type Ref,
+  type ClipboardEvent as ReactClipboardEvent,
   type SyntheticEvent,
 } from 'react';
 import { FieldError, Input, Text, TextArea, TextField } from 'react-aria-components';
@@ -136,6 +137,8 @@ export interface FieldProps {
   readonly onKeyDown?: (event: ReactKeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
   /** The caret moved or the selection changed: a composer looks for an `@` before it. */
   readonly onSelect?: (event: SyntheticEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
+  /** Text pasted into the field, before it lands: a full name split into first and last, a pasted list split. */
+  readonly onPaste?: (event: ReactClipboardEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
   /** The `copy` variant's button name ("Copy link"); "Copy" when left out. */
   readonly copyLabel?: string;
   /** Where the typed text sits: `end` for numbers, which a cell aligns to its end. */
@@ -210,6 +213,7 @@ export function Field({
   combobox,
   onKeyDown,
   onSelect,
+  onPaste,
   ref,
 }: FieldProps) {
   const { locale } = useFormatSettings();
@@ -296,6 +300,7 @@ export function Field({
         }),
     ...(onKeyDown === undefined ? {} : { onKeyDown }),
     ...(onSelect === undefined ? {} : { onSelect }),
+    ...(onPaste === undefined ? {} : { onPaste }),
   };
   return (
     <TextField

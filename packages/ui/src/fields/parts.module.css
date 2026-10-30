@@ -65,6 +65,38 @@
     box-shadow: var(--shadow-focus);
   }
 
+  /* A value with its Copy after it (the record panel): the button keeps its size; the value gives way. */
+  .withActions {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-inline-size: 0;
+    max-inline-size: 100%;
+  }
+
+  .actionValue {
+    display: inline-flex;
+    min-inline-size: 0;
+  }
+
+  .actions {
+    display: inline-flex;
+    flex: none;
+  }
+
+  /* With a pointer, Copy waits for the value's hover or focus; under a finger it always shows. */
+  @media (hover: hover) and (pointer: fine) {
+    .actions {
+      opacity: 0;
+      transition: opacity var(--duration-hover) var(--ease-hover);
+    }
+
+    .withActions:hover .actions,
+    .withActions:focus-within .actions {
+      opacity: 1;
+    }
+  }
+
   .stack {
     display: flex;
     flex-direction: column;

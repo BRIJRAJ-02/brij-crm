@@ -13,6 +13,7 @@ Screens never import it; they render values through `AttributeDisplay` and `Attr
 - **Display**: FileItem chips with their type icons, "+N" past `maxVisible`; each name links to the download #32 serves (`FileDisplay.href`).
 - **Editor**: a FileDrop that hands files to `onUpload` (#32 uploads and stores them, then commits the new value), and the attached files as FileItems with remove. The grid edits it in a popover, with focus on the panel rather than the first remove button, so the Enter that opened it is never followed by one that removes a file.
 - **Text out / in** (copy, paste, CSV, the import preview): names / refused (upload them).
+- **Polish (30 October 2026)**: A file or screenshot pasted while focus is in the editor uploads, as a drop would. It honours `isDisabled`.
 - **Filter operators**: name contains, then is empty and is not empty.
 
 ## States

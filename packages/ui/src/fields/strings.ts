@@ -14,6 +14,14 @@ export const strings = {
   more: (count: number) => `+${String(count)}`,
   showMore: (count: number) => `Show ${String(count)} more`,
   remove: (label: string) => `Remove ${label}`,
+  /** A chip's menu inside a list editor: what it is about. */
+  valueActions: (label: string) => `${label} options`,
+  /** Moves a value first: the one people mean when they mean one (Attio, Twenty). */
+  makePrimary: 'Make primary',
+  /** Puts a value back in the add field, out of the list, to change it. */
+  editValue: 'Edit',
+  /** Copy beside a value on the record panel: its name says what it copies. */
+  copy: (value: string) => `Copy ${value}`,
   choose: (name: string) => `Choose ${name}…`,
   search: (name: string) => `Search ${name}`,
   addAnother: 'Add another',

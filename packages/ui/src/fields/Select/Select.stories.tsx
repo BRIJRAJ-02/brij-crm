@@ -4,7 +4,7 @@ import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { FIELD_SAMPLES } from '../../workbench/field-samples.ts';
 import { SAMPLE_IDS } from '../../workbench/sample-ids.ts';
 import { AttributeEditor } from '../AttributeEditor.tsx';
-import { expect, fn, screen, waitFor } from 'storybook/test';
+import { expect, fn, screen, waitFor, within } from 'storybook/test';
 
 const sample = FIELD_SAMPLES.select;
 
@@ -83,7 +83,7 @@ export const CreateOption: Story = {
   },
 };
 
-/** Several values: the menu's search offers "Create" last, too. */
+/** Several values: the list's search offers "Create" last, too, and the closed field shows the chosen tags. */
 export const CreateOptionSeveral: Story = {
   args: {
     attribute: sample.several?.attribute ?? sample.attribute,
@@ -97,10 +97,10 @@ export const CreateOptionSeveral: Story = {
   ),
   play: async ({ args, canvas, userEvent }) => {
     await userEvent.click(canvas.getByRole('button'));
-    const search = await screen.findByRole('searchbox');
+    const search = await screen.findByRole('textbox', { name: /^Search/ });
     await waitFor(() => expect(search).toHaveFocus());
     await userEvent.keyboard('Robotics');
-    await userEvent.click(await screen.findByRole('menuitemcheckbox', { name: 'Create "Robotics"' }));
+    await userEvent.click(await screen.findByRole('option', { name: 'Create "Robotics"' }));
     await expect(args.onCreateOption).toHaveBeenCalledWith('Robotics');
   },
 };
@@ -120,5 +120,50 @@ export const CreateOffered: Story = {
     await waitFor(() => expect(search).toHaveFocus());
     await userEvent.keyboard('Hot');
     await expect(await screen.findByRole('option', { name: 'Create "Hot"' })).toBeVisible();
+  },
+};
+
+/** Several, outside a grid cell: the closed field shows the chosen tags, as the display does, not a joined line. */
+export const SeveralInForm: Story = {
+  args: { attribute: sample.several?.attribute ?? sample.attribute, value: [SAMPLE_IDS.tag.saas, SAMPLE_IDS.tag.b2b] },
+  render: (args) => (
+    <Stage width="narrow">
+      <AttributeEditor {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const field = canvas.getByRole('button');
+    await expect(within(field).getByText('SaaS')).toBeInTheDocument();
+    await expect(within(field).getByText('B2B')).toBeInTheDocument();
+  },
+};
+
+/** From 8 options a list searches as it opens: typing filters it. */
+export const SearchesLongList: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: {
+    attribute: {
+      ...sample.attribute,
+      name: 'Industry',
+      options: Array.from({ length: 9 }, (_, index) => ({
+        id: `industry-${String(index)}`,
+        label: ['Retail', 'Banking', 'Energy', 'Health', 'Media', 'Travel', 'Food', 'Mining', 'Legal'][index] ?? '',
+        hue: 'blue' as const,
+        archived: false,
+      })),
+    },
+  },
+  render: (args) => (
+    <Stage width="narrow">
+      <AttributeEditor {...args} />
+    </Stage>
+  ),
+  play: async ({ args, userEvent }) => {
+    await userEvent.tab();
+    await userEvent.keyboard('{ArrowDown}');
+    const search = await screen.findByRole('textbox', { name: 'Search Industry' });
+    await waitFor(() => expect(search).toHaveFocus());
+    await userEvent.keyboard('min{Enter}');
+    await expect(args.onCommit).toHaveBeenCalledWith('industry-7');
   },
 };

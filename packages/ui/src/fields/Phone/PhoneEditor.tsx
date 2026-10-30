@@ -2,18 +2,12 @@ import type { PhoneValue } from '@crm/contracts/values';
 import { useState } from 'react';
 import { countryOfNumber, withoutDialCode } from '../../lib/countries.ts';
 import { PHONE_PROBLEMS, PhoneField, type PhoneFieldValue } from '../../molecules/PhoneField/PhoneField.tsx';
-import { useFormatSettings } from '../../provider/context.ts';
+import { useRegionDefaults } from '../../provider/context.ts';
 import { ListEditor, type CheckedOne } from '../ListEditor.tsx';
 import type { EditorProps } from '../types.ts';
 import { asList, escapesHere, isCompactSurface, toCommittable } from '../values.ts';
 import { formatPhone } from './PhoneDisplay.tsx';
-import {
-  createPhoneParser,
-  defaultCountryFor,
-  phoneProblemOf,
-  usePhoneLibrary,
-  type PhoneLibrary,
-} from './phone-library.ts';
+import { createPhoneParser, phoneProblemOf, usePhoneLibrary, type PhoneLibrary } from './phone-library.ts';
 import { strings } from './strings.ts';
 
 /** Typed text to a phone value: parsed and checked for that country by libphonenumber-js, or why not. */
@@ -49,11 +43,11 @@ function fromTyped(text: string, country: string): PhoneFieldValue {
 
 /**
  * The country a new number starts in: the attribute's own default when it
- * has one, else the viewer's (their language's region), else the US.
+ * has one, else the workspace's (its own, else the language's region), else the US.
  */
 function useStartCountry(attributeDefault: string | undefined): string {
-  const { locale } = useFormatSettings();
-  return attributeDefault ?? defaultCountryFor(locale, undefined) ?? 'US';
+  const region = useRegionDefaults();
+  return attributeDefault ?? region.country;
 }
 
 /**

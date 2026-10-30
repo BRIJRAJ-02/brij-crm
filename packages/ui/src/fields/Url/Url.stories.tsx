@@ -223,7 +223,8 @@ export const SeveralProfiles: Story = {
     </Stage>
   ),
   play: async ({ canvas, args, userEvent }) => {
-    await expect(canvas.getByRole('link', { name: 'LinkedIn ada-lovelace' })).toBeInTheDocument();
+    // Inside its editor a chip is no link: it opens its menu (Make primary, Edit).
+    await expect(canvas.getByRole('button', { name: 'ada-lovelace options' })).toBeInTheDocument();
     await userEvent.click(canvas.getByRole('textbox', { name: 'LinkedIn' }));
     await userEvent.keyboard('company/northwind{Enter}');
     await expect(args.onCommit).toHaveBeenCalledWith([

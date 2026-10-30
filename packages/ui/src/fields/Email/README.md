@@ -13,6 +13,7 @@ Screens never import it; they render values through `AttributeDisplay` and `Attr
 - **Display**: a LinkChip to `mailto:`; several values are a row of chips with "+N" (cells measure, cards show 3). On a card (a board card, a line of the timeline) the chip is flat, the link's text alone: a blue chip there read heavier than the words around it (the owner, 21 October 2026).
 - **Editor**: a Field checked on blur: trimmed and lowercased; "ada@example" is refused with "Enter an email address with a name and a domain, such as ada@example.com." Several values are removable chips and a field to add one. On a form the placeholder is an example address ("ada@example.com").
 - **Text out / in** (copy, paste, CSV, the import preview): the address / parsed and lowercased.
+- **Polish (30 October 2026)**: Pasted text is cleaned first (`cleanEmail`: "mailto:", "Ada <ada@x.com>", a trailing "."), and a pasted list splits into its addresses. On the record panel each chip has Copy after it. In a list editor a chip is not a link: it opens a menu with Make primary (first) and Edit (back to the add field).
 - **Filter operators**: is, contains, is empty, is not empty.
 
 ## States

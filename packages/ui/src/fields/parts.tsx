@@ -3,6 +3,7 @@
 // show 3, stories pass a number).
 import { createContext, use, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { Button as AriaButton, DialogTrigger } from 'react-aria-components';
+import { CopyButton } from '../atoms/Button/CopyButton.tsx';
 import { Icon } from '../atoms/Icon/Icon.tsx';
 import { VisuallyHidden } from '../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { Popover } from '../molecules/Popover/Popover.tsx';
@@ -10,9 +11,22 @@ import { chipsThatFit } from './fit.ts';
 import styles from './parts.module.css';
 import { strings } from './strings.ts';
 import type { FieldAttribute, Surface } from './types.ts';
+import { showsValueActions } from './values.ts';
 
-/** An empty value: nothing in a cell, a dash elsewhere, and "Empty" for screen readers everywhere. */
-export function EmptyValue({ surface }: { readonly surface: Surface }) {
+/**
+ * An empty value: nothing in a cell, a dash elsewhere, and "Empty" for screen
+ * readers everywhere. A type whose empty says something on its own passes its
+ * word (an interaction's "No contact", as Attio's table writes it), shown in
+ * the quiet colour on every surface and read as it is.
+ */
+export function EmptyValue({ surface, word }: { readonly surface: Surface; readonly word?: string }) {
+  if (word !== undefined) {
+    return (
+      <span className={styles.empty} data-surface={surface}>
+        {word}
+      </span>
+    );
+  }
   return (
     <span className={styles.empty} data-surface={surface}>
       {surface !== 'cell' && <span aria-hidden="true">{strings.emptyMark}</span>}
@@ -90,6 +104,34 @@ export function ChipRow({ chips, maxVisible, label }: ChipRowProps) {
           </Popover>
         </DialogTrigger>
       )}
+    </span>
+  );
+}
+
+/** Props for ValueActions. */
+export interface ValueActionsProps {
+  readonly surface: Surface;
+  /** The raw value Copy puts on the clipboard: the address, the E.164 number, the link, the text. */
+  readonly copy: string;
+  /** The value as drawn (a chip, a line of text). */
+  readonly children: ReactNode;
+}
+
+/**
+ * A value with Copy after it, shown on hover or focus with a pointer and
+ * always under a finger, on the surfaces `showsValueActions` names (the
+ * record panel). A link chip already opens; Copy is what people otherwise
+ * reach by opening mailto or selecting the text. Elsewhere the value alone:
+ * a grid cell copies with ⌘C, and a card is one row to press and drag.
+ */
+export function ValueActions({ surface, copy, children }: ValueActionsProps) {
+  if (!showsValueActions(surface)) return children;
+  return (
+    <span className={styles.withActions}>
+      <span className={styles.actionValue}>{children}</span>
+      <span className={styles.actions}>
+        <CopyButton value={copy} label={strings.copy(copy)} isIconOnly variant="ghost" size="sm" />
+      </span>
     </span>
   );
 }

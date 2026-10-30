@@ -13,6 +13,7 @@ Screens never import it; they render values through `AttributeDisplay` and `Attr
 - **Display**: the full name on one line (the record header adds the avatar beside it).
 - **Editor**: first and last name Fields side by side; the full name is made from them. Focus leaving the group commits. The grid edits it in a popover. A refusal ("Name is required.", "Name the person.") is about the whole name, so it marks the first name field, where the name starts, in every layout.
 - **Text out / in** (copy, paste, CSV, the import preview): the full name / "Last, First", or split at the first space.
+- **Polish (30 October 2026)**: A whole name pasted into First while Last is empty ("Ada Lovelace", "Lovelace, Ada") splits into both (`nameFromText`, in `name.ts`). A key typed in a grid cell starts First with it. It honours `isDisabled`.
 - **Filter operators**: contains, first name is, last name is, then is empty and is not empty.
 
 ## States

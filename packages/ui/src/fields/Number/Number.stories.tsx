@@ -77,3 +77,40 @@ export const Percent: Story = {
     await expect(canvas.getByText('%')).toBeInTheDocument();
   },
 };
+
+/** Compact display with fixed decimals: "1.3M" for 1,250,000, the exact number in a tooltip and for screen readers. */
+export const Compact: Story = {
+  args: { attribute: { ...sample.attribute, name: 'Revenue', isCompact: true }, value: '1250000' },
+  render: (args) => (
+    <Stage width="narrow">
+      <AttributeDisplay attribute={args.attribute} value={args.value} surface="panel" />
+      <AttributeDisplay
+        attribute={{ ...args.attribute, isCompact: false, decimals: 2 }}
+        value="1234.5"
+        surface="panel"
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('1.3M')).toBeInTheDocument();
+    await expect(canvas.getByText('1,250,000')).toBeInTheDocument();
+    await expect(canvas.getByText('1,234.50')).toBeInTheDocument();
+  },
+};
+
+/** Forgiving input: "1.2k" reads as 1,200, and "(300)" as minus 300. */
+export const Forgiving: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: {},
+  render: (args) => (
+    <Stage width="narrow">
+      <AttributeEditor {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas, args, userEvent }) => {
+    await userEvent.click(canvas.getByRole('textbox', { name: 'Employees' }));
+    await userEvent.keyboard('1.2k');
+    await userEvent.tab();
+    await expect(args.onCommit).toHaveBeenCalledWith('1200');
+  },
+};

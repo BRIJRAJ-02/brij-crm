@@ -4,9 +4,10 @@ import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { FIELD_SAMPLES } from '../../workbench/field-samples.ts';
 import { useState } from 'react';
 import { Form } from '../../molecules/Form/Form.tsx';
+import { AttributeDisplay } from '../AttributeDisplay.tsx';
 import { AttributeEditor } from '../AttributeEditor.tsx';
 import type { FieldAttribute } from '../types.ts';
-import { expect, fn } from 'storybook/test';
+import { expect, fn, screen } from 'storybook/test';
 
 const sample = FIELD_SAMPLES.email;
 
@@ -165,5 +166,58 @@ export const SeveralAtTheLimit: Story = {
     await expect(canvas.getByText('Up to 2 addresses.')).toBeInTheDocument();
     await expect(add).toHaveValue('lovelace@example.org');
     await expect(canvas.getByRole('list', { name: 'Emails' }).querySelectorAll('li')).toHaveLength(2);
+  },
+};
+
+/** On the record panel each address has Copy after it, on hover or focus (always under a finger). */
+export const CopyOnPanel: Story = {
+  render: () => (
+    <Stage>
+      <AttributeDisplay attribute={sample.attribute} value={sample.value as never} surface="panel" />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('button', { name: 'Copy ada@example.com' })).toBeInTheDocument();
+  },
+};
+
+/** What an email client pastes ("Ada <ada@x.com>", "mailto:") reads as the address. */
+export const PastedName: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { value: null },
+  render: (args) => (
+    <Stage width="narrow">
+      <AttributeEditor {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas, args, userEvent }) => {
+    await userEvent.click(canvas.getByRole('textbox', { name: 'Email' }));
+    await userEvent.paste('Ada Lovelace <Ada@Example.com>');
+    await userEvent.tab();
+    await expect(args.onCommit).toHaveBeenCalledWith('ada@example.com');
+  },
+};
+
+/** Several: a pasted list adds each address; a chip opens Make primary and Edit, never its link. */
+export const SeveralPasteAndPrimary: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { attribute: sample.several?.attribute ?? sample.attribute, value: ['ada@example.com', 'b@example.com'] },
+  render: (args) => (
+    <Stage width="narrow">
+      <AttributeEditor {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas, args, userEvent }) => {
+    await userEvent.click(canvas.getByRole('textbox', { name: 'Emails' }));
+    await userEvent.paste('c@example.com, d@example.com');
+    await expect(args.onCommit).toHaveBeenCalledWith([
+      'ada@example.com',
+      'b@example.com',
+      'c@example.com',
+      'd@example.com',
+    ]);
+    await userEvent.click(canvas.getByRole('button', { name: 'b@example.com options' }));
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Make primary' }));
+    await expect(args.onCommit).toHaveBeenLastCalledWith(['b@example.com', 'ada@example.com']);
   },
 };

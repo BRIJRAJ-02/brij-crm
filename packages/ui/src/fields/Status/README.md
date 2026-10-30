@@ -13,6 +13,7 @@ Screens never import it; they render values through `AttributeDisplay` and `Attr
 - **Display**: a StatusDot in the status's hue, with its label; archived statuses show muted.
 - **Editor**: a Select with dot options; archived statuses can't be chosen; "Clear" when not required. In a grid cell it is its list, open at once from the cell (Select's `cell` variant, the trigger filling the cell and the list at least a menu wide). With `onCreateOption` (spec 0012, AC-238; only for someone who may shape the schema), the list searches, and typing a stage no live one is called offers "Create "<label>"" last, handing the label over.
 - **Text out / in** (copy, paste, CSV, the import preview): the label / the label, matched ignoring case.
+- **Polish (30 October 2026)**: From 8 stages, or with Create, the list searches as it opens (from the key that opened a cell). It honours `isDisabled`.
 - **Filter operators**: is, is not, is any of, then is empty and is not empty.
 
 ## States

@@ -13,6 +13,7 @@ Screens never import it; they render values through `AttributeDisplay` and `Attr
 - **Display**: one line in `body`, cut with an ellipsis, the full text in a tooltip when cut (TruncatedText).
 - **Editor**: a Field input. The text is trimmed and line breaks become spaces; up to 500 characters.
 - **Text out / in** (copy, paste, CSV, the import preview): as it is / trimmed.
+- **Polish (30 October 2026)**: On the record panel the value has Copy after it, on hover or focus.
 - **Filter operators**: is, is not, contains, does not contain, is empty, is not empty.
 
 ## States

@@ -33,6 +33,7 @@ New. The record page and the record panel (#18) list a record's attributes. `Des
 - A long name ("Associated company") wraps to a second line instead of ending in an ellipsis that hid the rest; two label lines fit the row (QA, 22 October 2026).
 
 Each name sits after its type's icon on a small gray tile (`Icon` with `tile`, 13 Oct reference batch 4), so a long list reads by its shapes at a glance.
+- An empty read only row says its type's `emptyWord` where it has one (an interaction's "No contact"), else "Not set". A long text clamps to six lines with Show more here. Email, phone, domain, URL and text values show Copy after them on hover or focus (`ValueActions`). A screen gives Create inline through `FieldActionsContext` around the list.
 
 ## States
 

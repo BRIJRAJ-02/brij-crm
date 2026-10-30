@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useId, useState } from 'react';
-import { expect, fn, waitFor, within } from 'storybook/test';
+import { expect, fn, screen, waitFor, within } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
 import type { FormRefusal } from '../../molecules/Form/Form.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
@@ -559,14 +559,16 @@ export const CreateStatus: Story = {
   },
 };
 
-/** A number shows plain or as a percent; a currency needs its default code (USD until changed). */
+/** A number shows plain, as a percent or compact (each with its example), with its decimals under it. */
 export const TypeSettings: Story = {
   args: { typeKeys: undefined },
   play: async ({ args, userEvent }) => {
     const dialog = await openDialog();
     await userEvent.keyboard('Margin');
     await chooseType(dialog, 'Number', userEvent);
-    await userEvent.click(within(dialog).getByRole('radio', { name: 'Percent' }));
+    await userEvent.click(within(dialog).getByRole('button', { name: /^Display/ }));
+    await userEvent.click(await screen.findByRole('option', { name: /^Percent/ }));
+    await waitFor(() => expect(document.querySelector('[role="listbox"]')).toBeNull());
     await userEvent.keyboard('{Meta>}{Enter}{/Meta}');
     await waitFor(() =>
       expect(args.onSubmit).toHaveBeenCalledWith(
@@ -580,7 +582,22 @@ export const TypeSettings: Story = {
   },
 };
 
-/** A currency's default code: a searchable list, starting at USD. */
+/** A phone's Default country, for numbers typed without their code; empty means the workspace's. */
+export const PhoneSettings: Story = {
+  args: { typeKeys: undefined },
+  play: async ({ args, userEvent }) => {
+    const dialog = await openDialog();
+    await userEvent.keyboard('Mobile');
+    await chooseType(dialog, 'Phone number', userEvent);
+    await expect(within(dialog).getByRole('button', { name: /^Default country/ })).toBeInTheDocument();
+    await userEvent.keyboard('{Meta>}{Enter}{/Meta}');
+    await waitFor(() =>
+      expect(args.onSubmit).toHaveBeenCalledWith(expect.objectContaining({ type: 'phone', config: {} })),
+    );
+  },
+};
+
+/** A currency's default code: a searchable list, starting at the workspace's currency (the stories' en-US: USD). */
 export const CurrencySettings: Story = {
   args: { typeKeys: undefined },
   parameters: { crm: { screenshot: false } },
