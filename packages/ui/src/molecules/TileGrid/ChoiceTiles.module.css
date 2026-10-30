@@ -12,9 +12,12 @@
     min-inline-size: 0;
   }
 
-  /* The tooltip's trigger wraps a tile: it is the grid cell, and the tile fills it. */
+  /* The tooltip's trigger wraps a tile: the trigger is the grid cell, this wrapper fills it, and the tile fills
+     the wrapper, so a tile with a description is the same size as one without. */
   .cell {
     display: flex;
+    flex: 1;
+    min-inline-size: 0;
   }
 
   .cell > * {
@@ -85,6 +88,14 @@
     white-space: nowrap;
   }
 
+  /* A disabled tile's reason ("At the limit"), a quiet line under the name, so it never needs a tooltip. */
+  .reason {
+    min-inline-size: 0;
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
   .tick {
     position: absolute;
     inset-block-start: var(--space-8);
@@ -136,8 +147,9 @@
     scale: var(--scale-press);
   }
 
-  .tile[data-disabled],
-  .tile:has([data-disabled]) {
+  /* A disabled tile fades its picture and name, never its reason: that is the one line the person has to read. */
+  .tile[data-disabled] :is(.picture, .name),
+  .tile:has([data-disabled]) :is(.picture, .name) {
     opacity: var(--opacity-disabled);
   }
 

@@ -19,6 +19,17 @@ export interface ChoiceTile {
   /** A sentence about it, shown as a tooltip and read by screen readers as its description. */
   readonly description?: string;
   readonly isDisabled?: boolean;
+  /**
+   * Why a disabled tile can't be picked now, in a few words ("At the limit"). It shows on the tile under its name
+   * and is the tile's description for screen readers, so the reason never hides behind a tooltip a keyboard can't
+   * reach (a disabled tile takes no focus). Ignored on a tile that isn't disabled.
+   */
+  readonly disabledReason?: string;
+}
+
+/** The reason a tile shows, when it is disabled and has one. */
+function reasonOf(tile: ChoiceTile): string | undefined {
+  return tile.isDisabled === true ? tile.disabledReason : undefined;
 }
 
 interface ChoiceTilesBase {
@@ -66,6 +77,12 @@ function WithTip({ tile, children }: { readonly tile: ChoiceTile; readonly child
 
 function ActionTile({ tile, onAction }: { readonly tile: ChoiceTile; readonly onAction: (id: string) => void }) {
   const descriptionId = useId();
+  const reasonId = useId();
+  const reason = reasonOf(tile);
+  const describedBy = [
+    ...(tile.description === undefined ? [] : [descriptionId]),
+    ...(reason === undefined ? [] : [reasonId]),
+  ].join(' ');
   return (
     <WithTip tile={tile}>
       <AriaButton
@@ -76,10 +93,15 @@ function ActionTile({ tile, onAction }: { readonly tile: ChoiceTile; readonly on
         onPress={() => {
           onAction(tile.id);
         }}
-        {...(tile.description === undefined ? {} : { 'aria-describedby': descriptionId })}
+        {...(describedBy === '' ? {} : { 'aria-describedby': describedBy })}
       >
         <Picture tile={tile} />
         <span className={styles.name}>{tile.name}</span>
+        {reason !== undefined && (
+          <span id={reasonId} className={styles.reason}>
+            {reason}
+          </span>
+        )}
         {tile.description !== undefined && <VisuallyHidden id={descriptionId}>{tile.description}</VisuallyHidden>}
       </AriaButton>
     </WithTip>
@@ -127,9 +149,11 @@ export function ChoiceTiles(props: ChoiceTilesProps) {
                 <Icon name="check" size="sm" />
               </span>
             </RadioButton>
-            {tile.description !== undefined && (
-              <Text slot="description">
-                <VisuallyHidden>{tile.description}</VisuallyHidden>
+            {(tile.description !== undefined || reasonOf(tile) !== undefined) && (
+              <Text slot="description" className={styles.reason}>
+                {reasonOf(tile)}
+                {reasonOf(tile) !== undefined && tile.description !== undefined && ' '}
+                {tile.description !== undefined && <VisuallyHidden>{tile.description}</VisuallyHidden>}
               </Text>
             )}
           </RadioField>
