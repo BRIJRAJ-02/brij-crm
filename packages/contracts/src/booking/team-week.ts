@@ -10,26 +10,9 @@ import { WorkspaceScoped } from '../workspaces.ts';
 import { isQuarterHour } from './schedules.ts';
 import { DayRanges, TimeRange, WEEKDAYS } from './settings.ts';
 import { TimeOffReason } from './time-off.ts';
+import { isMonday, TEAM_WEEK } from './roster.ts';
 
-/** The Team week's numbers (spec 0037's Numbers table). */
-export const TEAM_WEEK = {
-  /** Rows a page holds (AC-1289). */
-  rowsPerPage: 50,
-  /** Weeks the stepper goes back, read only (AC-1293). */
-  backWeeks: 8,
-  /** Weeks the stepper goes forward (AC-1293). */
-  forwardWeeks: 52,
-  /** Overrides dated more than this many weeks before today are dropped on every schedule write (AC-1293). */
-  keptWeeks: 8,
-  /** Members one bulk write names at most (AC-1292). */
-  bulkMax: 50,
-} as const;
-
-/** Whether `date` (`YYYY-MM-DD`) is a Monday: the week starts on Monday (decision 31). */
-export function isMonday(date: string): boolean {
-  const at = Date.parse(`${date}T00:00:00Z`);
-  return Number.isFinite(at) && new Date(at).getUTCDay() === 1;
-}
+export { footerOf, isMonday, mergedMinutes, mondayOf, plusDays, TEAM_WEEK, weekDates } from './roster.ts';
 
 const NOT_A_MONDAY = 'Pick a week by its Monday.';
 
@@ -60,6 +43,8 @@ export const TeamWeekDay = z.object({
   date: DateValue,
   ranges: z.array(TimeRange),
   source: TeamWeekSource,
+  /** The weekly hours for that weekday: what "Usual hours" puts back. */
+  usual: z.array(TimeRange),
   away: z.object({ reason: TimeOffReason.optional(), note: z.string().optional() }).optional(),
 });
 /** One cell. */
