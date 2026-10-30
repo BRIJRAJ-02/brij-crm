@@ -337,8 +337,13 @@ export function Select({
     const root = rootRef.current;
     if (root === null) return;
     // Captured on the field itself, so it is known before React Aria's own handler on the trigger sets the value.
+    // Forgotten once the key's own handling is done, so a later change that no key made never steps. A task, not a
+    // microtask: microtasks run between this listener and React's own, before the key has done anything.
     const remember = (event: globalThis.KeyboardEvent) => {
       lastKey.current = event.key;
+      setTimeout(() => {
+        lastKey.current = '';
+      }, 0);
     };
     root.addEventListener('keydown', remember, true);
     return () => {
@@ -559,6 +564,11 @@ export function Select({
           onValuesChange?.(items.filter((item) => picked.has(item.id)).map((item) => item.id));
           return;
         }
+        // The closed trigger's arrows walk every option, Clear and Create too, without the list ever opening.
+        const isArrow = lastKey.current === 'ArrowRight' || lastKey.current === 'ArrowLeft';
+        const isClosedArrow = isArrow && !isOpenNow.current;
+        // An arrow on the closed trigger never clears the value or creates an option: those need the open list.
+        if (isClosedArrow && (next === CLEAR || next === CREATE)) return;
         if (next === CREATE) {
           if (canCreate) onCreate(typed);
           return;
@@ -572,9 +582,11 @@ export function Select({
           return;
         }
         // A closed trigger's arrow steps past a disabled option to the next one it can choose; anything else that
-        // lands on one (its typeahead) is refused, and the value stays.
-        const arrow = lastKey.current === 'ArrowRight' ? 1 : lastKey.current === 'ArrowLeft' ? -1 : undefined;
-        const stepped = arrow === undefined || isOpenNow.current ? undefined : stepPast(id, arrow);
+        // lands on one (its typeahead) is refused, and the value stays. With nothing chosen, React Aria starts both
+        // arrows from the first option, so both step forward. The open list never sends a disabled option here (it
+        // refuses it itself), so `isOpenNow` is only a backstop.
+        const step = current === null || lastKey.current === 'ArrowRight' ? 1 : -1;
+        const stepped = isClosedArrow ? stepPast(id, step) : undefined;
         if (stepped === undefined) return;
         setOwn(stepped);
         onChange?.(stepped);

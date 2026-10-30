@@ -145,6 +145,8 @@ describe('a disabled option in a single choice', () => {
       const { onChange, node } = single(props);
       await render(node);
       trigger().focus();
+      // An arrow first (nothing above Small team), so the letter's own key is the one remembered.
+      await userEvent.keyboard('{ArrowLeft}');
       await userEvent.keyboard('L');
       await frame();
       expect(onChange).not.toHaveBeenCalled();
@@ -212,6 +214,82 @@ describe('a disabled option in a single choice', () => {
       expect(trigger().textContent).toContain('Small team');
       for (const unmount of mounted.splice(0)) unmount();
     }
+  });
+});
+
+const item = (id: string, extra: Partial<SelectItem> = {}): SelectItem => ({ id, label: `Option ${id}`, ...extra });
+
+/** Presses `key` on the closed trigger of `props`, and returns what onChange heard and what the trigger reads. */
+async function arrowOnClosed(props: Partial<SelectProps>, key: '{ArrowRight}' | '{ArrowLeft}') {
+  const { onChange, node } = single(props);
+  await render(node);
+  trigger().focus();
+  await userEvent.keyboard(key);
+  await frame();
+  expect(listbox()).toBeNull();
+  return { onChange, reads: trigger().textContent };
+}
+
+describe('a closed Select’s arrows', () => {
+  it('step across a section boundary in the list’s own order', async () => {
+    // Listed as One: a, b; Two: c, d. In `items` order, d would come after b.
+    const items = [
+      item('a', { group: 'One' }),
+      item('c', { group: 'Two' }),
+      item('b', { group: 'One', isDisabled: true }),
+      item('d', { group: 'Two' }),
+    ];
+    const { onChange } = await arrowOnClosed({ items, value: 'a' }, '{ArrowRight}');
+    expect(onChange).toHaveBeenCalledExactlyOnceWith('c');
+  });
+
+  it('step past two disabled options in a row, and past a disabled one beside an archived one', async () => {
+    const twice = await arrowOnClosed(
+      { items: [item('a'), item('b', { isDisabled: true }), item('c', { isDisabled: true }), item('d')], value: 'a' },
+      '{ArrowRight}',
+    );
+    expect(twice.onChange).toHaveBeenCalledExactlyOnceWith('d');
+    for (const unmount of mounted.splice(0)) unmount();
+    const archived = await arrowOnClosed(
+      { items: [item('a'), item('b', { isDisabled: true }), item('c', { isArchived: true }), item('d')], value: 'a' },
+      '{ArrowRight}',
+    );
+    expect(archived.onChange).toHaveBeenCalledExactlyOnceWith('d');
+  });
+
+  it('keep the value when only a disabled option lies ahead, at the end or before Clear', async () => {
+    const items = [item('a'), item('b', { isDisabled: true })];
+    for (const props of [
+      { items, value: 'a' },
+      { items, value: 'a', isClearable: true },
+    ]) {
+      const { onChange, reads } = await arrowOnClosed(props, '{ArrowRight}');
+      expect(onChange).not.toHaveBeenCalled();
+      expect(reads).toContain('Option a');
+      for (const unmount of mounted.splice(0)) unmount();
+    }
+  });
+
+  it('with nothing chosen and the first option disabled, both step forward from it', async () => {
+    const items = [item('a', { isDisabled: true }), item('b'), item('c')];
+    for (const key of ['{ArrowLeft}', '{ArrowRight}'] as const) {
+      const { onChange } = await arrowOnClosed({ items, value: null }, key);
+      expect(onChange).toHaveBeenCalledExactlyOnceWith('b');
+      for (const unmount of mounted.splice(0)) unmount();
+    }
+  });
+
+  it('never clear the value or create an option', async () => {
+    const items = [item('a'), item('b')];
+    const clear = await arrowOnClosed({ items, value: 'b', isClearable: true }, '{ArrowRight}');
+    expect(clear.onChange).not.toHaveBeenCalled();
+    expect(clear.reads).toContain('Option b');
+    for (const unmount of mounted.splice(0)) unmount();
+    const onCreate = vi.fn();
+    const create = await arrowOnClosed({ items, value: 'b', onCreate, defaultSearch: 'Zed' }, '{ArrowRight}');
+    expect(create.onChange).not.toHaveBeenCalled();
+    expect(onCreate).not.toHaveBeenCalled();
+    expect(create.reads).toContain('Option b');
   });
 });
 
