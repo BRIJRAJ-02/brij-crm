@@ -1,7 +1,8 @@
 // Brief
 // Purpose: act on the rows ticked in an object's table, a few or every one the view matches (spec 0022, milestones 1 to 3).
 // Main task: tick rows (or "Select all N matching"), press Edit or Delete; up to 500 go at once, more are counted, reviewed and run in the background.
-// Leaves out: Add to list (#51), board cards (#21), several fields in one edit, and relationships (owner decision 3).
+// Leaves out: Add to list for "all matching" (ticked rows only), board cards (#21), several fields in one edit, and
+// relationships (owner decision 3).
 import {
   refusalSummary,
   toFieldAttribute,
@@ -18,8 +19,10 @@ import {
 } from '@crm/data';
 import { AttributeDisplay, BulkActionBar, Button, Callout, Modal } from '@crm/ui';
 import { allMatching, noRows, selectedCount, type GridSelection } from '@crm/ui/grid';
-import { useRouteContext } from '@tanstack/react-router';
+import { useMatch, useRouteContext } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { AddToListMenu, listsToAddTo } from '../lists/AddToListMenu.tsx';
+import { strings as listStrings } from '../lists/strings.ts';
 import type { MemberPicker } from '../records/members.ts';
 import { BulkEditDialog, type BulkApplied, type BulkEditChoice } from './BulkEditDialog.tsx';
 import {
@@ -234,6 +237,8 @@ export function useBulkActions({
   exportColumns,
 }: BulkActionsOptions): BulkActions {
   const { data, toasts } = useRouteContext({ from: '__root__' });
+  // The lists the member may read (spec 0048), from the workspace frame's route: Add to list offers those they may write.
+  const lists = useMatch({ from: '/w/$slug', shouldThrow: false, select: (match) => match.loaderData?.lists });
   const { selection, asOf } = ticked;
   const count = selectedCount(selection, total);
   // The ticked ids, copied once per selection, not on every render (a selection holds up to 10,000).
@@ -425,6 +430,23 @@ export function useBulkActions({
       </Button>
     ) : undefined;
 
+  // Add to list (spec 0048, AC-4825): the ticked rows, up to 10,000, in calls of 500, with Undo. Not for "all matching".
+  const writableLists = listsToAddTo(lists ?? [], object.id);
+  const addToList =
+    selection.kind === 'some' && ids.length > 0 && writableLists.length > 0 ? (
+      <AddToListMenu
+        data={data}
+        toasts={toasts}
+        slug={slug}
+        object={object}
+        lists={writableLists}
+        recordIds={ids}
+        onAdded={ticked.clear}
+      >
+        <Button icon="list">{listStrings.addToListMenu}</Button>
+      </AddToListMenu>
+    ) : undefined;
+
   const { note, progress, isRunning } = bulkJob;
   // Up while rows are ticked, a change runs or a note shows; then it plays its exit before the grid gives back its room.
   const isWanted = count > 0 || isRunning || note !== undefined;
@@ -459,6 +481,7 @@ export function useBulkActions({
       >
         {bulkStrings.edit}
       </Button>
+      {addToList}
       {exportButton}
       <Button
         variant="danger"

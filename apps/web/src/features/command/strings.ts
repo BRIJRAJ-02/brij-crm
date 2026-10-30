@@ -22,6 +22,12 @@ export const strings = {
   goTo: 'Go to',
   settingsSection: 'Settings',
   actions: 'Actions',
+  /** Lists (spec 0048, AC-4827). */
+  listKind: (plural: string) => `List · ${plural}`,
+  createList: 'Create list',
+  createListTerms: ['new', 'add', 'pipeline'],
+  addRecordToList: (name: string, list: string) => `Add ${name} to ${list}`,
+  addToListTerms: ['list', 'pipeline'],
   /** Pages. */
   home: 'Home',
   myTasks: 'Tasks',

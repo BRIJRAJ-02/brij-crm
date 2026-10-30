@@ -15,6 +15,7 @@ import { exportsRouter } from './modules/exports/router.ts';
 import { importsRouter } from './modules/imports/router.ts';
 import { jobsRouter } from './modules/jobs/router.ts';
 import { linksRouter } from './modules/links/router.ts';
+import { entriesRouter, listsRouter } from './modules/lists/router.ts';
 import { invitationsRouter } from './modules/invitations/router.ts';
 import { meRouter } from './modules/me/router.ts';
 import { operatorRouter } from './modules/operator/router.ts';
@@ -58,6 +59,8 @@ export const router = base.router({
   attributes: attributesRouter,
   options: optionsRouter,
   records: recordsRouter,
+  lists: listsRouter,
+  entries: entriesRouter,
   relationships: relationshipsRouter,
   links: linksRouter,
   members: membersRouter,

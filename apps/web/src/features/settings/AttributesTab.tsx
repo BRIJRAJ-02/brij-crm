@@ -29,16 +29,22 @@ import {
 import { useRouteContext } from '@tanstack/react-router';
 import { useEffect, useMemo, useState } from 'react';
 import { focusTitle } from '../navigation/focus-title.ts';
+import type { ListView, NewAttribute } from '@crm/data';
 import { objectHref } from '../workspace/objects.ts';
 import { useCan } from '../workspace/WorkspacePage.tsx';
 import { ArchiveAttributeDialog } from './ArchiveAttributeDialog.tsx';
 import { AttributeDialog } from './AttributeDialog.tsx';
 import { strings } from './attribute-strings.ts';
 
+/** The most fields a list holds, system ones included (spec 0004's per parent limit). */
+const LIST_FIELD_LIMIT = 250;
+
 /** Props for the Attributes tab: what its route loaded through the data layer. */
 export interface AttributesTabProps {
   readonly slug: string;
   readonly object: ObjectSummary;
+  /** A list whose fields these are (spec 0048, AC-4829): its managers change them, everyone else reads them. */
+  readonly list?: ListView | undefined;
   /** Every attribute of the object, archived ones too, by position. */
   readonly attributes: readonly AttributeDefinition[];
   /** Every object the person can see (archived ones too), for an archived reference's reason. */
@@ -161,6 +167,7 @@ function AttributeRules({ attribute }: { readonly attribute: AttributeDefinition
 export function AttributesTab({
   slug,
   object,
+  list,
   attributes,
   objects,
   usage,
@@ -173,7 +180,9 @@ export function AttributesTab({
 }: AttributesTabProps) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
   // Only owners and admins change the schema (spec 0009, AC-136); the server refuses anyone else on its own.
-  const canManage = useCan('schema.manage');
+  const canChangeSchema = useCan('schema.manage');
+  // A list's fields are its managers' (spec 0048, AC-4834); the server decides, this only hides what it would refuse.
+  const canManage = list === undefined ? canChangeSchema : list.canManage;
   const { own, live, archived, system } = useMemo(() => {
     const ordered = [...attributes].sort((a, b) => a.position - b.position);
     const mine = ordered.filter((attribute) => !attribute.isSystem);
@@ -385,7 +394,10 @@ export function AttributesTab({
         <EmptyState title={strings.noMatches(query.trim())} />
       ),
   };
-  const meter = usage?.attributes[object.id];
+  const meter =
+    list === undefined
+      ? usage?.attributes[object.id]
+      : { used: own.filter((attribute) => !attribute.isArchived).length + system.length, limit: LIST_FIELD_LIMIT };
   return (
     <SettingsStack>
       {canManage &&
@@ -394,7 +406,7 @@ export function AttributesTab({
         ) : (
           <Meter label={strings.attributeLimit} value={meter.used} maxValue={meter.limit} />
         ))}
-      {!canManage && <Callout>{sharedStrings.ownersAndAdminsOnly}</Callout>}
+      {!canManage && list === undefined && <Callout>{sharedStrings.ownersAndAdminsOnly}</Callout>}
       {hasSearch && (
         <Field
           label={strings.searchAttributes}
@@ -454,7 +466,9 @@ export function AttributesTab({
         canManage={canManage}
         optionsLimit={usage?.optionsPerAttribute}
         objectAttributes={attributes}
-        duplicatesLink={{ label: strings.openTable(object.pluralName), href: objectHref(slug, object) }}
+        {...(list === undefined
+          ? { duplicatesLink: { label: strings.openTable(object.pluralName), href: objectHref(slug, object) } }
+          : { onCreate: (input: NewAttribute) => data.lists.createField(slug, list, input) })}
         initialTitle={isCreating ? recreateTitle : undefined}
         {...(canManage && selected !== undefined
           ? {

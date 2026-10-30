@@ -5,6 +5,7 @@
 // (in the first load) imports a small module of its own instead, as the object
 // settings route does with object-tabs.ts.
 import type { ObjectSummary, Permission } from '@crm/data';
+import { strings as listStrings } from '../lists/strings.ts';
 import { jobsHref, settingsHomeHref, trashHref } from '../workspace/objects.ts';
 import { historyHref } from './history-href.ts';
 import { strings as history } from './history-nav-strings.ts';
@@ -24,6 +25,16 @@ export { HISTORY_TABS, historyHref, isHistoryTab, type HistoryTab } from './hist
 
 /** Settings, Objects. */
 export const objectsSettingsHref = (slug: string) => `/w/${slug}/settings/objects`;
+
+/** Settings › Workspace › Lists (spec 0048, AC-4828). */
+export const listsSettingsHref = (slug: string) => `/w/${slug}/settings/lists`;
+
+/** One list's settings tab (General by default), by the list's API name, so links survive renames (AC-4829). */
+export const listSettingsHref = (
+  slug: string,
+  list: { readonly apiSlug: string },
+  tab: 'general' | 'fields' = 'general',
+) => `/w/${slug}/settings/lists/${list.apiSlug}/${tab}`;
 
 /** One object's settings tab (its Attributes tab by default), by the object's API name, so links survive renames. */
 export const objectSettingsHref = (
@@ -64,6 +75,7 @@ export type SettingsPageId =
   | 'members'
   | 'workspace-security'
   | 'objects'
+  | 'lists'
   | 'jobs'
   | 'history'
   | 'trash'
@@ -97,6 +109,7 @@ export interface SettingsNavEntry {
     | 'users'
     | 'lock'
     | 'box'
+    | 'list'
     | 'list-checks'
     | 'clock'
     | 'users-round'
@@ -170,6 +183,8 @@ export function settingsNav(slug: string): readonly SettingsNavGroup[] {
           requires: 'security.manage',
         },
         { id: 'objects', label: strings.objects, href: objectsSettingsHref(slug), icon: 'box' },
+        // Lists (spec 0048, AC-4828): every member may open it; they see the lists they may read.
+        { id: 'lists', label: listStrings.settingsTitle, href: listsSettingsHref(slug), icon: 'list' },
         { id: 'jobs', label: jobs.title, href: jobsHref(slug), icon: 'list-checks' },
         // History (spec 0046): every member opens it; Workspace changes inside it is for `audit.read` alone.
         { id: 'history', label: history.title, href: historyHref(slug), icon: 'clock' },
@@ -242,6 +257,7 @@ export function settingsPageOf(pathname: string): SettingsPageId | undefined {
   if (rest === 'account/scheduling') return 'scheduling-access';
   if (rest === 'account/sign-in' || rest === 'account/security') return 'security';
   if (rest === 'objects' || rest.startsWith('objects/')) return 'objects';
+  if (rest === 'lists' || rest.startsWith('lists/')) return 'lists';
   if (rest === 'jobs') return 'jobs';
   if (rest === 'history' || rest === 'history/changes' || rest === 'history/sign-ins') return 'history';
   if (rest === 'members') return 'members';

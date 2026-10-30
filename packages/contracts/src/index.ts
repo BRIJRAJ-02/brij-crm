@@ -16,6 +16,8 @@ import { commentsContract } from './comments.ts';
 import { formsContract, submissionsContract } from './forms/forms.ts';
 import { routingContract } from './forms/routing.ts';
 import { exportsContract, importsContract } from './imports.ts';
+import { entriesContract } from './entries.ts';
+import { listsContract } from './lists.ts';
 import { jobsContract } from './jobs.ts';
 import { meContract } from './me.ts';
 import { navContract } from './navigation.ts';
@@ -61,10 +63,12 @@ export * from './calendar.ts';
 export * from './home.ts';
 export * from './change-event.ts';
 export * from './comments.ts';
+export * from './entries.ts';
 export * from './errors.ts';
 export * from './forms/index.ts';
 export * from './imports.ts';
 export * from './jobs.ts';
+export * from './lists.ts';
 export * from './scheduling.ts';
 export * from './csv.ts';
 export * from './me.ts';
@@ -124,6 +128,9 @@ export const contract = {
   options: optionsContract,
   // Bulk actions (spec 0022) join the records namespace from their own file.
   records: { ...recordsContract, ...bulkRecordsContract },
+  // Lists and their entries (spec 0048).
+  lists: listsContract,
+  entries: entriesContract,
   relationships: relationshipsContract,
   links: linksContract,
   members: membersContract,

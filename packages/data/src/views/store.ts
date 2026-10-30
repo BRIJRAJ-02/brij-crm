@@ -45,7 +45,11 @@ export const MARK_OPENED_MS = 10_000;
 
 /** The calls the views store makes, each mapped to a DataError by the layer. */
 export interface ViewsApi {
-  readonly list: (input: { readonly workspace: string; readonly objectId: string }) => Promise<ViewsList>;
+  readonly list: (input: {
+    readonly workspace: string;
+    readonly objectId: string;
+    readonly listId?: string;
+  }) => Promise<ViewsList>;
   readonly get: (input: { readonly workspace: string; readonly viewId: string }) => Promise<View>;
   readonly saveQuery: (input: {
     readonly workspace: string;
@@ -85,6 +89,7 @@ export interface ViewsApi {
   readonly setDefault: (input: {
     readonly workspace: string;
     readonly objectId: string;
+    readonly listId?: string;
     readonly viewId: string;
     readonly mutationId: string;
   }) => Promise<readonly ViewSummary[]>;
@@ -100,6 +105,8 @@ export interface ViewsApi {
 export interface NewView {
   readonly id: string;
   readonly objectId: string;
+  /** A view of one of the object's lists (spec 0048). */
+  readonly listId?: string;
   readonly name: string;
   readonly kind: ViewKind;
   readonly visibility: ViewVisibility;
@@ -278,6 +285,16 @@ export function createViewsStore(deps: ViewsDeps) {
   const windows = new Map<string, { pending: boolean; coarse: boolean; named: Set<string>; cancel: () => void }>();
 
   const key = (workspace: string, id: string) => `${workspace}\u0000${id}`;
+  // A list's views (spec 0048) are held by the list's id as their parent; each list's object, by workspace and list.
+  const listObjects = new Map<string, string>();
+  /** What a call names for a parent: its object, and its list when the parent is a list. */
+  const parentArgs = (workspace: string, parentId: string) => {
+    const objectId = listObjects.get(key(workspace, parentId));
+    return objectId === undefined ? { objectId: parentId } : { objectId, listId: parentId };
+  };
+  /** The parent a view's list and bodies are held by: its list's id, else its object's. */
+  const parentOf = (view: { readonly objectId: string; readonly listId?: string | undefined }) =>
+    view.listId ?? view.objectId;
 
   function makeList(workspace: string, objectId: string) {
     const source = createSource<ViewsListSnapshot>(
@@ -285,7 +302,7 @@ export function createViewsStore(deps: ViewsDeps) {
       LOADING_LIST,
       async (isLatest) => {
         try {
-          const answer = await deps.api.list({ workspace, objectId });
+          const answer = await deps.api.list({ workspace, ...parentArgs(workspace, objectId) });
           if (!isLatest()) return;
           source.set({
             status: 'ready',
@@ -463,10 +480,13 @@ export function createViewsStore(deps: ViewsDeps) {
     return made;
   };
 
-  /** The held bodies of one workspace whose view is on `objectId`. */
+  /** A held body's parent, when it has loaded. */
+  const parentOfHeld = (view: View | undefined) => (view === undefined ? undefined : parentOf(view));
+
+  /** The held bodies of one workspace whose view is on `objectId` (or, for a list's views, the list). */
   const bodiesOn = (workspace: string, objectId: string) =>
     [...bodies.entries()].flatMap(([bodyKey, body]) =>
-      bodyKey.startsWith(`${workspace}\u0000`) && body.get().view?.objectId === objectId ? [body] : [],
+      bodyKey.startsWith(`${workspace}\u0000`) && parentOfHeld(body.get().view) === objectId ? [body] : [],
     );
 
   /**
@@ -546,8 +566,12 @@ export function createViewsStore(deps: ViewsDeps) {
   };
 
   return {
-    /** An object's views, the same source for every screen that asks. */
-    list: (workspace: string, objectId: string): ViewsListSource => listOf(workspace, objectId).api,
+    /** An object's views (or, with `listId`, one of its lists'), the same source for every screen that asks. */
+    list: (workspace: string, objectId: string, listId?: string): ViewsListSource => {
+      if (listId === undefined) return listOf(workspace, objectId).api;
+      listObjects.set(key(workspace, listId), objectId);
+      return listOf(workspace, listId).api;
+    },
     /** One view whole, the same source for every screen that asks. */
     get: (workspace: string, viewId: string): SavedViewSource => bodyOf(workspace, viewId).api,
     /**
@@ -570,7 +594,7 @@ export function createViewsStore(deps: ViewsDeps) {
       );
       // One views row for the view's object: its echo is skipped, so the list is read here.
       put(workspace, view);
-      refreshList(workspace, view.objectId);
+      refreshList(workspace, parentOf(view));
       return view;
     },
     /**
@@ -581,7 +605,7 @@ export function createViewsStore(deps: ViewsDeps) {
     async create(workspace: string, input: NewView): Promise<View> {
       const view = await confirmed((mutationId) => deps.api.create({ workspace, mutationId, ...input }));
       put(workspace, view);
-      refreshList(workspace, view.objectId);
+      refreshList(workspace, parentOf(view));
       return view;
     },
     /** Renames a view, or changes who sees it, waiting for the server. */
@@ -600,7 +624,7 @@ export function createViewsStore(deps: ViewsDeps) {
         }),
       );
       put(workspace, view);
-      refreshList(workspace, view.objectId);
+      refreshList(workspace, parentOf(view));
       return view;
     },
     /**
@@ -641,7 +665,7 @@ export function createViewsStore(deps: ViewsDeps) {
     async setLocked(workspace: string, viewId: string, locked: boolean): Promise<View> {
       const view = await confirmed((mutationId) => deps.api.setLocked({ workspace, viewId, locked, mutationId }));
       put(workspace, view);
-      refreshList(workspace, view.objectId);
+      refreshList(workspace, parentOf(view));
       return view;
     },
     /** Makes a shared view the object's default (`views.manage`), waiting for the server. */
@@ -649,7 +673,9 @@ export function createViewsStore(deps: ViewsDeps) {
       takeSummaries(
         workspace,
         objectId,
-        await confirmed((mutationId) => deps.api.setDefault({ workspace, objectId, viewId, mutationId })),
+        await confirmed((mutationId) =>
+          deps.api.setDefault({ workspace, ...parentArgs(workspace, objectId), viewId, mutationId }),
+        ),
       );
       // Both the old default and the new one changed: the held bodies of the object are read again.
       for (const body of bodiesOn(workspace, objectId)) {
@@ -681,12 +707,13 @@ export function createViewsStore(deps: ViewsDeps) {
      * quiet (the next open marks it again).
      */
     markOpened(workspace: string, viewId: string) {
-      const objectId = servers.get(key(workspace, viewId))?.objectId;
+      const held = servers.get(key(workspace, viewId));
+      const objectId = held === undefined ? undefined : parentOf(held);
       // The held list lands on this view next time the object's address opens, in this tab too.
       const list = objectId === undefined ? undefined : lists.get(key(workspace, objectId));
-      const held = list?.get();
-      if (list !== undefined && held?.status === 'ready' && held.lastOpenedViewId !== viewId) {
-        list.set({ ...held, lastOpenedViewId: viewId });
+      const shown = list?.get();
+      if (list !== undefined && shown?.status === 'ready' && shown.lastOpenedViewId !== viewId) {
+        list.set({ ...shown, lastOpenedViewId: viewId });
       }
       // Skipped only when this view is already the object's last mark, made under 10 seconds ago.
       const markKey = key(workspace, objectId ?? viewId);
@@ -709,8 +736,9 @@ export function createViewsStore(deps: ViewsDeps) {
     keptDraft: (workspace: string, viewId: string): KeptDraft | undefined => drafts.get(key(workspace, viewId)),
     /** A live `views` event: the object's list and the bodies it concerns are read again, coalesced per object. */
     changed(workspace: string, event: LiveEventOf<'views'>) {
-      if (event.objectId === undefined) return;
-      changed(workspace, event.objectId, event.coarse === true, event.viewIds);
+      const parent = event.listId ?? event.objectId;
+      if (parent === undefined) return;
+      changed(workspace, parent, event.coarse === true, event.viewIds);
     },
     /** Everything held of the workspace is read again (a resync after a gap the outbox no longer covers). */
     resync(workspace: string) {

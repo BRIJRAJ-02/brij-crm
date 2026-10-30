@@ -36,6 +36,14 @@ import type { NavSnapshot, NavSource } from './navigation/store.ts';
 import type { DueTasksSnapshot, DueTasksSource } from './tasks/due.ts';
 import type { PendingOptions } from './options.ts';
 import type { RecordsView, ViewReader, ViewState } from './records/layer.ts';
+import type {
+  EntriesState,
+  EntriesView,
+  ListBoard,
+  ListBoardState,
+  RecordEntries,
+  RecordEntriesState,
+} from './lists/entries.ts';
 import type { RecordState, RecordSubscription } from './records/one.ts';
 import type { AggregateSource, AggregateState } from './records/aggregate-source.ts';
 import type { RecordSearch, RecordSearchState } from './records/search.ts';
@@ -574,4 +582,22 @@ export function useRecordFacts(facts: RecordFacts): RecordFactsState {
 /** One held operator console read (spec 0047): its state, kept current while the screen shows it. */
 export function useOperator<T>(held: OperatorHeld<T>): T {
   return useSyncExternalStore(held.subscribe, held.getSnapshot, held.getSnapshot);
+}
+
+/** A list's rows (spec 0048), held while the screen shows them: the view lets go 30 seconds after it leaves. */
+export function useEntries(view: EntriesView): EntriesState {
+  useEffect(() => view.retain(), [view]);
+  return useSyncExternalStore(view.subscribe, view.getSnapshot);
+}
+
+/** A list board's columns (spec 0048, AC-4820), held while the screen shows them. */
+export function useListBoard(board: ListBoard): ListBoardState {
+  useEffect(() => board.retain(), [board]);
+  return useSyncExternalStore(board.subscribe, board.getSnapshot);
+}
+
+/** A record's entries for its page's Lists section (spec 0048, AC-4822), held while the section shows them. */
+export function useRecordEntries(source: RecordEntries): RecordEntriesState {
+  useEffect(() => source.retain(), [source]);
+  return useSyncExternalStore(source.subscribe, source.getSnapshot);
 }

@@ -163,7 +163,7 @@ describe('a member', () => {
       memberId: t.ids[0],
       role: 'member',
       roleLabel: 'Member',
-      permissions: ['records.export', 'booking.manage', 'availability.own'],
+      permissions: ['lists.manage', 'records.export', 'booking.manage', 'availability.own'],
       // Spec 0037, AC-1261: a member reaches nobody's scheduling but their own; an owner everyone's.
       scheduling: { seesOthers: false, managesOthers: false, seesEveryone: false, managesEveryone: false },
     });

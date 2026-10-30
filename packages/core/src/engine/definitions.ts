@@ -42,6 +42,7 @@ import {
 } from '../forms/dependencies.ts';
 import { inWorkspace } from '../access/run.ts';
 import { requirePermission } from '../access/check.ts';
+import { requireFieldManager } from '../lists/manager.ts';
 import { attributeVisible } from '../access/visibility.ts';
 import { objectLevel, type Access } from '../access/policy.ts';
 
@@ -178,7 +179,8 @@ export function checkDescription(description: string | null | undefined): void {
   }
 }
 
-function checkLook(icon: string | undefined, hue: string | undefined): void {
+/** Refuses an icon outside the object icon set and an unknown hue, each on its field (objects and lists). */
+export function checkLook(icon: string | undefined, hue: string | undefined): void {
   if (icon !== undefined && !(OBJECT_ICONS as readonly string[]).includes(icon)) {
     throw refuseOn('CONFIG_INVALID', 'Pick an icon from the object icon set.', 'icon');
   }
@@ -897,7 +899,7 @@ export async function updateAttribute(
   input: AttributeUpdate,
   hooks: readonly AfterWrite[] = [],
 ): Promise<AttributeRef> {
-  requirePermission(scope, 'schema.manage');
+  await requireFieldManager(scope, input.attributeId);
   const { result } = await runWrite(
     scope,
     async (context) => {
@@ -1016,7 +1018,7 @@ export async function archiveAttribute(
   attributeId: string,
   hooks: readonly AfterWrite[] = [],
 ): Promise<readonly AttributeRef[]> {
-  requirePermission(scope, 'schema.manage');
+  await requireFieldManager(scope, attributeId);
   const { result } = await runWrite(
     scope,
     async (context) => {
@@ -1212,7 +1214,7 @@ export async function restoreAttribute(
   attributeId: string,
   hooks: readonly AfterWrite[] = [],
 ): Promise<readonly AttributeRef[]> {
-  requirePermission(scope, 'schema.manage');
+  await requireFieldManager(scope, attributeId);
   const { result } = await runWrite(
     scope,
     async (context) => {
@@ -1277,7 +1279,7 @@ export async function reorderAttribute(
   input: { readonly attributeId: string; readonly position: number },
   hooks: readonly AfterWrite[] = [],
 ): Promise<AttributeRef> {
-  requirePermission(scope, 'schema.manage');
+  await requireFieldManager(scope, input.attributeId);
   if (!Number.isInteger(input.position) || input.position < 0) {
     throw refuseOn('CONFIG_INVALID', 'Give the position as a whole number from 0.', 'position');
   }

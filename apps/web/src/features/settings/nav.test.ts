@@ -20,7 +20,7 @@ describe('settingsNav', () => {
     expect(groups.map((group) => group.label)).toEqual(['Account', 'Workspace', 'Super admin']);
     expect(groups.map((group) => group.entries.map((entry) => entry.label))).toEqual([
       ['Profile', 'Preferences', 'Sign in and devices', 'Notifications', 'Scheduling access'],
-      ['General', 'Members', 'Security', 'Objects', 'Background jobs', 'History', 'Trash'],
+      ['General', 'Members', 'Security', 'Objects', 'Lists', 'Background jobs', 'History', 'Trash'],
       ['Overview', 'Users', 'Booking pages', 'Website'],
     ]);
   });
@@ -37,6 +37,7 @@ describe('settingsNav', () => {
       members: '/w/acme/settings/members',
       'workspace-security': '/w/acme/settings/security',
       objects: '/w/acme/settings/objects',
+      lists: '/w/acme/settings/lists',
       jobs: '/w/acme/settings/jobs',
       history: '/w/acme/settings/history',
       // The trash opens inside Settings, its sidebar and trail kept (A120, 23 October 2026).
@@ -83,7 +84,7 @@ describe('visibleSettingsNav', () => {
     // Calendars and Round robin are tabs of Bookings (25 October 2026), so neither is in here to lose.
     expect(visibleSettingsNav(settingsNav('acme'), []).map((group) => group.entries.map((entry) => entry.id))).toEqual([
       ['profile', 'preferences', 'security', 'notifications', 'scheduling-access'],
-      ['general', 'members', 'objects', 'jobs', 'history', 'trash'],
+      ['general', 'members', 'objects', 'lists', 'jobs', 'history', 'trash'],
     ]);
   });
 
@@ -136,6 +137,8 @@ describe('settingsPageOf', () => {
     expect(settingsPageOf('/w/acme/settings/account/security')).toBe('security');
     expect(settingsPageOf('/w/acme/settings/objects')).toBe('objects');
     expect(settingsPageOf('/w/acme/settings/objects/people/attributes')).toBe('objects');
+    expect(settingsPageOf('/w/acme/settings/lists')).toBe('lists');
+    expect(settingsPageOf('/w/acme/settings/lists/sales/fields')).toBe('lists');
     expect(settingsPageOf('/w/acme/settings/jobs/')).toBe('jobs');
     expect(settingsPageOf('/w/acme/settings/history')).toBe('history');
     expect(settingsPageOf('/w/acme/settings/history/changes')).toBe('history');

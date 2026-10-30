@@ -85,6 +85,13 @@ const READS: ReadonlySet<string> = new Set([
   'members.visible',
   'records.query',
   'records.count',
+  // Lists and their entries (spec 0048).
+  'lists.list',
+  'entries.query',
+  'entries.count',
+  'entries.groups',
+  'entries.get',
+  'entries.membership',
   'records.objectCounts',
   'records.groups',
   // A column's calculation (the CRM flow pass): a read.
@@ -490,6 +497,40 @@ async function hostBooking(m: Member): Promise<string> {
   return bookingId;
 }
 
+/**
+ * A Blank list over People with one person in it, made through the API: three writes (the list, the person, the
+ * entry), each with its own outbox row, before the case's.
+ */
+async function listWithEntry(m: Member): Promise<{ listId: string; recordId: string; entryId: string }> {
+  const listId = newId();
+  await m.client.lists.create({
+    workspace: m.slug,
+    id: listId,
+    objectId: m.people.id,
+    name: 'Crew',
+    template: 'blank',
+    mutationId: newId(),
+  });
+  const recordId = newId();
+  await m.client.records.create({
+    workspace: m.slug,
+    objectId: m.people.id,
+    id: recordId,
+    values: { [m.attribute('name')]: { firstName: 'Ada' } },
+    mutationId: newId(),
+  });
+  const entryId = newId();
+  await m.client.entries.add({ workspace: m.slug, id: entryId, listId, recordId, mutationId: newId() });
+  return { listId, recordId, entryId };
+}
+
+/** The three rows `listWithEntry` stores: the list's definitions, the person, the entry. */
+const listRows = (m: Member, made: { listId: string; recordId: string; entryId: string }) => [
+  { kind: 'definitions', list_id: made.listId },
+  { kind: 'records', object_id: m.people.id, record_ids: [made.recordId] },
+  { kind: 'entries', list_id: made.listId, item_ids: [made.entryId], record_ids: [made.recordId] },
+];
+
 /** A shared view on People, made through the API (its own write and outbox row before the case's). */
 async function sharedViewOf(m: Member, name = 'Pipeline'): Promise<string> {
   const id = newId();
@@ -762,6 +803,79 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     });
     // Its events would go to a workspace nobody can be subscribed to yet: none, in the new workspace or this one.
     return [];
+  },
+  // Lists (spec 0048): a new list stores one definitions row naming it; each entry write one entries row.
+  'lists.create': async (m, mutationId) => {
+    const id = newId();
+    await m.client.lists.create({
+      workspace: m.slug,
+      id,
+      objectId: m.people.id,
+      name: 'Hiring',
+      template: 'pipeline',
+      mutationId,
+    });
+    return [{ kind: 'definitions', list_id: id, mutation_id: mutationId }];
+  },
+  'entries.add': async (m, mutationId) => {
+    const made = await listWithEntry(m);
+    const recordId = newId();
+    await m.client.records.create({
+      workspace: m.slug,
+      objectId: m.people.id,
+      id: recordId,
+      values: { [m.attribute('name')]: { firstName: 'Bo' } },
+      mutationId: newId(),
+    });
+    const id = newId();
+    await m.client.entries.add({ workspace: m.slug, id, listId: made.listId, recordId, mutationId });
+    return [
+      ...listRows(m, made),
+      { kind: 'records', object_id: m.people.id, record_ids: [recordId] },
+      { kind: 'entries', list_id: made.listId, item_ids: [id], record_ids: [recordId], mutation_id: mutationId },
+    ];
+  },
+  'entries.setValues': async (m, mutationId) => {
+    const made = await listWithEntry(m);
+    const attributeId = newId();
+    await m.client.attributes.create({
+      workspace: m.slug,
+      objectId: m.people.id,
+      listId: made.listId,
+      id: attributeId,
+      title: 'Note',
+      type: 'text',
+      mutationId: newId(),
+    });
+    await m.client.entries.setValues({
+      workspace: m.slug,
+      entryId: made.entryId,
+      values: { [attributeId]: { value: 'Call back' } },
+      mutationId,
+    });
+    return [
+      ...listRows(m, made),
+      { kind: 'definitions', list_id: made.listId, attribute_ids: [attributeId] },
+      { kind: 'entries', list_id: made.listId, item_ids: [made.entryId], mutation_id: mutationId },
+    ];
+  },
+  'entries.remove': async (m, mutationId) => {
+    const made = await listWithEntry(m);
+    await m.client.entries.remove({ workspace: m.slug, entryIds: [made.entryId], mutationId });
+    return [
+      ...listRows(m, made),
+      { kind: 'entries', list_id: made.listId, item_ids: [made.entryId], mutation_id: mutationId },
+    ];
+  },
+  'entries.restore': async (m, mutationId) => {
+    const made = await listWithEntry(m);
+    await m.client.entries.remove({ workspace: m.slug, entryIds: [made.entryId], mutationId: newId() });
+    await m.client.entries.restore({ workspace: m.slug, entryIds: [made.entryId], mutationId });
+    return [
+      ...listRows(m, made),
+      { kind: 'entries', list_id: made.listId, item_ids: [made.entryId] },
+      { kind: 'entries', list_id: made.listId, item_ids: [made.entryId], mutation_id: mutationId },
+    ];
   },
   'records.create': async (m, mutationId) => {
     const id = newId();
@@ -2318,6 +2432,11 @@ Object.assign(WRITES, {
 
 /** How many writes (each one poke) a case in WRITES makes before and with its own. */
 const WRITES_MADE: Readonly<Record<string, number>> = {
+  // Lists (spec 0048): the list, its person and their entry first, then the case's own writes.
+  'entries.add': 5,
+  'entries.setValues': 5,
+  'entries.remove': 4,
+  'entries.restore': 5,
   // Imports (spec 0040): the import made (and its rows staged) first, then the write.
   'imports.stage': 2,
   'imports.start': 3,

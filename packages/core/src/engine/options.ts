@@ -13,7 +13,7 @@ import type { EngineScope } from './scope.ts';
 import { loadAttribute, type AttributeDef } from './values.ts';
 import { runWrite, type AfterWrite, type WriteContext } from './write.ts';
 import { inWorkspace } from '../access/run.ts';
-import { requirePermission } from '../access/check.ts';
+import { requireFieldManager, requireOptionManager } from '../lists/manager.ts';
 import { isOpen } from '../access/policy.ts';
 import { attributeVisible } from '../access/visibility.ts';
 
@@ -219,7 +219,7 @@ export async function insertOption(context: WriteContext, input: OptionInput): P
  * AC-236), refusing the 501st live one `LIMIT_REACHED` (AC-237).
  */
 export async function defineOption(scope: EngineScope, input: OptionInput, hooks: readonly AfterWrite[] = []) {
-  requirePermission(scope, 'schema.manage');
+  await requireFieldManager(scope, input.attributeId);
   const { result } = await runWrite(scope, (context) => insertOption(context, input), hooks);
   return result;
 }
@@ -294,8 +294,8 @@ export async function updateOption(
   input: OptionUpdate,
   hooks: readonly AfterWrite[] = [],
 ): Promise<OptionRef> {
-  requirePermission(scope, 'schema.manage');
   const optionId = checkId(input.optionId, 'That option does not exist.');
+  await requireOptionManager(scope, optionId);
   if (input.position !== undefined && (!Number.isInteger(input.position) || input.position < 0)) {
     throw refuseOn('CONFIG_INVALID', 'Give the position as a whole number from 0.', 'position');
   }

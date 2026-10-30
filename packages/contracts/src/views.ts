@@ -108,6 +108,11 @@ export type ViewVisibility = z.infer<typeof ViewVisibility>;
 export const ViewSummary = z.object({
   id: Uuid,
   objectId: Uuid,
+  /**
+   * A list's view (spec 0048): the list it belongs to. `objectId` is then the list's object, whose fields the view
+   * may show beside the list's own.
+   */
+  listId: Uuid.optional(),
   name: z.string(),
   kind: ViewKind,
   visibility: ViewVisibility,
@@ -134,8 +139,8 @@ export const View = ViewSummary.extend({
 /** One view whole. */
 export type View = z.infer<typeof View>;
 
-/** An object's views. */
-export const ListViewsInput = WorkspaceScoped.extend({ objectId: Uuid });
+/** An object's views, or with `listId` one of its lists' (spec 0048). */
+export const ListViewsInput = WorkspaceScoped.extend({ objectId: Uuid, listId: Uuid.optional() });
 /** An object's views. */
 export type ListViewsInput = z.infer<typeof ListViewsInput>;
 
@@ -199,6 +204,8 @@ export const ViewName = z
 export const CreateViewInput = WorkspaceScoped.extend({
   id: Uuid,
   objectId: Uuid,
+  /** A view of one of the object's lists (spec 0048). */
+  listId: Uuid.optional(),
   name: ViewName,
   kind: ViewKind,
   visibility: ViewVisibility,
@@ -248,6 +255,8 @@ export type SetViewLockedInput = z.infer<typeof SetViewLockedInput>;
 /** Makes a shared view the object's default (`views.manage`, AC-475). */
 export const SetDefaultViewInput = WorkspaceScoped.extend({
   objectId: Uuid,
+  /** The default of one of the object's lists (spec 0048). */
+  listId: Uuid.optional(),
   viewId: Uuid,
   mutationId: Uuid,
 });

@@ -3,10 +3,11 @@
 // and that every address it lists is a route the app has (AC-1104).
 import { readdirSync } from 'node:fs';
 import path from 'node:path';
-import type { ObjectSummary, Permission, RecordHit } from '@crm/data';
+import type { ListView, ObjectSummary, Permission, RecordHit } from '@crm/data';
 import { describe, expect, it } from 'vitest';
 import {
   actionCommands,
+  addToListCommands,
   createHref,
   createNamedCommand,
   createTaskCommand,
@@ -125,6 +126,7 @@ describe('what the menu lists (AC-1075, AC-1082, AC-1086)', () => {
       'Settings › General',
       'Settings › Members',
       'Settings › Objects',
+      'Settings › Lists',
       'Settings › Background jobs',
       'Settings › History',
     ]);
@@ -154,6 +156,7 @@ describe('matching what is typed (AC-1077, AC-1082)', () => {
       'Settings › General',
       'Settings › Members',
       'Settings › Objects',
+      'Settings › Lists',
       'Settings › Background jobs',
       'Settings › History',
     ]);
@@ -278,6 +281,47 @@ describe('the keys (AC-1071)', () => {
   });
 });
 
+/** A live list over the first object, for the list commands (spec 0048). */
+const LIST: ListView = {
+  id: '0199a6f2-0000-7000-8000-0000000000a1',
+  objectId: OBJECTS[0]?.id ?? '',
+  apiSlug: 'sales_pipeline',
+  name: 'Sales pipeline',
+  icon: 'list',
+  hue: 'gray',
+  allowsDuplicates: false,
+  isArchived: false,
+  canWrite: true,
+  canManage: true,
+};
+
+describe('lists in the menu (spec 0048, AC-4827)', () => {
+  it('lists every live list as a destination found by name, with its object in its kind', () => {
+    const pages = pageCommands('acme', OBJECTS, [], [LIST, { ...LIST, id: 'gone', name: 'Old', isArchived: true }]);
+    const found = matchCommands(pages, 'pipeline').filter((command) => command.id.startsWith('page:list:'));
+    expect(found.map((command) => [command.name, command.kind, command.run])).toEqual([
+      [
+        'Sales pipeline',
+        `List · ${OBJECTS[0]?.pluralName ?? ''}`,
+        { kind: 'go', href: '/w/acme/lists/sales_pipeline' },
+      ],
+    ]);
+    expect(matchCommands(pages, 'old').some((command) => command.name === 'Old')).toBe(false);
+  });
+
+  it('offers Create list only to someone who may make one, and Add to list on a record page', () => {
+    expect(actionCommands('acme', OBJECTS).some((command) => command.id === 'list:new')).toBe(false);
+    expect(
+      actionCommands('acme', OBJECTS, { canMakeLists: true }).find((command) => command.id === 'list:new'),
+    ).toMatchObject({ name: 'Create list', run: { kind: 'new-list' } });
+    const record = { slug: 'acme', objectSlug: 'people', recordId: 'r1', name: 'Ada' };
+    expect(addToListCommands(undefined, [LIST])).toEqual([]);
+    expect(addToListCommands(record, [LIST]).map((command) => [command.name, command.run])).toEqual([
+      ['Add Ada to Sales pipeline', { kind: 'add-to-list', listId: LIST.id, recordId: 'r1' }],
+    ]);
+  });
+});
+
 describe('every address the menu lists is a route (AC-1104)', () => {
   /** Each route file as a pattern: `w.$slug.objects.$object_.views.$viewId.tsx` is `/w/<any>/objects/<any>/views/<any>`. */
   const routes = readdirSync(path.join(import.meta.dirname, '../../routes'))
@@ -298,6 +342,7 @@ describe('every address the menu lists is a route (AC-1104)', () => {
       ...pageCommands('acme', OBJECTS),
       ...settingsCommands('acme', []),
       ...actionCommands('acme', OBJECTS, { object: OBJECTS[0], viewId: '0199a6f2-0000-7000-8000-000000000001' }),
+      ...pageCommands('acme', OBJECTS, [], [LIST]),
     ].flatMap((command) => ('href' in command.run ? [command.run.href] : []));
     expect(hrefs.filter((href) => !isRoute(href))).toEqual([]);
     expect(isRoute(createHref('acme', { apiSlug: 'people' }))).toBe(true);

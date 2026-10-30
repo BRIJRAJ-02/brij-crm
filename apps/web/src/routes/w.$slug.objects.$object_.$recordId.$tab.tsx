@@ -1,4 +1,4 @@
-import { isDataError } from '@crm/data';
+import { isDataError, type DataLayer } from '@crm/data';
 import { LoadingNow } from '@crm/ui';
 import { createFileRoute, redirect, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { isNoteParam, isRecordId, isRecordTab, isTaskParam, isThreadParam } from '../features/records/params.ts';
@@ -33,6 +33,18 @@ function recordSearch(search: Record<string, unknown>): RecordSearch {
     ...(isNoteParam(search.note) ? { note: search.note } : {}),
     ...(isThreadParam(search.thread) ? { thread: search.thread } : {}),
   };
+}
+
+/** The lists over the object and this record's entries, or undefined when there is nothing to show (never fails the page). */
+async function readListSection(data: DataLayer, slug: string, objectId: string, recordId: string) {
+  try {
+    const lists = (await data.lists.list(slug)).filter((list) => list.objectId === objectId);
+    if (lists.length === 0) return undefined;
+    const layer = await data.lists.entries();
+    return { lists, layer, source: layer.forRecord(slug, recordId) };
+  } catch {
+    return undefined;
+  }
 }
 
 /** How long the route waits for the record before showing the page loading in place. */
@@ -87,7 +99,7 @@ export const Route = createFileRoute('/w/$slug/objects/$object_/$recordId/$tab')
         },
       };
     }
-    const [record, feed, recent, open, notes, comments, sections] = await Promise.all([
+    const [record, feed, recent, open, notes, comments, sections, listSection] = await Promise.all([
       context.data.records.one(
         params.slug,
         params.recordId,
@@ -113,6 +125,8 @@ export const Route = createFileRoute('/w/$slug/objects/$object_/$recordId/$tab')
           }),
         ),
       ),
+      // The Lists section (spec 0048, AC-4822): left out when no list the person may read sits over this object.
+      readListSection(context.data, params.slug, object.id, params.recordId),
     ]);
     const related = sides.flatMap((side, index) => {
       const section = sections[index];
@@ -132,7 +146,21 @@ export const Route = createFileRoute('/w/$slug/objects/$object_/$recordId/$tab')
     ]);
     clearTimeout(timer);
     return {
-      page: { object, objects, attributes: shown, related, members, meId, record, feed, recent, open, notes, comments },
+      page: {
+        object,
+        objects,
+        attributes: shown,
+        related,
+        members,
+        meId,
+        record,
+        feed,
+        recent,
+        open,
+        notes,
+        comments,
+        listSection,
+      },
     };
   },
   pendingComponent: () => (

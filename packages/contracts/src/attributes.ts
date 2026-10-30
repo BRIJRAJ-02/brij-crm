@@ -55,6 +55,8 @@ export type AttributeOption = z.infer<typeof AttributeOption>;
 export const AttributeDefinition = z.object({
   id: Uuid,
   objectId: Uuid,
+  /** A list's own field (spec 0048): its list; `objectId` is then the list's object. */
+  listId: Uuid.optional(),
   apiSlug: z.string(),
   title: z.string(),
   description: z.string().optional(),
@@ -86,6 +88,8 @@ export type AttributeDefinition = z.infer<typeof AttributeDefinition>;
 /** Which object's attributes to read. */
 export const ListAttributesInput = WorkspaceScoped.extend({
   objectId: Uuid,
+  /** One of the object's lists (spec 0048): its own fields rather than the object's. */
+  listId: Uuid.optional(),
   /** Settings only: the archived attributes too (spec 0012, AC-227). */
   includeArchived: z.boolean().optional(),
 });
@@ -173,6 +177,8 @@ export type NewAttributeOption = z.infer<typeof NewAttributeOption>;
  */
 export const CreateAttributeInput = WorkspaceScoped.extend({
   objectId: Uuid,
+  /** A field of one of the object's lists (spec 0048, AC-4811): the list's managers make it. */
+  listId: Uuid.optional(),
   id: uuidV7('The attribute id must be a UUID v7.'),
   title: AttributeTitle,
   type: PickerAttributeType,

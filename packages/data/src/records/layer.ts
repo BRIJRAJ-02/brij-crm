@@ -48,6 +48,7 @@ import {
   createOwnVersions,
   createUndoStack,
   type DeleteEntry,
+  type ExternalEntry,
   type LinksEntry,
   type LinkStep,
   type UndoCell,
@@ -396,6 +397,8 @@ export type UndoOutcome =
   | { readonly kind: 'uncreated'; readonly objectId: string; readonly recordName: string; readonly deleted: boolean }
   /** A toast's Undo whose action is no longer the newest (a later change, or already undone): nothing was done. */
   | { readonly kind: 'stale' }
+  /** Another store's action undone (spec 0048: a list's entries): its own sentence for the toast. */
+  | { readonly kind: 'external'; readonly message: string; readonly tone: 'success' | 'danger' }
   | {
       readonly kind: 'undone';
       readonly action: UndoKind;
@@ -1068,6 +1071,8 @@ export function createRecordsLayer({
   };
   const store = createPlainStore<RecordView>({ now, later });
   // The names of linked records, read by id with the primary attribute only; arriving names redraw that workspace's views.
+  // Other stores' screens showing linked names (spec 0048: a list's rows), told when names arrive.
+  const nameListeners = new Set<(workspace: string) => void>();
   const names = createReferenceNames({
     read: async (workspace, ids) => {
       const rows = await whenFree(() => api.get({ workspace, ids, attributeIds: [] }));
@@ -1077,6 +1082,7 @@ export function createRecordsLayer({
     onNames: (workspace) => {
       for (const entry of viewsOf(workspace)) entry.invalidate();
       subscriptions.renamed(workspace);
+      for (const listener of nameListeners) listener(workspace);
     },
     held: (recordId) => store.get(recordId)?.display,
     later: (run, ms) => {
@@ -3220,6 +3226,7 @@ export function createRecordsLayer({
         };
       }
       if (entry.kind === 'links') return undoLink(workspace, entry);
+      if (entry.kind === 'external') return { kind: 'external', ...(await entry.run()) };
       const [firstCell] = entry.cells;
       if (firstCell === undefined) return { kind: 'nothing' };
       // The other fields of the same Apply (a bulk edit of several fields) go back with it, newest first, as one step.
@@ -3855,6 +3862,10 @@ export function createRecordsLayer({
        * with `only`, that action alone, and only while it is the newest.
        */
       run: (workspace: string, only?: string): Promise<UndoOutcome> => runUndo(workspace, only),
+      /** Puts another store's action on this tab's stack (spec 0048), so Cmd+Z and a toast's Undo reach it. */
+      push: (workspace: string, entry: ExternalEntry): void => {
+        undo.push(workspace, entry);
+      },
       /** How many actions this tab can undo in the workspace (for tests). */
       depth: (workspace: string): number => undo.size(workspace),
     },
@@ -4043,6 +4054,26 @@ export function createRecordsLayer({
      */
     aggregates: (workspace: string, question: AggregateQuestion): AggregateSource =>
       aggregates.source(workspace, question),
+    /**
+     * The record store's one copy, for the lists' entry rows (spec 0048, AC-4840): a list row holds its record here
+     * while it shows it, so a record edited anywhere shows everywhere at once.
+     */
+    shared: {
+      receive: store.receive,
+      hold: store.hold,
+      release: store.release,
+      get: store.get,
+      subscribe: store.subscribe,
+      /** The names of records a list cell links to, as a records view's `referenceDisplays` reads them. */
+      displaysOf: (workspace: string, refs: readonly RecordRef[]) => names.displaysOf(workspace, refs),
+      /** Hears names arriving in a workspace, so a list's rows draw them; the answer stops listening. */
+      onNames: (listener: (workspace: string) => void) => {
+        nameListeners.add(listener);
+        return () => {
+          nameListeners.delete(listener);
+        };
+      },
+    },
   };
 }
 

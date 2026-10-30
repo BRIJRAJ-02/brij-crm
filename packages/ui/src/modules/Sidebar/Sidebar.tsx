@@ -570,6 +570,11 @@ export interface NavSectionProps {
    */
   readonly onMoveSection?: (toIndex: number) => void;
   readonly position?: { readonly index: number; readonly count: number };
+  /**
+   * A quiet "+" after the label, named by `label`, that makes something in the section (Lists' New list, spec
+   * 0048). Leave it out where the viewer may not make one.
+   */
+  readonly add?: { readonly label: string; readonly onAdd: () => void };
 }
 
 /** A folding group of nav items under a quiet label. Collapsed, the sidebar draws its items without the label, and tile marks while they load. */
@@ -585,6 +590,7 @@ export function NavSection({
   onReorder,
   onMoveSection,
   position,
+  add,
 }: NavSectionProps) {
   const { isCollapsed } = useContext(SidebarContext);
   const showSkeleton = useDelayedLoading(isLoading);
@@ -622,6 +628,13 @@ export function NavSection({
         <VisuallyHidden>{strings.loading}</VisuallyHidden>
       </div>
     ) : null;
+  } else if (!hasItems && add !== undefined) {
+    // Empty, the make action shows in the body too: the label row's "+" appears only on hover or focus.
+    body = (
+      <Button variant="ghost" size="sm" icon="plus" onPress={add.onAdd}>
+        {add.label}
+      </Button>
+    );
   } else if (!hasItems && emptyLabel !== undefined) {
     body = <p className={styles.empty}>{emptyLabel}</p>;
   }
@@ -652,9 +665,10 @@ export function NavSection({
     );
   }
   const actions =
-    menu === undefined && sectionMove === undefined ? undefined : (
+    menu === undefined && sectionMove === undefined && add === undefined ? undefined : (
       <>
         {sectionMove !== undefined && <DragHandle label={strings.moveSection(title)} manual={sectionMove.handle} />}
+        {add !== undefined && <Button variant="ghost" size="sm" icon="plus" label={add.label} onPress={add.onAdd} />}
         {menu !== undefined && (
           <MenuTrigger>
             <Button variant="ghost" size="sm" icon="ellipsis" label={strings.sectionMenu(title)} />

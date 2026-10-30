@@ -7,10 +7,13 @@ import type {
   ActivityKind,
   ActivityFeed as ActivityFeedSource,
   AttributeDefinition,
+  EntriesLayer,
+  ListView,
   MemberSummary,
   NoteList as NoteListSource,
   ObjectSummary,
   RecordComments,
+  RecordEntries,
   RecordState,
   RecordSubscription,
   RecordView,
@@ -26,6 +29,7 @@ import {
   useLiveStatus,
   useNoteTotal,
   useRecord,
+  useRecordEntries,
   useTaskTotal,
   useTrashed,
 } from '@crm/data/react';
@@ -43,6 +47,7 @@ import {
   NoteList,
   RecordHeader,
   RecordLayout,
+  Tooltip,
   type RecordStat,
   type RelatedRecordsHandle,
   sharedStrings,
@@ -69,6 +74,9 @@ import { ActivityTab } from './ActivityTab.tsx';
 import { recordHref, recordName } from './details.ts';
 import { isRecordTab, type RecordTab } from './params.ts';
 import { OverviewTab } from './OverviewTab.tsx';
+import { AddToListMenu, listsToAddTo } from '../lists/AddToListMenu.tsx';
+import { RecordLists } from '../lists/RecordLists.tsx';
+import { strings as listStrings } from '../lists/strings.ts';
 import { RecordActions } from './RecordActions.tsx';
 import { RecordDetails } from './RecordDetails.tsx';
 import { PendingRelatedCard, RelatedCards, RelatedSections, type RelatedSource } from './RelatedSections.tsx';
@@ -106,6 +114,15 @@ export interface RecordPageProps {
   readonly comments: RecordComments | undefined;
   /** `?thread=`: the thread a link to a comment names (AC-1161). */
   readonly thread?: string;
+  /** The Lists section (spec 0048, AC-4822): the lists over this object and this record's entries; none when no list is readable. */
+  readonly listSection?: ListSectionSource | undefined;
+}
+
+/** What the Lists section reads: loaded by the route, shown by the page. */
+export interface ListSectionSource {
+  readonly lists: readonly ListView[];
+  readonly layer: EntriesLayer;
+  readonly source: RecordEntries;
 }
 
 /** The page's tabs, in order. */
@@ -356,6 +373,7 @@ function RecordScreen({
   open,
   notes,
   comments,
+  listSection,
   meId,
   task,
   note,
@@ -873,6 +891,15 @@ function RecordScreen({
                     announcement={strings.linkCopied}
                     failureMessage={sharedStrings.couldntCopy}
                   />
+                  {listSection !== undefined && canEdit && (
+                    <HeaderAddToList
+                      slug={slug}
+                      object={object}
+                      recordId={recordId}
+                      shown={shown}
+                      section={listSection}
+                    />
+                  )}
                   <RecordActions
                     slug={slug}
                     object={object}
@@ -908,6 +935,18 @@ function RecordScreen({
                       : {})}
                   />
                   {/* Left out for a record in the trash (its links come back with a restore) or one no longer there. */}
+                  {listSection !== undefined && !isTrashed && !isLost && (
+                    <RecordLists
+                      data={data}
+                      toasts={toasts}
+                      slug={slug}
+                      object={object}
+                      recordId={recordId}
+                      record={shown.display}
+                      members={members}
+                      {...listSection}
+                    />
+                  )}
                   {related !== undefined && !isTrashed && !isLost && (
                     <RelatedSections
                       slug={slug}
@@ -929,5 +968,42 @@ function RecordScreen({
       {dialog}
       {noteWindow}
     </>
+  );
+}
+
+/** The header's Add to list (spec 0048, AC-4823): nothing when the member may write no list over the object. */
+function HeaderAddToList({
+  slug,
+  object,
+  recordId,
+  shown,
+  section,
+}: {
+  readonly slug: string;
+  readonly object: ObjectSummary;
+  readonly recordId: string;
+  readonly shown: RecordView;
+  readonly section: ListSectionSource;
+}) {
+  const { data, toasts } = useRouteContext({ from: '__root__' });
+  const writable = listsToAddTo(section.lists, object.id);
+  const rows = useRecordEntries(section.source).rows;
+  const inLists = useMemo(() => new Set(rows.map((row) => row.entry.listId)), [rows]);
+  if (writable.length === 0) return null;
+  return (
+    <AddToListMenu
+      data={data}
+      toasts={toasts}
+      slug={slug}
+      object={object}
+      lists={writable}
+      recordIds={[recordId]}
+      record={shown.display}
+      inLists={inLists}
+    >
+      <Tooltip content={listStrings.addToListMenu}>
+        <Button variant="ghost" icon="list" label={listStrings.addToListMenu} />
+      </Tooltip>
+    </AddToListMenu>
   );
 }

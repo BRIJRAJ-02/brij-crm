@@ -180,6 +180,26 @@ export type {
 } from './scheduling/time-off.ts';
 export type { LimitsDraft, LimitsHeld, LimitsState, LimitsStore, MeetingLimits } from './scheduling/limits.ts';
 export type { LimitsAt } from '@crm/contracts';
+// Lists and their entries (spec 0048).
+export type { EntryView, ListTemplate, ListView } from '@crm/contracts';
+export type {
+  AddManyOutcome,
+  AddOutcome,
+  EntriesState,
+  EntriesStatus,
+  EntriesLayer,
+  EntriesView,
+  ListBoard,
+  ListBoardColumn,
+  ListBoardState,
+  ListRef,
+  ListRow,
+  RecordEntries,
+  RecordEntriesState,
+  RemoveOutcome,
+} from './lists/entries.ts';
+import type { EntriesLayer } from './lists/entries.ts';
+import type { ListTemplate, ListView } from '@crm/contracts';
 export type {
   CalendarHealthHeld,
   CalendarHealthState,
@@ -831,7 +851,9 @@ export type UndoResult =
   | (Extract<UndoOutcome, { kind: 'restored' }> & { readonly singularName: string; readonly pluralName: string })
   | Extract<UndoOutcome, { kind: 'uncreated' }>
   /** A delete past 500 undone as a restore job (spec 0022): its end raises the finish toast. */
-  | (Extract<UndoOutcome, { kind: 'restoring' }> & { readonly singularName: string; readonly pluralName: string });
+  | (Extract<UndoOutcome, { kind: 'restoring' }> & { readonly singularName: string; readonly pluralName: string })
+  /** A list's entry action undone (spec 0048): the toast's own sentence. */
+  | Extract<UndoOutcome, { kind: 'external' }>;
 
 /** What each API call carries to the link: where to report the answer's `Retry-After`, and that an answer came. */
 interface CallContext {
@@ -1148,6 +1170,11 @@ export function createDataLayer({
   let allAttributes = new Map<string, Promise<AttributeDefinition[]>>();
   // The records layer, loaded with the first screen that shows records.
   let records: Promise<RecordsLayer> | undefined;
+  // Lists (spec 0048): each workspace's lists, each list's own fields, and the entries layer, loaded with the first
+  // list screen.
+  let lists = new Map<string, Promise<ListView[]>>();
+  let listFields = new Map<string, Promise<AttributeDefinition[]>>();
+  let entriesLoading: Promise<EntriesLayer> | undefined;
   /** The records layer once loaded, so a screen's calculations source comes back at once (and the same each time). */
   let recordsLoaded: RecordsLayer | undefined;
   // Options a cell made, shown by their label until the attribute's own list holds them (spec 0012, AC-238).
@@ -1237,6 +1264,11 @@ export function createDataLayer({
     roles = new Map();
     attributes = new Map();
     allAttributes = new Map();
+    lists = new Map();
+    listFields = new Map();
+    void entriesLoading?.then((layer) => {
+      layer.clear();
+    });
     heads = new Map();
     firstTokens = new Map();
     uncovered = new Set();
@@ -1767,8 +1799,20 @@ export function createDataLayer({
     else tell();
   });
   router.on('definitions', (workspace, event) => {
-    // A list's own definitions: no screen holds lists yet.
-    if (event.listId !== undefined) return;
+    // A list made, renamed or archived, or its fields changed (spec 0048): its fields and the workspace's lists are
+    // read again, its open views settle, and the pages reload.
+    if (event.listId !== undefined) {
+      lists.delete(workspace);
+      listFields.delete(objectKey(workspace, event.listId));
+      const listId = event.listId;
+      void entriesLoading?.then((layer) => {
+        layer.reload(workspace, listId);
+      });
+      onDefinitionsChange();
+      return;
+    }
+    // An object made, archived or restored takes its lists with it (AC-4832).
+    if (event.attributeIds === undefined) lists.delete(workspace);
     // A side archived, hidden or renamed: the object's open related sections read again (or go, when nobody shows
     // them), spread a random moment so a whole team doesn't read in step.
     if (sections !== undefined) {
@@ -1937,7 +1981,17 @@ export function createDataLayer({
       feeds.changed(workspace, { objectId: '', recordIds: event.recordIds });
     });
   });
+  // A list's entries changed (spec 0048, AC-4839): the named entries held are read again, and the list's views settle.
+  router.on('entries', (workspace, event) => {
+    void entriesLoading?.then((layer) => {
+      layer.changed(workspace, event);
+    });
+  });
   router.onResync((workspace) => {
+    lists.delete(workspace);
+    void entriesLoading?.then((layer) => {
+      layer.reload(workspace);
+    });
     schedules.changed(workspace);
     accessLoaded?.teamWeek.changed(workspace);
     accessLoaded?.timeOff.changed(workspace);
@@ -2819,6 +2873,7 @@ export function createDataLayer({
       const touched = [...new Set(objectsOf(answer))];
       mutations.answered(mutationId, Math.max(1, touched.length));
       usage.delete(workspace);
+      listFields.clear();
       for (const objectId of touched) {
         attributes.delete(objectKey(workspace, objectId));
         dropAllAttributes(workspace, objectId);
@@ -3256,6 +3311,126 @@ export function createDataLayer({
     );
     return inbox;
   };
+
+  /** The lists layer (spec 0048), loaded with the first list screen, over the records layer's one store. */
+  const entriesLayer = (): Promise<EntriesLayer> => {
+    entriesLoading ??= Promise.all([import('./lists/entries.ts'), recordsLayer()]).then(
+      ([{ createEntriesLayer }, layer]) =>
+        createEntriesLayer({
+          api: {
+            query: (input, signal) =>
+              call(
+                (options) =>
+                  api.entries.query(
+                    {
+                      workspace: input.workspace,
+                      listId: input.listId,
+                      limit: input.limit,
+                      ...(input.cursor === undefined ? {} : { cursor: input.cursor }),
+                      ...(input.filter === undefined ? {} : { filter: input.filter }),
+                      ...(input.sorts === undefined ? {} : { sorts: [...input.sorts] }),
+                      attributeIds: [...input.attributeIds],
+                    },
+                    options,
+                  ),
+                signal,
+              ),
+            count: (input, signal) => call((options) => api.entries.count(input, options), signal),
+            groups: (input, signal) =>
+              call(
+                (options) =>
+                  api.entries.groups(
+                    {
+                      workspace: input.workspace,
+                      listId: input.listId,
+                      groupBy: input.groupBy,
+                      groupIds: [...input.groupIds],
+                      ...(input.filter === undefined ? {} : { filter: input.filter }),
+                      ...(input.sorts === undefined ? {} : { sorts: [...input.sorts] }),
+                      attributeIds: [...input.attributeIds],
+                    },
+                    options,
+                  ),
+                signal,
+              ),
+            get: (input) =>
+              call((options) => api.entries.get({ workspace: input.workspace, ids: [...input.ids] }, options)),
+            membership: (input) =>
+              call((options) => api.entries.membership({ ...input, recordIds: [...input.recordIds] }, options)),
+            add: (input) =>
+              landed(
+                input.workspace,
+                call((options) => api.entries.add(input, options)),
+              ),
+            addMany: (input) =>
+              landed(
+                input.workspace,
+                call((options) =>
+                  api.entries.addMany({ ...input, recordIds: [...input.recordIds], ids: [...input.ids] }, options),
+                ),
+              ),
+            forRecord: (input) => call((options) => api.entries.forRecord(input, options)),
+            setValues: (input) =>
+              landed(
+                input.workspace,
+                call((options) => api.entries.setValues(input, options)),
+              ),
+            remove: (input) =>
+              call((options) => api.entries.remove({ ...input, entryIds: [...input.entryIds] }, options)),
+            restore: (input) =>
+              call((options) => api.entries.restore({ ...input, entryIds: [...input.entryIds] }, options)),
+          },
+          records: {
+            receive: layer.shared.receive,
+            hold: layer.shared.hold,
+            release: layer.shared.release,
+            get: layer.shared.get,
+            subscribe: layer.shared.subscribe,
+            displaysOf: layer.shared.displaysOf,
+            onNames: layer.shared.onNames,
+            pushUndo: (workspace, entry) => {
+              layer.undo.push(workspace, entry);
+            },
+          },
+          notify,
+          mintId,
+          mutations,
+          watch,
+          refusalSummary,
+          timeZone: zoneOf,
+        }),
+    );
+    return entriesLoading;
+  };
+
+  /** A list write that waits for the server (spec 0048): its echo is skipped, so the lists are read again here. */
+  async function listWrite(
+    workspace: string,
+    send: (mutationId: string, options: CallOptions) => Promise<ListView>,
+  ): Promise<ListView> {
+    const mutationId = mintId();
+    mutations.sent(mutationId);
+    try {
+      const made = await call((options) => send(mutationId, options));
+      mutations.answered(mutationId, 1);
+      lists.delete(workspace);
+      listFields.clear();
+      onDefinitionsChange();
+      return made;
+    } catch (error) {
+      mutations.forget(mutationId);
+      throw toDataError(error);
+    }
+  }
+
+  /** The workspace's lists the member may read (spec 0048), archived ones too, cached until a list changes. */
+  function allLists(workspace: string): Promise<ListView[]> {
+    return cached(lists, workspace, () =>
+      beforeRead(workspace).then(() =>
+        call((options) => api.lists.list({ workspace, includeArchived: true }, options)),
+      ),
+    );
+  }
 
   const recordsLayer = (): Promise<RecordsLayer> => {
     records ??= import('./records/layer.ts')
@@ -4124,6 +4299,119 @@ export function createDataLayer({
           (mutationId, options) => api.objects.restore({ workspace, objectId, mutationId }, options),
           { archives: true },
         ),
+    },
+    lists: {
+      /** The workspace's live lists the member may read (spec 0048, AC-4804), oldest first, cached until one changes. */
+      list: (workspace: string): Promise<ListView[]> =>
+        allLists(workspace).then((all) => all.filter((each) => !each.isArchived)),
+      /** Every list the member may read, archived ones too (settings). */
+      all: allLists,
+      /** A new list's id: mint it once per dialog, and send the same one again on a retry. */
+      newId: () => mintId(),
+      /**
+       * Makes a list (AC-4801), waiting for the server: its echo is skipped, so the workspace's lists are read again
+       * here and the pages reload. Refusals: `CONFIG_INVALID` (a name another list holds, on `name`),
+       * `LIMIT_REACHED`, `FORBIDDEN`, `NOT_FOUND`.
+       */
+      create: async (
+        workspace: string,
+        input: {
+          readonly id: string;
+          readonly objectId: string;
+          readonly name: string;
+          readonly template: ListTemplate;
+        },
+      ): Promise<ListView> => {
+        const mutationId = mintId();
+        mutations.sent(mutationId);
+        try {
+          const made = await call((options) => api.lists.create({ workspace, ...input, mutationId }, options));
+          mutations.answered(mutationId, 1);
+          lists.delete(workspace);
+          onDefinitionsChange();
+          return made;
+        } catch (error) {
+          mutations.forget(mutationId);
+          throw toDataError(error);
+        }
+      },
+      /**
+       * Changes a list's name, tile or "Each record once" rule (AC-4829), waiting for the server: its managers only.
+       * Refusals: `FORBIDDEN` (naming who may), `CONFIG_INVALID` (a name another list holds, on `name`; a record in
+       * the list twice, on `allowsDuplicates`), `NOT_FOUND`.
+       */
+      update: (
+        workspace: string,
+        listId: string,
+        changes: {
+          readonly name?: string;
+          readonly icon?: ListView['icon'];
+          readonly hue?: ListView['hue'];
+          readonly allowsDuplicates?: boolean;
+        },
+      ): Promise<ListView> =>
+        listWrite(workspace, (mutationId, options) =>
+          api.lists.update({ workspace, listId, ...changes, mutationId }, options),
+        ),
+      /** Archives a list (AC-4831): it leaves the sidebar, pickers and record pages. */
+      archive: (workspace: string, listId: string): Promise<ListView> =>
+        listWrite(workspace, (mutationId, options) => api.lists.archive({ workspace, listId, mutationId }, options)),
+      /** Restores an archived list with its entries (AC-4831). */
+      restore: (workspace: string, listId: string): Promise<ListView> =>
+        listWrite(workspace, (mutationId, options) => api.lists.restore({ workspace, listId, mutationId }, options)),
+      /** A list's own fields (AC-4807): Added and Added by first, then those its managers made; cached until they change. */
+      fields: (workspace: string, list: { readonly id: string; readonly objectId: string }) =>
+        cached(listFields, objectKey(workspace, list.id), () =>
+          beforeRead(workspace).then(() =>
+            call((options) => api.attributes.list({ workspace, objectId: list.objectId, listId: list.id }, options)),
+          ),
+        ),
+      /** A list's fields with the archived ones too (Settings › Lists › Fields), read fresh each time. */
+      allFields: (workspace: string, list: { readonly id: string; readonly objectId: string }) =>
+        beforeRead(workspace).then(() =>
+          call((options) =>
+            api.attributes.list(
+              { workspace, objectId: list.objectId, listId: list.id, includeArchived: true },
+              options,
+            ),
+          ),
+        ),
+      /** A new list field (AC-4811), for the list's managers; waits for the server, then the fields are read again. */
+      createField: async (
+        workspace: string,
+        list: { readonly id: string; readonly objectId: string },
+        input: Omit<NewAttribute, 'objectId'>,
+      ): Promise<AttributeDefinition> => {
+        const mutationId = mintId();
+        mutations.sent(mutationId);
+        try {
+          const made = await call((options) =>
+            api.attributes.create(
+              {
+                workspace,
+                objectId: list.objectId,
+                listId: list.id,
+                id: input.id,
+                title: input.title,
+                type: input.type,
+                ...(input.isMulti === undefined ? {} : { isMulti: input.isMulti }),
+                ...(input.options === undefined ? {} : { options: input.options.map(optionInput) }),
+                mutationId,
+              },
+              options,
+            ),
+          );
+          mutations.answered(mutationId, 1);
+          listFields.delete(objectKey(workspace, list.id));
+          onDefinitionsChange();
+          return made;
+        } catch (error) {
+          mutations.forget(mutationId);
+          throw toDataError(error);
+        }
+      },
+      /** A list's entries and boards, and their writes (`src/lists/entries.ts`), loaded with the first list screen. */
+      entries: entriesLayer,
     },
     usage: {
       /**
@@ -6127,7 +6415,9 @@ export function createDataLayer({
        * source for every screen, live while a screen retains it
        * (`useViewsList`).
        */
-      list: (workspace: string, objectId: string): ViewsListSource => views.list(workspace, objectId),
+      // With `listId`, one of the object's lists' views (spec 0048).
+      list: (workspace: string, objectId: string, listId?: string): ViewsListSource =>
+        views.list(workspace, objectId, listId),
       /** One view whole, the same source for every screen, live while retained (`useSavedView`). */
       get: (workspace: string, viewId: string): SavedViewSource => views.get(workspace, viewId),
       /**

@@ -9,22 +9,28 @@ import { BOARD_BLOCK, BOARD_MAX_COLUMNS, CHECKBOX_COLUMNS, columnFilter, groupKi
 import type { FilterGroup, SortRules } from '@crm/contracts/values';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { canonicalId, isUuid } from '../ids.ts';
+import type { EntryView } from '../lists.ts';
 import type { RecordView } from '../records.ts';
 import { postgresError, refuse } from '../refusals.ts';
 import type { EngineScope } from '../scope.ts';
-import { isArchivedNow, loadAttributes } from '../values.ts';
+import { isArchivedNow, loadAttributes, loadListAttributes, type AttributeDef } from '../values.ts';
 import { isAborted, withCancel } from './cancel.ts';
-import { countIn, countsWhole, readPage, type MatchCount } from './page.ts';
-import { attributeVisible, checkObject } from '../../access/visibility.ts';
+import { countIn, countsWhole, readPage, type MatchCount, type ViewSource } from './page.ts';
+import { attributeVisible, checkList, checkObject } from '../../access/visibility.ts';
 
-const { attributeOptions, objects, sortKeys } = schema;
+const { attributeOptions, lists, objects, sortKeys } = schema;
 
 /** How long one `records.groups` call may take in all, every column together (spec 0021). */
 export const GROUPS_DEADLINE_MS = 10_000;
 
-/** What a board asks for: its object, grouping attribute, columns, the view's filter and sorts, and the clock. */
-export interface GroupsQuery {
-  readonly objectId: string;
+/**
+ * What a board asks for: its object (or list, spec 0048), grouping attribute, columns, the view's filter and sorts,
+ * and the clock. A list's board groups by a field of the list or of its object (decision 10).
+ */
+export type GroupsQuery = ViewSource & GroupsAsk;
+
+/** A board's question beside its source. */
+interface GroupsAsk {
   readonly groupBy: string;
   /** Each an option id of `groupBy`, or null for the records with no value, in the order to answer. */
   readonly groupIds: readonly (string | null)[];
@@ -45,6 +51,8 @@ export interface GroupsQuery {
 export interface RecordGroup extends MatchCount {
   readonly id: string | null;
   readonly records: readonly RecordView[];
+  /** A list's board (spec 0048): the column's entries in order; `records` holds their records. */
+  readonly entries?: readonly EntryView[];
   readonly nextCursor?: string;
 }
 
@@ -108,15 +116,9 @@ async function readGroups(
 ): Promise<Groups> {
   const limitTime = () =>
     tx.execute(sql`set local statement_timeout = ${sql.raw(`'${String(Math.max(1, timeLeft()))}ms'`)}`);
-  if (!isUuid(query.objectId)) throw refuse('NOT_FOUND', 'That object does not exist.');
-  const objectId = canonicalId(query.objectId);
   await limitTime();
-  const [object] = await tx.select({ id: objects.id }).from(objects).where(eq(objects.id, objectId));
-  if (object === undefined) throw refuse('NOT_FOUND', 'That object does not exist.');
-  // A hidden object answers as an unknown one (spec 0009, AC-140).
-  await checkObject(tx, scope.access, objectId, 'read');
+  const { objectId, source, attributes } = await groupsSource(tx, scope, query);
   // 1. The grouping attribute: a hidden one answers as any filter naming it would.
-  const attributes = await loadAttributes(tx, objectId);
   const groupBy = isUuid(query.groupBy) ? attributes.get(canonicalId(query.groupBy)) : undefined;
   if (groupBy === undefined || !attributeVisible(scope.access, groupBy)) {
     throw refuse('FILTER_INVALID', 'A filter or sort names an attribute that is not on this object.');
@@ -129,7 +131,7 @@ async function readGroups(
   });
   if (kind === undefined) throw refuse('CONFIG_INVALID', NOT_GROUPABLE);
   if (kind !== 'option')
-    return readOtherGroups(tx, scope, query, objectId, groupBy.id, kind, checkpoint, timeLeft, tuning);
+    return readOtherGroups(tx, scope, query, source, groupBy.id, kind, checkpoint, timeLeft, tuning);
   const options = await tx
     .select({ id: attributeOptions.id, archivedAt: attributeOptions.archivedAt })
     .from(attributeOptions)
@@ -150,12 +152,14 @@ async function readGroups(
 
   // 2. Archived options some live record holds, so their columns show (and only those).
   const archived = options.filter((option) => option.archivedAt !== null).map((option) => option.id);
-  // No record rule for the principal: stored keys count every record they may see.
+  // No record rule for the principal: stored keys count every record they may see. A list's columns count its
+  // entries, which the stored keys of an object field don't (spec 0048): those are counted per column.
+  const isList = 'listId' in source;
   const ruleFree = await countsWhole(tx, scope, { objectId });
-  const whole = ruleFree && (query.filter === undefined || query.filter.conditions.length === 0);
+  const whole = !isList && ruleFree && (query.filter === undefined || query.filter.conditions.length === 0);
   checkpoint();
   let archivedHolding: readonly string[] | undefined;
-  if (query.probeArchived === true && archived.length === 0) archivedHolding = [];
+  if (query.probeArchived === true && (archived.length === 0 || isList)) archivedHolding = [];
   else if (query.probeArchived === true) {
     archivedHolding = ruleFree
       ? await probeStored(tx, groupBy.id, archived, limitTime)
@@ -180,7 +184,7 @@ async function readGroups(
       tx,
       scope,
       {
-        objectId,
+        ...source,
         filter,
         ...(query.sorts === undefined ? {} : { sorts: query.sorts }),
         limit: query.limit ?? BOARD_BLOCK,
@@ -195,17 +199,57 @@ async function readGroups(
     checkpoint();
     const count: MatchCount =
       totals === undefined
-        ? await countIn(tx, scope, { objectId, filter, ...clock }, checkpoint, {}, timeLeft)
+        ? await countIn(tx, scope, { ...source, filter, ...clock }, checkpoint, {}, timeLeft)
         : { count: id === null ? totals.empty : (totals.byOption.get(id) ?? 0), atLeast: false };
     checkpoint();
     groups.push({
       id,
       records: page.records,
+      ...(page.entries === undefined ? {} : { entries: page.entries }),
       ...(page.nextCursor === undefined ? {} : { nextCursor: page.nextCursor }),
       ...count,
     });
   }
   return archivedHolding === undefined ? { groups } : { groups, archivedHolding };
+}
+
+/**
+ * A board's source, checked: its object (visible, else `NOT_FOUND` as an
+ * unknown one, spec 0009 AC-140), or its list (readable, else `NOT_FOUND` as an
+ * unknown list, spec 0048), and the attributes it may group by: a list's own,
+ * then its object's.
+ */
+async function groupsSource(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  query: ViewSource,
+): Promise<{
+  readonly objectId: string;
+  readonly source: ViewSource;
+  readonly attributes: ReadonlyMap<string, AttributeDef>;
+}> {
+  if ('listId' in query) {
+    if (!isUuid(query.listId)) throw refuse('NOT_FOUND', 'That list does not exist.');
+    const listId = canonicalId(query.listId);
+    const [list] = await tx
+      .select({ objectId: lists.objectId, name: lists.name })
+      .from(lists)
+      .where(eq(lists.id, listId));
+    if (list === undefined) throw refuse('NOT_FOUND', 'That list does not exist.');
+    checkList(scope.access, { id: listId, objectId: list.objectId, name: list.name }, 'read');
+    const attributes = new Map([
+      ...(await loadListAttributes(tx, listId)),
+      ...(await loadAttributes(tx, list.objectId)),
+    ]);
+    return { objectId: list.objectId, source: { listId }, attributes };
+  }
+  if (!isUuid(query.objectId)) throw refuse('NOT_FOUND', 'That object does not exist.');
+  const objectId = canonicalId(query.objectId);
+  const [object] = await tx.select({ id: objects.id }).from(objects).where(eq(objects.id, objectId));
+  if (object === undefined) throw refuse('NOT_FOUND', 'That object does not exist.');
+  // A hidden object answers as an unknown one (spec 0009, AC-140).
+  await checkObject(tx, scope.access, objectId, 'read');
+  return { objectId, source: { objectId }, attributes: await loadAttributes(tx, objectId) };
 }
 
 /**
@@ -217,7 +261,7 @@ async function readOtherGroups(
   tx: WorkspaceTx,
   scope: EngineScope,
   query: GroupsQuery,
-  objectId: string,
+  source: ViewSource,
   groupBy: string,
   kind: 'checkbox' | 'member',
   checkpoint: () => void,
@@ -245,7 +289,7 @@ async function readOtherGroups(
       tx,
       scope,
       {
-        objectId,
+        ...source,
         filter,
         ...(query.sorts === undefined ? {} : { sorts: query.sorts }),
         limit: query.limit ?? BOARD_BLOCK,
@@ -258,11 +302,12 @@ async function readOtherGroups(
       timeLeft,
     );
     checkpoint();
-    const count = await countIn(tx, scope, { objectId, filter, ...clock }, checkpoint, {}, timeLeft);
+    const count = await countIn(tx, scope, { ...source, filter, ...clock }, checkpoint, {}, timeLeft);
     checkpoint();
     groups.push({
       id,
       records: page.records,
+      ...(page.entries === undefined ? {} : { entries: page.entries }),
       ...(page.nextCursor === undefined ? {} : { nextCursor: page.nextCursor }),
       ...count,
     });
