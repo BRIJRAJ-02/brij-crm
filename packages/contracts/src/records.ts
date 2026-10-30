@@ -9,7 +9,7 @@ import { ActorReferenceValue, Timestamp } from './values/attribute-values.ts';
 import { FilterGroup } from './values/filters.ts';
 import { RecordRefDisplay } from './values/options.ts';
 import { SortRules } from './values/sorts.ts';
-import { BOARD_GROUPS_PER_CALL, BOARD_MAX_GROUP_LIMIT } from './board-model.ts';
+import { BOARD_GROUPS_PER_CALL, BOARD_MAX_GROUP_LIMIT, CHECKBOX_COLUMNS } from './board-model.ts';
 import { WorkspaceScoped } from './workspaces.ts';
 import { Uuid, uuidV7 } from './values/ids.ts';
 
@@ -155,12 +155,18 @@ export const RecordCount = z.object({
 /** A count of records. */
 export type RecordCount = z.infer<typeof RecordCount>;
 
+/** A board column's id: an option's or a member's id, or a checkbox's `checked` or `unchecked`. */
+export const GroupId = z.union([Uuid, z.enum(CHECKBOX_COLUMNS)]);
+/** A board column's id. */
+export type GroupId = z.infer<typeof GroupId>;
+
 /**
  * The first cards of a board's columns (spec 0021): the object's records in
  * the view's `filter` and `sorts`, split by the grouping attribute `groupBy`
- * (a status, or a select holding one value). `groupIds` names 1 to 12
- * columns, each an option id of `groupBy`, or `null` for the records with no
- * value. Each group answers up to `limit` records (25 when not given) and
+ * (a status, a select holding one value, a checkbox or a member field
+ * holding one person). `groupIds` names 1 to 12 columns, each an option id
+ * of `groupBy`, a member's id, `checked` or `unchecked` for a checkbox, or
+ * `null` for the records with no value. Each group answers up to `limit` records (25 when not given) and
  * the count as `records.count` would: exact with no filter, however large;
  * with a filter, exact up to 10,000, else 10,000 with `atLeast`. With
  * `probeArchived`, the answer also names the archived options of `groupBy`
@@ -170,7 +176,7 @@ export const RecordGroupsInput = WorkspaceScoped.extend({
   objectId: Uuid,
   groupBy: Uuid,
   groupIds: z
-    .array(Uuid.nullable())
+    .array(GroupId.nullable())
     .min(1, 'Name at least one column.')
     .max(BOARD_GROUPS_PER_CALL, `Read at most ${String(BOARD_GROUPS_PER_CALL)} columns at once.`)
     .refine((ids) => new Set(ids).size === ids.length, { error: 'Name each column once.' }),
@@ -191,7 +197,7 @@ export type RecordGroupsInput = z.infer<typeof RecordGroupsInput>;
 
 /** One column's first cards, the cursor for its next page, and its count. */
 export const RecordGroup = z.object({
-  id: Uuid.nullable(),
+  id: GroupId.nullable(),
   records: z.array(RecordView),
   nextCursor: z.string().optional(),
   count: z.number().int().min(0),

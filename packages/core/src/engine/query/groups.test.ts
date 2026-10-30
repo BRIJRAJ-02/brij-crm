@@ -238,6 +238,34 @@ describe('records.groups against each column on its own', () => {
   });
 });
 
+describe('records.groups by a member field', () => {
+  it('answers a column per member and one for no one, each what its filter answers on its own', async () => {
+    const query: GroupsQuery = { objectId: deals, groupBy: id('owner'), groupIds: [null, memberId], limit: 5 };
+    const answer = await queryGroups(scope, query);
+    const one = async (groupId: string | null) => {
+      const filter = columnFilter(undefined, id('owner'), groupId, 'member');
+      const page = await queryPage(scope, { objectId: deals, filter, limit: 5 });
+      return {
+        id: groupId,
+        ids: page.records.map((record) => record.id),
+        hasMore: page.nextCursor !== undefined,
+        count: await countMatches(scope, { objectId: deals, filter }),
+      };
+    };
+    expect(shapeOf(answer.groups)).toEqual([await one(null), await one(memberId)]);
+    expect(answer.groups.map((group) => group.count)).toEqual([
+      seeded.filter((record) => !record.mine).length,
+      seeded.filter((record) => record.mine).length,
+    ]);
+  });
+
+  it('refuses a column that is no member id', async () => {
+    expect(
+      await refusalOf(queryGroups(scope, { objectId: deals, groupBy: id('owner'), groupIds: ['checked'] })),
+    ).toMatchObject({ code: 'CONFIG_INVALID' });
+  });
+});
+
 describe('records.groups refusals', () => {
   const base = { objectId: deals, groupIds: [null] as const };
 
@@ -247,7 +275,7 @@ describe('records.groups refusals', () => {
         await refusalOf(queryGroups(scope, { ...base, objectId: deals, groupBy, groupIds: [null] })),
       ).toMatchObject({
         code: 'CONFIG_INVALID',
-        message: 'Boards group by a status or single select field.',
+        message: 'Boards group by a status, a single select, a checkbox or a member field.',
       });
     }
   });

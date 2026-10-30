@@ -341,8 +341,8 @@ export function RecordsScreen({
   const isReordering = useDelayedLoading(shown.key !== wanted);
   const state = useView(view, visible);
   // Grouped (13 Oct reference batch 4): the rows through the board's per group windows, folded groups unread.
-  const groupingPlan = useMemo(() => groupPlan(attributes, groupBy), [attributes, groupBy]);
-  const ungrouped = useMemo(() => groupingGap(attributes, groupBy), [attributes, groupBy]);
+  const groupingPlan = useMemo(() => groupPlan(attributes, groupBy, members), [attributes, groupBy, members]);
+  const ungrouped = useMemo(() => groupingGap(attributes, groupBy, members), [attributes, groupBy, members]);
   const [folded, setFolded] = useState<ReadonlySet<string>>(() => new Set());
   const grouped = useGroupedRows(slug, object.id, groupingPlan, query, visible, folded);
   // The count spoken after a new question's rows are in (spec 0020, AC-487), once per question.

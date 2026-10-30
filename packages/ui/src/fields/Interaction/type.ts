@@ -11,7 +11,7 @@ export const interactionType: AttributeTypeDef<'interaction'> = {
   icon: 'mail',
   Display: InteractionDisplay,
   Editor: InteractionEditor,
-  operators: () => withEmpty(['before', 'after', 'within_last', 'kind_is']),
+  operators: () => withEmpty(['before', 'after', 'within_last', 'more_than_ago', 'kind_is']),
   toText: (value) => {
     const interaction = value as InteractionValue;
     return `${interaction.at} ${interaction.kind}`;

@@ -603,8 +603,8 @@ export function ViewScreen(props: ViewScreenProps) {
   // Planned over the archived attributes too, so a grouping field archived since says so rather than the board
   // quietly grouping by the next field and saving that over it (late trap #14).
   const boardOutcome = useMemo(
-    () => (kind === 'board' ? planBoard(queried, storedBoard) : undefined),
-    [kind, queried, storedBoard],
+    () => (kind === 'board' ? planBoard(queried, storedBoard, members) : undefined),
+    [kind, queried, storedBoard, members],
   );
   // A board view showing defaults it never stored (saved with nothing to group by): the first time it can group,
   // the defaults are saved like any layout change, once per visit (AC-492). Never over a grouping the view does

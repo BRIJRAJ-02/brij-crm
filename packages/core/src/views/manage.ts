@@ -243,8 +243,7 @@ function checkLayoutIds(
 
 /**
  * Refuses board settings a board can't show (spec 0021, `boardConfigProblem`,
- * `CONFIG_INVALID`): grouped by anything but a live status or single select
- * of the object, more than 6 card fields, one twice, or the primary one. It
+ * `CONFIG_INVALID`): grouped by anything `isGroupable` refuses, more than 6 card fields, one twice, or the primary one. It
  * judges what the caller sent against the attributes they see.
  */
 async function checkBoard(
@@ -258,7 +257,7 @@ async function checkBoard(
   if (problem !== undefined) throw refuse('CONFIG_INVALID', problem);
 }
 
-/** Refuses a table grouped by anything but a live status or single select of the object (`CONFIG_INVALID`). */
+/** Refuses a table grouped by anything a board can't group by (`isGroupable`, `CONFIG_INVALID`). */
 async function checkGroupBy(
   tx: WorkspaceTx,
   scope: EngineScope,
@@ -268,7 +267,7 @@ async function checkGroupBy(
   if (typeof groupBy !== 'string') return;
   const attribute = (await boardAttributes(tx, scope, objectId)).find((each) => each.id === groupBy.toLowerCase());
   if (attribute === undefined || !isGroupable(attribute)) {
-    throw refuse('CONFIG_INVALID', 'Tables group by a status or single select field.');
+    throw refuse('CONFIG_INVALID', 'Tables group by a status, a single select, a checkbox or a member field.');
   }
 }
 

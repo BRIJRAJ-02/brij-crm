@@ -8,7 +8,7 @@
 // with `records.query`. The store holds ids only: bodies stay in the one
 // record store. Archived options show as columns only once the first call's
 // probe says a live record still holds them.
-import { BOARD_BLOCK, BOARD_GROUPS_PER_CALL, columnFilter } from '@crm/contracts/board';
+import { BOARD_BLOCK, BOARD_GROUPS_PER_CALL, columnFilter, type GroupKind } from '@crm/contracts/board';
 import type { FilterGroup, SortRules } from '@crm/contracts/values';
 import type { RecordView } from '@crm/contracts';
 import { toDataError, type DataError } from '../errors.ts';
@@ -45,6 +45,8 @@ export interface GroupsAnswer {
 /** What a board is: its object, grouping attribute, columns in order (archived ones among them), filter and sorts. */
 export interface BoardQuery {
   readonly groupBy: string;
+  /** How `groupBy` makes its columns: options (the default), Checked and Not checked, or members. */
+  readonly groupKind?: GroupKind;
   /** Every column in order: `null` (no value) first, then the options by position, archived ones included. */
   readonly columnIds: readonly (string | null)[];
   /** The archived options among `columnIds`: shown only while a live record holds them. */
@@ -179,7 +181,12 @@ export function createBoard<View>(deps: BoardDeps<View>): BoardStore<View> {
           if (!shown.has(group.id) || views.has(keyOf(group.id))) continue;
           views.set(
             keyOf(group.id),
-            deps.column(group.id, columnFilter(query.filter, query.groupBy, group.id), query.sorts, group),
+            deps.column(
+              group.id,
+              columnFilter(query.filter, query.groupBy, group.id, query.groupKind ?? 'option'),
+              query.sorts,
+              group,
+            ),
           );
         }
         status = 'ready';

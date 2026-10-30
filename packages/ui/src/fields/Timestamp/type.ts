@@ -10,7 +10,7 @@ export const timestampType: AttributeTypeDef<'timestamp'> = {
   icon: 'clock',
   Display: TimestampDisplay,
   Editor: TimestampEditor,
-  operators: () => withEmpty(['before', 'after', 'within_last']),
+  operators: () => withEmpty(['before', 'after', 'within_last', 'more_than_ago']),
   toText: (value) => (typeof value === 'string' ? value : value.join(', ')),
   fromText: () => refuse('The system sets this time; it can’t be pasted.'),
   align: 'start',

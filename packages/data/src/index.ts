@@ -610,10 +610,14 @@ export {
   BOARD_MAX_COLUMNS,
   boardColumnIds,
   boardDefaults,
+  CHECKBOX_COLUMNS,
   groupableAttributes,
+  groupKindOf,
+  groupValueOf,
   isGroupable,
   liveOptionCount,
   type BoardSettings,
+  type GroupKind,
 } from '@crm/contracts/board';
 export { DRAFT_LINK_MAX, FILTER_EDIT_MS, type DraftQuery } from './views/draft.ts';
 export type {

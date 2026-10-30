@@ -1,8 +1,9 @@
 // Brief
-// Purpose: see one object's records as a pipeline, a column per option of a status or select field (spec 0021).
+// Purpose: see one object's records as a pipeline, a column per option, member or checked state of a field (spec 0021).
 // Main task: see where every record stands and drag a card to its next column, live for everyone.
 // Leaves out: the stuck badge (milestone 3).
 import {
+  groupValueOf,
   isDataError,
   toActorDisplays,
   toFieldAttribute,
@@ -176,9 +177,9 @@ export function BoardScreen(props: BoardScreenProps) {
     };
   }, [object, attributes, preset, groupBy]);
   const addToColumn = (columnId: string) => {
-    if (groupBy === undefined) return;
-    const option = columnId === NO_VALUE_COLUMN ? null : columnId;
-    setPreset({ [groupBy.id]: option !== null && groupBy.isMulti ? [option] : option });
+    if (outcome.kind !== 'board' || groupBy === undefined) return;
+    const value = groupValueOf(outcome.groupKind, columnId === NO_VALUE_COLUMN ? null : columnId);
+    setPreset({ [groupBy.id]: value !== null && groupBy.isMulti ? [value] : value });
     setCreating(true);
   };
   // The dialog's Owner: a Menu of the workspace's members, "Me" first.
@@ -370,12 +371,13 @@ function useBoardStore(
   const asked = useMemo(
     () => ({
       groupBy: plan.groupBy.id,
+      groupKind: plan.groupKind,
       columnIds: plan.columnIds,
       archivedIds: plan.archivedIds,
       ...(query.filter === undefined ? {} : { filter: query.filter }),
       ...(query.sorts === undefined ? {} : { sorts: query.sorts }),
     }),
-    [plan.groupBy.id, plan.columnIds, plan.archivedIds, query.filter, query.sorts],
+    [plan.groupBy.id, plan.groupKind, plan.columnIds, plan.archivedIds, query.filter, query.sorts],
   );
   const key = JSON.stringify([objectId, asked]);
   const [held, setHeld] = useState<{ readonly key: string; readonly store: BoardStore<RecordsView> }>();

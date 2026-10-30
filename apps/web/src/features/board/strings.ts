@@ -2,6 +2,9 @@
 export const strings = {
   /** The board's name for screen readers. */
   label: (plural: string, groupBy: string) => `${plural} by ${groupBy}`,
+  /** A board or table grouped by a checkbox: its two columns. */
+  checked: 'Checked',
+  unchecked: 'Not checked',
   /** The column of records with no value (AC-494). */
   noValue: (title: string) => `No ${title}`,
   /** The Table and Board switch (AC-492). */

@@ -5,7 +5,7 @@
 // stored sort keys, exact however large; filtered ones from `countMatches`'s
 // capped statement. The pages are `queryPage`'s own, so no new compiler path.
 import { and, eq, inArray, sql } from 'drizzle-orm';
-import { BOARD_BLOCK, BOARD_MAX_COLUMNS, columnFilter, isGroupable } from '@crm/contracts/board';
+import { BOARD_BLOCK, BOARD_MAX_COLUMNS, CHECKBOX_COLUMNS, columnFilter, groupKindOf } from '@crm/contracts/board';
 import type { FilterGroup, SortRules } from '@crm/contracts/values';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { canonicalId, isUuid } from '../ids.ts';
@@ -58,7 +58,7 @@ export interface GroupsTuning {
   readonly beforeColumn?: (tx: WorkspaceTx, index: number) => Promise<void>;
 }
 
-const NOT_GROUPABLE = 'Boards group by a status or single select field.';
+const NOT_GROUPABLE = 'Boards group by a status, a single select, a checkbox or a member field.';
 
 /**
  * A board's first cards and counts (spec 0021): for each column asked, the
@@ -119,9 +119,15 @@ async function readGroups(
   if (groupBy === undefined || !attributeVisible(scope.access, groupBy)) {
     throw refuse('FILTER_INVALID', 'A filter or sort names an attribute that is not on this object.');
   }
-  if (!isGroupable({ type: groupBy.type, isMulti: groupBy.isMulti, isArchived: isArchivedNow(groupBy) })) {
-    throw refuse('CONFIG_INVALID', NOT_GROUPABLE);
-  }
+  const kind = groupKindOf({
+    type: groupBy.type,
+    isMulti: groupBy.isMulti,
+    isSystem: groupBy.isSystem,
+    isArchived: isArchivedNow(groupBy),
+  });
+  if (kind === undefined) throw refuse('CONFIG_INVALID', NOT_GROUPABLE);
+  if (kind !== 'option')
+    return readOtherGroups(tx, scope, query, objectId, groupBy.id, kind, checkpoint, timeLeft, tuning);
   const options = await tx
     .select({ id: attributeOptions.id, archivedAt: attributeOptions.archivedAt })
     .from(attributeOptions)
@@ -163,7 +169,7 @@ async function readGroups(
   for (const [index, id] of groupIds.entries()) {
     await tuning.beforeColumn?.(tx, index);
     checkpoint();
-    const filter = columnFilter(query.filter, groupBy.id, id);
+    const filter = columnFilter(query.filter, groupBy.id, id, 'option');
     const clock = {
       ...(query.now === undefined ? {} : { now: query.now }),
       ...(query.timeZone === undefined ? {} : { timeZone: query.timeZone }),
@@ -197,6 +203,67 @@ async function readGroups(
     });
   }
   return archivedHolding === undefined ? { groups } : { groups, archivedHolding };
+}
+
+/**
+ * A board grouped by a checkbox (Checked and Not checked) or by a member (one column per member, and no one): each
+ * column is the view's filter and its condition, counted by the capped count, as a filtered option board is. No
+ * archived options to probe. A member column names a member by id; one the reader can't see simply matches nothing.
+ */
+async function readOtherGroups(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  query: GroupsQuery,
+  objectId: string,
+  groupBy: string,
+  kind: 'checkbox' | 'member',
+  checkpoint: () => void,
+  timeLeft: () => number,
+  tuning: GroupsTuning,
+): Promise<Groups> {
+  const allowed = (id: string | null) =>
+    kind === 'checkbox'
+      ? id !== null && (CHECKBOX_COLUMNS as readonly string[]).includes(id)
+      : id === null || isUuid(id);
+  if (query.groupIds.length > BOARD_MAX_COLUMNS + 1 || !query.groupIds.every(allowed)) {
+    throw refuse('CONFIG_INVALID', 'A column is not one this field groups by.');
+  }
+  const clock = {
+    ...(query.now === undefined ? {} : { now: query.now }),
+    ...(query.timeZone === undefined ? {} : { timeZone: query.timeZone }),
+  };
+  const groups: RecordGroup[] = [];
+  for (const [index, raw] of query.groupIds.entries()) {
+    await tuning.beforeColumn?.(tx, index);
+    checkpoint();
+    const id = raw !== null && kind === 'member' ? canonicalId(raw) : raw;
+    const filter = columnFilter(query.filter, groupBy, id, kind);
+    const page = await readPage(
+      tx,
+      scope,
+      {
+        objectId,
+        filter,
+        ...(query.sorts === undefined ? {} : { sorts: query.sorts }),
+        limit: query.limit ?? BOARD_BLOCK,
+        ...(query.attributeIds === undefined ? {} : { attributeIds: query.attributeIds }),
+        ...clock,
+      },
+      {},
+      checkpoint,
+      timeLeft,
+    );
+    checkpoint();
+    const count = await countIn(tx, scope, { objectId, filter, ...clock }, checkpoint, {}, timeLeft);
+    checkpoint();
+    groups.push({
+      id,
+      records: page.records,
+      ...(page.nextCursor === undefined ? {} : { nextCursor: page.nextCursor }),
+      ...count,
+    });
+  }
+  return query.probeArchived === true ? { groups, archivedHolding: [] } : { groups };
 }
 
 /**

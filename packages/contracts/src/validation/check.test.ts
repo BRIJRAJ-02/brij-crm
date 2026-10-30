@@ -344,6 +344,9 @@ describe('summarizeCondition', () => {
     expect(read({ attributeId: ID.close, operator: 'within_last', range: { amount: 7, unit: 'day' } })).toBe(
       'Close date is within the last 7 days',
     );
+    expect(read({ attributeId: ID.close, operator: 'more_than_ago', range: { amount: 30, unit: 'day' } })).toBe(
+      'Close date is more than 30 days ago',
+    );
     expect(read({ attributeId: ID.value, operator: 'between', from: '1', to: '5' })).toBe('Value is between 1 and 5');
   });
 });
@@ -365,6 +368,22 @@ describe('matchesCondition', () => {
     };
     expect(matchesCondition(thisWeek, input({ [ID.close]: '2026-10-05' }))).toBe(true);
     expect(matchesCondition(thisWeek, input({ [ID.close]: '2026-10-04' }))).toBe(false);
+  });
+  it('reads more than N days ago as before the first of the last N days, and the next N days from today', () => {
+    const ago: FilterGroup = {
+      conjunction: 'and',
+      conditions: [{ attributeId: ID.close, operator: 'more_than_ago', range: { amount: 30, unit: 'day' } }],
+    };
+    expect(matchesCondition(ago, input({ [ID.close]: '2026-09-07' }))).toBe(true);
+    expect(matchesCondition(ago, input({ [ID.close]: '2026-09-08' }))).toBe(false);
+    const next: FilterGroup = {
+      conjunction: 'and',
+      conditions: [{ attributeId: ID.close, operator: 'within_next', range: { amount: 10, unit: 'day' } }],
+    };
+    expect(matchesCondition(next, input({ [ID.close]: '2026-10-08' }))).toBe(true);
+    expect(matchesCondition(next, input({ [ID.close]: '2026-10-18' }))).toBe(true);
+    expect(matchesCondition(next, input({ [ID.close]: '2026-10-19' }))).toBe(false);
+    expect(matchesCondition(next, input({ [ID.close]: '2026-10-07' }))).toBe(false);
   });
   it('is total: an unknown attribute or a through condition is no match', () => {
     const odd: FilterGroup = {

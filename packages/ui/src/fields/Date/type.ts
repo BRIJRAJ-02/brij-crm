@@ -11,7 +11,7 @@ export const dateType: AttributeTypeDef<'date'> = {
   icon: 'calendar',
   Display: DateDisplay,
   Editor: DateEditor,
-  operators: () => withEmpty(['is', 'before', 'after', 'within']),
+  operators: () => withEmpty(['is', 'before', 'after', 'within', 'within_next', 'more_than_ago']),
   toText: (value) => (typeof value === 'string' ? value : value.join(', ')),
   fromText: (text, context) =>
     parseLocaleDate(text, context.locale) ?? refuse(`“${text.trim()}” isn’t a date. Use 2026-10-08.`),

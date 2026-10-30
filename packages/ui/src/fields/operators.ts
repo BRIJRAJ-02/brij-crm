@@ -18,6 +18,8 @@ const OPERANDS: Readonly<Partial<Record<FilterOperator, OperandKind>>> = {
   contains_none_of: 'list',
   within: 'relative',
   within_last: 'relative',
+  within_next: 'relative',
+  more_than_ago: 'relative',
   is_me: 'none',
   is_empty: 'none',
   is_not_empty: 'none',
