@@ -4,7 +4,7 @@
 **Status**: Proposed
 **Feature**: #58 Round robin assignment (rules first routing), #48 Forms (Show when and routing, the revision in [0023-types-and-logic.md](../0023-forms/0023-types-and-logic.md), AC-1036 to AC-1039 and AC-1049 to AC-1051), #59 team booking pages
 **Builds on**: [0029](../0029-round-robin-booking/index.md) (rotations), round 7's form hand off to a booking page (spec 0023, AC-1055 to AC-1058)
-**Relates to**: spec 0037's [0037-routing.md](../0037-team-scheduling-access/0037-routing.md) (not yet landed). This spec is its first, smaller slice: the same condition shape (`ShowWhen`, evaluated by `matchesShowWhen`), the visitor rule and host rule split, and rules per form and per team page in place of one workspace routing setup. Smart ranking, holdouts and learned lift stay in 0037. Rules per surface are accepted for now (coordinator, 22 October 2026); a workspace wide routing setup holding the same rules can come later.
+**Relates to**: spec 0037's [0037-routing.md](../0037-team-scheduling-access/0037-routing.md). This spec is its first, smaller slice: the same condition shape (`ShowWhen`, evaluated by `matchesShowWhen`), the visitor rule and host rule split, and rules per form and per team page in place of one workspace routing setup. Smart ranking, holdouts and learned lift stay in 0037. Rules per surface are accepted for now (coordinator, 22 October 2026); a workspace wide routing setup holding the same rules can come later. **31 October 2026**: spec 0037 was amended to keep these rules per surface for good and build on them (a Bookings › Routing tab for skills, the smart ranking, learning and one Decisions log; new nullable columns on `routing_decisions`), so nothing here is replaced.
 
 ## Summary
 
