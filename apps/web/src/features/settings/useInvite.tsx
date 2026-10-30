@@ -10,7 +10,14 @@ import {
   type Role,
   type RoleOption,
 } from '@crm/data';
-import { createInviteRow, InfoTip, type InviteRow, type InviteRowsHandle, type InviteRowsProps } from '@crm/ui';
+import {
+  createInviteRow,
+  InfoTip,
+  type InviteRow,
+  type InviteRowsHandle,
+  type InviteRowsProps,
+  sharedStrings,
+} from '@crm/ui';
 import { useRef, useState } from 'react';
 import { isEmail } from './members.ts';
 import { strings } from './members-strings.ts';
@@ -77,6 +84,12 @@ export interface UseInviteOptions {
   readonly onInvited?: () => void;
   /** What Send says with nothing typed (first run adds "or skip this step"). */
   readonly noEmails?: string;
+  /**
+   * Called in place of showing the sent summary when every address went out and none was refused or left
+   * unmailed (31 October 2026: a clean send closes and says how many, in a toast). It gets the count and the
+   * form's `reset`. Left out, the summary shows as before (first run's step has its own Continue).
+   */
+  readonly onClean?: (invited: number, reset: () => void) => void;
 }
 
 const NONE: ReadonlySet<string> = new Set();
@@ -96,6 +109,7 @@ export function useInvite({
   invitedEmails = NONE,
   onInvited,
   noEmails = strings.noEmails,
+  onClean,
 }: UseInviteOptions) {
   const startRole =
     roles === undefined
@@ -189,12 +203,16 @@ export function useInvite({
           setBusy(false);
           inFlight.current = false;
           setJustInvited((before) => new Set([...before, ...done.invited.map((each) => each.email.toLowerCase())]));
-          setSent(done);
           if (done.invited.length > 0) onInvited?.();
+          if (onClean !== undefined && done.refused.length === 0 && done.unsent.length === 0) {
+            onClean(done.invited.length, reset);
+            return;
+          }
+          setSent(done);
         },
         (error: unknown) => {
           setBusy(false);
-          const reason = isDataError(error) ? error.message : strings.somethingWrong;
+          const reason = isDataError(error) ? error.message : sharedStrings.couldntDoThat;
           inFlight.current = false;
           setJustInvited((before) => new Set([...before, ...done.invited.map((each) => each.email.toLowerCase())]));
           if (handled.size === 0) {

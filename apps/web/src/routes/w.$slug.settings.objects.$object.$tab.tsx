@@ -1,5 +1,5 @@
 import { isDataError } from '@crm/data';
-import { LoadingNow } from '@crm/ui';
+import { LoadingNow, sharedStrings } from '@crm/ui';
 import { createFileRoute, useNavigate, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { useCallback } from 'react';
 import { isObjectTab } from '../features/settings/object-tabs.ts';
@@ -94,7 +94,7 @@ function ObjectError({ error }: ErrorComponentProps) {
     <SettingsFailed
       title={strings.objects}
       heading={strings.loadFailedObject}
-      text={isDataError(error) ? error.message : strings.somethingWrong}
+      text={isDataError(error) ? error.message : sharedStrings.couldntDoThat}
       onRetry={() => void router.invalidate()}
     />
   );

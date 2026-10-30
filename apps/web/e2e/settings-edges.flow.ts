@@ -131,15 +131,15 @@ test.describe('the settings journey’s edges', () => {
     const invite = page.getByRole('dialog', { name: 'Invite people' });
     // Off at first: one press turns it on as a Member link and copies it, no question asked.
     await invite.getByRole('button', { name: 'Copy invite link' }).click();
-    await expect(page.getByText('Invite link turned on and copied.', { exact: false })).toBeVisible();
+    await expect(page.getByText('Link on and copied.', { exact: false })).toBeVisible();
     const copied = await page.evaluate(() => navigator.clipboard.readText());
     expect(copied).toMatch(/\/invite\/[\w-]+$/);
     // Undo turns it off again; the next press turns it on afresh.
     await page.getByRole('button', { name: 'Undo' }).click();
     await invite.getByRole('button', { name: 'Copy invite link' }).click();
-    await expect(page.getByText('Invite link turned on and copied.', { exact: false })).toBeVisible();
+    await expect(page.getByText('Link on and copied.', { exact: false })).toBeVisible();
     // On, a press only copies.
     await invite.getByRole('button', { name: 'Copy invite link' }).click();
-    await expect(page.getByText('Invite link copied.')).toBeVisible();
+    await expect(page.getByText('Link copied.')).toBeVisible();
   });
 });

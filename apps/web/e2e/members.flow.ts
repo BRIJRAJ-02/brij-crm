@@ -112,7 +112,7 @@ test('invites two people: the wrong address is refused, the invited one joins, a
   await expect(page.getByRole('heading', { name: 'Pending invitations' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Other ways to join' })).toBeVisible();
   await expect(page.getByRole('switch', { name: 'Invite link' })).toBeVisible();
-  await expect(page.getByRole('switch', { name: 'Company email' })).toBeVisible();
+  await expect(page.getByRole('switch', { name: /ask to join$/ })).toBeVisible();
   await checkScreen(page, 'members-invitations');
   const link = await inviteLinkFor(page.request, invitee);
 
@@ -182,9 +182,11 @@ test('invites two people: the wrong address is refused, the invited one joins, a
   await expect(grace).toBeVisible();
   await page.getByRole('button', { name: /^Actions for grace/i }).click();
   await page.getByRole('menuitem', { name: 'Remove from workspace' }).click();
-  // Slice 5: it reads what the removal does first; nothing names them, so there is nobody to hand work to.
+  // Slice 5: it reads what the removal does first (one line, then a small table of counts); nothing names them,
+  // so there is nobody to hand work to.
+  await expect(remove.getByText('They lose access now.')).toBeVisible();
   await expect(remove.getByRole('button', { name: 'Remove member' })).toBeEnabled();
-  await expect(remove.getByRole('button', { name: /Hand their open tasks/ })).toHaveCount(0);
+  await expect(remove.getByRole('button', { name: /Hand over to/ })).toHaveCount(0);
   await remove.getByRole('button', { name: 'Remove member' }).click();
   await expect(page.getByText(/was removed from the workspace\./)).toBeVisible();
   await expect(grace).toHaveCount(0);
