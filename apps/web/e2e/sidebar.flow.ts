@@ -248,14 +248,16 @@ test.describe('sidebar', () => {
     await newWorkspace(page, `favourites-${tag}@example.com`, slug);
     await addPerson(page, 'Ada', 'Byron', `ada-${tag}@acme.com`);
     const favourites = nav(page).getByRole('button', { name: 'Favourites', exact: true });
-    // Favourites is left out while the member has none (AC-925).
-    await expect(favourites).toHaveCount(0);
+    // Favourites stays while the member has none, saying how to fill it (flow pass, 30 October 2026).
+    await expect(favourites).toBeVisible();
+    const hint = nav(page).getByText('Star a view or record to pin it here.');
+    await expect(hint).toBeVisible();
 
-    // The view's star, in its bar (AC-934): pressed at once, and the section appears.
+    // The view's star, in its bar (AC-934): pressed at once, and the hint gives way to the view.
     const star = page.getByRole('button', { name: 'Add to favourites' });
     await star.click();
     await expect(page.getByRole('button', { name: 'Remove from favourites' })).toHaveAttribute('aria-pressed', 'true');
-    await expect(favourites).toBeVisible();
+    await expect(hint).toHaveCount(0);
 
     // The record's star, on its header.
     const table = page.getByRole('grid', { name: 'People' });

@@ -1,6 +1,6 @@
 // Brief
 // Purpose: the main sidebar's sections in the member's order (spec 0034): Favourites, Records, Lists and Scheduling.
-// Main task: go to a favourite, an object or a Scheduling page; fold, reorder and hide, and remove a favourite, each kept for the member on every device.
+// Main task: go to a favourite, an object or a Scheduling page; fold, reorder and hide (with Undo), and remove a favourite, each kept for the member on every device.
 // Leaves out: the workspace menu and the pages above the sections (the frame's), and the foot (Trash, Settings, Help).
 import type {
   DataLayer,
@@ -13,7 +13,7 @@ import type {
   ObjectSummary,
 } from '@crm/data';
 import { moveIndexFor, navKey, sectionOrder } from '@crm/data/navigation';
-import { Menu, MenuItem, NavGroup, NavItem, NavSection } from '@crm/ui';
+import { Menu, MenuItem, NavGroup, NavItem, NavSection, type Toasts } from '@crm/ui';
 import { recordHref } from '../records/details.ts';
 import { objectHref, viewHref } from './objects.ts';
 import { drawnSections, PAGE_LINKS, prefsOf, sectionMoveIndex, type SidebarPage } from './sidebar.ts';
@@ -31,6 +31,8 @@ export interface SidebarSectionsProps {
   /** The `apiSlug` of the object whose page is open. */
   readonly currentObject?: string;
   readonly currentPage?: SidebarPage;
+  /** For Hide from sidebar's toast, whose Undo shows the object again. */
+  readonly toasts: Toasts;
   /** Opens the Customise sidebar dialog. */
   readonly onCustomise: () => void;
 }
@@ -48,14 +50,29 @@ export function SidebarSections({
   objects,
   currentObject,
   currentPage,
+  toasts,
   onCustomise,
 }: SidebarSectionsProps) {
   const change = (op: NavOperation) => {
     void data.nav.change(slug, op, universe);
   };
+  // Hiding an object asked nothing and only Customise brought it back: the toast says where it went, with Undo.
+  const hideObject = (object: ObjectSummary) => {
+    change({ op: 'hide', kind: 'object', id: object.id });
+    toasts.toast({
+      tone: 'success',
+      message: strings.hiddenFromSidebar(object.pluralName),
+      action: {
+        label: strings.undo,
+        onAction: () => {
+          change({ op: 'show', kind: 'object', id: object.id });
+        },
+      },
+    });
+  };
   const objectOf = new Map((objects ?? []).map((object) => [object.id, object]));
   const favouriteOf = new Map(nav.favourites.map((favourite) => [navKey(favourite), favourite]));
-  const context: ItemContext = { slug, objectOf, favouriteOf, currentObject, currentPage, change };
+  const context: ItemContext = { slug, objectOf, favouriteOf, currentObject, currentPage, change, hideObject };
   const sections = drawnSections(nav, universe);
   const order = sectionOrder(prefsOf(nav));
   const drawn = sections.map((section) => section.key);
@@ -77,6 +94,7 @@ export function SidebarSections({
             title={section.title}
             isLoading={section.key === 'records' && objects === undefined}
             {...(section.key === 'records' ? { emptyLabel: strings.noObjects } : {})}
+            {...(section.key === 'favourites' ? { emptyLabel: strings.noFavourites } : {})}
             isFolded={section.isFolded}
             onFoldChange={(isFolded) => {
               change({ op: 'fold', section: section.key, folded: isFolded });
@@ -146,10 +164,14 @@ interface ItemContext {
   readonly currentObject: string | undefined;
   readonly currentPage: SidebarPage | undefined;
   readonly change: (op: NavOperation) => void;
+  readonly hideObject: (object: ObjectSummary) => void;
 }
 
 /** One entry as its NavItem: an object, a Scheduling page, or a favourite view or record; nothing it can't draw. */
-function itemOf(entry: NavEntry, { slug, objectOf, favouriteOf, currentObject, currentPage, change }: ItemContext) {
+function itemOf(
+  entry: NavEntry,
+  { slug, objectOf, favouriteOf, currentObject, currentPage, change, hideObject }: ItemContext,
+) {
   const key = navKey(entry);
   const hide = () => {
     change({ op: 'hide', kind: entry.kind, id: entry.id });
@@ -165,7 +187,9 @@ function itemOf(entry: NavEntry, { slug, objectOf, favouriteOf, currentObject, c
         hue={object.hue}
         href={objectHref(slug, object)}
         isCurrent={object.apiSlug === currentObject}
-        menu={itemMenu(object.pluralName, strings.hideFromSidebar, hide)}
+        menu={itemMenu(object.pluralName, strings.hideFromSidebar, () => {
+          hideObject(object);
+        })}
       >
         {object.pluralName}
       </NavItem>,

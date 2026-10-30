@@ -119,13 +119,14 @@ const navOf = (over: Partial<NavState> = {}): NavState => ({
 });
 
 describe('the sections the sidebar draws (AC-921, AC-928, AC-931)', () => {
-  it('draws Records then Scheduling by default, leaving out Favourites and Lists while they are empty', () => {
+  it('draws Favourites (empty, with its hint), Records then Scheduling by default, leaving out an empty Lists', () => {
     const nav = navOf();
     const sections = drawnSections(nav, universeOf(OBJECTS, nav));
-    expect(sections.map((section) => section.key)).toEqual(['records', 'scheduling']);
+    expect(sections.map((section) => section.key)).toEqual(['favourites', 'records', 'scheduling']);
+    expect(sections[0]?.entries).toEqual([]);
     // The live objects in the workspace's order; an archived one isn't in the sidebar.
-    expect(sections[0]?.entries.map((entry) => entry.id)).toEqual([PEOPLE, COMPANIES]);
-    expect(sections[1]?.entries.map((entry) => entry.id)).toEqual(['bookings', 'captures']);
+    expect(sections[1]?.entries.map((entry) => entry.id)).toEqual([PEOPLE, COMPANIES]);
+    expect(sections[2]?.entries.map((entry) => entry.id)).toEqual(['bookings', 'captures']);
   });
 
   it('follows the member’s section order and folds', () => {
@@ -134,21 +135,27 @@ describe('the sections the sidebar draws (AC-921, AC-928, AC-931)', () => {
     expect(sections.map((section) => [section.key, section.isFolded])).toEqual([
       ['scheduling', true],
       ['records', false],
+      // A section the member never placed follows theirs.
+      ['favourites', false],
     ]);
   });
 
   it('leaves Scheduling out for someone with none of its pages (a guest, spec 0031)', () => {
     const nav = navOf({ scheduling: [] });
-    expect(drawnSections(nav, universeOf(OBJECTS, nav)).map((section) => section.key)).toEqual(['records']);
+    expect(drawnSections(nav, universeOf(OBJECTS, nav)).map((section) => section.key)).toEqual([
+      'favourites',
+      'records',
+    ]);
   });
 
   it('draws Records loading or empty, never leaving it out', () => {
     const nav = navOf();
     expect(drawnSections(nav, universeOf(undefined, nav)).map((section) => section.key)).toEqual([
+      'favourites',
       'records',
       'scheduling',
     ]);
-    expect(drawnSections(nav, universeOf([], nav))[0]?.entries).toEqual([]);
+    expect(drawnSections(nav, universeOf([], nav))[1]?.entries).toEqual([]);
   });
 
   it('puts Tasks above the sections, and nothing there for someone without it', () => {
