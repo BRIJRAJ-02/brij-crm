@@ -55,11 +55,8 @@ test.describe('the activity journey’s edges', () => {
     const { slug, recordPath } = await withGrace(page, 'notespage');
     await writeNote(page, 'Kickoff call', 'They want 40 seats by March.');
 
-    // Notes sits beside Tasks in the sidebar, and lists the note with Grace's chip.
-    await page
-      .getByRole('navigation', { name: 'Main navigation' })
-      .getByRole('link', { name: 'Notes', exact: true })
-      .click();
+    // The Notes page (out of the sidebar since 30 October 2026, still at its address) lists the note with Grace's chip.
+    await page.goto(`/w/${slug}/notes`);
     await expect(page).toHaveURL(new RegExp(`/w/${slug}/notes$`));
     const list = page.getByRole('grid', { name: 'Notes' });
     const row = list.getByRole('row', { name: /Kickoff call/ });

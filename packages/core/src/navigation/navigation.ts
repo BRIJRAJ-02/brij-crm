@@ -199,8 +199,18 @@ function favouriteOf(kind: 'view' | 'record', id: string, label: string, object:
   };
 }
 
-/** The pages above the sections that exist today: Tasks (My tasks, spec 0019) and Notes. Inbox joins with #28. */
-const TOP_PAGES_BUILT: readonly NavPage[] = ['linkPage', 'tasks', 'notes'];
+/**
+ * The pages above the sections the sidebar offers today: the link page and Tasks (My tasks, spec 0019). Inbox joins
+ * with #28. Notes keeps its page (a record's Notes tab and Quick actions reach it) but left the sidebar (owner, 30
+ * October 2026: not needed right now).
+ */
+const TOP_PAGES_BUILT: readonly NavPage[] = ['linkPage', 'tasks'];
+
+/**
+ * The Scheduling pages the sidebar offers: Bookings and Captures. The Roster stays Bookings › Availability's Team
+ * view, reached from there, and left the sidebar (owner, 30 October 2026).
+ */
+const SCHEDULING_PAGES_BUILT: readonly NavPage[] = NAV_SCHEDULING_PAGES.filter((page) => page !== 'roster');
 
 /**
  * The pages above the sections the caller has (AC-924): Tasks for every
@@ -215,7 +225,7 @@ function topFor(scope: EngineScope): readonly NavPage[] {
  * guest (spec 0031; no guest role exists yet), and nothing for an API key.
  */
 function schedulingFor(scope: EngineScope): readonly NavPage[] {
-  return scope.actor.type === 'member' ? NAV_SCHEDULING_PAGES : [];
+  return scope.actor.type === 'member' ? SCHEDULING_PAGES_BUILT : [];
 }
 
 /** The changes `applyNavOp` reads the universe for. */
