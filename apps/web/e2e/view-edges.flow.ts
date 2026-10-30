@@ -197,7 +197,7 @@ test.describe('the table view’s edges', () => {
     await page.getByRole('menuitem', { name: 'Duplicate' }).click();
     const rename = page.getByRole('dialog', { name: 'Rename view' });
     await expect(rename).toBeVisible();
-    const name = rename.getByRole('textbox', { name: 'View name' });
+    const name = rename.getByRole('textbox', { name: 'Name' });
     await expect(name).toBeFocused();
     // The whole name is selected: typing replaces it, so no "copy" is left by accident.
     await page.keyboard.type('My people');
