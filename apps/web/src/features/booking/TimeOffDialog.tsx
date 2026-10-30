@@ -1,6 +1,6 @@
 // Brief
 // Purpose: Add or edit time off (spec 0037, AC-1281, AC-1285, AC-1286): whole days away, for the reader or a colleague they manage (picked in For, AC-1272, when opened from Bookings).
-// Main task: pick the days, a reason, optionally who covers and a note, then Save; when meetings are already booked inside, the dialog lists them before it closes.
+// Main task: pick the days, a reason, optionally who covers and a note, then Save; when meetings are already booked inside, the dialog says how many before it closes (spec 0058, AC-15), with Open Bookings for the reader's own.
 // Leaves out: part days (Block time on the Bookings week), repeating leave, and moving the meetings inside (they stay; Bookings flags them Host away).
 import { isDataError, type DataLayer, type TimeOffEntry, type TimeOffReason, type TimeOffSaved } from '@crm/data';
 import {
@@ -16,7 +16,7 @@ import {
   useFormatSettings,
 } from '@crm/ui';
 import { useId, useState } from 'react';
-import { firstName, timeOffDays } from './time-off.ts';
+import { firstName } from './time-off.ts';
 import { timeOffStrings as strings } from './time-off-strings.ts';
 
 const REASONS: readonly TimeOffReason[] = ['vacation', 'sick', 'travel', 'holiday', 'other'];
@@ -58,7 +58,7 @@ export interface TimeOffDialogProps {
   readonly meId?: string | undefined;
 }
 
-/** The dialog: one Modal, the form first, then (only when meetings are inside) what was saved over. */
+/** The dialog: one Modal, the form first, then (only when meetings are inside) how many were saved over. */
 export function TimeOffDialog(props: TimeOffDialogProps) {
   // Each opening starts afresh: a new id for a new entry, the entry's own fields for an edit.
   const [opening, setOpening] = useState(0);
@@ -200,15 +200,20 @@ function TimeOffForm({
         <Callout tone="warning" title={first === undefined ? strings.inside(count) : strings.insideFor(first, count)}>
           {strings.insideKept}
         </Callout>
-        <DescriptionList
-          layout="compact"
-          items={saved.bookingsInside.map((booking) => ({
-            id: booking.id,
-            term: when(booking.startsAt, locale, timeZone),
-            description: `${booking.visitorName} · ${booking.pageTitle}`,
-          }))}
-        />
-        {saved.moreInside > 0 && <p>{strings.insideMore(saved.moreInside)}</p>}
+        {/* The reader's own meetings are a press away on Bookings; a colleague's aren't there, so they're listed here. */}
+        {first !== undefined && (
+          <>
+            <DescriptionList
+              layout="compact"
+              items={saved.bookingsInside.map((booking) => ({
+                id: booking.id,
+                term: when(booking.startsAt, locale, timeZone),
+                description: `${booking.visitorName} · ${booking.pageTitle}`,
+              }))}
+            />
+            {saved.moreInside > 0 && <p>{strings.insideMore(saved.moreInside)}</p>}
+          </>
+        )}
       </Modal>
     );
   }
@@ -269,10 +274,6 @@ function TimeOffForm({
         )}
         <DateRangePicker
           label={strings.days}
-          hint={[
-            ...(range === null ? [] : [strings.dayCount(timeOffDays(range.start, range.end))]),
-            first === undefined ? strings.daysHint : strings.daysHintFor(first),
-          ].join(' ')}
           value={range}
           isRequired
           onChange={(next) => {

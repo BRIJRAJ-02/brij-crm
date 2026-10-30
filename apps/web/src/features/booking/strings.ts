@@ -87,7 +87,7 @@ export const strings = {
   durationRequired: 'Pick at least one length.',
   durationCustom: 'Custom',
   customMinutes: 'Minutes',
-  customMinutesHint: 'Any length from 5 to 480 minutes, in steps of 5.',
+  customMinutesHint: '5 to 480, in steps of 5.',
   customMinutesInvalid: 'Type 5 to 480 minutes, in steps of 5.',
   addLength: 'Add a length',
   /** The editor's tabs (22 Oct 2026): one per group, the chosen one in `?tab=`. */
@@ -100,6 +100,11 @@ export const strings = {
   minutesUnit: 'min',
   createPage: 'Create page',
   creating: 'Creating',
+  /** The Ready panel after Create page (spec 0058, AC-5): the one heading, one line, and the way on to the editor. */
+  readyTitle: 'Your booking page is ready',
+  readyMessage: 'Anyone with the link can book.',
+  readyEdit: 'Edit page',
+  readyPreview: 'Preview of the booking page',
   // The editor.
   live: 'Live',
   page: 'Page',
@@ -254,7 +259,7 @@ export const strings = {
       example: 'With 15 minutes, a 10:00 AM meeting keeps 9:45 to 10:00 clear.',
     },
     bufferAfter: {
-      text: 'Time kept free after each meeting, for notes or a break.',
+      text: 'Free time after each meeting.',
       example: 'With 10 minutes, nothing can start before 11:10 AM after a meeting that ends at 11:00.',
     },
     notice: {

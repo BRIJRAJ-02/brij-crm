@@ -8,14 +8,12 @@ export const scheduleStrings = {
   creatingSchedule: 'Creating',
   name: 'Name',
   namePlaceholder: 'Evenings',
-  nameHint: 'Your booking pages pick a schedule by its name.',
   nameRequired: 'Give the schedule a name.',
   defaultBadge: 'Default',
   /** A pinned page's choice of the default schedule itself, set apart from the Default one that follows any change. */
   staysOn: (name: string) => `Stays on ${name} if your default changes`,
   /** The Default badge's InfoTip on a schedule's page. */
-  defaultHelp:
-    'Booking pages set to Default schedule book inside these hours. Set as default on another schedule, and they follow that one.',
+  defaultHelp: 'Pages on the default schedule follow it.',
   /** The page's Hours choice that follows whichever schedule is the owner's default (AC-965). */
   defaultSchedule: (name: string | undefined) =>
     name === undefined ? 'Default schedule' : `Default schedule (${name})`,
@@ -35,8 +33,7 @@ export const scheduleStrings = {
   // Scheduling access (spec 0037): whose hours these are, who is told, who changed them (AC-1260, AC-1265, AC-1268).
   seeOnly: (name: string) => `You can see ${name}’s hours but not change them.`,
   toldAboutChanges: (name: string) => `${name} will be told about changes.`,
-  hoursHeldBack: (name: string) =>
-    `${name}’s hours are set by others, so you can see them but not change them. You can still book and block time for them.`,
+  hoursHeldBack: (name: string) => `Others set ${name}’s hours. You can still book and block time for them.`,
   hoursSetByOthers: 'Your hours are set by the people who manage your scheduling.',
   changedBy: (name: string) => `Changed by ${name}`,
   seeOnlyShort: 'See only',
@@ -50,10 +47,10 @@ export const scheduleStrings = {
   deleteTitle: (name: string) => `Delete the ${name} schedule?`,
   deleteCommit: 'Delete schedule',
   deleting: 'Deleting',
-  deleteUnused: 'No booking pages use it, and this can’t be undone.',
+  deleteUnused: 'No pages use it. This can’t be undone.',
   /** "Intro call and Demo will use Working hours, your default, and this can’t be undone." */
   deleteUsed: (pages: string, fallback: string, isOwn = true) =>
-    `${pages} will use ${fallback}, ${isOwn ? 'your' : 'their'} default, and this can’t be undone.`,
+    `${pages} will use ${fallback}, ${isOwn ? 'your' : 'their'} default. This can’t be undone.`,
   deleted: (name: string) => `Deleted the ${name} schedule.`,
   cantDeleteDefault: 'Set another schedule as default first.',
   alreadyDefault: 'It’s your default.',

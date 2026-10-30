@@ -97,7 +97,6 @@ export function NewScheduleDialog({
       <Field
         label={scheduleStrings.name}
         placeholder={scheduleStrings.namePlaceholder}
-        hint={scheduleStrings.nameHint}
         value={name}
         maxLength={SCHEDULE_NAME_MAX}
         isRequired

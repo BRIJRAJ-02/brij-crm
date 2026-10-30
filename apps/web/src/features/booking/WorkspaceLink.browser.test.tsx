@@ -141,6 +141,8 @@ describe('Booking pages › New: Everyone on the roster', () => {
     expect(page.getByText('Schedule', { exact: true }).elements()).toHaveLength(0);
     await checkEverywhere('new-everyone', () => document.querySelector('[role="dialog"]'));
     await userEvent.click(page.getByRole('button', { name: strings.createPage }));
+    // The Ready panel first (spec 0058, AC-5); Edit page goes on to the editor.
+    await userEvent.click(page.getByRole('button', { name: strings.readyEdit }));
     await vi.waitFor(() => expect(onCreated).toHaveBeenCalled());
     expect(create).toHaveBeenCalledWith(
       'acme',
