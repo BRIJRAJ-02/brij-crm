@@ -806,28 +806,56 @@ export const DayView: Story = {
   },
 };
 
-/** An empty week with a way on (`emptyAction`): "Next booking: Tue 13 Oct" jumps to it, the one press the note takes. */
+/**
+ * An empty week with a way on (`emptyAction`): "Next booking: Tue 13 Oct" jumps to it, the one press the note takes.
+ * Its button leaves with the empty week, so focus lands on the new week's chosen day.
+ */
 export const EmptyWeekNext: Story = {
   args: { onSelectDay: fn() },
-  render: (args) => (
-    <Stage width="fill">
-      <WeekCalendar
-        {...args}
-        days={days()}
-        blocks={[]}
-        emptyHint="No meetings this week"
-        emptyAction={{
-          label: 'Next booking: Tue 13 Oct',
-          onPress: () => {
-            args.onSelectDay('2026-10-13');
-          },
-        }}
-      />
-    </Stage>
-  ),
+  render: function Render(args) {
+    const [isJumped, setJumped] = useState(false);
+    // The next week, 12 to 18 October, with its booking on the Tuesday.
+    const shown = isJumped
+      ? days().map((day, index) => ({ ...day, key: `2026-10-${String(12 + index)}`, dayNumber: String(12 + index) }))
+      : days();
+    const first = blocks()[0];
+    return (
+      <Stage width="fill">
+        <WeekCalendar
+          {...args}
+          days={shown}
+          blocks={isJumped && first !== undefined ? [{ ...first, dayKey: '2026-10-13' }] : []}
+          selectedDay={isJumped ? '2026-10-13' : args.selectedDay}
+          emptyHint="No meetings this week"
+          emptyAction={{
+            label: 'Next booking: Tue 13 Oct',
+            onPress: () => {
+              args.onSelectDay('2026-10-13');
+              setJumped(true);
+            },
+          }}
+        />
+      </Stage>
+    );
+  },
   play: async ({ canvas, args }) => {
     await userEvent.click(canvas.getByRole('button', { name: 'Next booking: Tue 13 Oct' }));
     await expect(args.onSelectDay).toHaveBeenCalledWith('2026-10-13');
+    await waitFor(() => expect(document.activeElement).toHaveAttribute('data-selected'));
+  },
+};
+
+/** The day view says the day is empty while it is, even with meetings on other days of the week. */
+export const EmptyDay: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { selectedDay: '2026-10-09' },
+  render: (args) => (
+    <Stage width="fill">
+      <WeekCalendar {...args} view="day" days={days()} blocks={blocks()} emptyHint="No meetings this day" />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('No meetings this day')).toBeInTheDocument();
   },
 };
 

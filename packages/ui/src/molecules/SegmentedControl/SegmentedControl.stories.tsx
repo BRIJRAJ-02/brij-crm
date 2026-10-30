@@ -124,6 +124,24 @@ export const Disabled: Story = {
   args: { isDisabled: true },
 };
 
+/** `kbd` on a segment: Bookings' D and W, stated to screen readers as each radio's `aria-keyshortcuts`. */
+export const WithKeys: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: {
+    label: 'Calendar view',
+    size: 'compact',
+    segments: [
+      { value: 'day', label: 'Day', kbd: 'D' },
+      { value: 'week', label: 'Week', kbd: 'W' },
+    ],
+    defaultValue: 'week',
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('radio', { name: 'Day' })).toHaveAttribute('aria-keyshortcuts', 'D');
+    await expect(canvas.getByRole('radio', { name: 'Week' })).toHaveAttribute('aria-keyshortcuts', 'W');
+  },
+};
+
 /** A saved choice a viewer can read but not change: the chosen segment stays at full contrast. */
 export const ReadOnly: Story = {
   args: { isReadOnly: true },

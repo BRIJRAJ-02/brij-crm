@@ -1,4 +1,4 @@
-import { lazy, Suspense, useRef, type JSX, type ReactNode, type Ref } from 'react';
+import { lazy, Suspense, useContext, useRef, type JSX, type ReactNode, type Ref } from 'react';
 import {
   Button as AriaButton,
   Link as AriaLink,
@@ -13,6 +13,7 @@ import { ProviderMark, type ProviderName } from '../ProviderMark/ProviderMark.ts
 import { keyShortcuts, type KeyboardPlatform } from '../Kbd/shortcuts.ts';
 import { useKeyboardPlatform } from '../../provider/context.ts';
 import { Spinner } from '../Spinner/Spinner.tsx';
+import { TooltipKbdContext } from '../Tooltip/tooltip-kbd.ts';
 import { useFooterRole } from './footer-keys.ts';
 import styles from './Button.module.css';
 
@@ -285,6 +286,8 @@ function PlainButton(props: ButtonProps) {
   const footer = useFooterRole({ kbd: props.kbd, slot, type, form, variant: props.variant });
   const kbd = footer.kbd;
   const look: ButtonLook = kbd === props.kbd ? props : { ...props, kbd };
+  // A Tooltip that shows a shortcut (Today's T) has its button state it too, without a second keycap.
+  const tooltipKbd = useContext(TooltipKbdContext);
   return (
     <AriaButton
       ref={ref}
@@ -301,7 +304,7 @@ function PlainButton(props: ButtonProps) {
       {...(props.isExpanded === true && props.controls !== undefined ? { 'aria-controls': props.controls } : {})}
       {...(props.isExpanded === true ? { 'data-expanded': '' } : {})}
       {...(props.autoFocus === true || footer.autoFocus ? { autoFocus: true } : {})}
-      {...shortcutAttribute(kbd, platform)}
+      {...shortcutAttribute(kbd ?? tooltipKbd, platform)}
       {...lookAttributes(props, face)}
     >
       <Face face={face} look={look} isPending={isPending} />

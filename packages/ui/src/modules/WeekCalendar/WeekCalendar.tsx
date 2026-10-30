@@ -179,12 +179,12 @@ export interface WeekCalendarProps {
   readonly emptyHint?: string;
   /**
    * A way on from an empty week, under `emptyHint`, as Attio's "Next day with meetings": "Next booking: Tue 3 Nov",
-   * which jumps to it.
+   * which jumps to it. The button goes with the week it leaves, so focus moves to the new chosen day.
    */
   readonly emptyAction?: { readonly label: string; readonly onPress: () => void };
   /**
    * `week` (the default) draws the seven days; `day` draws only the selected one across the width, its head still
-   * the week's days to pick from, as a phone's narrow week does.
+   * the week's days to pick from, as a phone's narrow week does. In `day`, `emptyHint` shows while that day is empty.
    */
   readonly view?: 'week' | 'day';
 }
@@ -367,6 +367,15 @@ export function WeekCalendar({
       focusDayLater(closed.day, closed.from);
     }
   });
+  // Pressed "Next booking": its button leaves with the empty week, so once the new week (or day) is in, focus goes
+  // to its chosen day rather than falling to the page.
+  const jumped = useRef(false);
+  const firstDayKey = days[0]?.key;
+  useEffect(() => {
+    if (!jumped.current) return;
+    jumped.current = false;
+    focusLater(() => columns.current.get(selectedDay));
+  }, [firstDayKey, selectedDay]);
   // A block or day the screen asks focus for: after any closing overlay (its dialog), never taking focus the person moved.
   useEffect(() => {
     if (focusDay === undefined) return;
@@ -766,18 +775,27 @@ export function WeekCalendar({
           })}
         </div>
       </div>
-      {emptyHint !== undefined && !isLoading && blocks.length === 0 && (
-        <div className={styles.empty} data-action={emptyAction === undefined ? undefined : ''}>
-          <p className={styles.emptyHint}>{emptyHint}</p>
-          {emptyAction !== undefined && (
-            <span className={styles.emptyAction}>
-              <Button variant="ghost" iconRight="arrow-right" onPress={emptyAction.onPress}>
-                {emptyAction.label}
-              </Button>
-            </span>
-          )}
-        </div>
-      )}
+      {emptyHint !== undefined &&
+        !isLoading &&
+        !blocks.some((block) => view === 'week' || block.dayKey === selectedDay) && (
+          <div className={styles.empty} data-action={emptyAction === undefined ? undefined : ''}>
+            <p className={styles.emptyHint}>{emptyHint}</p>
+            {emptyAction !== undefined && (
+              <span className={styles.emptyAction}>
+                <Button
+                  variant="ghost"
+                  iconRight="arrow-right"
+                  onPress={() => {
+                    jumped.current = true;
+                    emptyAction.onPress();
+                  }}
+                >
+                  {emptyAction.label}
+                </Button>
+              </span>
+            )}
+          </div>
+        )}
       {draft !== undefined && dragging === null && draftCard !== undefined && ghost !== null && (
         <Popover
           triggerRef={ghostRef}

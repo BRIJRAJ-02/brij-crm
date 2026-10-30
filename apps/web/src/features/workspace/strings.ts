@@ -194,4 +194,11 @@ export const strings = {
   undoShortcut: 'Undo your last change',
   showShortcuts: 'Show keyboard shortcuts',
   toggleRail: 'Fold the sidebar to icons, or open it',
+  /** ShortcutHelp's group on Bookings › Calendar: its single keys (T, J, K, D, W). */
+  shortcutsCalendar: 'Calendar',
+  calendarToday: 'Go to today',
+  calendarNext: 'Next week, or next day',
+  calendarPrevious: 'Previous week, or previous day',
+  calendarDay: 'Day view',
+  calendarWeek: 'Week view',
 } as const;

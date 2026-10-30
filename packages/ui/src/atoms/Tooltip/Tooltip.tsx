@@ -7,6 +7,7 @@ import {
   type TooltipTriggerState,
 } from 'react-aria-components';
 import { Kbd } from '../Kbd/Kbd.tsx';
+import { TooltipKbdContext } from './tooltip-kbd.ts';
 import styles from './Tooltip.module.css';
 
 /**
@@ -26,7 +27,7 @@ export interface TooltipProps {
   readonly content: string;
   /**
    * The control's shortcut, as a keycap after the line ("Search ⌘K"), written with Mac symbols: icon buttons teach
-   * their keys this way. Sight only; give the control its `aria-keyshortcuts` too.
+   * their keys this way. A library Button inside states it as its `aria-keyshortcuts` by itself.
    */
   readonly kbd?: string;
   /**
@@ -85,7 +86,11 @@ export function Tooltip({
       {...(isOpen === undefined ? {} : { isOpen })}
       {...(onOpenChange === undefined ? {} : { onOpenChange })}
     >
-      {isTextTrigger ? <TextTrigger isShared={isTriggerShared}>{children}</TextTrigger> : children}
+      {isTextTrigger ? (
+        <TextTrigger isShared={isTriggerShared}>{children}</TextTrigger>
+      ) : (
+        <TooltipKbdContext value={kbd}>{children}</TooltipKbdContext>
+      )}
       <AriaTooltip
         className={styles.root}
         placement={placement}

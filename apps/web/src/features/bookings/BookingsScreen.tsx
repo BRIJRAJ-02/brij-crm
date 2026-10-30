@@ -966,6 +966,12 @@ function NextBookingProbe({
   return null;
 }
 
+/** The grid's quiet line while what it shows is empty: the week's, or in the day view the day's; one calendar's by name. */
+function emptyHintOf(view: 'week' | 'day', calendar: string | undefined): string {
+  if (view === 'day') return calendar === undefined ? strings.noMeetingsDay : strings.nothingOnDay(calendar);
+  return calendar === undefined ? strings.noMeetingsWeek : strings.nothingOnWeek(calendar);
+}
+
 /** The week view's toolbar, grid and count. */
 function WeekView(props: BookingsCalendarScreenProps) {
   const { slug, objects, search, week, pages, connections, locale, onSearch, onRemoveBlock, onBlock } = props;
@@ -1062,8 +1068,12 @@ function WeekView(props: BookingsCalendarScreenProps) {
   // Go to date: the small month the calendars panel held, now from the week's bar (the panel stays folded here).
   const [isJumpOpen, setJumpOpen] = useState(false);
   const jumpRef = useRef<HTMLButtonElement>(null);
-  // Day or Week (D and W), kept while the screen is: the day view is the picked day across the width.
-  const [view, setView] = useState<'week' | 'day'>('week');
+  // Day or Week (D and W), in the address (`v=day`), so a reload or a shared link keeps it: the day view is the
+  // picked day across the width.
+  const view = search.view ?? 'week';
+  const setView = (next: 'week' | 'day') => {
+    onSearch({ view: next });
+  };
   const shownDay = days.includes(search.day) ? search.day : (days[0] ?? search.week);
   const range =
     view === 'day'
@@ -1231,8 +1241,8 @@ function WeekView(props: BookingsCalendarScreenProps) {
               if (next === 'day' || next === 'week') setView(next);
             }}
             segments={[
-              { value: 'day', label: strings.dayView },
-              { value: 'week', label: strings.weekView },
+              { value: 'day', label: strings.dayView, kbd: WEEK_KEYS.day },
+              { value: 'week', label: strings.weekView, kbd: WEEK_KEYS.week },
             ]}
           />
           <FilterMenu search={search} pages={pages} onSearch={onSearch} />
@@ -1457,13 +1467,12 @@ function WeekView(props: BookingsCalendarScreenProps) {
                   },
                 })}
             {...(props.openHours === undefined ? {} : { openHours: props.openHours })}
-            emptyHint={
+            emptyHint={emptyHintOf(
+              view,
               choice === ALL_CALENDARS
-                ? strings.noMeetingsWeek
-                : strings.nothingOnWeek(
-                    switchable?.find((calendar) => calendar.id === choice)?.name ?? strings.calendars,
-                  )
-            }
+                ? undefined
+                : (switchable?.find((calendar) => calendar.id === choice)?.name ?? strings.calendars),
+            )}
             isFill
             selectedDay={shownDay}
             onSelectDay={(day) => onSearch({ day })}

@@ -65,7 +65,10 @@ export const WithKbd: Story = {
   ),
   play: async ({ canvas, userEvent }) => {
     await userEvent.tab();
-    await expect(canvas.getByRole('button', { name: 'Search' })).toHaveFocus();
+    const button = canvas.getByRole('button', { name: 'Search' });
+    await expect(button).toHaveFocus();
+    // The button states the tooltip's shortcut itself.
+    await expect(button.getAttribute('aria-keyshortcuts')).toMatch(/^(Meta|Control)\+K$/u);
     const tip = await tooltip();
     await expect(tip.querySelector('kbd')).not.toBeNull();
   },

@@ -58,6 +58,9 @@ export const strings = {
   /** The week grid's quiet line when nothing is on it. */
   noMeetingsWeek: 'No meetings this week',
   nothingOnWeek: (calendar: string) => `Nothing on ${calendar} this week`,
+  /** The same in the day view, while the day shown is empty. */
+  noMeetingsDay: 'No meetings this day',
+  nothingOnDay: (calendar: string) => `Nothing on ${calendar} this day`,
   calendarsRetry: 'Calendars didn’t load. Try again',
   /** The calendars panel's small month. */
   goToDate: 'Go to date',

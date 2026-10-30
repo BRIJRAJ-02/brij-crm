@@ -38,6 +38,7 @@ import { settingsNav, visibleSettingsNav, type SettingsPageId } from '../setting
 import { useToday } from '../tasks/day.ts';
 import { useCommandMenu } from '../command/CommandMenuProvider.tsx';
 import { COMMAND_MENU_KEYS, SEARCH_KEYS } from '../command/keys.ts';
+import { WEEK_KEYS } from '../bookings/week-keys.ts';
 import { strings as commandStrings } from '../command/strings.ts';
 import { strings as settingsStrings } from '../settings/strings.ts';
 import { CalendarBanner } from './CalendarBanner.tsx';
@@ -80,6 +81,9 @@ const NO_NAV: NavSource = {
 
 /** Bookings › Calendars' own address, the one page the stopped calendar banner stays off. */
 const CALENDARS_TAB = /\/bookings\/calendars\/?$/;
+
+/** Bookings › Calendar's address, whose single keys the shortcut help lists. */
+const CALENDAR_TAB = /\/bookings\/calendar\/?$/;
 
 /** Inside Settings (spec 0026): the settings sidebar's current page and the way back out. */
 export interface SettingsSidebar {
@@ -202,6 +206,10 @@ export function WorkspaceFrame({
   // load for one comparison; `frame.flow.ts` walks the tab and holds the two together.
   const isOnCalendars = useLocation({
     select: (location) => currentPage === 'bookings' && CALENDARS_TAB.test(location.pathname),
+  });
+  // Bookings › Calendar: the shortcut help adds its single keys, the ones its buttons' tooltips teach.
+  const isOnCalendar = useLocation({
+    select: (location) => currentPage === 'bookings' && CALENDAR_TAB.test(location.pathname),
   });
   const snapshot = useNav(isMissing ? NO_NAV : data.nav.source(slug));
   const nav = snapshot.status === 'ready' ? snapshot.nav : snapshot.status === 'error' ? DEFAULT_NAV : undefined;
@@ -451,6 +459,20 @@ export function WorkspaceFrame({
                 { label: strings.showShortcuts, keys: ['?'] },
               ],
             },
+            ...(isOnCalendar
+              ? [
+                  {
+                    title: strings.shortcutsCalendar,
+                    shortcuts: [
+                      { label: strings.calendarToday, keys: [WEEK_KEYS.today] },
+                      { label: strings.calendarNext, keys: [WEEK_KEYS.next] },
+                      { label: strings.calendarPrevious, keys: [WEEK_KEYS.previous] },
+                      { label: strings.calendarDay, keys: [WEEK_KEYS.day] },
+                      { label: strings.calendarWeek, keys: [WEEK_KEYS.week] },
+                    ],
+                  },
+                ]
+              : []),
             GRID_SHORTCUTS,
           ]}
         />

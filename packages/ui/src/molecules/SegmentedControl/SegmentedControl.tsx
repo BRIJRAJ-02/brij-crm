@@ -2,6 +2,8 @@ import { useId, useRef, useState, useSyncExternalStore } from 'react';
 import { useFocusVisible } from 'react-aria';
 import { RadioButton, RadioField, RadioGroup, SelectionIndicator } from 'react-aria-components';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
+import { keyShortcuts } from '../../atoms/Kbd/shortcuts.ts';
+import { useKeyboardPlatform } from '../../provider/context.ts';
 import { StatusDot } from '../../atoms/StatusDot/StatusDot.tsx';
 import type { Hue } from '../../hue.ts';
 import type { IconName } from '../../atoms/Icon/icons.ts';
@@ -20,6 +22,11 @@ export interface Segment {
   readonly isIconOnly?: boolean;
   /** A colour dot before the label (a calendar's colour on Bookings' week), drawn as the StatusDot atom. */
   readonly hue?: Hue;
+  /**
+   * The key that picks it from anywhere on the page (Bookings' D and W), written with Mac symbols: stated to screen
+   * readers as `aria-keyshortcuts`. The screen handles the key and lists it in its shortcut help.
+   */
+  readonly kbd?: string;
 }
 
 /** Props for SegmentedControl. */
@@ -91,6 +98,7 @@ export function SegmentedControl({
 }: SegmentedControlProps) {
   const { isFocusVisible } = useFocusVisible();
   const labelId = useId();
+  const platform = useKeyboardPlatform();
   const group = (
     <RadioGroup
       className={styles.root}
@@ -108,7 +116,19 @@ export function SegmentedControl({
       {...(onChange === undefined ? {} : { onChange })}
     >
       {segments.map((segment) => (
-        <RadioField key={segment.value} value={segment.value} className={styles.field}>
+        <RadioField
+          key={segment.value}
+          value={segment.value}
+          className={styles.field}
+          // React Aria's radio takes no aria-keyshortcuts, so it goes on the input itself.
+          {...(segment.kbd === undefined
+            ? {}
+            : {
+                inputRef: (input: HTMLInputElement | null) => {
+                  input?.setAttribute('aria-keyshortcuts', keyShortcuts([segment.kbd ?? ''], platform));
+                },
+              })}
+        >
           <RadioButton className={styles.segment}>
             <SelectionIndicator className={styles.thumb} />
             {segment.icon !== undefined &&

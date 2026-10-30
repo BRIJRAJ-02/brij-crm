@@ -1,6 +1,6 @@
 // What Bookings' addresses hold, read and written in one place for both tabs'
 // routes (plain functions, no React, so loaders can use them):
-// - Calendar: `w` (the week's Monday), `d` (the day picked), `link`, `cal`;
+// - Calendar: `w` (the week's Monday), `d` (the day picked), `v` (`day` for the day view), `link`, `cal`;
 // - List: `tab` (`past`, `cancelled`), `src` (`bookings`, `calendar`), `link`, `cal`.
 // The list pages by cursor (More), so the address holds no page.
 import type { BookingsTab, MeetingSource } from '@crm/data';
@@ -10,6 +10,7 @@ import { dayKeyOf, isDayKey, weekOf } from './week.ts';
 export interface RawBookingsSearch {
   readonly w?: string;
   readonly d?: string;
+  readonly v?: 'day';
   readonly tab?: 'past' | 'cancelled';
   readonly src?: 'bookings' | 'calendar';
   readonly link?: string;
@@ -22,6 +23,8 @@ export interface BookingsSearch {
   readonly week: string;
   /** The day selected (a narrow screen shows it alone). */
   readonly day: string;
+  /** The calendar's Day or Week (D and W); absent is the week. Kept in the address, so a reload or a link keeps it. */
+  readonly view?: 'week' | 'day';
   readonly tab: BookingsTab;
   /** The list's meetings: all, the bookings, or the calendar events. */
   readonly source: MeetingSource;
@@ -36,6 +39,7 @@ export function parseBookingsSearch(search: Record<string, unknown>): RawBooking
   return {
     ...(isDayKey(search.w) ? { w: search.w } : {}),
     ...(isDayKey(search.d) ? { d: search.d } : {}),
+    ...(search.v === 'day' ? { v: 'day' as const } : {}),
     ...(search.tab === 'past' || search.tab === 'cancelled' ? { tab: search.tab } : {}),
     ...(search.src === 'bookings' || search.src === 'calendar' ? { src: search.src } : {}),
     ...(typeof search.link === 'string' && /^[0-9a-f-]{36}$/i.test(search.link) ? { link: search.link } : {}),
@@ -50,6 +54,7 @@ export function bookingsSearchOf(raw: RawBookingsSearch, now: Date, firstDay: nu
     // A link's week starts on the member's week start too, so Today and the grid agree.
     week: weekOf(raw.w ?? day, firstDay),
     day,
+    ...(raw.v === undefined ? {} : { view: raw.v }),
     tab: raw.tab ?? 'upcoming',
     source: raw.src ?? 'all',
     ...(raw.link === undefined ? {} : { link: raw.link }),
@@ -63,7 +68,9 @@ export function rawOf(tab: 'calendar' | 'list', search: BookingsSearch): RawBook
     ...(search.link === undefined ? {} : { link: search.link }),
     ...(search.cal === undefined ? {} : { cal: search.cal.join(',') }),
   };
-  if (tab === 'calendar') return { w: search.week, d: search.day, ...shared };
+  if (tab === 'calendar') {
+    return { w: search.week, d: search.day, ...(search.view === 'day' ? { v: 'day' as const } : {}), ...shared };
+  }
   return {
     ...(search.tab === 'upcoming' ? {} : { tab: search.tab }),
     ...(search.source === 'all' ? {} : { src: search.source }),
