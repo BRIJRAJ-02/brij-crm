@@ -273,6 +273,8 @@ describe('instants and defaults for the system only types', () => {
 
   it('gives the system only types no static default: a timestamp takes an offset, an interaction nothing', () => {
     for (const type of SYSTEM_ONLY_TYPES) expect(defaultKindsFor(type)).not.toContain('static');
+    // A person writes a timestamp now (the field types pass): only interactions stay the system's.
+    expect(SYSTEM_ONLY_TYPES).toEqual(['interaction']);
     expect(defaultKindsFor('timestamp')).toEqual(['offset']);
     expect(defaultKindsFor('interaction')).toEqual([]);
     expect(defaultKindsFor('date')).toEqual(['static', 'offset']);
