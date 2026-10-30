@@ -23,6 +23,7 @@ import { mergeValue } from './kind.ts';
 import { MADE_KEPT_MESSAGE } from './undo.ts';
 import {
   checkImportLinks,
+  checkImportMatches,
   createImport,
   getImport,
   listImportRefusals,
@@ -243,6 +244,50 @@ describe('imports (AC-1117 to AC-1127)', () => {
     expect(refusal?.message).not.toContain('Secret');
     const [record] = await getRecords(w.owner, { ids: [hidden] });
     expect(record?.values[w.attribute('job_title')]).toBe('Spy');
+  });
+
+  it('says before the start which rows update a record, and never one the member can’t read', async () => {
+    const w = await world();
+    await w.person('Ada', 'ada@example.com');
+    const hidden = await w.person('Secret', 'secret@example.com', undefined, w.ownerId);
+    const answer = await checkImportMatches(w.owner, {
+      objectId: w.people,
+      attributeId: w.attribute('email_addresses'),
+      values: [['ADA@example.com'], ['new@example.com'], ['new@example.com'], 'not an email'],
+    });
+    // Two rows of the file sharing a key carry the same keys, so the preview counts the second as an update.
+    expect(answer.rows).toEqual([
+      { keys: ['ada@example.com'], matched: true },
+      { keys: ['new@example.com'], matched: false },
+      { keys: ['new@example.com'], matched: false },
+      { keys: [], matched: false },
+    ]);
+    const own: AccessRules = {
+      levels: [],
+      records: [
+        {
+          subject: { type: 'role', role: 'member' },
+          objectId: w.people,
+          kind: 'own',
+          attributeId: w.attribute('owner'),
+        },
+      ],
+    };
+    rulesByWorkspace.set(w.workspaceId, own);
+    const member = rescope(w.member, { rules: own });
+    const seen = await checkImportMatches(member, {
+      objectId: w.people,
+      attributeId: w.attribute('email_addresses'),
+      values: [['secret@example.com']],
+    });
+    expect(seen.rows).toEqual([{ keys: ['secret@example.com'], matched: false }]);
+    expect(hidden).not.toBe('');
+    // A non unique attribute finds nothing.
+    expect(
+      await refusalOf(
+        checkImportMatches(w.owner, { objectId: w.people, attributeId: w.attribute('job_title'), values: ['x'] }),
+      ),
+    ).toMatchObject({ code: 'CONFIG_INVALID' });
   });
 
   it('lets only the starter stage and start, and the starter or jobs.manage read it', async () => {

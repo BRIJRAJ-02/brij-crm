@@ -375,6 +375,8 @@ export const ACCESS_TABLE = {
   listImportRefusals: { data: 'read' },
   // The preview's unmatched names: write on the object, as only an importer asks; finds only readable records.
   checkImportLinks: { data: 'write' },
+  // The preview's new and update counts: the same, finding only readable records.
+  checkImportMatches: { data: 'write' },
   // Records exports (spec 0040): read on the object (and the view) to start; only the starter reads one back.
   startRecordsExport: { data: 'read' },
   getRecordsExport: { data: 'read' },

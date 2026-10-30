@@ -144,6 +144,34 @@ export const ImportLinks = z.object({
 /** Names that link to no record, or to several. */
 export type ImportLinks = z.infer<typeof ImportLinks>;
 
+/** The most values one `imports.matches` call asks about. */
+export const IMPORT_MATCHES_PAGE = 1_000;
+
+/**
+ * The match attribute's values of a file's ready rows, to say before the
+ * start how many rows update a record and how many add one: the import's
+ * object, its match attribute (unique, one a column goes to), and each row's
+ * value in the attribute's shape, in file order.
+ */
+export const ImportMatchesInput = WorkspaceScoped.extend({
+  objectId: Uuid,
+  attributeId: Uuid,
+  values: z.array(z.unknown()).min(1).max(IMPORT_MATCHES_PAGE),
+});
+/** Values to look up. */
+export type ImportMatchesInput = z.infer<typeof ImportMatchesInput>;
+
+/**
+ * Per value asked about, in order: its keys as the import finds records by
+ * them (so two rows of one file sharing a key are told apart from two that
+ * don't), and whether one names a live record the member can read.
+ */
+export const ImportMatches = z.object({
+  rows: z.array(z.object({ keys: z.array(z.string()), matched: z.boolean() })),
+});
+/** Which values name a record. */
+export type ImportMatches = z.infer<typeof ImportMatches>;
+
 /** Where an import is: rows arriving, its job started, or taken back. */
 export const ImportStatus = z.enum(['staging', 'started', 'undone']);
 /** Where an import is. */
@@ -278,6 +306,7 @@ export const importsContract = {
   rows: oc.input(ImportRowsInput).output(ImportRows),
   undo: oc.input(ImportWriteInput).output(ImportView),
   links: oc.input(ImportLinksInput).output(ImportLinks),
+  matches: oc.input(ImportMatchesInput).output(ImportMatches),
 };
 
 /**

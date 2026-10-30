@@ -1,5 +1,6 @@
 import {
   checkImportLinks,
+  checkImportMatches,
   createImport,
   getImport,
   listImportRefusals,
@@ -59,6 +60,13 @@ export const importsRouter = member.imports.router({
       objectId: input.objectId,
       attributeId: input.attributeId,
       names: input.names,
+    }),
+  ),
+  matches: member.imports.matches.handler(({ context, input }) =>
+    checkImportMatches(context.scope, {
+      objectId: input.objectId,
+      attributeId: input.attributeId,
+      values: input.values,
     }),
   ),
 });

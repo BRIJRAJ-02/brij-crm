@@ -9,6 +9,7 @@ import type {
   RecordsExportView,
   StartExportInput,
   ImportLinks,
+  ImportMatches,
   ImportRows,
   ImportSettings,
   ImportView,
@@ -5548,6 +5549,28 @@ export function createDataLayer({
           ambiguous.push(...answer.ambiguous);
         }
         return { missing, ambiguous };
+      },
+      /**
+       * Each value of a file's match column, in order: its keys as the import
+       * finds records by them, and whether one names a record the member can
+       * read (the preview's new and update counts). Asks 1,000 a call, in
+       * turn; a read, so a lost answer is asked again by the caller.
+       */
+      matches: async (
+        workspace: string,
+        objectId: string,
+        attributeId: string,
+        values: readonly unknown[],
+      ): Promise<ImportMatches['rows']> => {
+        const rows: ImportMatches['rows'][number][] = [];
+        for (let start = 0; start < values.length; start += 1_000) {
+          const part = values.slice(start, start + 1_000);
+          const answer = await call((options) =>
+            api.imports.matches({ workspace, objectId, attributeId, values: part }, options),
+          );
+          rows.push(...answer.rows);
+        }
+        return rows;
       },
       /** The import a job this tab started belongs to (its import or its undo job), for the finish toast. */
       forJob: (jobId: string): string | undefined => importJobs.get(jobId),
