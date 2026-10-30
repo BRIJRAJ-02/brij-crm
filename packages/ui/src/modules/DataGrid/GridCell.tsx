@@ -24,7 +24,10 @@ import { strings } from './strings.ts';
 const CELL_PADDING = spaceToken('space-8');
 
 /** What reference and file editors need from the screen: search, uploads and the signed in member. */
-export type GridEditorProps = Pick<EditorProps<AttributeType>, 'onSearch' | 'onUpload' | 'me' | 'describeResult'>;
+export type GridEditorProps = Pick<
+  EditorProps<AttributeType>,
+  'onSearch' | 'onUpload' | 'me' | 'describeResult' | 'onCreateRecord' | 'createFormNoun'
+>;
 
 /** Where a cell sits: its drawn column, and its offset when it is pinned. */
 export interface CellPlace {

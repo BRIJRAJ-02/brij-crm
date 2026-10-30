@@ -3,7 +3,6 @@
 // Main task: read and edit records in place (a paste or clear is one change, undone with ⌘Z), add a record and a column, live.
 // Leaves out: which filter, sorts and columns run and saving them (the view screen, spec 0020, hands them in), and presence.
 import {
-  isEditableHere,
   queryKey,
   toFieldAttribute,
   withPendingOptions,
@@ -27,7 +26,6 @@ import {
   ButtonLink,
   Callout,
   EmptyState,
-  isSystemOnly,
   Spinner,
   TopBar,
   useDelayedLoading,
@@ -43,6 +41,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ArchiveAttributeDialog } from '../settings/ArchiveAttributeDialog.tsx';
 import { AttributeDialog } from '../settings/AttributeDialog.tsx';
 import { useLinkEditing } from '../records/links.ts';
+import { useRecordForm } from '../records/RecordForm.tsx';
 import { useMemberPicker } from '../records/members.ts';
 import { importHref } from '../imports/paths.ts';
 import { strings as importStrings } from '../imports/strings.ts';
@@ -52,6 +51,7 @@ import type { ShownColumn, ShownLayout } from '../views/layout.ts';
 import { avatarAttribute } from './columns.ts';
 import { groupingGap, groupPlan, useGroupedRows } from './grouped.ts';
 import { createdToast } from './created.ts';
+import { createEditors } from './create-editors.ts';
 import { NewRecordDialog } from './NewRecordDialog.tsx';
 import { strings } from './strings.ts';
 import { editToast, isClear } from './undo.ts';
@@ -178,33 +178,6 @@ function columnsFor(
       },
     ];
   });
-}
-
-/**
- * The create dialog's editors for an object (spec 0012, AC-240): the primary
- * attribute, then the required ones, then the rest, each by position, and
- * only those the field set edits in a form here (no system values, and no
- * record references yet, #15; a member through the member picker).
- */
-export function createEditors(
-  object: ObjectSummary,
-  attributes: readonly AttributeDefinition[],
-): { readonly first: readonly AttributeDefinition[]; readonly more: readonly AttributeDefinition[] } {
-  const editable = attributes
-    .filter(
-      (attribute) =>
-        isEditableHere(attribute) &&
-        !attribute.isArchived &&
-        !isSystemOnly(attribute.type) &&
-        // Files arrive with #32's uploads.
-        attribute.type !== 'file',
-    )
-    .sort((a, b) => a.position - b.position);
-  const isFirst = (attribute: AttributeDefinition) =>
-    attribute.id === object.primaryAttributeId || attribute.isRequired;
-  const primary = editable.filter((attribute) => attribute.id === object.primaryAttributeId);
-  const required = editable.filter((attribute) => attribute.id !== object.primaryAttributeId && attribute.isRequired);
-  return { first: [...primary, ...required], more: editable.filter((attribute) => !isFirst(attribute)) };
 }
 
 /**
@@ -381,7 +354,9 @@ export function RecordsScreen({
     [attributes],
   );
   // Relation cells (spec 0014): a picker per cell, and what it commits goes as link deltas, never a whole list.
-  const links = useLinkEditing(slug);
+  // "Create deal…" in a reference cell's picker opens the far object's full form; what it makes is linked.
+  const recordForm = useRecordForm(slug);
+  const links = useLinkEditing(slug, recordForm.open);
   const references = useMemo(
     () =>
       new Map(
@@ -755,6 +730,7 @@ export function RecordsScreen({
                 : {})}
             />
             {bulk.dialog}
+            {recordForm.dialog}
             <NewRecordDialog
               isOpen={isCreating}
               onOpenChange={setCreating}

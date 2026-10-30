@@ -664,6 +664,7 @@ export type {
 export { UNREAD_PAST_CAP, type UnreadSource } from './inbox/unread.ts';
 export {
   isEditableHere,
+  isAskedOnCreate,
   searchMembers,
   toActorDisplays,
   toFieldAttribute,

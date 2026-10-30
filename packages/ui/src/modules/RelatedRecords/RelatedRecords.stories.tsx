@@ -107,6 +107,59 @@ export const AddLinkedAlready: Story = {
   },
 };
 
+/** Candidates whose name holds what is typed, as the screen's record search answers. */
+const searchCandidates = (query: string) =>
+  arraySource(
+    CANDIDATES.filter((display) => display.name.toLowerCase().includes(query.trim().toLowerCase())),
+    (display) => display.recordId,
+  );
+
+/**
+ * A search that finds nobody by that name ends in "Create "<typed>"": choosing it hands the name over for the
+ * screen to make and link. A lone Create isn't focused first, so one Enter on a typo makes nothing.
+ */
+export const AddCreates: Story = {
+  args: { picker: { onSearch: searchCandidates, onPick: fn(), onCreate: fn() } },
+  play: async ({ canvas, args }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Add to Team' }));
+    const menu = within(document.body).getByRole('menu');
+    await userEvent.keyboard('Grace Hopper');
+    const create = await within(menu).findByRole('menuitem', { name: 'Create "Grace Hopper"' });
+    await userEvent.keyboard('{Enter}');
+    await expect(args.picker?.onCreate).not.toHaveBeenCalled();
+    await userEvent.click(create);
+    await waitFor(() => expect(args.picker?.onCreate).toHaveBeenCalledWith('Grace Hopper'));
+  },
+};
+
+/** A name that matches a result, ignoring case: no Create, the result is the one to pick. */
+export const AddCreateMatchesName: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { picker: { onSearch: searchCandidates, onPick: fn(), onCreate: fn() } },
+  play: async ({ canvas }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Add to Team' }));
+    const menu = within(document.body).getByRole('menu');
+    await userEvent.keyboard('linus torvalds');
+    await within(menu).findByText('Linus Torvalds');
+    await expect(within(menu).queryByRole('menuitem', { name: /^Create/ })).toBeNull();
+  },
+};
+
+/** A far object that needs more than a name: the row reads "Create person…" and hands the typed text to its form. */
+export const AddCreatesThroughForm: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: {
+    picker: { onSearch: searchCandidates, onPick: fn(), onCreate: fn(), createFormNoun: 'person' },
+  },
+  play: async ({ canvas, args }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Add to Team' }));
+    const menu = within(document.body).getByRole('menu');
+    await userEvent.keyboard('Grace');
+    await userEvent.click(await within(menu).findByRole('menuitem', { name: 'Create person…' }));
+    await waitFor(() => expect(args.picker?.onCreate).toHaveBeenCalledWith('Grace'));
+  },
+};
+
 /** Every row held: no Show more. */
 export const AllShown: Story = {
   args: { records: records(3), total: 3, hasMore: false },

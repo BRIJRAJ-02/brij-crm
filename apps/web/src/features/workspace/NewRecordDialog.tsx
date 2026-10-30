@@ -2,7 +2,7 @@
 // Purpose: add one record of any object (a person, a project) without leaving the table.
 // Main task: fill the name and every required field, open "Add more fields" for the rest, then Create; the row shows at once.
 // "Create more" keeps the dialog open, emptied, for the next one.
-// Leaves out: references (linked in the table), duplicate checks and templates.
+// Leaves out: duplicate checks and templates. References pick through the record picker and go with the create.
 import {
   isDataError,
   refusalFor,
@@ -12,7 +12,10 @@ import {
   type RecordView,
 } from '@crm/data';
 import { AttributeEditor, Button, Disclosure, Form, Modal, Switch, type FormRefusal } from '@crm/ui';
+import { useParams } from '@tanstack/react-router';
 import { useId, useRef, useState } from 'react';
+import { refsOf } from '../records/details.ts';
+import { useLinkEditing } from '../records/links.ts';
 import type { MemberPicker } from '../records/members.ts';
 import { strings } from './strings.ts';
 
@@ -42,8 +45,8 @@ export interface NewRecordDialogProps {
    */
   readonly onCreated: (record: RecordView, keepOpen: boolean) => void;
   /**
-   * Values set before anything is typed, by attribute id, sent as if typed (a board column's "+" sets its option;
-   * `null` clears a default, for its "No <field>" column).
+   * Values set before anything is typed, by attribute id, sent as if typed: a board column's "+" sets its option
+   * (`null` clears a default, for its "No <field>" column), and a record picker's "Create deal…" its typed name.
    */
   readonly preset?: Readonly<Record<string, unknown>>;
 }
@@ -236,6 +239,10 @@ function NewRecordForm({
   preset,
 }: NewRecordFormProps) {
   const editors = [...first, ...more];
+  // A reference picks through the record picker, its links sent with the create (one write: made and linked, or
+  // neither, its refusal on the field). "Create "<typed>"" there makes the far record by name, never a form on a form.
+  const { slug = '' } = useParams({ strict: false });
+  const links = useLinkEditing(slug);
   // One id per opening (the Modal mounts this afresh), sent again on every press.
   const [id] = useState(newId);
   // What each editor shows: its default until the person commits a value (AC-240).
@@ -302,6 +309,16 @@ function NewRecordForm({
     );
   };
 
+  /** A reference's search, "Create …" and its chips' names (a record picked or made here). */
+  const referenceProps = (definition: AttributeDefinition) => {
+    const picker = links.formPickerFor(definition);
+    if (picker === undefined) return {};
+    const display = refsOf(values[definition.id]).map(
+      (ref) => picker.displayOf(ref.recordId) ?? { ...ref, name: '', kind: 'other' as const },
+    );
+    return { ...picker.editor, display };
+  };
+
   const editorFor = (definition: AttributeDefinition) => {
     const error = fieldErrors.get(definition.id);
     return (
@@ -311,6 +328,7 @@ function NewRecordForm({
         value={values[definition.id] ?? null}
         surface="form"
         {...(definition.type === 'actor_reference' ? { display: memberPicker.displays, ...memberPicker.extras } : {})}
+        {...(definition.type === 'record_reference' ? referenceProps(definition) : {})}
         onCommit={(value) => {
           sending.current = {
             ...sending.current,

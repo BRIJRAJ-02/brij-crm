@@ -17,6 +17,10 @@ export const strings = {
   choose: (name: string) => `Choose ${name}…`,
   search: (name: string) => `Search ${name}`,
   addAnother: 'Add another',
+  /** A record picker's last row when the search found none by that name: makes it and picks it. */
+  createNamed: (label: string) => `Create "${label}"`,
+  /** A record picker's last row when the far object needs more than a name: opens its full form. */
+  createIn: (noun: string) => `Create ${noun}…`,
   /** A picker's button once it holds one: picking replaces it. */
   change: (name: string) => `Change ${name}`,
   /** The object switcher's label: which object a record search looks in. */

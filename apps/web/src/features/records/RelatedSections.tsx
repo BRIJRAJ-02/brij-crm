@@ -1,24 +1,30 @@
 // Brief
 // Purpose: who and what is linked to this record on each side that holds many (a company's people and deals).
-// Main task: scan a side's records and open one, add one, or remove one, from the record itself.
+// Main task: scan a side's records and open one, add one (or create it when the search finds none), or remove one.
 // Leaves out: editing the related records' own values, sorting or filtering a side, removing several at once.
-import { RELATED_PREVIEW, type LinkChange, type LinkSection, type LinkSectionState } from '@crm/data';
+import {
+  RELATED_PREVIEW,
+  type LinkChange,
+  type LinkSection,
+  type LinkSectionState,
+  type RecordRefDisplay,
+} from '@crm/data';
 import { useLinkSection } from '@crm/data/react';
 import {
   Button,
   Card,
-  Modal,
   RelatedRecords,
   type RelatedRecord,
   type RelatedRecordsHandle,
   type RelatedRecordsPicker,
 } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
-import { useMemo, useState, type Ref } from 'react';
+import { useMemo, type Ref } from 'react';
 import { runUndo } from '../workspace/useUndoShortcut.ts';
 import { strings as workspaceStrings } from '../workspace/strings.ts';
 import type { RelatedSide } from './details.ts';
 import { useLinkEditing } from './links.ts';
+import { useRecordForm } from './RecordForm.tsx';
 import { strings } from './strings.ts';
 import type { RecordLink } from './timeline.ts';
 
@@ -38,7 +44,7 @@ function rowsOf(items: LinkSectionState['items'], link: RecordLink): readonly Re
 /** The library's load status for a section's (an unavailable one draws nothing at all). */
 const statusOf = (status: LinkSectionState['status']) => (status === 'unavailable' ? 'ready' : status);
 
-/** A related record's name in a confirm or a toast: "Unnamed person" for one with none. */
+/** A related record's name in a toast: "Unnamed person" for one with none. */
 const nameOf = (side: RelatedSide, record: RelatedRecord) =>
   record.display.name === '' ? strings.unnamed(side.farObject.singularName) : record.display.name;
 
@@ -49,8 +55,6 @@ const count = (value: number): string => new Intl.NumberFormat().format(value);
 export interface RelatedSectionsProps {
   readonly slug: string;
   readonly recordId: string;
-  /** The record's name, for Remove's confirm ("Only the link to Northwind Traders is removed"). */
-  readonly recordName: string;
   readonly related: readonly RelatedSource[];
   /** Whether the person may change this record's links (the object at `write`, the record live). */
   readonly canChange: boolean;
@@ -59,35 +63,27 @@ export interface RelatedSectionsProps {
   readonly handleRef?: (attributeId: string) => Ref<RelatedRecordsHandle>;
 }
 
-/** What Remove's confirm asks about. */
-interface Asking {
+/** What a Remove takes out: one record from one side. */
+interface Removing {
   readonly side: RelatedSide;
   readonly record: RelatedRecord;
 }
 
 /**
  * The record page's related sections (spec 0017, AC-375), after Details: one
- * per side that holds many, with Show more, Add and Remove. Remove asks
- * first (owner rule, 21 Oct); once a Remove or an Add lands, a toast says so
- * with Undo (one click, or Cmd+Z).
+ * per side that holds many, with Show more, Add and Remove. Remove acts at
+ * once (only a link goes; the record stays), and once a Remove or an Add
+ * lands, a toast says so with Undo (one click, or Cmd+Z): no confirm (owner,
+ * 30 Oct: Undo over confirm).
  */
-export function RelatedSections({
-  slug,
-  recordId,
-  recordName,
-  related,
-  canChange,
-  link,
-  handleRef,
-}: RelatedSectionsProps) {
+export function RelatedSections({ slug, recordId, related, canChange, link, handleRef }: RelatedSectionsProps) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
-  const links = useLinkEditing(slug);
-  // The confirm's record stays while the dialog animates out, so it never closes blank.
-  const [asking, setAsking] = useState<Asking>();
-  const [isAsking, setIsAsking] = useState(false);
+  // A far object that needs more than a name is made through its full form, opened from the picker.
+  const recordForm = useRecordForm(slug);
+  const links = useLinkEditing(slug, recordForm.open);
 
   /** Sends one delta; once it lands (and changed something) its toast says what happened, with Undo. */
-  const send = (change: LinkChange, message: string) => {
+  const send = (change: LinkChange, message: string): void => {
     data.links.change(slug, change).then(
       (outcome) => {
         // A refusal already said why, in the data layer's toast with Retry.
@@ -114,7 +110,7 @@ export function RelatedSections({
     );
   };
 
-  const remove = ({ side, record }: Asking) => {
+  const remove = ({ side, record }: Removing) => {
     const paired = side.attribute.relationship?.pairedAttributeId;
     send(
       {
@@ -134,11 +130,27 @@ export function RelatedSections({
       {related.map((side) => {
         const editable = canChange && side.attribute.readOnly === undefined;
         const search = editable ? links.pickerFor(side.attribute, recordId) : undefined;
+        // "Create "<typed>"": made, then linked as an Add (its link waits for the record); one toast says both.
+        const addMade = (display: RecordRefDisplay) => {
+          const { change } = links.addFor(side.attribute, recordId, display);
+          send(change, strings.createdLinked(nameOf(side, { display })));
+        };
+        const offer = search === undefined ? undefined : links.offerFor(side.attribute, addMade);
         const picker: RelatedRecordsPicker | undefined =
           search === undefined
             ? undefined
             : {
-                ...search,
+                onSearch: search.onSearch,
+                describeResult: search.describeResult,
+                ...(offer === undefined
+                  ? {}
+                  : {
+                      onCreate: (label: string) => {
+                        const made = offer.onCreate(label);
+                        if (made !== undefined) addMade(made);
+                      },
+                      ...(offer.formNoun === undefined ? {} : { createFormNoun: offer.formNoun }),
+                    }),
                 onPick: (display) => {
                   const { change, movedFromName } = links.addFor(side.attribute, recordId, display);
                   const name = nameOf(side, { display });
@@ -160,41 +172,14 @@ export function RelatedSections({
             {...(editable
               ? {
                   onRemove: (record: RelatedRecord) => {
-                    setAsking({ side, record });
-                    setIsAsking(true);
+                    remove({ side, record });
                   },
                 }
               : {})}
           />
         );
       })}
-      {asking !== undefined && (
-        <Modal
-          title={strings.removeTitle(nameOf(asking.side, asking.record), asking.side.attribute.title)}
-          tone="danger"
-          isOpen={isAsking}
-          onOpenChange={setIsAsking}
-          actions={
-            <>
-              <Button slot="close" kbd="ESC">
-                {strings.cancel}
-              </Button>
-              <Button
-                variant="danger-solid"
-                icon="x"
-                onPress={() => {
-                  setIsAsking(false);
-                  remove(asking);
-                }}
-              >
-                {strings.removeAction(asking.side.attribute.title)}
-              </Button>
-            </>
-          }
-        >
-          {strings.removeText(nameOf(asking.side, asking.record), recordName)}
-        </Modal>
-      )}
+      {recordForm.dialog}
     </>
   );
 }

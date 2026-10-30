@@ -247,3 +247,64 @@ export const ResultNotes: Story = {
     await expect(items[0]).toHaveAccessibleDescription('Current');
   },
 };
+
+/**
+ * A search that finds nothing by that name ends in "Create "<typed>"" (for someone who may make records of the far
+ * object): choosing it hands the name over, and the record the screen made at once is picked, as if chosen.
+ */
+export const CreatesRecord: Story = {
+  args: {
+    onSearch: ((query: string) =>
+      arraySource(
+        SAMPLE_COMPANIES.filter((company) => company.name.toLowerCase().includes(query.toLowerCase())),
+        (company) => company.recordId,
+      )) as never,
+    onCreateRecord: fn((label: string) => ({
+      objectId: SAMPLE_IDS.companies,
+      recordId: 'new-company',
+      name: label,
+      kind: 'company' as const,
+    })),
+  },
+  render: (args) => (
+    <Stage width="narrow">
+      <AttributeEditor {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas, args, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: /Choose Company/ }));
+    const page = within(document.body);
+    await page.findByRole('menu');
+    await userEvent.keyboard('Initech');
+    await userEvent.click(await page.findByRole('menuitem', { name: 'Create "Initech"' }));
+    await expect(args.onCreateRecord).toHaveBeenCalledWith('Initech');
+    await waitFor(() => expect(canvas.getByRole('button', { name: /Change Company/ })).toHaveFocus(), { timeout: 100 });
+    await expect(args.onCommit).toHaveBeenCalledWith({ objectId: SAMPLE_IDS.companies, recordId: 'new-company' });
+    await waitFor(() => expect(document.querySelector('[role="menu"]')).toBeNull());
+  },
+};
+
+/** A far object that needs more than a name (a required field): "Create company…" hands the typed text to its form. */
+export const CreatesThroughForm: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: {
+    onSearch: (() => arraySource([], (company: { readonly recordId: string }) => company.recordId)) as never,
+    onCreateRecord: fn(() => undefined),
+    createFormNoun: 'company',
+  },
+  render: (args) => (
+    <Stage width="narrow">
+      <AttributeEditor {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas, args, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: /Choose Company/ }));
+    const page = within(document.body);
+    await page.findByRole('menu');
+    await userEvent.keyboard('Initech');
+    await userEvent.click(await page.findByRole('menuitem', { name: 'Create company…' }));
+    await expect(args.onCreateRecord).toHaveBeenCalledWith('Initech');
+    await expect(args.onCommit).not.toHaveBeenCalled();
+    await waitFor(() => expect(document.querySelector('[role="menu"]')).toBeNull());
+  },
+};

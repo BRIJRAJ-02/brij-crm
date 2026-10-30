@@ -51,18 +51,17 @@ export const strings = {
   relatedNoun: (pluralName: string) => pluralName.toLowerCase(),
   /** The Related card Overview holds while the page loads, before its sides are known. */
   relatedPending: 'Related records',
-  /** Remove's confirm (owner rule, 21 Oct: an ending action asks first; its Undo stays one click). */
-  removeTitle: (name: string, side: string) => `Remove ${name} from ${side}?`,
-  removeText: (name: string, recordName: string) =>
-    `${name} stays. Only the link to ${recordName} is removed. You can undo this.`,
-  removeAction: (side: string) => `Remove from ${side}`,
-  cancel: 'Cancel',
   /** The toasts once a Remove or an Add lands, each with Undo. */
   removed: (name: string, side: string) => `Removed ${name} from ${side}.`,
   added: (name: string, side: string) => `Added ${name} to ${side}.`,
   /** An Add that took the record from the one holding it on a side of one ("At Acme"). */
   moved: (name: string, side: string, from: string) => `Moved ${name} to ${side} from ${from}.`,
   undo: 'Undo',
+  /** A picker's "Create …" once the record is made and linked (its chip already shows where), with Undo. */
+  createdLinked: (name: string) => `Created ${name}.`,
+  /** A picker's "Create …" refused: nothing was made or linked. */
+  notCreated: (name: string, reason: string) => `Couldn’t create ${name}. ${reason}`,
+  tryAgain: 'Try again in a moment.',
   /** A Related card's "View all" with the side's total, and said in full. */
   viewAllRelated: (count: string) => `View all ${count}`,
   viewAllRelatedLabel: (count: string, noun: string, side: string) => `View all ${count} ${noun} in ${side}`,

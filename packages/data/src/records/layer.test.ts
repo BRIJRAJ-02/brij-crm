@@ -1066,6 +1066,27 @@ describe('creating a record', () => {
     expect(layer.size()).toBe(3);
   });
 
+  it('sends a create that links a record being made only once that one is in, and drops it when refused', async () => {
+    const { layer, creates } = await readyView();
+    const company = layer.create(WS, PEOPLE, { [NAME]: 'Acme' }, idAt(8300));
+    const person = layer.create(WS, PEOPLE, { [NAME]: 'Grace', [CITY]: { objectId: PEOPLE, recordId: idAt(8300) } });
+    await settle();
+    expect(creates).toHaveLength(1);
+    creates[0]?.answer(rowOf(idAt(8300), { [NAME]: 'Acme' }));
+    await company;
+    await settle();
+    expect(creates).toHaveLength(2);
+    creates[1]?.answer(rowOf(creates[1].input.id, { [NAME]: 'Grace' }));
+    await person;
+    const refused = layer.create(WS, PEOPLE, { [NAME]: 'Globex' }, idAt(8301));
+    const linking = layer.create(WS, PEOPLE, { [NAME]: 'Ada', [CITY]: [{ objectId: PEOPLE, recordId: idAt(8301) }] });
+    await settle();
+    creates[2]?.fail(dataError('LIMIT_REACHED', 'Full.'));
+    await expect(refused).rejects.toMatchObject({ code: 'LIMIT_REACHED' });
+    await expect(linking).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    expect(creates).toHaveLength(3);
+  });
+
   it('sends an edit to the draft once the create is in', async () => {
     const { layer, creates, edits } = await readyView();
     const made = layer.create(WS, PEOPLE, { [NAME]: 'Grace' });
@@ -2443,6 +2464,52 @@ describe('link deltas (spec 0014, milestone 2)', () => {
     await settle();
     expect(gets.at(-1)?.input).toEqual([idAt(2)]);
     expect(mutationLog).toContain(`answered ${idAt(5001)} 2`);
+  });
+
+  it('links a record being made only once its create is in (a picker’s Create)', async () => {
+    const { layer, view, linkAdds, creates, frame } = await linkedView();
+    const made = layer.create(WS, PEOPLE, { [NAME]: 'Grace' }, idAt(8100));
+    const done = layer.changeLink(WS, {
+      kind: 'add',
+      recordId: idAt(0),
+      attributeId: TEAM,
+      target: ref(8100),
+      isMulti: true,
+    });
+    await settle();
+    frame();
+    expect(shown(view, 1)?.values[TEAM]).toEqual([ref(1), ref(8100)]);
+    expect(linkAdds).toHaveLength(0);
+    creates[0]?.answer(rowOf(idAt(8100), { [NAME]: 'Grace' }));
+    await made;
+    await settle();
+    expect(linkAdds[0]?.input).toMatchObject({ recordId: idAt(0), targets: [ref(8100)] });
+    linkAdds[0]?.answer({
+      record: { ...rowOf(idAt(0), { [TEAM]: [ref(1), ref(8100)] }), revision: 1 },
+      written: { [TEAM]: version(9) },
+      changedRecordIds: [],
+    });
+    expect(await done).toMatchObject({ kind: 'done', changed: true });
+  });
+
+  it('drops the link quietly when the record it names is refused', async () => {
+    const { layer, view, linkAdds, creates, frame, notices } = await linkedView();
+    const made = layer.create(WS, PEOPLE, { [NAME]: 'Grace' }, idAt(8200));
+    const done = layer.changeLink(WS, {
+      kind: 'add',
+      recordId: idAt(0),
+      attributeId: TEAM,
+      target: ref(8200),
+      isMulti: true,
+    });
+    await settle();
+    creates[0]?.fail(dataError('LIMIT_REACHED', 'Full.'));
+    await expect(made).rejects.toMatchObject({ code: 'LIMIT_REACHED' });
+    expect(await done).toMatchObject({ kind: 'refused', error: { code: 'NOT_FOUND' } });
+    frame();
+    expect(linkAdds).toHaveLength(0);
+    expect(shown(view, 0)?.values[TEAM]).toEqual([ref(1)]);
+    expect(notices).toHaveLength(0);
   });
 
   it('raises a full cell’s total instead of drawing a 21st chip, and lowers it on remove', async () => {

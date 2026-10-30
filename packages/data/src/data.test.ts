@@ -44,6 +44,7 @@ import {
   createIdMinter,
   isDataError,
   isEditableHere,
+  isAskedOnCreate,
   searchMembers,
   toActorDisplays,
   toFieldAttribute,
@@ -1359,6 +1360,11 @@ describe('members and attributes', () => {
     };
     expect(toFieldAttribute(linked)).toMatchObject({ isReadOnly: false, cardinality: 'many' });
     expect(isEditableHere(linked)).toBe(false);
+    // The create form asks for a reference that can link (sent with the create), never one that can't.
+    expect(isAskedOnCreate(linked)).toBe(true);
+    expect(isAskedOnCreate(company)).toBe(false);
+    expect(isAskedOnCreate({ ...linked, isSystem: true })).toBe(false);
+    expect(isAskedOnCreate(owner)).toBe(true);
     const createdAt = { ...TITLE, type: 'timestamp' as const, isSystem: true };
     expect(toFieldAttribute(createdAt, 'unused')).toMatchObject({ isReadOnly: true });
     expect(toFieldAttribute(createdAt, 'unused').readOnlyReason).toBeUndefined();

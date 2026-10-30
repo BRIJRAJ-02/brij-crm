@@ -4,7 +4,7 @@
 // it sits in the first load with the rest of the layer's surface.
 import type { ActorDisplay, AttributeDefinition, AttributeType, Hue, MemberSummary } from '@crm/contracts';
 
-/** The types a create form leaves out for now: record references (linked from the table or the record page). */
+/** The types a bulk edit leaves out: record references (linked one at a time, from a cell or the record page). */
 const NOT_IN_FORMS: readonly AttributeType[] = ['record_reference'];
 
 /**
@@ -54,6 +54,21 @@ export interface FieldAttributeShape {
  */
 export const isEditableHere = (definition: Pick<AttributeDefinition, 'type' | 'isSystem' | 'readOnly'>): boolean =>
   !definition.isSystem && definition.readOnly === undefined && !NOT_IN_FORMS.includes(definition.type);
+
+/**
+ * Whether the create form asks for this attribute: what `isEditableHere`
+ * allows, and a record reference that can link from here (a deal's Company,
+ * a person's Company: owner flow pass, 30 Oct 2026), sent with the create so
+ * the record and its links land together or not at all.
+ */
+export const isAskedOnCreate = (
+  definition: Pick<AttributeDefinition, 'type' | 'isSystem' | 'readOnly' | 'relationship'>,
+): boolean =>
+  isEditableHere(definition) ||
+  (definition.type === 'record_reference' &&
+    !definition.isSystem &&
+    definition.readOnly === undefined &&
+    !isUnlinkable(definition));
 
 /**
  * An attribute definition as the field set's attribute: title to name,

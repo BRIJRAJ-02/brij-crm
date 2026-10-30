@@ -39,7 +39,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useMemberPicker } from '../records/members.ts';
 import { AttributeDialog } from '../settings/AttributeDialog.tsx';
 import { NewRecordDialog } from '../workspace/NewRecordDialog.tsx';
-import { createEditors } from '../workspace/RecordsScreen.tsx';
+import { createEditors } from '../workspace/create-editors.ts';
 import { createdToast } from '../workspace/created.ts';
 import { strings as workspaceStrings } from '../workspace/strings.ts';
 import { useCan, WorkspacePage } from '../workspace/WorkspacePage.tsx';

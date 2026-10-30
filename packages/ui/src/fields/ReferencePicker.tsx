@@ -14,6 +14,14 @@ import { Menu, MenuTrigger } from '../molecules/Menu/Menu.tsx';
 import { InPopover } from '../molecules/Popover/Popover.tsx';
 import { Select } from '../molecules/Select/Select.tsx';
 import { focusLater } from '../lib/focus-later.ts';
+import {
+  CREATE_ROW_KEY,
+  createRowFor,
+  createRowText,
+  isCreateRow,
+  withCreateRow,
+  type CreateRow,
+} from './create-row.ts';
 import styles from './ReferencePicker.module.css';
 import { strings } from './strings.ts';
 
@@ -95,6 +103,21 @@ export interface ReferencePickerProps<D extends Reference> {
   readonly describeResult?: (display: D) => ResultState | undefined;
   /** The form around it is sending: the chips show in Field's disabled look, and neither the box nor a Remove acts. */
   readonly isDisabled?: boolean;
+  /**
+   * Offers "Create "<typed>"" last in the search when no result has that name
+   * (ignoring case), as Select's `onCreate` does, and hands the label over:
+   * a display it returns is picked at once, as if chosen from the results.
+   * Only for someone who may make records of the far object; nothing is
+   * offered when absent.
+   */
+  readonly onCreate?: (label: string) => D | undefined;
+  /**
+   * With `onCreate`, the far object needs more than a name (a required
+   * field): the row reads "Create <noun>…" whatever is typed, and choosing
+   * it closes the menu and hands the typed text over for the screen's full
+   * form, which picks what it makes itself.
+   */
+  readonly createFormNoun?: string;
 }
 
 /**
@@ -122,6 +145,8 @@ export function ReferencePicker<D extends Reference>({
   showLabel = false,
   describeResult,
   isDisabled = false,
+  onCreate,
+  createFormNoun,
 }: ReferencePickerProps<D>) {
   const labelId = useId();
   const errorId = useId();
@@ -162,18 +187,48 @@ export function ReferencePicker<D extends Reference>({
                 },
               }),
         };
+  // Last, "Create "<typed>"" (or "Create company…") when the search has nothing by that name.
+  const createRow = createRowFor(
+    results,
+    query,
+    (display) => display.name,
+    onCreate === undefined ? undefined : createFormNoun === undefined ? {} : { formNoun: createFormNoun },
+  );
+  const listed = withCreateRow<D>(offered, createRow);
+  const backToTrigger = () => {
+    if (isInline) return;
+    requestAnimationFrame(() => {
+      triggerRef.current?.focus();
+    });
+  };
+  const create = (row: CreateRow) => {
+    if (onCreate === undefined) return;
+    backToTrigger();
+    if (row.formNoun !== undefined) {
+      setOpen(false);
+      onCreate(row.label);
+      return;
+    }
+    const made = onCreate(row.label);
+    if (made === undefined) return;
+    if (!allowMultiple) {
+      onChange([made]);
+      return;
+    }
+    if (!chosen.some((item) => keyOf(item) === keyOf(made))) onChange([...chosen, made]);
+  };
   const pick = (key: string | number) => {
+    if (key === CREATE_ROW_KEY) {
+      if (createRow !== undefined) create(createRow);
+      return;
+    }
     const found = Array.from({ length: offered.count }, (_, index) => offered.getItem(index)).find(
       (item) => item !== undefined && keyOf(item) === String(key),
     );
     if (found === undefined) return;
     // A pointer pick: focus goes back to the trigger at once, not when the closing menu has faded, so a key pressed
     // meanwhile (Escape in a dialog) reaches what it is meant for. A keyboard pick does the same already.
-    if (!isInline) {
-      requestAnimationFrame(() => {
-        triggerRef.current?.focus();
-      });
-    }
+    backToTrigger();
     if (!allowMultiple) {
       onChange([found]);
       return;
@@ -188,7 +243,7 @@ export function ReferencePicker<D extends Reference>({
   const hasObjects = objects !== undefined && objects.length > 0 && onObjectChange !== undefined;
   const currentObject = hasObjects ? (objects.find((object) => object.id === objectId) ?? objects[0]) : undefined;
   const menu = (
-    <Menu<D>
+    <Menu<D | CreateRow>
       label={name}
       isInline={isInline}
       width="trigger"
@@ -234,9 +289,14 @@ export function ReferencePicker<D extends Reference>({
         ...(currentObject === undefined ? {} : { placeholder: strings.searchObject(currentObject.label) }),
         onSearch: setQuery,
         ...(startQuery === undefined ? {} : { defaultQuery: startQuery }),
+        // A lone "Create "<typed>"" isn't focused first, so one Enter on a typo makes nothing; an arrow reaches it.
+        ...(createRow !== undefined && createRow.formNoun === undefined && listed.count === 1
+          ? { isFirstUnfocused: true }
+          : {}),
       }}
-      source={offered}
+      source={listed}
       renderItem={(display) => {
+        if (isCreateRow(display)) return { children: createRowText(display), icon: 'plus' };
         const state = describeResult?.(display);
         const email = 'email' in display ? display.email : undefined;
         // A note ("At Acme") is the result's second line, read with it; a member's email tells two people apart.
