@@ -48,3 +48,7 @@ None of its own.
 ## Differences from the artifact
 
 Not in the artifact.
+
+## Entering
+
+`isEntering` (cards only) eases each tile in on mount: a fade and a `space-8` rise over `duration-modal` on `ease-out`, the second tile one `duration-press` later and the rest two. Only translate and opacity move, reduced motion keeps the fade alone, and the tiles take input from the first frame. It is for a moment worth marking (first run's Done, spec 0058 AC-21), never for grids that load or refresh.
