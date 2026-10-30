@@ -419,6 +419,23 @@ describe('pruning and the cap (AC-1293)', () => {
   });
 });
 
+describe('the footer across zones (AC-1294)', () => {
+  it('adds up each person’s own hours, whatever their zone, the same hours their rows show', async () => {
+    const w = await world();
+    const lon = await w.add('Lena London', { zone: 'Europe/London' });
+    const kol = await w.add('Kiran Kolkata', { zone: 'Asia/Kolkata' });
+    const week = await readTeamWeek(w.owner, { now: realNow }, { weekStart: thisMonday() });
+    // Olga (the virtual default), Lena and Kiran each work 9 to 5 in their own zone: 3 people, 24 hours added up,
+    // though in UTC Kiran's day and Lena's barely meet.
+    expect(week.footer[0]).toMatchObject({ working: 3, minutes: 3 * 480 });
+    const rows = week.rows.filter((row) => [w.memberId, lon, kol].includes(row.memberId));
+    expect(rows.map((row) => row.offsetMinutes === 330 || row.memberId !== kol)).toEqual([true, true, true]);
+    // The footer's day is the rows' days added: the same number a reader adds from the hours under the names.
+    const fromRows = rows.reduce((sum, row) => sum + row.weekMinutes, 0);
+    expect(week.footer.reduce((sum, day) => sum + day.minutes, 0)).toBe(fromRows);
+  });
+});
+
 describe('a week across the clock change (AC-1290)', () => {
   it('keeps 9 to 5 local in London and moves the offset with the week', async () => {
     const w = await world();

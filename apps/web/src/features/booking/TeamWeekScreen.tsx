@@ -341,8 +341,10 @@ function Loaded({
         {words.setUsualFor}
       </Button>
     );
+  // In Bookings the strip sits in the tab bar's end; on its own it is a page bar with the page's gutter.
   const tools = (
     <SectionBar
+      {...(slot === null ? { variant: 'bar' as const } : {})}
       start={
         <>
           <AvailabilityViewSwitch
@@ -401,7 +403,8 @@ function Loaded({
         </EmptyState>
       </PageColumn>
     ) : (
-      <>
+      // The page's gutter, as every full width page has it (Members, Bookings' list).
+      <PageColumn>
         {isPast ? (
           <Callout tone="info">{words.readOnlyWeek}</Callout>
         ) : (
@@ -445,7 +448,7 @@ function Loaded({
             {state.more === 'failed' ? words.tryAgain : words.showMore}
           </Button>
         )}
-      </>
+      </PageColumn>
     );
   return (
     <WorkspacePage
@@ -723,7 +726,11 @@ export function TeamWeekPending({ week }: { readonly week?: string | undefined }
       currentPage="roster"
       page={{
         topBar: <TopBar title={words.title} icon="users" isLoading />,
-        body: <TeamWeek label={words.grid(rangeWords(monday, locale))} days={days} people={[]} isLoading />,
+        body: (
+          <PageColumn>
+            <TeamWeek label={words.grid(rangeWords(monday, locale))} days={days} people={[]} isLoading />
+          </PageColumn>
+        ),
       }}
     />
   );

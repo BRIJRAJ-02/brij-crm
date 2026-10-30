@@ -22,9 +22,15 @@ export const teamWeekStrings = {
   hours,
   people: (count: number) => (count === 1 ? '1 person' : `${String(count)} people`),
   nobody: 'Nobody',
-  working: 'Working',
+  /**
+   * The footer's heading (AC-1294): who works that day, and their hours added up, each person's own merged hours
+   * (the same number as the hours under their name), whatever their zone.
+   */
+  working: 'Working, hours added up',
   totalLabel: (day: string, count: number, minutes: number) =>
-    count === 0 ? `${day}: nobody working` : `${day}: ${teamWeekStrings.people(count)} working, ${hours(minutes)}`,
+    count === 0
+      ? `${day}: nobody working`
+      : `${day}: ${teamWeekStrings.people(count)} working, ${hours(minutes)} added up`,
   offset: (minutes: number) => {
     const sign = minutes < 0 ? '−' : '+';
     const whole = Math.abs(minutes);
