@@ -188,11 +188,17 @@ export function localDay(instant: string, timeZone: string): string {
   return `${part('year')}-${part('month')}-${part('day')}`;
 }
 
+/** The day a week can start on. */
+export type WeekDay = 'monday' | 'sunday' | 'saturday';
+
+/** Each week start as `Date#getUTCDay` numbers it. */
+const WEEK_STARTS: Readonly<Record<WeekDay, number>> = { sunday: 0, monday: 1, saturday: 6 };
+
 /** The first day of the period that holds `day`. A week starts on `weekStart`. */
-export function periodStartOf(bucket: ReportBucket, day: string, weekStart: 'monday' | 'sunday'): string {
+export function periodStartOf(bucket: ReportBucket, day: string, weekStart: WeekDay): string {
   if (bucket === 'month') return `${day.slice(0, 7)}-01`;
   const weekday = new Date(utcOf(day)).getUTCDay();
-  const back = weekStart === 'monday' ? (weekday + 6) % 7 : weekday;
+  const back = (weekday - WEEK_STARTS[weekStart] + 7) % 7;
   return addDays(day, -back);
 }
 
@@ -207,7 +213,7 @@ export function periodEndOf(bucket: ReportBucket, start: string): string {
 export function periodStarts(
   bucket: ReportBucket,
   today: string,
-  weekStart: 'monday' | 'sunday',
+  weekStart: WeekDay,
   count: number = REPORT_PERIODS,
 ): readonly string[] {
   const starts: string[] = [];
@@ -326,7 +332,7 @@ export interface ReportContext {
   /** The clock, an ISO instant. */
   readonly now: string;
   readonly timeZone: string;
-  readonly weekStart: 'monday' | 'sunday';
+  readonly weekStart: WeekDay;
 }
 
 /** A plan, or the sentence saying why the config can't run. */

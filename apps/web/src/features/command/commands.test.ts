@@ -40,7 +40,7 @@ const OBJECTS = [
 ];
 
 describe('what the menu lists (AC-1075, AC-1082, AC-1086)', () => {
-  it('goes Home, to each object in the workspace’s order, then Tasks, Scheduling’s pages, Trash and Settings', () => {
+  it('goes Home, to each object in the workspace’s order, then Tasks, Scheduling’s pages, Reports, Trash and Settings', () => {
     expect(pageCommands('acme', OBJECTS).map((command) => command.name)).toEqual([
       'Home',
       'Companies',
@@ -52,6 +52,7 @@ describe('what the menu lists (AC-1075, AC-1082, AC-1086)', () => {
       'Calendars',
       'Booking pages',
       'Forms',
+      'Reports',
       'Open trash',
       'Settings',
     ]);

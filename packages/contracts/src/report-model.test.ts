@@ -86,6 +86,8 @@ describe('days and periods', () => {
     // 31 October 2026 is a Saturday.
     expect(periodStartOf('week', '2026-10-31', 'monday')).toBe('2026-10-26');
     expect(periodStartOf('week', '2026-10-31', 'sunday')).toBe('2026-10-25');
+    expect(periodStartOf('week', '2026-10-31', 'saturday')).toBe('2026-10-31');
+    expect(periodStartOf('week', '2026-10-30', 'saturday')).toBe('2026-10-24');
     expect(periodEndOf('month', '2026-12-01')).toBe('2027-01-01');
     expect(periodEndOf('month', '2026-10-01')).toBe('2026-11-01');
     expect(periodEndOf('week', '2026-10-26')).toBe('2026-11-02');

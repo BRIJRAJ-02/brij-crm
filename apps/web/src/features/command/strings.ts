@@ -31,6 +31,8 @@ export const strings = {
   calendars: 'Calendars',
   roundRobin: 'Round robin',
   forms: 'Forms',
+  /** The charts page (the reports lane), which has no sidebar item: Home and this menu reach it. */
+  reports: 'Reports',
   /** The trash, a quick action now it left the sidebar (the owner, 22 October 2026). */
   trash: 'Open trash',
   settings: 'Settings',
@@ -42,6 +44,7 @@ export const strings = {
   availabilityTerms: ['hours', 'schedules', 'working hours'],
   bookingPagesTerms: ['links', 'scheduling links', 'captures'],
   formsTerms: ['enquiries', 'submissions', 'captures'],
+  reportsTerms: ['charts', 'forecast', 'pipeline', 'analytics', 'graph', 'dashboard'],
   trashTerms: ['deleted', 'bin', 'restore', 'go to trash'],
   settingsTerms: ['preferences', 'options'],
   preferencesTerms: ['theme', 'appearance', 'dark', 'light'],
