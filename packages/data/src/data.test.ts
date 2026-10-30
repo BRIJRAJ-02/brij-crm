@@ -3074,6 +3074,7 @@ describe('a team page’s routing rules (spec 0043, AC-1608)', () => {
     title: 'Demo',
     description: '',
     slug: 'demo',
+    scope: 'member',
     durations: [30],
     location: { type: 'video' },
     bufferBefore: 0,
