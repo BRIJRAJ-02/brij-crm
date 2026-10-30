@@ -1815,8 +1815,22 @@ export function createDataLayer({
       () => {
         schedulesDue.delete(workspace);
         schedules.changed(workspace);
-        // The Team week reads the same schedules (spec 0037, job J6), and time off rides this event too (coarse, no
-        // ids): the held time off lists read again, and Bookings' held reads, whose Host away flags it sets.
+        // The Team week reads the same schedules (spec 0037, job J6).
+        accessLoaded?.teamWeek.changed(workspace);
+      },
+      100 + Math.round(random() * 300),
+    );
+  });
+  // Someone's time off changed (spec 0037): the Team week (Away), the held time off lists and Bookings' held reads
+  // (Host away) read again, once for a burst, spread over 100 to 400 ms as schedules are. The event names nobody, so
+  // every tab of the workspace hears it; only what a screen holds reads.
+  const timeOffDue = new Set<string>();
+  router.on('time_off', (workspace) => {
+    if (timeOffDue.has(workspace)) return;
+    timeOffDue.add(workspace);
+    setTimeout(
+      () => {
+        timeOffDue.delete(workspace);
         accessLoaded?.teamWeek.changed(workspace);
         accessLoaded?.timeOff.changed(workspace);
         refreshBookings(workspace);
@@ -2116,10 +2130,14 @@ export function createDataLayer({
     },
     ...bookingsFresh,
   });
-  /** Time off changed (spec 0037): what Bookings shows now reads again (Host away), each held read once. */
+  /**
+   * Time off changed (spec 0037): what Bookings shows now reads again (Host away), each held read once, and so does
+   * Home's Team today (Away).
+   */
   const refreshBookings = (workspace: string) => {
     bookingsLists.refreshHeld(workspace);
     meetings.refreshHeld(workspace);
+    homeReads.teamChanged(workspace);
   };
   /** A booking or a calendar changed: every held Bookings read of the workspace reads again. */
   const reloadBookings = (workspace: string) => {
@@ -2142,7 +2160,7 @@ export function createDataLayer({
   const schedulingAccess = (): Promise<SchedulingAccessStore> =>
     (accessStore ??= import('./scheduling/access.ts').then(({ createSchedulingAccessStore, wireApi }) => {
       accessLoaded = createSchedulingAccessStore({
-        api: wireApi({ client: api, call: (run) => call(run), beforeRead, mintId }),
+        api: wireApi({ client: api, call: (run) => call(run), beforeRead, mintId, mutations }),
         mintId,
         notify,
         watch,

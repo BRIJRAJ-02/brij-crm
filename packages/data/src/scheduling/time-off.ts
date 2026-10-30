@@ -2,11 +2,11 @@
 // Availability's Time off section reads. It loads in the scheduling access chunk (never the first load). Add and
 // change wait for the server, since its answer carries the meetings already booked inside (the dialog shows them);
 // each lands in every held list of that member at once. Delete is optimistic: gone at once, put back with a toast if
-// refused. A time off write anywhere stores a coarse `schedules` event (spec 0037), which reads every held list of the
+// refused. A time off write anywhere stores one `time_off` event (naming nothing), which reads every held list of the
 // workspace again (`changed`); a list nobody holds reads when held again. A held list watches its workspace, so the
 // Time off section open on its own is live. A list also reads again when a screen holds it and the last read is more
 // than a moment old, and on Try again. Each landed write here runs `onChanged`, so this tab's Team week and Bookings
-// read again at once (its own event is skipped as an echo).
+// read again at once; its own event is then skipped as an echo (the write's mutation id is in the tab's log).
 import type { TimeOffEntry, TimeOffList, TimeOffReason, TimeOffSaved } from '@crm/contracts';
 import { toDataError, type DataError } from '../errors.ts';
 import type { Notice } from '../notice.ts';

@@ -91,10 +91,12 @@ describe('every kind has a rule', () => {
         'records',
         'schedules',
         'tasks',
+        'time_off',
         'views',
       ].sort(),
     );
     expect(eventFacts({ seq: 1, at, kind: 'schedules', scheduleIds: [] })).toEqual([]);
+    expect(eventFacts({ seq: 1, at, kind: 'time_off' })).toEqual([]);
     expect(eventFacts({ seq: 1, at, kind: 'comments', recordIds: [], threadIds: [] })).toEqual([]);
     expect(eventFacts({ seq: 1, at, kind: 'meetings', recordIds: [], meetingIds: [] })).toEqual(['meetings']);
     expect(eventFacts({ seq: 1, at, kind: 'views', viewIds: [], coarse: false })).toEqual(['views']);

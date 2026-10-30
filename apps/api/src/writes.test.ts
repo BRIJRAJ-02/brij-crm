@@ -1656,8 +1656,8 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     await m.client.bookings.blocks.remove({ workspace: m.slug, id: block.id, mutationId });
     return [];
   },
-  // Time off (spec 0037): one coarse `schedules` row with no ids, so open tabs read their hours, the Team week and
-  // Host away again.
+  // Time off (spec 0037): one `time_off` row naming nothing, so open tabs read the Team week, time off and Host away
+  // again.
   'timeOff.create': async (m, mutationId) => {
     await m.client.timeOff.create({
       workspace: m.slug,
@@ -1667,7 +1667,7 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
       reason: 'vacation',
       mutationId,
     });
-    return [{ kind: 'schedules', item_ids: [], mutation_id: mutationId }];
+    return [{ kind: 'time_off', item_ids: [], mutation_id: mutationId }];
   },
   'timeOff.update': async (m, mutationId) => {
     const made = await m.client.timeOff.create({
@@ -1688,8 +1688,8 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
       mutationId,
     });
     return [
-      { kind: 'schedules', item_ids: [] },
-      { kind: 'schedules', item_ids: [], mutation_id: mutationId },
+      { kind: 'time_off', item_ids: [] },
+      { kind: 'time_off', item_ids: [], mutation_id: mutationId },
     ];
   },
   'timeOff.delete': async (m, mutationId) => {
@@ -1703,8 +1703,8 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     });
     await m.client.timeOff.delete({ workspace: m.slug, id: made.entry.id, mutationId });
     return [
-      { kind: 'schedules', item_ids: [] },
-      { kind: 'schedules', item_ids: [], mutation_id: mutationId },
+      { kind: 'time_off', item_ids: [] },
+      { kind: 'time_off', item_ids: [], mutation_id: mutationId },
     ];
   },
   // The Team week (spec 0037): every write goes through the schedules' write path, so each stores a `schedules` row.

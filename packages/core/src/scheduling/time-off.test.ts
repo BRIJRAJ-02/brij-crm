@@ -312,7 +312,7 @@ describe('time off for someone else (AC-1282, AC-1285, AC-1286, AC-1287)', () =>
     expect(today.members.find((each) => each.memberId === doctor)?.away).toBe(true);
     expect(today.members.find((each) => each.memberId === manager)?.away).toBeUndefined();
     // Named, the stand in rides on each flagged booking for the host and for Manage over them.
-    await updateTimeOff(w.as(doctor), { ...saved.entry, standinMemberId: manager });
+    await updateTimeOff(w.as(doctor), { ...saved.entry, reason: 'sick', standinMemberId: manager });
     for (const reader of [w.as(doctor), w.as(manager)]) {
       const again = await listWorkspaceBookings(reader, { when: 'upcoming', hosts: 'all' }, NOW);
       expect(again.filter((each) => each.hostAway === true).map((each) => each.hostAwayStandinId)).toEqual([

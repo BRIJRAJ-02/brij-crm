@@ -3,8 +3,8 @@
 // every page that books the member, private ones included, and round robin's per member read skips them, with no
 // new query. A member adds, changes and removes their own (with `booking.manage`); anyone with Manage over them
 // does the same for them (and needs `booking.manage` of their own, AC-1275). Each change writes one audit row
-// (the dates, the reason code and the stand in, never the note), one coarse `schedules` outbox row (so open tabs read
-// again) and, when someone else made it, queues the member's scheduling notice (AC-1264). A stand in is emailed once
+// (the dates, the reason code and the stand in, never the note), one `time_off` outbox row naming nothing (so open
+// tabs read again) and, when someone else made it, queues the member's scheduling notice (AC-1264). A stand in is emailed once
 // when they are named or the dates change.
 //
 // The dates are calendar dates read in the zone of the member's default schedule at save (stored in `time_zone`):
@@ -298,8 +298,8 @@ async function afterChange(tx: WorkspaceTx, scope: EngineScope, member: string):
 
 /**
  * One time off write in one transaction, then the hooks (the outbox): `changed(member)` notes whose time off it
- * changed, which stores one coarse `schedules` row, so every tab holding hours, the Team week or Host away reads
- * again. A replay that changed nothing notes nobody.
+ * changed, which stores one `time_off` outbox row naming nothing, so every tab holding the Team week, time off or
+ * Host away reads again. A replay that changed nothing notes nobody.
  */
 async function writeTimeOff<T>(
   scope: EngineScope,

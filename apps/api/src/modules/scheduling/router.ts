@@ -47,8 +47,8 @@ export const schedulingRouter = member.scheduling.router({
 const now = () => new Date();
 
 // Time off (spec 0037, AC-1281 to AC-1288): whole days away. Who may add, change and remove whose is packages/core's
-// (`scheduling/time-off.ts`). Each write stores its audit row, one coarse `schedules` outbox row (so open tabs read
-// their hours, the Team week and Host away again) and, for someone else's, the member's notice in its transaction.
+// (`scheduling/time-off.ts`). Each write stores its audit row, one `time_off` outbox row naming nothing (so open
+// tabs read the Team week, time off and Host away again) and, for someone else's, the member's notice in its transaction.
 export const timeOffRouter = member.timeOff.router({
   list: member.timeOff.list.handler(({ context, input }) =>
     listTimeOff(context.scope, { now }, { memberId: input.memberId }),

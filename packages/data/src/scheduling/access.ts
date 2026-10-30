@@ -17,6 +17,7 @@ import type {
   VisibleMembers,
 } from '@crm/contracts';
 import { toDataError, type DataError } from '../errors.ts';
+import type { MutationLog } from '../live/mutations.ts';
 import type { Notice } from '../notice.ts';
 import { refusalSummary } from '../refusals.ts';
 import { createTimeOffStore, type TimeOffApi, type TimeOffDraft } from './time-off.ts';
@@ -162,11 +163,35 @@ export interface SchedulingAccessWire<O> {
   readonly call: <T>(run: (options: O) => Promise<T>) => Promise<T>;
   readonly beforeRead: (workspace: string) => Promise<void>;
   readonly mintId: () => string;
+  /**
+   * This tab's writes whose echoes are due: a time off write's own `time_off` event is then skipped, since the store
+   * already read again what it changed. Left out (tests), every echo is heard.
+   */
+  readonly mutations?: Pick<MutationLog, 'sent' | 'answered' | 'forget'>;
 }
 
 /** The store's calls over the data layer's client (each write with its own mutation id). */
-export function wireApi<O>({ client, call, beforeRead, mintId }: SchedulingAccessWire<O>): SchedulingAccessApi {
+export function wireApi<O>({
+  client,
+  call,
+  beforeRead,
+  mintId,
+  mutations,
+}: SchedulingAccessWire<O>): SchedulingAccessApi {
   const { delegations } = client.scheduling;
+  /** A time off write under a mutation id this tab knows, so its one `time_off` echo is skipped. */
+  const echoed = async <T>(send: (mutationId: string) => Promise<T>): Promise<T> => {
+    const mutationId = mintId();
+    mutations?.sent(mutationId);
+    try {
+      const answer = await send(mutationId);
+      mutations?.answered(mutationId, 1);
+      return answer;
+    } catch (error) {
+      mutations?.forget(mutationId);
+      throw error;
+    }
+  };
   return {
     list: (input) => beforeRead(input.workspace).then(() => call((options) => delegations.list(input, options))),
     grant: (input) => call((options) => delegations.grant({ ...input, mutationId: mintId() }, options)),
@@ -175,10 +200,14 @@ export function wireApi<O>({ client, call, beforeRead, mintId }: SchedulingAcces
       beforeRead(input.workspace).then(() => call((options) => client.members.visible(input, options))),
     timeOff: {
       list: (input) => beforeRead(input.workspace).then(() => call((options) => client.timeOff.list(input, options))),
-      create: (input) => call((options) => client.timeOff.create({ ...input, mutationId: mintId() }, options)),
-      update: (input) => call((options) => client.timeOff.update({ ...input, mutationId: mintId() }, options)),
+      create: (input) =>
+        echoed((mutationId) => call((options) => client.timeOff.create({ ...input, mutationId }, options))),
+      update: (input) =>
+        echoed((mutationId) => call((options) => client.timeOff.update({ ...input, mutationId }, options))),
       remove: (input) =>
-        call((options) => client.timeOff.delete({ ...input, mutationId: mintId() }, options)).then(() => undefined),
+        echoed((mutationId) => call((options) => client.timeOff.delete({ ...input, mutationId }, options))).then(
+          () => undefined,
+        ),
     },
     teamWeek: {
       read: (input) =>

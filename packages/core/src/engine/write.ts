@@ -179,8 +179,8 @@ export interface Change {
   /** Availability schedules the write made, changed or deleted (spec 0035), by id. */
   readonly schedules: readonly string[];
   /**
-   * Members whose time off the write added, changed or removed (spec 0037, AC-1281): one coarse `schedules` row,
-   * so the Team week, Availability and Bookings' Host away flags read again in every tab. Never published by id.
+   * Members whose time off the write added, changed or removed (spec 0037, AC-1281): one `time_off` row, so the
+   * Team week, Availability and Bookings' Host away flags read again in every tab. Never published by id.
    */
   readonly timeOff: readonly string[];
   /**
