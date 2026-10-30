@@ -11,6 +11,7 @@ import { useMemo, type KeyboardEvent, type ReactNode } from 'react';
 import { GridList, GridListItem, ListLayout, Virtualizer } from 'react-aria-components';
 import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
+import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { ACTOR_ICONS, RecordChip } from '../../atoms/RecordChip/RecordChip.tsx';
 import { RelativeTime } from '../../atoms/RelativeTime/RelativeTime.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
@@ -212,7 +213,7 @@ export function NotificationList({
             size="sm"
             shape="square"
             hue="ink"
-            icon={ACTOR_ICONS[item.actor.type]}
+            mark={<Icon name={ACTOR_ICONS[item.actor.type]} size="xs" />}
             isDecorative
           />
         )}

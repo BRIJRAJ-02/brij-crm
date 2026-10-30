@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, waitFor } from 'storybook/test';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
+import { Icon } from '../Icon/Icon.tsx';
 import { Avatar, AvatarStack } from './Avatar.tsx';
 
 const meta = {
@@ -59,10 +60,10 @@ export const Sizes: Story = {
 export const Mark: Story = {
   render: () => (
     <Stage>
-      <Avatar name="Contact us" icon="clipboard-list" shape="square" hue="ink" size="xs" />
-      <Avatar name="Contact us" icon="clipboard-list" shape="square" hue="ink" size="sm" />
-      <Avatar name="System" icon="server" shape="square" hue="ink" size="md" />
-      <Avatar name="System" icon="server" shape="square" hue="ink" size="lg" />
+      <Avatar name="Contact us" mark={<Icon name="clipboard-list" size="xs" />} shape="square" hue="ink" size="xs" />
+      <Avatar name="Contact us" mark={<Icon name="clipboard-list" size="xs" />} shape="square" hue="ink" size="sm" />
+      <Avatar name="System" mark={<Icon name="server" size="sm" />} shape="square" hue="ink" size="md" />
+      <Avatar name="System" mark={<Icon name="server" size="md" />} shape="square" hue="ink" size="lg" />
     </Stage>
   ),
   play: async ({ canvas }) => {

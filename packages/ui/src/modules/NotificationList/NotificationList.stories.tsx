@@ -174,7 +174,7 @@ export const Empty: Story = {
   args: { isEmpty: true },
   play: async ({ canvas }) => {
     await expect(canvas.getByText('You’re all caught up.')).toBeInTheDocument();
-    await expect(canvas.getByText(/tasks assigned to you show here/)).toBeInTheDocument();
+    await expect(canvas.getByText(/new form submissions show here/)).toBeInTheDocument();
   },
 };
 
