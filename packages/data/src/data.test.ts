@@ -20,6 +20,7 @@ import {
   type UpdateManyResults,
   type TrashPage,
   type JobView,
+  type LinkPage,
   type Me,
   type MemberView,
   type MyAccess,
@@ -149,6 +150,8 @@ interface Behaviour {
   jobStartTest: (id: string) => JobView;
   /** What every object write answers (spec 0012). */
   objectWrite: () => ObjectSummary;
+  /** One page of a record's side (spec 0017): a related section's rows. */
+  linksPage: () => LinkPage;
   usage: () => Usage;
   /** A page of a record's timeline (spec 0017). */
   activity: (recordId: string, cursor?: string) => RecordActivity;
@@ -226,6 +229,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
     jobStartTest: notServed,
     deleteAccount: notServed,
     objectWrite: notServed,
+    linksPage: notServed,
     usage: () => ({ attributes: { [PEOPLE.id]: { used: 20, limit: 250 } }, optionsPerAttribute: 500 }),
     activity: notServed,
     trashed: notServed,
@@ -353,7 +357,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
     links: {
       add: os.links.add.handler(notServed),
       remove: os.links.remove.handler(notServed),
-      page: os.links.page.handler(notServed),
+      page: os.links.page.handler(() => behaviour.linksPage()),
     },
     relationships: {
       create: os.relationships.create.handler(({ input }) => {
@@ -2575,6 +2579,36 @@ describe('objects in settings (spec 0012)', () => {
     // A rename reads none.
     await data.objects.update('acme', PROJECTS.id, { pluralName: 'Ventures' });
     expect(count(api.calls, '/api/rpc/attributes/list')).toBe(lists + 1);
+  });
+
+  it('reads the sections listing an object’s records again once this tab names them by another attribute', async () => {
+    const api = fakeApi({
+      objectWrite: () => ({ ...PROJECTS, isArchived: false }),
+      linksPage: () => ({ items: [], total: 0 }),
+    });
+    const { data } = layer(api, '/w/acme/settings/objects');
+    const pages = () => count(api.calls, '/api/rpc/links/page');
+    // A person's projects, and a project's people: only the first lists Projects' records.
+    const side = { objectId: PEOPLE.id, attributeId: TITLE.id, farObjectIds: [PROJECTS.id] };
+    const listing = await data.links.section('acme', { ...side, recordId: '0199a6f2-0000-7000-8000-0000000000d1' });
+    const onProject = await data.links.section('acme', {
+      recordId: '0199a6f2-0000-7000-8000-0000000000d2',
+      objectId: PROJECTS.id,
+      attributeId: TITLE.id,
+      farObjectIds: [PEOPLE.id],
+    });
+    listing.retain();
+    onProject.retain();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const before = pages();
+    expect(before).toBe(2);
+    // A rename names no record by anything new: nothing is read.
+    await data.objects.update('acme', PROJECTS.id, { pluralName: 'Ventures' });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(pages()).toBe(before);
+    await data.objects.update('acme', PROJECTS.id, { primaryAttributeId: TITLE.id });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(pages()).toBe(before + 1);
   });
 
   it('rejects a refused object write with its refusals, and reloads nothing', async () => {
