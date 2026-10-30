@@ -34,13 +34,13 @@ Two parity items from the owner's 30 October list, both free and with no new ven
 - **AC-5911**: When a person record is created, or its Email addresses change, and its Company is empty after the write, the first email address whose domain is not a free mail domain decides the company. If a live company holds that domain in Domains, the person is linked to it. If none does, a company is created and linked.
 - **AC-5912**: Matching tries the email's host first (`eu.acme.com`), then its registrable domain (`acme.com`). A created company holds the registrable domain.
 - **AC-5913**: A created company is named from its domain: the first label of the registrable domain, hyphens and underscores read as spaces, each word capitalised (`acme.com` gives "Acme", `big-corp.co.uk` gives "Big Corp"). Its Domains holds the registrable domain, and its Owner is the acting member when a member acts (none otherwise). When the Companies name attribute is not a text type, the name is left empty.
-- **AC-5914**: Free mail domains never link or create: `isPublicEmailDomain` from `@crm/contracts` decides (the same list the workspace domain setting uses), so gmail.com, hotmail.se and yahoo.com.mx are all skipped.
+- **AC-5914**: Free mail domains never link or create: `isPublicEmailDomain` from `@crm/contracts` decides (the same list the workspace domain setting uses), so gmail.com, hotmail.se and yahoo.com.mx are all skipped. Domains reserved for examples and tests (`example.com`, `example.net`, `example.org`, and anything under `.test`, `.example`, `.invalid` or `.localhost`) never file either. Booking keeps its own frozen free mail list, so on that path only its list applies.
 - **AC-5915**: A Company already set is never replaced, and changing or removing an email never removes a link.
 - **AC-5916**: Every way a person is written behaves the same: the app (create dialog, table cell, record page, paste, bulk edit), CSV import, forms, booking, calendar sync and the public API. A path that sets the Company itself (a form's or a booking's own company filing) keeps what it set.
 - **AC-5917**: Two writes for the same new domain at the same moment create one company, and both people are linked to it.
 - **AC-5918**: The created company, its values, the link, their value history, audit entries and change events are written in the same transaction as the person's write. If any part fails, the person's write fails as it would have anyway; filing never fails a write on its own (see AC-5919).
 - **AC-5919**: Filing runs with the acting scope's access. Linking needs read on the company and write on the person's Company attribute; creating needs create on Companies. When the actor lacks any of these, nothing is filed and the person's write succeeds unchanged.
-- **AC-5920**: In the app, after a create or edit that filed a company, a toast says "Linked to Acme" (an existing company) or "Added Acme and linked it" (a created one), with Undo. Undo clears the person's Company, and trashes the company when this write created it and nothing else links to it now. Undoing the person's create (⌘Z) undoes the filing too.
+- **AC-5920**: In the app, after a create or edit that filed a company, a toast says "Linked to Acme" (an existing company) or "Added Acme and linked it" (a created one), with an **Unlink** action (10 seconds; not "Undo", so it never sits beside a paste's own Undo). A paste that made companies says "…, N of them new". Unlink clears the person's Company, and trashes the company when this write created it and nothing else links to it now. Undoing the person's create (⌘Z) undoes the filing too, and undo writes send `noFiling` so they never file again. Unlink after ⌘Z says "Already undone."
 - **AC-5921**: Other tabs see the new company and the link live, through the change events of AC-5918, with no reload.
 
 ## Decision
@@ -64,7 +64,8 @@ Logos reuse the link page icon fetch (spec 0055's outside door and `@crm/core` f
 | Endpoint | Method | Key inputs | Key outputs | Auth | Key errors |
 |---|---|---|---|---|---|
 | `/api/logos/:domain` | GET | `domain` (lowercase host, path) | image bytes, `content-type`, `cache-control: public, max-age=604800, s-maxage=604800` | signed in session (Better Auth cookie) | 404 no icon (`public, max-age=86400, s-maxage=86400`; a timeout or network failure 5 minutes), 404 invalid host or no session (`private, no-store`, so the edge is never poisoned), 429 over 300 a minute per user (`private, max-age=<retry after>`) |
-| `records.create`, `records.update`, `records.setValues` (existing oRPC) | POST | unchanged | adds `filedCompany?: { recordId, name, made: boolean, linkVersionId }` | unchanged | unchanged |
+| `records.create`, `records.setValues`, `records.setValuesBatch` (existing oRPC) | POST | adds `noFiling?: boolean` on `setValues` and `setValuesBatch` (undo writes) | adds `filedCompany?: { recordId, objectId, attributeId, name, made: boolean, linkVersionId }` (per result on the batch) | unchanged | unchanged |
+| `records.deleteMany` (existing oRPC) | POST | adds `unlinkedOnly?: boolean` | unchanged | unchanged | `IN_USE` for a company something still links to |
 
 **Value sourcing**
 
@@ -97,6 +98,8 @@ Logos reuse the link page icon fetch (spec 0055's outside door and `@crm/core` f
 - The route is a server side fetch of a user chosen host: the outside door (spec 0055) is the SSRF guard, and the host must pass `isFaviconSite` and be a public host name (no IP literal, no port, no credentials).
 - Filing acts as the write's own actor, through the same door and rules as the write (AC-5919). Import acts as the importer, forms as the form actor, booking and calendar sync as the system, exactly as their writes already do.
 - The created company's audit entry and history name the same actor as the person's write.
+- Filing files nothing when the actor cannot see Companies' Domains, so a hidden holder is never revealed by a link. Two small existence signals are accepted (security review, 31 October 2026): `IN_USE` from `deleteMany` with `unlinkedOnly`, and a hidden holder filing nothing instead of creating a second company.
+- A form that files People widens the form actor to write on Companies with only Domains and Name visible, plus People's Company; AC-5916 needs it.
 
 **Configuration required**
 
@@ -140,6 +143,9 @@ Tracer Bullet: one thin thread for each half, end to end, then thicken.
 - Bulk paths (a 10,000 row import, calendar sync of many attendees) now create companies too. That is the point, but it can add many companies with names guessed from domains ("Acmecorp" rather than "Acme Corp").
 - One more query per person write that touches emails (the holder lookup), and one advisory lock per new domain.
 - The edge cache keeps a changed site icon for up to 7 days.
+- Undoing an import also trashes the companies its filing made; the link's version counts as the row's own write.
+- A create now takes its record slot once, at the end of the write (to keep one lock order). At the exact plan limit under a race, the whole write is refused rather than one record.
+- Shared host suffixes (github.io, vercel.app, onmicrosoft.com) group their users into one company, since there is no public suffix list.
 
 **Neutral**
 
@@ -154,6 +160,10 @@ Tracer Bullet: one thin thread for each half, end to end, then thicken.
 - [ ] Declared icons and redirects may name any public https host, so the route is a weak GET reflector (300 a minute per user), the same as the link page icon route.
 - [ ] Tables in `packages/data` do not read Domains, so another person's domain change does not refresh a table row's logo live.
 - [ ] Look: transparent favicons on the dark mode hue tile may read poorly; a neutral plate under a loaded picture is the owner's call.
+- [ ] Filing costs about 16 to 20 round trips; cache the filing target on the write context and reuse the locked person, then run the load harness.
+- [ ] A bulk edit job files on the server but shows no toast or undo for it.
+- [ ] ⌘Z does not say it also trashed the made company; a dialog create shows two toasts.
+- [ ] Booking's own free mail list should move to `isPublicEmailDomain` when the booking freeze lifts (AC-5914).
 - [ ] A workspace switch to turn filing off was declined (owner, 31 October 2026); revisit only if someone asks.
 
 ## Rationale
