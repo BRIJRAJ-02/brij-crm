@@ -418,6 +418,9 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       setValues: os.entries.setValues.handler(notServed),
       remove: os.entries.remove.handler(notServed),
       restore: os.entries.restore.handler(notServed),
+      addMatching: os.entries.addMatching.handler(notServed),
+      removeMatching: os.entries.removeMatching.handler(notServed),
+      undoJob: os.entries.undoJob.handler(notServed),
     },
     records: {
       query: os.records.query.handler(({ input }) => ({

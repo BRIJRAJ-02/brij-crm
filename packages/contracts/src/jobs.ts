@@ -33,6 +33,10 @@ export const JOB_KINDS = {
   'records.bulk_delete': { label: 'Bulk delete', lane: 'heavy', cancellable: true },
   'records.bulk_restore': { label: 'Restore from trash', lane: 'heavy', cancellable: true },
   'records.purge': { label: 'Delete forever', lane: 'heavy', cancellable: true },
+  // A list's bulk changes (spec 0048, AC-4817, AC-4825): adding many records, removing many entries, and the undo of each.
+  'entries.bulk_add': { label: 'Add to list', lane: 'heavy', cancellable: true },
+  'entries.bulk_remove': { label: 'Remove from list', lane: 'heavy', cancellable: true },
+  'entries.bulk_restore': { label: 'Bring back to list', lane: 'heavy', cancellable: true },
   // A removed member's records and open tasks handed to another member (spec 0031, AC-816).
   'members.reassign': { label: 'Hand on a removed member’s work', lane: 'heavy', cancellable: true },
   // Import and export (spec 0040): a CSV's rows written as the member, taking one back, and a view written out.

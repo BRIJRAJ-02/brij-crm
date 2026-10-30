@@ -227,6 +227,10 @@ export const ACCESS_TABLE = {
   readEntryPage: { data: 'read' },
   entryMembership: { data: 'read' },
   entriesForRecord: { data: 'read' },
+  // A list's bulk jobs (AC-4817, AC-4825): the list's own write checks run inside.
+  startAddMatching: { data: 'write' },
+  startRemoveMatching: { data: 'write' },
+  undoEntriesJob: { data: 'write' },
   // The record page (spec 0017): its timeline and a record in the trash.
   getActivity: { data: 'read' },
   // 13 Oct reference batch 4: a record's stage age, read as its timeline is.

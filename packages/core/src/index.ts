@@ -235,6 +235,7 @@ export {
   type UpdateListInput,
   type WrittenEntry,
 } from './lists/lists.ts';
+export { ENTRY_JOB_KINDS, startAddMatching, startRemoveMatching, undoEntriesJob } from './lists/jobs.ts';
 export { attributeImpact } from './attributes/impact.ts';
 export {
   archiveOption,

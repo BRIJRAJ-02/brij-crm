@@ -698,6 +698,33 @@ export async function addEntries(
   return result;
 }
 
+/**
+ * `addEntries` inside a write (a bulk add job's batch): the list locked and
+ * checked, then every record answered on its own, by its id.
+ */
+export async function addEntriesIn(
+  context: WriteContext,
+  input: { readonly listId: string; readonly recordIds: readonly string[]; readonly timeZone?: string | undefined },
+): Promise<ReadonlyMap<string, AddOutcome>> {
+  const list = await lockWritableList(context, input.listId);
+  return addMany(
+    context,
+    list,
+    input.listId,
+    input.recordIds.map((raw) => ({ raw, id: undefined })),
+    input.timeZone ?? 'UTC',
+  );
+}
+
+/**
+ * Checks the caller may add to a list now (a bulk job's start): hidden is
+ * unknown, read only 403, archived `NOT_FOUND`. Answers the list's object.
+ */
+export async function checkWritableList(context: WriteContext, listId: string): Promise<{ readonly objectId: string }> {
+  const list = await lockWritableList(context, checkId(listId, UNKNOWN_LIST));
+  return { objectId: list.objectId };
+}
+
 /** One record a batch add was asked for: as given, and its entry's client id. */
 interface AskedAdd {
   readonly raw: string;
@@ -1090,39 +1117,50 @@ export async function changeEntries(
   if (input.entryIds.length > MAX_ENTRY_BATCH) {
     throw refuse('CONFIG_INVALID', `Change at most ${String(MAX_ENTRY_BATCH)} entries at once.`);
   }
-  const { result } = await runWrite(
-    scope,
-    async (context) => {
-      const { tx } = context;
-      const ids = [...new Set(input.entryIds.filter(isUuid).map(canonicalId))];
-      const parents =
-        ids.length === 0
-          ? []
-          : await tx
-              .select({ id: listEntries.id, listId: listEntries.listId, recordId: listEntries.recordId })
-              .from(listEntries)
-              .where(inArray(listEntries.id, ids));
-      const ordered = [...parents].sort((a, b) =>
-        a.listId !== b.listId ? (a.listId < b.listId ? -1 : 1) : a.recordId < b.recordId ? -1 : 1,
-      );
-      const outcomes = new Map<string, EntryOutcome>();
-      for (const entry of ordered) {
-        // Its own savepoint: a refusal after a change (a unique value taken meanwhile, past the count's move) rolls
-        // that entry back whole, and the others go on.
-        const done = await context.perRecord((part) =>
-          input.action === 'remove' ? removeIn(part, entry.id) : restoreIn(part, entry.id),
-        );
-        const [refusal] = done.ok ? [] : done.refusals;
-        outcomes.set(entry.id, refusal === undefined ? { entryId: entry.id } : { entryId: entry.id, refusal });
-      }
-      const missing = { code: 'NOT_FOUND' as const, message: 'That entry does not exist.' };
-      return input.entryIds.map(
-        (raw): EntryOutcome => outcomes.get(isUuid(raw) ? canonicalId(raw) : raw) ?? { entryId: raw, refusal: missing },
-      );
-    },
-    hooks,
-  );
+  const { result } = await runWrite(scope, (context) => changeEntriesIn(context, input), hooks);
   return result;
+}
+
+/**
+ * `changeEntries` inside a write (a bulk job's batch runs it in its own): each
+ * entry on its own savepoint, list by list then record by record, answered in
+ * the order asked.
+ */
+export async function changeEntriesIn(
+  context: WriteContext,
+  input: { readonly entryIds: readonly string[]; readonly action: 'remove' | 'restore'; readonly listId?: string },
+): Promise<readonly EntryOutcome[]> {
+  const { tx } = context;
+  const ids = [...new Set(input.entryIds.filter(isUuid).map(canonicalId))];
+  const parents =
+    ids.length === 0
+      ? []
+      : await tx
+          .select({ id: listEntries.id, listId: listEntries.listId, recordId: listEntries.recordId })
+          .from(listEntries)
+          .where(
+            and(
+              inArray(listEntries.id, ids),
+              input.listId === undefined ? undefined : eq(listEntries.listId, input.listId),
+            ),
+          );
+  const ordered = [...parents].sort((a, b) =>
+    a.listId !== b.listId ? (a.listId < b.listId ? -1 : 1) : a.recordId < b.recordId ? -1 : 1,
+  );
+  const outcomes = new Map<string, EntryOutcome>();
+  for (const entry of ordered) {
+    // Its own savepoint: a refusal after a change (a unique value taken meanwhile, past the count's move) rolls
+    // that entry back whole, and the others go on.
+    const done = await context.perRecord((part) =>
+      input.action === 'remove' ? removeIn(part, entry.id) : restoreIn(part, entry.id),
+    );
+    const [refusal] = done.ok ? [] : done.refusals;
+    outcomes.set(entry.id, refusal === undefined ? { entryId: entry.id } : { entryId: entry.id, refusal });
+  }
+  const missing = { code: 'NOT_FOUND' as const, message: 'That entry does not exist.' };
+  return input.entryIds.map(
+    (raw): EntryOutcome => outcomes.get(isUuid(raw) ? canonicalId(raw) : raw) ?? { entryId: raw, refusal: missing },
+  );
 }
 
 /** A read entry row, before its values. */

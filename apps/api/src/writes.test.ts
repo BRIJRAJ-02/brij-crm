@@ -92,6 +92,7 @@ const READS: ReadonlySet<string> = new Set([
   'entries.groups',
   'entries.get',
   'entries.membership',
+  'entries.forRecord',
   'records.objectCounts',
   'records.groups',
   // A column's calculation (the CRM flow pass): a read.
@@ -875,6 +876,89 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
       ...listRows(m, made),
       { kind: 'entries', list_id: made.listId, item_ids: [made.entryId] },
       { kind: 'entries', list_id: made.listId, item_ids: [made.entryId], mutation_id: mutationId },
+    ];
+  },
+  'lists.update': async (m, mutationId) => {
+    const made = await listWithEntry(m);
+    await m.client.lists.update({ workspace: m.slug, listId: made.listId, name: 'Talent', mutationId });
+    return [...listRows(m, made), { kind: 'definitions', list_id: made.listId, mutation_id: mutationId }];
+  },
+  'lists.archive': async (m, mutationId) => {
+    const made = await listWithEntry(m);
+    await m.client.lists.archive({ workspace: m.slug, listId: made.listId, mutationId });
+    return [...listRows(m, made), { kind: 'definitions', list_id: made.listId, mutation_id: mutationId }];
+  },
+  'lists.restore': async (m, mutationId) => {
+    const made = await listWithEntry(m);
+    await m.client.lists.archive({ workspace: m.slug, listId: made.listId, mutationId: newId() });
+    await m.client.lists.restore({ workspace: m.slug, listId: made.listId, mutationId });
+    return [
+      ...listRows(m, made),
+      { kind: 'definitions', list_id: made.listId },
+      { kind: 'definitions', list_id: made.listId, mutation_id: mutationId },
+    ];
+  },
+  'entries.addMany': async (m, mutationId) => {
+    const made = await listWithEntry(m);
+    const recordId = newId();
+    await m.client.records.create({
+      workspace: m.slug,
+      objectId: m.people.id,
+      id: recordId,
+      values: { [m.attribute('name')]: { firstName: 'Bo' } },
+      mutationId: newId(),
+    });
+    const id = newId();
+    await m.client.entries.addMany({
+      workspace: m.slug,
+      listId: made.listId,
+      recordIds: [recordId],
+      ids: [id],
+      mutationId,
+    });
+    return [
+      ...listRows(m, made),
+      { kind: 'records', object_id: m.people.id, record_ids: [recordId] },
+      { kind: 'entries', list_id: made.listId, item_ids: [id], record_ids: [recordId], mutation_id: mutationId },
+    ];
+  },
+  // A list's bulk jobs (AC-4817, AC-4825): each start stores one jobs row.
+  'entries.addMatching': async (m, mutationId) => {
+    const made = await listWithEntry(m);
+    const job = await m.client.entries.addMatching({
+      workspace: m.slug,
+      id: newId(),
+      listId: made.listId,
+      target: { kind: 'ids', objectId: m.people.id, recordIds: [made.recordId] },
+      mutationId,
+    });
+    return [...listRows(m, made), { kind: 'jobs', item_ids: [job.id], mutation_id: mutationId }];
+  },
+  'entries.removeMatching': async (m, mutationId) => {
+    const made = await listWithEntry(m);
+    const job = await m.client.entries.removeMatching({
+      workspace: m.slug,
+      id: newId(),
+      listId: made.listId,
+      target: { kind: 'ids', entryIds: [made.entryId] },
+      mutationId,
+    });
+    return [...listRows(m, made), { kind: 'jobs', item_ids: [job.id], mutation_id: mutationId }];
+  },
+  'entries.undoJob': async (m, mutationId) => {
+    const made = await listWithEntry(m);
+    const started = await m.client.entries.removeMatching({
+      workspace: m.slug,
+      id: newId(),
+      listId: made.listId,
+      target: { kind: 'ids', entryIds: [made.entryId] },
+      mutationId: newId(),
+    });
+    const job = await m.client.entries.undoJob({ workspace: m.slug, id: newId(), jobId: started.id, mutationId });
+    return [
+      ...listRows(m, made),
+      { kind: 'jobs', item_ids: [started.id] },
+      { kind: 'jobs', item_ids: [job.id], mutation_id: mutationId },
     ];
   },
   'records.create': async (m, mutationId) => {
@@ -2404,6 +2488,13 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'entries.setValues': 5,
   'entries.remove': 4,
   'entries.restore': 5,
+  'lists.update': 4,
+  'lists.archive': 4,
+  'lists.restore': 5,
+  'entries.addMany': 5,
+  'entries.addMatching': 4,
+  'entries.removeMatching': 4,
+  'entries.undoJob': 5,
   // Imports (spec 0040): the import made (and its rows staged) first, then the write.
   'imports.stage': 2,
   'imports.start': 3,

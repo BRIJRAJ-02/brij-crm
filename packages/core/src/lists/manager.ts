@@ -5,7 +5,7 @@ import { and, eq } from 'drizzle-orm';
 import { schema, type WorkspaceTx } from '@crm/db';
 import type { EngineScope } from '../engine/scope.ts';
 import { refuse } from '../engine/refusals.ts';
-import { checkId } from '../engine/ids.ts';
+import { checkId, isUuid } from '../engine/ids.ts';
 import { requirePermission } from '../access/check.ts';
 import { inWorkspace } from '../access/run.ts';
 import { can, objectLevel } from '../access/policy.ts';
@@ -52,6 +52,8 @@ export async function listManagersSentence(tx: WorkspaceTx, scope: EngineScope, 
  */
 export async function requireFieldManager(scope: EngineScope, attributeId: string): Promise<void> {
   if (can(scope.access, 'schema.manage')) return;
+  // No id names no list's field: the permission check says no, as it did before lists had fields.
+  if (!isUuid(attributeId)) requirePermission(scope, 'schema.manage');
   const id = checkId(attributeId, 'That attribute does not exist.');
   await inWorkspace(scope, async (tx) => {
     const [row] = await tx
@@ -91,6 +93,7 @@ export async function requireFieldManager(scope: EngineScope, attributeId: strin
 /** The same check for a change to an option: it asks about the option's attribute. */
 export async function requireOptionManager(scope: EngineScope, optionId: string): Promise<void> {
   if (can(scope.access, 'schema.manage')) return;
+  if (!isUuid(optionId)) requirePermission(scope, 'schema.manage');
   const id = checkId(optionId, 'That option does not exist.');
   const attributeId = await inWorkspace(scope, async (tx) => {
     const [row] = await tx
