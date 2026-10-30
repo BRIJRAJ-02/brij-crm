@@ -66,6 +66,8 @@ export const AUDIT_ACTIONS = [
   'routing.changed',
   // Spec 0029 milestone 3: who a form's new records go to changed (a member, a round robin rotation, or nobody).
   'form.owner_changed',
+  // Who a form emails each new submission changed (spec 0023, AC-568): the list decides who reads visitors' answers.
+  'form.notify_changed',
   'booking.no_show',
   'booking.no_show_undone',
   // A booking linked to a record by hand from its card, and the link taken off (polish F2).

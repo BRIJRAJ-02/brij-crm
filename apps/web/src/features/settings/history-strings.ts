@@ -185,6 +185,7 @@ const SENTENCES: SentenceTemplates = {
         : `changed the routing rules of ${w.thing(entry.target)}`,
     ),
   'form.owner_changed': (entry, w) => actor(`changed who gets ${w.thing(entry.target)}’s leads`),
+  'form.notify_changed': (entry, w) => actor(`changed who is emailed ${w.thing(entry.target)}’s new submissions`),
   'booking.no_show': (entry, w) => actor(`marked ${w.booking(entry.target)} as a no show`),
   'booking.no_show_undone': (entry, w) => actor(`took back the no show on ${w.booking(entry.target)}`),
   'booking.record_linked': (entry, w) => actor(`linked ${w.booking(entry.target)} to a record`),

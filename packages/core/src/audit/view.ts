@@ -543,6 +543,17 @@ export function toEntryView(row: AuditRow, names: AuditNames): AuditEntryView | 
         changes: change('leadsTo', leadsTo(before), leadsTo(after)),
       };
     }
+    case 'form.notify_changed': {
+      const people = (side: Bag) =>
+        Array.isArray(side.notifyMemberIds) ? count(side.notifyMemberIds.length) : undefined;
+      return {
+        ...base,
+        action,
+        target: thing('form', names.forms),
+        params: {},
+        changes: change('people', people(before), people(after)),
+      };
+    }
     case 'booking.no_show':
     case 'booking.no_show_undone':
     case 'booking.record_linked':

@@ -504,7 +504,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_show_public_profile',
         // A deleted account's handles freed after their 90 days (migration 0126).
         'crm_sweep_released_handles',
-        // An old handle let go to make room at the cap (late trap #76, migration 0128): called only by the two
+        // An old handle let go to make room at the cap (late trap #76, migration 0124): called only by the two
         // above that take a handle, as crm_pack_profile_items is, so it has no signature below.
         'crm_make_handle_room',
       ],
@@ -2137,7 +2137,7 @@ describe('the auth schema: global identity, outside row level security (spec 000
       'auth."user".id SELECT',
       'auth."user".image SELECT',
       'auth."user".name SELECT',
-      // Letting an old handle go into the hold to make room at the cap (late trap #76, migration 0128): the person
+      // Letting an old handle go into the hold to make room at the cap (late trap #76, migration 0124): the person
       // cleared, and only through crm_make_handle_room.
       'auth.public_handles.user_id UPDATE',
       'auth.public_profiles.bio UPDATE',

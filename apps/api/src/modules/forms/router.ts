@@ -87,6 +87,7 @@ export const formsRouter = member.forms.router({
           ...(input.ownerRotationId === undefined ? {} : { ownerRotationId: input.ownerRotationId }),
           ...(input.allowedOrigins === undefined ? {} : { allowedOrigins: input.allowedOrigins }),
           ...(input.requireSignature === undefined ? {} : { requireSignature: input.requireSignature }),
+          ...(input.notifyMemberIds === undefined ? {} : { notifyMemberIds: input.notifyMemberIds }),
         },
         hooks,
       ),

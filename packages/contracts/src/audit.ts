@@ -134,6 +134,7 @@ export const AUDIT_FIELDS = [
   'reason',
   'rules',
   'leadsTo',
+  'people',
 ] as const;
 /** A field a change names. */
 export const AuditField = z.enum(AUDIT_FIELDS);
@@ -261,6 +262,8 @@ export const AuditEntryView = z.discriminatedUnion('action', [
   ),
   entry(['routing.changed'], z.discriminatedUnion('type', [form, bookingPage]), NoParams),
   entry(['form.owner_changed'], form, NoParams),
+  /** How many people the form emailed before and after: who they are stays in the row. */
+  entry(['form.notify_changed'], form, NoParams),
   /** A record link row names the booking only: the record is never named or sent. */
   entry(
     ['booking.no_show', 'booking.no_show_undone', 'booking.record_linked', 'booking.record_unlinked'],

@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import type { Hue } from '../../hue.ts';
 import { safeImageSrc } from '../../lib/safe-image-src.ts';
+import type { ReactNode } from 'react';
 import { initialsOf, stableHue } from '../../lib/stable-hue.ts';
 import { strings } from './strings.ts';
 import styles from './Avatar.module.css';
@@ -26,6 +27,13 @@ export interface AvatarProps {
   readonly shape?: 'circle' | 'square';
   /** Hides it from screen readers when the name is written right beside it. */
   readonly isDecorative?: boolean;
+  /**
+   * A mark in place of the initials, for something that isn't a person or a record (a form, the system): an Icon the
+   * caller sizes (`xs` up to `sm` tiles, `sm` at `md`), so its face keeps the row's size and shape beside people's.
+   * A picture still wins when `src` is given. A node, not an icon name, so Avatar never pulls the icon registry into
+   * a page that draws only people.
+   */
+  readonly mark?: ReactNode;
 }
 
 /**
@@ -39,7 +47,7 @@ const FADES_IN: ReadonlySet<AvatarSize> = new Set<AvatarSize>(['title', 'xl', 'h
 const ONE_INITIAL: ReadonlySet<AvatarSize> = new Set<AvatarSize>(['xs', 'sm']);
 
 /** A person's or company's picture, or their initials on a hue tile: people are circles, companies squares. */
-export function Avatar({ name, id, src, hue, size = 'sm', shape = 'circle', isDecorative = false }: AvatarProps) {
+export function Avatar({ name, id, src, hue, size = 'sm', shape = 'circle', isDecorative = false, mark }: AvatarProps) {
   const [failed, setFailed] = useState<string | undefined>(undefined);
   // The picture that has loaded, and whether it was already in the browser's cache: one there shows at once.
   const [loaded, setLoaded] = useState<{ readonly src: string; readonly isCached: boolean } | undefined>(undefined);
@@ -59,7 +67,7 @@ export function Avatar({ name, id, src, hue, size = 'sm', shape = 'circle', isDe
     }
   }, [fades, image]);
   // One initial is the first word's: initialsOf on that word alone, so a letter built of several code points stays whole.
-  const initials = initialsOf(ONE_INITIAL.has(size) ? (name.trim().split(/\s+/u)[0] ?? '') : name);
+  const initials = mark ?? initialsOf(ONE_INITIAL.has(size) ? (name.trim().split(/\s+/u)[0] ?? '') : name);
   return (
     <span
       className={styles.root}

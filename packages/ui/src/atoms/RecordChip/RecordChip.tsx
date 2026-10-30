@@ -23,7 +23,8 @@ export interface RecordChipProps {
   readonly isPlain?: boolean;
 }
 
-const ACTOR_ICONS: Readonly<Record<'api_key' | 'automation' | 'system' | 'form' | 'booking', IconName>> = {
+/** The mark each actor that isn't a member shows in place of a face, here and in the inbox's rows. */
+export const ACTOR_ICONS: Readonly<Record<'api_key' | 'automation' | 'system' | 'form' | 'booking', IconName>> = {
   api_key: 'key',
   automation: 'zap',
   system: 'server',

@@ -1,5 +1,6 @@
 // Brief
-// Purpose: everything that needs the person in this workspace, on `/w/$slug/inbox`: mentions, replies, tasks given to them.
+// Purpose: everything that needs the person in this workspace, on `/w/$slug/inbox`: mentions, replies, tasks given to them,
+// and new submissions to the forms they're told about.
 // Main task: open each new one where it lives (the comment's thread, the task), and clear the inbox as they go.
 // Leaves out: email and digest settings (Settings › Account › Notifications), other people's notifications, search.
 import type { InboxList, MemberSummary, NotificationView, ObjectSummary } from '@crm/data';
@@ -21,7 +22,8 @@ import { useNavigate, useRouteContext, useRouter } from '@tanstack/react-router'
 import { useMemo, useRef } from 'react';
 import { TaskDialog } from '../tasks/TaskDialog.tsx';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
-import { notificationKind, targetOf, toNotificationItem, type InboxKind, type InboxSearch } from './entries.ts';
+import { targetOf, toNotificationItem } from './entries.ts';
+import { notificationKind, type InboxKind, type InboxSearch } from './search.ts';
 import { strings } from './strings.ts';
 
 /** How near the end of what is loaded the list asks for the next 50. */
@@ -43,12 +45,13 @@ const TABS: readonly { readonly value: 'inbox' | 'done'; readonly label: string 
   { value: 'done', label: strings.done },
 ];
 
-/** The kind filter's choices: a menu, so four kinds fit beside Inbox and Done on a phone (AC-1170). */
+/** The kind filter's choices: a menu, so all and four kinds fit beside Inbox and Done on a phone (AC-1170). */
 const KINDS: readonly { readonly value: 'all' | InboxKind; readonly label: string; readonly icon?: IconName }[] = [
   { value: 'all', label: strings.allKinds, icon: 'inbox' },
   { value: 'mentions', label: strings.mentions, icon: 'at-sign' },
   { value: 'replies', label: strings.replies, icon: 'message-square' },
   { value: 'assignments', label: strings.assignments, icon: 'user-check' },
+  { value: 'submissions', label: strings.submissions, icon: 'clipboard-list' },
 ];
 
 /** The list's notifications as NotificationList's rows, each mapped once while the members stay, loading more near the end. */

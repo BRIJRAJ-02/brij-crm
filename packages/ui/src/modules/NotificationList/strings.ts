@@ -10,6 +10,10 @@ export const strings = {
     reply: (actor: string) => `${actor} replied in a thread`,
     task_assigned: (actor: string) => `${actor} assigned you a task`,
   },
+  /** A form's new submission, its form first as the other rows lead with who acted: "Contact us got a new submission". */
+  submission: (form: string) => `${form} got a new submission`,
+  /** A submission's form whose name didn't come with it. */
+  someForm: 'A form',
   /** A mention in a note: "Ada Lovelace mentioned you in a note". */
   mentionInNote: (actor: string) => `${actor} mentioned you in a note`,
   /** Read before an unread row's sentence. */
