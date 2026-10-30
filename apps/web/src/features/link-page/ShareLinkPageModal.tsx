@@ -4,7 +4,7 @@
 // Main task: hand the page to somebody standing in front of you, or save the code to print on a badge or a card.
 // Leaves out: the figures footer (this month's views and clicks, "See all clicks"), which waits for the editor's
 // own figures surface. Loaded with the chunk that opens it, so neither it nor the QR library is in the first load.
-import { Button, ButtonLink, Field, Modal, QrCode } from '@crm/ui';
+import { Button, ButtonLink, Callout, Field, Modal, QrCode } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useRef, useState } from 'react';
 import { qrPng, saveFile } from './qr-png.ts';
@@ -18,13 +18,28 @@ export interface ShareLinkPageModalProps {
   readonly handle: string;
   /** The workspace the page belongs to, said once above the code, so a badge is printed for the right one (AC-5617). */
   readonly workspaceName?: string | undefined;
+  /**
+   * Whether anyone else can open the page (spec 0058, AC-23). Sharing never changes it; a private page says so in
+   * the scan line's place, with the way to turn it on, so nobody hands out a link that opens for them alone.
+   */
+  readonly isPublic: boolean;
+  /** The Live switch's on, offered beside the private line: the switch itself is behind this modal's scrim. */
+  readonly onGoLive: () => void;
   /** Kept mounted while it closes, so the Modal's own exit plays. */
   readonly isOpen: boolean;
   readonly onClose: () => void;
 }
 
 /** Share your link page: the QR code, the address to copy, Download QR code and Open page. */
-export function ShareLinkPageModal({ address, handle, workspaceName, isOpen, onClose }: ShareLinkPageModalProps) {
+export function ShareLinkPageModal({
+  address,
+  handle,
+  workspaceName,
+  isPublic,
+  onGoLive,
+  isOpen,
+  onClose,
+}: ShareLinkPageModalProps) {
   const { toasts } = useRouteContext({ from: '__root__' });
   const codeRef = useRef<SVGSVGElement>(null);
   const [isSaving, setSaving] = useState(false);
@@ -58,7 +73,20 @@ export function ShareLinkPageModal({ address, handle, workspaceName, isOpen, onC
       }
     >
       <QrCode ref={codeRef} value={address} label={strings.qrLabel} size="fill" />
-      <p>{workspaceName === undefined ? strings.scan : `${strings.inWorkspace(workspaceName)} ${strings.scan}`}</p>
+      {isPublic ? (
+        <p>{workspaceName === undefined ? strings.scan : `${strings.inWorkspace(workspaceName)} ${strings.scan}`}</p>
+      ) : (
+        <Callout
+          tone="warning"
+          actions={
+            <Button size="md" onPress={onGoLive}>
+              {strings.goLive}
+            </Button>
+          }
+        >
+          {strings.privateLine}
+        </Callout>
+      )}
       <Field label={strings.address} isLabelHidden variant="copy" icon="link" value={shown} copyLabel={strings.copy} />
     </Modal>
   );
