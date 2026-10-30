@@ -42,9 +42,6 @@ export const capturesHref = (slug: string) => `/w/${slug}/captures/links`;
 
 export const bookingsHref = (slug: string) => `/w/${slug}/bookings/calendar`;
 
-/** The Roster (spec 0037, the Team week): Bookings › Roster, a tab of its own since 31 October 2026. */
-export const rosterHref = (slug: string) => `/w/${slug}/bookings/roster`;
-
 /** Settings, Background jobs (spec 0008). */
 export const jobsHref = (slug: string) => `/w/${slug}/settings/jobs`;
 /** Settings, Objects (spec 0012): where a workspace with no live object opens. */

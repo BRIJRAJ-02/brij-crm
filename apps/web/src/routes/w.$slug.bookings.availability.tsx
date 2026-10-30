@@ -3,7 +3,7 @@ import { EmptyState, LoadingNow, PageColumn, TopBar } from '@crm/ui';
 import { createFileRoute, redirect, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { AvailabilityPending, AvailabilityScreen } from '../features/booking/AvailabilityScreen.tsx';
 import { memberZone } from '../features/booking/zone.ts';
-import { availabilitySearch } from '../features/booking/links.ts';
+import { availabilitySearch, rosterSearch } from '../features/booking/links.ts';
 import { scheduleStrings } from '../features/booking/schedule-strings.ts';
 import { strings } from '../features/booking/strings.ts';
 import { WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
@@ -24,10 +24,7 @@ export const Route = createFileRoute('/w/$slug/bookings/availability')({
     throw redirect({
       to: '/w/$slug/bookings/roster',
       params: { slug: params.slug },
-      search: {
-        ...(search.week === undefined ? {} : { week: search.week }),
-        ...(search.q === undefined ? {} : { q: search.q }),
-      },
+      search: rosterSearch(search),
       replace: true,
     });
   },

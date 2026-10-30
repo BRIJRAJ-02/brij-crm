@@ -62,16 +62,6 @@ export function memberSearch(search: Record<string, unknown>): { readonly member
   return typeof search.member === 'string' && UUID.test(search.member) ? { member: search.member.toLowerCase() } : {};
 }
 
-/**
- * Whether the Roster shows (spec 0037, AC-1447): to an admin (`booking.admin`) and to anyone whose scheduling reach
- * sees a colleague (`seesOthers`); a roster of one is Availability, so everyone else has no such tab, and its
- * address falls back to Availability.
- */
-export const rosterIsShown = (access: {
-  readonly permissions: readonly string[];
-  readonly scheduling?: { readonly seesOthers: boolean } | undefined;
-}): boolean => access.permissions.includes('booking.admin') || access.scheduling?.seesOthers === true;
-
 /** The Roster tab's search (spec 0037, the Team week): `?week=` (a Monday) and `?q=` (a name). */
 export function rosterSearch(search: Record<string, unknown>): { readonly week?: string; readonly q?: string } {
   return {
