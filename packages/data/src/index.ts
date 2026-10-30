@@ -5,7 +5,9 @@
 // store, a view per object, and optimistic creates and edits (loaded when a
 // screen first asks for records), patched in place by live change events
 // while a screen shows a workspace (the realtime client loads with the first).
+import type { AggregateFn, FilterGroup } from '@crm/contracts/values';
 import type {
+  RecordAggregate,
   RecordsExportView,
   StartExportInput,
   ImportLinks,
@@ -611,6 +613,7 @@ export {
   boardColumnIds,
   boardDefaults,
   CHECKBOX_COLUMNS,
+  columnFilter,
   groupableAttributes,
   groupKindOf,
   groupValueOf,
@@ -732,6 +735,8 @@ export {
 export type { NameState, RecordRef } from './records/names.ts';
 export type { WindowCount, WindowMode } from './records/windows.ts';
 export type { FilterGroup, SortRule, SortRules } from '@crm/contracts/values';
+export { aggregatesFor, type AggregateFn } from '@crm/contracts/views';
+export type { RecordAggregate } from '@crm/contracts';
 
 /**
  * A value this tab saved was replaced by someone else's later save (spec
@@ -4578,6 +4583,38 @@ export function createDataLayer({
        */
       count: (workspace: string, objectId: string): Promise<{ readonly count: number; readonly atLeast: boolean }> =>
         beforeRead(workspace).then(() => call((options) => api.records.count({ workspace, objectId }, options))),
+      /**
+       * A column's calculation across every record a view matches (the CRM
+       * flow pass, `records.aggregate`): a count of the filled or the empty,
+       * or for a number or currency the sum, average, least or most (one per
+       * currency). One read per footer, never per row and never cached; the
+       * screen asks again when the view's question or count moves. Relative
+       * dates in the filter resolve in the member's time zone.
+       */
+      aggregate: (
+        workspace: string,
+        objectId: string,
+        input: { readonly attributeId: string; readonly fn: AggregateFn; readonly filter?: FilterGroup | undefined },
+        signal?: AbortSignal,
+      ): Promise<RecordAggregate> =>
+        beforeRead(workspace).then(() =>
+          call(
+            (options) =>
+              api.records.aggregate(
+                {
+                  workspace,
+                  objectId,
+                  attributeId: input.attributeId,
+                  fn: input.fn,
+                  ...(input.filter === undefined ? {} : { filter: input.filter }),
+                  now: new Date().toISOString(),
+                  timeZone: zoneOf(workspace),
+                },
+                options,
+              ),
+            signal,
+          ),
+        ),
       /**
        * Makes a record at once (see the records layer) with `id` (from
        * `newId`); rejects with the refusals when the server says no. Sending the

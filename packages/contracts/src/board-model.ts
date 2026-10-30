@@ -43,6 +43,8 @@ export interface BoardSettings {
   readonly groupByAttributeId: string;
   readonly cardFields: readonly string[];
   readonly showEmptyColumns: boolean;
+  /** A currency field each column header totals, when set. */
+  readonly totalAttributeId?: string;
 }
 
 /**
@@ -149,6 +151,11 @@ export function boardConfigProblem(config: BoardSettings, attributes: readonly B
     return `A card shows at most ${String(BOARD_MAX_CARD_FIELDS)} fields.`;
   }
   if (new Set(config.cardFields).size !== config.cardFields.length) return 'Each field shows on a card once.';
+  if (config.totalAttributeId !== undefined) {
+    const total = byId.get(config.totalAttributeId);
+    if (total === undefined || total.type !== 'currency' || total.isArchived)
+      return 'A column totals a currency field.';
+  }
   for (const id of config.cardFields) {
     const field = byId.get(id);
     if (field === undefined) return 'A card field is not a field of this object.';

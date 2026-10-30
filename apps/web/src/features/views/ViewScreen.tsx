@@ -1,7 +1,7 @@
 // Brief
 // Purpose: slice one object the way you work and keep it (spec 0020).
 // Main task: filter and sort the table, lay out its columns, then save it, or keep it as a view of its own.
-// Leaves out: grouping inside the table, saving a search, charts, and sharing outside the workspace.
+// Leaves out: saving a search, charts, and sharing outside the workspace.
 import {
   BOARD_MAX_CARD_FIELDS,
   FILTER_EDIT_MS,
@@ -478,6 +478,16 @@ export function ViewScreen(props: ViewScreenProps) {
     ],
     [attributes],
   );
+  // A board's Show total of: none, or one of the object's live currency fields.
+  const totalChoices = useMemo(
+    () => [
+      { id: 'none', label: strings.noTotal },
+      ...attributes
+        .filter((attribute) => attribute.type === 'currency' && !attribute.isArchived)
+        .map((attribute) => ({ id: attribute.id, label: attribute.title })),
+    ],
+    [attributes],
+  );
   const viewId = view?.id;
   useEffect(
     () => () => {
@@ -929,6 +939,25 @@ export function ViewScreen(props: ViewScreenProps) {
           {...(boardPlan === undefined
             ? { label: strings.columns, fields }
             : { label: strings.cardFields, fields: cardFields, maxShown: BOARD_MAX_CARD_FIELDS })}
+          {...(boardPlan !== undefined && totalChoices.length > 1
+            ? {
+                // A board's column total (the CRM flow pass): the sum of one currency field in each column header.
+                header: (
+                  <Select
+                    label={strings.showTotalOf}
+                    size="sm"
+                    items={totalChoices}
+                    value={boardPlan.total?.id ?? 'none'}
+                    onChange={(id) => {
+                      const { totalAttributeId: _old, ...rest } = boardPlan.settings;
+                      changeBoardLayout({
+                        board: id === null || id === 'none' ? rest : { ...rest, totalAttributeId: id },
+                      });
+                    }}
+                  />
+                ),
+              }
+            : {})}
           {...(boardPlan === undefined && groupChoices.length > 1
             ? {
                 header: (
@@ -953,14 +982,15 @@ export function ViewScreen(props: ViewScreenProps) {
               changeCardFields(next);
               return;
             }
-            const widths = new Map(layout.columns.map((column) => [column.id, column.width]));
+            const kept = new Map(layout.columns.map((column) => [column.id, column]));
             changeLayout({
               columns: next.map((field) => {
-                const width = widths.get(field.attribute.id);
+                const { width, calc } = kept.get(field.attribute.id) ?? {};
                 return {
                   id: field.attribute.id,
                   isHidden: !field.isShown && field.isLocked !== true,
                   ...(width === undefined ? {} : { width }),
+                  ...(calc === undefined ? {} : { calc }),
                 };
               }),
               pinnedCount: layout.pinnedCount,

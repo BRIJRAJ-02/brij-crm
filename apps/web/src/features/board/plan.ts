@@ -33,6 +33,8 @@ export interface BoardPlan {
   /** `null` (no value) first, then the options by position, archived ones too. */
   readonly columnIds: readonly (string | null)[];
   readonly archivedIds: readonly string[];
+  /** The live currency field each column header totals, when the view sets one. */
+  readonly total?: AttributeDefinition;
   /** The card fields that show: live, never the name, at most 6, in the view's order. */
   readonly cardFields: readonly AttributeDefinition[];
   /** Whether settings came from the view (false: the defaults, this visit, AC-492). */
@@ -83,10 +85,12 @@ export function planBoard(
     const field = byId.get(id);
     return field === undefined || field.isArchived || field.isPrimary || field.id === groupBy.id ? [] : [field];
   });
+  const total = settings.totalAttributeId === undefined ? undefined : byId.get(settings.totalAttributeId);
   return {
     kind: 'board',
     groupBy,
     groupKind,
+    ...(total === undefined || total.isArchived || total.type !== 'currency' ? {} : { total }),
     settings,
     // A checkbox has no "No" column: an empty one is Not checked.
     columnIds: groupKind === 'checkbox' ? CHECKBOX_COLUMNS : boardColumnIds(options),

@@ -1,5 +1,6 @@
 import {
   addRecord,
+  aggregateMatches,
   bulkEditRecords,
   countMatches,
   deleteRecords,
@@ -48,6 +49,23 @@ export const recordsRouter = member.records.router({
         context.scope,
         {
           objectId: input.objectId,
+          ...(input.filter === undefined ? {} : { filter: input.filter }),
+          ...(input.now === undefined ? {} : { now: input.now }),
+          ...(input.timeZone === undefined ? {} : { timeZone: input.timeZone }),
+        },
+        signal,
+      ),
+    ),
+  ),
+  // A column's calculation (the CRM flow pass): one statement or two through the door, in the same read gate.
+  aggregate: member.records.aggregate.handler(({ context, input, signal }) =>
+    context.readGate.run(context.scope.workspaceId, () =>
+      aggregateMatches(
+        context.scope,
+        {
+          objectId: input.objectId,
+          attributeId: input.attributeId,
+          fn: input.fn,
           ...(input.filter === undefined ? {} : { filter: input.filter }),
           ...(input.now === undefined ? {} : { now: input.now }),
           ...(input.timeZone === undefined ? {} : { timeZone: input.timeZone }),

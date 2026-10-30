@@ -79,6 +79,9 @@ export const strings = {
   columns: 'Columns',
   /** A table's View settings: the rows in runs by a status or single select (13 Oct reference batch 4). */
   groupBy: 'Group by',
+  /** A board's View settings: the currency field each column header totals (the CRM flow pass). */
+  showTotalOf: 'Show total of',
+  noTotal: 'Nothing',
   noGrouping: 'None',
   /** A board's View settings: what its cards show. */
   cardFields: 'Card fields',

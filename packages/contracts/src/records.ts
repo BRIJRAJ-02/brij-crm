@@ -6,6 +6,7 @@ import * as z from 'zod';
 import { RecordActivity, RecordActivityInput } from './activity.ts';
 import { ApiRefusal } from './errors.ts';
 import { ActorReferenceValue, Timestamp } from './values/attribute-values.ts';
+import { AGGREGATE_FNS } from './values/aggregates.ts';
 import { FilterGroup } from './values/filters.ts';
 import { RecordRefDisplay } from './values/options.ts';
 import { SortRules } from './values/sorts.ts';
@@ -213,6 +214,44 @@ export const RecordGroups = z.object({
 });
 /** A board's columns. */
 export type RecordGroups = z.infer<typeof RecordGroups>;
+
+/** One calculation over a column (the CRM flow pass). */
+export const AggregateFnSchema = z.enum(AGGREGATE_FNS);
+
+/**
+ * A column's calculation across every record the view's `filter` matches
+ * (the CRM flow pass): `count` holds a value, `count_empty` holds none, and
+ * for a number or a currency `sum`, `avg`, `min` and `max`. One query, through
+ * the access door: a hidden attribute or object refuses as a filter would.
+ */
+export const AggregateRecordsInput = WorkspaceScoped.extend({
+  objectId: Uuid,
+  attributeId: Uuid,
+  fn: AggregateFnSchema,
+  filter: FilterGroup.optional(),
+  ...QueryClock,
+});
+/** A column's calculation. */
+export type AggregateRecordsInput = z.infer<typeof AggregateRecordsInput>;
+
+/**
+ * What a calculation answers: a count (capped as `records.count` is, with
+ * `atLeast`), or the amounts as exact decimal text, one per currency for a
+ * currency (none when nothing holds a value). `tooMany` when a filtered view
+ * matches more records than an amount is worked out over (10,000): nothing is
+ * shown rather than a part.
+ */
+export const RecordAggregate = z.object({
+  count: z.number().int().min(0).optional(),
+  atLeast: z.boolean().optional(),
+  amounts: z
+    .array(z.object({ value: z.string(), currency: z.string().optional() }))
+    .max(200)
+    .optional(),
+  tooMany: z.boolean().optional(),
+});
+/** A column's calculation's answer. */
+export type RecordAggregate = z.infer<typeof RecordAggregate>;
 
 /** Records by id, up to 500, in the order asked. */
 export const GetRecordsInput = WorkspaceScoped.extend({
@@ -467,6 +506,7 @@ export const recordsContract = {
   query: oc.input(QueryRecordsInput).output(RecordPage),
   count: oc.input(CountRecordsInput).output(RecordCount),
   groups: oc.input(RecordGroupsInput).output(RecordGroups),
+  aggregate: oc.input(AggregateRecordsInput).output(RecordAggregate),
   get: oc.input(GetRecordsInput).output(z.array(RecordView)),
   create: oc.input(CreateRecordInput).output(WrittenRecord),
   setValues: oc.input(SetValuesInput).output(WrittenRecord),

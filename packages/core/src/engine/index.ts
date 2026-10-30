@@ -55,8 +55,10 @@ export {
 } from './options.ts';
 export { type QueryClock, type WeekStart } from './query/compile.ts';
 export {
+  aggregateMatches,
   COUNT_CAP,
   countMatches,
+  type Aggregate,
   cursorBinding,
   decodeCursor,
   encodeCursor,

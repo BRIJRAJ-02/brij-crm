@@ -1,7 +1,9 @@
 // The table view's edges (CRM flow pass, 30 October 2026): the default order says itself as a muted chip; a column
 // header's sort goes first and keeps the sorts already built; ticked rows stay through a sort and go, with a word,
 // when the filter changes; the view's search narrows by name, is never saved, and Esc clears it; and a ghost
-// "+ New person" after the last row opens the same create dialog as New.
+// "+ New person" after the last row opens the same create dialog as New. Then the views pass: an unsaved draft
+// survives leaving through the sidebar, "more than N days ago" filters by a relative date, Duplicate opens Rename
+// with the name selected, Delete view is one click with Undo, and a column's footer works out a calculation.
 import { randomUUID } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
 import { addPerson, newWorkspace } from './people.ts';
@@ -22,6 +24,21 @@ async function sortBy(page: Page, column: string, direction: 'Sort ascending' | 
     .click();
   await page.keyboard.press('Alt+ArrowDown');
   await page.getByRole('menuitem', { name: direction }).click();
+}
+
+/** The view switcher's menu, opened from its button (the current view's name). */
+async function openSwitcher(page: Page, current: string): Promise<void> {
+  await page.getByRole('button', { name: current, exact: true }).click();
+  await expect(page.getByRole('menu')).toBeVisible();
+}
+
+/** Opens the Toolbar's filter builder and adds a filter on `attribute`. */
+async function addFilter(page: Page, attribute: string) {
+  await toolbar(page).getByRole('button', { name: 'Filter', exact: true }).click();
+  const builder = page.getByRole('dialog', { name: 'Filters' });
+  await builder.getByRole('button', { name: 'Add filter', exact: true }).click();
+  await page.getByRole('menuitem', { name: attribute }).click();
+  return builder;
 }
 
 /** A new workspace on People, holding three people. */
@@ -126,5 +143,96 @@ test.describe('the table view’s edges', () => {
     await expect(dialog).toBeHidden();
     await expect(table(page).getByRole('rowheader', { name: /Dee Lane/ })).toBeVisible();
     await expect(add).toContainText(`${(before + 1).toLocaleString('en')} records`);
+  });
+
+  test('an unsaved draft survives leaving through the sidebar, and comes back with Save and Discard', async ({
+    page,
+  }) => {
+    test.setTimeout(180_000);
+    await threePeople(page, 'vkeep');
+    const builder = await addFilter(page, 'Email addresses');
+    await builder.getByRole('button', { name: 'is', exact: true }).click();
+    await page.getByRole('menuitemradio', { name: 'contains', exact: true }).click();
+    await builder.getByRole('textbox').last().fill('bea-');
+    await page.keyboard.press('Escape');
+    await expect(table(page).getByRole('rowheader', { name: /Ada Byron/ })).toHaveCount(0);
+    await expect(toolbar(page).getByRole('button', { name: 'Discard changes' })).toBeVisible();
+
+    // Away through the sidebar and back: the draft is still there, not silently dropped.
+    const nav = page.getByRole('navigation', { name: 'Main navigation' });
+    await nav.getByRole('link', { name: 'Companies', exact: true }).click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Companies' })).toBeVisible();
+    await nav.getByRole('link', { name: 'People', exact: true }).click();
+    await expect(page.getByRole('heading', { level: 1, name: 'People' })).toBeVisible();
+    await expect(toolbar(page).getByRole('button', { name: 'Discard changes' })).toBeVisible();
+    await expect(table(page).getByRole('rowheader', { name: /Bea Stone/ })).toBeVisible();
+    await expect(table(page).getByRole('rowheader', { name: /Ada Byron/ })).toHaveCount(0);
+    await expect(page).toHaveURL(/\?draft=/);
+
+    // Discard ends it for good: the next visit opens the saved view.
+    await toolbar(page).getByRole('button', { name: 'Discard changes' }).click();
+    await nav.getByRole('link', { name: 'Companies', exact: true }).click();
+    await nav.getByRole('link', { name: 'People', exact: true }).click();
+    await expect(table(page).getByRole('rowheader', { name: /Ada Byron/ })).toBeVisible();
+    await expect(toolbar(page).getByRole('button', { name: 'Discard changes' })).toHaveCount(0);
+  });
+
+  test('a relative date filter: created more than 30 days ago matches nobody made today', async ({ page }) => {
+    test.setTimeout(180_000);
+    await threePeople(page, 'vrel');
+    const builder = await addFilter(page, 'Created at');
+    await builder.getByRole('button', { name: 'is before', exact: true }).click();
+    await page.getByRole('menuitemradio', { name: 'is more than', exact: true }).click();
+    // It starts at 30 days, and says "ago" after its unit.
+    await expect(builder).toContainText('ago');
+    await page.keyboard.press('Escape');
+    await expect(toolbar(page)).toContainText('30 days ago');
+    await expect(page.getByText('No people match these filters')).toBeVisible();
+  });
+
+  test('Duplicate opens Rename with the name selected, and Delete view is one click with Undo', async ({ page }) => {
+    test.setTimeout(180_000);
+    await threePeople(page, 'vdup');
+    await openSwitcher(page, 'All People');
+    await page.getByRole('menuitem', { name: 'Duplicate' }).click();
+    const rename = page.getByRole('dialog', { name: 'Rename view' });
+    await expect(rename).toBeVisible();
+    const name = rename.getByRole('textbox', { name: 'View name' });
+    await expect(name).toBeFocused();
+    // The whole name is selected: typing replaces it, so no "copy" is left by accident.
+    await page.keyboard.type('My people');
+    await expect(name).toHaveValue('My people');
+    await rename.getByRole('button', { name: 'Rename' }).click();
+    await expect(rename).toBeHidden();
+    await expect(page.getByRole('button', { name: 'My people', exact: true })).toBeVisible();
+
+    // Delete acts at once, with no confirm; Undo makes the view again.
+    await openSwitcher(page, 'My people');
+    await page.getByRole('menuitem', { name: 'Delete view' }).click();
+    await expect(page.getByText('Deleted My people.')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'All People', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Undo' }).click();
+    await expect(page.getByRole('button', { name: 'My people', exact: true })).toBeVisible();
+    await openSwitcher(page, 'My people');
+    await expect(page.getByRole('menuitemradio', { name: 'My people' })).toBeVisible();
+    await page.keyboard.press('Escape');
+  });
+
+  test('a column footer counts across every matching record, and the view keeps the choice', async ({ page }) => {
+    test.setTimeout(180_000);
+    await threePeople(page, 'vcalc');
+    const footer = table(page).getByRole('row').last();
+    await footer.getByRole('button', { name: 'Calculate' }).first().click();
+    await page.getByRole('menuitemradio', { name: 'Count', exact: true }).click();
+    await expect(footer.getByRole('button', { name: 'Count 3' })).toBeVisible();
+
+    // Kept with the view: a reload shows it again, worked out afresh.
+    await page.reload();
+    await expect(table(page).getByRole('row').last().getByRole('button', { name: 'Count 3' })).toBeVisible();
+
+    // None takes it away, and the quiet Calculate is back.
+    await table(page).getByRole('row').last().getByRole('button', { name: 'Count 3' }).click();
+    await page.getByRole('menuitemradio', { name: 'None', exact: true }).click();
+    await expect(table(page).getByRole('row').last().getByRole('button', { name: 'Count 3' })).toHaveCount(0);
   });
 });

@@ -3,7 +3,7 @@
 // React or library imports, so the route's loader (in the first load) reads the
 // same columns the screen shows. What a change saves lives in `edits.ts`, which
 // only the screens load.
-import { effectiveColumns, type AttributeDefinition, type ObjectSummary, type View } from '@crm/data';
+import { effectiveColumns, type AggregateFn, type AttributeDefinition, type ObjectSummary, type View } from '@crm/data';
 import { avatarAttribute, listedAttributes } from '../workspace/columns.ts';
 
 /** One column the table shows: the attribute, whether hidden, and its width when the view keeps one. */
@@ -11,6 +11,8 @@ export interface ShownColumn {
   readonly id: string;
   readonly isHidden: boolean;
   readonly width?: number;
+  /** The calculation its footer shows (the CRM flow pass). */
+  readonly calc?: AggregateFn;
 }
 
 /** A view's columns and how many are pinned. */
@@ -48,6 +50,7 @@ export function viewColumns(
       id: column.attributeId,
       isHidden: column.isHidden,
       ...(column.width === undefined ? {} : { width: column.width }),
+      ...(column.calc === undefined ? {} : { calc: column.calc }),
     })),
     pinnedCount: effective.pinnedCount,
   };

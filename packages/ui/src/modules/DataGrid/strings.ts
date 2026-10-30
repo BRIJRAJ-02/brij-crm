@@ -16,6 +16,22 @@ export const strings = {
   filter: 'Filter',
   /** Shown on the header while resizing, and announced as the width changes. */
   resizeHint: 'Left and Right change the width. Enter or Esc to finish.',
+  /** A column's footer calculation (the CRM flow pass). */
+  calculate: 'Calculate',
+  calculateColumn: (name: string) => `Calculate ${name}`,
+  calcs: {
+    count: 'Count',
+    count_empty: 'Empty',
+    sum: 'Sum',
+    avg: 'Average',
+    min: 'Min',
+    max: 'Max',
+  },
+  calcNone: 'None',
+  /** While a calculation is worked out. */
+  calcPending: '…',
+  /** A filtered view too large to add up. */
+  calcTooMany: 'too many rows',
   /** What a group header's count counts, read after the number. */
   groupRows: 'records',
   /** What a screen reader hears as a column moves by pointer. */

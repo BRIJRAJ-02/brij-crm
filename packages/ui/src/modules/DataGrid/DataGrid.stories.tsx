@@ -20,6 +20,7 @@ import {
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { DataGrid, type GridStatus, type RowNote, type RowSource } from './DataGrid.tsx';
 import type { GridEditorProps } from './GridCell.tsx';
+import type { ColumnCalc } from './GridCalc.tsx';
 import type { GridColumnAction } from './GridHeaderCell.tsx';
 import type { GridColumn } from './grid-columns.ts';
 import type { GridGroup } from './grid-groups.ts';
@@ -31,6 +32,8 @@ interface SampleGridProps {
   readonly status?: GridStatus;
   readonly selected?: readonly string[];
   readonly footer?: Readonly<Record<string, ReactNode>>;
+  /** Each column's footer calculation, by column id. */
+  readonly calculations?: Readonly<Record<string, ColumnCalc>>;
   /** The footer's ghost "+ New company" under the row header. */
   readonly addRow?: { readonly label: string; readonly onAdd: () => void };
   /** Rows at these indexes are still loading. */
@@ -72,6 +75,7 @@ function SampleGrid({
   status = 'ready',
   selected = [],
   footer,
+  calculations,
   addRow,
   isLoading,
   cellErrors,
@@ -170,6 +174,7 @@ function SampleGrid({
         editorProps={editorProps}
         onRetry={onRetry}
         {...(footer === undefined ? {} : { footer })}
+        {...(calculations === undefined ? {} : { calculations })}
         {...(addRow === undefined ? {} : { addRow })}
         {...(cellErrors === undefined ? {} : { cellErrors })}
         {...(onRowOpen === undefined ? {} : { onRowOpen })}
@@ -1005,6 +1010,36 @@ export const FooterByKeyboard: Story = {
     await press(['{Meta>}{End}{/Meta}'], '200:9');
     await press(['{Home}', '{ArrowRight}', '{ArrowRight}', '{ArrowRight}'], '200:3');
     await expect(document.activeElement).toHaveTextContent('1,234 avg');
+  },
+};
+
+/**
+ * Footer calculations (the CRM flow pass): a chosen one reads its name and value; an empty column's quiet
+ * "+ Calculate" shows on its focused cell, and Enter opens its Menu of what the type can work out.
+ */
+export const Calculations: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: {
+    calculations: {
+      arr: {
+        choices: ['count', 'count_empty', 'sum', 'avg', 'min', 'max'],
+        chosen: 'sum',
+        value: 'USD 91,234,560',
+        onChange: fn(),
+      },
+      employees: { choices: ['count', 'count_empty', 'sum', 'avg', 'min', 'max'], onChange: fn() },
+    },
+  },
+  play: async ({ args, canvas, userEvent }) => {
+    const press = presser((keys) => userEvent.keyboard(keys));
+    await expect(canvas.getByRole('button', { name: 'Sum USD 91,234,560' })).toBeInTheDocument();
+    await userEvent.tab();
+    await press(['{Meta>}{End}{/Meta}'], '200:9');
+    await press(['{Home}', '{ArrowRight}', '{ArrowRight}', '{ArrowRight}'], '200:3');
+    await press(['{Enter}']);
+    const average = await within(document.body).findByRole('menuitemradio', { name: 'Average' });
+    await userEvent.click(average);
+    await expect(args.calculations?.employees?.onChange).toHaveBeenCalledWith('avg');
   },
 };
 

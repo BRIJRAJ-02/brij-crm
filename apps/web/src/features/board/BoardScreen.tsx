@@ -3,6 +3,7 @@
 // Main task: see where every record stands and drag a card to its next column, live for everyone.
 // Leaves out: the stuck badge (milestone 3).
 import {
+  columnFilter,
   groupValueOf,
   isDataError,
   toActorDisplays,
@@ -38,6 +39,7 @@ import {
 import { useNavigate, useRouteContext, useRouter } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useMemberPicker } from '../records/members.ts';
+import { useAggregates } from '../workspace/calcs.ts';
 import { AttributeDialog } from '../settings/AttributeDialog.tsx';
 import { NewRecordDialog } from '../workspace/NewRecordDialog.tsx';
 import { createEditors } from '../workspace/RecordsScreen.tsx';
@@ -461,6 +463,8 @@ function BoardBody({
   }
   return (
     <LoadedBoard
+      slug={slug}
+      filter={query.filter}
       store={store}
       attributeIds={attributeIds}
       label={label}
@@ -483,6 +487,9 @@ function BoardBody({
 }
 
 interface LoadedBoardProps {
+  readonly slug: string;
+  /** The view's filter, which each column's total runs under with the column's own condition. */
+  readonly filter: ViewQuery['filter'];
   readonly store: BoardStore<RecordsView>;
   readonly attributeIds: readonly string[];
   readonly label: string;
@@ -498,6 +505,8 @@ interface LoadedBoardProps {
 }
 
 function LoadedBoard({
+  slug,
+  filter,
   store,
   attributeIds,
   label,
@@ -513,6 +522,35 @@ function LoadedBoard({
 }: LoadedBoardProps) {
   const board: BoardView = useBoard(store, attributeIds);
   const memberDisplays = useMemo(() => toActorDisplays(members), [members]);
+  // Column totals (Board settings' Column total, the CRM flow pass): one sum per column that holds cards, read
+  // again when a column's count moves; never added up from the cards loaded.
+  const totalId = plan.total?.id;
+  const holdingKey = board.columns
+    .filter((column) => (column.state?.count.count ?? 0) > 0)
+    .map((column) => column.id ?? NO_VALUE_COLUMN)
+    .join('\u0000');
+  const asks = useMemo(
+    () =>
+      totalId === undefined || holdingKey === ''
+        ? []
+        : holdingKey.split('\u0000').map((key) => {
+            const id = key === NO_VALUE_COLUMN ? null : key;
+            return {
+              key,
+              attributeId: totalId,
+              fn: 'sum' as const,
+              filter: columnFilter(filter, plan.groupBy.id, id, plan.groupKind),
+            };
+          }),
+    // The columns holding cards, as one string: a new array each render must not ask again.
+    [totalId, holdingKey, filter, plan.groupBy.id, plan.groupKind],
+  );
+  const totals = useAggregates(
+    slug,
+    object.id,
+    asks,
+    board.columns.map((column) => String(column.state?.count.count ?? '')).join(','),
+  );
   const options = useMemo(
     () => new Map((plan.groupBy.options ?? []).map((option) => [option.id, option])),
     [plan.groupBy.options],
@@ -558,6 +596,9 @@ function LoadedBoard({
       ...(option === undefined ? {} : { hue: option.hue }),
       count: state?.count.count ?? 0,
       ...(state?.count.atLeast === true ? { isCountAtLeast: true } : {}),
+      ...(totalId === undefined || (state?.count.count ?? 0) === 0
+        ? {}
+        : { total: totals.get(column.id ?? NO_VALUE_COLUMN) ?? workspaceStrings.calcPending }),
       ...(option?.isArchived === true ? { isArchived: true } : {}),
       // The no value column stays a slim strip while it holds nothing (once its count is in, so it never flickers).
       ...(column.id === null && state !== undefined ? { isCollapsedWhenEmpty: true } : {}),
