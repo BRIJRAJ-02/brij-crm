@@ -9,7 +9,17 @@
 // saved; what bounds it is the route, which fetches only for a link block on a live page, rate limited per address
 // and per handle. The door's own rules do the rest: every resolved address checked against the private, loopback,
 // link local, unique local, multicast and carrier grade NAT ranges before the connection and after each redirect.
-import { declaredIcon, faviconSources, imageTypeOf, isFaviconSite, type ImageType } from '@crm/core/public';
+//
+// A company's logo (spec 0059, AC-5904) is the same fetch preferring the head's declared icon sized for a logo
+// (`prefer: 'logo'`), behind its own route (`../logos.ts`): a signed in person, a public host name, 300 a minute.
+import {
+  declaredIcon,
+  faviconSources,
+  imageTypeOf,
+  isFaviconSite,
+  type IconPick,
+  type ImageType,
+} from '@crm/core/public';
 import { createOutsideFetch, type Lookup, type OutsideMiss } from './outside.ts';
 import { pictureResponse } from './picture.ts';
 
@@ -59,47 +69,83 @@ export type FetchedIcon =
 export type FaviconFetch = (link: string) => Promise<FetchedIcon>;
 
 /**
- * Builds the icon fetch on the one outside door. It tries the site's own `/favicon.ico` first, which most sites
- * still answer and which costs one request; only when that misses does it read the page's head for a declared
- * icon and fetch that. So a site with an icon where browsers look costs one fetch, and a modern one costs three,
- * all on a cache miss only. `fetch` and `lookup` are the platform's unless a test passes its own.
+ * Which icon a fetch tries first. `favicon`, a link block's: the site's own `/favicon.ico`, then the icon its head
+ * declares, best `rel` first. `logo`, a company's (spec 0059, AC-5904): the icon the head declares that best fills a
+ * logo tile, by `sizes` (`declaredIcon`'s `logo` pick), then `/favicon.ico`, since a logo is drawn up to 48 pixels
+ * across and a favicon is often 16.
+ */
+export type FaviconPrefer = 'favicon' | 'logo';
+
+/**
+ * Builds the icon fetch on the one outside door. By `favicon` (the default) it tries the site's own `/favicon.ico`
+ * first, which most sites still answer and which costs one request; only when that misses does it read the page's
+ * head for a declared icon and fetch that. So a site with an icon where browsers look costs one fetch, and a modern
+ * one costs three. By `logo` it reads the head first and fetches the declared icon that best fills a logo, falling back to
+ * `/favicon.ico`: two fetches for most sites, three when the declared one misses. Either way only on a cache miss,
+ * and every read of one lookup shares one deadline, `timeoutMs` in all. `fetch` and `lookup` are the platform's
+ * unless a test passes its own.
  */
 export function createFaviconFetch(
   options: {
     readonly fetch?: typeof globalThis.fetch;
     readonly lookup?: Lookup;
     readonly timeoutMs?: number;
+    readonly prefer?: FaviconPrefer;
   } = {},
 ): FaviconFetch {
+  const timeoutMs = options.timeoutMs ?? FAVICON_TIMEOUT_MS;
   const read = createOutsideFetch({
-    ...options,
-    timeoutMs: options.timeoutMs ?? FAVICON_TIMEOUT_MS,
+    ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
+    ...(options.lookup === undefined ? {} : { lookup: options.lookup }),
+    timeoutMs,
     maxBytes: FAVICON_MAX_BYTES,
   });
 
   /** One image address, answered only when its bytes begin as an image we serve. */
-  const image = async (url: URL): Promise<FetchedIcon> => {
-    const fetched = await read(url, { accept: ICON_TYPES, allow: isFaviconSite });
+  const image = async (url: URL, signal: AbortSignal): Promise<FetchedIcon> => {
+    const fetched = await read(url, { accept: ICON_TYPES, allow: isFaviconSite, signal });
     if (!fetched.ok) return fetched;
     // What the bytes say, never the header's word: a great many sites serve a PNG as `image/x-icon`.
     const type = imageTypeOf(fetched.bytes);
     return type === undefined ? { ok: false, reason: 'type' } : { ok: true, type, bytes: fetched.bytes };
   };
 
-  return async (link) => {
-    const sources = faviconSources(link);
-    if (sources === undefined) return { ok: false, reason: 'url' };
-    const guessed = await image(sources.guess);
-    if (guessed.ok) return guessed;
-    const page = await read(sources.page, {
+  /** The page's head, read for the icon it declares (picked as `pick` says; none is undefined), or why it wasn't read. */
+  const declared = async (
+    page: URL,
+    pick: IconPick,
+    signal: AbortSignal,
+  ): Promise<
+    { readonly ok: true; readonly url: URL | undefined } | { readonly ok: false; readonly reason: FaviconMiss }
+  > => {
+    const head = await read(page, {
       accept: PAGE_TYPES,
       maxBytes: FAVICON_PAGE_MAX_BYTES,
       allow: isFaviconSite,
+      signal,
     });
-    if (!page.ok) return page;
-    const declared = declaredIcon(new TextDecoder().decode(page.bytes), sources.page);
+    return head.ok ? { ok: true, url: declaredIcon(new TextDecoder().decode(head.bytes), page, pick) } : head;
+  };
+
+  return async (link) => {
+    const sources = faviconSources(link);
+    if (sources === undefined) return { ok: false, reason: 'url' };
+    // One deadline for every read of this icon: the page, the image and their redirects.
+    const signal = AbortSignal.timeout(timeoutMs);
+    if (options.prefer === 'logo') {
+      const head = await declared(sources.page, 'logo', signal);
+      if (head.ok && head.url !== undefined) {
+        const icon = await image(head.url, signal);
+        if (icon.ok) return icon;
+      }
+      return await image(sources.guess, signal);
+    }
+    const guessed = await image(sources.guess, signal);
+    if (guessed.ok) return guessed;
+    const head = await declared(sources.page, 'rel', signal);
+    if (!head.ok) return head;
     // Nothing declared: the first miss is the honest reason, since that is where an icon should have been.
-    return declared === undefined ? guessed : await image(declared);
+    return head.url === undefined ? guessed : await image(head.url, signal);
   };
 }
 
