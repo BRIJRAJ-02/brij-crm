@@ -128,7 +128,7 @@ describe('the Team week', () => {
     await render();
     await expect.element(page.getByRole('grid', { name: /^Roster, / })).toBeVisible();
     await expect.element(page.getByRole('button', { name: SAM_TUESDAY })).toBeVisible();
-    await expect.element(page.getByText('UTC+5:30')).toBeVisible();
+    await expect.element(page.getByText('36 h · UTC+5:30')).toBeVisible();
     await expect.element(page.getByText('2 pages use other schedules')).toBeVisible();
     // See only: Priya's cells are text, with Away read out.
     expect(document.querySelectorAll('button[aria-label*="Priya Shah"]')).toHaveLength(0);
@@ -202,34 +202,49 @@ describe('the Team week', () => {
     });
   });
 
+  it('copies everyone the reader may change from the toolbar, after asking', async () => {
+    const { teamWeek } = await render();
+    await page.getByRole('button', { name: 'Copy to next week' }).click();
+    await expect.element(page.getByRole('dialog', { name: 'Copy 2 people’s weeks to next week?' })).toBeVisible();
+    await page.getByRole('button', { name: 'Copy week' }).click();
+    expect(teamWeek.copyWeek).toHaveBeenCalledWith('acme', {
+      memberIds: [ME, SAM],
+      fromWeekStart: MONDAY,
+      toWeekStart: '2026-11-09',
+    });
+  });
+
   it.each(THEMES)('has no axe violations in %s', async (theme) => {
     await render();
     applyTheme(theme);
     expect(await axeViolations()).toEqual([]);
   });
 
-  it.runIf(import.meta.env.VITE_ROSTER_SHOTS === '1')('saves screenshots at 390 and 1280, light and dark', async () => {
-    // Beside this file (Vite serves nothing outside the project); the lane moves them to its scratchpad.
-    const dir = 'roster-shots';
-    for (const width of [390, 1280]) {
-      for (const theme of THEMES) {
-        await page.viewport(width, 900);
-        await render();
-        applyTheme(theme);
-        await new Promise((resolve) => setTimeout(resolve, 300));
-        await page.screenshot({ path: `${dir}/week-${String(width)}-${theme}.png` });
-        await page.getByRole('button', { name: SAM_TUESDAY }).click();
-        await expect.element(page.getByRole('dialog', { name: 'Sam Lee, Tuesday 3 November' })).toBeVisible();
-        await new Promise((resolve) => setTimeout(resolve, 400));
-        await page.screenshot({ path: `${dir}/cell-${String(width)}-${theme}.png` });
-        await userEvent.keyboard('{Escape}');
-        await page.getByRole('button', { name: 'Set usual hours for…' }).click();
-        await new Promise((resolve) => setTimeout(resolve, 400));
-        await page.screenshot({ path: `${dir}/usual-${String(width)}-${theme}.png` });
-        shown?.unmount();
-        shown = undefined;
-        resetTheme();
+  it.runIf(import.meta.env.VITE_ROSTER_SHOTS === '1')(
+    'saves screenshots at 390, 1440 and 1920, light and dark',
+    async () => {
+      // Beside this file (Vite serves nothing outside the project); the lane moves them to its scratchpad.
+      const dir = 'roster-shots';
+      for (const width of [390, 1440, 1920]) {
+        for (const theme of THEMES) {
+          await page.viewport(width, 900);
+          await render();
+          applyTheme(theme);
+          await new Promise((resolve) => setTimeout(resolve, 300));
+          await page.screenshot({ path: `${dir}/week-${String(width)}-${theme}.png` });
+          await page.getByRole('button', { name: SAM_TUESDAY }).click();
+          await expect.element(page.getByRole('dialog', { name: 'Sam Lee, Tuesday 3 November' })).toBeVisible();
+          await new Promise((resolve) => setTimeout(resolve, 400));
+          await page.screenshot({ path: `${dir}/cell-${String(width)}-${theme}.png` });
+          await userEvent.keyboard('{Escape}');
+          await page.getByRole('button', { name: 'Set usual hours for…' }).click();
+          await new Promise((resolve) => setTimeout(resolve, 400));
+          await page.screenshot({ path: `${dir}/usual-${String(width)}-${theme}.png` });
+          shown?.unmount();
+          shown = undefined;
+          resetTheme();
+        }
       }
-    }
-  });
+    },
+  );
 });

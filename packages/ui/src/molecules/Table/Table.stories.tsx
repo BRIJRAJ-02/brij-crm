@@ -258,3 +258,54 @@ export const HeaderHidden: Story = {
     await expect(canvas.queryByText('Conflicts')).not.toBeVisible();
   },
 };
+
+interface Shift {
+  readonly id: string;
+  readonly name: string;
+  readonly days: readonly string[];
+}
+
+const WEEK: readonly TableColumn[] = [
+  { id: 'name', label: 'Person', isRowHeader: true },
+  { id: 'mon', label: 'Mon' },
+  { id: 'tue', label: 'Tue', isCurrent: true },
+  { id: 'wed', label: 'Wed' },
+  { id: 'sat', label: 'Sat', tone: 'quiet' },
+  { id: 'sun', label: 'Sun', tone: 'quiet' },
+];
+
+const SHIFTS: readonly Shift[] = [
+  { id: 's1', name: 'Ada Lovelace', days: ['9 – 5', '9 – 5', '9 – 5', 'Off', 'Off'] },
+  { id: 's2', name: 'Grace Hopper', days: ['10 – 2', '9 – 5', '9 – 5', '9 – 1', 'Off'] },
+  { id: 'total', name: 'Total', days: ['2', '2', '2', '1', '0'] },
+];
+
+/**
+ * The even layout (`layout="even"`): the row header column one set width and the days sharing the rest as equals,
+ * whatever their content; the current column (`isCurrent`), quiet columns (`tone: 'quiet'`) and a row of sums
+ * (`getRowTone`), as the roster's week uses them.
+ */
+export const EvenLayout: Story = {
+  render: () => (
+    <Stage width="fill">
+      <Table<Shift>
+        label="Week"
+        layout="even"
+        isScrollable
+        columns={WEEK}
+        rows={SHIFTS}
+        getRowId={(row) => row.id}
+        getRowTone={(row) => (row.id === 'total' ? 'total' : undefined)}
+        renderCell={(row, column) =>
+          column === 'name' ? row.name : (row.days[WEEK.findIndex((each) => each.id === column) - 1] ?? '')
+        }
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const headers = canvas.getAllByRole('columnheader');
+    const monday = headers[1]?.getBoundingClientRect().width ?? 0;
+    // The shared columns are equals, a quiet one too, whatever their content.
+    await expect(Math.abs((headers[4]?.getBoundingClientRect().width ?? 0) - monday)).toBeLessThan(2);
+  },
+};
