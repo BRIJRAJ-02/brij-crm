@@ -21,6 +21,7 @@ import {
 import {
   AttributeSettings,
   relationshipStep,
+  type AttributeSettingsDraft,
   type AttributeSettingsOptionWrites,
   type AttributeSettingsValues,
   type FieldAttribute,
@@ -65,6 +66,8 @@ export interface AttributeDialogProps {
   readonly objectAttributes?: readonly AttributeDefinition[] | undefined;
   /** On create, the type chosen at the start (a picker key, `select` for a board with nothing to group by). */
   readonly initialTypeKey?: string | undefined;
+  /** On create, the name and a select's first options to start from (an import's column). */
+  readonly initialDraft?: AttributeSettingsDraft | undefined;
   readonly onClose: () => void;
   /** The server agreed: the attribute as it is now, and whether it is new. */
   readonly onSaved: (attribute: AttributeDefinition, isNew: boolean) => void;
@@ -168,6 +171,7 @@ export function AttributeDialog({
   optionsLimit,
   objectAttributes,
   initialTypeKey,
+  initialDraft,
   onClose,
   onSaved,
 }: AttributeDialogProps) {
@@ -371,6 +375,7 @@ export function AttributeDialog({
         if (!open) onClose();
       }}
       {...(initialTypeKey === undefined ? {} : { initialTypeKey })}
+      {...(initialDraft === undefined ? {} : { initialDraft })}
       {...(attribute === undefined
         ? {}
         : {

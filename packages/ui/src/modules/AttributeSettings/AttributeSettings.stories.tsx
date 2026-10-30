@@ -432,6 +432,32 @@ export const StartsOnSelect: Story = {
   },
 };
 
+/** Opened from an import's column: the column's header as the name, and its values as a select's first options. */
+export const StartsFromImportColumn: Story = {
+  args: {
+    typeKeys: undefined,
+    initialTypeKey: 'select',
+    initialDraft: { title: 'Tier', optionLabels: ['Gold', 'Silver'] },
+    newOptionId: optionIds(),
+    optionsLimit: 500,
+  },
+  play: async ({ args, userEvent }) => {
+    const dialog = await openDialog();
+    await expect(inDialog(dialog, 'Name')).toHaveValue('Tier');
+    await expect(dialog).toHaveTextContent('2 of 500');
+    await userEvent.keyboard('{Meta>}{Enter}{/Meta}');
+    await waitFor(() =>
+      expect(args.onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: 'Tier',
+          type: 'select',
+          options: [expect.objectContaining({ label: 'Gold' }), expect.objectContaining({ label: 'Silver' })],
+        }),
+      ),
+    );
+  },
+};
+
 /** A new status starts with its three stages, Not started, In progress (open) and Done (won), editable before create. */
 export const CreateStatus: Story = {
   args: { typeKeys: undefined, newOptionId: optionIds() },

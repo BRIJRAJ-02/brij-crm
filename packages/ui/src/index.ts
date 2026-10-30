@@ -382,6 +382,7 @@ export {
 export {
   AttributeSettings,
   type AttributeSettingsAttribute,
+  type AttributeSettingsDraft,
   type AttributeSettingsField,
   type AttributeSettingsOptionWrites,
   type AttributeSettingsProps,
