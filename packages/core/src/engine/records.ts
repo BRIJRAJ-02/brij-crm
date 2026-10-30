@@ -438,6 +438,8 @@ function creatorOwns(
   if (rule === undefined || principal.kind !== 'member') return values;
   const attribute = attributes.get(rule.attributeId);
   if (attribute === undefined || attribute.type !== 'actor_reference' || isArchivedNow(attribute)) return values;
+  // A system field (Created by) is stamped by the write itself: it already names the creator, and can't be given.
+  if (attribute.systemColumn !== null) return values;
   if (Object.keys(values).some((key) => key.toLowerCase() === attribute.id)) return values;
   return { ...values, [attribute.id]: { type: 'member', id: principal.memberId } };
 }

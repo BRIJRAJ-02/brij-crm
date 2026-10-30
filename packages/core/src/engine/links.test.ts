@@ -798,10 +798,12 @@ async function deskName(world: World, desks: string): Promise<string> {
 }
 
 async function pipeline(world: World, allowsDuplicates = true) {
+  // A list's name is unique in its workspace (spec 0048, AC-4803), so each pipeline a test makes gets its own.
+  const suffix = `${String(Date.now())}_${String(Math.random()).slice(2, 6)}`;
   const { listId } = await defineList(world.scope, {
     objectId: world.deals,
-    apiSlug: `pipeline_${String(Date.now())}_${String(Math.random()).slice(2, 6)}`,
-    name: 'Pipeline',
+    apiSlug: `pipeline_${suffix}`,
+    name: `Pipeline ${suffix}`,
     allowsDuplicates,
   });
   const { attributeId: stage } = await defineAttribute(world.scope, {
