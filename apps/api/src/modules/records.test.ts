@@ -770,7 +770,10 @@ describe('records.activity and records.getTrashed (spec 0017)', () => {
       status: 404,
     });
     await trash(m, ada.id);
-    expect((await m.client.records.activity({ workspace: m.slug, recordId: ada.id })).entries).toHaveLength(1);
+    // In the trash, the timeline says so above its creation.
+    expect(
+      (await m.client.records.activity({ workspace: m.slug, recordId: ada.id })).entries.map((entry) => entry.kind),
+    ).toEqual(['deleted', 'created']);
     const trashed = await m.client.records.getTrashed({ workspace: m.slug, recordId: ada.id });
     expect(trashed.record.display.name).toBe('Ada Lovelace');
     expect(trashed.deletedBy).toEqual(ada.createdBy);
