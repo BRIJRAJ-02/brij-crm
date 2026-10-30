@@ -41,7 +41,7 @@ Spec 0005, milestones 1 to 3; spec 0012 makes the object pages generic. Every pa
 
 - **Purpose**: add one record of any object without leaving the table.
 - **Main task**: fill the primary attribute and every required one, open "Add more fields" for the rest (by position, defaults prefilled), then Create <singular>; the row shows at once, and takes focus once the server agrees.
-- **Leaves out**: references and members (edited in the table until #15), files (#32), duplicate checks and templates.
+- **Leaves out**: files (#32), duplicate checks and templates. A reference picks through the record picker (one to another object asked at once, a deal's company; "Create …" makes the far record by name) and its links go with the create, made and linked together or not at all.
 
 ## The table's schema entry points (spec 0012)
 

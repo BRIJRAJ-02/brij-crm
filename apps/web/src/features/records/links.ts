@@ -4,12 +4,24 @@
 // at a time; each result says beside its name whether it is linked already
 // and who holds it ("At Acme"); a pick or a removed chip goes to the data
 // layer as one link delta (`records.editLinks`), a pick marked "At …" moving
-// the record from its holder.
-import type { AttributeDefinition, LinkChange, RecordRefDisplay, RecordSearch, SearchResult } from '@crm/data';
+// the record from its holder. A picker may also make the record searched for
+// ("Create "<typed>"", `useRecordMaking`), linked once it exists.
+import type {
+  AttributeDefinition,
+  LinkChange,
+  LinkOutcome,
+  ObjectSummary,
+  RecordRefDisplay,
+  RecordSearch,
+  SearchResult,
+} from '@crm/data';
 import { arraySource, type AttributeEditorProps, type ListSource, type ResultState } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useCallback, useEffect, useReducer, useRef } from 'react';
+import { runUndo } from '../workspace/useUndoShortcut.ts';
+import { refsOf } from './details.ts';
 import { strings } from './strings.ts';
+import { useRecordMaking } from './useRecordMaking.ts';
 
 const keyOf = (display: RecordRefDisplay) => `${display.objectId}:${display.recordId}`;
 
@@ -28,7 +40,37 @@ export const editorSearch = <T>(search: (query: string) => ListSource<T>) =>
 export interface LinkPicker {
   readonly onSearch: (query: string) => ListSource<RecordRefDisplay>;
   readonly describeResult: (display: RecordRefDisplay) => ResultState | undefined;
+  /** "Create "<typed>"": makes the far record and answers its chip; left out where the person may not make one. */
+  readonly onCreateRecord?: (label: string) => RecordRefDisplay | undefined;
+  /** The far object needs its full form: the row reads "Create deal…" and opens it. */
+  readonly createFormNoun?: string;
 }
+
+/** A picker's create offer, as ReferencePicker and RelatedRecords take it. */
+export interface MakeOffer {
+  readonly onCreate: (label: string) => RecordRefDisplay | undefined;
+  readonly formNoun?: string;
+}
+
+/**
+ * Opens the full create form for a far object that needs more than a name,
+ * starting from what was typed, and hands over what it made (a screen's
+ * `useRecordForm`).
+ */
+export type OpenRecordForm = (
+  object: ObjectSummary,
+  label: string,
+  onMade: (display: RecordRefDisplay) => void,
+) => void;
+
+/** A create offer as an editor's props. */
+const editorOffer = (offer: MakeOffer | undefined) =>
+  offer === undefined
+    ? {}
+    : {
+        onCreateRecord: offer.onCreate,
+        ...(offer.formNoun === undefined ? {} : { createFormNoun: offer.formNoun }),
+      };
 
 /** A result's note and chosen state: linked already, or held elsewhere ("At Acme", or hidden). */
 export function resultState(result: SearchResult | undefined): ResultState | undefined {
@@ -111,26 +153,119 @@ function sourceOf(search: RecordSearch, query: string): ListSource<RecordRefDisp
  * relationship lists no object the person can see has no picker (it shows
  * read only).
  */
-export function useLinkEditing(slug: string) {
-  const { data } = useRouteContext({ from: '__root__' });
-  const { searchFor, peek } = useSearches(slug);
-  const keyFor = (definition: AttributeDefinition, recordId: string): SearchKey | undefined => {
+export function useLinkEditing(slug: string, openForm?: OpenRecordForm) {
+  const { data, toasts } = useRouteContext({ from: '__root__' });
+  const { searchFor, peek, seenResult } = useSearches(slug);
+  const making = useRecordMaking(slug);
+  const keyFor = (definition: AttributeDefinition, recordId?: string): SearchKey | undefined => {
     const objectId = definition.relationship?.targetObjectIds[0];
-    return objectId === undefined ? undefined : { objectId, attributeId: definition.id, recordId };
+    if (objectId === undefined) return undefined;
+    return { objectId, attributeId: definition.id, ...(recordId === undefined ? {} : { recordId }) };
   };
+
+  /** Says a made record landed and was linked, with Undo for the link (the record stays; ⌘Z again bins it). */
+  const toastMade = (outcome: LinkOutcome | undefined, display: RecordRefDisplay) => {
+    making.forget(display.recordId);
+    if (outcome?.kind !== 'done' || !outcome.changed) return;
+    const { undoId } = outcome;
+    toasts.toast({
+      tone: 'success',
+      message: strings.createdLinked(display.name),
+      ...(undoId === undefined
+        ? {}
+        : {
+            action: {
+              label: strings.undo,
+              onAction: () => {
+                runUndo(data, toasts, slug, undoId);
+              },
+            },
+          }),
+    });
+  };
+
+  /**
+   * "Create "<typed>"" on a side (owner flow pass, 30 Oct 2026): for someone
+   * who may make records of the far object, from the name alone, or (when it
+   * needs more) through the screen's full form, whose record `onMade` links.
+   */
+  const offerFor = (
+    definition: AttributeDefinition,
+    onMade: (display: RecordRefDisplay) => void,
+  ): MakeOffer | undefined => {
+    const objectId = definition.relationship?.targetObjectIds[0];
+    if (objectId === undefined || definition.type !== 'record_reference' || definition.readOnly !== undefined) {
+      return undefined;
+    }
+    const choice = making.choiceFor(objectId);
+    if (choice === undefined) return undefined;
+    if (choice.mode === 'name') return { onCreate: (label) => making.makeByName(choice.object, label) };
+    if (openForm === undefined) return undefined;
+    return {
+      onCreate: (label) => {
+        openForm(choice.object, label, onMade);
+        return undefined;
+      },
+      formNoun: choice.object.singularName.toLowerCase(),
+    };
+  };
+
+  /** A record the full form made for a cell or a row: linked as one add, with its toast. */
+  const linkMade = (definition: AttributeDefinition, recordId: string, display: RecordRefDisplay) => {
+    const { change } = addFor(definition, recordId, display);
+    data.records.changeLink(slug, change).then(
+      (outcome) => {
+        toastMade(outcome, display);
+      },
+      () => undefined,
+    );
+  };
+
   const pickerFor = (definition: AttributeDefinition, recordId: string): LinkPicker | undefined => {
     const key = keyFor(definition, recordId);
     if (key === undefined || definition.type !== 'record_reference') return undefined;
     return {
       onSearch: (query) => sourceOf(searchFor(key), query),
       describeResult: (display) => resultState(peek(key)?.resultOf(display.recordId)),
+      ...editorOffer(
+        offerFor(definition, (display) => {
+          linkMade(definition, recordId, display);
+        }),
+      ),
     };
   };
+
+  /**
+   * A reference in the create form (NewRecordDialog): the same search, with
+   * no record yet (so nothing reads as linked, and a record held elsewhere
+   * still says where), the chips' names, and "Create "<typed>"" by name only:
+   * a form never opens over the form.
+   */
+  const formPickerFor = (definition: AttributeDefinition) => {
+    const key = keyFor(definition);
+    if (key === undefined || definition.type !== 'record_reference') return undefined;
+    const offer = offerFor(definition, () => undefined);
+    return {
+      editor: {
+        onSearch: editorSearch((query: string) => sourceOf(searchFor(key), query)),
+        describeResult: (display: RecordRefDisplay) => resultState(peek(key)?.resultOf(display.recordId)),
+        ...(offer?.formNoun === undefined ? editorOffer(offer) : {}),
+      },
+      displayOf: (recordId: string): RecordRefDisplay | undefined =>
+        making.madeHere(recordId) ?? seenResult(recordId)?.ref,
+    };
+  };
+
   const commit = (definition: AttributeDefinition, recordId: string, value: unknown) => {
     const key = keyFor(definition, recordId);
     const search = key === undefined ? undefined : peek(key);
     const paired = definition.relationship?.pairedAttributeId;
-    return data.records.editLinks(slug, {
+    // A record just made here ("Create …"): its toast follows the link.
+    const madeNow = refsOf(value).flatMap((ref) => {
+      const display = making.madeHere(ref.recordId);
+      return display === undefined ? [] : [display];
+    });
+    const sent = data.records.editLinks(slug, {
       recordId,
       attributeId: definition.id,
       value,
@@ -138,7 +273,10 @@ export function useLinkEditing(slug: string) {
       ...(paired === undefined ? {} : { pairedAttributeId: paired }),
       pickOf: (pickedId) => {
         const result = search?.resultOf(pickedId);
-        if (result === undefined) return undefined;
+        if (result === undefined) {
+          const display = making.madeHere(pickedId);
+          return display === undefined ? undefined : { display };
+        }
         const holder = result.linked ? undefined : result.takenBy;
         return {
           display: result.ref,
@@ -150,6 +288,16 @@ export function useLinkEditing(slug: string) {
         };
       },
     });
+    const [first] = madeNow;
+    if (first !== undefined) {
+      void sent.then(
+        (outcomes) => {
+          toastMade(outcomes[0], first);
+        },
+        () => undefined,
+      );
+    }
+    return sent;
   };
   /**
    * A related section's Add (spec 0017, AC-375): the record picked on a side
@@ -181,7 +329,7 @@ export function useLinkEditing(slug: string) {
     // The holder by name for the toast ("Moved … from Acme"); one the person can't see is never named.
     return holder === undefined || 'hidden' in holder ? { change } : { change, movedFromName: holder.name };
   };
-  return { pickerFor, commit, addFor };
+  return { pickerFor, formPickerFor, offerFor, commit, addFor };
 }
 
 /**

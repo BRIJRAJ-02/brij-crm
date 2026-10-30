@@ -19,6 +19,7 @@ import { useMemo } from 'react';
 import { refsOf } from './details.ts';
 import { useLinkEditing } from './links.ts';
 import { useMemberPicker } from './members.ts';
+import { useRecordForm } from './RecordForm.tsx';
 import { strings } from './strings.ts';
 
 /** Props for the record's details. */
@@ -77,7 +78,9 @@ export function RecordDetails({
     [attributes, slug, objectKey, pendingOptions],
   );
   // A record reference edits through its picker and goes as link deltas (spec 0014), never a whole value.
-  const links = useLinkEditing(slug);
+  // "Create deal…" in a picker opens the far object's full form; what it makes is linked here.
+  const recordForm = useRecordForm(slug);
+  const links = useLinkEditing(slug, recordForm.open);
   const byId = useMemo(() => new Map(attributes.map((definition) => [definition.id, definition])), [attributes]);
   if (record === undefined) return <AttributeList label={strings.details} sections={[]} isLoading />;
   const items = fields.map(({ definition, attribute }) => {
@@ -99,27 +102,30 @@ export function RecordDetails({
     };
   });
   return (
-    <AttributeList
-      // A new record starts its own fold: rows kept open for one record never carry over to the next.
-      key={record.id}
-      label={strings.details}
-      sections={[{ id: 'details', items }]}
-      // Filled values first, the empty ones behind Show N empty values (Attio's Show all values).
-      emptyValues="fold"
-      editorProps={(attribute) => {
-        const definition = byId.get(attribute.id);
-        if (definition?.type === 'actor_reference') return memberPicker.extras;
-        return (definition === undefined ? undefined : links.pickerFor(definition, record.id)) ?? {};
-      }}
-      {...(onCommit === undefined
-        ? {}
-        : {
-            onCommit: (attributeId: string, value: unknown) => {
-              const definition = byId.get(attributeId);
-              if (definition?.type === 'record_reference') void links.commit(definition, record.id, value);
-              else onCommit(attributeId, value);
-            },
-          })}
-    />
+    <>
+      <AttributeList
+        // A new record starts its own fold: rows kept open for one record never carry over to the next.
+        key={record.id}
+        label={strings.details}
+        sections={[{ id: 'details', items }]}
+        // Filled values first, the empty ones behind Show N empty values (Attio's Show all values).
+        emptyValues="fold"
+        editorProps={(attribute) => {
+          const definition = byId.get(attribute.id);
+          if (definition?.type === 'actor_reference') return memberPicker.extras;
+          return (definition === undefined ? undefined : links.pickerFor(definition, record.id)) ?? {};
+        }}
+        {...(onCommit === undefined
+          ? {}
+          : {
+              onCommit: (attributeId: string, value: unknown) => {
+                const definition = byId.get(attributeId);
+                if (definition?.type === 'record_reference') void links.commit(definition, record.id, value);
+                else onCommit(attributeId, value);
+              },
+            })}
+      />
+      {recordForm.dialog}
+    </>
   );
 }

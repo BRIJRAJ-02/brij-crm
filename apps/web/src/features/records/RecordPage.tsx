@@ -820,7 +820,6 @@ function RecordScreen({
                     <RelatedSections
                       slug={slug}
                       recordId={recordId}
-                      recordName={name}
                       related={related}
                       canChange={canEdit}
                       link={link}

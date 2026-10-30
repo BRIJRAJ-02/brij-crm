@@ -1,8 +1,7 @@
 // A record's related records (spec 0017, milestone 3), end to end: on a
 // company's page its Team section starts empty with Add; adding Grace from
 // the empty row and Alan from the heading shows them at once, with a toast,
-// and in a second browser; Remove asks first (Cancel keeps her), then takes
-// Grace out with focus on the row now in her place and a toast whose Undo
+// and in a second browser; Remove takes Grace out at once (no confirm) with focus on the row now in her place and a toast whose Undo
 // brings her back, and the second browser follows each step. Overview's Team
 // card shows them, and its View all moves focus to the section (AC-375,
 // AC-377, AC-383).
@@ -94,16 +93,9 @@ test('a company’s Team: added and removed from its page, with Undo, live in a 
   await expect(theirTeam).toContainText('Alan Turing', { timeout: LIVE_MS });
   await expect(theirTeam).toContainText('Grace Hopper');
 
-  // Remove asks first: Cancel keeps her.
+  // Remove acts at once (only the link goes, and Undo is one click), and focus moves to the row now in her place.
   await sidebar.getByRole('button', { name: 'Remove Grace Hopper from Team' }).click();
-  const confirm = page.getByRole('alertdialog', { name: 'Remove Grace Hopper from Team?' });
-  await expect(confirm).toContainText('Grace Hopper stays. Only the link to Acme is removed.');
-  await confirm.getByRole('button', { name: 'Cancel' }).click();
-  await expect(confirm).toBeHidden();
-  await expect(team).toContainText('Grace Hopper');
-  // The commit takes her out, and focus moves to the row now in her place.
-  await sidebar.getByRole('button', { name: 'Remove Grace Hopper from Team' }).click();
-  await confirm.getByRole('button', { name: 'Remove from Team' }).click();
+  await expect(page.getByRole('alertdialog', { name: /^Remove/ })).toHaveCount(0);
   await expect(team).not.toContainText('Grace Hopper');
   await expect(team.getByRole('link', { name: /Alan Turing/ })).toBeFocused();
   if (!LIVE) await reader.reload();

@@ -1,7 +1,7 @@
 // Brief
 // Purpose: add one record of any object (a person, a project) without leaving the table.
 // Main task: fill the name and every required field, open "Add more fields" for the rest, then Create; the row shows at once.
-// Leaves out: references (linked in the table), duplicate checks and templates.
+// Leaves out: duplicate checks and templates. References pick through the record picker and go with the create.
 import {
   isDataError,
   refusalFor,
@@ -11,7 +11,10 @@ import {
   type RecordView,
 } from '@crm/data';
 import { AttributeEditor, Button, Disclosure, Form, Modal, type FormRefusal } from '@crm/ui';
+import { useParams } from '@tanstack/react-router';
 import { useId, useRef, useState } from 'react';
+import { refsOf } from '../records/details.ts';
+import { useLinkEditing } from '../records/links.ts';
 import type { MemberPicker } from '../records/members.ts';
 import { strings } from './strings.ts';
 
@@ -37,6 +40,11 @@ export interface NewRecordDialogProps {
   readonly onCreate: (id: string, values: Readonly<Record<string, unknown>>) => Promise<RecordView>;
   /** The server made it: close, and focus its row. */
   readonly onCreated: (record: RecordView) => void;
+  /**
+   * Values the form starts with, by attribute id, sent unless changed: the
+   * name typed into a record picker before its "Create deal…" opened this.
+   */
+  readonly startValues?: Readonly<Record<string, unknown>>;
 }
 
 /** The types whose editor is a list of chips: one value here (more are added in the table). */
@@ -138,6 +146,7 @@ export function NewRecordDialog({
   newId,
   onCreate,
   onCreated,
+  startValues,
 }: NewRecordDialogProps) {
   const formId = useId();
   const [isBusy, setBusy] = useState(false);
@@ -180,6 +189,7 @@ export function NewRecordDialog({
         onBusyChange={setBusy}
         onCreate={onCreate}
         onCreated={onCreated}
+        {...(startValues === undefined ? {} : { startValues })}
       />
     </Modal>
   );
@@ -188,7 +198,7 @@ export function NewRecordDialog({
 /** Props for the dialog's form. */
 interface NewRecordFormProps extends Pick<
   NewRecordDialogProps,
-  'first' | 'more' | 'onCreate' | 'onCreated' | 'singularName' | 'newId' | 'objectKey' | 'memberPicker'
+  'first' | 'more' | 'onCreate' | 'onCreated' | 'singularName' | 'newId' | 'objectKey' | 'memberPicker' | 'startValues'
 > {
   readonly formId: string;
   readonly label: string;
@@ -210,18 +220,24 @@ function NewRecordForm({
   onBusyChange,
   onCreate,
   onCreated,
+  startValues,
 }: NewRecordFormProps) {
   const editors = [...first, ...more];
+  // A reference picks through the record picker, its links sent with the create (one write: made and linked, or
+  // neither, its refusal on the field). "Create "<typed>"" there makes the far record by name, never a form on a form.
+  const { slug = '' } = useParams({ strict: false });
+  const links = useLinkEditing(slug);
   // One id per opening (the Modal mounts this afresh), sent again on every press.
   const [id] = useState(newId);
   // What each editor shows: its default until the person commits a value (AC-240).
   const meId = memberPicker.extras.me?.id ?? undefined;
-  const [values, setValues] = useState<Readonly<Record<string, unknown>>>(() =>
-    Object.fromEntries(editors.map((editor) => [editor.id, prefillOf(editor, meId)])),
-  );
+  const [values, setValues] = useState<Readonly<Record<string, unknown>>>(() => ({
+    ...Object.fromEntries(editors.map((editor) => [editor.id, prefillOf(editor, meId)])),
+    ...startValues,
+  }));
   // What the person committed, in the shape the attribute takes: a ref as well, so a submit that a blur's commit
   // runs just before sees it. Untouched fields are left out, so the server applies their defaults itself.
-  const sending = useRef<Record<string, unknown>>({});
+  const sending = useRef<Record<string, unknown>>({ ...startValues });
   const [fieldErrors, setFieldErrors] = useState<ReadonlyMap<string, string>>(new Map());
   const [refusals, setRefusals] = useState<readonly FormRefusal[]>([]);
   // A refusal or a typed value in a hidden field opens "Add more fields", so nothing is out of sight.
@@ -273,6 +289,16 @@ function NewRecordForm({
     );
   };
 
+  /** A reference's search, "Create …" and its chips' names (a record picked or made here). */
+  const referenceProps = (definition: AttributeDefinition) => {
+    const picker = links.formPickerFor(definition);
+    if (picker === undefined) return {};
+    const display = refsOf(values[definition.id]).map(
+      (ref) => picker.displayOf(ref.recordId) ?? { ...ref, name: '', kind: 'other' as const },
+    );
+    return { ...picker.editor, display };
+  };
+
   const editorFor = (definition: AttributeDefinition) => {
     const error = fieldErrors.get(definition.id);
     return (
@@ -282,6 +308,7 @@ function NewRecordForm({
         value={values[definition.id] ?? null}
         surface="form"
         {...(definition.type === 'actor_reference' ? { display: memberPicker.displays, ...memberPicker.extras } : {})}
+        {...(definition.type === 'record_reference' ? referenceProps(definition) : {})}
         onCommit={(value) => {
           sending.current = {
             ...sending.current,
