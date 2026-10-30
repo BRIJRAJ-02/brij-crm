@@ -625,7 +625,8 @@
   .root[data-view='team'] .head {
     position: sticky;
     inset-block-start: 0;
-    z-index: var(--z-sticky);
+    /* Over the pinned axis too, so an hour's label never shows through the heads as the hours scroll under them. */
+    z-index: calc(var(--z-sticky) + var(--z-raised));
     background: var(--surface-raised);
   }
 

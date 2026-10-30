@@ -93,7 +93,11 @@ export function DrawCard({
   const [pending, setPending] = useState(false);
   // The member's zone, the one the week is drawn in.
   const { timeZone } = useFormatSettings();
-  const { title, meta } = spanNames(span, locale, timeZone);
+  const named = spanNames(span, locale, timeZone);
+  const { title } = named;
+  // A colleague's column (the Team day): whose time it is leads the line, so the card never reads as the member's own.
+  const whose = initialFor === undefined ? undefined : forPeople.find((person) => person.id === initialFor)?.name;
+  const meta = whose === undefined ? named.meta : `${whose} · ${named.meta}`;
   const weekday = new Intl.DateTimeFormat(locale, { weekday: 'long' }).format(dayStart(span.dayKey));
   const back = () => setMode({ kind: 'choose' });
 

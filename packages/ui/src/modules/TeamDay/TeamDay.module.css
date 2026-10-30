@@ -45,33 +45,24 @@
     letter-spacing: var(--tracking-body-strong);
   }
 
-  .title {
+  /* One quiet line: the title, how the day stands, the zone's offset. */
+  .meta {
     min-inline-size: 0;
-    color: var(--text-secondary);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
-  }
-
-  .status {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     color: var(--text-secondary);
     font: var(--text-label);
     font-variant-numeric: tabular-nums;
     letter-spacing: var(--tracking-label);
   }
 
-  /* Booked: the count is news, so it reads in the text colour; away in the Team week's Away colour. */
-  .status[data-tone='booked'] {
-    color: var(--text);
-  }
+  /* Away in the Team week's Away colour, strong: the one state that changes what can be done with the column. */
 
   .status[data-tone='away'] {
     color: var(--tag-yellow-text);
     font: var(--text-label-strong);
     letter-spacing: var(--tracking-label-strong);
-  }
-
-  .status[data-tone='off'] {
-    color: var(--text-tertiary);
   }
 
   .extra {
@@ -103,13 +94,6 @@
     color: var(--text);
     font: var(--text-body-strong);
     letter-spacing: var(--tracking-body-strong);
-  }
-
-  .laneHint {
-    margin: 0;
-    color: var(--text-secondary);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
   }
 
   .laneList {
