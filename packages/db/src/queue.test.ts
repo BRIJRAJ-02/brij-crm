@@ -534,7 +534,8 @@ describe('the calendar health sweep (spec 0037, AC-1310, AC-1311)', () => {
       broken: opened?.broken,
       notified: expect.any(String) as string,
     });
-    // Reconnecting goes through syncing first: still the same episode until it is connected.
+    // A failed connection retrying goes through syncing: still the same episode until it is connected.
+    await set(workspaceId, id, sql`status = 'failed'`);
     await set(workspaceId, id, sql`status = 'syncing'`);
     expect((await episodeOf(workspaceId, id))?.broken).toBe(opened?.broken);
     await set(workspaceId, id, sql`status = 'connected'`);
@@ -544,6 +545,10 @@ describe('the calendar health sweep (spec 0037, AC-1310, AC-1311)', () => {
     expect(again).toMatchObject({ notified: null, reminded: null });
     expect(again?.broken).not.toBeNull();
     expect(again?.broken).not.toBe(opened?.broken);
+    // A new grant (expired to syncing) ends the episode even before its first sync works.
+    await set(workspaceId, id, sql`health_notified_at = now()`);
+    await set(workspaceId, id, sql`status = 'syncing'`);
+    expect(await episodeOf(workspaceId, id)).toEqual({ broken: null, notified: null, reminded: null });
   });
 
   it('names a first email, then nothing, then the reminder 7 days on, then nothing, on the worker login', async () => {
@@ -560,13 +565,13 @@ describe('the calendar health sweep (spec 0037, AC-1310, AC-1311)', () => {
       expect(sweep.newlyBroken).toBeGreaterThanOrEqual(1);
       const [first, ...rest] = await mine();
       expect(rest).toEqual([]);
-      expect(first).toMatchObject({ connectionId: broken, reminder: false });
+      expect(first).toMatchObject({ connectionId: broken, reminder: false, fresh: true });
       expect(Date.parse(first?.episode ?? '')).not.toBeNaN();
       expect((await mine()).map((row) => row.connectionId)).not.toContain(healthy);
       await set(workspaceId, broken, sql`health_notified_at = now()`);
       expect(await mine()).toEqual([]);
       await set(workspaceId, broken, sql`health_notified_at = now() - interval '7 days 1 minute'`);
-      expect(await mine()).toEqual([expect.objectContaining({ connectionId: broken, reminder: true })]);
+      expect(await mine()).toEqual([expect.objectContaining({ connectionId: broken, reminder: true, fresh: false })]);
       await set(workspaceId, broken, sql`health_reminded_at = now()`);
       expect(await mine()).toEqual([]);
       // A deleted workspace's connections are nobody's to tell.

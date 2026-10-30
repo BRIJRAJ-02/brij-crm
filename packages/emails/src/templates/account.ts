@@ -51,14 +51,16 @@ export const calendarDisconnected: Template<CalendarDisconnectedEmail> = (params
         type: 'paragraph',
         text: reminder
           ? `${cause} It stopped a week ago and is still broken, so your booking pages can’t see when you’re busy and people may book you over other meetings.`
-          : `${cause} Until you reconnect it, your booking pages can’t see when you’re busy, so people may book you when you’re busy.`,
+          : `${cause} Until you reconnect it, your booking pages can’t see when you’re busy, so people may book you over other meetings.`,
       },
       { type: 'button', label: 'Reconnect calendar', url: context.link(params.settingsPath) },
       {
         type: 'note',
-        text: expired
-          ? `Reconnecting takes a minute: sign in to ${provider} again and allow access.`
-          : 'If it starts working again by itself, there’s nothing to do.',
+        // A week on, "it may fix itself" no longer holds: the reminder says how to reconnect either way.
+        text:
+          expired || reminder
+            ? `Reconnecting takes a minute: sign in to ${provider} again and allow access.`
+            : 'If it starts working again by itself, there’s nothing to do.',
       },
     ],
     why: reminder

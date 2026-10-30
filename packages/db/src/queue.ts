@@ -37,6 +37,8 @@ export interface CalendarHealthSweep {
      */
     readonly episode: string;
     readonly reminder: boolean;
+    /** Broke in the last hour with no email yet: a mass outage holds it (AC-1311); the rest go anyway. */
+    readonly fresh: boolean;
   }[];
 }
 
@@ -237,10 +239,11 @@ export function openQueueConnection(options: {
         connection_id: string;
         episode: string;
         reminder: boolean;
+        fresh: boolean;
         checked: number;
         newly_broken: number;
       }>(
-        `select workspace_id, connection_id, to_json(episode) #>> '{}' as episode, reminder, checked, newly_broken
+        `select workspace_id, connection_id, to_json(episode) #>> '{}' as episode, reminder, fresh, checked, newly_broken
          from public.crm_calendar_health_candidates($1)`,
         [max],
       );
@@ -253,6 +256,7 @@ export function openQueueConnection(options: {
           connectionId: row.connection_id,
           episode: row.episode,
           reminder: row.reminder,
+          fresh: row.fresh,
         })),
       };
     },

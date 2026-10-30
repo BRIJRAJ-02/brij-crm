@@ -4,12 +4,13 @@
 // Main task: read at a glance who needs to reconnect, the time it began on hover or focus, and (from the row's menu)
 // ask them to reconnect.
 // Leaves out: which account or calendar broke, and why (the member's own Settings says so; colleagues never see it).
-import type {
-  CalendarHealthState,
-  CalendarHealthStatus,
-  DataLayer,
-  MemberCalendarHealth,
-  SchedulingAccessStore,
+import {
+  dataError,
+  type CalendarHealthState,
+  type CalendarHealthStatus,
+  type DataLayer,
+  type MemberCalendarHealth,
+  type SchedulingAccessStore,
 } from '@crm/data';
 import { Badge, MenuItem, memoIntl, Skeleton, Tooltip, useFormatSettings, VisuallyHidden } from '@crm/ui';
 import { useEffect, useMemo, useReducer, useState } from 'react';
@@ -31,10 +32,11 @@ export const needsReconnect = (health: MemberCalendarHealth): boolean =>
 
 /**
  * The scheduling store: at once when a loader opened it, else opened here (its own chunk, never the first load), and
- * only while `isWanted` (a screen whose reader sees no chips never loads it).
+ * only while `isWanted` (a screen whose reader sees no chips never loads it). `null` when its chunk failed to load:
+ * the chips then say they're unavailable rather than load for ever.
  */
-export function useSchedulingStore(data: DataLayer, isWanted = true): SchedulingAccessStore | undefined {
-  const [store, setStore] = useState(() => data.scheduling.loaded());
+export function useSchedulingStore(data: DataLayer, isWanted = true): SchedulingAccessStore | null | undefined {
+  const [store, setStore] = useState<SchedulingAccessStore | null | undefined>(() => data.scheduling.loaded());
   useEffect(() => {
     if (store !== undefined || !isWanted) return undefined;
     let isCurrent = true;
@@ -42,7 +44,9 @@ export function useSchedulingStore(data: DataLayer, isWanted = true): Scheduling
       (opened) => {
         if (isCurrent) setStore(opened);
       },
-      () => undefined,
+      () => {
+        if (isCurrent) setStore(null);
+      },
     );
     return () => {
       isCurrent = false;
@@ -53,10 +57,10 @@ export function useSchedulingStore(data: DataLayer, isWanted = true): Scheduling
 
 /**
  * Some members' calendar health, held while the screen shows them: the store reads them in one call, and a status
- * changing re-renders. Absent from the map until the store has loaded.
+ * changing re-renders. Absent from the map until the store has loaded; an error for each when it couldn't.
  */
 export function useCalendarHealth(
-  store: SchedulingAccessStore | undefined,
+  store: SchedulingAccessStore | null | undefined,
   slug: string,
   memberIds: readonly string[],
 ): ReadonlyMap<string, CalendarHealthState> {
@@ -65,7 +69,11 @@ export function useCalendarHealth(
     () =>
       store === undefined
         ? []
-        : key.split(',').flatMap((id) => (id === '' ? [] : [[id, store.health.held(slug, id)] as const])),
+        : key
+            .split(',')
+            .flatMap((id) =>
+              id === '' ? [] : [[id, store === null ? UNAVAILABLE : store.health.held(slug, id)] as const],
+            ),
     [store, slug, key],
   );
   const [version, changed] = useReducer((count: number) => count + 1, 0);
@@ -89,6 +97,17 @@ export function useCalendarHealth(
   return shown;
 }
 
+/** What a member's chip holds when the store's chunk couldn't load: unavailable, never loading for ever. */
+const UNAVAILABLE_STATE: CalendarHealthState = {
+  status: 'error',
+  error: dataError('API_UNAVAILABLE', 'The calendar statuses couldn’t load.'),
+};
+const UNAVAILABLE = {
+  subscribe: () => () => undefined,
+  getSnapshot: () => UNAVAILABLE_STATE,
+  retain: () => () => undefined,
+};
+
 /** Props for CalendarHealthChip. */
 export interface CalendarHealthChipProps {
   /** The member's status as the store holds it; undefined while the store loads. */
@@ -103,18 +122,22 @@ export interface CalendarHealthChipProps {
 
 /**
  * A member's calendar health as a Badge with its state's dot and words (never colour alone), the time it began in
- * a tooltip and for screen readers. Loading is a short skeleton; a failed read says nothing rather than alarm.
+ * a tooltip and for screen readers. Loading is a short skeleton; a failed read says Unavailable where the chip has a
+ * place of its own (a column) and nothing where it only flags trouble.
  */
 export function CalendarHealthChip({ state, name, isQuiet = false, showsHidden = false }: CalendarHealthChipProps) {
   const { locale, timeZone } = useFormatSettings();
   if (state === undefined || state.status === 'loading') return isQuiet ? null : <Skeleton width="short" />;
-  if (state.status === 'error') return null;
+  if (state.status === 'error') return isQuiet ? null : <Badge text={words.unavailable} isWhole />;
   if (state.status === 'hidden') {
     if (!showsHidden) return null;
     return (
-      <Tooltip content={words.hiddenHint(name)} isTextTrigger>
-        <Badge text={words.hidden} isWhole />
-      </Tooltip>
+      <>
+        <Tooltip content={words.hiddenHint(name)} isTextTrigger>
+          <Badge text={words.hidden} isWhole />
+        </Tooltip>
+        <VisuallyHidden>{`, ${words.hiddenHint(name)}`}</VisuallyHidden>
+      </>
     );
   }
   const { health } = state;
@@ -169,7 +192,12 @@ export const offersAsk = (state: CalendarHealthState | undefined): boolean =>
   state?.status === 'ready' && needsReconnect(state.health);
 
 /** Sends Ask to reconnect for a member; the store toasts how it went. */
-export function askReconnect(store: SchedulingAccessStore | undefined, slug: string, memberId: string, name: string) {
-  if (store === undefined) return;
+export function askReconnect(
+  store: SchedulingAccessStore | null | undefined,
+  slug: string,
+  memberId: string,
+  name: string,
+) {
+  if (store === undefined || store === null) return;
   void store.health.ask(slug, memberId, { asked: words.askedToast(name) });
 }

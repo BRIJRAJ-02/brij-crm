@@ -110,6 +110,40 @@ describe('the calendar health store', () => {
     await limited.flush();
     expect(await limited.store.ask('acme', id(3), { asked: 'Asked' })).toBe(false);
     expect(other.getSnapshot()).toMatchObject({ asked: true });
-    expect(limited.notices[0]?.tone).toBe('danger');
+    expect(limited.notices[0]?.tone).toBe('success');
+  });
+});
+
+describe('the store’s guards', () => {
+  it('sends one ask however often it is pressed, and lets a refused one be pressed again', async () => {
+    let sent = 0;
+    const w = world({
+      ask: () => {
+        sent += 1;
+        return sent === 1 ? Promise.reject(new Error('down')) : Promise.resolve({});
+      },
+    });
+    const first = w.store.ask('acme', id(1), { asked: 'Asked' });
+    expect(await w.store.ask('acme', id(1), { asked: 'Asked' })).toBe(false);
+    expect(await first).toBe(false);
+    expect(sent).toBe(1);
+    expect(await w.store.ask('acme', id(1), { asked: 'Asked' })).toBe(true);
+    expect(sent).toBe(2);
+  });
+
+  it('drops an answer that lands after a sign out', async () => {
+    let answer: (value: { members: [] }) => void = () => undefined;
+    const w = world({
+      read: () =>
+        new Promise((resolve) => {
+          answer = resolve;
+        }),
+    });
+    w.store.held('acme', id(1)).retain();
+    await w.flush();
+    w.store.clear();
+    answer({ members: [] });
+    await w.flush();
+    expect(w.store.held('acme', id(1)).getSnapshot()).toEqual({ status: 'loading' });
   });
 });

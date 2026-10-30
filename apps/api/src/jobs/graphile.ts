@@ -292,8 +292,8 @@ export function digestTask(
 
 /**
  * The calendar health sweep (spec 0037, AC-1310, AC-1311): the connections owed an email, across workspaces, ids and
- * counts only. In a mass outage it queues nothing and tells `held` once; otherwise one email job each, at most 200,
- * keyed by connection, episode and which email, so a sweep run twice queues each once.
+ * counts only. In a mass outage it holds the newly broken and tells `held` once; the rest get one email job each, at
+ * most 200, keyed by connection, episode and which email, so a sweep run twice queues each once.
  */
 export function calendarHealthSweepTask(
   queue: Pick<QueueConnection, 'calendarHealthDue'>,
@@ -307,24 +307,33 @@ export function calendarHealthSweepTask(
     const sweep = await queue.calendarHealthDue(CALENDAR_HEALTH.emailsPerSweep);
     const counts = { checked: sweep.checked, newlyBroken: sweep.newlyBroken };
     if (sweep.due.length === 0) return;
-    if (isMassOutage(sweep.checked, sweep.newlyBroken)) {
+    // A mass outage holds the newly broken only: reminders and older first emails still go, so no burst elsewhere
+    // (one workspace's accounts breaking together, say) keeps everyone else's members from hearing.
+    const isHeld = isMassOutage(sweep.checked, sweep.newlyBroken);
+    if (isHeld) {
       log.warn('calendar.health.held', counts);
       held(counts);
-      return;
     }
-    for (const due of sweep.due) {
-      const payload = {
-        workspaceId: due.workspaceId,
-        connectionId: due.connectionId,
-        episode: due.episode,
-        reminder: due.reminder,
-      };
-      await helpers.addJob(CALENDAR_HEALTH_EMAIL_TASK, payload, {
-        jobKey: calendarHealthEmailKey(payload),
-        maxAttempts: 5,
-      });
-    }
-    log.info('calendar.health.queued', { ...counts, queued: sweep.due.length });
+    const sending = isHeld ? sweep.due.filter((due) => !due.fresh) : sweep.due;
+    if (sending.length === 0) return;
+    // One round trip for all of them: the scheduled turn on Hobby is a few seconds.
+    await helpers.addJobs(
+      sending.map((due) => {
+        const payload = {
+          workspaceId: due.workspaceId,
+          connectionId: due.connectionId,
+          episode: due.episode,
+          reminder: due.reminder,
+        };
+        return {
+          identifier: CALENDAR_HEALTH_EMAIL_TASK,
+          payload,
+          jobKey: calendarHealthEmailKey(payload),
+          maxAttempts: 5,
+        };
+      }),
+    );
+    log.info('calendar.health.queued', { ...counts, queued: sending.length, held: isHeld });
   };
 }
 

@@ -25,6 +25,7 @@ import {
   Link,
   Menu,
   MenuItem,
+  MenuSeparator,
   memoIntl,
   MenuTrigger,
   Modal,
@@ -45,7 +46,14 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useBookingsToolbarSlot } from '../bookings/toolbarSlot.ts';
 import { useMyAccess, WorkspacePage } from '../workspace/WorkspacePage.tsx';
-import { askReconnect, askReconnectItem, CalendarHealthChip, offersAsk, useCalendarHealth } from './CalendarHealth.tsx';
+import {
+  askReconnect,
+  askReconnectItem,
+  CalendarHealthChip,
+  offersAsk,
+  useCalendarHealth,
+  useSchedulingStore,
+} from './CalendarHealth.tsx';
 import { todayIn } from './hours.ts';
 import { availabilityHref } from './links.ts';
 import { teamWeekHref } from './team-week-links.ts';
@@ -227,7 +235,8 @@ function extraOf(
         chip
       ) : (
         <>
-          {chip} {link}
+          {chip}
+          {link}
         </>
       ),
   };
@@ -339,7 +348,7 @@ function Loaded({
   const anyChangeable = (shown?.rows ?? []).some((row) => row.canChange);
   // Each person's calendar health (spec 0037, AC-1308, AC-1314): only trouble shows, under their name, and their menu
   // offers Ask to reconnect (AC-1309).
-  const healthStore = data.scheduling.loaded();
+  const healthStore = useSchedulingStore(data);
   const me = useMyAccess()?.memberId;
   const health = useCalendarHealth(
     healthStore,
@@ -365,7 +374,7 @@ function Loaded({
             <Link href={availabilityHref(slug, row.memberId)}>{words.otherSchedules(row.otherSchedules)}</Link>
           ),
         ),
-        ...(row.canChange || offersAsk(health.get(row.memberId))
+        ...(row.canChange || (row.memberId !== me && offersAsk(health.get(row.memberId)))
           ? {
               actions: (
                 <MenuTrigger>
@@ -378,6 +387,10 @@ function Loaded({
                       else if (key === 'ask-reconnect') askReconnect(healthStore, slug, row.memberId, row.name);
                     }}
                   >
+                    {row.memberId === me ? null : askReconnectItem(health.get(row.memberId))}
+                    {row.canChange && row.memberId !== me && offersAsk(health.get(row.memberId)) ? (
+                      <MenuSeparator />
+                    ) : null}
                     {!row.canChange || isPast || isLatest ? null : (
                       <MenuItem id="copy" icon="copy">
                         {words.copyToNext}
@@ -388,7 +401,6 @@ function Loaded({
                         {words.setUsual}
                       </MenuItem>
                     ) : null}
-                    {row.memberId === me ? null : askReconnectItem(health.get(row.memberId))}
                   </Menu>
                 </MenuTrigger>
               ),

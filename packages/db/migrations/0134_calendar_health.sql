@@ -6,13 +6,16 @@
 --
 -- The trigger crm_calendar_health_episode keeps them whatever code moves the status: the move into expired or failed
 -- opens an episode when none is open (failed then expired is one episode), and the move to connected closes it,
--- clearing all three, so a later break is a new episode. Nothing else ever clears them.
+-- clearing all three, so a later break is a new episode. A new grant closes it too: an expired or revoked connection
+-- only syncs again once its member reconnected it, so its move to syncing ends the episode whether or not the first
+-- sync then works. (A failed one retries by itself, so failed to syncing is the same episode.)
 --
 -- crm_calendar_health_candidates(max) is the sweep's read (the worker's `crm_cron_calendar_health`): across every
 -- workspace, ids and counts only, the broken connections owed their first email or their reminder, oldest first and
--- first emails ahead of reminders, at most `max` (1 to 200), each row carrying the sweep's two counts: `checked` (every
--- connection of an active member in a live workspace, revoked ones aside) and `newly_broken` (the broken ones with no
--- email yet that broke in the last hour, the hourly floor's window on brij-crm). It reaches across workspaces, so it is
+-- first emails ahead of reminders, at most `max` (1 to 200), each row saying whether it is `fresh` (broke in the last
+-- hour, no email yet: what a mass outage holds) and carrying the sweep's two counts: `checked` (every connection of an
+-- active member in a live workspace, revoked ones aside) and `newly_broken` (the fresh ones; the hour is the hourly
+-- floor's window on brij-crm, where the sweep runs once an hour). It reaches across workspaces, so it is
 -- the worker's alone (crm_worker), owned by crm_sweep like crm_workspace_ids, with select on just the columns it reads.
 --
 -- Existing broken connections were already told by the sync's inline email, so their episodes start as notified, and
@@ -34,7 +37,8 @@ create function crm_calendar_health_episode()
   set search_path = pg_catalog, pg_temp
 as $function$
 begin
-  if new.status = 'connected' then
+  if new.status = 'connected'
+    or (tg_op = 'UPDATE' and new.status = 'syncing' and old.status in ('expired', 'revoked')) then
     new.health_broken_at := null;
     new.health_notified_at := null;
     new.health_reminded_at := null;
@@ -62,6 +66,7 @@ create function crm_calendar_health_candidates(max integer)
     connection_id uuid,
     episode timestamptz,
     reminder boolean,
+    fresh boolean,
     checked integer,
     newly_broken integer
   )
@@ -87,7 +92,9 @@ begin atomic
       ))::integer as newly_broken
     from live l
   )
-  select l.workspace_id, l.id, l.health_broken_at, l.health_notified_at is not null, k.checked, k.newly_broken
+  select l.workspace_id, l.id, l.health_broken_at, l.health_notified_at is not null,
+    l.health_notified_at is null and l.health_broken_at > pg_catalog.now() - interval '1 hour', k.checked,
+    k.newly_broken
   from live l cross join counts k
   where l.status in ('expired', 'failed') and l.health_broken_at is not null
     and (

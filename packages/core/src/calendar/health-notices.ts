@@ -136,7 +136,8 @@ export async function runCalendarHealthEmail(
         ...(input.reminder ? { reminder: true as const } : {}),
       },
     });
-    if (queued.outcome === 'refused') return 'refused';
+    // A refused email (params its template doesn't take) still marks the episode: it would be refused every sweep and
+    // hold a place ahead of others. The task logs it as a fault to fix.
     await markEpisode(tx, input.connectionId, input.reminder);
     return queued.outcome;
   });
@@ -199,11 +200,6 @@ export async function askToReconnect(
       `);
       const wait = last.rows[0]?.wait ?? 0;
       if (wait > 0) return { outcome: 'wait' as const, retryAfterSeconds: wait, name };
-      await writeAudit(tx, scope.workspaceId, scope.actor, {
-        action: 'calendar.reconnect_asked',
-        targetType: 'member',
-        targetId: member,
-      });
       const at = await tx.execute<{ at: string; seconds: string }>(sql`
         select to_char(now() at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as at,
           floor(extract(epoch from now()))::bigint::text as seconds
@@ -213,11 +209,18 @@ export async function askToReconnect(
         actorName: people.rows.find((row) => row.id === actor)?.name ?? 'Someone',
         settingsPath: settingsPathOf(people.rows[0]?.slug ?? ''),
       };
-      await queueEmail(tx, {
+      // The email first: one the template refuses rolls the ask back, so the day's ask is never spent on nothing.
+      const queued = await queueEmail(tx, {
         kind: 'calendar_reconnect_asked',
         ids: [member, at.rows[0]?.seconds ?? String(Math.floor(Date.now() / 1000))],
         to: { memberId: member },
         params,
+      });
+      if (queued.outcome === 'refused') throw new Error('The ask to reconnect email was refused by its template.');
+      await writeAudit(tx, scope.workspaceId, scope.actor, {
+        action: 'calendar.reconnect_asked',
+        targetType: 'member',
+        targetId: member,
       });
       return { outcome: 'asked' as const, askedAt };
     },

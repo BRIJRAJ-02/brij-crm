@@ -6,6 +6,7 @@ export const calendarHealthStrings = {
   reconnect: 'Reconnect needed',
   none: 'No calendar',
   hidden: 'Hidden',
+  unavailable: 'Unavailable',
   hiddenHint: (name: string) => `Only people who can see ${name}’s scheduling see their calendar status.`,
   noneHint: 'Booked from their hours and bookings only, until they connect a calendar.',
   since: (when: string) => `Since ${when}`,
