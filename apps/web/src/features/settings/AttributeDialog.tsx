@@ -21,6 +21,7 @@ import {
 import {
   AttributeSettings,
   relationshipStep,
+  type AttributeSettingsApiNames,
   type AttributeSettingsOptionWrites,
   type AttributeSettingsValues,
   type FieldAttribute,
@@ -33,6 +34,7 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { strings } from './attribute-strings.ts';
 import { defaultArchivedNotice } from './default-notice.ts';
 import { formRefusals } from './refusals.ts';
+import { requiredWhenLine } from './required-when.ts';
 import { RelationshipDialog, useRelationshipCreate } from './RelationshipDialog.tsx';
 
 /** The settings the server names on its refusals, as the dialog shows them. */
@@ -63,6 +65,11 @@ export interface AttributeDialogProps {
   readonly optionsLimit?: number | undefined;
   /** The object's attributes, for a rule's "Only when…" (spec 0013): its own, live, never a system one. */
   readonly objectAttributes?: readonly AttributeDefinition[] | undefined;
+  /**
+   * The object's table, as "Open <Plural>": linked under Unique when a Save is refused for values records share.
+   * Absent where the dialog opens over the table already.
+   */
+  readonly duplicatesLink?: { readonly label: string; readonly href: string } | undefined;
   /** On create, the type chosen at the start (a picker key, `select` for a board with nothing to group by). */
   readonly initialTypeKey?: string | undefined;
   readonly onClose: () => void;
@@ -107,7 +114,10 @@ function conditionAttributesOf(attributes: readonly AttributeDefinition[]): read
     .map((each) => toFieldAttribute(each));
 }
 
-/** An attribute's rules as the dialog edits them: Required When is set apart (milestone 2). */
+/**
+ * An attribute's rules as the dialog edits them: Required When is set apart (milestone 2). The `rules` input can't
+ * carry it, so Save never sends it and the server keeps it (`writeRules`); the dialog says it is there, read only.
+ */
 function rulesOf(attribute: AttributeDefinition): readonly RuleSettings[] {
   return (attribute.validation?.rules ?? []).flatMap((rule): RuleSettings[] =>
     rule.kind === 'required_when'
@@ -167,6 +177,7 @@ export function AttributeDialog({
   canManage,
   optionsLimit,
   objectAttributes,
+  duplicatesLink,
   initialTypeKey,
   onClose,
   onSaved,
@@ -213,6 +224,33 @@ export function AttributeDialog({
     () => (objectAttributes === undefined ? undefined : conditionAttributesOf(objectAttributes)),
     [objectAttributes],
   );
+  const rulesNote = requiredWhenLine(attribute, objectAttributes ?? []);
+  // On create, the API names the object's attributes hold: an archived one's is said, with Restore it (flow pass).
+  const apiNames = useMemo((): AttributeSettingsApiNames | undefined => {
+    if (attribute !== undefined || objectAttributes === undefined) return undefined;
+    const held = (isArchived: boolean) =>
+      new Set(objectAttributes.filter((each) => each.isArchived === isArchived).map((each) => each.apiSlug));
+    return {
+      live: held(false),
+      archived: held(true),
+      onRestore: (apiSlug) => {
+        const holder = objectAttributes.find((each) => each.isArchived && each.apiSlug === apiSlug);
+        if (holder === undefined) return;
+        data.attributes.restore(slug, holder.id).then(
+          () => {
+            onClose();
+            toasts.toast({ tone: 'success', message: strings.restored(holder.title) });
+          },
+          (error: unknown) => {
+            toasts.toast({
+              tone: 'danger',
+              message: strings.restoreFailed(holder.title, isDataError(error) ? error.message : strings.somethingWrong),
+            });
+          },
+        );
+      },
+    };
+  }, [attribute, objectAttributes, data, slug, onClose, toasts]);
   const readOnlyReason =
     attribute?.isSystem === true ? strings.systemReason(attribute.title) : canManage ? undefined : strings.memberReason;
 
@@ -262,7 +300,12 @@ export function AttributeDialog({
               refusal.field?.startsWith('rules') === true ? [refusal.field] : [],
             )
           : [];
-        setRefusals(formRefusals(error, [...FIELDS, ...ruleFields]));
+        // Unique refused for values records share names the attribute, not the setting: it lands on Unique.
+        setRefusals(
+          formRefusals(error, [...FIELDS, ...ruleFields]).map((refusal) =>
+            refusal.code === 'UNIQUE_HAS_DUPLICATES' ? { ...refusal, attributeId: 'isUnique' } : refusal,
+          ),
+        );
       },
     );
   };
@@ -395,6 +438,9 @@ export function AttributeDialog({
       newOptionId={data.attributes.newId}
       newRuleId={data.attributes.newId}
       {...(ruleAttributes === undefined ? {} : { ruleAttributes })}
+      {...(rulesNote === undefined ? {} : { rulesNote })}
+      {...(apiNames === undefined ? {} : { apiNames })}
+      {...(duplicatesLink === undefined ? {} : { duplicatesLink })}
       // Relationship chosen in the type picker: its step takes this dialog's place, in the same Modal (spec 0014).
       {...(attribute === undefined && relationshipDraft !== undefined
         ? {

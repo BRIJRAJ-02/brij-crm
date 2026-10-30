@@ -27,6 +27,7 @@ import {
 import { useRouteContext } from '@tanstack/react-router';
 import { useEffect, useMemo, useState } from 'react';
 import { focusTitle } from '../navigation/focus-title.ts';
+import { objectHref } from '../workspace/objects.ts';
 import { useCan } from '../workspace/WorkspacePage.tsx';
 import { ArchiveAttributeDialog } from './ArchiveAttributeDialog.tsx';
 import { AttributeDialog } from './AttributeDialog.tsx';
@@ -388,6 +389,7 @@ export function AttributesTab({
         canManage={canManage}
         optionsLimit={usage?.optionsPerAttribute}
         objectAttributes={attributes}
+        duplicatesLink={{ label: strings.openTable(object.pluralName), href: objectHref(slug, object) }}
         onClose={() => {
           if (isCreating) onCreatingChange(false);
           else onSelect(undefined);
@@ -406,7 +408,22 @@ export function AttributesTab({
         }}
         onArchived={(ends) => {
           setArchiving(undefined);
-          toasts.toast({ tone: 'success', message: strings.archivedToast(titlesOf(ends)) });
+          const [first] = ends;
+          // Undo restores it (both ends of a relationship) through the same call as the Archived section's Restore.
+          toasts.toast({
+            tone: 'success',
+            message: strings.archivedToast(titlesOf(ends)),
+            ...(first === undefined
+              ? {}
+              : {
+                  action: {
+                    label: strings.undo,
+                    onAction: () => {
+                      restore(first);
+                    },
+                  },
+                }),
+          });
           // Its row left the live table, and the menu that opened the confirm with it.
           focusTitle();
         }}

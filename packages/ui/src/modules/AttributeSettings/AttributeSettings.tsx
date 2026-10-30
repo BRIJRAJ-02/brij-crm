@@ -6,6 +6,7 @@
 import {
   CURRENCY_CODES,
   defaultKindsFor,
+  freeApiSlug,
   PICKER_TYPES,
   pickerTypeOf,
   STARTER_STAGES,
@@ -21,6 +22,7 @@ import { useId, useRef, useState } from 'react';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { CopyButton } from '../../atoms/Button/CopyButton.tsx';
 import { Checkbox } from '../../atoms/Checkbox/Checkbox.tsx';
+import { Link } from '../../atoms/Link/Link.tsx';
 import { Radio, RadioGroup } from '../../atoms/Radio/Radio.tsx';
 import { AttributeEditor, type AttributeEditorProps } from '../../fields/AttributeEditor.tsx';
 import { fieldTypeOf, typeLabelOf } from '../../fields/registry.ts';
@@ -61,6 +63,16 @@ export interface AttributeSettingsAttribute {
   readonly options?: readonly OptionsEditorOption[];
   /** Its validation rules, in order (spec 0013). */
   readonly rules?: readonly RuleSettings[];
+}
+
+/** The API names an object's attributes hold, for a new attribute's (see `apiNames`). */
+export interface AttributeSettingsApiNames {
+  /** Held by a live attribute. */
+  readonly live: ReadonlySet<string>;
+  /** Held by an archived attribute. */
+  readonly archived: ReadonlySet<string>;
+  /** Restores the archived attribute holding `apiSlug`: the screen closes the dialog and says so. */
+  readonly onRestore: (apiSlug: string) => void;
 }
 
 /** A setting the dialog shows, by the name the server's refusals give it. */
@@ -157,6 +169,22 @@ export interface AttributeSettingsProps {
   /** A new rule's id (a UUID v7 the screen mints). */
   readonly newRuleId?: () => string;
   /**
+   * A rule this dialog doesn't edit, said as one read only line under the rules (a Required When set through the
+   * API). The screen keeps it through Save; the line only says it is there.
+   */
+  readonly rulesNote?: string;
+  /**
+   * On create, the API names the object's attributes hold (flow pass, 30 October 2026). A name whose API name an
+   * archived attribute holds says so on the API name, with Restore it, and takes the next free one (`price_2`), so
+   * Create still works. A live attribute's stays the server's to refuse (`SLUG_TAKEN`).
+   */
+  readonly apiNames?: AttributeSettingsApiNames;
+  /**
+   * Where the records sharing a value are (the object's table): linked under Unique while a Save is refused for
+   * them (`UNIQUE_HAS_DUPLICATES`, which the screen puts on `isUnique`). No link when absent.
+   */
+  readonly duplicatesLink?: { readonly label: string; readonly href: string };
+  /**
    * Another dialog's step shown in this one's place, in the same Modal
    * (RelationshipSettings' `relationshipStep` once Relationship is chosen,
    * spec 0014): the scrim stays, and focus still goes back to what opened
@@ -246,6 +274,9 @@ export function AttributeSettings({
   ruleAttributes,
   ruleEditorProps,
   newRuleId,
+  rulesNote,
+  apiNames,
+  duplicatesLink,
   step,
 }: AttributeSettingsProps) {
   const formId = useId();
@@ -306,6 +337,9 @@ export function AttributeSettings({
           ruleAttributes={ruleAttributes}
           ruleEditorProps={ruleEditorProps}
           newRuleId={newRuleId}
+          rulesNote={rulesNote}
+          apiNames={apiNames}
+          duplicatesLink={duplicatesLink}
         />
       )}
     </Modal>
@@ -331,6 +365,9 @@ interface AttributeFormProps {
   readonly ruleAttributes: readonly FieldAttribute[] | undefined;
   readonly ruleEditorProps: FilterBuilderProps['editorProps'] | undefined;
   readonly newRuleId: (() => string) | undefined;
+  readonly rulesNote: string | undefined;
+  readonly apiNames: AttributeSettingsApiNames | undefined;
+  readonly duplicatesLink: AttributeSettingsProps['duplicatesLink'];
 }
 
 function AttributeForm({
@@ -351,6 +388,9 @@ function AttributeForm({
   ruleAttributes,
   ruleEditorProps,
   newRuleId,
+  rulesNote,
+  apiNames,
+  duplicatesLink,
 }: AttributeFormProps) {
   const isCreating = attribute === undefined;
   const isReadOnly = readOnlyReason !== undefined;
@@ -394,8 +434,15 @@ function AttributeForm({
     (ruleAttributes ?? []).map((each) => [each.id, { type: each.type, isSystem: false }]),
   );
 
+  // Following the name, an API name an archived attribute holds is said, and the next free one is taken instead.
+  const derived = name.trim() === '' ? '' : toApiSlug(name.trim(), 'attribute');
+  const archivedHolder =
+    isCreating && apiSlug === undefined && apiNames?.archived.has(derived) === true ? derived : undefined;
   const slugShown = isCreating
-    ? (apiSlug ?? (name.trim() === '' ? '' : toApiSlug(name.trim(), 'attribute')))
+    ? (apiSlug ??
+      (archivedHolder === undefined
+        ? derived
+        : freeApiSlug(derived, new Set([...(apiNames?.live ?? []), ...(apiNames?.archived ?? [])]))))
     : attribute.apiSlug;
   const allowsMultiple = entry?.allowsMultiple ?? attribute?.isMulti ?? false;
   const allowsUnique = entry?.allowsUnique ?? attribute?.isUnique ?? false;
@@ -406,6 +453,7 @@ function AttributeForm({
   // A refusal typed locally wins until the next answer; each lands on its setting, the rest above them.
   const shown = local.length > 0 ? local : refusals;
   const errorOf = (field: AttributeSettingsField) => shown.find((refusal) => refusal.attributeId === field)?.message;
+  const hasDuplicates = shown.some((refusal) => refusal.code === 'UNIQUE_HAS_DUPLICATES');
 
   const chooseType = (key: string | null) => {
     if (key === null || key === typeKey) return;
@@ -460,6 +508,8 @@ function AttributeForm({
       isMulti,
       title: name.trim(),
       ...(isCreating && apiSlug !== undefined && apiSlug.trim() !== '' ? { apiSlug: apiSlug.trim() } : {}),
+      // The free API name shown in place of the one an archived attribute holds.
+      ...(isCreating && apiSlug === undefined && archivedHolder !== undefined ? { apiSlug: slugShown } : {}),
       description: description.trim(),
       isRequired,
       isUnique: allowsUnique && isUnique,
@@ -586,8 +636,23 @@ function AttributeForm({
           name="apiSlug"
           autoComplete="off"
           maxLength={63}
-          hint={strings.apiNameHint}
+          hint={archivedHolder === undefined ? strings.apiNameHint : strings.archivedHolds(archivedHolder)}
           value={slugShown}
+          {...(archivedHolder === undefined || apiNames === undefined
+            ? {}
+            : {
+                after: (
+                  <Button
+                    variant="ghost"
+                    icon="archive-restore"
+                    onPress={() => {
+                      apiNames.onRestore(archivedHolder);
+                    }}
+                  >
+                    {strings.restoreIt}
+                  </Button>
+                ),
+              })}
           // Emptied, it follows the name again.
           onChange={(next) => {
             setApiSlug(next === '' ? undefined : next);
@@ -639,6 +704,10 @@ function AttributeForm({
           }}
           {...(errorOf('isUnique') === undefined ? {} : { error: errorOf('isUnique') })}
         />
+      )}
+      {/* Refused for values records share: the way to them, so the switch isn't a dead end. */}
+      {allowsUnique && duplicatesLink !== undefined && hasDuplicates && (
+        <Link href={duplicatesLink.href}>{duplicatesLink.label}</Link>
       )}
       {allowsMultiple && (
         <Checkbox
@@ -699,6 +768,7 @@ function AttributeForm({
           {listError !== undefined && <Callout tone="danger">{listError}</Callout>}
         </>
       )}
+      {rulesNote !== undefined && <Callout>{rulesNote}</Callout>}
     </Form>
   );
 }

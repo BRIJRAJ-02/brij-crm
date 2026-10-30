@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { freeHue, nextHue, PICKER_TYPES, STARTER_STAGES } from './picker.ts';
-import { API_SLUG_PATTERN, RESERVED_SLUGS, toApiSlug } from './slugs.ts';
+import { API_SLUG_PATTERN, freeApiSlug, MAX_API_SLUG, RESERVED_SLUGS, toApiSlug } from './slugs.ts';
 
 describe('toApiSlug (spec 0012, AC-245)', () => {
   it('derives an API name from a plural name or a title', () => {
@@ -72,5 +72,20 @@ describe('the type picker and new options (AC-228, AC-230, AC-236)', () => {
     expect(nextHue([{ hue: 'gray' }])).toBe('red');
     expect(nextHue([{ hue: 'red' }, { hue: 'purple' }])).toBe('gray');
     expect(freeHue([{ hue: 'gray' }, { hue: 'red' }])).toBe('orange');
+  });
+});
+
+describe('freeApiSlug (an archived attribute keeps its API name)', () => {
+  it('keeps a free name, else numbers it from 2, skipping the numbers taken', () => {
+    expect(freeApiSlug('price', new Set())).toBe('price');
+    expect(freeApiSlug('price', new Set(['price']))).toBe('price_2');
+    expect(freeApiSlug('price', new Set(['price', 'price_2', 'price_3']))).toBe('price_4');
+  });
+
+  it('cuts a long name so the number fits within 63 characters, and stays a valid API name', () => {
+    const long = 'a'.repeat(MAX_API_SLUG);
+    const free = freeApiSlug(long, new Set([long]));
+    expect(free).toBe(`${'a'.repeat(MAX_API_SLUG - 2)}_2`);
+    expect(free).toMatch(API_SLUG_PATTERN);
   });
 });

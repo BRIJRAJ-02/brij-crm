@@ -28,6 +28,9 @@ export const strings = {
   apiNameHint: 'Used by the API and integrations. It can’t change once the attribute exists.',
   apiNameLocked: 'API names never change, so links and integrations keep working.',
   copyApiName: 'Copy the API name',
+  /** On create, a name whose API name an archived attribute holds: said on the API name, with Restore it. */
+  archivedHolds: (apiSlug: string) => `An archived attribute uses ${apiSlug}.`,
+  restoreIt: 'Restore it',
   description: 'Description',
   descriptionHint: 'Tells your team what this attribute holds.',
   required: 'Required',

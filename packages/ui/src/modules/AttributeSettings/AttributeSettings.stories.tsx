@@ -200,6 +200,79 @@ export const Refused: Story = {
   },
 };
 
+const restoreArchived = fn();
+
+/**
+ * A name whose API name an archived attribute holds: said on the API name with Restore it, and the next free API
+ * name shown and sent, so Create works.
+ */
+export const ArchivedApiName: Story = {
+  args: {
+    apiNames: { live: new Set(['name']), archived: new Set(['price']), onRestore: restoreArchived },
+  },
+  play: async ({ args, userEvent }) => {
+    const dialog = await openDialog();
+    await waitFor(() => expect(inDialog(dialog, 'Name')).toHaveFocus());
+    await userEvent.keyboard('Price');
+    await waitFor(() => expect(inDialog(dialog, 'API name')).toHaveValue('price_2'));
+    await expect(dialog).toHaveTextContent('An archived attribute uses price.');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Restore it' }));
+    await expect(restoreArchived).toHaveBeenCalledWith('price');
+    await userEvent.click(inDialog(dialog, 'Name'));
+    await userEvent.keyboard('{Meta>}{Enter}{/Meta}');
+    await waitFor(() =>
+      expect(args.onSubmit).toHaveBeenCalledWith(expect.objectContaining({ title: 'Price', apiSlug: 'price_2' })),
+    );
+  },
+};
+
+/** Unique refused for values records share: the reason on Unique, and the way to the table under it. */
+export const UniqueDuplicates: Story = {
+  args: {
+    attribute: {
+      type: 'text',
+      isMulti: false,
+      title: 'Code',
+      apiSlug: 'code',
+      isRequired: false,
+      isUnique: true,
+    },
+    refusals: [
+      {
+        code: 'UNIQUE_HAS_DUPLICATES',
+        message: 'Code can’t be unique yet: 3 values are used by more than one record. Merge or change them first.',
+        attributeId: 'isUnique',
+      },
+    ],
+    duplicatesLink: { label: 'Open Contracts', href: '/w/acme/objects/contracts' },
+  },
+  play: async () => {
+    const dialog = await openDialog();
+    await expect(dialog).toHaveTextContent('3 values are used by more than one record');
+    await expect(within(dialog).getByRole('link', { name: 'Open Contracts' })).toBeInTheDocument();
+  },
+};
+
+/** A Required When set through the API: one read only line under the rules, which the dialog never edits. */
+export const RulesNote: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: {
+    attribute: {
+      type: 'date',
+      isMulti: false,
+      title: 'Close date',
+      apiSlug: 'close_date',
+      isRequired: false,
+      isUnique: false,
+    },
+    rulesNote: 'Required when Stage matches (set through the API).',
+  },
+  play: async () => {
+    const dialog = await openDialog();
+    await expect(dialog).toHaveTextContent('Required when Stage matches (set through the API).');
+  },
+};
+
 /** Waiting for the server: Create spins with its ongoing verb, and the dialog stays. */
 export const Busy: Story = {
   args: { isBusy: true },

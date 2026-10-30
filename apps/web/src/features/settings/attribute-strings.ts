@@ -7,6 +7,15 @@ export const strings = {
     `${option} archived, so new records get ${first} as their ${field}.`,
   defaultOptionGone: (option: string, field: string) => `${option} archived, so new records get no ${field}.`,
   undo: 'Undo',
+  /** Under Unique when a Save is refused for values records share: the object's table. */
+  openTable: (plural: string) => `Open ${plural}`,
+  /** A Required When rule, read only in the dialog: the attributes its condition looks at (none named: hidden). */
+  requiredWhenLine: (titles: readonly string[]) => {
+    const last = titles.at(-1);
+    if (last === undefined) return 'Required when a condition holds (set through the API).';
+    const named = titles.length === 1 ? last : `${titles.slice(0, -1).join(', ')} and ${last}`;
+    return `Required when ${named} ${titles.length === 1 ? 'matches' : 'match'} (set through the API).`;
+  },
   newAttribute: 'New attribute',
   /** The attribute meter (AC-227). */
   attributes: 'Attributes',

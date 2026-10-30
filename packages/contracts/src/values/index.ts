@@ -86,6 +86,7 @@ export {
 } from './options.ts';
 export {
   API_SLUG_PATTERN,
+  freeApiSlug,
   isReservedSlug,
   MAX_API_SLUG,
   RESERVED_SLUGS,
