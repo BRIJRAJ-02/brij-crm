@@ -1,6 +1,6 @@
 /* ReadyPanel (spec 0058): the "done, here is your link" moment. One column on one left and right edge, blocks
    space-16 apart: the head (a success mark and the heading), the link label, the link row (the address in a read
-   only box, then Copy and Share, all size-input tall), the QR and the preview side by side at one height, then more,
+   only box, then Copy and Share, all size-input tall), the QR and the preview (at most size-column tall) side by side at one height, then more,
    then the buttons at the end. It eases in on opacity and a small rise; the mark pops in on opacity and scale. */
 @layer components {
   .root {
@@ -100,14 +100,17 @@
     flex: none;
   }
 
+  /* The preview is a glimpse, capped at size-column tall: a taller picture (a whole phone) is cut at the cap, its
+     top kept in view (safe centring falls back to the start when the content overflows). */
   .preview {
     display: flex;
     flex: 1 1 var(--size-column);
-    align-items: center;
-    justify-content: center;
+    align-items: safe center;
+    justify-content: safe center;
     box-sizing: border-box;
     min-inline-size: 0;
     min-block-size: var(--size-column-narrow);
+    max-block-size: var(--size-column);
     overflow: hidden;
     border: var(--border-width-hairline) solid var(--border-subtle);
     border-radius: var(--radius-md);

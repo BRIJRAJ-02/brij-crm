@@ -23,6 +23,7 @@ New. Nothing in the library showed a finished thing with its link: LinkCard show
     message="Anyone with the link can book."
     link="https://timefix.com/b/k3x9"
     preview={<MiniPage />}
+    copyVariant="secondary"
   />
 </Modal>
 ```
@@ -30,7 +31,8 @@ New. Nothing in the library showed a finished thing with its link: LinkCard show
 - One column on one left and right edge, blocks `space-16` apart. The link row, Copy and Share are `size-input` tall.
 - `link` is shown, copied (Copy swaps to a tick and "Copied" for two seconds, announced as "Link copied"), shared, and drawn as the QR code.
 - Share uses `onShare` when given, otherwise the browser's share sheet, and is left out where the browser has none. A closed sheet is not an error.
-- `preview` is a framed slot at the QR's height beside it (below it in a narrow slot), named by `previewLabel`.
+- `preview` is a framed slot at the QR's height beside it (below it in a narrow slot), named by `previewLabel`. It is at most `size-column` tall: a taller picture (a whole phone) is cut there, its top kept in view.
+- Copy is primary by default. In a Modal whose footer has its own primary (Done), pass `copyVariant="secondary"` so the dialog keeps one primary.
 - `children` come below (embed tiles: `TileGrid variant="choice"`); `actions` sit at the end.
 - Motion: the panel eases in on opacity and a `space-8` rise, and the mark pops on opacity and scale, from the modal's duration and curve. Under reduced motion both are a fade.
 - The caller passes the address it already has; the panel makes no request.
