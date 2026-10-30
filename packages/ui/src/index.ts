@@ -193,6 +193,11 @@ export {
 } from './molecules/Select/DeferredSelect.tsx';
 export { ChoiceChips, type ChoiceChip, type ChoiceChipsProps } from './molecules/ChoiceChips/ChoiceChips.tsx';
 export { ConditionRow, type ConditionRowProps } from './molecules/ConditionRow/ConditionRow.tsx';
+export {
+  SpotIllustration,
+  type SpotIllustrationKind,
+  type SpotIllustrationProps,
+} from './molecules/SpotIllustration/SpotIllustration.tsx';
 export { Steps, type Step, type StepsProps, type StepsVariant } from './molecules/Steps/Steps.tsx';
 /** The rows to pick from under a field being typed in, focus staying in the field (Field's `combobox` names it). */
 export {
