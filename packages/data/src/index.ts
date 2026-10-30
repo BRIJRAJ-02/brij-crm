@@ -1815,8 +1815,11 @@ export function createDataLayer({
       () => {
         schedulesDue.delete(workspace);
         schedules.changed(workspace);
-        // The Team week reads the same schedules (spec 0037, job J6).
+        // The Team week reads the same schedules (spec 0037, job J6), and time off rides this event too (coarse, no
+        // ids): the held time off lists read again, and Bookings' held reads, whose Host away flags it sets.
         accessLoaded?.teamWeek.changed(workspace);
+        accessLoaded?.timeOff.changed(workspace);
+        refreshBookings(workspace);
       },
       100 + Math.round(random() * 300),
     );
@@ -1876,6 +1879,8 @@ export function createDataLayer({
   });
   router.onResync((workspace) => {
     schedules.changed(workspace);
+    accessLoaded?.teamWeek.changed(workspace);
+    accessLoaded?.timeOff.changed(workspace);
     jobs.resync(workspace);
     views.resync(workspace);
     navStore?.resync(workspace);
@@ -2111,6 +2116,11 @@ export function createDataLayer({
     },
     ...bookingsFresh,
   });
+  /** Time off changed (spec 0037): what Bookings shows now reads again (Host away), each held read once. */
+  const refreshBookings = (workspace: string) => {
+    bookingsLists.refreshHeld(workspace);
+    meetings.refreshHeld(workspace);
+  };
   /** A booking or a calendar changed: every held Bookings read of the workspace reads again. */
   const reloadBookings = (workspace: string) => {
     bookingsLists.reloadAll(workspace);
@@ -2136,6 +2146,9 @@ export function createDataLayer({
         mintId,
         notify,
         watch,
+        onTimeOffChanged: (workspace) => {
+          refreshBookings(workspace);
+        },
       });
       return accessLoaded;
     }));

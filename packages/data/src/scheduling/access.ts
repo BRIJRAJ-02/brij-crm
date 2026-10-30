@@ -206,8 +206,10 @@ export interface SchedulingAccessDeps {
   readonly notify: (notice: Notice) => void;
   /** The clock, in milliseconds; tests pass their own. */
   readonly now?: () => number;
-  /** Watches a workspace's live events while a Team week of it is held. */
+  /** Watches a workspace's live events while a Team week or a time off list of it is held. */
   readonly watch?: (workspace: string) => () => void;
+  /** Time off changed here (a write landed): Bookings' held reads, whose Host away flags it sets, read again. */
+  readonly onTimeOffChanged?: (workspace: string) => void;
 }
 
 /** A read this recent serves a new holder as it is: the loader and the screen it opens hold it together. */
@@ -277,6 +279,12 @@ export function createSchedulingAccessStore(deps: SchedulingAccessDeps) {
     },
     mintId: deps.mintId,
     notify: deps.notify,
+    ...(deps.watch === undefined ? {} : { watch: deps.watch }),
+    // The Team week draws Away from time off, and Bookings flags Host away by it: both read again at once.
+    onChanged: (workspace) => {
+      teamWeek.changed(workspace);
+      deps.onTimeOffChanged?.(workspace);
+    },
     ...(deps.now === undefined ? {} : { now: deps.now }),
   });
 
@@ -525,6 +533,7 @@ export function createSchedulingAccessStore(deps: SchedulingAccessDeps) {
     reload(workspace: string): void {
       visibles.delete(workspace);
       teamWeek.changed(workspace);
+      timeOff.changed(workspace);
       for (const [key, list] of lists) if (key.startsWith(`${workspace}\u0000`)) list.reread();
     },
     /** Signed out: forgets every workspace's. */

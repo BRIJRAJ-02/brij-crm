@@ -47,14 +47,14 @@ export const schedulingRouter = member.scheduling.router({
 const now = () => new Date();
 
 // Time off (spec 0037, AC-1281 to AC-1288): whole days away. Who may add, change and remove whose is packages/core's
-// (`scheduling/time-off.ts`); like blocks, it is a setting with no outbox row, and a screen reads it again when it
-// holds it again. Each write stores its audit row and, for someone else's, the member's notice in its transaction.
+// (`scheduling/time-off.ts`). Each write stores its audit row, one coarse `schedules` outbox row (so open tabs read
+// their hours, the Team week and Host away again) and, for someone else's, the member's notice in its transaction.
 export const timeOffRouter = member.timeOff.router({
   list: member.timeOff.list.handler(({ context, input }) =>
     listTimeOff(context.scope, { now }, { memberId: input.memberId }),
   ),
   create: member.timeOff.create.handler(({ context, input }) =>
-    commitWrite(context, { mutationId: input.mutationId }, () =>
+    commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
       createTimeOff(
         context.scope,
         { now },
@@ -67,24 +67,31 @@ export const timeOffRouter = member.timeOff.router({
           note: input.note,
           standinMemberId: input.standinMemberId,
         },
+        hooks,
       ),
     ),
   ),
   update: member.timeOff.update.handler(({ context, input }) =>
-    commitWrite(context, { mutationId: input.mutationId }, () =>
-      updateTimeOff(context.scope, {
-        id: input.id,
-        fromDate: input.fromDate,
-        toDate: input.toDate,
-        reason: input.reason,
-        note: input.note,
-        standinMemberId: input.standinMemberId,
-        updatedAt: input.updatedAt,
-      }),
+    commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+      updateTimeOff(
+        context.scope,
+        {
+          id: input.id,
+          fromDate: input.fromDate,
+          toDate: input.toDate,
+          reason: input.reason,
+          note: input.note,
+          standinMemberId: input.standinMemberId,
+          updatedAt: input.updatedAt,
+        },
+        hooks,
+      ),
     ),
   ),
   delete: member.timeOff.delete.handler(({ context, input }) =>
-    commitWrite(context, { mutationId: input.mutationId }, () => deleteTimeOff(context.scope, { id: input.id })),
+    commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+      deleteTimeOff(context.scope, { id: input.id }, hooks),
+    ),
   ),
 });
 

@@ -179,6 +179,11 @@ export interface Change {
   /** Availability schedules the write made, changed or deleted (spec 0035), by id. */
   readonly schedules: readonly string[];
   /**
+   * Members whose time off the write added, changed or removed (spec 0037, AC-1281): one coarse `schedules` row,
+   * so the Team week, Availability and Bookings' Host away flags read again in every tab. Never published by id.
+   */
+  readonly timeOff: readonly string[];
+  /**
    * The background job whose batch made this write (spec 0022, milestone 3):
    * the outbox stores it in `outbox.job_id`, never published, and its
    * `records` rows carry `fromJob`.
@@ -338,6 +343,7 @@ const LIST_KEYS = [
   'notes',
   'meetings',
   'schedules',
+  'timeOff',
   'nav',
   'comments',
   'notifications',
@@ -461,6 +467,7 @@ export async function runWrite<T>(
           notes: [] as NoteChange[],
           meetings: [] as MeetingChange[],
           schedules: [] as string[],
+          timeOff: [] as string[],
           nav: [] as string[],
           comments: [] as CommentChange[],
           notifications: [] as string[],
@@ -497,6 +504,7 @@ export async function runWrite<T>(
             append(collected.notes, part.notes);
             append(collected.meetings, part.meetings);
             append(collected.schedules, part.schedules);
+            append(collected.timeOff, part.timeOff);
             append(collected.nav, part.nav);
             append(collected.comments, part.comments);
             append(collected.notifications, part.notifications);
@@ -547,6 +555,7 @@ export async function runWrite<T>(
           notes: [...collected.notes],
           meetings: [...collected.meetings],
           schedules: [...new Set(collected.schedules)],
+          timeOff: [...new Set(collected.timeOff)],
           ...(options.jobId === undefined ? {} : { jobId: options.jobId }),
           nav: [...new Set(collected.nav)],
           comments: [...collected.comments],

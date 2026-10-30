@@ -3,8 +3,9 @@
 // every page that books the member, private ones included, and round robin's per member read skips them, with no
 // new query. A member adds, changes and removes their own (with `booking.manage`); anyone with Manage over them
 // does the same for them (and needs `booking.manage` of their own, AC-1275). Each change writes one audit row
-// (the dates, the reason code and the stand in, never the note) and, when someone else made it, queues the member's
-// scheduling notice (AC-1264). A stand in is emailed once when they are named or the dates change.
+// (the dates, the reason code and the stand in, never the note), one coarse `schedules` outbox row (so open tabs read
+// again) and, when someone else made it, queues the member's scheduling notice (AC-1264). A stand in is emailed once
+// when they are named or the dates change.
 //
 // The dates are calendar dates read in the zone of the member's default schedule at save (stored in `time_zone`):
 // the span runs from the first day's midnight to the midnight after the last. Nothing booked inside moves: the save
@@ -33,6 +34,7 @@ import { queueEmail } from '../emails/queue.ts';
 import { isUuid, uuidArray } from '../engine/ids.ts';
 import { isRefusal, refuse, refuseOn } from '../engine/refusals.ts';
 import { actorRow } from '../engine/scope.ts';
+import { runWrite, type AfterWrite } from '../engine/write.ts';
 import { writeAudit } from '../members/audit.ts';
 import { queueSchedulingNotice } from './notice.ts';
 
@@ -295,6 +297,24 @@ async function afterChange(tx: WorkspaceTx, scope: EngineScope, member: string):
 }
 
 /**
+ * One time off write in one transaction, then the hooks (the outbox): `changed(member)` notes whose time off it
+ * changed, which stores one coarse `schedules` row, so every tab holding hours, the Team week or Host away reads
+ * again. A replay that changed nothing notes nobody.
+ */
+async function writeTimeOff<T>(
+  scope: EngineScope,
+  hooks: readonly AfterWrite[],
+  body: (tx: WorkspaceTx, changed: (member: string) => void) => Promise<T>,
+): Promise<T> {
+  const { result } = await runWrite(
+    scope,
+    (context) => body(context.tx, (member) => context.record({ timeOff: [member] })),
+    hooks,
+  );
+  return result;
+}
+
+/**
  * A member's time off (AC-1286): their own, or a colleague's in the caller's See reach (outside it, NOT_FOUND).
  * Upcoming entries soonest first, then the last 20 past ones, latest first. Reason, note and stand in only for
  * the member and for Manage over them.
@@ -350,12 +370,13 @@ export async function createTimeOff(
   scope: EngineScope,
   deps: { readonly now: () => Date },
   input: TimeOffDraft & { readonly id: string; readonly memberId?: string | undefined },
+  hooks: readonly AfterWrite[] = [],
 ): Promise<TimeOffSaved> {
   requirePermission(scope, 'booking.manage');
   const actor = actorOf(scope);
   const member = input.memberId ?? actor;
   const by = actorRow(scope.actor);
-  return inWorkspace(scope, async (tx) => {
+  return writeTimeOff(scope, hooks, async (tx, changed) => {
     await mayChange(tx, scope, member);
     // A visitor's booking rechecks under this lock: the time off lands wholly before or after it.
     await lockKey(tx, hostLockKey(scope.workspaceId, member));
@@ -407,6 +428,7 @@ export async function createTimeOff(
       after: auditFieldsOf(entry),
     });
     await afterChange(tx, scope, member);
+    changed(member);
     if (input.standinMemberId !== undefined) await tellStandin(tx, entry, input.standinMemberId);
     const inside = await bookingsInside(tx, member, start.toJSDate(), end.toJSDate());
     return { entry, bookingsInside: inside.bookings, moreInside: inside.more };
@@ -417,10 +439,11 @@ export async function createTimeOff(
 export async function updateTimeOff(
   scope: EngineScope,
   input: TimeOffDraft & { readonly id: string; readonly updatedAt: string },
+  hooks: readonly AfterWrite[] = [],
 ): Promise<TimeOffSaved> {
   requirePermission(scope, 'booking.manage');
   const by = actorRow(scope.actor);
-  return inWorkspace(scope, async (tx) => {
+  return writeTimeOff(scope, hooks, async (tx, changed) => {
     const found = await awayRow(tx, input.id);
     if (found === undefined) throw refuse('NOT_FOUND', NOT_FOUND_MESSAGE);
     const member = found.memberId;
@@ -460,6 +483,7 @@ export async function updateTimeOff(
       after: auditFieldsOf(entry),
     });
     await afterChange(tx, scope, member);
+    changed(member);
     const standin = input.standinMemberId;
     const datesMoved = before.fromDate !== entry.fromDate || before.toDate !== entry.toDate;
     if (standin !== undefined && (standin !== before.standinMemberId || datesMoved)) {
@@ -474,9 +498,10 @@ export async function updateTimeOff(
 export async function deleteTimeOff(
   scope: EngineScope,
   input: { readonly id: string },
+  hooks: readonly AfterWrite[] = [],
 ): Promise<{ readonly id: string }> {
   requirePermission(scope, 'booking.manage');
-  return inWorkspace(scope, async (tx) => {
+  return writeTimeOff(scope, hooks, async (tx, changed) => {
     const found = await awayRow(tx, input.id);
     if (found === undefined) throw refuse('NOT_FOUND', NOT_FOUND_MESSAGE);
     const member = found.memberId;
@@ -500,6 +525,7 @@ export async function deleteTimeOff(
       before: auditFieldsOf(entryOf(row, true)),
     });
     await afterChange(tx, scope, member);
+    changed(member);
     return { id: input.id };
   });
 }

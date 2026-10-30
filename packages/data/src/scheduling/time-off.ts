@@ -2,8 +2,11 @@
 // Availability's Time off section reads. It loads in the scheduling access chunk (never the first load). Add and
 // change wait for the server, since its answer carries the meetings already booked inside (the dialog shows them);
 // each lands in every held list of that member at once. Delete is optimistic: gone at once, put back with a toast if
-// refused. Time off is a setting with no live event of its own (as blocks): a list reads again when a screen holds it
-// and the last read is more than a moment old, and on Try again.
+// refused. A time off write anywhere stores a coarse `schedules` event (spec 0037), which reads every held list of the
+// workspace again (`changed`); a list nobody holds reads when held again. A held list watches its workspace, so the
+// Time off section open on its own is live. A list also reads again when a screen holds it and the last read is more
+// than a moment old, and on Try again. Each landed write here runs `onChanged`, so this tab's Team week and Bookings
+// read again at once (its own event is skipped as an echo).
 import type { TimeOffEntry, TimeOffList, TimeOffReason, TimeOffSaved } from '@crm/contracts';
 import { toDataError, type DataError } from '../errors.ts';
 import type { Notice } from '../notice.ts';
@@ -54,6 +57,10 @@ export interface TimeOffDeps {
   readonly api: TimeOffApi;
   readonly mintId: () => string;
   readonly notify: (notice: Notice) => void;
+  /** Watches a workspace's live events while a list of it is held (the `schedules` event reaches `changed`). */
+  readonly watch?: (workspace: string) => () => void;
+  /** A write here landed: what else shows time off (the Team week, Bookings' Host away) reads again. */
+  readonly onChanged?: (workspace: string) => void;
   /** The clock, in milliseconds; tests pass their own. */
   readonly now?: () => number;
 }
@@ -90,6 +97,8 @@ export function createTimeOffStore(deps: TimeOffDeps) {
     let state: TimeOffState = { status: 'loading' };
     let reading: Promise<void> | undefined;
     let readAt: number | undefined;
+    let holders = 0;
+    let stopWatching: (() => void) | undefined;
     // A read sent before a write landed would put its older answer over the write: it is read again instead.
     let version = 0;
     const listeners = new Set<() => void>();
@@ -125,8 +134,16 @@ export function createTimeOffStore(deps: TimeOffDeps) {
         },
         getSnapshot: () => state,
         retain() {
+          holders += 1;
+          if (holders === 1) stopWatching = deps.watch?.(workspace);
           if (readAt === undefined || now() - readAt >= TIME_OFF_FRESH_MS) void read().catch(() => undefined);
-          return () => undefined;
+          return () => {
+            holders -= 1;
+            if (holders === 0) {
+              stopWatching?.();
+              stopWatching = undefined;
+            }
+          };
         },
         ready: () => (state.status === 'ready' ? Promise.resolve() : read()),
         reload: () => {
@@ -140,6 +157,12 @@ export function createTimeOffStore(deps: TimeOffDeps) {
       change(next: (list: TimeOffList) => TimeOffList) {
         version += 1;
         if (state.status === 'ready') set({ status: 'ready', list: next(state.list) });
+      },
+      /** Reads again now while held; else on the next hold. */
+      stale() {
+        version += 1;
+        readAt = undefined;
+        if (holders > 0) void read().catch(() => undefined);
       },
     };
   }
@@ -185,6 +208,7 @@ export function createTimeOffStore(deps: TimeOffDeps) {
           ...draftOf(input),
         });
         land(workspace, saved.entry);
+        deps.onChanged?.(workspace);
         return saved;
       } catch (error) {
         throw toDataError(error);
@@ -195,6 +219,7 @@ export function createTimeOffStore(deps: TimeOffDeps) {
       try {
         const saved = await deps.api.update({ workspace, id: entry.id, updatedAt: entry.updatedAt, ...draftOf(draft) });
         land(workspace, saved.entry);
+        deps.onChanged?.(workspace);
         return saved;
       } catch (error) {
         const failure = toDataError(error);
@@ -211,12 +236,17 @@ export function createTimeOffStore(deps: TimeOffDeps) {
       for (const list of touched) list.change((shown) => withEntry(shown, undefined, entry.id, now()));
       try {
         await deps.api.remove({ workspace, id: entry.id });
+        deps.onChanged?.(workspace);
         return true;
       } catch (error) {
         for (const list of touched) list.change((shown) => withEntry(shown, entry, entry.id, now()));
         deps.notify({ tone: 'danger', message: refusalSummary(toDataError(error)) });
         return false;
       }
+    },
+    /** Someone's time off changed (a `schedules` event, a resync): every held list of the workspace reads again. */
+    changed(workspace: string): void {
+      for (const [key, list] of lists) if (key.startsWith(`${workspace}\u0000`)) list.stale();
     },
     /** Signed out: forgets every workspace's. */
     clear(): void {

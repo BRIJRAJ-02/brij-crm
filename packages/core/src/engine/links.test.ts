@@ -1215,6 +1215,7 @@ describe('deletion', () => {
       notes: [],
       meetings: [],
       schedules: [],
+      timeOff: [],
       nav: [],
       comments: [],
       notifications: [],
