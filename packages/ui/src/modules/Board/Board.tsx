@@ -36,6 +36,11 @@ export interface BoardProps {
   /** Enter or a click on a card: open its record. */
   readonly onOpen?: (card: BoardCard) => void;
   /**
+   * The card whose record is open in the panel beside the board (the CRM flow pass, 31 October 2026): it takes the
+   * selected surface and `aria-current`, and scrolls into view when the open record changes.
+   */
+  readonly activeId?: string;
+  /**
    * The "+" on each column's head: add a record with that column's value. Leave it out where the viewer may not
    * create; a collapsed strip and a column that refuses cards show no "+".
    */
@@ -97,6 +102,7 @@ export function Board({
   showEmptyColumns,
   onShowEmptyColumnsChange,
   onOpen,
+  activeId,
   onAddCard,
   onMovingChange,
   collapsedIds,
@@ -256,6 +262,7 @@ export function Board({
                     : {}),
                 })}
             {...(onAddCard === undefined || isMoving ? {} : { onAddCard: () => onAddCard(column.id) })}
+            {...(activeId === undefined ? {} : { activeId })}
             {...(onOpen === undefined
               ? {}
               : {

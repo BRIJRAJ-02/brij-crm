@@ -17,16 +17,19 @@ import {
 import {
   AttributeEditor,
   Button,
+  ButtonGroup,
   Callout,
   FieldGroup,
   focusLater,
   Form,
   iconOf,
   InfoTip,
+  LockReason,
   Modal,
   Radio,
   RadioGroup,
   Select,
+  VisuallyHidden,
   type FormRefusal,
 } from '@crm/ui';
 import { usePendingOptions } from '@crm/data/react';
@@ -290,6 +293,7 @@ function BulkEditForm({
   const [nextKey, setNextKey] = useState(1);
   const [refusals, setRefusals] = useState<readonly FormRefusal[]>([]);
   const addRef = useRef<HTMLButtonElement>(null);
+  const limitId = useId();
   const change = (key: number, patch: RowPatch) => {
     setRows((held) =>
       held.map((row) => (row.key === key ? { ...row, ...(typeof patch === 'function' ? patch(row) : patch) } : row)),
@@ -349,8 +353,9 @@ function BulkEditForm({
   }
 
   const isMany = rows.length > 1;
-  // Another row while every row has its field and a field is left to pick (one field at a time on a background job).
-  const canAdd = !isSingle && rows.every((row) => row.attributeId !== undefined) && rows.length < offered.length;
+  // Another row while every row has its field and a field is left to pick. On a background job (more than 500
+  // records, or all matching) the button stays, off, with its reason beside it: a job takes one field.
+  const canAdd = rows.every((row) => row.attributeId !== undefined) && rows.length < offered.length;
   return (
     <Form
       id={formId}
@@ -405,7 +410,7 @@ function BulkEditForm({
           </FieldGroup>
         );
       })}
-      {canAdd && (
+      {canAdd && !isSingle && (
         <Button
           ref={addRef}
           variant="ghost"
@@ -417,6 +422,15 @@ function BulkEditForm({
         >
           {bulkStrings.addField}
         </Button>
+      )}
+      {canAdd && isSingle && (
+        <ButtonGroup label={bulkStrings.addField} layout="row">
+          <Button variant="ghost" icon="plus" isDisabled aria-describedby={limitId}>
+            {bulkStrings.addField}
+          </Button>
+          <VisuallyHidden id={limitId}>{bulkStrings.addFieldLimit}</VisuallyHidden>
+          <LockReason reason={bulkStrings.addFieldLimit} />
+        </ButtonGroup>
       )}
     </Form>
   );

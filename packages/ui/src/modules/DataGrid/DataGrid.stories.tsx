@@ -43,6 +43,11 @@ interface SampleGridProps {
   readonly confirmsPaste?: boolean;
   /** Notes on rows by id: a record made here, a row that left the view. */
   readonly rowNotes?: ReadonlyMap<string, RowNote>;
+  /** The row whose record is open beside the grid, and its place (the grid scrolls to it). */
+  readonly activeId?: string;
+  readonly activeIndex?: number;
+  /** Open comment threads by row id. */
+  readonly commentCounts?: ReadonlyMap<string, number>;
   /** Columns not read yet for these rows (a column just shown): their cells draw skeletons. */
   readonly unknown?: { readonly rows: readonly string[]; readonly column: string };
   readonly sort?: { readonly columnId: string; readonly direction: 'ascending' | 'descending' };
@@ -87,6 +92,9 @@ function SampleGrid({
   onRowOpen,
   confirmsPaste,
   rowNotes,
+  activeId,
+  activeIndex,
+  commentCounts,
   unknown,
   sort,
   withAvatars = false,
@@ -188,6 +196,9 @@ function SampleGrid({
         {...(onRowOpen === undefined ? {} : { onRowOpen })}
         {...(confirmsPaste === undefined ? {} : { confirmsPaste })}
         {...(rowNotes === undefined ? {} : { rowNotes })}
+        {...(activeId === undefined ? {} : { activeId })}
+        {...(activeIndex === undefined ? {} : { activeIndex })}
+        {...(commentCounts === undefined ? {} : { commentCount: (row: SampleRow) => commentCounts.get(row.id) })}
         {...(sort === undefined ? {} : { sort, onSort: () => undefined })}
         {...(withAvatars ? { rowAvatar: () => undefined, untitled: 'Unnamed company' } : {})}
         {...(onAddColumn === undefined ? {} : { onAddColumn })}
@@ -971,6 +982,30 @@ export const RowNotesAndUnreadCells: Story = {
     await expect(cell(canvasElement, 0, 1)).toHaveTextContent('New');
     await expect(cell(canvasElement, 3, 2)?.querySelector('[data-shape]')).not.toBeNull();
     await expect(cell(canvasElement, 1, 2)?.querySelector('[data-shape]')).toBeNull();
+  },
+};
+
+/**
+ * The record open beside the grid: its row is tinted and marked current, and the grid scrolls it into view (row 150
+ * is far below the first screen). Rows with open comment threads carry a comment mark and the count after the name.
+ */
+export const OpenRowAndComments: Story = {
+  args: {
+    activeId: 'company-150',
+    activeIndex: 150,
+    commentCounts: new Map<string, number>([
+      ['company-150', 2],
+      ['company-151', 1],
+    ]),
+  },
+  play: async ({ canvasElement }) => {
+    // The grid scrolled to the open row, which is far below the first screen.
+    const open = '[role="row"][aria-current="true"]';
+    await waitFor(() => expect(canvasElement.querySelector(open)).not.toBeNull());
+    const row = canvasElement.querySelector<HTMLElement>(open);
+    await expect(row).toBeVisible();
+    // The count is part of the row header, so it is read with the name.
+    await expect(row).toHaveTextContent('2 open comment threads');
   },
 };
 

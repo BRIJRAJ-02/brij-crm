@@ -2,7 +2,7 @@
 // as a virtualised React Aria GridList. The column is a drop zone of the
 // library's drag wrapper, and each card a sortable item in it, moved by
 // pointer from anywhere on the card, or by keyboard from its grip.
-import { useId, useMemo, useRef } from 'react';
+import { useEffect, useId, useMemo, useRef } from 'react';
 import { GridList, GridListItem, ListLayout, Virtualizer, type Key } from 'react-aria-components';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { focusLater } from '../../lib/focus-later.ts';
@@ -39,6 +39,8 @@ export interface KanbanColumnProps {
   /** A slim strip: the title down its length and the count, no cards (an empty "No <field>" column). */
   readonly isCollapsed?: boolean;
   readonly onOpen?: (card: BoardCard) => void;
+  /** The card whose record is open beside the board: tinted, marked current, and scrolled into view when drawn. */
+  readonly activeId?: string;
   /** The head's "+": add a card with this column's value. Absent, there is no button. */
   readonly onAddCard?: () => void;
   /** Folds the column into a strip (the head's collapse button). Absent, there is no button. */
@@ -55,6 +57,7 @@ function SortableCard({
   columnId,
   canMove,
   refusesDrop,
+  isOpen,
 }: {
   readonly id: string;
   readonly card: BoardCard;
@@ -62,6 +65,8 @@ function SortableCard({
   readonly columnId: string;
   readonly canMove: boolean;
   readonly refusesDrop: boolean;
+  /** The card's record is open in the panel beside the board. */
+  readonly isOpen: boolean;
 }) {
   const isLocked = card.readOnlyReason !== undefined;
   const { bind, grip, onPointerDown } = useSortableItem(id, {
@@ -71,7 +76,14 @@ function SortableCard({
     within: 'row',
   });
   return (
-    <span ref={bind} className={styles.content} onPointerDown={onPointerDown}>
+    // The row's own element drops aria-current (React Aria filters what an item passes through), so the card's
+    // content carries it.
+    <span
+      ref={bind}
+      className={styles.content}
+      onPointerDown={onPointerDown}
+      aria-current={isOpen ? 'true' : undefined}
+    >
       <KanbanCard card={card} fields={fields} grip={canMove && !isLocked ? grip : undefined} />
     </span>
   );
@@ -92,6 +104,7 @@ export function KanbanColumn({
   isOver,
   isCollapsed = false,
   onOpen,
+  activeId,
   onAddCard,
   onCollapse,
   onExpand,
@@ -112,6 +125,22 @@ export function KanbanColumn({
   );
   const cardAt = (key: Key) => itemOfKey(column.cards, rows, key);
   const titleId = useId();
+  // The open card comes into view when the open record changes, if this column draws it and it is out of view.
+  const cardsRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (activeId === undefined) return;
+    const frame = requestAnimationFrame(() => {
+      const cards = cardsRef.current;
+      if (cards === null) return;
+      const open = [...cards.querySelectorAll<HTMLElement>('[data-card]')].find(
+        (each) => each.dataset.card === activeId,
+      );
+      open?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    });
+    return () => {
+      cancelAnimationFrame(frame);
+    };
+  }, [activeId]);
   // Folding or opening takes away the button pressed: focus goes to the one that takes its place.
   const collapseRef = useRef<HTMLButtonElement>(null);
   const expandRef = useRef<HTMLButtonElement>(null);
@@ -188,6 +217,7 @@ export function KanbanColumn({
             layoutOptions={{ estimatedRowHeight: 3 * sizeToken('size-row'), gap: spaceToken('space-8') }}
           >
             <GridList
+              ref={cardsRef}
               className={styles.cards}
               aria-labelledby={titleId}
               items={rows}
@@ -222,6 +252,8 @@ export function KanbanColumn({
                     textValue={card.record.name}
                     data-pressable={onOpen === undefined ? undefined : ''}
                     data-locked={card.readOnlyReason === undefined ? undefined : ''}
+                    data-card={column.cards.getKey(card)}
+                    data-open={column.cards.getKey(card) === activeId ? '' : undefined}
                   >
                     <RowShown index={row.index} onShown={onShown} />
                     <SortableCard
@@ -231,6 +263,7 @@ export function KanbanColumn({
                       columnId={column.id}
                       canMove={canMove}
                       refusesDrop={refusal !== undefined}
+                      isOpen={column.cards.getKey(card) === activeId}
                     />
                   </GridListItem>
                 );

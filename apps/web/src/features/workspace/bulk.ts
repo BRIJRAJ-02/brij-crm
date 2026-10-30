@@ -58,6 +58,8 @@ export const bulkStrings = {
   fieldPlaceholder: 'Choose a field',
   /** Another field to change in the same Apply (the CRM flow pass, 31 October 2026). */
   addField: 'Add field',
+  /** Why Add field is off on a big selection: a background job takes one field. */
+  addFieldLimit: 'Up to 500 records at once',
   removeField: (title: string) => `Remove ${title}`,
   /** The second and later rows' field Select, named by its place: "Field 2". */
   fieldAt: (place: number) => `Field ${String(place)}`,

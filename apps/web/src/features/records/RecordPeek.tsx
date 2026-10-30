@@ -18,7 +18,7 @@ import { TaskDialog } from '../tasks/TaskDialog.tsx';
 import { TasksTab } from '../tasks/TasksTab.tsx';
 import { ActivityTab } from './ActivityTab.tsx';
 import { recordHref, recordName } from './details.ts';
-import type { PeekSteps, PeekTab } from './params.ts';
+import type { PeekLoadStep, PeekSteps, PeekTab } from './params.ts';
 import { openPeek, type PeekSources } from './peek.ts';
 import { RecordDetails } from './RecordDetails.tsx';
 import { RelatedSections } from './RelatedSections.tsx';
@@ -39,6 +39,11 @@ export interface RecordPeekProps {
   readonly onTabChange: (tab: PeekTab) => void;
   /** Steps through the list beside it (↑ and ↓, Previous and Next); undefined when the record isn't among its rows. */
   readonly steps?: PeekSteps;
+  /**
+   * Loads the row beside the record when the list has it but hasn't loaded it (`steps.isNextPending`), answering its
+   * id, or undefined when it doesn't arrive. Keep it stable: the panel draws again only when what it shows changes.
+   */
+  readonly onLoadStep?: PeekLoadStep;
   /** Shows another record: a step, or a row picked in the list. */
   readonly onOpen: (recordId: string) => void;
   readonly onClose: () => void;
@@ -57,6 +62,34 @@ function RecordPeekPanel(props: RecordPeekProps) {
   const { data } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
   const [attempt, setAttempt] = useState(0);
+  // A step to a row the list hasn't loaded: it loads the row's block, then opens the record. One at a time; it
+  // names the record it started from, so it is over once the panel shows another.
+  const [step, setStep] = useState<{ readonly from: string; readonly controller: AbortController } | undefined>(
+    undefined,
+  );
+  const { onLoadStep, onOpen } = props;
+  const loadStep = useCallback(
+    (direction: 'previous' | 'next') => {
+      if (onLoadStep === undefined) return;
+      step?.controller.abort();
+      const controller = new AbortController();
+      setStep({ from: recordId, controller });
+      void onLoadStep(direction, controller.signal).then((id) => {
+        if (controller.signal.aborted) return;
+        setStep(undefined);
+        if (id !== undefined) onOpen(id);
+      });
+    },
+    [onLoadStep, onOpen, recordId, step],
+  );
+  // A load is let go when another replaces it, the record changes some other way (a row picked, Close), or the
+  // panel goes.
+  useEffect(
+    () => () => {
+      step?.controller.abort();
+    },
+    [step, recordId],
+  );
   // The last sources that arrived, whichever record they are for, and a record whose sources failed to open.
   const [held, setHeld] = useState<PeekSources | undefined>(undefined);
   const [failedFor, setFailedFor] = useState<string | undefined>(undefined);
@@ -95,7 +128,7 @@ function RecordPeekPanel(props: RecordPeekProps) {
           setAttempt((count) => count + 1);
         }}
         onClose={props.onClose}
-        {...stepProps(props)}
+        {...stepProps(props, loadStep)}
         onOpenPage={() => {
           void navigate({ href: pageHref(props) });
         }}
@@ -103,7 +136,16 @@ function RecordPeekPanel(props: RecordPeekProps) {
       />
     );
   }
-  return held === undefined ? null : <LoadedPeek {...props} sources={held} />;
+  if (held === undefined) return null;
+  return (
+    <LoadedPeek
+      {...props}
+      sources={held}
+      loadStep={loadStep}
+      // The next record is on its way: the one before stays, with a quiet line over it.
+      isStepping={step?.from === recordId || held.recordId !== recordId}
+    />
+  );
 }
 
 /**
@@ -122,18 +164,45 @@ export const RecordPeek = memo(
     before.onTabChange === after.onTabChange &&
     before.onOpen === after.onOpen &&
     before.onClose === after.onClose &&
+    before.onLoadStep === after.onLoadStep &&
     before.steps?.previous === after.steps?.previous &&
     before.steps?.next === after.steps?.next &&
+    before.steps?.isPreviousPending === after.steps?.isPreviousPending &&
+    before.steps?.isNextPending === after.steps?.isNextPending &&
     (before.steps === undefined) === (after.steps === undefined),
 );
 
-/** Previous and Next, from the steps the list worked out; both left out when the list doesn't hold the record. */
-function stepProps({ steps, onOpen }: Pick<RecordPeekProps, 'steps' | 'onOpen'>) {
+/**
+ * Previous and Next, from the steps the list worked out; both left out when the list doesn't hold the record. A
+ * neighbour the list has but hasn't loaded keeps its button on: pressing it loads the row and moves on, so a step
+ * is off only at the list's real end.
+ */
+function stepProps(
+  { steps, onOpen, onLoadStep }: Pick<RecordPeekProps, 'steps' | 'onOpen' | 'onLoadStep'>,
+  loadStep: (direction: 'previous' | 'next') => void,
+) {
   if (steps === undefined) return {};
   const { previous, next } = steps;
+  const canLoad = onLoadStep !== undefined;
   return {
-    ...(previous === undefined ? {} : { onPrevious: () => onOpen(previous) }),
-    ...(next === undefined ? {} : { onNext: () => onOpen(next) }),
+    ...(previous !== undefined
+      ? { onPrevious: () => onOpen(previous) }
+      : steps.isPreviousPending === true && canLoad
+        ? {
+            onPrevious: () => {
+              loadStep('previous');
+            },
+          }
+        : {}),
+    ...(next !== undefined
+      ? { onNext: () => onOpen(next) }
+      : steps.isNextPending === true && canLoad
+        ? {
+            onNext: () => {
+              loadStep('next');
+            },
+          }
+        : {}),
   };
 }
 
@@ -150,7 +219,13 @@ function shownOf(state: RecordState): RecordView | undefined {
   return state.status === 'ready' ? state.record : undefined;
 }
 
-function LoadedPeek(props: RecordPeekProps & { readonly sources: PeekSources }) {
+function LoadedPeek(
+  props: RecordPeekProps & {
+    readonly sources: PeekSources;
+    readonly loadStep: (direction: 'previous' | 'next') => void;
+    readonly isStepping: boolean;
+  },
+) {
   const { slug, object, members, tab, onTabChange, onClose, sources } = props;
   // The record these sources are for: the one asked for once its sources arrive, the last one until then.
   const { recordId } = sources;
@@ -192,7 +267,8 @@ function LoadedPeek(props: RecordPeekProps & { readonly sources: PeekSources }) 
     width: 'lg' as const,
     onClose,
     onOpenPage: openPage,
-    ...stepProps(props),
+    isStepping: props.isStepping,
+    ...stepProps(props, props.loadStep),
   };
 
   // One panel in every state, so it never mounts again (and slides in again) as the record's state changes.

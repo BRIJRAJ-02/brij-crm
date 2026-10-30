@@ -1903,6 +1903,10 @@ export function createDataLayer({
     void comments?.then((store) => {
       store.changed(workspace, event);
     });
+    // The rows and cards that show these records read their open thread count again.
+    void records?.then((layer) => {
+      void layer.commentsChanged(workspace, event.objectId, event.recordIds, event.coarse === true);
+    });
   });
   // A member's notifications or settings changed (spec 0038, AC-1172, AC-1174, AC-1180): only the person's own
   // count, lists and settings read again; every other member's tab drops the event.
@@ -2552,7 +2556,12 @@ export function createDataLayer({
 
   const recordsApi: RecordsApi = {
     query: (input, signal) =>
-      call((options) => api.records.query({ ...input, attributeIds: [...input.attributeIds] }, options), signal),
+      // A window's rows carry their open comment count, for the row's and the card's comment mark.
+      call(
+        (options) =>
+          api.records.query({ ...input, attributeIds: [...input.attributeIds], threadCounts: true }, options),
+        signal,
+      ),
     count: (input, signal) => call((options) => api.records.count(input, options), signal),
     groups: (input, signal) =>
       call(
@@ -2562,6 +2571,7 @@ export function createDataLayer({
               ...input,
               groupIds: [...input.groupIds],
               attributeIds: [...input.attributeIds],
+              threadCounts: true,
               ...(input.sorts === undefined ? {} : { sorts: [...input.sorts] }),
             },
             options,
@@ -2583,6 +2593,7 @@ export function createDataLayer({
             workspace: input.workspace,
             ids: [...input.ids],
             ...(input.attributeIds === undefined ? {} : { attributeIds: [...input.attributeIds] }),
+            ...(input.threadCounts === true ? { threadCounts: true } : {}),
           },
           options,
         ),
@@ -3200,6 +3211,11 @@ export function createDataLayer({
   const commentsStore = (): Promise<CommentsStore> => {
     comments ??= import('./comments/store.ts').then(({ createCommentsStore }) =>
       createCommentsStore({
+        onOpenCount: (_workspace, recordId, openCount) => {
+          void records?.then((layer) => {
+            layer.setOpenThreads(recordId, openCount);
+          });
+        },
         api: {
           list: (input) =>
             beforeRead(input.workspace).then(() => call((options) => api.comments.list({ ...input }, options))),

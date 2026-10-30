@@ -29,10 +29,19 @@ interface SampleProps {
   readonly stats?: 'shown' | 'loading' | 'none';
   /** The record was deleted while open (a notice over the tabs), or isn't available at all (in place of the tabs). */
   readonly gone?: 'lost' | 'unavailable';
+  /** The next record is on its way (a held ↓): a thin progress line along the body's top edge. */
+  readonly isStepping?: boolean;
 }
 
 /** A company opened from the table: details, activity and tasks, stepping through three companies. */
-function SamplePanel({ startOpen = true, onOpenPage, status = 'ready', stats = 'shown', gone }: SampleProps) {
+function SamplePanel({
+  startOpen = true,
+  onOpenPage,
+  status = 'ready',
+  stats = 'shown',
+  gone,
+  isStepping = false,
+}: SampleProps) {
   const [isOpen, setOpen] = useState(startOpen);
   const [tab, setTab] = useState('details');
   const isLoadingStats = stats === 'loading';
@@ -52,6 +61,7 @@ function SamplePanel({ startOpen = true, onOpenPage, status = 'ready', stats = '
       </Button>
       <RecordPanel
         status={status}
+        isStepping={isStepping}
         {...(status === 'loading' || gone === 'unavailable' ? {} : { record })}
         isOpen={isOpen}
         onClose={() => {
@@ -271,6 +281,16 @@ export const EscInAnEditor: Story = {
     await expect(canvas.getByRole('dialog', { name: 'Northwind Traders' })).toBeInTheDocument();
     await userEvent.keyboard('{Escape}');
     await waitFor(() => expect(canvas.queryByRole('dialog')).not.toBeInTheDocument());
+  },
+};
+
+/** The next record is on its way: after the loading delay a thin progress line shows over the body and the tabs dim, with no change of layout. */
+export const Stepping: Story = {
+  args: { isStepping: true },
+  play: async ({ canvas }) => {
+    const panel = canvas.getByRole('dialog', { name: 'Northwind Traders' });
+    await waitFor(() => expect(within(panel).getByRole('progressbar', { name: 'Loading record' })).toBeInTheDocument());
+    await expect(within(panel).getByRole('region', { name: 'Details' })).toBeInTheDocument();
   },
 };
 

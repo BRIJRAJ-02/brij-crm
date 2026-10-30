@@ -39,12 +39,12 @@ import {
 } from '@crm/ui';
 import { columnWidthFor, DataGrid, type ColumnCalc, type GridColumn } from '@crm/ui/grid';
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ArchiveAttributeDialog } from '../settings/ArchiveAttributeDialog.tsx';
 import { AttributeDialog } from '../settings/AttributeDialog.tsx';
 import { isAtLimit, type LimitCount } from '../settings/AtLimit.tsx';
 import { useLinkEditing } from '../records/links.ts';
-import { stepsAround, type PeekControl } from '../records/params.ts';
+import { loadRowId, stepsAround, type PeekControl } from '../records/params.ts';
 import { RecordPeek } from '../records/RecordPeek.tsx';
 import { useRecordForm } from '../records/RecordForm.tsx';
 import { useMemberPicker } from '../records/members.ts';
@@ -523,11 +523,33 @@ export function RecordsScreen({
     );
   }, [attributes, shownColumns, calcValues, rowHeader, layout, onLayoutChange]);
 
-  // The panel's Previous and Next: the rows either side of its record in the table's order, while it holds them.
+  // The panel's Previous and Next: the rows either side of its record in the table's order. A row the table has
+  // but hasn't loaded keeps its step on (the panel loads it and moves on), so Next is off only at the real end.
+  const peekRecordId = peek?.recordId;
+  const peekIndex = peekRecordId === undefined ? undefined : view.indexOf(peekRecordId);
   const peekSteps =
-    peek?.recordId === undefined || grouped !== undefined
+    peekIndex === undefined || grouped !== undefined
       ? undefined
-      : stepsAround(view.indexOf(peek.recordId), state.source.count, (index) => state.source.getItem(index)?.id);
+      : stepsAround(peekIndex, state.source.count, (index) => state.source.getItem(index)?.id);
+  const loadPeekStep = useCallback(
+    (direction: 'previous' | 'next', signal: AbortSignal) => {
+      const at = peekRecordId === undefined ? undefined : view.indexOf(peekRecordId);
+      if (at === undefined) return Promise.resolve(undefined);
+      return loadRowId(
+        {
+          // The table's own range change loads the row's block; the id arrives with the view's next frame.
+          reach: (index) => {
+            view.getSnapshot().source.onRangeChange({ start: index, end: index + 1 });
+          },
+          idAt: (index) => view.getSnapshot().source.getItem(index)?.id,
+          subscribe: view.subscribe,
+        },
+        direction === 'next' ? at + 1 : at - 1,
+        signal,
+      );
+    },
+    [view, peekRecordId],
+  );
 
   // The name the menu's Create <object> named … typed, for the dialog it opened; New starts empty.
   const [createPreset, setCreatePreset] = useState<Readonly<Record<string, unknown>> | undefined>(undefined);
@@ -680,6 +702,10 @@ export function RecordsScreen({
                 return refs.map((ref, index) => displayOf(ref, names[index] ?? 'loading'));
               }}
               rowHeader={rowHeader}
+              // The open record's row is marked and kept in view as the panel steps (a grouped table's rows run under headers).
+              {...(peekRecordId === undefined ? {} : { activeId: peekRecordId })}
+              {...(peekIndex === undefined || grouped !== undefined ? {} : { activeIndex: peekIndex })}
+              commentCount={(row) => row.openThreads}
               // A record's name opens it in the panel beside the table (spec 0017, AC-384), its page one press on.
               onRowOpen={(recordId) => {
                 if (peek !== undefined) {
@@ -857,7 +883,7 @@ export function RecordsScreen({
                 onOpen={peek.open}
                 onClose={peek.close}
                 // The rows either side in the table's order; a grouped table's rows run under headers, so it has none.
-                {...(peekSteps === undefined ? {} : { steps: peekSteps })}
+                {...(peekSteps === undefined ? {} : { steps: peekSteps, onLoadStep: loadPeekStep })}
               />
             )}
             {bulk.dialog}

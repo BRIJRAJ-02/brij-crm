@@ -37,9 +37,9 @@ import {
   type ViewSettingsTrigger,
 } from '@crm/ui';
 import { useNavigate, useRouteContext, useRouter } from '@tanstack/react-router';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useMemberPicker } from '../records/members.ts';
-import { stepsAround, type PeekControl, type PeekSteps } from '../records/params.ts';
+import { loadRowId, stepsAround, type PeekControl, type PeekLoadStep, type PeekSteps } from '../records/params.ts';
 import { RecordPeek } from '../records/RecordPeek.tsx';
 import { useBoardTotals } from '../workspace/calcs.ts';
 import { AttributeDialog } from '../settings/AttributeDialog.tsx';
@@ -530,7 +530,7 @@ function BoardBody({
         ? {}
         : {
             peekId: peekRecordId,
-            peekPanel: (steps: PeekSteps | undefined) => (
+            peekPanel: (steps: PeekSteps | undefined, onLoadStep: PeekLoadStep) => (
               <RecordPeek
                 slug={slug}
                 object={object}
@@ -541,7 +541,7 @@ function BoardBody({
                 onTabChange={peek.setTab}
                 onOpen={peek.open}
                 onClose={peek.close}
-                {...(steps === undefined ? {} : { steps })}
+                {...(steps === undefined ? {} : { steps, onLoadStep })}
               />
             ),
           })}
@@ -566,7 +566,7 @@ interface LoadedBoardProps {
   readonly onOpen: (card: BoardCard) => void;
   readonly onAddCard?: (columnId: string) => void;
   /** The record panel, given the cards either side of its record in the record's column. */
-  readonly peekPanel?: (steps: PeekSteps | undefined) => ReactNode;
+  readonly peekPanel?: (steps: PeekSteps | undefined, onLoadStep: PeekLoadStep) => ReactNode;
   /** The record the panel shows, to find its column. */
   readonly peekId?: string;
   readonly addColumn?: BoardAddColumn;
@@ -640,6 +640,8 @@ function LoadedBoard({
       values: row.values,
       displays,
       ...(readOnlyReason === undefined ? {} : { readOnlyReason }),
+      // The record's open comment threads: a comment mark and count on its card.
+      ...(row.openThreads === undefined || row.openThreads === 0 ? {} : { openThreads: row.openThreads }),
     };
     cards.current.set(row, card);
     return card;
@@ -677,7 +679,31 @@ function LoadedBoard({
             },
     };
   });
-  // The panel's Previous and Next: the cards either side of its record in the record's own column.
+  // The panel's Previous and Next: the cards either side of its record in the record's own column. A card the column
+  // has but hasn't loaded keeps its step on (the panel loads it and moves on): off only at the column's real end.
+  const loadPeekStep = useCallback(
+    (direction: 'previous' | 'next', signal: AbortSignal) => {
+      if (peekId === undefined) return Promise.resolve(undefined);
+      for (const column of store.getSnapshot().columns) {
+        const view = column.view;
+        const at = view?.indexOf(peekId);
+        if (view === undefined || at === undefined) continue;
+        return loadRowId(
+          {
+            reach: (index) => {
+              view.getSnapshot().source.onRangeChange({ start: index, end: index + 1 });
+            },
+            idAt: (index) => view.getSnapshot().source.getItem(index)?.id,
+            subscribe: view.subscribe,
+          },
+          direction === 'next' ? at + 1 : at - 1,
+          signal,
+        );
+      }
+      return Promise.resolve(undefined);
+    },
+    [store, peekId],
+  );
   const peekSteps = ((): PeekSteps | undefined => {
     if (peekId === undefined) return undefined;
     // Each column's view knows a record's row by a map lookup, so this costs one lookup per column, not a scan.
@@ -718,12 +744,13 @@ function LoadedBoard({
         showEmptyColumns={showEmpty}
         onShowEmptyColumnsChange={onShowEmptyChange}
         onOpen={onOpen}
+        {...(peekId === undefined ? {} : { activeId: peekId })}
         // Where the grouping field is read only, a "+" would set a value the member can't write.
         {...(onAddCard === undefined || plan.groupBy.readOnly !== undefined ? {} : { onAddCard })}
         status={board.status}
         onRetry={store.retry}
       />
-      {peekPanel?.(peekSteps)}
+      {peekPanel?.(peekSteps, loadPeekStep)}
     </>
   );
 }

@@ -194,6 +194,18 @@ export interface DataGridProps<Row> {
   readonly isCellKnown?: (row: Row, columnId: string) => boolean;
   /** Notes on rows, by row key: drawn after the row header's value, and read with it. */
   readonly rowNotes?: ReadonlyMap<string, RowNote>;
+  /**
+   * The row whose record is open beside the grid (the record panel, 31 October 2026): that row is tinted and marked
+   * `aria-current`, and scrolled into view when it changes (only if it is out of view). `activeIndex` is its row
+   * while the screen holds it, so the grid can scroll to a row it hasn't drawn.
+   */
+  readonly activeId?: string;
+  readonly activeIndex?: number;
+  /**
+   * A row's open comment threads: a comment mark with the count after the name in its row header, read with it
+   * ("Ada Lovelace, 2 open comment threads"). Nothing for 0 or undefined.
+   */
+  readonly commentCount?: (row: Row) => number | undefined;
   /** A cell editor opened (true) or closed (false): a screen holds back reordering its rows meanwhile. */
   readonly onEditingChange?: (isEditing: boolean) => void;
   /**
@@ -374,6 +386,9 @@ export function DataGrid<Row>({
   focusRow,
   isCellKnown,
   rowNotes,
+  activeId,
+  activeIndex,
+  commentCount,
   onEditingChange,
   onAddColumn,
   addColumnLabel = strings.addColumn,
@@ -717,6 +732,20 @@ export function DataGrid<Row>({
   useLayoutEffect(() => {
     goToLatest.current = goTo;
   });
+  // The open record's row comes into view when the open record changes (or once its row is known), and only when
+  // it is out of view, so opening a row that shows doesn't move the table.
+  const scrollToActive = useRef<() => void>(() => undefined);
+  useLayoutEffect(() => {
+    scrollToActive.current = () => {
+      if (activeIndex === undefined || activeIndex < 0 || activeIndex >= count) return;
+      virtualizer.scrollToIndex(lines.lineOf(activeIndex), { align: 'auto' });
+    };
+  });
+  const hasActiveIndex = activeIndex !== undefined;
+  useEffect(() => {
+    if (activeId === undefined || !hasActiveIndex) return;
+    scrollToActive.current();
+  }, [activeId, hasActiveIndex]);
   useEffect(() => {
     if (focusRow === undefined) return;
     let frames = 0;
@@ -1604,6 +1633,8 @@ export function DataGrid<Row>({
     const rowData = rows.getItem(row);
     const id = rowData === undefined ? undefined : rows.getKey(rowData);
     const isSelected = id !== undefined && isRowSelected(currentSelection, id);
+    const isOpen = id !== undefined && id === activeId;
+    const comments = rowData === undefined ? undefined : commentCount?.(rowData);
     const named = rowData === undefined ? undefined : nameOf(rowData);
     const name = rowData === undefined ? strings.loadingRow : (named ?? untitled);
     // A known row header with no name says so, muted, in place of an empty cell.
@@ -1614,8 +1645,10 @@ export function DataGrid<Row>({
         role="row"
         aria-rowindex={item.index + 2}
         aria-selected={isSelected}
+        aria-current={isOpen ? 'true' : undefined}
         className={styles.row}
         data-selected={isSelected || undefined}
+        data-open={isOpen || undefined}
         data-editing={editing?.row === row || undefined}
         style={{ '--row-offset': `${String(item.start - HEADER - rowShift)}px` }}
       >
@@ -1668,6 +1701,7 @@ export function DataGrid<Row>({
               {...(each.column.id === rowHeader && id !== undefined && rowNotes?.get(id) !== undefined
                 ? { note: rowNotes.get(id) }
                 : {})}
+              {...(each.column.id === rowHeader && comments !== undefined && comments > 0 ? { comments } : {})}
               isFocused={isFocusedAt(row, place.col)}
               isActive={isWithin && isFocusedAt(row, place.col)}
               isInRange={isInRange(range, row, place.col)}

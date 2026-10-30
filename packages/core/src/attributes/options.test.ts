@@ -207,6 +207,28 @@ describe('creating an option (AC-236, AC-244)', () => {
     expect(first).toMatchObject({ label: 'Lead', hue: 'gray', outcome: 'open' });
   });
 
+  it('puts a new open stage before the end stages (Won, Lost), and a new end stage last', async () => {
+    const { scope, projects } = await workspace();
+    const stage = await createAttribute(scope, {
+      objectId: projects,
+      id: newId(),
+      title: 'Stage',
+      type: 'status',
+      options: [
+        { id: newId(), label: 'Lead', hue: 'gray', outcome: 'open' },
+        { id: newId(), label: 'Won', hue: 'green', outcome: 'won' },
+        { id: newId(), label: 'Lost', hue: 'red', outcome: 'lost' },
+      ],
+    });
+    const proposal = await createOption(scope, { attributeId: stage.id, id: newId(), label: 'Proposal' });
+    expect(proposal).toMatchObject({ label: 'Proposal', outcome: 'open', position: 1 });
+    const bought = await createOption(scope, { attributeId: stage.id, id: newId(), label: 'Renewed', outcome: 'won' });
+    expect(bought.position).toBe(4);
+    const order = (await listObjectAttributes(scope, projects)).find((each) => each.id === stage.id)?.options ?? [];
+    expect(order.map((option) => option.label)).toEqual(['Lead', 'Proposal', 'Won', 'Lost', 'Renewed']);
+    expect(order.map((option) => option.position)).toEqual([0, 1, 2, 3, 4]);
+  });
+
   it('refuses a label a live option holds (ignoring case) on the label, but not an archived one’s', async () => {
     const { scope, projects } = await workspace();
     const tier = await selectWith(scope, projects, ['Silver', 'Platinum']);

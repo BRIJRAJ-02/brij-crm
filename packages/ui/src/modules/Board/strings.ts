@@ -6,6 +6,8 @@ export const strings = {
   cardsAtLeast: (count: string) => `${count} or more cards`,
   atLeast: (count: string) => `${count}+`,
   noCards: 'No cards',
+  /** What a card's comment count counts, read after the number. */
+  openThreads: (count: number) => (count === 1 ? 'open comment thread' : 'open comment threads'),
   /** The column head's "+": names the column it adds to. */
   addCard: (column: string) => `Add to ${column}`,
   /** A column folded into a strip, and opened again. */
