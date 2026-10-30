@@ -47,6 +47,8 @@ export interface NoteListProps {
   readonly emptyTitle?: string;
   /** The line under `emptyTitle`. */
   readonly emptyBody?: string;
+  /** The empty state's action, under its words ("New note"), so the way to start is where the eye lands. */
+  readonly emptyActions?: ReactNode;
   /** Drawn above the list in every state ("New note"). */
   readonly toolbar?: ReactNode;
 }
@@ -91,6 +93,7 @@ function NoteListContent({
   onRetry,
   emptyTitle,
   emptyBody,
+  emptyActions,
 }: Omit<NoteListProps, 'toolbar'>) {
   const showSkeleton = useDelayedLoading(status === 'loading');
   const onShown = useRangeReporter(notes);
@@ -124,7 +127,11 @@ function NoteListContent({
   }
   if (rows.length === 0) {
     return (
-      <EmptyState icon="notebook" title={emptyTitle ?? strings.empty}>
+      <EmptyState
+        icon="notebook"
+        title={emptyTitle ?? strings.empty}
+        {...(emptyActions === undefined ? {} : { actions: emptyActions })}
+      >
         {emptyBody ?? (emptyTitle === undefined ? strings.emptyBody : undefined)}
       </EmptyState>
     );

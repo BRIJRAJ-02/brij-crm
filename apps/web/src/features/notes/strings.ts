@@ -5,8 +5,6 @@ export const strings = {
   untitled: 'Untitled note',
   /** The Notes tab with none yet. */
   noNotes: 'No notes yet',
-  /** Under No notes yet, for someone who can add one. */
-  noNotesText: 'Write the first one.',
   listLabel: 'Notes',
   // The note window.
   note: 'Note',

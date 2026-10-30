@@ -179,6 +179,7 @@ describe('restoring (AC-534)', () => {
       restored: 1,
       refused: 1,
       refusedIds: [idAt(1)],
+      reasons: ['Another record now has Email ada@acme.com.'],
       objectIds: [PEOPLE],
     });
     frame();

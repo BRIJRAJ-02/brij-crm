@@ -1,6 +1,7 @@
 // Brief
 // Purpose: add one record of any object (a person, a project) without leaving the table.
 // Main task: fill the name and every required field, open "Add more fields" for the rest, then Create; the row shows at once.
+// "Create more" keeps the dialog open, emptied, for the next one.
 // Leaves out: references (linked in the table), duplicate checks and templates.
 import {
   isDataError,
@@ -10,7 +11,7 @@ import {
   type AttributeDefinition,
   type RecordView,
 } from '@crm/data';
-import { AttributeEditor, Button, Disclosure, Form, Modal, type FormRefusal } from '@crm/ui';
+import { AttributeEditor, Button, Disclosure, Form, Modal, Switch, type FormRefusal } from '@crm/ui';
 import { useId, useRef, useState } from 'react';
 import type { MemberPicker } from '../records/members.ts';
 import { strings } from './strings.ts';
@@ -35,8 +36,11 @@ export interface NewRecordDialogProps {
   readonly newId: () => string;
   /** Makes the record (optimistic: the row is in the table while this waits); rejects with the refusals. */
   readonly onCreate: (id: string, values: Readonly<Record<string, unknown>>) => Promise<RecordView>;
-  /** The server made it: close, and focus its row. */
-  readonly onCreated: (record: RecordView) => void;
+  /**
+   * The server made it: say so, and with `keepOpen` false close and focus its row. With "Create more" on,
+   * `keepOpen` is true: the dialog stays, its fields emptied and the first focused, for the next record.
+   */
+  readonly onCreated: (record: RecordView, keepOpen: boolean) => void;
   /**
    * Values set before anything is typed, by attribute id, sent as if typed (a board column's "+" sets its option;
    * `null` clears a default, for its "No <field>" column).
@@ -147,6 +151,10 @@ export function NewRecordDialog({
 }: NewRecordDialogProps) {
   const formId = useId();
   const [isBusy, setBusy] = useState(false);
+  // "Create more", kept across openings while the screen stays, as Attio keeps it.
+  const [isCreatingMore, setCreatingMore] = useState(false);
+  // Each record made with "Create more" on starts the form afresh: a new id, defaults, focus on the first field.
+  const [round, setRound] = useState(0);
   // Each opening starts idle; the fields start afresh because the Modal mounts them afresh.
   const [wasOpen, setWasOpen] = useState(isOpen);
   if (isOpen !== wasOpen) {
@@ -162,6 +170,9 @@ export function NewRecordDialog({
         if (!open && isBusy) return;
         onOpenChange(open);
       }}
+      footerStart={
+        <Switch label={strings.createMore} isSelected={isCreatingMore} onChange={setCreatingMore} isDisabled={isBusy} />
+      }
       actions={
         <>
           <Button slot="close" isDisabled={isBusy} kbd="ESC">
@@ -174,6 +185,7 @@ export function NewRecordDialog({
       }
     >
       <NewRecordForm
+        key={round}
         formId={formId}
         label={title}
         singularName={singularName}
@@ -185,7 +197,10 @@ export function NewRecordDialog({
         isBusy={isBusy}
         onBusyChange={setBusy}
         onCreate={onCreate}
-        onCreated={onCreated}
+        onCreated={(record) => {
+          if (isCreatingMore) setRound((now) => now + 1);
+          onCreated(record, isCreatingMore);
+        }}
         {...(preset === undefined ? {} : { preset })}
       />
     </Modal>
@@ -195,8 +210,9 @@ export function NewRecordDialog({
 /** Props for the dialog's form. */
 interface NewRecordFormProps extends Pick<
   NewRecordDialogProps,
-  'first' | 'more' | 'onCreate' | 'onCreated' | 'singularName' | 'newId' | 'objectKey' | 'memberPicker' | 'preset'
+  'first' | 'more' | 'onCreate' | 'singularName' | 'newId' | 'objectKey' | 'memberPicker' | 'preset'
 > {
+  readonly onCreated: (record: RecordView) => void;
   readonly formId: string;
   readonly label: string;
   readonly isBusy: boolean;

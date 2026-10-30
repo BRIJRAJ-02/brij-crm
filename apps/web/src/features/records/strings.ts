@@ -29,6 +29,18 @@ export const strings = {
   viewAll: 'View all',
   /** Recent activity's "View all" by its full name, apart from Open tasks' beside it. */
   viewAllActivity: 'View all activity',
+  /** The trashed banner's action, for someone who may change the object (the Trash screen's rule). */
+  restore: 'Restore',
+  restoring: 'Restoring…',
+  restored: (name: string) => `Restored ${name}.`,
+  restoreFailed: 'Couldn’t restore it. Try again in a moment.',
+  /** The header's More menu: Copy link, and Delete for someone who may change the object. */
+  more: 'More actions',
+  deleteRecord: (singularName: string) => `Delete ${singularName.toLowerCase()}`,
+  /** Delete's confirm: the question, what happens, and the verb. */
+  /** A record on an object the person may only read: a Badge in the header, and why on its lock. */
+  viewOnly: 'View only',
+  viewOnlyReason: (pluralName: string) => `You can view ${pluralName} but not edit them. Ask an admin.`,
   copyLink: 'Copy link',
   linkCopied: 'Link copied',
   copyFailed: 'Couldn’t copy the link. Copy it from the address bar.',

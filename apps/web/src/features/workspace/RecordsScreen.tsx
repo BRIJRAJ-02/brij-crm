@@ -51,6 +51,7 @@ import { useBulkActions, useTableSelection } from './BulkActions.tsx';
 import type { ShownColumn, ShownLayout } from '../views/layout.ts';
 import { avatarAttribute } from './columns.ts';
 import { groupingGap, groupPlan, useGroupedRows } from './grouped.ts';
+import { createdToast } from './created.ts';
 import { NewRecordDialog } from './NewRecordDialog.tsx';
 import { strings } from './strings.ts';
 import { editToast, isClear } from './undo.ts';
@@ -731,7 +732,17 @@ export function RecordsScreen({
               singularName={object.singularName}
               objectKey={objectKey}
               memberPicker={memberPicker}
-              onCreated={(record) => {
+              onCreated={(record, keepOpen) => {
+                toasts.toast(
+                  createdToast(record, object.singularName, () => {
+                    void navigate({
+                      to: '/w/$slug/objects/$object/$recordId/$tab',
+                      params: { slug, object: object.apiSlug, recordId: record.id, tab: 'overview' },
+                    });
+                  }),
+                );
+                // "Create more" keeps the dialog, and focus in it, for the next record.
+                if (keepOpen) return;
                 setCreating(false);
                 // A record made here sits first (spec 0006, AC-56).
                 const index = view.indexOf(record.id) ?? 0;

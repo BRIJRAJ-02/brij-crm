@@ -22,10 +22,12 @@ import {
   matchCommands,
   orderSections,
   pageCommands,
+  recordCommands,
   settingsCommands,
   viewHref,
   type Command,
   type CommandMode,
+  type CommandRecord,
   type SectionId,
 } from './commands.ts';
 import { strings } from './strings.ts';
@@ -39,6 +41,8 @@ export interface CommandMenuProps {
   readonly mode: CommandMode;
   readonly isOpen: boolean;
   readonly onOpenChange: (isOpen: boolean) => void;
+  /** The record page open now: its New note and New task lead Actions. */
+  readonly record?: CommandRecord;
 }
 
 /**
@@ -47,7 +51,7 @@ export interface CommandMenuProps {
  * matched here as they type. Records and views come from the server through
  * `data.search`, and nothing enters the record store (AC-1100).
  */
-export function CommandMenu({ slug, mode, isOpen, onOpenChange }: CommandMenuProps) {
+export function CommandMenu({ slug, mode, isOpen, onOpenChange, record }: CommandMenuProps) {
   const { data, theme, toasts } = useRouteContext({ from: '__root__' });
   const loaded = useMatch({ from: '/w/$slug', shouldThrow: false, select: (match) => match.loaderData });
   const objects = useMemo(() => loaded?.objects ?? [], [loaded?.objects]);
@@ -72,13 +76,16 @@ export function CommandMenu({ slug, mode, isOpen, onOpenChange }: CommandMenuPro
   const actions = useMemo(
     () =>
       mode === 'commands'
-        ? actionCommands(slug, objects, {
-            ...(here === undefined ? {} : { object: here }),
-            ...(viewId === undefined ? {} : { viewId }),
-            canInvite,
-          })
+        ? [
+            ...recordCommands(record),
+            ...actionCommands(slug, objects, {
+              ...(here === undefined ? {} : { object: here }),
+              ...(viewId === undefined ? {} : { viewId }),
+              canInvite,
+            }),
+          ]
         : [],
-    [mode, slug, objects, here, viewId, canInvite],
+    [mode, slug, objects, here, viewId, canInvite, record],
   );
   // Invite members opens the one Invite dialog over the page, as Home's setup step does.
   const [isInviting, setInviting] = useState(false);

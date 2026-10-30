@@ -98,6 +98,8 @@ export interface TaskListProps {
   readonly emptyTitle?: string;
   /** The line under `emptyTitle`. */
   readonly emptyBody?: string;
+  /** The empty state's action, under its words ("New task"), so the way to start is where the eye lands. */
+  readonly emptyActions?: ReactNode;
   /** The inline layout's most rows (10 by default); a list in a scrolling slot passes more and pages as it shows them. */
   readonly maxRows?: number;
   /**
@@ -191,6 +193,7 @@ export function TaskList({
   newIds,
   emptyTitle,
   emptyBody,
+  emptyActions,
   maxRows = INLINE_TASKS,
   toolbar,
   footer,
@@ -221,6 +224,7 @@ export function TaskList({
       {...(newIds === undefined ? {} : { newIds })}
       {...(emptyTitle === undefined ? {} : { emptyTitle })}
       {...(emptyBody === undefined ? {} : { emptyBody })}
+      {...(emptyActions === undefined ? {} : { emptyActions })}
     />
   );
   const content =
@@ -278,6 +282,7 @@ function TaskListContent({
   newIds,
   emptyTitle,
   emptyBody,
+  emptyActions,
   maxRows = INLINE_TASKS,
   isFramed = false,
 }: Omit<TaskListProps, 'toolbar' | 'footer' | 'onShowMore' | 'isLoadingMore'> & {
@@ -338,6 +343,7 @@ function TaskListContent({
         title={emptyTitle ?? strings.empty}
         // A list drawn in place, or with a quick add above and more under it, says so in one row of its own size.
         layout={isInline || isFramed ? 'row' : 'block'}
+        {...(emptyActions === undefined ? {} : { actions: emptyActions })}
       >
         {emptyBody ?? (emptyTitle === undefined ? strings.emptyBody : undefined)}
       </EmptyState>

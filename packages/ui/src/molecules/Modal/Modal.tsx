@@ -55,6 +55,11 @@ export interface ModalProps {
    * obvious ("It goes to the end of the section. Drag it anywhere afterwards."). Needs `actions`.
    */
   readonly hint?: ReactNode;
+  /**
+   * A control at the start of the footer, before the buttons: a choice about what the primary does next (New
+   * record's "Create more" Switch). Needs `actions`; takes the place of `hint`.
+   */
+  readonly footerStart?: ReactNode;
   readonly variant?: ModalVariant;
   /**
    * A wider window (`size-dialog-wide` plus a `size-column`, 980px), for a reference laid out as a settings page:
@@ -118,6 +123,7 @@ export function Modal({
   children,
   actions,
   hint,
+  footerStart,
   variant = 'dialog',
   isWide = false,
   icon,
@@ -205,7 +211,11 @@ export function Modal({
           </InPopover>
           {actions !== undefined && (
             <div className={styles.foot}>
-              {hint !== undefined && <p className={styles.hint}>{hint}</p>}
+              {footerStart !== undefined ? (
+                <div className={styles.footerStart}>{footerStart}</div>
+              ) : (
+                hint !== undefined && <p className={styles.hint}>{hint}</p>
+              )}
               {actions}
             </div>
           )}

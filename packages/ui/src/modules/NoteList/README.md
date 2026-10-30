@@ -29,6 +29,7 @@ New (spec 0019). No list in the library shows a document summary (a title, a two
 - The order is the screen's (last edited first).
 - `toolbar` draws above the list in every state, so "New note" is there when the list is empty or failed.
 - `emptyTitle` and `emptyBody` say what an empty list means in the screen's own words.
+- `emptyActions` puts the way to start inside the empty state, under its words (a record's "New note"), as Attio and Twenty do; the screen then leaves its toolbar's New note out while the list is empty, so there is one button, where the eye lands. Why a prop: the toolbar's button sat away from the empty words that asked for it.
 - `status`: `loading` (skeleton rows after the loading delay), `error` (with Try again from `onRetry`), or `no-access`.
 - Give it a slot with a height: it scrolls inside it. Rows not loaded yet draw as skeletons, and `onRangeChange` hears which range is on screen.
 

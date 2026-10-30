@@ -82,7 +82,7 @@ test('tasks on a record: quick add, the dialog, links, ticks and the timeline, l
   const reader = await readerContext.newPage();
   await signInAgain(reader, email, tasksPath, [code]);
   const readerList = reader.getByRole('grid', { name: 'Open tasks' });
-  await expect(reader.getByText('No open tasks. Add one above.')).toBeVisible();
+  await expect(reader.getByText('No open tasks', { exact: true })).toBeVisible();
 
   // Quick add on the Tasks tab: it shows first, marked new, and the field keeps focus (AC-432).
   await page.getByRole('tab', { name: /Tasks/ }).click();
@@ -143,7 +143,7 @@ test('tasks on a record: quick add, the dialog, links, ticks and the timeline, l
   await reader.getByRole('checkbox', { name: 'Mark “Send the proposal” as done' }).click({ force: true });
   await expect(reader.getByRole('checkbox', { name: 'Mark “Send the proposal” as done' })).toBeChecked();
   if (!isLive) await page.reload();
-  await expect(page.getByText('No open tasks. Add one above.')).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText('No open tasks', { exact: true })).toBeVisible({ timeout: 10_000 });
   await page.getByRole('button', { name: /Completed/ }).click();
   await expect(
     page.getByRole('grid', { name: 'Completed' }).getByRole('row', { name: /Send the proposal/ }),
