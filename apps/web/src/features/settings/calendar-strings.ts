@@ -1,5 +1,6 @@
 // Settings › Scheduling › Calendars: the page's copy (spec 0024), apart from the other settings pages' own.
 import type { CalendarStatus } from '@crm/data';
+import type { ConnectResult } from './connect-result.ts';
 
 /** Settings › Scheduling › Calendars: the page's copy (spec 0024, AC-597, AC-599, AC-611, AC-621). */
 export const strings = {
@@ -148,13 +149,5 @@ export const strings = {
       title: 'Calendar not connected',
       text: 'Something went wrong on the way back from your calendar. Try again.',
     },
-  },
+  } as const satisfies Record<ConnectResult, unknown>,
 } as const;
-
-/** What the browser came back with, as `?calendar=` names it. */
-export type ConnectResult = keyof typeof strings.results;
-
-/** True when `value` is one of the results the connect routes send back. */
-export function isConnectResult(value: unknown): value is ConnectResult {
-  return typeof value === 'string' && Object.hasOwn(strings.results, value);
-}
