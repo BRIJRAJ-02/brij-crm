@@ -594,6 +594,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       list: os.notes.list.handler(notServed),
       delete: os.notes.delete.handler(notServed),
       restore: os.notes.restore.handler(notServed),
+      link: os.notes.link.handler(notServed),
     },
     comments: {
       list: os.comments.list.handler(notServed),

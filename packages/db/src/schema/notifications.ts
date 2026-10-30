@@ -37,6 +37,7 @@ export const notificationKind = pgEnum('notification_kind', [
   'task_assigned',
   'form_submission',
   'join_request',
+  'task_due',
 ]);
 
 const actor = actorColumns('actor');
@@ -105,12 +106,12 @@ export const notifications = pgTable(
       columns: [t.workspaceId, t.submissionId],
       foreignColumns: [formSubmissions.workspaceId, formSubmissions.id],
     }).onDelete('cascade'),
-    // A comment notification names its comment, thread and record; a task one its task; a note mention its note
+    // A comment notification names its comment, thread and record; a task one (assigned or due) its task; a note mention its note
     // and record; a submission one its submission (and its record, once filed); a join request its request
     // alone. Kinds compare as text (0130, 0131): each value was added in its own migration's transaction.
     check(
       'notifications_subject',
-      sql`(${t.kind}::text = 'task_assigned' and ${t.taskId} is not null and ${t.commentId} is null
+      sql`(${t.kind}::text in ('task_assigned', 'task_due') and ${t.taskId} is not null and ${t.commentId} is null
           and ${t.noteId} is null and ${t.submissionId} is null and ${t.joinRequestId} is null)
         or (${t.kind}::text in ('mention', 'reply') and ${t.commentId} is not null and ${t.threadId} is not null
           and ${t.recordId} is not null and ${t.taskId} is null and ${t.noteId} is null and ${t.submissionId} is null
@@ -124,7 +125,7 @@ export const notifications = pgTable(
           and ${t.threadId} is null and ${t.commentId} is null and ${t.taskId} is null and ${t.noteId} is null
           and ${t.submissionId} is null)`,
     ),
-    // One per recipient per comment, and per task assignment.
+    // One per recipient per comment, and per task (its assignment, which turns into its due day: migration 0135).
     uniqueIndex('notifications_one_per_comment')
       .on(t.workspaceId, t.memberId, t.commentId)
       .where(sql`${t.commentId} is not null`),

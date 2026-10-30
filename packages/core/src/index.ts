@@ -295,7 +295,10 @@ export { changeNav, readNav } from './navigation/navigation.ts';
 export {
   deleteNote,
   getNote,
+  linkNote,
   listNotes,
+  NOTE_LINK_FORBIDDEN,
+  NOTE_LINKS_FULL,
   NOTE_READ_ONLY,
   restoreNote,
   saveNote,

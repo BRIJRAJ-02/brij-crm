@@ -120,6 +120,10 @@ async function withAttachedWork(context: WriteContext, recordIds: readonly strin
     select l.record_id::text from task_records l
     join tasks t on t.workspace_id = l.workspace_id and t.id = l.task_id and t.deleted_at is null
     where l.workspace_id = ${context.scope.workspaceId} and l.record_id = any(${ids})
+    union
+    select l.record_id::text from note_records l
+    join notes n on n.workspace_id = l.workspace_id and n.id = l.note_id and n.deleted_at is null
+    where l.workspace_id = ${context.scope.workspaceId} and l.record_id = any(${ids})
   `);
   return new Set(found.rows.map((row) => row.id));
 }

@@ -92,6 +92,11 @@ export interface NoteChange {
   readonly recordId: string;
   /** The record's object: the row names it, so the event reaches only those who may see the object. */
   readonly objectId: string;
+  /**
+   * A record the note links besides its own (migration 0135): its row names the record, never the note, since only
+   * the note's own record decides who may know of it.
+   */
+  readonly linked?: boolean;
 }
 
 /**

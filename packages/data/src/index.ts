@@ -688,8 +688,8 @@ export type {
   TaskSubscription,
   TaskSubscriptionState,
 } from './tasks/store.ts';
-export { TASK_COUNT_CAP, TASK_RECORDS_MAX, TASK_TITLE_MAX } from '@crm/contracts/task-limits';
-export { NOTE_TITLE_MAX, NOTE_TOO_LONG } from '@crm/contracts/note-limits';
+export { TASK_COUNT_CAP, TASK_DESCRIPTION_MAX, TASK_RECORDS_MAX, TASK_TITLE_MAX } from '@crm/contracts/task-limits';
+export { NOTE_RECORDS_MAX, NOTE_TITLE_MAX, NOTE_TOO_LONG } from '@crm/contracts/note-limits';
 export type {
   NoteList,
   NoteListState,
@@ -3165,6 +3165,17 @@ export function createDataLayer({
             ),
           delete: (input) => call((options) => api.notes.delete({ ...input }, options)),
           restore: (input) => call((options) => api.notes.restore({ ...input }, options)),
+          link: ({ addRecordIds, removeRecordIds, ...input }) =>
+            call((options) =>
+              api.notes.link(
+                {
+                  ...input,
+                  ...(addRecordIds === undefined ? {} : { addRecordIds: [...addRecordIds] }),
+                  ...(removeRecordIds === undefined ? {} : { removeRecordIds: [...removeRecordIds] }),
+                },
+                options,
+              ),
+            ),
         },
         mintId,
         mutations,

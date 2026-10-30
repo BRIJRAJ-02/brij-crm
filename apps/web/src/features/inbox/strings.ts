@@ -11,6 +11,8 @@ export const strings = {
   mentions: 'Mentions',
   replies: 'Replies',
   assignments: 'Assignments',
+  /** Tasks of theirs due today (migration 0135). */
+  dueToday: 'Due today',
   submissions: 'Form submissions',
   /** A submission's form whose name didn't come with it. */
   someForm: 'A form',

@@ -23,6 +23,12 @@ export const strings = {
   linkCopied: 'Link copied',
   copyFailed: 'Couldn’t copy the link. Copy it from the address bar.',
   deleteNote: 'Delete note',
+  /** The More menu's way to link the note to other records (migration 0135), and the field that holds them. */
+  linkRecord: 'Link record',
+  linkedRecords: 'Linked records',
+  linkForbidden: 'You can’t link a note to a record you can’t change.',
+  linksFull: (max: number) => `A note links at most ${String(max)} records.`,
+  searchFailed: 'The search didn’t answer. Type again to try again.',
   noteDeleted: 'Note deleted',
   undo: 'Undo',
   notDeleted: 'The note wasn’t deleted.',

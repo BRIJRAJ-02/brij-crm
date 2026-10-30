@@ -18,6 +18,7 @@ const ada: RecordRefDisplay = { objectId: 'o2', recordId: ADA, name: 'Ada', kind
 const task = (n: number, extra: Partial<TaskView> = {}): TaskView => ({
   id: `0199a6f2-0000-7000-8000-0000000001${String(n).padStart(2, '0')}`,
   title: `Task ${String(n)}`,
+  description: '',
   isDone: false,
   records: [acme],
   recordCount: 1,

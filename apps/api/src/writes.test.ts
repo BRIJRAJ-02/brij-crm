@@ -1319,6 +1319,39 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
       { kind: 'notes', object_id: m.people.id, item_ids: [note.id], record_ids: [record.id], mutation_id: mutationId },
     ];
   },
+  // A note's links (migration 0135): one notes row per object, naming every record linked before or after.
+  'notes.link': async (m, mutationId) => {
+    const made = async (firstName: string) =>
+      m.client.records.create({
+        workspace: m.slug,
+        objectId: m.people.id,
+        id: newId(),
+        values: { [m.attribute('name')]: { firstName } },
+        mutationId: newId(),
+      });
+    const home = await made('Ada');
+    const other = await made('Bea');
+    const { note } = await m.client.notes.save({
+      workspace: m.slug,
+      id: newId(),
+      recordId: home.id,
+      title: 'Both',
+      mutationId: newId(),
+    });
+    await m.client.notes.link({ workspace: m.slug, noteId: note.id, addRecordIds: [other.id], mutationId });
+    return [
+      { kind: 'records', record_ids: [home.id] },
+      { kind: 'records', record_ids: [other.id] },
+      { kind: 'notes', item_ids: [note.id] },
+      {
+        kind: 'notes',
+        object_id: m.people.id,
+        item_ids: [note.id],
+        record_ids: [home.id, other.id].sort(),
+        mutation_id: mutationId,
+      },
+    ];
+  },
   // Calendar sync (spec 0024): a sharing change names the connection's meetings and their records; so does a
   // disconnect, for the meetings it removed. Each also names the member in a `calendars` row, so their other tabs
   // read their connections again.
@@ -2325,6 +2358,7 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'notes.save': 2,
   'notes.delete': 3,
   'notes.restore': 4,
+  'notes.link': 4,
   'comments.create': 2,
   'comments.update': 3,
   'comments.delete': 3,

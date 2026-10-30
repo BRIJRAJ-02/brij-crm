@@ -11,8 +11,8 @@ Spec 0019, milestones 3 and 4: notes on a record. The side panel's Notes tab wai
 ## The note window (NoteWindow)
 
 - **Purpose**: one note, on `?note=<id>` (or `?note=new`) over whichever tab opened it, written as a page (Notion's centre peek) and saving itself as it is typed.
-- **Main task**: write what was learned, and trust that it's saved.
-- **Leaves out**: versions and shared editing (#27), moving a note to another record, a page of its own (so no "Open as full page": there is no note route).
+- **Main task**: write what was learned, and trust that it's saved; link the other records it is about.
+- **Leaves out**: versions and shared editing (#27), moving a note to another record (its own record stays and decides who sees it), a page of its own (so no "Open as full page": there is no note route).
 
 ## Notes
 
@@ -27,4 +27,5 @@ Spec 0019, milestones 3 and 4: notes on a record. The side panel's Notes tab wai
 - Esc closes an open list or the selection toolbar first, then the window, as a click outside does. Closing with a save pending closes at once; the save finishes in the data layer, and if it then fails a toast offers "Open note". While any note has unsaved changes, leaving the page asks first.
 - "Delete note" in the window's More menu asks first (the owner's rule of 21 October 2026, since a deleted note can't come back from the Trash): "Delete <title>?" ("Delete this note?" untitled), Cancel or Esc changes nothing, and Delete note waits for the server, a refusal staying in the confirm with its reason. Once it lands, both close, the note leaves every list, and "Note deleted" offers Undo for 10 seconds (`delete.ts`).
 - A note in the timeline reads "added a note" with its title ("Untitled note" when it has none) and the start of its text, which opens the window.
+- A note links up to 19 other records besides its own (migration 0135). "Link record" in the More menu shows the Linked records field (the task dialog's Records field: chips with Remove, a picker over the objects the person may change) with its picker open; once a note links any, the field stays under the bar. Each linked record's Notes tab lists the note and its Activity reads "added a note" at the moment it was linked. Opened from a linked record, the bar's crumb names the note's own record, which still decides who may see and change it: a note linked to a record you can see from one you can't stays absent. Its own record can't be unlinked.
 - Every string is in `strings.ts`.

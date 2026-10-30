@@ -1,9 +1,10 @@
 // Brief
 // Purpose: everything about one task, on `?task=<id>` (or `?task=new`) over the page it opened from.
-// Main task: set its title, when it's due, who has it and which records it is about.
-// Leaves out: comments on tasks, reminders (#28), subtasks.
+// Main task: set its title and what it means, when it's due, who has it and which records it is about.
+// Leaves out: comments on tasks, rich text in the description, reminders beyond the due day's inbox notice, subtasks.
 import {
   refusalSummary,
+  TASK_DESCRIPTION_MAX,
   TASK_RECORDS_MAX,
   TASK_TITLE_MAX,
   searchMembers,
@@ -36,7 +37,7 @@ import {
   type FieldAttribute,
 } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
-import { useEffect, useId, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { memberDisplay } from './entries.ts';
 import { deleteWithUndo } from './undo-delete.ts';
 import { taskCreatedToast } from './toasts.ts';
@@ -86,7 +87,7 @@ function failedTask(retry: () => void): TaskSubscription {
 }
 
 /** Which field a refusal shows under. */
-type FieldName = 'title' | 'isDone' | 'dueOn' | 'assignee' | 'records';
+type FieldName = 'title' | 'description' | 'isDone' | 'dueOn' | 'assignee' | 'records';
 
 /** The dialog's attributes, through the field set's own editors (one field design, house rule 3). */
 function attributeOf(
@@ -112,6 +113,7 @@ function attributeOf(
 interface TaskFieldsProps {
   readonly slug: string;
   readonly title: string;
+  readonly description: string;
   readonly isDone?: boolean;
   readonly dueOn: string | undefined;
   readonly assigneeMemberId: string | undefined;
@@ -125,12 +127,15 @@ interface TaskFieldsProps {
   readonly onChange: (change: TaskChange) => void;
   /** The title as typed, before it is committed (a new task holds it). */
   readonly onTitleInput?: (title: string) => void;
+  /** The description as typed, before it is committed (a new task holds it). */
+  readonly onDescriptionInput?: (description: string) => void;
 }
 
-/** The title, Done (a saved task only), due date, assignee and records, each through its one editor. */
+/** The title, description, Done (a saved task only), due date, assignee and records, each through its one editor. */
 function TaskFields({
   slug,
   title,
+  description,
   isDone,
   dueOn,
   assigneeMemberId,
@@ -143,8 +148,31 @@ function TaskFields({
   errors,
   onChange,
   onTitleInput,
+  onDescriptionInput,
 }: TaskFieldsProps) {
   const [draft, setDraft] = useState(title);
+  // The description, as the title: a change from elsewhere shows only when the person isn't typing over it.
+  const [descriptionDraft, setDescriptionDraft] = useState(description);
+  const [shownDescription, setShownDescription] = useState(description);
+  if (description !== shownDescription) {
+    setShownDescription(description);
+    if (descriptionDraft === shownDescription) setDescriptionDraft(description);
+  }
+  const commitDescription = () => {
+    const trimmed = descriptionDraft.trim();
+    if (trimmed !== description) onChange({ description: trimmed });
+  };
+  // A saved task's description typed and then closed with Esc (no blur on the way out) is still saved.
+  const commitOnClose = useRef<() => void>(() => undefined);
+  useEffect(() => {
+    commitOnClose.current = isDone === undefined ? () => undefined : commitDescription;
+  });
+  useEffect(() => {
+    const latest = commitOnClose;
+    return () => {
+      latest.current();
+    };
+  }, []);
   // A change from elsewhere (live, or a refusal putting it back) shows only when the person isn't typing over it.
   const [shownTitle, setShownTitle] = useState(title);
   if (title !== shownTitle) {
@@ -197,6 +225,20 @@ function TaskFields({
         isRequired
         {...(readOnlyReason === undefined ? {} : { isReadOnly: true, readOnlyReason })}
         {...(shownTitleError === undefined ? {} : { error: shownTitleError })}
+      />
+      <Field
+        label={strings.description}
+        value={descriptionDraft}
+        onChange={(next) => {
+          setDescriptionDraft(next);
+          onDescriptionInput?.(next);
+        }}
+        onBlur={commitDescription}
+        isMultiline
+        maxLength={TASK_DESCRIPTION_MAX}
+        showCounter
+        {...(readOnlyReason === undefined ? {} : { isReadOnly: true, readOnlyReason })}
+        {...(errors.description === undefined ? {} : { error: errors.description })}
       />
       {isDone !== undefined && (
         <Checkbox
@@ -293,6 +335,7 @@ function TaskFields({
 /** A refusal's words, under the field the change named (the first one it touched). */
 function fieldOf(change: TaskChange): FieldName {
   if (change.title !== undefined) return 'title';
+  if (change.description !== undefined) return 'description';
   if (change.isDone !== undefined) return 'isDone';
   if (change.dueOn !== undefined) return 'dueOn';
   if (change.assigneeMemberId !== undefined) return 'assignee';
@@ -417,6 +460,7 @@ function SavedTask({
         <TaskFields
           slug={slug}
           title={task.title}
+          description={task.description}
           isDone={task.isDone}
           dueOn={task.dueOn}
           assigneeMemberId={task.assigneeMemberId}
@@ -463,6 +507,7 @@ function NewTask({
   // One id per opening, sent again on Retry.
   const [id] = useState(() => data.tasks.newId());
   const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
   const [dueOn, setDueOn] = useState<string | undefined>(undefined);
   const [assignee, setAssignee] = useState<string | undefined>(meId);
   const [records, setRecords] = useState<readonly RecordRefDisplay[]>(pageRecord === undefined ? [] : [pageRecord]);
@@ -476,6 +521,7 @@ function NewTask({
     void data.tasks.create(slug, {
       id,
       title: trimmed,
+      ...(description.trim() === '' ? {} : { description: description.trim() }),
       ...(dueOn === undefined ? {} : { dueOn }),
       ...(assignee === undefined ? {} : { assigneeMemberId: assignee }),
       records,
@@ -510,6 +556,7 @@ function NewTask({
         <TaskFields
           slug={slug}
           title={title}
+          description={description}
           dueOn={dueOn}
           assigneeMemberId={assignee}
           records={records}
@@ -522,8 +569,10 @@ function NewTask({
             setTitle(next);
             if (next.trim() !== '') setTitleError(undefined);
           }}
+          onDescriptionInput={setDescription}
           onChange={(change) => {
             if (change.title !== undefined) setTitle(change.title);
+            if (change.description !== undefined) setDescription(change.description);
             if (change.dueOn !== undefined) setDueOn(change.dueOn ?? undefined);
             if (change.assigneeMemberId !== undefined) setAssignee(change.assigneeMemberId ?? undefined);
             if (change.addRecords !== undefined || change.removeRecordIds !== undefined) {

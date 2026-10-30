@@ -21,6 +21,7 @@ export const strings = {
   task: 'Task',
   loading: 'Loading the task',
   title: 'Title',
+  description: 'Description',
   done: 'Done',
   dueDate: 'Due date',
   assignee: 'Assignee',

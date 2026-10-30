@@ -10,6 +10,7 @@ const members = [{ id: 'm1', name: 'Grace Hopper', email: 'grace@example.com' }]
 const task: TaskView = {
   id: '0199a6f2-0000-7000-8000-000000000001',
   title: 'Call back',
+  description: '',
   isDone: false,
   dueOn: '2026-10-20',
   assigneeMemberId: 'm1',

@@ -632,11 +632,11 @@ export async function unemailedNotifications(
     // unemailed here was waiting for a digest since turned off, or its own email was refused, so it goes in this one.
     const kinds: NotificationKind[] = (
       options.digest
-        ? (['mention', 'reply', 'task_assigned', 'form_submission'] as const)
+        ? (['mention', 'reply', 'task_assigned', 'task_due', 'form_submission'] as const)
         : [
             ...(settings.emailMentions ? (['mention'] as const) : []),
             ...(settings.emailReplies ? (['reply'] as const) : []),
-            ...(settings.emailAssignments ? (['task_assigned'] as const) : []),
+            ...(settings.emailAssignments ? (['task_assigned', 'task_due'] as const) : []),
             ...(settings.digest ? [] : (['form_submission'] as const)),
           ]
     ).filter((kind) => kind !== 'mention' || mentionsOn);

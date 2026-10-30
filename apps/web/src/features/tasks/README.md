@@ -17,8 +17,8 @@ Spec 0019: tasks on a record (milestone 1), My tasks (milestone 2) and deleting 
 ## The task dialog (TaskDialog)
 
 - **Purpose**: everything about one task, on `?task=<id>` (or `?task=new`) over whichever tab opened it.
-- **Main task**: set its title, when it's due, who has it and which records it is about.
-- **Leaves out**: comments on tasks, reminders, subtasks.
+- **Main task**: set its title and what it means (a plain text Description, up to 5,000 characters, saved on leaving the field), when it's due, who has it and which records it is about.
+- **Leaves out**: comments on tasks, rich text in the description, reminders beyond the due day's inbox notice (the daily cleanup tells the assignee once, on the UTC day it is due), subtasks.
 
 ## My tasks (MyTasksScreen)
 
