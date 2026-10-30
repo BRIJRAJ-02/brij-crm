@@ -37,7 +37,7 @@ export const MAX_READ_ATTRIBUTES = 250;
  * object's are ignored, not refused, so they reveal nothing. Absent reads
  * every attribute.
  */
-const ReadAttributeIds = z
+export const ReadAttributeIds = z
   .array(Uuid)
   .max(MAX_READ_ATTRIBUTES, `Read at most ${String(MAX_READ_ATTRIBUTES)} attributes at once.`);
 
@@ -48,7 +48,7 @@ const ReadAttributeIds = z
  * so two blocks never disagree about "today". The server's clock and UTC
  * when absent; an unknown zone is refused `FILTER_INVALID`.
  */
-const QueryClock = {
+export const QueryClock = {
   // Postgres has no year 0: a clock in 0000 would fail in the database rather than as an input problem.
   now: Timestamp.refine((value) => !value.startsWith('0000'), {
     error: 'Give a time from the year 0001 on.',
@@ -61,7 +61,7 @@ const QueryClock = {
  * ("today", "in the last 7 days") resolve where the person is (spec 0013).
  * UTC when absent; an unknown zone reads as UTC.
  */
-const WriteTimeZone = z.string().min(1).max(64).optional();
+export const WriteTimeZone = z.string().min(1).max(64).optional();
 
 /** The most records one `records.setValuesBatch` changes (spec 0006, AC-50); more is refused 422 `CONFIG_INVALID`. */
 export const MAX_BATCH_RECORDS = 500;
