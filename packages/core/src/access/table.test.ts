@@ -1580,6 +1580,9 @@ const DATA_CASES: Readonly<Record<string, DataCase>> = {
   ),
   deleteNote: refused('FORBIDDEN', (scope, world) => core.deleteNote(scope, { noteId: world.noteId })),
   restoreNote: refused('FORBIDDEN', (scope, world) => core.restoreNote(scope, { noteId: world.noteId })),
+  linkNote: refused('FORBIDDEN', (scope, world) =>
+    core.linkNote(scope, { noteId: world.noteId, addRecordIds: [world.recordId] }),
+  ),
 };
 
 describe('schema writes (AC-135)', () => {
