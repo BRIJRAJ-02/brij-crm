@@ -27,6 +27,7 @@ import {
   EmptyState,
   TopBar,
   ViewBar,
+  type BoardAddColumn,
   type BoardCard,
   type BoardColumn,
   type ListSource,
@@ -38,6 +39,8 @@ import {
 import { useNavigate, useRouteContext, useRouter } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useMemberPicker } from '../records/members.ts';
+import { stepsAround, type PeekControl, type PeekSteps } from '../records/params.ts';
+import { RecordPeek } from '../records/RecordPeek.tsx';
 import { useBoardTotals } from '../workspace/calcs.ts';
 import { AttributeDialog } from '../settings/AttributeDialog.tsx';
 import { NewRecordDialog } from '../workspace/NewRecordDialog.tsx';
@@ -45,6 +48,7 @@ import { createEditors } from '../workspace/create-editors.ts';
 import { CREATED_TOAST_MS, createdToast } from '../workspace/created.ts';
 import { strings as workspaceStrings } from '../workspace/strings.ts';
 import { useCan, WorkspacePage } from '../workspace/WorkspacePage.tsx';
+import { useCollapsedColumns } from './collapsed.ts';
 import type { BoardOutcome, BoardPlan } from './plan.ts';
 import { strings } from './strings.ts';
 
@@ -93,6 +97,8 @@ export interface BoardScreenProps {
   readonly onCreateRequestTaken?: () => void;
   /** Show empty columns turned on or off: saved with the view's board settings (AC-497). */
   readonly onShowEmptyColumnsChange: (show: boolean) => void;
+  /** The record panel (spec 0021, AC-509): a card opens its record beside the board, ↑ and ↓ step its column. */
+  readonly peek?: PeekControl;
 }
 
 /** One object's view as a board: the bars, then the board or why there is none. */
@@ -342,6 +348,10 @@ export function BoardScreen(props: BoardScreenProps) {
                 // Its column may be scrolled off or hidden while empty: say it was made, with a way to it.
                 toasts.toast(
                   createdToast(record, object.singularName, () => {
+                    if (props.peek !== undefined) {
+                      props.peek.open(record.id);
+                      return;
+                    }
                     void navigate({
                       to: '/w/$slug/objects/$object/$recordId/$tab',
                       params: { slug, object: object.apiSlug, recordId: record.id, tab: 'overview' },
@@ -422,12 +432,15 @@ const LOADING_CARDS: ListSource<BoardCard> = { count: 3, getItem: () => undefine
 function BoardBody({
   slug,
   object,
+  attributes,
   members,
   plan,
   query,
   onShowEmptyColumnsChange,
   onAnnounce,
   onAddCard,
+  peek,
+  currentViewId,
 }: BoardScreenProps & {
   readonly plan: BoardPlan;
   readonly onAnnounce: (text: string) => void;
@@ -439,6 +452,30 @@ function BoardBody({
     [plan.cardFields, plan.groupBy.id],
   );
   const store = useBoardStore(slug, object.id, plan, query, attributeIds);
+  const peekRecordId = peek?.recordId;
+  const { data, toasts } = useRouteContext({ from: '__root__' });
+  const canChangeSchema = useCan('schema.manage');
+  // "+ Add stage" (the CRM flow pass): for whoever may shape the schema, on a board grouped by a status or select
+  // they may write. The option is made through the path a Select's "Create" uses; the board gains its column once
+  // the attribute is read again, as any option change reaches it.
+  const addColumn: BoardAddColumn | undefined =
+    canChangeSchema && plan.groupKind === 'option' && plan.groupBy.readOnly === undefined
+      ? {
+          label: plan.groupBy.type === 'status' ? strings.addStage : strings.addOption,
+          onAdd: (title) => {
+            const making = data.options.make(slug, object.id, plan.groupBy.id, title);
+            if (making === undefined) return Promise.resolve();
+            return making.made.then(
+              () => undefined,
+              (error: unknown) => {
+                toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : strings.tryAgain });
+                throw error;
+              },
+            );
+          },
+        }
+      : undefined;
+  const collapsing = useCollapsedColumns(currentViewId);
   const fields = useMemo(
     () =>
       plan.cardFields.map((field) =>
@@ -477,12 +514,39 @@ function BoardBody({
       onShowEmptyChange={onShowEmptyColumnsChange}
       onAnnounce={onAnnounce}
       {...(onAddCard === undefined ? {} : { onAddCard })}
+      {...(addColumn === undefined ? {} : { addColumn })}
+      collapsedIds={collapsing.collapsedIds}
+      onCollapsedChange={collapsing.onCollapsedChange}
+      // A card opens its record beside the board (AC-509), its full page one press on from the panel.
       onOpen={(card) => {
+        if (peek !== undefined) {
+          peek.open(card.id);
+          return;
+        }
         void navigate({
           to: '/w/$slug/objects/$object/$recordId/$tab',
           params: { slug, object: object.apiSlug, recordId: card.id, tab: 'overview' },
         });
       }}
+      {...(peek === undefined || peekRecordId === undefined
+        ? {}
+        : {
+            peekId: peekRecordId,
+            peekPanel: (steps: PeekSteps | undefined) => (
+              <RecordPeek
+                slug={slug}
+                object={object}
+                attributes={attributes}
+                members={members}
+                recordId={peekRecordId}
+                tab={peek.tab}
+                onTabChange={peek.setTab}
+                onOpen={peek.open}
+                onClose={peek.close}
+                {...(steps === undefined ? {} : { steps })}
+              />
+            ),
+          })}
     />
   );
 }
@@ -503,6 +567,13 @@ interface LoadedBoardProps {
   readonly onAnnounce: (text: string) => void;
   readonly onOpen: (card: BoardCard) => void;
   readonly onAddCard?: (columnId: string) => void;
+  /** The record panel, given the cards either side of its record in the record's column. */
+  readonly peekPanel?: (steps: PeekSteps | undefined) => ReactNode;
+  /** The record the panel shows, to find its column. */
+  readonly peekId?: string;
+  readonly addColumn?: BoardAddColumn;
+  readonly collapsedIds: ReadonlySet<string>;
+  readonly onCollapsedChange: (columnId: string, isCollapsed: boolean) => void;
 }
 
 function LoadedBoard({
@@ -520,6 +591,11 @@ function LoadedBoard({
   onAnnounce,
   onOpen,
   onAddCard,
+  peekPanel,
+  peekId,
+  addColumn,
+  collapsedIds,
+  onCollapsedChange,
 }: LoadedBoardProps) {
   const board: BoardView = useBoard(store, attributeIds);
   const memberDisplays = useMemo(() => toActorDisplays(members), [members]);
@@ -603,35 +679,55 @@ function LoadedBoard({
             },
     };
   });
+  // The panel's Previous and Next: the cards either side of its record in the record's own column.
+  const peekSteps = ((): PeekSteps | undefined => {
+    if (peekId === undefined) return undefined;
+    for (const column of board.columns) {
+      const source = column.state?.source;
+      if (source === undefined) continue;
+      for (let index = 0; index < source.count; index += 1) {
+        if (source.getItem(index)?.id === peekId) {
+          return stepsAround(index, source.count, (at) => source.getItem(at)?.id);
+        }
+      }
+    }
+    return undefined;
+  })();
   return (
-    <Board
-      label={label}
-      columns={columns}
-      cardFields={fields}
-      isReadOnly={readOnlyReason !== undefined}
-      onMove={({ cardId, toColumnId }) => {
-        const to = toColumnId === NO_VALUE_COLUMN ? null : toColumnId;
-        const name = store.getSnapshot().columns.flatMap((column) => {
-          const source = column.view?.getSnapshot().source;
-          if (source === undefined) return [];
-          for (let index = 0; index < source.count; index += 1) {
-            const row = source.getItem(index);
-            if (row?.id === cardId) return [row.display.name === '' ? unnamed : row.display.name];
-          }
-          return [];
-        })[0];
-        void store.move(cardId, to).then((landed) => {
-          if (landed && name !== undefined) onAnnounce(strings.moved(name, titleOf(to)));
-        });
-      }}
-      onMovingChange={store.holdStill}
-      showEmptyColumns={showEmpty}
-      onShowEmptyColumnsChange={onShowEmptyChange}
-      onOpen={onOpen}
-      // Where the grouping field is read only, a "+" would set a value the member can't write.
-      {...(onAddCard === undefined || plan.groupBy.readOnly !== undefined ? {} : { onAddCard })}
-      status={board.status}
-      onRetry={store.retry}
-    />
+    <>
+      <Board
+        label={label}
+        columns={columns}
+        cardFields={fields}
+        isReadOnly={readOnlyReason !== undefined}
+        onMove={({ cardId, toColumnId }) => {
+          const to = toColumnId === NO_VALUE_COLUMN ? null : toColumnId;
+          const name = store.getSnapshot().columns.flatMap((column) => {
+            const source = column.view?.getSnapshot().source;
+            if (source === undefined) return [];
+            for (let index = 0; index < source.count; index += 1) {
+              const row = source.getItem(index);
+              if (row?.id === cardId) return [row.display.name === '' ? unnamed : row.display.name];
+            }
+            return [];
+          })[0];
+          void store.move(cardId, to).then((landed) => {
+            if (landed && name !== undefined) onAnnounce(strings.moved(name, titleOf(to)));
+          });
+        }}
+        onMovingChange={store.holdStill}
+        collapsedIds={collapsedIds}
+        onCollapsedChange={onCollapsedChange}
+        {...(addColumn === undefined ? {} : { addColumn })}
+        showEmptyColumns={showEmpty}
+        onShowEmptyColumnsChange={onShowEmptyChange}
+        onOpen={onOpen}
+        // Where the grouping field is read only, a "+" would set a value the member can't write.
+        {...(onAddCard === undefined || plan.groupBy.readOnly !== undefined ? {} : { onAddCard })}
+        status={board.status}
+        onRetry={store.retry}
+      />
+      {peekPanel?.(peekSteps)}
+    </>
   );
 }

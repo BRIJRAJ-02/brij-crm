@@ -35,6 +35,9 @@ export const strings = {
   requiredRefuses: (title: string) => `${title} is required, so cards can’t move here.`,
   /** An object the member may only read: why no card moves. */
   readOnly: (plural: string) => `You can view ${plural.toLowerCase()} but not change them.`,
+  /** The column after the last, for whoever may add an option to the grouping field (the CRM flow pass). */
+  addStage: 'Add stage',
+  addOption: 'Add option',
   /** After a move, for screen readers (AC-509). */
   moved: (name: string, column: string) => `Moved ${name} to ${column}.`,
 } as const;

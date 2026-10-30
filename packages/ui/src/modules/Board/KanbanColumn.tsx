@@ -40,6 +40,10 @@ export interface KanbanColumnProps {
   readonly onOpen?: (card: BoardCard) => void;
   /** The head's "+": add a card with this column's value. Absent, there is no button. */
   readonly onAddCard?: () => void;
+  /** Folds the column into a strip (the head's collapse button). Absent, there is no button. */
+  readonly onCollapse?: () => void;
+  /** Opens a strip the viewer folded (the strip's expand button). */
+  readonly onExpand?: () => void;
 }
 
 /** A card's row content: binds its row as a sortable item, and drags from anywhere on it. */
@@ -88,6 +92,8 @@ export function KanbanColumn({
   isCollapsed = false,
   onOpen,
   onAddCard,
+  onCollapse,
+  onExpand,
 }: KanbanColumnProps) {
   const { locale } = useFormatSettings();
   const onShown = useRangeReporter(column.cards);
@@ -116,6 +122,10 @@ export function KanbanColumn({
       data-collapsed={isCollapsed || undefined}
     >
       <div className={styles.head}>
+        {/* A strip the viewer folded opens again from its top, where the eye lands on its name. */}
+        {isCollapsed && onExpand !== undefined && (
+          <Button variant="ghost" icon="panel-left-open" label={strings.expand(column.title)} onPress={onExpand} />
+        )}
         <h3 id={titleId} className={styles.heading}>
           {column.hue === undefined ? (
             <span className={styles.title}>{column.title}</span>
@@ -136,6 +146,17 @@ export function KanbanColumn({
         {/* A strip is too narrow for it, and a column that refuses cards (archived, required) takes no new one. */}
         {onAddCard !== undefined && !isCollapsed && refusal === undefined && (
           <Button variant="ghost" icon="plus" label={strings.addCard(column.title)} onPress={onAddCard} />
+        )}
+        {/* Quiet until the head is hovered or focused (a pointer that can hover), so the "+" stays the head's action. */}
+        {onCollapse !== undefined && !isCollapsed && (
+          <span className={styles.collapse}>
+            <Button
+              variant="ghost"
+              icon="panel-left-close"
+              label={strings.collapse(column.title)}
+              onPress={onCollapse}
+            />
+          </span>
         )}
       </div>
       {/* A strip is too narrow for the sentence: dimmed, it says enough, and a drop there is put back with words. */}
