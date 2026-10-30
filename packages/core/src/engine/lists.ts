@@ -579,6 +579,8 @@ async function addIn(
   const listAttributes = await loadListAttributes(tx, listId);
   const parsed = await initialValues(tx, scope, listAttributes, input.values ?? {}, input.timeZone ?? 'UTC');
   await takeEntrySlots(tx, scope, listId, 1);
+  // An id another workspace's entry holds is invisible to the check above yet taken in the table: that is this
+  // entry's refusal, never the whole batch's failure.
   const [row] = await tx
     .insert(listEntries)
     .values({
@@ -588,7 +590,11 @@ async function addIn(
       recordId,
       ...audit(scope),
     })
-    .returning({ id: listEntries.id });
+    .returning({ id: listEntries.id })
+    .catch((error: unknown) => {
+      if (postgresError(error)?.code === '23505') throw refuse('CONFIG_INVALID', ENTRY_ID_USED);
+      throw error;
+    });
   if (row === undefined) throw new Error('The entry was not created.');
   context.record({ createdEntries: [{ entryId: row.id, listId, recordId, objectId: list.objectId }] });
   const versions = await writeAll(context, 'entry', row.id, parsed);

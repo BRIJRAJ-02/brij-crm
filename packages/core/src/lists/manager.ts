@@ -8,7 +8,7 @@ import { refuse } from '../engine/refusals.ts';
 import { checkId } from '../engine/ids.ts';
 import { requirePermission } from '../access/check.ts';
 import { inWorkspace } from '../access/run.ts';
-import { can } from '../access/policy.ts';
+import { can, objectLevel } from '../access/policy.ts';
 
 const { attributeOptions, attributes, lists, members } = schema;
 
@@ -65,7 +65,22 @@ export async function requireFieldManager(scope: EngineScope, attributeId: strin
       .leftJoin(members, and(eq(members.workspaceId, lists.workspaceId), eq(members.id, lists.createdByMemberId)))
       .where(and(eq(attributes.workspaceId, scope.workspaceId), eq(attributes.id, id)));
     // An object's attribute, or none at all: the permission check says no, as it did before lists had fields.
-    if (row?.listId === null || row?.listId === undefined) { requirePermission(scope, 'schema.manage'); return; }
+    if (row?.listId === null || row?.listId === undefined) {
+      requirePermission(scope, 'schema.manage');
+      return;
+    }
+    // A list the caller can't read is an unknown field, before anything names its maker (AC-4835).
+    const [parent] = await tx
+      .select({ objectId: lists.objectId })
+      .from(lists)
+      .where(and(eq(lists.workspaceId, scope.workspaceId), eq(lists.id, row.listId)));
+    if (
+      parent === undefined ||
+      objectLevel(scope.access, parent.objectId) === 'none' ||
+      objectLevel(scope.access, row.listId) === 'none'
+    ) {
+      throw refuse('NOT_FOUND', 'That attribute does not exist.');
+    }
     const maker = row.createdByMemberId ?? null;
     if (!canManageList(scope, { createdByMemberId: maker }, row.makerStatus === 'active')) {
       throw refuse('FORBIDDEN', await listManagersSentence(tx, scope, row.listId));
@@ -84,6 +99,9 @@ export async function requireOptionManager(scope: EngineScope, optionId: string)
       .where(and(eq(attributeOptions.workspaceId, scope.workspaceId), eq(attributeOptions.id, id)));
     return row?.attributeId;
   });
-  if (attributeId === undefined) { requirePermission(scope, 'schema.manage'); return; }
+  if (attributeId === undefined) {
+    requirePermission(scope, 'schema.manage');
+    return;
+  }
   return requireFieldManager(scope, attributeId);
 }

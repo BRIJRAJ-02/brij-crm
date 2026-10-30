@@ -1099,7 +1099,7 @@ export function createEntriesLayer({
     let stopWatch: (() => void) | undefined;
     let stopStore: (() => void) | undefined;
     let cancelDrop: (() => void) | undefined;
-    let control: AbortController | undefined;
+    let isRefreshing = false;
     let version = 0;
     let state: RecordEntriesState = { status, rows: [] };
     const snapshot = () => {
@@ -1115,8 +1115,6 @@ export function createEntriesLayer({
     const read = async () => {
       version += 1;
       const mine = version;
-      control?.abort();
-      control = new AbortController();
       try {
         const answer = await api.forRecord({ workspace, recordId });
         if (mine !== version) return;
@@ -1136,11 +1134,15 @@ export function createEntriesLayer({
       }
       snapshot();
     };
+    // A live change reads again at most once a second and a half, so a busy list doesn't make every open record
+    // page ask on every frame; held entries are patched in place by their own events already.
     const refresh = () => {
-      if (shown === 0) return;
-      schedule(() => {
+      if (shown === 0 || isRefreshing) return;
+      isRefreshing = true;
+      later(() => {
+        isRefreshing = false;
         void read();
-      });
+      }, ENTRIES_SETTLE_MS);
     };
     const view: RecordEntries = {
       subscribe: (listener) => {
@@ -1159,6 +1161,8 @@ export function createEntriesLayer({
         shown += 1;
         cancelDrop?.();
         cancelDrop = undefined;
+        // Let go after its 30 seconds and shown again: the layer holds it once more, so live changes find it.
+        recordViews.set(key, { workspace, view, refresh });
         stopWatch ??= watch(workspace);
         stopStore ??= entries.subscribe((changedIds) => {
           if (ids.some((id) => changedIds.has(id))) snapshot();
@@ -1171,7 +1175,6 @@ export function createEntriesLayer({
             if (shown > 0) return;
             recordViews.delete(key);
             version += 1;
-            control?.abort();
             stopStore?.();
             stopStore = undefined;
             stopWatch?.();
