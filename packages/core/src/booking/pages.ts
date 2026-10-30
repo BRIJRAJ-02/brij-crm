@@ -51,6 +51,7 @@ import { eligibleMembers, pageRotations, ROTATION_ROLES, TEAM_LIMITS } from '../
 import { loadPage, pagesOf, type PageRecord } from './slots.ts';
 import {
   checkAnswersObject,
+  checkNoNewWall,
   checkPageCanGoLive,
   checkPageQuestions,
   questionsSeenBy,
@@ -638,7 +639,9 @@ export async function createBookingPage(
       answersObjectId: given.answersObjectId ?? null,
     };
     if (settings.scheduleId !== null) await checkPageSchedule(tx, owner, settings.scheduleId);
-    if (settings.answersObjectId !== null) await checkAnswersObject(tx, scope, settings.answersObjectId);
+    if (settings.answersObjectId !== null) {
+      await checkAnswersObject(tx, scope, settings.answersObjectId, settings.questions);
+    }
     await checkPageQuestions(tx, scope, settings.questions, [], settings.answersObjectId);
     // A new page is live at once, so the wall a form's publish refuses is refused here (27 October 2026).
     if (settings.status === 'live') {
@@ -765,7 +768,6 @@ export async function updateBookingPage(
     // the new object, since an attribute id belongs to one object.
     const target = settings.answersObjectId === undefined ? page.answersObjectId : settings.answersObjectId;
     const moved = settings.answersObjectId !== undefined && settings.answersObjectId !== page.answersObjectId;
-    if (moved && target !== null) await checkAnswersObject(tx, scope, target);
     // The questions as the writer sent them, with the filings a field hidden from them kept, then checked: what changed
     // against the writer's own access (spec 0057, AC-5717), the rest as a form's publish checks it.
     const seen = await questionsSeenBy(tx, scope.access);
@@ -777,12 +779,27 @@ export async function updateBookingPage(
         : withHiddenFilings(page.questions, settings.questions, seen(page.questions, page.answersObjectId));
     const questions =
       sent === undefined ? undefined : moved ? refiledOnto(sent, await attributeIdsOf(tx, target)) : sent;
+    // Checked with the questions it will file there: a required question fills the field it is filed on.
+    if (moved && target !== null) await checkAnswersObject(tx, scope, target, questions ?? page.questions);
     if (questions !== undefined) {
       await checkPageQuestions(tx, scope, questions, moved ? [] : page.questions, target);
     }
     // Only on the way to live: a page already live onto such an object keeps working, and its other settings save.
-    if (settings.status === 'live' && page.status !== 'live') {
+    // Filing to the CRM turned back on is going live for the records it makes: a required field may have turned
+    // Required meanwhile, since a page kept out of the CRM walls nothing (`livePagesWalledBy`).
+    const startsFiling = settings.fileToCrm === true && !page.fileToCrm && settings.status !== 'paused';
+    if ((settings.status === 'live' && page.status !== 'live') || (startsFiling && page.status === 'live')) {
       await checkPageCanGoLive(tx, scope, questions ?? page.questions, target);
+    } else if (
+      page.status === 'live' &&
+      settings.status !== 'paused' &&
+      (settings.fileToCrm ?? page.fileToCrm) &&
+      questions !== undefined &&
+      !moved
+    ) {
+      // A live page's edit may not take away the required question a required field is filled by. A page kept out
+      // of the CRM makes no record, so it has nothing to wall.
+      await checkNoNewWall(tx, scope, page.questions, questions, target);
     }
     if (input.hosts !== undefined) {
       if (page.kind !== 'round_robin') {

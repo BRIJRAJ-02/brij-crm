@@ -1182,9 +1182,13 @@ async function checkLivePagesFill(
   const one = pages.length === 1;
   const named = pages.flatMap((page) => (page.title === undefined ? [] : [page.title]));
   const subject = breakageNames(named, pages.length - named.length, A_PAGE, PAGES);
+  // A required question filed on the field lifts the wall only on a page whose answers go onto its object.
+  const ask = pages.every((page) => page.canAsk)
+    ? ` add a required question for it to ${one ? 'that page' : 'each of them'},`
+    : '';
   throw refuseOn(
     'CONFIG_INVALID',
-    `${subject} ${one ? 'is live and makes' : 'are live and make'} records here at bookings, with nothing for ${attribute.title}, so each guest would be left out of the CRM. Give it a default, or pause ${one ? 'that page' : 'those pages'} first.`,
+    `${subject} ${one ? 'is live and makes' : 'are live and make'} records here at bookings, with nothing for ${attribute.title}, so each guest would be left out of the CRM. Give it a default,${ask} or pause ${one ? 'that page' : 'those pages'} first.`,
     'isRequired',
   );
 }

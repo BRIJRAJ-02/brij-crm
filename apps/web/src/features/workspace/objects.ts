@@ -16,7 +16,7 @@ export function navObjects(objects: readonly ObjectSummary[]): readonly ObjectSu
 export const objectHref = (slug: string, object: Pick<ObjectSummary, 'apiSlug'>) =>
   `/w/${slug}/objects/${object.apiSlug}`;
 
-/** One saved view of an object (spec 0020): a favourite view's address in the sidebar (spec 0034). */
+/** One saved view of an object (spec 0020). */
 export const viewHref = (slug: string, objectSlug: string, viewId: string) =>
   `/w/${slug}/objects/${objectSlug}/views/${viewId}`;
 

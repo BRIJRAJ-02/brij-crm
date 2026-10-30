@@ -1,9 +1,9 @@
 // The sidebar's model (spec 0034): every page it links to is a route (AC-944), so a renamed route can't leave a
 // dead item; every address round 7 moved keeps a route that redirects; the sections it draws, in the member's
-// order and folds (AC-921, AC-931); and the first paint's rail hint (AC-935).
+// order and folds (AC-921, AC-931), never Favourites; and the first paint's rail hint (AC-935).
 import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { NavState, ObjectSummary } from '@crm/data';
+import type { NavFavourite, NavState, ObjectSummary } from '@crm/data';
 import { movedHref, movedPath } from './moved.ts';
 import { settingsHomeHref, trashHref } from './objects.ts';
 import { keepRailHint, readRailHint } from './rail.ts';
@@ -109,6 +109,19 @@ const PEOPLE = '01900000-0000-7000-8000-000000000001';
 const COMPANIES = '01900000-0000-7000-8000-000000000002';
 const DEALS = '01900000-0000-7000-8000-000000000003';
 
+const VIEW = '01900000-0000-7000-8000-000000000010';
+const FAVOURITE: NavFavourite = {
+  kind: 'view',
+  id: VIEW,
+  label: 'Hot leads',
+  objectId: PEOPLE,
+  objectSlug: 'people',
+  objectName: 'People',
+  objectSingularName: 'Person',
+  icon: 'user',
+  hue: 'blue',
+};
+
 const object = (id: string, pluralName: string, position: number, isArchived = false): ObjectSummary =>
   ({ id, pluralName, position, isArchived }) as ObjectSummary;
 const OBJECTS = [object(COMPANIES, 'Companies', 2), object(PEOPLE, 'People', 1), object(DEALS, 'Deals', 3, true)];
@@ -125,14 +138,21 @@ const navOf = (over: Partial<NavState> = {}): NavState => ({
 });
 
 describe('the sections the sidebar draws (AC-921, AC-928, AC-931)', () => {
-  it('draws Favourites (empty, with its hint), Records then Scheduling by default, leaving out an empty Lists', () => {
+  it('draws Records then Scheduling by default, leaving out an empty Lists', () => {
     const nav = navOf();
     const sections = drawnSections(nav, universeOf(OBJECTS, nav));
-    expect(sections.map((section) => section.key)).toEqual(['favourites', 'records', 'scheduling']);
-    expect(sections[0]?.entries).toEqual([]);
+    expect(sections.map((section) => section.key)).toEqual(['records', 'scheduling']);
     // The live objects in the workspace's order; an archived one isn't in the sidebar.
-    expect(sections[1]?.entries.map((entry) => entry.id)).toEqual([PEOPLE, COMPANIES]);
-    expect(sections[2]?.entries.map((entry) => entry.id)).toEqual(['bookings', 'captures']);
+    expect(sections[0]?.entries.map((entry) => entry.id)).toEqual([PEOPLE, COMPANIES]);
+    expect(sections[1]?.entries.map((entry) => entry.id)).toEqual(['bookings', 'captures']);
+  });
+
+  it('never draws Favourites, even with a starred view the server resolved (owner, 30 October 2026)', () => {
+    const nav = navOf({ items: [{ kind: 'view', id: VIEW, pinned: true }], favourites: [FAVOURITE] });
+    expect(drawnSections(nav, universeOf(OBJECTS, nav)).map((section) => section.key)).toEqual([
+      'records',
+      'scheduling',
+    ]);
   });
 
   it('follows the member’s section order and folds', () => {
@@ -141,27 +161,21 @@ describe('the sections the sidebar draws (AC-921, AC-928, AC-931)', () => {
     expect(sections.map((section) => [section.key, section.isFolded])).toEqual([
       ['scheduling', true],
       ['records', false],
-      // A section the member never placed follows theirs.
-      ['favourites', false],
     ]);
   });
 
   it('leaves Scheduling out for someone with none of its pages (a guest, spec 0031)', () => {
     const nav = navOf({ scheduling: [] });
-    expect(drawnSections(nav, universeOf(OBJECTS, nav)).map((section) => section.key)).toEqual([
-      'favourites',
-      'records',
-    ]);
+    expect(drawnSections(nav, universeOf(OBJECTS, nav)).map((section) => section.key)).toEqual(['records']);
   });
 
   it('draws Records loading or empty, never leaving it out', () => {
     const nav = navOf();
     expect(drawnSections(nav, universeOf(undefined, nav)).map((section) => section.key)).toEqual([
-      'favourites',
       'records',
       'scheduling',
     ]);
-    expect(drawnSections(nav, universeOf([], nav))[1]?.entries).toEqual([]);
+    expect(drawnSections(nav, universeOf([], nav))[0]?.entries).toEqual([]);
   });
 
   it('puts Tasks above the sections, and nothing there for someone without it', () => {

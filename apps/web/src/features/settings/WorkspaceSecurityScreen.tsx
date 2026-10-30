@@ -218,6 +218,7 @@ export function WorkspaceSecurityScreen({ data, toasts, slug, workspaceName, ini
             description={strings.sessionLengthDescription}
           >
             <Select
+              savesOnPick
               label={strings.sessionLength}
               isLabelHidden
               items={LENGTHS}

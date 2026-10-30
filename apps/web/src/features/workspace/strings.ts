@@ -45,7 +45,7 @@ export const strings = {
   notes: 'Notes',
   /** The group above the sections holding Tasks (and Inbox once it exists), for screen readers. */
   yourWork: 'Your work',
-  /** The sidebar's sections (spec 0034). */
+  /** The sidebar's sections (spec 0034). Favourites is a stored section the sidebar no longer draws (owner, 30 October 2026). */
   favourites: 'Favourites',
   lists: 'Lists',
   scheduling: 'Scheduling',
@@ -55,11 +55,6 @@ export const strings = {
   hideFromSidebar: 'Hide from sidebar',
   /** Hide from sidebar's toast on an object, with Undo. */
   hiddenFromSidebar: (pluralName: string) => `${pluralName} hidden from sidebar`,
-  /** Favourites while nothing is starred: where the star is. */
-  noFavourites: 'Star a view or record to pin it here.',
-  removeFavourite: 'Remove from favourites',
-  /** The star on a record's or a view's header (AC-934). */
-  addFavourite: 'Add to favourites',
   moveUp: 'Move up',
   moveDown: 'Move down',
   customiseSidebar: 'Customise sidebar',
@@ -68,8 +63,6 @@ export const strings = {
   /** An item's and a section's menu, for screen readers: "Deals options". */
   itemOptions: (name: string) => `${name} options`,
   sectionOptions: (title: string) => `${title} options`,
-  /** A favourite record with no name (spec 0034, AC-925): "Unnamed person". */
-  unnamedRecord: (singular: string) => `Unnamed ${singular.toLowerCase()}`,
   /** The workspace menu's way into settings (spec 0012), above Sign out. */
   settings: 'Settings',
   noObjects: 'No objects yet',

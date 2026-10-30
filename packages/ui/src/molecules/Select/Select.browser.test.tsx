@@ -375,3 +375,66 @@ describe('a disabled option in a multiple choice', () => {
     expect(onValuesChange).not.toHaveBeenCalled();
   });
 });
+
+describe('a Select that saves on pick', () => {
+  const items = [item('a'), item('b'), item('c')];
+
+  it('changes nothing for the closed trigger’s arrows or a typed letter, controlled or not', async () => {
+    for (const props of [{ value: 'a' }, { value: undefined, defaultValue: 'a' }]) {
+      const { onChange, node } = single({ ...props, items, savesOnPick: true });
+      await render(node);
+      trigger().focus();
+      await userEvent.keyboard('{ArrowRight}');
+      await userEvent.keyboard('{ArrowRight}');
+      await userEvent.keyboard('{ArrowLeft}');
+      await userEvent.keyboard('O');
+      await frame();
+      expect(onChange).not.toHaveBeenCalled();
+      expect(listbox()).toBeNull();
+      expect(trigger().textContent).toContain('Option a');
+      for (const unmount of mounted.splice(0)) unmount();
+    }
+  });
+
+  it('changes nothing from the closed trigger with nothing chosen yet', async () => {
+    const { onChange, node } = single({ items, value: null, savesOnPick: true });
+    await render(node);
+    trigger().focus();
+    await userEvent.keyboard('{ArrowRight}');
+    await userEvent.keyboard('O');
+    await frame();
+    expect(onChange).not.toHaveBeenCalled();
+    expect(listbox()).toBeNull();
+  });
+
+  it('still opens from the keyboard, and Enter in the open list chooses', async () => {
+    const { onChange, node } = single({ items, value: 'a', savesOnPick: true });
+    await render(node);
+    trigger().focus();
+    await userEvent.keyboard('{ArrowDown}');
+    await expect.poll(listbox).not.toBeNull();
+    await userEvent.keyboard('{ArrowDown}');
+    await expect.poll(() => current()?.textContent).toContain('Option b');
+    await userEvent.keyboard('{Enter}');
+    await expect.poll(listbox).toBeNull();
+    expect(onChange).toHaveBeenCalledExactlyOnceWith('b');
+  });
+
+  it('chooses by a click in the open list, and by Enter in its search', async () => {
+    const clicked = single({ items, value: 'a', savesOnPick: true, defaultOpen: true });
+    await render(clicked.node);
+    await expect.poll(listbox).not.toBeNull();
+    await userEvent.click(optionNamed('Option c'));
+    expect(clicked.onChange).toHaveBeenCalledExactlyOnceWith('c');
+    for (const unmount of mounted.splice(0)) unmount();
+    const searched = single({ items, value: 'a', savesOnPick: true, isSearchable: true });
+    await render(searched.node);
+    trigger().focus();
+    await userEvent.keyboard('{ArrowDown}');
+    await expect.poll(listbox).not.toBeNull();
+    await userEvent.keyboard('Option b');
+    await expect.poll(() => current()?.textContent).toContain('Option b');
+    await userEvent.keyboard('{Enter}');
+    expect(searched.onChange).toHaveBeenCalledExactlyOnceWith('b');
+  });
+});

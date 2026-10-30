@@ -22,7 +22,7 @@ export interface RecordActionsProps {
   readonly canDelete: boolean;
 }
 
-/** "⋮" beside Favourite and Copy link: Copy link, then Delete (with Undo) for someone who may. */
+/** "⋮" beside Copy link: Copy link, then Delete (with Undo) for someone who may. */
 export function RecordActions({ slug, object, recordId, pageLink, canDelete }: RecordActionsProps) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();

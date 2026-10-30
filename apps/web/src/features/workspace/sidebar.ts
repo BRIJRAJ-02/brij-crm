@@ -84,14 +84,16 @@ export interface DrawnSection {
 
 /**
  * The sections the sidebar draws, in the member's order: Records always (it has loading and empty states of its
- * own), Scheduling while the member has its pages (AC-928; never for a guest), Lists once lists exist (AC-927),
- * and Favourites always: empty, it says how to fill it, so a member finds the star (flow pass, 30 October 2026).
+ * own), Scheduling while the member has its pages (AC-928; never for a guest) and Lists once lists exist (AC-927).
+ * Favourites is never drawn (owner, 30 October 2026: "remove favourites"): the server still keeps and resolves a
+ * member's stars, so drawing the section again brings them back as they were.
  */
 export function drawnSections(nav: NavState, universe: NavUniverse): DrawnSection[] {
   const prefs = prefsOf(nav);
   return sectionOrder(prefs).flatMap((key): DrawnSection[] => {
     const entries = sectionItems(prefs, universe, key);
-    if (key !== 'records' && key !== 'favourites' && entries.length === 0) return [];
+    if (key === 'favourites') return [];
+    if (key !== 'records' && entries.length === 0) return [];
     return [{ key, title: SECTION_TITLES[key], entries, isFolded: prefs.sections.folded.includes(key) }];
   });
 }

@@ -5,12 +5,10 @@
 // (AC-936); and every address round 7 gave Availability, Booking pages and Forms lands back inside Bookings or
 // Captures with its query kept, replacing the history entry. Milestone 2: an object hidden from its menu and back from Customise
 // sidebar, an item and a section reordered by keyboard, live in the second browser, and Reset to default behind its
-// confirm (AC-932, AC-933). Milestone 3: a view and a record starred from their headers sit in Favourites; the
-// record drops out while it is in the trash and comes back on restore; Remove from favourites unstars it (AC-925,
-// AC-934, AC-939).
+// confirm (AC-932, AC-933). Milestone 3's Favourites left the sidebar (owner, 30 October 2026), and its flow with it.
 import { randomUUID } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
-import { addPerson, newWorkspace, objectUrl, signInAgain } from './people.ts';
+import { newWorkspace, objectUrl, signInAgain } from './people.ts';
 
 /** Whether the second browser's live checks run: Centrifugo must allow the app's origin. */
 const LIVE = process.env.FLOW_NO_LIVE === undefined;
@@ -237,63 +235,5 @@ test.describe('sidebar', () => {
     await page.reload();
     await expect(firstOf(page)).toHaveText('Records');
     await other.close();
-  });
-
-  test('stars a view and a record from their headers, drops the record while it is in the trash, and unstars it', async ({
-    page,
-  }) => {
-    test.setTimeout(180_000);
-    const tag = randomUUID().slice(0, 8);
-    const slug = `favourites-${tag}`;
-    await newWorkspace(page, `favourites-${tag}@example.com`, slug);
-    await addPerson(page, 'Ada', 'Byron', `ada-${tag}@acme.com`);
-    const favourites = nav(page).getByRole('button', { name: 'Favourites', exact: true });
-    // Favourites stays while the member has none, saying how to fill it (flow pass, 30 October 2026).
-    await expect(favourites).toBeVisible();
-    const hint = nav(page).getByText('Star a view or record to pin it here.');
-    await expect(hint).toBeVisible();
-
-    // The view's star, in its bar (AC-934): pressed at once, and the hint gives way to the view.
-    const star = page.getByRole('button', { name: 'Add to favourites' });
-    await star.click();
-    await expect(page.getByRole('button', { name: 'Remove from favourites' })).toHaveAttribute('aria-pressed', 'true');
-    await expect(hint).toHaveCount(0);
-
-    // The record's star, on its header.
-    const table = page.getByRole('grid', { name: 'People' });
-    await table
-      .getByRole('rowheader', { name: /Ada Byron/ })
-      .getByText('Ada Byron')
-      .click();
-    await expect(page).toHaveURL(new RegExp(`/w/${slug}/objects/people/[0-9a-f-]{36}/overview$`));
-    await page.getByRole('button', { name: 'Add to favourites' }).click();
-    const ada = nav(page).getByRole('link', { name: 'Ada Byron', exact: true });
-    await expect(ada).toBeVisible();
-
-    // In the trash the record drops out of Favourites with no placeholder, and comes back on restore (AC-939).
-    await nav(page).getByRole('link', { name: 'People', exact: true }).click();
-    const bar = page.getByRole('toolbar', { name: 'Selected records' });
-    await table.getByRole('gridcell', { name: /^Select Ada Byron/ }).click();
-    await bar.getByRole('button', { name: 'Delete' }).click();
-    await expect(page.getByText('Deleted Ada Byron.')).toBeVisible();
-    await expect(ada).toHaveCount(0);
-    await expect(favourites).toBeVisible();
-    // The trash's old address opens it in Settings (A120), where the settings sidebar stands in for this one.
-    await page.goto(`/w/${slug}/trash`);
-    await expect(page).toHaveURL(new RegExp(`/w/${slug}/settings/trash$`));
-    const trash = page.getByRole('grid', { name: 'Trash' });
-    await trash.getByRole('gridcell', { name: /^Select Ada Byron/ }).click();
-    await bar.getByRole('button', { name: 'Restore' }).click();
-    await expect(page.getByText('Restored Ada Byron.')).toBeVisible();
-    await page.getByRole('navigation', { name: 'Settings' }).getByRole('link', { name: 'Leave settings' }).click();
-    await expect(ada).toBeVisible();
-
-    // Remove from favourites, from the item's menu, unstars it; a reload keeps that (AC-934, AC-936).
-    await nav(page).getByRole('button', { name: 'More for Ada Byron' }).click();
-    await page.getByRole('menuitem', { name: 'Remove from favourites' }).click();
-    await expect(ada).toHaveCount(0);
-    await page.reload();
-    await expect(favourites).toBeVisible();
-    await expect(nav(page).getByRole('link', { name: 'Ada Byron', exact: true })).toHaveCount(0);
   });
 });

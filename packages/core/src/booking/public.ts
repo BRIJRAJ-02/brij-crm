@@ -88,6 +88,7 @@ import {
   chatIsOff,
   answersRecord,
   fileBookingAnswers,
+  requiredAnswerValues,
   handedOver,
   peopleObjectId,
   publicQuestionsOf,
@@ -1107,9 +1108,15 @@ export async function bookPublicSlot(
       // robin page, a person or company made now is the assigned host's (AC-744); one that exists keeps its owner.
       // A page that keeps bookings out of the CRM finds and makes no records (spec 0057, AC-5708). The filed answers
       // go onto the person in the same savepoint (AC-5712), each one the record refuses kept and marked not saved.
+      // A person made now is made with the answers to its required fields (late trap #11's real fix): without them
+      // a required field the page asks for refused the Person, and the guest silently never reached the CRM.
       if (page.fileToCrm) {
         await lockKey(tx, `booking:email:${workspaceId}:${input.email}`);
         const matched = await context.perRecord(async (step) => {
+          const required =
+            answersObject !== entry.people || kept.length === 0
+              ? {}
+              : await requiredAnswerValues(step.tx, { objectId: entry.people, questions: page.questions, answers });
           const visitor = await matchVisitor(
             step,
             { people: entry.people, companies: entry.companies },
@@ -1119,6 +1126,7 @@ export async function bookPublicSlot(
               timeZone: input.timeZone,
               // The first rotation's pick: the member the round robin assigned it to.
               ...(chosen?.picks[0] === undefined ? {} : { ownerMemberId: chosen.picks[0].memberId }),
+              answers: required,
             },
           );
           // Onto the person, as every page did, when that is where this page files.
@@ -1150,6 +1158,12 @@ export async function bookPublicSlot(
                     email: input.email,
                     name: input.name,
                     timeZone: input.timeZone,
+                    // A record made now takes the answers its required fields need; a found one is only filled.
+                    answers: await requiredAnswerValues(step.tx, {
+                      objectId: answersObject,
+                      questions: page.questions,
+                      answers,
+                    }),
                   });
                   // No record to put them on (the object has no unique email to find the visitor by): not saved,
                   // and the host's screen says so rather than showing them saved (late trap #32).

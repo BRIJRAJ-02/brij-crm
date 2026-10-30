@@ -409,3 +409,9 @@ A late trap is a change that saves fine, then breaks something later somewhere e
 - A member's job that ends `failed` emails the member who started it (`job_failed`): the job's label ("Didn't finish: Bulk edit"), the runner's plain sentence for why, and a button to Background jobs. Not for system jobs, not for a starter whose removal ended it (`ACTOR_REMOVED`), and not for a kind that tells its starter itself (`tellsStarter`, the import). Before, only a toast told them, and only while the app was open (#20).
 - A kind may declare `onSucceeded`, the twin of `onFailed`: it runs in the transaction that ends the job `succeeded`, under the system's scope, short and idempotent, and a throw rolls the ending back to try again.
 - A job that tells a member something reads that member through the door's `memberScopeIn` (system scope only), with the api's rules (`APP_RULES`, passed to `jobKinds`). A registry built without rules tells nobody, so it fails closed.
+
+## Calls made fixing late traps, round 2, 30 October 2026 (shipped, main 1cdb46072 and after)
+
+The same rules as the section above: each line says what the product does now, and the trap it closes.
+
+- A Graphile task that must keep trying for a fixed window, longer than Graphile's own backoff (e^n seconds, uncapped) reaches sensibly, re-queues itself instead of throwing: the same job key in `replace` mode, its try count in its payload, waits capped and clamped to the window's end, then a last run that ends the work. The realtime cut-off (`realtime_cutoff`, spec 0031) is the first such task; its re-queued tries run at priority 1 so they never hold up emails and notices on the light lane. Only a re-queue that itself fails falls back to Graphile's retries (#41).

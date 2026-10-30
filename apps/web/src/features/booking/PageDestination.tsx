@@ -102,6 +102,7 @@ function destinationField(
   });
   return (
     <Select
+      savesOnPick
       label={strings.addBookingsTo}
       items={items}
       optionStyle="dot"

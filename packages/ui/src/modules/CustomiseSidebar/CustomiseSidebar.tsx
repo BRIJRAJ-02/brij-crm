@@ -1,7 +1,7 @@
 // Brief
 // Purpose: one place to choose what the sidebar shows (spec 0034, AC-933), so a hidden item can always be brought back.
 // Main task: switch each section's items on or off; reset the sidebar to its default.
-// Leaves out: ordering (the sidebar's own grips) and favourites (starred from a view's or record's header).
+// Leaves out: ordering (the sidebar's own grips).
 import { useId, useState } from 'react';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';

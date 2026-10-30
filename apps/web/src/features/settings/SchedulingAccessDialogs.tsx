@@ -65,6 +65,7 @@ export function LevelSelect({
 }) {
   return (
     <Select
+      savesOnPick
       label={strings.levelFor(name)}
       isLabelHidden
       variant="inline"
