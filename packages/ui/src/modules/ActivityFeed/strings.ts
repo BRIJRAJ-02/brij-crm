@@ -2,7 +2,6 @@
 export const strings = {
   loading: 'Loading activity',
   empty: 'No activity yet',
-  emptyBody: 'Changes, notes, tasks, comments and meetings show here as they happen.',
   /** A run of changes at one moment: open each, and fold them again. */
   showAll: 'Show all',
   showLess: 'Show less',

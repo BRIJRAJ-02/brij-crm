@@ -345,7 +345,7 @@ function TaskListContent({
         layout={isInline || isFramed ? 'row' : 'block'}
         {...(emptyActions === undefined ? {} : { actions: emptyActions })}
       >
-        {emptyBody ?? (emptyTitle === undefined ? strings.emptyBody : undefined)}
+        {emptyBody}
       </EmptyState>
     );
   }

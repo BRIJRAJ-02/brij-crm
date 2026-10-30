@@ -135,7 +135,7 @@ function NoteListContent({
         title={emptyTitle ?? strings.empty}
         {...(emptyActions === undefined ? {} : { actions: emptyActions })}
       >
-        {emptyBody ?? (emptyTitle === undefined ? strings.emptyBody : undefined)}
+        {emptyBody}
       </EmptyState>
     );
   }

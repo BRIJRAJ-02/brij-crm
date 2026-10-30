@@ -76,7 +76,6 @@ export function CustomiseSidebar({ isOpen, onOpenChange, sections, onShownChange
           </>
         }
       >
-        <p className={styles.intro}>{strings.intro}</p>
         {sections.length === 0 && <p className={styles.empty}>{strings.empty}</p>}
         {sections.map((section) => (
           <section key={section.id} className={styles.section} aria-labelledby={`${headingId}-${section.id}`}>

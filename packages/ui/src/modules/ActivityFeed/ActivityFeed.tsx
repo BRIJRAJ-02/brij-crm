@@ -434,11 +434,7 @@ function FeedContent({
     );
   }
   if (entries.count === 0) {
-    return (
-      <EmptyState icon="activity" title={strings.empty}>
-        {strings.emptyBody}
-      </EmptyState>
-    );
+    return <EmptyState icon="activity" title={strings.empty} />;
   }
 
   // Inline: the first entries in place, each at its own height, with nothing virtual.

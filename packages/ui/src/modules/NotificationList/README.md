@@ -31,7 +31,7 @@ New (spec 0038, the inventory's NotificationInbox). No list in the library marks
 
 ## States
 
-Unread, read, done, loading (skeleton rows), empty (in the screen's words, with an optional `emptyBody` line saying what lands here, and its actions), failed with Try again, and no access.
+Unread, read, done, loading (skeleton rows), empty (in the screen's words, with its actions, and no line under the title: an empty inbox says "You’re all caught up" and nothing more), failed with Try again, and no access.
 
 ## Keyboard
 
