@@ -131,6 +131,7 @@ describe('@crm/ui', () => {
       'Pagination',
       'Panel',
       'Path',
+      'PersonLine',
       'PhoneField',
       'PhonePreview',
       'Popover',

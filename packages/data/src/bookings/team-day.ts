@@ -17,8 +17,11 @@ export function blockedOnDay(
   blockId: string,
   turns: readonly Omit<TimeBlockOccurrence, 'key' | 'blockId'>[],
 ): TeamDay {
+  // Only turns that fall on this day: a neighbouring day held beside it never shows the block at midnight.
+  const from = Date.parse(day.from);
+  const to = Date.parse(day.to);
   const added = turns.flatMap((turn): TeamDayItem[] =>
-    turn.kind === 'away'
+    turn.kind === 'away' || Date.parse(turn.endsAt) <= from || Date.parse(turn.startsAt) >= to
       ? []
       : [
           {

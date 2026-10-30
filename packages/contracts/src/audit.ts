@@ -121,6 +121,7 @@ export const AUDIT_FIELDS = [
   'handle',
   'bio',
   'socials',
+  'jobTitle',
   'address',
   'domains',
   'expiresInDays',
@@ -226,7 +227,10 @@ export const AuditEntryView = z.discriminatedUnion('action', [
   entry(
     ['member.profile_updated'],
     member,
-    z.strictObject({ isOwn: z.boolean(), fields: z.array(z.enum(['name', 'timeZone', 'handle', 'bio', 'socials'])) }),
+    z.strictObject({
+      isOwn: z.boolean(),
+      fields: z.array(z.enum(['name', 'timeZone', 'jobTitle', 'handle', 'bio', 'socials'])),
+    }),
   ),
   /** `from` and `to` only for a rename alone. */
   entry(

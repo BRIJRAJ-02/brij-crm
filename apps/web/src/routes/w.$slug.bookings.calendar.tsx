@@ -48,13 +48,16 @@ export const Route = createFileRoute('/w/$slug/bookings/calendar')({
     const shown = asked.week;
     // The Team day (spec 0030): its first read with the page, so it lands in place; the days either side behind it.
     const teamDay = asked.view === 'team' ? heldTeamDay(asked, data, params.slug, zone) : undefined;
-    // Mine, the default whoever reads (an admin's kept Everyone is the screen's to ask for).
-    const week = heldWeek(shown, data, params.slug, zone);
+    // Mine, the default whoever reads (an admin's kept Everyone is the screen's to ask for); not on the Team day,
+    // which reads its own day instead of a week nobody sees.
+    const week = teamDay === undefined ? heldWeek(shown, data, params.slug, zone) : undefined;
     // The weeks either side, read behind, so Previous and Next show at once.
-    for (const step of [-7, 7])
-      heldWeek(addDays(shown, step), data, params.slug, zone)
-        .ready()
-        .catch(() => undefined);
+    if (week !== undefined) {
+      for (const step of [-7, 7])
+        heldWeek(addDays(shown, step), data, params.slug, zone)
+          .ready()
+          .catch(() => undefined);
+    }
     const calendar = data.calendar.view(params.slug);
     const [objects, pages, hours, , , , visible] = await Promise.all([
       data.objects.list(params.slug),
@@ -62,7 +65,7 @@ export const Route = createFileRoute('/w/$slug/bookings/calendar')({
       data.bookingPages.held(params.slug).catch(() => []),
       // Where a day starts when time is drawn from the keyboard; without it, 9:00.
       data.bookings.hours(params.slug, zone).catch(() => undefined),
-      week.ready(),
+      week?.ready(),
       calendar.ready().catch(() => undefined),
       teamDay?.ready().catch(() => undefined),
       // Whom the member Manages, for For on Block time and New meeting (spec 0037, AC-1272); none when it fails.
@@ -152,8 +155,9 @@ function Calendar({ objects, pages, connections, availability, forPeople, member
   const hosts = choice?.value ?? 'mine';
   const week = heldWeek(search.week, data, slug, timeZone, hosts);
   // The Team day (spec 0030): its held day, and the days either side read behind it so Previous and Next show at once.
-  const teamDay = heldTeamDay(search, data, slug, timeZone);
   const isTeam = search.view === 'team';
+  // Only while Team shows: a day nobody opened is never held, so a booking change never reads it again.
+  const teamDay = isTeam ? heldTeamDay(search, data, slug, timeZone) : undefined;
   useEffect(() => {
     if (!isTeam) return;
     for (const step of [-1, 1])

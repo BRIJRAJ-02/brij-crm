@@ -364,13 +364,8 @@ export {
   type TeamWeekTone,
   type TeamWeekTotal,
 } from './modules/TeamWeek/TeamWeek.tsx';
-export {
-  TeamDay,
-  type TeamDayLaneItem,
-  type TeamDayPerson,
-  type TeamDayProps,
-  type TeamDayTone,
-} from './modules/TeamDay/TeamDay.tsx';
+export { PersonLine, type PersonLineProps, type PersonLineTone } from './molecules/PersonLine/PersonLine.tsx';
+export { TeamDay, type TeamDayPerson, type TeamDayProps, type TeamDayTone } from './modules/TeamDay/TeamDay.tsx';
 export {
   SetupChecklist,
   type SetupChecklistProps,

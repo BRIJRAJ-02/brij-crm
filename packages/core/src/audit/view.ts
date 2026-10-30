@@ -386,7 +386,7 @@ export function toEntryView(row: AuditRow, names: AuditNames): AuditEntryView | 
       return { ...base, action, target: memberTarget(), params: {}, changes: [] };
     case 'member.profile_updated': {
       const target = memberTarget();
-      const known = (['name', 'timeZone', 'handle', 'bio', 'socials'] as const).filter(
+      const known = (['name', 'timeZone', 'jobTitle', 'handle', 'bio', 'socials'] as const).filter(
         (field) => has(after, field) || has(before, field),
       );
       // A deleted account's own values went with it (AC-4610): the fields stay named, their values don't.

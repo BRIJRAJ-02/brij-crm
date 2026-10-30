@@ -1,6 +1,5 @@
-/* TeamDay: the Needs a host lane at the start (only when it holds something), then WeekCalendar's team view filling
-   the rest. A person's head is their picture, name, title and how their day stands; the lane is a quiet column of
-   cards, each a booking to hand on. Below 480px of its container the lane sits over the grid. */
+/* TeamDay: the Needs a host lane at the start (only when it holds something; BookingList's rows), then WeekCalendar's
+   team view filling the rest. Below 480px of its container the lane sits over the grid, a few rows high. */
 @layer components {
   .root {
     display: flex;
@@ -17,166 +16,16 @@
     min-block-size: 0;
   }
 
-  /* A person's head. */
-  .person {
-    display: flex;
-    align-items: center;
-    gap: var(--space-8);
-    inline-size: 100%;
-    min-inline-size: 0;
-  }
-
-  .picture {
-    display: flex;
-    flex: none;
-  }
-
-  .who {
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    min-inline-size: 0;
-  }
-
-  .name {
-    min-inline-size: 0;
-    color: var(--text);
-    font: var(--text-body-strong);
-    letter-spacing: var(--tracking-body-strong);
-  }
-
-  /* One quiet line: the title, how the day stands, the zone's offset. */
-  .meta {
-    min-inline-size: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    color: var(--text-secondary);
-    font: var(--text-label);
-    font-variant-numeric: tabular-nums;
-    letter-spacing: var(--tracking-label);
-  }
-
-  /* Away in the Team week's Away colour, strong: the one state that changes what can be done with the column. */
-
-  .status[data-tone='away'] {
-    color: var(--tag-yellow-text);
-    font: var(--text-label-strong);
-    letter-spacing: var(--tracking-label-strong);
-  }
-
-  .extra {
-    display: flex;
-    flex: none;
-  }
-
-  /* The lane: pinned at the start, as Jobber's Unscheduled and timefix's driver calendar's Unassigned column. */
+  /* The lane: pinned at the start, a menu's width, as Jobber's Unscheduled and timefix's Unassigned column. */
   .lane {
-    display: flex;
     flex: none;
-    flex-direction: column;
-    gap: var(--space-8);
     inline-size: var(--size-menu);
-    padding: var(--space-12);
+    padding-block: var(--space-8);
     overflow-y: auto;
     border-inline-end: var(--border-width-hairline) solid var(--border);
-    background: var(--surface-sunken);
-  }
-
-  .laneHead {
-    display: flex;
-    align-items: center;
-    gap: var(--space-8);
-  }
-
-  .laneTitle {
-    margin: 0;
-    color: var(--text);
-    font: var(--text-body-strong);
-    letter-spacing: var(--tracking-body-strong);
-  }
-
-  .laneList {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-6);
-    margin: 0;
-    padding: 0;
-    list-style: none;
-  }
-
-  .laneItem {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: var(--space-2) var(--space-8);
-    inline-size: 100%;
-    padding: var(--space-8) var(--space-8);
-    border: var(--border-width-hairline) solid var(--border);
-    border-radius: var(--radius-md);
     background: var(--surface-raised);
-    color: var(--text);
-    font: var(--text-body);
-    letter-spacing: var(--tracking-body);
-    text-align: start;
-    transition:
-      border-color var(--duration-hover) var(--ease-hover),
-      scale var(--duration-press) var(--ease-out);
   }
 
-  .laneItem:active {
-    scale: var(--scale-press);
-  }
-
-  @media (hover: hover) and (pointer: fine) {
-    .laneItem:hover {
-      border-color: var(--control-border);
-    }
-  }
-
-  .laneItem[data-open] {
-    border-color: var(--accent-line);
-    background: var(--surface-selected);
-  }
-
-  .laneItem:focus-visible {
-    outline: var(--border-width-thick) solid var(--accent-line);
-    outline-offset: var(--border-width-hairline);
-  }
-
-  .laneTime {
-    color: var(--text);
-    font: var(--text-label-strong);
-    font-variant-numeric: tabular-nums;
-    letter-spacing: var(--tracking-label-strong);
-  }
-
-  .laneStatus {
-    grid-row: 1;
-    grid-column: 2;
-    color: var(--tag-orange-text);
-    font: var(--text-label-strong);
-    letter-spacing: var(--tracking-label-strong);
-  }
-
-  .laneItemTitle,
-  .laneDetail {
-    grid-column: 1 / -1;
-    min-inline-size: 0;
-  }
-
-  .laneDetail {
-    color: var(--text-secondary);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .laneItem:active {
-      scale: none;
-    }
-  }
-
-  /* A narrow container: the lane goes over the grid, a few cards high, scrolling inside. */
   @container (inline-size < 480px) {
     .root {
       flex-direction: column;

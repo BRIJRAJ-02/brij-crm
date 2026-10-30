@@ -154,6 +154,8 @@ const FIXTURES: Record<ListedAuditAction, readonly AuditRow[]> = {
       before: { socials: ['https://x.com/ada'] },
       after: { socials: ['https://x.com/ada', 'https://ada.dev'] },
     }),
+    // A job title (spec 0037, AC-1441), set and then cleared.
+    row('member.profile_updated', 'member', ada, { before: { jobTitle: null }, after: { jobTitle: 'Head of sales' } }),
   ],
   'workspace.updated': [
     row('workspace.updated', 'workspace', newId(), { before: { name: 'Acme' }, after: { name: 'Acme Ltd' } }),
@@ -403,6 +405,12 @@ describe('toEntryView, per action', () => {
         after: { kind: 'list', items: ['https://x.com/ada', 'https://ada.dev'] },
       },
     ]);
+  });
+
+  it('names a job title change, its title before and after', () => {
+    const entry = only('member.profile_updated', 4);
+    expect(entry.params).toEqual({ isOwn: true, fields: ['jobTitle'] });
+    expect(entry.changes).toEqual([{ field: 'jobTitle', after: { kind: 'text', text: 'Head of sales' } }]);
   });
 
   it('drops unknown keys: a profile change with no known field left names no field', () => {

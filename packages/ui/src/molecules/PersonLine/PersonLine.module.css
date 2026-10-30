@@ -1,0 +1,62 @@
+/* PersonLine: a picture, the name, and one quiet line under it whose parts are joined by a middle dot; the line is
+   cut at its end, so the first part (what it is about) always shows. Room at the end for a chip or a menu. */
+@layer components {
+  .root {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    inline-size: 100%;
+    min-inline-size: 0;
+  }
+
+  .picture {
+    display: flex;
+    flex: none;
+  }
+
+  .who {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-inline-size: 0;
+  }
+
+  .name {
+    min-inline-size: 0;
+    color: var(--text);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+  }
+
+  .meta {
+    min-inline-size: 0;
+    overflow: hidden;
+    color: var(--text-secondary);
+    font: var(--text-label);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: var(--tracking-label);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Time off: the Team week's Away colour, strong, the one state that changes what can be done with this person. */
+  .lead[data-tone='away'] {
+    color: var(--tag-yellow-text);
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label-strong);
+  }
+
+  .end {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--space-4);
+  }
+
+  /* A phone's narrow column gives the picture's room to the name. */
+  @container (inline-size < 320px) {
+    .root[data-size='md'] .picture {
+      display: none;
+    }
+  }
+}

@@ -183,7 +183,15 @@ export interface WeekCalendarProps {
    * through a dialog outside the block's card (a block removed, a booking cancelled), as the week does itself when
    * the screen closes a card whose block went.
    */
-  readonly focusDay?: { readonly dayKey: string; readonly blockId?: string };
+  readonly focusDay?: {
+    readonly dayKey: string;
+    readonly blockId?: string;
+    /**
+     * Asked for by the person (an issue picked from the Team day's menu): focus moves even though the menu's trigger
+     * holds it once the menu has closed, and the block scrolls into view.
+     */
+    readonly isAsked?: boolean;
+  };
   /**
    * The member's open hours on a day (their availability). The hours outside them are shaded a step darker, as
    * Google Calendar shades outside working hours. Answering undefined shades nothing that day; an empty list shades
@@ -401,7 +409,7 @@ export function WeekCalendar({
     if (focusDay === undefined) return;
     focusLater(() => {
       const active = document.activeElement;
-      if (active !== null && active !== document.body) return undefined;
+      if (focusDay.isAsked !== true && active !== null && active !== document.body) return undefined;
       const block = focusDay.blockId === undefined ? undefined : blockRefs.current.get(focusDay.blockId);
       return block?.isConnected === true ? block : columns.current.get(focusDay.dayKey);
     });
@@ -478,37 +486,15 @@ export function WeekCalendar({
   };
 
   const zoneId = useId();
-  /** A day's timed blocks as laid out: closed time full width under the rest, then bookings and events in lanes. */
-  const layoutOf = (dayKey: string) => {
-    const ofDay = blocks.filter((block) => block.dayKey === dayKey);
-    // Laid out as tall as they are drawn: a short block is never under one line (`size-chip`), so two back to back
-    // quarter hours overlap on screen and must share the width or cascade, not paint over each other.
-    const drawn = (block: WeekCalendarBlock) => ({
-      ...block,
-      endMinute: Math.max(block.endMinute, block.startMinute + DRAWN_MINUTES),
-    });
-    // Closed time sits under bookings and events, full width, out of their lanes (AC-705), later over earlier;
-    // where a block would cover its title (a booking at the same time as Busy, even a cancelled one) it takes a
-    // lane beside it instead, so it never hides.
-    const lifted = liftClosed(
-      ofDay.filter((block) => isClosed(block)).map(drawn),
-      ofDay.filter((block) => !isClosed(block)).map(drawn),
-    );
-    const closed: Placed[] = ofDay
-      .filter((block) => isClosed(block) && !lifted.has(block.id))
-      .sort((a, b) => a.startMinute - b.startMinute)
-      .map((block) => ({ ...block, ...WHOLE }));
-    const timed = ofDay.filter((block) => !isClosed(block) || lifted.has(block.id));
-    const ends = new Map(timed.map((block) => [block.id, block.endMinute]));
-    const layout = placeBlocks(timed.map(drawn));
-    const placed = layout.blocks.map((block) => ({ ...block, endMinute: ends.get(block.id) ?? block.endMinute }));
-    const dayBlocks = [...closed, ...placed];
-    // Up and Down walk what shows, "+N" chips among the blocks, by start.
-    const stops = [...dayBlocks, ...layout.more].sort(
-      (a, b) => a.startMinute - b.startMinute || a.indent - b.indent || a.lane - b.lane,
-    );
-    return { ofDay, dayBlocks, more: layout.more, stops };
-  };
+  /**
+   * Each day's blocks as laid out (`layoutOfDay`), worked out once per change of the blocks or the days: a drag re-draws
+   * the grid on every pointer move, and fifty columns of a Team day would lay out again each time.
+   */
+  const layouts = useMemo(
+    () => new Map(days.map((day) => [day.key, layoutOfDay(blocks, day.key)] as const)),
+    [blocks, days],
+  );
+  const layoutOf = (dayKey: string) => layouts.get(dayKey) ?? layoutOfDay(blocks, dayKey);
   /** What Up and Down walk on a day: its blocks and "+N" chips by start, as they read down the screen. */
   const orderOf = (dayKey: string): readonly string[] => layoutOf(dayKey).stops.map((stop) => stop.id);
 
@@ -964,6 +950,38 @@ export function WeekCalendar({
         ))}
     </section>
   );
+}
+
+/** A day's timed blocks as laid out: closed time full width under the rest, then bookings and events in lanes. */
+function layoutOfDay(blocks: readonly WeekCalendarBlock[], dayKey: string) {
+  const ofDay = blocks.filter((block) => block.dayKey === dayKey);
+  // Laid out as tall as they are drawn: a short block is never under one line (`size-chip`), so two back to back
+  // quarter hours overlap on screen and must share the width or cascade, not paint over each other.
+  const drawn = (block: WeekCalendarBlock) => ({
+    ...block,
+    endMinute: Math.max(block.endMinute, block.startMinute + DRAWN_MINUTES),
+  });
+  // Closed time sits under bookings and events, full width, out of their lanes (AC-705), later over earlier;
+  // where a block would cover its title (a booking at the same time as Busy, even a cancelled one) it takes a
+  // lane beside it instead, so it never hides.
+  const lifted = liftClosed(
+    ofDay.filter((block) => isClosed(block)).map(drawn),
+    ofDay.filter((block) => !isClosed(block)).map(drawn),
+  );
+  const closed: Placed[] = ofDay
+    .filter((block) => isClosed(block) && !lifted.has(block.id))
+    .sort((a, b) => a.startMinute - b.startMinute)
+    .map((block) => ({ ...block, ...WHOLE }));
+  const timed = ofDay.filter((block) => !isClosed(block) || lifted.has(block.id));
+  const ends = new Map(timed.map((block) => [block.id, block.endMinute]));
+  const layout = placeBlocks(timed.map(drawn));
+  const placed = layout.blocks.map((block) => ({ ...block, endMinute: ends.get(block.id) ?? block.endMinute }));
+  const dayBlocks = [...closed, ...placed];
+  // Up and Down walk what shows, "+N" chips among the blocks, by start.
+  const stops = [...dayBlocks, ...layout.more].sort(
+    (a, b) => a.startMinute - b.startMinute || a.indent - b.indent || a.lane - b.lane,
+  );
+  return { ofDay, dayBlocks, more: layout.more, stops };
 }
 
 /** "+N": blocks folded where a lane would be too narrow, a quiet chip in the last lane that fits; it opens their list. */
