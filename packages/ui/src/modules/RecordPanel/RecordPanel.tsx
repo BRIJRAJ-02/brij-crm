@@ -109,7 +109,10 @@ export function RecordPanel({
   }
   return (
     <Panel
-      title={record?.name ?? strings.loading}
+      title={
+        record?.name ??
+        (empty !== undefined ? strings.unavailable : status === 'error' ? strings.failed : strings.loading)
+      }
       variant="floating"
       isFlush
       width={width}
@@ -146,6 +149,8 @@ export function RecordPanel({
                 variant="ghost"
                 icon="chevron-up"
                 label={strings.previous}
+                // ↑ steps too, where nothing in the panel owns the arrows: shown in the button's tooltip.
+                kbd="↑"
                 isDisabled={onPrevious === undefined}
                 {...(onPrevious === undefined ? {} : { onPress: onPrevious })}
               />
@@ -154,6 +159,7 @@ export function RecordPanel({
                 variant="ghost"
                 icon="chevron-down"
                 label={strings.next}
+                kbd="↓"
                 isDisabled={onNext === undefined}
                 {...(onNext === undefined ? {} : { onPress: onNext })}
               />

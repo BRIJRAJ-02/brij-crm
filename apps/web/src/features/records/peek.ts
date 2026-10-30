@@ -72,9 +72,8 @@ export async function openPeek(
     const section = sections[index];
     return section === undefined ? [] : [{ ...side, section }];
   });
-  // The tabs' counts arrive with the panel.
-  void open.ready();
-  void notes.ready();
+  // The tabs' counts read their first pages as the panel retains them (never here: a step the panel skipped past
+  // would leave those lists read and held with nobody showing them).
   return {
     recordId,
     objects,

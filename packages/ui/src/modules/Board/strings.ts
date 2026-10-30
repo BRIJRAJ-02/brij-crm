@@ -13,6 +13,9 @@ export const strings = {
   expand: (column: string) => `Expand ${column}`,
   /** The new column's name field, named by the screen's own label ("Add stage"). */
   newColumnName: (label: string) => `${label}: name`,
+  adding: 'Adding…',
+  /** The column couldn't be made and the screen gave no reason (the connection dropped). */
+  addFailed: 'Couldn’t add it. Try again.',
   /** Shown on an archived column while a card is moving. */
   archivedRefuses: 'Archived. Cards can’t move here.',
   hiddenColumns: (count: string, plural: Intl.LDMLPluralRule) =>

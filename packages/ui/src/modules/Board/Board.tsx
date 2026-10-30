@@ -306,17 +306,23 @@ function AddColumn({ add }: { readonly add: BoardAddColumn }) {
   const [isTyping, setTyping] = useState(false);
   const [name, setName] = useState('');
   const [isPending, setPending] = useState(false);
+  const [error, setError] = useState<string | undefined>(undefined);
+  // Put away with Esc: the button comes back with focus, so the keyboard never lands on the page.
+  const [wasPutAway, setPutAway] = useState(false);
   const submit = () => {
     const title = name.trim();
     if (title === '' || isPending) return;
     setPending(true);
+    setError(undefined);
     add.onAdd(title).then(
-      () => {
+      (refused) => {
         setPending(false);
-        setName('');
+        if (refused === undefined) setName('');
+        else setError(refused);
       },
       () => {
         setPending(false);
+        setError(strings.addFailed);
       },
     );
   };
@@ -332,13 +338,20 @@ function AddColumn({ add }: { readonly add: BoardAddColumn }) {
           maxLength={100}
           // eslint-disable-next-line jsx-a11y-x/no-autofocus
           autoFocus
-          isDisabled={isPending}
-          {...(isPending ? { suffix: <Spinner size="sm" label={add.label} /> } : {})}
-          onChange={setName}
+          // Read only rather than disabled while it is made, so focus stays for the next name.
+          isReadOnly={isPending}
+          {...(isPending ? { suffix: <Spinner size="sm" label={strings.adding} /> } : {})}
+          {...(error === undefined ? {} : { error })}
+          onChange={(next) => {
+            setName(next);
+            setError(undefined);
+          }}
           onSubmit={submit}
           onEscape={() => {
             setName('');
+            setError(undefined);
             setTyping(false);
+            setPutAway(true);
           }}
           onBlur={() => {
             if (name.trim() === '' && !isPending) setTyping(false);
@@ -349,6 +362,8 @@ function AddColumn({ add }: { readonly add: BoardAddColumn }) {
           variant="dashed"
           icon="plus"
           isFullWidth
+          // eslint-disable-next-line jsx-a11y-x/no-autofocus
+          autoFocus={wasPutAway}
           onPress={() => {
             setTyping(true);
           }}

@@ -68,9 +68,12 @@ export function stepOf(event: StepKey, path: readonly StepTarget[]): 'previous' 
   if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return undefined;
   const step = event.key === 'ArrowUp' ? 'previous' : event.key === 'ArrowDown' ? 'next' : undefined;
   if (step === undefined) return undefined;
-  const isOwned = path.some(
-    (each) =>
-      TYPING_TAGS.has(each.tagName) || each.isContentEditable || (each.role !== null && ARROW_ROLES.has(each.role)),
-  );
+  // A tab's panel holding focus itself scrolls with the arrows; a button inside it leaves them to the step.
+  const isOwned =
+    path[0]?.role === 'tabpanel' ||
+    path.some(
+      (each) =>
+        TYPING_TAGS.has(each.tagName) || each.isContentEditable || (each.role !== null && ARROW_ROLES.has(each.role)),
+    );
   return isOwned ? undefined : step;
 }

@@ -106,7 +106,9 @@ export function Panel({
   // ↑ and ↓ step through the list, where nothing in the panel owns the arrows. No motion: a key repeated
   // hundreds of times a day swaps the content at once.
   const onStepKey = (event: ReactKeyboardEvent<HTMLElement>) => {
-    if (onStep === undefined) return;
+    // A key from an overlay opened inside the panel (a confirm, a date picker) reaches here through React's tree,
+    // not the page's: it belongs to that overlay, never to a step.
+    if (onStep === undefined || !(event.target instanceof Node) || !event.currentTarget.contains(event.target)) return;
     const step = stepOf(event, pathOf(event.target, event.currentTarget));
     if (step === undefined) return;
     event.preventDefault();

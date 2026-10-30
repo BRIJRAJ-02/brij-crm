@@ -21,7 +21,7 @@ import { allMatching, noRows, selectedCount, type GridSelection } from '@crm/ui/
 import { useRouteContext } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { MemberPicker } from '../records/members.ts';
-import { BulkEditDialog, type BulkEditChoice } from './BulkEditDialog.tsx';
+import { BulkEditDialog, type BulkApplied, type BulkEditChoice } from './BulkEditDialog.tsx';
 import {
   BULK_EXCEPT_MAX,
   BULK_IDS_MAX,
@@ -361,22 +361,31 @@ export function useBulkActions({
       );
   };
 
-  const edit = async (recordIds: readonly string[], choices: readonly BulkEditChoice[], fromToast = false) => {
-    const { result, undoIds } = combineEditResults(await sendInOrder(recordIds, choices));
-    // One toast for every field changed, its Undo taking them all back.
+  const edit = async (
+    recordIds: readonly string[],
+    choices: readonly BulkEditChoice[],
+    fromToast = false,
+  ): Promise<BulkApplied> => {
+    const results = await sendInOrder(recordIds, choices);
+    const landed = results.filter((each) => each.kind === 'done');
+    const stop = results.find((each) => each.kind !== 'done');
+    const { result, undoIds } = combineEditResults(landed);
+    // One toast for every field that changed, its Undo taking them all back; a refusal of the whole edit before any
+    // landed is said where it was asked (the dialog), or here from a toast's Retry.
     const toast = bulkEditToast(
-      result,
+      stop !== undefined && landed.length === 0 ? stop : result,
       object,
       () => {
         undoAll(undoIds);
       },
       () => {
-        void edit(recordIds, choices, true);
+        // Again from the field that was refused: the ones before it landed.
+        void edit(recordIds, choices.slice(landed.length), true);
       },
       { fromToast },
     );
     if (toast !== undefined) raise(toast);
-    return result;
+    return stop === undefined ? result : { ...stop, landed: landed.length };
   };
 
   // The change a counted edit job will make, restated in its confirm (the dialog is gone by then): the field by id,

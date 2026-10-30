@@ -14,6 +14,7 @@ import type { Hue } from '../../hue.ts';
 import { Callout } from '../../molecules/Callout/Callout.tsx';
 import { Card } from '../../molecules/Card/Card.tsx';
 import { Field } from '../../molecules/Field/Field.tsx';
+import { FieldGroup } from '../../molecules/FieldGroup/FieldGroup.tsx';
 import { Form, type FormRefusal } from '../../molecules/Form/Form.tsx';
 import { InfoTip } from '../../molecules/InfoTip/InfoTip.tsx';
 import { Modal } from '../../molecules/Modal/Modal.tsx';
@@ -399,71 +400,75 @@ function RelationshipForm({
       focusesFirstField={false}
     >
       {readOnlyReason !== undefined && <Callout>{readOnlyReason}</Callout>}
-      {objectSelect('from', fromId, from !== undefined)}
-      {objectSelect('to', toId, to !== undefined)}
+      {/* Fixed (edit, read only), the cards below name both objects: the read only Selects would say it twice. */}
+      {!isFixed && objectSelect('from', fromId, from !== undefined)}
+      {!isFixed && objectSelect('to', toId, to !== undefined)}
       {isShaped && (
         // The two objects as two cards with how many each holds of the other written on it, as Attio draws it
         // (the CRM flow pass, 31 October 2026): the choice is made on the card it describes, in words.
-        <div className={styles.shape}>
-          <div className={styles.preview} role="group" aria-label={strings.cardinality}>
-            <Card
-              tone="sunken"
-              title={near.title}
-              {...(fromObject === undefined ? {} : { eyebrow: <Icon name={fromObject.icon} tile={fromObject.hue} /> })}
-            >
-              {isFixed ? (
-                <p className={styles.holds}>
-                  {isSelf ? strings.thisSideHolds : strings.eachHas(near.singular)}{' '}
-                  <strong className={styles.answer}>
-                    {holdsOne.from ? strings.holdsOne(far.singular) : strings.holdsMany(far.plural)}
-                  </strong>
-                </p>
-              ) : (
-                <RadioGroup
-                  label={isSelf ? strings.thisSideHolds : strings.eachHas(near.singular)}
-                  value={holdsOne.from ? 'one' : 'many'}
-                  onChange={(next) => {
-                    setCardinality(cardinalityOf(next === 'one', holdsOne.to));
-                  }}
-                  {...(cardinalityError === undefined ? {} : { error: cardinalityError })}
-                >
-                  <Radio value="one">{strings.one(far.singular)}</Radio>
-                  <Radio value="many">{strings.many(far.plural)}</Radio>
-                </RadioGroup>
-              )}
-            </Card>
-            <span className={styles.link}>
-              <Icon name="arrow-left-right" />
-            </span>
-            <Card
-              tone="sunken"
-              title={far.title}
-              {...(toObject === undefined ? {} : { eyebrow: <Icon name={toObject.icon} tile={toObject.hue} /> })}
-            >
-              {isFixed ? (
-                <p className={styles.holds}>
-                  {isSelf ? strings.reverseSideHolds : strings.eachHas(far.singular)}{' '}
-                  <strong className={styles.answer}>
-                    {holdsOne.to ? strings.holdsOne(near.singular) : strings.holdsMany(near.plural)}
-                  </strong>
-                </p>
-              ) : (
-                <RadioGroup
-                  label={isSelf ? strings.reverseSideHolds : strings.eachHas(far.singular)}
-                  value={holdsOne.to ? 'one' : 'many'}
-                  onChange={(next) => {
-                    setCardinality(cardinalityOf(holdsOne.from, next === 'one'));
-                  }}
-                >
-                  <Radio value="one">{strings.one(near.singular)}</Radio>
-                  <Radio value="many">{strings.many(near.plural)}</Radio>
-                </RadioGroup>
-              )}
-            </Card>
-            {/* Saying once why the cards don't change: the shape is fixed once the relationship exists. */}
-            {isEditing && !isReadOnly && <p className={styles.fixed}>{strings.shapeFixed}</p>}
+        <FieldGroup label={strings.cardinality} {...(isEditing && !isReadOnly ? { hint: strings.shapeFixed } : {})}>
+          <div className={styles.shape}>
+            <div className={styles.preview}>
+              <Card
+                tone="sunken"
+                title={near.title}
+                {...(fromObject === undefined
+                  ? {}
+                  : { eyebrow: <Icon name={fromObject.icon} tile={fromObject.hue} /> })}
+              >
+                {isFixed ? (
+                  <p className={styles.holds}>
+                    {isSelf ? strings.thisSideHolds : strings.eachHas(near.singular)}{' '}
+                    <strong className={styles.answer}>
+                      {holdsOne.from ? strings.holdsOne(far.singular) : strings.holdsMany(far.plural)}
+                    </strong>
+                  </p>
+                ) : (
+                  <RadioGroup
+                    label={isSelf ? strings.thisSideHolds : strings.eachHas(near.singular)}
+                    value={holdsOne.from ? 'one' : 'many'}
+                    onChange={(next) => {
+                      setCardinality(cardinalityOf(next === 'one', holdsOne.to));
+                    }}
+                    {...(cardinalityError === undefined ? {} : { error: cardinalityError })}
+                  >
+                    <Radio value="one">{strings.one(far.singular)}</Radio>
+                    <Radio value="many">{strings.many(far.plural)}</Radio>
+                  </RadioGroup>
+                )}
+              </Card>
+              <span className={styles.link}>
+                <Icon name="arrow-left-right" />
+              </span>
+              <Card
+                tone="sunken"
+                title={far.title}
+                {...(toObject === undefined ? {} : { eyebrow: <Icon name={toObject.icon} tile={toObject.hue} /> })}
+              >
+                {isFixed ? (
+                  <p className={styles.holds}>
+                    {isSelf ? strings.reverseSideHolds : strings.eachHas(far.singular)}{' '}
+                    <strong className={styles.answer}>
+                      {holdsOne.to ? strings.holdsOne(near.singular) : strings.holdsMany(near.plural)}
+                    </strong>
+                  </p>
+                ) : (
+                  <RadioGroup
+                    label={isSelf ? strings.reverseSideHolds : strings.eachHas(far.singular)}
+                    value={holdsOne.to ? 'one' : 'many'}
+                    onChange={(next) => {
+                      setCardinality(cardinalityOf(holdsOne.from, next === 'one'));
+                    }}
+                  >
+                    <Radio value="one">{strings.one(near.singular)}</Radio>
+                    <Radio value="many">{strings.many(near.plural)}</Radio>
+                  </RadioGroup>
+                )}
+              </Card>
+              {/* Saying once why the cards don't change: the shape is fixed once the relationship exists. */}
+            </div>
           </div>
-        </div>
+        </FieldGroup>
       )}
       {isShaped && nameField('from')}
       {isShaped && nameField('to')}

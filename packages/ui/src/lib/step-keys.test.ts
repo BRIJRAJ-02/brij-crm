@@ -40,5 +40,10 @@ describe('stepOf', () => {
     expect(stepOf(press('ArrowDown'), [element('BUTTON', 'tab'), element('DIV', 'tablist')])).toBeUndefined();
     expect(stepOf(press('ArrowDown'), [element('DIV'), element('DIV', 'listbox')])).toBeUndefined();
     expect(stepOf(press('ArrowUp'), [element('DIV', 'menuitem')])).toBeUndefined();
+    expect(stepOf(press('ArrowDown'), [element('DIV', 'tabpanel')])).toBeUndefined();
+  });
+
+  it('steps from a button inside a tab’s panel', () => {
+    expect(stepOf(press('ArrowDown'), [element('BUTTON'), element('DIV', 'tabpanel')])).toBe('next');
   });
 });

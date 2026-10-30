@@ -208,13 +208,13 @@ function ViewRoute() {
       />
     );
   }
-  // The record panel (spec 0017, AC-384): each change replaces the address, so Back leaves the view, not each step.
-  const toPeek = (next: ViewSearch) => {
+  // The record panel (spec 0017, AC-384): opening it is one step in the history; stepping, tabs and closing replace.
+  const toPeek = (next: ViewSearch, replace = true) => {
     void navigate({
       to: '/w/$slug/objects/$object/views/$viewId',
       params: { slug: params.slug, object: params.object, viewId: params.viewId },
       search: next,
-      replace: true,
+      replace,
     });
   };
   const { record: _record, panelTab: _tab, ...withoutPeek } = search;
@@ -224,7 +224,8 @@ function ViewRoute() {
         recordId: search.record,
         tab: search.panelTab ?? 'details',
         open: (recordId) => {
-          toPeek({ ...search, record: recordId });
+          // Opening pushes, so Back closes the panel; a step or another row replaces it.
+          toPeek({ ...search, record: recordId }, search.record !== undefined);
         },
         setTab: (tab) => {
           toPeek({

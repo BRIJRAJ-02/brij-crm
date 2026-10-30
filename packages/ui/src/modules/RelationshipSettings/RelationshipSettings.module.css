@@ -1,7 +1,7 @@
 /* RelationshipSettings: the two objects as two sunken Cards side by side,
    space-8 apart with the link's arrow between them, each holding its side's
    question; on a narrow dialog they stack, the arrow turned to run between
-   them. The fixed shape's line runs under both. */
+   them. */
 @layer components {
   /* The slot the cards measure, so they stack by the dialog's width, not the window's. */
   .shape {
@@ -33,14 +33,6 @@
     color: var(--text);
     font: var(--text-body-strong);
     letter-spacing: var(--tracking-body-strong);
-  }
-
-  .fixed {
-    grid-column: 1 / -1;
-    margin: 0;
-    color: var(--text-secondary);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
   }
 
   @container (inline-size < 480px) {

@@ -76,7 +76,6 @@ export const bulkStrings = {
   } satisfies Record<BulkOp, string>,
   checked: 'Checked',
   unchecked: 'Unchecked',
-  clearsValue: (title: string, records: string) => `${title} will be emptied on ${records}.`,
   /** AC-529: a unique attribute can't be Set on several records. */
   uniqueRule: (title: string) => `${title} is unique, so several records can’t share one value.`,
   noFields: (pluralName: string) => `${pluralName} have no fields you can change in bulk.`,
@@ -276,9 +275,9 @@ export function bulkEditToast(
 
 /**
  * Several fields changed in one Apply, sent one bulk edit each (the server's edit takes one field): one outcome for
- * the one toast. A failure or a too-many answer stands for the whole (the fields before it landed and can be undone);
- * otherwise the records touched are the most any field touched, and every landed edit's undo id is kept, oldest
- * first, so Undo can take them back newest first.
+ * the one toast. A failure or a too-many answer among them stands for the whole; otherwise the records touched are the
+ * most any field touched. Every landed edit's undo id is kept, oldest first, so Undo can take them back newest first
+ * (the screen passes only the edits that landed when a later field was refused, so their toast still offers Undo).
  */
 export function combineEditResults(results: readonly BulkEditResult[]): {
   readonly result: BulkEditResult;

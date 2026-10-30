@@ -52,7 +52,7 @@ function SamplePanel({ startOpen = true, onOpenPage, status = 'ready', stats = '
       </Button>
       <RecordPanel
         status={status}
-        {...(status === 'loading' ? {} : { record })}
+        {...(status === 'loading' || gone === 'unavailable' ? {} : { record })}
         isOpen={isOpen}
         onClose={() => {
           setOpen(false);
@@ -215,6 +215,7 @@ export const NoLongerAvailable: Story = {
 export const Unavailable: Story = {
   args: { gone: 'unavailable', stats: 'none' },
   play: async ({ canvas }) => {
+    await expect(canvas.getByRole('dialog', { name: 'Record unavailable' })).toBeInTheDocument();
     await expect(canvas.getByText('This record isn’t available.')).toBeInTheDocument();
     await expect(canvas.queryByRole('tab')).not.toBeInTheDocument();
   },

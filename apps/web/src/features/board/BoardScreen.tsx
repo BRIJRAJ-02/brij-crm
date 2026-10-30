@@ -453,7 +453,7 @@ function BoardBody({
   );
   const store = useBoardStore(slug, object.id, plan, query, attributeIds);
   const peekRecordId = peek?.recordId;
-  const { data, toasts } = useRouteContext({ from: '__root__' });
+  const { data } = useRouteContext({ from: '__root__' });
   const canChangeSchema = useCan('schema.manage');
   // "+ Add stage" (the CRM flow pass): for whoever may shape the schema, on a board grouped by a status or select
   // they may write. The option is made through the path a Select's "Create" uses; the board gains its column once
@@ -464,13 +464,11 @@ function BoardBody({
           label: plan.groupBy.type === 'status' ? strings.addStage : strings.addOption,
           onAdd: (title) => {
             const making = data.options.make(slug, object.id, plan.groupBy.id, title);
-            if (making === undefined) return Promise.resolve();
+            if (making === undefined) return Promise.resolve(undefined);
+            // A refusal (a name a stage already has, the option limit) is said under the name, which stays.
             return making.made.then(
               () => undefined,
-              (error: unknown) => {
-                toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : strings.tryAgain });
-                throw error;
-              },
+              (error: unknown) => (isDataError(error) ? error.message : strings.tryAgain),
             );
           },
         }
@@ -682,14 +680,12 @@ function LoadedBoard({
   // The panel's Previous and Next: the cards either side of its record in the record's own column.
   const peekSteps = ((): PeekSteps | undefined => {
     if (peekId === undefined) return undefined;
-    for (const column of board.columns) {
-      const source = column.state?.source;
-      if (source === undefined) continue;
-      for (let index = 0; index < source.count; index += 1) {
-        if (source.getItem(index)?.id === peekId) {
-          return stepsAround(index, source.count, (at) => source.getItem(at)?.id);
-        }
-      }
+    // Each column's view knows a record's row by a map lookup, so this costs one lookup per column, not a scan.
+    for (const column of store.getSnapshot().columns) {
+      const at = column.view?.indexOf(peekId);
+      const source = column.view?.getSnapshot().source;
+      if (at !== undefined && source !== undefined)
+        return stepsAround(at, source.count, (row) => source.getItem(row)?.id);
     }
     return undefined;
   })();

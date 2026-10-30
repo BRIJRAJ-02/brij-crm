@@ -58,7 +58,7 @@
   @media (hover: hover) and (pointer: fine) {
     .collapse {
       opacity: 0;
-      transition: opacity var(--duration-press) var(--ease-hover);
+      transition: opacity var(--duration-hover) var(--ease-hover);
     }
 
     .collapse:focus-within,

@@ -6,7 +6,7 @@ import type { AttributeDefinition, MemberSummary, ObjectSummary, RecordState, Re
 import { useCommentCount, useNoteTotal, useRecord, useTaskTotal } from '@crm/data/react';
 import { Callout, EmptyState, RecordPanel, type RecordPanelTab } from '@crm/ui';
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CommentsTab } from '../comments/CommentsTab.tsx';
 import { strings as commentStrings } from '../comments/strings.ts';
 import { NotesTab } from '../notes/NotesTab.tsx';
@@ -44,12 +44,15 @@ export interface RecordPeekProps {
   readonly onClose: () => void;
 }
 
+/** How long a step waits before opening its record, so a held ↓ opens only where it stops. */
+const STEP_SETTLE_MS = 150;
+
 /**
  * The record panel: its sources opened through the data layer, then the record in whichever state it is. The panel
  * draws once the first record's sources are in (the table already holds its body, so that is a moment), and a step
  * keeps the last record's until the next one's arrive, so the panel never slides in twice nor flashes empty.
  */
-export function RecordPeek(props: RecordPeekProps) {
+function RecordPeekPanel(props: RecordPeekProps) {
   const { slug, object, attributes, recordId } = props;
   const { data } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
@@ -57,20 +60,29 @@ export function RecordPeek(props: RecordPeekProps) {
   // The last sources that arrived, whichever record they are for, and a record whose sources failed to open.
   const [held, setHeld] = useState<PeekSources | undefined>(undefined);
   const [failedFor, setFailedFor] = useState<string | undefined>(undefined);
+  // Whether a record shows yet: the first opens at once; a step waits a moment, so holding ↓ opens only the record
+  // it stops on rather than every one it passes.
+  const isShowing = useRef(false);
   useEffect(() => {
     let isCurrent = true;
-    openPeek(data, slug, object, attributes, recordId).then(
-      (sources) => {
-        if (!isCurrent) return;
-        setHeld(sources);
-        setFailedFor(undefined);
-      },
-      () => {
-        if (isCurrent) setFailedFor(recordId);
-      },
-    );
+    const open = () => {
+      openPeek(data, slug, object, attributes, recordId).then(
+        (sources) => {
+          if (!isCurrent) return;
+          isShowing.current = true;
+          setHeld(sources);
+          setFailedFor(undefined);
+        },
+        () => {
+          if (isCurrent) setFailedFor(recordId);
+        },
+      );
+    };
+    const timer = isShowing.current ? setTimeout(open, STEP_SETTLE_MS) : undefined;
+    if (timer === undefined) open();
     return () => {
       isCurrent = false;
+      clearTimeout(timer);
     };
   }, [data, slug, object, attributes, recordId, attempt]);
   if (failedFor === recordId) {
@@ -93,6 +105,27 @@ export function RecordPeek(props: RecordPeekProps) {
   }
   return held === undefined ? null : <LoadedPeek {...props} sources={held} />;
 }
+
+/**
+ * The panel over a table or board. It draws again only when what it shows changes: the list beside it renders on
+ * every scroll and live patch, and hands it a new steps object each time with the same two ids.
+ */
+export const RecordPeek = memo(
+  RecordPeekPanel,
+  (before, after) =>
+    before.slug === after.slug &&
+    before.object === after.object &&
+    before.attributes === after.attributes &&
+    before.members === after.members &&
+    before.recordId === after.recordId &&
+    before.tab === after.tab &&
+    before.onTabChange === after.onTabChange &&
+    before.onOpen === after.onOpen &&
+    before.onClose === after.onClose &&
+    before.steps?.previous === after.steps?.previous &&
+    before.steps?.next === after.steps?.next &&
+    (before.steps === undefined) === (after.steps === undefined),
+);
 
 /** Previous and Next, from the steps the list worked out; both left out when the list doesn't hold the record. */
 function stepProps({ steps, onOpen }: Pick<RecordPeekProps, 'steps' | 'onOpen'>) {

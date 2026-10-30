@@ -19,6 +19,7 @@ import {
   Button,
   Callout,
   FieldGroup,
+  focusLater,
   Form,
   iconOf,
   InfoTip,
@@ -30,7 +31,7 @@ import {
 } from '@crm/ui';
 import { usePendingOptions } from '@crm/data/react';
 import { useParams, useRouteContext } from '@tanstack/react-router';
-import { Fragment, useEffect, useId, useMemo, useState } from 'react';
+import { Fragment, useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { MemberPicker } from '../records/members.ts';
 import { withOption, withoutOption } from '../records/option-values.ts';
 import { useOptionMaker } from '../records/options.ts';
@@ -85,6 +86,12 @@ export interface BulkEditChoice {
   readonly value?: unknown;
 }
 
+/**
+ * What Apply answers: the outcome, and on a refusal how many of the fields before it landed (their toast already
+ * went, with Undo), so the dialog keeps only the fields still to send.
+ */
+export type BulkApplied = BulkEditResult & { readonly landed?: number };
+
 /** Props for the bulk edit dialog. */
 export interface BulkEditDialogProps {
   readonly isOpen: boolean;
@@ -98,7 +105,7 @@ export interface BulkEditDialogProps {
   /** The records in words for the title ("48 people", "all 10,000+ matching people"). */
   readonly records?: string;
   /** Sends the edits, one per field, in order; the dialog waits for them, and shows a refusal above its fields. */
-  readonly onApply: (choices: readonly BulkEditChoice[]) => Promise<BulkEditResult>;
+  readonly onApply: (choices: readonly BulkEditChoice[]) => Promise<BulkApplied>;
   /** One field only: the change runs as a background job, which takes one field (no Add field). */
   readonly isSingle?: boolean;
 }
@@ -282,6 +289,7 @@ function BulkEditForm({
   const [rows, setRows] = useState<readonly EditRow[]>(() => [emptyRow(0)]);
   const [nextKey, setNextKey] = useState(1);
   const [refusals, setRefusals] = useState<readonly FormRefusal[]>([]);
+  const addRef = useRef<HTMLButtonElement>(null);
   const change = (key: number, patch: RowPatch) => {
     setRows((held) =>
       held.map((row) => (row.key === key ? { ...row, ...(typeof patch === 'function' ? patch(row) : patch) } : row)),
@@ -315,6 +323,9 @@ function BulkEditForm({
       (result) => {
         onBusyChange(false);
         if (result.kind === 'failed') {
+          // The fields that landed leave the dialog: Apply again sends only what is left.
+          const landed = result.landed ?? 0;
+          if (landed > 0) setRows((held) => held.slice(landed));
           // Refused whole (a read only field, the network): said here, where it was asked.
           const error = result.error;
           setRefusals([{ code: error.code, message: refusalSummary(error) }]);
@@ -384,6 +395,8 @@ function BulkEditForm({
                 label={bulkStrings.removeField(title ?? bulkStrings.fieldAt(index + 1))}
                 onPress={() => {
                   setRows((held) => held.filter((each) => each.key !== row.key));
+                  // The pressed Remove leaves with its row: focus goes on to Add field.
+                  focusLater(() => addRef.current);
                 }}
               />
             }
@@ -394,6 +407,7 @@ function BulkEditForm({
       })}
       {canAdd && (
         <Button
+          ref={addRef}
           variant="ghost"
           icon="plus"
           onPress={() => {

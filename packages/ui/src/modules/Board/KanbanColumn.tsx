@@ -2,9 +2,10 @@
 // as a virtualised React Aria GridList. The column is a drop zone of the
 // library's drag wrapper, and each card a sortable item in it, moved by
 // pointer from anywhere on the card, or by keyboard from its grip.
-import { useId, useMemo } from 'react';
+import { useId, useMemo, useRef } from 'react';
 import { GridList, GridListItem, ListLayout, Virtualizer, type Key } from 'react-aria-components';
 import { Button } from '../../atoms/Button/Button.tsx';
+import { focusLater } from '../../lib/focus-later.ts';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { StatusDot } from '../../atoms/StatusDot/StatusDot.tsx';
 import type { FieldAttribute } from '../../fields/types.ts';
@@ -111,6 +112,9 @@ export function KanbanColumn({
   );
   const cardAt = (key: Key) => itemOfKey(column.cards, rows, key);
   const titleId = useId();
+  // Folding or opening takes away the button pressed: focus goes to the one that takes its place.
+  const collapseRef = useRef<HTMLButtonElement>(null);
+  const expandRef = useRef<HTMLButtonElement>(null);
   return (
     <section
       ref={bindZone}
@@ -124,7 +128,16 @@ export function KanbanColumn({
       <div className={styles.head}>
         {/* A strip the viewer folded opens again from its top, where the eye lands on its name. */}
         {isCollapsed && onExpand !== undefined && (
-          <Button variant="ghost" icon="panel-left-open" label={strings.expand(column.title)} onPress={onExpand} />
+          <Button
+            ref={expandRef}
+            variant="ghost"
+            icon="panel-left-open"
+            label={strings.expand(column.title)}
+            onPress={() => {
+              onExpand();
+              focusLater(() => collapseRef.current);
+            }}
+          />
         )}
         <h3 id={titleId} className={styles.heading}>
           {column.hue === undefined ? (
@@ -151,10 +164,14 @@ export function KanbanColumn({
         {onCollapse !== undefined && !isCollapsed && (
           <span className={styles.collapse}>
             <Button
+              ref={collapseRef}
               variant="ghost"
               icon="panel-left-close"
               label={strings.collapse(column.title)}
-              onPress={onCollapse}
+              onPress={() => {
+                onCollapse();
+                focusLater(() => expandRef.current);
+              }}
             />
           </span>
         )}
