@@ -10,6 +10,7 @@ import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDatabase, type Database } from '@crm/db';
 import { testQuery } from '@crm/db/testing';
 import { systemScope } from '../access/door.ts';
+import { listAuditEvents } from '../audit/audit.ts';
 import { createBookingPage } from '../booking/pages.ts';
 import { newId } from '../engine/ids.ts';
 import { isRefusal } from '../engine/refusals.ts';
@@ -245,6 +246,14 @@ describe('the Team week scenario (AC-1289 to AC-1292)', () => {
     }
     const sent = await w.emails();
     expect(sent.map((each) => each.to_member_id).sort()).toEqual([sam, ana, ben].sort());
+    // Settings › History shows them: five schedule changes by Olga.
+    const history = await listAuditEvents(w.owner, { limit: 100 });
+    expect(
+      history.entries.filter(
+        (entry) =>
+          entry.action === 'schedule.changed' && entry.actor.kind === 'member' && entry.actor.memberId === w.memberId,
+      ),
+    ).toHaveLength(5);
 
     // See: Priya reads Sam's row, can't change it, and a cell write is refused.
     const seen = await readTeamWeek(w.as(priya), { now: realNow }, { weekStart: monday });
@@ -261,9 +270,20 @@ describe('the Team week scenario (AC-1289 to AC-1292)', () => {
     expect((await refusalOf(setUsualHours(w.as(priya), { memberIds: [ana], weekly: anaWeek() }))).code).toBe(
       'NOT_FOUND',
     );
+    // A bulk write naming one member Priya manages and one she only sees is refused whole: Ben keeps his hours.
+    await grantDelegation(w.as(ben), {
+      delegateMemberId: priya,
+      target: { type: 'member', memberId: ben },
+      level: 'manage',
+    });
+    expect((await refusalOf(setUsualHours(w.as(priya), { memberIds: [ben, sam], weekly: anaWeek() }))).code).toBe(
+      'FORBIDDEN',
+    );
+    const kept = await readTeamWeek(w.owner, { now: realNow }, { weekStart: monday });
+    expect(kept.rows.find((row) => row.memberId === ben)?.days[0]?.ranges).toEqual([ten]);
     // A member with no reach sees only themself.
-    const alone = await readTeamWeek(w.as(ben), { now: realNow }, { weekStart: monday });
-    expect(alone.rows.map((row) => row.memberId)).toEqual([ben]);
+    const alone = await readTeamWeek(w.as(ana), { now: realNow }, { weekStart: monday });
+    expect(alone.rows.map((row) => row.memberId)).toEqual([ana]);
     expect(alone.rows[0]?.canChange).toBe(true);
   });
 

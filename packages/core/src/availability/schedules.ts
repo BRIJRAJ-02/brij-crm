@@ -133,7 +133,7 @@ async function targetMember(
  * touched as it was and as it is now (no `before` on a schedule it made, no `after` on one it deleted).
  */
 export interface ScheduleChange {
-  readonly kind: 'create' | 'update' | 'set_default' | 'duplicate' | 'delete' | 'default_hours' | 'team_week';
+  readonly kind: 'create' | 'update' | 'set_default' | 'duplicate' | 'delete' | 'default_hours';
   readonly memberId: string;
   readonly schedules: readonly { readonly id: string; readonly before?: ScheduleRow; readonly after?: ScheduleRow }[];
 }
@@ -522,14 +522,15 @@ async function clearDefault(
 
 /**
  * The hours as a schedule write stores them (spec 0037, AC-1293): every date override dated more than 8 weeks before
- * today in the schedule's zone dropped, so a member rostered week after week never fills the schedule; past
- * `SCHEDULE_OVERRIDES_MAX` still, refused. Today is the database's clock, read in the write's own transaction.
+ * today dropped, so a member rostered week after week never fills the schedule; past `SCHEDULE_OVERRIDES_MAX` still,
+ * refused. Today is the database's own date (its session runs in UTC): a day either way is nothing against 8 weeks, and
+ * no zone Postgres might not know is ever handed to it.
  */
 export async function keptHours(tx: WorkspaceTx, hours: BookingAvailability): Promise<BookingAvailability> {
   let kept = hours;
   if (hours.overrides.length > 0) {
     const found = await tx.execute<{ cutoff: string }>(sql`
-      select ((now() at time zone ${hours.timeZone})::date - ${TEAM_WEEK.keptWeeks * 7}::int)::text as cutoff
+      select (current_date - ${TEAM_WEEK.keptWeeks * 7}::int)::text as cutoff
     `);
     const cutoff = found.rows[0]?.cutoff;
     if (cutoff !== undefined) {
@@ -572,7 +573,8 @@ export async function saveScheduleHours(
   return {
     row: updated,
     change: {
-      kind: 'team_week',
+      // A Team week write is an update of the default's hours, so History says it as one (spec 0046's lines).
+      kind: 'update',
       memberId: updated.memberId,
       // A default stored by this write shows as made, with the hours it now has.
       schedules: [
