@@ -109,9 +109,7 @@ export const Route = createFileRoute('/w/$slug/objects/$object_/$recordId/$tab')
             attributeId: side.attribute.id,
             farObjectIds: side.attribute.relationship?.targetObjectIds ?? [side.farObject.id],
             // The rows show names only: a far record reads again when its name changes, not with each edit.
-            ...(side.farObject.primaryAttributeId === undefined
-              ? {}
-              : { farNameAttributeIds: [side.farObject.primaryAttributeId] }),
+            farNameAttributeIds: side.farNameAttributeIds,
           }),
         ),
       ),
