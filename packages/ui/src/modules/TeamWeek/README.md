@@ -25,7 +25,7 @@ The references (Mobbin): Fresha's roster (hours chips per cell, time off inside 
 - `isEditable` with `renderEditor` makes a person's cells buttons; otherwise they are text. The screen decides (a past week, See only).
 - `badge` shows beside the week's hours only when given: the screen passes the zone's offset only when it differs from the reader's.
 - `extra` sits under the name (a Link to the person's schedules); `actions` at the cell's end (the row's menu).
-- The footer row follows the people, and is left out with no people.
+- The footer row follows the people, and is left out with no people. A total's `extra` is one more quiet line under its detail, in the detail's own style (the workspace link's coverage, "Link: 3"), so a second footer row was never needed; the total's `label` says it too.
 - `isLoading` shows Table's skeleton rows; `emptyState` shows with no people.
 
 ## States

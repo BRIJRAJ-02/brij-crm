@@ -66,6 +66,8 @@ export const TeamWeekRow = z.object({
   otherSchedules: z.number().int().min(0),
   canChange: z.boolean(),
   schedule: z.object({ id: Uuid.nullable(), updatedAt: Timestamp.nullable() }),
+  /** Whether the workspace link can book them (in its pool and switched on); set only while the workspace has one. */
+  inLink: z.boolean().optional(),
 });
 /** One member's row. */
 export type TeamWeekRow = z.infer<typeof TeamWeekRow>;
@@ -75,6 +77,8 @@ export const TeamWeekTotal = z.object({
   date: DateValue,
   working: z.number().int().min(0),
   minutes: z.number().int().min(0),
+  /** Of those working, how many the workspace link can book; only while the workspace has one. */
+  linked: z.number().int().min(0).optional(),
 });
 /** The footer's day. */
 export type TeamWeekTotal = z.infer<typeof TeamWeekTotal>;
@@ -91,6 +95,11 @@ export const TeamWeek = z.object({
   latest: DateValue,
   rows: z.array(TeamWeekRow),
   footer: z.array(TeamWeekTotal).length(7),
+  /**
+   * The workspace booking link whose coverage the footer counts (the brief's decision 3): the workspace's first one,
+   * a live one before a paused one, then the oldest. Absent when the workspace has none.
+   */
+  link: z.object({ pageId: Uuid, title: z.string() }).optional(),
   nextCursor: z.string().optional(),
 });
 /** A week of the roster. */

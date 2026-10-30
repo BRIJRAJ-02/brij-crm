@@ -47,10 +47,14 @@ export interface TeamWeekPerson {
   readonly isEditable: boolean;
 }
 
-/** The footer's day: how many work, and their hours ("4 people", "32 h"). */
+/**
+ * The footer's day: how many work, and their hours ("4 people", "32 h"), and optionally one more quiet line under them
+ * (the workspace link's coverage, "Link: 3"). `label` is what a screen reader hears for all of it.
+ */
 export interface TeamWeekTotal {
   readonly value: string;
   readonly detail: string;
+  readonly extra?: string;
   readonly label: string;
 }
 
@@ -128,6 +132,11 @@ export function TeamWeek({
                 {total.detail !== '' && (
                   <span aria-hidden="true" className={styles.totalDetail}>
                     {total.detail}
+                  </span>
+                )}
+                {total.extra !== undefined && total.extra !== '' && (
+                  <span aria-hidden="true" className={styles.totalDetail}>
+                    {total.extra}
                   </span>
                 )}
               </span>

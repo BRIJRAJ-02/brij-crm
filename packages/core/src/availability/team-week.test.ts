@@ -18,6 +18,7 @@ import { createWorkspace } from '../engine/workspaces.ts';
 import { grantDelegation } from '../scheduling/delegations.ts';
 import { runSchedulingNotice } from '../scheduling/notice.ts';
 import { createTimeOff } from '../scheduling/time-off.ts';
+import { listRotations, updateRotation } from '../rotation/rotations.ts';
 import { testScope } from '../testing.ts';
 import { createSchedule, saveDefaultHours, updateSchedule } from './schedules.ts';
 import { footerOf, mergedMinutes, mondayOf, weekDates } from '@crm/contracts/roster';
@@ -161,6 +162,18 @@ describe('the pure parts', () => {
     ];
     const footer = footerOf(dates, rows);
     expect(footer[0]).toEqual({ date: '2026-11-02', working: 1, minutes: 480 });
+    // With a workspace link, the rows it books are counted apart: here neither is in it.
+    expect(
+      footerOf(
+        dates,
+        rows.map((row) => ({ ...row, inLink: false })),
+      )[0],
+    ).toEqual({
+      date: '2026-11-02',
+      working: 1,
+      minutes: 480,
+      linked: 0,
+    });
     expect(footer[1]).toEqual({ date: '2026-11-03', working: 1, minutes: 480 });
   });
 });
@@ -345,6 +358,47 @@ describe('the Team week scenario (AC-1289 to AC-1292)', () => {
     expect(managed.footer[2]?.working).toBe(2);
     const seen = await readTeamWeek(w.as(priya), { now: realNow }, { weekStart: monday });
     expect(seen.rows.find((row) => row.memberId === sam)?.days[2]?.away).toEqual({});
+  });
+
+  it('counts, per day, whom the workspace link can book: working, not away, in its pool and switched on', async () => {
+    const w = await world();
+    const sam = await w.add('Sam Lee');
+    const kim = await w.add('Kim Park');
+    const monday = plusDays(thisMonday(), 7);
+    // No workspace link: no coverage line, and no row says whether it is in one.
+    const before = await readTeamWeek(w.owner, { now: realNow }, { weekStart: monday });
+    expect(before.link).toBeUndefined();
+    expect(before.footer[0]).not.toHaveProperty('linked');
+    expect(before.rows.every((row) => row.inLink === undefined)).toBe(true);
+    const page = await createBookingPage(
+      w.owner,
+      { id: newId(), title: 'Talk to us', timeZone: 'UTC', scope: 'workspace' },
+      realNow(),
+    );
+    const rotation = (await listRotations(w.owner, realNow()))[0];
+    await updateRotation(
+      w.owner,
+      {
+        rotationId: rotation?.id ?? '',
+        settings: {},
+        members: [{ memberId: kim, weight: 100, priority: 2, dailyCap: null, weeklyCap: null, isOn: false }],
+      },
+      realNow(),
+    );
+    await createTimeOff(
+      w.as(sam),
+      { now: realNow },
+      { id: newId(), fromDate: plusDays(monday, 1), toDate: plusDays(monday, 1), reason: 'vacation' },
+    );
+    const week = await readTeamWeek(w.owner, { now: realNow }, { weekStart: monday });
+    expect(week.link).toEqual({ pageId: page.id, title: 'Talk to us' });
+    expect(week.rows.find((row) => row.memberId === kim)?.inLink).toBe(false);
+    expect(week.rows.find((row) => row.memberId === sam)?.inLink).toBe(true);
+    // Monday: Olga, Sam and Kim work; Kim is switched off. Tuesday: Sam is away.
+    expect(week.footer[0]).toMatchObject({ working: 3, linked: 2 });
+    expect(week.footer[1]).toMatchObject({ working: 2, linked: 1 });
+    // Saturday nobody works.
+    expect(week.footer[5]).toMatchObject({ working: 0, linked: 0 });
   });
 
   it('counts the pages that book by another schedule (AC-1295)', async () => {

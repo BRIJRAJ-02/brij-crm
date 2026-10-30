@@ -31,6 +31,11 @@ export const teamWeekStrings = {
     count === 0
       ? `${day}: nobody working`
       : `${day}: ${teamWeekStrings.people(count)} working, ${hours(minutes)} added up`,
+  /** Under a day's total (the brief's decision 3): how many of those working the workspace link can book. */
+  linkCount: (count: number) => `Link: ${String(count)}`,
+  /** What a screen reader hears after the day's total. */
+  linkLabel: (title: string, count: number) =>
+    count === 0 ? `${title} can book nobody` : `${title} can book ${teamWeekStrings.people(count)}`,
   offset: (minutes: number) => {
     const sign = minutes < 0 ? '−' : '+';
     const whole = Math.abs(minutes);

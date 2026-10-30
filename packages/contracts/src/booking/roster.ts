@@ -92,22 +92,29 @@ export const workingMinutes = (day: RosterDay): number => (day.away === undefine
 export const weekMinutesOf = (days: readonly RosterDay[]): number =>
   days.reduce((sum, day) => sum + workingMinutes(day), 0);
 
-/** The footer over a page of rows (AC-1294): per day, the people working and their merged minutes added up. */
+/**
+ * The footer over a page of rows (AC-1294): per day, the people working and their merged minutes added up; and, when
+ * the rows say whether the workspace link books them (`inLink`, set only while the workspace has one), how many of
+ * those working that day it can book (`linked`).
+ */
 export function footerOf(
   dates: readonly string[],
-  rows: readonly { readonly days: readonly RosterDay[] }[],
-): { readonly date: string; readonly working: number; readonly minutes: number }[] {
+  rows: readonly { readonly days: readonly RosterDay[]; readonly inLink?: boolean | undefined }[],
+): { readonly date: string; readonly working: number; readonly minutes: number; readonly linked?: number }[] {
+  const hasLink = rows.some((row) => row.inLink !== undefined);
   return dates.map((date, index) => {
     let working = 0;
     let total = 0;
+    let linked = 0;
     for (const row of rows) {
       const day = row.days[index];
       const worked = day === undefined ? 0 : workingMinutes(day);
       if (worked > 0) {
         working += 1;
         total += worked;
+        if (row.inLink === true) linked += 1;
       }
     }
-    return { date, working, minutes: total };
+    return { date, working, minutes: total, ...(hasLink ? { linked } : {}) };
   });
 }

@@ -145,6 +145,29 @@ export const ReadOnly: Story = {
   },
 };
 
+/** The footer with the workspace link's coverage under each day: how many of those working it can book. */
+export const LinkCoverage: Story = {
+  render: (args) => (
+    <Stage width="fill">
+      <TeamWeek
+        {...args}
+        people={people().map((each) => ({ ...each, isEditable: false }))}
+        footer={{
+          ...footer,
+          totals: footer.totals.map((total, index) => ({
+            ...total,
+            extra: `Link: ${index < 5 ? String(2) : String(0)}`,
+            label: `${total.label}, the workspace link can book ${index < 5 ? '2' : 'nobody'}`,
+          })),
+        }}
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getAllByText('Link: 2')).toHaveLength(5);
+  },
+};
+
 /** While the week loads. */
 export const Loading: Story = {
   parameters: { crm: { screenshot: false } },

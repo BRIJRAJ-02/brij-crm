@@ -1,7 +1,7 @@
 // Brief
 // Purpose: the Roster (spec 0037, job J6): Availability's Team view, the team's bookable hours for one dated week, people down the side and the days across, with a footer counting who works.
 // Main task: read who works when, and (with Manage) change one person's day for that date only, copy a week to the next, or set usual hours for several people.
-// Leaves out: shifts with roles or places, publishing, labour cost, painting cells by drag, a team filter (no teams yet), and the workspace link's coverage (a later row in the footer).
+// Leaves out: shifts with roles or places, publishing, labour cost, painting cells by drag, and a team filter (no teams yet). The workspace link's coverage is one quiet line under each day's total ("Link: 3"), only while the workspace has a link.
 import {
   clockLabel,
   isDataError,
@@ -326,12 +326,20 @@ function Loaded({
       ? undefined
       : {
           label: words.working,
-          // A later row (the workspace link's coverage per day, spec 0037 decision 3) joins here once it lands.
-          totals: shown.footer.map((total) => ({
-            value: total.working === 0 ? words.nobody : words.people(total.working),
-            detail: total.working === 0 ? '' : words.hours(total.minutes),
-            label: words.totalLabel(dayWords(total.date, locale, 'long'), total.working, total.minutes),
-          })),
+          // The workspace link's coverage (the brief's decision 3): how many of those working it can book, a quiet
+          // line under each day, only while the workspace has a link.
+          totals: shown.footer.map((total) => {
+            const { link } = shown;
+            const linked = total.linked ?? 0;
+            const label = words.totalLabel(dayWords(total.date, locale, 'long'), total.working, total.minutes);
+            return {
+              value: total.working === 0 ? words.nobody : words.people(total.working),
+              detail: total.working === 0 ? '' : words.hours(total.minutes),
+              ...(link === undefined
+                ? { label }
+                : { extra: words.linkCount(linked), label: `${label}. ${words.linkLabel(link.title, linked)}` }),
+            };
+          }),
         };
   const range = rangeWords(week, locale);
   const thisWeek = shown?.thisWeek;

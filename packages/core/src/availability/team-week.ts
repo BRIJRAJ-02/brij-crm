@@ -242,6 +242,7 @@ export async function readTeamWeek(
       note: row.note,
       zone: row.time_zone,
     }));
+    const link = await workspaceLink(tx, scope.workspaceId, ids);
     const changesOwn = mayEditOwnHours(scope);
     const changesOthers = can(scope.access, 'booking.manage');
     const rows: TeamWeekRow[] = page.map((row) => {
@@ -266,6 +267,7 @@ export async function readTeamWeek(
           id: row.schedule_id,
           updatedAt: row.updated_at === null ? null : new Date(row.updated_at).toISOString(),
         },
+        ...(link === undefined ? {} : { inLink: link.pool.has(row.id) }),
       };
     });
     const last = page.at(-1);
@@ -273,11 +275,43 @@ export async function readTeamWeek(
       ...empty,
       rows,
       footer: footerOf(dates, rows),
+      ...(link === undefined ? {} : { link: { pageId: link.pageId, title: link.title } }),
       ...(visible.length > TEAM_WEEK.rowsPerPage && last !== undefined
         ? { nextCursor: encodeCursor(last.name, last.id) }
         : {}),
     };
   });
+}
+
+/**
+ * The workspace booking link the footer counts (the brief's decision 3) and which of `memberIds` it can book: the
+ * workspace's first link that isn't deleted (a live one before a paused one, then the oldest, then by id), and of
+ * `memberIds` those its rotations hold switched on (`rotation_roster`, so "Everyone on the roster" follows
+ * membership). One query; undefined when the workspace has no link.
+ */
+async function workspaceLink(
+  tx: WorkspaceTx,
+  workspaceId: string,
+  memberIds: readonly string[],
+): Promise<{ readonly pageId: string; readonly title: string; readonly pool: ReadonlySet<string> } | undefined> {
+  const found = await tx.execute<{ page_id: string; title: string; pool: string[] }>(sql`
+    select l.id::text as page_id, l.title,
+      array(
+        select distinct r.member_id::text from booking_page_rotations bpr
+        join rotations ro on ro.workspace_id = bpr.workspace_id and ro.id = bpr.rotation_id and ro.deleted_at is null
+        join rotation_roster r on r.workspace_id = bpr.workspace_id and r.rotation_id = bpr.rotation_id
+        where bpr.workspace_id = l.workspace_id and bpr.page_id = l.id and r.is_on
+          and r.member_id = any(${uuidList(memberIds)})
+      ) as pool
+    from (
+      select p.id, p.workspace_id, p.title from booking_pages p
+      where p.workspace_id = ${workspaceId}::uuid and p.scope = 'workspace' and p.deleted_at is null
+      order by (p.status = 'live') desc, p.created_at, p.id
+      limit 1
+    ) l
+  `);
+  const row = found.rows[0];
+  return row === undefined ? undefined : { pageId: row.page_id, title: row.title, pool: new Set(row.pool) };
 }
 
 /**

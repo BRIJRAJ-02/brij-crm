@@ -89,8 +89,8 @@ afterEach(() => {
   resetTheme();
 });
 
-function fake() {
-  const state: TeamWeekState = { status: 'ready', week: WEEK, more: 'idle' };
+function fake(week: TeamWeek = WEEK) {
+  const state: TeamWeekState = { status: 'ready', week, more: 'idle' };
   const held: TeamWeekHeld = {
     subscribe: () => () => undefined,
     getSnapshot: () => state,
@@ -110,8 +110,8 @@ function fake() {
   return { data, teamWeek };
 }
 
-async function render() {
-  const made = fake();
+async function render(week: TeamWeek = WEEK) {
+  const made = fake(week);
   shown = await renderInApp(
     () => (
       <TeamWeekScreen data={made.data} slug="acme" week={MONDAY} search="" zone="Europe/London" members={MEMBERS} />
@@ -134,6 +134,22 @@ describe('the Team week', () => {
     expect(document.querySelectorAll('button[aria-label*="Priya Shah"]')).toHaveLength(0);
     await expect.element(page.getByText('Wednesday 4 November, Priya Shah: Away')).toBeInTheDocument();
     await expect.element(page.getByText('Monday 2 November: 3 people working, 24 h added up')).toBeInTheDocument();
+  });
+
+  it('says under each day how many the workspace link can book, only while there is one', async () => {
+    await render({
+      ...WEEK,
+      link: { pageId: '01900000-0000-7000-8000-0000000000aa', title: 'Talk to us' },
+      footer: WEEK.footer.map((total, index) => ({ ...total, linked: index < 5 ? 2 : 0 })),
+    });
+    await expect.element(page.getByText('Link: 2').first()).toBeInTheDocument();
+    await expect
+      .element(page.getByText('Monday 2 November: 3 people working, 24 h added up. Talk to us can book 2 people'))
+      .toBeInTheDocument();
+    shown?.unmount();
+    await render();
+    await expect.element(page.getByRole('grid', { name: /^Roster, / })).toBeVisible();
+    expect(page.getByText('Link: 2').elements()).toHaveLength(0);
   });
 
   it('moves by the arrow keys, opens a cell with Enter, closes with Esc, and saves a day off', async () => {
