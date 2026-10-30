@@ -1,10 +1,12 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
-import { expect, fn, userEvent, within } from 'storybook/test';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
+import { Badge } from '../../atoms/Badge/Badge.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { settleAnimations } from '../../workbench/animations.ts';
+import type { BookingListRow } from '../BookingList/BookingList.tsx';
 import type { WeekCalendarBlock } from '../WeekCalendar/WeekCalendar.tsx';
-import { TeamDay, type TeamDayLaneItem, type TeamDayPerson } from './TeamDay.tsx';
+import { TeamDay, type TeamDayPerson } from './TeamDay.tsx';
 
 const ADA = '0193a1b2-0000-7000-8000-000000000001';
 const GRACE = '0193a1b2-0000-7000-8000-000000000002';
@@ -12,24 +14,18 @@ const ALAN = '0193a1b2-0000-7000-8000-000000000003';
 const KATHERINE = '0193a1b2-0000-7000-8000-000000000004';
 const LINUS = '0193a1b2-0000-7000-8000-000000000005';
 
-/** The frozen clock's day, Thursday 8 October 2026: five people, one away, one with no hours. Built in a function. */
+/** The frozen clock's day, Thursday 8 October 2026: five people, one away, one off, one in another zone. */
 function people(): TeamDayPerson[] {
   return [
-    {
-      id: ADA,
-      name: 'Ada Lovelace',
-      title: 'Head of sales',
-      status: '2 booked',
-      tone: 'booked',
-      label: 'Ada Lovelace, Head of sales, 2 booked',
-    },
+    { id: ADA, name: 'Ada Lovelace', title: 'Head of sales', status: '2 booked', tone: 'booked' },
     {
       id: GRACE,
       name: 'Grace Hopper',
       title: 'Account executive',
       status: '1 booked',
       tone: 'booked',
-      label: 'Grace Hopper, Account executive, 1 booked',
+      extra: <Badge text="Reconnect" dot="red" isWhole />,
+      extraLabel: 'Reconnect',
     },
     {
       id: ALAN,
@@ -37,18 +33,10 @@ function people(): TeamDayPerson[] {
       title: 'Solutions engineer',
       status: 'Away',
       tone: 'away',
-      label: 'Alan Turing, Solutions engineer, away',
       band: { label: 'Away · Vacation', startMinute: 0, endMinute: 1440 },
     },
-    {
-      id: KATHERINE,
-      name: 'Katherine Johnson',
-      status: 'Free',
-      tone: 'free',
-      badge: 'UTC+5:30',
-      label: 'Katherine Johnson, free, UTC+5:30',
-    },
-    { id: LINUS, name: 'Linus Torvalds', status: 'Off', tone: 'off', label: 'Linus Torvalds, off' },
+    { id: KATHERINE, name: 'Katherine Johnson', status: 'Free', tone: 'free', badge: 'UTC+1' },
+    { id: LINUS, name: 'Linus Torvalds', status: 'Off', tone: 'off' },
   ];
 }
 
@@ -121,24 +109,19 @@ function blocks(): WeekCalendarBlock[] {
   ];
 }
 
-function lane(): TeamDayLaneItem[] {
+/** The lane's bookings, as BookingList's rows: the time, the page, who it was with and whose it was. */
+function lane(): BookingListRow[] {
   return [
     {
       id: 'l1',
-      time: '3:00 PM',
+      date: '3:00 PM',
+      time: '',
       title: 'Follow up',
-      detail: 'Tom Ruiz · Alan Turing',
-      status: 'Host away',
-      label: 'Follow up, 3:00 PM, Tom Ruiz, Alan Turing is away',
+      guestName: 'Tom Ruiz',
+      hostName: 'Alan Turing',
+      badge: 'Host away',
     },
-    {
-      id: 'n1',
-      time: '4:30 PM',
-      title: 'Discovery',
-      detail: 'Ola Berg · left the workspace',
-      status: 'Needs a host',
-      label: 'Discovery, 4:30 PM, Ola Berg, needs a host',
-    },
+    { id: 'n1', date: '4:30 PM', time: '', title: 'Discovery', guestName: 'Ola Berg', hostName: 'Left the workspace' },
   ];
 }
 
@@ -146,7 +129,7 @@ const hours = (person: string) =>
   person === LINUS
     ? []
     : person === KATHERINE
-      ? [{ startMinute: 3 * 60 + 30, endMinute: 11 * 60 + 30 }]
+      ? [{ startMinute: 13 * 60, endMinute: 21 * 60 }]
       : [{ startMinute: 9 * 60, endMinute: 17 * 60 }];
 
 const meta = {
@@ -169,7 +152,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** A day of five people: bookings, closed time and Busy in their columns, one away, one with no hours, and the lane. */
+/** A day of five people: bookings, closed time and Busy in their columns, one away, one off, and the lane. */
 export const Default: Story = {
   parameters: { crm: { preview: true } },
   render: function Render(args) {
@@ -183,7 +166,7 @@ export const Default: Story = {
           openHours={hours}
           now={{ dayKey: '2026-10-08', minute: 14 * 60 + 30 }}
           lane={{
-            items: lane(),
+            rows: lane(),
             ...(openId === undefined ? {} : { openId }),
             detail: <p>Reassign</p>,
             onOpen: setOpenId,
@@ -195,15 +178,18 @@ export const Default: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    // Each person's column is a group named for them, with what is on it.
-    await expect(canvas.getByRole('group', { name: 'Alan Turing, Solutions engineer, away, 1 item' })).toBeVisible();
+    // Each person's column is a group named for them: status, then offset, title and trouble, as the head shows.
+    await expect(canvas.getByRole('group', { name: 'Alan Turing, Away, Solutions engineer, 1 item' })).toBeVisible();
+    await expect(
+      canvas.getByRole('group', { name: 'Grace Hopper, 1 booked, Account executive, Reconnect, 2 items' }),
+    ).toBeVisible();
+    await expect(canvas.getByRole('group', { name: 'Katherine Johnson, Free, UTC+1, nothing on' })).toBeVisible();
     await expect(canvas.getByRole('region', { name: 'Needs a host, 2 bookings' })).toBeVisible();
   },
 };
 
-/** The lane's card opens its booking's card beside it; Escape closes it. */
+/** The lane's row opens its booking's card beside it; Escape closes it and focus goes back to the row. */
 export const LaneOpen: Story = {
-  parameters: { crm: { screenshot: false } },
   render: function Render(args) {
     const [openId, setOpenId] = useState<string | undefined>(undefined);
     return (
@@ -214,7 +200,7 @@ export const LaneOpen: Story = {
           blocks={blocks()}
           openHours={hours}
           lane={{
-            items: lane(),
+            rows: lane(),
             ...(openId === undefined ? {} : { openId }),
             detail: <p>Reassign</p>,
             onOpen: setOpenId,
@@ -226,13 +212,38 @@ export const LaneOpen: Story = {
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const item = canvas.getByRole('button', { name: 'Discovery, 4:30 PM, Ola Berg, needs a host' });
-    await userEvent.click(item);
+    const row = canvas.getByRole('button', { name: 'Discovery' });
+    await userEvent.click(row);
     await settleAnimations();
     await expect(within(document.body).getByRole('dialog')).toBeVisible();
-    await expect(item).toHaveAttribute('aria-expanded', 'true');
+    await expect(row).toHaveAttribute('aria-expanded', 'true');
     await userEvent.keyboard('{Escape}');
-    await expect(item).toHaveAttribute('aria-expanded', 'false');
+    await waitFor(() => expect(row).toHaveFocus());
+  },
+};
+
+/** A colleague the reader may only See: an eye on the head, "view only" in its name, and nothing drawn on Enter. */
+export const SeeOnly: Story = {
+  render: (args) => (
+    <Stage width="fill" height="page">
+      <TeamDay
+        {...args}
+        people={people().map((person) => (person.id === GRACE ? { ...person, canAct: false } : person))}
+        blocks={blocks()}
+        openHours={hours}
+      />
+    </Stage>
+  ),
+  play: async ({ canvas, args }) => {
+    const column = canvas.getByRole('group', { name: /^Grace Hopper, .*view only/ });
+    await expect(column).not.toHaveAttribute('aria-keyshortcuts');
+    column.focus();
+    await userEvent.keyboard('{Enter}');
+    await expect(args.onDraw).not.toHaveBeenCalled();
+    // A column the reader acts on still draws.
+    canvas.getByRole('group', { name: /^Ada Lovelace/ }).focus();
+    await userEvent.keyboard('{Enter}');
+    await expect(args.onDraw).toHaveBeenCalled();
   },
 };
 
@@ -245,24 +256,41 @@ export const Keyboard: Story = {
     </Stage>
   ),
   play: async ({ canvas, args }) => {
-    canvas.getByRole('group', { name: 'Ada Lovelace, Head of sales, 2 booked, 3 items' }).focus();
+    canvas.getByRole('group', { name: 'Ada Lovelace, 2 booked, Head of sales, 3 items' }).focus();
     await userEvent.keyboard('{ArrowRight}');
     await expect(args.onSelectPerson).toHaveBeenCalledWith(GRACE);
   },
 };
 
-/** A phone: one person at a time, Previous and Next in the corner. */
+/** A phone: one person at a time, Previous and Next in the corner, the lane over the grid. */
 export const Phone: Story = {
-  parameters: { crm: { screenshot: false } },
   render: (args) => (
     <Stage width="phone" height="page">
-      <TeamDay {...args} people={people()} blocks={blocks()} openHours={hours} />
+      <TeamDay
+        {...args}
+        people={people()}
+        blocks={blocks()}
+        openHours={hours}
+        lane={{ rows: lane(), onOpen: fn(), onClose: fn() }}
+      />
     </Stage>
   ),
   play: async ({ canvas, args }) => {
     await expect(canvas.getByRole('button', { name: 'Previous person' })).toBeDisabled();
     await userEvent.click(canvas.getByRole('button', { name: 'Next person' }));
     await expect(args.onSelectPerson).toHaveBeenCalledWith(GRACE);
+  },
+};
+
+/** A day with nothing on it yet: the heads and hours, and the quiet line in the middle. */
+export const Empty: Story = {
+  render: (args) => (
+    <Stage width="fill" height="page">
+      <TeamDay {...args} people={people()} openHours={hours} emptyHint="No meetings this day" />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('No meetings this day')).toBeVisible();
   },
 };
 

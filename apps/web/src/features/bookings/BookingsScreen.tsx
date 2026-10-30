@@ -333,7 +333,8 @@ function TeamFilterMenu({
             <MenuSection
               label={strings.teamPeople}
               selectionMode="multiple"
-              selectedKeys={picked}
+              // Ticked means shown: everyone while no one is picked.
+              selectedKeys={picked.length === 0 ? members.map((member) => member.id) : picked}
               onSelectionChange={(keys) => {
                 const ids = [...keys].map(String).filter((id) => members.some((member) => member.id === id));
                 onSearch({ members: ids.length === 0 || ids.length === members.length ? undefined : ids });
@@ -369,6 +370,7 @@ export function BookingCard({
   onAsk: askGiven,
   focusOnMount,
   headingLevel = 4,
+  managesHost,
 }: {
   readonly booking: BookingListItem;
   readonly personHref: string | undefined;
@@ -381,6 +383,11 @@ export function BookingCard({
   readonly focusOnMount?: BookingAsk | undefined;
   /** 4: under the sheet's or the List panel's own heading (level 3); the week's popover has none, and a level too deep there is the smaller harm. */
   readonly headingLevel?: 3 | 4;
+  /**
+   * Whether the reader Manages a member's scheduling (the Team day knows, from its columns): with it, Reassign shows
+   * on a booking whose host they Manage (spec 0030 AC-777, spec 0037 AC-1337). Absent, only booking.admin sees it.
+   */
+  readonly managesHost?: ((memberId: string) => boolean) | undefined;
 }) {
   // The member's zone (their Preferences, else the browser's), as the week is drawn in.
   const { timeZone } = useFormatSettings();
@@ -401,10 +408,10 @@ export function BookingCard({
         ? [{ term: strings.assignedTerm, description: strings.assignedFailed }]
         : assignedItems(read.rows, locale);
   const seats = read === undefined || 'failed' in read ? [] : read.rows.filter((row) => row.voidedAt === undefined);
-  // Reassign a round robin seat (AC-748): admins, and anyone who Manages someone (spec 0030 AC-777, spec 0037
-  // AC-1337): the server checks Manage over both hosts, and the dialog lists only who can take it.
+  // Reassign a round robin seat (AC-748): admins, and on the Team day anyone who Manages its host (spec 0030 AC-777,
+  // spec 0037 AC-1337); the server checks Manage over both hosts, and the dialog lists only who can take it.
   const access = useMyAccess();
-  const canReassign = useCan('booking.admin') || access?.scheduling?.managesOthers === true;
+  const canReassign = useCan('booking.admin') || managesHost?.(booking.hostMemberId) === true;
   // A colleague's booking (an admin's Everyone, a co-hosted one) says whose it is.
   const me = access?.memberId;
   const isColleagues = me !== undefined && booking.hostMemberId !== me && booking.hostName !== '';
@@ -470,8 +477,28 @@ export function BookingCard({
       {booking.hostRemoved === true && <Callout tone="info">{strings.hostRemoved}</Callout>}
       {booking.eventFailed && isConfirmed && <Callout tone="warning">{strings.eventFailed}</Callout>}
       {booking.needsHost && isConfirmed && (
-        <Callout tone="warning" title={strings.needsHost}>
-          {strings.needsHostText}
+        // The card's status already says Needs a host: the notice says why, and offers Reassign where it can.
+        <Callout
+          tone="warning"
+          {...(actions !== undefined && canReassign && seats.length > 0
+            ? {
+                actions: (
+                  <Button
+                    icon="users-round"
+                    onPress={() => {
+                      if (onAsk !== undefined) onAsk('reassign', seats);
+                      else setReassigning(true);
+                    }}
+                  >
+                    {strings.reassignAction}
+                  </Button>
+                ),
+              }
+            : {})}
+        >
+          {actions !== undefined && canReassign && seats.length > 0
+            ? strings.needsHostText
+            : strings.needsHostCancelText}
         </Callout>
       )}
       {booking.hostAway === true && isConfirmed && !booking.needsHost && (
@@ -1069,7 +1096,8 @@ export interface BookingsCalendarScreenProps {
    * may see (for its People filter), and how a block lands on someone's column. Absent, the switch offers no Team.
    */
   readonly team?: {
-    readonly held: TeamDayHeld;
+    /** The day's held read, while Team shows. */
+    readonly held: TeamDayHeld | undefined;
     readonly data: DataLayer;
     readonly members: readonly { readonly id: string; readonly name: string }[];
     readonly onBlock: TeamDayViewProps['onBlock'];
@@ -1161,10 +1189,22 @@ function emptyHintOf(view: 'week' | 'day', calendar: string | undefined): string
 }
 
 /** The week view's toolbar, grid and count. */
+/** A week nobody reads: what the calendar holds while the Team day shows, so the hidden week isn't kept current. */
+const IDLE_STATE = { status: 'loading' } as const;
+const IDLE_WEEK: BookingsCalendarHeld = {
+  subscribe: () => () => undefined,
+  // One snapshot, always the same object: a new one each read would draw again for ever.
+  getSnapshot: () => IDLE_STATE,
+  retain: () => () => undefined,
+  ready: () => Promise.resolve(),
+  reload: () => undefined,
+};
+
 function WeekView(props: BookingsCalendarScreenProps) {
   const { slug, objects, search, week, pages, connections, locale, onSearch, onRemoveBlock, onBlock } = props;
   const forPeople = props.forPeople ?? NO_PEOPLE;
   const canBookForOthers = useCan('booking.admin');
+  const canInvite = useCan('members.invite');
   const { workingStart, toasts, onBookAsHost, newBookingKey } = props;
   // The reader: a colleague's booking (an admin's Everyone) names its host on its block.
   const me = useMyAccess()?.memberId;
@@ -1174,7 +1214,8 @@ function WeekView(props: BookingsCalendarScreenProps) {
   const [meeting, setMeeting] = useState<DrawnSpan | undefined>(undefined);
   const bookable = pages.filter((page) => page.status === 'live');
   const personHref = usePersonHref(slug, objects);
-  const state = useBookingsCalendar(week);
+  // The Team day reads its own day: the week isn't held (nor read again on return) while Team shows.
+  const state = useBookingsCalendar(search.view === 'team' && props.team !== undefined ? IDLE_WEEK : week);
   const now = useNow();
   const firstDay = useFirstDay();
   // The member's zone (their Preferences, else the browser's): the week's days, hours, blocks and now line.
@@ -1439,7 +1480,10 @@ function WeekView(props: BookingsCalendarScreenProps) {
             segments={[
               { value: 'day', label: strings.dayView, kbd: WEEK_KEYS.day },
               { value: 'week', label: strings.weekView, kbd: WEEK_KEYS.week },
-              ...(props.team === undefined ? [] : [{ value: 'team', label: strings.teamView }]),
+              // Team only where there is a team to see, or someone who could invite one (AC-764's empty state).
+              ...(props.team === undefined || (props.team.members.length < 2 && !canInvite)
+                ? []
+                : [{ value: 'team', label: strings.teamView }]),
             ]}
           />
           {view === 'team' && props.team !== undefined ? (
@@ -1451,15 +1495,16 @@ function WeekView(props: BookingsCalendarScreenProps) {
       }
     />
   );
-  if (view === 'team' && props.team !== undefined) {
-    const { team } = props;
+  const team = props.team;
+  const held = team?.held;
+  if (view === 'team' && team !== undefined && held !== undefined) {
     return (
       <>
         {framed(
           <TeamDayView
             slug={slug}
             data={team.data}
-            held={team.held}
+            held={held}
             day={shownDay}
             isToday={shownDay === today}
             now={now}
@@ -1481,6 +1526,7 @@ function WeekView(props: BookingsCalendarScreenProps) {
             actions={props.actions}
             toasts={toasts}
             isFiltered={search.members !== undefined || search.withBookings === true}
+            members={team.members}
             onClearFilters={() => onSearch({ members: undefined, withBookings: undefined })}
             issuesSlot={issuesSlot}
           />,

@@ -91,6 +91,9 @@ export type TeamDayState = HeldState<TeamDay>;
 /** One Team day, held while the screen shows it. */
 export type TeamDayHeld = HeldView<TeamDayState>;
 
+/** At most this many Team days are kept that no screen holds (the days either side), the oldest dropped first. */
+const UNHELD_TEAM_DAYS_MAX = 3;
+
 /** At most this many ranges are kept that no screen holds (the weeks paged past), the oldest dropped first. */
 const UNHELD_RANGES_MAX = 12;
 
@@ -255,7 +258,7 @@ export function createBookingsStore(deps: BookingsDeps) {
       );
       teamDays.set(key, made);
       const unheld = [...teamDays.entries()].filter(([, view]) => !view.isHeld());
-      for (const [old] of unheld.slice(0, Math.max(0, unheld.length - UNHELD_RANGES_MAX))) teamDays.delete(old);
+      for (const [old] of unheld.slice(0, Math.max(0, unheld.length - UNHELD_TEAM_DAYS_MAX))) teamDays.delete(old);
       return made;
     },
     /**
@@ -312,8 +315,15 @@ export function createBookingsStore(deps: BookingsDeps) {
     },
     /** Reads every list and range a screen holds again (after the member changed a booking). */
     reloadAll(workspace: string): void {
-      for (const [key, view] of [...lists.entries(), ...ranges.entries(), ...teamDays.entries()]) {
+      for (const [key, view] of [...lists.entries(), ...ranges.entries()]) {
         if (key.startsWith(`${workspace}:`)) view.reload();
+      }
+      // A Team day is the heaviest read: the one on screen reads again; the others (the days either side) are
+      // forgotten, so the next ask reads them afresh rather than every change reading days nobody shows.
+      for (const [key, view] of [...teamDays.entries()]) {
+        if (!key.startsWith(`${workspace}:`)) continue;
+        if (view.isHeld()) view.reload();
+        else teamDays.delete(key);
       }
     },
     /**

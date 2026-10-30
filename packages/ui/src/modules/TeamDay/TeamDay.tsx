@@ -1,55 +1,39 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
-import { Badge } from '../../atoms/Badge/Badge.tsx';
-import { TruncatedText } from '../../atoms/TruncatedText/TruncatedText.tsx';
+import { Icon } from '../../atoms/Icon/Icon.tsx';
+import { focusLater } from '../../lib/focus-later.ts';
+import { Modal } from '../../molecules/Modal/Modal.tsx';
+import { PersonLine } from '../../molecules/PersonLine/PersonLine.tsx';
 import { Popover } from '../../molecules/Popover/Popover.tsx';
+import { BookingList, type BookingListRow } from '../BookingList/BookingList.tsx';
 import { WeekCalendar, type WeekCalendarDay, type WeekCalendarProps } from '../WeekCalendar/WeekCalendar.tsx';
 import { strings } from './strings.ts';
 import styles from './TeamDay.module.css';
 
-/**
- * How a person's day stands, as their head's status reads: `booked` (meetings that day), `free` (none, but hours),
- * `off` (no hours that day) or `away` (time off).
- */
+/** How a person's day stands, as their head's status reads: booked, free, off (no hours that day) or away. */
 export type TeamDayTone = 'booked' | 'free' | 'off' | 'away';
 
 /** One person's column. */
 export interface TeamDayPerson {
   readonly id: string;
   readonly name: string;
-  /** Their job title, first on the quiet line under the name: it is why the columns are in the order they are. */
-  readonly title?: string;
-  /** Their day in a word or two: "3 booked", "Free", "Off", "Away". */
+  /** Their day in a word or two: "3 booked", "Free", "Off", "Away". First on the line under the name. */
   readonly status: string;
   readonly tone: TeamDayTone;
-  /** Their zone's offset after the status, only when it differs from the reader's ("UTC+5:30"). */
+  /** Their zone's offset, only when it differs from the reader's ("UTC+1"): after the status. */
   readonly badge?: string;
-  /** More at the head's end: their calendar's health chip, when it needs saying. */
+  /** Their job title, last on the line, so it is what gets cut when the column is narrow. */
+  readonly title?: string;
+  /** At the head's end: their calendar's trouble chip, when there is any. */
   readonly extra?: ReactNode;
-  /** The column's whole name for screen readers: "Sam Lee, Sales lead, 3 booked". */
-  readonly label: string;
+  /** What `extra` says, for the column's name ("Reconnect needed"). */
+  readonly extraLabel?: string;
   /** Time off over the day, as a band down the column: its word, and its minutes on the reader's clock. */
   readonly band?: WeekCalendarDay['band'];
   /**
-   * False when the reader may only See this person (spec 0037): empty time on their column draws nothing, and shows
-   * no crosshair. Absent, it draws as the grid does.
+   * False when the reader may only See this person (spec 0037): empty time on their column draws nothing and shows no
+   * crosshair, the head carries an eye, and the column's name says "view only". Absent, it draws as the grid does.
    */
   readonly canAct?: boolean;
-}
-
-/** One booking in the Needs a host lane. */
-export interface TeamDayLaneItem {
-  readonly id: string;
-  /** Its time on the reader's clock ("10:00 AM"). */
-  readonly time: string;
-  /** Its page's title. */
-  readonly title: string;
-  /** Who it is with, and whose it was ("Visitor · Sam Lee"). */
-  readonly detail: string;
-  /** Why it is here: "Needs a host" or "Host away". */
-  readonly status: string;
-  /** What a screen reader hears for the whole item. */
-  readonly label: string;
 }
 
 /** Props for TeamDay. */
@@ -62,19 +46,33 @@ export interface TeamDayProps extends Omit<
   /** The column the arrow keys start from and a phone shows. */
   readonly selectedPerson: string;
   readonly onSelectPerson: (id: string) => void;
-  /** Today: drawn as the week draws its today (the now line runs across every column). */
+  /** A block or column to focus (WeekCalendar's `focusDay`), the person's id as the day. */
   readonly focusPerson?: WeekCalendarProps['focusDay'];
   /**
-   * The Needs a host lane, pinned at the start (AC-1435): only when it holds something. Pressing an item opens
-   * `laneDetail` beside it (its booking's card, with Reassign).
+   * The Needs a host lane, pinned at the start (AC-1435): only when it holds something. Its rows are BookingList's;
+   * pressing one opens `detail` beside it (its booking's card, with Reassign), or as a sheet on a phone.
    */
   readonly lane?: {
-    readonly items: readonly TeamDayLaneItem[];
+    readonly rows: readonly BookingListRow[];
     readonly openId?: string;
     readonly detail?: ReactNode;
     readonly onOpen: (id: string) => void;
     readonly onClose: () => void;
   };
+}
+
+/** A column's whole name for screen readers, from what its head shows (the head itself is hidden from them). */
+function columnName(person: TeamDayPerson): string {
+  return [
+    person.name,
+    person.status,
+    person.badge,
+    person.title,
+    person.extraLabel,
+    person.canAct === false ? strings.viewOnly : undefined,
+  ]
+    .filter((part) => part !== undefined && part !== '')
+    .join(', ');
 }
 
 /**
@@ -89,19 +87,42 @@ export function TeamDay({ people, selectedPerson, onSelectPerson, focusPerson, l
         key: person.id,
         weekday: '',
         dayNumber: '',
-        label: person.label,
+        label: columnName(person),
         isToday: false,
         isPast: false,
-        head: <PersonHead person={person} />,
+        head: (
+          <PersonLine
+            id={person.id}
+            name={person.name}
+            meta={[
+              person.status,
+              ...(person.badge === undefined ? [] : [person.badge]),
+              ...(person.title === undefined ? [] : [person.title]),
+            ]}
+            tone={person.tone === 'away' ? 'away' : 'quiet'}
+            size="sm"
+            isDecorative
+            {...(person.canAct === false || person.extra !== undefined
+              ? {
+                  end: (
+                    <>
+                      {person.canAct === false && <Icon name="eye" size="sm" />}
+                      {person.extra}
+                    </>
+                  ),
+                }
+              : {})}
+          />
+        ),
         ...(person.band === undefined ? {} : { band: person.band }),
         ...(person.canAct === false ? { canDraw: false } : {}),
       })),
     [people],
   );
-  const items = lane?.items ?? [];
+  const rows = lane?.rows ?? [];
   return (
-    <div className={styles.root} data-lane={items.length > 0 || undefined}>
-      {lane !== undefined && items.length > 0 && <Lane lane={{ ...lane, items }} />}
+    <div className={styles.root} data-team-day="">
+      {lane !== undefined && rows.length > 0 && <Lane lane={{ ...lane, rows }} />}
       <div className={styles.grid}>
         <WeekCalendar
           {...calendar}
@@ -116,89 +137,70 @@ export function TeamDay({ people, selectedPerson, onSelectPerson, focusPerson, l
   );
 }
 
-/**
- * A person's head: their picture and name over one quiet line, the job title first (the stable fact, and why the
- * columns are in their order), then how their day stands, then their zone's offset when it isn't the reader's
- * (timefix's header), with their calendar's chip at the end.
- */
-function PersonHead({ person }: { readonly person: TeamDayPerson }) {
-  return (
-    <span className={styles.person} aria-hidden="true">
-      <span className={styles.picture}>
-        <Avatar name={person.name} id={person.id} size="sm" isDecorative />
-      </span>
-      <span className={styles.who}>
-        <span className={styles.name}>
-          <TruncatedText>{person.name}</TruncatedText>
-        </span>
-        <span className={styles.meta}>
-          {person.title !== undefined && `${person.title}${strings.separator}`}
-          <span className={styles.status} data-tone={person.tone}>
-            {person.status}
-          </span>
-          {person.badge !== undefined && `${strings.separator}${person.badge}`}
-        </span>
-      </span>
-      {person.extra !== undefined && <span className={styles.extra}>{person.extra}</span>}
-    </span>
-  );
+/** Whether the lane sits in a container narrower than `bp-container-md` (a phone): its card opens as a sheet. */
+function isNarrow(element: HTMLElement): boolean {
+  const root = element.closest('[data-team-day]');
+  if (!(root instanceof HTMLElement)) return false;
+  const narrow = Number.parseFloat(getComputedStyle(root).getPropertyValue('--bp-container-md'));
+  return Number.isFinite(narrow) && root.clientWidth < narrow;
 }
 
-/** The lane: its count, then each booking as a card that opens its booking's card beside it. */
+/** The lane: its bookings as BookingList's rows, each opening its booking's card beside it (a sheet on a phone). */
 function Lane({ lane }: { readonly lane: NonNullable<TeamDayProps['lane']> }) {
-  const [anchor, setAnchor] = useState<HTMLButtonElement | null>(null);
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  const [isSheet, setSheet] = useState(false);
   const anchorRef = useMemo(() => ({ current: anchor }), [anchor]);
-  const isOpen = lane.openId !== undefined && lane.items.some((item) => item.id === lane.openId) && anchor !== null;
+  const isOpen = lane.openId !== undefined && lane.rows.some((row) => row.id === lane.openId) && anchor !== null;
+  /** Closed by Escape, a press outside or the sheet's close: focus goes back to the row's button. */
+  const close = () => {
+    const from = anchor;
+    lane.onClose();
+    focusLater(() => from?.querySelector('button') ?? undefined);
+  };
   return (
-    <section className={styles.lane} aria-label={strings.laneLabel(lane.items.length)}>
-      <header className={styles.laneHead}>
-        <h2 className={styles.laneTitle}>{strings.lane}</h2>
-        <Badge count={lane.items.length} tone="accent" />
-      </header>
-      <ul className={styles.laneList}>
-        {lane.items.map((item) => (
-          <li key={item.id}>
-            <button
-              type="button"
-              className={styles.laneItem}
-              data-open={item.id === lane.openId || undefined}
-              aria-haspopup="dialog"
-              aria-expanded={item.id === lane.openId}
-              aria-label={item.label}
-              onClick={(event) => {
-                if (item.id === lane.openId) {
-                  lane.onClose();
-                  return;
-                }
-                setAnchor(event.currentTarget);
-                lane.onOpen(item.id);
-              }}
-            >
-              <span className={styles.laneTime}>{item.time}</span>
-              <span className={styles.laneItemTitle}>
-                <TruncatedText>{item.title}</TruncatedText>
-              </span>
-              <span className={styles.laneDetail}>
-                <TruncatedText>{item.detail}</TruncatedText>
-              </span>
-              <span className={styles.laneStatus}>{item.status}</span>
-            </button>
-          </li>
+    <section className={styles.lane} aria-label={strings.laneLabel(lane.rows.length)}>
+      <BookingList
+        label={strings.laneLabel(lane.rows.length)}
+        placement="card"
+        groups={[{ id: 'lane', label: strings.laneTitle(lane.rows.length), rows: lane.rows }]}
+        {...(lane.openId === undefined ? {} : { openId: lane.openId })}
+        onOpen={(id, row) => {
+          if (id === lane.openId) {
+            lane.onClose();
+            return;
+          }
+          setAnchor(row);
+          setSheet(isNarrow(row));
+          lane.onOpen(id);
+        }}
+      />
+      {isOpen &&
+        lane.detail !== undefined &&
+        (isSheet ? (
+          <Modal
+            variant="sheet"
+            title={strings.details}
+            isOpen
+            isDismissable
+            onOpenChange={(open) => {
+              if (!open) close();
+            }}
+          >
+            {lane.detail}
+          </Modal>
+        ) : (
+          <Popover
+            triggerRef={anchorRef}
+            isOpen
+            onOpenChange={(open) => {
+              if (!open) close();
+            }}
+            placement="end top"
+            label={strings.details}
+          >
+            {lane.detail}
+          </Popover>
         ))}
-      </ul>
-      {isOpen && lane.detail !== undefined && (
-        <Popover
-          triggerRef={anchorRef}
-          isOpen
-          onOpenChange={(open) => {
-            if (!open) lane.onClose();
-          }}
-          placement="end top"
-          label={strings.details}
-        >
-          {lane.detail}
-        </Popover>
-      )}
     </section>
   );
 }

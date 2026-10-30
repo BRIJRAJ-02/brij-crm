@@ -10,8 +10,10 @@ import { enterBookingPage } from '../access/door.ts';
 import { newId } from '../engine/ids.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
+import { grantDelegation } from '../scheduling/delegations.ts';
 import { createTimeOff } from '../scheduling/time-off.ts';
 import { rescope, testScope } from '../testing.ts';
+import { createTimeBlock } from './blocks.ts';
 import { NO_CALENDAR } from './calendar.ts';
 import { createBookingPage } from './pages.ts';
 import { bookPublicSlot } from './public.ts';
@@ -194,6 +196,75 @@ describe('Team day', () => {
     expect(day.needsHost?.toSorted()).toEqual([booked.bookingId, flagged.bookingId].toSorted());
     // Away isn't outside hours: Bookings already says Host away.
     expect(day.issues).toEqual([]);
+  });
+
+  it('shows See reach a colleague’s day with no labels, notes or guest details, and Manage reach in full', async () => {
+    const w = await workspace();
+    const grace = await w.addMember('Grace', 'member');
+    const bea = await w.addMember('Bea', 'member');
+    const linus = await w.addMember('Linus', 'member');
+    const page = await createBookingPage(linus, { id: newId(), title: 'Linus intro', timeZone: 'UTC' }, NOW);
+    const booked = await book(page.publicKey, at('10:00'), 'Visitor');
+    await createTimeBlock(linus, {
+      id: newId(),
+      kind: 'block',
+      repeat: 'once',
+      date: DAY,
+      startMinute: 13 * 60,
+      endMinute: 14 * 60,
+      timeZone: 'UTC',
+      label: 'Dentist',
+    });
+    await createTimeOff(
+      linus,
+      { now: () => NOW },
+      { id: newId(), fromDate: DAY, toDate: DAY, reason: 'sick', note: 'Flu' },
+    );
+    // Grace may See Linus's scheduling, Bea may Manage it (delegations an admin grants, spec 0037).
+    await grantDelegation(w.owner, {
+      delegateMemberId: memberOf(grace),
+      target: { type: 'member', memberId: memberOf(linus) },
+      level: 'view',
+    });
+    await grantDelegation(w.owner, {
+      delegateMemberId: memberOf(bea),
+      target: { type: 'member', memberId: memberOf(linus) },
+      level: 'manage',
+    });
+
+    const seen = await readTeamDay(grace, input, { now: NOW });
+    expect(seen.columns.map((column) => column.memberId)).toEqual([memberOf(grace), memberOf(linus)]);
+    const linusSeen = seen.columns[1];
+    expect(linusSeen?.canManage).toBe(false);
+    expect(linusSeen?.away).toEqual({ span: expect.any(Object) as unknown });
+    expect(linusSeen?.items).toContainEqual(expect.objectContaining({ kind: 'block' }));
+    expect(linusSeen?.items.some((item) => item.kind === 'block' && item.label !== undefined)).toBe(false);
+    expect(seen.bookings).toEqual([
+      expect.objectContaining({ id: booked.bookingId, seeOnly: true, visitorEmail: '', visitorName: 'Visitor' }),
+    ]);
+    expect(seen.needsHost).toBeUndefined();
+    const said = JSON.stringify(seen);
+    expect(said).not.toContain('Dentist');
+    expect(said).not.toContain('Flu');
+    expect(said).not.toContain('visitor@example.org');
+
+    const managed = await readTeamDay(bea, input, { now: NOW });
+    const linusManaged = managed.columns.find((column) => column.memberId === memberOf(linus));
+    expect(linusManaged?.canManage).toBe(true);
+    expect(linusManaged?.away).toMatchObject({ reason: 'sick', note: 'Flu' });
+    expect(linusManaged?.items).toContainEqual(expect.objectContaining({ kind: 'block', label: 'Dentist' }));
+    expect(managed.bookings[0]?.seeOnly).toBeUndefined();
+    expect(managed.needsHost).toEqual([booked.bookingId]);
+  });
+
+  it('never answers another workspace’s members, whatever is asked for', async () => {
+    const mine = await workspace();
+    const theirs = await workspace();
+    const stranger = await theirs.addMember('Stranger', 'member');
+    const admin = await mine.addMember('Barbara', 'admin');
+    const day = await readTeamDay(admin, { ...input, memberIds: [memberOf(stranger), theirs.memberId] }, { now: NOW });
+    expect(day.columns).toEqual([]);
+    expect(day.bookings).toEqual([]);
   });
 });
 

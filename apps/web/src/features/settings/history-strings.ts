@@ -52,6 +52,7 @@ const units = (value: number): string => (value > 0 ? `+${String(value)}` : `−
 const PROFILE_FIELDS = {
   name: 'name',
   timeZone: 'time zone',
+  jobTitle: 'job title',
   handle: 'public handle',
   bio: 'bio',
   socials: 'social links',
