@@ -1,25 +1,37 @@
 // Brief
-// Purpose: an object's Configuration tab: its names and look, its API name and id, and archiving it.
-// Main task: owners and admins rename or restyle the object and save from the SaveBar at the view's foot; or archive
-// (or restore) it from the danger zone.
+// Purpose: an object's Configuration tab: its names and look, the attribute its records are named by, its API name
+// and id, and archiving it.
+// Main task: owners and admins rename or restyle the object and save from the SaveBar at the view's foot, pick a
+// custom object's name attribute; or archive (or restore) it from the danger zone.
 // Leaves out: changing the API name (never, AC-224) and the attributes (the Attributes tab).
-import { isDataError, type Hue, type ObjectIcon, type ObjectSummary } from '@crm/data';
+import {
+  canNameRecords,
+  isDataError,
+  type AttributeDefinition,
+  type Hue,
+  type ObjectIcon,
+  type ObjectSummary,
+} from '@crm/data';
 import {
   Button,
   Callout,
   Card,
   CopyButton,
   Field,
+  iconOf,
   InfoTip,
   Form,
   type FormRefusal,
   SaveBar,
   type SaveBarStatus,
+  Select,
+  SettingsRow,
   SettingsSection,
   SettingsStack,
+  typeLabelOf,
 } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
-import { useId, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { pageHeading } from '../navigation/focus.ts';
 import { focusTitle } from '../navigation/focus-title.ts';
 import { useCan } from '../workspace/WorkspacePage.tsx';
@@ -165,13 +177,162 @@ export interface ConfigurationTabProps {
   readonly object: ObjectSummary;
   /** The names and look as edited, from useObjectConfiguration on the object's page. */
   readonly configuration: ObjectConfiguration;
+  /**
+   * The object's live attributes, for its name attribute: `unavailable` when they couldn't be read (the choice shows
+   * read only, saying so), undefined while the object is archived (they come back with it).
+   */
+  readonly attributes: readonly AttributeDefinition[] | 'unavailable' | undefined;
+}
+
+/** Props for the name attribute's row. */
+interface RecordNameRowProps {
+  readonly slug: string;
+  readonly object: ObjectSummary;
+  readonly attributes: readonly AttributeDefinition[] | 'unavailable';
 }
 
 /**
- * The Configuration tab: the names and look as a form (saved from the SaveBar at the view's foot), the API name and
- * id read only with copy buttons, and the danger zone. Members read it all, with nothing to change.
+ * The attribute that names the object's records (late trap #15), saved as it is picked, as General's time zone is:
+ * it changes no record, only how each one reads, and Undo in its toast puts the old one back. Only the attributes
+ * that can name records are offered (`canNameRecords`, the engine's own rule). A standard object's stays its Name,
+ * read only with the reason, as it is for someone who may not shape the schema.
  */
-export function ConfigurationTab({ slug, object, configuration }: ConfigurationTabProps) {
+function RecordNameRow({ slug, object, attributes }: RecordNameRowProps) {
+  const { data, toasts } = useRouteContext({ from: '__root__' });
+  const canManage = useCan('schema.manage');
+  const current = object.primaryAttributeId;
+  // What the row shows: the choice from the moment it is picked (put back on a refusal), and the server's once a
+  // change from elsewhere arrives (another admin's, or this save read back).
+  const [chosen, setChosen] = useState(current);
+  const [base, setBase] = useState(current);
+  if (base !== current) {
+    setBase(current);
+    setChosen(current);
+  }
+  // The name attribute as shown now and whether a save is out, for an Undo pressed later (refs, as the toast
+  // outlives the render it came from): never over a newer change, nor beside one still on its way.
+  const shown = useRef(chosen);
+  const sending = useRef(false);
+  useEffect(() => {
+    shown.current = chosen;
+  });
+  // The last saved toast: a newer pick closes it as it starts, and so does leaving the tab, so no older Undo is left
+  // to press (General's Q99).
+  const lastSaved = useRef<string | undefined>(undefined);
+  const closeSaved = () => {
+    if (lastSaved.current !== undefined) toasts.dismiss(lastSaved.current);
+    lastSaved.current = undefined;
+  };
+  useEffect(
+    () => () => {
+      if (lastSaved.current !== undefined) toasts.dismiss(lastSaved.current);
+    },
+    [toasts],
+  );
+  const known = attributes === 'unavailable' ? [] : attributes;
+  const items = known
+    .filter((attribute) => attribute.id === current || canNameRecords(attribute))
+    .map((attribute) => ({
+      id: attribute.id,
+      label: attribute.title,
+      icon: iconOf(attribute),
+      description: typeLabelOf(attribute.type),
+    }));
+  const titleOf = (id: string | undefined) => known.find((attribute) => attribute.id === id)?.title ?? '';
+  // Someone who may not shape the schema gets the lock alone: the tab's own Callout says why, once for the page.
+  const readOnlyReason =
+    attributes === 'unavailable'
+      ? canManage
+        ? strings.recordNameUnavailable
+        : undefined
+      : object.isStandard
+        ? strings.recordNameStandard(titleOf(current))
+        : canManage && items.length < 2
+          ? strings.recordNameNone
+          : undefined;
+  const isReadOnly = readOnlyReason !== undefined || !canManage || attributes === 'unavailable';
+
+  const fail = (error: unknown) => {
+    const why = isDataError(error) ? error.message : strings.somethingWrong;
+    toasts.toast({ tone: 'danger', message: strings.recordNameFailed(why) });
+  };
+
+  // Undo only while the object still holds this change, read through the data layer (another admin's change since
+  // wins), and never beside a save still on its way.
+  const undo = (from: string, to: string) => {
+    const stale = () => {
+      toasts.toast({ tone: 'info', message: strings.recordNameUndoStale });
+    };
+    if (sending.current || shown.current !== to) {
+      stale();
+      return;
+    }
+    data.objects
+      .all(slug)
+      .then((list) => {
+        const now = list.find((each) => each.id === object.id)?.primaryAttributeId;
+        if (sending.current || now !== to) stale();
+        else choose(from, false);
+      })
+      .catch(fail);
+  };
+
+  const choose = (to: string, withUndo: boolean) => {
+    const from = shown.current;
+    closeSaved();
+    sending.current = true;
+    setChosen(to);
+    shown.current = to;
+    data.objects.update(slug, object.id, { primaryAttributeId: to }).then(
+      () => {
+        sending.current = false;
+        lastSaved.current = toasts.toast({
+          tone: 'success',
+          message: strings.recordNameChanged(object.pluralName, titleOf(to)),
+          ...(withUndo && from !== undefined
+            ? {
+                action: {
+                  label: strings.undo,
+                  onAction: () => {
+                    undo(from, to);
+                  },
+                },
+              }
+            : {}),
+        });
+      },
+      (error: unknown) => {
+        sending.current = false;
+        if (shown.current === to) setChosen(from);
+        fail(error);
+      },
+    );
+  };
+
+  return (
+    <SettingsRow title={strings.recordNameTitle} description={strings.recordNameText} control="field">
+      <Select
+        label={strings.recordNameTitle}
+        isLabelHidden
+        items={items}
+        value={chosen ?? null}
+        isReadOnly={isReadOnly}
+        {...(readOnlyReason === undefined ? {} : { readOnlyReason })}
+        // Never disabled while a save is out, so focus stays on the field: a second pick waits for the first.
+        onChange={(id) => {
+          if (id !== null && id !== chosen && !sending.current) choose(id, true);
+        }}
+      />
+    </SettingsRow>
+  );
+}
+
+/**
+ * The Configuration tab: the names and look as a form (saved from the SaveBar at the view's foot), the attribute its
+ * records are named by (saved as it is picked), the API name and id read only with copy buttons, and the danger
+ * zone. Members read it all, with nothing to change.
+ */
+export function ConfigurationTab({ slug, object, configuration, attributes }: ConfigurationTabProps) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
   const canManage = useCan('schema.manage');
   const formId = useId();
@@ -236,6 +397,13 @@ export function ConfigurationTab({ slug, object, configuration }: ConfigurationT
           </Form>
         </Card>
       </SettingsSection>
+      {attributes !== undefined && (
+        <SettingsSection title={strings.recordNameSection}>
+          <Card>
+            <RecordNameRow slug={slug} object={object} attributes={attributes} />
+          </Card>
+        </SettingsSection>
+      )}
       <SettingsSection title={strings.idsSection}>
         <Card>
           <Field

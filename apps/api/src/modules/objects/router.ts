@@ -35,6 +35,7 @@ export const objectsRouter = member.objects.router({
           pluralName: input.pluralName,
           icon: input.icon,
           hue: input.hue,
+          primaryAttributeId: input.primaryAttributeId,
         },
         hooks,
       ),

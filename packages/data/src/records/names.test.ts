@@ -23,7 +23,7 @@ function setup(names: Readonly<Record<string, string>> = { acme: 'Acme', globex:
     await Promise.resolve();
     await Promise.resolve();
   };
-  return { reader, read, onNames, frame };
+  return { reader, read, onNames, frame, frames };
 }
 
 describe('reference names', () => {
@@ -61,6 +61,26 @@ describe('reference names', () => {
     await frame();
     expect(read).toHaveBeenCalledTimes(2);
     expect(reader.displaysOf('ws', [ACME])).toEqual([display('acme', 'Acme Corp')]);
+  });
+
+  it('reads every name of a workspace again once forgetAll drops them, a read already out included', async () => {
+    const names: Record<string, string> = { acme: 'Acme', globex: 'Globex' };
+    const { reader, read, onNames, frame, frames } = setup(names);
+    reader.displaysOf('ws', [ACME]);
+    await frame();
+    // Globex's read is out (sent, not landed) when the object's name attribute changes: what it brings is dropped.
+    reader.displaysOf('ws', [GLOBEX]);
+    for (const flush of frames.splice(0)) flush();
+    names.acme = 'ACM-1';
+    names.globex = 'GLX-1';
+    onNames.mockClear();
+    reader.forgetAll('ws');
+    expect(onNames).toHaveBeenCalledWith('ws');
+    await frame();
+    expect(reader.displaysOf('ws', [ACME, GLOBEX])).toEqual(['loading', 'loading']);
+    await frame();
+    expect(reader.displaysOf('ws', [ACME, GLOBEX])).toEqual([display('acme', 'ACM-1'), display('globex', 'GLX-1')]);
+    expect(read).toHaveBeenLastCalledWith('ws', ['acme', 'globex']);
   });
 
   it('tries a failed read again after a wait, twice, then says unknown rather than loading for ever', async () => {

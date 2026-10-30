@@ -164,17 +164,22 @@ export async function createObject(
   return readObject(scope, made.objectId);
 }
 
-/** What settings may change on an object: its names and its look (AC-224). Its API name never changes. */
+/**
+ * What settings may change on an object: its names and its look (AC-224), and
+ * the attribute that names its records (late trap #15). Its API name never changes.
+ */
 export interface EditObjectInput {
   readonly objectId: string;
   readonly singularName?: string | undefined;
   readonly pluralName?: string | undefined;
   readonly icon?: string | undefined;
   readonly hue?: string | undefined;
+  readonly primaryAttributeId?: string | undefined;
 }
 
 /**
- * Renames or restyles an object, standard or custom alike (AC-224), and
+ * Renames or restyles an object, standard or custom alike (AC-224), or names
+ * a custom object's records by another of its attributes (late trap #15), and
  * answers it. Refuses `FORBIDDEN`, `NOT_FOUND`, `NAME_TAKEN` on the name it
  * names and `CONFIG_INVALID` on its field.
  */
@@ -193,6 +198,7 @@ export async function editObject(
       ...(input.pluralName === undefined ? {} : { pluralName: input.pluralName }),
       ...(input.icon === undefined ? {} : { icon: input.icon }),
       ...(input.hue === undefined ? {} : { hue: input.hue }),
+      ...(input.primaryAttributeId === undefined ? {} : { primaryAttributeId: input.primaryAttributeId }),
     },
     hooks,
   );
