@@ -4955,12 +4955,13 @@ export function createDataLayer({
       /** Marks notifications read or unread, done or back in the inbox, at once (AC-1171). */
       mark: async (workspace: string, ids: readonly string[], mark: InboxMark): Promise<DataError | undefined> =>
         (await inboxStore()).mark(workspace, ids, mark),
-      /** Marks every unread notification of a tab (and kind) read. */
+      /** Marks every unread notification of a tab (and kind) read; with `done`, every one of the inbox done (Mark all done). */
       markAllRead: async (
         workspace: string,
         status: NotificationStatus,
         kind?: NotificationKind,
-      ): Promise<DataError | undefined> => (await inboxStore()).markAllRead(workspace, status, kind),
+        done?: boolean,
+      ): Promise<DataError | undefined> => (await inboxStore()).markAllRead(workspace, status, kind, done),
       /** The member's email settings for the workspace (AC-1179). Read it through `useNotificationSettings`. */
       settings: async (workspace: string): Promise<InboxSettings> => (await inboxStore()).settings(workspace),
       /** Saves some switches at once; a refusal puts them back with a toast. */

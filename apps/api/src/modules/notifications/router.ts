@@ -40,7 +40,11 @@ export const notificationsRouter = member.notifications.router({
     commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
       markAllRead(
         context.scope,
-        { status: input.status, ...(input.kind === undefined ? {} : { kind: input.kind }) },
+        {
+          status: input.status,
+          ...(input.kind === undefined ? {} : { kind: input.kind }),
+          ...(input.done === undefined ? {} : { done: input.done }),
+        },
         hooks,
       ),
     ),

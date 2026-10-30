@@ -107,10 +107,12 @@ export const MarkNotificationsInput = WorkspaceScoped.extend({
 /** Marks some of the caller's notifications. */
 export type MarkNotificationsInput = z.infer<typeof MarkNotificationsInput>;
 
-/** Marks every unread notification of a tab (and a kind) read. */
+/** Marks every unread notification of a tab (and a kind) read; with `done`, every one of the inbox done. */
 export const MarkAllReadInput = WorkspaceScoped.extend({
   status: NotificationStatus,
   kind: NotificationKind.optional(),
+  /** Mark all done: every notification of the inbox tab (and kind) done and read. */
+  done: z.literal(true).optional(),
   mutationId: Uuid,
 });
 /** Marks every unread notification of a tab read. */

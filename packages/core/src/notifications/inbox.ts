@@ -337,38 +337,50 @@ export async function markNotifications(
   return result;
 }
 
-/** The most notifications one Mark all as read reads: the newest, so a second press reaches older ones. */
+/** The most notifications one Mark all as read (or done) reads: the newest, so a second press reaches older ones. */
 const MARK_ALL_MAX = 1_000;
 
 /**
  * Marks every unread notification of the caller's tab (and kind) that they
- * may see read (AC-1171), up to the newest `MARK_ALL_MAX`. Hidden ones stay
- * as they are and are never counted. Answers how many changed.
+ * may see read (AC-1171), up to the newest `MARK_ALL_MAX`; with `done`, every
+ * one of the inbox tab, read or not, done (and read), which empties the inbox
+ * in one press. Hidden ones stay as they are and are never counted. Answers
+ * how many changed.
  */
 export async function markAllRead(
   scope: EngineScope,
-  input: { readonly status: NotificationStatus; readonly kind?: NotificationKind },
+  input: { readonly status: NotificationStatus; readonly kind?: NotificationKind; readonly done?: boolean },
   hooks: readonly AfterWrite[] = [],
 ): Promise<{ readonly changed: number }> {
   checkScope(scope);
   const me = memberOrUnknown(scope);
+  const isDone = input.done === true;
+  // The Done tab is done already: marking it done again changes nothing.
+  if (isDone && input.status === 'done') return { changed: 0 };
   const { result } = await runWrite(
     scope,
     async (context) => {
       const { tx } = context;
-      const unread = await tx.execute<NotificationRow>(sql`
+      const found = await tx.execute<NotificationRow>(sql`
         select ${NOTIFICATION_COLUMNS}, ${micros('n.created_at')} as at
         from notifications n ${COMMENT_JOIN}
-        where ${filters(me, { ...input, unreadOnly: true })}
+        where ${filters(me, { status: input.status, ...(input.kind === undefined ? {} : { kind: input.kind }), unreadOnly: !isDone })}
         order by n.created_at desc, n.id desc
         limit ${MARK_ALL_MAX}
       `);
-      const shown = (await visibleViews(tx, scope, unread.rows)).map((view) => view.id);
+      const shown = (await visibleViews(tx, scope, found.rows)).map((view) => view.id);
       if (shown.length === 0) return { changed: 0 };
-      const changed = await tx.execute(sql`
-        update notifications set read_at = now()
-        where member_id = ${me}::uuid and id = any(${uuidList(shown)}) and read_at is null
-      `);
+      const changed = await tx.execute(
+        isDone
+          ? sql`
+            update notifications set read_at = coalesce(read_at, now()), done_at = now()
+            where member_id = ${me}::uuid and id = any(${uuidList(shown)}) and done_at is null
+          `
+          : sql`
+            update notifications set read_at = now()
+            where member_id = ${me}::uuid and id = any(${uuidList(shown)}) and read_at is null
+          `,
+      );
       const count = changed.rowCount ?? 0;
       if (count > 0) context.record({ notifications: [me] });
       return { changed: count };

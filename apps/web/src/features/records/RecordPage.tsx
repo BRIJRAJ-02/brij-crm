@@ -637,6 +637,7 @@ function RecordScreen({
         members={members}
         meId={meId}
         onClose={closeTask}
+        onOpenTask={openTask}
         {...(tab === 'tasks' ? { listLabel: taskStrings.openTasks } : {})}
       />
     );

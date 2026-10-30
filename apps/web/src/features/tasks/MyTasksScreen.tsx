@@ -1,7 +1,7 @@
 // Brief
 // Purpose: each person's to do list across the workspace, on `/w/$slug/tasks`.
 // Main task: see what's due today and get it done (tick it, or open it to change it).
-// Leaves out: search and saved filters (#33, #20), other people's lists except through "All tasks", deleting (milestone 4).
+// Leaves out: search and saved filters (#33, #20), other people's lists except through "All tasks", a task's description.
 import type { MemberSummary, ObjectSummary, TaskList as TaskListSource, TaskMine } from '@crm/data';
 import { useTaskList } from '@crm/data/react';
 import { Button, SegmentedControl, TabPanel, Tabs, TaskList, TopBar, useFormatSettings } from '@crm/ui';
@@ -12,6 +12,7 @@ import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { daySections, useToday } from './day.ts';
 import { strings } from './strings.ts';
 import { TaskDialog } from './TaskDialog.tsx';
+import { tickTask } from './toasts.ts';
 import { useTaskEntries } from './useTaskEntries.ts';
 
 /** Open tasks, or done ones. */
@@ -57,7 +58,7 @@ function emptyOf(filter: TaskMine, status: MyTasksStatus): { readonly title: str
  * with no record linked.
  */
 export function MyTasksScreen({ slug, filter, status, task, list, objects, members, meId }: MyTasksScreenProps) {
-  const { data } = useRouteContext({ from: '__root__' });
+  const { data, toasts } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
   const router = useRouter();
   const state = useTaskList(list);
@@ -154,9 +155,22 @@ export function MyTasksScreen({ slug, filter, status, task, list, objects, membe
                   {...(sectionOf === undefined ? {} : { sectionOf })}
                   emptyTitle={empty.title}
                   {...(empty.body === undefined ? {} : { emptyBody: empty.body })}
+                  {...(status === 'open'
+                    ? {
+                        emptyActions: (
+                          <Button
+                            onPress={() => {
+                              openTask('new');
+                            }}
+                          >
+                            {strings.newTask}
+                          </Button>
+                        ),
+                      }
+                    : {})}
                   recordHref={recordHref}
                   onToggle={(entry, isDone) => {
-                    void data.tasks.setDone(slug, entry.id, isDone);
+                    tickTask(toasts, (next) => data.tasks.setDone(slug, entry.id, next), isDone);
                   }}
                   onAction={(entry) => {
                     openTask(entry.id);
@@ -165,7 +179,15 @@ export function MyTasksScreen({ slug, filter, status, task, list, objects, membe
               </TabPanel>
             </Tabs>
             {task !== undefined && (
-              <TaskDialog slug={slug} task={task} objects={objects} members={members} meId={meId} onClose={closeTask} />
+              <TaskDialog
+                slug={slug}
+                task={task}
+                objects={objects}
+                members={members}
+                meId={meId}
+                onClose={closeTask}
+                onOpenTask={openTask}
+              />
             )}
           </>
         ),

@@ -419,6 +419,11 @@ describe('the inbox (AC-1169 to AC-1171, AC-1179, AC-1181)', () => {
     expect(await countUnread(bea)).toEqual({ count: 0, atLeast: false });
     await markNotifications(bea, { ids: [latest.id], read: false }, hooks());
     expect(await markAllRead(bea, { status: 'inbox' }, hooks())).toEqual({ changed: 1 });
+    // Mark all done empties the inbox, read or not; the Done tab is done already.
+    expect(await markAllRead(bea, { status: 'done', done: true }, hooks())).toEqual({ changed: 0 });
+    expect(await markAllRead(bea, { status: 'inbox', done: true }, hooks())).toEqual({ changed: 1 });
+    expect((await listNotifications(bea, { status: 'inbox' })).items).toHaveLength(0);
+    await markNotifications(bea, { ids: [latest.id], done: false }, hooks());
     expect(await refusalOf(markNotifications(bea, { ids: [latest.id], read: false, done: true }))).toMatchObject({
       code: 'INPUT_INVALID',
     });

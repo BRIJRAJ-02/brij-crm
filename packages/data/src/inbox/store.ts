@@ -57,6 +57,7 @@ export interface InboxApi {
     readonly workspace: string;
     readonly status: NotificationStatus;
     readonly kind?: NotificationKind;
+    readonly done?: true;
     readonly mutationId: string;
   }) => Promise<{ readonly changed: number }>;
   readonly settings: (input: { readonly workspace: string }) => Promise<NotificationSettings>;
@@ -146,11 +147,12 @@ export interface InboxStore {
   readonly list: (workspace: string, filter: InboxFilter) => InboxList;
   /** Marks notifications at once everywhere they show; answers the refusal, if any (already put back). */
   readonly mark: (workspace: string, ids: readonly string[], mark: InboxMark) => Promise<DataError | undefined>;
-  /** Marks every unread one of a tab (and kind) read. */
+  /** Marks every unread one of a tab (and kind) read; with `done`, every one of the inbox done. */
   readonly markAllRead: (
     workspace: string,
     status: NotificationStatus,
     kind?: NotificationKind,
+    done?: boolean,
   ) => Promise<DataError | undefined>;
   readonly settings: (workspace: string) => InboxSettings;
   /** Saves some switches at once; answers the refusal, if any (already put back, with a toast). */
@@ -541,21 +543,25 @@ export function createInboxStore(deps: InboxDeps): InboxStore {
       }
     },
 
-    async markAllRead(workspace, status, kind) {
+    async markAllRead(workspace, status, kind, done = false) {
+      // The Done tab is done already.
+      if (done && status === 'done') return undefined;
       const at = new Date().toISOString();
       const touched = new Map<string, NotificationView>();
       for (const held of listsOf(workspace)) {
         for (const item of held.state.items) {
           const inScope =
             (status === 'done') === (item.doneAt !== undefined) && (kind === undefined || item.kind === kind);
-          if (inScope && item.readAt === undefined) touched.set(item.id, item);
+          if (inScope && (done || item.readAt === undefined)) touched.set(item.id, item);
         }
       }
+      const mark: InboxMark = done ? { done: true } : { read: true };
       const putBack = snapshot(workspace);
       // It reads again once answered in any case, so a reread on its way now is dropped.
       settle(workspace);
-      show(workspace, (item) => (touched.has(item.id) ? applied(item, { read: true }, at) : item));
-      const delta = status === 'inbox' ? -touched.size : 0;
+      show(workspace, (item) => (touched.has(item.id) ? applied(item, mark, at) : item));
+      const unreadTouched = [...touched.values()].filter((item) => item.readAt === undefined).length;
+      const delta = status === 'inbox' ? -unreadTouched : 0;
       deps.unread.adjust(workspace, delta);
       const mutationId = deps.mintId();
       deps.mutations.sent(mutationId);
@@ -564,6 +570,7 @@ export function createInboxStore(deps: InboxDeps): InboxStore {
           workspace,
           status,
           ...(kind === undefined ? {} : { kind }),
+          ...(done ? { done: true as const } : {}),
           mutationId,
         });
         deps.mutations.answered(mutationId, answer.changed > 0 ? 1 : 0);

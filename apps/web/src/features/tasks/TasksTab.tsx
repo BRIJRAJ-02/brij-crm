@@ -1,13 +1,14 @@
 // Brief
 // Purpose: the follow ups about this record, on its page's Tasks tab.
 // Main task: add a task (type its title, press Enter) and tick it off.
-// Leaves out: reminders (#28), tasks of related records, and deleting a task (milestone 4).
+// Leaves out: reminders (#28), tasks of related records, a task's description.
 import { TASK_TITLE_MAX, type MemberSummary, type RecordRefDisplay, type TaskList as TaskListSource } from '@crm/data';
 import { useTaskList } from '@crm/data/react';
 import { Button, Disclosure, Field, TaskList } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { strings } from './strings.ts';
+import { tickTask } from './toasts.ts';
 import { useTaskEntries } from './useTaskEntries.ts';
 
 /** Props for a record's Tasks tab. */
@@ -204,7 +205,7 @@ function CompletedList({
  * struck through until the list settles), and Completed under them.
  */
 export function TasksTab({ slug, record, open, members, meId, canAdd, recordHref, onOpenTask }: TasksTabProps) {
-  const { data } = useRouteContext({ from: '__root__' });
+  const { data, toasts } = useRouteContext({ from: '__root__' });
   const state = useTaskList(open);
   const entries = useTaskEntries(state.source, members, record.recordId);
   const isEmpty = state.status === 'ready' && entries.count === 0;
@@ -229,7 +230,7 @@ export function TasksTab({ slug, record, open, members, meId, canAdd, recordHref
       {...(canAdd ? { emptyActions: newTask } : {})}
       recordHref={recordHref}
       onToggle={(task, isDone) => {
-        void data.tasks.setDone(slug, task.id, isDone);
+        tickTask(toasts, (next) => data.tasks.setDone(slug, task.id, next), isDone);
       }}
       onAction={(task) => {
         onOpenTask(task.id);
