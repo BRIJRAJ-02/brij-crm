@@ -229,15 +229,13 @@ describe('Settings › Calendars’ words', () => {
     expect(strings.results.off.title).toBe(strings.offTitle);
   });
 
-  it('says what connecting does while nothing is connected', async () => {
+  it('offers each provider as its own button while nothing is connected, with no sentence of why', async () => {
     shown = await renderCalendars({ connections: [] });
-    await expect
-      .element(
-        page.getByText(
-          'Connect your calendar so bookings avoid your busy times and your meetings show on the people you meet.',
-        ),
-      )
-      .toBeVisible();
+    await expect.element(page.getByText(strings.emptyTitle)).toBeVisible();
+    // The fake has Google on only: a button per provider that is on.
+    await expect.element(page.getByRole('button', { name: strings.connectGoogle })).toBeVisible();
+    expect(page.getByRole('button', { name: strings.connectOutlook }).elements()).toEqual([]);
+    expect(page.getByText(/avoid your busy times/).elements()).toEqual([]);
   });
 
   it('names Where bookings go, the accounts limit, a stopped account and the workspace section', async () => {
@@ -248,13 +246,12 @@ describe('Settings › Calendars’ words', () => {
       accountEmail: `ada${String(index + 2)}@acme.dev`,
     }));
     shown = await renderCalendars({ connections: [{ ...connection, status: 'expired' }, ...others], max: 3 });
-    await expect.element(page.getByRole('button', { name: 'About Where bookings go' })).toBeVisible();
-    await expect
-      .element(page.getByText('You’ve connected 3 accounts, the most you can. Disconnect one to add another.'))
-      .toBeVisible();
+    // The label is the whole help for Add bookings to, and for what teammates see: no tips beside them.
+    expect(page.getByRole('button', { name: 'About Where bookings go' }).elements()).toEqual([]);
+    await expect.element(page.getByText('Limit of 3 accounts. Disconnect one to add another.')).toBeVisible();
     await expect.element(page.getByText('Needs reconnecting')).toBeVisible();
     await expect.element(page.getByRole('heading', { name: 'For everyone in the workspace' })).toBeVisible();
-    await expect.element(page.getByText('Applies to every member’s synced meetings.')).toBeVisible();
+    await expect.element(page.getByRole('button', { name: 'About Add people from meetings' })).toBeVisible();
     expect([strings.status.revoked, strings.status.failed]).toEqual(['Access removed', 'Stopped syncing']);
   });
 });
