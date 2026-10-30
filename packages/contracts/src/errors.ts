@@ -78,6 +78,8 @@ export const ERROR_MAP = {
   // another schedule as default first", and a page naming a schedule its owner doesn't hold.
   SCHEDULE_LIMIT: CONFLICT,
   STALE: CONFLICT,
+  // A type change that would lose a value or break what uses the attribute (the field types pass).
+  TYPE_CHANGE_REFUSED: UNPROCESSABLE,
   DEFAULT_SCHEDULE: CONFLICT,
   SCHEDULE_NOT_ALLOWED: UNPROCESSABLE,
   IN_USE: CONFLICT,

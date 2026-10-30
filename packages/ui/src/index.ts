@@ -402,6 +402,11 @@ export {
   type AttributeSettingsValues,
 } from './modules/AttributeSettings/AttributeSettings.tsx';
 export {
+  typeChangeStep,
+  type TypeChangePreview,
+  type TypeChangeStepProps,
+} from './modules/AttributeSettings/TypeChangeStep.tsx';
+export {
   AttributeList,
   type AttributeEditorExtras,
   type AttributeItem,

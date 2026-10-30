@@ -48,6 +48,23 @@ export {
   type AttributeValueOptions,
   type AttributeValueResult,
 } from './attribute-values.ts';
+export {
+  CONVERT_REASONS,
+  convertValue,
+  type ConvertContext,
+  type ConvertOutcome,
+  type ConvertPhoneParser,
+} from './convert.ts';
+export {
+  isTypeChange,
+  TYPE_CHANGE_MAX_VALUES,
+  TYPE_CHANGE_SPECS,
+  TYPE_CHANGES,
+  typeChangeTargets,
+  typeKeyOf,
+  type TypeChangeKey,
+  type TypeChangeSource,
+} from './type-changes.ts';
 export { COUNTRY_CODES, countryCodeFromText, isCountryCode, type CountryCode } from './countries.ts';
 export { CURRENCY_CODES, type CurrencyCode } from './currencies.ts';
 export { Decimal, DECIMAL_LIMITS, toCanonicalDecimal } from './decimal.ts';

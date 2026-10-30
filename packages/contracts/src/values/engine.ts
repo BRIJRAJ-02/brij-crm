@@ -33,6 +33,9 @@ export const ENGINE_REFUSAL_CODES = [
   'JOB_TOO_LARGE',
   // A write that breaks an attribute's rules (spec 0013, AC-254): one refusal per failing rule, each with its ruleId.
   'VALIDATION_FAILED',
+  // Changing an attribute's type in place (the field types pass): a value that doesn't convert, or something that
+  // depends on the attribute and can't follow (a board's grouping, a view's filter, a live form).
+  'TYPE_CHANGE_REFUSED',
   // Saved views (spec 0020): the filter or sorts were saved by someone else since the draft began; the default
   // view can't be deleted or made private.
   'VIEW_CHANGED',

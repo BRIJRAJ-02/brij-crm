@@ -86,6 +86,8 @@ export const strings = {
   loading: 'Loading attributes',
   loadFailed: 'Couldn’t load the attributes',
   somethingWrong: 'Something went wrong. Try again in a moment.',
+  /** The Change type step's link to the table filtered to the records whose values don't convert. */
+  showRecords: (count: number) => (count === 1 ? 'Show the record' : `Show ${String(count)} records`),
   /** The archive confirm (spec 0012, screens). */
   confirmTitle: (title: string) => `Archive ${title}?`,
   /** The archive confirm's one line of what uses it (flow pass, 30 October 2026). */

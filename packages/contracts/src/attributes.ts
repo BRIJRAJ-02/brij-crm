@@ -105,6 +105,7 @@ export const PickerAttributeType = z.enum([
   'number',
   'currency',
   'date',
+  'timestamp',
   'checkbox',
   'select',
   'status',
@@ -274,6 +275,62 @@ export const AttributeImpact = z.object({
 /** What changing or archiving an attribute touches. */
 export type AttributeImpact = z.infer<typeof AttributeImpact>;
 
+/**
+ * The picker keys a type change may reach (the field types pass, 31 October 2026): every target of
+ * `TYPE_CHANGES` in `@crm/contracts/values`. Which of them an attribute may take is `typeChangeTargets`.
+ */
+export const TypeChangeTarget = z.enum([
+  'text',
+  'long_text',
+  'multi_select',
+  'number',
+  'currency',
+  'email',
+  'link',
+  'phone',
+]);
+/** A picker key a type change may reach. */
+export type TypeChangeTarget = z.infer<typeof TypeChangeTarget>;
+
+/**
+ * An attribute's type, changed in place to `to`. `config` is the new type's settings: a currency's
+ * `defaultCurrency` (required, the code every amount takes), a phone's `defaultCountry` (the country numbers typed
+ * without their code are read in).
+ */
+export const TypeChangeInput = WorkspaceScoped.extend({
+  attributeId: Uuid,
+  to: TypeChangeTarget,
+  config: z.record(z.string(), z.unknown()).optional(),
+});
+/** An attribute's type, changed in place. */
+export type TypeChangeInput = z.infer<typeof TypeChangeInput>;
+
+/**
+ * What a type change would do, read before it is made: how many values the attribute holds in live records
+ * (`total`), how many convert (kept as they are, or rewritten in the new type), how many can't (`fails`, with the
+ * commonest `reason` and up to 100 of their records the reader may open, for a filtered table), what else changes
+ * (`consequences`: Unique turned off, a rule removed, the default cleared, values in the trash cleared), and what
+ * stops it (`blockers`: a board grouped by it, a view filtering it a way the new type can't, a live form or
+ * booking page filing an answer it can't take, too many values). It may be made only with no fails and no
+ * blockers. Counts cover every record, including any the reader can't open.
+ */
+export const TypeChangeCheck = z.object({
+  total: z.number().int().min(0),
+  converts: z.number().int().min(0),
+  fails: z.number().int().min(0),
+  failedRecordIds: z.array(Uuid).max(100),
+  reason: z.string().optional(),
+  consequences: z.array(z.string()),
+  blockers: z.array(z.string()),
+});
+/** What a type change would do. */
+export type TypeChangeCheck = z.infer<typeof TypeChangeCheck>;
+
+/** A type change, made: the same as its check, with the write's own id. */
+export const ChangeTypeInput = TypeChangeInput.extend({ mutationId: Uuid });
+/** A type change, made. */
+export type ChangeTypeInput = z.infer<typeof ChangeTypeInput>;
+
 export const attributesContract = {
   list: oc.input(ListAttributesInput).output(z.array(AttributeDefinition)),
   create: oc.input(CreateAttributeInput).output(AttributeDefinition),
@@ -283,4 +340,11 @@ export const attributesContract = {
   restore: oc.input(AttributeWriteInput).output(z.array(AttributeDefinition)),
   /** Read only: `FORBIDDEN` without `schema.manage`, `NOT_FOUND` for an attribute the reader can't see. */
   impact: oc.input(AttributeImpactInput).output(AttributeImpact),
+  /** Read only, `schema.manage`: what changing the type would do (`TypeChangeCheck`). */
+  checkTypeChange: oc.input(TypeChangeInput).output(TypeChangeCheck),
+  /**
+   * Changes the type in place, every value converted in the same write (its history kept), or refuses
+   * `TYPE_CHANGE_REFUSED` with the first fail or blocker the check would show.
+   */
+  changeType: oc.input(ChangeTypeInput).output(AttributeDefinition),
 };

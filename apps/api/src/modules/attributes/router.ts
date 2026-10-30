@@ -1,6 +1,8 @@
 import {
   archiveAttributes,
   attributeImpact,
+  changeAttributeType,
+  checkTypeChange,
   createAttribute,
   editAttribute,
   listObjectAttributes,
@@ -69,6 +71,14 @@ export const attributesRouter = member.attributes.router({
   ),
   impact: member.attributes.impact.handler(({ context, input }) =>
     attributeImpact(context.scope, { attributeId: input.attributeId }),
+  ),
+  checkTypeChange: member.attributes.checkTypeChange.handler(({ context, input }) =>
+    checkTypeChange(context.scope, { attributeId: input.attributeId, to: input.to, config: input.config }),
+  ),
+  changeType: member.attributes.changeType.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+      changeAttributeType(context.scope, { attributeId: input.attributeId, to: input.to, config: input.config }, hooks),
+    ),
   ),
   restore: member.attributes.restore.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, (hooks) =>

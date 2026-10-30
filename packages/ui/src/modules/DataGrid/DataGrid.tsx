@@ -29,6 +29,7 @@ import { Button } from '../../atoms/Button/Button.tsx';
 import { CheckboxMark } from '../../atoms/Checkbox/Checkbox.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
+import { LockReason } from '../../atoms/Tooltip/LockReason.tsx';
 import { AnchoredTooltip, Tooltip, TOOLTIP_DELAY_MS } from '../../atoms/Tooltip/Tooltip.tsx';
 import { Menu, MenuItem, MenuSection, MenuTrigger } from '../../molecules/Menu/Menu.tsx';
 import { SharedTooltipContext } from '../../atoms/TruncatedText/TruncatedText.tsx';
@@ -217,6 +218,12 @@ export interface DataGridProps<Row> {
   /** One of `addColumnItems` was chosen. */
   readonly onAddColumnItem?: (id: string) => void;
   /**
+   * Why "New attribute…" is off (the object is at its attribute limit, the field types pass): the "+" becomes a
+   * LockReason saying it when there is nothing hidden to show, else its menu keeps the hidden columns and shows New
+   * attribute… disabled with the reason under it. Absent, it is on.
+   */
+  readonly addColumnLock?: string;
+  /**
    * Items a column's menu adds after its own (spec 0012: Edit attribute,
    * Archive attribute), per column; none for a column it answers none for.
    * The menu has only its own items when absent.
@@ -372,6 +379,7 @@ export function DataGrid<Row>({
   addColumnLabel = strings.addColumn,
   addColumnItems,
   onAddColumnItem,
+  addColumnLock,
   columnActions: columnActionsOf,
   focusColumn,
 }: DataGridProps<Row>) {
@@ -1160,7 +1168,7 @@ export function DataGrid<Row>({
         event.preventDefault();
         if (focus.col >= colCount) {
           if (addColumnItems !== undefined && addColumnItems.length > 0) setAddMenuOpen(true);
-          else onAddColumn?.();
+          else if (addColumnLock === undefined) onAddColumn?.();
         } else if (column === undefined) toggleScreen();
         else setMenuFor(column.id);
       }
@@ -1460,9 +1468,10 @@ export function DataGrid<Row>({
             },
             isMenuOpen: isAddMenuOpen,
             onMenuOpenChange: setAddMenuOpen,
+            lock: addColumnLock,
           }
         : undefined,
-    [hasAdd, colCount, addColumnLabel, isAddFocused, addColumnItems, isAddMenuOpen],
+    [hasAdd, colCount, addColumnLabel, isAddFocused, addColumnItems, isAddMenuOpen, addColumnLock],
   );
   const headerHandlers = useMemo<HeaderHandlers>(
     () => ({
@@ -1983,6 +1992,8 @@ interface AddColumnHeader {
   readonly onItem: (id: string) => void;
   readonly isMenuOpen: boolean;
   readonly onMenuOpenChange: (isOpen: boolean) => void;
+  /** Why New attribute is off, when it is. */
+  readonly lock: string | undefined;
 }
 
 /** The header row: the checkbox for the rows on screen, then a header per drawn column. Memoised, so a scroll step skips it. */
@@ -2093,7 +2104,9 @@ const GridHeader = memo(function GridHeader({
             data-focused={addColumn.isFocused || undefined}
             tabIndex={addColumn.isFocused ? 0 : -1}
           >
-            {addColumn.items.length === 0 ? (
+            {addColumn.items.length === 0 && addColumn.lock !== undefined ? (
+              <LockReason reason={addColumn.lock} />
+            ) : addColumn.items.length === 0 ? (
               <Tooltip content={addColumn.label}>
                 <Button variant="ghost" icon="plus" label={addColumn.label} onPress={addColumn.onPress} />
               </Tooltip>
@@ -2103,8 +2116,9 @@ const GridHeader = memo(function GridHeader({
                 <Menu
                   label={addColumn.label}
                   onAction={(key) => {
-                    if (key === NEW_COLUMN) addColumn.onPress();
-                    else addColumn.onItem(String(key));
+                    if (key === NEW_COLUMN) {
+                      if (addColumn.lock === undefined) addColumn.onPress();
+                    } else addColumn.onItem(String(key));
                   }}
                 >
                   {addColumn.items.map((item) => (
@@ -2114,7 +2128,11 @@ const GridHeader = memo(function GridHeader({
                   ))}
                   {/* Pinned at the foot, so a long list of hidden attributes never scrolls it away. */}
                   <MenuSection label={strings.newColumnItem} isPinned>
-                    <MenuItem id={NEW_COLUMN} icon="plus">
+                    <MenuItem
+                      id={NEW_COLUMN}
+                      icon="plus"
+                      {...(addColumn.lock === undefined ? {} : { isDisabled: true, description: addColumn.lock })}
+                    >
                       {strings.newColumnItem}
                     </MenuItem>
                   </MenuSection>

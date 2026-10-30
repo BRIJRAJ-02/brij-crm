@@ -57,6 +57,8 @@ interface SampleGridProps {
   /** The "+" header's menu: hidden columns to show, then New attribute. */
   readonly addColumnItems?: readonly { readonly id: string; readonly label: string }[];
   readonly onAddColumnItem?: (id: string) => void;
+  /** Why New attribute is off: the object is at its attribute limit. */
+  readonly addColumnLock?: string;
   /** The screen's own column menu items (spec 0012). */
   readonly columnActions?: (columnId: string) => readonly GridColumnAction[];
   /** "Create" in a select or status cell's list (spec 0012, AC-238). */
@@ -93,6 +95,7 @@ function SampleGrid({
   onAddColumn,
   addColumnItems,
   onAddColumnItem,
+  addColumnLock,
   columnActions,
   onCreateOption,
   floatingBar,
@@ -190,6 +193,7 @@ function SampleGrid({
         {...(onAddColumn === undefined ? {} : { onAddColumn })}
         {...(addColumnItems === undefined ? {} : { addColumnItems })}
         {...(onAddColumnItem === undefined ? {} : { onAddColumnItem })}
+        {...(addColumnLock === undefined ? {} : { addColumnLock })}
         {...(columnActions === undefined ? {} : { columnActions })}
         {...(onCreateOption === undefined ? {} : { onCreateOption })}
         {...(floatingBar === undefined ? {} : { floatingBar })}
@@ -732,6 +736,23 @@ export const AddColumnMenu: Story = {
     await userEvent.click(domain);
     await waitFor(() => expect(args.onAddColumnItem).toHaveBeenCalledWith('domain'));
     await waitFor(() => expect(document.querySelector('[role="menu"]')).toBeNull());
+  },
+};
+
+/**
+ * At the attribute limit (the field types pass): with nothing hidden, the "+" is a lock whose name and tooltip say
+ * why; with hidden columns its menu still shows them, and New attribute… is off with the reason under it.
+ */
+export const AddColumnAtLimit: Story = {
+  args: {
+    onAddColumn: fn(),
+    addColumnLock: '120 of 120 used. Archive one first.',
+  },
+  parameters: { crm: { screenshot: false } },
+  play: async ({ args, canvas, userEvent }) => {
+    const lock = canvas.getByRole('button', { name: '120 of 120 used. Archive one first.' });
+    await userEvent.click(lock);
+    await expect(args.onAddColumn).not.toHaveBeenCalled();
   },
 };
 
