@@ -11,6 +11,7 @@ import { CommentsTab } from '../comments/CommentsTab.tsx';
 import { strings as commentStrings } from '../comments/strings.ts';
 import { NotesTab } from '../notes/NotesTab.tsx';
 import { strings as noteStrings } from '../notes/strings.ts';
+import { LogActivityDialog } from '../notes/LogActivityDialog.tsx';
 import { NoteWindow } from '../notes/NoteWindow.tsx';
 import { tabCount } from '../tasks/entries.ts';
 import { strings as taskStrings } from '../tasks/strings.ts';
@@ -247,12 +248,14 @@ function LoadedPeek(
   // A task or note opens over the panel, as on the page; their address stays the list's, so closing leaves the panel.
   const [task, setTask] = useState<string | undefined>(undefined);
   const [note, setNote] = useState<string | undefined>(undefined);
+  const [log, setLog] = useState<string | undefined>(undefined);
   // Stepping to another record closes what was open on the last one.
   const [shownFor, setShownFor] = useState(recordId);
   if (shownFor !== recordId) {
     setShownFor(recordId);
     setTask(undefined);
     setNote(undefined);
+    setLog(undefined);
   }
   const shown = shownOf(state);
   const isLost = state.status === 'deleted' && state.isLost;
@@ -332,7 +335,9 @@ function LoadedPeek(
       id: 'notes',
       label: noteStrings.notes,
       ...tabCount(notesTotal),
-      content: <NotesTab list={sources.notes} members={members} canAdd={canEdit} onOpenNote={setNote} />,
+      content: (
+        <NotesTab list={sources.notes} members={members} canAdd={canEdit} onOpenNote={setNote} onOpenLog={setLog} />
+      ),
     },
     {
       id: 'tasks',
@@ -417,6 +422,19 @@ function LoadedPeek(
           onStored={setNote}
           onClose={() => {
             setNote(undefined);
+          }}
+        />
+      )}
+      {log !== undefined && (
+        <LogActivityDialog
+          slug={slug}
+          log={log}
+          record={display}
+          members={members}
+          objects={sources.objects}
+          canChange={canEdit}
+          onClose={() => {
+            setLog(undefined);
           }}
         />
       )}

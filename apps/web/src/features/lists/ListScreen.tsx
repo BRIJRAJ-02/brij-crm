@@ -32,6 +32,7 @@ import {
   EmptyState,
   Modal,
   TopBar,
+  sharedStrings,
   ViewBar,
   arraySource,
   type BoardCard,
@@ -142,7 +143,7 @@ export function ListScreen(given: ListScreenProps) {
           setSaving(false);
           props.toasts.toast({
             tone: 'danger',
-            message: isDataError(error) ? error.message : viewStrings.actionFailed,
+            message: isDataError(error) ? error.message : sharedStrings.couldntDoThat,
           });
         },
       );

@@ -5,12 +5,11 @@
 // reads who is in which team.
 // Leaves out: what a team may see (an object's Access tab), team pages and team calendars, and guests.
 import { isDataError, type DataLayer, type MemberView, type TeamView } from '@crm/data';
-import { AvatarStack, Button, Callout, EmptyState, Table, type TableColumn, type Toasts } from '@crm/ui';
+import { AvatarStack, Button, Callout, EmptyState, sharedStrings, Table, type TableColumn, type Toasts } from '@crm/ui';
 import { useNavigate, useRouter } from '@tanstack/react-router';
 import { useEffect, useMemo, useState } from 'react';
 import { useCan } from '../workspace/WorkspacePage.tsx';
 import { focusTitle } from '../navigation/focus-title.ts';
-import { strings as membersStrings } from './members-strings.ts';
 import { objectSettingsHref } from './nav.ts';
 import { SettingsPage } from './SettingsPage.tsx';
 import { TeamDialog } from './TeamDialog.tsx';
@@ -249,7 +248,7 @@ export function TeamsScreen({ data, toasts, slug, teams, members, canManage }: T
             renderCell={cell}
             isScrollable
           />
-          {!canManage && <Callout>{membersStrings.readOnlyNote}</Callout>}
+          {!canManage && <Callout>{sharedStrings.ownersAndAdminsOnly}</Callout>}
         </>
       )}
       {canManage && (

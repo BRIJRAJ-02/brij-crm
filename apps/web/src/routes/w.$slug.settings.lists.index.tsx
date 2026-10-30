@@ -1,10 +1,9 @@
 import { isDataError } from '@crm/data';
-import { LoadingNow } from '@crm/ui';
+import { LoadingNow, sharedStrings } from '@crm/ui';
 import { createFileRoute, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { strings as listStrings } from '../features/lists/strings.ts';
 import { ListsPending, ListsScreen } from '../features/settings/ListsScreen.tsx';
 import { SettingsFailed } from '../features/settings/SettingsPage.tsx';
-import { strings } from '../features/settings/strings.ts';
 
 // Settings, Lists (spec 0048, AC-4828): every list the person may read, archived ones too, with the objects (for
 // their names and the New list dialog) and the members (for who made each). Owners and admins are sent the entry
@@ -45,7 +44,7 @@ function ListsError({ error }: ErrorComponentProps) {
     <SettingsFailed
       title={listStrings.settingsTitle}
       heading={listStrings.failed}
-      text={isDataError(error) ? error.message : strings.somethingWrong}
+      text={isDataError(error) ? error.message : sharedStrings.couldntDoThat}
       onRetry={() => void router.invalidate()}
     />
   );

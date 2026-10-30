@@ -10,6 +10,8 @@ export const strings = {
   discard: 'Discard changes',
   /** After Discard changes, with Undo (30 October 2026: Undo over a confirm). */
   discarded: 'Changes discarded.',
+  /** A list's view saved its filters (spec 0048). */
+  saved: (name: string) => `Filters saved on ${name}.`,
   save: 'Save',
   saving: 'Saving',
   /** Someone else saved the view's filters while this tab had no draft (AC-468). */

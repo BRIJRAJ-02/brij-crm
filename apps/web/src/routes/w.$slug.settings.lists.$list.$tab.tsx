@@ -1,5 +1,5 @@
 import { isDataError } from '@crm/data';
-import { LoadingNow } from '@crm/ui';
+import { LoadingNow, sharedStrings } from '@crm/ui';
 import { createFileRoute, useNavigate, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { useCallback } from 'react';
 import { strings as listStrings } from '../features/lists/strings.ts';
@@ -7,7 +7,6 @@ import { isListTab } from '../features/settings/list-tabs.ts';
 import { ListSettingsScreen } from '../features/settings/ListSettingsScreen.tsx';
 import { ListsPending } from '../features/settings/ListsScreen.tsx';
 import { SettingsFailed, SettingsMissing } from '../features/settings/SettingsPage.tsx';
-import { strings } from '../features/settings/strings.ts';
 
 /** `?attribute=<id>` on the Fields tab: the field whose dialog is open. */
 interface ListSettingsSearch {
@@ -83,7 +82,7 @@ function ListError({ error }: ErrorComponentProps) {
     <SettingsFailed
       title={listStrings.settingsTitle}
       heading={listStrings.failed}
-      text={isDataError(error) ? error.message : strings.somethingWrong}
+      text={isDataError(error) ? error.message : sharedStrings.couldntDoThat}
       onRetry={() => void router.invalidate()}
     />
   );
