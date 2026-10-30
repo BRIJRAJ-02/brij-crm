@@ -156,6 +156,10 @@ export const ACCESS_TABLE = {
   // The forms they may place (spec 0052) and the look of the page (spec 0054): their own account, as the rest.
   listProfileFormChoices: { ownLinkPage: true },
   saveProfileTheme: { ownLinkPage: true },
+  // The link page's own accent and photos (spec 0060, AC-23): their own page only, as the look is.
+  readProfileLook: { ownLinkPage: true },
+  saveProfileAccent: { ownLinkPage: true },
+  saveProfileImage: { ownLinkPage: true },
   // The picture their page shares with (spec 0055): their own account, like every other page setting.
   saveProfileShareImage: { ownLinkPage: true },
   setProfileIndexable: { ownLinkPage: true },
@@ -167,6 +171,13 @@ export const ACCESS_TABLE = {
   // Workspace › General (spec 0031, slice 7): every member reads it; changing it and deleting it are permissions.
   getWorkspaceSettings: { anyMember: true },
   updateWorkspace: { permission: 'workspace.manage' },
+  // The brand kit (spec 0060, AC-1, AC-23): every member reads it; owners and admins change it and its logo.
+  getWorkspaceBrand: { anyMember: true },
+  readBrandLogo: { anyMember: true },
+  saveWorkspaceBrand: { permission: 'workspace.manage' },
+  requireBrandEditor: { permission: 'workspace.manage' },
+  saveBrandLogo: { permission: 'workspace.manage' },
+  clearBrandLogo: { permission: 'workspace.manage' },
   deleteWorkspace: { permission: 'workspace.delete' },
   restoreWorkspace: { permission: 'workspace.delete' },
   setWorkspaceDomains: { permission: 'workspace.manage' },

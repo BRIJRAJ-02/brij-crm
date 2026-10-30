@@ -148,6 +148,24 @@ export {
   importProfileLinks,
   saveProfileItem,
 } from './profile/items.ts';
+// A workspace's brand kit and the caller's own link page accent and photos (spec 0060).
+export {
+  brandLogoFolder,
+  clearBrandLogo,
+  getWorkspaceBrand,
+  readBrandLogo,
+  requireBrandEditor,
+  saveBrandLogo,
+  saveWorkspaceBrand,
+  type StoredLogo,
+} from './brand/brand.ts';
+export {
+  pageImageFolder,
+  readProfileLook,
+  saveProfileAccent,
+  saveProfileImage,
+  type StoredPageImage,
+} from './brand/look.ts';
 // A person's own account picture from our origin (23 Oct 2026): only Google's account pictures, with their version.
 export {
   personPicture,

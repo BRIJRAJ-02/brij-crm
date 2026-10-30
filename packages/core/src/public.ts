@@ -83,3 +83,17 @@ export { addGuests, cancelBooking, guestTarget, moveBooking, readMoveSlots, remo
 // An email's preferences link (the emails lane): its token read, the member's narrow scope, and their choices.
 export { enterEmailLink } from './access/door.ts';
 export { readEmailLinkToken, readEmailPreferences, setEmailPreference } from './emails/preferences.ts';
+
+// What the public pages wear of a brand (spec 0060): a booking page's, a form's and a link page's accent, photos and
+// logo, and the small stylesheets that carry the accent.
+export {
+  brandStylesheet,
+  LOOK_IMAGE_PROPERTIES,
+  lookStylesheet,
+  readBookingBrand,
+  readFormBrand,
+  readHandleLook,
+  type LookImage,
+  type PageBrand,
+  type PageLook,
+} from './brand/public.ts';

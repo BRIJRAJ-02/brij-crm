@@ -15,6 +15,9 @@ import { ACCESS_TABLE, type AccessEntry } from './table.ts';
 
 /** Exported functions that take no scope: the door, pure helpers, the bootstrap (which mints its own) and the runner. */
 const NO_SCOPE: ReadonlySet<string> = new Set([
+  // Where a workspace's logo and a link page's photos are kept (spec 0060): pure, a path from ids.
+  'brandLogoFolder',
+  'pageImageFolder',
   // The door and its entries mint scopes; they don't take one. NO_RULE_SOURCE is what the door reads rules from
   // until #24 stores them: the door's input, not a service.
   'enterWorkspace',
@@ -460,7 +463,21 @@ describe('the walk: a principal without the access is refused', () => {
         // The look of a page names no block and no page, so it can only ever be the caller's own (spec 0054).
         // Bea has claimed no handle, so there is no public profile of theirs to put a look on: NOT_FOUND, with
         // the others below, rather than a look saved against nothing.
-        saveProfileTheme: { ground: 'ink', hue: 'green', mode: 'dark', shape: 'pill', fill: 'solid', font: 'mono' },
+        saveProfileTheme: {
+          ground: 'ink',
+          hue: 'green',
+          mode: 'dark',
+          shape: 'pill',
+          fill: 'solid',
+          font: 'mono',
+          gradient: 'dawn',
+          pattern: 'dots',
+          header: 'centred',
+          avatar: 'circle',
+        },
+        // The page's accent and photos (spec 0060) name nothing either, and Bea has no page: NOT_FOUND too.
+        saveProfileAccent: { accent: '#1f5fd6', accentDark: null },
+        saveProfileImage: { slot: 'cover' },
         // Whether search engines may show the page names nothing either, and Bea has no page: NOT_FOUND too.
         setProfileIndexable: false,
         // An import of nothing: what it would land is Bea's own, so it answers Bea's page and holds none of Ada's.
@@ -476,6 +493,7 @@ describe('the walk: a principal without the access is refused', () => {
         name === 'listProfilePageChoices' ||
         name === 'listProfileFormChoices' ||
         name === 'readProfileCounts' ||
+        name === 'readProfileLook' ||
         name === 'importProfileLinks'
       ) {
         // The reads answer Bea's own page, which holds nothing of Ada's: a refusal would say the wrong thing.
