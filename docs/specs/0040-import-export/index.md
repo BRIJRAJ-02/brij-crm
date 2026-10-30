@@ -268,4 +268,10 @@ A late trap is a change that saves fine, then breaks something later somewhere e
 
 - The member who started an import is emailed how it ended (`import_finished`), on success and on failure: counts, what to do next on a failure, and the import's page. Nothing goes to a starter who can no longer read the object or was removed (#74).
 - Undo keeps a created record someone has worked on since (an edit, a note, a comment, a task, or a link from elsewhere), and a record made by Create missing likewise; each kept one gets a row note (#5, #80, #81). An import reads undone only once the undo finishes (#21).
-- An import is refused up front when a required field has no column (#25), and Create missing is refused when the far object has a required field a made record can't fill (#75). A sorted export that saw changes while it ran says so (#40).
+- An import is refused up front when a required field has no column (#25), and Create missing is refused when the far object has a required field a made record can't fill (#75).
+
+## Calls made fixing late traps, round 2, 30 October 2026 (shipped, main 1cdb46072)
+
+The same rules as the section above: each line says what the product does now, and the trap it closes.
+
+- A records export is a snapshot (replacing "a sorted export that saw changes says so"). Its first batch reads every id the view matches, in the view's order, in one statement (`orderedIdsIn`, through the door like a page: the record rule applies, and a filter or sort on a hidden attribute is refused) and stores them as the job's items, with the header; rows are written from the second batch on, by those ids. A record that changes while the export runs can no longer push another out of the file or appear twice; one deleted, or gone from the starter's sight, since is left out. The snapshot's sort has 15 seconds (jobs run in a function with about 30 seconds a batch); past that the job ends at once with `QUERY_CANCELLED` and a plain message, and is not retried (#40).

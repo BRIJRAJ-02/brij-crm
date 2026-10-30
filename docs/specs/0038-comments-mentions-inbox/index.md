@@ -270,3 +270,9 @@ None new: the worker gains the mailer the api already has (`RESEND_API_KEY` or `
 A late trap is a change that saves fine, then breaks something later somewhere else, without anyone being told. Each line says what the product does now, and the trap it closes (numbers from the late trap audit). The owner asked for each to follow industry practice and delegated the product calls.
 
 - Settings shows Email mentions off while the email's one click unsubscribe has the topic off, and turning it on there subscribes again (`updated_via = app`) (#87). A notifications email that was claimed but not sent is given back for the retry (#4).
+
+## Calls made fixing late traps, round 2, 30 October 2026 (shipped, main 1cdb46072)
+
+The same rules as the section above: each line says what the product does now, and the trap it closes.
+
+- A new kind, `form_submission` (spec 0023): one per member and submission (`notifications.submission_id`, unique, migration 0130), from the system, with the form as its actor (a square gray tile with a clipboard mark). It reads "<form> got a new submission", opens the submission, and shows only while the member can see the form (hidden means absent). The Inbox filter has "Form submissions". It is never emailed in the 5 minute batch: its own email is the form's submission email, so the row is stored as emailed, except for a member with the digest on, whose submissions wait for the digest instead. Turning the digest off sends what was waiting. Deleting the submission or its form deletes the notice and tells the inbox.
