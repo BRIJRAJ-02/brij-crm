@@ -432,7 +432,8 @@ export function ViewScreen(props: ViewScreenProps) {
   // Export CSV (spec 0040, AC-1130, AC-1131): the view as it stands, its unsaved filter and sorts included, its visible
   // columns in order; one toast shows it working, then turns into Download (or Try again).
   const exporting = useRef(false);
-  const exportView = () => {
+  // `withHidden` (Export all columns) writes the layout's hidden columns too, in the layout's order.
+  const exportView = (withHidden = false) => {
     // One export per press: a second press while the first is on its way starts nothing.
     if (exporting.current) return;
     exporting.current = true;
@@ -451,7 +452,7 @@ export function ViewScreen(props: ViewScreenProps) {
         ...(view === undefined ? {} : { viewId: view.id }),
         ...(query.filter === undefined ? {} : { filter: query.filter }),
         sorts: query.sorts,
-        attributeIds: layout.columns.filter((column) => !column.isHidden).map((column) => column.id),
+        attributeIds: layout.columns.filter((column) => withHidden || !column.isHidden).map((column) => column.id),
       },
     ).finally(() => {
       exporting.current = false;
@@ -679,7 +680,14 @@ export function ViewScreen(props: ViewScreenProps) {
           </Callout>
         )}
         <FavouriteButton data={data} slug={slug} kind="view" id={view.id} />
-        <TransferMenu slug={slug} object={object} onExport={exportView} />
+        <TransferMenu
+          slug={slug}
+          object={object}
+          shownColumns={layout.columns.filter((column) => !column.isHidden).length}
+          allColumns={layout.columns.length}
+          {...(table === undefined ? {} : { records: table.records })}
+          onExport={exportView}
+        />
       </>
     );
   const viewSettings: ViewSettingsTrigger | undefined =

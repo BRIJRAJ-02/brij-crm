@@ -437,6 +437,7 @@ export function RecordsScreen({
     total: state.count.count,
     isTotalAtLeast: state.count.atLeast,
     query: shown.query,
+    exportColumns: columns.filter((column) => column.isHidden !== true).map((column) => column.id),
     onClear: () => {
       focusBackAt(tickedIds, false);
       ticked.clear();

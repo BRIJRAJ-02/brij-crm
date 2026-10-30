@@ -20,6 +20,14 @@ export const strings = {
   exportFailed: (name: string, why: string | undefined) =>
     why === undefined ? `Couldn’t export ${name}.` : `Couldn’t export ${name}. ${why}`,
   tryAgain: 'Try again',
+  /** The Import / Export menu's export items: the shown columns, then every column, hidden ones too. */
+  exportShown: (columns: number) => `Export view (${n(columns)} ${columns === 1 ? 'column' : 'columns'})`,
+  exportAll: (columns: number) => `Export all columns (${n(columns)})`,
+  exportAllText: 'Hidden columns included',
+  /** Why the export items are off on a view past the limit. */
+  exportTooMany: 'Narrow the filter to 100,000 or fewer',
+  /** The bulk bar's export of the ticked rows, and what its toast calls them. */
+  exportSelected: (count: number) => `Export ${n(count)} selected`,
   title: (pluralName: string) => `Import ${pluralName.toLowerCase()}`,
   stepsLabel: 'Import steps',
   steps: {

@@ -5562,6 +5562,9 @@ export function createDataLayer({
        * is followed like any this tab started; `forJob` gives the export a
        * finished job wrote, for the toast's Download. Rejects with a
        * `DataError` (`EXPORT_TOO_LARGE` with the count, `LIMIT_REACHED`).
+       * `recordIds` exports exactly those records (a table's ticked rows,
+       * at most 10,000) instead of the filter; ones the member can't read are
+       * absent from the file.
        */
       start: async (
         workspace: string,
@@ -5572,15 +5575,18 @@ export function createDataLayer({
           readonly filter?: StartExportInput['filter'];
           readonly sorts?: StartExportInput['sorts'];
           readonly attributeIds: readonly string[];
+          readonly recordIds?: readonly string[];
         },
       ): Promise<RecordsExportView> => {
+        const { recordIds, ...rest } = input;
         const view = await sendImport(
           (mutationId) => (options) =>
             api.exports.start(
               {
                 workspace,
-                ...input,
+                ...rest,
                 attributeIds: [...input.attributeIds],
+                ...(recordIds === undefined ? {} : { recordIds: [...recordIds] }),
                 timeZone: zoneOf(workspace),
                 mutationId,
               },

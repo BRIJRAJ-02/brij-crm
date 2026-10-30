@@ -3,7 +3,7 @@
 // which way round a date column's dates are; Open trash from the view menu and ⌘K; and ⌘K's page actions.
 import { randomUUID } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
-import { newWorkspace } from './people.ts';
+import { addPerson, newWorkspace } from './people.ts';
 
 /** Opens the command menu and runs the action named `name`. */
 async function runCommand(page: Page, name: string) {
@@ -47,7 +47,7 @@ test.describe('the data journey’s edges', () => {
     await page.goto(`/w/${slug}/objects/people`);
     await page.getByRole('button', { name: 'Import / Export' }).click();
     await expect(page.getByRole('menuitem', { name: 'Import people' })).toBeVisible();
-    await page.getByRole('menuitem', { name: 'Export this view (CSV)' }).click();
+    await page.getByRole('menuitem', { name: /^Export view \(\d+ columns?\)/u }).click();
     // One toast: working, then the file.
     await expect(page.getByRole('button', { name: 'Download' })).toBeVisible({ timeout: 30_000 });
     await expect(page.getByText(/^Exporting /u)).toBeHidden();
@@ -127,5 +127,38 @@ test.describe('the data journey’s edges', () => {
 
     await runCommand(page, 'Import people');
     await expect(page.getByRole('heading', { level: 1, name: 'Import people' })).toBeVisible();
+  });
+
+  test('Export names its column count and offers the hidden ones; the bulk bar exports the ticked rows', async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    const tag = randomUUID().slice(0, 8);
+    const slug = `dataexport-${tag}`;
+    await newWorkspace(page, `dataexport-${tag}@example.com`, slug);
+    await page.goto(`/w/${slug}/objects/people`);
+    const grid = page.getByRole('grid', { name: 'People' });
+    await expect(grid).toBeVisible();
+    await addPerson(page, 'Ada', 'Byron', `ada-${tag}@acme.com`);
+    await addPerson(page, 'Bea', 'Stone', `bea-${tag}@acme.com`);
+    await expect(grid.getByRole('rowheader', { name: /Bea Stone/u })).toBeVisible();
+
+    // The view bar's export says how many columns it writes; People's default view hides some, offered apart.
+    await page.getByRole('button', { name: 'Import / Export' }).click();
+    const shown = page.getByRole('menuitem', { name: /^Export view \((\d+) columns?\)/u });
+    await expect(shown).toBeVisible();
+    await expect(shown).toBeEnabled();
+    await expect(page.getByRole('menuitem', { name: /^Export all columns \(\d+\)/u })).toBeVisible();
+    await page.keyboard.press('Escape');
+
+    // Two ticked rows: Export 2 selected, one toast that turns into Download.
+    const tick = (name: string) => grid.getByRole('gridcell', { name: new RegExp(`^Select ${name}`, 'u') });
+    await tick('Ada Byron').click();
+    await tick('Bea Stone').click();
+    const bar = page.getByRole('toolbar', { name: 'Selected records' });
+    await bar.getByRole('button', { name: 'Export 2 selected' }).click();
+    await expect(page.getByText('Exporting 2 people…')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Download' })).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText(/People - Selected - /u)).toBeVisible();
   });
 });

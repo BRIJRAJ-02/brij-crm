@@ -8,6 +8,7 @@
 // same NOT_FOUND as one that doesn't exist.
 import { oc } from '@orpc/contract';
 import * as z from 'zod';
+import { BULK_IDS_MAX } from './bulk.ts';
 import { ExportIdInput } from './forms/forms.ts';
 import { TRANSFER_LIMITS } from './transfer-limits.ts';
 import { Uuid, uuidV7 } from './values/ids.ts';
@@ -220,6 +221,9 @@ export type ImportRows = z.infer<typeof ImportRows>;
  * (the retry key); the view by id when saved, with the filter and sorts on
  * screen (the unsaved ones when the member changed them); `attributeIds` the
  * visible columns in order; `timeZone` for relative dates in the filter.
+ * `recordIds` exports exactly those records (a table's ticked rows, at most
+ * `BULK_IDS_MAX`) in that order instead of the filter; one the member may
+ * not read is simply absent.
  */
 export const StartExportInput = WorkspaceScoped.extend({
   id: uuidV7('The export id must be a UUID v7.'),
@@ -228,6 +232,11 @@ export const StartExportInput = WorkspaceScoped.extend({
   filter: FilterGroup.optional(),
   sorts: SortRules.optional(),
   attributeIds: z.array(Uuid).min(1).max(TRANSFER_LIMITS.importColumns),
+  recordIds: z
+    .array(Uuid)
+    .min(1, 'Choose at least one record.')
+    .max(BULK_IDS_MAX, `Export at most ${BULK_IDS_MAX.toLocaleString('en')} selected records at a time.`)
+    .optional(),
   timeZone: z.string().min(1).max(64),
   mutationId: Uuid,
 });
