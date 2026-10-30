@@ -201,7 +201,7 @@ export {
   type SuggestionListProps,
   type SuggestionRow,
 } from './molecules/SuggestionList/SuggestionList.tsx';
-export { Table, type TableColumn, type TableProps } from './molecules/Table/Table.tsx';
+export { Table, type TableColumn, type TableLayout, type TableProps } from './molecules/Table/Table.tsx';
 export { TabPanel, Tabs, type TabItem, type TabPanelProps, type TabsProps } from './molecules/Tabs/Tabs.tsx';
 export {
   ActivityFeed,
@@ -358,6 +358,7 @@ export {
   TeamWeek,
   type TeamWeekCell,
   type TeamWeekDay,
+  type TeamWeekLegendItem,
   type TeamWeekPerson,
   type TeamWeekProps,
   type TeamWeekTone,

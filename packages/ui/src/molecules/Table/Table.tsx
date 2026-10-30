@@ -38,7 +38,19 @@ export interface TableColumn {
    * calendars isn't a column of identical buttons; always shown on touch, where nothing hovers.
    */
   readonly showsOnHover?: boolean;
+  /**
+   * What the header draws in place of its label (a weekday over its date, today's in an accent circle); the label
+   * stays its text value, so give the heading words that read the same (a VisuallyHidden "today" where it helps).
+   */
+  readonly heading?: ReactNode;
+  /** The column for now (today in a week): its header in the link colour, an accent line under it. */
+  readonly isCurrent?: boolean;
+  /** `quiet` tints the whole column a step off the page (a week's weekend, when few work). */
+  readonly tone?: 'quiet';
 }
+
+/** How a Table shares its width. */
+export type TableLayout = 'auto' | 'even';
 
 /** Rows that can be moved, and each one's name for its handle; or neither. */
 type Reorder<T> =
@@ -95,6 +107,15 @@ interface TableBase<T> {
    * control names itself in full ("Check Team for conflicts"), since its column header is no longer read.
    */
   readonly isHeaderHidden?: boolean;
+  /**
+   * `even` gives the row header column one set width (a column and room for a picture) and shares the rest evenly
+   * between the others, whatever their content, so a week's seven days line up as equals; with `isScrollable`,
+   * each keeps at least `size-column-min` and the frame scrolls on a phone. `auto` (the default) lets the browser
+   * share the width by content.
+   */
+  readonly layout?: TableLayout;
+  /** A row's look: `total` sets a row of sums apart (a hairline in the control edge above it, no hover). */
+  readonly getRowTone?: (row: T) => 'total' | undefined;
 }
 
 /** The handle column's id, kept apart from any column the caller names. */
@@ -127,6 +148,8 @@ export function Table<T>({
   isHeaderSticky = false,
   isScrollable = false,
   isHeaderHidden = false,
+  layout = 'auto',
+  getRowTone,
 }: TableProps<T>) {
   const isSelectable = selected !== undefined && onSelectedChange !== undefined;
   // A scrollable frame fades the end that hides columns, so it shows there is more to scroll to.
@@ -152,6 +175,7 @@ export function Table<T>({
     <AriaTable
       className={styles.root}
       aria-label={label}
+      data-layout={layout === 'even' ? 'even' : undefined}
       {...(onRowAction === undefined ? {} : { onRowAction: (key) => onRowAction(String(key)) })}
       {...(isSelectable
         ? {
@@ -177,11 +201,16 @@ export function Table<T>({
             data-size={column.size}
             data-handle={column.id === HANDLE || column.id === SELECT || undefined}
             data-sticky={isHeaderSticky || undefined}
+            data-lead={(layout === 'even' && column.isRowHeader === true) || undefined}
+            data-current={column.isCurrent === true || undefined}
+            data-tone={column.tone}
           >
             {column.id === SELECT ? (
               <Checkbox slot="selection" label={strings.selectAll} isLabelHidden />
             ) : column.isLabelHidden === true ? (
               <VisuallyHidden>{column.label}</VisuallyHidden>
+            ) : column.heading !== undefined ? (
+              <span className={styles.columnLabel}>{column.heading}</span>
             ) : column.info === undefined ? (
               column.label
             ) : (
@@ -215,6 +244,7 @@ export function Table<T>({
             columns={shown}
             className={styles.row}
             data-pressable={onRowAction === undefined ? undefined : ''}
+            data-tone={getRowTone?.(item.row)}
           >
             {(column) =>
               column.id === HANDLE ? (
@@ -234,6 +264,9 @@ export function Table<T>({
                   className={styles.cell}
                   data-align={column.align ?? 'start'}
                   data-size={column.size}
+                  data-tone={column.tone}
+                  data-row-tone={getRowTone?.(item.row)}
+                  data-lead={(layout === 'even' && column.isRowHeader === true) || undefined}
                   data-gutter-handle={(handleInGutter && column.id === firstColumnId) || undefined}
                 >
                   {handleInGutter && column.id === firstColumnId && (
@@ -264,6 +297,9 @@ export function Table<T>({
       data-scrollable={scrolls || undefined}
       data-fade={fade}
       data-edge={atPageEdge ? 'page' : undefined}
+      data-layout={layout === 'even' ? 'even' : undefined}
+      // How many columns share the width evenly, so an even table's least width holds each at size-column-min.
+      style={{ '--table-shared': String(shown.filter((each) => each.isRowHeader !== true).length) }}
     >
       {onReorder === undefined ? (
         table

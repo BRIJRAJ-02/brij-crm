@@ -5,6 +5,9 @@
      what a cell places absolutely (a visually hidden label) scrolls inside it
      too and never widens the page. */
   .frame {
+    /* How many columns an even table shares its width between (the component sets it). */
+    --table-shared: 1;
+
     position: relative;
     min-inline-size: 0;
     overflow-x: auto;
@@ -93,7 +96,7 @@
   }
 
   @media (hover: hover) and (pointer: fine) {
-    .row:not([data-selected])[data-hovered] {
+    .row:not([data-selected], [data-tone='total'])[data-hovered] {
       background: var(--surface-hover);
     }
   }
@@ -104,8 +107,11 @@
   }
 
   .cell {
+    /* A cell's side padding, which content that runs to the cell's edges (a band across days) reads. */
+    --table-cell-inline: var(--space-8);
+
     block-size: var(--size-row);
-    padding-inline: var(--space-8);
+    padding-inline: var(--table-cell-inline);
     border-block-end: var(--border-width-hairline) solid var(--border-subtle);
     outline: none;
   }
@@ -217,6 +223,87 @@
   /* Directly in a settings page's body, the skeleton rows start on the content edge too. */
   .frame[data-edge='page'] .loading {
     padding-inline: var(--space-16);
+  }
+
+  /* An even table: the row header column one set width (a column, and room for a picture beside a name), the others
+     sharing the rest as equals whatever their content (a week's days). In a scrolling frame each keeps at least
+     size-column-min, so a phone scrolls rather than crushing them. */
+  .root[data-layout='even'] {
+    --table-lead: calc(var(--size-column) + var(--space-32));
+    --table-shared-min: var(--size-column-min);
+
+    table-layout: fixed;
+  }
+
+  .frame[data-scrollable] > .root[data-layout='even'] {
+    inline-size: 100%;
+    min-inline-size: calc(var(--table-lead) + var(--table-shared) * var(--table-shared-min));
+  }
+
+  /* A phone: the row header column narrows, so the shared columns keep more of the screen, and each shared one
+     keeps a narrow column's width, since the frame scrolls there anyway. */
+  .frame[data-layout='even'] {
+    container-type: inline-size;
+    /* Keyboard scrolling stops a focused cell clear of the names held at the start on a phone. */
+    scroll-padding-inline-start: calc(var(--size-column-narrow) + var(--space-32));
+  }
+
+  /* The names hold the start edge (below), so only the end fades. */
+  .frame[data-layout='even'][data-fade='start'] {
+    mask-image: none;
+  }
+
+  .frame[data-layout='even'][data-fade='both'] {
+    mask-image: linear-gradient(to right, var(--surface) calc(100% - var(--space-24)), transparent);
+  }
+
+  @container (inline-size < 480px) {
+    .root[data-layout='even'] {
+      --table-lead: calc(var(--size-column-narrow) + var(--space-32));
+      --table-shared-min: var(--size-column-narrow);
+    }
+
+    /* The names stay in view while the days scroll under them. */
+    .column[data-lead],
+    .cell[data-lead] {
+      position: sticky;
+      z-index: var(--z-raised);
+      inset-inline-start: 0;
+      background: var(--surface);
+    }
+
+    /* Held names take their row's state, solid, so the days still scroll under them. */
+    .row[data-selected] > .cell[data-lead] {
+      background: var(--accent-soft);
+    }
+
+    @media (hover: hover) and (pointer: fine) {
+      .row:not([data-selected], [data-tone='total'])[data-hovered] > .cell[data-lead] {
+        background: var(--surface-hover);
+      }
+    }
+  }
+
+  .column[data-lead] {
+    inline-size: var(--table-lead);
+  }
+
+  /* The column for now (today): its header in the link colour over an accent line. */
+  .column[data-current] {
+    border-block-end: var(--border-width-thick) solid var(--accent-line);
+    color: var(--link);
+  }
+
+  /* A quiet column (a weekend): the whole column a step off the page. */
+  .column[data-tone='quiet'],
+  .row:not([data-selected], [data-hovered]) > .cell[data-tone='quiet'] {
+    background: var(--surface-subtle);
+  }
+
+  /* A row of sums: a control's edge above it, and it never takes a hover. */
+  .cell[data-row-tone='total'] {
+    border-block-start: var(--border-width-hairline) solid var(--border);
+    border-block-end: none;
   }
 
   @media (forced-colors: active) {

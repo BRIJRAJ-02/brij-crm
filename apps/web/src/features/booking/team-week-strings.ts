@@ -14,6 +14,8 @@ export const teamWeekStrings = {
   team: 'Team',
   title: 'Roster',
   grid: (range: string) => `Roster, ${range}`,
+  /** A day's column heading: the weekday first, then the date ("Mon 2"). */
+  dayShort: (weekday: string, date: string) => `${weekday} ${date}`,
   person: 'Team member',
   thisWeek: 'This week',
   previousWeek: 'Previous week',
@@ -45,8 +47,7 @@ export const teamWeekStrings = {
     const m = whole % 60;
     return `UTC${sign}${String(h)}${m === 0 ? '' : `:${String(m).padStart(2, '0')}`}`;
   },
-  otherSchedules: (count: number) =>
-    count === 1 ? '1 page uses another schedule' : `${String(count)} pages use other schedules`,
+  otherSchedules: (count: number) => (count === 1 ? '1 other schedule' : `${String(count)} other schedules`),
   off: 'Off',
   away: 'Away',
   thisWeekOnly: 'this week only',
@@ -64,11 +65,31 @@ export const teamWeekStrings = {
   copyToNext: 'Copy this week to next week',
   setUsual: 'Set usual hours',
   setUsualFor: 'Set usual hours for…',
-  copyTitle: (name: string) => `Copy ${name}’s week to next week?`,
-  copyBody: (name: string, range: string) =>
-    `This replaces ${name}’s hours for ${range} with this week’s. Days on usual hours this week are on usual hours next week too.`,
+  /** The toolbar's Copy week: everyone on the page the reader may change. */
+  copyAll: 'Copy to next week',
+  copyTitle: (rows: readonly { readonly name: string }[]) =>
+    rows.length === 1
+      ? `Copy ${rows[0]?.name ?? ''}’s week to next week?`
+      : `Copy this week to next week for ${teamWeekStrings.people(rows.length)}?`,
+  copyBody: (rows: readonly { readonly name: string }[], range: string, isPartial: boolean) =>
+    `This replaces ${rows.length === 1 ? `${rows[0]?.name ?? ''}’s hours` : `the hours of ${teamWeekStrings.namesOf(rows)}`} for ${range} with this week’s. Days on usual hours this week are on usual hours next week too.${isPartial ? ' People not shown here keep their hours.' : ''}`,
+  /** "Ada Lovelace, Sam Lee and 3 more": who a copy covers, named. */
+  namesOf: (rows: readonly { readonly name: string }[]) => {
+    const named = rows.slice(0, 2).map((row) => row.name);
+    const rest = rows.length - named.length;
+    return rest > 0 ? `${named.join(', ')} and ${String(rest)} more` : named.join(' and ');
+  },
   copyAction: 'Copy week',
-  copied: (name: string) => `${name}’s week copied to next week.`,
+  copied: (rows: readonly { readonly name: string }[], changed: number) =>
+    changed === 0
+      ? 'Next week already matched this week.'
+      : rows.length === 1
+        ? `${rows[0]?.name ?? ''}’s week copied to next week.`
+        : `Copied to next week for ${teamWeekStrings.people(changed)}.`,
+  /** On a row the reader may not change, beside rows they may. */
+  viewOnly: 'View only',
+  /** Between the quiet extras after a person's hours. */
+  metaSeparator: ' · ',
   usualTitle: (name: string | undefined) => (name === undefined ? 'Set usual hours' : `Set ${name}’s usual hours`),
   usualFor: 'People',
   usualForPlaceholder: 'Choose people…',
@@ -81,8 +102,10 @@ export const teamWeekStrings = {
   usualDone: (count: number) =>
     count === 0 ? 'Their usual hours were already these.' : `Usual hours set for ${teamWeekStrings.people(count)}.`,
   readOnlyWeek: 'Weeks before this one are read only.',
-  explain:
-    'A change to a day is for that date only, marked with a dot. Usual hours repeat every week. Booking pages offer these hours.',
+  /** The hint after the legend: what selecting a day does, and what the hours are for. */
+  explain: 'Select a day to change that date only. Usual hours repeat every week; booking pages offer these hours.',
+  legendUsual: 'Usual hours',
+  legendChanged: 'Changed for this date',
   seesOnlyYou: 'You see your own hours. People who share their scheduling with you show here too.',
   failed: 'Couldn’t load the roster.',
   noMatch: 'No one matches',

@@ -7,14 +7,24 @@ import { settleAnimations } from '../../workbench/animations.ts';
 import { TeamWeek, type TeamWeekCell, type TeamWeekPerson } from './TeamWeek.tsx';
 
 const DAYS = [
-  { id: 'mon', label: 'Mon 2', long: 'Monday 2 November' },
-  { id: 'tue', label: 'Tue 3', long: 'Tuesday 3 November' },
-  { id: 'wed', label: 'Wed 4', long: 'Wednesday 4 November' },
-  { id: 'thu', label: 'Thu 5', long: 'Thursday 5 November' },
-  { id: 'fri', label: 'Fri 6', long: 'Friday 6 November' },
-  { id: 'sat', label: 'Sat 7', long: 'Saturday 7 November' },
-  { id: 'sun', label: 'Sun 8', long: 'Sunday 8 November' },
+  { id: 'mon', label: 'Mon 2', weekday: 'Mon', date: '2', long: 'Monday 2 November' },
+  { id: 'tue', label: 'Tue 3', weekday: 'Tue', date: '3', long: 'Tuesday 3 November' },
+  { id: 'wed', label: 'Wed 4', weekday: 'Wed', date: '4', long: 'Wednesday 4 November', isToday: true },
+  { id: 'thu', label: 'Thu 5', weekday: 'Thu', date: '5', long: 'Thursday 5 November' },
+  { id: 'fri', label: 'Fri 6', weekday: 'Fri', date: '6', long: 'Friday 6 November' },
+  { id: 'sat', label: 'Sat 7', weekday: 'Sat', date: '7', long: 'Saturday 7 November', isQuiet: true },
+  { id: 'sun', label: 'Sun 8', weekday: 'Sun', date: '8', long: 'Sunday 8 November', isQuiet: true },
 ];
+
+const legend = {
+  items: [
+    { tone: 'usual' as const, label: 'Usual hours' },
+    { tone: 'override' as const, label: 'Changed for this date' },
+    { tone: 'off' as const, label: 'Off' },
+    { tone: 'away' as const, label: 'Away' },
+  ],
+  hint: 'Select a day to change that date only. Usual hours repeat every week.',
+};
 
 const NINE = '9:00 AM – 5:00 PM';
 
@@ -59,7 +69,7 @@ function people(): TeamWeekPerson[] {
 const footer = {
   label: 'Working',
   totals: DAYS.map((day, index) => ({
-    value: index < 5 ? '3 people' : '0',
+    value: index < 5 ? '3 people' : 'Nobody',
     detail: index < 5 ? '24 h' : '0 h',
     label: `${day.long}: ${index < 5 ? '3 people, 24 hours' : 'nobody'}`,
   })),
@@ -78,7 +88,10 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** A week: usual hours, two changes for this week only (the dot), an offset, time off, days off and the footer. */
+/**
+ * A week: usual hours, two changes for this week only (the dot), an offset, two days away joined as one band, today
+ * marked, the weekend quiet, days off, the footer and the legend.
+ */
 export const Default: Story = {
   parameters: { crm: { preview: true } },
   render: (args) => (
@@ -87,6 +100,7 @@ export const Default: Story = {
         {...args}
         people={people()}
         footer={footer}
+        legend={legend}
         editorLabel={(id, day) => `Hours for ${DAYS[day]?.long ?? ''}`}
         renderEditor={(_, __, close) => (
           <Button variant="primary" onPress={close}>
@@ -105,6 +119,9 @@ export const Default: Story = {
     });
     await expect(tuesday).toBeInTheDocument();
     await expect(canvas.queryByRole('button', { name: /Linus Pauling/ })).not.toBeInTheDocument();
+    // Today's column is named so; the legend says what each look means.
+    await expect(canvas.getByRole('columnheader', { name: 'Wed 4, today' })).toBeInTheDocument();
+    await expect(canvas.getByRole('list', { name: 'Key' })).toBeInTheDocument();
   },
 };
 
@@ -191,7 +208,7 @@ export const Empty: Story = {
 export const Phone: Story = {
   render: (args) => (
     <Stage width="phone">
-      <TeamWeek {...args} people={people()} footer={footer} />
+      <TeamWeek {...args} people={people()} footer={footer} legend={legend} />
     </Stage>
   ),
 };
