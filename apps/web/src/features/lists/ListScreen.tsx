@@ -1,13 +1,16 @@
 // Brief
 // Purpose: one list's entries (spec 0048, AC-4806 to AC-4821), as a table or a board, under the list's name and tile.
 // Main task: add records, edit the list's fields in place, move cards between stages, take entries out with Undo.
-// Leaves out: filters and saved sorts (the object's Toolbar), bulk Edit (milestone 3), settings, archive and import
-// (milestone 4).
+// Leaves out: a row opening the record panel (rows open the record page), bulk Edit, the view menu (rename, duplicate,
+// lock, default, delete), and Import (the list's import is not built).
 import {
+  isDataError,
+  isSortable,
   toActorDisplays,
   toFieldAttribute,
   type AttributeDefinition,
   type DataLayer,
+  type DraftQuery,
   type EntriesLayer,
   type ListRow,
   type ListView,
@@ -40,9 +43,12 @@ import { useNavigate } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
 import { refsOf } from '../records/details.ts';
 import { AttributeDialog } from '../settings/AttributeDialog.tsx';
+import { CreateViewDialog } from '../views/CreateViewDialog.tsx';
+import { strings as viewStrings } from '../views/strings.ts';
+import { ViewToolbar } from '../views/ViewToolbar.tsx';
 import { strings as workspaceStrings } from '../workspace/strings.ts';
 import { runUndo } from '../workspace/useUndoShortcut.ts';
-import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
+import { useMyAccess, WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { AddEntryModal } from './AddEntryModal.tsx';
 import { strings } from './strings.ts';
 
@@ -97,6 +103,51 @@ export function ListScreen(given: ListScreenProps) {
   const canWrite = list.canWrite;
   const addLabel = strings.add(object.singularName);
 
+  // The view's filter and sorts as drafted here and not yet saved (AC-4808): Save keeps them, Discard drops them.
+  const savedQuery: DraftQuery = {
+    ...(view.config.filter === undefined ? {} : { filter: view.config.filter }),
+    sorts: view.config.sorts,
+  };
+  const [drafted, setDrafted] = useState<DraftQuery | undefined>(undefined);
+  const isDraft = drafted !== undefined && !data.views.isSameQuery(drafted, savedQuery);
+  const query = isDraft ? drafted : savedQuery;
+  const [isSaving, setSaving] = useState(false);
+  const [createMode, setCreateMode] = useState<'save-as' | undefined>(undefined);
+  const memberDisplays = toActorDisplays(props.members);
+  const meId = useMyAccess()?.memberId;
+  const me = memberDisplays.find((member) => member.id === meId);
+  // Filters and sorts take the list's fields and the object's alike (AC-4808), the list's first.
+  const queryFields = useMemo(
+    () => [...listFields.filter((field) => !field.isArchived), ...attributes.filter((field) => !field.isArchived)],
+    [listFields, attributes],
+  );
+  const sortable = useMemo(() => queryFields.filter((field) => isSortable(field)), [queryFields]);
+  const save = () => {
+    if (isSaving || !isDraft) return;
+    setSaving(true);
+    const toSave = query;
+    data.views
+      .saveQuery(slug, view.id, {
+        ...(toSave.filter === undefined ? {} : { filter: toSave.filter }),
+        sorts: toSave.sorts,
+        baseQueryVersion: view.queryVersion,
+      })
+      .then(
+        (next) => {
+          setSaving(false);
+          setDrafted(undefined);
+          props.toasts.toast({ tone: 'success', message: viewStrings.saved(next.name) });
+        },
+        (error: unknown) => {
+          setSaving(false);
+          props.toasts.toast({
+            tone: 'danger',
+            message: isDataError(error) ? error.message : viewStrings.actionFailed,
+          });
+        },
+      );
+  };
+
   const switchLayout = (next: string) => {
     if (next !== 'table' && next !== 'board') return;
     const board =
@@ -129,6 +180,30 @@ export function ListScreen(given: ListScreenProps) {
             )}
           </TopBar>
         ),
+        toolbar: (
+          <ViewToolbar
+            query={query}
+            filter={query.filter}
+            attributes={queryFields}
+            objectKey={object.standardKey ?? object.apiSlug}
+            sortable={sortable}
+            members={memberDisplays}
+            me={me}
+            isDraft={isDraft}
+            canSave={!view.isLocked || list.canManage}
+            isSaving={isSaving}
+            onChange={(next) => {
+              setDrafted(next);
+            }}
+            onDiscard={() => {
+              setDrafted(undefined);
+            }}
+            onSave={save}
+            onSaveAsNew={() => {
+              setCreateMode('save-as');
+            }}
+          />
+        ),
         viewBar: (
           <ViewBar
             views={views.map((each) => ({
@@ -159,6 +234,7 @@ export function ListScreen(given: ListScreenProps) {
             {kind === 'board' ? (
               <ListBoardBody
                 {...props}
+                query={query}
                 groupFields={groupFields}
                 groupBy={groupBy}
                 ownIds={ownIds}
@@ -172,6 +248,8 @@ export function ListScreen(given: ListScreenProps) {
             ) : (
               <ListTable
                 {...props}
+                query={query}
+                onQueryChange={setDrafted}
                 listFields={listFields}
                 ownIds={ownIds}
                 onAdd={() => {
@@ -182,6 +260,35 @@ export function ListScreen(given: ListScreenProps) {
                 }}
               />
             )}
+            <CreateViewDialog
+              mode={createMode}
+              onClose={() => {
+                setCreateMode(undefined);
+              }}
+              objectId={object.id}
+              newId={data.views.newId}
+              configFor={(fromThisView) =>
+                fromThisView
+                  ? {
+                      ...view.config,
+                      ...(query.filter === undefined ? {} : { filter: query.filter }),
+                      sorts: [...query.sorts],
+                    }
+                  : { columns: [], showNewAttributes: true, pinnedCount: 1, sorts: [] }
+              }
+              canStartFromView
+              currentKind={view.kind}
+              boardDefaults={undefined}
+              onCreate={(input) => data.views.create(slug, { ...input, listId: list.id })}
+              onCreated={(made) => {
+                setCreateMode(undefined);
+                setDrafted(undefined);
+                void navigate({
+                  to: '/w/$slug/lists/$list/views/$viewId',
+                  params: { slug, list: list.apiSlug, viewId: made.id },
+                });
+              }}
+            />
             <AddEntryModal
               data={data}
               entries={props.entries}
@@ -222,6 +329,8 @@ export function ListScreen(given: ListScreenProps) {
 
 /** What the table and the board share beyond the screen's props. */
 interface BodyProps extends ListScreenProps {
+  /** The filter and sorts that run: the draft, or the view's own. */
+  readonly query: DraftQuery;
   /** The list's own field ids: a cell of one writes the entry, any other the record. */
   readonly ownIds: ReadonlySet<string>;
   readonly onAddField: () => void;
@@ -241,12 +350,18 @@ function writeCell(props: BodyProps, entryId: string, columnId: string, value: u
 
 /** The table (AC-4807 to AC-4812, AC-4817): the record first and pinned, then the list's fields and Added. */
 function ListTable(
-  props: BodyProps & { readonly listFields: readonly AttributeDefinition[]; readonly onAdd: () => void },
+  props: BodyProps & {
+    readonly listFields: readonly AttributeDefinition[];
+    readonly onAdd: () => void;
+    readonly onQueryChange: (next: DraftQuery) => void;
+  },
 ) {
-  const { slug, list, object, attributes, listFields, entries, view, data, toasts, onAdd, onAddField } = props;
+  const { slug, list, object, attributes, listFields, entries, view, data, toasts, onAdd, onAddField, query } = props;
+  const { onQueryChange } = props;
   const navigate = useNavigate();
   const primaryId = object.primaryAttributeId ?? attributes[0]?.id ?? '';
-  const [sorts, setSorts] = useState(view.config.sorts);
+  const sorts = query.sorts;
+  const hasFilter = (query.filter?.conditions.length ?? 0) > 0;
   const shownIds = useMemo(() => {
     const own = listFields.filter((field) => !field.isSystem || field.title === 'Added').map((field) => field.id);
     const stored = view.config.columns.map((column) => column.attributeId);
@@ -279,8 +394,14 @@ function ListTable(
   );
   const recordAttributeIds = useMemo(() => shownIds.filter((id) => !props.ownIds.has(id)), [props.ownIds, shownIds]);
   const source = useMemo(
-    () => entries.view(slug, list, { sorts }, recordAttributeIds),
-    [entries, list, recordAttributeIds, slug, sorts],
+    () =>
+      entries.view(
+        slug,
+        list,
+        { ...(query.filter === undefined ? {} : { filter: query.filter }), sorts },
+        recordAttributeIds,
+      ),
+    [entries, list, recordAttributeIds, slug, sorts, query.filter],
   );
   const state = useEntries(source);
   const [selection, setSelection] = useState<GridSelection>(noRows);
@@ -326,7 +447,15 @@ function ListTable(
     });
   };
 
-  const hidden = attributes.filter((field) => !shownIds.includes(field.id) && !field.isSystem && !field.isArchived);
+  const hiddenList = listFields
+    .filter(
+      (field) => !shownIds.includes(field.id) && !field.isArchived && (!field.isSystem || field.title === 'Added'),
+    )
+    .map((field) => ({ id: field.id, label: field.title, group: strings.listFieldsGroup(list.name) }));
+  const hiddenObject = attributes
+    .filter((field) => !shownIds.includes(field.id) && !field.isSystem && !field.isArchived)
+    .map((field) => ({ id: field.id, label: field.title, group: strings.objectFieldsGroup(object.pluralName) }));
+  const hidden = [...hiddenList, ...hiddenObject];
   return (
     <>
       <DataGrid<ListRow>
@@ -361,16 +490,28 @@ function ListTable(
         emptyState={
           <EmptyState
             icon={list.icon}
-            title={strings.empty(object.pluralName)}
-            {...(list.canWrite
+            title={hasFilter ? strings.filteredEmpty(object.pluralName) : strings.empty(object.pluralName)}
+            {...(hasFilter
               ? {
                   actions: (
-                    <Button icon="plus" onPress={onAdd}>
-                      {strings.add(object.singularName)}
+                    <Button
+                      onPress={() => {
+                        onQueryChange({ sorts });
+                      }}
+                    >
+                      {strings.clearFilters}
                     </Button>
                   ),
                 }
-              : {})}
+              : list.canWrite
+                ? {
+                    actions: (
+                      <Button icon="plus" onPress={onAdd}>
+                        {strings.add(object.singularName)}
+                      </Button>
+                    ),
+                  }
+                : {})}
           />
         }
         selection={selection}
@@ -408,7 +549,10 @@ function ListTable(
           });
         }}
         onSort={(columnId, direction) => {
-          setSorts([{ attributeId: columnId, direction }]);
+          onQueryChange({
+            ...(query.filter === undefined ? {} : { filter: query.filter }),
+            sorts: [{ attributeId: columnId, direction }],
+          });
         }}
         {...(sorts[0] === undefined ? {} : { sort: { columnId: sorts[0].attributeId, direction: sorts[0].direction } })}
         onColumnsChange={(next, pinnedCount) => {
@@ -431,7 +575,7 @@ function ListTable(
           ? {
               onAddColumn: onAddField,
               addColumnLabel: strings.addField,
-              addColumnItems: hidden.map((field) => ({ id: field.id, label: field.title })),
+              addColumnItems: hidden,
               onAddColumnItem: (id: string) => {
                 data.views.setLayout(slug, view.id, {
                   columns: [...shownIds, id].map((attributeId) => ({ attributeId })),
@@ -506,15 +650,26 @@ function ListBoardColumns(
     readonly onAdd: (preset: Readonly<Record<string, unknown>>) => void;
   },
 ) {
-  const { slug, list, object, entries, field, view, fields, attributes, onAdd } = props;
+  const { slug, list, object, entries, field, view, fields, attributes, onAdd, query } = props;
   const navigate = useNavigate();
   const options = useMemo(() => (field.options ?? []).filter((option) => !option.isArchived), [field.options]);
   const groupIds = useMemo(() => [...options.map((option) => option.id), null], [options]);
   const cardIds = useMemo(() => view.config.board?.cardFields ?? [], [view.config.board?.cardFields]);
   const recordAttributeIds = useMemo(() => cardIds.filter((id) => !props.ownIds.has(id)), [cardIds, props.ownIds]);
   const board = useMemo(
-    () => entries.board(slug, list, { groupBy: field.id, groupIds }, recordAttributeIds),
-    [entries, field.id, groupIds, list, recordAttributeIds, slug],
+    () =>
+      entries.board(
+        slug,
+        list,
+        {
+          groupBy: field.id,
+          groupIds,
+          ...(query.filter === undefined ? {} : { filter: query.filter }),
+          ...(query.sorts.length === 0 ? {} : { sorts: query.sorts }),
+        },
+        recordAttributeIds,
+      ),
+    [entries, field.id, groupIds, list, recordAttributeIds, slug, query.filter, query.sorts],
   );
   const state = useListBoard(board);
   // A card shows in its new column at once, until the board's next read places it (AC-4820): moves made since the

@@ -4,11 +4,11 @@ A list is a working set of one object's records (a Sales pipeline over Deals); e
 
 ## Screens
 
-| Screen | Purpose | Main task | Leaves out |
-|---|---|---|---|
-| `NewListModal` (sidebar Lists' "+") | Make a list over an object | Name, Of, Blank or Pipeline, then Create list; the list opens | Icon and hue (the list tile, gray), "Each record once" (on), fields (the list's "+") |
-| `ListScreen` (`/w/$slug/lists/$list/views/$viewId`) | One list's entries as a table or a board | Add records, edit list fields in place, move cards between stages, take entries out with Undo | Filters and saved sorts, bulk Edit, settings, archive, import |
-| `AddEntryModal` | Put one record in a list | Find the record (one already in an "Each record once" list says so), fill a required list field, Add to list | Optional fields (edited in the row), making a new record here |
+| Screen                                              | Purpose                                  | Main task                                                                                                    | Leaves out                                                                           |
+| --------------------------------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
+| `NewListModal` (sidebar Lists' "+")                 | Make a list over an object               | Name, Of, Blank or Pipeline, then Create list; the list opens                                                | Icon and hue (the list tile, gray), "Each record once" (on), fields (the list's "+") |
+| `ListScreen` (`/w/$slug/lists/$list/views/$viewId`) | One list's entries as a table or a board | Add records, edit list fields in place, move cards between stages, take entries out with Undo                | Filters and saved sorts, bulk Edit, settings, archive, import                        |
+| `AddEntryModal`                                     | Put one record in a list                 | Find the record (one already in an "Each record once" list says so), fill a required list field, Add to list | Optional fields (edited in the row), making a new record here                        |
 
 ## Decisions made here (owner delegated UX calls)
 

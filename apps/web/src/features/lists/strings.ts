@@ -60,4 +60,65 @@ export const strings = {
   noGroupField: (list: string) => `${list} has no status or select field to group by.`,
   noValue: (title: string) => `No ${title.toLowerCase()}`,
   boardOf: (list: string, field: string) => `${list} by ${field.toLowerCase()}`,
+
+  // Lists around the record (AC-4822 to AC-4827).
+  listsSection: 'Lists',
+  notInAny: 'Not in any list',
+  openList: 'Open list',
+  entryActions: (list: string) => `${list} actions`,
+  addToListMenu: 'Add to list',
+  alreadyInShort: 'Already in',
+  addedMany: (count: number, list: string) => `Added ${count.toLocaleString('en')} to ${list}`,
+  addedManyKept: (said: string, already: number) =>
+    `${said}. ${already.toLocaleString('en')} ${already === 1 ? 'was' : 'were'} already in it`,
+  allAlreadyIn: (list: string) => `Already in ${list}`,
+  noneAdded: (reason: string) => `Nothing was added. ${reason}`,
+  addFailed: 'Nothing was added. Try again.',
+  addRecordTitle: (name: string, list: string) => `Add ${name} to ${list}`,
+
+  needsValues: (list: string) => `${list} needs a value first. Use Add to list on the page.`,
+
+  // The column picker's two groups (AC-4807).
+  listFieldsGroup: (list: string) => `${list} fields`,
+  objectFieldsGroup: (plural: string) => `${plural} fields`,
+
+  // Settings and archive (AC-4828 to AC-4832).
+  settingsTitle: 'Lists',
+  settingsGeneral: 'General',
+  settingsFields: 'Fields',
+  settingsTabs: (list: string) => `${list} settings`,
+  nameColumn: 'Name',
+  objectColumn: 'Object',
+  createdByColumn: 'Created by',
+  entriesColumn: 'Entries',
+  settingsEmpty: 'No lists yet',
+  archivedSection: 'Archived',
+  actionsColumn: 'Actions',
+  look: 'Icon and colour',
+  eachRecordOnce: 'Each record once',
+  eachRecordOnceHint: 'A record can be in this list one time.',
+  save: 'Save',
+  saved: (name: string) => `${name} saved`,
+  saveFailed: 'The list wasn’t saved. Try again.',
+  archive: 'Archive list',
+  archiveTitle: (name: string) => `Archive ${name}?`,
+  archiveText: 'It leaves everyone’s sidebar. Its entries are kept, and it can be restored from Settings › Lists.',
+  archiveAction: 'Archive',
+  archivedToast: (name: string) => `${name} archived`,
+  archiveFailed: 'The list wasn’t archived. Try again.',
+  restore: 'Restore',
+  restoredToast: (name: string) => `${name} restored`,
+  restoreFailed: 'The list wasn’t restored. Try again.',
+  archivedTitle: (name: string) => `${name} is archived`,
+  archivedText: 'Its entries are kept.',
+  onlyManagers: (maker: string | undefined) =>
+    maker === undefined
+      ? 'Only owners and admins can change this list.'
+      : `Only ${maker}, owners and admins can change this list.`,
+  listAtLimit: 'This workspace has 500 lists, archived ones included, the most it can have.',
+  fieldLimit: 'Fields',
+  menu: 'List menu',
+  importList: 'Import',
+  clearFilters: 'Clear filters',
+  filteredEmpty: (plural: string) => `No ${plural.toLowerCase()} match.`,
 } as const;

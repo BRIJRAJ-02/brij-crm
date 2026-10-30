@@ -2857,6 +2857,7 @@ export function createDataLayer({
       const touched = [...new Set(objectsOf(answer))];
       mutations.answered(mutationId, Math.max(1, touched.length));
       usage.delete(workspace);
+      listFields.clear();
       for (const objectId of touched) {
         attributes.delete(objectKey(workspace, objectId));
         dropAllAttributes(workspace, objectId);
@@ -4331,6 +4332,16 @@ export function createDataLayer({
         cached(listFields, objectKey(workspace, list.id), () =>
           beforeRead(workspace).then(() =>
             call((options) => api.attributes.list({ workspace, objectId: list.objectId, listId: list.id }, options)),
+          ),
+        ),
+      /** A list's fields with the archived ones too (Settings › Lists › Fields), read fresh each time. */
+      allFields: (workspace: string, list: { readonly id: string; readonly objectId: string }) =>
+        beforeRead(workspace).then(() =>
+          call((options) =>
+            api.attributes.list(
+              { workspace, objectId: list.objectId, listId: list.id, includeArchived: true },
+              options,
+            ),
           ),
         ),
       /** A new list field (AC-4811), for the list's managers; waits for the server, then the fields are read again. */

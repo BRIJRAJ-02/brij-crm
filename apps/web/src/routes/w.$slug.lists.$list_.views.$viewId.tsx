@@ -1,6 +1,7 @@
 import { isDataError } from '@crm/data';
 import { LoadingNow } from '@crm/ui';
 import { createFileRoute, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
+import { ArchivedList } from '../features/lists/ArchivedList.tsx';
 import { ListScreen } from '../features/lists/ListScreen.tsx';
 import { strings } from '../features/lists/strings.ts';
 import { failedPage, missingPage, ObjectPendingPage } from '../features/workspace/ObjectScreen.tsx';
@@ -15,7 +16,7 @@ export const Route = createFileRoute('/w/$slug/lists/$list_/views/$viewId')({
   shouldReload: ({ cause }) => cause === 'enter',
   loader: async ({ context, params }) => {
     const [lists, objects] = await Promise.all([
-      context.data.lists.list(params.slug),
+      context.data.lists.all(params.slug),
       context.data.objects.list(params.slug),
     ]).catch((error: unknown) => {
       if (isDataError(error) && error.code === 'NOT_FOUND') return [[], []] as const;
@@ -23,6 +24,7 @@ export const Route = createFileRoute('/w/$slug/lists/$list_/views/$viewId')({
     });
     const list = lists.find((each) => each.apiSlug === params.list);
     const object = list === undefined ? undefined : objects.find((each) => each.id === list.objectId);
+    if (list?.isArchived === true) return { kind: 'archived' as const, list };
     if (list === undefined || object === undefined) return { kind: 'missing' as const };
     const view = context.data.views.get(params.slug, params.viewId);
     const views = context.data.views.list(params.slug, list.objectId, list.id);
@@ -68,6 +70,9 @@ function ListViewRoute() {
   const loaded = Route.useLoaderData();
   const params = Route.useParams();
   const { data, toasts } = Route.useRouteContext();
+  if (loaded.kind === 'archived') {
+    return <ArchivedList data={data} toasts={toasts} slug={params.slug} list={loaded.list} />;
+  }
   if (loaded.kind === 'missing') {
     return <WorkspacePage page={missingPage(strings.notFoundTitle, strings.notFoundText)} />;
   }

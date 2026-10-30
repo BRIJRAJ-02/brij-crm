@@ -5,13 +5,14 @@
 // tests cover it, the address walk of AC-1104 among them. Records, views,
 // notes and tasks come from the server through the data layer; nothing here
 // reads data.
-import type { ObjectSummary, Permission, RecordHit, ViewHit } from '@crm/data';
+import type { ListView, ObjectSummary, Permission, RecordHit, ViewHit } from '@crm/data';
 import type { IconName } from '@crm/ui';
 import type { ThemeChoice } from '@crm/ui/theme';
 import { settingsNav, visibleSettingsNav } from '../settings/nav.ts';
 import { availabilityHref, calendarsHref, linksHref, roundRobinHref } from '../booking/links.ts';
 import { formsHref } from '../forms/paths.ts';
 import { importHref } from '../imports/paths.ts';
+import { listHref } from '../lists/paths.ts';
 import { recordHref } from '../records/details.ts';
 import { bookingsHref, homeHref, navObjects, objectHref, tasksHref, trashHref } from '../workspace/objects.ts';
 import { strings } from './strings.ts';
@@ -22,7 +23,11 @@ export type CommandRun =
   | { readonly kind: 'create'; readonly href: string }
   | { readonly kind: 'theme'; readonly choice: ThemeChoice }
   /** Opens the Invite dialog over the page the member is on. */
-  | { readonly kind: 'invite' };
+  | { readonly kind: 'invite' }
+  /** Opens the New list dialog over the page (spec 0048, AC-4827). */
+  | { readonly kind: 'new-list' }
+  /** Puts the open record in a list (spec 0048, AC-4827). */
+  | { readonly kind: 'add-to-list'; readonly listId: string; readonly recordId: string };
 
 /** One page, Settings page or action the menu lists. */
 export interface Command {
@@ -33,6 +38,8 @@ export interface Command {
   /** Other words it answers to ("theme" finds Preferences). */
   readonly terms: readonly string[];
   readonly run: CommandRun;
+  /** Its kind at the row's end, when it isn't the section's (a list's "List · Deals"). */
+  readonly kind?: string;
   /** Its shortcut, with Mac symbols. */
   readonly kbd?: string;
 }
@@ -49,7 +56,9 @@ export function pageCommands(
   slug: string,
   objects: readonly ObjectSummary[],
   permissions?: readonly Permission[],
+  lists: readonly ListView[] = [],
 ): readonly Command[] {
+  const plural = new Map(objects.map((object) => [object.id, object.pluralName]));
   return [
     { id: 'page:home', name: strings.home, icon: 'house', terms: strings.homeTerms, run: go(homeHref(slug)) },
     ...navObjects(objects).map((object): Command => ({
@@ -59,6 +68,17 @@ export function pageCommands(
       terms: [object.singularName],
       run: { kind: 'go', href: objectHref(slug, object) },
     })),
+    // Every live list the member may read is a destination, found by name (spec 0048, AC-4827).
+    ...lists
+      .filter((list) => !list.isArchived)
+      .map((list): Command => ({
+        id: `page:list:${list.id}`,
+        name: list.name,
+        icon: list.icon,
+        terms: [],
+        run: go(listHref(slug, list)),
+        kind: strings.listKind(plural.get(list.objectId) ?? ''),
+      })),
     {
       id: 'page:tasks',
       name: strings.myTasks,
@@ -159,6 +179,8 @@ export interface CommandPlace {
   readonly viewId?: string;
   /** The member holds `members.invite`. */
   readonly canInvite?: boolean;
+  /** The member holds `lists.manage` (spec 0048, AC-4827). */
+  readonly canMakeLists?: boolean;
 }
 
 /** What a view page is asked to do from the menu, as its address carries it (`?do=`). */
@@ -229,7 +251,32 @@ export function actionCommands(
       run: { kind: 'invite' },
     });
   }
+  // Create list, for whoever may make one (spec 0048, AC-4827).
+  if (place.canMakeLists === true) {
+    here.push({
+      id: 'list:new',
+      name: strings.createList,
+      icon: 'plus',
+      terms: strings.createListTerms,
+      run: { kind: 'new-list' },
+    });
+  }
   return [...creates, ...here, ...themes];
+}
+
+/**
+ * The open record's Add <name> to <list>, one per list over its object the member may write (spec 0048, AC-4827);
+ * none on a page that isn't a record's. The lists are the ones the member may write over that object.
+ */
+export function addToListCommands(record: CommandRecord | undefined, lists: readonly ListView[]): readonly Command[] {
+  if (record === undefined) return [];
+  return lists.map((list): Command => ({
+    id: `record:list:${list.id}`,
+    name: strings.addRecordToList(record.name, list.name),
+    icon: list.icon,
+    terms: strings.addToListTerms,
+    run: { kind: 'add-to-list', listId: list.id, recordId: record.recordId },
+  }));
 }
 
 /** A view asked to export itself or open Create view once it shows. */

@@ -3,6 +3,7 @@ import { LoadingNow } from '@crm/ui';
 import { createFileRoute, redirect, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { failedPage, missingPage, ObjectPendingPage } from '../features/workspace/ObjectScreen.tsx';
 import { useWorkspaceName, WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
+import { ArchivedList } from '../features/lists/ArchivedList.tsx';
 import { strings } from '../features/lists/strings.ts';
 
 // A list's address (spec 0048, decision 14): `/w/$slug/lists/$list` by its API name opens the member's last opened
@@ -10,12 +11,14 @@ import { strings } from '../features/lists/strings.ts';
 // shows the not found page with the same words (AC-4835). Everything comes through the data layer.
 export const Route = createFileRoute('/w/$slug/lists/$list')({
   loader: async ({ context, params }) => {
-    const lists = await context.data.lists.list(params.slug).catch((error: unknown) => {
+    const lists = await context.data.lists.all(params.slug).catch((error: unknown) => {
       if (isDataError(error) && error.code === 'NOT_FOUND') return [];
       throw error;
     });
     const list = lists.find((each) => each.apiSlug === params.list);
     if (list === undefined) return { missing: true as const };
+    // An archived list says so, and its managers can restore it (AC-4831).
+    if (list.isArchived) return { archived: list };
     const views = context.data.views.list(params.slug, list.objectId, list.id);
     await views.ready();
     const held = views.getSnapshot();
@@ -38,6 +41,11 @@ export const Route = createFileRoute('/w/$slug/lists/$list')({
 });
 
 function ListMissing() {
+  const loaded = Route.useLoaderData();
+  const params = Route.useParams();
+  const { data, toasts } = Route.useRouteContext();
+  const archived = loaded.archived;
+  if (archived !== undefined) return <ArchivedList data={data} toasts={toasts} slug={params.slug} list={archived} />;
   return <WorkspacePage page={missingPage(strings.notFoundTitle, strings.notFoundText)} />;
 }
 

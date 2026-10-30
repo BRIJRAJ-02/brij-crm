@@ -1970,6 +1970,25 @@ const NEW_COLUMN = '__new_column';
 export interface AddColumnItem {
   readonly id: string;
   readonly label: string;
+  /**
+   * The heading of the group the item sits under ("Deals fields"); items with the same one that follow each other
+   * share a section. None: the item stands alone, as before.
+   */
+  readonly group?: string;
+}
+
+/** The hidden columns the "+" menu offers, in runs under their group's heading (items with no group stand alone). */
+function groupedItems(items: readonly AddColumnItem[]): readonly {
+  readonly label: string | undefined;
+  readonly items: readonly AddColumnItem[];
+}[] {
+  const runs: { label: string | undefined; items: AddColumnItem[] }[] = [];
+  for (const item of items) {
+    const last = runs.at(-1);
+    if (last !== undefined && last.label === item.group && item.group !== undefined) last.items.push(item);
+    else runs.push({ label: item.group, items: [item] });
+  }
+  return runs;
 }
 
 /** The "+" header after the last column. */
@@ -2107,11 +2126,23 @@ const GridHeader = memo(function GridHeader({
                     else addColumn.onItem(String(key));
                   }}
                 >
-                  {addColumn.items.map((item) => (
-                    <MenuItem key={item.id} id={item.id} icon="eye">
-                      {item.label}
-                    </MenuItem>
-                  ))}
+                  {groupedItems(addColumn.items).map((group) =>
+                    group.label === undefined ? (
+                      group.items.map((item) => (
+                        <MenuItem key={item.id} id={item.id} icon="eye">
+                          {item.label}
+                        </MenuItem>
+                      ))
+                    ) : (
+                      <MenuSection key={group.label} label={group.label}>
+                        {group.items.map((item) => (
+                          <MenuItem key={item.id} id={item.id} icon="eye">
+                            {item.label}
+                          </MenuItem>
+                        ))}
+                      </MenuSection>
+                    ),
+                  )}
                   {/* Pinned at the foot, so a long list of hidden attributes never scrolls it away. */}
                   <MenuSection label={strings.newColumnItem} isPinned>
                     <MenuItem id={NEW_COLUMN} icon="plus">

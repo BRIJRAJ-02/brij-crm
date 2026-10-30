@@ -4,8 +4,11 @@
 // Leaves out: its icon and hue (the list tile and the next hue), "Each record once" (on), and fields (the list's "+").
 import { isDataError, type DataLayer, type ListTemplate, type ListView, type ObjectSummary } from '@crm/data';
 import { Button, Field, Form, Modal, SegmentedControl, Select, type FormRefusal } from '@crm/ui';
-import { useId, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { strings } from './strings.ts';
+
+/** The most lists a workspace holds, archived ones included (spec 0048, AC-4805). */
+const LIST_CAP = 500;
 
 /** Props for the New list dialog. */
 export interface NewListModalProps {
@@ -28,6 +31,8 @@ export interface NewListModalProps {
 export function NewListModal({ isOpen, onClose, ...rest }: NewListModalProps) {
   const formId = useId();
   const [isBusy, setBusy] = useState(false);
+  // The workspace holds 500 lists, archived ones included (AC-4805): the dialog says so and Create stays off.
+  const isFull = useIsFull(rest.data, rest.slug, isOpen);
   return (
     <Modal
       title={strings.newList}
@@ -45,16 +50,35 @@ export function NewListModal({ isOpen, onClose, ...rest }: NewListModalProps) {
             type="submit"
             form={formId}
             isPending={isBusy}
-            isDisabled={rest.objects.length === 0}
+            isDisabled={rest.objects.length === 0 || isFull}
           >
             {isBusy ? strings.creatingList : strings.createList}
           </Button>
         </>
       }
     >
-      {isOpen && <NewListForm formId={formId} isBusy={isBusy} onBusyChange={setBusy} {...rest} />}
+      {isOpen && <NewListForm formId={formId} isBusy={isBusy} onBusyChange={setBusy} isFull={isFull} {...rest} />}
     </Modal>
   );
+}
+
+/** Whether the workspace's lists are at the cap, read through the data layer each time the dialog opens. */
+function useIsFull(data: DataLayer, slug: string, isOpen: boolean): boolean {
+  const [isFull, setFull] = useState(false);
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    let isCurrent = true;
+    data.lists.all(slug).then(
+      (all) => {
+        if (isCurrent) setFull(all.length >= LIST_CAP);
+      },
+      () => undefined,
+    );
+    return () => {
+      isCurrent = false;
+    };
+  }, [data, slug, isOpen]);
+  return isFull;
 }
 
 /** The dialog's form, mounted afresh with each opening (its id minted once, sent again on a retry). */
@@ -65,11 +89,13 @@ function NewListForm({
   objectId,
   formId,
   isBusy,
+  isFull,
   onBusyChange,
   onMade,
 }: Omit<NewListModalProps, 'isOpen' | 'onClose'> & {
   readonly formId: string;
   readonly isBusy: boolean;
+  readonly isFull: boolean;
   readonly onBusyChange: (isBusy: boolean) => void;
 }) {
   const [id] = useState(() => data.lists.newId());
@@ -81,7 +107,7 @@ function NewListForm({
   );
 
   const create = () => {
-    if (isBusy || object === '') return;
+    if (isBusy || isFull || object === '') return;
     if (name.trim() === '') {
       setRefusals([{ code: 'INPUT_INVALID', message: strings.nameMissing, attributeId: 'name' }]);
       return;
@@ -113,7 +139,7 @@ function NewListForm({
     <Form
       id={formId}
       isBusy={isBusy}
-      refusals={refusals}
+      refusals={isFull ? [{ code: 'LIMIT_REACHED', message: strings.listAtLimit }, ...refusals] : refusals}
       fieldFor={(refusal) => refusal.attributeId}
       onSubmit={create}
       label={strings.newList}

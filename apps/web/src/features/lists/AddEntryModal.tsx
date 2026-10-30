@@ -38,6 +38,8 @@ export interface AddEntryModalProps {
   readonly object: ObjectSummary;
   /** The list's own fields: required ones are asked for here. */
   readonly fields: readonly AttributeDefinition[];
+  /** The record to add, when it is already known (a record page, AC-4823): the dialog then asks only for the fields. */
+  readonly record?: RecordRefDisplay | undefined;
   /** Values the dialog starts with: a board column's option (AC-4815). */
   readonly preset?: Readonly<Record<string, unknown>> | undefined;
   readonly isOpen: boolean;
@@ -50,7 +52,11 @@ export function AddEntryModal({ isOpen, onClose, list, object, ...rest }: AddEnt
   const [isBusy, setBusy] = useState(false);
   return (
     <Modal
-      title={strings.addTitle(object.singularName, list.name)}
+      title={
+        rest.record === undefined
+          ? strings.addTitle(object.singularName, list.name)
+          : strings.addRecordTitle(rest.record.name, list.name)
+      }
       isOpen={isOpen}
       onOpenChange={(open) => {
         if (!open && !isBusy) onClose();
@@ -90,6 +96,7 @@ function AddEntryForm({
   list,
   object,
   fields,
+  record,
   preset,
   formId,
   isBusy,
@@ -102,7 +109,7 @@ function AddEntryForm({
   readonly onDone: () => void;
 }) {
   const [id] = useState(() => data.lists.newId());
-  const [picked, setPicked] = useState<RecordRefDisplay | undefined>(undefined);
+  const [picked, setPicked] = useState<RecordRefDisplay | undefined>(record);
   const [values, setValues] = useState<Readonly<Record<string, unknown>>>(preset ?? {});
   const [refusals, setRefusals] = useState<readonly FormRefusal[]>([]);
   const search = useRecordSearch(slug, object.id);
@@ -170,6 +177,8 @@ function AddEntryForm({
     void entries.add(slug, list, picked.recordId, values, id).then((outcome) => {
       onBusyChange(false);
       if (outcome.kind === 'refused') {
+        // Someone else added it meanwhile (AC-4814): the toast says so too, since the dialog may be out of sight.
+        if (outcome.code === 'ENTRY_EXISTS') toasts.toast({ tone: 'danger', message: outcome.message });
         setRefusals([
           {
             code: outcome.code,
@@ -206,21 +215,23 @@ function AddEntryForm({
       label={strings.addTitle(object.singularName, list.name)}
       focusesFirstField
     >
-      <AttributeEditor
-        attribute={recordField}
-        value={picked === undefined ? null : { objectId: picked.objectId, recordId: picked.recordId }}
-        display={picked}
-        surface="form"
-        autoOpen
-        onSearch={editorSearch(search.onSearch)}
-        describeResult={describeResult}
-        onCommit={(value) => {
-          const [ref] = refsOf(value);
-          setRefusals([]);
-          setPicked(ref === undefined ? undefined : search.displayOf(ref.recordId));
-        }}
-        {...(recordError === undefined ? {} : { error: recordError })}
-      />
+      {record === undefined && (
+        <AttributeEditor
+          attribute={recordField}
+          value={picked === undefined ? null : { objectId: picked.objectId, recordId: picked.recordId }}
+          display={picked}
+          surface="form"
+          autoOpen
+          onSearch={editorSearch(search.onSearch)}
+          describeResult={describeResult}
+          onCommit={(value) => {
+            const [ref] = refsOf(value);
+            setRefusals([]);
+            setPicked(ref === undefined ? undefined : search.displayOf(ref.recordId));
+          }}
+          {...(recordError === undefined ? {} : { error: recordError })}
+        />
+      )}
       {required.map((field) => (
         <AttributeEditor
           key={field.id}
