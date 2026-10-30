@@ -15,6 +15,7 @@ import { can, isOpen } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
 import { visibleRecords } from '../access/visibility.ts';
 import { splitName } from '../booking/visitor.ts';
+import { bySlug } from '../engine/filing.ts';
 import { checkId, uuidList } from '../engine/ids.ts';
 import { insertRecord } from '../engine/records.ts';
 import { refuse } from '../engine/refusals.ts';
@@ -42,11 +43,6 @@ interface PersonSetup {
   readonly company?: AttributeDef;
   readonly companies?: string;
   readonly domains?: AttributeDef;
-}
-
-/** The live attribute of an object with this api slug. */
-function bySlug(attributes: ReadonlyMap<string, AttributeDef>, apiSlug: string): AttributeDef | undefined {
-  return [...attributes.values()].find((attribute) => attribute.apiSlug === apiSlug && attribute.archivedAt === null);
 }
 
 /** The standard People and Companies, as filing a person needs them; undefined when People has no email attribute. */

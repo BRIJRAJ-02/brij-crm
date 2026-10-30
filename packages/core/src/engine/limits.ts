@@ -74,6 +74,23 @@ export async function takeRecordSlots(tx: WorkspaceTx, scope: EngineScope, amoun
     .where(eq(workspaceCounters.workspaceId, scope.workspaceId));
 }
 
+/**
+ * Refuses `LIMIT_REACHED` unless `amount` more records fit beside the live count, read without the counter row's
+ * lock (spec 0059): a write that defers its slots to its end (`WriteContext.deferSlots`) checks here as it makes
+ * each record, so a record past the limit is refused on its own, and the end's `takeRecordSlots` stays the
+ * guarantee under a race at the exact limit.
+ */
+export async function checkRecordRoom(tx: WorkspaceTx, scope: EngineScope, amount: number): Promise<void> {
+  const [row] = await tx
+    .select({ liveRecords: workspaceCounters.liveRecords })
+    .from(workspaceCounters)
+    .where(eq(workspaceCounters.workspaceId, scope.workspaceId));
+  const limit = limitsOf(scope).liveRecords;
+  if ((row?.liveRecords ?? 0) + amount > limit) {
+    throw refuse('LIMIT_REACHED', `This workspace holds at most ${limit.toLocaleString('en')} records.`);
+  }
+}
+
 /** Takes one custom object slot. */
 export async function takeCustomObject(tx: WorkspaceTx, scope: EngineScope): Promise<void> {
   const [row] = await tx

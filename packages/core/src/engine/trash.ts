@@ -70,7 +70,8 @@ export interface DeleteOutcome {
   /**
    * `deleted` by this call (or by an earlier try of it with the same batch),
    * `already-deleted` by another delete (with `RECORD_DELETED`), or `refused`
-   * (`NOT_FOUND`: unknown, of another object, or hidden from the principal).
+   * (`NOT_FOUND`: unknown, of another object, or hidden from the principal;
+   * `IN_USE`: linked to a live record, when only unlinked ones may go).
    */
   readonly state: 'deleted' | 'already-deleted' | 'refused';
   readonly refusal?: EngineRefusal;
@@ -214,7 +215,13 @@ async function farReferencesMany(
  */
 export async function deleteRecords(
   scope: EngineScope,
-  input: { readonly objectId: string; readonly recordIds: readonly string[]; readonly batchId: string },
+  input: {
+    readonly objectId: string;
+    readonly recordIds: readonly string[];
+    readonly batchId: string;
+    /** Only records nothing live links to (spec 0059): a linked one is refused `IN_USE`. */
+    readonly unlinkedOnly?: boolean;
+  },
   hooks: readonly AfterWrite[] = [],
 ): Promise<readonly DeleteOutcome[]> {
   const objectId = checkId(input.objectId, UNKNOWN_OBJECT);
@@ -222,10 +229,41 @@ export async function deleteRecords(
   const ids = inlineIds(input.recordIds, 'That record does not exist.');
   const { result } = await runWrite(
     scope,
-    (context) => deleteIn(context, { objectId, recordIds: ids, batchId }),
+    (context) =>
+      deleteIn(context, {
+        objectId,
+        recordIds: ids,
+        batchId,
+        ...(input.unlinkedOnly === true ? { unlinkedOnly: true } : {}),
+      }),
     hooks,
   );
   return result;
+}
+
+/** What a record kept because something links to it answers (spec 0059): no word of what links, or whose. */
+export const LINKED_KEPT = 'Other records link to it now, so it was kept.';
+
+/**
+ * Of `ids`, those a live record links to now, through any relationship (spec
+ * 0059), read after their rows are locked. A link to a record in the trash
+ * doesn't count; one to a record the principal can't see does, and is never
+ * named, so nothing they can't see loses its link.
+ */
+async function linkedNow(tx: WorkspaceTx, ids: readonly string[]): Promise<ReadonlySet<string>> {
+  if (ids.length === 0) return new Set();
+  const rows = await tx.execute<{ id: string }>(sql`
+    select distinct mine.id::text as id
+    from (
+      select l.from_record_id as id, l.to_record_id as far from record_links l
+      where l.active_until is null and l.from_record_id = any(${uuidArray(ids)})
+      union all
+      select l.to_record_id, l.from_record_id from record_links l
+      where l.active_until is null and l.to_record_id = any(${uuidArray(ids)})
+    ) mine
+    join records far on far.id = mine.far and far.deleted_at is null
+  `);
+  return new Set(rows.rows.map((row) => row.id));
 }
 
 /**
@@ -236,7 +274,12 @@ export async function deleteRecords(
  */
 export async function deleteIn(
   context: WriteContext,
-  input: { readonly objectId: string; readonly recordIds: readonly string[]; readonly batchId: string },
+  input: {
+    readonly objectId: string;
+    readonly recordIds: readonly string[];
+    readonly batchId: string;
+    readonly unlinkedOnly?: boolean;
+  },
 ): Promise<readonly DeleteOutcome[]> {
   const { tx, scope } = context;
   const objectId = checkId(input.objectId, UNKNOWN_OBJECT);
@@ -257,7 +300,10 @@ export async function deleteIn(
     locked.rows.map((row) => ({ objectId, recordId: row.id })),
   );
   const rows = new Map(locked.rows.filter((row) => seen.has(row.id)).map((row) => [row.id, row]));
-  const live = [...rows.values()].filter((row) => !row.deleted).map((row) => row.id);
+  const untrashed = [...rows.values()].filter((row) => !row.deleted).map((row) => row.id);
+  // Only what nothing links to, when asked (a filed company taken back, spec 0059): the rest stays.
+  const linked = input.unlinkedOnly === true ? await linkedNow(tx, untrashed) : new Set<string>();
+  const live = untrashed.filter((id) => !linked.has(id));
   if (live.length > 0) {
     const by = actorRow(scope.actor);
     await tx.execute(sql`
@@ -282,6 +328,7 @@ export async function deleteIn(
     if (row === undefined) {
       return { recordId, state: 'refused', refusal: { code: 'NOT_FOUND', message: 'That record does not exist.' } };
     }
+    if (linked.has(recordId)) return { recordId, state: 'refused', refusal: { code: 'IN_USE', message: LINKED_KEPT } };
     if (isLive.has(recordId) || row.batch === batchId) return { recordId, state: 'deleted' };
     return {
       recordId,
