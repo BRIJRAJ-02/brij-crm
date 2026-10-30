@@ -43,7 +43,10 @@ export interface ViewDraftInput {
   readonly savedVersion: number;
   /** The `draft` search param now. */
   readonly param: string | undefined;
-  /** The draft the loader read from the link it opened with, already checked. */
+  /**
+   * The draft the loader opened with, already checked: the link's, or with no `draft` in the address the one this
+   * tab kept for the view (read through the same check, so a kept draft that no longer reads is never shown).
+   */
   readonly opened: DraftQuery | undefined;
   /** Writes the `draft` param (undefined removes it). */
   readonly write: (param: string | undefined, replace: boolean) => void;
@@ -71,11 +74,12 @@ export function useViewDraft({
   const [draft, setDraft] = useState<Draft | undefined>(() => {
     if (param !== undefined)
       return opened === undefined ? undefined : { query: opened, text: param, base: savedVersion };
-    // Opened with no draft in the address: the one this tab kept for the view, if any.
+    // Opened with no draft in the address: the one this tab kept for the view, as the loader checked it (`opened`),
+    // on the version it began on.
     const kept = viewId === undefined ? undefined : data.views.keptDraft(slug, viewId);
-    return kept === undefined
+    return kept === undefined || opened === undefined
       ? undefined
-      : { query: kept.query, text: data.views.draftParam(kept.query), base: kept.base };
+      : { query: opened, text: data.views.draftParam(opened), base: kept.base };
   });
   // The param as this tab last wrote or read it: a different one came from back, forward or a typed address.
   const known = useRef(param);
