@@ -12,6 +12,7 @@ import { strings as jobs } from './jobs-strings.ts';
 import { strings as members } from './members-strings.ts';
 import { strings as notifications } from './notifications-strings.ts';
 import { strings as schedulingAccess } from './scheduling-access-nav-strings.ts';
+import { strings as brand } from './brand-strings.ts';
 import { strings as security } from './security-strings.ts';
 import { strings as workspaceSecurity } from './workspace-security-strings.ts';
 import { strings } from './strings.ts';
@@ -41,6 +42,9 @@ export const profileHref = (slug: string) => `/w/${slug}/settings/account/profil
 /** Settings › Workspace › General (spec 0031, AC-822): the workspace's name, time zone and address, and its delete. */
 export const generalSettingsHref = (slug: string) => `/w/${slug}/settings/general`;
 
+/** Settings › Workspace › Brand (spec 0060, AC-1): the logo and colour its booking pages and forms wear. */
+export const brandSettingsHref = (slug: string) => `/w/${slug}/settings/brand`;
+
 /** Settings › Workspace › Members (spec 0031): who is in the workspace, roles and invitations. */
 export const membersSettingsHref = (slug: string) => `/w/${slug}/settings/members`;
 
@@ -61,6 +65,7 @@ export type SettingsPageId =
   | 'notifications'
   | 'scheduling-access'
   | 'general'
+  | 'brand'
   | 'members'
   | 'workspace-security'
   | 'objects'
@@ -104,7 +109,8 @@ export interface SettingsNavEntry {
     | 'chart-line'
     | 'calendar-days'
     | 'calendar-clock'
-    | 'globe';
+    | 'globe'
+    | 'palette';
   /** A quiet word after the name. Every entry opens a page in Settings (20 Oct 2026; Trash too since 23 Oct 2026). */
   readonly meta?: string;
   /** A permission the page needs before the member may open it at all; absent, every member may. */
@@ -160,6 +166,8 @@ export function settingsNav(slug: string): readonly SettingsNavGroup[] {
         // General, then Members (spec 0031, AC-832): every member may open both; what they may change is the server's
         // call.
         { id: 'general', label: workspace.generalTitle, href: generalSettingsHref(slug), icon: 'building' },
+        // Brand (spec 0060): every member reads it; owners and admins change it.
+        { id: 'brand', label: brand.navLabel, href: brandSettingsHref(slug), icon: 'palette' },
         { id: 'members', label: members.title, href: membersSettingsHref(slug), icon: 'users' },
         // The workspace's sign in rules (spec 0033): owners only, so nobody else sees the entry at all.
         {
@@ -238,6 +246,7 @@ export function settingsPageOf(pathname: string): SettingsPageId | undefined {
   if (rest === 'account/profile') return 'profile';
   if (rest === 'account/preferences') return 'preferences';
   if (rest === 'general') return 'general';
+  if (rest === 'brand') return 'brand';
   if (rest === 'account/notifications') return 'notifications';
   if (rest === 'account/scheduling') return 'scheduling-access';
   if (rest === 'account/sign-in' || rest === 'account/security') return 'security';

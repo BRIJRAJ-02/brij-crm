@@ -41,6 +41,7 @@ import { Route as WSlugCapturesIndexRouteImport } from './routes/w.$slug.capture
 import { Route as WSlugFormsSplatRouteImport } from './routes/w.$slug.forms.$.tsx'
 import { Route as WSlugObjectsObjectRouteImport } from './routes/w.$slug.objects.$object.tsx'
 import { Route as WSlugSettingsIndexRouteImport } from './routes/w.$slug.settings.index.tsx'
+import { Route as WSlugSettingsBrandRouteImport } from './routes/w.$slug.settings.brand.tsx'
 import { Route as WSlugSettingsCalendarRouteImport } from './routes/w.$slug.settings.calendar.tsx'
 import { Route as WSlugSettingsGeneralRouteImport } from './routes/w.$slug.settings.general.tsx'
 import { Route as WSlugSettingsJobsRouteImport } from './routes/w.$slug.settings.jobs.tsx'
@@ -245,6 +246,11 @@ const WSlugObjectsObjectRoute = WSlugObjectsObjectRouteImport.update({
 const WSlugSettingsIndexRoute = WSlugSettingsIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => WSlugSettingsRoute,
+} as any)
+const WSlugSettingsBrandRoute = WSlugSettingsBrandRouteImport.update({
+  id: '/brand',
+  path: '/brand',
   getParentRoute: () => WSlugSettingsRoute,
 } as any)
 const WSlugSettingsCalendarRoute = WSlugSettingsCalendarRouteImport.update({
@@ -532,6 +538,7 @@ export interface FileRoutesByFullPath {
   '/w/$slug/bookings/round-robin': typeof WSlugBookingsRoundRobinRoute
   '/w/$slug/forms/$': typeof WSlugFormsSplatRoute
   '/w/$slug/objects/$object': typeof WSlugObjectsObjectRoute
+  '/w/$slug/settings/brand': typeof WSlugSettingsBrandRoute
   '/w/$slug/settings/calendar': typeof WSlugSettingsCalendarRoute
   '/w/$slug/settings/general': typeof WSlugSettingsGeneralRoute
   '/w/$slug/settings/jobs': typeof WSlugSettingsJobsRoute
@@ -606,6 +613,7 @@ export interface FileRoutesByTo {
   '/w/$slug/bookings/round-robin': typeof WSlugBookingsRoundRobinRoute
   '/w/$slug/forms/$': typeof WSlugFormsSplatRoute
   '/w/$slug/objects/$object': typeof WSlugObjectsObjectRoute
+  '/w/$slug/settings/brand': typeof WSlugSettingsBrandRoute
   '/w/$slug/settings/calendar': typeof WSlugSettingsCalendarRoute
   '/w/$slug/settings/general': typeof WSlugSettingsGeneralRoute
   '/w/$slug/settings/jobs': typeof WSlugSettingsJobsRoute
@@ -685,6 +693,7 @@ export interface FileRoutesById {
   '/w/$slug/bookings/round-robin': typeof WSlugBookingsRoundRobinRoute
   '/w/$slug/forms/$': typeof WSlugFormsSplatRoute
   '/w/$slug/objects/$object': typeof WSlugObjectsObjectRoute
+  '/w/$slug/settings/brand': typeof WSlugSettingsBrandRoute
   '/w/$slug/settings/calendar': typeof WSlugSettingsCalendarRoute
   '/w/$slug/settings/general': typeof WSlugSettingsGeneralRoute
   '/w/$slug/settings/jobs': typeof WSlugSettingsJobsRoute
@@ -765,6 +774,7 @@ export interface FileRouteTypes {
     | '/w/$slug/bookings/round-robin'
     | '/w/$slug/forms/$'
     | '/w/$slug/objects/$object'
+    | '/w/$slug/settings/brand'
     | '/w/$slug/settings/calendar'
     | '/w/$slug/settings/general'
     | '/w/$slug/settings/jobs'
@@ -839,6 +849,7 @@ export interface FileRouteTypes {
     | '/w/$slug/bookings/round-robin'
     | '/w/$slug/forms/$'
     | '/w/$slug/objects/$object'
+    | '/w/$slug/settings/brand'
     | '/w/$slug/settings/calendar'
     | '/w/$slug/settings/general'
     | '/w/$slug/settings/jobs'
@@ -917,6 +928,7 @@ export interface FileRouteTypes {
     | '/w/$slug/bookings/round-robin'
     | '/w/$slug/forms/$'
     | '/w/$slug/objects/$object'
+    | '/w/$slug/settings/brand'
     | '/w/$slug/settings/calendar'
     | '/w/$slug/settings/general'
     | '/w/$slug/settings/jobs'
@@ -1203,6 +1215,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/w/$slug/settings/'
       preLoaderRoute: typeof WSlugSettingsIndexRouteImport
+      parentRoute: typeof WSlugSettingsRoute
+    }
+    '/w/$slug/settings/brand': {
+      id: '/w/$slug/settings/brand'
+      path: '/brand'
+      fullPath: '/w/$slug/settings/brand'
+      preLoaderRoute: typeof WSlugSettingsBrandRouteImport
       parentRoute: typeof WSlugSettingsRoute
     }
     '/w/$slug/settings/calendar': {
@@ -1555,6 +1574,7 @@ const WSlugCapturesRouteWithChildren = WSlugCapturesRoute._addFileChildren(
 )
 
 interface WSlugSettingsRouteChildren {
+  WSlugSettingsBrandRoute: typeof WSlugSettingsBrandRoute
   WSlugSettingsCalendarRoute: typeof WSlugSettingsCalendarRoute
   WSlugSettingsGeneralRoute: typeof WSlugSettingsGeneralRoute
   WSlugSettingsJobsRoute: typeof WSlugSettingsJobsRoute
@@ -1592,6 +1612,7 @@ interface WSlugSettingsRouteChildren {
 }
 
 const WSlugSettingsRouteChildren: WSlugSettingsRouteChildren = {
+  WSlugSettingsBrandRoute: WSlugSettingsBrandRoute,
   WSlugSettingsCalendarRoute: WSlugSettingsCalendarRoute,
   WSlugSettingsGeneralRoute: WSlugSettingsGeneralRoute,
   WSlugSettingsJobsRoute: WSlugSettingsJobsRoute,

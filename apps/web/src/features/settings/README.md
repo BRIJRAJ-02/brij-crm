@@ -129,6 +129,12 @@ Each account lists only its calendars in use (the owner, 23 October 2026: "don't
 
 Built from library parts only: SettingsLayout (through `SettingsPage`), SettingsSection, Card, SettingsRow and SettingsRowGroup, ProviderMark, Badge, RelativeTime, Select, InfoTip, Table (`isScrollable`) with HuePicker, TruncatedText, Badge and Checkbox in its cells, Menu, Callout, Switch, Modal (the disconnect confirm) and EmptyState (no account yet, sync off, and error with Try again). Changes show at once through `data.calendar` and come back with a toast when refused; a connection still syncing is read again until it is done.
 
+## Settings › Workspace › Brand (`/w/$slug/settings/brand`, BrandScreen)
+
+Brief: the logo and colour every booking page and form of the workspace wears (spec 0060, AC-1 to AC-3, AC-6), beside a preview of both wearing it. Main task: an owner or admin adds the logo and picks the colour. Leaves out: a link page's own look (its Design panel), fonts and backgrounds, and emails.
+
+Every member opens it; the kit's `canEdit` (owners and admins, `workspace.manage`) decides who changes it, and everyone else reads one line saying so with the controls read only. The logo is a FileDrop (PNG, JPEG or WebP), drawn again in the browser as a PNG and sent to `/api/brand/logo`; Remove logo asks first in a Modal. The colour is `AccentPicker` (Timefix first, the product's own accent, then the nine hues, Any colour and the hex), with a Dark colour under it once there is a colour. The preview beside it switches between a booking page and a form, each the real library component (BookingFrame, HostedFormPreview) wearing the kit through `brand` (the logo, and the variables `brandVariables()` makes, the very ones the pages' brand stylesheet sets). The store is `data.brand.load()`, read by the route's loader; a change shows at once and goes back with its reason on the card if refused.
+
 ## Settings › Workspace › General (`/w/$slug/settings/general`, GeneralScreen)
 
 - **Purpose**: the workspace's name, web address and time zone, and for owners its deletion (spec 0031, AC-822, AC-823).

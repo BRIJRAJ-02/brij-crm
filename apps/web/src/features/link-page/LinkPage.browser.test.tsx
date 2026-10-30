@@ -140,19 +140,20 @@ describe('the Add modal’s kinds (AC-9)', () => {
   });
 });
 
-describe('Appearance’s starting looks (AC-10)', () => {
-  it('shows each as a thumbnail with its name, ticks the one on the page, and picks by its picture', async () => {
+describe('Design’s gallery of looks (spec 0058, AC-10; spec 0060, AC-8)', () => {
+  it('shows all fourteen as thumbnails with their names, ticks the one on the page, and picks by its picture', async () => {
     const onChange = vi.fn();
     const ink = PAGE_THEME_PRESETS.find((preset) => preset.id === 'ink');
     if (ink === undefined) throw new Error('No Ink look.');
     await render({}, () => <AppearanceCard theme={DEFAULT_PAGE_THEME} onChange={onChange} />);
-    const looks = page.getByRole('radiogroup', { name: 'Start from' });
-    for (const name of ['Plain', 'Paper', 'Bold', 'Ink', 'Quiet']) {
+    const looks = page.getByRole('radiogroup', { name: 'Looks' });
+    for (const name of ['Plain', 'Paper', 'Bold', 'Ink', 'Quiet', 'Dawn', 'Studio', 'Editorial', 'Gallery']) {
       await expect.element(looks.getByRole('radio', { name })).toBeInTheDocument();
     }
     const tiles = [...looks.element().querySelectorAll('[data-tile]')];
-    expect(tiles).toHaveLength(5);
-    // Each tile draws the real look in its picture slot, with the page's own look attributes (Ink's dark ground).
+    expect(tiles).toHaveLength(14);
+    // Each tile draws the real look in its picture slot, with the page's own look attributes (Ink's dark ground, and
+    // Gallery's photo, standing in until there is one).
     const grounds = tiles.map((tile) => tile.querySelector('[data-thumbnail]')?.getAttribute('data-page-ground'));
     expect(grounds).toEqual(PAGE_THEME_PRESETS.map((preset) => preset.theme.ground));
     // The page stands on Plain (the default look), so Plain is the one ticked.
@@ -161,6 +162,43 @@ describe('Appearance’s starting looks (AC-10)', () => {
     (looks.getByRole('radio', { name: 'Plain' }).element() as HTMLElement).focus();
     await userEvent.keyboard('{ArrowDown}{ArrowDown}{ArrowDown}');
     expect(onChange).toHaveBeenLastCalledWith(ink.theme);
+  });
+});
+
+describe('Design’s Customise rows (spec 0060, AC-6, AC-9)', () => {
+  it('shows each row as pictures, picks from the keyboard, and says when the colour was adjusted', async () => {
+    const onChange = vi.fn();
+    const onAccent = vi.fn();
+    const extras = {
+      look: { accent: '#ffd400', workspaceAccent: '#1f5fd6' },
+      colours: () => ({ variables: [], adjusted: true, light: '#7a6700', dark: '#ffd400' }),
+      variables: [],
+      quickPicks: [{ hue: 'orange', value: '#fb8f3c' }],
+      photoSrc: () => undefined,
+      onAccent,
+      onPreviewAccent: () => undefined,
+      onPhoto: () => undefined,
+      onRemovePhoto: () => undefined,
+    } as const;
+    await render({}, () => <AppearanceCard theme={DEFAULT_PAGE_THEME} onChange={onChange} extras={extras} />);
+    await userEvent.click(page.getByRole('button', { name: 'Customise' }));
+    // Six rows of choices (Buttons and Header each with their second row: corners and the face).
+    for (const name of ['Colour', 'Background', 'Font', 'Buttons', 'Corners', 'Header', 'Face', 'Mode']) {
+      await expect.element(page.getByRole('radiogroup', { name })).toBeInTheDocument();
+    }
+    // Every choice is a picture of the page: one thumbnail a tile.
+    const background = page.getByRole('radiogroup', { name: 'Background' }).element();
+    expect(background.querySelectorAll('[data-thumbnail]')).toHaveLength(17);
+    await expect.element(page.getByRole('status')).toHaveTextContent('Adjusted so text stays readable.');
+    // Mode by keyboard: Light, then Dark.
+    (page.getByRole('radio', { name: 'Light' }).element() as HTMLElement).focus();
+    await userEvent.keyboard('{ArrowRight}');
+    expect(onChange).toHaveBeenLastCalledWith({ ...DEFAULT_PAGE_THEME, mode: 'dark' });
+    // A quick pick saves the colour, keeping no dark one the page didn't have.
+    // From the keyboard too: the default, then the arrow to the next swatch.
+    (page.getByRole('radio', { name: 'Workspace' }).element() as HTMLElement).focus();
+    await userEvent.keyboard('{ArrowRight}');
+    expect(onAccent).toHaveBeenLastCalledWith('#fb8f3c', undefined);
   });
 });
 
