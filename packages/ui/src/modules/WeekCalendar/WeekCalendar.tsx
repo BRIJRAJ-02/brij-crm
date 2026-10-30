@@ -34,6 +34,16 @@ export interface WeekCalendarDay {
   readonly label: string;
   readonly isToday: boolean;
   readonly isPast: boolean;
+  /**
+   * The `team` view's head for this column in place of the weekday and date (TeamDay's person: their picture, name
+   * and status). Drawn as it is given; the column keeps `label` as its name.
+   */
+  readonly head?: ReactNode;
+  /**
+   * A stretch drawn across the column under everything on it, with its word at its top (TeamDay's Away band for time
+   * off). Decoration: the column's `label` says it in words.
+   */
+  readonly band?: { readonly label: string; readonly startMinute: number; readonly endMinute: number };
 }
 
 /** One block on the grid: a booking, one of the member's own calendar events, or time they closed. */
@@ -185,8 +195,11 @@ export interface WeekCalendarProps {
   /**
    * `week` (the default) draws the seven days; `day` draws only the selected one across the width, its head still
    * the week's days to pick from, as a phone's narrow week does. In `day`, `emptyHint` shows while that day is empty.
+   * `team` (TeamDay) draws any number of columns (each a person, its `head` drawn in place of a date), at least
+   * `size-column-narrow` plus `space-32` and `space-8` wide each, scrolling sideways under a head and an hour axis that stay put;
+   * the now line shows in every column, and below 480px one column shows at a time, with Previous and Next.
    */
-  readonly view?: 'week' | 'day';
+  readonly view?: 'week' | 'day' | 'team';
 }
 
 /** The parts of a day outside its open hours, in order. */
@@ -293,6 +306,8 @@ export function WeekCalendar({
   view = 'week',
 }: WeekCalendarProps) {
   const scroller = useRef<HTMLDivElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const isTeam = view === 'team';
   const columns = useRef(new Map<string, HTMLDivElement>());
   const blockRefs = useRef(new Map<string, HTMLButtonElement>());
   // The open card's anchor: the block that was pressed.
@@ -405,7 +420,8 @@ export function WeekCalendar({
     const place = (tries: number) => {
       const box = scroller.current;
       if (box === null) return;
-      const hour = box.scrollHeight / 24;
+      // The body's own height: in the team view the head scrolls inside too, over it.
+      const hour = (bodyRef.current?.offsetHeight ?? box.scrollHeight) / 24;
       if (box.scrollHeight <= box.clientHeight && tries < 2) {
         frame = requestAnimationFrame(() => place(tries + 1));
         return;
@@ -486,6 +502,71 @@ export function WeekCalendar({
   /** What Up and Down walk on a day: its blocks and "+N" chips by start, as they read down the screen. */
   const orderOf = (dayKey: string): readonly string[] => layoutOf(dayKey).stops.map((stop) => stop.id);
 
+  const at = days.findIndex((day) => day.key === selectedDay);
+  /** The heads over the columns, the zone in the corner: above the hours, or (team) inside them, pinned to the top. */
+  const headRow = (
+    <div className={styles.head}>
+      {isTeam && (
+        // One person at a time on a phone: Previous and Next walk the columns (the arrow keys do too).
+        <span className={styles.stepper}>
+          <Button
+            variant="ghost"
+            size="sm"
+            icon="chevron-left"
+            label={strings.previousColumn}
+            isDisabled={at <= 0}
+            onPress={() => moveDay(selectedDay, -1)}
+          />
+          <Button
+            variant="ghost"
+            size="sm"
+            icon="chevron-right"
+            label={strings.nextColumn}
+            isDisabled={at < 0 || at >= days.length - 1}
+            onPress={() => moveDay(selectedDay, 1)}
+          />
+        </span>
+      )}
+      {zone === undefined ? (
+        <span className={styles.corner} aria-hidden="true" />
+      ) : (
+        <span className={styles.corner}>
+          <span className={styles.zone} aria-hidden="true" title={zone.name}>
+            {/* "GMT+5:30" is wider than the axis: it may break before its sign, "GMT" over "+5:30". */}
+            {zone.short.split(/(?=[+\-\u2212])/).map((part, index) => (
+              <Fragment key={part}>
+                {index > 0 && <wbr />}
+                {part}
+              </Fragment>
+            ))}
+          </span>
+          <VisuallyHidden id={zoneId}>{zone.name}</VisuallyHidden>
+        </span>
+      )}
+      {isTeam
+        ? days.map((day) => (
+            <div key={day.key} className={styles.personHead} data-selected={day.key === selectedDay || undefined}>
+              {day.head ?? day.label}
+            </div>
+          ))
+        : days.map((day) => (
+            <button
+              key={day.key}
+              type="button"
+              className={styles.dayButton}
+              data-today={day.isToday || undefined}
+              data-past={day.isPast || undefined}
+              data-busy={blocks.some((block) => block.dayKey === day.key) || undefined}
+              aria-pressed={day.key === selectedDay}
+              aria-label={day.isToday ? strings.today(day.label) : day.label}
+              onClick={() => onSelectDay(day.key)}
+            >
+              <span className={styles.weekday}>{day.weekday}</span>
+              <span className={styles.dayNumber}>{day.dayNumber}</span>
+            </button>
+          ))}
+    </div>
+  );
   return (
     <section
       className={styles.root}
@@ -495,43 +576,12 @@ export function WeekCalendar({
       aria-busy={isLoading || undefined}
       data-fill={isFill || undefined}
       data-view={view}
+      {...(isTeam ? { style: { '--columns': String(Math.max(days.length, 1)) } } : {})}
     >
-      <div className={styles.head}>
-        {zone === undefined ? (
-          <span className={styles.corner} aria-hidden="true" />
-        ) : (
-          <span className={styles.corner}>
-            <span className={styles.zone} aria-hidden="true" title={zone.name}>
-              {/* "GMT+5:30" is wider than the axis: it may break before its sign, "GMT" over "+5:30". */}
-              {zone.short.split(/(?=[+\-\u2212])/).map((part, index) => (
-                <Fragment key={part}>
-                  {index > 0 && <wbr />}
-                  {part}
-                </Fragment>
-              ))}
-            </span>
-            <VisuallyHidden id={zoneId}>{zone.name}</VisuallyHidden>
-          </span>
-        )}
-        {days.map((day) => (
-          <button
-            key={day.key}
-            type="button"
-            className={styles.dayButton}
-            data-today={day.isToday || undefined}
-            data-past={day.isPast || undefined}
-            data-busy={blocks.some((block) => block.dayKey === day.key) || undefined}
-            aria-pressed={day.key === selectedDay}
-            aria-label={day.isToday ? strings.today(day.label) : day.label}
-            onClick={() => onSelectDay(day.key)}
-          >
-            <span className={styles.weekday}>{day.weekday}</span>
-            <span className={styles.dayNumber}>{day.dayNumber}</span>
-          </button>
-        ))}
-      </div>
+      {!isTeam && headRow}
       <div ref={scroller} className={styles.scroller}>
-        <div className={styles.body}>
+        {isTeam && headRow}
+        <div ref={bodyRef} className={styles.body}>
           <div className={styles.axis} aria-hidden="true">
             {HOURS.map((hour) => (
               <span key={hour} className={styles.hour}>
@@ -541,11 +591,12 @@ export function WeekCalendar({
             {/* The time now on the axis, level with the now line, while today is on the week. */}
             {now !== undefined &&
               (now.label !== undefined || minuteLabel !== undefined) &&
-              days.some((day) => day.key === now.dayKey) && (
+              (isTeam || days.some((day) => day.key === now.dayKey)) && (
                 <span
                   className={styles.nowLabel}
-                  // One day across (a phone), it shows only on today, where its line is.
-                  data-on-day={now.dayKey === selectedDay || undefined}
+                  // One day across (a phone), it shows only on today, where its line is; every column is today in
+                  // the team view.
+                  data-on-day={isTeam || now.dayKey === selectedDay || undefined}
                   style={{ '--start': String(now.minute) }}
                 >
                   {now.label ?? minuteLabel?.(now.minute)}
@@ -660,6 +711,19 @@ export function WeekCalendar({
                         />
                       ));
                 })()}
+                {/* A band across the column (time off), under everything drawn on it; the column's name says it. */}
+                {day.band !== undefined && (
+                  <span
+                    className={styles.band}
+                    aria-hidden="true"
+                    style={{
+                      '--start': String(day.band.startMinute),
+                      '--length': String(Math.max(day.band.endMinute - day.band.startMinute, 15)),
+                    }}
+                  >
+                    <span className={styles.bandLabel}>{day.band.label}</span>
+                  </span>
+                )}
                 {/* The span drawn sits under bookings and events, so it never hides what it is drawn across. */}
                 {(dragging?.dayKey === day.key ? dragging : draft?.dayKey === day.key ? draft : undefined) !==
                   undefined && (
@@ -767,7 +831,7 @@ export function WeekCalendar({
                     }
                   />
                 ))}
-                {now?.dayKey === day.key && (
+                {now !== undefined && (isTeam || now.dayKey === day.key) && (
                   <span className={styles.now} style={{ '--start': String(now.minute) }} aria-hidden="true" />
                 )}
               </div>
@@ -777,7 +841,7 @@ export function WeekCalendar({
       </div>
       {emptyHint !== undefined &&
         !isLoading &&
-        !blocks.some((block) => view === 'week' || block.dayKey === selectedDay) && (
+        !blocks.some((block) => view !== 'day' || block.dayKey === selectedDay) && (
           <div className={styles.empty} data-action={emptyAction === undefined ? undefined : ''}>
             <p className={styles.emptyHint}>{emptyHint}</p>
             {emptyAction !== undefined && (
