@@ -114,8 +114,11 @@ export const strings = {
   creating: 'Creating',
   /** The table's footer, under the name column: how many records the view holds ("10,000+ records"). */
   recordCount: (count: string, isOne: boolean) => (isOne ? `${count} record` : `${count} records`),
-  /** A footer calculation (the CRM flow pass): a filtered view too large to add up, nothing to add, a failed read. */
-  calcTooMany: 'over 10,000 rows',
+  /**
+   * A footer calculation (the CRM flow pass): too large to add up (a filtered view past 10,000 rows, or more than 200
+   * currencies), nothing to add, a failed read.
+   */
+  calcTooMany: 'too many to add up',
   calcNothing: '—',
   calcFailed: 'unavailable',
   calcMore: (shown: string, more: number) => `${shown} and ${String(more)} more`,

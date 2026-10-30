@@ -5,10 +5,8 @@
 // store, a view per object, and optimistic creates and edits (loaded when a
 // screen first asks for records), patched in place by live change events
 // while a screen shows a workspace (the realtime client loads with the first).
-import type { AggregateFn, FilterGroup } from '@crm/contracts/values';
 import type {
   ActivityKind,
-  RecordAggregate,
   RecordsExportView,
   StartExportInput,
   ImportLinks,
@@ -249,6 +247,7 @@ import type { RecordAttributes, RecordSubscription } from './records/one.ts';
 import { createRecordSearch, type RecordSearch } from './records/search.ts';
 import { createBookingLink } from './bookings/link.ts';
 import type { BoardQuery, BoardStore } from './records/board.ts';
+import { lazyAggregateSource, type AggregateQuestion, type AggregateSource } from './records/aggregate-source.ts';
 import type { PurgeSummary, RestoreSummary, Trash, TrashView } from './trash/store.ts';
 import type {
   BulkEditRequest,
@@ -742,6 +741,15 @@ export type { WindowCount, WindowMode } from './records/windows.ts';
 export type { FilterGroup, SortRule, SortRules } from '@crm/contracts/values';
 export { aggregatesFor, type AggregateFn } from '@crm/contracts/views';
 export type { RecordAggregate } from '@crm/contracts';
+export {
+  aggregateKey,
+  NO_AGGREGATES,
+  type AggregateAnswers,
+  type AggregateAskSpec,
+  type AggregateQuestion,
+  type AggregateSource,
+  type AggregateState,
+} from './records/aggregate-source.ts';
 
 /**
  * A value this tab saved was replaced by someone else's later save (spec
@@ -1083,6 +1091,8 @@ export function createDataLayer({
   let allAttributes = new Map<string, Promise<AttributeDefinition[]>>();
   // The records layer, loaded with the first screen that shows records.
   let records: Promise<RecordsLayer> | undefined;
+  /** The records layer once loaded, so a screen's calculations source comes back at once (and the same each time). */
+  let recordsLoaded: RecordsLayer | undefined;
   // Options a cell made, shown by their label until the attribute's own list holds them (spec 0012, AC-238).
   const pendingOptions = createPendingOptions();
   // Records' timelines (spec 0017), loaded with the first record page.
@@ -2422,6 +2432,14 @@ export function createDataLayer({
           ),
         signal,
       ),
+    aggregate: (input, signal) =>
+      call((options) => api.records.aggregate({ ...input, asks: [...input.asks] }, options), signal),
+    aggregateGroups: (input, signal) =>
+      call(
+        (options) =>
+          api.records.aggregateGroups({ ...input, groupIds: [...input.groupIds], asks: [...input.asks] }, options),
+        signal,
+      ),
     get: (input) =>
       call((options) =>
         api.records.get(
@@ -3070,46 +3088,51 @@ export function createDataLayer({
   };
 
   const recordsLayer = (): Promise<RecordsLayer> => {
-    records ??= import('./records/layer.ts').then(({ createRecordsLayer }) =>
-      createRecordsLayer({
-        api: recordsApi,
-        notify,
-        mintId,
-        refusals: { refusalFor, refusalSummary },
-        watch,
-        mutations,
-        beforeRead,
-        // The person's member id in the workspace (cached with their role), so their own saves raise no notice.
-        memberOf: (workspace) =>
-          cached(access, workspace, () => call((options) => api.access.mine({ workspace }, options))).then(
-            (mine) => mine.memberId,
-            () => undefined,
-          ),
-        onReplaced: (notice) => {
-          void tellReplaced(notice);
-        },
-        describe: describeObject,
-        definitionsOf,
-        // Relative dates ("today", "this week") and rules resolve in the member's Preferences time zone.
-        timeZone: zoneOf,
-        // A cell's new option (spec 0012, AC-238): its label shows while it is made, on every try. Landed, the
-        // object's attributes are read again (its own definitions echo is skipped) and the pages reload.
-        cellOptions: {
-          asked: (workspace, option) => {
-            pendingOptions.add(workspace, option);
+    records ??= import('./records/layer.ts')
+      .then(({ createRecordsLayer }) =>
+        createRecordsLayer({
+          api: recordsApi,
+          notify,
+          mintId,
+          refusals: { refusalFor, refusalSummary },
+          watch,
+          mutations,
+          beforeRead,
+          // The person's member id in the workspace (cached with their role), so their own saves raise no notice.
+          memberOf: (workspace) =>
+            cached(access, workspace, () => call((options) => api.access.mine({ workspace }, options))).then(
+              (mine) => mine.memberId,
+              () => undefined,
+            ),
+          onReplaced: (notice) => {
+            void tellReplaced(notice);
           },
-          refused: (workspace, attributeId, id) => {
-            pendingOptions.remove(workspace, attributeId, id);
+          describe: describeObject,
+          definitionsOf,
+          // Relative dates ("today", "this week") and rules resolve in the member's Preferences time zone.
+          timeZone: zoneOf,
+          // A cell's new option (spec 0012, AC-238): its label shows while it is made, on every try. Landed, the
+          // object's attributes are read again (its own definitions echo is skipped) and the pages reload.
+          cellOptions: {
+            asked: (workspace, option) => {
+              pendingOptions.add(workspace, option);
+            },
+            refused: (workspace, attributeId, id) => {
+              pendingOptions.remove(workspace, attributeId, id);
+            },
+            made: (workspace, objectId, made) => {
+              pendingOptions.resolve(workspace, made.attributeId, made.id, made.resolvedId);
+              usage.delete(workspace);
+              dropAllAttributes(workspace, objectId);
+              reloadIfChanged([refreshAttributes(workspace, objectId)]);
+            },
           },
-          made: (workspace, objectId, made) => {
-            pendingOptions.resolve(workspace, made.attributeId, made.id, made.resolvedId);
-            usage.delete(workspace);
-            dropAllAttributes(workspace, objectId);
-            reloadIfChanged([refreshAttributes(workspace, objectId)]);
-          },
-        },
-      }),
-    );
+        }),
+      )
+      .then((layer) => {
+        recordsLoaded = layer;
+        return layer;
+      });
     return records;
   };
 
@@ -4605,37 +4628,19 @@ export function createDataLayer({
           .then(() => call((options) => api.records.objectCounts({ workspace }, options)))
           .then((answer) => answer.counts),
       /**
-       * A column's calculation across every record a view matches (the CRM
-       * flow pass, `records.aggregate`): a count of the filled or the empty,
-       * or for a number or currency the sum, average, least or most (one per
-       * currency). One read per footer, never per row and never cached; the
-       * screen asks again when the view's question or count moves. Relative
-       * dates in the filter resolve in the member's time zone.
+       * A view's calculations across every record it matches (the CRM flow
+       * pass): a table's footer, every ask in one `records.aggregate`, or a
+       * board's column totals (`groupBy` and `groupIds`) in one
+       * `records.aggregateGroups`; counts of the filled or the empty, or for a
+       * number or currency the sum, average, least or most (one per
+       * currency). One store in the records layer, shared by every screen
+       * asking the same question in any ask order, read again after the
+       * changes that may move it (see the records layer). `useAggregates`
+       * reads it; answers sit under `aggregateKey`.
        */
-      aggregate: (
-        workspace: string,
-        objectId: string,
-        input: { readonly attributeId: string; readonly fn: AggregateFn; readonly filter?: FilterGroup | undefined },
-        signal?: AbortSignal,
-      ): Promise<RecordAggregate> =>
-        beforeRead(workspace).then(() =>
-          call(
-            (options) =>
-              api.records.aggregate(
-                {
-                  workspace,
-                  objectId,
-                  attributeId: input.attributeId,
-                  fn: input.fn,
-                  ...(input.filter === undefined ? {} : { filter: input.filter }),
-                  now: new Date().toISOString(),
-                  timeZone: zoneOf(workspace),
-                },
-                options,
-              ),
-            signal,
-          ),
-        ),
+      aggregates: (workspace: string, question: AggregateQuestion): AggregateSource =>
+        recordsLoaded?.aggregates(workspace, question) ??
+        lazyAggregateSource(recordsLayer().then((layer) => layer.aggregates(workspace, question))),
       /**
        * Makes a record at once (see the records layer) with `id` (from
        * `newId`); rejects with the refusals when the server says no. Sending the

@@ -38,6 +38,7 @@ import type { DueTasksSnapshot, DueTasksSource } from './tasks/due.ts';
 import type { PendingOptions } from './options.ts';
 import type { RecordsView, ViewReader, ViewState } from './records/layer.ts';
 import type { RecordState, RecordSubscription } from './records/one.ts';
+import type { AggregateSource, AggregateState } from './records/aggregate-source.ts';
 import type { RecordSearch, RecordSearchState } from './records/search.ts';
 import type { TrashedSource, TrashedState } from './records/trashed.ts';
 import type { SavedViewSnapshot, SavedViewSource, ViewsListSnapshot, ViewsListSource } from './views/store.ts';
@@ -199,6 +200,16 @@ interface Retained<State> {
 function useRetained<State>(source: Retained<State>): State {
   useEffect(() => source.retain(), [source]);
   return useSyncExternalStore(source.subscribe, source.getSnapshot);
+}
+
+/**
+ * A view's calculations (the CRM flow pass, `data.records.aggregates`): a
+ * table's footer or a board's column totals, re-rendering when the answers
+ * change. Held while the screen is mounted, so they read again after changes;
+ * the answers shown stay while a newer read is out.
+ */
+export function useAggregates(source: AggregateSource): AggregateState {
+  return useRetained(source);
 }
 
 /**

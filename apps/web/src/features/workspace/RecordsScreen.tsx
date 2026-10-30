@@ -456,15 +456,10 @@ export function RecordsScreen({
   const rowHeader = object.primaryAttributeId ?? columns[0]?.id ?? '';
   const newRecord = strings.newRecord(object.singularName);
   // Footer calculations (the CRM flow pass): each shown column but the name offers what its type can work out; the
-  // view keeps the choice in its columns, and each chosen one is one read across every matching record.
+  // view keeps the choice in its columns, and the whole footer is one read across every matching record, read again
+  // by the data layer after changes that may move it.
   const shownColumns = useMemo(() => layout.columns.filter((column) => !column.isHidden), [layout.columns]);
-  const calcValues = useColumnCalcs(
-    slug,
-    object.id,
-    shown.query.filter,
-    shownColumns,
-    state.status === 'ready' ? `${String(state.count.count)}${state.count.atLeast ? '+' : ''}` : '',
-  );
+  const calcValues = useColumnCalcs(slug, object.id, shown.query.filter, shownColumns);
   const calculations = useMemo(() => {
     const types = new Map(attributes.map((attribute) => [attribute.id, attribute.type]));
     const choose = (columnId: string, calc: ColumnCalc['chosen']) => {
