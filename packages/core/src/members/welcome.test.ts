@@ -287,4 +287,31 @@ describe('a page made with a membership', () => {
     expect(switched).toBe(false);
     expect(await shownAt(ada.id, w.workspaceId)).toBe(false);
   });
+
+  it('never switches a live page off from another workspace, nor for someone who isn\u2019t a member there', async () => {
+    const { ada, w, scope } = await made();
+    expect(await showMyLinkPage(scope, true)).toEqual({ isPublic: true });
+    const claimedAt = async () =>
+      (
+        await testQuery<{ at: string | null }>(
+          ownerUrl,
+          'select claimed_at::text as at from auth.public_profiles where user_id = $1 and workspace_id = $2',
+          [ada.id, w.workspaceId],
+        )
+      )[0]?.at;
+    const before = await claimedAt();
+    const other = await workspaceOf(await person(`Ivy ${tag()}`));
+    const turnOff = (workspaceId: string) =>
+      db.withWorkspace(other.workspaceId, async (tx) => {
+        const answer = await tx.execute<{ shown: boolean }>(
+          sql`select crm_set_public_profile_live(${ada.id}::uuid, ${workspaceId}::uuid, false) as shown`,
+        );
+        return answer.rows[0]?.shown;
+      });
+    // From another workspace's transaction, and for Ada in a workspace she isn't in: nothing written.
+    expect(await turnOff(w.workspaceId)).toBe(false);
+    expect(await turnOff(other.workspaceId)).toBe(false);
+    expect(await shownAt(ada.id, w.workspaceId)).toBe(true);
+    expect(await claimedAt()).toBe(before);
+  });
 });
