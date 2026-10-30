@@ -2,6 +2,7 @@
 // routes load it lazily and it never sits in the first load.
 export {
   DataGrid,
+  type AddColumnItem,
   type DataGridProps,
   type GridStatus,
   type RowNote,

@@ -699,6 +699,20 @@ export function RecordsScreen({
                       setAdding(true);
                     },
                     addColumnLabel: attributeStrings.addAttribute,
+                    // "+" offers the view's hidden columns first (flow pass, 30 October 2026): a blank create was
+                    // the only way, so hidden ones came back as duplicates. One press shows one, focused.
+                    addColumnItems: columns
+                      .filter((column) => column.isHidden === true)
+                      .map((column) => ({ id: column.id, label: column.attribute.name })),
+                    onAddColumnItem: (columnId: string) => {
+                      onLayoutChange({
+                        columns: layout.columns.map((column) =>
+                          column.id === columnId ? { ...column, isHidden: false } : column,
+                        ),
+                        pinnedCount: layout.pinnedCount,
+                      });
+                      setFocusColumn({ id: columnId });
+                    },
                     columnActions: (columnId: string) => {
                       const attribute = attributes.find((each) => each.id === columnId);
                       if (attribute === undefined || attribute.isSystem) return [];

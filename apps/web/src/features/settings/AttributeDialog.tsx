@@ -15,6 +15,7 @@ import {
   type AttributeDefinition,
   type MemberSummary,
   type NewOption,
+  type ObjectSummary,
   type OptionChanges,
   type PickerAttributeType,
   PICKER_TYPES,
@@ -30,10 +31,11 @@ import {
   type OptionsEditorOption,
   type RuleSettings,
 } from '@crm/ui';
-import { useRouteContext } from '@tanstack/react-router';
+import { useMatch, useRouteContext } from '@tanstack/react-router';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { strings } from './attribute-strings.ts';
 import { defaultArchivedNotice } from './default-notice.ts';
+import { NewObjectDialog } from './NewObjectDialog.tsx';
 import { formRefusals } from './refusals.ts';
 import { requiredWhenLine } from './required-when.ts';
 import { RelationshipDialog, useRelationshipCreate } from './RelationshipDialog.tsx';
@@ -208,12 +210,20 @@ export function AttributeDialog({
   // Relationship chosen in the type picker (spec 0014): its step takes over, with the name typed so far.
   const [relationshipDraft, setRelationshipDraft] = useState<{ readonly title: string } | undefined>(undefined);
   const relationshipFormId = useId();
+  // "New object…" in the relationship step (flow pass, 30 October 2026): New object opens over it, and the object
+  // made comes back chosen as the related one.
+  const [isMakingObject, setMakingObject] = useState(false);
+  const [madeObject, setMadeObject] = useState<ObjectSummary | undefined>(undefined);
+  // Back from the relationship step: the attribute form comes back with the name that was typed.
+  const [backTitle, setBackTitle] = useState<string | undefined>(undefined);
+  const workspaceObjects = useMatch({ from: '/w/$slug', shouldThrow: false })?.loaderData?.objects;
   const relationship = useRelationshipCreate({
     slug,
     objectId,
     isOpen: isOpen && relationshipDraft !== undefined,
     draftTitle: relationshipDraft?.title,
     onSaved,
+    made: madeObject,
   });
   // Each opening starts afresh, with its own id.
   const [wasOpen, setWasOpen] = useState(isOpen);
@@ -227,6 +237,9 @@ export function AttributeDialog({
       setAdding([]);
       setOptionErrors({});
       setRelationshipDraft(undefined);
+      setMakingObject(false);
+      setMadeObject(undefined);
+      setBackTitle(undefined);
     }
   }
   const displays = useMemo(() => toActorDisplays(members), [members]);
@@ -418,62 +431,92 @@ export function AttributeDialog({
   }
 
   return (
-    <AttributeSettings
-      isOpen={isOpen}
-      onOpenChange={(open) => {
-        if (!open) onClose();
-      }}
-      {...(initialTypeKey === undefined ? {} : { initialTypeKey })}
-      {...(initialTitle === undefined || attribute !== undefined ? {} : { initialTitle })}
-      // The name every record goes by never archives; a system attribute has nothing to archive or recreate.
-      {...(attribute === undefined || attribute.isPrimary || attribute.isSystem
-        ? {}
-        : {
-            ...(onArchive === undefined ? {} : { onArchive }),
-            ...(onRecreate === undefined ? {} : { onRecreate }),
-          })}
-      {...(attribute === undefined
-        ? {}
-        : {
-            attribute: {
-              type: attribute.type,
-              isMulti: attribute.isMulti,
-              title: attribute.title,
-              apiSlug: attribute.apiSlug,
-              ...(attribute.description === undefined ? {} : { description: attribute.description }),
-              isRequired: attribute.isRequired,
-              isUnique: attribute.isUnique,
-              ...(attribute.defaultValue === undefined ? {} : { defaultValue: attribute.defaultValue }),
-              config: attribute.config,
-              ...(attribute.options === undefined ? {} : { options }),
-              rules: rulesOf(attribute),
-            },
-          })}
-      members={displays}
-      isBusy={isBusy}
-      refusals={refusals}
-      onSubmit={submit}
-      newOptionId={data.attributes.newId}
-      newRuleId={data.attributes.newId}
-      {...(ruleAttributes === undefined ? {} : { ruleAttributes })}
-      {...(rulesNote === undefined ? {} : { rulesNote })}
-      {...(apiNames === undefined ? {} : { apiNames })}
-      {...(duplicatesLink === undefined ? {} : { duplicatesLink })}
-      // Relationship chosen in the type picker: its step takes this dialog's place, in the same Modal (spec 0014).
-      {...(attribute === undefined && relationshipDraft !== undefined
-        ? {
-            step: relationshipStep({ ...relationship, formId: relationshipFormId }),
-            isBusy: relationship.isBusy === true,
-          }
-        : {})}
-      {...(attribute === undefined && canManage
-        ? { relationshipEntry: { label: strings.relationship, onChoose: setRelationshipDraft } }
-        : {})}
-      {...(optionsLimit === undefined ? {} : { optionsLimit })}
-      // The writes read `openNow` only when the server answers, never while rendering.
-      // eslint-disable-next-line react-hooks/refs
-      {...(optionWrites === undefined ? {} : { optionWrites })}
-      {...(readOnlyReason === undefined ? {} : { readOnlyReason })}
-    />
+    <>
+      <AttributeSettings
+        isOpen={isOpen}
+        onOpenChange={(open) => {
+          if (!open) onClose();
+        }}
+        {...(initialTypeKey === undefined ? {} : { initialTypeKey })}
+        {...(attribute !== undefined
+          ? {}
+          : backTitle !== undefined
+            ? { initialTitle: backTitle }
+            : initialTitle === undefined
+              ? {}
+              : { initialTitle })}
+        // The name every record goes by never archives; a system attribute has nothing to archive or recreate.
+        {...(attribute === undefined || attribute.isPrimary || attribute.isSystem
+          ? {}
+          : {
+              ...(onArchive === undefined ? {} : { onArchive }),
+              ...(onRecreate === undefined ? {} : { onRecreate }),
+            })}
+        {...(attribute === undefined
+          ? {}
+          : {
+              attribute: {
+                type: attribute.type,
+                isMulti: attribute.isMulti,
+                title: attribute.title,
+                apiSlug: attribute.apiSlug,
+                ...(attribute.description === undefined ? {} : { description: attribute.description }),
+                isRequired: attribute.isRequired,
+                isUnique: attribute.isUnique,
+                ...(attribute.defaultValue === undefined ? {} : { defaultValue: attribute.defaultValue }),
+                config: attribute.config,
+                ...(attribute.options === undefined ? {} : { options }),
+                rules: rulesOf(attribute),
+              },
+            })}
+        members={displays}
+        isBusy={isBusy}
+        refusals={refusals}
+        onSubmit={submit}
+        newOptionId={data.attributes.newId}
+        newRuleId={data.attributes.newId}
+        {...(ruleAttributes === undefined ? {} : { ruleAttributes })}
+        {...(rulesNote === undefined ? {} : { rulesNote })}
+        {...(apiNames === undefined ? {} : { apiNames })}
+        {...(duplicatesLink === undefined ? {} : { duplicatesLink })}
+        // Relationship chosen in the type picker: its step takes this dialog's place, in the same Modal (spec 0014).
+        {...(attribute === undefined && relationshipDraft !== undefined
+          ? {
+              step: relationshipStep({
+                ...relationship,
+                formId: relationshipFormId,
+                onBack: () => {
+                  setBackTitle(relationshipDraft.title);
+                  setRelationshipDraft(undefined);
+                },
+                newObject: { label: strings.newObjectItem, onChoose: () => setMakingObject(true) },
+              }),
+              isBusy: relationship.isBusy === true,
+            }
+          : {})}
+        {...(attribute === undefined && canManage
+          ? { relationshipEntry: { label: strings.relationship, onChoose: setRelationshipDraft } }
+          : {})}
+        {...(optionsLimit === undefined ? {} : { optionsLimit })}
+        // The writes read `openNow` only when the server answers, never while rendering.
+        // eslint-disable-next-line react-hooks/refs
+        {...(optionWrites === undefined ? {} : { optionWrites })}
+        {...(readOnlyReason === undefined ? {} : { readOnlyReason })}
+      />
+      {relationshipDraft !== undefined && (
+        <NewObjectDialog
+          isOpen={isMakingObject}
+          onOpenChange={setMakingObject}
+          objects={workspaceObjects ?? []}
+          newId={data.objects.newId}
+          onCreate={(input) => data.objects.create(slug, input)}
+          onCreated={(object) => {
+            setMakingObject(false);
+            setMadeObject(object);
+            toasts.toast({ tone: 'success', message: strings.objectCreated(object.pluralName) });
+          }}
+        />
+      )}
+    </>
   );
 }

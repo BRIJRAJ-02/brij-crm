@@ -80,6 +80,9 @@ export const strings = {
   noMatches: (query: string) => `No attribute matches “${query}”`,
   /** The type picker's entry that hands over to the relationship dialog (spec 0014). */
   relationship: 'Relationship',
+  /** Last in the relationship step's related object list: an object that doesn't exist yet. */
+  newObjectItem: 'New object…',
+  objectCreated: (plural: string) => `${plural} created.`,
   loading: 'Loading attributes',
   loadFailed: 'Couldn’t load the attributes',
   somethingWrong: 'Something went wrong. Try again in a moment.',
