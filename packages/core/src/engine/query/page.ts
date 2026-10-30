@@ -92,6 +92,8 @@ export type PageQuery = ViewSource &
     readonly limit?: number;
     /** Only these attributes' values, plus the primary (spec 0006, AC-55); every attribute when absent. */
     readonly attributeIds?: readonly string[];
+    /** Add each record's open comment threads (`openThreads`): one more statement for the page. */
+    readonly threadCounts?: boolean;
   };
 
 /** One page: records in order (for a list, its entries in order and their records), and the cursor for the next. */
@@ -1084,6 +1086,7 @@ export async function readPage(
     visibleAlready: true,
     // Malformed ids name nothing; ids of another object's attributes are ignored by the read.
     ...(query.attributeIds === undefined ? {} : { attributeIds: query.attributeIds.filter(isUuid).map(canonicalId) }),
+    ...(query.threadCounts === true ? { threadCounts: true as const } : {}),
   });
   const page: Page = !isList
     ? { records }

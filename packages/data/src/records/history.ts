@@ -76,6 +76,11 @@ export interface CellsEntry {
   readonly kind: UndoKind;
   readonly objectId: string;
   readonly cells: readonly UndoCell[];
+  /**
+   * A bulk edit's group (the CRM flow pass, 31 October 2026): the edits of one Apply, one per field, share it, and
+   * Cmd+Z takes them back together, as the toast's Undo does.
+   */
+  readonly group?: string;
 }
 
 /**
@@ -156,6 +161,11 @@ export interface UndoStack {
   readonly pop: (workspace: string) => UndoEntry | undefined;
   /** The newest entry, left on the stack. */
   readonly top: (workspace: string) => UndoEntry | undefined;
+  /**
+   * Takes the edits of one group off the top of the stack, newest first: the entries just under the one popped that
+   * share its `group` (the rest of one Apply's fields). Stops at the first entry of another group.
+   */
+  readonly popGroup: (workspace: string, group: string) => readonly CellsEntry[];
   /** Takes the entry with this id off the stack, wherever it sits (a delete job undone from its toast). */
   readonly drop: (workspace: string, id: string) => void;
   /**
@@ -212,6 +222,17 @@ export function createUndoStack(depth: number = UNDO_DEPTH, cellBudget: number =
       return top;
     },
     top: (workspace) => stacks.get(workspace)?.at(-1),
+    popGroup: (workspace, group) => {
+      const stack = stacks.get(workspace) ?? [];
+      const taken: CellsEntry[] = [];
+      for (let at = stack.length - 1; at >= 0; at -= 1) {
+        const entry = stack[at];
+        if (entry === undefined || !isCellsEntry(entry) || entry.group !== group) break;
+        taken.push(entry);
+      }
+      if (taken.length > 0) stacks.set(workspace, stack.slice(0, stack.length - taken.length));
+      return taken;
+    },
     drop: (workspace, id) => {
       const stack = stacks.get(workspace);
       if (stack === undefined || !stack.some((entry) => entry.id === id)) return;

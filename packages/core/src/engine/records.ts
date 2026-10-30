@@ -13,6 +13,7 @@ import {
 } from '@crm/contracts/values';
 import { takeRecordSlots } from './limits.ts';
 import { decodeValue, encodeValue, sameItems } from './columns.ts';
+import { openThreadCounts } from '../comments/counts.ts';
 import { canonicalId, canonicalKeys, checkId, isUuid, isUuidV7 } from './ids.ts';
 import { isRefusal, postgresError, refuse, refuseAll, versionChangedMessage } from './refusals.ts';
 import { actorRow, type Actor, type EngineScope } from './scope.ts';
@@ -220,6 +221,8 @@ export interface RecordView {
    * A cell that wasn't cut has no entry, so this is empty for most records.
    */
   readonly linkTotals: Readonly<Record<string, number>>;
+  /** The record's open comment threads; present only on a read that asked for them (`threadCounts`), 0 when none. */
+  readonly openThreads?: number;
 }
 
 /**
@@ -885,6 +888,11 @@ export interface ReadOptions {
    * statement of its own to check.
    */
   readonly liveObjectsOnly?: true;
+  /**
+   * Add each record's open comment threads (`openThreads`, the count a table row and a board card show): one more
+   * statement for the whole read, over the records it returns, so only ones the reader may see are counted.
+   */
+  readonly threadCounts?: true;
 }
 
 /**
@@ -898,6 +906,7 @@ export async function getRecords(
     readonly ids: readonly string[];
     readonly attributeIds?: readonly string[];
     readonly attributes?: ReadOptions['attributes'];
+    readonly threadCounts?: boolean;
   },
 ): Promise<readonly RecordView[]> {
   if (input.ids.length > 500) throw refuse('CONFIG_INVALID', 'Read at most 500 records at once.');
@@ -909,6 +918,7 @@ export async function getRecords(
     readRecords(tx, scope.access, ids, {
       ...(attributeIds === undefined ? {} : { attributeIds }),
       ...(input.attributes === undefined ? {} : { attributes: input.attributes }),
+      ...(input.threadCounts === true ? { threadCounts: true as const } : {}),
     }),
   );
 }
@@ -1006,6 +1016,14 @@ export async function readRecords(
             .map((reference) => reference.recordId),
         ),
       );
+  // One statement for the page's open comment threads, over the records this read returns (those the reader may see).
+  const threads =
+    options.threadCounts === true
+      ? await openThreadCounts(
+          tx,
+          rows.map((row) => row.id),
+        )
+      : undefined;
   return rows
     .map((row): RecordView => {
       const object = objectById.get(row.objectId);
@@ -1075,6 +1093,7 @@ export async function readRecords(
         values,
         versions,
         linkTotals,
+        ...(threads === undefined ? {} : { openThreads: threads.get(row.id) ?? 0 }),
       };
       return farSeen === undefined ? view : filterRecordView(access, view, farSeen);
     })

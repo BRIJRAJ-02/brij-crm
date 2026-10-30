@@ -221,6 +221,8 @@ export interface RecordsApi {
     readonly workspace: string;
     readonly ids: readonly string[];
     readonly attributeIds?: readonly string[];
+    /** Add each record's open comment threads (`openThreads`): what a table row and a board card show. */
+    readonly threadCounts?: boolean;
   }) => Promise<RecordView[]>;
   readonly create: (input: CreateRecordInput) => Promise<WrittenRecord>;
   readonly setValues: (input: SetValuesInput) => Promise<WrittenRecord>;
@@ -327,6 +329,11 @@ export interface BulkEditRequest {
   readonly isMulti: boolean;
   readonly op: BulkOp;
   readonly value?: unknown;
+  /**
+   * The edits of one Apply, one request per field, share a group: Cmd+Z takes them all back as one step, as the
+   * toast's Undo does (the CRM flow pass, 31 October 2026).
+   */
+  readonly group?: string;
 }
 
 /**
@@ -3057,7 +3064,15 @@ export function createRecordsLayer({
       if (order.any || order.ids.has(attributeId)) entry.markDirty();
     }
     const pushed = cells.length > 0;
-    if (pushed) undo.push(workspace, { id: mutationId, kind: 'bulk', objectId, cells });
+    if (pushed) {
+      undo.push(workspace, {
+        id: mutationId,
+        kind: 'bulk',
+        objectId,
+        cells,
+        ...(request.group === undefined ? {} : { group: request.group }),
+      });
+    }
     const refused = marks.length + gone.length;
     return {
       kind: 'done',
@@ -3207,16 +3222,27 @@ export function createRecordsLayer({
       if (entry.kind === 'links') return undoLink(workspace, entry);
       const [firstCell] = entry.cells;
       if (firstCell === undefined) return { kind: 'nothing' };
-      const { landed: undone, kept, failed } = await undoCellsBack(workspace, entry.objectId, entry.cells);
+      // The other fields of the same Apply (a bulk edit of several fields) go back with it, newest first, as one step.
+      const parts = [entry, ...(entry.group === undefined ? [] : undo.popGroup(workspace, entry.group))];
+      let undone = 0;
+      let kept = 0;
+      let failed = 0;
+      for (const part of parts) {
+        const back = await undoCellsBack(workspace, part.objectId, part.cells);
+        undone += back.landed;
+        kept += back.kept;
+        failed += back.failed.reduce((sum, outcome) => sum + outcome.cells.length, 0);
+      }
       const shown = store.get(firstCell.recordId) ?? store.base(firstCell.recordId);
       return {
         kind: 'undone',
         action: entry.kind,
         objectId: entry.objectId,
-        cells: entry.cells.length,
+        // The records the Apply touched: the most any one field changed.
+        cells: Math.max(...parts.map((part) => part.cells.length)),
         undone,
         kept,
-        failed: failed.reduce((sum, outcome) => sum + outcome.cells.length, 0),
+        failed,
         first: {
           recordId: firstCell.recordId,
           attributeId: firstCell.attributeId,
@@ -3284,7 +3310,13 @@ export function createRecordsLayer({
     await Promise.all(
       chunks(held, GET_LIMIT).map(async (part) => {
         const rows = await whenFree(() =>
-          api.get({ workspace, ids: part, ...(attributeIds === undefined ? {} : { attributeIds }) }),
+          api.get({
+            workspace,
+            ids: part,
+            ...(attributeIds === undefined ? {} : { attributeIds }),
+            // A held record shows in a view: its row and card carry the open comment count, read with it.
+            threadCounts: true,
+          }),
         );
         // Only rows this workspace's views still show: the store is keyed by record id alone.
         store.receive(rows.filter((row) => isHeldIn(workspace, row.id)));
@@ -3834,6 +3866,31 @@ export function createRecordsLayer({
 
     /** Reads records again by id (a change event's ids); ids the server leaves out are gone and leave every window. */
     refetch,
+
+    /**
+     * Comments changed on these records (a `comments` event, or this tab's own count moving): the held ones read
+     * their open thread count again, and nothing else of them (the primary attribute rides along). A coarse event
+     * reads the object's views again.
+     */
+    commentsChanged: (workspace: string, objectId: string | undefined, ids: readonly string[], isCoarse: boolean) => {
+      if (isCoarse) {
+        for (const entry of viewsOf(workspace))
+          if (objectId === undefined || entry.objectId === objectId) entry.reread();
+        return Promise.resolve();
+      }
+      return refetch(workspace, ids, []);
+    },
+
+    /**
+     * Puts a record's open comment thread count in place from what the comments store knows (this tab's own
+     * comment, a thread resolved or deleted): the row and card show it at once. A record the store doesn't hold
+     * is left alone.
+     */
+    setOpenThreads: (recordId: string, count: number): void => {
+      const base = store.base(recordId);
+      if (base === undefined || base.openThreads === count) return;
+      store.receive([{ ...base, openThreads: count }]);
+    },
 
     /**
      * Another tab or person changed these records of an object (a change

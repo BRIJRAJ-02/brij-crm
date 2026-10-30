@@ -31,6 +31,8 @@ export interface GroupsQuery {
   readonly filter?: FilterGroup;
   readonly sorts?: SortRules;
   readonly attributeIds?: readonly string[];
+  /** Add each card's open comment threads (`openThreads`). */
+  readonly threadCounts?: boolean;
   /** Cards per column: 25 when not given. */
   readonly limit?: number;
   /** Also name the archived options some live record still holds. */
@@ -183,6 +185,7 @@ async function readGroups(
         ...(query.sorts === undefined ? {} : { sorts: query.sorts }),
         limit: query.limit ?? BOARD_BLOCK,
         ...(query.attributeIds === undefined ? {} : { attributeIds: query.attributeIds }),
+        ...(query.threadCounts === true ? { threadCounts: true } : {}),
         ...clock,
       },
       {},
@@ -247,6 +250,7 @@ async function readOtherGroups(
         ...(query.sorts === undefined ? {} : { sorts: query.sorts }),
         limit: query.limit ?? BOARD_BLOCK,
         ...(query.attributeIds === undefined ? {} : { attributeIds: query.attributeIds }),
+        ...(query.threadCounts === true ? { threadCounts: true } : {}),
         ...clock,
       },
       {},

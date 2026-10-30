@@ -37,6 +37,8 @@ export interface RecordWindow {
   readonly sorts?: SortRules;
   /** Only these attributes' values, plus the primary (spec 0006, AC-55). */
   readonly attributeIds?: readonly string[];
+  /** Add each record's open comment threads (`openThreads`): one more statement for the window. */
+  readonly threadCounts?: boolean;
   /** The window's clock (spec 0006, AC-51): relative dates resolve against it. */
   readonly now?: string;
   readonly timeZone?: string;
@@ -64,6 +66,7 @@ export async function queryRecords(
       ...(window.filter === undefined ? {} : { filter: window.filter }),
       ...(window.sorts === undefined ? {} : { sorts: window.sorts }),
       ...(window.attributeIds === undefined ? {} : { attributeIds: window.attributeIds }),
+      ...(window.threadCounts === true ? { threadCounts: true } : {}),
       ...(window.now === undefined ? {} : { now: window.now }),
       ...(window.timeZone === undefined ? {} : { timeZone: window.timeZone }),
     },
@@ -82,8 +85,15 @@ export async function readRecordsById(
   scope: EngineScope,
   ids: readonly string[],
   attributeIds?: readonly string[],
+  options: { readonly threadCounts?: boolean } = {},
 ): Promise<RecordView[]> {
-  return [...(await getRecords(scope, { ids, ...(attributeIds === undefined ? {} : { attributeIds }) }))];
+  return [
+    ...(await getRecords(scope, {
+      ids,
+      ...(attributeIds === undefined ? {} : { attributeIds }),
+      ...(options.threadCounts === true ? { threadCounts: true } : {}),
+    })),
+  ];
 }
 
 /**
