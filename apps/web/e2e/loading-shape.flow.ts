@@ -84,6 +84,14 @@ const ALL_SCREENS: readonly Screen[] = [
     start: at('settings/objects/people/attributes'),
     target: tab('Configuration'),
   },
+  // Teams (spec 0031) and an object's Access tab (spec 0032): the list's rows, and the summary line, the grid and the
+  // Fields fold where they land.
+  { name: 'settings teams', start: at('settings/account/preferences'), target: sidebar('Teams') },
+  {
+    name: 'settings object access',
+    start: at('settings/objects/people/attributes'),
+    target: tab('Access'),
+  },
   { name: 'settings jobs', start: at('settings/account/preferences'), target: sidebar('Background jobs') },
   // History (spec 0046): the owner's Workspace changes, its tabs and the table's skeleton rows where the rows land.
   { name: 'settings history', start: at('settings/account/preferences'), target: sidebar('History') },

@@ -376,7 +376,7 @@ export function AccessTab({ data, toasts, slug, object, access: initial, teams, 
   );
 }
 
-/** The Access tab while it loads: a line where the result goes, then the grid under its heading. */
+/** The Access tab while it loads: a line where the result goes, the grid under its heading, then where its buttons and the Fields fold land. */
 export function AccessTabPending() {
   return (
     <SettingsStack>
@@ -390,7 +390,9 @@ export function AccessTabPending() {
           renderCell={() => null}
           isLoading
         />
+        <Skeleton width="short" />
       </SettingsSection>
+      <Skeleton width="short" />
     </SettingsStack>
   );
 }

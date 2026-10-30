@@ -2,7 +2,10 @@
 // renames it, fills it, deletes it and takes the delete back with Undo; then, on Deals' Access tab, takes Members'
 // access away and gives it to the Sales team, with one plain line saying the result. A member in no team no longer
 // finds Deals; put in Sales, they do. A member opening the Access tab's address is told it is for owners and admins,
-// and reads Teams without a way to change it (AC-824 to AC-827, AC-843, AC-844, AC-854, AC-856).
+// and reads Teams without a way to change it (AC-824 to AC-827, AC-843, AC-844, AC-854, AC-856). A third test hides
+// Deals' Value from Members under Fields: the member's open table loses the column without a reload, the owner sees how
+// many people lost it with Undo, Preview as shows the member's view with an Exit, and Undo brings the column back
+// (AC-846, AC-850, AC-852, AC-858).
 import { randomUUID } from 'node:crypto';
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import { codeFor, MAILPIT_URL } from './mailpit.ts';
@@ -180,6 +183,68 @@ test.describe('teams and access', () => {
     await member.goto(`/w/${slug}/settings/objects/people/access`);
     await expect(member.getByText('Only owners and admins set access')).toBeVisible();
 
+    await memberContext.close();
+  });
+
+  test('hiding a field says who loses it, the member’s table drops the column live, and Preview as shows their view', async ({
+    page,
+    browser,
+  }, info) => {
+    test.setTimeout(300_000);
+    const tag = `${randomUUID().slice(0, 8)}-${info.project.name}`;
+    const slug = `fields-${tag}`;
+    const grace = `grace-${tag}@example.com`;
+    await newWorkspace(page, `ada-${tag}@example.com`, slug);
+    await page.goto(`/w/${slug}/settings/members`);
+    await page.getByRole('button', { name: 'Invite people' }).first().click();
+    const invite = page.getByRole('dialog', { name: 'Invite people' });
+    await invite.getByRole('textbox', { name: 'Email' }).fill(grace);
+    await invite.getByRole('button', { name: /^Invite/ }).click();
+    await invite.getByRole('button', { name: 'Done' }).click();
+    const memberContext = await browser.newContext();
+    const member = await memberContext.newPage();
+    await joinThrough(member, await inviteLinkFor(page.request, grace), grace, slug);
+
+    // The member has Deals open, with its Value column.
+    await member.goto(`/w/${slug}/objects/deals`);
+    const memberGrid = member.getByRole('grid').first();
+    await expect(memberGrid.getByRole('columnheader', { name: /Value/ })).toBeVisible({ timeout: 30_000 });
+
+    // The owner opens Deals' Access tab: Fields is folded away until asked for.
+    await page.goto(`/w/${slug}/settings/objects/deals/access`);
+    const fields = page.getByRole('button', { name: 'Fields' });
+    await expect(fields).toHaveAttribute('aria-expanded', 'false');
+    await fields.click();
+    // The record's name always shows: its picker offers no Hidden.
+    await page.getByRole('button', { name: /Name for Members/ }).click();
+    await expect(page.getByRole('option', { name: 'Hidden' })).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    await checkScreen(page, 'access-fields');
+
+    // Value is hidden from Members: one person loses it, said as chips, with Undo.
+    await page.getByRole('button', { name: /Value for Members/ }).click();
+    await page.getByRole('option', { name: 'Hidden' }).click();
+    const less = page.getByRole('status').filter({ hasText: 'Less access' });
+    await expect(less.getByText('1 person')).toBeVisible();
+    await expect(less.getByRole('button', { name: 'Undo' })).toBeVisible();
+    await checkScreen(page, 'access-less');
+    // The member's open table drops the column with no reload (AC-852).
+    await expect(memberGrid.getByRole('columnheader', { name: /Value/ })).toHaveCount(0, { timeout: 15_000 });
+
+    // Preview as the member: a read only banner with an Exit, and no Value among their fields.
+    await page.getByRole('button', { name: 'Preview as' }).click();
+    await page.getByRole('menuitem', { name: /Grace/ }).click();
+    const banner = page.getByRole('status').filter({ hasText: /Previewing as / });
+    await expect(banner.getByText('Read only')).toBeVisible();
+    await expect(banner.getByText('Value', { exact: true })).toHaveCount(0);
+    await expect(banner.getByText('Name', { exact: true })).toBeVisible();
+    await checkScreen(page, 'access-preview');
+    await banner.getByRole('button', { name: 'Exit preview' }).click();
+    await expect(page.getByText(/^Previewing as /)).toHaveCount(0);
+
+    // Undo brings the column back for the member.
+    await page.getByRole('button', { name: 'Undo' }).first().click();
+    await expect(memberGrid.getByRole('columnheader', { name: /Value/ })).toBeVisible({ timeout: 15_000 });
     await memberContext.close();
   });
 });

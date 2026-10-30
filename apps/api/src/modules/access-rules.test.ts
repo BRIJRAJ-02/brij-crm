@@ -6,6 +6,7 @@ import type { Database, IdentityStore } from '@crm/db';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { MailMessage } from '../mail/mailer.ts';
 import { createMailpitMailer } from '../mail/mailpit.ts';
+import { APP_RULES } from '../rules.ts';
 import { MAILPIT_URL, rpcClient, signIn, signInApp, testConnections } from '../../test/sign-in.ts';
 import { memberWithWorkspace, refusal } from '../../test/workspace.ts';
 
@@ -22,6 +23,8 @@ beforeAll(() => {
     { db, identity },
     {},
     {
+      // The app's own rules: the stored ones (the test server names none unless asked).
+      rules: APP_RULES,
       mailer: {
         transport: 'mailpit',
         send: (message: MailMessage) => {
@@ -163,6 +166,75 @@ describe('access rules (AC-843, AC-844, AC-851, AC-854)', () => {
           subject: { type: 'team', teamId: theirTeam.id },
           rule: { level: 'write', records: 'all' },
           mutationId: newId(),
+        }),
+      ),
+    ).toMatchObject({ code: 'NOT_FOUND', status: 404 });
+  });
+
+  it('hides a field from the Member role over the wire, says who lost it, and previews the member’s view', async () => {
+    const owner = await memberWithWorkspace(app);
+    const other = await memberWithWorkspace(app);
+    const workspace = owner.slug;
+    const ada = await teammate(owner);
+    const read = await owner.client.accessRules.get({ workspace, objectId: owner.people.id });
+    const jobTitle = read.fields.find((field) => field.title === 'Job title')?.id ?? '';
+    const name = read.fields.find((field) => field.isPrimary)?.id ?? '';
+    expect(jobTitle).not.toBe('');
+    const attributesFor = async () =>
+      (await ada.client.attributes.list({ workspace, objectId: owner.people.id })).map((attribute) => attribute.id);
+    expect(await attributesFor()).toContain(jobTitle);
+
+    const answer = await owner.client.accessRules.set({
+      workspace,
+      objectId: owner.people.id,
+      subject: MEMBER,
+      rule: { level: 'write', records: 'all', fields: { [jobTitle]: 'hidden' } },
+      mutationId: newId(),
+    });
+    expect(answer.impact).toMatchObject({ people: 1 });
+    expect(answer.access.subjects[0]?.fields).toEqual({ [jobTitle]: 'hidden' });
+    // Absent for the member, present for the owner; the record's name can't be hidden.
+    expect(await attributesFor()).not.toContain(jobTitle);
+    expect(
+      (await owner.client.attributes.list({ workspace, objectId: owner.people.id })).map((attribute) => attribute.id),
+    ).toContain(jobTitle);
+    expect(
+      await refusal(() =>
+        owner.client.accessRules.set({
+          workspace,
+          objectId: owner.people.id,
+          subject: MEMBER,
+          rule: { level: 'write', records: 'all', fields: { [name]: 'hidden' } },
+          mutationId: newId(),
+        }),
+      ),
+    ).toMatchObject({ code: 'CONFIG_INVALID' });
+
+    // Preview as Ada: the owner sees her fields, without the hidden one; she cannot ask, and nobody previews
+    // a person of another workspace.
+    const preview = await owner.client.accessRules.preview({
+      workspace,
+      objectId: owner.people.id,
+      as: { type: 'member', memberId: ada.memberId },
+    });
+    expect(preview.level).toBe('write');
+    expect(preview.fields.map((field) => field.id)).not.toContain(jobTitle);
+    expect(preview.fields.map((field) => field.id)).toContain(name);
+    expect(
+      await refusal(() =>
+        ada.client.accessRules.preview({
+          workspace,
+          objectId: owner.people.id,
+          as: { type: 'member', memberId: ada.memberId },
+        }),
+      ),
+    ).toMatchObject({ code: 'FORBIDDEN', status: 403 });
+    expect(
+      await refusal(() =>
+        other.client.accessRules.preview({
+          workspace: other.slug,
+          objectId: other.people.id,
+          as: { type: 'member', memberId: ada.memberId },
         }),
       ),
     ).toMatchObject({ code: 'NOT_FOUND', status: 404 });
