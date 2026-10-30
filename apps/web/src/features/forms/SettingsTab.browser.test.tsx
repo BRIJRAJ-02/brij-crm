@@ -224,7 +224,8 @@ describe('the owner of a form’s new records', () => {
       group(QUIET, 'Night shift', [false, false]),
     ]);
     const owner = page.getByRole('button', { name: /Owner$/ });
-    await expect.element(owner).toHaveTextContent('Ada Lovelace');
+    // The chosen teammate shows with their avatar, so the name is matched on its own.
+    await expect.element(owner.getByText('Ada Lovelace', { exact: true })).toBeVisible();
     await expect.element(page.getByText('For new records only.')).toBeVisible();
 
     await owner.click();
@@ -270,7 +271,7 @@ describe('the owner of a form’s new records', () => {
     const list = page.getByRole('listbox');
     await expect.element(list).toBeVisible();
     await userEvent.keyboard('{Home}{ArrowDown}{Enter}');
-    await expect.element(owner).toHaveTextContent('Ada Lovelace');
+    await expect.element(owner.getByText('Ada Lovelace', { exact: true })).toBeVisible();
     await expect.element(page.getByText('For new records only.')).toBeVisible();
   });
 
