@@ -464,6 +464,7 @@ export function OptionsEditor({
                       <>
                         <span className={styles.outcome}>
                           <Select
+                            savesOnPick
                             label={strings.outcomeOf(name)}
                             isLabelHidden
                             size="sm"
