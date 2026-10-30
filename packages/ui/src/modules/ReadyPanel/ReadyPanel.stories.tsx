@@ -96,3 +96,24 @@ export const Minimal: Story = {
   parameters: { crm: { screenshot: false } },
   args: { onShare: undefined },
 };
+
+/**
+ * Inside a dialog whose footer has the primary button: Copy steps down to secondary, and a tall preview (a whole
+ * phone) is cut at the slot's cap with its top in view.
+ */
+export const InDialog: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: {
+    copyVariant: 'secondary',
+    preview: <Skeleton lines={24} isStill />,
+  },
+  play: async ({ canvas }) => {
+    await settleAnimations();
+    await expect(canvas.getByRole('button', { name: 'Copy link' })).toHaveAttribute('data-variant', 'secondary');
+    const cap = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--size-column'));
+    const preview = canvas.getByRole('group', { name: 'Preview' });
+    await expect(preview.getBoundingClientRect().height).toBeLessThanOrEqual(cap + 1);
+    const top = preview.firstElementChild?.getBoundingClientRect().top ?? 0;
+    await expect(top).toBeGreaterThanOrEqual(preview.getBoundingClientRect().top);
+  },
+};

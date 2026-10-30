@@ -33,6 +33,11 @@ export interface ReadyPanelProps {
   readonly children?: ReactNode;
   /** The panel's own buttons at the end, usually one "Done" (the panel can be dismissed in one action). */
   readonly actions?: ReactNode;
+  /**
+   * Copy's emphasis. `primary` (the default) when Copy is the one thing to do; `secondary` inside a Modal whose
+   * footer already has the primary button (Done), so the dialog keeps one primary.
+   */
+  readonly copyVariant?: 'primary' | 'secondary';
 }
 
 /**
@@ -54,6 +59,7 @@ export function ReadyPanel({
   shareTitle,
   children,
   actions,
+  copyVariant = 'primary',
 }: ReadyPanelProps) {
   const titleId = useId();
   const linkId = useId();
@@ -92,7 +98,7 @@ export function ReadyPanel({
           label={strings.copyLink}
           announcement={strings.linkCopied}
           size="lg"
-          variant="primary"
+          variant={copyVariant}
           sourceRef={linkRef}
         />
         {canShare && (
