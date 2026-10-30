@@ -140,12 +140,11 @@ describe('a disabled option in a single choice', () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
-  it('is not chosen from the closed trigger by an arrow or a typed letter, controlled or not', async () => {
+  it('is not chosen from the closed trigger by a typed letter, controlled or not', async () => {
     for (const props of [{ value: 'small' }, { value: undefined, defaultValue: 'small' }]) {
       const { onChange, node } = single(props);
       await render(node);
       trigger().focus();
-      await userEvent.keyboard('{ArrowRight}');
       await userEvent.keyboard('L');
       await frame();
       expect(onChange).not.toHaveBeenCalled();
@@ -153,6 +152,29 @@ describe('a disabled option in a single choice', () => {
       expect(trigger().textContent).toContain('Small team');
       for (const unmount of mounted.splice(0)) unmount();
     }
+  });
+
+  it('is stepped past by the closed trigger’s arrows, both ways', async () => {
+    const { onChange, node } = single({ value: undefined, defaultValue: 'small' });
+    await render(node);
+    trigger().focus();
+    await userEvent.keyboard('{ArrowRight}');
+    await expect.poll(() => trigger().textContent).toContain('Just me');
+    expect(onChange).toHaveBeenLastCalledWith('solo');
+    await userEvent.keyboard('{ArrowLeft}');
+    await expect.poll(() => trigger().textContent).toContain('Small team');
+    expect(onChange).toHaveBeenLastCalledWith('small');
+    expect(onChange).toHaveBeenCalledTimes(2);
+    expect(listbox()).toBeNull();
+  });
+
+  it('is stepped past by the closed trigger’s arrow when controlled', async () => {
+    const { onChange, node } = single({ value: 'small' });
+    await render(node);
+    trigger().focus();
+    await userEvent.keyboard('{ArrowRight}');
+    await frame();
+    expect(onChange).toHaveBeenCalledExactlyOnceWith('solo');
   });
 
   it('is not chosen by a click', async () => {
@@ -175,6 +197,21 @@ describe('a disabled option in a single choice', () => {
     await frame();
     expect(onChange).not.toHaveBeenCalled();
     expect(listbox()).not.toBeNull();
+  });
+
+  it('keeps what was chosen when Enter lands on it with the search on, controlled or not', async () => {
+    for (const props of [{ value: 'small' }, { value: undefined, defaultValue: 'small' }]) {
+      const { onChange, node } = single({ ...props, isSearchable: true });
+      await render(node);
+      await arrowOntoDisabled();
+      expectAnnouncedDisabled();
+      await userEvent.keyboard('{Enter}');
+      await frame();
+      expect(onChange).not.toHaveBeenCalled();
+      expect(listbox()).not.toBeNull();
+      expect(trigger().textContent).toContain('Small team');
+      for (const unmount of mounted.splice(0)) unmount();
+    }
   });
 });
 

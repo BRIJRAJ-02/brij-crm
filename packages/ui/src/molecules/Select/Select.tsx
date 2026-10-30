@@ -1,4 +1,13 @@
-import { use, useLayoutEffect, useRef, useState, type KeyboardEventHandler, type ReactNode, type Ref } from 'react';
+import {
+  use,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type KeyboardEventHandler,
+  type ReactNode,
+  type Ref,
+} from 'react';
 import {
   Autocomplete,
   Button as AriaButton,
@@ -319,6 +328,23 @@ export function Select({
   // Without a `value`, the Select keeps its own, so a refused choice (a disabled option) never changes it: React
   // Aria's own uncontrolled value would take any key its trigger's arrows or typeahead land on.
   const [own, setOwn] = useState<string | null>(defaultValue ?? null);
+  // The last key pressed in the field and whether the list is open, so a closed trigger's arrow that lands on a
+  // disabled option steps past it (as React Aria did when it skipped one) where its typeahead is only refused.
+  const rootRef = useRef<HTMLDivElement>(null);
+  const lastKey = useRef('');
+  const isOpenNow = useRef(defaultOpen ?? false);
+  useEffect(() => {
+    const root = rootRef.current;
+    if (root === null) return;
+    // Captured on the field itself, so it is known before React Aria's own handler on the trigger sets the value.
+    const remember = (event: globalThis.KeyboardEvent) => {
+      lastKey.current = event.key;
+    };
+    root.addEventListener('keydown', remember, true);
+    return () => {
+      root.removeEventListener('keydown', remember, true);
+    };
+  }, [isReadOnly]);
   const current = isMultiple ? null : value === undefined ? own : value;
   const chosen = items.find((item) => item.id === current);
   // Every chosen id: the one in a single choice, all of them in a multiple one.
@@ -423,6 +449,27 @@ export function Select({
   );
   // Grouped options: those with no group first, then a headed section per group, in the order they come.
   const groups = [...new Set(options.flatMap((item) => (item.group === undefined ? [] : [item.group])))];
+  const special = options.filter((item) => item.id === CLEAR || item.id === CREATE);
+  const ungrouped = options.filter(
+    (item) => item.group === undefined && item.isApart !== true && item.id !== CLEAR && item.id !== CREATE,
+  );
+  const apart = options.filter((item) => item.group === undefined && item.isApart === true);
+  // The options in the list's own order, as its keyboard walks them.
+  const listed =
+    groups.length === 0
+      ? options
+      : [
+          ...ungrouped,
+          ...groups.flatMap((group) => options.filter((item) => item.group === group)),
+          ...apart,
+          ...special,
+        ];
+  // The next option after `refused` that can be chosen, the way an arrow went, if any.
+  const stepPast = (refused: string, step: 1 | -1) => {
+    const at = listed.findIndex((item) => item.id === refused);
+    const ahead = step === 1 ? listed.slice(at + 1) : listed.slice(0, Math.max(at, 0)).reverse();
+    return ahead.find((item) => item.id !== CLEAR && item.id !== CREATE && !disabledKeys.includes(item.id))?.id;
+  };
   const grouped =
     groups.length === 0 ? undefined : (
       <ListBox
@@ -430,11 +477,7 @@ export function Select({
         className={styles.list}
         renderEmptyState={() => <span className={styles.empty}>{emptyText}</span>}
       >
-        {options
-          .filter(
-            (item) => item.group === undefined && item.isApart !== true && item.id !== CLEAR && item.id !== CREATE,
-          )
-          .map(option)}
+        {ungrouped.map(option)}
         {groups.map((group) => (
           <ListBoxSection key={group} id={`group:${group}`} className={styles.section}>
             <Header className={styles.groupHeading}>{group}</Header>
@@ -442,8 +485,8 @@ export function Select({
           </ListBoxSection>
         ))}
         {/* A choice set apart, then Clear and Create, last, as in an ungrouped list. */}
-        {options.filter((item) => item.group === undefined && item.isApart === true).map(option)}
-        {options.filter((item) => item.id === CLEAR || item.id === CREATE).map(option)}
+        {apart.map(option)}
+        {special.map(option)}
       </ListBox>
     );
 
@@ -482,6 +525,7 @@ export function Select({
 
   return (
     <AriaSelect
+      ref={rootRef}
       className={styles.root}
       data-size={size}
       data-variant={variant}
@@ -501,6 +545,7 @@ export function Select({
       {...(autoFocus ? { autoFocus: true } : {})}
       // Each opening searches afresh (from the key that opened a cell's list, when one did).
       onOpenChange={(isOpen) => {
+        isOpenNow.current = isOpen;
         if (!isOpen) setQuery(defaultSearch ?? '');
         onOpenChange?.(isOpen);
       }}
@@ -519,9 +564,20 @@ export function Select({
           return;
         }
         const id = next === CLEAR || next === null ? null : String(next);
-        if (items.some((item) => item.isDisabled === true && item.id === id && id !== current)) return;
-        setOwn(id);
-        onChange?.(id);
+        const isRefused =
+          id !== null && items.some((item) => item.isDisabled === true && item.id === id && id !== current);
+        if (!isRefused) {
+          setOwn(id);
+          onChange?.(id);
+          return;
+        }
+        // A closed trigger's arrow steps past a disabled option to the next one it can choose; anything else that
+        // lands on one (its typeahead) is refused, and the value stays.
+        const arrow = lastKey.current === 'ArrowRight' ? 1 : lastKey.current === 'ArrowLeft' ? -1 : undefined;
+        const stepped = arrow === undefined || isOpenNow.current ? undefined : stepPast(id, arrow);
+        if (stepped === undefined) return;
+        setOwn(stepped);
+        onChange?.(stepped);
       }}
     >
       {!isLabelHidden && <FieldLabel label={label} aside={labelAside} info={info} isDisabled={isDisabled} />}
