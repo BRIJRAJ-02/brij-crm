@@ -266,6 +266,7 @@ export function Table<T>({
                   data-size={column.size}
                   data-tone={column.tone}
                   data-row-tone={getRowTone?.(item.row)}
+                  data-lead={(layout === 'even' && column.isRowHeader === true) || undefined}
                   data-gutter-handle={(handleInGutter && column.id === firstColumnId) || undefined}
                 >
                   {handleInGutter && column.id === firstColumnId && (

@@ -47,8 +47,7 @@ export const teamWeekStrings = {
     const m = whole % 60;
     return `UTC${sign}${String(h)}${m === 0 ? '' : `:${String(m).padStart(2, '0')}`}`;
   },
-  otherSchedules: (count: number) =>
-    count === 1 ? '1 page uses another schedule' : `${String(count)} pages use other schedules`,
+  otherSchedules: (count: number) => (count === 1 ? '1 other schedule' : `${String(count)} other schedules`),
   off: 'Off',
   away: 'Away',
   thisWeekOnly: 'this week only',
@@ -71,14 +70,26 @@ export const teamWeekStrings = {
   copyTitle: (rows: readonly { readonly name: string }[]) =>
     rows.length === 1
       ? `Copy ${rows[0]?.name ?? ''}’s week to next week?`
-      : `Copy ${teamWeekStrings.people(rows.length)}’s weeks to next week?`,
-  copyBody: (rows: readonly { readonly name: string }[], range: string) =>
-    `This replaces ${rows.length === 1 ? `${rows[0]?.name ?? ''}’s hours` : `the hours of ${teamWeekStrings.people(rows.length)}`} for ${range} with this week’s. Days on usual hours this week are on usual hours next week too.`,
+      : `Copy this week to next week for ${teamWeekStrings.people(rows.length)}?`,
+  copyBody: (rows: readonly { readonly name: string }[], range: string, isPartial: boolean) =>
+    `This replaces ${rows.length === 1 ? `${rows[0]?.name ?? ''}’s hours` : `the hours of ${teamWeekStrings.namesOf(rows)}`} for ${range} with this week’s. Days on usual hours this week are on usual hours next week too.${isPartial ? ' People not shown here keep their hours.' : ''}`,
+  /** "Ada Lovelace, Sam Lee and 3 more": who a copy covers, named. */
+  namesOf: (rows: readonly { readonly name: string }[]) => {
+    const named = rows.slice(0, 2).map((row) => row.name);
+    const rest = rows.length - named.length;
+    return rest > 0 ? `${named.join(', ')} and ${String(rest)} more` : named.join(' and ');
+  },
   copyAction: 'Copy week',
-  copied: (rows: readonly { readonly name: string }[]) =>
-    rows.length === 1
-      ? `${rows[0]?.name ?? ''}’s week copied to next week.`
-      : `${teamWeekStrings.people(rows.length)}’s weeks copied to next week.`,
+  copied: (rows: readonly { readonly name: string }[], changed: number) =>
+    changed === 0
+      ? 'Next week already matched this week.'
+      : rows.length === 1
+        ? `${rows[0]?.name ?? ''}’s week copied to next week.`
+        : `Copied to next week for ${teamWeekStrings.people(changed)}.`,
+  /** On a row the reader may not change, beside rows they may. */
+  viewOnly: 'View only',
+  /** Between the quiet extras after a person's hours. */
+  metaSeparator: ' · ',
   usualTitle: (name: string | undefined) => (name === undefined ? 'Set usual hours' : `Set ${name}’s usual hours`),
   usualFor: 'People',
   usualForPlaceholder: 'Choose people…',

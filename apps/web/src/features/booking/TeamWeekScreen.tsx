@@ -119,15 +119,17 @@ function dayWords(date: string, locale: string, style: 'short' | 'long'): string
   ).format(new Date(Date.UTC(year, month - 1, day)));
 }
 
-/** The week's days as the grid heads them: weekday beside date, today marked, the weekend quiet. */
-function weekDays(monday: string, locale: string, today: string): TeamWeekDayColumn[] {
-  return weekDates(monday).map((date, index) => ({
+/**
+ * The week's days as the grid heads them: weekday beside date, today marked, and a day nobody works quiet (from the
+ * week's own totals, not the calendar: a salon's Saturday is its busiest day).
+ */
+function weekDays(monday: string, locale: string, today: string, footer?: Week['footer']): TeamWeekDayColumn[] {
+  return weekDates(monday).map((date) => ({
     id: date,
     label: dayWords(date, locale, 'short'),
     ...dayParts(date, locale),
     isToday: date === today,
-    // Saturday and Sunday: fewest work then, so their columns sit a step back (Motion's and Aboard's weekends).
-    isQuiet: index >= 5,
+    isQuiet: footer?.find((total) => total.date === date)?.working === 0,
   }));
 }
 
@@ -198,6 +200,12 @@ function cellOf(row: TeamWeekRow, day: TeamWeekDay, locale: string): TeamWeekCel
     lines,
     label: words.cellLabel(long, row.name, day.source === 'override' ? `${spoken}, ${words.thisWeekOnly}` : spoken),
   };
+}
+
+/** A person's quiet extras after their hours, joined ("UTC+5:30 · View only"), or nothing. */
+function badgeOf(parts: readonly (string | undefined)[]): { readonly badge?: string } {
+  const shown = parts.filter((part): part is string => part !== undefined);
+  return shown.length === 0 ? {} : { badge: shown.join(words.metaSeparator) };
 }
 
 /** Time off's reason in words, as Availability's Time off section says it. */
@@ -300,16 +308,22 @@ function Loaded({
   const go = (next: string) => void navigate({ href: teamWeekHref(slug, next, query) });
   const viewerOffset = offsetMinutes(zone, week);
   const dates = weekDates(week);
-  const days = weekDays(week, locale, todayIn(zone));
+  const days = weekDays(week, locale, todayIn(zone), shown?.footer);
   const rowOf = (memberId: string) => shown?.rows.find((row) => row.memberId === memberId);
   const isLatest = shown !== undefined && week >= shown.latest;
+  const anyChangeable = (shown?.rows ?? []).some((row) => row.canChange);
   const people: TeamWeekPerson[] = useMemo(
     () =>
       (shown?.rows ?? []).map((row) => ({
         id: row.memberId,
         name: row.name,
         meta: words.hours(row.weekMinutes),
-        ...(row.offsetMinutes === viewerOffset ? {} : { badge: words.offset(row.offsetMinutes) }),
+        // The zone's offset where it differs from the reader's, and "View only" on a row the reader may not change
+        // beside rows they may, since its days are words rather than blocks.
+        ...badgeOf([
+          row.offsetMinutes === viewerOffset ? undefined : words.offset(row.offsetMinutes),
+          !row.canChange && !isPast && anyChangeable ? words.viewOnly : undefined,
+        ]),
         ...(row.otherSchedules === 0
           ? {}
           : {
@@ -345,12 +359,14 @@ function Loaded({
         cells: row.days.map((day) => cellOf(row, day, locale)),
         isEditable: row.canChange && !isPast,
       })),
-    [shown, locale, viewerOffset, isPast, isLatest, slug, onCopy, onUsualFor],
+    [shown, locale, viewerOffset, isPast, isLatest, anyChangeable, slug, onCopy, onUsualFor],
   );
   const anyEditable = people.some((person) => person.isEditable);
   // Copy week from the toolbar: everyone on this page the reader may change, one confirm for all (Deputy's and
   // 7shifts' Copy week); a row's menu still copies one person.
-  const copyRows = isPast || isLatest ? [] : (shown?.rows ?? []).filter((row) => row.canChange);
+  const copyRows = (shown?.rows ?? []).filter((row) => row.canChange);
+  // Who the copy leaves out: people not loaded yet, or filtered out by the search.
+  const copyIsPartial = query !== '' || (state.status === 'ready' && state.week.nextCursor !== undefined);
   const legend: { readonly items: readonly TeamWeekLegendItem[]; readonly hint?: string } = {
     items: [
       { tone: 'usual', label: words.legendUsual },
@@ -358,7 +374,7 @@ function Loaded({
       { tone: 'off', label: words.off },
       { tone: 'away', label: words.away },
     ],
-    ...(isPast ? { hint: words.readOnlyWeek } : anyEditable ? { hint: words.explain } : {}),
+    ...(anyEditable ? { hint: words.explain } : {}),
   };
   const footer =
     shown === undefined
@@ -438,7 +454,7 @@ function Loaded({
             onChange={onQuery}
           />
           {copyRows.length > 0 && (
-            <Button variant="secondary" icon="copy" onPress={() => onCopy(copyRows)}>
+            <Button variant="secondary" icon="copy" isDisabled={isPast || isLatest} onPress={() => onCopy(copyRows)}>
               {words.copyAll}
             </Button>
           )}
@@ -461,6 +477,7 @@ function Loaded({
     ) : (
       // The page's gutter, as every full width page has it (Members, Bookings' list).
       <PageColumn>
+        {isPast && <Callout tone="info">{words.readOnlyWeek}</Callout>}
         <TeamWeek
           label={words.grid(range)}
           personLabel={words.person}
@@ -514,17 +531,23 @@ function Loaded({
             {body}
             <CopyWeekModal
               rows={copying}
+              isPartial={copyIsPartial}
               range={rangeWords(plusDays(week, 7), locale)}
               onClose={() => onCopy(undefined)}
               onCopy={async (rows) => {
                 if (store === undefined) return;
                 try {
-                  await store.copyWeek(slug, {
-                    memberIds: rows.map((row) => row.memberId),
-                    fromWeekStart: week,
-                    toWeekStart: plusDays(week, 7),
-                  });
-                  toast('success', words.copied(rows));
+                  // One write takes at most TEAM_WEEK.bulkMax people, so a longer roster goes in turns.
+                  const ids = rows.map((row) => row.memberId);
+                  let changed = 0;
+                  for (let start = 0; start < ids.length; start += TEAM_WEEK.bulkMax) {
+                    changed += await store.copyWeek(slug, {
+                      memberIds: ids.slice(start, start + TEAM_WEEK.bulkMax),
+                      fromWeekStart: week,
+                      toWeekStart: plusDays(week, 7),
+                    });
+                  }
+                  toast('success', words.copied(rows, changed));
                   onCopy(undefined);
                 } catch (error) {
                   toast('danger', `${words.failedSave} ${isDataError(error) ? error.message : words.somethingWrong}`);
@@ -631,11 +654,14 @@ function DayEditor({
  */
 function CopyWeekModal({
   rows,
+  isPartial,
   range,
   onClose,
   onCopy,
 }: {
   readonly rows: readonly TeamWeekRow[] | undefined;
+  /** Some people aren't on the page (not loaded, or searched out), so the copy says it leaves them alone. */
+  readonly isPartial: boolean;
   readonly range: string;
   readonly onClose: () => void;
   readonly onCopy: (rows: readonly TeamWeekRow[]) => Promise<void>;
@@ -673,7 +699,7 @@ function CopyWeekModal({
         </>
       }
     >
-      {words.copyBody(asked, range)}
+      {words.copyBody(asked, range, isPartial && asked.length > 1)}
     </Modal>
   );
 }

@@ -107,8 +107,11 @@
   }
 
   .cell {
+    /* A cell's side padding, which content that runs to the cell's edges (a band across days) reads. */
+    --table-cell-inline: var(--space-8);
+
     block-size: var(--size-row);
-    padding-inline: var(--space-8);
+    padding-inline: var(--table-cell-inline);
     border-block-end: var(--border-width-hairline) solid var(--border-subtle);
     outline: none;
   }
@@ -241,12 +244,32 @@
      keeps a narrow column's width, since the frame scrolls there anyway. */
   .frame[data-layout='even'] {
     container-type: inline-size;
+    /* Keyboard scrolling stops a focused cell clear of the names held at the start on a phone. */
+    scroll-padding-inline-start: calc(var(--size-column-narrow) + var(--space-32));
+  }
+
+  /* The names hold the start edge (below), so only the end fades. */
+  .frame[data-layout='even'][data-fade='start'] {
+    mask-image: none;
+  }
+
+  .frame[data-layout='even'][data-fade='both'] {
+    mask-image: linear-gradient(to right, var(--surface) calc(100% - var(--space-24)), transparent);
   }
 
   @container (inline-size < 480px) {
     .root[data-layout='even'] {
       --table-lead: calc(var(--size-column-narrow) + var(--space-32));
       --table-shared-min: var(--size-column-narrow);
+    }
+
+    /* The names stay in view while the days scroll under them. */
+    .column[data-lead],
+    .cell[data-lead] {
+      position: sticky;
+      z-index: var(--z-raised);
+      inset-inline-start: 0;
+      background: var(--surface);
     }
   }
 
@@ -262,7 +285,7 @@
 
   /* A quiet column (a weekend): the whole column a step off the page. */
   .column[data-tone='quiet'],
-  .cell[data-tone='quiet'] {
+  .row:not([data-selected], [data-hovered]) > .cell[data-tone='quiet'] {
     background: var(--surface-subtle);
   }
 

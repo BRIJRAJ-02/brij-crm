@@ -40,7 +40,11 @@ The references (Mobbin, read again for the owner's "better UI" pass, 30 October 
 
 ## States
 
-Usual (the grey tag's surface), this week only (the blue tag's surface and the dot), off (a dashed control edge, secondary text), away (the yellow tag's surface and text, joined across days), today, the weekend, hover (pointer only: a control's edge appears), focus (the focus ring, above a joined neighbour), no change on press (rule 8), read only (text), loading, empty. Every text colour is a token that meets 4.5:1 in both themes (the tag tokens carry their own pairs). Below 480px of its container (a phone) the picture gives its room to the name, Table narrows the name column and the week scrolls sideways.
+Editable: usual (the grey tag's surface with a `border-subtle` hairline), this week only (the blue tag's surface and the dot), off (a dashed control edge, secondary text), away (the yellow tag's surface and text, joined across days through Table's `--table-cell-inline` padding). Read only (a past week, a See only row): the same words with no block, so a filled block always means "select to change" (Away keeps its band), and the screen says "View only" after that person's hours. today, the weekend, hover (pointer only: a control's edge appears), focus (the focus ring, above a joined neighbour), no change on press (rule 8), read only (text), loading, empty. Every text colour is a token that meets 4.5:1 in both themes (the tag tokens carry their own pairs). Below 480px of its container (a phone) the picture gives its room to the name, Table narrows the name column and the week scrolls sideways.
+
+Rows are taller than Table's 34px (a 24px picture over two lines, the blocks `size-input` high with `space-6` above and below), on purpose: the owner found 34px rows cramped here.
+
+Today's date circle repeats WeekCalendar's look at `size-chip` rather than its `size-control`, since it sits in a 36px table header beside the weekday rather than over it; the two stay separate until a third use earns a shared DayNumber.
 
 ## Keyboard
 

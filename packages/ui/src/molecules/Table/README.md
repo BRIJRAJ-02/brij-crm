@@ -33,7 +33,7 @@ New. Settings lists (#23, #25, #34, #35, #42) are short and need columns, a row 
 
 ## States
 
-Loading (skeletons), empty, rows, hover (pointer only), focus (row and cell), reorderable (a handle per row; the held row fades, an accent line marks where it lands, `Highlight` in forced colours).
+Loading (skeletons), empty, rows, hover (pointer only), focus (row and cell), reorderable (a handle per row; the held row fades, an accent line marks where it lands, `Highlight` in forced colours). Even layout: the current column (link coloured header over a thick accent line), quiet columns (`surface-subtle`, only on rows at rest, so hover and selection still show), a total row (a control's edge above, no hover), and on a phone the row header held at the start edge while the rest scroll, with only the end fading.
 
 A table wider than its slot (a phone) scrolls sideways in its own frame, never the page around it (21 October 2026). Focus rings are inset, so the frame never clips one.
 

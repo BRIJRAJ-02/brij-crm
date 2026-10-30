@@ -129,7 +129,7 @@ describe('the Team week', () => {
     await expect.element(page.getByRole('grid', { name: /^Roster, / })).toBeVisible();
     await expect.element(page.getByRole('button', { name: SAM_TUESDAY })).toBeVisible();
     await expect.element(page.getByText('36 h · UTC+5:30')).toBeVisible();
-    await expect.element(page.getByText('2 pages use other schedules')).toBeVisible();
+    await expect.element(page.getByText('2 other schedules')).toBeVisible();
     // See only: Priya's cells are text, with Away read out.
     expect(document.querySelectorAll('button[aria-label*="Priya Shah"]')).toHaveLength(0);
     await expect.element(page.getByText('Wednesday 4 November, Priya Shah: Away')).toBeInTheDocument();
@@ -205,7 +205,7 @@ describe('the Team week', () => {
   it('copies everyone the reader may change from the toolbar, after asking', async () => {
     const { teamWeek } = await render();
     await page.getByRole('button', { name: 'Copy to next week' }).click();
-    await expect.element(page.getByRole('dialog', { name: 'Copy 2 people’s weeks to next week?' })).toBeVisible();
+    await expect.element(page.getByRole('dialog', { name: 'Copy this week to next week for 2 people?' })).toBeVisible();
     await page.getByRole('button', { name: 'Copy week' }).click();
     expect(teamWeek.copyWeek).toHaveBeenCalledWith('acme', {
       memberIds: [ME, SAM],
