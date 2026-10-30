@@ -440,6 +440,9 @@ function emailTask(options: JobRunnersOptions, email: NonNullable<JobRunnersOpti
   };
 }
 
+/** The priority of a cut off's own next try on the light lane: behind priority 0. */
+const CUTOFF_RETRY_PRIORITY = 1;
+
 /**
  * The cut off task: one try, told which it is. `runCutOff` logs its own
  * failure with ids only; a `retry` is queued again here under the row's key
@@ -465,6 +468,8 @@ function cutOffTask(options: JobRunnersOptions, cutOff: NonNullable<JobRunnersOp
         ...(helpers.job.key === null ? {} : { jobKey: helpers.job.key, jobKeyMode: 'replace' as const }),
         runAt: result.runAt,
         maxAttempts: helpers.job.max_attempts,
+        // Behind what a person is waiting on (emails, notices: priority 0), as the calendar's polls are.
+        priority: CUTOFF_RETRY_PRIORITY,
       });
     } catch (error) {
       failure = error instanceof Error ? error.name : 'unknown';

@@ -29,6 +29,7 @@ import {
   CUTOFF_TASK,
   CUTOFF_WINDOW_MS,
   cutOffTask,
+  nextTryAt,
   REMOVED,
   runCutOff,
   type CutOffDeps,
@@ -137,6 +138,13 @@ describe('the durable cut off (late trap #41)', () => {
       runAt: new Date(1_000 + CUTOFF_DELAY_MS),
     });
     expect(CUTOFF_WINDOW_MS).toBe(REALTIME_TOKEN_SECONDS * 1_000);
+    // The next try: e^n seconds, capped at five minutes, clamped to the hour's end, and never under a second on.
+    const start = Date.parse(at);
+    const end = start + CUTOFF_WINDOW_MS;
+    expect(nextTryAt(1, at, start).getTime()).toBe(Math.trunc(start + Math.exp(1) * 1_000));
+    expect(nextTryAt(9, at, start).getTime()).toBe(start + CUTOFF_MAX_WAIT_MS);
+    expect(nextTryAt(9, at, end - 60_000).getTime()).toBe(end);
+    expect(nextTryAt(9, at, end - 500).getTime()).toBe(end + 500);
     // A row naming no member queues nothing.
     expect(cutOffTask(workspaceId, 8, ['nobody'], at, 1_000)).toBeUndefined();
   });
@@ -190,6 +198,15 @@ describe('the durable cut off (late trap #41)', () => {
       level: 'warn',
       fields: { reason: 'centrifugo', users: 1 },
     });
+    // Many users: closed in batches, and a batch with a failure stops the rest until the next try.
+    const many = await Promise.all(Array.from({ length: 45 }, () => member(workspaceId, true)));
+    const batched = deps({ unsubscribe: false, disconnect: false });
+    const crowd = { ...payload, memberIds: many.map((m) => m.memberId) };
+    expect((await runCutOff(batched, crowd, third)).outcome).toBe('retry');
+    expect(batched.disconnected).toHaveLength(20);
+    const all = deps({ unsubscribe: false });
+    expect(await runCutOff(all, crowd, third)).toEqual({ outcome: 'disconnected' });
+    expect(new Set(all.disconnected.map((d) => d.userId)).size).toBe(45);
     // A disconnect that throws is a refusal too: tried again, not thrown.
     const throwing = { ...deps({ unsubscribe: false }), disconnectUser: () => Promise.reject(new Error('down')) };
     expect((await runCutOff(throwing, payload, third)).outcome).toBe('retry');

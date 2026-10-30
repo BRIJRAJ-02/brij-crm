@@ -18,6 +18,9 @@
 // the members' tokens still hold. That last run finds every token issued
 // before the removal run out and ends as `lapsed`, at error when tries failed.
 // Graphile's own tries are left for a re-queue that fails (the database gone).
+// The relay queueing the row again (published again after a restart) replaces
+// a waiting retry and starts the count over: at most a few seconds more
+// before the fallback, never past the hour, which `at` still bounds.
 // The relay still tries the cut at once, the fast path, and this task is the
 // guarantee. Logs carry ids and counts only.
 import { workspaceChannel } from '@crm/contracts';
@@ -54,6 +57,9 @@ const MAX_TRIES = 100;
 
 /** The first try that falls back to closing the users' connections when the unsubscribe is refused. */
 export const CUTOFF_FALLBACK_FROM = 3;
+
+/** How many connection closes go to Centrifugo at once in the fallback. */
+const DISCONNECT_BATCH = 20;
 
 /** How long after the relay's own try the task first runs: the fast path usually landed by then. */
 export const CUTOFF_DELAY_MS = 15_000;
@@ -145,6 +151,21 @@ export function nextTryAt(tries: number, at: string, now: number): Date {
 }
 
 /**
+ * Closes each user's connections, `DISCONNECT_BATCH` at a time, stopping at
+ * the first batch with a failure (a struggling Centrifugo gets no more, and
+ * the next try sends them all again: a close is harmless to repeat). True
+ * when every one landed.
+ */
+async function disconnectAll(disconnectUser: DisconnectUser, userIds: readonly string[]): Promise<boolean> {
+  for (let start = 0; start < userIds.length; start += DISCONNECT_BATCH) {
+    const batch = userIds.slice(start, start + DISCONNECT_BATCH);
+    const closed = await Promise.all(batch.map((userId) => disconnectUser(userId, REMOVED).catch(() => false)));
+    if (!closed.every(Boolean)) return false;
+  }
+  return true;
+}
+
+/**
  * One try of a cut off. Resolves `retry` with the next try's time when
  * neither the unsubscribe nor the fallback landed, or the database read
  * failed; otherwise with how it ended.
@@ -198,8 +219,7 @@ export async function runCutOff(deps: CutOffDeps, payload: unknown, attempt: Cut
     // drops their tabs in every workspace for a moment, so a brief refusal is only tried again.
   }
   if (tryNumber < CUTOFF_FALLBACK_FROM) return failed('centrifugo', { users: userIds.length });
-  const closed = await Promise.all(userIds.map((userId) => deps.disconnectUser(userId, REMOVED).catch(() => false)));
-  if (closed.every(Boolean)) {
+  if (await disconnectAll(deps.disconnectUser, userIds)) {
     deps.log.warn('realtime.cutoff', { ...fields, users: userIds.length, outcome: 'disconnected' });
     return { outcome: 'disconnected' };
   }
