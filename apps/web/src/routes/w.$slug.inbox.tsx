@@ -1,6 +1,6 @@
 import { isDataError } from '@crm/data';
 import { createFileRoute, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
-import { inboxSearch, notificationKind } from '../features/inbox/entries.ts';
+import { inboxSearch, notificationKind } from '../features/inbox/search.ts';
 import { InboxScreen } from '../features/inbox/InboxScreen.tsx';
 import { strings } from '../features/inbox/strings.ts';
 import { failedPage, missingPage, pendingPage } from '../features/workspace/ObjectScreen.tsx';

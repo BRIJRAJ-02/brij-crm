@@ -1,6 +1,7 @@
 import type { MemberSummary, ShownThread } from '@crm/data';
 import { describe, expect, it } from 'vitest';
-import { isThreadParam, toThreadItem } from './entries.ts';
+import { isThreadParam } from '../records/params.ts';
+import { toThreadItem } from './entries.ts';
 
 const ADA = '11111111-1111-4111-8111-111111111111';
 const GONE = '22222222-2222-4222-8222-222222222222';
