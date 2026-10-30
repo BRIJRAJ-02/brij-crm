@@ -193,14 +193,6 @@
     animation: grow var(--duration-modal) var(--ease-out) var(--duration-hover) both;
   }
 
-  /* What was sent (spec 0058, AC-19): the answers read back in a sunken Card, the card's full width and read from
-     its left edge, so the thank you is a receipt rather than a blank. Only its place here: the box is Card's. */
-  .sent {
-    inline-size: 100%;
-    margin-block-start: var(--space-8);
-    text-align: start;
-  }
-
   /* What follows a confirmation: Send another, or Book now beside Stay here. */
   .again {
     display: flex;

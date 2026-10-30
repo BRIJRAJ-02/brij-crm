@@ -1,3 +1,4 @@
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { VisuallyHidden } from '../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import type { PublicForm } from '@crm/contracts/forms';
 import { Button } from '../atoms/Button/Button.tsx';
@@ -15,7 +16,7 @@ import {
   TIMEFIX_LOGO,
 } from './FormParts.tsx';
 import styles from './HostedForm.module.css';
-import { FormBooking } from './FormBooking.tsx';
+import type { FormBooking as EagerFormBooking } from './FormBooking.tsx';
 import type { HostedRemoveUpload, HostedUpload } from './files.ts';
 import { Question } from './Question.tsx';
 import {
@@ -26,6 +27,15 @@ import {
 } from './use-hosted-form.ts';
 
 export { FormLoading, FormMessage } from './FormParts.tsx';
+
+/**
+ * Sent, and on to book (FormBooking), in a chunk of its own: nobody sees it before they send, and the hosted page's
+ * first load has no room to spare (apps/web/.size-limit.js). It starts loading once the form is drawn and is kept
+ * once here, so by the time anyone presses Send it draws at once, and its heading can take focus in the same render;
+ * the lazy one only stands in if it hasn't arrived yet.
+ */
+const loadBooking = () => import('./FormBooking.tsx');
+const FormBooking = lazy(() => loadBooking().then((module) => ({ default: module.FormBooking })));
 export type { HostedFormMode, HostedSubmission, HostedSubmitOutcome } from './use-hosted-form.ts';
 
 /** Props for HostedForm. */
@@ -90,18 +100,25 @@ export function HostedForm({
     now,
   });
   const { words, preview } = state;
+  const [LoadedBooking, setLoadedBooking] = useState<typeof EagerFormBooking>();
+  useEffect(() => {
+    void loadBooking().then((module) => setLoadedBooking(() => module.FormBooking));
+  }, []);
+  const Booking = LoadedBooking ?? FormBooking;
   let body;
   if (state.isClosed) body = <FormClosed state={state} mode={mode} heading={refs.heading} />;
   else if (state.view.kind === 'booking') {
     body = (
-      <FormBooking
-        state={state}
-        mode={mode}
-        heading={refs.heading}
-        url={state.view.url}
-        seconds={state.view.seconds}
-        text={state.view.text}
-      />
+      <Suspense fallback={null}>
+        <Booking
+          state={state}
+          mode={mode}
+          heading={refs.heading}
+          url={state.view.url}
+          seconds={state.view.seconds}
+          text={state.view.text}
+        />
+      </Suspense>
     );
   } else if (state.view.kind === 'thanks')
     body = <FormThanks form={form} state={state} mode={mode} heading={refs.heading} />;
