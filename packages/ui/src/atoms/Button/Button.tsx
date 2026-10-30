@@ -17,7 +17,7 @@ import { TooltipKbdContext } from '../Tooltip/tooltip-kbd.ts';
 import { useFooterRole } from './footer-keys.ts';
 import styles from './Button.module.css';
 
-/** `secondary` (the default) for view controls and Cancel, `primary` for the one action that commits, `danger` for a control that starts a destructive action (Delete in a bar, Archive in settings), `danger-solid` for the final commit that destroys (Delete in a confirm), `ghost` for quiet and undo style actions, `ghost-danger` for a quiet icon button that deletes at once with an Undo (red only under the pointer or focus), `dashed` for "add a condition". */
+/** `secondary` (the default) for view controls and Cancel, `primary` for the one action that commits, `danger` for a control that starts a destructive action (Delete in a bar, Archive in settings), `danger-solid` for the final commit that destroys (Delete in a confirm), `ghost` for quiet and undo style actions, `ghost-danger` for a quiet icon button that deletes at once with an Undo (red only under the pointer or focus), `dashed` for "add a condition", `warning` for trouble that asks for a look (a Team day's issues), in the orange tag's colours. */
 export type ButtonVariant =
   'secondary' | 'primary' | 'danger' | 'danger-solid' | 'ghost' | 'ghost-danger' | 'dashed' | 'link' | 'warning';
 

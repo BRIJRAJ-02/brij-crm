@@ -57,6 +57,9 @@ export const Variants: Story = {
       <Button variant="ghost">Discard changes</Button>
       <Button variant="link">Sign out</Button>
       <Button variant="ghost-danger" icon="trash" label="Delete" />
+      <Button variant="warning" icon="triangle-alert" iconRight="chevron-down">
+        2 issues
+      </Button>
       <Button variant="danger" icon="trash">
         Delete record
       </Button>
@@ -413,6 +416,17 @@ export const FocusedDangerSolid: Story = {
   play: async ({ canvas, userEvent }) => {
     await userEvent.tab();
     const button = canvas.getByRole('button', { name: 'Delete 3 records' });
+    await expect(button).toHaveFocus();
+    await expect(getComputedStyle(button).outlineStyle).toBe('solid');
+  },
+};
+
+/** A warning button focused from the keyboard: its fill stays orange, so the 1px accent ring sits just outside it. */
+export const FocusedWarning: Story = {
+  args: { variant: 'warning', children: '2 issues', icon: 'triangle-alert' },
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.tab();
+    const button = canvas.getByRole('button', { name: '2 issues' });
     await expect(button).toHaveFocus();
     await expect(getComputedStyle(button).outlineStyle).toBe('solid');
   },

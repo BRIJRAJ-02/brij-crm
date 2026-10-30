@@ -46,11 +46,7 @@
     letter-spacing: var(--tracking-label-strong);
   }
 
-  /* A calendar head's day: booked in the link colour, free in the success colour, off quiet. */
-  .lead[data-tone='booked'] {
-    color: var(--link);
-  }
-
+  /* A calendar head's day: free in the success colour, off quieter still. */
   .lead[data-tone='free'] {
     color: var(--success);
   }

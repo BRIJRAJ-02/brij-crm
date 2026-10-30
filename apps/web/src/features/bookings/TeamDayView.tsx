@@ -112,6 +112,8 @@ export interface TeamDayViewProps {
   readonly members: readonly { readonly id: string; readonly name: string }[];
   /** Whether filters narrow the day (the empty state then offers to clear them). */
   readonly isFiltered: boolean;
+  /** Ordered by job title (Filter's order, AC-1438): the heads show each title, so the order explains itself. */
+  readonly isTitleOrder: boolean;
   readonly onClearFilters: () => void;
   /** Where the toolbar holds the day's issue count (AC-1436); null until it is drawn. */
   readonly issuesSlot: HTMLElement | null;
@@ -612,6 +614,7 @@ export function TeamDayView(props: TeamDayViewProps) {
     <>
       {issuesButton}
       <TeamDay
+        isTitleShown={props.isTitleOrder}
         label={strings.teamLabel(
           new Intl.DateTimeFormat(locale, { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' }).format(
             new Date(`${day}T12:00:00Z`),

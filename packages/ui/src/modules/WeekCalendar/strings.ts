@@ -6,7 +6,8 @@ export const strings = {
   dayLoading: (day: string) => `${day}, loading`,
   /**
    * A block's name: its title, its status when unusual, its time, who it is with, whether it was called off, and
-   * "Timefix booking" for one that came through Timefix (its mark says so on screen).
+   * last "Timefix booking" for one that came through Timefix (its mark says so on screen), so what changes is heard
+   * first on every arrow press.
    */
   blockName: (
     title: string,
@@ -18,11 +19,11 @@ export const strings = {
   ) =>
     [
       title,
-      ...(isTimefix === true ? ['Timefix booking'] : []),
       ...(status === undefined ? [] : [status]),
       time,
       ...(detail === undefined ? [] : [detail]),
       ...(isCancelled === true ? ['cancelled'] : []),
+      ...(isTimefix === true ? ['Timefix booking'] : []),
     ].join(', '),
   details: 'Details',
   more: (count: number) => `+${String(count)}`,

@@ -311,7 +311,8 @@
      just outside, past a 1px gap of the surface. */
   .root[data-variant='primary'][data-focus-visible],
   .root[data-variant='danger'][data-focus-visible],
-  .root[data-variant='danger-solid'][data-focus-visible] {
+  .root[data-variant='danger-solid'][data-focus-visible],
+  .root[data-variant='warning'][data-focus-visible] {
     outline: var(--border-width-hairline) solid var(--accent-line);
     outline-offset: var(--border-width-hairline);
   }

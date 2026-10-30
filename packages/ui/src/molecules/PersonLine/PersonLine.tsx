@@ -1,14 +1,16 @@
 import { Fragment, type ReactNode } from 'react';
 import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
-import { TruncatedText } from '../../atoms/TruncatedText/TruncatedText.tsx';
+import { Tooltip } from '../../atoms/Tooltip/Tooltip.tsx';
+import { SharedTooltipContext, TruncatedText } from '../../atoms/TruncatedText/TruncatedText.tsx';
 import styles from './PersonLine.module.css';
 import { strings } from './strings.ts';
 
 /**
  * How the line's first part reads: `quiet` (secondary text), `away` (time off, in the Away colour, strong), or a day's
- * state on a calendar's head: `booked` (the link colour), `free` (the success colour) and `off` (tertiary).
+ * state on a calendar's head: `free` (the success colour) and `off` (tertiary). Booked stays `quiet`: the link colour
+ * on words that can't be pressed would read as a link.
  */
-export type PersonLineTone = 'quiet' | 'away' | 'booked' | 'free' | 'off';
+export type PersonLineTone = 'quiet' | 'away' | 'free' | 'off';
 
 /** Props for PersonLine. */
 export interface PersonLineProps {
@@ -28,7 +30,10 @@ export interface PersonLineProps {
   readonly end?: ReactNode;
   /** Hidden from screen readers when the thing it heads already names the person in full (a calendar column). */
   readonly isDecorative?: boolean;
-  /** The pointer's tooltip: what a short line leaves out (a job title, an offset). Screen readers get it elsewhere. */
+  /**
+   * A tooltip over the name and line, for what a short line leaves out (the Team day's job title): the name first, so
+   * it also stands in for the name's own tooltip when that is cut. Screen readers get it from what the line heads.
+   */
   readonly hint?: string;
 }
 
@@ -48,34 +53,41 @@ export function PersonLine({
   hint,
 }: PersonLineProps) {
   const [first, ...rest] = meta;
+  const who = (
+    <span className={styles.who}>
+      <span className={styles.name}>
+        <TruncatedText>{name}</TruncatedText>
+      </span>
+      {first !== undefined && (
+        <span className={styles.meta}>
+          <span className={styles.lead} data-tone={tone}>
+            {first}
+          </span>
+          {rest.map((part) => (
+            <Fragment key={part}>
+              {strings.separator}
+              {part}
+            </Fragment>
+          ))}
+        </span>
+      )}
+    </span>
+  );
   return (
-    <span
-      className={styles.root}
-      data-size={size}
-      {...(hint === undefined ? {} : { title: hint })}
-      {...(isDecorative ? { 'aria-hidden': true } : {})}
-    >
+    <span className={styles.root} data-size={size} {...(isDecorative ? { 'aria-hidden': true } : {})}>
       <span className={styles.picture}>
         <Avatar name={name} id={id} size={size} isDecorative />
       </span>
-      <span className={styles.who}>
-        <span className={styles.name}>
-          <TruncatedText>{name}</TruncatedText>
-        </span>
-        {first !== undefined && (
-          <span className={styles.meta}>
-            <span className={styles.lead} data-tone={tone}>
-              {first}
-            </span>
-            {rest.map((part) => (
-              <Fragment key={part}>
-                {strings.separator}
-                {part}
-              </Fragment>
-            ))}
-          </span>
-        )}
-      </span>
+      {hint === undefined ? (
+        who
+      ) : (
+        // One tooltip for the whole: the name's own (when cut) would only repeat its first part.
+        <SharedTooltipContext value>
+          <Tooltip content={hint} isTextTrigger isTriggerShared>
+            {who}
+          </Tooltip>
+        </SharedTooltipContext>
+      )}
       {end !== undefined && <span className={styles.end}>{end}</span>}
     </span>
   );

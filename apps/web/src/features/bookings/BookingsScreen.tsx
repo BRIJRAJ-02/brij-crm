@@ -1526,6 +1526,7 @@ function WeekView(props: BookingsCalendarScreenProps) {
             actions={props.actions}
             toasts={toasts}
             isFiltered={search.members !== undefined || search.withBookings === true}
+            isTitleOrder={search.order === 'title'}
             members={team.members}
             onClearFilters={() => onSearch({ members: undefined, withBookings: undefined })}
             issuesSlot={issuesSlot}
