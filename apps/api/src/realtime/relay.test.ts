@@ -138,6 +138,7 @@ interface RelayOptions extends Partial<
     | 'selfDormant'
     | 'onWork'
     | 'cutOff'
+    | 'durableCutOff'
     | 'now'
   >
 > {
@@ -199,6 +200,7 @@ function relayTo(centrifugoUrl: string, options: RelayOptions = {}) {
     ...(options.selfDormant === undefined ? {} : { selfDormant: options.selfDormant }),
     ...(options.onWork === undefined ? {} : { onWork: options.onWork }),
     ...(options.cutOff === undefined ? {} : { cutOff: options.cutOff }),
+    ...(options.durableCutOff === undefined ? {} : { durableCutOff: options.durableCutOff }),
     ...(options.now === undefined ? {} : { now: options.now }),
   });
   started.push(relay);
@@ -1350,6 +1352,109 @@ describe('the relay plans each row for its workspace’s audience (spec 0007, mi
     await testQuery(ownerUrl, `select pg_notify('crm_outbox', $1)`, [workspaceId]);
     await expect.poll(() => centrifugo.seqs(workspaceId), WAIT).toEqual([1, 2, 3, 4]);
     expect(cut).toHaveLength(2);
+  });
+
+  it('queues the durable cut off for an access row before marking it, and sends the row again when that fails (late trap #41)', async () => {
+    const centrifugo = await fakeCentrifugo();
+    servers.push(centrifugo);
+    const workspaceId = await workspace();
+    const ada = await member(workspaceId);
+    await row(workspaceId, 1, 'access', [ada]);
+    await events(workspaceId, [2]);
+    const jobKey = `crm-cutoff:${workspaceId}:1`;
+    let queueDown = true;
+    let tries = 0;
+    // The relay's clock, jumped past the in memory retry's first wait below.
+    let skewMs = 0;
+    try {
+      const { warnings } = relayTo(centrifugo.url, {
+        now: () => Date.now() + skewMs,
+        durableCutOff: true,
+        // The fast path fails: the queued task is left to try again, so the relay keeps nothing in memory.
+        cutOff: () => {
+          tries += 1;
+          return Promise.reject(new Error('Centrifugo could not be reached.'));
+        },
+        // The queue refuses the first time: the access row stays unmarked, and the turn's retry sends it again.
+        wrap: (reader) => ({
+          ...reader,
+          queueTask: (task) => {
+            if (!queueDown) return reader.queueTask(task);
+            queueDown = false;
+            return Promise.reject(new Error('The queue is down.'));
+          },
+        }),
+      });
+      await expect.poll(() => unpublished(workspaceId), WAIT).toEqual([]);
+      expect(centrifugo.seqs(workspaceId)).toEqual([1, 2]);
+      // Row 1 went out twice (its idempotency key drops the repeat), the second time with its cut off queued.
+      const sent = centrifugo.calls.filter((call) => call.channel === `workspace:${workspaceId}`);
+      expect(sent.map((call) => call.size)).toEqual([1, 1, 1]);
+      expect(warnings.map((warning) => warning.message)).toContain(
+        'Reading or marking changes failed; retrying the workspace with backoff',
+      );
+      const queued = await testQuery<{ identifier: string; payload: unknown; max_attempts: number }>(
+        ownerUrl,
+        `select t.identifier, j.payload, j.max_attempts from graphile_worker._private_jobs j
+         join graphile_worker._private_tasks t on t.id = j.task_id where j.key = $1`,
+        [jobKey],
+      );
+      expect(queued).toEqual([
+        {
+          identifier: 'crm_realtime_cutoff',
+          payload: { workspaceId, memberIds: [ada], at: expect.any(String) as string },
+          max_attempts: 8,
+        },
+      ]);
+      await expect.poll(() => tries, WAIT).toBe(1);
+      await expect
+        .poll(() => warnings.find((warning) => warning.message.startsWith('Cutting removed members'))?.fields, WAIT)
+        .toMatchObject({ workspaceId, queued: true });
+      // Past the in memory retry's first wait, and a pass later, the relay hasn't tried again: the task owns it.
+      skewMs = 10_000;
+      await events(workspaceId, [3]);
+      await testQuery(ownerUrl, `select pg_notify('crm_outbox', $1)`, [workspaceId]);
+      await expect.poll(() => centrifugo.seqs(workspaceId), WAIT).toEqual([1, 2, 3]);
+      await expect.poll(() => unpublished(workspaceId), WAIT).toEqual([]);
+      expect(tries).toBe(1);
+    } finally {
+      await testQuery(ownerUrl, 'delete from graphile_worker._private_jobs where key = $1', [jobKey]);
+    }
+  });
+
+  it('marks the access row and keeps its cut off in memory when the queue keeps refusing (late trap #41)', async () => {
+    const centrifugo = await fakeCentrifugo();
+    servers.push(centrifugo);
+    const workspaceId = await workspace();
+    const ada = await member(workspaceId);
+    await row(workspaceId, 1, 'access', [ada]);
+    await events(workspaceId, [2]);
+    let queueTries = 0;
+    let tries = 0;
+    const { warnings } = relayTo(centrifugo.url, {
+      durableCutOff: true,
+      cutOff: () => {
+        tries += 1;
+        // Fails once, so the in memory retry has it, then lands.
+        return tries === 1 ? Promise.reject(new Error('Centrifugo could not be reached.')) : Promise.resolve();
+      },
+      wrap: (reader) => ({
+        ...reader,
+        queueTask: () => {
+          queueTries += 1;
+          return Promise.reject(new Error('The queue is down.'));
+        },
+      }),
+    });
+    // The workspace's later rows still go out, after a few failed turns.
+    await expect.poll(() => unpublished(workspaceId), WAIT).toEqual([]);
+    expect(centrifugo.seqs(workspaceId)).toEqual([1, 2]);
+    expect(queueTries).toBe(6);
+    expect(warnings.map((warning) => warning.message)).toContain(
+      'Queueing a durable cut off kept failing; it is kept in memory instead',
+    );
+    // Without the task, the relay tried the cut off again itself.
+    await expect.poll(() => tries, { timeout: 10_000, interval: 100 }).toBe(2);
   });
 
   it('forgets the audiences when it goes dormant, and reads them again after the wake', async () => {

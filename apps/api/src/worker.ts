@@ -26,6 +26,7 @@ import { errorFields, log } from './log.ts';
 import { captureFault, flush, heartbeat, metrics, MONITORING_FLUSH_MS, raiseIssue } from './monitoring/sentry.ts';
 import { createLagSample, createStatsReporter, relaySource } from './monitoring/stats.ts';
 import { createCentrifugoDisconnect, createCentrifugoPublisher } from './realtime/centrifugo.ts';
+import { CUTOFF_TASK, runCutOff, type CutOffTry } from './realtime/cutoff.ts';
 import { SIGNED_OUT } from './realtime/signed-out.ts';
 import { createRelay } from './realtime/relay.ts';
 import { onShutdown } from './shutdown.ts';
@@ -103,6 +104,25 @@ let lifecycle: Lifecycle | undefined;
 
 // Centrifugo's server API: the relay publishes through it and cuts removed people off (spec 0031, AC-817).
 const centrifugo = env.centrifugo === undefined ? undefined : createCentrifugoPublisher(env.centrifugo);
+// Centrifugo's disconnect by user, on the relay's key (spec 0033's signed out notice, and the cut off's fallback).
+const disconnect = env.centrifugo === undefined ? undefined : createCentrifugoDisconnect(env.centrifugo);
+// The durable cut off (late trap #41): with the relay and the jobs on, the relay queues `crm_realtime_cutoff` for
+// every `access` row it publishes and the light runner runs it, so a restart or a Centrifugo outage can't leave a
+// removed member hearing the workspace until their token runs out.
+const cutOff =
+  centrifugo === undefined || disconnect === undefined || !jobsOn
+    ? undefined
+    : (payload: unknown, attempt: CutOffTry) =>
+        runCutOff(
+          {
+            removedUserIds: (workspaceId, memberIds) => removedUserIds(systemScope(db, workspaceId), memberIds),
+            unsubscribe: centrifugo.unsubscribe,
+            disconnectUser: disconnect.disconnectUser,
+            log: reportingLog,
+          },
+          payload,
+          attempt,
+        );
 const relay =
   centrifugo === undefined
     ? undefined
@@ -129,6 +149,7 @@ const relay =
           const userIds = await removedUserIds(systemScope(db, workspaceId), memberIds);
           await centrifugo.unsubscribe(workspaceChannel(workspaceId), userIds);
         },
+        durableCutOff: cutOff !== undefined,
         log: reportingLog,
         // Only crm_worker may run crm_outbox_prune (spec 0007, milestone 3): on another login (where the jobs, and
         // so the daily cleanup, are off too) the outbox keeps every row until the login moves to crm_worker_user.
@@ -198,6 +219,7 @@ async function openWorker(hooks: {
       ...(jobTasks.email === undefined ? {} : { email: jobTasks.email }),
       notificationEmail: jobTasks.notificationEmail,
       schedulingNotice: jobTasks.schedulingNotice,
+      ...(cutOff === undefined ? {} : { cutOff }),
       // The daily cleanup (milestone 3): the outbox, the dead queue rows, then one maintenance job a workspace.
       daily: jobTasks.daily(opened),
     });
@@ -210,7 +232,7 @@ async function openWorker(hooks: {
         opened.sleepCheck({
           outbox: relay !== undefined,
           stuck: relay?.stuckWorkspaces() ?? [],
-          tasks: jobTasks.tasks,
+          tasks: cutOff === undefined ? jobTasks.tasks : [...jobTasks.tasks, CUTOFF_TASK],
         }),
       close: async () => {
         // The slices in hand finish their batch and hand their jobs back first.
@@ -238,9 +260,6 @@ if (jobsOn) {
     ...(env.WORKER_IDLE_SLEEP_SECONDS === 0 ? { never: true } : {}),
   });
 }
-
-// Centrifugo's disconnect by user, on the relay's key (spec 0033's signed out notice).
-const disconnect = env.centrifugo === undefined ? undefined : createCentrifugoDisconnect(env.centrifugo);
 
 const health = createWorkerServer({
   wakeSecret: env.WORKER_WAKE_SECRET,

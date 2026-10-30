@@ -91,6 +91,12 @@
 // more than one audience fails its turn rather than share one copy. A batch
 // holding a `views` row reads its views' facts first (the `facts` dep, spec
 // 0020), so a shared view's id goes out and a private one's goes coarse.
+//
+// Cut off (spec 0031, AC-817; late trap #41): once an `access` row went out,
+// the members it names who are removed lose the channel. With the jobs on,
+// the relay queues `crm_realtime_cutoff` (`cutoff.ts`) on its own connection
+// before marking the row, the durable guarantee, then tries the cut at once;
+// with them off, only the try at once, kept in memory and tried again.
 import { type ChangeEvent, workspaceChannel } from '@crm/contracts';
 import {
   AUDIENCES_NEED_CHANNELS,
@@ -102,6 +108,7 @@ import {
 import { PRUNE_BATCH, type OutboxReader, type OutboxRow } from '@crm/db';
 import { errorFields } from '../log.ts';
 import type { PublishBatch } from './centrifugo.ts';
+import { cutOffTask } from './cutoff.ts';
 import { createRelayStats, type RelayStats, type RelayStatsSnapshot } from './stats.ts';
 import { REALTIME_TOKEN_SECONDS } from './tokens.ts';
 
@@ -135,11 +142,20 @@ export interface RelayDeps {
   /**
    * Cuts off the members an `access` row names who are no longer in the
    * workspace (spec 0031, AC-817), once that row went out, so their open tabs
-   * stop hearing it. Best effort: a failure is logged and tried again after
-   * later passes while this relay publishes (late trap #41), and their
-   * subscription token runs out within the hour anyway.
+   * stop hearing it: the fast path. With `durableCutOff`, a failure is left to
+   * the queued task; without it, it is tried again after later passes while
+   * this relay publishes (late trap #41), and their subscription token runs
+   * out within the hour anyway.
    */
   readonly cutOff?: (workspaceId: string, memberIds: readonly string[]) => Promise<void>;
+  /**
+   * Whether the worker's runners run `crm_realtime_cutoff` (`cutoff.ts`): the
+   * relay then queues it on its own connection for every `access` row it
+   * published, before marking the row, so the cut off survives a restart and
+   * a Centrifugo outage (late trap #41). True only on a direct login in
+   * `crm_worker` with the runners on (default false).
+   */
+  readonly durableCutOff?: boolean;
   readonly log: RelayLog;
   /**
    * The safety poll's waits over a quiet spell, the last repeating (default
@@ -263,6 +279,11 @@ const PRUNE_SLOW_MS = 250;
 /** The first wait before a failed cut off is tried again, and the longest (late trap #41). */
 const CUT_RETRY_FIRST_MS = 2_000;
 const CUT_RETRY_MAX_MS = 5 * 60_000;
+/**
+ * Failed turns in a row (about 30 seconds of backoff at the defaults) after which a durable cut off that can't be
+ * queued is kept in memory instead, so the workspace's later rows go out.
+ */
+const QUEUE_GIVE_UP_FAILURES = 5;
 /** A subscription token's life: past it, a member not cut off has lost the channel anyway. */
 const CUT_RETRY_GIVE_UP_MS = REALTIME_TOKEN_SECONDS * 1_000;
 
@@ -324,6 +345,7 @@ export function createRelay(deps: RelayDeps): Relay {
   const stats = deps.stats ?? createRelayStats({ now: clock });
   const statsEveryMs = deps.statsEveryMs ?? 60_000;
   const selfDormant = deps.selfDormant ?? true;
+  const durableCutOff = deps.durableCutOff ?? false;
   const { log } = deps;
   // Set by sleep(), cleared once dormant or by a wake: the worker is going to sleep, so the relay goes dormant now.
   let sleepRequested = false;
@@ -548,12 +570,37 @@ export function createRelay(deps: RelayDeps): Relay {
     if (cut !== -1 && outcome.published > cut) {
       audienceCache.delete(workspaceId);
       const row = rows[cut];
-      if (row?.kind === 'access' && deps.cutOff !== undefined) {
-        await deps.cutOff(workspaceId, row.itemIds).catch((error: unknown) => {
-          log.warn('Cutting removed members off the live channel failed; it is tried again', {
+      // The durable cut off is queued before the row is marked: a throw here fails the turn, and the row goes out
+      // again (its idempotency key drops the repeat) and is queued again under the same key (late trap #41). Its
+      // first run is a wall clock time, so `Date.now()`, not the relay's clock. A queue that keeps refusing for
+      // `QUEUE_GIVE_UP_FAILURES` turns in a row would hold the whole workspace's live updates behind one cut off:
+      // then the row is marked and the cut off kept in memory, as with the jobs off.
+      let task =
+        row?.kind === 'access' && durableCutOff
+          ? cutOffTask(workspaceId, row.seq, row.itemIds, row.at, Date.now())
+          : undefined;
+      if (task !== undefined) {
+        try {
+          await reader.queueTask(task);
+        } catch (error) {
+          if ((retries.get(workspaceId)?.failures ?? 0) < QUEUE_GIVE_UP_FAILURES) throw error;
+          log.error('Queueing a durable cut off kept failing; it is kept in memory instead', {
             workspaceId,
             ...errorFields(error),
           });
+          task = undefined;
+        }
+      }
+      const queued = task !== undefined;
+      if (row?.kind === 'access' && deps.cutOff !== undefined) {
+        const tried = deps.cutOff(workspaceId, row.itemIds).catch((error: unknown) => {
+          log.warn('Cutting removed members off the live channel failed; it is tried again', {
+            workspaceId,
+            ...(queued ? { queued: true } : {}),
+            ...errorFields(error),
+          });
+          // The queued task tries again, durably: nothing to keep here.
+          if (queued) return;
           const pending = pendingCuts.get(workspaceId);
           if (pending === undefined) {
             pendingCuts.set(workspaceId, {
@@ -570,6 +617,8 @@ export function createRelay(deps: RelayDeps): Relay {
             pending.dueAt = clock() + CUT_RETRY_FIRST_MS;
           }
         });
+        // With the task queued, a slow Centrifugo never holds this lane or the round: the try runs on its own.
+        if (!queued) await tried;
       }
     }
     const landed = rows[outcome.published - 1];
@@ -642,8 +691,8 @@ export function createRelay(deps: RelayDeps): Relay {
   /**
    * Tries the failed cut offs that are due again, after a pass of a relay holding the lock: one that lands is
    * forgotten, one that fails waits twice as long, up to `CUT_RETRY_MAX_MS`, until it lands or the members' tokens
-   * have run out. Best effort, in memory: a relay that goes dormant or loses the lock tries again only once it is
-   * publishing again (a durable cut off, as a job, is the stronger fix, noted for later).
+   * have run out. Best effort, in memory, and only without `durableCutOff` (the jobs off): a relay that goes dormant
+   * or loses the lock tries again only once it is publishing again.
    */
   async function retryCuts(): Promise<void> {
     const cutOff = deps.cutOff;
