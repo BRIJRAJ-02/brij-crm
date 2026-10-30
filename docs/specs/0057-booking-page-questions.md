@@ -104,5 +104,9 @@ Reviewers: `security-access-reviewer` (public input, filing), `state-performance
 
 A late trap is a change that saves fine, then breaks something later somewhere else, without anyone being told. Each line says what the product does now, and the trap it closes (numbers from the late trap audit). The owner asked for each to follow industry practice and delegated the product calls.
 
-- A page's required question filed onto a field does not yet count as filling it for the Required guard (see spec 0012's amendment): the person is made before the answers are filed. Owed: make the person with the filed answers.
+- A page's required question filed onto a field counts as filling it for the Required guard (main 06fa5a261, see spec 0012's amendment): the record made at a booking takes the page's planned answers for its required fields, a live page can't drop that question or make it optional, and turning "file to the CRM" back on is checked like going live. Still owed:
+  - a renamed or archived option under a required choice question still counts as filling the field;
+  - a form hand off skips a question the form already filed, so the insert lacks that answer;
+  - a People page with no filed questions skips the go live wall check;
+  - host made bookings ask no questions, so they fill nothing.
 - Save clears Unsaved changes after a question creates an attribute (#57). Where the answers go doesn't offer an object it would refuse (#58). A booking question no longer turns into a workspace attribute and a People column without the owner choosing it (#59, #62).
