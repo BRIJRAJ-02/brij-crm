@@ -78,6 +78,7 @@ export function PreferencesScreen({
         <Card>
           <SettingsRow title={strings.theme} control="field">
             <Select
+              savesOnPick
               label={strings.theme}
               isLabelHidden
               items={THEMES}
@@ -182,6 +183,7 @@ function MemberSections({
         <Card>
           <SettingsRow title={strings.timeZone} description={strings.timeZoneDescription} control="field">
             <Select
+              savesOnPick
               label={strings.timeZone}
               isLabelHidden
               items={zones}
@@ -193,6 +195,7 @@ function MemberSections({
           </SettingsRow>
           <SettingsRow title={strings.dateFormat} control="field">
             <Select
+              savesOnPick
               label={strings.dateFormat}
               isLabelHidden
               items={formats}
@@ -202,6 +205,7 @@ function MemberSections({
           </SettingsRow>
           <SettingsRow title={strings.weekStart} control="field">
             <Select
+              savesOnPick
               label={strings.weekStart}
               isLabelHidden
               items={weeks}
@@ -215,6 +219,7 @@ function MemberSections({
         <Card>
           <SettingsRow title={strings.landing} description={strings.landingDescription} control="field">
             <Select
+              savesOnPick
               label={strings.landing}
               isLabelHidden
               items={landings}

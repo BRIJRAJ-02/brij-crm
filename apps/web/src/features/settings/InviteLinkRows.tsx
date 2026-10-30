@@ -205,6 +205,7 @@ export function InviteLinkRows({ data, slug, link, ask, onChanged, toasts, onFai
           <Disclosure title={strings.linkSettings} variant="quiet">
             <SettingsRow title={strings.linkExpires}>
               <Select
+                savesOnPick
                 label={strings.linkExpires}
                 isLabelHidden
                 size="sm"
@@ -224,6 +225,7 @@ export function InviteLinkRows({ data, slug, link, ask, onChanged, toasts, onFai
             </SettingsRow>
             <SettingsRow title={strings.linkMostUses}>
               <Select
+                savesOnPick
                 label={strings.linkMostUses}
                 isLabelHidden
                 size="sm"

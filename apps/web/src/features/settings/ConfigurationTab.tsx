@@ -312,6 +312,7 @@ function RecordNameRow({ slug, object, attributes }: RecordNameRowProps) {
   return (
     <SettingsRow title={strings.recordNameTitle} description={strings.recordNameText} control="field">
       <Select
+        savesOnPick
         label={strings.recordNameTitle}
         isLabelHidden
         items={items}

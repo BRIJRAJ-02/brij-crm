@@ -326,6 +326,7 @@ export function GeneralScreen({
             meta={<InfoTip label={strings.timeZone}>{strings.timeZoneInfo}</InfoTip>}
           >
             <Select
+              savesOnPick
               label={strings.timeZone}
               isLabelHidden
               showsDescription

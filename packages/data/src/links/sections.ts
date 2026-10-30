@@ -141,6 +141,8 @@ export function createLinkSections({
     readonly hide: (recordId: string) => SectionChange;
     readonly show: (display: RecordRefDisplay) => SectionChange;
     readonly dispose: () => void;
+    /** The far objects' name attributes as the screen asking now names them: one may have moved (late trap #15). */
+    readonly nameBy: (attributeIds: readonly string[]) => void;
   }
   const sources = new Map<string, Source>();
 
@@ -148,6 +150,7 @@ export function createLinkSections({
     workspace: string,
     { recordId, objectId, attributeId, farObjectIds, farNameAttributeIds = [] }: SectionKey,
   ): Source {
+    let names = farNameAttributeIds;
     const key = keyOf(workspace, recordId, attributeId);
     const listeners = new Set<() => void>();
     let status: LinkSectionStatus = 'loading';
@@ -496,7 +499,7 @@ export function createLinkSections({
         const named =
           event.attributeIds === undefined ||
           event.attributeIds.length === 0 ||
-          event.attributeIds.some((id) => farNameAttributeIds.includes(id));
+          event.attributeIds.some((id) => names.includes(id));
         if (!named) return false;
         const heldIds = new Set(held.map((each) => each.recordId));
         return event.recordIds.some((id) => heldIds.has(id));
@@ -513,6 +516,9 @@ export function createLinkSections({
       hide: (far) => track({ kind: 'remove', recordId: far }),
       show: (display) => track({ kind: 'add', display, ...(total === undefined ? {} : { baseTotal: total }) }),
       dispose,
+      nameBy: (attributeIds) => {
+        names = attributeIds;
+      },
     };
     sources.set(key, source);
     cancelUnused = later(dispose, keepUnusedMs);
@@ -520,8 +526,12 @@ export function createLinkSections({
     return source;
   }
 
-  const sourceOf = (workspace: string, side: SectionKey) =>
-    sources.get(keyOf(workspace, side.recordId, side.attributeId)) ?? open(workspace, side);
+  const sourceOf = (workspace: string, side: SectionKey) => {
+    const held = sources.get(keyOf(workspace, side.recordId, side.attributeId));
+    if (held === undefined) return open(workspace, side);
+    held.nameBy(side.farNameAttributeIds ?? []);
+    return held;
+  };
   const inWorkspace = (workspace: string) => [...sources.values()].filter((each) => each.workspace === workspace);
 
   return {
@@ -560,6 +570,16 @@ export function createLinkSections({
     definitionsChanged: (workspace: string, objectId?: string): void => {
       for (const each of inWorkspace(workspace)) {
         if (objectId === undefined || each.objectId === objectId || each.objectIds.has(objectId)) each.reset();
+      }
+    },
+    /**
+     * This tab named the records of these objects by another attribute (late trap #15; its echo never comes
+     * back): the sections listing their records read again, since every row's name may have changed. Sections
+     * on those objects' own records list other objects' records, so they read nothing.
+     */
+    renamed: (workspace: string, objectIds: readonly string[]): void => {
+      for (const each of inWorkspace(workspace)) {
+        if (objectIds.some((id) => each.objectIds.has(id))) each.refresh();
       }
     },
     /** A full catch up (spec 0006, 0007): every section of the workspace reads again. */

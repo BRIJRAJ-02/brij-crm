@@ -255,3 +255,59 @@ describe('a long section read again', () => {
     expect(section.getSnapshot()).toBe(before);
   });
 });
+
+describe('a section whose far records are named by another attribute (late trap #15)', () => {
+  const NEW_NAME = '0199a6f2-0000-7000-8000-0000000000c4';
+
+  it('reads again when this tab renames its far object’s records, and not for another object', async () => {
+    const t = setUp(2);
+    const section = t.sections.section(WS, SIDE);
+    section.retain();
+    await flush();
+    const before = t.calls.length;
+    // The section's own object, and an object it doesn't show: its rows keep their names.
+    t.sections.renamed(WS, [COMPANIES, OTHER]);
+    await flush();
+    expect(t.calls.length).toBe(before);
+    t.setRows([
+      { ...person(1), name: 'ada@acme.dev' },
+      { ...person(2), name: 'bo@acme.dev' },
+    ]);
+    t.sections.renamed(WS, [PEOPLE]);
+    await flush();
+    expect(t.calls.length).toBe(before + 1);
+    expect(names(section.getSnapshot().items)).toEqual(['ada@acme.dev', 'bo@acme.dev']);
+  });
+
+  it('waits while nobody shows it, and reads the new names once shown again', async () => {
+    const t = setUp(1);
+    const section = t.sections.section(WS, SIDE);
+    const release = section.retain();
+    await flush();
+    release();
+    const before = t.calls.length;
+    t.sections.renamed(WS, [PEOPLE]);
+    await flush();
+    expect(t.calls.length).toBe(before);
+    section.retain();
+    await flush();
+    expect(t.calls.length).toBe(before + 1);
+  });
+
+  it('follows a far record’s new name attribute once the screen asks with it', async () => {
+    const t = setUp(2);
+    const section = t.sections.section(WS, SIDE);
+    section.retain();
+    await flush();
+    // The page loads again with the far object's new name attribute: the same source, named by it.
+    expect(t.sections.section(WS, { ...SIDE, farNameAttributeIds: [NEW_NAME] })).toBe(section);
+    const before = t.calls.length;
+    // The old name attribute is just another field now.
+    t.sections.changed(WS, { objectId: PEOPLE, recordIds: [person(2).recordId], attributeIds: [NAME] });
+    await flush();
+    expect(t.calls.length).toBe(before);
+    t.sections.changed(WS, { objectId: PEOPLE, recordIds: [person(2).recordId], attributeIds: [NEW_NAME] });
+    await flush();
+    expect(t.calls.length).toBe(before + 1);
+  });
+});

@@ -652,6 +652,7 @@ export function SettingsTab({
         {isFiling && (
           <>
             <Select
+              savesOnPick
               label={strings.whichObject}
               items={liveObjects.map((object) => ({ id: object.id, label: object.pluralName, icon: object.icon }))}
               value={draft.targets.main?.objectId ?? null}

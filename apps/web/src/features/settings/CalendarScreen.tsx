@@ -282,6 +282,7 @@ function AccountCard({
         <span aria-hidden="true">{strings.sharingLabel}</span>
         <InfoTip label={strings.sharingLabel}>{strings.sharingInfo}</InfoTip>
         <Select
+          savesOnPick
           label={strings.sharingLabel}
           isLabelHidden
           items={SHARING}
@@ -547,6 +548,7 @@ export function CalendarScreen({ data, slug, view, result, onResultSeen, inFrame
             }
           >
             <Select
+              savesOnPick
               label={strings.addBookingsTo}
               isLabelHidden
               optionStyle="dot"

@@ -1213,6 +1213,7 @@ export function PageEditor({
                           isBusy={isMovingAnswers}
                         >
                           <Select
+                            savesOnPick
                             label={strings.answersObject}
                             // The card's title already says it (flow walks B6): read, not drawn twice.
                             isLabelHidden
