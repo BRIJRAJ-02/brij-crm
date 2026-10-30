@@ -1,0 +1,167 @@
+/* ChoiceTiles (TileGrid variant="choice", spec 0058): equal size tiles to pick from by sight. Each track is at least
+   size-column-narrow and the tracks share the width, so every tile has one width; the rows share one height. A tile is
+   a picture slot (size-column-min tall, a mark or a thumbnail centred in it) over a one line name, both on one left
+   edge, space-12 in from the tile's edge. The chosen tile takes the accent line as its border and soft fill with a
+   tick in its top end corner. Press scales to scale-press; the tick eases in on opacity and scale. */
+@layer components {
+  .root {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(var(--size-column-narrow), 100%), 1fr));
+    grid-auto-rows: 1fr;
+    gap: var(--space-8);
+    min-inline-size: 0;
+  }
+
+  /* The tooltip's trigger wraps a tile: it is the grid cell, and the tile fills it. */
+  .cell {
+    display: flex;
+  }
+
+  .cell > * {
+    flex: 1;
+  }
+
+  .tile {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    box-sizing: border-box;
+    min-inline-size: 0;
+    padding: var(--space-12);
+    border: var(--border-width-hairline) solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface-raised);
+    color: var(--text);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    text-align: start;
+    outline: none;
+    transition:
+      background-color var(--duration-hover) var(--ease-hover),
+      border-color var(--duration-hover) var(--ease-hover),
+      scale var(--duration-press) var(--ease-out);
+  }
+
+  /* A select tile's border and fill sit on the field; its pressable is the button inside, covering the whole tile. */
+  .button {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    min-inline-size: 0;
+    outline: none;
+  }
+
+  .button::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: var(--radius-md);
+  }
+
+  .picture {
+    display: grid;
+    place-content: center;
+    box-sizing: border-box;
+    block-size: var(--size-column-min);
+    overflow: hidden;
+    border-radius: var(--radius-sm);
+    background: var(--surface-subtle);
+    color: var(--text-secondary);
+  }
+
+  /* A thumbnail fills the slot; a mark sits centred in it. */
+  .picture[data-kind='thumbnail'] {
+    display: block;
+    border: var(--border-width-hairline) solid var(--border-subtle);
+  }
+
+  .name {
+    min-inline-size: 0;
+    overflow: hidden;
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .tick {
+    position: absolute;
+    inset-block-start: var(--space-8);
+    inset-inline-end: var(--space-8);
+    display: grid;
+    place-content: center;
+    inline-size: var(--size-icon);
+    block-size: var(--size-icon);
+    border-radius: var(--radius-full);
+    background: var(--accent);
+    color: var(--on-accent);
+    opacity: 0;
+    scale: var(--scale-shrunk);
+    transition:
+      opacity var(--duration-press) var(--ease-out),
+      scale var(--duration-press) var(--ease-out);
+    pointer-events: none;
+  }
+
+  .tile:has([data-selected]) {
+    border-color: var(--accent-line);
+    background: var(--accent-soft);
+  }
+
+  .tile:has([data-selected]) .tick {
+    opacity: 1;
+    scale: 1;
+  }
+
+  .tile:has([data-selected]) .picture {
+    background: var(--surface-raised);
+  }
+
+  .tile:has([data-focus-visible]),
+  .tile[data-focus-visible] {
+    border-color: var(--accent-line);
+    box-shadow: var(--shadow-focus);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .tile:has([data-hovered]:not([data-selected], [data-disabled])),
+    .tile[data-hovered]:not([data-disabled]) {
+      background: var(--surface-hover);
+    }
+  }
+
+  .tile[data-pressed],
+  .tile:has([data-pressed]) {
+    scale: var(--scale-press);
+  }
+
+  .tile[data-disabled],
+  .tile:has([data-disabled]) {
+    opacity: var(--opacity-disabled);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .tick {
+      scale: 1;
+      transition: opacity var(--duration-press) var(--ease-out);
+    }
+
+    .tile {
+      transition:
+        background-color var(--duration-hover) var(--ease-hover),
+        border-color var(--duration-hover) var(--ease-hover);
+    }
+  }
+
+  @media (forced-colors: active) {
+    .tile:has([data-selected]) {
+      border-color: Highlight;
+    }
+
+    .tile:has([data-focus-visible]),
+    .tile[data-focus-visible] {
+      outline: var(--border-width-thick) solid Highlight;
+    }
+  }
+}

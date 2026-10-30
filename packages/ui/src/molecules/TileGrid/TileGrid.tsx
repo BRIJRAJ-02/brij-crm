@@ -1,8 +1,13 @@
 import type { ReactNode } from 'react';
+import { ChoiceTiles, type ChoiceTilesProps } from './ChoiceTiles.tsx';
 import styles from './TileGrid.module.css';
 
-/** Props for TileGrid. */
-export interface TileGridProps {
+export type { ChoiceActionProps, ChoiceSelectProps, ChoiceTile } from './ChoiceTiles.tsx';
+
+/** Props for TileGrid's card layout (the default variant). */
+export interface CardTileGridProps {
+  /** `cards` (the default) lays out the Cards you pass; `choice` is the picker below. */
+  readonly variant?: 'cards';
   /** The tiles, usually Cards. A tile that renders nothing leaves no gap: the rest close up. */
   readonly children: ReactNode;
   /**
@@ -19,10 +24,19 @@ export interface TileGridProps {
 }
 
 /**
+ * Props for TileGrid: the card layout, or with `variant="choice"` equal size tiles to pick from by sight (`tiles`,
+ * each a Lucide mark or a thumbnail over a short name; `mode="select"` keeps one chosen with a ring and a tick,
+ * `mode="action"` makes each tile a button).
+ */
+export type TileGridProps = CardTileGridProps | ChoiceTilesProps;
+
+/**
  * Cards side by side that wrap (Home's Today, Tasks due and Team today): as many columns as fit at
  * the panel's width or more, one column on a phone, each tile as tall as its own content.
  */
-export function TileGrid({ children, fill = 'fit', columns = 'auto' }: TileGridProps) {
+export function TileGrid(props: TileGridProps) {
+  if (props.variant === 'choice') return <ChoiceTiles {...props} />;
+  const { children, fill = 'fit', columns = 'auto' } = props;
   return (
     <div
       className={styles.root}
