@@ -260,6 +260,43 @@ export const DisabledOption: Story = {
   },
 };
 
+/**
+ * A disabled option is reached by the keyboard (#68): the arrows land on it, so a screen reader reads it as
+ * disabled with its reason, but Enter leaves it unchosen and the list open, and the next arrow moves on.
+ */
+export const DisabledOptionByKeyboard: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: {
+    label: 'Team size',
+    optionStyle: 'plain',
+    placeholder: 'Choose a size',
+    items: [
+      { id: 'small', label: 'Small team' },
+      { id: 'large', label: 'Large team', isDisabled: true, description: 'Up to 20 people' },
+      { id: 'solo', label: 'Just me' },
+    ],
+  },
+  render: (args) => (
+    <Stage width="narrow">
+      <Select {...args} />
+    </Stage>
+  ),
+  play: async ({ args, userEvent }) => {
+    await userEvent.tab();
+    await userEvent.keyboard('{ArrowDown}');
+    await listbox();
+    await userEvent.keyboard('{ArrowDown}');
+    await waitFor(() => expect(document.activeElement).toHaveTextContent('Large team'));
+    await expect(document.activeElement).toHaveAttribute('aria-disabled', 'true');
+    await expect(document.activeElement).toHaveTextContent('Up to 20 people');
+    await userEvent.keyboard('{Enter}');
+    await expect(args.onChange).not.toHaveBeenCalled();
+    await expect(document.querySelector('[role="listbox"]')).not.toBeNull();
+    await userEvent.keyboard('{ArrowDown}{Enter}');
+    await expect(args.onChange).toHaveBeenCalledWith('solo');
+  },
+};
+
 /** Searchable, for a long list: the search field takes focus as it opens, and typing narrows the options. */
 export const Searchable: Story = {
   args: { label: 'Stage', isSearchable: true, optionStyle: 'plain' },
