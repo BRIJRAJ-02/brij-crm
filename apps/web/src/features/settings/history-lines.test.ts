@@ -393,6 +393,23 @@ const SENTENCES: readonly (readonly [AuditEntryView, string])[] = [
     { ...base, action: 'booking.changed_for', target: booking, params: { host: bea, change: 'made' } },
     'Ada Lovelace booked Intro call on dayTime(2026-10-24T09:30) for Bea Rao',
   ],
+  [
+    {
+      ...base,
+      action: 'booking_page.changed_for',
+      target: member(bea),
+      params: { page: 'Intro call', deleted: false },
+    },
+    'Ada Lovelace changed Bea Rao’s “Intro call” page',
+  ],
+  [
+    { ...base, action: 'booking_page.changed_for', target: member(bea), params: { page: 'Intro call', deleted: true } },
+    'Ada Lovelace deleted Bea Rao’s “Intro call” page',
+  ],
+  [
+    { ...base, action: 'rotation.changed', target: rotation, params: { added: 1, removed: 0 } },
+    'Ada Lovelace changed who is in Sales',
+  ],
 ];
 
 describe('every listed action', () => {

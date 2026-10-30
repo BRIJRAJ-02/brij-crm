@@ -621,6 +621,28 @@ export function toEntryView(row: AuditRow, names: AuditNames): AuditEntryView | 
         changes: [],
       };
     }
+    case 'booking_page.changed_for': {
+      // Whose page and its title; the fields that changed stay in the row (the owner's notice lists them).
+      const title = text(after.title) ?? text(before.title);
+      if (title === undefined) return undefined;
+      return {
+        ...base,
+        action,
+        target: memberTarget(),
+        params: { page: title, deleted: after.deleted === true },
+        changes: [],
+      };
+    }
+    case 'rotation.changed': {
+      const many = (value: unknown) => (Array.isArray(value) ? value.length : 0);
+      return {
+        ...base,
+        action,
+        target: thing('rotation', names.rotations),
+        params: { added: many(after.added), removed: many(after.removed) },
+        changes: [],
+      };
+    }
     default:
       return undefined;
   }

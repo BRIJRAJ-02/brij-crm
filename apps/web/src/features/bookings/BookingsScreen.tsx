@@ -68,6 +68,7 @@ import { providerOf } from './provider.ts';
 import { useNow } from './useNow.ts';
 import { createPortal } from 'react-dom';
 import { availabilityHref, calendarsHref, newLinkOnlyPageHref } from '../booking/links.ts';
+import { TimeOffDialog } from '../booking/TimeOffDialog.tsx';
 import { linksHref } from '../captures/tabs.ts';
 import { recordLinks, type RecordLink } from '../records/timeline.ts';
 import { belongsElsewhere, isUndoKey, type KeyTarget } from '../workspace/undo.ts';
@@ -1203,7 +1204,6 @@ const IDLE_WEEK: BookingsCalendarHeld = {
 function WeekView(props: BookingsCalendarScreenProps) {
   const { slug, objects, search, week, pages, connections, locale, onSearch, onRemoveBlock, onBlock } = props;
   const forPeople = props.forPeople ?? NO_PEOPLE;
-  const canBookForOthers = useCan('booking.admin');
   const canInvite = useCan('members.invite');
   const { workingStart, toasts, onBookAsHost, newBookingKey } = props;
   // The reader: a colleague's booking (an admin's Everyone) names its host on its block.
@@ -1236,6 +1236,8 @@ function WeekView(props: BookingsCalendarScreenProps) {
   );
   const openings = useRef(0);
   const [draft, setDraft] = useState<DrawnSpan | undefined>(undefined);
+  // Add time off from a drawn span (spec 0037, AC-1272): its day, For the reader or someone they Manage.
+  const [timeOffDay, setTimeOffDay] = useState<string | undefined>(undefined);
   // Each new drawing gets a fresh card; moving the span with From and To keeps the card as it is.
   const [drawCount, setDrawCount] = useState(0);
   // The draft as of the last render, so a save that settles later knows whether its card is still open.
@@ -1862,6 +1864,14 @@ function WeekView(props: BookingsCalendarScreenProps) {
                         overlapping={overlapping(bookings, draft, timeZone)}
                         onSpanChange={setDraft}
                         forPeople={forPeople}
+                        {...(props.team === undefined
+                          ? {}
+                          : {
+                              onTimeOff: () => {
+                                setTimeOffDay(draft.dayKey);
+                                setDraft(undefined);
+                              },
+                            })}
                         onClose={({ kind, repeat, label, pageId, forMemberId }) => {
                           const drawn = draft;
                           const forName =
@@ -2026,8 +2036,8 @@ function WeekView(props: BookingsCalendarScreenProps) {
           locale={locale}
           hasCalendar={connections.length > 0}
           pages={bookable}
-          // Only `booking.admin` reads a colleague's pages today, so only they get For here (AC-1273 widens it).
-          forPeople={canBookForOthers ? forPeople : NO_PEOPLE}
+          // Whoever they Manage (AC-1272): Captures › Links gives them those people's pages too (AC-1273).
+          forPeople={forPeople}
           newKey={newBookingKey}
           people={props.peopleSearch}
           limitsAt={props.limitsAt}
@@ -2046,6 +2056,26 @@ function WeekView(props: BookingsCalendarScreenProps) {
             );
           }}
           onClose={() => setMeeting(undefined)}
+        />
+      )}
+      {props.team !== undefined && (
+        <TimeOffDialog
+          data={props.team.data}
+          slug={slug}
+          member={undefined}
+          entry={undefined}
+          initialDay={timeOffDay}
+          isOpen={timeOffDay !== undefined}
+          // Anyone the reader sees may cover; the one away is left out by the dialog.
+          people={props.team.members.filter((person) => person.id !== me)}
+          forPeople={forPeople}
+          onClose={() => setTimeOffDay(undefined)}
+          onSaved={(saved) => {
+            setTimeOffDay(undefined);
+            const name = forPeople.find((person) => person.id === saved.entry.memberId)?.name;
+            toasts.toast({ tone: 'success', message: strings.timeOffSaved(name) });
+          }}
+          onOpenBookings={() => setTimeOffDay(undefined)}
         />
       )}
     </>

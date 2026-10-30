@@ -953,6 +953,13 @@
       "when": 1795400200000,
       "tag": "0135_member_job_title",
       "breakpoints": true
+    },
+    {
+      "idx": 136,
+      "version": "7",
+      "when": 1795400800000,
+      "tag": "0136_scheduling_notice_inbox",
+      "breakpoints": true
     }
   ]
 }

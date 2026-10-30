@@ -33,6 +33,8 @@ export const strings = {
   workspaceGroup: 'Workspace',
   workspaceGroupLine: 'Links that book whoever in the workspace is free, in turn',
   membersGroup: 'Members’ pages',
+  /** The reader's own pages, once the list holds someone else's too (spec 0037, AC-1273). */
+  yourGroup: 'Your pages',
   searchPages: 'Search booking pages',
   copying: 'Copying',
   duplicated: (title: string) => `Made “${title}”.`,
@@ -55,7 +57,7 @@ export const strings = {
   },
   locationChip: { phone: 'Phone', address: 'In person', custom: 'Custom place' },
   emptyTitle: 'No booking pages yet',
-  emptyText: 'Make a page, share its link, and people book time inside your hours.',
+
   failedTitle: 'Booking pages didn’t load',
   failedText: 'Check your connection and try again.',
   deleteTitle: (title: string) => `Delete “${title}”?`,
@@ -72,7 +74,7 @@ export const strings = {
   titleRequired: 'Give the page a title.',
   whereRequired: 'Say where the meeting happens.',
   /** Above a paused page's editor: what visitors see, and how to turn it back on. */
-  pausedNote: 'This page is off, so visitors see it closed. Resume it from More actions to take bookings again.',
+  pausedNote: 'Paused. Visitors see it closed.',
   duration: 'Duration',
   durationRequired: 'Pick at least one length.',
   durationCustom: 'Custom',
@@ -98,8 +100,7 @@ export const strings = {
   /** The Page tab's sections (22 Oct 2026): Details, Sharing, and Profile for a Public page. */
   details: 'Details',
   sharing: 'Sharing',
-  workspaceLinkSharing:
-    'This link belongs to the workspace. It books whoever is free, in turn, and stays when the person who made it leaves.',
+  workspaceLinkSharing: 'Workspace link. Books whoever is free.',
   profile: 'Profile',
   /** The page's one address row: its full link, the part after the owner's handle editable (22 Oct 2026). */
   address: 'Web address',
@@ -121,21 +122,16 @@ export const strings = {
    * this on my meeting page"): the view the page opens in for a visitor who hasn't picked one of their own.
    */
   opensIn: 'Opens in',
-  opensInLine: 'Which way to pick a time a visitor sees first. They can switch, and their choice is remembered.',
   /** The three views, each named as the page's own switch names it. */
   opensInViews: { month: 'Month', list: 'List', chat: 'Book by chat' },
   meeting: 'Meeting',
   /** The Meeting tab's switch (spec 0057, AC-5708; moved there 27 Oct 2026), in a form's words. */
   afterBooking: 'After someone books',
-  addToCrm: 'Add each booking to the CRM',
-  addToCrmLine:
-    'Every booking finds or adds the person who booked, and their company, and files their answers on them. Off, the answers stay with the booking.',
+  addToCrm: 'Add bookers to People',
   targetsFailedTitle: 'Where answers go didn’t load',
   targetsFailed: 'The object’s fields couldn’t be read, so questions can’t be filed onto them right now.',
   /** The Questions tab's object picker (booking answers parity, 27 Oct 2026), in the forms editor's words. */
   answersObject: 'Where the answers go',
-  answersObjectLine: (objectName: string) =>
-    `Each answer is filed on the ${objectName} record the person’s email finds or makes. The booking still adds them to People either way.`,
   answersObjectMoved: (objectName: string) =>
     `Answers now go to ${objectName}. Choose a field for each question again.`,
   answersObjectFailed: 'That object couldn’t be used for the answers.',
@@ -145,9 +141,8 @@ export const strings = {
   answersObjectRule: 'Only objects with a unique email field can take booking answers.',
   /** The object chosen can no longer take answers: its unique email field was archived or made not unique since. */
   answersObjectBrokenTitle: (pluralName: string) => `Bookings can’t find the visitor in ${pluralName}`,
-  answersObjectBroken: 'It has no unique email field now, so a booking can’t find or make the visitor’s record.',
-  answersObjectBrokenAsk:
-    'It has no unique email field now, so a booking can’t find or make the visitor’s record. Ask an admin to add one.',
+  answersObjectBroken: 'No unique email field.',
+  answersObjectBrokenAsk: 'No unique email field. Ask an admin to add one.',
   answersObjectAddField: 'Add an email field',
   tryAgain: 'Try again',
   /** Book by chat (spec 0042) doesn't ask the page's questions yet (spec 0057 follow up). */
@@ -158,12 +153,11 @@ export const strings = {
   location: 'Location',
   locations: { video: 'Video', address: 'In person', phone: 'Phone', custom: 'Somewhere else' },
   /** Under Location's Video when the page's owner has no live calendar, so no video link is made (Q57, Q77). */
-  noVideoLink: 'No calendar is connected, so no video link is made. Connect one, or send the link yourself.',
+  noVideoLink: 'No video link: no calendar connected.',
   /** The same, where calendars can't be connected here (calendar sync off). */
-  noVideoLinkNoSync: 'No calendar is connected, so no video link is made. Send the link yourself.',
+  noVideoLinkNoSync: 'No video link. Send one yourself.',
   /** The same, when their calendar's account has expired and needs reconnecting in Settings › Calendars. */
-  noVideoLinkReconnect:
-    'Your calendar needs reconnecting, so no video link is made. Reconnect it in Settings, or send the link yourself.',
+  noVideoLinkReconnect: 'No video link: reconnect your calendar.',
   addressOrRoom: 'Address or room',
   numberToCall: 'Number to call',
   where: 'Where',
@@ -213,7 +207,7 @@ export const strings = {
   limitGroups: { buffers: 'Buffers', window: 'Booking window', pace: 'Pace' },
   limitHelp: {
     before: {
-      text: 'Free time kept before each meeting, so a booking can’t start right after another event.',
+      text: 'Free time before each meeting.',
       example: 'With 15 minutes, after a meeting ending at 10:00 AM the first slot is 10:15 AM.',
     },
     after: {
@@ -229,7 +223,7 @@ export const strings = {
       example: 'With 60 days, on 1 March the last day offered is 30 April.',
     },
     daily: {
-      text: 'The most meetings this page books in one day. Once reached, the day offers no more slots.',
+      text: 'Meetings from this page in one day.',
       example: 'With 3, a day with three meetings is full.',
     },
     step: {
@@ -240,12 +234,11 @@ export const strings = {
   /** Under Who can book, for Link only: what it does that Public doesn't. */
   linkOnlyHint: 'Not on your profile. It can also book your reserved time.',
   /** Under Who can book, while a public page is being switched to Link only: the old address stops working. */
-  linkOnlyChanging:
-    'Not on your profile, and it moves to the link above. Its old address stops working once you save, so share the new one.',
+  linkOnlyChanging: 'Old address stops working on save.',
   /** InfoTips on the editor's settings that a new member wouldn't read from the label alone. */
   tips: {
     schedule: {
-      text: 'The one marked Default follows whichever schedule is your default in Availability, even after you change it.',
+      text: 'Default follows your default schedule.',
       example: 'Pick Evenings and the page offers only your evening hours.',
     },
     bufferBefore: {
@@ -265,7 +258,7 @@ export const strings = {
       example: 'With 30 days, on 1 March people can book up to about 31 March.',
     },
     dailyLimit: {
-      text: 'The most meetings this page books in one day. Once a day is full, it shows no times. Meetings from your other pages don’t count toward it.',
+      text: 'Meetings from this page in one day.',
       example: 'With 3, once three people book Tuesday, Tuesday shows no times.',
     },
     step: {
@@ -277,7 +270,7 @@ export const strings = {
   bufferAfter: 'Buffer after',
   notice: 'Minimum notice',
   window: 'How far ahead',
-  dailyLimit: 'Meetings a day',
+  dailyLimit: 'Max per day',
   noLimit: 'No limit',
   step: 'Start times every',
   stepDuration: 'Meeting length',
@@ -313,19 +306,23 @@ export const strings = {
     const stopped =
       name === undefined ? 'Your calendar stopped taking bookings' : `Your calendar ${name} stopped taking bookings`;
     return fallback === undefined
-      ? `${stopped}, so new bookings on this page aren’t added to any calendar until you pick one.`
+      ? `${stopped}. Pick another.`
       : `${stopped}, so this page uses your default calendar ${fallback}.`;
   },
   destinationUnusableColleague: 'The owner’s pick can’t take bookings now, so they go on the owner’s default.',
   destinationFailed: 'Couldn’t load calendars. Reload the page to try again.',
   destinationOwnerOnly: 'Only the page’s owner sees their calendars.',
+  /** Where someone else's page's events go, read only (spec 0037, AC-1273): only its owner chooses. */
+  setBy: (name: string) => `Set by ${name.trim().split(/\s+/)[0] ?? name}`,
+  /** The editor's header on someone else's page (spec 0037, AC-1273). */
+  editingFor: (name: string) => `Editing ${name.trim().split(/\s+/)[0] ?? name}’s page`,
   destinationLoading: 'Loading calendars',
   noCalendarTitle: 'No calendar connected',
   connectCalendar: 'Connect calendar',
   notNow: 'Not now',
   statusLive: 'Live',
   statusOff: 'Paused',
-  noCalendar: 'Until calendar sync is on, pages offer your hours minus their bookings, not your other meetings.',
+  noCalendar: 'Calendar sync is off: other meetings don’t block times.',
   notFoundTitle: 'This booking page isn’t here',
   notFoundText: 'It was deleted, or it isn’t yours.',
   endBeforeStart: 'End these hours after they start.',

@@ -1,5 +1,5 @@
 // Brief
-// Purpose: Add or edit time off (spec 0037, AC-1281, AC-1285, AC-1286): whole days away, for the reader or a colleague they manage.
+// Purpose: Add or edit time off (spec 0037, AC-1281, AC-1285, AC-1286): whole days away, for the reader or a colleague they manage (picked in For, AC-1272, when opened from Bookings).
 // Main task: pick the days, a reason, optionally who covers and a note, then Save; when meetings are already booked inside, the dialog lists them before it closes.
 // Leaves out: part days (Block time on the Bookings week), repeating leave, and moving the meetings inside (they stay; Bookings flags them Host away).
 import { isDataError, type DataLayer, type TimeOffEntry, type TimeOffReason, type TimeOffSaved } from '@crm/data';
@@ -21,6 +21,7 @@ import { timeOffStrings as strings } from './time-off-strings.ts';
 
 const REASONS: readonly TimeOffReason[] = ['vacation', 'sick', 'travel', 'holiday', 'other'];
 const NOBODY = 'nobody';
+const ME = 'me';
 const NOTE_MAX = 200;
 
 /** Someone who could cover. */
@@ -43,6 +44,11 @@ export interface TimeOffDialogProps {
   readonly isOpen: boolean;
   /** Who may cover: active members other than the one away. */
   readonly people: readonly StandinChoice[];
+  /**
+   * The colleagues the reader Manages (spec 0037, AC-1272): with any, a new entry for the reader asks For whom, Me
+   * first. Left out where the dialog already knows whose (a colleague's Availability, a Team day column).
+   */
+  readonly forPeople?: readonly StandinChoice[];
   readonly onClose: () => void;
   /** Saved: the screen says so. */
   readonly onSaved: (saved: TimeOffSaved, isNew: boolean) => void;
@@ -70,16 +76,22 @@ export function TimeOffDialog(props: TimeOffDialogProps) {
 function TimeOffForm({
   data,
   slug,
-  member,
+  member: given,
   entry,
   isOpen,
-  people,
+  people: everyone,
+  forPeople = [],
   onClose,
   onSaved,
   onOpenBookings,
   initialDay,
 }: TimeOffDialogProps) {
   const { locale, timeZone } = useFormatSettings();
+  // For whom (AC-1272): only a new entry for the reader, by someone who Manages others.
+  const offersFor = given === undefined && entry === undefined && forPeople.length > 0;
+  const [forId, setForId] = useState(ME);
+  const member = given ?? (forId === ME ? undefined : forPeople.find((person) => person.id === forId));
+  const people = member === undefined ? everyone : everyone.filter((person) => person.id !== member.id);
   const store = data.scheduling.loaded()?.timeOff;
   const [id] = useState(() => store?.newId() ?? '');
   const [range, setRange] = useState<{ readonly start: string; readonly end: string } | null>(
@@ -219,7 +231,36 @@ function TimeOffForm({
     >
       {errors.form !== undefined && <Callout tone="danger">{errors.form}</Callout>}
       <Form id={formId} label={title} onSubmit={save}>
-        {first !== undefined && (
+        {offersFor && (
+          <Select
+            label={strings.forLabel}
+            isSearchable={forPeople.length > 6}
+            items={[
+              { id: ME, label: strings.forMe },
+              ...forPeople.map((person) => ({
+                id: person.id,
+                label: person.name,
+                leading: (
+                  <Avatar
+                    name={person.name}
+                    id={person.id}
+                    size="xs"
+                    {...(person.avatarUrl === undefined ? {} : { src: person.avatarUrl })}
+                    isDecorative
+                  />
+                ),
+              })),
+            ]}
+            value={forId}
+            onChange={(next) => {
+              const id = next ?? ME;
+              setForId(id);
+              // Nobody covers for themself.
+              if (standin === id) setStandin(NOBODY);
+            }}
+          />
+        )}
+        {first !== undefined && !offersFor && (
           <Callout tone="info">{entry === undefined ? strings.onBehalf(first) : strings.onBehalfEdit(first)}</Callout>
         )}
         <DateRangePicker

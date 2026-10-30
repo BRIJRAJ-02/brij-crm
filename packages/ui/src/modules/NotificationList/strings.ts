@@ -11,6 +11,8 @@ export const strings = {
     task_assigned: (actor: string) => `${actor} assigned you a task`,
     /** The actor is the person asking (the screen names them), not whoever acted. */
     join_request: (actor: string) => `${actor} asks to join`,
+    /** Someone else changed the reader's hours, time off, limits, pages or rotations (spec 0037, AC-1264). */
+    scheduling_changed: (actor: string) => `${actor} changed your scheduling`,
   },
   /** A form's new submission, its form first as the other rows lead with who acted: "Contact us got a new submission". */
   submission: (form: string) => `${form} got a new submission`,

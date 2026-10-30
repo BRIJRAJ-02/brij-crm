@@ -289,6 +289,15 @@ const FIXTURES: Record<ListedAuditAction, readonly AuditRow[]> = {
     row('booking.changed_for', 'booking', booking, { after: { memberId: bea, change: 'moved' } }),
     row('booking.changed_for', 'booking', booking, { after: { memberId: bea, change: 'made' } }),
   ],
+  'booking_page.changed_for': [
+    row('booking_page.changed_for', 'member', bea, {
+      before: { memberId: bea, pageId: newId(), title: 'Intro call', fields: { location: 'video' } },
+      after: { memberId: bea, pageId: newId(), title: 'Intro call', fields: { location: 'phone' } },
+    }),
+  ],
+  'rotation.changed': [
+    row('rotation.changed', 'rotation', rotation, { after: { name: 'Sales', added: [bea], removed: [] } }),
+  ],
 };
 
 const view = (each: AuditRow): AuditEntryView => {
@@ -455,6 +464,8 @@ describe('toEntryView, per action', () => {
       host: { kind: 'member', memberId: bea, name: 'Bea Rao', state: 'former' },
       change: 'moved',
     });
+    expect(only('booking_page.changed_for').params).toEqual({ page: 'Intro call', deleted: false });
+    expect(only('rotation.changed').params).toEqual({ added: 1, removed: 0 });
     const unknown = row('schedule.changed', 'member', bea, { after: { memberId: bea, kind: 'rebuilt' } });
     expect(toEntryView(unknown, names)).toBeUndefined();
   });

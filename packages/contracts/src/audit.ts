@@ -313,6 +313,14 @@ export const AuditEntryView = z.discriminatedUnion('action', [
     booking,
     z.strictObject({ host: AuditPerson, change: z.enum(['made', 'moved', 'cancelled']) }),
   ),
+  /** A personal booking page changed or deleted by anyone but its owner (spec 0037, AC-1263): the target is the owner. */
+  entry(['booking_page.changed_for'], member, z.strictObject({ page: z.string(), deleted: z.boolean() })),
+  /** Who is in a rotation changed (spec 0037, AC-1264): how many joined and how many left. */
+  entry(
+    ['rotation.changed'],
+    rotation,
+    z.strictObject({ added: z.number().int().min(0), removed: z.number().int().min(0) }),
+  ),
 ]);
 /** One row of Workspace changes. */
 export type AuditEntryView = z.infer<typeof AuditEntryView>;

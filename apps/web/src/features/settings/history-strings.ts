@@ -235,6 +235,11 @@ const SENTENCES: SentenceTemplates = {
     const verb = { made: 'booked', moved: 'moved', cancelled: 'cancelled' }[entry.params.change];
     return actor(`${verb} ${w.booking(entry.target)} for ${w.person(entry.params.host)}`);
   },
+  'booking_page.changed_for': (entry, w) =>
+    actor(
+      `${entry.params.deleted ? 'deleted' : 'changed'} ${w.persons(entry.target.person)} “${entry.params.page}” page`,
+    ),
+  'rotation.changed': (entry, w) => actor(`changed who is in ${w.thing(entry.target)}`),
 };
 
 /** A delegation's level as its verb: See or Manage. */

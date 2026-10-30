@@ -13,7 +13,14 @@ import {
 } from './templates/account.ts';
 import { formConfirmation, formSubmission } from './templates/forms.ts';
 import { memberInvite } from './templates/invite.ts';
-import { importFinished, jobFailed, schedulingChanged, standinCovering } from './templates/team.ts';
+import {
+  importFinished,
+  jobFailed,
+  schedulingAccessGiven,
+  schedulingAccessRemoved,
+  schedulingChanged,
+  standinCovering,
+} from './templates/team.ts';
 import { workspaceWelcome } from './templates/welcome.ts';
 
 /** One queued kind of email. */
@@ -159,6 +166,23 @@ export const CATALOG: Catalog = {
       more: 0,
       availabilityPath: '/w/acme/bookings/availability',
     },
+  },
+  scheduling_access_given: {
+    template: schedulingAccessGiven,
+    medium: 'email_calendar_alert',
+    sample: {
+      to: 'delegate',
+      level: 'manage',
+      otherName: 'Ada Lovelace',
+      everyone: false,
+      byName: 'Priya Shah',
+      path: '/w/acme/bookings/availability',
+    },
+  },
+  scheduling_access_removed: {
+    template: schedulingAccessRemoved,
+    medium: 'email_calendar_alert',
+    sample: { level: 'manage', memberName: 'Ada Lovelace', byName: 'Priya Shah' },
   },
   standin_covering: {
     template: standinCovering,
