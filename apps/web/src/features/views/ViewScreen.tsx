@@ -41,6 +41,7 @@ import { BoardScreen } from '../board/BoardScreen.tsx';
 import { planBoard } from '../board/plan.ts';
 import { strings as boardStrings } from '../board/strings.ts';
 import { FavouriteButton } from '../workspace/FavouriteButton.tsx';
+import type { ViewRequest } from '../command/commands.ts';
 import { RecordsScreen } from '../workspace/RecordsScreen.tsx';
 import { objectPendingPage } from '../workspace/ObjectScreen.tsx';
 import { useCan, useMyAccess, WorkspacePage } from '../workspace/WorkspacePage.tsx';
@@ -56,7 +57,8 @@ import {
   toViewQuery,
   withDefaultOrderAsNone,
 } from './query.ts';
-import { strings as importStrings } from '../imports/strings.ts';
+import { runExport } from '../imports/export-run.ts';
+import { TransferMenu } from './TransferMenu.tsx';
 import { strings } from './strings.ts';
 import { useViewDraft } from './useViewDraft.ts';
 import { ViewChangedDialog } from './ViewChangedDialog.tsx';
@@ -96,6 +98,10 @@ export interface ViewScreenProps {
   readonly isCreateRequested?: boolean;
   /** The request was taken (the dialog opened, or this view can't): drop it from the address. */
   readonly onCreateRequestTaken?: () => void;
+  /** The command menu's Export this view or Create a view, run once the view shows. */
+  readonly request?: ViewRequest;
+  /** That request was run: drop it from the address. */
+  readonly onRequestTaken?: () => void;
 }
 
 /** The attributes of the objects a through filter leads to, read through the data layer as they are asked for. */
@@ -424,32 +430,51 @@ export function ViewScreen(props: ViewScreenProps) {
     });
   };
   // Export CSV (spec 0040, AC-1130, AC-1131): the view as it stands, its unsaved filter and sorts included, its visible
-  // columns in order; the job's end toast offers Download.
+  // columns in order; one toast shows it working, then turns into Download (or Try again).
   const exporting = useRef(false);
   const exportView = () => {
     // One export per press: a second press while the first is on its way starts nothing.
     if (exporting.current) return;
     exporting.current = true;
-    data.exports
-      .start(slug, {
-        id: data.exports.newId(),
+    void runExport(
+      {
+        data,
+        toasts,
+        download: (path) => {
+          window.location.assign(path);
+        },
+      },
+      slug,
+      view?.name ?? object.pluralName,
+      {
         objectId: object.id,
         ...(view === undefined ? {} : { viewId: view.id }),
         ...(query.filter === undefined ? {} : { filter: query.filter }),
         sorts: query.sorts,
         attributeIds: layout.columns.filter((column) => !column.isHidden).map((column) => column.id),
-      })
-      .then(
-        () => {
-          exporting.current = false;
-          toasts.toast({ tone: 'info', message: importStrings.exportStarted });
-        },
-        (error: unknown) => {
-          exporting.current = false;
-          toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : strings.actionFailed });
-        },
-      );
+      },
+    ).finally(() => {
+      exporting.current = false;
+    });
   };
+  // The command menu's Export this view and Create a view (`?do=`): run once, then dropped from the address. Read
+  // through refs, so a new callback each render never runs one twice.
+  const latest = useRef({ exportView, taken: props.onRequestTaken });
+  useEffect(() => {
+    latest.current = { exportView, taken: props.onRequestTaken };
+  });
+  const { request } = props;
+  // Create a view opens its dialog in render, as the create request does; the export runs after, once.
+  const [seenRequest, setSeenRequest] = useState<ViewRequest | undefined>(undefined);
+  if (request !== seenRequest) {
+    setSeenRequest(request);
+    if (request === 'new-view') setCreateMode('create');
+  }
+  useEffect(() => {
+    if (request === undefined) return;
+    if (request === 'export') latest.current.exportView();
+    latest.current.taken?.();
+  }, [request]);
   const [isDuplicating, setDuplicating] = useState(false);
   const duplicate = () => {
     // One copy per press: a second press while the first is on its way adds nothing.
@@ -654,6 +679,7 @@ export function ViewScreen(props: ViewScreenProps) {
           </Callout>
         )}
         <FavouriteButton data={data} slug={slug} kind="view" id={view.id} />
+        <TransferMenu slug={slug} object={object} onExport={exportView} />
       </>
     );
   const viewSettings: ViewSettingsTrigger | undefined =

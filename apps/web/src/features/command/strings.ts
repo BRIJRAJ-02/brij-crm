@@ -36,7 +36,7 @@ export const strings = {
   availabilityTerms: ['hours', 'schedules', 'working hours'],
   bookingPagesTerms: ['links', 'scheduling links', 'captures'],
   formsTerms: ['enquiries', 'submissions', 'captures'],
-  trashTerms: ['deleted', 'bin', 'restore'],
+  trashTerms: ['deleted', 'bin', 'restore', 'go to trash'],
   settingsTerms: ['preferences', 'options'],
   preferencesTerms: ['theme', 'appearance', 'dark', 'light'],
   calendarsTerms: ['google', 'outlook', 'sync', 'connect'],
@@ -51,6 +51,14 @@ export const strings = {
   addWord: 'add',
   useTheme: { light: 'Use light theme', dark: 'Use dark theme', system: 'Use system theme' },
   themeTerms: ['theme', 'appearance', 'mode'],
+  /** The page's own actions: on an object's page, and on one of its views. */
+  importPlural: (plural: string) => `Import ${plural.toLocaleLowerCase()}`,
+  importTerms: ['csv', 'upload', 'spreadsheet'],
+  exportView: 'Export this view',
+  exportTerms: ['csv', 'download', 'spreadsheet'],
+  createView: 'Create a view',
+  invite: 'Invite members',
+  inviteTerms: ['team', 'people', 'add members', 'teammates'],
   /** The three theme actions as one choice, for screen readers (Q47). */
   theme: 'Theme',
   /** Create a <object> on an object with only boards, which have no new record dialog. */

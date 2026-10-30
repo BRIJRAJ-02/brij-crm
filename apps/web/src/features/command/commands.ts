@@ -10,6 +10,7 @@ import type { ThemeChoice } from '@crm/ui/theme';
 import { settingsNav, visibleSettingsNav } from '../settings/nav.ts';
 import { availabilityHref, calendarsHref, linksHref, roundRobinHref } from '../booking/links.ts';
 import { formsHref } from '../forms/paths.ts';
+import { importHref } from '../imports/paths.ts';
 import { bookingsHref, homeHref, navObjects, objectHref, tasksHref, trashHref } from '../workspace/objects.ts';
 import { strings } from './strings.ts';
 
@@ -17,7 +18,9 @@ import { strings } from './strings.ts';
 export type CommandRun =
   | { readonly kind: 'go'; readonly href: string }
   | { readonly kind: 'create'; readonly href: string }
-  | { readonly kind: 'theme'; readonly choice: ThemeChoice };
+  | { readonly kind: 'theme'; readonly choice: ThemeChoice }
+  /** Opens the Invite dialog over the page the member is on. */
+  | { readonly kind: 'invite' };
 
 /** One page, Settings page or action the menu lists. */
 export interface Command {
@@ -146,11 +149,30 @@ export function settingsCommands(slug: string, permissions: readonly Permission[
   );
 }
 
+/** Where the menu opened, for the actions that work on it: the object page and view on screen, and who may invite. */
+export interface CommandPlace {
+  /** The object whose page is open. */
+  readonly object?: ObjectSummary;
+  /** The view of it that is open. */
+  readonly viewId?: string;
+  /** The member holds `members.invite`. */
+  readonly canInvite?: boolean;
+}
+
+/** What a view page is asked to do from the menu, as its address carries it (`?do=`). */
+export type ViewRequest = 'export' | 'new-view';
+
 /**
  * The actions (AC-1075, AC-1086, AC-1087): Create a <object> for each live
- * object the member may write, then the three themes.
+ * object the member may write; on an object's page, Import <plural> (where
+ * they may write it), and on one of its views Export this view and Create a
+ * view; Invite members for those who may; then the three themes.
  */
-export function actionCommands(slug: string, objects: readonly ObjectSummary[]): readonly Command[] {
+export function actionCommands(
+  slug: string,
+  objects: readonly ObjectSummary[],
+  place: CommandPlace = {},
+): readonly Command[] {
   const creates = navObjects(objects)
     .filter((object) => object.access === 'write')
     .map((object): Command => ({
@@ -167,7 +189,50 @@ export function actionCommands(slug: string, objects: readonly ObjectSummary[]):
     terms: strings.themeTerms,
     run: { kind: 'theme', choice },
   }));
-  return [...creates, ...themes];
+  const { object, viewId } = place;
+  const here: Command[] = [];
+  if (object !== undefined && object.access === 'write' && !object.isArchived) {
+    here.push({
+      id: `import:${object.id}`,
+      name: strings.importPlural(object.pluralName),
+      icon: 'upload',
+      terms: strings.importTerms,
+      run: go(importHref(slug, object)),
+    });
+  }
+  if (object !== undefined && viewId !== undefined) {
+    here.push(
+      {
+        id: 'view:export',
+        name: strings.exportView,
+        icon: 'download',
+        terms: strings.exportTerms,
+        run: go(viewRequestHref(slug, object.apiSlug, viewId, 'export')),
+      },
+      {
+        id: 'view:new',
+        name: strings.createView,
+        icon: 'plus',
+        terms: [strings.newWord, strings.addWord],
+        run: go(viewRequestHref(slug, object.apiSlug, viewId, 'new-view')),
+      },
+    );
+  }
+  if (place.canInvite === true) {
+    here.push({
+      id: 'invite',
+      name: strings.invite,
+      icon: 'user-plus',
+      terms: strings.inviteTerms,
+      run: { kind: 'invite' },
+    });
+  }
+  return [...creates, ...here, ...themes];
+}
+
+/** A view asked to export itself or open Create view once it shows. */
+export function viewRequestHref(slug: string, objectSlug: string, viewId: string, request: ViewRequest): string {
+  return `${viewHref(slug, objectSlug, viewId)}?do=${request}`;
 }
 
 /** An object's page with its new record dialog open (AC-1086): the object route carries `new` to the view it opens. */

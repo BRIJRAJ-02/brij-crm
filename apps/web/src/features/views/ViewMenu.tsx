@@ -17,6 +17,7 @@ import {
 import { Button, Callout, Field, Form, Modal, type FormRefusal, type ViewAction as ViewMenuAction } from '@crm/ui';
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { importHref } from '../imports/paths.ts';
+import { trashHref } from '../workspace/objects.ts';
 import { strings as importStrings } from '../imports/strings.ts';
 import { useId, useState, type ReactNode } from 'react';
 import { strings } from './strings.ts';
@@ -266,6 +267,16 @@ export function useViewMenu({
               })),
         ]
       : []),
+    // Deleted records wait in the trash (spec 0022); a delete's toast has room for Undo only, so the way there is here.
+    {
+      id: 'open-trash',
+      label: strings.openTrash,
+      icon: 'trash',
+      startsGroup: true,
+      run: () => {
+        void navigate({ href: `${trashHref(slug)}?object=${encodeURIComponent(object.id)}` });
+      },
+    },
     ...entry(reasonFor('delete'), {
       id: 'delete',
       label: strings.deleteView,

@@ -1,3 +1,4 @@
+import type { ViewRequest } from '../features/command/commands.ts';
 import { isDataError } from '@crm/data';
 import { LoadingNow } from '@crm/ui';
 import { createFileRoute, useNavigate, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
@@ -35,12 +36,15 @@ interface ViewSearch {
   readonly draft?: string;
   /** Open the new record dialog once the table shows (the command menu's Create a <object>, spec 0039). */
   readonly new?: true;
+  /** Export this view, or open Create view, once it shows (the command menu's actions). */
+  readonly do?: ViewRequest;
 }
 
 export const Route = createFileRoute('/w/$slug/objects/$object_/views/$viewId')({
   validateSearch: (search: Record<string, unknown>): ViewSearch => ({
     ...(typeof search.draft === 'string' && search.draft !== '' ? { draft: search.draft } : {}),
     ...(search.new === true || search.new === 1 || search.new === '1' || search.new === 'true' ? { new: true } : {}),
+    ...(search.do === 'export' || search.do === 'new-view' ? { do: search.do } : {}),
   }),
   loaderDeps: () => ({}),
   // Entering the view (again) reads it afresh: the records a cached match held are let go 30 seconds after
@@ -177,6 +181,15 @@ function ViewRoute() {
       slug={params.slug}
       {...loaded.screen}
       param={search.draft}
+      {...(search.do === undefined ? {} : { request: search.do })}
+      onRequestTaken={() => {
+        void navigate({
+          to: '/w/$slug/objects/$object/views/$viewId',
+          params: { slug: params.slug, object: params.object, viewId: params.viewId },
+          search: search.draft === undefined ? {} : { draft: search.draft },
+          replace: true,
+        });
+      }}
       isCreateRequested={search.new === true}
       onCreateRequestTaken={() => {
         void navigate({

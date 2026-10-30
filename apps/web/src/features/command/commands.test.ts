@@ -75,6 +75,31 @@ describe('what the menu lists (AC-1075, AC-1082, AC-1086)', () => {
     expect(actions[2]?.run).toEqual({ kind: 'theme', choice: 'light' });
   });
 
+  it('adds the page’s own actions where they apply, and Invite members for those who may', () => {
+    const [people] = OBJECTS;
+    if (people === undefined) throw new Error('expected an object');
+    const names = (place: Parameters<typeof actionCommands>[2]) =>
+      actionCommands('acme', OBJECTS, place).map((command) => command.name);
+    expect(names({ object: people, viewId: 'v1', canInvite: true })).toEqual([
+      'Create a company',
+      'Create a person',
+      'Import people',
+      'Export this view',
+      'Create a view',
+      'Invite members',
+      'Use light theme',
+      'Use dark theme',
+      'Use system theme',
+    ]);
+    // Read only: export, but no import; off a view: nothing of the view's.
+    expect(names({ object: { ...people, access: 'read' }, viewId: 'v1' })).not.toContain('Import people');
+    expect(names({ object: people })).not.toContain('Export this view');
+    const exported = actionCommands('acme', OBJECTS, { object: people, viewId: 'v1' }).find(
+      (command) => command.id === 'view:export',
+    );
+    expect(exported?.run).toEqual({ kind: 'go', href: `/w/acme/objects/${people.apiSlug}/views/v1?do=export` });
+  });
+
   it('lists the Settings pages the member may open, by their place in Settings', () => {
     expect(settingsCommands('acme', []).map((command) => command.name)).toEqual([
       'Settings › Profile',
@@ -256,8 +281,8 @@ describe('every address the menu lists is a route (AC-1104)', () => {
     const hrefs = [
       ...pageCommands('acme', OBJECTS),
       ...settingsCommands('acme', []),
-      ...actionCommands('acme', OBJECTS),
-    ].flatMap((command) => (command.run.kind === 'theme' ? [] : [command.run.href]));
+      ...actionCommands('acme', OBJECTS, { object: OBJECTS[0], viewId: '0199a6f2-0000-7000-8000-000000000001' }),
+    ].flatMap((command) => ('href' in command.run ? [command.run.href] : []));
     expect(hrefs.filter((href) => !isRoute(href))).toEqual([]);
     expect(isRoute(createHref('acme', { apiSlug: 'people' }))).toBe(true);
     expect(isRoute(viewHref('acme', 'people', '0199a6f2-0000-7000-8000-000000000001'))).toBe(true);

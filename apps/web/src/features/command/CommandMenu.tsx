@@ -13,9 +13,10 @@ import type {
 } from '@crm/data';
 import { Avatar, CommandPalette, type PaletteItem, type PaletteSection } from '@crm/ui';
 import type { ThemeChoice } from '@crm/ui/theme';
-import { useMatch, useNavigate, useRouteContext } from '@tanstack/react-router';
+import { useMatch, useNavigate, useParams, useRouteContext } from '@tanstack/react-router';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { recordHref } from '../records/details.ts';
+import { InviteTeamDialog } from '../settings/InviteTeamDialog.tsx';
 import {
   actionCommands,
   matchCommands,
@@ -63,7 +64,24 @@ export function CommandMenu({ slug, mode, isOpen, onOpenChange }: CommandMenuPro
   const byObject = useMemo(() => new Map(objects.map((object) => [object.id, object])), [objects]);
   const pages = useMemo(() => pageCommands(slug, objects, permissions), [slug, objects, permissions]);
   const settings = useMemo(() => settingsCommands(slug, permissions), [slug, permissions]);
-  const actions = useMemo(() => (mode === 'commands' ? actionCommands(slug, objects) : []), [mode, slug, objects]);
+  // The page the menu opened over: its object and view get their own actions (Import, Export this view).
+  const params: { readonly object?: string; readonly viewId?: string } = useParams({ strict: false });
+  const here = objects.find((object) => object.apiSlug === params.object);
+  const canInvite = permissions?.includes('members.invite') === true;
+  const viewId = params.viewId;
+  const actions = useMemo(
+    () =>
+      mode === 'commands'
+        ? actionCommands(slug, objects, {
+            ...(here === undefined ? {} : { object: here }),
+            ...(viewId === undefined ? {} : { viewId }),
+            canInvite,
+          })
+        : [],
+    [mode, slug, objects, here, viewId, canInvite],
+  );
+  // Invite members opens the one Invite dialog over the page, as Home's setup step does.
+  const [isInviting, setInviting] = useState(false);
   const commands = useMemo(
     () => new Map([...pages, ...settings, ...actions].map((command) => [command.id, command])),
     [pages, settings, actions],
@@ -124,6 +142,10 @@ export function CommandMenu({ slug, mode, isOpen, onOpenChange }: CommandMenuPro
         runTheme(command.run.choice);
         return;
       }
+      if (command.run.kind === 'invite') {
+        setInviting(true);
+        return;
+      }
       void navigate({ href: command.run.href });
       return;
     }
@@ -138,23 +160,33 @@ export function CommandMenu({ slug, mode, isOpen, onOpenChange }: CommandMenuPro
   };
 
   return (
-    <CommandPalette
-      isOpen={isOpen}
-      onOpenChange={onOpenChange}
-      title={mode === 'search' ? strings.search : strings.commandMenu}
-      searchLabel={mode === 'search' ? strings.searchOnlyLabel : strings.searchLabel}
-      placeholder={mode === 'search' ? strings.searchPlaceholder : strings.placeholder}
-      sections={sections}
-      onSearch={(next) => {
-        setQuery(next);
-        search?.ask(next);
-      }}
-      onRetry={() => {
-        if (search === undefined) reopen();
-        else search.retry();
-      }}
-      onAction={choose}
-    />
+    <>
+      <CommandPalette
+        isOpen={isOpen}
+        onOpenChange={onOpenChange}
+        title={mode === 'search' ? strings.search : strings.commandMenu}
+        searchLabel={mode === 'search' ? strings.searchOnlyLabel : strings.searchLabel}
+        placeholder={mode === 'search' ? strings.searchPlaceholder : strings.placeholder}
+        sections={sections}
+        onSearch={(next) => {
+          setQuery(next);
+          search?.ask(next);
+        }}
+        onRetry={() => {
+          if (search === undefined) reopen();
+          else search.retry();
+        }}
+        onAction={choose}
+      />
+      <InviteTeamDialog
+        data={data}
+        slug={slug}
+        isOpen={isInviting}
+        onClose={() => {
+          setInviting(false);
+        }}
+      />
+    </>
   );
 }
 
