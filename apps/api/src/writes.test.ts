@@ -373,8 +373,13 @@ async function schedule(m: Member) {
   return { made, named: schedules.map((each) => each.id ?? '').sort() };
 }
 
-/** A Monday far enough ahead that the Team week may still change it. */
-const ROSTER_MONDAY = '2030-11-04';
+/** A Monday two to three weeks ahead: inside the Team week's reach (a year on), and never in a week already gone. */
+function rosterMonday(weeksOn: number): string {
+  const day = new Date();
+  day.setUTCDate(day.getUTCDate() + 14 + ((8 - day.getUTCDay()) % 7) + weeksOn * 7);
+  return day.toISOString().slice(0, 10);
+}
+const ROSTER_MONDAY = rosterMonday(0);
 
 /** The member's own Monday on the Team week, 10 to 2 that week only, as read first so the stale check passes. */
 async function rosterDay(m: Member, mutationId: string) {
@@ -1699,7 +1704,7 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
       workspace: m.slug,
       memberIds: [set.memberId],
       fromWeekStart: ROSTER_MONDAY,
-      toWeekStart: '2030-11-11',
+      toWeekStart: rosterMonday(1),
       mutationId,
     });
     return [
