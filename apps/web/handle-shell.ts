@@ -6,14 +6,27 @@
 // Three rules hold this together. The bytes below `</head>` are the build's, never rewritten. A read that misses,
 // in any way at all, answers the plain shell rather than an error. And nothing is read off the request but its
 // path, so one handle has one answer for everybody and the edge can cache it (AC-5504).
+import { linkPageCacheTags } from '@crm/contracts/handles';
 import { BRAND_DESCRIPTION, withMeta, type MetaLook, type MetaSource } from './handle-meta.ts';
 import { HANDLE_PATH } from './public-paths.ts';
 
 /** How long the profile read may take before the plain shell goes out instead (AC-5503). */
 export const READ_TIMEOUT_MS = 800;
 
-/** What the shell answers with, so a crawler caches it and a person never waits on it (AC-5504). */
+/**
+ * What a booking page's shell answers with, so a crawler caches it and a person never waits on it (AC-5504). A
+ * booking page under a handle isn't the link page and its switch doesn't hide it, so it keeps the long stale window.
+ */
 export const SHELL_CACHE_CONTROL = 'public, s-maxage=300, stale-while-revalidate=86400';
+
+/**
+ * What a link page's shell answers with, and a handle with nothing to show (spec 0058, AC-23). The shell carries the
+ * page itself (its name, bio and blocks, in the boot block), so a page made Private must stop being served promptly:
+ * its Live or Private switch deletes the edge's copy at once (the `link-page:<handle>` cache tag), and where that
+ * can't run, a minute fresh and a minute stale bound it at two. The stale minute is only ever a page that was public
+ * a minute before, and it keeps the cold api's wait off a visitor.
+ */
+export const PROFILE_SHELL_CACHE_CONTROL = 'public, s-maxage=60, stale-while-revalidate=60';
 
 /**
  * A shell whose read missed (it timed out on a cold api, or failed) is kept by the edge for seconds, not minutes
@@ -21,9 +34,13 @@ export const SHELL_CACHE_CONTROL = 'public, s-maxage=300, stale-while-revalidate
  */
 export const MISSED_CACHE_CONTROL = 'public, s-maxage=10';
 
-/** What the shell's answer is cached for: a miss briefly, anything the read decided (a page, a 404) as usual. */
+/**
+ * What the shell's answer is cached for: a miss briefly, a booking page as usual, and a link page or a 404 (which a
+ * private page answers) for a minute, so either side of the Live or Private switch shows promptly.
+ */
 export function cacheControlFor(outcome: ShellOutcome): string {
-  return outcome === 'missed' ? MISSED_CACHE_CONTROL : SHELL_CACHE_CONTROL;
+  if (outcome === 'missed') return MISSED_CACHE_CONTROL;
+  return outcome === 'page' ? SHELL_CACHE_CONTROL : PROFILE_SHELL_CACHE_CONTROL;
 }
 
 /** The share card's address for one handle, versioned so a new name or picture is a new address (AC-5513). */
@@ -114,11 +131,16 @@ export function withBoot(shell: string, boot: ShellBoot): string {
 /** What the shell was built from, which the answer's own header reports so a miss is visible in production. */
 export type ShellOutcome = 'profile' | 'page' | 'unknown' | 'missed';
 
-/** One answer: the page's bytes, its status and the outcome that produced it. */
+/** One answer: the page's bytes, its status, the outcome that produced it, and the edge cache tags it is filed under. */
 export interface ShellAnswer {
   readonly body: string;
   readonly status: number;
   readonly outcome: ShellOutcome;
+  /**
+   * A link page's shell, or the 404 a private one answers, is filed under `link-page:<handle>` for the address asked
+   * and the page's current handle (`linkPageCacheTags`), so its Live or Private switch deletes it (spec 0058, AC-23).
+   */
+  readonly tags?: readonly string[];
 }
 
 /** What the shell needs from outside: the built bytes, where the page lives, and the one read it makes. */
@@ -175,7 +197,12 @@ export async function shellFor(pathname: string, deps: ShellDeps): Promise<Shell
       kind: 'profile',
       indexable: false,
     };
-    return { body: withMeta(deps.shell, source), status: 404, outcome: 'unknown' };
+    return {
+      body: withMeta(deps.shell, source),
+      status: 404,
+      outcome: 'unknown',
+      tags: linkPageCacheTags(parts.handle),
+    };
   }
   const handle = text(profile.handle) ?? parts.handle;
   const look = lookOf(profile.theme);
@@ -194,6 +221,7 @@ export async function shellFor(pathname: string, deps: ShellDeps): Promise<Shell
     body: withBoot(withMeta(deps.shell, source), { kind: 'profile', profile, readAt: (deps.now ?? Date.now)() }),
     status: 200,
     outcome: 'profile',
+    tags: linkPageCacheTags(parts.handle, handle),
   };
 }
 

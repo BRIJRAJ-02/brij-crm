@@ -28,6 +28,8 @@ const FUNCTION_ADDS: Readonly<Record<string, string>> = {
   wakeOnUse: 'the job drain wakes from use when work is due, in place of the worker poke',
   // An instance may be frozen once it answers, so work started after the answer runs inside waitUntil.
   keepAlive: "Vercel's waitUntil; a long running server needs none",
+  // The CDN's cache tags exist only on Vercel; a long running server's answers live out their short s-maxage.
+  edgeCache: "Vercel's cache tags, so a link page switched Private leaves the edge at once",
 };
 
 const source = (file: string) => readFileSync(fileURLToPath(new URL(file, import.meta.url)), 'utf8');

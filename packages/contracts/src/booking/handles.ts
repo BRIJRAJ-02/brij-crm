@@ -115,6 +115,16 @@ export function isReservedHandle(handle: string): boolean {
   return RESERVED_HANDLES.includes(handle);
 }
 
+/**
+ * The edge cache tags for what a link page serves publicly (spec 0058, AC-23): its shell, share card, picture and
+ * share image are each kept under `link-page:<handle>`, so switching the page Private deletes every copy at once.
+ * Only well formed handles make a tag, each once, so nothing a visitor typed ever names one.
+ */
+export function linkPageCacheTags(...handles: readonly (string | undefined)[]): readonly string[] {
+  const valid = handles.filter((handle): handle is string => handle !== undefined && HANDLE_PATTERN.test(handle));
+  return [...new Set(valid)].map((handle) => `link-page:${handle}`);
+}
+
 /** Why `handle` can't be a handle, in plain words, or undefined when it can. */
 export function handleProblem(handle: string): string | undefined {
   if (handle.length < HANDLE_MIN) return 'Use at least 3 characters.';

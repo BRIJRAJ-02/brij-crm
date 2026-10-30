@@ -6,6 +6,7 @@
 // it applies to the static shell, so the policy, `X-Content-Type-Options` and `Referrer-Policy` are the same bytes
 // for both and can never drift (AC-5505).
 import { registerHooks } from 'node:module';
+import { addCacheTag } from '@vercel/functions';
 
 // Vercel's Node builder compiles each imported TypeScript file to a .js beside it but keeps the `.ts` in every
 // import, as Node runs them on the other hosts. The same hook `api/index.mjs` registers, for the same reason.
@@ -56,7 +57,7 @@ export async function GET(request) {
   // The canonical address is the public origin's, never the host this request happened to arrive on (AC-5502);
   // without one set, a preview serves itself and says so.
   const origin = process.env.BOOKING_PUBLIC_ORIGIN ?? url.origin;
-  const { body, status, outcome } = await shellFor(url.pathname, {
+  const { body, status, outcome, tags } = await shellFor(url.pathname, {
     shell: BOOKING_SHELL,
     origin,
     // The share card is served from the public origin too, by `api/card.mjs` in this same deployment, so a crawler
@@ -69,6 +70,9 @@ export async function GET(request) {
       console.warn(JSON.stringify({ event: 'handle.shell.missed', handle, reason }));
     },
   });
+  // A link page's shell is filed under its handle, so the page's Live or Private switch deletes it from the edge at
+  // once (spec 0058, AC-23). A failed tag leaves only the answer's short s-maxage, which bounds it anyway.
+  if (tags !== undefined && tags.length > 0) await addCacheTag([...tags]).catch(() => undefined);
   return new Response(body, {
     status,
     headers: {

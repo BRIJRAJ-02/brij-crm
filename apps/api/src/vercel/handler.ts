@@ -21,6 +21,7 @@ import { createEdgeGuard } from '../edge.ts';
 import { ApiEnv, FunctionEnv } from '../env.ts';
 import { composeJobTasks } from '../jobs/compose.ts';
 import { createDrainWake, createDueWake, createJobDrain, type DrainReport, type JobDrain } from '../jobs/drain.ts';
+import type { EdgeCache } from '../edge-cache.ts';
 import { errorFields, log } from '../log.ts';
 import { createMailer } from '../mail/mailer.ts';
 import { createAnalytics, POSTHOG_EU_HOST } from '../monitoring/posthog.ts';
@@ -83,6 +84,8 @@ export interface FunctionPlatform {
   readonly keepAlive: (work: Promise<unknown>) => void;
   /** Hands a pool to the platform, which closes its idle clients before the instance suspends. */
   readonly attachPool?: Parameters<typeof createDatabase>[0]['onPool'];
+  /** Vercel's CDN cache tags, so a link page switched Private is deleted from the edge at once (spec 0058, AC-23). */
+  readonly edgeCache?: EdgeCache;
 }
 
 /** The function's one handler. */
@@ -207,6 +210,7 @@ export function createFunctionApi(source: Record<string, string | undefined>, pl
       mailer,
       rules: APP_RULES,
       keepAlive: platform.keepAlive,
+      ...(platform.edgeCache === undefined ? {} : { edgeCache: platform.edgeCache }),
     },
     env,
   });

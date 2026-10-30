@@ -10,7 +10,7 @@ import { log } from '../log.ts';
 import { MonitoringEnv } from '../monitoring/config.ts';
 import { startSentry } from '../monitoring/sentry.ts';
 import { createFunctionApi } from './handler.ts';
-import { attachPool, keepAlive } from './platform.ts';
+import { attachPool, edgeCache, keepAlive } from './platform.ts';
 
 const monitoring = MonitoringEnv.safeParse(process.env);
 if (monitoring.success && monitoring.data.SENTRY_DSN_SERVER !== undefined) {
@@ -26,7 +26,7 @@ if (monitoring.success && monitoring.data.SENTRY_DSN_SERVER !== undefined) {
   log.info('Monitoring off', { monitoring: 'off', service: 'api' });
 }
 
-const api = createFunctionApi(process.env, { keepAlive, attachPool });
+const api = createFunctionApi(process.env, { keepAlive, attachPool, edgeCache });
 
 /** Every method goes to the one handler; the Hono app routes them. */
 const handle = (request: Request): Promise<Response> => api.fetch(request);

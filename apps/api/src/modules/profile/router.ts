@@ -1,4 +1,4 @@
-import { myPicturePath } from '@crm/contracts';
+import { linkPageCacheTags, myPicturePath } from '@crm/contracts';
 import {
   archiveProfileItem,
   importProfileLinks,
@@ -100,9 +100,19 @@ export const profileRouter = member.profile.router({
     };
   }),
   /** Opening the caller's own link page, or its Live or Private switch (spec 0058, AC-23). */
-  show: member.profile.show.handler(({ context, input }) =>
-    commitWrite(context, { mutationId: input.mutationId }, () => showMyLinkPage(context.scope, input.live)),
-  ),
+  show: member.profile.show.handler(async ({ context, input }) => {
+    const shown = await commitWrite(context, { mutationId: input.mutationId }, () =>
+      showMyLinkPage(context.scope, input.live),
+    );
+    // The switch, either way: the edge's copies of the page (its shell, card, picture and share image) are deleted
+    // once the change has committed, so a page made Private stops being served at once and one made Live stops
+    // answering its cached 404. Opening the page changes nothing a visitor was sent, so it purges nothing.
+    if (input.live !== undefined) {
+      const { handle } = await getMyProfile(context.scope);
+      await context.edgeCache.forget(linkPageCacheTags(handle));
+    }
+    return shown;
+  }),
   counts: member.profile.counts.handler(async ({ context }) => {
     const counts = await readProfileCounts(context.scope);
     return { ...counts, presses: [...counts.presses] };

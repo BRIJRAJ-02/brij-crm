@@ -293,8 +293,37 @@ describe('the boot block (29 Oct 2026)', () => {
 describe('cacheControlFor', () => {
   it('keeps a missed read for seconds, so a cold api never leaves the plain shell cached for minutes', () => {
     expect(cacheControlFor('missed')).toBe('public, s-maxage=10');
-    expect(cacheControlFor('page')).toContain('s-maxage=300');
-    expect(cacheControlFor('profile')).toContain('s-maxage=300');
-    expect(cacheControlFor('unknown')).toContain('s-maxage=300');
+    expect(cacheControlFor('page')).toBe('public, s-maxage=300, stale-while-revalidate=86400');
+  });
+
+  it('keeps a link page, or the 404 a private one answers, two minutes at most, so its switch shows promptly', () => {
+    // Spec 0058, AC-23: a page made Private must not be served from the edge for long, stale or fresh.
+    for (const outcome of ['profile', 'unknown'] as const) {
+      const header = cacheControlFor(outcome);
+      expect(header).toBe('public, s-maxage=60, stale-while-revalidate=60');
+      const seconds = (name: string) => Number(new RegExp(`${name}=(\\d+)`).exec(header)?.[1] ?? 'NaN');
+      expect(seconds('s-maxage') + seconds('stale-while-revalidate')).toBeLessThanOrEqual(120);
+    }
+  });
+});
+
+describe('the edge cache tags', () => {
+  it('files a link page’s shell under the address asked and the handle its owner holds now', async () => {
+    const answer = await shellFor('/anish-old', deps({ readProfile: () => Promise.resolve(profile) }));
+    expect(answer.tags).toEqual(['link-page:anish-old', 'link-page:anish']);
+    expect((await shellFor('/anish', deps())).tags).toEqual(['link-page:anish']);
+  });
+
+  it('files the 404 a private page answers under its handle, so going Live again deletes it', async () => {
+    const answer = await shellFor('/anish', deps({ readProfile: () => Promise.resolve(undefined) }));
+    expect(answer.tags).toEqual(['link-page:anish']);
+  });
+
+  it('files nothing for a miss or a booking page, which the switch doesn’t touch', async () => {
+    const missed = await shellFor('/anish', deps({ readProfile: () => Promise.reject(new Error('down')) }));
+    expect(missed.tags).toBeUndefined();
+    const booking = await shellFor('/anish/intro', deps({ readPage: () => Promise.resolve(page) }));
+    expect(booking.outcome).toBe('page');
+    expect(booking.tags).toBeUndefined();
   });
 });

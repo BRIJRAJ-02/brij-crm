@@ -28,6 +28,9 @@ let db: Database;
 let identity: IdentityStore;
 let app: ReturnType<typeof createApp>;
 const fetched: string[] = [];
+/** What the app filed under the edge cache's tags, and what it asked the edge to delete (spec 0058, AC-23). */
+const tagged: string[][] = [];
+const forgotten: string[][] = [];
 const calendar: BookingCalendar = {
   busy: () => Promise.resolve({ status: 'read', busy: [] }),
   events: () => Promise.resolve({ meetingId: newId() }),
@@ -48,6 +51,13 @@ beforeAll(() => {
       bookingLimiter: createMemoryLimiter(),
       pictureFetch,
       now: () => NOW,
+      edgeCache: {
+        tag: (tags) => void tagged.push([...tags]),
+        forget: (tags) => {
+          forgotten.push([...tags]);
+          return Promise.resolve();
+        },
+      },
     },
     env,
   });
@@ -270,5 +280,41 @@ describe('a private link page’s picture', () => {
     const shown = await pictureAnswer(picture);
     expect(shown.status).toBe(200);
     expect(shown.cache).toContain('public');
+  });
+});
+
+// The Live or Private switch and the edge (spec 0058, AC-23): a public picture is kept five minutes at most and filed
+// under the page's tag, the switch deletes that tag once it commits, and the origin answers 404 `no-store` at once.
+describe('the Live or Private switch and the edge cache', () => {
+  it('files a live page’s picture under its handle, and switching Private deletes it and answers 404 at once', async () => {
+    const m = await memberWithWorkspace(app);
+    const [user] = await testQuery<{ id: string }>(ownerUrl, `select id::text from auth."user" where email = $1`, [
+      m.email,
+    ]);
+    if (user === undefined) throw new Error('The signed in person has no account.');
+    await testQuery(ownerUrl, `update auth."user" set image = $1 where id = $2`, [GOOGLE, user.id]);
+    expect((await m.client.profile.show({ workspace: m.slug, mutationId: newId(), live: true })).isPublic).toBe(true);
+    const { handle } = await m.client.profile.get({ workspace: m.slug });
+    if (handle === undefined) throw new Error('No link page was made with the membership.');
+    const tag = `link-page:${handle}`;
+    expect(forgotten.at(-1)).toEqual([tag]);
+    const picture = `/api/public/profiles/${handle}/picture?v=${pictureVersion(user.id, GOOGLE)}`;
+
+    const live = await pictureAnswer(picture);
+    expect(live.status).toBe(200);
+    expect(live.cache).toBe('public, max-age=300, s-maxage=300');
+    expect(tagged.at(-1)).toEqual([tag]);
+
+    const forgets = forgotten.length;
+    expect((await m.client.profile.show({ workspace: m.slug, mutationId: newId(), live: false })).isPublic).toBe(false);
+    expect(forgotten.slice(forgets)).toEqual([[tag]]);
+    const hidden = await pictureAnswer(picture);
+    expect(hidden.status).toBe(404);
+    expect(hidden.cache).toBe('no-store');
+
+    // Opening the page changes nothing a visitor was sent, so it deletes nothing.
+    const opens = forgotten.length;
+    await m.client.profile.show({ workspace: m.slug, mutationId: newId() });
+    expect(forgotten.length).toBe(opens);
   });
 });

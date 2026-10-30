@@ -6,10 +6,14 @@ import { Resvg } from '@resvg/resvg-js';
 import satori from 'satori';
 import { describe, expect, it } from 'vitest';
 import {
+  CARD_CACHE_CONTROL,
+  CARD_CACHE_CONTROL_MISSED,
+  CARD_CACHE_CONTROL_UNVERSIONED,
   CARD_HEIGHT,
   CARD_WIDTH,
   STRIP_HEIGHT,
   STRIP_WIDTH,
+  cardCacheTags,
   cardFonts,
   cardTree,
   clampWords,
@@ -158,5 +162,24 @@ describe('the card address', () => {
     expect(handleOf('/api/public/handles/..%2F..%2Fetc/card.png')).toBeUndefined();
     expect(handleOf('/api/public/handles/Ada/card.png')).toBeUndefined();
     expect(handleOf('/api/public/handles/a/card.png')).toBeUndefined();
+  });
+});
+
+describe('the card’s cache (spec 0058, AC-23)', () => {
+  it('is never immutable, and the edge keeps it five minutes at most, so a page made Private stops showing it', () => {
+    for (const header of [CARD_CACHE_CONTROL, CARD_CACHE_CONTROL_UNVERSIONED, CARD_CACHE_CONTROL_MISSED]) {
+      expect(header).not.toContain('immutable');
+      expect(header).not.toContain('stale-while-revalidate');
+      const edge = Number(/s-maxage=(\d+)/.exec(header)?.[1] ?? 'NaN');
+      const browser = Number(/max-age=(\d+)/.exec(header)?.[1] ?? 'NaN');
+      expect(edge).toBeLessThanOrEqual(300);
+      expect(browser).toBeLessThanOrEqual(300);
+    }
+  });
+
+  it('files the card under the address’s handle and the one the page holds now, so the switch deletes it', () => {
+    expect(cardCacheTags('anish-old', { handle: 'anish' })).toEqual(['link-page:anish-old', 'link-page:anish']);
+    expect(cardCacheTags('anish', undefined)).toEqual(['link-page:anish']);
+    expect(cardCacheTags('anish', { handle: 42 })).toEqual(['link-page:anish']);
   });
 });
