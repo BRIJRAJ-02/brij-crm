@@ -99,9 +99,9 @@ export const profileRouter = member.profile.router({
       url: wallet({ handle: me.handle, name: me.name, ...(me.bio === '' ? {} : { bio: me.bio }) }),
     };
   }),
-  /** Sharing its link makes the caller's own link page public (27 Oct 2026); editing it already has. */
+  /** Opening the caller's own link page, or its Live or Private switch (spec 0058, AC-23). */
   show: member.profile.show.handler(({ context, input }) =>
-    commitWrite(context, { mutationId: input.mutationId }, () => showMyLinkPage(context.scope)),
+    commitWrite(context, { mutationId: input.mutationId }, () => showMyLinkPage(context.scope, input.live)),
   ),
   counts: member.profile.counts.handler(async ({ context }) => {
     const counts = await readProfileCounts(context.scope);

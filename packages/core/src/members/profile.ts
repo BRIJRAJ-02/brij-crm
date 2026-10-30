@@ -17,6 +17,7 @@ import {
   profileHandlesOf,
   publicProfilesOf,
   savePublicProfile,
+  setLinkPageLive,
   showLinkPage,
   suggestHandle,
 } from '../booking/handles.ts';
@@ -219,14 +220,16 @@ export async function updateMyMemberProfile(
           after.socials = socials.map((link) => link.href);
         }
       }
-      if (Object.keys(after).length === 0) return now;
-      // An edit of what the link page says makes it public (27 Oct 2026). A name or time zone alone doesn't, since
-      // first run sets those for everyone and a page made with a membership stays private until its owner acts; nor
-      // does hiding their photo, which is someone asking for less of themself to show, not for the page to go up.
-      const userId = selfUserId(scope);
-      if (userId !== undefined && ['handle', 'bio', 'socials'].some((field) => field in after)) {
-        await showLinkPage(tx, userId, scope.workspaceId);
+      // A handle its owner claims is live at once, as on Linktree (spec 0058, AC-23): a new one, or the one made for
+      // them, which first run's Your link page claims by sending it unchanged. A page they set Private stays so
+      // (`showLinkPage` never overrules their switch). Nothing else here shows the page: a name, a time zone, a bio or
+      // a photo choice made in Settings is not someone opening their link page.
+      const claimant = input.handle === undefined ? undefined : selfUserId(scope);
+      if (Object.keys(after).length === 0) {
+        if (claimant === undefined || now.isPublic !== false) return now;
+        return { ...now, isPublic: await showLinkPage(tx, claimant, scope.workspaceId) };
       }
+      if (claimant !== undefined) await showLinkPage(tx, claimant, scope.workspaceId);
       if (after.name !== undefined || 'timeZone' in after) {
         await tx
           .update(members)
@@ -253,11 +256,18 @@ export async function updateMyMemberProfile(
 }
 
 /**
- * Makes the caller's own link page public (27 Oct 2026): what sharing its link does, since a page made with a
- * membership is private until its owner edits it or shares it. False when they have no page in this workspace.
+ * The caller's own link page in this workspace, Live or Private (spec 0058, AC-23). With no `live`, they opened it:
+ * a page made for them that nobody has chosen for goes live, once, and one they set Private stays so. With `live`,
+ * it is their Live or Private switch. Answers whether the page is public now; false when they have no page here.
  */
-export async function showMyLinkPage(scope: EngineScope): Promise<{ readonly isPublic: boolean }> {
+export async function showMyLinkPage(scope: EngineScope, live?: boolean): Promise<{ readonly isPublic: boolean }> {
   const userId = selfUserId(scope);
   if (userId === undefined) return { isPublic: false };
-  return { isPublic: await inWorkspace(scope, (tx) => showLinkPage(tx, userId, scope.workspaceId)) };
+  return {
+    isPublic: await inWorkspace(scope, (tx) =>
+      live === undefined
+        ? showLinkPage(tx, userId, scope.workspaceId)
+        : setLinkPageLive(tx, userId, scope.workspaceId, live),
+    ),
+  };
 }

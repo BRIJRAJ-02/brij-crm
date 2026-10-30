@@ -236,9 +236,9 @@ describe('Hide my photo on booking pages (owner ask A124)', () => {
   });
 });
 
-// A private link page's picture (27 Oct 2026): theirs alone to see, and the edge never keeps it for anyone else. Since
-// 0119 a page made with a membership is live at once, so the test makes this one private as a page made before then
-// and never shown would be (`shown_at` null), then shows it the way its owner would.
+// A private link page's picture (27 Oct 2026): theirs alone to see, and the edge never keeps it for anyone else. A page
+// made with a membership starts private again since spec 0058 (AC-23, migration 0135); the test still clears
+// `shown_at` itself, so it holds whichever way a page starts, then opens it the way its owner would.
 describe('a private link page’s picture', () => {
   it('answers a stranger as a handle nobody holds, and its owner privately', async () => {
     const m = await memberWithWorkspace(app);
@@ -247,7 +247,7 @@ describe('a private link page’s picture', () => {
     ]);
     if (user === undefined) throw new Error('The signed in person has no account.');
     await testQuery(ownerUrl, `update auth."user" set image = $1 where id = $2`, [GOOGLE, user.id]);
-    // A page is live from the moment it exists (0119); one left private (as 0116 made them) is what this checks.
+    // Private, as a page made for a membership starts (0135) and as 0116 made them: what this checks.
     await testQuery(ownerUrl, `update auth.public_profiles set shown_at = null where user_id = $1`, [user.id]);
     const profile = await m.client.profile.get({ workspace: m.slug });
     expect(profile.isPublic).toBe(false);

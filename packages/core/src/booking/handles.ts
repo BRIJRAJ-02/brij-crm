@@ -28,8 +28,9 @@ export interface PublicProfileRow {
    */
   readonly shareImageVersion?: string;
   /**
-   * Whether the link page is public yet (27 Oct 2026). A page made with a membership starts private, and shows the
-   * first time its owner edits it or shares its link (`showLinkPage`).
+   * Whether the link page is public (27 Oct 2026; spec 0058, AC-23). A page made with a membership starts private and
+   * goes live the first time its owner claims or opens it (`showLinkPage`); after that only their Live or Private
+   * switch changes it (`setLinkPageLive`).
    */
   readonly isShown: boolean;
 }
@@ -78,14 +79,32 @@ interface ShownRow extends Record<string, unknown> {
 }
 
 /**
- * Makes the person's link page in this workspace public, once (`crm_show_public_profile`, 27 Oct 2026): the first
- * time they edit it or share its link. A page made with their membership is private until then, since an address
- * made from their name, showing their name and photo, is not one they ever asked for. True when the page is public
- * after this (now or already); false when they have no page here. It never makes a page private again.
+ * The person claimed, opened or edited their link page in this workspace (`crm_show_public_profile`; spec 0058,
+ * AC-23): a page nobody has chosen for yet goes live, once, and is theirs from then on. A page made with their
+ * membership is private until then, since an address made from their name, showing their name and photo, is not
+ * one they ever asked for. True when the page is public after this; false when they set it Private, or have no page
+ * here. It never overrules their own choice, so it is safe on every claim, open and edit.
  */
 export async function showLinkPage(tx: WorkspaceTx, userId: string, workspaceId: string): Promise<boolean> {
   const found = await tx.execute<ShownRow>(
     sql`select crm_show_public_profile(${userId}::uuid, ${workspaceId}::uuid) as shown`,
+  );
+  return found.rows[0]?.shown === true;
+}
+
+/**
+ * The Live or Private switch (`crm_set_public_profile_live`; spec 0058, AC-23): the person's link page in this
+ * workspace is public when `live`, private otherwise, and their own choice from now on. Answers whether it is
+ * public after this; false, writing nothing, when they have no page here.
+ */
+export async function setLinkPageLive(
+  tx: WorkspaceTx,
+  userId: string,
+  workspaceId: string,
+  live: boolean,
+): Promise<boolean> {
+  const found = await tx.execute<ShownRow>(
+    sql`select crm_set_public_profile_live(${userId}::uuid, ${workspaceId}::uuid, ${live}) as shown`,
   );
   return found.rows[0]?.shown === true;
 }
