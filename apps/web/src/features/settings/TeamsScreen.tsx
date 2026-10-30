@@ -125,7 +125,13 @@ export function TeamsScreen({ data, toasts, slug, teams, members, canManage }: T
         setDeleting(undefined);
         // A team an access rule names stays, and the toast opens the rule that holds it (the first object's Access).
         if (isDataError(error) && error.code === 'IN_USE') {
-          void blocker(team).then((href) => {
+          // The toast waits a moment for the link at most: the refusal itself is never held up by the search.
+          const quickly = new Promise<undefined>((resolve) => {
+            setTimeout(() => {
+              resolve(undefined);
+            }, 1500);
+          });
+          void Promise.race([blocker(team), quickly]).then((href) => {
             toasts.toast({
               tone: 'danger',
               message: error.message,

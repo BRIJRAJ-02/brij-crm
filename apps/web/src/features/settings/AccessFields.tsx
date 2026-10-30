@@ -44,7 +44,7 @@ export function AccessFields({ object, fields, subjects, onChange }: AccessField
   const total = subjects.reduce((sum, each) => sum + limitedCount(each.fields, fields), 0);
   const canRule = subject.level !== 'none';
   return (
-    <Disclosure title={strings.fieldsTitle} {...(total > 0 ? { count: total } : {})}>
+    <Disclosure title={strings.fieldsTitle} {...(total > 0 ? { count: total, countLabel: strings.fieldsLimited } : {})}>
       {subjects.length > 1 && (
         <Select
           label={strings.fieldsFor}
@@ -59,7 +59,7 @@ export function AccessFields({ object, fields, subjects, onChange }: AccessField
       )}
       {canRule ? (
         <Table
-          label={strings.fieldsTable}
+          label={strings.fieldsTitle}
           columns={COLUMNS}
           rows={fields}
           getRowId={(field) => field.id}
@@ -77,7 +77,6 @@ export function AccessFields({ object, fields, subjects, onChange }: AccessField
                   label: strings.fieldStates[each],
                 }))}
                 value={state}
-                {...(field.isPrimary ? { hint: strings.nameStays } : {})}
                 onChange={(id) => {
                   if (id === 'visible' || id === 'read' || id === 'hidden') {
                     onChange(subject.key, withField(subject.fields, field.id, id));

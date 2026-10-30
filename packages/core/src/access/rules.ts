@@ -381,12 +381,22 @@ async function impactOf(
   const none: AccessImpact = { people: 0, views: 0, forms: 0 };
   if (covered.length === 0) return none;
   const all = await workspaceRules(tx);
-  const rows = await tx
-    .select({ id: members.id, role: members.role })
-    .from(members)
-    .where(
-      and(eq(members.workspaceId, scope.workspaceId), eq(members.status, 'active'), inArray(members.id, [...covered])),
+  // In chunks, so a role that covers tens of thousands never meets Postgres's limit on bound values.
+  const rows: { id: string; role: string }[] = [];
+  for (let at = 0; at < covered.length; at += 5000) {
+    rows.push(
+      ...(await tx
+        .select({ id: members.id, role: members.role })
+        .from(members)
+        .where(
+          and(
+            eq(members.workspaceId, scope.workspaceId),
+            eq(members.status, 'active'),
+            inArray(members.id, covered.slice(at, at + 5000)),
+          ),
+        )),
     );
+  }
   const fieldIds = (
     await tx
       .select({ id: attributes.id })
@@ -410,36 +420,48 @@ async function impactOf(
       ...next.records,
     ],
   });
+  // Members with the same role and teams get the same verdict (nothing here depends on who they are), so each
+  // distinct pair is worked out once, however many people it covers.
+  const verdicts = new Map<
+    string,
+    { readonly less: boolean; readonly gone: boolean; readonly lost: readonly string[] }
+  >();
   let people = 0;
   let gone = false;
   const lost = new Set<string>();
   for (const row of rows) {
     if (!isRole(row.role)) continue;
-    const rules = all.forMember(row.id);
-    const principal = {
-      kind: 'member',
-      memberId: row.id,
-      role: row.role,
-      teamIds: rules.teamIds ?? [],
-      teamMemberIds: rules.teamMemberIds ?? [],
-    } as const;
-    const was = roleAccess(principal, rules);
-    const now = roleAccess(principal, after(rules));
-    let less = false;
-    if ((LEVEL_RANK[objectLevel(now, objectId)] ?? 0) < (LEVEL_RANK[objectLevel(was, objectId)] ?? 0)) {
-      less = true;
-      if (objectLevel(now, objectId) === 'none') gone = true;
-    }
-    if (reachOf(now, objectId) < reachOf(was, objectId)) less = true;
-    for (const id of fieldIds) {
-      const before = fieldLevel(was, { id, objectId });
-      const level = fieldLevel(now, { id, objectId });
-      if ((LEVEL_RANK[level] ?? 0) < (LEVEL_RANK[before] ?? 0)) {
+    const teamIds = all.teamIdsOf(row.id);
+    const key = `${row.role}|${teamIds.join(',')}`;
+    let verdict = verdicts.get(key);
+    if (verdict === undefined) {
+      const rules: AccessRules = { levels: all.levels, records: all.records, teamIds, teamMemberIds: [] };
+      const principal = { kind: 'member', memberId: row.id, role: row.role, teamIds, teamMemberIds: [] } as const;
+      const was = roleAccess(principal, rules);
+      const now = roleAccess(principal, after(rules));
+      let less = false;
+      let objectGone = false;
+      if ((LEVEL_RANK[objectLevel(now, objectId)] ?? 0) < (LEVEL_RANK[objectLevel(was, objectId)] ?? 0)) {
         less = true;
-        if (level === 'hidden') lost.add(id);
+        objectGone = objectLevel(now, objectId) === 'none';
       }
+      if (reachOf(now, objectId) < reachOf(was, objectId)) less = true;
+      const hidden: string[] = [];
+      for (const id of fieldIds) {
+        const before = fieldLevel(was, { id, objectId });
+        const level = fieldLevel(now, { id, objectId });
+        if ((LEVEL_RANK[level] ?? 0) < (LEVEL_RANK[before] ?? 0)) {
+          less = true;
+          if (level === 'hidden') hidden.push(id);
+        }
+      }
+      verdict = { less, gone: objectGone, lost: hidden };
+      verdicts.set(key, verdict);
     }
-    if (less) people += 1;
+    if (!verdict.less) continue;
+    people += 1;
+    gone ||= verdict.gone;
+    for (const id of verdict.lost) lost.add(id);
   }
   if (people === 0) return none;
   // The shared views the object has that name a field some of them can no longer see (or, with the object gone, all).
@@ -484,12 +506,16 @@ export async function setObjectAccess(
   if (rule !== null && (!isLevel(rule.level) || !isScope(rule.records))) {
     throw inputInvalid('rule', 'Pick no access, view or edit, and which records.');
   }
-  if (rule?.fields !== undefined) {
-    for (const [attributeId, level] of Object.entries(rule.fields)) {
-      checkId(attributeId, FIELD_NOT_FOUND);
-      if (!isFieldLevel(level)) throw inputInvalid('rule', 'Pick read only or hidden for a field.');
-    }
-  }
+  // Field rules by canonical id, each a level the code knows.
+  const givenFields: FieldRules | undefined =
+    rule?.fields === undefined
+      ? undefined
+      : Object.fromEntries(
+          Object.entries(rule.fields).map(([attributeId, level]) => {
+            if (!isFieldLevel(level)) throw inputInvalid('rule', 'Pick read only or hidden for a field.');
+            return [checkId(attributeId, FIELD_NOT_FOUND), level];
+          }),
+        );
   const teamId = subject.type === 'team' ? checkId(subject.teamId, TEAM_NOT_FOUND) : undefined;
   const { result } = await runWrite(
     scope,
@@ -522,7 +548,7 @@ export async function setObjectAccess(
       }
       // Field rules: those given, else the ones the subject has (a null rule clears them). Each names a live field of
       // this object (one already stored may have been archived since), and the record's name is never hidden.
-      const given = rule?.fields;
+      const given = givenFields;
       const fields: FieldRules = rule === null ? {} : (given ?? was?.fields ?? {});
       if (given !== undefined) {
         const live = new Set(before.fields.map((field) => field.id));

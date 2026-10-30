@@ -150,12 +150,10 @@ export const AccessPreviewInput = ObjectAccessRead.extend({ as: PreviewAs });
 /** Previewing an object as someone. */
 export type AccessPreviewInput = z.infer<typeof AccessPreviewInput>;
 
-/** How many records a preview names, at most. */
-export const PREVIEW_SAMPLE = 5;
-
 /**
  * The object as someone sees it, read through the access door as them (spec 0032, AC-858): what they may do, the
- * fields they have (hidden ones are absent), how many records they see and the first few by name. Never a write.
+ * fields they have (hidden ones are absent) and how many records they see (`atLeast` when that is only a floor).
+ * Never a write.
  */
 export const AccessPreview = z.object({
   /** Who is shown: the person's name, or the team's. */
@@ -163,7 +161,7 @@ export const AccessPreview = z.object({
   level: ObjectAccessLevel,
   fields: z.array(z.object({ id: Uuid, title: z.string(), canEdit: z.boolean() })),
   count: z.number().int().nonnegative(),
-  sample: z.array(z.object({ id: Uuid, name: z.string() })).max(PREVIEW_SAMPLE),
+  atLeast: z.boolean(),
 });
 /** The object as someone sees it. */
 export type AccessPreview = z.infer<typeof AccessPreview>;

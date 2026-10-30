@@ -711,8 +711,7 @@ describe('Preview as (AC-858)', () => {
     const preview = await previewAccess(w.owner, { objectId: w.companies, as: { type: 'member', memberId: ada } });
     expect(preview.name).toBe('Ada');
     expect(preview.level).toBe('read');
-    expect(preview.count).toBe(1);
-    expect(preview.sample.map((each) => each.name)).toEqual(['Acme']);
+    expect(preview).toMatchObject({ count: 1, atLeast: false });
     expect(preview.fields.map((each) => each.id)).not.toContain(description);
     expect(preview.fields.every((each) => !each.canEdit)).toBe(true);
     // The member may not ask, for themself or anyone.
@@ -749,7 +748,7 @@ describe('Preview as (AC-858)', () => {
     const bea = await w.add('Bea');
     expect(
       await previewAccess(w.owner, { objectId: w.companies, as: { type: 'member', memberId: bea } }),
-    ).toMatchObject({ level: 'none', fields: [], count: 0, sample: [] });
+    ).toMatchObject({ level: 'none', fields: [], count: 0, atLeast: false });
     expect(
       await refusalOf(previewAccess(w.owner, { objectId: w.companies, as: { type: 'member', memberId: outsider } })),
     ).toMatchObject({ code: 'NOT_FOUND' });

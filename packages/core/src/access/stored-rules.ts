@@ -103,6 +103,8 @@ export interface WorkspaceRules {
   readonly records: readonly RecordRuleRow[];
   /** The rules and teams as one member sees them, ready for `roleAccess`. */
   readonly forMember: (memberId: string) => AccessRules;
+  /** The ids of the teams a member is in, sorted: cheap, for work that only needs who shares which teams. */
+  readonly teamIdsOf: (memberId: string) => readonly string[];
 }
 
 /**
@@ -131,8 +133,12 @@ export async function workspaceRules(tx: WorkspaceTx): Promise<WorkspaceRules> {
   const peopleOf = new Map<string, string[]>();
   for (const row of found.rows) {
     if (row.k === 'member' && row.a !== null && row.b !== null) {
-      teamsOf.set(row.b, [...(teamsOf.get(row.b) ?? []), row.a]);
-      peopleOf.set(row.a, [...(peopleOf.get(row.a) ?? []), row.b]);
+      const joined = teamsOf.get(row.b);
+      if (joined === undefined) teamsOf.set(row.b, [row.a]);
+      else joined.push(row.a);
+      const inTeam = peopleOf.get(row.a);
+      if (inTeam === undefined) peopleOf.set(row.a, [row.b]);
+      else inTeam.push(row.b);
     } else if (row.k === 'level') {
       const level = levelOf(row);
       if (level !== undefined) levels.push(level);
@@ -144,6 +150,7 @@ export async function workspaceRules(tx: WorkspaceTx): Promise<WorkspaceRules> {
   return {
     levels,
     records,
+    teamIdsOf: (memberId) => [...(teamsOf.get(memberId) ?? [])].sort(),
     forMember: (memberId) => {
       const teamIds = [...(teamsOf.get(memberId) ?? [])].sort();
       const mates = new Set<string>([memberId, ...teamIds.flatMap((teamId) => peopleOf.get(teamId) ?? [])]);

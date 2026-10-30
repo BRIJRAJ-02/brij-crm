@@ -72,7 +72,7 @@ export const strings = {
   /** Fields (spec 0032, AC-846, AC-856): which fields a subject sees or changes. */
   fieldsTitle: 'Fields',
   fieldsFor: 'For',
-  fieldsTable: 'Fields',
+  fieldsLimited: 'limited',
   fieldColumn: 'Field',
   accessColumn: 'Access',
   fieldFor: (field: string, who: string) => `${field} for ${who}`,
@@ -80,8 +80,6 @@ export const strings = {
   /** A subject who can't see the object has no fields to rule. */
   fieldsNone: (who: string, object: string) => `${who} can’t see ${object}.`,
   fieldsChanged: 'Fields changed.',
-  /** Under a field's picker: why the record's name has no Hidden. */
-  nameStays: 'Names always show.',
   /** What a change took away from people who had it (AC-850): a chip row, and Undo. */
   lessTitle: 'Less access',
   lessPeople: (count: number) => `${String(count)} ${count === 1 ? 'person' : 'people'}`,
@@ -91,14 +89,13 @@ export const strings = {
   previewAs: 'Preview as',
   previewMembers: 'People',
   previewTeams: 'Teams',
-  previewNoOne: 'No one to preview yet.',
   previewTitle: (name: string) => `Previewing as ${name}`,
-  previewReadOnly: 'Read only',
   previewSees: 'Sees',
-  previewRecordsLabel: 'Records',
   previewExit: 'Exit preview',
   previewFailed: 'That preview didn’t load.',
-  previewRecords: (count: number) => `${String(count)} ${count === 1 ? 'record' : 'records'}`,
+  previewRecords: (count: number, atLeast: boolean) =>
+    `${atLeast ? '10,000+' : String(count)} ${count === 1 && !atLeast ? 'record' : 'records'}`,
+  previewFieldReadOnly: (title: string) => `${title} (read only)`,
   previewFields: (count: number) => `${String(count)} ${count === 1 ? 'field' : 'fields'}`,
   previewLevel: { none: 'Can’t see', read: 'Can view', write: 'Can edit' } as const satisfies Record<
     ObjectAccessLevel,

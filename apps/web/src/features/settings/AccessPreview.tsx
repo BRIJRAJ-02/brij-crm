@@ -24,6 +24,7 @@ import {
   type Toasts,
 } from '@crm/ui';
 import { useRef, useState } from 'react';
+import { focusTitle } from '../navigation/focus-title.ts';
 import { strings } from './teams-strings.ts';
 
 /** What the preview is doing: nothing, reading, showing someone, or unable to. */
@@ -49,10 +50,14 @@ export function useAccessPreview({ data, toasts, slug, objectId, teams, members 
   // The latest ask: an answer for an earlier pick never shows over a later one, or after Exit.
   const asked = useRef(0);
 
-  const start = (as: PreviewAs) => {
+  // Who is shown, so a rule change can read the preview again.
+  const shown = useRef<PreviewAs | undefined>(undefined);
+
+  const start = (as: PreviewAs, quiet = false) => {
     asked.current += 1;
     const mine = asked.current;
-    setPhase({ kind: 'loading', as });
+    shown.current = as;
+    if (!quiet) setPhase({ kind: 'loading', as });
     data.accessRules.preview(slug, objectId, as).then(
       (preview) => {
         if (asked.current === mine) setPhase({ kind: 'ready', preview });
@@ -66,7 +71,14 @@ export function useAccessPreview({ data, toasts, slug, objectId, teams, members 
   };
   const exit = () => {
     asked.current += 1;
+    shown.current = undefined;
     setPhase({ kind: 'idle' });
+    // The Exit button went away with the banner.
+    focusTitle();
+  };
+  /** A rule changed while someone is shown: read them again behind what is on screen, so it never goes stale. */
+  const refresh = () => {
+    if (shown.current !== undefined) start(shown.current, true);
   };
 
   // Owners and admins see everything, so only the people a rule can restrict are worth previewing.
@@ -111,7 +123,11 @@ export function useAccessPreview({ data, toasts, slug, objectId, teams, members 
     if (phase.kind === 'idle' || phase.kind === 'failed') return null;
     if (phase.kind === 'loading') {
       return (
-        <Callout title={strings.previewLoading} actions={<Button onPress={exit}>{strings.previewExit}</Button>}>
+        <Callout
+          isAnnounced
+          title={strings.previewLoading}
+          actions={<Button onPress={exit}>{strings.previewExit}</Button>}
+        >
           <Skeleton width="long" />
         </Callout>
       );
@@ -124,38 +140,24 @@ export function useAccessPreview({ data, toasts, slug, objectId, teams, members 
         actions={<Button onPress={exit}>{strings.previewExit}</Button>}
       >
         <FieldGroup label={strings.previewSees} layout="row">
-          <Badge size="chip" text={strings.previewReadOnly} dot="orange" />
           <Badge size="chip" text={strings.previewLevel[preview.level]} dot="gray" />
           {preview.level !== 'none' && (
             <>
-              <Badge size="chip" text={strings.previewRecords(preview.count)} dot="blue" />
+              <Badge size="chip" text={strings.previewRecords(preview.count, preview.atLeast)} dot="blue" />
               <Badge size="chip" text={strings.previewFields(preview.fields.length)} dot="blue" />
             </>
           )}
         </FieldGroup>
         {preview.level !== 'none' && (
-          <>
-            <FieldGroup label={strings.fieldsTitle} layout="row">
-              {preview.fields.map((field) => (
-                <Badge
-                  key={field.id}
-                  size="chip"
-                  text={field.canEdit ? field.title : `${field.title} · ${strings.fieldStates.read}`}
-                />
-              ))}
-            </FieldGroup>
-            {preview.sample.length > 0 && (
-              <FieldGroup label={strings.previewRecordsLabel} layout="row">
-                {preview.sample.map((record) => (
-                  <Badge key={record.id} size="chip" text={record.name} />
-                ))}
-              </FieldGroup>
-            )}
-          </>
+          <FieldGroup label={strings.fieldsTitle}>
+            {preview.fields
+              .map((field) => (field.canEdit ? field.title : strings.previewFieldReadOnly(field.title)))
+              .join(', ')}
+          </FieldGroup>
         )}
       </Callout>
     );
   })();
 
-  return { menu, banner };
+  return { menu, banner, refresh };
 }

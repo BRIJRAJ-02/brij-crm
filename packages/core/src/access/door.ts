@@ -562,7 +562,9 @@ export async function previewScope(
     return { access, name: team.name };
   });
   if (found === undefined) throw refuse('NOT_FOUND', "That person or team doesn't exist.");
-  return { scope: rescope(scope, scope.actor, found.access), name: found.name };
+  // Their data policy and none of their permissions: previewing an owner must never hand out an owner's powers.
+  const access: Access = Object.freeze({ ...found.access, permissions: Object.freeze([]) });
+  return { scope: rescope(scope, scope.actor, access), name: found.name };
 }
 
 /**

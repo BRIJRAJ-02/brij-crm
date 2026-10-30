@@ -62,12 +62,6 @@ export interface AccessTabProps {
   readonly members: readonly MemberView[];
 }
 
-/** What the last change took away from people who had it, and the Undo that gives it back. */
-interface Less {
-  readonly impact: AccessImpact;
-  readonly onUndo: () => void;
-}
-
 /** One row of the grid. */
 type Row =
   | { readonly kind: 'fixed' }
@@ -99,13 +93,18 @@ const columnsFor = (slug: string, apiSlug: string, hasOwner: boolean): readonly 
 
 const SCOPES: readonly RecordScope[] = ['all', 'own', 'team'];
 
+/** What Undo puts back: a subject at its default has no rule to restore, so it is cleared. */
+const backOf = (standing: SubjectAccess): Rule | null =>
+  standing.isDefault ? null : { level: standing.level, records: standing.records, fields: standing.fields };
+
 /** The message a refusal shows, in the server's words when it gave any. */
 const messageOf = (error: unknown) => (isDataError(error) ? error.message : strings.ruleFailed);
 
 /** The Access tab: a grid of who can see and edit, a line for the result, and Add team. */
 export function AccessTab({ data, toasts, slug, object, access: initial, teams, members }: AccessTabProps) {
   const [access, setAccess] = useState(initial);
-  const [less, setLess] = useState<Less | undefined>(undefined);
+  // What the last change took away from people who had it (AC-850); its Undo is the toast.
+  const [less, setLess] = useState<AccessImpact | undefined>(undefined);
   const preview = useAccessPreview({ data, toasts, slug, objectId: object.id, teams, members });
   // The latest change sent for each subject: an older answer arriving late never lands over a newer change.
   const sent = useRef(new Map<string, number>());
@@ -134,20 +133,18 @@ export function AccessTab({ data, toasts, slug, object, access: initial, teams, 
     const isLatest = () => sent.current.get(key) === mine;
     data.accessRules.set(slug, object.id, subject, rule).then(
       ({ access: next, impact }) => {
-        if (isLatest()) setAccess(next);
+        // An older answer never lands over a newer change.
+        if (!isLatest()) return;
+        setAccess(next);
+        preview.refresh();
         // An Undo (it has none of its own) brings access back, so what was taken away is no longer news.
         if (undo === undefined) {
           setLess(undefined);
           return;
         }
         if (lastToast.current !== undefined) toasts.dismiss(lastToast.current);
-        // Taking access from people who had it says how many and what, as chips, with Undo (AC-850); anything
-        // else is the quiet toast.
-        if (impact.people > 0) {
-          setLess({ impact, onUndo: () => persist(subject, undo.back) });
-          return;
-        }
-        setLess(undefined);
+        // Taking access from people who had it says how many, as chips (AC-850); the toast offers Undo either way.
+        setLess(impact.people > 0 ? impact : undefined);
         lastToast.current = toasts.toast({
           tone: 'success',
           message: undo.message,
@@ -170,7 +167,7 @@ export function AccessTab({ data, toasts, slug, object, access: initial, teams, 
   const removeTeam = (standing: SubjectAccess) => {
     persist(standing.subject, null, {
       message: strings.teamRemoved(nameOf(standing.subject)),
-      back: { level: standing.level, records: standing.records, fields: standing.fields },
+      back: backOf(standing),
     });
     // The button that asked went away with the row.
     focusTitle();
@@ -179,11 +176,7 @@ export function AccessTab({ data, toasts, slug, object, access: initial, teams, 
   const change = (standing: SubjectAccess, next: Partial<Rule>) => {
     const level = next.level ?? standing.level;
     const records = level === 'none' ? 'all' : (next.records ?? standing.records);
-    persist(
-      standing.subject,
-      { level, records },
-      { message: strings.changed, back: { level: standing.level, records: standing.records, fields: standing.fields } },
-    );
+    persist(standing.subject, { level, records }, { message: strings.changed, back: backOf(standing) });
   };
 
   /** One subject's field rules set, as picked in the Fields fold; the object's level and records stay as they are. */
@@ -193,10 +186,7 @@ export function AccessTab({ data, toasts, slug, object, access: initial, teams, 
     persist(
       standing.subject,
       { level: standing.level, records: standing.records, fields },
-      {
-        message: strings.fieldsChanged,
-        back: { level: standing.level, records: standing.records, fields: standing.fields },
-      },
+      { message: strings.fieldsChanged, back: backOf(standing) },
     );
   };
 
@@ -312,11 +302,11 @@ export function AccessTab({ data, toasts, slug, object, access: initial, teams, 
       {/* The result is said as the grid changes, so a screen reader hears what the tick did. */}
       <Callout isAnnounced>{summary}</Callout>
       {less !== undefined && (
-        <Callout tone="warning" isAnnounced actions={<Button onPress={less.onUndo}>{strings.undo}</Button>}>
+        <Callout isAnnounced>
           <FieldGroup label={strings.lessTitle} layout="row">
-            <Badge size="chip" text={strings.lessPeople(less.impact.people)} dot="orange" />
-            {less.impact.views > 0 && <Badge size="chip" text={strings.lessViews(less.impact.views)} dot="orange" />}
-            {less.impact.forms > 0 && <Badge size="chip" text={strings.lessForms(less.impact.forms)} dot="orange" />}
+            <Badge size="chip" text={strings.lessPeople(less.people)} dot="orange" />
+            {less.views > 0 && <Badge size="chip" text={strings.lessViews(less.views)} dot="orange" />}
+            {less.forms > 0 && <Badge size="chip" text={strings.lessForms(less.forms)} dot="orange" />}
           </FieldGroup>
         </Callout>
       )}
@@ -329,7 +319,7 @@ export function AccessTab({ data, toasts, slug, object, access: initial, teams, 
           renderCell={cell}
           isScrollable
         />
-        <ButtonGroup label={strings.gridTitle} layout="row">
+        <ButtonGroup label={strings.addTeam} layout="row">
           {teams.length === 0 ? (
             <ButtonLink href={teamsSettingsHref(slug)} icon="users-round">
               {strings.makeTeam}

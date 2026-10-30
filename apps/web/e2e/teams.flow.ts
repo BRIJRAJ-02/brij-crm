@@ -226,7 +226,8 @@ test.describe('teams and access', () => {
     await page.getByRole('option', { name: 'Hidden' }).click();
     const less = page.getByRole('status').filter({ hasText: 'Less access' });
     await expect(less.getByText('1 person')).toBeVisible();
-    await expect(less.getByRole('button', { name: 'Undo' })).toBeVisible();
+    // Undo is the toast's, not a question first.
+    await expect(page.getByRole('button', { name: 'Undo' })).toBeVisible();
     await checkScreen(page, 'access-less');
     // The member's open table drops the column with no reload (AC-852).
     await expect(memberGrid.getByRole('columnheader', { name: /Value/ })).toHaveCount(0, { timeout: 15_000 });
@@ -235,15 +236,15 @@ test.describe('teams and access', () => {
     await page.getByRole('button', { name: 'Preview as' }).click();
     await page.getByRole('menuitem', { name: /Grace/ }).click();
     const banner = page.getByRole('status').filter({ hasText: /Previewing as / });
-    await expect(banner.getByText('Read only')).toBeVisible();
-    await expect(banner.getByText('Value', { exact: true })).toHaveCount(0);
-    await expect(banner.getByText('Name', { exact: true })).toBeVisible();
+    await expect(banner.getByText('Can edit')).toBeVisible();
+    await expect(banner).not.toContainText('Value');
+    await expect(banner).toContainText('Name');
     await checkScreen(page, 'access-preview');
     await banner.getByRole('button', { name: 'Exit preview' }).click();
     await expect(page.getByText(/^Previewing as /)).toHaveCount(0);
 
     // Undo brings the column back for the member.
-    await page.getByRole('button', { name: 'Undo' }).first().click();
+    await page.getByRole('button', { name: 'Undo' }).click();
     await expect(memberGrid.getByRole('columnheader', { name: /Value/ })).toBeVisible({ timeout: 15_000 });
     await memberContext.close();
   });
