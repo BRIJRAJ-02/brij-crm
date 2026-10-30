@@ -2719,27 +2719,17 @@ describe('options (spec 0012, milestone 3)', () => {
   });
 
   it('makes an option from a form at once: its id answered, its label pending until the server agrees', async () => {
-    // The server answers once the test has seen the pending option.
-    let answer: () => void = () => undefined;
-    const answered = new Promise<void>((resolve) => {
-      answer = resolve;
-    });
-    const api = fakeApi({
-      attributes: () => [TITLE, TIER],
-      optionWrite: async () => {
-        await answered;
-        return SILVER;
-      },
-    });
+    // The server's option (an id of its own, as when a live one held the label): the label stays pending under it.
+    const gold = { ...SILVER, id: '0199a6f2-0000-7000-8000-0000000000ff', label: 'Gold', hue: 'red' as const };
+    const api = fakeApi({ attributes: () => [TITLE, TIER], optionWrite: () => gold });
     const { data } = layer(api);
     await data.attributes.list('acme', PEOPLE.id);
     expect(data.options.make('acme', PEOPLE.id, TIER.id, '  ')).toBeUndefined();
     const making = data.options.make('acme', PEOPLE.id, TIER.id, ' Gold ');
-    await settled();
-    const [pending] = data.options.pending.getSnapshot().get(`acme/${TIER.id}`) ?? [];
-    expect(pending).toMatchObject({ id: making?.id, label: 'Gold', hue: 'red' });
-    answer();
+    expect(making?.id).toBeDefined();
     await making?.made;
+    const [pending] = data.options.pending.getSnapshot().get(`acme/${TIER.id}`) ?? [];
+    expect(pending).toMatchObject({ id: gold.id, label: 'Gold', hue: 'red' });
     expect(api.sent.at(-1)).toMatchObject({ id: making?.id, label: 'Gold', hue: 'red' });
   });
 
