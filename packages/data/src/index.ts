@@ -177,6 +177,18 @@ export type {
   TimeOffState,
   TimeOffStore,
 } from './scheduling/time-off.ts';
+export type {
+  DayHours,
+  TeamWeek,
+  TeamWeekDay,
+  TeamWeekHeld,
+  TeamWeekRow,
+  TeamWeekSource,
+  TeamWeekState,
+  TeamWeekStore,
+  TeamWeekTotal,
+  WeeklyHours,
+} from './scheduling/team-week.ts';
 import {
   createPreferencesStore,
   type MemberPreferences,
@@ -1761,6 +1773,8 @@ export function createDataLayer({
       () => {
         schedulesDue.delete(workspace);
         schedules.changed(workspace);
+        // The Team week reads the same schedules (spec 0037, job J6).
+        accessLoaded?.teamWeek.changed(workspace);
       },
       100 + Math.round(random() * 300),
     );
@@ -1820,6 +1834,7 @@ export function createDataLayer({
   });
   router.onResync((workspace) => {
     schedules.changed(workspace);
+    accessLoaded?.teamWeek.changed(workspace);
     jobs.resync(workspace);
     views.resync(workspace);
     navStore?.resync(workspace);
@@ -2079,6 +2094,7 @@ export function createDataLayer({
         api: wireApi({ client: api, call: (run) => call(run), beforeRead, mintId }),
         mintId,
         notify,
+        watch: (workspace) => watch(workspace),
       });
       return accessLoaded;
     }));

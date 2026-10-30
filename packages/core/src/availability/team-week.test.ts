@@ -19,16 +19,8 @@ import { runSchedulingNotice } from '../scheduling/notice.ts';
 import { createTimeOff } from '../scheduling/time-off.ts';
 import { testScope } from '../testing.ts';
 import { createSchedule, saveDefaultHours, updateSchedule } from './schedules.ts';
-import {
-  copyWeek,
-  footerOf,
-  mergedMinutes,
-  mondayOf,
-  readTeamWeek,
-  setDayHours,
-  setUsualHours,
-  weekDates,
-} from './team-week.ts';
+import { footerOf, mergedMinutes, mondayOf, weekDates } from '@crm/contracts/roster';
+import { copyWeek, readTeamWeek, setDayHours, setUsualHours } from './team-week.ts';
 
 const { appUrl, ownerUrl } = inject('testDatabase');
 let db: Database;
@@ -158,6 +150,7 @@ describe('the pure parts', () => {
     const day = (ranges: [string, string][], away = false) => ({
       date: '2026-11-02',
       ranges,
+      usual: ranges,
       source: 'usual' as const,
       ...(away ? { away: {} } : {}),
     });

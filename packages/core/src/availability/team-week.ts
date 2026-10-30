@@ -13,7 +13,6 @@ import {
   BookingAvailability,
   defaultAvailability,
   isTimeZone,
-  minutesOf,
   PERMISSIONS,
   TEAM_WEEK,
   TimeOffReason,
@@ -27,6 +26,7 @@ import {
   type WeeklyHours,
   type BookingAvailability as Hours,
 } from '@crm/contracts';
+import { footerOf, mondayOf, plusDays, weekDates, weekMinutesOf } from '@crm/contracts/roster';
 import type { WorkspaceTx } from '@crm/db';
 import { requirePermission } from '../access/check.ts';
 import { checkScope, type EngineScope } from '../access/mint.ts';
@@ -57,48 +57,12 @@ const STALE_MESSAGE = 'These hours changed since you opened them. Close this and
 const memberOf = (scope: EngineScope): string | undefined =>
   scope.access.principal.kind === 'member' ? scope.access.principal.memberId : undefined;
 
-/** The Monday of the week holding `date` (`YYYY-MM-DD`), read as a calendar date. */
-export function mondayOf(date: string): string {
-  const day = DateTime.fromISO(date, { zone: 'UTC' });
-  return day.minus({ days: day.weekday - 1 }).toISODate() ?? date;
-}
-
 /** `weeks` weeks after the Monday `monday` (before, when negative). */
-const plusWeeks = (monday: string, weeks: number): string =>
-  DateTime.fromISO(monday, { zone: 'UTC' }).plus({ weeks }).toISODate() ?? monday;
-
-/** The seven dates of the week starting `monday`. */
-export function weekDates(monday: string): readonly string[] {
-  const start = DateTime.fromISO(monday, { zone: 'UTC' });
-  return WEEKDAYS.map((_, index) => start.plus({ days: index }).toISODate() ?? monday);
-}
+const plusWeeks = (monday: string, weeks: number): string => plusDays(monday, weeks * 7);
 
 /** Today's Monday in `zone` at `now`. */
 const thisMondayIn = (now: Date, zone: string): string =>
   mondayOf(DateTime.fromJSDate(now, { zone }).toISODate() ?? now.toISOString().slice(0, 10));
-
-/**
- * A day's minutes once its ranges are merged (pure, AC-1290: merged, not summed): ranges that overlap or touch count
- * once, so legacy hours stored before the overlap check never double a person's day.
- */
-export function mergedMinutes(ranges: readonly (readonly [string, string])[]): number {
-  const spans = ranges
-    .map(([start, end]) => [minutesOf(start), minutesOf(end)] as const)
-    .filter(([start, end]) => end > start)
-    .sort((a, b) => a[0] - b[0]);
-  let total = 0;
-  let open: number | undefined;
-  let close = 0;
-  for (const [start, end] of spans) {
-    if (open === undefined || start > close) {
-      if (open !== undefined) total += close - open;
-      open = start;
-      close = end;
-    } else close = Math.max(close, end);
-  }
-  if (open !== undefined) total += close - open;
-  return total;
-}
 
 /** One away block as the read takes it. */
 interface AwayBlock {
@@ -143,29 +107,10 @@ export function daysOf(
     return {
       date,
       ranges: (own ?? hours.weekly[day]).map(([start, end]) => [start, end] as [string, string]),
+      usual: hours.weekly[day].map(([start, end]) => [start, end] as [string, string]),
       source: own === undefined ? ('usual' as const) : ('override' as const),
       ...(away === undefined ? {} : { away }),
     };
-  });
-}
-
-/** A day's working minutes: none while Away. */
-const workingMinutes = (day: TeamWeekDay): number => (day.away === undefined ? mergedMinutes(day.ranges) : 0);
-
-/** The footer over a page of rows (pure, AC-1294): per day, the people working and their merged minutes added. */
-export function footerOf(dates: readonly string[], rows: readonly Pick<TeamWeekRow, 'days'>[]): TeamWeek['footer'] {
-  return dates.map((date, index) => {
-    let working = 0;
-    let minutes = 0;
-    for (const row of rows) {
-      const day = row.days[index];
-      const worked = day === undefined ? 0 : workingMinutes(day);
-      if (worked > 0) {
-        working += 1;
-        minutes += worked;
-      }
-    }
-    return { date, working, minutes };
   });
 }
 
@@ -307,7 +252,7 @@ export async function readTeamWeek(
         timeZone: hours.timeZone,
         offsetMinutes: offsetOn(weekStart, hours.timeZone),
         days: [...days],
-        weekMinutes: days.reduce((sum, day) => sum + workingMinutes(day), 0),
+        weekMinutes: weekMinutesOf(days),
         otherSchedules: Number(row.other),
         canChange: row.id === me ? changesOwn : changesOthers && canActFor(reach, row.id, 'manage', 'hours'),
         schedule: {

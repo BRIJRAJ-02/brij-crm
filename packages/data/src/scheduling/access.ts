@@ -20,7 +20,16 @@ import { toDataError, type DataError } from '../errors.ts';
 import type { Notice } from '../notice.ts';
 import { refusalSummary } from '../refusals.ts';
 import { createTimeOffStore, type TimeOffApi, type TimeOffDraft } from './time-off.ts';
-import type { TimeOffList, TimeOffSaved } from '@crm/contracts';
+import { createTeamWeekStore, type TeamWeekApi } from './team-week.ts';
+import type {
+  BulkHoursResult,
+  DayHours,
+  SetDayResult,
+  TeamWeek,
+  TimeOffList,
+  TimeOffSaved,
+  WeeklyHours,
+} from '@crm/contracts';
 
 export type { DelegationTarget, DelegationView, SchedulingLevel, VisibleMember } from '@crm/contracts';
 
@@ -59,6 +68,8 @@ export interface SchedulingAccessApi {
   readonly visible: (input: { readonly workspace: string }) => Promise<VisibleMembers>;
   /** Time off's calls (spec 0037): its store loads in this same chunk. Absent in tests that don't need it. */
   readonly timeOff?: TimeOffApi;
+  /** The Team week's calls (spec 0037, job J6): its store loads in this same chunk. Absent in tests that don't need it. */
+  readonly teamWeek?: TeamWeekApi;
 }
 
 /**
@@ -106,6 +117,47 @@ export interface SchedulingAccessWire<O> {
         options: O,
       ): Promise<unknown>;
     };
+    readonly availability: {
+      teamWeek(
+        input: {
+          readonly workspace: string;
+          readonly weekStart: string;
+          readonly search?: string;
+          readonly cursor?: string;
+        },
+        options: O,
+      ): Promise<TeamWeek>;
+      setDay(
+        input: {
+          readonly workspace: string;
+          readonly memberId: string;
+          readonly date: string;
+          readonly hours: DayHours;
+          readonly updatedAt: string | null;
+          readonly mutationId: string;
+        },
+        options: O,
+      ): Promise<SetDayResult>;
+      copyWeek(
+        input: {
+          readonly workspace: string;
+          readonly memberIds: string[];
+          readonly fromWeekStart: string;
+          readonly toWeekStart: string;
+          readonly mutationId: string;
+        },
+        options: O,
+      ): Promise<BulkHoursResult>;
+      setUsualHours(
+        input: {
+          readonly workspace: string;
+          readonly memberIds: string[];
+          readonly weekly: WeeklyHours;
+          readonly mutationId: string;
+        },
+        options: O,
+      ): Promise<BulkHoursResult>;
+    };
   };
   readonly call: <T>(run: (options: O) => Promise<T>) => Promise<T>;
   readonly beforeRead: (workspace: string) => Promise<void>;
@@ -128,6 +180,22 @@ export function wireApi<O>({ client, call, beforeRead, mintId }: SchedulingAcces
       remove: (input) =>
         call((options) => client.timeOff.delete({ ...input, mutationId: mintId() }, options)).then(() => undefined),
     },
+    teamWeek: {
+      read: (input) =>
+        beforeRead(input.workspace).then(() => call((options) => client.availability.teamWeek(input, options))),
+      setDay: (input) => call((options) => client.availability.setDay({ ...input, mutationId: mintId() }, options)),
+      copyWeek: (input) =>
+        call((options) =>
+          client.availability.copyWeek({ ...input, memberIds: [...input.memberIds], mutationId: mintId() }, options),
+        ),
+      setUsualHours: (input) =>
+        call((options) =>
+          client.availability.setUsualHours(
+            { ...input, memberIds: [...input.memberIds], mutationId: mintId() },
+            options,
+          ),
+        ),
+    },
   };
 }
 
@@ -138,6 +206,8 @@ export interface SchedulingAccessDeps {
   readonly notify: (notice: Notice) => void;
   /** The clock, in milliseconds; tests pass their own. */
   readonly now?: () => number;
+  /** Watches a workspace's live events while a Team week of it is held. */
+  readonly watch?: (workspace: string) => () => void;
 }
 
 /** A read this recent serves a new holder as it is: the loader and the screen it opens hold it together. */
@@ -207,6 +277,15 @@ export function createSchedulingAccessStore(deps: SchedulingAccessDeps) {
     },
     mintId: deps.mintId,
     notify: deps.notify,
+    ...(deps.now === undefined ? {} : { now: deps.now }),
+  });
+
+  // The Team week (spec 0037, job J6), in this same chunk: Availability opens this store for whose rows show.
+  const notWired = () => Promise.reject(new Error('the Team week is not wired'));
+  const teamWeek = createTeamWeekStore({
+    api: deps.api.teamWeek ?? { read: notWired, setDay: notWired, copyWeek: notWired, setUsualHours: notWired },
+    notify: deps.notify,
+    ...(deps.watch === undefined ? {} : { watch: deps.watch }),
     ...(deps.now === undefined ? {} : { now: deps.now }),
   });
 
@@ -315,6 +394,11 @@ export function createSchedulingAccessStore(deps: SchedulingAccessDeps) {
   return {
     /** A member's time off (spec 0037, AC-1286): held per workspace and member, Availability's Time off section. */
     timeOff,
+    /**
+     * The Team week (spec 0037, AC-1289 to AC-1296): weeks of the roster held per workspace, week and search; a cell's
+     * change shows at once and is put back if refused; Copy week and Set usual hours wait, then the weeks read again.
+     */
+    teamWeek,
     /** A held list of delegations: the member's own both ways, or the workspace's (`members.manage`). */
     delegations: (workspace: string, scope: DelegationsScope): DelegationsHeld => of(workspace, scope).held,
     /**
@@ -424,6 +508,7 @@ export function createSchedulingAccessStore(deps: SchedulingAccessDeps) {
     /** The member's reach changed (an `access` row naming them): every held list reads again, `visible` too. */
     reload(workspace: string): void {
       visibles.delete(workspace);
+      teamWeek.changed(workspace);
       for (const [key, list] of lists) if (key.startsWith(`${workspace}\u0000`)) list.reread();
     },
     /** Signed out: forgets every workspace's. */
@@ -431,6 +516,7 @@ export function createSchedulingAccessStore(deps: SchedulingAccessDeps) {
       lists.clear();
       visibles.clear();
       timeOff.clear();
+      teamWeek.clear();
     },
   };
 }
