@@ -333,6 +333,13 @@ function BookingCard({
   const [reassigning, setReassigning] = useState(false);
   // Host away's Reassign (spec 0037, AC-1284): to the stand in, else the next in the group, after a confirm.
   const [awayReassigning, setAwayReassigning] = useState(false);
+  const awayRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    // Its confirm dismissed in the week, the card opens again with focus back on the notice's Reassign.
+    if (focusOnMount === 'reassignAway') focusLater(() => awayRef.current);
+    // Only as the card opens again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [isChatOpen, setChatOpen] = useState(false);
   const chatId = useId();
   const footer = useBookingActions({
@@ -340,7 +347,8 @@ function BookingCard({
     actions: actions ?? NO_ACTIONS,
     locale,
     ...(onAsk === undefined ? {} : { onAsk: (kind: BookingAsk) => onAsk(kind, seats) }),
-    ...(focusOnMount === undefined ? {} : { focusOnMount }),
+    // Host away's Reassign sits in the notice, not the footer: the card focuses it itself (below).
+    ...(focusOnMount === undefined || focusOnMount === 'reassignAway' ? {} : { focusOnMount }),
     ...(canReassign && seats.length > 0
       ? {
           onReassign: () => {
@@ -396,6 +404,7 @@ function BookingCard({
             ? {
                 actions: (
                   <Button
+                    ref={awayRef}
                     icon="users-round"
                     onPress={() => {
                       if (onAsk !== undefined) onAsk('reassignAway', seats);
@@ -408,7 +417,7 @@ function BookingCard({
               }
             : {})}
         >
-          {strings.hostAwayText}
+          {canReassignAway ? strings.hostAwayReassignText : strings.hostAwayText}
         </Callout>
       )}
     </>
@@ -564,6 +573,8 @@ function BookingCard({
           onReassigned={() => {
             setAwayReassigning(false);
             setReads((count) => count + 1);
+            // The notice and its button go as the booking reads again: focus goes on to More.
+            footer.focusMore?.();
           }}
         />
       )}

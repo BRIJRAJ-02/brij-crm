@@ -313,6 +313,7 @@ export const strings = {
   // Time off (spec 0037, AC-1285, AC-1287).
   hostAway: 'Host away',
   hostAwayText: 'Its host is away then. It stays booked: move it, or reassign it on a round robin page.',
+  hostAwayReassignText: 'Its host is away then. It stays booked unless you reassign or move it.',
   away: 'Away',
   awayNote: 'Online bookings can’t be placed during time off.',
   openTimeOff: 'Open time off',
@@ -341,7 +342,11 @@ export const strings = {
   awayToStandin: (standin: string, host: string) =>
     `${standin} takes it, as ${host}’s stand in while they’re away. The guest, ${standin} and ${host} are emailed.`,
   awayStandinOutside: (host: string, rotation: string) =>
-    `${host}’s stand in isn’t in ${rotation}, so whoever is free then and next in it takes it. The guest and both hosts are emailed.`,
+    `${host}’s stand in can’t take ${rotation}’s bookings now, so whoever is free then and next in it takes it. The guest and both hosts are emailed.`,
+  awayMembersFailed: (rotation: string) =>
+    `Couldn’t load who is in ${rotation}, so the server checks the stand in is free and in it.`,
+  awayNotChanged: (host: string, rotation: string) =>
+    `Nobody else in ${rotation} is free then, so it stays with ${host}.`,
   awayToNext: (rotation: string) =>
     `Whoever is free then and next in ${rotation} takes it. The guest and both hosts are emailed.`,
   awayStandinUnknown: (host: string) =>

@@ -481,6 +481,22 @@ describe('reassigning from Host away', () => {
       .toEqual(['success', 'Reassigned to Bo Diaz. The guest and both hosts are emailed.']);
   });
 
+  it('keeps the host on Esc, and the card opens again with focus back on its Reassign', async () => {
+    const away = { ...bookingOf(), hostAway: true } as BookingListItem;
+    const { actions } = await renderWeek([], [away], undefined, ['booking.admin']);
+    await openCard(/^Quick chat,/);
+    await userEvent.click(page.getByRole('button', { name: 'Reassign', exact: true }));
+    await expect
+      .poll(() => [...document.querySelectorAll('[role="dialog"]')].map(heading))
+      .toEqual(['Reassign Quick chat with Ada Lovelace?']);
+    // No stand in named: whoever is next in the group.
+    await expect.element(page.getByText(/^Whoever is free then and next in Support takes it/)).toBeVisible();
+    await userEvent.keyboard('{Escape}');
+    await expect.poll(card).not.toBeNull();
+    await expect.poll(() => document.activeElement?.textContent).toBe('Reassign');
+    expect(actions.reassign).not.toHaveBeenCalled();
+  });
+
   it('offers nothing to someone who may not reassign', async () => {
     await renderWeek([], [{ ...bookingOf(), hostAway: true }]);
     await openCard(/^Quick chat,/);

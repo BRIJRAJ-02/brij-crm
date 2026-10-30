@@ -33,9 +33,11 @@ export const teamWeekStrings = {
       : `${day}: ${teamWeekStrings.people(count)} working, ${hours(minutes)} added up`,
   /** Under a day's total (the brief's decision 3): how many of those working the workspace link can book. */
   linkCount: (count: number) => `Link: ${String(count)}`,
-  /** What a screen reader hears after the day's total. */
-  linkLabel: (title: string, count: number) =>
-    count === 0 ? `${title} can book nobody` : `${title} can book ${teamWeekStrings.people(count)}`,
+  /** The footer's heading while the workspace has a link: it names the link once, so "Link: 3" reads on its own. */
+  workingWithLink: (title: string) => `Working, hours added up. Link: ${title}`,
+  /** What a screen reader hears for a day's total while the workspace has a link. */
+  totalWithLinkLabel: (total: string, title: string, count: number) =>
+    count === 0 ? `${total}. ${title} can book nobody` : `${total}. ${title} can book ${teamWeekStrings.people(count)}`,
   offset: (minutes: number) => {
     const sign = minutes < 0 ? '−' : '+';
     const whole = Math.abs(minutes);

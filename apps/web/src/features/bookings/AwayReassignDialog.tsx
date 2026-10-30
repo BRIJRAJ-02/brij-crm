@@ -64,11 +64,13 @@ export function AwayReassignDialog({ booking, seats, actions, onClose, onReassig
     actions.reassign(booking.id, { rotationId: seat.rotationId, ...to }).then(
       (done) => {
         setBusy(false);
-        const named =
-          pick.kind === 'standin' && pick.name !== undefined && done.hostMemberId === pick.memberId
-            ? strings.reassignedTo(pick.name)
-            : strings.reassigned;
-        actions.notify('success', named);
+        if (!done.changed) {
+          setError(strings.awayNotChanged(host, group));
+          return;
+        }
+        // Named when the group's members say who took it: the stand in, or whoever was next.
+        const taker = rotation?.members.find((each) => each.memberId === done.hostMemberId)?.name;
+        actions.notify('success', taker === undefined ? strings.reassigned : strings.reassignedTo(taker));
         onReassigned();
       },
       (failure: unknown) => {
@@ -107,6 +109,7 @@ export function AwayReassignDialog({ booking, seats, actions, onClose, onReassig
           {error}
         </Callout>
       )}
+      {rotations === 'failed' && <Callout tone="info">{strings.awayMembersFailed(group)}</Callout>}
       {rotations === 'loading' ? <Skeleton lines={2} /> : <p>{text}</p>}
     </Modal>
   );

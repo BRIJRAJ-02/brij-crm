@@ -325,9 +325,9 @@ function Loaded({
     shown === undefined
       ? undefined
       : {
-          label: words.working,
+          label: shown.link === undefined ? words.working : words.workingWithLink(shown.link.title),
           // The workspace link's coverage (the brief's decision 3): how many of those working it can book, a quiet
-          // line under each day, only while the workspace has a link.
+          // line under each day someone works, only while the workspace has a link.
           totals: shown.footer.map((total) => {
             const { link } = shown;
             const linked = total.linked ?? 0;
@@ -337,7 +337,10 @@ function Loaded({
               detail: total.working === 0 ? '' : words.hours(total.minutes),
               ...(link === undefined
                 ? { label }
-                : { extra: words.linkCount(linked), label: `${label}. ${words.linkLabel(link.title, linked)}` }),
+                : {
+                    ...(total.working === 0 ? {} : { extra: words.linkCount(linked) }),
+                    label: words.totalWithLinkLabel(label, link.title, linked),
+                  }),
             };
           }),
         };
