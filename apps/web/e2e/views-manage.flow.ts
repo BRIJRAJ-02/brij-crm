@@ -193,18 +193,10 @@ test.describe('saved views: many views and their layout', () => {
 
     // Ada deletes Pipeline: Bea's tab goes to the default view (AC-474), or, reloaded, finds it gone (AC-463).
     await ada.goto(pipelineUrl);
-    // It asks first: Cancel changes nothing, and the view stays.
+    // It goes at once, with Undo in its toast (30 October 2026: Undo over a confirm).
     await openSwitcher(ada, 'Pipeline');
     await ada.getByRole('menuitem', { name: 'Delete view' }).click();
-    const confirm = ada.getByRole('alertdialog', { name: 'Delete Pipeline for everyone?' });
-    await expect(confirm).toContainText('Everyone who sees this view loses it for good, and its records stay.');
-    await confirm.getByRole('button', { name: 'Cancel' }).click();
-    await expect(confirm).toBeHidden();
-    await expect(viewBarSwitcher(ada, 'Pipeline')).toBeVisible();
-    await expect(ada).toHaveURL(new RegExp(`${pipelineUrl}$`));
-    await openSwitcher(ada, 'Pipeline');
-    await ada.getByRole('menuitem', { name: 'Delete view' }).click();
-    await confirm.getByRole('button', { name: 'Delete view' }).click();
+    await expect(ada.getByRole('alertdialog', { name: 'Delete Pipeline for everyone?' })).toHaveCount(0);
     await expect(ada).toHaveURL(new RegExp(`${defaultUrl}$`));
     await expect(ada.getByText('Deleted Pipeline.')).toBeVisible();
     // This tab's own delete raises no "isn't available" notice.
