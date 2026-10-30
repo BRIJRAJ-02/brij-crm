@@ -71,11 +71,15 @@ interface AwayBlock {
   readonly endsAt: number;
   readonly reason: string | null;
   readonly note: string | null;
+  /** The zone its dates were chosen in. */
+  readonly zone: string | null;
 }
 
-/** Whether a block covers the local midday of `date` in `zone`: time off is whole days, read in the zone they were. */
+/** Whether a block covers the local midday of `date`: time off is whole days, read in the zone they were chosen in. */
 const covers = (block: AwayBlock, date: string, zone: string): boolean => {
-  const noon = DateTime.fromISO(date, { zone }).set({ hour: 12 }).toMillis();
+  const noon = DateTime.fromISO(date, { zone: block.zone ?? zone })
+    .set({ hour: 12 })
+    .toMillis();
   return block.startsAt <= noon && noon < block.endsAt;
 };
 
@@ -223,9 +227,11 @@ export async function readTeamWeek(
             ends_at: string;
             reason: string | null;
             note: string | null;
+            time_zone: string | null;
           }>(sql`
-            select member_id::text, starts_at::text, ends_at::text, reason, note from booking_time_blocks
-            where kind = 'away' and repeat = 'once' and member_id = any(${uuidList(ids)})
+            select member_id::text, starts_at::text, ends_at::text, reason, note, time_zone from booking_time_blocks
+            where workspace_id = ${scope.workspaceId}::uuid and kind = 'away' and repeat = 'once'
+              and member_id = any(${uuidList(ids)})
               and starts_at < ${to}::timestamptz and ends_at > ${from}::timestamptz
           `);
     const blocks: AwayBlock[] = away.rows.map((row) => ({
@@ -234,6 +240,7 @@ export async function readTeamWeek(
       endsAt: Date.parse(row.ends_at),
       reason: row.reason,
       note: row.note,
+      zone: row.time_zone,
     }));
     const changesOwn = mayEditOwnHours(scope);
     const changesOthers = can(scope.access, 'booking.manage');
@@ -347,8 +354,9 @@ async function awayOver(tx: WorkspaceTx, memberId: string, dates: readonly strin
     ends_at: string;
     reason: string | null;
     note: string | null;
+    time_zone: string | null;
   }>(sql`
-    select starts_at::text, ends_at::text, reason, note from booking_time_blocks
+    select starts_at::text, ends_at::text, reason, note, time_zone from booking_time_blocks
     where kind = 'away' and repeat = 'once' and member_id = ${memberId}::uuid
       and starts_at < ${to}::timestamptz and ends_at > ${from}::timestamptz
   `);
@@ -358,6 +366,7 @@ async function awayOver(tx: WorkspaceTx, memberId: string, dates: readonly strin
     endsAt: Date.parse(row.ends_at),
     reason: row.reason,
     note: row.note,
+    zone: row.time_zone,
   }));
 }
 

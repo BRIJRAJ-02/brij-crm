@@ -96,12 +96,37 @@ describe('the Team week store', () => {
     expect(shown.rows[0]?.days[0]).toMatchObject({ ranges: [['10:00', '12:00']], source: 'override' });
     expect(shown.rows[0]?.weekMinutes).toBe(4 * 480 + 120);
     expect(shown.footer[0]).toEqual({ date: MONDAY, working: 2, minutes: 600 });
+    // The write goes out on the next tick, behind any of Ana's still out.
+    await flush();
     answer({
       day: { date: MONDAY, ranges: [['10:00', '12:00']], usual: [NINE], source: 'override' },
       schedule: { id: 'a-s', updatedAt: '2026-11-01T00:00:00.000Z' },
     });
     expect(await landing).toBe(true);
     expect(ready(held.getSnapshot).rows[0]?.schedule.updatedAt).toBe('2026-11-01T00:00:00.000Z');
+  });
+
+  it('sends two quick edits to one person one after another, the second with the first’s version', async () => {
+    const sent: (string | null)[] = [];
+    let count = 0;
+    const { store } = setup({
+      setDay: (input) => {
+        sent.push(input.updatedAt);
+        count += 1;
+        const stamp = `2026-11-0${String(count)}T00:00:00.000Z`;
+        return Promise.resolve({
+          day: { date: input.date, ranges: [], usual: [NINE], source: 'override' as const },
+          schedule: { id: 'a-s', updatedAt: stamp },
+        });
+      },
+    });
+    const held = store.held('ws', MONDAY);
+    held.retain();
+    await held.ready();
+    const first = store.setDay('ws', row('a', 'Ana'), MONDAY, 'off');
+    const second = store.setDay('ws', row('a', 'Ana'), '2026-11-03', 'off');
+    expect(await Promise.all([first, second])).toEqual([true, true]);
+    expect(sent).toEqual(['2026-10-01T00:00:00.000Z', '2026-11-01T00:00:00.000Z']);
   });
 
   it('puts a refused cell back with a toast, and reads again on STALE', async () => {

@@ -163,6 +163,8 @@ export function createTeamWeekStore(deps: TeamWeekDeps) {
           reading = undefined;
           if (sentAt !== version) return read();
           readAt = now();
+          // A read is the server's truth: each member's next cell sends the version it carries.
+          for (const each of week.rows) versions.delete(`${workspace}\u0000${each.memberId}`);
           set({ status: 'ready', week, more: 'idle' });
           return undefined;
         },
@@ -250,6 +252,9 @@ export function createTeamWeekStore(deps: TeamWeekDeps) {
     weeks.set(key, made);
     return made;
   };
+  // Per member: the cell writes still going out (one after another) and the schedule version the last one answered.
+  const chains = new Map<string, Promise<void>>();
+  const versions = new Map<string, string | null>();
   const inWorkspace = (workspace: string) =>
     [...weeks].filter(([key]) => key.startsWith(`${workspace}\u0000`)).map(([, week]) => week);
   const shown = (week: ReturnType<typeof make>): TeamWeek | undefined => {
@@ -283,29 +288,49 @@ export function createTeamWeekStore(deps: TeamWeekDeps) {
       date: string,
       hours: DayHours,
     ): Promise<boolean> {
-      const touched = inWorkspace(workspace).filter((week) => {
-        const held = shown(week);
-        return held?.rows.some((each) => each.memberId === row.memberId && each.days.some((day) => day.date === date));
-      });
+      const member = `${workspace}\u0000${row.memberId}`;
+      const holding = (week: ReturnType<typeof make>) =>
+        shown(week)?.rows.some((each) => each.memberId === row.memberId) === true;
+      const touched = inWorkspace(workspace).filter(holding);
       const before = touched.map((week) =>
         shown(week)
           ?.rows.find((each) => each.memberId === row.memberId)
           ?.days.find((day) => day.date === date),
       );
-      for (const week of touched)
-        week.change((held) => weekWith(held, row.memberId, date, (day) => dayWith(day, hours)));
-      try {
-        const saved = await deps.api.setDay({
-          workspace,
-          memberId: row.memberId,
-          date,
-          hours,
-          updatedAt: row.schedule.updatedAt,
+      const mine = new Map<ReturnType<typeof make>, TeamWeekDay>();
+      for (const week of touched) {
+        week.change((held) => {
+          const next = weekWith(held, row.memberId, date, (day) => dayWith(day, hours));
+          const day = next.rows.find((each) => each.memberId === row.memberId)?.days.find((each) => each.date === date);
+          if (day !== undefined) mine.set(week, day);
+          return next;
         });
+      }
+      // One member's cells go out one after another, each with the version the last one answered, so a quick second
+      // edit along a row is never refused as stale by the first.
+      const previous = chains.get(member) ?? Promise.resolve();
+      const sending = previous.then(async () => {
+        // The version last answered, else the one the newest held row carries, else the screen's.
+        const held = inWorkspace(workspace)
+          .map((week) => shown(week)?.rows.find((each) => each.memberId === row.memberId))
+          .find((each) => each !== undefined);
+        const updatedAt = versions.has(member)
+          ? (versions.get(member) ?? null)
+          : (held?.schedule.updatedAt ?? row.schedule.updatedAt);
+        return deps.api.setDay({ workspace, memberId: row.memberId, date, hours, updatedAt });
+      });
+      const settled = sending.then(
+        () => undefined,
+        () => undefined,
+      );
+      chains.set(member, settled);
+      try {
+        const saved = await sending;
+        versions.set(member, saved.schedule.updatedAt);
         // Every held week showing the member takes the new version, so their next cell isn't stale.
-        for (const week of inWorkspace(workspace)) {
+        for (const week of inWorkspace(workspace).filter(holding)) {
           week.change((held) => {
-            const placed = weekWith(held, row.memberId, date, () => saved.day, saved.schedule);
+            const placed = weekWith(held, row.memberId, date, () => saved.day);
             return {
               ...placed,
               rows: placed.rows.map((each) =>
@@ -319,12 +344,23 @@ export function createTeamWeekStore(deps: TeamWeekDeps) {
         const failure = toDataError(error);
         touched.forEach((week, index) => {
           const was = before[index];
-          if (was !== undefined) week.change((held) => weekWith(held, row.memberId, date, () => was));
+          const shownNow = shown(week)
+            ?.rows.find((each) => each.memberId === row.memberId)
+            ?.days.find((day) => day.date === date);
+          // Only while the cell still shows this change: a later edit of it stays.
+          if (was !== undefined && shownNow === mine.get(week)) {
+            week.change((held) => weekWith(held, row.memberId, date, () => was));
+          }
         });
-        // Someone changed their hours meanwhile: what is shown reads again.
-        if (failure.code === 'STALE' || failure.code === 'NOT_FOUND') for (const week of touched) week.stale();
+        // Someone changed their hours meanwhile: what is shown reads again, and the next edit sends what it reads.
+        if (failure.code === 'STALE' || failure.code === 'NOT_FOUND') {
+          versions.delete(member);
+          for (const week of touched) week.stale();
+        }
         deps.notify({ tone: 'danger', message: refusalSummary(failure) });
         return false;
+      } finally {
+        if (chains.get(member) === settled) chains.delete(member);
       }
     },
     /**
@@ -363,6 +399,8 @@ export function createTeamWeekStore(deps: TeamWeekDeps) {
     /** Signed out: forgets every workspace's. */
     clear(): void {
       weeks.clear();
+      chains.clear();
+      versions.clear();
     },
   };
 }
