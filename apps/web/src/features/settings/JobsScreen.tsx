@@ -292,11 +292,7 @@ export function JobsScreen({ data, slug, view, isAll, members: loaded, canRunTes
           renderCell={renderCell}
           isScrollable
           isLoading={snapshot.status === 'loading'}
-          emptyState={
-            <EmptyState icon="list-checks" title={strings.emptyTitle}>
-              {isAll ? strings.emptyText : strings.emptyTextMine}
-            </EmptyState>
-          }
+          emptyState={<EmptyState icon="list-checks" title={strings.emptyTitle} />}
         />
         {snapshot.hasMore && (
           <Button onPress={() => void view.more()} isPending={snapshot.loadingMore}>

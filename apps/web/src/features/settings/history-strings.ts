@@ -197,7 +197,7 @@ const SENTENCES: SentenceTemplates = {
     ),
   'delegation.changed': (entry, w) =>
     actor(
-      `changed what ${w.person(entry.target.person)} can do with ${whoseScheduling(entry.params.over, w)} to ${verbOf(entry.params.level)} it`,
+      `now lets ${w.person(entry.target.person)} ${verbOf(entry.params.level)} ${whoseScheduling(entry.params.over, w)}`,
     ),
   'delegation.revoked': (entry, w) =>
     actor(
@@ -289,14 +289,13 @@ export const strings = {
   bookingOn: (page: string, when: string) => `${page} on ${when}`,
   /** The states (AC-4615 to AC-4618). */
   emptyTitle: 'No changes yet',
-  emptyText: 'Invitations, role changes, removals and changes to settings and scheduling show here.',
   failedTitle: 'Couldn’t load workspace changes',
   failedMore: 'Couldn’t load more changes.',
   /** When the page itself failed and the data layer had no words for why. */
-  failedText: 'Something went wrong. Try again in a moment.',
+  failedText: 'Try again in a moment.',
   forbidden: 'Only workspace owners and admins can see workspace changes.',
   /** Your sign ins (AC-4619). */
   signInsTitle: 'Your sign ins',
-  signInsText: 'In every workspace, for the last 90 days.',
+  signInsText: 'Every workspace, last 90 days.',
   sentences: SENTENCES,
 } as const;
