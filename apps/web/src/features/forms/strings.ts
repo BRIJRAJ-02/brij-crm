@@ -227,13 +227,16 @@ export const strings = {
   noticesTitle: 'Submission emails',
   noticesLabel: 'Email each new submission to',
   noticesNobody: 'Nobody else',
-  noticesHint: (filing: boolean) =>
-    filing
-      ? 'The new record’s owner is always emailed too. The email leaves out answers someone isn’t allowed to see.'
-      : 'The email leaves out answers someone isn’t allowed to see.',
+  noticesHint: (ownerIsTold: boolean) =>
+    ownerIsTold
+      ? 'The new record’s owner is emailed too. People who can’t see submissions aren’t emailed, and each email leaves out answers that person can’t see.'
+      : 'People who can’t see submissions aren’t emailed, and each email leaves out answers that person can’t see.',
+  /** A teammate not chosen once 20 are. */
+  noticesFull: 'Up to 20 people',
   noticesSearch: 'Search teammates',
   /** The people the form lists whom the reader can't list (the server already drops those who left). */
   noticesOthers: (count: number) => (count === 1 ? '1 other person' : `${String(count)} other people`),
+  noticesOthersHint: 'People you can’t see in this workspace',
   spamTitle: 'Spam',
   spamSummary: 'On. Doubtful sends wait for review.',
   detailsTitle: 'Details',

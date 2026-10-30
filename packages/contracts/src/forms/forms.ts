@@ -161,7 +161,7 @@ export const UpdateFormSettingsInput = WorkspaceScoped.extend({
   allowedOrigins: z.array(FormOrigin).max(20, { error: 'List at most 20 sites.' }).optional(),
   requireSignature: z.boolean().optional(),
   /** Who is told about each new submission besides the lead's owner, replacing the list; `[]` is nobody else. */
-  notifyMemberIds: z.array(Uuid).max(20, { error: 'Tell at most 20 people.' }).optional(),
+  notifyMemberIds: z.array(Uuid).max(20, { error: 'Pick up to 20 people.' }).optional(),
   mutationId: Uuid,
 }).refine((input) => !(typeof input.ownerMemberId === 'string' && typeof input.ownerRotationId === 'string'), {
   error: 'Pick a teammate or a round robin group as the owner, not both.',

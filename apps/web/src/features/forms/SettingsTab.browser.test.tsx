@@ -292,7 +292,7 @@ describe('who is emailed each new submission (AC-568, AC-1047)', () => {
     await expect
       .element(
         page.getByText(
-          'The new record’s owner is always emailed too. Each person sees only the answers they have access to.',
+          'The new record’s owner is emailed too. People who can’t see submissions aren’t emailed, and each email leaves out answers that person can’t see.',
         ),
       )
       .toBeVisible();
@@ -313,6 +313,13 @@ describe('who is emailed each new submission (AC-568, AC-1047)', () => {
     await expect
       .element(page.getByRole('button', { name: /Email each new submission to$/ }))
       .toHaveTextContent('Nobody else');
+    // With no owner, nobody else is told either: the field says Nobody and the hint drops the owner.
+    shown?.unmount();
+    await show(formView({}), []);
+    await expect
+      .element(page.getByRole('button', { name: /Email each new submission to$/ }))
+      .not.toHaveTextContent('Nobody else');
+    await expect.element(page.getByText(/^People who can’t see submissions aren’t emailed/)).toBeVisible();
   });
 });
 

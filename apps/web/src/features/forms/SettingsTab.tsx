@@ -3,8 +3,9 @@
 // sending, whether and where submissions go in the CRM, the form's words, its details (name, link, owner: nobody, a
 // teammate, or a round robin group handing each new record to its next teammate, spec 0029) and spam.
 // Main task: scan the groups, change only what needs changing (the defaults already work), and save the name,
-// address and owner from the SaveBar; the rest goes live on Publish, which the header's state says once (not each card).
-// Leaves out: email notifications (no backend yet), each question's filing (set on the question, linked from here),
+// address, owner and who is emailed each submission from the SaveBar; the rest goes live on Publish, which the
+// header's state says once (not each card).
+// Leaves out: the daily digest (spec 0023 milestone 3), each question's filing (set on the question, linked from here),
 // and the look (on the Form tab, beside the preview, the only tab that has one).
 import type {
   BookingPageView,
@@ -85,9 +86,12 @@ interface Applied {
   readonly notify: readonly string[];
 }
 
-/** Whether two lists name the same people in the same order. */
+/** Whether two lists name the same people, in any order (the picker answers its own order). */
 const sameList = (a: readonly string[], b: readonly string[]) =>
-  a.length === b.length && a.every((id, index) => id === b[index]);
+  a.length === b.length && a.every((id) => b.includes(id));
+
+/** The most people a form emails (the server's limit). */
+const NOTIFY_MAX = 20;
 
 /** Props for useFormSettings. */
 export interface FormSettingsInput {
@@ -343,19 +347,34 @@ export function SettingsTab({
   ];
   // Who is emailed each submission: any teammate, drawn as people are. Those the form lists whom the reader can't
   // list stay chosen as one "other people" option, so a save keeps them.
-  const hiddenNotify = settings.values.notify.filter((id) => !members.some((member) => member.id === id));
-  const notifyItems = [
-    ...members.map((member) => ({
-      id: member.id,
-      label: member.name,
-      description: member.email,
-      leading: <Avatar name={member.name} id={member.id} size="xs" isDecorative />,
-    })),
-    ...(hiddenNotify.length === 0 ? [] : [{ id: HIDDEN_NOTIFY, label: strings.noticesOthers(hiddenNotify.length) }]),
-  ];
+  // Read from what is saved, so unticking that option can be ticked again.
+  const hiddenNotify = form.notifyMemberIds.filter((id) => !members.some((member) => member.id === id));
   const notifyValues = [
     ...settings.values.notify.filter((id) => !hiddenNotify.includes(id)),
-    ...(hiddenNotify.length === 0 ? [] : [HIDDEN_NOTIFY]),
+    ...(hiddenNotify.some((id) => settings.values.notify.includes(id)) ? [HIDDEN_NOTIFY] : []),
+  ];
+  // At the limit, the people not chosen yet wait, saying why.
+  const isFull = settings.values.notify.length >= NOTIFY_MAX;
+  const notifyItems = [
+    ...members.map((member) => {
+      const waits = isFull && !settings.values.notify.includes(member.id);
+      return {
+        id: member.id,
+        label: member.name,
+        description: waits ? strings.noticesFull : member.email,
+        leading: <Avatar name={member.name} id={member.id} size="xs" isDecorative />,
+        ...(waits ? { isDisabled: true } : {}),
+      };
+    }),
+    ...(hiddenNotify.length === 0
+      ? []
+      : [
+          {
+            id: HIDDEN_NOTIFY,
+            label: strings.noticesOthers(hiddenNotify.length),
+            description: strings.noticesOthersHint,
+          },
+        ]),
   ];
   // One line under it: who gets new records, or why nobody will.
   const ownerHint = ownerLeft
@@ -403,6 +422,13 @@ export function SettingsTab({
   const afterProblem = afterPageProblem(draft, pages.status === 'ready' ? pages.items : undefined, seesAllPages);
   // Where each question's answer goes: the target's attribute, or kept with the submission only.
   const isFiling = draft.targets.main !== undefined && target.objectName !== undefined;
+  // The new record's owner hears of each submission too, when there is one to hear: not Nobody, not someone who left,
+  // and not a round robin group with nobody switched on.
+  const ownerIsTold =
+    isFiling &&
+    settings.values.owner !== NOBODY &&
+    !ownerLeft &&
+    !(chosenGroup !== undefined && takers(chosenGroup) === 0);
   const objectName = target.objectName ?? '';
   const attributeTitle = (attributeId: string | undefined) =>
     target.items.find((item) => item.attributeId === attributeId)?.title;
@@ -747,8 +773,8 @@ export function SettingsTab({
         <Select
           label={strings.noticesLabel}
           selectionMode="multiple"
-          placeholder={isFiling ? strings.noticesNobody : strings.nobody}
-          hint={strings.noticesHint(isFiling)}
+          placeholder={ownerIsTold ? strings.noticesNobody : strings.nobody}
+          hint={strings.noticesHint(ownerIsTold)}
           items={notifyItems}
           values={notifyValues}
           isSearchable={members.length > 8}
