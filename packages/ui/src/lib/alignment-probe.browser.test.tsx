@@ -21,12 +21,14 @@ describe('probeAlignment', () => {
     mount(`
       <div style="padding: var(--space-16); display: grid; gap: var(--space-8); width: 400px">
         <label data-probe="edge">Name</label>
-        <input data-probe="edge" style="width: 200px" />
+        <input data-probe="edge" style="width: 200px; padding: var(--space-4) var(--space-8)" />
         <div style="display: flex; gap: var(--space-8)">
           <div data-tile style="width: 100px; height: 80px"></div>
           <div data-tile style="width: 100px; height: 80px"></div>
         </div>
       </div>`);
+    // The input sets its own inset from tokens, as every library field does: a bare input keeps the browser's
+    // 1px 2px, which is off the scale, and the probe rightly reports it.
     const report = probeAlignment({ root: '#fixture' });
     expect(report.failures).toEqual([]);
     expect(report.checked['left-edge']).toBe(2);

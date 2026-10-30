@@ -300,7 +300,7 @@ export const Tiles: Story = {
  */
 export const Thumbnails: Story = {
   render: () => (
-    <Stage>
+    <Stage width="fill">
       <TileGrid
         variant="choice"
         label="Look"

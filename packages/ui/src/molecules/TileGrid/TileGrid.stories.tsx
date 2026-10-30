@@ -216,12 +216,11 @@ function Picker({ onChange }: { readonly onChange?: (id: string) => void }) {
   );
 }
 
-/** Choose by sight: marks over short names, one tile chosen with a ring and a tick. Every tile is one size. */
 /** First run's Done: two tiles that ease in, one a moment after the other (spec 0058, AC-21). */
 export const Entering: Story = {
   args: { fill: 'fill', isEntering: true },
   render: (args) => (
-    <Stage>
+    <Stage width="fill">
       <TileGrid {...args}>
         <Card title="Booking link">
           <Skeleton lines={2} isStill />
@@ -240,6 +239,7 @@ export const Entering: Story = {
   },
 };
 
+/** Choose by sight: marks over short names, one tile chosen with a ring and a tick. Every tile is one size. */
 export const Choice: Story = {
   parameters: { crm: { preview: true } },
   render: () => <Picker />,
@@ -288,5 +288,70 @@ export const ChoiceAction: Story = {
       await expect(Math.round(tile.getBoundingClientRect().width)).toBe(Math.round(first?.width ?? 0));
       await expect(Math.round(tile.getBoundingClientRect().height)).toBe(Math.round(first?.height ?? 0));
     }
+  },
+};
+
+/**
+ * Tiles with and without a description fill their tracks alike (a description's tooltip wraps the tile, and the
+ * tile still fills the cell), and a disabled tile shows its reason on the tile, where a keyboard user reads it too.
+ */
+export const ChoiceDisabled: Story = {
+  render: () => (
+    <Stage width="fill">
+      <TileGrid
+        variant="choice"
+        mode="action"
+        label="Add block"
+        onAction={fn()}
+        tiles={[
+          { id: 'link', name: 'Link', icon: 'link', description: 'A button that opens a web address.' },
+          { id: 'text', name: 'Text', icon: 'file-text' },
+          {
+            id: 'booking',
+            name: 'Booking page',
+            icon: 'calendar',
+            description: 'Lets people book a time with you.',
+            isDisabled: true,
+            disabledReason: 'At the limit',
+          },
+          { id: 'image', name: 'Image', icon: 'image' },
+        ]}
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await settleAnimations();
+    const report = probeAlignment({ root: 'body' });
+    await expect(report.failures.filter((failure) => failure.check === 'tile-size')).toEqual([]);
+    await expect(report.checked['tile-size']).toBe(4);
+    await expect(canvas.getByText('At the limit')).toBeVisible();
+    const booking = canvas.getByRole('button', { name: /Booking page/ });
+    await expect(booking).toBeDisabled();
+    await expect(booking).toHaveAccessibleDescription(/At the limit/);
+  },
+};
+
+/** Select mode: a disabled choice says why on the tile and in its description. */
+export const ChoiceDisabledSelect: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage width="fill">
+      <TileGrid
+        variant="choice"
+        label="Look"
+        defaultValue="fair"
+        tiles={[
+          { id: 'fair', name: 'Fair', icon: 'users', description: 'Everyone gets a turn in order.' },
+          { id: 'first', name: 'First free', icon: 'clock', isDisabled: true, disabledReason: 'Needs two hosts' },
+        ]}
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Needs two hosts')).toBeVisible();
+    await expect(canvas.getByRole('radio', { name: /First free/ })).toBeDisabled();
+    await expect(canvas.getByRole('radio', { name: /First free/ })).toHaveAccessibleDescription('Needs two hosts');
+    const report = probeAlignment({ root: 'body' });
+    await expect(report.failures.filter((failure) => failure.check === 'tile-size')).toEqual([]);
   },
 };

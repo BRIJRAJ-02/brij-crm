@@ -34,6 +34,11 @@ const SRC = path.join(UI, 'src');
 const HERE = import.meta.dirname;
 const RUNTIME = path.join(HERE, 'preview-runtime.tsx');
 const TEST_STUB = path.join(HERE, 'story-test-stub.ts');
+/**
+ * Library files only play functions use, with no imports of their own: they bundle into the preview as the
+ * workbench helpers do (the dropped plays leave them unused), since `src/index.ts` rightly doesn't export them.
+ */
+const PLAY_HELPERS: ReadonlySet<string> = new Set([path.join(SRC, 'lib', 'alignment-probe.ts')]);
 const NAMESPACE = 'Workspace';
 const GROUP_ORDER = ['Atoms', 'Molecules', 'Fields', 'Modules'];
 
@@ -239,7 +244,7 @@ function workspaceImports(names: readonly string[], importers: ReadonlySet<strin
       const file = cleanPath(resolved.id);
       // Play helpers (src/workbench/*.ts) stay in the preview, where the dropped
       // play functions leave them unused.
-      if (path.dirname(file) === path.join(SRC, 'workbench')) return null;
+      if (path.dirname(file) === path.join(SRC, 'workbench') || PLAY_HELPERS.has(file)) return null;
       return file.startsWith(SRC + path.sep) && !importers.has(file) ? VIRTUAL : null;
     },
     load(id) {
