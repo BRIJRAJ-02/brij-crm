@@ -248,6 +248,12 @@
     opacity: var(--opacity-disabled);
   }
 
+  /* A disabled option takes the keyboard's focus, so its reason is read, but the pointer passing over it marks
+     nothing: it looks as it did when the keyboard skipped it, and only the keyboard's ring says where focus is. */
+  .option[data-disabled][data-focused]:not([data-focus-visible]) {
+    background: none;
+  }
+
   /* Clear and Create, and an option set apart (isApart), sit under a hairline, apart from the options above. */
   .option[data-clear],
   .option[data-apart] {
@@ -318,6 +324,11 @@
     .option[data-focused] {
       background: Highlight;
       color: HighlightText;
+    }
+
+    .option[data-disabled][data-focused]:not([data-focus-visible]) {
+      background: Canvas;
+      color: GrayText;
     }
   }
 }

@@ -7,6 +7,7 @@ import {
   ListBox,
   ListBoxItem,
   ListBoxSection,
+  type ListBoxItemProps,
   Select as AriaSelect,
   SelectValue,
   Text,
@@ -166,6 +167,30 @@ const FOCUS_FIRST_EVENT = 'react-aria-focus';
 
 const CLEAR = '\u0000clear';
 const CREATE = '\u0000create';
+
+/**
+ * What a disabled option (`isDisabled`) adds to its ListBoxItem: the arrows and typeahead land on it, so a keyboard
+ * or screen reader user hears it and its reason, while staying in `disabledKeys` keeps Enter, Space and a click from
+ * choosing it. React Aria's own disabled option is skipped by the keyboard, reason and all. React Stately reads an
+ * item's `disabledBehavior` (its keyboard delegate's and selection manager's `isDisabled`), though ListBoxItem's
+ * types leave it out; `Select.browser.test.tsx` pins it, so an upgrade that drops it fails there. A focusable option
+ * isn't marked disabled by React Aria, so `render` puts back `aria-disabled` and the `data-disabled` its look keys on.
+ */
+function reachableWhileDisabled(item: SelectItem): Partial<ListBoxItemProps<SelectItem>> {
+  if (item.isDisabled !== true) return {};
+  const selectionOnly = { disabledBehavior: 'selection' };
+  return {
+    ...selectionOnly,
+    render: (props) =>
+      'href' in props ? (
+        <a {...props} aria-disabled="true" data-disabled="">
+          {props.children}
+        </a>
+      ) : (
+        <div {...props} aria-disabled="true" data-disabled="" />
+      ),
+  };
+}
 
 function Face({ item, optionStyle }: { readonly item: SelectItem; readonly optionStyle: SelectOptionStyle }) {
   if (optionStyle === 'tag') {
@@ -346,6 +371,7 @@ export function Select({
       data-clear={item.id === CLEAR || item.id === CREATE || undefined}
       data-apart={item.isApart === true || undefined}
       data-description={item.description === undefined ? undefined : optionDescription}
+      {...reachableWhileDisabled(item)}
     >
       {({ isSelected }) => (
         <>
@@ -401,6 +427,7 @@ export function Select({
           data-clear={item.id === CLEAR || item.id === CREATE || undefined}
           data-apart={item.isApart === true || undefined}
           data-description={item.description === undefined ? undefined : optionDescription}
+          {...reachableWhileDisabled(item)}
         >
           {({ isSelected }) => (
             <>

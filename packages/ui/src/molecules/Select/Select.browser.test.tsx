@@ -1,0 +1,182 @@
+// A disabled option (#68) in a real browser: the arrows land on it, so a
+// keyboard or screen reader user reaches it and hears why it can't be chosen,
+// but Enter, Space and a click never choose it, in a single and a multiple
+// choice and with the search on. React Aria's own disabled option is skipped by
+// the keyboard; this pins the item level `disabledBehavior` Select relies on.
+import type { ReactNode } from 'react';
+import { createRoot } from 'react-dom/client';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { userEvent } from 'vitest/browser';
+import { createToasts } from '../../provider/toasts.tsx';
+import { UiProvider } from '../../provider/UiProvider.tsx';
+import { Select, type SelectItem, type SelectProps } from './Select.tsx';
+
+const mounted: (() => void)[] = [];
+
+afterEach(() => {
+  for (const unmount of mounted.splice(0)) unmount();
+});
+
+const frame = () => new Promise((resolve) => setTimeout(resolve, 30));
+
+const REASON = 'Up to 20 people';
+
+const ITEMS: readonly SelectItem[] = [
+  { id: 'small', label: 'Small team' },
+  { id: 'large', label: 'Large team', isDisabled: true, description: REASON },
+  { id: 'solo', label: 'Just me' },
+];
+
+async function render(node: ReactNode) {
+  const host = document.createElement('div');
+  document.body.append(host);
+  const root = createRoot(host);
+  root.render(
+    <UiProvider locale="en-US" timeZone="Europe/London" navigate={() => undefined} toasts={createToasts()}>
+      {node}
+    </UiProvider>,
+  );
+  mounted.push(() => {
+    root.unmount();
+    host.remove();
+  });
+  await frame();
+}
+
+function trigger(): HTMLElement {
+  const found = document.querySelector<HTMLElement>('button[aria-haspopup="listbox"]');
+  if (found === null) throw new Error('no Select trigger');
+  return found;
+}
+
+const listbox = () => document.querySelector('[role="listbox"]');
+
+function optionNamed(label: string): HTMLElement {
+  const found = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find((option) =>
+    option.textContent.includes(label),
+  );
+  if (found === undefined) throw new Error(`no option ${label}`);
+  return found;
+}
+
+/** The option the keyboard is on: the focused one, or the search's active descendant. */
+function current(): HTMLElement | null {
+  const active = document.activeElement;
+  const descendant = active?.getAttribute('aria-activedescendant');
+  if (descendant !== null && descendant !== undefined && descendant !== '') return document.getElementById(descendant);
+  return active instanceof HTMLElement && active.getAttribute('role') === 'option' ? active : null;
+}
+
+/** Opens the list from the keyboard and arrows down onto the disabled option. */
+async function arrowOntoDisabled() {
+  trigger().focus();
+  await userEvent.keyboard('{ArrowDown}');
+  await expect.poll(listbox).not.toBeNull();
+  await expect.poll(() => current()?.textContent).toContain('Small team');
+  await userEvent.keyboard('{ArrowDown}');
+  await expect.poll(() => current()?.textContent).toContain('Large team');
+}
+
+/** The disabled option as the keyboard reaches it: marked disabled, its reason inside it, and it looks disabled. */
+function expectAnnouncedDisabled() {
+  const on = current();
+  expect(on).not.toBeNull();
+  expect(on?.getAttribute('aria-disabled')).toBe('true');
+  expect(on?.textContent).toContain(REASON);
+  expect(on?.hasAttribute('data-disabled')).toBe(true);
+}
+
+function single(props: Partial<SelectProps> = {}) {
+  const onChange = vi.fn();
+  return { onChange, node: <Select label="Team size" items={ITEMS} value={null} onChange={onChange} {...props} /> };
+}
+
+function multiple(props: Partial<SelectProps> = {}) {
+  const onValuesChange = vi.fn();
+  return {
+    onValuesChange,
+    node: (
+      <Select
+        label="Team sizes"
+        items={ITEMS}
+        selectionMode="multiple"
+        values={[]}
+        onValuesChange={onValuesChange}
+        {...props}
+      />
+    ),
+  };
+}
+
+describe('a disabled option in a single choice', () => {
+  it('is reached by the arrows, announced as disabled with its reason, and Enter and Space leave it unchosen', async () => {
+    const { onChange, node } = single();
+    await render(node);
+    await arrowOntoDisabled();
+    expectAnnouncedDisabled();
+    await userEvent.keyboard('{Enter}');
+    await userEvent.keyboard(' ');
+    await frame();
+    expect(onChange).not.toHaveBeenCalled();
+    // The list stays open on it, so the next arrow moves on and Enter chooses that one.
+    expect(listbox()).not.toBeNull();
+    await userEvent.keyboard('{ArrowDown}');
+    await expect.poll(() => current()?.textContent).toContain('Just me');
+    await userEvent.keyboard('{Enter}');
+    expect(onChange).toHaveBeenCalledExactlyOnceWith('solo');
+  });
+
+  it('is not chosen by a click', async () => {
+    const { onChange, node } = single({ defaultOpen: true });
+    await render(node);
+    await expect.poll(listbox).not.toBeNull();
+    await userEvent.click(optionNamed('Large team'));
+    await frame();
+    expect(onChange).not.toHaveBeenCalled();
+    expect(listbox()).not.toBeNull();
+  });
+
+  it('is reached and refused with the search on', async () => {
+    const { onChange, node } = single({ isSearchable: true });
+    await render(node);
+    await arrowOntoDisabled();
+    expectAnnouncedDisabled();
+    await userEvent.keyboard('{Enter}');
+    await frame();
+    expect(onChange).not.toHaveBeenCalled();
+    expect(listbox()).not.toBeNull();
+  });
+});
+
+describe('a disabled option in a multiple choice', () => {
+  it('is reached by the arrows, announced as disabled with its reason, and Enter and Space leave it unchecked', async () => {
+    const { onValuesChange, node } = multiple();
+    await render(node);
+    await arrowOntoDisabled();
+    expectAnnouncedDisabled();
+    await userEvent.keyboard('{Enter}');
+    await userEvent.keyboard(' ');
+    await frame();
+    expect(onValuesChange).not.toHaveBeenCalled();
+    expect(optionNamed('Large team').getAttribute('aria-selected')).toBe('false');
+  });
+
+  it('is not checked by a click', async () => {
+    const { onValuesChange, node } = multiple({ defaultOpen: true });
+    await render(node);
+    await expect.poll(listbox).not.toBeNull();
+    await userEvent.click(optionNamed('Large team'));
+    await frame();
+    expect(onValuesChange).not.toHaveBeenCalled();
+  });
+
+  it('is reached and refused with the search on', async () => {
+    const { onValuesChange, node } = multiple({ isSearchable: true });
+    await render(node);
+    await arrowOntoDisabled();
+    expectAnnouncedDisabled();
+    await userEvent.keyboard('{Enter}');
+    await frame();
+    expect(onValuesChange).not.toHaveBeenCalled();
+  });
+});
