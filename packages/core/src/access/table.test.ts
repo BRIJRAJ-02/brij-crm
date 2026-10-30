@@ -1060,9 +1060,10 @@ const DATA_CASES: Readonly<Record<string, DataCase>> = {
     core.aggregateMatches(scope, { objectId: world.people, asks: [{ attributeId: world.jobTitle, fn: 'count' }] }),
   ),
   aggregateGroups: refused('NOT_FOUND', (scope, world) =>
+    // A board totals amounts only; the owner's sum over a text field is refused for its type, past the door.
     core.aggregateGroups(scope, {
       objectId: world.people,
-      asks: [{ attributeId: world.jobTitle, fn: 'count' }],
+      asks: [{ attributeId: world.jobTitle, fn: 'sum' }],
       groupBy: world.stage,
       groupIds: [null],
     }),

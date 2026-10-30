@@ -371,7 +371,8 @@ describe('the email, checked before anything is stored', () => {
     }
     const rows = await authSql('select key from auth.rate_limit where key like $1 or key like $2', [
       `${ip}|%`,
-      'email:aaaa%',
+      // The 3 KB email's own prefix: a short one also matched other tests' random addresses (aaaa5918-…@).
+      'email:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa%',
     ]);
     expect(rows).toEqual([]);
   });

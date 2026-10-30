@@ -71,7 +71,12 @@ async function createView(page: Page, current: string, name: string, everyone: b
 async function toggleColumn(page: Page, column: string): Promise<void> {
   await page.getByRole('button', { name: 'View settings' }).click();
   const settings = page.getByRole('dialog', { name: 'View settings' });
-  await settings.getByRole('switch', { name: `Show ${column}` }).press('Space');
+  const toggle = settings.getByRole('switch', { name: `Show ${column}` });
+  const wasOn = await toggle.isChecked();
+  await toggle.click();
+  // The switch shows the change at once (the layout goes to the server behind it).
+  if (wasOn) await expect(toggle).not.toBeChecked();
+  else await expect(toggle).toBeChecked();
   await page.keyboard.press('Escape');
   await expect(settings).toBeHidden();
 }
