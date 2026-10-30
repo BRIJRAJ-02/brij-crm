@@ -2,9 +2,11 @@
    calm block of hours per day filling its cell (Fresha's roster, Wix's work schedule), a footer of totals (Square's)
    and a legend under it (Deputy's). The grid itself, its even columns, rows, focus and sideways scroll are Table's. */
 @layer components {
+  /* A size container fills its slot (a container's own content no longer sizes it). */
   .root {
     container-type: inline-size;
     display: flex;
+    inline-size: 100%;
     flex-direction: column;
     gap: var(--space-12);
     min-inline-size: 0;
