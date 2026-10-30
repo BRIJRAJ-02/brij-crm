@@ -2,6 +2,7 @@
 // `booking_page.changed_for` audit row keeps the before and after of the fields that changed, so the owner's
 // notice can say what is different ("Intro call: location changed from Video call to Phone"). The row's target is
 // the owner (`target_type = 'member'`), so the notice reads it with the owner's other scheduling rows.
+import { createHash } from 'node:crypto';
 import type { BookingPageSettings } from '@crm/contracts';
 
 /** The fields a page's audit row compares, in the order the notice lists them. */
@@ -38,10 +39,13 @@ export type PageAudited = Pick<BookingPageSettings, Exclude<PageAuditField, 'que
   readonly scheduleName: string;
 };
 
-/** The longest description an audit row keeps. */
-const DESCRIPTION_KEPT = 200;
+/**
+ * A description as a row keeps it: a short digest, never the text the owner may later erase, so a change shows and
+ * a change undone in the window cancels out.
+ */
+const digestOf = (text: string) => createHash('sha256').update(text).digest('hex').slice(0, 12);
 
-/** One field as the row keeps it: a location by its kind, the questions by their count, a description cut short. */
+/** One field as the row keeps it: a location by its kind, the questions by their count, a description's digest. */
 function kept(page: PageAudited, field: PageAuditField): PageAuditValue {
   switch (field) {
     case 'location':
@@ -49,7 +53,7 @@ function kept(page: PageAudited, field: PageAuditField): PageAuditValue {
     case 'questions':
       return page.questions.length;
     case 'description':
-      return page.description.slice(0, DESCRIPTION_KEPT);
+      return digestOf(page.description);
     case 'durations':
       return [...page.durations];
     default:

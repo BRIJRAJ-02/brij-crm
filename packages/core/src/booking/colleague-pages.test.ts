@@ -18,7 +18,14 @@ import { grantDelegation } from '../scheduling/delegations.ts';
 import { pageLines, rotationLines, runSchedulingNotice } from '../scheduling/notice.ts';
 import { testScope } from '../testing.ts';
 import { pageAuditSides, type PageAudited } from './page-audit.ts';
-import { createBookingPage, deleteBookingPage, getBookingPage, listBookingPages, updateBookingPage } from './pages.ts';
+import {
+  createBookingPage,
+  deleteBookingPage,
+  getBookingPage,
+  listBookingPages,
+  listBookings,
+  updateBookingPage,
+} from './pages.ts';
 
 const { appUrl, ownerUrl } = inject('testDatabase');
 let db: Database;
@@ -167,6 +174,41 @@ describe('Manage over a colleague reaches their personal pages (AC-1273, AC-1332
         code: 'NOT_FOUND',
       });
     }
+  });
+
+  it('lists the page’s bookings to the manager', async () => {
+    const w = await world('manage');
+    expect(await listBookings(w.as(w.priya), { pageId: w.page.id, when: 'upcoming' }, NOW)).toEqual([]);
+    expect(await refusalOf(listBookings(w.as(w.bo), { pageId: w.page.id, when: 'upcoming' }, NOW))).toMatchObject({
+      code: 'NOT_FOUND',
+    });
+  });
+
+  it('reaches nothing once the owner is removed, nor a round robin page they made', async () => {
+    const w = await world('manage');
+    const other = await createBookingPage(w.as(w.bea), { id: newId(), title: 'Team call', timeZone: 'UTC' }, NOW);
+    await testQuery(ownerUrl, `update booking_pages set kind = 'round_robin' where id = $1`, [other.id]);
+    expect((await listBookingPages(w.as(w.priya), NOW)).map((page) => page.id)).toEqual([w.page.id]);
+    expect(await refusalOf(getBookingPage(w.as(w.priya), { pageId: other.id }, NOW))).toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    await testQuery(ownerUrl, `update members set status = 'removed' where id = $1`, [w.bea]);
+    expect(await listBookingPages(w.as(w.priya), NOW)).toEqual([]);
+    for (const call of [
+      getBookingPage(w.as(w.priya), { pageId: w.page.id }, NOW),
+      updateBookingPage(w.as(w.priya), { pageId: w.page.id, settings: { bufferBefore: 5 } }, NOW),
+      readPageDestination(w.as(w.priya), { pageId: w.page.id }),
+    ]) {
+      expect(await refusalOf(call)).toMatchObject({ code: 'NOT_FOUND' });
+    }
+  });
+
+  it('reaches no page of another workspace', async () => {
+    const w = await world('manage');
+    const elsewhere = await world('manage');
+    expect(await refusalOf(getBookingPage(w.as(w.priya), { pageId: elsewhere.page.id }, NOW))).toMatchObject({
+      code: 'NOT_FOUND',
+    });
   });
 });
 

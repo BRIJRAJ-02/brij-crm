@@ -1151,8 +1151,14 @@ export async function listBookings(
   requirePermission(scope, 'booking.manage');
   return inWorkspace(scope, async (tx) => {
     const page = await loadPage(tx, input.pageId);
+    if (page === undefined) throw refuse('NOT_FOUND', NOT_FOUND_MESSAGE);
+    // A colleague's page through Manage over its active owner (AC-1273), as `pageToChange` reaches it.
+    const reach =
+      isSomeoneElses(scope, page) && (await managedOwners(tx, [page.ownerMemberId])).has(page.ownerMemberId)
+        ? await pageReach(tx, scope)
+        : undefined;
     // A deleted page's bookings stay readable to whoever could change it.
-    if (page === undefined || !mayChange(scope, page)) throw refuse('NOT_FOUND', NOT_FOUND_MESSAGE);
+    if (!mayChange(scope, page, reach)) throw refuse('NOT_FOUND', NOT_FOUND_MESSAGE);
     const upcoming = input.when === 'upcoming';
     const rows = await tx
       .select()
