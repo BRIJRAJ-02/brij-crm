@@ -79,6 +79,27 @@ export const CreateListInput = WorkspaceScoped.extend({
 export type CreateListInput = z.infer<typeof CreateListInput>;
 
 /**
+ * A list's settings (AC-4829): any of its name, tile and the once only rule.
+ * Turning "Each record once" on while a record has two live entries is
+ * `CONFIG_INVALID` (AC-4830).
+ */
+export const UpdateListInput = WorkspaceScoped.extend({
+  listId: Uuid,
+  name: ListName.optional(),
+  icon: ObjectIcon.optional(),
+  hue: Hue.optional(),
+  allowsDuplicates: z.boolean().optional(),
+  mutationId: Uuid,
+});
+/** A list's settings. */
+export type UpdateListInput = z.infer<typeof UpdateListInput>;
+
+/** One list to archive or restore (AC-4831). */
+export const ListIdInput = WorkspaceScoped.extend({ listId: Uuid, mutationId: Uuid });
+/** One list to archive or restore. */
+export type ListIdInput = z.infer<typeof ListIdInput>;
+
+/**
  * A workspace's lists. `list` answers the live lists the caller may read (a
  * list whose object they can't see is absent), oldest first, and the archived
  * ones after them with `includeArchived`. `create` needs `lists.manage` and
@@ -86,9 +107,15 @@ export type CreateListInput = z.infer<typeof CreateListInput>;
  * name another list holds ignoring case ("A list named <Name> already
  * exists."), `LIMIT_REACHED` past 500 lists, and `NOT_FOUND` for an object
  * the caller can't see or that is archived. It stores a `definitions` event
- * naming the list.
+ * naming the list. `update`, `archive` and `restore` are for the list's
+ * managers (`schema.manage`, or its maker with `lists.manage`; anyone else gets
+ * 403 `FORBIDDEN` naming who may) and each stores a `definitions` event naming
+ * the list; an archived list refuses `update` and entry writes.
  */
 export const listsContract = {
   list: oc.input(ListListsInput).output(z.array(ListView)),
   create: oc.input(CreateListInput).output(ListView),
+  update: oc.input(UpdateListInput).output(ListView),
+  archive: oc.input(ListIdInput).output(ListView),
+  restore: oc.input(ListIdInput).output(ListView),
 };

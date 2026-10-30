@@ -30,9 +30,10 @@ import { runWrite, type AfterWrite, type WriteContext } from './write.ts';
 import { inWorkspace } from '../access/run.ts';
 import { requirePermission } from '../access/check.ts';
 import { isOpen, objectLevel, type Access } from '../access/policy.ts';
-import { attributeVisible, checkList, checkObject, visibleRecords } from '../access/visibility.ts';
+import { attributeVisible, checkList, checkObject, UNKNOWN_LIST, visibleRecords } from '../access/visibility.ts';
+import { canManageList, listManagersSentence } from '../lists/manager.ts';
 
-const { attributes, listEntries, lists, objects, records, views } = schema;
+const { attributes, listEntries, lists, members, objects, records, views } = schema;
 
 /** What a new list needs. `allowsDuplicates` false lets each record in once. */
 export interface ListInput {
@@ -329,6 +330,149 @@ export async function defineList(scope: EngineScope, input: ListInput, hooks: re
   return result;
 }
 
+/** What a list's settings may change (AC-4829): its name, tile and the once only rule. */
+export interface ListUpdate {
+  readonly listId: string;
+  readonly name?: string | undefined;
+  readonly icon?: string | undefined;
+  readonly hue?: string | undefined;
+  readonly allowsDuplicates?: boolean | undefined;
+}
+
+/** The words of the once only refusal (AC-4830). Without an open view of every record, no count is named. */
+const duplicatesWords = (count: number | undefined) =>
+  count === undefined
+    ? 'Some records are in this list more than once. Remove the extra entries first.'
+    : `${count.toLocaleString('en')} ${count === 1 ? 'record is' : 'records are'} in this list more than once. Remove the extra entries first.`;
+
+/**
+ * A list's row locked for a change, with the caller known to manage it (AC-4834):
+ * a list the caller can't read answers as an unknown one, a manager check
+ * failing is 403 naming who may. Archived ones refuse unless `allowArchived`.
+ */
+async function lockManagedList(context: WriteContext, listId: string, allowArchived: boolean) {
+  const { tx, scope } = context;
+  const [list] = await tx
+    .select({
+      objectId: lists.objectId,
+      name: lists.name,
+      archivedAt: lists.archivedAt,
+      createdByMemberId: lists.createdByMemberId,
+      makerStatus: members.status,
+      objectArchivedAt: sql<Date | null>`(select o.archived_at from objects o where o.workspace_id = ${lists.workspaceId} and o.id = ${lists.objectId})`,
+    })
+    .from(lists)
+    .leftJoin(members, and(eq(members.workspaceId, lists.workspaceId), eq(members.id, lists.createdByMemberId)))
+    .where(eq(lists.id, listId))
+    .for('update', { of: lists });
+  if (list === undefined) throw refuse('NOT_FOUND', UNKNOWN_LIST);
+  // A list the caller can't read is an unknown one (AC-4835); a manager of it can read it.
+  if (
+    !isOpen(scope.access) &&
+    (objectLevel(scope.access, list.objectId) === 'none' || objectLevel(scope.access, listId) === 'none')
+  ) {
+    throw refuse('NOT_FOUND', UNKNOWN_LIST);
+  }
+  if (!canManageList(scope, list, list.makerStatus === 'active')) {
+    throw refuse('FORBIDDEN', await listManagersSentence(tx, scope, listId));
+  }
+  if (!allowArchived && (list.archivedAt !== null || list.objectArchivedAt !== null)) {
+    throw refuse('NOT_FOUND', 'That list is archived. Restore it first.');
+  }
+  return list;
+}
+
+/**
+ * Changes a list's name, tile or once only rule (spec 0048, AC-4829, AC-4830),
+ * under the list's row lock, and records a `definitions` change naming the list.
+ * The API name never changes. Refuses `FORBIDDEN` (not a manager),
+ * `NOT_FOUND`, and `CONFIG_INVALID` for a name another list holds or turning
+ * "Each record once" on while a record has two live entries.
+ */
+export async function changeList(scope: EngineScope, input: ListUpdate, hooks: readonly AfterWrite[] = []) {
+  const listId = checkId(input.listId, UNKNOWN_LIST);
+  if (input.name !== undefined) checkName(input.name, 'list name', 'name');
+  checkLook(input.icon, input.hue);
+  const { result } = await runWrite(
+    scope,
+    async (context) => {
+      const { tx } = context;
+      const list = await lockManagedList(context, listId, false);
+      if (input.allowsDuplicates === false) {
+        const [row] = await tx.select({ count: sql<number>`count(*)::int` }).from(
+          tx
+            .select({ recordId: listEntries.recordId })
+            .from(listEntries)
+            .where(and(eq(listEntries.listId, listId), isNull(listEntries.deletedAt)))
+            .groupBy(listEntries.recordId)
+            .having(sql`count(*) > 1`)
+            .as('repeated'),
+        );
+        const repeated = row?.count ?? 0;
+        if (repeated > 0) {
+          throw refuseOn(
+            'CONFIG_INVALID',
+            duplicatesWords(isOpen(scope.access) ? repeated : undefined),
+            'allowsDuplicates',
+          );
+        }
+      }
+      const name = input.name?.trim();
+      await listGuard(name ?? list.name, async () => {
+        await tx
+          .update(lists)
+          .set({
+            ...(name === undefined ? {} : { name }),
+            ...(input.icon === undefined ? {} : { icon: input.icon }),
+            ...(input.hue === undefined ? {} : { hue: input.hue }),
+            ...(input.allowsDuplicates === undefined ? {} : { allowsDuplicates: input.allowsDuplicates }),
+            ...touched(scope),
+          })
+          .where(eq(lists.id, listId));
+      });
+      context.record({ definitions: [{ listId, objectId: list.objectId, attributeIds: [] }] });
+      return { listId };
+    },
+    hooks,
+  );
+  return result;
+}
+
+/**
+ * Archives a list or restores it (spec 0048, AC-4831): it leaves every
+ * sidebar, picker and record page, and its entries are kept. Archived ones
+ * still count toward the 500. Archiving an archived list or restoring a live
+ * one changes nothing. Restoring a list whose object is archived is `NOT_FOUND`
+ * ("Restore <object> first.").
+ */
+export async function setListArchived(
+  scope: EngineScope,
+  input: { readonly listId: string; readonly archived: boolean },
+  hooks: readonly AfterWrite[] = [],
+) {
+  const listId = checkId(input.listId, UNKNOWN_LIST);
+  const { result } = await runWrite(
+    scope,
+    async (context) => {
+      const { tx } = context;
+      const list = await lockManagedList(context, listId, true);
+      if (!input.archived && list.objectArchivedAt !== null) {
+        throw refuse('NOT_FOUND', "That list's object is archived. Restore it first.");
+      }
+      const isArchived = list.archivedAt !== null;
+      if (isArchived === input.archived) return { listId };
+      await tx
+        .update(lists)
+        .set({ archivedAt: input.archived ? sql`clock_timestamp()` : null, ...touched(scope) })
+        .where(eq(lists.id, listId));
+      context.record({ definitions: [{ listId, objectId: list.objectId, attributeIds: [] }] });
+      return { listId };
+    },
+    hooks,
+  );
+  return result;
+}
+
 /** Refuses a second live entry for a record in a list that lets each record in once. */
 async function checkOnce(tx: WorkspaceTx, listId: string, recordId: string, except?: string): Promise<void> {
   const [existing] = await tx
@@ -348,6 +492,108 @@ async function checkOnce(tx: WorkspaceTx, listId: string, recordId: string, exce
 
 /** What an entry id another entry holds answers (AC-4816). */
 const ENTRY_ID_USED = 'That entry id is already used.';
+
+/** The list row an add reads while it holds the list's lock. */
+interface LockedList {
+  readonly objectId: string;
+  readonly name: string;
+  readonly allowsDuplicates: boolean;
+}
+
+/**
+ * Locks a list's row for the rest of the write and checks the caller may add
+ * to it: a hidden list answers as an unknown one, a read only one is 403, an
+ * archived one (or one whose object is archived, AC-4832) `NOT_FOUND`.
+ */
+async function lockWritableList(context: WriteContext, listId: string): Promise<LockedList> {
+  const { tx, scope } = context;
+  const [list] = await tx
+    .select({
+      objectId: lists.objectId,
+      name: lists.name,
+      allowsDuplicates: lists.allowsDuplicates,
+      archivedAt: lists.archivedAt,
+      objectArchivedAt: sql<Date | null>`(select o.archived_at from objects o where o.workspace_id = ${lists.workspaceId} and o.id = ${lists.objectId})`,
+    })
+    .from(lists)
+    .where(eq(lists.id, listId))
+    .for('update', { of: lists });
+  if (list === undefined) throw refuse('NOT_FOUND', 'That list does not exist.');
+  // A hidden list answers as an unknown one, before anything says it is archived; a read only one is 403.
+  checkList(scope.access, { id: listId, objectId: list.objectId, name: list.name }, 'write');
+  // A list whose object is archived reads as archived too (AC-4832).
+  if (list.archivedAt !== null || list.objectArchivedAt !== null) {
+    throw refuse('NOT_FOUND', 'That list is archived. Restore it first.');
+  }
+  return list;
+}
+
+/**
+ * One record into a locked list, inside a write: the record's lock, the retry
+ * check, the object and once only rules, the entry's first values and its
+ * slot. Refuses before its first change, so a batch can take it in a savepoint.
+ */
+async function addIn(
+  context: WriteContext,
+  input: {
+    readonly listId: string;
+    readonly recordId: string;
+    readonly id: string | undefined;
+    readonly values: Readonly<Record<string, unknown>> | undefined;
+    readonly timeZone: string | undefined;
+  },
+  list: LockedList,
+): Promise<{ entryId: string; versions: Record<string, AttributeResult> }> {
+  const { tx, scope } = context;
+  const { listId, recordId, id } = input;
+  // The record must be one the principal sees (spec 0009, AC-143); adding it changes the list, not the record.
+  const record = await lockRecord(tx, recordId, scope.access);
+  if (id !== undefined) {
+    // Under the list's lock, so a concurrent try with the same id has committed or not started. Only the add's
+    // own maker gets the entry back, so an id never tells anyone else what a list holds.
+    const [earlier] = await tx
+      .select({
+        listId: listEntries.listId,
+        recordId: listEntries.recordId,
+        deletedAt: listEntries.deletedAt,
+        createdByType: listEntries.createdByType,
+        createdById: listEntries.createdById,
+      })
+      .from(listEntries)
+      .where(eq(listEntries.id, id));
+    if (earlier !== undefined) {
+      const isOwnTry =
+        earlier.listId === listId &&
+        earlier.recordId === recordId &&
+        earlier.deletedAt === null &&
+        earlier.createdByType === scope.actor.type &&
+        earlier.createdById === scope.actor.id;
+      if (isOwnTry) return { entryId: id, versions: {} };
+      throw refuse('CONFIG_INVALID', ENTRY_ID_USED);
+    }
+  }
+  if (record.objectId !== list.objectId) {
+    throw refuse('CONFIG_INVALID', "That record can't go in this list; it holds another object's records.");
+  }
+  if (!list.allowsDuplicates) await checkOnce(tx, listId, recordId);
+  const listAttributes = await loadListAttributes(tx, listId);
+  const parsed = await initialValues(tx, scope, listAttributes, input.values ?? {}, input.timeZone ?? 'UTC');
+  await takeEntrySlots(tx, scope, listId, 1);
+  const [row] = await tx
+    .insert(listEntries)
+    .values({
+      ...(id === undefined ? {} : { id }),
+      workspaceId: scope.workspaceId,
+      listId,
+      recordId,
+      ...audit(scope),
+    })
+    .returning({ id: listEntries.id });
+  if (row === undefined) throw new Error('The entry was not created.');
+  context.record({ createdEntries: [{ entryId: row.id, listId, recordId, objectId: list.objectId }] });
+  const versions = await writeAll(context, 'entry', row.id, parsed);
+  return { entryId: row.id, versions };
+}
 
 /**
  * Adds a record to a list, with the entry's first values (defaults filled in,
@@ -369,72 +615,85 @@ export async function addEntry(
   const { result } = await runWrite(
     scope,
     async (context) => {
-      const { tx } = context;
-      const [list] = await tx
-        .select({
-          objectId: lists.objectId,
-          name: lists.name,
-          allowsDuplicates: lists.allowsDuplicates,
-          archivedAt: lists.archivedAt,
-          objectArchivedAt: sql<Date | null>`(select o.archived_at from objects o where o.workspace_id = ${lists.workspaceId} and o.id = ${lists.objectId})`,
-        })
-        .from(lists)
-        .where(eq(lists.id, listId))
-        .for('update', { of: lists });
-      if (list === undefined) throw refuse('NOT_FOUND', 'That list does not exist.');
-      // A hidden list answers as an unknown one, before anything says it is archived; a read only one is 403.
-      checkList(scope.access, { id: listId, objectId: list.objectId, name: list.name }, 'write');
-      // A list whose object is archived reads as archived too (AC-4832).
-      if (list.archivedAt !== null || list.objectArchivedAt !== null) {
-        throw refuse('NOT_FOUND', 'That list is archived. Restore it first.');
-      }
-      // The record must be one the principal sees (spec 0009, AC-143); adding it changes the list, not the record.
-      const record = await lockRecord(tx, recordId, scope.access);
-      if (id !== undefined) {
-        // Under the list's lock, so a concurrent try with the same id has committed or not started. Only the add's
-        // own maker gets the entry back, so an id never tells anyone else what a list holds.
-        const [earlier] = await tx
-          .select({
-            listId: listEntries.listId,
-            recordId: listEntries.recordId,
-            deletedAt: listEntries.deletedAt,
-            createdByType: listEntries.createdByType,
-            createdById: listEntries.createdById,
-          })
-          .from(listEntries)
-          .where(eq(listEntries.id, id));
-        if (earlier !== undefined) {
-          const isOwnTry =
-            earlier.listId === listId &&
-            earlier.recordId === recordId &&
-            earlier.deletedAt === null &&
-            earlier.createdByType === scope.actor.type &&
-            earlier.createdById === scope.actor.id;
-          if (isOwnTry) return { entryId: id, versions: {} };
-          throw refuse('CONFIG_INVALID', ENTRY_ID_USED);
-        }
-      }
-      if (record.objectId !== list.objectId) {
-        throw refuse('CONFIG_INVALID', "That record can't go in this list; it holds another object's records.");
-      }
-      if (!list.allowsDuplicates) await checkOnce(tx, listId, recordId);
-      const listAttributes = await loadListAttributes(tx, listId);
-      const parsed = await initialValues(tx, scope, listAttributes, input.values ?? {}, input.timeZone ?? 'UTC');
-      await takeEntrySlots(tx, scope, listId, 1);
-      const [row] = await tx
-        .insert(listEntries)
-        .values({
-          ...(id === undefined ? {} : { id }),
-          workspaceId: scope.workspaceId,
-          listId,
+      const list = await lockWritableList(context, listId);
+      return addIn(context, { listId, recordId, id, values: input.values, timeZone: input.timeZone }, list);
+    },
+    hooks,
+  );
+  return result;
+}
+
+/** The most records one batch adds (spec 0048). */
+export const MAX_ADD_BATCH = 500;
+
+/** One record's outcome in an add batch: its entry, or the refusal that kept it out. */
+export interface AddOutcome {
+  readonly recordId: string;
+  readonly entryId?: string;
+  readonly refusal?: RefusalError['refusal'];
+}
+
+/**
+ * Adds up to 500 records to one list in one write (spec 0048, AC-4825), each
+ * on its own savepoint: a record already in an "Each record once" list
+ * (`ENTRY_EXISTS`), one in the trash, one the caller can't see, a missing
+ * required list field or a full list keeps that record out and says why,
+ * never failing the rest. The list is locked once, then records are taken in
+ * id order, so two batches lock in one order. `ids` are the entries' client
+ * minted UUID v7s, one per record: the same batch again answers the entries it
+ * made. The list's own checks (hidden, read only, archived) refuse the call.
+ */
+export async function addEntries(
+  scope: EngineScope,
+  input: {
+    readonly listId: string;
+    readonly recordIds: readonly string[];
+    readonly ids?: readonly string[] | undefined;
+    readonly timeZone?: string | undefined;
+  },
+  hooks: readonly AfterWrite[] = [],
+): Promise<readonly AddOutcome[]> {
+  if (input.recordIds.length > MAX_ADD_BATCH) {
+    throw refuse('CONFIG_INVALID', `Add at most ${String(MAX_ADD_BATCH)} records at once.`);
+  }
+  if (input.ids !== undefined && input.ids.length !== input.recordIds.length) {
+    throw refuse('CONFIG_INVALID', 'Give one entry id for each record.');
+  }
+  const listId = checkId(input.listId, 'That list does not exist.');
+  const asked = input.recordIds.map((raw, index) => ({ raw, id: input.ids?.[index]?.toLowerCase() }));
+  for (const each of asked) {
+    if (each.id !== undefined && !isUuidV7(each.id)) throw refuse('CONFIG_INVALID', 'The entry id must be a UUID v7.');
+  }
+  const { result } = await runWrite(
+    scope,
+    async (context) => {
+      const list = await lockWritableList(context, listId);
+      const outcomes = new Map<string, AddOutcome>();
+      const unknown = { code: 'NOT_FOUND' as const, message: 'That record does not exist.' };
+      // Id order, the one lock order; a record named twice is added once.
+      const valid = asked.filter((each) => isUuid(each.raw));
+      const order = [...valid].sort((a, b) => (canonicalId(a.raw) < canonicalId(b.raw) ? -1 : 1));
+      for (const each of order) {
+        const recordId = canonicalId(each.raw);
+        if (outcomes.has(recordId)) continue;
+        const done = await context.perRecord((part) =>
+          addIn(part, { listId, recordId, id: each.id, values: undefined, timeZone: input.timeZone }, list),
+        );
+        const [refusal] = done.ok ? [] : done.refusals;
+        outcomes.set(
           recordId,
-          ...audit(scope),
-        })
-        .returning({ id: listEntries.id });
-      if (row === undefined) throw new Error('The entry was not created.');
-      context.record({ createdEntries: [{ entryId: row.id, listId, recordId, objectId: list.objectId }] });
-      const versions = await writeAll(context, 'entry', row.id, parsed);
-      return { entryId: row.id, versions };
+          done.ok
+            ? { recordId, entryId: done.value.entryId }
+            : { recordId, ...(refusal === undefined ? {} : { refusal }) },
+        );
+      }
+      return asked.map(
+        (each): AddOutcome =>
+          (isUuid(each.raw) ? outcomes.get(canonicalId(each.raw)) : undefined) ?? {
+            recordId: each.raw,
+            refusal: unknown,
+          },
+      );
     },
     hooks,
   );

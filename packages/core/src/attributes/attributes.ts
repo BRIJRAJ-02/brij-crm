@@ -34,7 +34,7 @@ import { requirePermission } from '../access/check.ts';
 import { inWorkspace } from '../access/run.ts';
 import { isOpen, objectLevel, readOnlyReason, visibleAttributes } from '../access/policy.ts';
 import { attributeVisible, UNKNOWN_LIST } from '../access/visibility.ts';
-import { canManageList } from '../lists/manager.ts';
+import { canManageList, listManagersSentence, requireFieldManager } from '../lists/manager.ts';
 import { relationshipBlocks } from '../relationships/blocks.ts';
 
 const { attributeOptions, attributes, lists, members, objects, validationRules } = schema;
@@ -417,9 +417,14 @@ export async function readDefinitions(
       ),
     ),
   ];
-  const listed = await Promise.all(
-    objectIds.map((objectId) => listObjectAttributes(scope, objectId, { includeArchived: true })),
-  );
+  // A list's field is read through its list (spec 0048, AC-4834), which answers only a list the caller may read.
+  const listIds = [...new Set(refs.flatMap((ref) => (ref.listId === null ? [] : [ref.listId])))];
+  const listed = await Promise.all([
+    ...objectIds.map((objectId) => listObjectAttributes(scope, objectId, { includeArchived: true })),
+    ...listIds.map((listId) =>
+      listListAttributes(scope, listId, { includeArchived: true }).catch(() => [] as AttributeDefinition[]),
+    ),
+  ]);
   const byId = new Map(listed.flat().map((definition) => [definition.id, definition]));
   return refs.flatMap((ref) => {
     const definition = byId.get(ref.attributeId);
@@ -577,22 +582,6 @@ async function createListAttribute(
   return made;
 }
 
-/**
- * Who may change a list (AC-4834): "Only <maker>, owners and admins can change
- * this list.", or, when its maker has gone or the system made it, "Only owners
- * and admins can change this list."
- */
-async function listManagersSentence(tx: WorkspaceTx, scope: EngineScope, listId: string): Promise<string> {
-  const [maker] = await tx
-    .select({ name: members.name, status: members.status })
-    .from(lists)
-    .innerJoin(members, and(eq(members.workspaceId, lists.workspaceId), eq(members.id, lists.createdByMemberId)))
-    .where(and(eq(lists.workspaceId, scope.workspaceId), eq(lists.id, listId)));
-  return maker === undefined || maker.status !== 'active'
-    ? 'Only owners and admins can change this list.'
-    : `Only ${maker.name}, owners and admins can change this list.`;
-}
-
 /** What settings may change on an attribute (AC-231): never its type, multiple setting or API name. */
 export interface EditAttributeInput {
   readonly attributeId: string;
@@ -617,7 +606,7 @@ export async function editAttribute(
   input: EditAttributeInput,
   hooks: readonly AfterWrite[] = [],
 ): Promise<AttributeDefinition> {
-  requirePermission(scope, 'schema.manage');
+  await requireFieldManager(scope, input.attributeId);
   const attributeId = checkId(input.attributeId, ATTRIBUTE_NOT_FOUND);
   const changed = await updateAttribute(
     scope,
@@ -646,9 +635,10 @@ export async function moveAttribute(
   input: { readonly attributeId: string; readonly position: number },
   hooks: readonly AfterWrite[] = [],
 ): Promise<AttributeDefinition[]> {
-  requirePermission(scope, 'schema.manage');
+  await requireFieldManager(scope, input.attributeId);
   const attributeId = checkId(input.attributeId, ATTRIBUTE_NOT_FOUND);
   const moved = await reorderAttribute(scope, { attributeId, position: input.position }, hooks);
+  if (moved.listId !== null) return listListAttributes(scope, moved.listId, { includeArchived: true });
   if (moved.objectId === null) return [];
   return listObjectAttributes(scope, moved.objectId, { includeArchived: true });
 }
@@ -664,7 +654,7 @@ export async function archiveAttributes(
   input: { readonly attributeId: string },
   hooks: readonly AfterWrite[] = [],
 ): Promise<AttributeDefinition[]> {
-  requirePermission(scope, 'schema.manage');
+  await requireFieldManager(scope, input.attributeId);
   const attributeId = checkId(input.attributeId, ATTRIBUTE_NOT_FOUND);
   return readDefinitions(scope, await archiveAttribute(scope, attributeId, hooks));
 }
@@ -681,7 +671,7 @@ export async function restoreAttributes(
   input: { readonly attributeId: string },
   hooks: readonly AfterWrite[] = [],
 ): Promise<AttributeDefinition[]> {
-  requirePermission(scope, 'schema.manage');
+  await requireFieldManager(scope, input.attributeId);
   const attributeId = checkId(input.attributeId, ATTRIBUTE_NOT_FOUND);
   return readDefinitions(scope, await restoreAttribute(scope, attributeId, hooks));
 }

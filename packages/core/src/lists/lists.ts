@@ -10,13 +10,19 @@ import { freeApiSlug, toApiSlug, type FilterGroup, type SortRules } from '@crm/c
 import { schema, type WorkspaceTx } from '@crm/db';
 import { canonicalId, checkId, isUuid } from '../engine/ids.ts';
 import {
+  addEntries,
   addEntry,
   changeEntries,
+  changeList,
+  getRecordEntries,
   insertList,
   readEntriesById,
+  setListArchived,
   visibleEntries,
+  type AddOutcome,
   type EntryOutcome,
   type EntryView,
+  type ListUpdate,
 } from '../engine/lists.ts';
 import { countMatches, queryPage, type MatchCount } from '../engine/query/page.ts';
 import { readRecords, setValues, type AttributeResult, type RecordView, type ValueInput } from '../engine/records.ts';
@@ -212,6 +218,42 @@ export async function createList(
     hooks,
   );
   return getList(scope, result.listId);
+}
+
+/** What a list's settings change (AC-4829): any of its name, tile and the once only rule. */
+export type UpdateListInput = ListUpdate;
+
+/**
+ * Changes a list's name, tile or "Each record once" rule (spec 0048, AC-4829,
+ * AC-4830) and answers it: its managers only (403 `FORBIDDEN` naming who may).
+ */
+export async function updateList(
+  scope: EngineScope,
+  input: UpdateListInput,
+  hooks: readonly AfterWrite[] = [],
+): Promise<ListView> {
+  const { listId } = await changeList(scope, input, hooks);
+  return getList(scope, listId);
+}
+
+/** Archives a list (AC-4831): its managers only. It leaves every sidebar, picker and record page. */
+export async function archiveList(
+  scope: EngineScope,
+  input: { readonly listId: string },
+  hooks: readonly AfterWrite[] = [],
+): Promise<ListView> {
+  const { listId } = await setListArchived(scope, { listId: input.listId, archived: true }, hooks);
+  return getList(scope, listId);
+}
+
+/** Restores an archived list with everything in it (AC-4831): its managers only. */
+export async function restoreList(
+  scope: EngineScope,
+  input: { readonly listId: string },
+  hooks: readonly AfterWrite[] = [],
+): Promise<ListView> {
+  const { listId } = await setListArchived(scope, { listId: input.listId, archived: false }, hooks);
+  return getList(scope, listId);
 }
 
 /** One window of a list's entries: from a position, or after a cursor (AC-4809). */
@@ -441,4 +483,92 @@ export async function restoreEntries(
   hooks: readonly AfterWrite[] = [],
 ): Promise<readonly EntryOutcome[]> {
   return changeEntries(scope, { entryIds: input.entryIds, action: 'restore' }, hooks);
+}
+
+/** What adding many records answers (AC-4825): who went in, who was already in, and who was refused and why. */
+export interface AddedEntries {
+  readonly added: readonly { readonly recordId: string; readonly entryId: string }[];
+  readonly alreadyIn: readonly string[];
+  readonly refused: readonly { readonly recordId: string; readonly code: string; readonly message: string }[];
+}
+
+/** An add batch's outcomes sorted into the three groups the bulk bar's Toast speaks of. */
+export function sortAdded(outcomes: readonly AddOutcome[]): AddedEntries {
+  const added: { recordId: string; entryId: string }[] = [];
+  const alreadyIn: string[] = [];
+  const refused: { recordId: string; code: string; message: string }[] = [];
+  for (const outcome of outcomes) {
+    if (outcome.entryId !== undefined) added.push({ recordId: outcome.recordId, entryId: outcome.entryId });
+    else if (outcome.refusal?.code === 'ENTRY_EXISTS') alreadyIn.push(outcome.recordId);
+    else {
+      refused.push({
+        recordId: outcome.recordId,
+        code: outcome.refusal?.code ?? 'INTERNAL',
+        message: outcome.refusal?.message ?? 'That record was not added.',
+      });
+    }
+  }
+  return { added, alreadyIn, refused };
+}
+
+/**
+ * Adds 1 to 500 records to a list in one request (AC-4825), each on its own:
+ * a record already in an "Each record once" list is reported, one refused
+ * says why, and neither fails the rest. `ids` are the entries' client minted
+ * UUID v7s, one per record, so the same call again answers the entries it made.
+ */
+export async function addListEntries(
+  scope: EngineScope,
+  input: {
+    readonly listId: string;
+    readonly recordIds: readonly string[];
+    readonly ids?: readonly string[] | undefined;
+    readonly timeZone?: string | undefined;
+  },
+  hooks: readonly AfterWrite[] = [],
+): Promise<AddedEntries> {
+  return sortAdded(await addEntries(scope, input, hooks));
+}
+
+/** The most entries one record's page lists (AC-4822). */
+export const MAX_RECORD_ENTRIES = 100;
+
+/**
+ * Every live entry of one record in a list the caller may read (AC-4822),
+ * by list name, then when it was added; at most 100. A list that is archived,
+ * or whose object is, is left out, and so is one the caller can't read, with no
+ * gap or count. A record the caller can't see is `NOT_FOUND`.
+ */
+export async function entriesForRecord(
+  scope: EngineScope,
+  input: { readonly recordId: string },
+): Promise<readonly EntryView[]> {
+  const recordId = checkId(input.recordId, 'That record does not exist.');
+  const found = await inWorkspace(scope, async (tx) => {
+    const [seen] = await readRecords(tx, scope.access, [recordId], { attributeIds: [] });
+    if (seen === undefined) throw refuse('NOT_FOUND', 'That record does not exist.');
+    const rows = await tx
+      .select({ id: listEntries.id, listName: lists.name })
+      .from(listEntries)
+      .innerJoin(lists, and(eq(lists.workspaceId, listEntries.workspaceId), eq(lists.id, listEntries.listId)))
+      .innerJoin(objects, and(eq(objects.workspaceId, lists.workspaceId), eq(objects.id, lists.objectId)))
+      .where(
+        and(
+          eq(listEntries.recordId, recordId),
+          isNull(listEntries.deletedAt),
+          isNull(lists.archivedAt),
+          isNull(objects.archivedAt),
+        ),
+      );
+    return rows;
+  });
+  const entries = await getRecordEntries(scope, { recordId });
+  const live = new Map(found.map((row) => [row.id, row.listName] as const));
+  return entries
+    .filter((entry) => live.has(entry.id))
+    .sort((a, b) => {
+      const byList = (live.get(a.id) ?? '').localeCompare(live.get(b.id) ?? '', 'en', { sensitivity: 'base' });
+      return byList !== 0 ? byList : a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0;
+    })
+    .slice(0, MAX_RECORD_ENTRIES);
 }

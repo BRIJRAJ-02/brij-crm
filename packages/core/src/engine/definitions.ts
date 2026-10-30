@@ -42,6 +42,7 @@ import {
 } from '../forms/dependencies.ts';
 import { inWorkspace } from '../access/run.ts';
 import { requirePermission } from '../access/check.ts';
+import { requireFieldManager } from '../lists/manager.ts';
 import { attributeVisible } from '../access/visibility.ts';
 import { objectLevel, type Access } from '../access/policy.ts';
 
@@ -898,7 +899,7 @@ export async function updateAttribute(
   input: AttributeUpdate,
   hooks: readonly AfterWrite[] = [],
 ): Promise<AttributeRef> {
-  requirePermission(scope, 'schema.manage');
+  await requireFieldManager(scope, input.attributeId);
   const { result } = await runWrite(
     scope,
     async (context) => {
@@ -1017,7 +1018,7 @@ export async function archiveAttribute(
   attributeId: string,
   hooks: readonly AfterWrite[] = [],
 ): Promise<readonly AttributeRef[]> {
-  requirePermission(scope, 'schema.manage');
+  await requireFieldManager(scope, attributeId);
   const { result } = await runWrite(
     scope,
     async (context) => {
@@ -1213,7 +1214,7 @@ export async function restoreAttribute(
   attributeId: string,
   hooks: readonly AfterWrite[] = [],
 ): Promise<readonly AttributeRef[]> {
-  requirePermission(scope, 'schema.manage');
+  await requireFieldManager(scope, attributeId);
   const { result } = await runWrite(
     scope,
     async (context) => {
@@ -1278,7 +1279,7 @@ export async function reorderAttribute(
   input: { readonly attributeId: string; readonly position: number },
   hooks: readonly AfterWrite[] = [],
 ): Promise<AttributeRef> {
-  requirePermission(scope, 'schema.manage');
+  await requireFieldManager(scope, input.attributeId);
   if (!Number.isInteger(input.position) || input.position < 0) {
     throw refuseOn('CONFIG_INVALID', 'Give the position as a whole number from 0.', 'position');
   }

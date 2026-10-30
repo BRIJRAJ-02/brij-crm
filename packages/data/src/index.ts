@@ -181,6 +181,7 @@ export type { LimitsAt } from '@crm/contracts';
 // Lists and their entries (spec 0048).
 export type { EntryView, ListTemplate, ListView } from '@crm/contracts';
 export type {
+  AddManyOutcome,
   AddOutcome,
   EntriesState,
   EntriesStatus,
@@ -191,6 +192,8 @@ export type {
   ListBoardState,
   ListRef,
   ListRow,
+  RecordEntries,
+  RecordEntriesState,
   RemoveOutcome,
 } from './lists/entries.ts';
 import type { EntriesLayer } from './lists/entries.ts';
@@ -3326,6 +3329,14 @@ export function createDataLayer({
                 input.workspace,
                 call((options) => api.entries.add(input, options)),
               ),
+            addMany: (input) =>
+              landed(
+                input.workspace,
+                call((options) =>
+                  api.entries.addMany({ ...input, recordIds: [...input.recordIds], ids: [...input.ids] }, options),
+                ),
+              ),
+            forRecord: (input) => call((options) => api.entries.forRecord(input, options)),
             setValues: (input) =>
               landed(
                 input.workspace,
@@ -3358,6 +3369,26 @@ export function createDataLayer({
     );
     return entriesLoading;
   };
+
+  /** A list write that waits for the server (spec 0048): its echo is skipped, so the lists are read again here. */
+  async function listWrite(
+    workspace: string,
+    send: (mutationId: string, options: CallOptions) => Promise<ListView>,
+  ): Promise<ListView> {
+    const mutationId = mintId();
+    mutations.sent(mutationId);
+    try {
+      const made = await call((options) => send(mutationId, options));
+      mutations.answered(mutationId, 1);
+      lists.delete(workspace);
+      listFields.clear();
+      onDefinitionsChange();
+      return made;
+    } catch (error) {
+      mutations.forget(mutationId);
+      throw toDataError(error);
+    }
+  }
 
   /** The workspace's lists the member may read (spec 0048), archived ones too, cached until a list changes. */
   function allLists(workspace: string): Promise<ListView[]> {
@@ -4271,6 +4302,30 @@ export function createDataLayer({
           throw toDataError(error);
         }
       },
+      /**
+       * Changes a list's name, tile or "Each record once" rule (AC-4829), waiting for the server: its managers only.
+       * Refusals: `FORBIDDEN` (naming who may), `CONFIG_INVALID` (a name another list holds, on `name`; a record in
+       * the list twice, on `allowsDuplicates`), `NOT_FOUND`.
+       */
+      update: (
+        workspace: string,
+        listId: string,
+        changes: {
+          readonly name?: string;
+          readonly icon?: ListView['icon'];
+          readonly hue?: ListView['hue'];
+          readonly allowsDuplicates?: boolean;
+        },
+      ): Promise<ListView> =>
+        listWrite(workspace, (mutationId, options) =>
+          api.lists.update({ workspace, listId, ...changes, mutationId }, options),
+        ),
+      /** Archives a list (AC-4831): it leaves the sidebar, pickers and record pages. */
+      archive: (workspace: string, listId: string): Promise<ListView> =>
+        listWrite(workspace, (mutationId, options) => api.lists.archive({ workspace, listId, mutationId }, options)),
+      /** Restores an archived list with its entries (AC-4831). */
+      restore: (workspace: string, listId: string): Promise<ListView> =>
+        listWrite(workspace, (mutationId, options) => api.lists.restore({ workspace, listId, mutationId }, options)),
       /** A list's own fields (AC-4807): Added and Added by first, then those its managers made; cached until they change. */
       fields: (workspace: string, list: { readonly id: string; readonly objectId: string }) =>
         cached(listFields, objectKey(workspace, list.id), () =>

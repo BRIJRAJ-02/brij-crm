@@ -36,7 +36,14 @@ import type { NavSnapshot, NavSource } from './navigation/store.ts';
 import type { DueTasksSnapshot, DueTasksSource } from './tasks/due.ts';
 import type { PendingOptions } from './options.ts';
 import type { RecordsView, ViewReader, ViewState } from './records/layer.ts';
-import type { EntriesState, EntriesView, ListBoard, ListBoardState } from './lists/entries.ts';
+import type {
+  EntriesState,
+  EntriesView,
+  ListBoard,
+  ListBoardState,
+  RecordEntries,
+  RecordEntriesState,
+} from './lists/entries.ts';
 import type { RecordState, RecordSubscription } from './records/one.ts';
 import type { AggregateSource, AggregateState } from './records/aggregate-source.ts';
 import type { RecordSearch, RecordSearchState } from './records/search.ts';
@@ -587,4 +594,10 @@ export function useEntries(view: EntriesView): EntriesState {
 export function useListBoard(board: ListBoard): ListBoardState {
   useEffect(() => board.retain(), [board]);
   return useSyncExternalStore(board.subscribe, board.getSnapshot);
+}
+
+/** A record's entries for its page's Lists section (spec 0048, AC-4822), held while the section shows them. */
+export function useRecordEntries(source: RecordEntries): RecordEntriesState {
+  useEffect(() => source.retain(), [source]);
+  return useSyncExternalStore(source.subscribe, source.getSnapshot);
 }

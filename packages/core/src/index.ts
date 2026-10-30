@@ -210,10 +210,13 @@ export {
 } from './attributes/attributes.ts';
 // Lists and their entries (spec 0048).
 export {
+  addListEntries,
   addListEntry,
+  archiveList,
   countEntries,
   createList,
   editEntry,
+  entriesForRecord,
   entryMembership,
   getList,
   listLists,
@@ -221,11 +224,15 @@ export {
   readEntryPage,
   removeEntries,
   restoreEntries,
+  restoreList,
+  updateList,
+  type AddedEntries,
   type AddListEntryInput,
   type CreateListInput,
   type EditEntryInput,
   type EntryPage,
   type EntryWindow,
+  type UpdateListInput,
   type WrittenEntry,
 } from './lists/lists.ts';
 export { attributeImpact } from './attributes/impact.ts';

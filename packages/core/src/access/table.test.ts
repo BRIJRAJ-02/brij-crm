@@ -626,6 +626,42 @@ describe('the walk: a principal without the access is refused', () => {
     },
   );
 
+  // Lists (spec 0048, AC-4834, AC-4835): changing a list is its managers'. Another member who can read it gets the
+  // managers' sentence, a key gets 403, and a member who can't read its object finds no such list.
+  it.each(entries.filter(([, entry]) => 'listMaker' in entry).map(([name]) => name))(
+    '%s refuses anyone but the list’s managers, and answers a hidden list as unknown',
+    async (name) => {
+      const { workspaceId, objects, ownerId, scope: owner } = await memberOf('admin');
+      const people = objects.people ?? '';
+      const list = await core.createList(owner, {
+        id: core.newId(),
+        objectId: people,
+        name: 'Mine',
+        template: 'blank',
+      });
+      const input = { listId: list.id, name: 'Renamed' };
+      const asMember = (level: string) =>
+        testScope({
+          db,
+          workspaceId,
+          actor: { type: 'member', id: ownerId },
+          role: 'member',
+          rules: {
+            levels: [
+              { subject: { type: 'role', role: 'member' }, target: { type: 'object', objectId: people }, level },
+            ],
+            records: [],
+          },
+        });
+      const key = testScope({ db, workspaceId, actor: { type: 'api_key', id: core.newId() }, scopes: [] });
+      // A member who isn't the maker reads the list and is refused with the sentence.
+      expect(await refusalOf(service(name)(asMember('write'), input))).toMatchObject({ code: 'FORBIDDEN' });
+      // A key holding no data scope can't read the list at all, so it is absent to it too.
+      expect(await refusalOf(service(name)(key, input))).toMatchObject({ code: 'NOT_FOUND' });
+      expect(await refusalOf(service(name)(asMember('none'), input))).toMatchObject({ code: 'NOT_FOUND' });
+    },
+  );
+
   it.each(entries.filter(([, entry]) => 'anyMember' in entry).map(([name]) => name))(
     '%s answers any member',
     async (name) => {
@@ -1171,6 +1207,7 @@ const DATA_CASES: Readonly<Record<string, DataCase>> = {
   entryMembership: refused('NOT_FOUND', (scope, world) =>
     core.entryMembership(scope, { listId: world.listId, recordIds: [world.recordId] }),
   ),
+  entriesForRecord: refused('NOT_FOUND', (scope, world) => core.entriesForRecord(scope, { recordId: world.recordId })),
   getActivity: refused('NOT_FOUND', (scope, world) => core.getActivity(scope, { recordId: world.recordId })),
   getStageSince: refused('NOT_FOUND', (scope, world) =>
     core.getStageSince(scope, { recordId: world.recordId, attributeId: world.stage }),
@@ -1472,6 +1509,10 @@ const DATA_CASES: Readonly<Record<string, DataCase>> = {
   restoreEntry: refused('FORBIDDEN', (scope, world) => core.restoreEntry(scope, { entryId: world.entryId })),
   addListEntry: refused('FORBIDDEN', (scope, world) =>
     core.addListEntry(scope, { id: core.newId(), listId: world.listId, recordId: world.recordId }),
+  ),
+  // The batch add answers FORBIDDEN for the whole call when the list or its object is read only (AC-4825).
+  addListEntries: refused('FORBIDDEN', (scope, world) =>
+    core.addListEntries(scope, { listId: world.listId, recordIds: [world.recordId] }),
   ),
   editEntry: refused('FORBIDDEN', (scope, world) => core.editEntry(scope, { entryId: world.entryId, values: {} })),
   // A batch answers per entry (AC-4818): each refused, the call itself answered.

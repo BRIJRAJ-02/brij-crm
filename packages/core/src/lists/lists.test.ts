@@ -7,7 +7,13 @@
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDatabase, type Database } from '@crm/db';
-import { createAttribute, listListAttributes } from '../attributes/attributes.ts';
+import {
+  archiveAttributes,
+  createAttribute,
+  editAttribute,
+  listListAttributes,
+  moveAttribute,
+} from '../attributes/attributes.ts';
 import { newId } from '../engine/ids.ts';
 import { createRecord } from '../engine/records.ts';
 import { queryGroups } from '../engine/query/groups.ts';
@@ -16,17 +22,24 @@ import { createWorkspace } from '../engine/workspaces.ts';
 import { testScope } from '../testing.ts';
 import { createView, setDefaultView } from '../views/manage.ts';
 import { getView, listViews } from '../views/views.ts';
+import { createOption } from '../attributes/options.ts';
 import {
+  addListEntries,
   addListEntry,
+  archiveList,
   countEntries,
   createList,
   editEntry,
+  entriesForRecord,
   entryMembership,
+  getList,
   listLists,
   queryEntries,
   readEntryPage,
   removeEntries,
   restoreEntries,
+  restoreList,
+  updateList,
 } from './lists.ts';
 
 const { appUrl } = inject('testDatabase');
@@ -431,5 +444,318 @@ describe('a list’s views and board (AC-4808, AC-4820)', () => {
       [1, [acme]],
       [1, [globex]],
     ]);
+  });
+});
+
+describe('list settings, archive and restore (AC-4829 to AC-4832)', () => {
+  it('renames, retiles and keeps the API name; another member is refused with the maker’s name', async () => {
+    const world = await workspace();
+    const list = await createList(world.bea.scope, {
+      id: newId(),
+      objectId: world.people,
+      name: 'Hiring',
+      template: 'blank',
+    });
+    const changed = await updateList(world.bea.scope, {
+      listId: list.id,
+      name: 'Recruiting',
+      icon: 'users',
+      hue: 'blue',
+    });
+    expect(changed).toMatchObject({ name: 'Recruiting', apiSlug: 'hiring', icon: 'users', hue: 'blue' });
+    expect(await refusalOf(updateList(world.cy.scope, { listId: list.id, name: 'Mine now' }))).toEqual({
+      code: 'FORBIDDEN',
+      message: 'Only Bea Ruiz, owners and admins can change this list.',
+    });
+    const other = await createList(world.owner, {
+      id: newId(),
+      objectId: world.people,
+      name: 'Events',
+      template: 'blank',
+    });
+    expect(await refusalOf(updateList(world.owner, { listId: other.id, name: 'recruiting' }))).toMatchObject({
+      code: 'CONFIG_INVALID',
+      message: 'A list named recruiting already exists.',
+    });
+    // An admin changes any list (AC-4834).
+    expect((await updateList(world.owner, { listId: list.id, name: 'Talent' })).name).toBe('Talent');
+  });
+
+  it('refuses turning Each record once on while a record is in twice, naming the count to an open reader', async () => {
+    const world = await workspace();
+    const list = await createList(world.owner, {
+      id: newId(),
+      objectId: world.people,
+      name: 'Visits',
+      template: 'blank',
+      allowsDuplicates: true,
+    });
+    const ada = await world.person('Ada');
+    const bob = await world.person('Bob');
+    for (const recordId of [ada, ada, bob]) await addListEntry(world.owner, { id: newId(), listId: list.id, recordId });
+    expect(await refusalOf(updateList(world.owner, { listId: list.id, allowsDuplicates: false }))).toMatchObject({
+      code: 'CONFIG_INVALID',
+      message: '1 record is in this list more than once. Remove the extra entries first.',
+    });
+    const page = await queryEntries(world.owner, { listId: list.id });
+    const extra = page.entries.find((entry) => entry.recordId === ada)?.id ?? '';
+    await removeEntries(world.owner, { entryIds: [extra] });
+    expect((await updateList(world.owner, { listId: list.id, allowsDuplicates: false })).allowsDuplicates).toBe(false);
+  });
+
+  it('archives a list out of every read and entry write, and restores it with its entries', async () => {
+    const world = await workspace();
+    const list = await createList(world.bea.scope, {
+      id: newId(),
+      objectId: world.people,
+      name: 'Old',
+      template: 'blank',
+    });
+    const ada = await world.person('Ada');
+    await addListEntry(world.bea.scope, { id: newId(), listId: list.id, recordId: ada });
+    expect(await refusalOf(archiveList(world.cy.scope, { listId: list.id }))).toMatchObject({ code: 'FORBIDDEN' });
+    const archived = await archiveList(world.bea.scope, { listId: list.id });
+    expect(archived.isArchived).toBe(true);
+    expect((await listLists(world.cy.scope)).some((each) => each.id === list.id)).toBe(false);
+    expect(
+      (await listLists(world.bea.scope, { includeArchived: true })).find((each) => each.id === list.id)?.isArchived,
+    ).toBe(true);
+    expect(await refusalOf(addListEntry(world.bea.scope, { id: newId(), listId: list.id, recordId: ada }))).toEqual({
+      code: 'NOT_FOUND',
+      message: 'That list is archived. Restore it first.',
+    });
+    expect(await refusalOf(updateList(world.bea.scope, { listId: list.id, name: 'Older' }))).toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    // Its record page shows no card while it is archived (AC-4831).
+    expect(await entriesForRecord(world.bea.scope, { recordId: ada })).toEqual([]);
+    const restored = await restoreList(world.bea.scope, { listId: list.id });
+    expect(restored.isArchived).toBe(false);
+    expect((await countEntries(world.bea.scope, { listId: list.id })).count).toBe(1);
+    expect((await getList(world.cy.scope, list.id)).name).toBe('Old');
+  });
+});
+
+describe('adding many and a record’s entries (AC-4822, AC-4825)', () => {
+  it('adds each record on its own: added, already in, refused; a replay answers the same entries', async () => {
+    const world = await workspace();
+    const list = await createList(world.owner, {
+      id: newId(),
+      objectId: world.people,
+      name: 'Batch',
+      template: 'blank',
+    });
+    const [a, b, c] = [await world.person('A'), await world.person('B'), await world.person('C')];
+    const acme = await world.company('Acme');
+    await addListEntry(world.owner, { id: newId(), listId: list.id, recordId: b });
+    const ids = [newId(), newId(), newId(), newId()];
+    const answer = await addListEntries(world.owner, { listId: list.id, recordIds: [a, b, c, acme], ids });
+    expect(answer.added.map((each) => each.recordId).sort()).toEqual([a, c].sort());
+    expect(answer.alreadyIn).toEqual([b]);
+    expect(answer.refused).toEqual([
+      {
+        recordId: acme,
+        code: 'CONFIG_INVALID',
+        message: "That record can't go in this list; it holds another object's records.",
+      },
+    ]);
+    expect((await countEntries(world.owner, { listId: list.id })).count).toBe(3);
+    const again = await addListEntries(world.owner, {
+      listId: list.id,
+      recordIds: [a, c],
+      ids: [ids[0] ?? '', ids[2] ?? ''],
+    });
+    expect(again.added).toHaveLength(2);
+    expect((await countEntries(world.owner, { listId: list.id })).count).toBe(3);
+  });
+
+  it('refuses a read only member, an unknown record and 501 records', async () => {
+    const world = await workspace();
+    const list = await createList(world.owner, {
+      id: newId(),
+      objectId: world.people,
+      name: 'Guard',
+      template: 'blank',
+    });
+    const a = await world.person('A');
+    const reader = testScope({
+      db,
+      workspaceId: world.workspaceId,
+      actor: { type: 'member', id: world.cy.id },
+      role: 'member',
+      rules: {
+        levels: [
+          {
+            subject: { type: 'role', role: 'member' },
+            target: { type: 'object', objectId: world.people },
+            level: 'read',
+          },
+        ],
+        records: [],
+      },
+    });
+    expect(await refusalOf(addListEntries(reader, { listId: list.id, recordIds: [a] }))).toMatchObject({
+      code: 'FORBIDDEN',
+    });
+    const missing = await addListEntries(world.owner, { listId: list.id, recordIds: [newId()] });
+    expect(missing.refused[0]?.code).toBe('NOT_FOUND');
+    const tooMany = Array.from({ length: 501 }, () => newId());
+    expect(await refusalOf(addListEntries(world.owner, { listId: list.id, recordIds: tooMany }))).toMatchObject({
+      code: 'CONFIG_INVALID',
+    });
+  });
+
+  it('lists a record’s entries by list name then added, in readable lists only (AC-4822)', async () => {
+    const world = await workspace();
+    const ada = await world.person('Ada');
+    const made = [];
+    for (const name of ['Zeta', 'Alpha', 'Hidden']) {
+      made.push(
+        await createList(world.owner, {
+          id: newId(),
+          objectId: world.people,
+          name,
+          template: 'blank',
+          allowsDuplicates: true,
+        }),
+      );
+    }
+    for (const list of made) await addListEntry(world.owner, { id: newId(), listId: list.id, recordId: ada });
+    const hiddenList = made[2];
+    const reader = testScope({
+      db,
+      workspaceId: world.workspaceId,
+      actor: { type: 'member', id: world.cy.id },
+      role: 'member',
+      rules: {
+        levels: [
+          {
+            subject: { type: 'role', role: 'member' },
+            target: { type: 'object', objectId: hiddenList?.id ?? '' },
+            level: 'none',
+          },
+        ],
+        records: [],
+      },
+    });
+    const entries = await entriesForRecord(reader, { recordId: ada });
+    expect(entries.map((entry) => entry.listId)).toEqual([made[1]?.id, made[0]?.id]);
+    const all = await entriesForRecord(world.owner, { recordId: ada });
+    expect(all.map((entry) => entry.listId)).toEqual([made[1]?.id, made[2]?.id, made[0]?.id]);
+    expect(await refusalOf(entriesForRecord(world.owner, { recordId: newId() }))).toMatchObject({ code: 'NOT_FOUND' });
+  });
+});
+
+describe('a list’s maker and its fields (AC-4834)', () => {
+  it('lets its maker edit, move, archive and add options to its own fields; another member is refused', async () => {
+    const world = await workspace();
+    const list = await createList(world.bea.scope, {
+      id: newId(),
+      objectId: world.people,
+      name: 'Pipe',
+      template: 'pipeline',
+    });
+    const fields = await listListAttributes(world.bea.scope, list.id);
+    const stage = fields.find((field) => field.title === 'Stage');
+    const owner = fields.find((field) => field.title === 'Owner');
+    expect(stage?.id).toBeDefined();
+    const renamed = await editAttribute(world.bea.scope, { attributeId: stage?.id ?? '', title: 'Phase' });
+    expect(renamed.title).toBe('Phase');
+    const moved = await moveAttribute(world.bea.scope, { attributeId: owner?.id ?? '', position: 0 });
+    expect(moved.length).toBeGreaterThan(0);
+    const option = await createOption(world.bea.scope, { attributeId: stage?.id ?? '', id: newId(), label: 'Parked' });
+    expect(option.label).toBe('Parked');
+    const sentence = { code: 'FORBIDDEN', message: 'Only Bea Ruiz, owners and admins can change this list.' };
+    expect(await refusalOf(editAttribute(world.cy.scope, { attributeId: stage?.id ?? '', title: 'Mine' }))).toEqual(
+      sentence,
+    );
+    expect(await refusalOf(archiveAttributes(world.cy.scope, { attributeId: stage?.id ?? '' }))).toEqual(sentence);
+    expect(
+      await refusalOf(createOption(world.cy.scope, { attributeId: stage?.id ?? '', id: newId(), label: 'Nope' })),
+    ).toEqual(sentence);
+    const archived = await archiveAttributes(world.bea.scope, { attributeId: owner?.id ?? '' });
+    expect(archived[0]?.isArchived).toBe(true);
+  });
+});
+
+describe('record rules and other workspaces (AC-4836, AC-4838)', () => {
+  it('leaves an entry out of rows, counts, membership and a record’s page when its record is hidden by a rule', async () => {
+    const world = await workspace();
+    const ownerField = await createAttribute(world.owner, {
+      objectId: world.people,
+      id: newId(),
+      title: 'Account owner',
+      type: 'actor_reference',
+    });
+    const list = await createList(world.owner, {
+      id: newId(),
+      objectId: world.people,
+      name: 'Mine',
+      template: 'blank',
+    });
+    const nameField = world.attribute('name', world.people);
+    const mine = (
+      await createRecord(world.owner, {
+        objectId: world.people,
+        values: { [nameField]: { firstName: 'Mine' }, [ownerField.id]: { type: 'member', id: world.cy.id } },
+      })
+    ).recordId;
+    const theirs = (
+      await createRecord(world.owner, {
+        objectId: world.people,
+        values: { [nameField]: { firstName: 'Theirs' }, [ownerField.id]: { type: 'member', id: world.bea.id } },
+      })
+    ).recordId;
+    for (const recordId of [mine, theirs]) await addListEntry(world.owner, { id: newId(), listId: list.id, recordId });
+    const ruled = testScope({
+      db,
+      workspaceId: world.workspaceId,
+      actor: { type: 'member', id: world.cy.id },
+      role: 'member',
+      rules: {
+        levels: [],
+        records: [
+          {
+            subject: { type: 'role', role: 'member' },
+            objectId: world.people,
+            kind: 'own',
+            attributeId: ownerField.id,
+          },
+        ],
+      },
+    });
+    const page = await queryEntries(ruled, { listId: list.id });
+    expect(page.entries.map((entry) => entry.recordId)).toEqual([mine]);
+    expect((await countEntries(ruled, { listId: list.id })).count).toBe(1);
+    expect(await entryMembership(ruled, { listId: list.id, recordIds: [mine, theirs] })).toEqual([mine]);
+    expect(await entriesForRecord(ruled, { recordId: mine })).toHaveLength(1);
+    expect(await refusalOf(entriesForRecord(ruled, { recordId: theirs }))).toMatchObject({ code: 'NOT_FOUND' });
+    const all = (await queryEntries(world.owner, { listId: list.id })).entries;
+    const hiddenEntry = all.find((entry) => entry.recordId === theirs)?.id ?? '';
+    expect((await readEntryPage(ruled, [hiddenEntry])).entries).toEqual([]);
+    // The stored count counts the hidden entry too, so it is told to no one a rule limits (decision 13).
+    expect((await listLists(ruled)).find((each) => each.id === list.id)?.entryCount).toBeUndefined();
+    const added = await addListEntries(ruled, { listId: list.id, recordIds: [theirs] });
+    expect(added.refused[0]?.code).toBe('NOT_FOUND');
+  });
+
+  it('answers a list from another workspace as unknown, for every new procedure', async () => {
+    const mine = await workspace();
+    const other = await workspace();
+    const list = await createList(other.owner, {
+      id: newId(),
+      objectId: other.people,
+      name: 'Theirs',
+      template: 'blank',
+    });
+    const record = await mine.person('Ada');
+    const unknown = { code: 'NOT_FOUND', message: 'That list does not exist.' };
+    expect(await refusalOf(updateList(mine.owner, { listId: list.id, name: 'Mine' }))).toEqual(unknown);
+    expect(await refusalOf(archiveList(mine.owner, { listId: list.id }))).toEqual(unknown);
+    expect(await refusalOf(restoreList(mine.owner, { listId: list.id }))).toEqual(unknown);
+    expect(await refusalOf(addListEntries(mine.owner, { listId: list.id, recordIds: [record] }))).toEqual(unknown);
+    expect(await refusalOf(entriesForRecord(mine.owner, { recordId: other.people }))).toMatchObject({
+      code: 'NOT_FOUND',
+    });
   });
 });

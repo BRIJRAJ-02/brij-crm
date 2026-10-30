@@ -74,7 +74,14 @@ export type AccessEntry =
    * Lists (spec 0048, decision 1, AC-4834): making one needs `lists.manage` (403 `FORBIDDEN`, "Your role can't make
    * lists.") and write on its object; changing one is `schema.manage`'s, or its maker's with `lists.manage`.
    */
-  | { readonly listManager: true };
+  | { readonly listManager: true }
+  /**
+   * A change to one existing list (spec 0048, AC-4834): its managers only, `schema.manage` or its maker with
+   * `lists.manage` while they are still a member. A list the caller can't read answers `NOT_FOUND`, as an unknown one;
+   * anyone else who can read it gets 403 `FORBIDDEN` naming who may ("Only <maker>, owners and admins can change
+   * this list.").
+   */
+  | { readonly listMaker: true };
 
 /** Every exported service that takes a scope, and what it checks. */
 export const ACCESS_TABLE = {
@@ -118,6 +125,9 @@ export const ACCESS_TABLE = {
   // Lists (spec 0048): lists.manage and write on the object (decision 1).
   defineList: { listManager: true },
   createList: { listManager: true },
+  updateList: { listMaker: true },
+  archiveList: { listMaker: true },
+  restoreList: { listMaker: true },
   // Removing records for good.
   eraseRecord: { permission: 'records.purge' },
   purgeDeleted: { permission: 'records.purge' },
@@ -216,6 +226,7 @@ export const ACCESS_TABLE = {
   countEntries: { data: 'read' },
   readEntryPage: { data: 'read' },
   entryMembership: { data: 'read' },
+  entriesForRecord: { data: 'read' },
   // The record page (spec 0017): its timeline and a record in the trash.
   getActivity: { data: 'read' },
   // 13 Oct reference batch 4: a record's stage age, read as its timeline is.
@@ -268,6 +279,7 @@ export const ACCESS_TABLE = {
   removeEntry: { data: 'write' },
   restoreEntry: { data: 'write' },
   addListEntry: { data: 'write' },
+  addListEntries: { data: 'write' },
   editEntry: { data: 'write' },
   removeEntries: { data: 'write' },
   restoreEntries: { data: 'write' },

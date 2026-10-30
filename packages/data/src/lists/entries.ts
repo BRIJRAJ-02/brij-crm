@@ -79,6 +79,23 @@ export interface EntriesApi {
     readonly timeZone: string;
     readonly mutationId: string;
   }) => Promise<WrittenEntry>;
+  readonly addMany: (input: {
+    readonly workspace: string;
+    readonly listId: string;
+    readonly recordIds: readonly string[];
+    readonly ids: readonly string[];
+    readonly timeZone: string;
+    readonly mutationId: string;
+  }) => Promise<{
+    readonly added: readonly { readonly recordId: string; readonly entryId: string }[];
+    readonly alreadyIn: readonly string[];
+    readonly refused: readonly { readonly recordId: string; readonly code: string; readonly message: string }[];
+    readonly echoes: number;
+  }>;
+  readonly forRecord: (input: {
+    readonly workspace: string;
+    readonly recordId: string;
+  }) => Promise<{ readonly entries: readonly EntryView[] }>;
   readonly setValues: (input: {
     readonly workspace: string;
     readonly entryId: string;
@@ -197,6 +214,30 @@ export type AddOutcome =
   | { readonly kind: 'added'; readonly entry: EntryView; readonly record?: RecordView }
   | { readonly kind: 'refused'; readonly code: string; readonly message: string };
 
+/** What adding many records answered (AC-4825): counts, the first refusal's sentence, and the Undo for those added. */
+export interface AddManyOutcome {
+  readonly added: number;
+  readonly alreadyIn: number;
+  readonly refused: number;
+  readonly reason?: string;
+  readonly undoId?: string;
+}
+
+/** A record's entries as its page's Lists section reads them (AC-4822). */
+export interface RecordEntriesState {
+  readonly status: EntriesStatus;
+  /** The record's live entries in readable lists, by list name then Added, as joined rows (an entry card's values). */
+  readonly rows: readonly ListRow[];
+}
+
+/** A record's entries, for useSyncExternalStore. */
+export interface RecordEntries {
+  readonly subscribe: (listener: () => void) => () => void;
+  readonly getSnapshot: () => RecordEntriesState;
+  readonly retry: () => void;
+  readonly retain: () => () => void;
+}
+
 /** What a removal answered (AC-4817): how many left, how many stayed and why, and the Undo for those that left. */
 export interface RemoveOutcome {
   readonly removed: number;
@@ -216,6 +257,8 @@ export const LIST_WORDS = {
     `Put ${back.toLocaleString('en')} back. ${kept.toLocaleString('en')} stayed out: ${reason}`,
   undidCell: (title: string, name: string) => `Undid ${title} on ${name}`,
   undidAdd: (name: string, list: string) => `Took ${name} out of ${list} again`,
+  undidAddMany: (count: number, list: string) =>
+    `Took ${count.toLocaleString('en')} ${count === 1 ? 'entry' : 'entries'} out of ${list} again`,
   couldNotUndo: 'That change couldn’t be undone.',
 } as const;
 
@@ -273,6 +316,13 @@ interface OpenBoard {
   readonly board: ListBoard;
   readonly settle: () => void;
   readonly invalidate: () => void;
+}
+
+/** One open record section, as the layer keeps it. */
+interface OpenRecordEntries {
+  readonly workspace: string;
+  readonly view: RecordEntries;
+  readonly refresh: () => void;
 }
 
 /** The lists layer: entries' views, boards and writes. */
@@ -973,6 +1023,170 @@ export function createEntriesLayer({
     return { restored, kept, ...(reason === undefined ? {} : { reason }) };
   }
 
+  /**
+   * Adds 1 to 500 records to a list in one request (AC-4825); more go in calls of 500. The list's open views and
+   * boards settle, and the undo stack gets one entry that takes out exactly the entries made (no confirm).
+   */
+  async function addMany(workspace: string, list: ListRef, recordIds: readonly string[]): Promise<AddManyOutcome> {
+    const unique = [...new Set(recordIds)];
+    const made: string[] = [];
+    let alreadyIn = 0;
+    let refused = 0;
+    let reason: string | undefined;
+    try {
+      for (let start = 0; start < unique.length; start += 500) {
+        const part = unique.slice(start, start + 500);
+        const answer = await sent((mutationId) =>
+          api.addMany({
+            workspace,
+            listId: list.id,
+            recordIds: part,
+            ids: part.map(() => mintId()),
+            timeZone: timeZone(workspace),
+            mutationId,
+          }),
+        );
+        for (const each of answer.added) made.push(each.entryId);
+        alreadyIn += answer.alreadyIn.length;
+        refused += answer.refused.length;
+        reason ??= answer.refused[0]?.message;
+      }
+    } catch (failed) {
+      refused += unique.length - made.length - alreadyIn - refused;
+      reason = refusalSummary(toDataError(failed));
+    }
+    settleList(workspace, list.id);
+    refreshRecordEntries(workspace);
+    if (made.length === 0) {
+      return { added: 0, alreadyIn, refused, ...(reason === undefined ? {} : { reason }) };
+    }
+    const undoId = mintId();
+    records.pushUndo(workspace, {
+      id: undoId,
+      kind: 'external',
+      objectId: list.objectId,
+      run: async () => {
+        const outcome = await remove(workspace, list, made, false);
+        return outcome.removed > 0
+          ? { tone: 'success', message: LIST_WORDS.undidAddMany(outcome.removed, list.name) }
+          : { tone: 'danger', message: outcome.reason ?? LIST_WORDS.couldNotUndo };
+      },
+    });
+    return { added: made.length, alreadyIn, refused, ...(reason === undefined ? {} : { reason }), undoId };
+  }
+
+  const recordViews = new Map<string, OpenRecordEntries>();
+
+  /** Every open record section of the workspace reads again, in the next frame. */
+  function refreshRecordEntries(workspace: string) {
+    for (const open of recordViews.values()) if (open.workspace === workspace) open.refresh();
+  }
+
+  /**
+   * A record's entries for its page's Lists section (AC-4822): one read of `entries.forRecord`, the entries held in
+   * the one entry store (so an edit on a card shows in every row showing it, AC-4840), read again when an entry of the
+   * workspace changes or this tab adds or removes one.
+   */
+  function forRecord(workspace: string, recordId: string): RecordEntries {
+    const key = `${workspace}\u0000${recordId}`;
+    const known = recordViews.get(key);
+    if (known !== undefined) return known.view;
+    const listeners = new Set<() => void>();
+    let status: EntriesStatus = 'loading';
+    let ids: readonly string[] = [];
+    let held: readonly string[] = [];
+    let shown = 0;
+    let stopWatch: (() => void) | undefined;
+    let stopStore: (() => void) | undefined;
+    let cancelDrop: (() => void) | undefined;
+    let control: AbortController | undefined;
+    let version = 0;
+    let state: RecordEntriesState = { status, rows: [] };
+    const snapshot = () => {
+      const rows = ids.flatMap((id) => {
+        const row = rowOf(id);
+        return row === undefined ? [] : [row];
+      });
+      const same =
+        state.status === status && state.rows.length === rows.length && state.rows.every((row, i) => row === rows[i]);
+      if (!same) state = { status, rows };
+      for (const listener of listeners) listener();
+    };
+    const read = async () => {
+      version += 1;
+      const mine = version;
+      control?.abort();
+      control = new AbortController();
+      try {
+        const answer = await api.forRecord({ workspace, recordId });
+        if (mine !== version) return;
+        const next = answer.entries.map((entry) => entry.id);
+        take({ entries: answer.entries, records: [] }, true);
+        const previous = held;
+        held = next;
+        if (previous.length > 0) {
+          records.release(previous.flatMap((id) => (recordOf.has(id) ? [recordOf.get(id) ?? ''] : [])));
+          entries.release(previous);
+        }
+        ids = next;
+        status = 'ready';
+      } catch {
+        if (mine !== version) return;
+        status = 'error';
+      }
+      snapshot();
+    };
+    const refresh = () => {
+      if (shown === 0) return;
+      schedule(() => {
+        void read();
+      });
+    };
+    const view: RecordEntries = {
+      subscribe: (listener) => {
+        listeners.add(listener);
+        return () => {
+          listeners.delete(listener);
+        };
+      },
+      getSnapshot: () => state,
+      retry: () => {
+        status = 'loading';
+        snapshot();
+        void read();
+      },
+      retain: () => {
+        shown += 1;
+        cancelDrop?.();
+        cancelDrop = undefined;
+        stopWatch ??= watch(workspace);
+        stopStore ??= entries.subscribe((changedIds) => {
+          if (ids.some((id) => changedIds.has(id))) snapshot();
+        });
+        if (shown === 1) void read();
+        return () => {
+          shown -= 1;
+          if (shown > 0) return;
+          cancelDrop = later(() => {
+            if (shown > 0) return;
+            recordViews.delete(key);
+            version += 1;
+            control?.abort();
+            stopStore?.();
+            stopStore = undefined;
+            stopWatch?.();
+            stopWatch = undefined;
+            records.release(held.flatMap((id) => (recordOf.has(id) ? [recordOf.get(id) ?? ''] : [])));
+            entries.release(held);
+            held = [];
+          }, keepUnusedMs);
+        };
+      },
+    };
+    recordViews.set(key, { workspace, view, refresh });
+    return view;
+  }
+
   /** Which of these records (up to 50) are in the list already (AC-4814's "Already in this list"). */
   const membership = async (workspace: string, listId: string, recordIds: readonly string[]) =>
     recordIds.length === 0
@@ -987,6 +1201,7 @@ export function createEntriesLayer({
    */
   const changed = (workspace: string, event: LiveEventOf<'entries'>) => {
     const named = event.entryIds;
+    refreshRecordEntries(workspace);
     const isHeld = (id: string) => entries.get(id) !== undefined;
     const heldIds = named.filter(isHeld);
     if (event.coarse === true || heldIds.length < named.length || named.length === 0)
@@ -1009,6 +1224,7 @@ export function createEntriesLayer({
 
   /** Everything held of the workspace (or one list) settles: a resync after a gap, or a definitions change. */
   const reload = (workspace: string, listId?: string) => {
+    refreshRecordEntries(workspace);
     for (const open of views.values())
       if (open.workspace === workspace && (listId === undefined || open.listId === listId)) open.settle();
     for (const open of boards.values())
@@ -1023,6 +1239,8 @@ export function createEntriesLayer({
     remove,
     restore,
     membership,
+    addMany,
+    forRecord,
     changed,
     reload,
     /** The row an entry shows as now (a board card, a record page card). */

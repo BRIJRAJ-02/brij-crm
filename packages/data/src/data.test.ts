@@ -402,6 +402,9 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
     lists: {
       list: os.lists.list.handler(() => []),
       create: os.lists.create.handler(notServed),
+      update: os.lists.update.handler(notServed),
+      archive: os.lists.archive.handler(notServed),
+      restore: os.lists.restore.handler(notServed),
     },
     entries: {
       query: os.entries.query.handler(notServed),
@@ -410,6 +413,8 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       get: os.entries.get.handler(notServed),
       membership: os.entries.membership.handler(notServed),
       add: os.entries.add.handler(notServed),
+      addMany: os.entries.addMany.handler(notServed),
+      forRecord: os.entries.forRecord.handler(notServed),
       setValues: os.entries.setValues.handler(notServed),
       remove: os.entries.remove.handler(notServed),
       restore: os.entries.restore.handler(notServed),

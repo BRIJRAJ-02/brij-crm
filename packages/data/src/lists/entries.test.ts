@@ -55,6 +55,14 @@ function setup(overrides: Partial<EntriesApi> = {}) {
     membership: () => Promise.resolve({ recordIds: [] }),
     add: (input) =>
       Promise.resolve({ ...written(entry(input.id, input.recordId)), record: record(input.recordId, 'Bo') }),
+    addMany: (input) =>
+      Promise.resolve({
+        added: input.recordIds.map((recordId, index) => ({ recordId, entryId: input.ids[index] ?? '' })),
+        alreadyIn: [],
+        refused: [],
+        echoes: 1,
+      }),
+    forRecord: () => Promise.resolve({ entries: [entry('e1', 'r1', 'lead')] }),
     setValues: (input) => Promise.resolve(written({ ...entry(input.entryId, 'r1'), values: { [STAGE]: 'won' } })),
     remove: (input) => Promise.resolve({ results: input.entryIds.map((entryId) => ({ entryId })), echoes: 1 }),
     restore: (input) => Promise.resolve({ results: input.entryIds.map((entryId) => ({ entryId })), echoes: 1 }),
@@ -181,5 +189,48 @@ describe('adding, editing and removing (AC-4810, AC-4813, AC-4817)', () => {
     const said = await undo[0]?.run();
     expect(said?.tone).toBe('success');
     expect(restored).toEqual([['e1']]);
+  });
+});
+
+describe('adding many and a record’s entries (AC-4822, AC-4825)', () => {
+  it('adds in one request, counts who was already in, and Undo takes out exactly the entries made', async () => {
+    const removed: string[][] = [];
+    const { layer, undo } = setup({
+      addMany: (input) =>
+        Promise.resolve({
+          added: [{ recordId: input.recordIds[0] ?? '', entryId: input.ids[0] ?? '' }],
+          alreadyIn: input.recordIds.slice(1),
+          refused: [],
+          echoes: 1,
+        }),
+      remove: (input) => {
+        removed.push([...input.entryIds]);
+        return Promise.resolve({ results: input.entryIds.map((entryId) => ({ entryId })), echoes: 1 });
+      },
+    });
+    const outcome = await layer.addMany('acme', LIST, ['r1', 'r2', 'r3']);
+    expect(outcome).toMatchObject({ added: 1, alreadyIn: 2, refused: 0 });
+    expect(undo).toHaveLength(1);
+    await undo[0]?.run();
+    expect(removed).toHaveLength(1);
+    expect(removed[0]).toHaveLength(1);
+  });
+
+  it('puts nothing on the undo stack when nothing went in, and reports a failed call as refused', async () => {
+    const { layer, undo } = setup({ addMany: () => Promise.reject(new Error('Offline')) });
+    const outcome = await layer.addMany('acme', LIST, ['r1']);
+    expect(outcome).toMatchObject({ added: 0, refused: 1 });
+    expect(undo).toHaveLength(0);
+  });
+
+  it('holds a record’s entries as joined rows once read', async () => {
+    const { layer } = setup();
+    const section = layer.forRecord('acme', 'r1');
+    const stop = section.retain();
+    await settle();
+    const state = section.getSnapshot();
+    expect(state.status).toBe('ready');
+    expect(state.rows.map((row) => row.id)).toEqual(['e1']);
+    stop();
   });
 });

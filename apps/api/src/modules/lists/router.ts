@@ -1,8 +1,11 @@
 import {
+  addListEntries,
   addListEntry,
+  archiveList,
   countEntries,
   createList,
   editEntry,
+  entriesForRecord,
   entryMembership,
   listLists,
   queryEntries,
@@ -10,6 +13,8 @@ import {
   readEntryPage,
   removeEntries,
   restoreEntries,
+  restoreList,
+  updateList,
   type EntryOutcome,
   type WrittenEntry,
 } from '@crm/core';
@@ -38,6 +43,31 @@ export const listsRouter = member.lists.router({
         },
         hooks,
       ),
+    ),
+  ),
+  update: member.lists.update.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+      updateList(
+        context.scope,
+        {
+          listId: input.listId,
+          name: input.name,
+          icon: input.icon,
+          hue: input.hue,
+          allowsDuplicates: input.allowsDuplicates,
+        },
+        hooks,
+      ),
+    ),
+  ),
+  archive: member.lists.archive.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+      archiveList(context.scope, { listId: input.listId }, hooks),
+    ),
+  ),
+  restore: member.lists.restore.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+      restoreList(context.scope, { listId: input.listId }, hooks),
     ),
   ),
 });
@@ -151,6 +181,21 @@ export const entriesRouter = member.entries.router({
     );
     return writtenView(result, echoes);
   }),
+  // Up to 500 records into one list, each on its own (AC-4825): who went in, who was already in, who was refused.
+  addMany: member.entries.addMany.handler(async ({ context, input }) => {
+    const { result, echoes } = await commitCounted(context, { mutationId: input.mutationId }, (hooks) =>
+      addListEntries(
+        context.scope,
+        { listId: input.listId, recordIds: input.recordIds, ids: input.ids, timeZone: input.timeZone },
+        hooks,
+      ),
+    );
+    return { added: [...result.added], alreadyIn: [...result.alreadyIn], refused: [...result.refused], echoes };
+  }),
+  // A record page's Lists section (AC-4822): readable lists only, no gap or count for the others.
+  forRecord: member.entries.forRecord.handler(async ({ context, input }) => ({
+    entries: [...(await entriesForRecord(context.scope, { recordId: input.recordId }))],
+  })),
   setValues: member.entries.setValues.handler(async ({ context, input }) => {
     const { result, echoes } = await commitCounted(context, { mutationId: input.mutationId }, (hooks) =>
       editEntry(context.scope, { entryId: input.entryId, values: input.values }, hooks),

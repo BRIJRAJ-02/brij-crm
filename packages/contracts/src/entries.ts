@@ -133,6 +133,45 @@ export const AddEntryInput = WorkspaceScoped.extend({
 /** A new entry. */
 export type AddEntryInput = z.infer<typeof AddEntryInput>;
 
+/**
+ * Records to add to a list, 1 to 500 at once (AC-4825). `ids` are the entries'
+ * client minted UUID v7s, one per record in the same order: the same call
+ * again answers the entries it made.
+ */
+export const AddEntriesInput = WorkspaceScoped.extend({
+  listId: Uuid,
+  recordIds: z
+    .array(Uuid)
+    .min(1, 'Name at least one record.')
+    .max(MAX_ENTRY_BATCH, `Add at most ${String(MAX_ENTRY_BATCH)} records at once.`),
+  ids: z
+    .array(uuidV7('The entry id must be a UUID v7.'))
+    .max(MAX_ENTRY_BATCH, `Add at most ${String(MAX_ENTRY_BATCH)} records at once.`)
+    .optional(),
+  timeZone: WriteTimeZone,
+  mutationId: Uuid,
+}).refine((input) => input.ids === undefined || input.ids.length === input.recordIds.length, {
+  error: 'Give one entry id for each record.',
+  path: ['ids'],
+});
+/** Records to add to a list. */
+export type AddEntriesInput = z.infer<typeof AddEntriesInput>;
+
+/** What adding many records answers: who went in (with their entry), who was already in, and who was refused. */
+export const AddedEntries = z.object({
+  added: z.array(z.object({ recordId: Uuid, entryId: Uuid })),
+  alreadyIn: z.array(Uuid),
+  refused: z.array(z.object({ recordId: z.string(), code: z.string(), message: z.string() })),
+  echoes: z.number().int().min(0),
+});
+/** What adding many records answers. */
+export type AddedEntries = z.infer<typeof AddedEntries>;
+
+/** One record whose entries are read, for its page's Lists section (AC-4822). */
+export const EntriesForRecordInput = WorkspaceScoped.extend({ recordId: Uuid });
+/** One record whose entries are read. */
+export type EntriesForRecordInput = z.infer<typeof EntriesForRecordInput>;
+
 /** New list values for one entry, all or none, as `records.setValues` takes a record's (AC-4810). */
 export const SetEntryValuesInput = WorkspaceScoped.extend({
   entryId: Uuid,
@@ -240,8 +279,13 @@ export type EntryGroups = z.infer<typeof EntryGroups>;
  * `CONFIG_INVALID` for another object's record, `RECORD_DELETED`,
  * `VALUE_REQUIRED` and `LIMIT_REACHED` (AC-4816); the same add again answers
  * the entry already made. `setValues` refuses as `records.setValues` does.
- * `remove` and `restore` answer per entry. Every write stores an `entries`
- * event and answers `echoes`.
+ * `remove` and `restore` answer per entry. `addMany` adds up to 500 records,
+ * each on its own: a record already in an "Each record once" list goes in
+ * `alreadyIn`, any other refusal in `refused`, and neither fails the rest.
+ * `forRecord` answers at most 100 live entries of one record in lists the
+ * caller may read, by list name then when added (a list they can't read leaves
+ * no gap); a record they can't see is `NOT_FOUND`. Every write stores an
+ * `entries` event and answers `echoes`.
  */
 export const entriesContract = {
   query: oc.input(QueryEntriesInput).output(EntryPage),
@@ -250,6 +294,8 @@ export const entriesContract = {
   get: oc.input(GetEntriesInput).output(EntryPage.omit({ nextCursor: true })),
   membership: oc.input(EntryMembershipInput).output(EntryMembership),
   add: oc.input(AddEntryInput).output(WrittenEntry),
+  addMany: oc.input(AddEntriesInput).output(AddedEntries),
+  forRecord: oc.input(EntriesForRecordInput).output(z.object({ entries: z.array(EntryView) })),
   setValues: oc.input(SetEntryValuesInput).output(WrittenEntry),
   remove: oc.input(EntryIdsInput).output(EntryResults),
   restore: oc.input(EntryIdsInput).output(EntryResults),
