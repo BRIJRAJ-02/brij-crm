@@ -87,17 +87,22 @@ export const Guidance: Story = {
   },
 };
 
-/** Near today (the stories' 8 October), in a cell, the panel and a card, a day reads as a word; elsewhere as the date. */
+/**
+ * Next to today (the stories' 8 October), on every surface, a day reads as Tomorrow or Yesterday, with the exact
+ * date in a tooltip; any other day, even three days off, reads as the date.
+ */
 export const NearDay: Story = {
   render: () => (
     <Stage direction="column">
       <FieldSurfaces attribute={sample.attribute} value="2026-10-09" />
-      <FieldSurfaces attribute={sample.attribute} value="2026-10-05" />
+      <FieldSurfaces attribute={sample.attribute} value="2026-10-07" />
+      <FieldSurfaces attribute={sample.attribute} value="2026-10-11" />
     </Stage>
   ),
   play: async ({ canvas }) => {
     await expect(canvas.getAllByText('Tomorrow').length).toBeGreaterThan(0);
-    await expect(canvas.getAllByText('3 days ago').length).toBeGreaterThan(0);
+    await expect(canvas.getAllByText('Yesterday').length).toBeGreaterThan(0);
+    await expect(canvas.queryByText(/in 3 days/i)).toBeNull();
   },
 };
 

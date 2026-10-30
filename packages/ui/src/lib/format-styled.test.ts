@@ -19,15 +19,15 @@ describe('formatNumber', () => {
 });
 
 describe('formatDayNear', () => {
-  it('names a day within a week of today', () => {
+  it('names today and the days either side of it', () => {
     expect(formatDayNear('2026-10-08', '2026-10-08', 'en-GB')).toBe('Today');
     expect(formatDayNear('2026-10-09', '2026-10-08', 'en-GB')).toBe('Tomorrow');
     expect(formatDayNear('2026-10-07', '2026-10-08', 'en-GB')).toBe('Yesterday');
-    expect(formatDayNear('2026-10-11', '2026-10-08', 'en-GB')).toBe('In 3 days');
-    expect(formatDayNear('2026-10-05', '2026-10-08', 'en-GB')).toBe('3 days ago');
   });
 
-  it('leaves a day further away to the date', () => {
+  it('leaves any other day to the date, never "In 3 days"', () => {
+    expect(formatDayNear('2026-10-10', '2026-10-08', 'en-GB')).toBeUndefined();
+    expect(formatDayNear('2026-10-05', '2026-10-08', 'en-GB')).toBeUndefined();
     expect(formatDayNear('2026-10-20', '2026-10-08', 'en-GB')).toBeUndefined();
   });
 });

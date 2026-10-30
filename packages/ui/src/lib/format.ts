@@ -265,14 +265,14 @@ function daysBetween(from: string, to: string): number {
 }
 
 /**
- * A calendar day near today as a word, as Attio and Linear show dates:
- * "Today", "Tomorrow", "Yesterday", "In 3 days", "3 days ago", within a
- * week either way; undefined past that, where the date itself reads better.
- * Capitalised, since it stands alone where a date would.
+ * A calendar day next to today as a word: "Today", "Tomorrow" or "Yesterday",
+ * in the language; undefined for any other day, where the exact date reads
+ * better than "In 6 days" (one date design, 30 October 2026). Capitalised,
+ * since it stands alone where a date would.
  */
 export function formatDayNear(date: string, today: string, locale: string): string | undefined {
   const days = daysBetween(today, date);
-  if (Math.abs(days) > 7) return undefined;
+  if (Math.abs(days) > 1) return undefined;
   const word = memoIntl(`relative:${locale}`, () => new Intl.RelativeTimeFormat(locale, { numeric: 'auto' })).format(
     days,
     'day',

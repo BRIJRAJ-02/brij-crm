@@ -609,11 +609,12 @@ export function DataGrid<Row>({
       told?.(false);
     };
   }, [isEditingNow]);
-  const textContext = (attribute: FieldAttribute, display?: unknown): TextContext => ({
+  // `today` is read once per copy or paste by the caller, never once per cell: 10,000 cells, one clock read.
+  const textContext = (attribute: FieldAttribute, display?: unknown, today?: string): TextContext => ({
     locale,
     timeZone,
-    // A pasted "tomorrow" or "Oct 8" reads against today here, read once per paste.
-    today: readToday(),
+    // A pasted "tomorrow" or "Oct 8" reads against today.
+    ...(today === undefined ? {} : { today }),
     attribute,
     ...(members === undefined ? {} : { members }),
     ...(phone === undefined ? {} : { phone }),
@@ -1278,6 +1279,7 @@ export function DataGrid<Row>({
     if (editing !== undefined || focus.row < 0 || focus.row >= count) return;
     const edges = targetEdges();
     if (edges.right < 1) return;
+    const today = readToday();
     const lines: string[][] = [];
     for (let row = edges.top; row <= edges.bottom; row += 1) {
       const item = rowItem(row);
@@ -1301,7 +1303,7 @@ export function DataGrid<Row>({
         line.push(
           value === null || value === undefined
             ? ''
-            : fieldTypeOf(column.attribute.type).toText(value, textContext(column.attribute, display)),
+            : fieldTypeOf(column.attribute.type).toText(value, textContext(column.attribute, display, today)),
         );
       }
       lines.push(line);
@@ -1324,6 +1326,7 @@ export function DataGrid<Row>({
       colCount - 1,
       (row) => rowItem(row) !== undefined,
     );
+    const today = readToday();
     const changes: CellChange[] = [];
     const refused: (readonly [string, string])[] = [];
     let readOnly = 0;
@@ -1346,7 +1349,7 @@ export function DataGrid<Row>({
       const parsed =
         cell.text.trim() === ''
           ? clearedValueOf(attribute)
-          : fieldTypeOf(attribute.type).fromText(cell.text, textContext(attribute));
+          : fieldTypeOf(attribute.type).fromText(cell.text, textContext(attribute, undefined, today));
       if (isRefusal(parsed)) {
         refused.push([`${id}:${column.id}`, parsed.reason]);
         continue;

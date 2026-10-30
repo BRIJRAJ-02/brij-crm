@@ -3,6 +3,7 @@
 // Pure and on day keys (`YYYY-MM-DD`), so DatePicker's "Type a date" row and
 // the field set's Date (later, Date.fromText) read text the same way, and it
 // is tested in Node. Every date is a calendar date, computed in UTC.
+import { memoIntl } from './intl-memo.ts';
 
 /** The words the parser knows, lower case. English by default; a language passes its own. */
 export interface DateWords {
@@ -119,6 +120,11 @@ function endOfMonth(key: string): string {
 
 /** Lower case names of the months (1 to 12) and weekdays (0 Sunday to 6 Saturday), long and short, in the language. */
 function names(locale: string): { readonly months: readonly string[][]; readonly weekdays: readonly string[][] } {
+  // Built once per language: a grid paste reads thousands of dates (bench: 10,000 under 100 ms).
+  return memoIntl(`dateNames:${locale}`, () => buildNames(locale));
+}
+
+function buildNames(locale: string): { readonly months: readonly string[][]; readonly weekdays: readonly string[][] } {
   const month = (style: 'long' | 'short') => new Intl.DateTimeFormat(locale, { month: style, timeZone: 'UTC' });
   const weekdayFormat = (style: 'long' | 'short') =>
     new Intl.DateTimeFormat(locale, { weekday: style, timeZone: 'UTC' });
@@ -146,19 +152,23 @@ function nameIndex(word: string, list: readonly string[][]): number | undefined 
 
 /** Whether the language writes the day before the month in a numeric date (8/10 is 8 October in British English). */
 function isDayFirst(locale: string): boolean {
-  const order = new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'numeric', timeZone: 'UTC' })
-    .formatToParts(Date.UTC(2026, 9, 8))
-    .map((part) => part.type)
-    .filter((type) => type === 'day' || type === 'month');
-  return order[0] === 'day';
+  return memoIntl(`dayFirst:${locale}`, () => {
+    const order = new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'numeric', timeZone: 'UTC' })
+      .formatToParts(Date.UTC(2026, 9, 8))
+      .map((part) => part.type)
+      .filter((type) => type === 'day' || type === 'month');
+    return order[0] === 'day';
+  });
 }
 
 /** The language's order of a full numeric date, for "8/10/2026". */
 function numericOrder(locale: string): readonly ('day' | 'month' | 'year')[] {
-  return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'numeric', year: 'numeric', timeZone: 'UTC' })
-    .formatToParts(Date.UTC(2026, 9, 8))
-    .map((part) => part.type)
-    .filter((type): type is 'day' | 'month' | 'year' => type === 'day' || type === 'month' || type === 'year');
+  return memoIntl(`numericOrder:${locale}`, () =>
+    new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'numeric', year: 'numeric', timeZone: 'UTC' })
+      .formatToParts(Date.UTC(2026, 9, 8))
+      .map((part) => part.type)
+      .filter((type): type is 'day' | 'month' | 'year' => type === 'day' || type === 'month' || type === 'year'),
+  );
 }
 
 function fullYear(year: number): number {
