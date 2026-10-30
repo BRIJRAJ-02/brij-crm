@@ -160,12 +160,14 @@ describe('Time off', () => {
     await userEvent.click(first);
     await userEvent.keyboard('04112030');
     await userEvent.keyboard('05112030');
-    // Workable's plain count, with what time off does (Fresha's line).
-    await expect.element(dialog.getByText(/2 days off\. Whole days, in your time zone/)).toBeVisible();
+    // No hint lines under the fields (spec 0058, AC-15).
+    expect(dialog.getByText(/Whole days|Optional\./).elements()).toHaveLength(0);
     await dialog.getByRole('button', { name: 'Save' }).click();
     const inside = page.getByRole('dialog', { name: 'Time off saved' });
-    await expect.element(inside.getByText('You have 1 meeting during this period.').first()).toBeVisible();
-    await expect.element(inside.getByText('Pat One · Check up')).toBeVisible();
+    // The meetings inside as a count, with Open Bookings for the list (spec 0058, AC-15).
+    await expect.element(inside.getByText('1 meeting in this time off').first()).toBeVisible();
+    await expect.element(inside.getByRole('button', { name: 'Open Bookings' })).toBeVisible();
+    expect(inside.getByText('Pat One · Check up').elements()).toHaveLength(0);
     expect(made.created).toHaveLength(1);
     await inside.getByRole('button', { name: 'Done' }).click();
   });
@@ -175,7 +177,7 @@ describe('Time off', () => {
     await page.getByRole('button', { name: 'Actions for 3 to 7 Nov 2030' }).click();
     await page.getByRole('menuitem', { name: 'Delete' }).click();
     const confirm = page.getByRole('alertdialog', { name: 'Delete time off, 3 to 7 Nov 2030?' });
-    await expect.element(confirm.getByText('Online bookings can be placed on these days again.')).toBeVisible();
+    await expect.element(confirm.getByText('These days open for booking again.')).toBeVisible();
     await confirm.getByRole('button', { name: 'Delete time off' }).click();
     expect(made.removed).toEqual(['a']);
     await expect.element(page.getByText('Vacation · Bo covers')).not.toBeInTheDocument();

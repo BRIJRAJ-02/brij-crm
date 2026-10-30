@@ -255,6 +255,8 @@ export async function switchingWorkspace(
     await page.getByRole('button', { name: 'New booking page' }).first().click();
     await page.getByLabel('Title').fill('Intro call');
     await page.getByRole('button', { name: 'Create page' }).click();
+    // The Ready panel shows the link (spec 0058, AC-5); Edit page goes on to the editor.
+    await page.getByRole('button', { name: 'Edit page' }).click();
     await expect(page).toHaveURL(/captures\/links\/[0-9a-f-]{36}/, { timeout: 60_000 });
   }
   await page.goto(`/w/${slug}/captures/forms`);
