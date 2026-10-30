@@ -91,6 +91,7 @@ function viewOf(scope: EngineScope, row: ListRow, activeMakers: ReadonlySet<stri
     hue: row.hue as ListView['hue'],
     allowsDuplicates: row.allowsDuplicates,
     isArchived: row.archivedAt !== null || row.objectArchivedAt !== null,
+    ...(row.objectArchivedAt === null ? {} : { isObjectArchived: true }),
     ...(row.defaultViewId === null ? {} : { defaultViewId: row.defaultViewId }),
     ...(row.createdByMemberId === null ? {} : { createdByMemberId: row.createdByMemberId }),
     canWrite: writesList(scope.access, row),

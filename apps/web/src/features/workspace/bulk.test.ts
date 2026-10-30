@@ -135,6 +135,29 @@ describe('a background change in the bar (spec 0022, AC-528)', () => {
 
 describe('a background change’s finish toast (spec 0022, AC-528, AC-531)', () => {
   const onView = () => undefined;
+  it('says what a list’s bulk add or removal did, with Undo, and a restore with none (spec 0048)', () => {
+    const onUndo = () => undefined;
+    const added = bulkJobToast(bulkJob('succeeded', { kind: 'entries.bulk_add', total: 600, done: 600 }), PEOPLE, {
+      onView,
+      onUndo,
+    });
+    expect(added).toMatchObject({
+      tone: 'success',
+      message: 'Added 600 people to the list.',
+      action: { label: 'Undo' },
+    });
+    const removed = bulkJobToast(bulkJob('succeeded', { kind: 'entries.bulk_remove', total: 600, done: 600 }), PEOPLE, {
+      onView,
+      onUndo,
+    });
+    expect(removed).toMatchObject({ message: 'Removed 600 entries from the list.', action: { label: 'Undo' } });
+    const back = bulkJobToast(bulkJob('succeeded', { kind: 'entries.bulk_restore', total: 1, done: 1 }), PEOPLE, {
+      onView,
+      onUndo,
+    });
+    expect(back).toMatchObject({ message: 'Brought back 1 entry.', action: { label: 'View details' } });
+  });
+
   it('says nothing for a change that ended before it touched anything', () => {
     // A declined confirm, or Cancel while counting.
     expect(bulkJobToast(bulkJob('cancelled'), PEOPLE, { onView })).toBeUndefined();

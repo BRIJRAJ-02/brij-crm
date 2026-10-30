@@ -68,6 +68,11 @@ export const strings = {
   entryActions: (list: string) => `${list} actions`,
   addToListMenu: 'Add to list',
   alreadyInShort: 'Already in',
+  importAction: 'Import',
+  // A counted add of many (AC-4825): undone from its finish toast, so the confirm stays plain.
+  confirmAddTitle: (records: string, list: string) => `Add ${records} to ${list}?`,
+  confirmAddText: 'Undo takes them out again.',
+  confirmAddAction: 'Add',
   addedMany: (count: number, list: string) => `Added ${count.toLocaleString('en')} to ${list}`,
   addedManyKept: (said: string, already: number) =>
     `${said}. ${already.toLocaleString('en')} ${already === 1 ? 'was' : 'were'} already in it`,
@@ -111,6 +116,8 @@ export const strings = {
   restoreFailed: 'The list wasn’t restored. Try again.',
   archivedTitle: (name: string) => `${name} is archived`,
   archivedText: 'Its entries are kept.',
+  // A list whose object is archived (AC-4832): it returns with the object.
+  objectArchivedText: (plural: string) => `${plural} is archived. Restoring it brings this list back.`,
   onlyManagers: (maker: string | undefined) =>
     maker === undefined
       ? 'Only owners and admins can change this list.'

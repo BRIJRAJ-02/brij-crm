@@ -717,6 +717,44 @@ export async function addEntriesIn(
 }
 
 /**
+ * One record into a list inside a write (an import's row, spec 0048, AC-4833):
+ * the list locked and checked as an add checks it, then the add, refusing as
+ * `addEntry` does. In a list that lets each record in once, a record already in
+ * it answers that live entry instead (`existing`), so the caller updates it.
+ */
+export async function addEntryIn(
+  context: WriteContext,
+  input: {
+    readonly listId: string;
+    readonly recordId: string;
+    readonly values?: Readonly<Record<string, unknown>> | undefined;
+    readonly timeZone?: string | undefined;
+  },
+): Promise<{ readonly entryId: string; readonly existing: boolean }> {
+  const list = await lockWritableList(context, input.listId);
+  if (!list.allowsDuplicates) {
+    const [held] = await context.tx
+      .select({ id: listEntries.id })
+      .from(listEntries)
+      .where(
+        and(
+          eq(listEntries.listId, input.listId),
+          eq(listEntries.recordId, input.recordId),
+          isNull(listEntries.deletedAt),
+        ),
+      )
+      .limit(1);
+    if (held !== undefined) return { entryId: held.id, existing: true };
+  }
+  const { entryId } = await addIn(
+    context,
+    { listId: input.listId, recordId: input.recordId, id: undefined, values: input.values, timeZone: input.timeZone },
+    list,
+  );
+  return { entryId, existing: false };
+}
+
+/**
  * Checks the caller may add to a list now (a bulk job's start): hidden is
  * unknown, read only 403, archived `NOT_FOUND`. Answers the list's object.
  */

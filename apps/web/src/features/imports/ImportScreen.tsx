@@ -1,5 +1,6 @@
 // Brief
-// Purpose: bring a spreadsheet of records into one object, seeing what each row will do before anything changes.
+// Purpose: bring a spreadsheet of records into one object, or one of its lists (spec 0048, AC-4833), seeing what each
+// row will do before anything changes.
 // Main task: choose a CSV, check where its columns go, settle any value that won't read, read the preview, start.
 // Leaves out: making far records of more than one object for a relation column, and file types other than CSV.
 import {
@@ -7,6 +8,7 @@ import {
   toActorDisplays,
   toFieldAttribute,
   type AttributeDefinition,
+  type ListView,
   type DataLayer,
   type ImportOnMatch,
   type ImportOnNoMatch,
@@ -66,6 +68,7 @@ import {
 import { defaultDateOrder, longDay, numericDates, orderLocale, type DateOrder } from './date-order.ts';
 import { columnNames, missingOptions, suggestAttribute } from './missing.ts';
 import { importSummaryHref } from './paths.ts';
+import { listHref } from '../lists/paths.ts';
 import { RecentImports } from './RecentImports.tsx';
 import {
   applyLabels,
@@ -101,6 +104,11 @@ export interface ImportScreenProps {
   readonly objects: readonly ObjectSummary[];
   /** Whether the object holds records already (undefined when the count didn't load): no match key then warns. */
   readonly hasRecords?: boolean | undefined;
+  /**
+   * Into a list (spec 0048, AC-4833): its writable fields take columns beside the object's, named "<List>: <Field>"
+   * and listed first; each row then adds its record to the list, or updates its entry in an "Each record once" list.
+   */
+  readonly list?: { readonly list: ListView; readonly fields: readonly AttributeDefinition[] } | undefined;
 }
 
 /** What looking up a relation column's names found (decision 7), by column. */
@@ -216,11 +224,25 @@ export function ImportScreen({
   members,
   objects,
   hasRecords,
+  list: into,
 }: ImportScreenProps) {
   const navigate = useNavigate();
   const canManage = useCan('schema.manage');
+  // A list's fields first, each named for its list, so a column says where it goes (AC-4833).
+  const listFields = useMemo(
+    () =>
+      (into?.fields ?? [])
+        .filter((field) => !field.isSystem && !field.isArchived && field.readOnly === undefined)
+        .map((field) => ({
+          ...field,
+          title: strings.listField(into?.list.name ?? '', field.title),
+          position: field.position - 100_000,
+        })),
+    [into],
+  );
   // Read again after the page makes an attribute or options, so the columns and the preview use them.
-  const [attributes, setAttributes] = useState(given);
+  const [objectAttributes, setAttributes] = useState(given);
+  const attributes = useMemo(() => [...listFields, ...objectAttributes], [listFields, objectAttributes]);
   const [links, setLinks] = useState<ReadonlyMap<number, LinkCheck>>(new Map());
   const [columnsError, setColumnsError] = useState<string | undefined>(undefined);
   const linkRuns = useRef(new Map<number, number>());
@@ -470,7 +492,7 @@ export function ImportScreen({
   const reread = async () => {
     const next = await data.attributes.list(slug, object.id);
     setAttributes(next);
-    return next;
+    return [...listFields, ...next];
   };
 
   /** Points a column at a target, forgetting what the rows read as before. */
@@ -482,7 +504,8 @@ export function ImportScreen({
     checkLinks(loaded.table.rows, next, links);
   };
 
-  const candidates = matchAttributes(attributes, targets);
+  // Records are found by one of their own fields, never a list's.
+  const candidates = matchAttributes(objectAttributes, targets);
   const matchAttributeId =
     matchId === undefined
       ? (defaultMatch(object, candidates) ?? candidates[0]?.id)
@@ -645,6 +668,7 @@ export function ImportScreen({
       await data.imports.create(slug, {
         id,
         objectId: object.id,
+        ...(into === undefined ? {} : { listId: into.list.id }),
         fileName: loaded.name,
         rowCount: loaded.table.rows.length,
         errorRows: result.errors.length,
@@ -680,10 +704,14 @@ export function ImportScreen({
 
   const topBar = (
     <TopBar
-      title={strings.title(object.pluralName)}
-      icon={object.icon}
-      hue={object.hue}
-      crumbs={[{ id: 'object', label: object.pluralName, href: objectHref(slug, object) }]}
+      title={strings.title(into?.list.name ?? object.pluralName)}
+      icon={into?.list.icon ?? object.icon}
+      hue={into?.list.hue ?? object.hue}
+      crumbs={[
+        into === undefined
+          ? { id: 'object', label: object.pluralName, href: objectHref(slug, object) }
+          : { id: 'list', label: into.list.name, href: listHref(slug, into.list) },
+      ]}
     />
   );
 

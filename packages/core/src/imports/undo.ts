@@ -18,6 +18,7 @@ import { schema } from '@crm/db';
 import { isRefusal } from '../engine/refusals.ts';
 import { readRecords, updateRecord } from '../engine/records.ts';
 import { deleteIn } from '../engine/trash.ts';
+import { changeEntriesIn } from '../engine/lists.ts';
 import type { WriteContext } from '../engine/write.ts';
 import { defineKind, MAX_ATTEMPTS, type ItemOutcome, type KindDefinition, type StepOutcome } from '../jobs/registry.ts';
 import { RECORDS_IMPORT_UNDO } from './service.ts';
@@ -47,6 +48,7 @@ type UndoRow = {
   readonly before: unknown;
   readonly written: unknown;
   readonly made: unknown;
+  readonly entry_id: string | null;
 };
 
 /** Far records a row made for its relation names (`createMissing`). */
@@ -214,13 +216,20 @@ export function recordsImportUndo(): KindDefinition<ImportUndoParams> {
         return { finished: true, items: items.map((item) => ({ position: item.position, state: 'skipped' })) };
       }
       const found = await tx.execute<UndoRow>(sql`
-        select id::text, outcome::text, record_id::text, before, written, made from import_rows
+        select id::text, outcome::text, record_id::text, before, written, made, entry_id::text from import_rows
         where workspace_id = ${scope.workspaceId} and import_id = ${row.id}
           and id = any(array(select jsonb_array_elements_text(${JSON.stringify(items.map((item) => item.itemId))}::jsonb))::uuid[])
       `);
       const byId = new Map(found.rows.map((each) => [each.id, each]));
       const outcomes = new Map<string, ItemOutcome>();
       const undone: string[] = [];
+
+      // Into a list (spec 0048, AC-4833): the entries the rows added come out first, each on its own; one taken out
+      // already, or whose record goes to the trash below anyway, changes nothing.
+      const entryIds = found.rows.flatMap((each) =>
+        each.entry_id === null || each.outcome === 'undone' || each.outcome === 'refused' ? [] : [each.entry_id],
+      );
+      if (entryIds.length > 0) await changeEntriesIn(context, { entryIds, action: 'remove' });
 
       // Created records: to the trash in one call, the import's id their batch.
       const madeRecords = items.flatMap((item) => {

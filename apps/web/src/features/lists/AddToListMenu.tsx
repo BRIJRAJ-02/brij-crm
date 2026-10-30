@@ -1,7 +1,8 @@
 // Brief
 // Purpose: put one record, or the ticked ones, in a list (spec 0048, AC-4823, AC-4825).
 // Main task: press Add to list, pick the list; one record goes in at once, many go in one request with Undo.
-// Leaves out: a search box (a menu of the lists the member may write), and "all matching" selections (ticked rows only).
+// Leaves out: a search box (a menu of the lists the member may write); "all matching" and more than 500 rows are the
+// bulk bar's job (`onChooseMany`).
 import type {
   AttributeDefinition,
   DataLayer,
@@ -34,6 +35,11 @@ export interface AddToListMenuProps {
   readonly children: ReactElement;
   /** Something was added: a table clears its ticks. */
   readonly onAdded?: (() => void) | undefined;
+  /**
+   * Picking a list hands it here instead of adding (the bulk bar's "all matching" or more than 500 rows, which run
+   * as a counted job, AC-4825).
+   */
+  readonly onChooseMany?: ((list: ListView) => void) | undefined;
 }
 
 /** The lists over an object a member may add to, in the order the workspace shows them. */
@@ -61,6 +67,7 @@ export function AddToListMenu({
   inLists,
   children,
   onAdded,
+  onChooseMany,
 }: AddToListMenuProps) {
   const [asking, setAsking] = useState<
     | {
@@ -116,6 +123,10 @@ export function AddToListMenu({
   };
 
   const choose = async (list: ListView) => {
+    if (onChooseMany !== undefined) {
+      onChooseMany(list);
+      return;
+    }
     const [only] = recordIds;
     if (only === undefined) return;
     if (recordIds.length > 1) {

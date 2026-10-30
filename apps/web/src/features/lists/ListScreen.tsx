@@ -1,17 +1,19 @@
 // Brief
 // Purpose: one list's entries (spec 0048, AC-4806 to AC-4821), as a table or a board, under the list's name and tile.
 // Main task: add records, edit the list's fields in place, move cards between stages, take entries out with Undo.
-// Leaves out: a row opening the record panel (rows open the record page), bulk Edit, the view menu (rename, duplicate,
-// lock, default, delete), and Import (the list's import is not built).
+// Leaves out: a row opening the record panel (rows open the record page), and bulk Edit of the list's own fields (they
+// change cell by cell; the bulk bar's Edit changes the records' fields).
 import {
   isDataError,
   isSortable,
+  refusalSummary,
   toActorDisplays,
   toFieldAttribute,
   type AttributeDefinition,
   type DataLayer,
   type DraftQuery,
   type EntriesLayer,
+  type EntryTarget,
   type ListRow,
   type ListView,
   type MemberSummary,
@@ -29,6 +31,7 @@ import {
   Board,
   BulkActionBar,
   Button,
+  Callout,
   EmptyState,
   Modal,
   TopBar,
@@ -38,10 +41,25 @@ import {
   type BoardColumn,
   type Toasts,
 } from '@crm/ui';
-import { columnWidthFor, DataGrid, noRows, type GridColumn, type GridSelection } from '@crm/ui/grid';
+import {
+  allMatching,
+  columnWidthFor,
+  DataGrid,
+  noRows,
+  selectedCount,
+  type GridColumn,
+  type GridSelection,
+} from '@crm/ui/grid';
 import { useNavigate } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
 import { refsOf } from '../records/details.ts';
+import { useMemberPicker } from '../records/members.ts';
+import { copyName } from '../views/edits.ts';
+import { useViewMenu } from '../views/ViewMenu.tsx';
+import { bulkEditToast, bulkStrings, recordsWord, BULK_INLINE_MAX } from '../workspace/bulk.ts';
+import { BulkEditDialog, type BulkEditChoice } from '../workspace/BulkEditDialog.tsx';
+import { useBulkJob } from '../workspace/useBulkJob.ts';
+import { listImportHref } from './paths.ts';
 import { AttributeDialog } from '../settings/AttributeDialog.tsx';
 import { CreateViewDialog } from '../views/CreateViewDialog.tsx';
 import { strings as viewStrings } from '../views/strings.ts';
@@ -89,7 +107,8 @@ const groupable = (field: AttributeDefinition) =>
 /** The list screen: its TopBar, its views, and the table or board the open view is. */
 export function ListScreen(given: ListScreenProps) {
   const saved = useSavedView(given.viewSource).view;
-  const views = useViewsList(given.viewsSource).views;
+  const viewsList = useViewsList(given.viewsSource);
+  const views = viewsList.views;
   const props = { ...given, view: saved?.id === given.view.id ? saved : given.view };
   const { data, slug, list, object, fields, attributes, view } = props;
   const navigate = useNavigate();
@@ -148,6 +167,52 @@ export function ListScreen(given: ListScreenProps) {
       );
   };
 
+  // The view's own actions (AC-4808): Rename, Duplicate, Copy link, who can see it, Set as default and Delete, as an
+  // object's views have them, under "This view" in the switcher's menu.
+  const openView = (viewId: string) => {
+    void navigate({ to: '/w/$slug/lists/$list/views/$viewId', params: { slug, list: list.apiSlug, viewId } });
+  };
+  const viewMenu = useViewMenu({
+    slug,
+    object,
+    view,
+    list: viewsList,
+    members: props.members,
+    memberId: meId,
+    canManage: list.canManage,
+    copyLinkReason: undefined,
+    listId: list.id,
+    onDuplicate: () => {
+      const taken = views.filter((each) => each.visibility === 'private').map((each) => each.name);
+      data.views
+        .create(slug, {
+          id: data.views.newId(),
+          objectId: object.id,
+          listId: list.id,
+          name: copyName(view.name, taken),
+          kind: view.kind,
+          visibility: 'private',
+          config: view.config,
+        })
+        .then(
+          (made) => {
+            openView(made.id);
+          },
+          (error: unknown) => {
+            props.toasts.toast({
+              tone: 'danger',
+              message: isDataError(error) ? error.message : viewStrings.actionFailed,
+            });
+          },
+        );
+    },
+    onDeleting: () => undefined,
+    onDeleted: (gone) => {
+      props.toasts.toast({ tone: 'success', message: viewStrings.deleted(gone.name) });
+      void navigate({ to: '/w/$slug/lists/$list', params: { slug, list: list.apiSlug }, replace: true });
+    },
+  });
+
   const switchLayout = (next: string) => {
     if (next !== 'table' && next !== 'board') return;
     const board =
@@ -167,6 +232,18 @@ export function ListScreen(given: ListScreenProps) {
       page={{
         topBar: (
           <TopBar title={list.name} icon={list.icon} hue={list.hue} meta={<Badge text={object.pluralName} />}>
+            {/* Import (AC-4833): spec 0040's flow, aimed at this list. */}
+            {canWrite && (
+              <Button
+                variant="ghost"
+                icon="upload"
+                onPress={() => {
+                  void navigate({ href: listImportHref(slug, list) });
+                }}
+              >
+                {strings.importAction}
+              </Button>
+            )}
             {canWrite && (
               <Button
                 variant="primary"
@@ -212,12 +289,10 @@ export function ListScreen(given: ListScreenProps) {
               icon: each.kind === 'board' ? 'kanban' : 'table',
             }))}
             currentViewId={view.id}
-            onViewChange={(viewId) => {
-              void navigate({
-                to: '/w/$slug/lists/$list/views/$viewId',
-                params: { slug, list: list.apiSlug, viewId },
-              });
-            }}
+            onViewChange={openView}
+            actions={viewMenu.actions}
+            onAction={viewMenu.onAction}
+            onMoveView={viewMenu.onMoveView}
             layout={{
               label: strings.layout,
               segments: [
@@ -289,6 +364,7 @@ export function ListScreen(given: ListScreenProps) {
                 });
               }}
             />
+            {viewMenu.dialogs}
             <AddEntryModal
               data={data}
               entries={props.entries}
@@ -405,8 +481,65 @@ function ListTable(
   );
   const state = useEntries(source);
   const [selection, setSelection] = useState<GridSelection>(noRows);
-  const [confirming, setConfirming] = useState<readonly string[] | undefined>();
+  // When "Select all" was pressed: entries added after it are never taken (spec 0022, AC-528).
+  const [asOf, setAsOf] = useState<string | undefined>(undefined);
   const ticked = selection.kind === 'some' ? [...selection.ids] : [];
+  const isAllMatching = selection.kind === 'all-matching';
+  const selected = selectedCount(selection, state.count.count);
+  // More than 500, or all matching, is a counted job (AC-4817): Review shows the exact number, Undo is in its toast.
+  const bulkJob = useBulkJob(slug, object, () => {
+    setSelection(noRows());
+  });
+  const [isReviewing, setReviewing] = useState(false);
+  if (isReviewing && !bulkJob.isCounted) setReviewing(false);
+  const [isEditing, setEditing] = useState(false);
+  const memberPicker = useMemberPicker(props.members);
+  const entryTarget = (): EntryTarget | undefined => {
+    if (selection.kind === 'all-matching') {
+      const at = asOf ?? new Date().toISOString();
+      return {
+        kind: 'matching',
+        ...(query.filter === undefined ? {} : { filter: query.filter }),
+        except: [...selection.except],
+        asOf: at,
+        now: at,
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      };
+    }
+    return ticked.length === 0 ? undefined : { kind: 'ids', entryIds: ticked };
+  };
+  const removeAsJob = () => {
+    const on = entryTarget();
+    if (on === undefined) return;
+    void bulkJob
+      .startWith(`remove:${list.id}:${JSON.stringify(on)}`, (id) =>
+        data.lists.startJob(slug, { kind: 'remove', id, listId: list.id, target: on }),
+      )
+      .then((failure) => {
+        if (failure !== undefined) bulkJob.say(refusalSummary(failure), 'danger');
+      });
+  };
+  // Bulk Edit (AC-4826): the ticked rows' records, through the object's bulk edit, with its Undo.
+  const editRecords = async (choice: BulkEditChoice) => {
+    const definition = attributes.find((each) => each.id === choice.attributeId);
+    const recordIds = [...new Set(ticked.flatMap((id) => entries.rowOf(id)?.recordId ?? []))];
+    if (definition === undefined || recordIds.length === 0) {
+      return { kind: 'done', updated: 0, unchanged: 0, refused: 0 } as const;
+    }
+    const result = await data.records.bulkEdit(slug, object.id, recordIds, {
+      attributeId: definition.id,
+      type: definition.type,
+      isMulti: definition.isMulti,
+      op: choice.op,
+      ...(Object.hasOwn(choice, 'value') ? { value: choice.value } : {}),
+    });
+    const toast = bulkEditToast(result, object, (undoId) => {
+      runUndo(data, toasts, slug, undoId);
+    });
+    if (toast !== undefined) toasts.toast(toast);
+    if (result.kind === 'done') setEditing(false);
+    return result;
+  };
   const memberDisplays = useMemo(() => toActorDisplays(props.members), [props.members]);
   const actorIds = useMemo(
     () =>
@@ -506,9 +639,19 @@ function ListTable(
               : list.canWrite
                 ? {
                     actions: (
-                      <Button icon="plus" onPress={onAdd}>
-                        {strings.add(object.singularName)}
-                      </Button>
+                      <>
+                        <Button icon="plus" onPress={onAdd}>
+                          {strings.add(object.singularName)}
+                        </Button>
+                        <Button
+                          icon="upload"
+                          onPress={() => {
+                            void navigate({ href: listImportHref(slug, list) });
+                          }}
+                        >
+                          {strings.importAction}
+                        </Button>
+                      </>
                     ),
                   }
                 : {})}
@@ -517,22 +660,58 @@ function ListTable(
         selection={selection}
         onSelectionChange={setSelection}
         floatingBar={
-          list.canWrite && ticked.length > 0 ? (
+          list.canWrite && (selected > 0 || bulkJob.isRunning || bulkJob.note !== undefined) ? (
             <BulkActionBar
               placement="floating"
               isOpen
-              count={ticked.length}
+              count={selected}
               total={state.count.count}
+              isTotalAtLeast={state.count.atLeast}
+              isAllMatching={isAllMatching}
+              {...(bulkJob.isRunning
+                ? {}
+                : {
+                    onSelectAllMatching: () => {
+                      setAsOf(new Date().toISOString());
+                      setSelection(allMatching());
+                    },
+                  })}
               onClear={() => {
+                bulkJob.forget();
                 setSelection(noRows());
               }}
+              {...(bulkJob.progress === undefined ? {} : { progress: bulkJob.progress })}
+              {...(bulkJob.canCancel ? { onCancel: bulkJob.cancel } : {})}
+              {...(bulkJob.isCancelling ? { isCancelling: true } : {})}
+              {...(bulkJob.isCounted
+                ? {
+                    onReview: () => {
+                      setReviewing(true);
+                    },
+                  }
+                : {})}
             >
+              {bulkJob.note !== undefined && (
+                <Callout placement="bar" tone={bulkJob.note.tone}>
+                  {bulkJob.note.text}
+                </Callout>
+              )}
+              {!isAllMatching && ticked.length <= BULK_INLINE_MAX && (
+                <Button
+                  icon="pencil"
+                  onPress={() => {
+                    setEditing(true);
+                  }}
+                >
+                  {bulkStrings.edit}
+                </Button>
+              )}
               <Button
                 icon="minus"
                 onPress={() => {
-                  // One entry goes at once, with Undo; two or more ask first (decision 9).
-                  if (ticked.length === 1) remove(ticked);
-                  else setConfirming(ticked);
+                  // Up to 500 go at once, with Undo (Undo over a confirm); more, or all matching, are counted first.
+                  if (isAllMatching || ticked.length > BULK_INLINE_MAX) removeAsJob();
+                  else remove(ticked);
                 }}
               >
                 {strings.removeSelected}
@@ -585,21 +764,27 @@ function ListTable(
             }
           : {})}
       />
+      {/* A counted removal (AC-4817), opened by Review: the exact number. Declining cancels it; nothing was removed. */}
       <Modal
-        title={strings.removeTitle(confirming?.length ?? 0, list.name)}
-        isOpen={confirming !== undefined}
+        title={strings.removeTitle(bulkJob.job?.total ?? 0, list.name)}
+        variant="confirm"
+        tone="danger"
+        isOpen={isReviewing && bulkJob.isCounted}
         onOpenChange={(open) => {
-          if (!open) setConfirming(undefined);
+          if (open) return;
+          if (bulkJob.isCounted) bulkJob.cancel();
+          setReviewing(false);
         }}
         actions={
           <>
             <Button slot="close">{strings.cancel}</Button>
             <Button
               variant="danger-solid"
+              icon="minus"
               onPress={() => {
-                const ids = confirming ?? [];
-                setConfirming(undefined);
-                remove(ids);
+                setReviewing(false);
+                setSelection(noRows());
+                bulkJob.confirm();
               }}
             >
               {strings.remove}
@@ -609,6 +794,16 @@ function ListTable(
       >
         {strings.removeText}
       </Modal>
+      <BulkEditDialog
+        isOpen={isEditing}
+        onOpenChange={setEditing}
+        object={object}
+        attributes={attributes}
+        memberPicker={memberPicker}
+        count={ticked.length}
+        records={recordsWord(ticked.length, object)}
+        onApply={editRecords}
+      />
     </>
   );
 }
