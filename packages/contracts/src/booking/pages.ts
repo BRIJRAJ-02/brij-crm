@@ -279,6 +279,8 @@ export const BookingListItem = BookingView.extend({
   hostName: z.string(),
   /** Its host left with nobody free to take it (spec 0029, AC-749): "Needs a host" until an admin reassigns it. */
   needsHost: z.boolean(),
+  /** Its host has time off over it (spec 0037, AC-1285): "Host away", for someone to move or reassign it. */
+  hostAway: z.boolean().optional(),
   /** Marked as a no show after it (spec 0043, AC-1613). */
   noShow: z.boolean().optional(),
   /**

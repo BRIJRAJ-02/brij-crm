@@ -159,7 +159,13 @@ async function existing(tx: WorkspaceTx, member: string, id: string): Promise<Ti
   const [row] = await tx
     .select(blockColumns())
     .from(bookingTimeBlocks)
-    .where(and(eq(bookingTimeBlocks.id, id), eq(bookingTimeBlocks.memberId, member)));
+    .where(
+      and(
+        eq(bookingTimeBlocks.id, id),
+        eq(bookingTimeBlocks.memberId, member),
+        sql`${bookingTimeBlocks.kind} <> 'away'`,
+      ),
+    );
   return row === undefined ? undefined : viewOf(row);
 }
 
@@ -199,7 +205,8 @@ export async function removeTimeBlock(
     const [found] = await tx
       .select({ memberId: bookingTimeBlocks.memberId })
       .from(bookingTimeBlocks)
-      .where(eq(bookingTimeBlocks.id, input.id));
+      .where(and(eq(bookingTimeBlocks.id, input.id), sql`${bookingTimeBlocks.kind} <> 'away'`));
+    // Time off is removed through its own service (audited as time off), never as a block.
     if (found === undefined) throw refuse('NOT_FOUND', NOT_FOUND_MESSAGE);
     if (found.memberId !== actor) {
       try {
@@ -214,7 +221,13 @@ export async function removeTimeBlock(
     await lockKey(tx, hostLockKey(scope.workspaceId, found.memberId));
     const removed = await tx
       .delete(bookingTimeBlocks)
-      .where(and(eq(bookingTimeBlocks.id, input.id), eq(bookingTimeBlocks.memberId, found.memberId)))
+      .where(
+        and(
+          eq(bookingTimeBlocks.id, input.id),
+          eq(bookingTimeBlocks.memberId, found.memberId),
+          sql`${bookingTimeBlocks.kind} <> 'away'`,
+        ),
+      )
       .returning(blockColumns());
     const [row] = removed;
     if (row === undefined) throw refuse('NOT_FOUND', NOT_FOUND_MESSAGE);
@@ -293,10 +306,18 @@ export function weeklyTurns(
 
 /** One row's occurrences in `[from, to)`. */
 function occurrencesOf(row: BlockRow, from: Date, to: Date): readonly TimeBlockOccurrence[] {
-  const kind = row.kind === 'hold' ? 'hold' : 'block';
+  const kind = row.kind === 'hold' ? 'hold' : row.kind === 'away' ? 'away' : 'block';
   const label = row.label === null ? {} : { label: row.label };
   if (row.repeat !== 'weekly') {
     if (row.startsAt === null || row.endsAt === null) return [];
+    // Time off (spec 0037) carries its days, so the week draws it as all day in the zone it was chosen in.
+    const days =
+      kind === 'away' && row.timeZone !== null
+        ? {
+            fromDate: DateTime.fromJSDate(row.startsAt, { zone: row.timeZone }).toISODate() ?? '',
+            toDate: DateTime.fromJSDate(row.endsAt, { zone: row.timeZone }).minus({ days: 1 }).toISODate() ?? '',
+          }
+        : {};
     return [
       {
         key: row.id,
@@ -306,6 +327,7 @@ function occurrencesOf(row: BlockRow, from: Date, to: Date): readonly TimeBlockO
         ...label,
         startsAt: iso(row.startsAt),
         endsAt: iso(row.endsAt),
+        ...days,
       },
     ];
   }

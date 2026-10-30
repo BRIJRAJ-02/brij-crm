@@ -224,6 +224,9 @@ const SENTENCES: SentenceTemplates = {
   },
   'block.created': (entry, w) => actor(`blocked time on ${w.persons(entry.target.person)} calendar`),
   'block.removed': (entry, w) => actor(`removed a block from ${w.persons(entry.target.person)} calendar`),
+  'time_off.created': (entry, w) => actor(`added time off for ${w.person(entry.target.person)}`),
+  'time_off.changed': (entry, w) => actor(`changed ${w.persons(entry.target.person)} time off`),
+  'time_off.deleted': (entry, w) => actor(`removed ${w.persons(entry.target.person)} time off`),
   'booking.changed_for': (entry, w) => {
     const verb = { made: 'booked', moved: 'moved', cancelled: 'cancelled' }[entry.params.change];
     return actor(`${verb} ${w.booking(entry.target)} for ${w.person(entry.params.host)}`);

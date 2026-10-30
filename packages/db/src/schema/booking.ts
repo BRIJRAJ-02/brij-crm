@@ -509,6 +509,12 @@ export const bookingTimeBlocks = pgTable(
     /** A hold carved for one private page; null is any private page. */
     pageId: uuid('page_id'),
     label: text('label'),
+    /** Time off (spec 0037, kind `away`): why (`vacation`, `sick`, `travel`, `holiday`, `other`). */
+    reason: text('reason'),
+    /** Time off's note, up to 200 characters, shown only to the member and to Manage over them; never audited. */
+    note: text('note'),
+    /** Time off's stand in: the member who covers for them (AC-1284). */
+    standinMemberId: uuid('standin_member_id'),
     ...auditColumns(),
   },
   (t) => [
@@ -516,6 +522,11 @@ export const bookingTimeBlocks = pgTable(
     foreignKey({
       name: 'booking_time_blocks_member',
       columns: [t.workspaceId, t.memberId],
+      foreignColumns: [members.workspaceId, members.id],
+    }),
+    foreignKey({
+      name: 'booking_time_blocks_standin',
+      columns: [t.workspaceId, t.standinMemberId],
       foreignColumns: [members.workspaceId, members.id],
     }),
     // The member's one off blocks ending after a range starts, read with every slots request.
@@ -526,17 +537,27 @@ export const bookingTimeBlocks = pgTable(
     index('booking_time_blocks_weekly')
       .on(t.workspaceId, t.memberId)
       .where(sql`${t.repeat} = 'weekly'`),
-    check('booking_time_blocks_kind', sql`${t.kind} in ('block', 'hold')`),
+    check('booking_time_blocks_kind', sql`${t.kind} in ('block', 'hold', 'away')`),
     check(
       'booking_time_blocks_shape',
       sql`(${t.repeat} = 'once' and ${t.during} is not null and not isempty(${t.during}) and lower_inc(${t.during}) and not upper_inc(${t.during})
-        and ${t.weekday} is null and ${t.startMinute} is null and ${t.endMinute} is null and ${t.timeZone} is null and ${t.fromDate} is null)
+        and ${t.weekday} is null and ${t.startMinute} is null and ${t.endMinute} is null and ${t.fromDate} is null
+        and (${t.timeZone} is null) = (${t.kind} <> 'away'))
       or (${t.repeat} = 'weekly' and ${t.kind} = 'block' and ${t.during} is null and ${t.weekday} between 0 and 6
         and ${t.startMinute} >= 0 and ${t.endMinute} > ${t.startMinute} and ${t.endMinute} <= 1440
         and ${t.timeZone} is not null and ${t.fromDate} is not null)`,
     ),
     check('booking_time_blocks_page', sql`${t.pageId} is null or ${t.kind} = 'hold'`),
     check('booking_time_blocks_label', sql`${t.label} is null or char_length(${t.label}) between 1 and 200`),
+    check(
+      'booking_time_blocks_away',
+      sql`(${t.kind} = 'away' and ${t.repeat} = 'once' and ${t.label} is null
+        and ${t.reason} in ('vacation', 'sick', 'travel', 'holiday', 'other')
+        and (${t.note} is null or char_length(${t.note}) between 1 and 200)
+        and (${t.standinMemberId} is null or ${t.standinMemberId} <> ${t.memberId})
+        and upper(${t.during}) - lower(${t.during}) <= interval '367 days')
+      or (${t.kind} <> 'away' and ${t.reason} is null and ${t.note} is null and ${t.standinMemberId} is null)`,
+    ),
     ...actorConstraints('booking_time_blocks', 'created_by', t.workspaceId, {
       type: t.createdByType,
       id: t.createdById,

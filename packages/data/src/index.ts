@@ -168,6 +168,17 @@ export type {
   SchedulingLevel,
   VisibleMember,
 } from './scheduling/access.ts';
+export type {
+  TimeOffBooking,
+  TimeOffDraft,
+  TimeOffEntry,
+  TimeOffHeld,
+  TimeOffList,
+  TimeOffReason,
+  TimeOffSaved,
+  TimeOffState,
+  TimeOffStore,
+} from './scheduling/time-off.ts';
 import {
   createPreferencesStore,
   type MemberPreferences,

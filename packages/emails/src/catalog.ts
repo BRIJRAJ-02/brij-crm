@@ -8,7 +8,7 @@ import type { Template } from './template.ts';
 import { bookingCalendarRemoved, calendarDisconnected, signInAlert } from './templates/account.ts';
 import { formConfirmation, formSubmission } from './templates/forms.ts';
 import { memberInvite } from './templates/invite.ts';
-import { importFinished, jobFailed, schedulingChanged } from './templates/team.ts';
+import { importFinished, jobFailed, schedulingChanged, standinCovering } from './templates/team.ts';
 import { workspaceWelcome } from './templates/welcome.ts';
 
 /** One queued kind of email. */
@@ -142,6 +142,15 @@ export const CATALOG: Catalog = {
       ],
       more: 0,
       availabilityPath: '/w/acme/bookings/availability',
+    },
+  },
+  standin_covering: {
+    template: standinCovering,
+    medium: 'email_calendar_alert',
+    sample: {
+      memberName: 'Sam Lee',
+      dates: 'from 3 to 7 November',
+      bookingsPath: '/w/acme/bookings',
     },
   },
   workspace_welcome: {
