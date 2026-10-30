@@ -3,7 +3,7 @@
 // did and when. Entries come through a ListSource. The feed layout draws only
 // those on screen and keeps the entry being read in place when newer ones
 // arrive above it; the inline layout draws a few in place, for Overview.
-import type { ActorDisplay, RecordRefDisplay } from '@crm/contracts/values';
+import type { ActorDisplay, Hue, RecordRefDisplay } from '@crm/contracts/values';
 import { defaultRangeExtractor, useVirtualizer, type Virtualizer } from '@tanstack/react-virtual';
 import {
   Fragment,
@@ -27,6 +27,7 @@ import { Link } from '../../atoms/Link/Link.tsx';
 import { RecordChip } from '../../atoms/RecordChip/RecordChip.tsx';
 import { RelativeTime } from '../../atoms/RelativeTime/RelativeTime.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
+import { Tag } from '../../atoms/Tag/Tag.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { AttributeDisplay } from '../../fields/AttributeDisplay.tsx';
 import { iconOf } from '../../fields/registry.ts';
@@ -98,13 +99,20 @@ export type ActivityEntry =
       readonly removedCount: number;
     })
   | (EntryBase & {
-      /** A note, task, comment or email: its title or subject, a line of its text, and its page. */
-      readonly kind: 'note' | 'task' | 'comment' | 'email';
+      /**
+       * A note, task, comment or email: its title or subject, a line of its text, and its page. A `call` or
+       * `logged_meeting` is one a person logged (migration 0137), at the moment it happened.
+       */
+      readonly kind: 'note' | 'task' | 'comment' | 'email' | 'call' | 'logged_meeting';
       readonly title?: string;
       readonly excerpt?: string;
       readonly href?: string;
       /** Tasks only: it was completed, not added. */
       readonly isDone?: boolean;
+      /** A call or logged meeting: its length, already worded by the screen ("30 min"). */
+      readonly duration?: string;
+      /** A call or logged meeting: how it went, as a coloured tag with the label worded by the screen. */
+      readonly outcome?: { readonly label: string; readonly hue: Hue };
     })
   | (EntryBase & {
       /**
@@ -198,6 +206,8 @@ const KIND_ICONS: Readonly<Record<Exclude<ActivityEntry['kind'], 'change' | 'lin
   task: 'square-check',
   comment: 'message-square',
   email: 'mail',
+  call: 'phone',
+  logged_meeting: 'users',
   meeting: 'calendar',
   submission: 'clipboard-list',
 };
@@ -788,7 +798,7 @@ function TaskRow({
   title,
   detailId,
 }: {
-  readonly entry: Extract<ActivityEntry, { kind: 'note' | 'task' | 'comment' | 'email' }>;
+  readonly entry: Extract<ActivityEntry, { kind: 'note' | 'task' | 'comment' | 'email' | 'call' | 'logged_meeting' }>;
   readonly title: string;
   readonly detailId: string;
 }) {
@@ -813,6 +823,40 @@ function TaskRow({
   );
 }
 
+/**
+ * A logged call or meeting's detail: how it went as a tag and how long it ran, which open the entry when it has a
+ * page, then the start of its notes. Nothing draws for one with none of them.
+ */
+function LoggedDetail({
+  entry,
+  detailId,
+}: {
+  readonly entry: Extract<ActivityEntry, { kind: 'note' | 'task' | 'comment' | 'email' | 'call' | 'logged_meeting' }>;
+  readonly detailId: string;
+}) {
+  const href = safeHref(entry.href);
+  const facts = (
+    <span className={styles.facts}>
+      {entry.outcome !== undefined && <Tag hue={entry.outcome.hue}>{entry.outcome.label}</Tag>}
+      {entry.duration !== undefined && <span className={styles.duration}>{entry.duration}</span>}
+    </span>
+  );
+  const hasFacts = entry.outcome !== undefined || entry.duration !== undefined;
+  return (
+    <span id={detailId} className={styles.card}>
+      {hasFacts && (href === undefined ? facts : <Link href={href}>{facts}</Link>)}
+      {entry.excerpt !== undefined &&
+        (href === undefined ? (
+          <span className={styles.excerpt}>{entry.excerpt}</span>
+        ) : (
+          <Link href={href}>
+            <span className={styles.excerpt}>{entry.excerpt}</span>
+          </Link>
+        ))}
+    </span>
+  );
+}
+
 /** What can take focus by Tab, for the feed's way out. */
 const TABBABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -832,6 +876,9 @@ function hasDetail(entry: ActivityEntry): boolean {
   if (isToggle(entry)) return false;
   if (entry.kind === 'change') return !isEmptyValue(entry.from) || !isEmptyValue(entry.to);
   if (entry.kind === 'meeting' || entry.kind === 'changes') return true;
+  if (entry.kind === 'call' || entry.kind === 'logged_meeting') {
+    return entry.outcome !== undefined || entry.duration !== undefined || entry.excerpt !== undefined;
+  }
   if (entry.kind === 'created' || entry.kind === 'deleted' || entry.kind === 'links' || entry.kind === 'submission') {
     return false;
   }
@@ -933,6 +980,8 @@ const Entry = memo(function Entry({ entry, lineId, endsRail, onAddPerson }: Entr
     detail = <MeetingDetail entry={entry} detailId={`${lineId}-detail`} onAddPerson={onAddPerson} />;
   } else if (entry.kind === 'task' && entry.title !== undefined) {
     detail = <TaskRow entry={entry} title={entry.title} detailId={`${lineId}-detail`} />;
+  } else if (entry.kind === 'call' || entry.kind === 'logged_meeting') {
+    detail = hasDetail(entry) ? <LoggedDetail entry={entry} detailId={`${lineId}-detail`} /> : undefined;
   } else if (
     entry.kind !== 'created' &&
     entry.kind !== 'deleted' &&

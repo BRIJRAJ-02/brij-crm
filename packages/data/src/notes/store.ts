@@ -19,6 +19,12 @@
 //   fails, a toast offers to open the note again with the text. A note links
 //   other records besides its own (migration 0135): the session holds them,
 //   and `setLinks` changes them at once, put back on a refusal.
+//
+// A call or a meeting logged on a record (migration 0137) is a note with a
+// kind, saved whole by the Log activity dialog, not by a session: `logActivity`
+// and `updateActivity` wait for the server (the dialog stays open on a
+// refusal, with what was typed), then put the note in every list of every
+// record it is on and have their timelines read again.
 import {
   NOTE_CONTENT_MAX_BYTES,
   NOTE_PAGE,
@@ -27,6 +33,7 @@ import {
   noteBytes,
   richTextToPlain,
 } from '@crm/contracts/note-limits';
+import type { NoteKind, NoteOutcome } from '@crm/contracts/note-limits';
 import type { ChangeEvent, Note, NoteLinks, NotePage, NoteSummary, SaveNoteResult, TaskTotal } from '@crm/contracts';
 import type { ActorReferenceValue as Actor, RecordRefDisplay } from '@crm/contracts/values';
 import { dataError, toDataError, type DataError } from '../errors.ts';
@@ -74,6 +81,10 @@ export interface NotesApi {
     readonly recordId: string;
     readonly title?: string;
     readonly content?: unknown;
+    readonly kind?: NoteKind;
+    readonly occurredAt?: string;
+    readonly durationMinutes?: number | null;
+    readonly outcome?: NoteOutcome | null;
     readonly baseVersion?: number | null;
     readonly mutationId: string;
   }) => Promise<SaveNoteResult>;
@@ -212,6 +223,30 @@ export interface NoteSession {
     readonly add?: readonly RecordRefDisplay[];
     readonly remove?: readonly string[];
   }) => Promise<DataError | undefined>;
+}
+
+/** A call or meeting as the Log activity dialog holds it. */
+export interface ActivityDraft {
+  readonly kind: Exclude<NoteKind, 'note'>;
+  /** When it happened, ISO 8601 in UTC. */
+  readonly occurredAt: string;
+  /** Minutes, 1 to 1,440; absent for none. */
+  readonly durationMinutes?: number;
+  readonly outcome?: NoteOutcome;
+  /** The notes, a rich text document; absent when nothing was written (or, on an edit, left as it was). */
+  readonly doc?: unknown;
+}
+
+/** What saving an activity answered. */
+export interface ActivityResult {
+  /** The stored note, once the save landed. */
+  readonly note?: NoteSummary;
+  /** The save was refused or failed: nothing was stored, and the dialog stays open on it. */
+  readonly failure?: DataError;
+  /** The note is stored, but its links were not changed. */
+  readonly linkFailure?: DataError;
+  /** An edit started from an older version: whose save it replaced. */
+  readonly overwrote?: SaveNoteResult['overwrote'];
 }
 
 const defaultLater = (work: () => void, ms: number) => {
@@ -887,7 +922,130 @@ export function createNotesStore(deps: NotesDeps) {
     return session;
   }
 
+  /**
+   * One save of a call or meeting, then its link changes, waiting for the server. The save is an upsert by the id
+   * the dialog minted, so a retry after a lost answer stores nothing twice. Once it lands, every list of every
+   * record it is on takes it (and reads again, for its place by when it happened) and their timelines read.
+   */
+  async function saveActivity(
+    workspace: string,
+    input: {
+      readonly noteId: string;
+      readonly recordId: string;
+      readonly draft: ActivityDraft;
+      /** An edit: the version it started from; absent for a new one. */
+      readonly baseVersion?: number;
+      readonly add: readonly RecordRefDisplay[];
+      readonly remove: readonly string[];
+    },
+  ): Promise<ActivityResult> {
+    const { draft } = input;
+    const isEdit = input.baseVersion !== undefined;
+    if (draft.doc !== undefined && noteBytes(draft.doc) > NOTE_CONTENT_MAX_BYTES) {
+      return { failure: dataError('CONFIG_INVALID', NOTE_TOO_LONG) };
+    }
+    const mutationId = deps.mintId();
+    deps.mutations.sent(mutationId);
+    let answer: SaveNoteResult;
+    try {
+      answer = await deps.api.save({
+        workspace,
+        id: input.noteId,
+        recordId: input.recordId,
+        mutationId,
+        kind: draft.kind,
+        occurredAt: draft.occurredAt,
+        // An edit clears a duration or outcome the dialog no longer holds; a new one just has none.
+        ...(draft.durationMinutes === undefined
+          ? isEdit
+            ? { durationMinutes: null }
+            : {}
+          : { durationMinutes: draft.durationMinutes }),
+        ...(draft.outcome === undefined ? (isEdit ? { outcome: null } : {}) : { outcome: draft.outcome }),
+        ...(draft.doc === undefined ? {} : { content: draft.doc }),
+        ...(input.baseVersion === undefined ? {} : { baseVersion: input.baseVersion }),
+      });
+      deps.mutations.answered(mutationId, 1);
+    } catch (failed) {
+      deps.mutations.forget(mutationId);
+      return { failure: toDataError(failed) };
+    }
+    let linkFailure: DataError | undefined;
+    if (input.add.length > 0 || input.remove.length > 0) {
+      const linkId = deps.mintId();
+      deps.mutations.sent(linkId);
+      try {
+        await deps.api.link({
+          workspace,
+          noteId: input.noteId,
+          mutationId: linkId,
+          ...(input.add.length === 0 ? {} : { addRecordIds: input.add.map((link) => link.recordId) }),
+          ...(input.remove.length === 0 ? {} : { removeRecordIds: input.remove }),
+        });
+        deps.mutations.answered(linkId, 1);
+      } catch (failed) {
+        deps.mutations.forget(linkId);
+        linkFailure = toDataError(failed);
+      }
+    }
+    const shownOn = [input.recordId, ...input.add.map((link) => link.recordId), ...input.remove];
+    // A plain note's place is the top; a call or meeting's is where it happened, so its lists read again instead.
+    // Records it was just unlinked from only read again.
+    if (answer.note.kind === 'note') {
+      for (const each of new Set([input.recordId, ...input.add.map((link) => link.recordId)])) {
+        putNote(workspace, each, answer.note);
+      }
+    }
+    for (const each of new Set(shownOn)) dirtyRecord(workspace, each);
+    deps.timelines(workspace, [...new Set(shownOn)]);
+    return {
+      note: answer.note,
+      ...(linkFailure === undefined ? {} : { linkFailure }),
+      ...(answer.overwrote === undefined ? {} : { overwrote: answer.overwrote }),
+    };
+  }
+
   return {
+    /**
+     * Logs a call or meeting on a record (migration 0137): one save under the id the dialog minted, then the
+     * records it also links. Waits for the server. A refusal comes back as `failure` with nothing stored.
+     */
+    logActivity: (
+      workspace: string,
+      input: {
+        readonly noteId: string;
+        readonly recordId: string;
+        readonly draft: ActivityDraft;
+        readonly links: readonly RecordRefDisplay[];
+      },
+    ): Promise<ActivityResult> =>
+      saveActivity(workspace, {
+        noteId: input.noteId,
+        recordId: input.recordId,
+        draft: input.draft,
+        add: input.links,
+        remove: [],
+      }),
+    /** Saves an edit of a logged call or meeting from the version the dialog read, and its link changes. */
+    updateActivity: (
+      workspace: string,
+      input: {
+        readonly noteId: string;
+        readonly recordId: string;
+        readonly baseVersion: number;
+        readonly draft: ActivityDraft;
+        readonly add: readonly RecordRefDisplay[];
+        readonly remove: readonly string[];
+      },
+    ): Promise<ActivityResult> => saveActivity(workspace, input),
+    /** One note with its body, for the Log activity dialog's edit. Rejects with a DataError. */
+    async read(workspace: string, noteId: string): Promise<Note> {
+      try {
+        return await deps.api.get({ workspace, noteId });
+      } catch (failed) {
+        throw toDataError(failed);
+      }
+    },
     /**
      * A record's notes, last edited first, the same list for every screen that
      * asks. `objectId` names the record's object, so a background job's changes

@@ -61,6 +61,7 @@ import { CommentsTab, LoadingThreads } from '../comments/CommentsTab.tsx';
 import { strings as commentStrings } from '../comments/strings.ts';
 import { NotesTab } from '../notes/NotesTab.tsx';
 import { strings as noteStrings } from '../notes/strings.ts';
+import { LogActivityDialog } from '../notes/LogActivityDialog.tsx';
 import { NoteWindow } from '../notes/NoteWindow.tsx';
 import { tabCount } from '../tasks/entries.ts';
 import { OpenTasksCard } from '../tasks/OpenTasksCard.tsx';
@@ -110,6 +111,8 @@ export interface RecordPageProps {
   readonly notes: NoteListSource | undefined;
   /** `?note=`: the note window's note, or `new`. */
   readonly note?: string;
+  /** `?log=`: the Log activity dialog's entry, or `new`, `call` or `meeting` for a new one. */
+  readonly log?: string;
   /** The record's comment threads (spec 0038): the Comments tab and its count. */
   readonly comments: RecordComments | undefined;
   /** `?thread=`: the thread a link to a comment names (AC-1161). */
@@ -377,6 +380,7 @@ function RecordScreen({
   meId,
   task,
   note,
+  log,
   thread,
   state,
   timelineStatus,
@@ -494,7 +498,7 @@ function RecordScreen({
   };
   // Kept while the page's address stays, so the timeline's links and the task rows don't draw again with each render.
   const taskHref = useCallback(
-    (itemId: string, kind: 'task' | 'note' | 'thread' = 'task') =>
+    (itemId: string, kind: 'task' | 'note' | 'thread' | 'log' = 'task') =>
       // A thread opens where it lives, on the Comments tab.
       `${recordHref(slug, object.apiSlug, recordId, kind === 'thread' ? 'comments' : tab)}?${kind}=${itemId}`,
     [slug, object.apiSlug, recordId, tab],
@@ -517,6 +521,29 @@ function RecordScreen({
   const closeNote = () => {
     if (noteOpenedHere.current) {
       noteOpenedHere.current = false;
+      router.history.back();
+      return;
+    }
+    void navigate({
+      to: '/w/$slug/objects/$object/$recordId/$tab',
+      params: { slug, object: object.apiSlug, recordId, tab },
+      search: {},
+      replace: true,
+    });
+  };
+  // The Log activity dialog (a call or meeting logged on the record), opened and closed as the note window is.
+  const logOpenedHere = useRef(false);
+  const openLog = (entry: string) => {
+    logOpenedHere.current = true;
+    void navigate({
+      to: '/w/$slug/objects/$object/$recordId/$tab',
+      params: { slug, object: object.apiSlug, recordId, tab },
+      search: { log: entry },
+    });
+  };
+  const closeLog = () => {
+    if (logOpenedHere.current) {
+      logOpenedHere.current = false;
       router.history.back();
       return;
     }
@@ -605,7 +632,9 @@ function RecordScreen({
       />
     );
   } else if (tab === 'notes') {
-    tabContent = <NotesTab list={notes} members={members} canAdd={canAddTasks} onOpenNote={openNote} />;
+    tabContent = (
+      <NotesTab list={notes} members={members} canAdd={canAddTasks} onOpenNote={openNote} onOpenLog={openLog} />
+    );
   } else if (tab === 'tasks' && pageRecord !== undefined) {
     tabContent = (
       <TasksTab
@@ -684,6 +713,19 @@ function RecordScreen({
         canChange={canAddTasks}
         onStored={noteStored}
         onClose={closeNote}
+      />
+    );
+
+  const logDialog =
+    log === undefined || pageRecord === undefined ? undefined : (
+      <LogActivityDialog
+        slug={slug}
+        log={log}
+        record={pageRecord}
+        members={members}
+        objects={objects}
+        canChange={canAddTasks}
+        onClose={closeLog}
       />
     );
 
@@ -967,6 +1009,7 @@ function RecordScreen({
       />
       {dialog}
       {noteWindow}
+      {logDialog}
     </>
   );
 }

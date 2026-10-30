@@ -27,6 +27,11 @@ export function isNoteParam(value: unknown): value is string {
   return typeof value === 'string' && (value === 'new' || UUID.test(value));
 }
 
+/** Whether a `log` search param names a logged call or meeting (a uuid) or a new one (`new`, `call` or `meeting`). */
+export function isLogParam(value: unknown): value is string {
+  return typeof value === 'string' && (value === 'new' || value === 'call' || value === 'meeting' || UUID.test(value));
+}
+
 /** Whether `?thread=` names a thread: a uuid, anything else is dropped. */
 export function isThreadParam(value: unknown): value is string {
   return typeof value === 'string' && UUID.test(value);

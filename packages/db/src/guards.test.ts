@@ -1391,6 +1391,37 @@ describe('isolation', () => {
         ),
       ),
     ).rejects.toMatchObject({ cause: { code: '23503', constraint: 'note_records_record' } });
+    // A call or meeting logged on a record (migration 0137): its kind, duration and outcome are held by the database.
+    const logged = (columns: string) =>
+      db.withWorkspace(a.workspaceId, (tx) =>
+        tx.execute(
+          sql.raw(`update notes set ${columns} where workspace_id = '${a.workspaceId}' and id = '${inA.noteId}'`),
+        ),
+      );
+    await expect(logged(`kind = 'webinar'`)).rejects.toMatchObject({
+      cause: { code: '23514', constraint: 'notes_kind' },
+    });
+    await expect(logged(`duration_minutes = 30`)).rejects.toMatchObject({
+      cause: { code: '23514', constraint: 'notes_duration' },
+    });
+    await expect(logged(`outcome = 'connected'`)).rejects.toMatchObject({
+      cause: { code: '23514', constraint: 'notes_outcome' },
+    });
+    await expect(logged(`kind = 'call', duration_minutes = 1441`)).rejects.toMatchObject({
+      cause: { code: '23514', constraint: 'notes_duration' },
+    });
+    await expect(logged(`kind = 'call', outcome = 'held'`)).rejects.toMatchObject({
+      cause: { code: '23514', constraint: 'notes_outcome' },
+    });
+    await expect(logged(`kind = 'meeting', outcome = 'connected'`)).rejects.toMatchObject({
+      cause: { code: '23514', constraint: 'notes_outcome' },
+    });
+    await logged(`kind = 'meeting', duration_minutes = 60, outcome = 'no_show'`);
+    // Another workspace reads none of it.
+    const seenFromB = await db.withWorkspace(b.workspaceId, (tx) =>
+      tx.execute<{ kind: string }>(sql`select kind from notes where kind <> 'note'`),
+    );
+    expect(seenFromB.rows).toEqual([]);
   });
 
   it("reads none of another workspace's comments or notifications, and refuses either on its record (spec 0038, AC-1182)", async () => {

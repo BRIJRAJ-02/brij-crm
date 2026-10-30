@@ -960,6 +960,13 @@
       "when": 1795500200000,
       "tag": "0136_lists_pipelines",
       "breakpoints": true
+    },
+    {
+      "idx": 137,
+      "version": "7",
+      "when": 1795500300000,
+      "tag": "0137_log_activity",
+      "breakpoints": true
     }
   ]
 }

@@ -1,6 +1,8 @@
 // Notes (spec 0019, milestone 3): their own table beside the records engine,
-// not records. A note belongs to one record for life (which decides who may
-// see and change it) and links up to 19 more (`note_records`, migration 0135,
+// not records. A call or a meeting logged on a record is a note with a `kind`
+// and an `occurred_at` (migration 0137), with its duration and outcome. A note
+// belongs to one record for life (which decides who may see and change it)
+// and links up to 19 more (`note_records`, migration 0135,
 // its own record first at position 0), holds the rich text
 // editor's document (`content`, Tiptap JSON, never HTML), its plain text copy
 // (`content_text`, derived on the server, for the list's excerpt and later
@@ -9,6 +11,7 @@
 // foreign key to the record has no `on delete` action, so a record removed
 // for good while it still has a note fails, unless the purge step deleted the
 // notes first, in the same transaction.
+import type { NoteKind, NoteOutcome } from '@crm/contracts/note-limits';
 import { sql } from 'drizzle-orm';
 import {
   check,
@@ -44,7 +47,19 @@ export const notes = pgTable(
     contentText: text('content_text').notNull().default(''),
     /** 1 on the first save, one more on each save after. */
     version: integer('version').notNull().default(1),
+    /** `note`, or a `call` or `meeting` logged on the record (migration 0137), for life. */
+    kind: text('kind').$type<NoteKind>().notNull().default('note'),
+    /** When it happened: a plain note's is its creation; a call's or meeting's may be earlier (never a day ahead). */
+    occurredAt: timestamptz('occurred_at').notNull().defaultNow(),
+    /** A call's or meeting's length in minutes, 1 to 1,440; never on a plain note. */
+    durationMinutes: smallint('duration_minutes'),
+    /** How it went, from the kind's own set; never on a plain note. */
+    outcome: text('outcome').$type<NoteOutcome>(),
     ...auditColumns(),
+    /** The moment it is listed at: a plain note's last edit, a call's or meeting's when it happened (generated). */
+    listedAt: timestamptz('listed_at').generatedAlwaysAs(
+      sql`case when kind = 'note' then updated_at else occurred_at end`,
+    ),
     deletedAt: timestamptz('deleted_at'),
     deletedByType: deletedBy.type,
     deletedById: deletedBy.id,
@@ -62,10 +77,26 @@ export const notes = pgTable(
     check('notes_content_text', sql`char_length(${t.contentText}) <= 100000`),
     check('notes_version', sql`${t.version} >= 1`),
     check('notes_deleted', sql`(${t.deletedAt} is null) = (${t.deletedByType} is null)`),
+    check('notes_kind', sql`${t.kind} in ('note', 'call', 'meeting')`),
+    check(
+      'notes_duration',
+      sql`${t.durationMinutes} is null or (${t.kind} <> 'note' and ${t.durationMinutes} between 1 and 1440)`,
+    ),
+    check(
+      'notes_outcome',
+      sql`${t.outcome} is null
+        or (${t.kind} = 'call' and ${t.outcome} in ('connected', 'no_answer', 'left_message'))
+        or (${t.kind} = 'meeting' and ${t.outcome} in ('held', 'cancelled', 'no_show'))`,
+    ),
     // A record's Notes tab (last edited first), and the purge step's delete and the foreign key's check.
     index('notes_by_record').on(t.workspaceId, t.recordId, t.updatedAt.desc(), t.id),
-    // The timeline's "added a note", by when each was made.
-    index('notes_by_record_created').on(t.workspaceId, t.recordId, t.createdAt.desc(), t.id),
+    // The timeline's "added a note", "logged a call", by when each happened (migration 0137; a plain note's moment is
+    // its creation).
+    index('notes_by_workspace_listed')
+      .on(t.workspaceId, t.listedAt.desc(), t.id)
+      .where(sql`${t.deletedAt} is null`),
+    index('notes_by_record_listed').on(t.workspaceId, t.recordId, t.listedAt.desc(), t.id),
+    index('notes_by_record_occurred').on(t.workspaceId, t.recordId, t.occurredAt.desc(), t.id),
     index('notes_trashed')
       .on(t.workspaceId, t.deletedAt)
       .where(sql`${t.deletedAt} is not null`),

@@ -470,7 +470,12 @@ export {
   type SidebarProps,
   type SidebarState,
 } from './modules/Sidebar/Sidebar.tsx';
-export { NoteList, type NoteListItem, type NoteListProps } from './modules/NoteList/NoteList.tsx';
+export {
+  NoteList,
+  type NoteListActivity,
+  type NoteListItem,
+  type NoteListProps,
+} from './modules/NoteList/NoteList.tsx';
 export {
   CustomiseSidebar,
   type CustomiseSidebarItem,

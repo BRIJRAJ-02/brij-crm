@@ -34,7 +34,7 @@ export interface ActivityTabProps {
   readonly layout?: ActivityFeedLayout;
   /** Adds a meeting's unknown attendee as a person (spec 0024, AC-609): the meeting's id and the attendee. */
   readonly onAddPerson?: (meetingId: string, attendee: MeetingAttendee) => Promise<void>;
-  /** The timeline cut to some kinds: given, the tab shows its filter (All, Changes, Notes, Tasks, Comments, Meetings). */
+  /** The timeline cut to some kinds: given, the tab shows its filter (All, Changes, Notes, Calls, Tasks, Comments, Meetings). */
   readonly feedFor?: (kinds: readonly ActivityKind[]) => Promise<ActivityFeedSource>;
 }
 
@@ -43,9 +43,10 @@ const FILTERS: readonly { readonly id: string; readonly label: string; readonly 
   { id: 'all', label: strings.filterAll },
   { id: 'changes', label: strings.filterChanges, kinds: ['created', 'change', 'links', 'deleted', 'submission'] },
   { id: 'notes', label: strings.filterNotes, kinds: ['note'] },
+  { id: 'calls', label: strings.filterCalls, kinds: ['call'] },
   { id: 'tasks', label: strings.filterTasks, kinds: ['task'] },
   { id: 'comments', label: strings.filterComments, kinds: ['comment'] },
-  { id: 'meetings', label: strings.filterMeetings, kinds: ['meeting'] },
+  { id: 'meetings', label: strings.filterMeetings, kinds: ['meeting', 'logged_meeting'] },
 ];
 
 /**

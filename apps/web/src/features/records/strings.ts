@@ -27,6 +27,7 @@ export const strings = {
   filterAll: 'All activity',
   filterChanges: 'Changes',
   filterNotes: 'Notes',
+  filterCalls: 'Calls',
   filterTasks: 'Tasks',
   filterComments: 'Comments',
   filterMeetings: 'Meetings',

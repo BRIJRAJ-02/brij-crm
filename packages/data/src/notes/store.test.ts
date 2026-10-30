@@ -44,12 +44,15 @@ function setup() {
   const links = new Map<string, RecordRefDisplay[]>();
   const linkCalls: { add?: readonly string[]; remove?: readonly string[] }[] = [];
   const savedOn: string[] = [];
+  const activitySaves: Record<string, unknown>[] = [];
   const summary = (id: string, held: Stored): NoteSummary => ({
     id,
     recordId: ACME,
     title: held.title,
     excerpt: '',
     version: held.version,
+    kind: 'note',
+    occurredAt: '2026-10-20T10:00:00.000Z',
     canChange: true,
     createdAt: '2026-10-20T10:00:00.000Z',
     createdBy: ME,
@@ -72,6 +75,10 @@ function setup() {
     },
     save: async (input) => {
       saves.push({ title: input.title, content: input.content, baseVersion: input.baseVersion });
+      if (input.kind !== undefined) {
+        const { kind, occurredAt, durationMinutes, outcome, content, baseVersion } = input;
+        activitySaves.push({ kind, occurredAt, durationMinutes, outcome, content, baseVersion });
+      }
       savedOn.push(input.recordId);
       await gate;
       const failure = failNext.shift();
@@ -176,6 +183,7 @@ function setup() {
     },
     linkCalls,
     savedOn,
+    activitySaves,
     hold: () => {
       gate = new Promise((resolve) => {
         open = resolve;
@@ -574,5 +582,145 @@ describe('a note’s linked records (migration 0135)', () => {
     await t.advance(0);
     expect(t.saves.at(-1)).toMatchObject({ content: doc('More'), baseVersion: 1 });
     expect(t.savedOn.at(-1)).toBe(ACME);
+  });
+});
+
+describe('a call or meeting logged on a record (migration 0137)', () => {
+  const ID = '0199a6f2-0000-7000-8000-0000000000c1';
+  const AT = '2026-10-20T09:00:00.000Z';
+  const GLOBEX: RecordRefDisplay = {
+    objectId: 'o2',
+    recordId: '0199a6f2-0000-7000-8000-0000000000a2',
+    name: 'Globex',
+    kind: 'other',
+  };
+
+  it('saves the call whole under the id the dialog minted, then links the other records', async () => {
+    const t = setup();
+    const result = await t.store.logActivity(WS, {
+      noteId: ID,
+      recordId: ACME,
+      draft: { kind: 'call', occurredAt: AT, durationMinutes: 30, outcome: 'connected', doc: doc('Talked.') },
+      links: [GLOBEX],
+    });
+    expect(result.failure).toBeUndefined();
+    expect(result.linkFailure).toBeUndefined();
+    expect(result.note).toMatchObject({ id: ID, recordId: ACME });
+    expect(t.activitySaves).toEqual([
+      {
+        kind: 'call',
+        occurredAt: AT,
+        durationMinutes: 30,
+        outcome: 'connected',
+        content: doc('Talked.'),
+        baseVersion: undefined,
+      },
+    ]);
+    expect(t.linkCalls).toEqual([{ add: [GLOBEX.recordId] }]);
+  });
+
+  it('leaves out what was not chosen on a new entry, and sends nothing for links when there are none', async () => {
+    const t = setup();
+    await t.store.logActivity(WS, {
+      noteId: ID,
+      recordId: ACME,
+      draft: { kind: 'meeting', occurredAt: AT },
+      links: [],
+    });
+    expect(t.activitySaves).toEqual([
+      {
+        kind: 'meeting',
+        occurredAt: AT,
+        durationMinutes: undefined,
+        outcome: undefined,
+        content: undefined,
+        baseVersion: undefined,
+      },
+    ]);
+    expect(t.linkCalls).toEqual([]);
+  });
+
+  it('answers a refusal as a failure with nothing linked, and a failed link step beside the stored note', async () => {
+    const t = setup();
+    t.failWith(dataError('FORBIDDEN', 'You can view this note but not change it.'));
+    const refused = await t.store.logActivity(WS, {
+      noteId: ID,
+      recordId: ACME,
+      draft: { kind: 'call', occurredAt: AT },
+      links: [GLOBEX],
+    });
+    expect(refused.failure).toMatchObject({ code: 'FORBIDDEN' });
+    expect(refused.note).toBeUndefined();
+    expect(t.linkCalls).toEqual([]);
+    t.failLinkWith(dataError('NOT_FOUND', 'That record does not exist.'));
+    const half = await t.store.logActivity(WS, {
+      noteId: ID,
+      recordId: ACME,
+      draft: { kind: 'call', occurredAt: AT },
+      links: [GLOBEX],
+    });
+    expect(half.failure).toBeUndefined();
+    expect(half.note).toBeDefined();
+    expect(half.linkFailure).toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('never sends a body over 200 KB, and says why as the service would', async () => {
+    const t = setup();
+    const huge = {
+      type: 'doc',
+      content: [{ type: 'paragraph', content: [{ type: 'text', text: 'x'.repeat(210_000) }] }],
+    };
+    const result = await t.store.logActivity(WS, {
+      noteId: ID,
+      recordId: ACME,
+      draft: { kind: 'call', occurredAt: AT, doc: huge },
+      links: [],
+    });
+    expect(result.failure).toMatchObject({ code: 'CONFIG_INVALID' });
+    expect(t.activitySaves).toEqual([]);
+  });
+
+  it('saves an edit from the version it read, clearing a duration and outcome it no longer holds, and diffs the links', async () => {
+    const t = setup();
+    await t.store.logActivity(WS, {
+      noteId: ID,
+      recordId: ACME,
+      draft: { kind: 'call', occurredAt: AT, durationMinutes: 15, outcome: 'no_answer' },
+      links: [],
+    });
+    const result = await t.store.updateActivity(WS, {
+      noteId: ID,
+      recordId: ACME,
+      baseVersion: 1,
+      draft: { kind: 'call', occurredAt: AT },
+      add: [GLOBEX],
+      remove: [],
+    });
+    expect(result.note?.version).toBe(2);
+    expect(t.activitySaves.at(-1)).toMatchObject({ durationMinutes: null, outcome: null, baseVersion: 1 });
+    expect(t.linkCalls).toEqual([{ add: [GLOBEX.recordId] }]);
+    const again = await t.store.updateActivity(WS, {
+      noteId: ID,
+      recordId: ACME,
+      baseVersion: 1,
+      draft: { kind: 'call', occurredAt: AT },
+      add: [],
+      remove: [GLOBEX.recordId],
+    });
+    // Started from version 1 while the note is at 2: whose save it replaced comes back for the dialog's notice.
+    expect(again.overwrote).toBeDefined();
+    expect(t.linkCalls.at(-1)).toEqual({ remove: [GLOBEX.recordId] });
+  });
+
+  it('reads an entry with its body for the dialog, and rejects with the refusal when it is gone', async () => {
+    const t = setup();
+    await t.store.logActivity(WS, {
+      noteId: ID,
+      recordId: ACME,
+      draft: { kind: 'call', occurredAt: AT, doc: doc('Hi') },
+      links: [],
+    });
+    expect(await t.store.read(WS, ID)).toMatchObject({ id: ID, content: doc('Hi') });
+    await expect(t.store.read(WS, '0199a6f2-0000-7000-8000-0000000000ff')).rejects.toMatchObject({ code: 'NOT_FOUND' });
   });
 });

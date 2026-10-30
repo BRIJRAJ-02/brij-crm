@@ -294,9 +294,11 @@ export interface CommandRecord {
 }
 
 /**
- * The open record's actions, first under Actions: New note on <name> and New
- * task on <name>, each opening the record's own note window or task dialog
- * (`?note=new`, `?task=new`) on its tab, as the tabs' buttons do.
+ * The open record's actions, first under Actions: New note on <name>, New
+ * task on <name>, Log a call on <name> and Log a meeting on <name>, each
+ * opening the record's own note window, task dialog or Log activity dialog
+ * (`?note=new`, `?task=new`, `?log=call`, `?log=meeting`) on its tab, as the
+ * tabs' buttons do.
  */
 export function recordCommands(record: CommandRecord | undefined): readonly Command[] {
   if (record === undefined) return [];
@@ -315,6 +317,20 @@ export function recordCommands(record: CommandRecord | undefined): readonly Comm
       icon: 'list-checks',
       terms: strings.taskTerms,
       run: go(`${recordHref(slug, objectSlug, recordId, 'tasks')}?task=new`),
+    },
+    {
+      id: `record:call:${recordId}`,
+      name: strings.logCallOn(name),
+      icon: 'phone',
+      terms: strings.callTerms,
+      run: go(`${recordHref(slug, objectSlug, recordId, 'notes')}?log=call`),
+    },
+    {
+      id: `record:meeting:${recordId}`,
+      name: strings.logMeetingOn(name),
+      icon: 'users',
+      terms: strings.meetingTerms,
+      run: go(`${recordHref(slug, objectSlug, recordId, 'notes')}?log=meeting`),
     },
   ];
 }

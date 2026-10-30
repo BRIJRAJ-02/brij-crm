@@ -16,6 +16,7 @@ import type {
   RecordActivity,
   RecordRefDisplay,
 } from '@crm/contracts';
+import type { Hue } from '@crm/contracts/values';
 import { ACTIVITY_PAGE, ACTIVITY_RECENT, compareActivityKeys } from '@crm/contracts/activity-keys';
 import { bodySegments } from '@crm/contracts/mentions';
 import { toDataError, type DataError } from '../errors.ts';
@@ -102,6 +103,23 @@ export type ActivityEntryShape =
       readonly excerpt: string;
       /** Its window's address, which the screen adds. */
       readonly href?: string;
+    })
+  | (EntryBase & {
+      /**
+       * A call or meeting a person logged on the record (migration 0137), at the moment it happened: the start of
+       * its notes, how long it ran and how it went (`outcomeId`, `durationMinutes`), which the screen words into
+       * `duration` and `outcome` (a Tag's label and hue) for the library.
+       */
+      readonly kind: 'call' | 'logged_meeting';
+      /** The note's id, for the screen to open it. */
+      readonly itemId: string;
+      readonly excerpt: string;
+      readonly durationMinutes?: number;
+      readonly outcomeId?: string;
+      /** Its dialog's address, which the screen adds. */
+      readonly href?: string;
+      readonly duration?: string;
+      readonly outcome?: { readonly label: string; readonly hue: Hue };
     })
   | (EntryBase & {
       /**
@@ -356,6 +374,17 @@ export function toActivityEntry(item: ActivityItem, context: EntryContext): Acti
   if (item.kind === 'note') {
     if (item.itemId === undefined) return undefined;
     return { ...base, kind: 'note', itemId: item.itemId, title: item.title ?? '', excerpt: item.excerpt ?? '' };
+  }
+  if (item.kind === 'call' || item.kind === 'logged_meeting') {
+    if (item.itemId === undefined) return undefined;
+    return {
+      ...base,
+      kind: item.kind,
+      itemId: item.itemId,
+      excerpt: item.excerpt ?? '',
+      ...(item.durationMinutes === undefined ? {} : { durationMinutes: item.durationMinutes }),
+      ...(item.outcome === undefined ? {} : { outcomeId: item.outcome }),
+    };
   }
   if (item.kind === 'meeting') {
     const meeting = item.meeting;

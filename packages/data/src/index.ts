@@ -274,7 +274,8 @@ import {
 } from './views/store.ts';
 import type { NewTask, TaskChange, TaskList, TasksStore, TaskSubscription } from './tasks/store.ts';
 import { createDueTasks, type DueTasksSource } from './tasks/due.ts';
-import type { NoteList, NoteSession, NotesStore } from './notes/store.ts';
+import type { ActivityDraft, ActivityResult, NoteList, NoteSession, NotesStore } from './notes/store.ts';
+import type { Note as NoteWithBody } from '@crm/contracts';
 import type { CommentEmoji, CommentVersion, NotificationKind, NotificationStatus } from '@crm/contracts';
 import type { CommentsStore, NewComment, RecordComments } from './comments/store.ts';
 import type {
@@ -709,8 +710,22 @@ export type {
   TaskSubscriptionState,
 } from './tasks/store.ts';
 export { TASK_COUNT_CAP, TASK_DESCRIPTION_MAX, TASK_RECORDS_MAX, TASK_TITLE_MAX } from '@crm/contracts/task-limits';
-export { NOTE_RECORDS_MAX, NOTE_TITLE_MAX, NOTE_TOO_LONG } from '@crm/contracts/note-limits';
+export {
+  ACTIVITY_AHEAD_MS,
+  ACTIVITY_DURATION_MAX,
+  CALL_OUTCOMES,
+  MEETING_OUTCOMES,
+  NOTE_RECORDS_MAX,
+  NOTE_TITLE_MAX,
+  NOTE_TOO_LONG,
+  outcomesFor,
+  richTextToPlain,
+  type NoteKind,
+  type NoteOutcome,
+} from '@crm/contracts/note-limits';
 export type {
+  ActivityDraft,
+  ActivityResult,
   NoteList,
   NoteListState,
   NoteNotice,
@@ -5550,6 +5565,34 @@ export function createDataLayer({
       ): Promise<NoteSession> => (await notesStore()).open(workspace, input),
       /** A new note's id: mint it once when the window opens on a new note. */
       newId: (): string => mintId(),
+      /**
+       * Logs a call or meeting on a record (migration 0137): saved whole, waiting for the server; a refusal comes
+       * back as `failure` with nothing stored, for the dialog to say. Its lists and timelines take it once it lands.
+       */
+      logActivity: async (
+        workspace: string,
+        input: {
+          readonly noteId: string;
+          readonly recordId: string;
+          readonly draft: ActivityDraft;
+          readonly links: readonly LinkedRecordDisplay[];
+        },
+      ): Promise<ActivityResult> => (await notesStore()).logActivity(workspace, input),
+      /** Saves an edit of a logged call or meeting, from the version the dialog read. */
+      updateActivity: async (
+        workspace: string,
+        input: {
+          readonly noteId: string;
+          readonly recordId: string;
+          readonly baseVersion: number;
+          readonly draft: ActivityDraft;
+          readonly add: readonly LinkedRecordDisplay[];
+          readonly remove: readonly string[];
+        },
+      ): Promise<ActivityResult> => (await notesStore()).updateActivity(workspace, input),
+      /** One note with its body (a logged call's dialog opened to edit). Rejects with a DataError. */
+      read: async (workspace: string, noteId: string): Promise<NoteWithBody> =>
+        (await notesStore()).read(workspace, noteId),
       /** The app's way to open a note window again, for a failed save's toast ("Open note"). */
       setOpener: async (
         open: (workspace: string, objectId: string, recordId: string, noteId: string) => void,

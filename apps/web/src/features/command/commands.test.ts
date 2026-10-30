@@ -105,15 +105,23 @@ describe('what the menu lists (AC-1075, AC-1082, AC-1086)', () => {
     expect(exported?.run).toEqual({ kind: 'go', href: `/w/acme/objects/${people.apiSlug}/views/v1?do=export` });
   });
 
-  it('offers a new note and a new task on the record page open, each opening on its tab', () => {
+  it('offers a new note, a new task, a call and a meeting on the record page open, each opening on its tab', () => {
     expect(recordCommands(undefined)).toEqual([]);
     const commands = recordCommands({ slug: 'acme', objectSlug: 'people', recordId: 'r1', name: 'Ada Lovelace' });
-    expect(commands.map((command) => command.name)).toEqual(['New note on Ada Lovelace', 'New task on Ada Lovelace']);
+    expect(commands.map((command) => command.name)).toEqual([
+      'New note on Ada Lovelace',
+      'New task on Ada Lovelace',
+      'Log a call on Ada Lovelace',
+      'Log a meeting on Ada Lovelace',
+    ]);
     expect(commands.map((command) => command.run)).toEqual([
       { kind: 'go', href: '/w/acme/objects/people/r1/notes?note=new' },
       { kind: 'go', href: '/w/acme/objects/people/r1/tasks?task=new' },
+      { kind: 'go', href: '/w/acme/objects/people/r1/notes?log=call' },
+      { kind: 'go', href: '/w/acme/objects/people/r1/notes?log=meeting' },
     ]);
     expect(matchCommands(commands, 'task').map((command) => command.id)).toEqual(['record:task:r1']);
+    expect(matchCommands(commands, 'call').map((command) => command.id)).toEqual(['record:call:r1']);
   });
 
   it('lists the Settings pages the member may open, by their place in Settings', () => {
