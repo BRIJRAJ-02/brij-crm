@@ -3,7 +3,14 @@
 // it), and setting values, each write answering the fresh record. Every read
 // and write goes through the scope the access door made.
 import { and, eq, isNotNull } from 'drizzle-orm';
-import type { BatchRecordResult, RecordPage, RecordView, TrashedRecord, UpdateOutcome } from '@crm/contracts';
+import type {
+  BatchRecordResult,
+  FiledCompany,
+  RecordPage,
+  RecordView,
+  TrashedRecord,
+  UpdateOutcome,
+} from '@crm/contracts';
 import type { FilterGroup, SortRules } from '@crm/contracts/values';
 import { schema } from '@crm/db';
 import { updateMany, type BulkEditInput } from '../engine/bulk-edit.ts';
@@ -137,6 +144,8 @@ export async function readTrashedRecord(scope: EngineScope, recordId: string): P
 export interface WrittenView {
   readonly record: RecordView;
   readonly written: Readonly<Record<string, string>>;
+  /** The company the person's email filed them under in this write (spec 0059); absent when nothing was filed. */
+  readonly filedCompany?: FiledCompany;
 }
 
 /** The versions a write made, by attribute id; an unchanged attribute is left out. */
@@ -206,7 +215,7 @@ export async function addRecord(
     throw inputInvalid('id', CLOCK_SKEW_MESSAGE);
   }
   try {
-    const { recordId, objectId, attributes, versions } = await createRecord(
+    const { recordId, objectId, attributes, versions, filedCompany } = await createRecord(
       scope,
       {
         objectId: input.objectId,
@@ -219,6 +228,7 @@ export async function addRecord(
     return {
       record: await freshRecord(scope, recordId, new Map([[objectId, attributes]])),
       written: writtenOf(versions),
+      ...(filedCompany === undefined ? {} : { filedCompany }),
     };
   } catch (error) {
     if (!isRefusal(error) || error.refusal.code !== 'ID_TAKEN') throw error;
@@ -280,7 +290,7 @@ export async function editRecord(
   input: EditRecordInput,
   hooks: readonly AfterWrite[] = [],
 ): Promise<WrittenView> {
-  const { attributesByObject, results } = await setRecordValues(
+  const { attributesByObject, results, filedCompany } = await setRecordValues(
     scope,
     {
       recordId: input.recordId,
@@ -293,6 +303,7 @@ export async function editRecord(
   return {
     record: await freshRecord(scope, canonicalId(input.recordId), attributesByObject),
     written: writtenOf(results),
+    ...(filedCompany === undefined ? {} : { filedCompany }),
   };
 }
 
@@ -343,7 +354,12 @@ export async function editRecords(
     const record = byId.get(outcome.recordId);
     return record === undefined
       ? { recordId: outcome.recordId, refusals: [{ code: 'RECORD_DELETED', message: TRASHED_SINCE }] }
-      : { recordId: outcome.recordId, record, written: writtenOf(outcome.results) };
+      : {
+          recordId: outcome.recordId,
+          record,
+          written: writtenOf(outcome.results),
+          ...(outcome.filedCompany === undefined ? {} : { filedCompany: outcome.filedCompany }),
+        };
   });
 }
 

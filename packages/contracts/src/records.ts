@@ -386,6 +386,24 @@ export const SetValuesInput = WorkspaceScoped.extend({
 export type SetValuesInput = z.infer<typeof SetValuesInput>;
 
 /**
+ * The company a person's write linked them to by their email's domain (spec
+ * 0059, AC-5920): the company (`made` when this write created it), its name
+ * as the writer may read it (empty when its name field is hidden from them),
+ * the person's Company attribute, and the version the link carries, which an
+ * undo names as `ifVersionId` so it never clears a Company someone set since.
+ */
+export const FiledCompany = z.object({
+  objectId: Uuid,
+  recordId: Uuid,
+  name: z.string(),
+  made: z.boolean(),
+  attributeId: Uuid,
+  linkVersionId: Uuid,
+});
+/** The company a person's write linked them to. */
+export type FiledCompany = z.infer<typeof FiledCompany>;
+
+/**
  * A record a write answers: fresh, plus `echoes`, how many change events
  * carry the write's `mutationId` (one per object it touched; 0 when it
  * changed nothing), so the tab that sent it skips exactly its own echoes
@@ -400,6 +418,8 @@ export const WrittenRecord = RecordView.extend({
    * between), so it is what the tab can call its own (spec 0006).
    */
   written: z.record(z.uuid(), Uuid),
+  /** The company this write linked the person to (spec 0059); absent when it filed nothing. */
+  filedCompany: FiledCompany.optional(),
 });
 /** A record a write answers, with its echo count. */
 export type WrittenRecord = z.infer<typeof WrittenRecord>;
@@ -437,6 +457,8 @@ export const BatchRecordResult = z.object({
   record: RecordView.optional(),
   /** With `record`: the version this write made for each attribute it changed (as `WrittenRecord.written`). */
   written: z.record(z.uuid(), Uuid).optional(),
+  /** With `record`: the company this write linked the person to (spec 0059), as `WrittenRecord.filedCompany`. */
+  filedCompany: FiledCompany.optional(),
   refusals: z.array(ApiRefusal).optional(),
 });
 /** One record's outcome in a batch. */

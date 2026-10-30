@@ -187,7 +187,12 @@ export const recordsRouter = member.records.router({
           hooks,
         ),
       );
-      return { ...result.record, written: result.written, echoes };
+      return {
+        ...result.record,
+        written: result.written,
+        ...(result.filedCompany === undefined ? {} : { filedCompany: result.filedCompany }),
+        echoes,
+      };
     } catch (error) {
       throw withInputFields(error, { ID_TAKEN: 'id' });
     }
@@ -204,7 +209,12 @@ export const recordsRouter = member.records.router({
         hooks,
       ),
     );
-    return { ...result.record, written: result.written, echoes };
+    return {
+      ...result.record,
+      written: result.written,
+      ...(result.filedCompany === undefined ? {} : { filedCompany: result.filedCompany }),
+      echoes,
+    };
   }),
   // One write for up to 500 records (spec 0006, AC-50): 200 with each record's outcome.
   setValuesBatch: member.records.setValuesBatch.handler(async ({ context, input }) => {
@@ -222,7 +232,12 @@ export const recordsRouter = member.records.router({
     const { result, echoes } = await commitCounted(context, { mutationId: input.mutationId }, (hooks) =>
       deleteRecords(
         context.scope,
-        { objectId: input.objectId, recordIds: input.recordIds, batchId: input.batchId },
+        {
+          objectId: input.objectId,
+          recordIds: input.recordIds,
+          batchId: input.batchId,
+          ...(input.unlinkedOnly === true ? { unlinkedOnly: true } : {}),
+        },
         hooks,
       ),
     );

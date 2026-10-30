@@ -300,7 +300,10 @@ export function keyAccess(keyId: string, scopes: readonly string[]): Access {
  * on its main object, and on that object's attributes only those its
  * published mapping names (`writable`); every other attribute of the object
  * hidden, and every other object out of reach. With no object (the public
- * endpoints, before processing) it reaches no data at all.
+ * endpoints, before processing) it reaches no data at all. A form filing
+ * People also files the person's company by their email (spec 0059,
+ * AC-5916): `filing` adds write on Companies and on the person's Company
+ * attribute, and nothing else.
  */
 export function formAccess(
   formId: string,
@@ -308,18 +311,29 @@ export function formAccess(
     readonly objectId: string;
     readonly attributeIds: readonly string[];
     readonly writable: ReadonlySet<string>;
+    readonly filing?: { readonly companies: string; readonly companyAttributeId: string };
   },
 ): Access {
+  const filing = target?.filing;
   const fields =
     target === undefined
       ? []
-      : target.attributeIds.flatMap((id): [string, FieldLevel][] => (target.writable.has(id) ? [] : [[id, 'hidden']]));
+      : target.attributeIds.flatMap((id): [string, FieldLevel][] =>
+          target.writable.has(id) || id === filing?.companyAttributeId ? [] : [[id, 'hidden']],
+        );
+  const objects: [string, ObjectLevel][] =
+    target === undefined
+      ? []
+      : [
+          [target.objectId, 'write'],
+          ...(filing === undefined ? [] : [[filing.companies, 'write'] as [string, ObjectLevel]]),
+        ];
   return Object.freeze({
     principal: Object.freeze({ kind: 'form', formId }),
     permissions: Object.freeze([]),
     data: sealPolicy({
       defaultObject: 'none',
-      objects: frozenRecord(target === undefined ? [] : [[target.objectId, 'write' as const]]),
+      objects: frozenRecord(objects),
       fields: frozenRecord(fields),
       records: frozenRecord([]),
     }),
