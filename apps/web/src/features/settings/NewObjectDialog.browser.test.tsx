@@ -42,7 +42,7 @@ describe('naming a new object', () => {
   it('takes a plural Name as the plural, says the singular it guessed, and sends both', async () => {
     const sent = await open();
     await userEvent.fill(page.getByRole('textbox', { name: 'Name' }), 'Projects');
-    await expect.element(page.getByText('One Project, many Projects, API name projects')).toBeVisible();
+    await expect.element(page.getByText('One Project, many Projects')).toBeVisible();
     await userEvent.click(page.getByRole('button', { name: 'Create object' }));
     await expect.poll(() => sent[0]).toMatchObject({ singularName: 'Project', pluralName: 'Projects' });
   });
@@ -50,7 +50,7 @@ describe('naming a new object', () => {
   it('lets a wrong singular guess be corrected, two words and all', async () => {
     const sent = await open();
     await userEvent.fill(page.getByRole('textbox', { name: 'Name' }), 'Sales Leads');
-    await userEvent.click(page.getByRole('button', { name: 'Names, API name and colour' }));
+    await userEvent.click(page.getByRole('button', { name: 'More settings' }));
     const singular = page.getByRole('textbox', { name: 'Singular name' });
     await expect.element(singular).toHaveValue('Sales Lead');
     // Typed key by key, a space stays: it was trimmed away the moment it was typed, so "Sales LeadRep".
@@ -63,9 +63,9 @@ describe('naming a new object', () => {
   it('takes a singular put back to the Name as one word for both, and says so', async () => {
     const sent = await open();
     await userEvent.fill(page.getByRole('textbox', { name: 'Name' }), 'Kudos');
-    await userEvent.click(page.getByRole('button', { name: 'Names, API name and colour' }));
+    await userEvent.click(page.getByRole('button', { name: 'More settings' }));
     await userEvent.fill(page.getByRole('textbox', { name: 'Singular name' }), 'Kudos');
-    await expect.element(page.getByText('One Kudos, many Kudos, API name kudos')).toBeVisible();
+    await expect.element(page.getByText('One Kudos, many Kudos')).toBeVisible();
     await userEvent.click(page.getByRole('button', { name: 'Create object' }));
     await expect.poll(() => sent[0]).toMatchObject({ singularName: 'Kudos', pluralName: 'Kudos' });
   });
@@ -73,8 +73,8 @@ describe('naming a new object', () => {
   it('still pluralises a singular Name, saying only the plural', async () => {
     const sent = await open();
     await userEvent.fill(page.getByRole('textbox', { name: 'Name' }), 'Project');
-    // Exact: "Projects, API name projects" is also the tail of the two-form hint.
-    await expect.element(page.getByText('Projects, API name projects', { exact: true })).toBeVisible();
+    // Exact: "Projects" is also the tail of the two-form hint.
+    await expect.element(page.getByText('Projects', { exact: true })).toBeVisible();
     await expect.element(page.getByText(/^One /)).not.toBeInTheDocument();
     await userEvent.click(page.getByRole('button', { name: 'Create object' }));
     await expect.poll(() => sent[0]).toMatchObject({ singularName: 'Project', pluralName: 'Projects' });

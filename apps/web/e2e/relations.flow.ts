@@ -141,9 +141,6 @@ test.describe('relations', () => {
     await expect(dialog.getByLabel('Name on Companies', { exact: true })).toHaveValue('Investors');
     await expect(dialog.getByLabel('Name on People', { exact: true })).toHaveValue('Companies');
     await dialog.getByLabel('Name on People', { exact: true }).fill('Investments');
-    await expect(dialog).toContainText(
-      'Companies get “Investors”, showing many people. People get “Investments”, showing many companies.',
-    );
     await checkScreen(page, 'relations-new');
     await dialog.getByRole('button', { name: 'Create relationship' }).click();
     await expect(dialog).toBeHidden();

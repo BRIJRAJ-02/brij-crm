@@ -73,6 +73,9 @@ test.describe('validation rules', () => {
       .getByRole('row', { name: /Email addresses/ })
       .click();
     const dialog = writer.getByRole('dialog', { name: 'Edit attribute' });
+    // Rules sit under More settings, open when the attribute already sets any of them.
+    const more = dialog.getByRole('button', { name: 'More settings' });
+    if ((await more.getAttribute('aria-expanded')) !== 'true') await more.click();
     await expect(dialog.getByText('No rules yet, so any value is accepted.')).toBeVisible();
     await dialog.getByRole('button', { name: 'Add rule' }).click();
     await writer.getByRole('menuitem', { name: 'Email domains' }).click();

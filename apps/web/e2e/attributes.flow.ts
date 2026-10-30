@@ -44,6 +44,10 @@ async function createAttribute(page: Page, each: TypeCase): Promise<void> {
   await page.getByRole('option', { name: each.type, exact: true }).click();
   // The list of fifteen reaches over the settings below it: gone before the next click lands there.
   await expect(page.getByRole('listbox')).toBeHidden();
+  // Everything past Name and Type is folded under More settings (the owner, 30 October 2026).
+  if (['description', 'unique', 'required', 'multiple', 'days', 'currentUser'].some((key) => key in each)) {
+    await dialog.getByRole('button', { name: 'More settings' }).click();
+  }
   if ('description' in each) await dialog.getByLabel('Description').fill(each.description);
   if ('unique' in each) await dialog.getByText('Unique', { exact: true }).click();
   if ('required' in each) await dialog.getByText('Required', { exact: true }).click();
@@ -77,12 +81,13 @@ test('an owner adds, edits, moves, archives and restores attributes without setu
   await expect(own.getByRole('row', { name: /Code/ })).toContainText('Unique');
   await expect(own.getByRole('row', { name: /Follow up/ })).toContainText('Default');
 
-  // A taken API name is refused on its field (AC-245).
+  // A name a live attribute goes by is refused on the name, before anything is sent (AC-245; the API name is made
+  // from it, with no field of its own since 30 October 2026).
   await page.getByRole('button', { name: 'New attribute' }).click();
   const dialog = page.getByRole('dialog', { name: 'New attribute' });
   await dialog.getByLabel('Name', { exact: true }).fill('Code');
   await dialog.getByRole('button', { name: 'Create attribute' }).click();
-  await expect(dialog.getByText('An attribute here already uses this API name. Pick another.')).toBeVisible();
+  await expect(dialog.getByText('Another attribute here has this name. Pick another.')).toBeVisible();
   await checkScreen(page, 'attribute-refused');
   await dialog.getByRole('button', { name: 'Cancel' }).click();
   await expect(dialog).toBeHidden();
@@ -94,6 +99,7 @@ test('an owner adds, edits, moves, archives and restores attributes without setu
   await dialog.getByRole('button', { name: /Type$/ }).click();
   await page.getByRole('option', { name: 'Rating', exact: true }).click();
   await expect(page.getByRole('listbox')).toBeHidden();
+  await dialog.getByRole('button', { name: 'More settings' }).click();
   await dialog.getByText('Required', { exact: true }).click();
   await dialog.getByRole('button', { name: 'Create attribute' }).click();
   await expect(dialog.getByText(/Intro call is live and makes records here at bookings/)).toBeVisible();
@@ -105,7 +111,6 @@ test('an owner adds, edits, moves, archives and restores attributes without setu
   const edit = page.getByRole('dialog', { name: 'Edit attribute' });
   await expect(edit).toBeVisible();
   await expect(page).toHaveURL(/\?attribute=/);
-  await expect(edit.getByText('Changing the type comes later.')).toBeVisible();
   await edit.getByLabel('Name', { exact: true }).fill('Desk phone');
   await edit.getByRole('button', { name: 'Save' }).click();
   await expect(edit).toBeHidden();

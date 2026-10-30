@@ -102,9 +102,9 @@ export const strings = {
           ? 'An invitation they sent is cancelled. Invite them again from Invite people if you still want them.'
           : `${String(counts.invitations)} invitations they sent are cancelled. Invite any you still want again from Invite people.`
         : '',
-    ]
-      .filter((sentence) => sentence !== '')
-      .join(' '),
+    ].filter((sentence) => sentence !== ''),
+  /** The removal's effects past the first two, folded. */
+  showMoreEffects: 'Show more',
   /** The removal's one effect that stops other people's work, apart in a warning (late trap #70). */
   requiredDefaultsLost: (count: number) =>
     count === 1
@@ -112,7 +112,6 @@ export const strings = {
       : `${String(count)} required fields will have no default. Give them one in their objects’ settings, or forms and booking pages can’t add records there.`,
   previewFailed: 'We couldn’t check what else this changes. You can still remove them.',
   handTo: 'Hand their open tasks and records to',
-  handToHint: 'They move in the background. Leave it empty to keep them as they are.',
   handToNobody: 'Keep them as they are',
   handToSearch: 'Search members',
   transferTitle: (name: string, workspace: string) => `Make ${name} the owner of ${workspace}?`,
@@ -138,6 +137,8 @@ export const strings = {
       : uses === 1
         ? '1 person joined with it.'
         : `${String(uses)} people joined with it.`,
+  /** The fold holding Expires and Most uses. */
+  linkSettings: 'Link settings',
   linkExpires: 'Expires',
   linkNever: 'Never',
   linkDays: (days: number) => (days === 1 ? 'In 1 day' : `In ${String(days)} days`),
@@ -187,7 +188,6 @@ export const strings = {
   domainOffAction: 'Turn off company email',
   domainTurnedOff: 'Company email is off.',
   // Help beside labels that don't say it all (the owner's Settings sweep, 21 October 2026).
-  linkMostUsesInfo: 'How many people can join with the link before it stops working.',
   // The invite dialog.
   inviteTitle: 'Invite people',
   emailFor: (row: number) => (row === 1 ? 'Email' : `Email ${String(row)}`),

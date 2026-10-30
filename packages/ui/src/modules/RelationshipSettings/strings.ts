@@ -20,7 +20,6 @@ export const strings = {
   shapeFixed: 'The objects and how records link can’t change once the relationship exists.',
   cardinality: 'How records link',
   /** The ⓘ beside the first side's question: what one and many mean. */
-  aboutCardinality: 'How many records each side can link to. One shows a single record; many shows a list.',
   /** Each side's question, one per object: "Each person has" One company or Many companies. */
   eachHas: (singular: string) => `Each ${singular} has`,
   one: (singular: string) => `One ${singular}`,
@@ -52,21 +51,9 @@ export const strings = {
   nameOn: (plural: string) => `Name on ${plural}`,
   /** The second name field of a relationship from an object to itself. */
   reverseNameOn: (plural: string) => `Reverse name on ${plural}`,
-  nameHint: 'Each name shows as a column on its object. API names come from the names and never change.',
+  nameHint: 'Each name shows as a column on its object.',
   nameMissing: 'Name this side.',
   namesEqual: 'Give each side its own name.',
-  /** One side in the sentence under the choices: "People get Company, showing one company." */
-  sideSentence: (onPlural: string, title: string, isOne: boolean, singular: string, plural: string) =>
-    `${onPlural} get ${title === '' ? 'a column' : `“${title}”`}, showing ${howMany(isOne, singular, plural)}.`,
-  /** Both sides of a relationship from an object to itself, in one sentence. */
-  selfSentence: (
-    onPlural: string,
-    first: { readonly title: string; readonly isOne: boolean },
-    second: { readonly title: string; readonly isOne: boolean },
-    singular: string,
-    plural: string,
-  ) =>
-    `${onPlural} get ${first.title === '' ? 'a column' : `“${first.title}”`}, showing ${howMany(first.isOne, singular, plural)}, and ${second.title === '' ? 'a column' : `“${second.title}”`}, showing ${howMany(second.isOne, singular, plural)}.`,
   /** Said in place of an object the viewer can't see or the dialog doesn't hold. */
   unknownSingular: 'record',
   unknownPlural: 'records',

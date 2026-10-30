@@ -30,6 +30,7 @@ import type { FieldAttribute } from '../../fields/types.ts';
 import { memoIntl } from '../../lib/intl-memo.ts';
 import { arraySource } from '../../lib/list-source.ts';
 import { Callout } from '../../molecules/Callout/Callout.tsx';
+import { Disclosure } from '../../molecules/Disclosure/Disclosure.tsx';
 import { Field } from '../../molecules/Field/Field.tsx';
 import { Form, type FormRefusal } from '../../molecules/Form/Form.tsx';
 import { Modal } from '../../molecules/Modal/Modal.tsx';
@@ -251,6 +252,17 @@ const pickerLabel = (entry: PickerType) => OWN_LABELS[entry.key] ?? typeLabelOf(
 /** The settings that land on Form fields by name; the rest are drawn with their own `error`. */
 const FORM_FIELDS: ReadonlySet<string> = new Set(['title', 'apiSlug', 'description', 'offsetDays']);
 
+/** The settings folded under More settings, which opens while one of them is refused. */
+const MORE_FIELDS: ReadonlySet<string> = new Set([
+  'apiSlug',
+  'description',
+  'isRequired',
+  'isUnique',
+  'isMulti',
+  'defaultValue',
+  'offsetDays',
+]);
+
 /**
  * AttributeSettings: a Modal with the attribute's name, type, API name,
  * description, rules and default, the type's own editor drawing the default.
@@ -403,7 +415,6 @@ function AttributeForm({
   const entry = PICKER_TYPES.find((each) => each.key === typeKey);
   const type: AttributeType = entry?.type ?? attribute?.type ?? 'text';
   const [name, setName] = useState(attribute?.title ?? '');
-  const [apiSlug, setApiSlug] = useState<string | undefined>(undefined);
   const [description, setDescription] = useState(attribute?.description ?? '');
   const [isRequired, setRequired] = useState(attribute?.isRequired ?? false);
   const [isUnique, setUnique] = useState(attribute?.isUnique ?? false);
@@ -434,16 +445,16 @@ function AttributeForm({
     (ruleAttributes ?? []).map((each) => [each.id, { type: each.type, isSystem: false }]),
   );
 
-  // Following the name, an API name an archived attribute holds is said, and the next free one is taken instead.
+  // The API name is made from the name, never typed (the owner, 30 October 2026: fewer choices). One an archived
+  // attribute holds quietly takes the next free one, with a way to restore that attribute instead; one a live
+  // attribute holds is refused on the name before anything is sent.
   const derived = name.trim() === '' ? '' : toApiSlug(name.trim(), 'attribute');
-  const archivedHolder =
-    isCreating && apiSlug === undefined && apiNames?.archived.has(derived) === true ? derived : undefined;
-  const slugShown = isCreating
-    ? (apiSlug ??
-      (archivedHolder === undefined
-        ? derived
-        : freeApiSlug(derived, new Set([...(apiNames?.live ?? []), ...(apiNames?.archived ?? [])]))))
-    : attribute.apiSlug;
+  const archivedHolder = isCreating && apiNames?.archived.has(derived) === true ? derived : undefined;
+  const isNameTaken = isCreating && apiNames?.live.has(derived) === true;
+  const freeSlug =
+    archivedHolder === undefined
+      ? undefined
+      : freeApiSlug(derived, new Set([...(apiNames?.live ?? []), ...(apiNames?.archived ?? [])]));
   const allowsMultiple = entry?.allowsMultiple ?? attribute?.isMulti ?? false;
   const allowsUnique = entry?.allowsUnique ?? attribute?.isUnique ?? false;
   const hasDefault = defaultKindsFor(type).length > 0;
@@ -482,6 +493,7 @@ function AttributeForm({
     if (isBusy || isReadOnly) return;
     const problems: FormRefusal[] = [
       ...(name.trim() === '' ? [{ code: 'INPUT_INVALID', message: strings.nameMissing, attributeId: 'title' }] : []),
+      ...(isNameTaken ? [{ code: 'SLUG_TAKEN', message: strings.nameTaken, attributeId: 'title' }] : []),
       ...(draft.kind === 'offset' && daysOf(draft.days) === undefined
         ? [{ code: 'INPUT_INVALID', message: strings.daysInvalid, attributeId: 'offsetDays' }]
         : []),
@@ -507,9 +519,8 @@ function AttributeForm({
       type,
       isMulti,
       title: name.trim(),
-      ...(isCreating && apiSlug !== undefined && apiSlug.trim() !== '' ? { apiSlug: apiSlug.trim() } : {}),
-      // The free API name shown in place of the one an archived attribute holds.
-      ...(isCreating && apiSlug === undefined && archivedHolder !== undefined ? { apiSlug: slugShown } : {}),
+      // The free API name in place of the one an archived attribute holds; else the server derives the same.
+      ...(freeSlug === undefined ? {} : { apiSlug: freeSlug }),
       description: description.trim(),
       isRequired,
       isUnique: allowsUnique && isUnique,
@@ -566,15 +577,34 @@ function AttributeForm({
   );
   const listError = shown.find((refusal) => refusal.attributeId === 'rules')?.message;
   const kinds = ruleKindsFor({ type, isMulti });
+  // More settings: closed on create; open on an edit that set any of them, and whenever one of them is refused.
+  const [isMoreOpen, setMoreOpen] = useState(
+    () =>
+      attribute !== undefined &&
+      (attribute.isRequired ||
+        attribute.isUnique ||
+        (attribute.description ?? '') !== '' ||
+        attribute.defaultValue !== undefined ||
+        (attribute.rules ?? []).length > 0 ||
+        rulesNote !== undefined),
+  );
+  const isMoreRefused = shown.some(
+    (refusal) =>
+      refusal.attributeId !== undefined && (MORE_FIELDS.has(refusal.attributeId) || isRuleField(refusal.attributeId)),
+  );
 
   return (
     <Form
       id={formId}
       isBusy={isBusy}
       refusals={formRefusals}
-      fieldFor={(refusal) =>
-        refusal.attributeId !== undefined && FORM_FIELDS.has(refusal.attributeId) ? refusal.attributeId : undefined
-      }
+      fieldFor={(refusal) => {
+        // No API name field on create: a refusal of it is about the name it was made from.
+        if (isCreating && refusal.attributeId === 'apiSlug') return 'title';
+        return refusal.attributeId !== undefined && FORM_FIELDS.has(refusal.attributeId)
+          ? refusal.attributeId
+          : undefined;
+      }}
       onSubmit={submit}
       label={label}
       focusesFirstField={!isReadOnly}
@@ -594,12 +624,23 @@ function AttributeForm({
         }}
         {...(isReadOnly ? { isReadOnly } : {})}
       />
+      {archivedHolder !== undefined && apiNames !== undefined && (
+        <Button
+          variant="ghost"
+          icon="archive-restore"
+          onPress={() => {
+            apiNames.onRestore(archivedHolder);
+          }}
+        >
+          {strings.restoreArchived(name.trim())}
+        </Button>
+      )}
       <Select
         label={strings.type}
         items={items}
         value={typeKey}
         onChange={chooseType}
-        {...(isCreating ? {} : { isReadOnly: true, readOnlyReason: strings.typeLater })}
+        {...(isCreating ? {} : { isReadOnly: true })}
         {...(isCreating && strings.typeHints[type] !== undefined ? { hint: strings.typeHints[type] } : {})}
         {...(errorOf('type') === undefined ? {} : { error: errorOf('type') })}
       />
@@ -630,145 +671,123 @@ function AttributeForm({
           onInvalidChange={setOptionsInvalid}
         />
       )}
-      {isCreating ? (
+      <Disclosure
+        variant="fields"
+        title={strings.moreSettings}
+        isExpanded={isMoreOpen || isMoreRefused}
+        onExpandedChange={setMoreOpen}
+      >
+        {/* Made from the name and never changed: shown once it exists, to copy. */}
+        {!isCreating && (
+          <Field
+            label={strings.apiName}
+            value={attribute.apiSlug}
+            isReadOnly
+            readOnlyReason={strings.apiNameLocked}
+            suffix={<CopyButton value={attribute.apiSlug} label={strings.copyApiName} isIconOnly variant="ghost" />}
+          />
+        )}
         <Field
-          label={strings.apiName}
-          name="apiSlug"
-          autoComplete="off"
-          maxLength={63}
-          hint={archivedHolder === undefined ? strings.apiNameHint : strings.archivedHolds(archivedHolder)}
-          value={slugShown}
-          {...(archivedHolder === undefined || apiNames === undefined
-            ? {}
-            : {
-                after: (
-                  <Button
-                    variant="ghost"
-                    icon="archive-restore"
-                    onPress={() => {
-                      apiNames.onRestore(archivedHolder);
-                    }}
-                  >
-                    {strings.restoreIt}
-                  </Button>
-                ),
-              })}
-          // Emptied, it follows the name again.
+          label={strings.description}
+          name="description"
+          isMultiline
+          maxLength={500}
+          showCounter={!isReadOnly}
+          value={description}
           onChange={(next) => {
-            setApiSlug(next === '' ? undefined : next);
+            setDescription(next);
+            touch('description');
           }}
+          {...(isReadOnly ? { isReadOnly } : {})}
         />
-      ) : (
-        <Field
-          label={strings.apiName}
-          value={slugShown}
-          isReadOnly
-          readOnlyReason={strings.apiNameLocked}
-          suffix={<CopyButton value={slugShown} label={strings.copyApiName} isIconOnly variant="ghost" />}
-        />
-      )}
-      <Field
-        label={strings.description}
-        name="description"
-        isMultiline
-        maxLength={500}
-        showCounter={!isReadOnly}
-        value={description}
-        onChange={(next) => {
-          setDescription(next);
-          touch('description');
-        }}
-        {...(isReadOnly ? { isReadOnly } : {})}
-      />
-      <Checkbox
-        label={strings.required}
-        description={strings.requiredHint}
-        isSelected={isRequired}
-        isReadOnly={isReadOnly}
-        onChange={(next) => {
-          setRequired(next);
-          touch('isRequired');
-        }}
-        {...(errorOf('isRequired') === undefined ? {} : { error: errorOf('isRequired') })}
-      />
-      {allowsUnique && (
         <Checkbox
-          label={strings.unique}
-          description={strings.uniqueHint}
-          isSelected={isUnique}
+          label={strings.required}
+          isSelected={isRequired}
           isReadOnly={isReadOnly}
           onChange={(next) => {
-            setUnique(next);
-            touch('isUnique');
+            setRequired(next);
+            touch('isRequired');
           }}
-          {...(errorOf('isUnique') === undefined ? {} : { error: errorOf('isUnique') })}
+          {...(errorOf('isRequired') === undefined ? {} : { error: errorOf('isRequired') })}
         />
-      )}
-      {/* Refused for values records share: the way to them, so the switch isn't a dead end. */}
-      {allowsUnique && duplicatesLink !== undefined && hasDuplicates && (
-        <Link href={duplicatesLink.href}>{duplicatesLink.label}</Link>
-      )}
-      {allowsMultiple && (
-        <Checkbox
-          label={strings.allowMultiple}
-          // Its label says what it does; only once made does it need a word (it can't change).
-          {...(isCreating ? {} : { description: strings.allowMultipleLocked })}
-          isSelected={isMulti}
-          isReadOnly={isReadOnly || !isCreating}
-          onChange={(next) => {
-            setMulti(next);
-            // A default made for one value or several starts again.
-            setDraft(NO_DEFAULT);
-            touch('isMulti');
-          }}
-        />
-      )}
-      {hasDefault && (
-        <DefaultSetting
-          // Mounted afresh for each type and multiple setting, so its editor starts from the new shape.
-          key={`${typeKey}:${String(isMulti)}`}
-          type={type}
-          isMulti={isMulti}
-          draft={draft}
-          members={members}
-          options={options}
-          config={config}
-          isRequired={isRequired}
-          readOnlyReason={readOnlyReason}
-          error={errorOf('defaultValue')}
-          onChange={(next) => {
-            setDraft(next);
-            touch('defaultValue');
-          }}
-        />
-      )}
-      {(kinds.length > 0 || rules.length > 0) && (
-        <>
-          <RulesEditor
-            label={strings.rules}
-            rules={rules}
-            kinds={kinds}
-            attribute={{ title: name, type }}
-            newId={ruleId}
+        {allowsUnique && (
+          <Checkbox
+            label={strings.unique}
+            isSelected={isUnique}
             isReadOnly={isReadOnly}
-            // Creating, the rules go with Create attribute: the hint names Save, which only editing shows.
-            {...(isCreating ? {} : { hint: strings.rulesSaveOnSave })}
-            errors={ruleErrors}
             onChange={(next) => {
-              setRules(next);
-              touch('rules');
-              // A setting typed again lets go of the refusal made here; the server's stay until it answers again.
-              if (local.some((refusal) => isRuleField(refusal.attributeId))) {
-                setLocal(local.filter((refusal) => !isRuleField(refusal.attributeId)));
-              }
+              setUnique(next);
+              touch('isUnique');
             }}
-            {...(ruleAttributes === undefined ? {} : { conditionAttributes: ruleAttributes })}
-            {...(ruleEditorProps === undefined ? {} : { editorProps: ruleEditorProps })}
+            {...(errorOf('isUnique') === undefined ? {} : { error: errorOf('isUnique') })}
           />
-          {listError !== undefined && <Callout tone="danger">{listError}</Callout>}
-        </>
-      )}
-      {rulesNote !== undefined && <Callout>{rulesNote}</Callout>}
+        )}
+        {/* Refused for values records share: the way to them, so the switch isn't a dead end. */}
+        {allowsUnique && duplicatesLink !== undefined && hasDuplicates && (
+          <Link href={duplicatesLink.href}>{duplicatesLink.label}</Link>
+        )}
+        {allowsMultiple && (
+          <Checkbox
+            label={strings.allowMultiple}
+            // Its label says what it does; only once made does it need a word (it can't change).
+            {...(isCreating ? {} : { description: strings.allowMultipleLocked })}
+            isSelected={isMulti}
+            isReadOnly={isReadOnly || !isCreating}
+            onChange={(next) => {
+              setMulti(next);
+              // A default made for one value or several starts again.
+              setDraft(NO_DEFAULT);
+              touch('isMulti');
+            }}
+          />
+        )}
+        {hasDefault && (
+          <DefaultSetting
+            // Mounted afresh for each type and multiple setting, so its editor starts from the new shape.
+            key={`${typeKey}:${String(isMulti)}`}
+            type={type}
+            isMulti={isMulti}
+            draft={draft}
+            members={members}
+            options={options}
+            config={config}
+            isRequired={isRequired}
+            readOnlyReason={readOnlyReason}
+            error={errorOf('defaultValue')}
+            onChange={(next) => {
+              setDraft(next);
+              touch('defaultValue');
+            }}
+          />
+        )}
+        {(kinds.length > 0 || rules.length > 0) && (
+          <>
+            <RulesEditor
+              label={strings.rules}
+              rules={rules}
+              kinds={kinds}
+              attribute={{ title: name, type }}
+              newId={ruleId}
+              isReadOnly={isReadOnly}
+              // Creating, the rules go with Create attribute: the hint names Save, which only editing shows.
+              {...(isCreating ? {} : { hint: strings.rulesSaveOnSave })}
+              errors={ruleErrors}
+              onChange={(next) => {
+                setRules(next);
+                touch('rules');
+                // A setting typed again lets go of the refusal made here; the server's stay until it answers again.
+                if (local.some((refusal) => isRuleField(refusal.attributeId))) {
+                  setLocal(local.filter((refusal) => !isRuleField(refusal.attributeId)));
+                }
+              }}
+              {...(ruleAttributes === undefined ? {} : { conditionAttributes: ruleAttributes })}
+              {...(ruleEditorProps === undefined ? {} : { editorProps: ruleEditorProps })}
+            />
+            {listError !== undefined && <Callout tone="danger">{listError}</Callout>}
+          </>
+        )}
+        {rulesNote !== undefined && <Callout>{rulesNote}</Callout>}
+      </Disclosure>
     </Form>
   );
 }
@@ -914,7 +933,6 @@ function DefaultSetting({
           name="offsetDays"
           inputMode="numeric"
           autoComplete="off"
-          hint={strings.daysHint}
           value={draft.days}
           onChange={(days) => {
             onChange({ ...draft, days });
@@ -1022,7 +1040,6 @@ function TypeSettings({ type, config, isReadOnly, error, onChange }: TypeSetting
   return (
     <Select
       label={strings.defaultCurrency}
-      hint={strings.defaultCurrencyHint}
       isRequired
       isSearchable
       searchLabel={strings.searchCurrencies}

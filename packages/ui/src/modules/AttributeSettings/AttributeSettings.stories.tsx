@@ -66,8 +66,8 @@ function openDialog() {
 const inDialog = (dialog: HTMLElement, label: string) => within(dialog).getByLabelText(label);
 
 /**
- * Create: the name first and focused, the API name following it, the type
- * picker with the ten types without setup, Required, Unique for a text, and
+ * Create: the name first and focused, the type picker with the ten types
+ * without setup, and the rest folded under More settings: Required, Unique for a text, and
  * the default through the type's own editor. Create sends what was chosen.
  */
 export const Create: Story = {
@@ -78,7 +78,8 @@ export const Create: Story = {
     const name = inDialog(dialog, 'Name');
     await waitFor(() => expect(name).toHaveFocus());
     await userEvent.keyboard('Café orders');
-    await waitFor(() => expect(inDialog(dialog, 'API name')).toHaveValue('cafe_orders'));
+    // The API name is made from the name: no field for it on create.
+    await expect(within(dialog).queryByLabelText('API name')).toBeNull();
     await userEvent.keyboard('{Meta>}{Enter}{/Meta}');
     await waitFor(() =>
       expect(args.onSubmit).toHaveBeenCalledWith(
@@ -116,6 +117,7 @@ export const DateDefault: Story = {
       return found;
     });
     await userEvent.click(date);
+    await userEvent.click(within(dialog).getByRole('button', { name: 'More settings' }));
     const plusDays = await waitFor(() => within(dialog).getByRole('radio', { name: 'Today plus days' }));
     await userEvent.click(plusDays);
     const days = await waitFor(() => inDialog(dialog, 'Days from today'));
@@ -153,7 +155,6 @@ export const Edit: Story = {
   play: async ({ args, userEvent }) => {
     const dialog = await openDialog();
     await expect(dialog).toHaveAccessibleName('Edit attribute');
-    await expect(dialog).toHaveTextContent('Changing the type comes later.');
     await expect(inDialog(dialog, 'Copy the API name')).toBeInTheDocument();
     await waitFor(() => expect(inDialog(dialog, 'Name')).toHaveFocus());
     await userEvent.keyboard(' (work)');
@@ -203,8 +204,8 @@ export const Refused: Story = {
 const restoreArchived = fn();
 
 /**
- * A name whose API name an archived attribute holds: said on the API name with Restore it, and the next free API
- * name shown and sent, so Create works.
+ * A name an archived attribute holds: Create quietly takes the next free API name (`price_2`), with a quiet way to
+ * restore the archived one instead. A name a live attribute holds is refused on the name.
  */
 export const ArchivedApiName: Story = {
   args: {
@@ -214,15 +215,17 @@ export const ArchivedApiName: Story = {
     const dialog = await openDialog();
     await waitFor(() => expect(inDialog(dialog, 'Name')).toHaveFocus());
     await userEvent.keyboard('Price');
-    await waitFor(() => expect(inDialog(dialog, 'API name')).toHaveValue('price_2'));
-    await expect(dialog).toHaveTextContent('An archived attribute uses price.');
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Restore it' }));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Restore the archived Price' }));
     await expect(restoreArchived).toHaveBeenCalledWith('price');
     await userEvent.click(inDialog(dialog, 'Name'));
     await userEvent.keyboard('{Meta>}{Enter}{/Meta}');
     await waitFor(() =>
       expect(args.onSubmit).toHaveBeenCalledWith(expect.objectContaining({ title: 'Price', apiSlug: 'price_2' })),
     );
+    await userEvent.clear(inDialog(dialog, 'Name'));
+    await userEvent.keyboard('Name');
+    await userEvent.keyboard('{Meta>}{Enter}{/Meta}');
+    await waitFor(() => expect(dialog).toHaveTextContent('Another attribute here has this name. Pick another.'));
   },
 };
 

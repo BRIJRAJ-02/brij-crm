@@ -59,8 +59,6 @@ async function render() {
 describe('Preferences', () => {
   it('reads in plain words', async () => {
     await render();
-    await expect.element(page.getByText('Only on this browser.')).toBeVisible();
-    await expect.element(page.getByRole('button', { name: 'About Time zone' })).toBeVisible();
     await expect.element(page.getByText('Where this workspace opens.')).toBeVisible();
     await expect.element(page.getByText('Show, hide or reorder what’s in your sidebar.')).toBeVisible();
     await expect.element(page.getByText('Kept for you on every device.')).not.toBeInTheDocument();

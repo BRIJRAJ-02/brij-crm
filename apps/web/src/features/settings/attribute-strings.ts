@@ -29,7 +29,7 @@ export const strings = {
   archived: 'Archived',
   archivedAttributes: 'Archived attributes',
   noAttributes: 'No attributes yet',
-  noAttributesText: 'Add one with New attribute. Every table of this object shows it as a column.',
+  noAttributesText: 'Add one with New attribute.',
   noAttributesMemberText: 'A workspace owner or admin can add one.',
   /** Badges (AC-227). */
   primary: 'Primary',

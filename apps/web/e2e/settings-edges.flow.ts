@@ -1,5 +1,5 @@
-// The settings journey's edges (flow pass, 30 October 2026): a new attribute named like an archived one is said
-// on its API name, made with a free one, or the archived one restored instead; Hide from sidebar says so with Undo;
+// The settings journey's edges (flow pass, 30 October 2026): a new attribute named like an archived one is made
+// with a free API name, or the archived one restored instead; Hide from sidebar says so with Undo;
 // Favourites stays while empty, saying how to fill it; archiving an object or an attribute toasts with Undo; an
 // object's settings open its records; and the Invite dialog copies the invite link, turning it on when off.
 import { randomUUID } from 'node:crypto';
@@ -33,7 +33,7 @@ async function archiveAttribute(page: Page, title: string): Promise<void> {
 test.describe('the settings journey’s edges', () => {
   test.skip(({ viewport }) => (viewport?.width ?? 0) < 1000, 'Settings and the sidebar run at desktop width.');
 
-  test('a name an archived attribute holds is said on its API name, made with a free one, or restored', async ({
+  test('a name an archived attribute holds is made with a free API name, or the archived one restored', async ({
     page,
   }) => {
     test.setTimeout(180_000);
@@ -51,14 +51,12 @@ test.describe('the settings journey’s edges', () => {
     await expect(page.getByText('Price restored.')).toBeVisible();
     await archiveAttribute(page, 'Price');
 
-    // A new Price: said on the API name, which takes price_2, so Create works.
+    // A new Price: a quiet way to restore the archived one instead (Create would take price_2).
     await page.getByRole('button', { name: 'New attribute' }).click();
     dialog = page.getByRole('dialog', { name: 'New attribute' });
     await dialog.getByLabel('Name', { exact: true }).fill('Price');
-    await expect(dialog.getByText('An archived attribute uses price.')).toBeVisible();
-    await expect(dialog.getByLabel('API name')).toHaveValue('price_2');
     // Restore it brings the archived one back instead, and closes the dialog.
-    await dialog.getByRole('button', { name: 'Restore it' }).click();
+    await dialog.getByRole('button', { name: 'Restore the archived Price' }).click();
     await expect(dialog).toBeHidden();
     await expect(page.getByText('Price restored.')).toBeVisible();
     await expect(page.getByRole('grid', { name: 'Attributes' }).getByRole('row', { name: /Price/ })).toHaveCount(1);

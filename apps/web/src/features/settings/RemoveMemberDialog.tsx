@@ -1,10 +1,11 @@
 // Brief
 // Purpose: ask before removing someone (spec 0031, AC-816), saying what their removal does: the booking pages that
 // pause, the calendars disconnected, the open tasks and records that name them.
-// Main task: read what happens, optionally pick who takes over their open tasks and records, then Remove member.
+// Main task: read what happens (two lines, the rest behind Show more), see their open tasks and records go to the
+// person removing them (or pick another, or keep them), then Remove member.
 // Leaves out: the removal's rules (the server's), the hand over's progress (Background jobs) and the toast (the page's).
 import { isDataError, type DataLayer, type MemberView, type RemovalPreview } from '@crm/data';
-import { Avatar, Button, Callout, Modal, Select, Skeleton, useDelayedLoading } from '@crm/ui';
+import { Avatar, Button, Callout, Disclosure, Modal, Select, Skeleton, useDelayedLoading } from '@crm/ui';
 import { useEffect, useState } from 'react';
 import { strings } from './members-strings.ts';
 
@@ -13,6 +14,8 @@ export interface RemoveMemberDialogProps {
   readonly data: DataLayer;
   readonly slug: string;
   readonly workspaceName: string;
+  /** The member removing them: their open tasks and records go to this person unless another is picked. */
+  readonly meId: string | undefined;
   /** Who is being removed; undefined while closed. */
   readonly member: MemberView | undefined;
   readonly onClose: () => void;
@@ -32,7 +35,15 @@ type Read =
  * reads what the removal will do and, when open tasks or records name them,
  * offers a person to hand those to.
  */
-export function RemoveMemberDialog({ data, slug, workspaceName, member, onClose, onDone }: RemoveMemberDialogProps) {
+export function RemoveMemberDialog({
+  data,
+  slug,
+  workspaceName,
+  meId,
+  member,
+  onClose,
+  onDone,
+}: RemoveMemberDialogProps) {
   // The last member stays while the Modal plays its exit.
   const [last, setLast] = useState(member);
   if (member !== undefined && member !== last) setLast(member);
@@ -43,6 +54,7 @@ export function RemoveMemberDialog({ data, slug, workspaceName, member, onClose,
       data={data}
       slug={slug}
       workspaceName={workspaceName}
+      meId={meId}
       member={shown}
       isOpen={member !== undefined}
       onClose={onClose}
@@ -55,6 +67,7 @@ function Asked({
   data,
   slug,
   workspaceName,
+  meId,
   member,
   isOpen,
   onClose,
@@ -70,7 +83,11 @@ function Asked({
     let isCurrent = true;
     Promise.all([data.members.removalPreview(slug, member.id), data.members.list(slug)]).then(
       ([preview, people]) => {
-        if (isCurrent) setRead({ status: 'ready', preview, people: people.filter((each) => each.id !== member.id) });
+        if (!isCurrent) return;
+        const others = people.filter((each) => each.id !== member.id);
+        setRead({ status: 'ready', preview, people: others });
+        // Their work goes to the person removing them unless they pick otherwise: nobody's tasks are orphaned.
+        if (preview.openTasks + preview.records > 0 && others.some((each) => each.id === meId)) setHeir(meId ?? null);
       },
       () => {
         if (isCurrent) setRead({ status: 'failed' });
@@ -79,7 +96,7 @@ function Asked({
     return () => {
       isCurrent = false;
     };
-  }, [data, slug, member.id]);
+  }, [data, slug, member.id, meId]);
 
   const commit = () => {
     if (isBusy) return;
@@ -103,7 +120,10 @@ function Asked({
     );
   };
 
-  const effects = read.status === 'ready' ? strings.removalEffects(read.preview) : undefined;
+  // Two sentences said; the rest folded, so the question stays short.
+  const effects = read.status === 'ready' ? strings.removalEffects(read.preview) : [];
+  const said = effects.slice(0, 2).join(' ');
+  const more = effects.slice(2).join(' ');
   return (
     <Modal
       title={strings.removeTitle(member.name, workspaceName)}
@@ -131,11 +151,15 @@ function Asked({
       {read.status === 'ready' && read.preview.requiredDefaults > 0 && (
         <Callout tone="warning">{strings.requiredDefaultsLost(read.preview.requiredDefaults)}</Callout>
       )}
-      {effects !== undefined && effects !== '' && <p>{effects}</p>}
+      {said !== '' && <p>{said}</p>}
+      {more !== '' && (
+        <Disclosure title={strings.showMoreEffects} variant="quiet">
+          <p>{more}</p>
+        </Disclosure>
+      )}
       {read.status === 'ready' && read.preview.openTasks + read.preview.records > 0 && (
         <Select
           label={strings.handTo}
-          hint={strings.handToHint}
           placeholder={strings.handToNobody}
           items={read.people.map((person) => ({
             id: person.id,

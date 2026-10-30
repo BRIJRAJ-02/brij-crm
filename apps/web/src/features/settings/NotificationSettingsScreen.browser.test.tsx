@@ -79,26 +79,21 @@ async function press(control: ReturnType<typeof page.getByRole>) {
 }
 
 describe('Notifications', () => {
-  it('says when an email comes, in an InfoTip on its row, where the name doesn’t say it', async () => {
+  it('names each switch plainly, with one InfoTip on the digest', async () => {
     await render();
     await expect
       .element(page.getByText('Everything shows in your Inbox. Pick what also comes by email.'))
       .toBeVisible();
-    for (const [name, tip] of [
-      ['Mentions', 'When someone @mentions you in a comment or a note.'],
-      ['Replies', 'When someone replies in a comment thread you wrote in.'],
-      [
-        'Daily digest',
-        'One email at 8 in the morning with everything still unread, even kinds switched off above. It uses the time zone your browser had when you turned it on.',
-      ],
-    ] as const) {
+    for (const [name, tip] of [['Daily digest', 'One email at 8am with what’s unread.']] as const) {
       await page.getByRole('button', { name: `About ${name}` }).click();
       await expect.element(page.getByText(tip)).toBeVisible();
       await userEvent.keyboard('{Escape}');
       await expect.element(page.getByText(tip)).not.toBeInTheDocument();
     }
     await expect.element(page.getByRole('switch', { name: 'Task assignments' })).toBeInTheDocument();
-    await expect.element(page.getByRole('button', { name: 'About Task assignments' })).not.toBeInTheDocument();
+    for (const name of ['Mentions', 'Replies', 'Task assignments']) {
+      await expect.element(page.getByRole('button', { name: `About ${name}` })).not.toBeInTheDocument();
+    }
   });
 
   it('says Notifications saved once a switch lands, and Undo puts it back', async () => {

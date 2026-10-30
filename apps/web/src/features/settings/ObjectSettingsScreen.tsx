@@ -3,7 +3,7 @@
 // Main task: add, edit, move, archive and restore its attributes, and rename, restyle, archive or restore it; Open
 // <Plural> goes to its records.
 // Leaves out: types with setup and options (spec 0012, milestone 3), and the schema map (#56).
-import type { AttributeDefinition, MemberSummary, ObjectSummary, Usage } from '@crm/data';
+import { isDataError, type AttributeDefinition, type MemberSummary, type ObjectSummary, type Usage } from '@crm/data';
 import {
   Badge,
   Button,
@@ -18,7 +18,7 @@ import {
   type TableColumn,
   SettingsStack,
 } from '@crm/ui';
-import { useNavigate, useParams } from '@tanstack/react-router';
+import { useNavigate, useParams, useRouteContext } from '@tanstack/react-router';
 import { useState } from 'react';
 import { objectHref } from '../workspace/objects.ts';
 import { useCan } from '../workspace/WorkspacePage.tsx';
@@ -72,7 +72,30 @@ export function ObjectSettingsScreen({
   onSelectAttribute,
 }: ObjectSettingsScreenProps) {
   const navigate = useNavigate();
+  const { data, toasts } = useRouteContext({ from: '__root__' });
   const canManage = useCan('schema.manage');
+  const [isRestoring, setRestoring] = useState(false);
+  /** The archived note's Restore: the same call as the Archived section's and the Configuration tab's. */
+  const restore = () => {
+    if (isRestoring) return;
+    setRestoring(true);
+    data.objects.restore(slug, object.id).then(
+      () => {
+        setRestoring(false);
+        toasts.toast({ tone: 'success', message: strings.restoredToast(object.pluralName) });
+      },
+      (error: unknown) => {
+        setRestoring(false);
+        toasts.toast({
+          tone: 'danger',
+          message: strings.restoreFailed(
+            object.pluralName,
+            isDataError(error) ? error.message : strings.somethingWrong,
+          ),
+        });
+      },
+    );
+  };
   const [isCreating, setCreating] = useState(false);
   const [isMoving, setMoving] = useState(false);
   const showsNew = canManage && tab === 'attributes' && attributesPage !== undefined;
@@ -126,7 +149,19 @@ export function ObjectSettingsScreen({
             (attributesPage === undefined ? (
               // An archived object's attributes come back with it.
               <SettingsStack>
-                <Callout>{strings.archivedObjectAttributes(object.pluralName)}</Callout>
+                <Callout
+                  {...(canManage
+                    ? {
+                        actions: (
+                          <Button icon="archive-restore" isPending={isRestoring} onPress={restore}>
+                            {isRestoring ? strings.restoring : strings.restore}
+                          </Button>
+                        ),
+                      }
+                    : {})}
+                >
+                  {strings.archivedObjectAttributes(object.pluralName)}
+                </Callout>
               </SettingsStack>
             ) : (
               <AttributesTab

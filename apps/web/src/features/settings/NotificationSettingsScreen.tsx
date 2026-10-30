@@ -2,7 +2,7 @@
 // Purpose: Settings › Account › Notifications (spec 0038): what reaches this person by email from this workspace.
 // Main task: turn each kind of email, and the daily digest, on or off; each switch saves at once, then says so in a
 // toast with Undo.
-// Leaves out: the in app inbox (always on, said in the Email InfoTip), other workspaces' settings, push notifications.
+// Leaves out: the in app inbox (always on, said under the Email heading), other workspaces' settings, push notifications.
 import type { InboxSettings, NotificationSettings, NotificationSettingsChange } from '@crm/data';
 import { useNotificationSettings } from '@crm/data/react';
 import { Card, EmptyState, InfoTip, Skeleton, SettingsRow, SettingsSection, Switch } from '@crm/ui';
@@ -11,17 +11,16 @@ import { useEffect, useRef } from 'react';
 import { strings } from './notifications-strings.ts';
 import { SettingsPage } from './SettingsPage.tsx';
 
-/** One email switch: its setting, its name, and an InfoTip saying when it comes where the name doesn't say it. */
+/** One email switch: its setting and its name. */
 interface Kind {
   readonly key: 'emailMentions' | 'emailReplies' | 'emailAssignments';
   readonly title: string;
-  readonly info?: string;
 }
 
-/** The email switches, in order. Task assignments has no InfoTip: it would only repeat its name. */
+/** The email switches, in order. Their names say what they are; no InfoTip repeats them (30 October 2026). */
 const KINDS: readonly Kind[] = [
-  { key: 'emailMentions', title: strings.mentions, info: strings.mentionsInfo },
-  { key: 'emailReplies', title: strings.replies, info: strings.repliesInfo },
+  { key: 'emailMentions', title: strings.mentions },
+  { key: 'emailReplies', title: strings.replies },
   { key: 'emailAssignments', title: strings.assignments },
 ];
 
@@ -103,21 +102,10 @@ export function NotificationSettingsScreen({ slug, settings }: NotificationSetti
     email = (
       // A section like every other settings page's: the heading above the card, and the inbox's promise said
       // in a line rather than hidden in a tip.
-      <SettingsSection
-        title={strings.email}
-        description={
-          <>
-            {strings.emailDescription} <InfoTip label={strings.email}>{strings.emailInfo}</InfoTip>
-          </>
-        }
-      >
+      <SettingsSection title={strings.email} description={strings.emailDescription}>
         <Card>
           {KINDS.map((kind) => (
-            <SettingsRow
-              key={kind.key}
-              title={kind.title}
-              {...(kind.info === undefined ? {} : { meta: <InfoTip label={kind.title}>{kind.info}</InfoTip> })}
-            >
+            <SettingsRow key={kind.key} title={kind.title}>
               <Switch
                 label={kind.title}
                 isLabelHidden

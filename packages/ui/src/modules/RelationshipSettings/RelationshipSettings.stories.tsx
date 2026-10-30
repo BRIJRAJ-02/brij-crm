@@ -108,13 +108,8 @@ export const Create: Story = {
     ).toBeChecked();
     await expect(inDialog(dialog, 'Name on People')).toHaveValue('Company');
     await expect(inDialog(dialog, 'Name on Companies')).toHaveValue('People');
-    // Each setting that needs a word of help has its ⓘ (owner, 22 October 2026).
-    for (const about of ['Related object', 'How records link']) {
-      await expect(within(dialog).getByRole('button', { name: `About ${about}` })).toBeInTheDocument();
-    }
-    await expect(dialog).toHaveTextContent(
-      'People get “Company”, showing one company. Companies get “People”, showing many people.',
-    );
+    // The related object keeps its ⓘ; the choices say enough without one (owner, 30 October 2026).
+    await expect(within(dialog).getByRole('button', { name: 'About Related object' })).toBeInTheDocument();
     await userEvent.click(within(dialog).getByRole('button', { name: /Create relationship/ }));
     await waitFor(() =>
       expect(args.onSubmit).toHaveBeenCalledWith({
@@ -206,9 +201,6 @@ export const SelfRelation: Story = {
     await expect(args.onSubmit).not.toHaveBeenCalled();
     await userEvent.clear(second);
     await userEvent.type(second, 'Reports');
-    await expect(dialog).toHaveTextContent(
-      'People get “Manager”, showing one person, and “Reports”, showing many people.',
-    );
     await userEvent.keyboard('{Meta>}{Enter}{/Meta}');
     await waitFor(() =>
       expect(args.onSubmit).toHaveBeenCalledWith(

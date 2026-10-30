@@ -12,8 +12,6 @@ export const strings = {
   name: 'Name',
   nameMissing: 'Name the attribute.',
   type: 'Type',
-  /** Under the type once it exists (#14 removes it when types can change). */
-  typeLater: 'Changing the type comes later.',
   /** Under the type while creating, for the types whose name alone doesn't say what they hold. */
   typeHints: {
     status: 'Stages a record moves through, like a deal’s pipeline. Each record is at one stage.',
@@ -25,17 +23,17 @@ export const strings = {
   link: 'Link',
   phone: 'Phone',
   apiName: 'API name',
-  apiNameHint: 'Used by the API and integrations. It can’t change once the attribute exists.',
   apiNameLocked: 'API names never change, so links and integrations keep working.',
   copyApiName: 'Copy the API name',
-  /** On create, a name whose API name an archived attribute holds: said on the API name, with Restore it. */
-  archivedHolds: (apiSlug: string) => `An archived attribute uses ${apiSlug}.`,
-  restoreIt: 'Restore it',
+  /** On create, a name an archived attribute holds: it can come back instead of a second one. */
+  restoreArchived: (name: string) => `Restore the archived ${name}`,
+  /** A name a live attribute of this object already goes by. */
+  nameTaken: 'Another attribute here has this name. Pick another.',
+  /** The fold under Name and Type: everything most new attributes never need. */
+  moreSettings: 'More settings',
   description: 'Description',
   required: 'Required',
-  requiredHint: 'New records need a value. Records already empty stay as they are.',
   unique: 'Unique',
-  uniqueHint: 'No two records can share a value.',
   allowMultiple: 'Allow multiple',
   allowMultipleLocked: 'Set when the attribute was made.',
   defaultValue: 'Default value',
@@ -48,14 +46,12 @@ export const strings = {
   defaultDate: 'Default date',
   defaultMember: 'Default member',
   days: 'Days from today',
-  daysHint: 'From 0 to 3,650. New records get today’s date plus this many days.',
   daysInvalid: 'Give a whole number of days from 0 to 3,650.',
   /** The type's settings (AC-230). */
   numberDisplay: 'Display',
   plain: 'Plain',
   percent: 'Percent',
   defaultCurrency: 'Default currency',
-  defaultCurrencyHint: 'New amounts start in this currency; each value keeps its own.',
   searchCurrencies: 'Search currencies',
   currencyItem: (code: string, name: string) => `${code} · ${name}`,
   options: 'Options',

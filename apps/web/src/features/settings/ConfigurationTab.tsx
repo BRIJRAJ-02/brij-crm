@@ -1,5 +1,5 @@
 // Brief
-// Purpose: an object's Configuration tab: its names and look, its API name and id, and archiving it.
+// Purpose: an object's Configuration tab: its names and look, archiving it, and (folded, for developers) its API name and id.
 // Main task: owners and admins rename or restyle the object and save from the SaveBar at the view's foot; or archive
 // (or restore) it from the danger zone.
 // Leaves out: changing the API name (never, AC-224) and the attributes (the Attributes tab).
@@ -9,8 +9,8 @@ import {
   Callout,
   Card,
   CopyButton,
+  Disclosure,
   Field,
-  InfoTip,
   Form,
   type FormRefusal,
   SaveBar,
@@ -236,29 +236,6 @@ export function ConfigurationTab({ slug, object, configuration }: ConfigurationT
           </Form>
         </Card>
       </SettingsSection>
-      <SettingsSection title={strings.idsSection}>
-        <Card>
-          <Field
-            label={strings.apiName}
-            info={
-              <InfoTip label={strings.apiName} example={strings.idsExample}>
-                {strings.idsHelp}
-              </InfoTip>
-            }
-            value={object.apiSlug}
-            isReadOnly
-            readOnlyReason={strings.apiNameLocked}
-            suffix={<CopyButton value={object.apiSlug} label={strings.copyApiName} isIconOnly variant="ghost" />}
-          />
-          <Field
-            label={strings.objectId}
-            value={object.id}
-            isReadOnly
-            readOnlyReason={strings.objectIdReason}
-            suffix={<CopyButton value={object.id} label={strings.copyObjectId} isIconOnly variant="ghost" />}
-          />
-        </Card>
-      </SettingsSection>
       {canManage && (
         <SettingsSection title={object.isArchived ? strings.restoreZone : strings.dangerZone}>
           {object.isArchived ? (
@@ -284,6 +261,25 @@ export function ConfigurationTab({ slug, object, configuration }: ConfigurationT
           )}
         </SettingsSection>
       )}
+      {/* For scripts and integrations only: one quiet fold at the foot (the owner, 30 October 2026). */}
+      <Disclosure title={strings.developer} variant="quiet">
+        <Card>
+          <Field
+            label={strings.apiName}
+            value={object.apiSlug}
+            isReadOnly
+            readOnlyReason={strings.apiNameLocked}
+            suffix={<CopyButton value={object.apiSlug} label={strings.copyApiName} isIconOnly variant="ghost" />}
+          />
+          <Field
+            label={strings.objectId}
+            value={object.id}
+            isReadOnly
+            readOnlyReason={strings.objectIdReason}
+            suffix={<CopyButton value={object.id} label={strings.copyObjectId} isIconOnly variant="ghost" />}
+          />
+        </Card>
+      </Disclosure>
       <ArchiveObjectDialog
         data={data}
         slug={slug}

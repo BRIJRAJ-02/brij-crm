@@ -551,6 +551,7 @@ describe('the Joining tab', () => {
     const counted = layerWith(() => Promise.resolve(), { ...LINK, maxUses: 25 });
     await renderMembers(counted.layer, { liveLink: counted.link });
     await page.getByRole('tab', { name: /Joining/ }).click();
+    await page.getByRole('button', { name: 'Link settings' }).click();
     await page.getByRole('button', { name: /people Most uses/ }).click();
     await page.getByRole('option', { name: '50 people' }).click();
     await expect.element(page.getByText('Invite link saved.')).toBeVisible();
@@ -567,6 +568,7 @@ describe('the Joining tab', () => {
     const counted = layerWith(() => Promise.resolve(), { ...LINK, maxUses: 25 });
     await renderMembers(counted.layer, { liveLink: counted.link });
     await page.getByRole('tab', { name: /Joining/ }).click();
+    await page.getByRole('button', { name: 'Link settings' }).click();
     await page.getByRole('button', { name: /people Most uses/ }).click();
     await page.getByRole('option', { name: '50 people' }).click();
     await expect.element(page.getByRole('button', { name: 'Undo' })).toBeVisible();
@@ -585,6 +587,7 @@ describe('the Joining tab', () => {
     const counted = layerWith(() => Promise.resolve(), { ...LINK, maxUses: 25 });
     await renderMembers(counted.layer, { liveLink: counted.link });
     await page.getByRole('tab', { name: /Joining/ }).click();
+    await page.getByRole('button', { name: 'Link settings' }).click();
     await page.getByRole('button', { name: /people Most uses/ }).click();
     await page.getByRole('option', { name: '50 people' }).click();
     await expect.element(page.getByRole('button', { name: 'Undo' })).toBeVisible();
@@ -597,6 +600,7 @@ describe('the Joining tab', () => {
     const counted = layerWith(() => Promise.resolve(), { ...LINK, maxUses: 25 });
     const { reload } = await renderMembers(counted.layer, { liveLink: counted.link });
     await page.getByRole('tab', { name: /Joining/ }).click();
+    await page.getByRole('button', { name: 'Link settings' }).click();
     await page.getByRole('button', { name: /people Most uses/ }).click();
     await page.getByRole('option', { name: '50 people' }).click();
     await expect.element(page.getByRole('button', { name: 'Undo' })).toBeVisible();
