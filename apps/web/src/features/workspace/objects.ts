@@ -42,8 +42,8 @@ export const capturesHref = (slug: string) => `/w/${slug}/captures/links`;
 
 export const bookingsHref = (slug: string) => `/w/${slug}/bookings/calendar`;
 
-/** The Roster (spec 0037, the Team week): Bookings › Availability's Team view, named outright so the sidebar preloads it. */
-export const rosterHref = (slug: string) => `/w/${slug}/bookings/availability?view=team`;
+/** The Roster (spec 0037, the Team week): Bookings › Roster, a tab of its own since 31 October 2026. */
+export const rosterHref = (slug: string) => `/w/${slug}/bookings/roster`;
 
 /** Settings, Background jobs (spec 0008). */
 export const jobsHref = (slug: string) => `/w/${slug}/settings/jobs`;

@@ -505,9 +505,9 @@ export function createSchedulingAccessStore(deps: SchedulingAccessDeps) {
      */
     teamWeek,
     /**
-     * What Availability › Team's loader needs, in this chunk so the first load carries none of it: the week (`date`'s
+     * What Bookings › Roster's loader needs, in this chunk so the first load carries none of it: the week (`date`'s
      * Monday, else this week's in `timeZone`), its first read settled (a failure shows in the screen), and the members
-     * in the reader's See reach for "Set usual hours for…".
+     * in the reader's See reach for Set usual hours.
      */
     async openTeamWeek(workspace: string, date: string | undefined, search: string, timeZone: string) {
       const week = teamWeek.weekOf(date, timeZone);
