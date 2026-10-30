@@ -226,13 +226,21 @@ test.describe('the table view’s edges', () => {
     await page.getByRole('menuitemradio', { name: 'Count', exact: true }).click();
     await expect(footer.getByRole('button', { name: 'Count 3' })).toBeVisible();
 
+    // A person made here moves the count with no reload: the footer reads again once the create lands (about 1.5 s
+    // after, never per keystroke), keeping "Count 3" on screen until then.
+    const tag = randomUUID().slice(0, 8);
+    await addPerson(page, 'Dee', 'Lane', `dee-${tag}@example.com`);
+    await expect(table(page).getByRole('row').last().getByRole('button', { name: 'Count 4' })).toBeVisible({
+      timeout: 15_000,
+    });
+
     // Kept with the view: a reload shows it again, worked out afresh.
     await page.reload();
-    await expect(table(page).getByRole('row').last().getByRole('button', { name: 'Count 3' })).toBeVisible();
+    await expect(table(page).getByRole('row').last().getByRole('button', { name: 'Count 4' })).toBeVisible();
 
     // None takes it away, and the quiet Calculate is back.
-    await table(page).getByRole('row').last().getByRole('button', { name: 'Count 3' }).click();
+    await table(page).getByRole('row').last().getByRole('button', { name: 'Count 4' }).click();
     await page.getByRole('menuitemradio', { name: 'None', exact: true }).click();
-    await expect(table(page).getByRole('row').last().getByRole('button', { name: 'Count 3' })).toHaveCount(0);
+    await expect(table(page).getByRole('row').last().getByRole('button', { name: 'Count 4' })).toHaveCount(0);
   });
 });

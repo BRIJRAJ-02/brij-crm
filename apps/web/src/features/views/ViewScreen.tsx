@@ -69,12 +69,15 @@ import { ViewChangedDialog } from './ViewChangedDialog.tsx';
 import { memberName, useViewMenu } from './ViewMenu.tsx';
 import { ViewToolbar } from './ViewToolbar.tsx';
 
-/** What the route opened with: the link's draft, read and checked, and what became of it. */
+/**
+ * What the route opened with: the link's draft, or the one this tab kept for the view, read and checked the same
+ * way, and what became of it.
+ */
 export interface OpenedDraft {
   readonly query: DraftQuery | undefined;
-  /** The link's draft couldn't be read (AC-467's toast). */
+  /** The draft couldn't be read (AC-467's toast). */
   readonly unreadable: boolean;
-  /** The link's draft named fields this person can't use (AC-467's Callout). */
+  /** The draft named fields this person can't use, or archived since (AC-467's Callout). */
   readonly dropped: boolean;
 }
 
@@ -723,7 +726,9 @@ export function ViewScreen(props: ViewScreenProps) {
     },
     onDeleted: (gone) => {
       // Undo makes it again from what it was, under the same id when the server takes it (a delete is hard, so the
-      // id is free again), else a new one; its place, lock and default don't come back.
+      // id is free again), else a new one; its place, lock and default don't come back. Known limit: `gone.config` is
+      // this person's copy, which leaves out the columns a field rule hides from them, so a view restored by someone
+      // who can't see every field comes back without those columns (the server keeps no deleted view to restore).
       const restore = (id: string) =>
         data.views.create(slug, {
           id,
