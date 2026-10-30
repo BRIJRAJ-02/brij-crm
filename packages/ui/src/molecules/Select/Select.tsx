@@ -168,42 +168,39 @@ const FOCUS_FIRST_EVENT = 'react-aria-focus';
 const CLEAR = '\u0000clear';
 const CREATE = '\u0000create';
 
+/** Untyped on ListBoxItem, so `reachableWhileDisabled` takes it through a spread. */
+const selectionOnly = { disabledBehavior: 'selection' };
+
 /**
- * What a disabled option (`isDisabled`) adds to its ListBoxItem: the arrows and typeahead land on it, so a keyboard
- * or screen reader user hears it and its reason, while staying in `disabledKeys` keeps Enter, Space and a click from
- * choosing it. React Aria's own disabled option is skipped by the keyboard, reason and all. React Stately reads an
- * item's `disabledBehavior` (its keyboard delegate's and selection manager's `isDisabled`), though ListBoxItem's
- * types leave it out; `Select.browser.test.tsx` pins it, so an upgrade that drops it fails there. A focusable option
- * isn't marked disabled by React Aria, so `render` puts back `aria-disabled` and the `data-disabled` its look keys on.
+ * What a disabled option (`isDisabled`) adds to its ListBoxItem while the list is open: the arrows and typeahead land
+ * on it, so a keyboard or screen reader user hears it and its reason, while staying in `disabledKeys` keeps Enter,
+ * Space and a click from choosing it (#68). React Aria's own disabled option is skipped, reason and all. React Stately
+ * reads an item's `disabledBehavior` (its keyboard delegate's and selection manager's `isDisabled`), though
+ * ListBoxItem's types leave it out, so it comes in through a spread; `Select.browser.test.tsx` pins it. A focusable
+ * option isn't marked disabled by React Aria, so `render` puts back `aria-disabled` and the `data-disabled` its look
+ * keys on. While the list is closed it stays a plain disabled option, so the trigger's arrows and typeahead skip it.
  */
-function reachableWhileDisabled(item: SelectItem): Partial<ListBoxItemProps<SelectItem>> {
-  if (item.isDisabled !== true) return {};
-  // Untyped on ListBoxItem, so it comes in through a spread; onChange's own refusal is the backstop if React Stately
-  // ever reads it differently.
-  const selectionOnly = { disabledBehavior: 'selection' };
-  return {
-    ...selectionOnly,
-    // With the search on, focus stays in the search and React Aria hands the option Enter and Space itself, and its
-    // press then empties the choice for a key it can't select (and closes a single choice). The option swallows
-    // them, so the list stays open on it with the choice as it was.
-    // A Select's options never link, so the option is always a div.
-    render: (props) => {
-      const div = props as ComponentProps<'div'>;
-      return (
-        // eslint-disable-next-line jsx-a11y-x/no-static-element-interactions -- React Aria's props bring role="option"
-        <div
-          {...div}
-          aria-disabled="true"
-          data-disabled=""
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' || event.key === ' ') event.preventDefault();
-            else div.onKeyDown?.(event);
-          }}
-        />
-      );
-    },
-  };
-}
+const reachableWhileDisabled: Partial<ListBoxItemProps<SelectItem>> = {
+  ...selectionOnly,
+  // A Select's options never link, so the option is always a div. With the search on, focus stays in the search
+  // and React Aria hands the option Enter and Space itself, and its press then empties the choice for a key it
+  // can't select; the option swallows them, so the list stays open on it with the choice as it was.
+  render: (props) => {
+    const div = props as ComponentProps<'div'>;
+    return (
+      // eslint-disable-next-line jsx-a11y-x/no-static-element-interactions -- React Aria's props bring role="option"
+      <div
+        {...div}
+        aria-disabled="true"
+        data-disabled=""
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') event.preventDefault();
+          else div.onKeyDown?.(event);
+        }}
+      />
+    );
+  },
+};
 
 function Face({ item, optionStyle }: { readonly item: SelectItem; readonly optionStyle: SelectOptionStyle }) {
   if (optionStyle === 'tag') {
@@ -297,13 +294,11 @@ export function Select({
   const isInPopover = use(InPopover);
   const [query, setQuery] = useState(defaultSearch ?? '');
   const isMultiple = selectionMode === 'multiple';
-  // Without a `value`, the Select keeps its own, so a refused choice (a disabled option) never changes it: React
-  // Aria's own uncontrolled value would take any key its trigger's arrows or typeahead land on.
+  // Without a `value`, the Select keeps its own: React Aria's uncontrolled value took Clear's own key as the value.
   const [own, setOwn] = useState<string | null>(defaultValue ?? null);
-  // The last key pressed in the field, so a closed trigger's arrow that lands on a disabled option steps past it (as
-  // React Aria did when it skipped one) where its typeahead is only refused.
-  const lastKey = useRef('');
   const current = isMultiple ? null : value === undefined ? own : value;
+  // Disabled options are reachable only in the open list; the closed trigger's arrows and typeahead skip them.
+  const [isOpen, setIsOpen] = useState(defaultOpen ?? false);
   const chosen = items.find((item) => item.id === current);
   // Every chosen id: the one in a single choice, all of them in a multiple one.
   const chosenIds: readonly string[] = isMultiple ? (values ?? []) : current === null ? [] : [current];
@@ -355,9 +350,13 @@ export function Select({
 
   // Nothing to choose yet and nothing typed: a list that creates says how to add the first one.
   const emptyText = onCreate !== undefined && typed === '' ? strings.typeToCreate : strings.noMatches;
-  const disabledKeys = items
-    .filter((item) => item.isDisabled === true || (item.isArchived === true && !chosenIds.includes(item.id)))
-    .map((item) => item.id);
+  // While closed, Clear and Create are skipped too: the trigger's arrows would clear or create without the list.
+  const disabledKeys = [
+    ...items
+      .filter((item) => item.isDisabled === true || (item.isArchived === true && !chosenIds.includes(item.id)))
+      .map((item) => item.id),
+    ...(isOpen ? [] : [CLEAR, CREATE]),
+  ];
   const canCreate =
     onCreate !== undefined &&
     !isMultiple &&
@@ -390,7 +389,7 @@ export function Select({
       data-clear={item.id === CLEAR || item.id === CREATE || undefined}
       data-apart={item.isApart === true || undefined}
       data-description={item.description === undefined ? undefined : optionDescription}
-      {...reachableWhileDisabled(item)}
+      {...(isOpen && item.isDisabled === true ? reachableWhileDisabled : {})}
     >
       {({ isSelected }) => (
         <>
@@ -407,27 +406,6 @@ export function Select({
   );
   // Grouped options: those with no group first, then a headed section per group, in the order they come.
   const groups = [...new Set(options.flatMap((item) => (item.group === undefined ? [] : [item.group])))];
-  const special = options.filter((item) => item.id === CLEAR || item.id === CREATE);
-  const ungrouped = options.filter(
-    (item) => item.group === undefined && item.isApart !== true && item.id !== CLEAR && item.id !== CREATE,
-  );
-  const apart = options.filter((item) => item.group === undefined && item.isApart === true);
-  // The options in the list's own order, as its keyboard walks them.
-  const listed =
-    groups.length === 0
-      ? options
-      : [
-          ...ungrouped,
-          ...groups.flatMap((group) => options.filter((item) => item.group === group)),
-          ...apart,
-          ...special,
-        ];
-  // The next option after `refused` that can be chosen, the way an arrow went, if any.
-  const stepPast = (refused: string, step: 1 | -1) => {
-    const at = listed.findIndex((item) => item.id === refused);
-    const ahead = step === 1 ? listed.slice(at + 1) : listed.slice(0, at).reverse();
-    return ahead.find((item) => item.id !== CLEAR && item.id !== CREATE && !disabledKeys.includes(item.id))?.id;
-  };
   const grouped =
     groups.length === 0 ? undefined : (
       <ListBox
@@ -435,7 +413,11 @@ export function Select({
         className={styles.list}
         renderEmptyState={() => <span className={styles.empty}>{emptyText}</span>}
       >
-        {ungrouped.map(option)}
+        {options
+          .filter(
+            (item) => item.group === undefined && item.isApart !== true && item.id !== CLEAR && item.id !== CREATE,
+          )
+          .map(option)}
         {groups.map((group) => (
           <ListBoxSection key={group} id={`group:${group}`} className={styles.section}>
             <Header className={styles.groupHeading}>{group}</Header>
@@ -443,8 +425,8 @@ export function Select({
           </ListBoxSection>
         ))}
         {/* A choice set apart, then Clear and Create, last, as in an ungrouped list. */}
-        {apart.map(option)}
-        {special.map(option)}
+        {options.filter((item) => item.group === undefined && item.isApart === true).map(option)}
+        {options.filter((item) => item.id === CLEAR || item.id === CREATE).map(option)}
       </ListBox>
     );
 
@@ -453,6 +435,8 @@ export function Select({
       ref={listRef}
       className={styles.list}
       items={options}
+      // Its options are drawn again when the list opens or closes: a disabled one is reachable only while open.
+      dependencies={[isOpen]}
       renderEmptyState={() => <span className={styles.empty}>{emptyText}</span>}
     >
       {(item) => (
@@ -463,7 +447,7 @@ export function Select({
           data-clear={item.id === CLEAR || item.id === CREATE || undefined}
           data-apart={item.isApart === true || undefined}
           data-description={item.description === undefined ? undefined : optionDescription}
-          {...reachableWhileDisabled(item)}
+          {...(isOpen && item.isDisabled === true ? reachableWhileDisabled : {})}
         >
           {({ isSelected }) => (
             <>
@@ -502,65 +486,27 @@ export function Select({
       {...(autoFocus ? { autoFocus: true } : {})}
       // Each opening searches afresh (from the key that opened a cell's list, when one did).
       onOpenChange={(isOpen) => {
+        setIsOpen(isOpen);
         if (!isOpen) setQuery(defaultSearch ?? '');
         onOpenChange?.(isOpen);
       }}
       onChange={(next) => {
-        // A disabled option is refused here too: inside the list React Aria refuses it (it stays in disabledKeys),
-        // but the closed trigger's arrows and typeahead set the value without asking, and they now reach it.
         if (Array.isArray(next)) {
           const picked = new Set(next.map(String));
-          if (items.some((item) => item.isDisabled === true && picked.has(item.id) && !chosenIds.includes(item.id)))
-            return;
           onValuesChange?.(items.filter((item) => picked.has(item.id)).map((item) => item.id));
           return;
         }
-        // Only the closed trigger's arrows choose by ArrowLeft or ArrowRight (the open list's run up and down, and
-        // the search's move its caret). They walk every option, Clear and Create too, without the list ever opening,
-        // so an arrow never clears the value or creates an option: those need the open list.
-        const key = lastKey.current;
-        const isArrow = key === 'ArrowRight' || key === 'ArrowLeft';
-        if (isArrow && (next === CLEAR || next === CREATE)) return;
         if (next === CREATE) {
           if (canCreate) onCreate(typed);
           return;
         }
         const id = next === CLEAR || next === null ? null : String(next);
-        const isRefused =
-          id !== null && items.some((item) => item.isDisabled === true && item.id === id && id !== current);
-        if (!isRefused) {
-          setOwn(id);
-          onChange?.(id);
-          return;
-        }
-        // A closed trigger's arrow steps past a disabled option to the next one it can choose; anything else that
-        // lands on one (its typeahead) is refused, and the value stays. With nothing chosen, React Aria starts both
-        // arrows from the first option, so both step forward.
-        const stepped = isArrow ? stepPast(id, current === null || key === 'ArrowRight' ? 1 : -1) : undefined;
-        if (stepped === undefined) return;
-        setOwn(stepped);
-        onChange?.(stepped);
+        setOwn(id);
+        onChange?.(id);
       }}
     >
       {!isLabelHidden && <FieldLabel label={label} aside={labelAside} info={info} isDisabled={isDisabled} />}
-      <AriaButton
-        className={styles.trigger}
-        {...(triggerRef === undefined ? {} : { ref: triggerRef })}
-        // The trigger's key, captured before React Aria's own handler on it sets the value, and forgotten once its
-        // handling is done, so a later change that no key made never steps. A task, not a microtask: microtasks run
-        // between this capture and React Aria's handler, before the key has done anything.
-        render={(props) => (
-          <button
-            {...props}
-            onKeyDownCapture={(event) => {
-              lastKey.current = event.key;
-              setTimeout(() => {
-                lastKey.current = '';
-              }, 0);
-            }}
-          />
-        )}
-      >
+      <AriaButton className={styles.trigger} {...(triggerRef === undefined ? {} : { ref: triggerRef })}>
         <SelectValue<SelectItem> className={styles.value}>
           {({ selectedItems, isPlaceholder, defaultChildren }) => {
             // Several chosen: each by the field's own values, in the list's order.
