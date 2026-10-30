@@ -25,6 +25,8 @@
 // backoff, the try told to the task so its last records the email failed.
 // On the worker with the relay on, it also takes `crm_realtime_cutoff` (late
 // trap #41): removed members cut off the live channel, which the relay queues.
+// A failed try queues the next itself under the same key (at most five
+// minutes on, the last at the token's hour), so the tries cover the hour.
 import { QueuePayload } from '@crm/contracts';
 import type { Runner } from '@crm/core';
 import type { CalendarSyncInput, CalendarSyncOutcome, DailyCleanupInput, DailyCleanupReport } from '@crm/core/system';
@@ -32,7 +34,7 @@ import type { DigestMember, QueueConnection } from '@crm/db';
 import { Logger, run, type Runner as GraphileRunner, type Task } from 'graphile-worker';
 import * as z from 'zod';
 import { errorFields } from '../log.ts';
-import { CUTOFF_TASK, type CutOffTry } from '../realtime/cutoff.ts';
+import { CUTOFF_TASK, type CutOffResult, type CutOffTry } from '../realtime/cutoff.ts';
 import { BOOKING_MAIL_TASK } from './booking-mail.ts';
 import { EMAIL_TASK, EmailPayload, type EmailRun, type EmailTry } from './email.ts';
 import { NOTIFICATION_EMAIL_TASK } from './notification-email.ts';
@@ -188,10 +190,11 @@ export interface JobRunnersOptions {
   /**
    * The durable cut off (late trap #41): one queued `crm_realtime_cutoff`
    * (`runCutOff` with the worker's Centrifugo), told which try this is. With
-   * it, the light runner takes that task; it throws plainly for a retry. Only
-   * the worker passes it, beside its relay, which queues the rows.
+   * it, the light runner takes that task; a `retry` is queued again under the
+   * row's key, and only a re-queue that fails throws for Graphile's backoff.
+   * Only the worker passes it, beside its relay, which queues the rows.
    */
-  readonly cutOff?: (payload: unknown, attempt: CutOffTry) => Promise<unknown>;
+  readonly cutOff?: (payload: unknown, attempt: CutOffTry) => Promise<CutOffResult>;
   /**
    * Hears every task call start and end (the worker's idle clock starts
    * again, spec 0008's sleep): a slice, or the daily task.
@@ -439,16 +442,41 @@ function emailTask(options: JobRunnersOptions, email: NonNullable<JobRunnersOpti
 
 /**
  * The cut off task: one try, told which it is. `runCutOff` logs its own
- * failure with ids only and throws a plain message, so anything thrown is
- * thrown on as a plain one for Graphile's backoff.
+ * failure with ids only; a `retry` is queued again here under the row's key
+ * (`replace`: the running row gives its key up and ends when this returns, so
+ * one row waits), its run time capped by `runCutOff` so the tries cover the
+ * token's hour. Anything thrown, or a re-queue that fails, is thrown on as a
+ * plain message for Graphile's backoff on this row.
  */
-function cutOffTask(cutOff: NonNullable<JobRunnersOptions['cutOff']>): Task {
+function cutOffTask(options: JobRunnersOptions, cutOff: NonNullable<JobRunnersOptions['cutOff']>): Task {
   return async (payload, helpers) => {
+    const plain = 'Cutting removed members off the live channel failed; the worker log has the workspace id.';
+    let result: CutOffResult;
     try {
-      await cutOff(payload, { attempt: helpers.job.attempts, maxAttempts: helpers.job.max_attempts });
+      result = await cutOff(payload, { attempt: helpers.job.attempts, maxAttempts: helpers.job.max_attempts });
     } catch {
-      throw new Error('Cutting removed members off the live channel failed; the worker log has the workspace id.');
+      throw new Error(plain);
     }
+    if (result.outcome !== 'retry') return;
+    // The error's class only, logged here and not thrown on: a database error's text can quote what it was given.
+    let failure: string | undefined;
+    try {
+      await helpers.addJob(CUTOFF_TASK, result.payload, {
+        ...(helpers.job.key === null ? {} : { jobKey: helpers.job.key, jobKeyMode: 'replace' as const }),
+        runAt: result.runAt,
+        maxAttempts: helpers.job.max_attempts,
+      });
+    } catch (error) {
+      failure = error instanceof Error ? error.name : 'unknown';
+    }
+    if (failure === undefined) return;
+    const last = helpers.job.attempts >= helpers.job.max_attempts;
+    options.log[last ? 'error' : 'warn']('realtime.cutoff.requeue_failed', {
+      workspaceId: result.payload.workspaceId,
+      attempt: helpers.job.attempts,
+      error: failure,
+    });
+    throw new Error(plain);
   };
 }
 
@@ -555,7 +583,7 @@ export async function startJobRunners(options: JobRunnersOptions): Promise<JobRu
                   }),
               ...(cutOff === undefined
                 ? {}
-                : { [CUTOFF_TASK]: counted(cutOffTask(cutOff), inFlight, options.onActivity) }),
+                : { [CUTOFF_TASK]: counted(cutOffTask(options, cutOff), inFlight, options.onActivity) }),
             },
             // The daily cleanup's line, and the digest's hourly one beside the email task that sends it.
             ...(daily === undefined && notificationEmail === undefined
