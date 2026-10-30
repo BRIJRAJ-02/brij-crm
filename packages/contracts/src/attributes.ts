@@ -251,6 +251,29 @@ export type AttributeWriteInput = z.infer<typeof AttributeWriteInput>;
  * unknown or hidden object or attribute is 404 `NOT_FOUND`, like a
  * workspace you're not in.
  */
+/** Which attribute's uses and counts to read. */
+export const AttributeImpactInput = WorkspaceScoped.extend({ attributeId: Uuid });
+/** Which attribute's uses and counts to read. */
+export type AttributeImpactInput = z.infer<typeof AttributeImpactInput>;
+
+/**
+ * What changing or archiving an attribute touches (flow pass, 30 October 2026): the views using it (shared ones and
+ * the reader's own, each with how: grouping, filtering or sorting), the forms filing onto it, and how many other
+ * attributes' rules look at it. For a reader who sees every record of the object: `emptyCount` (live records with
+ * no value), `optionCounts` (a select or status: live records holding each option, by option id) and
+ * `duplicateCount` (a type that can be unique: values more than one live record shares).
+ */
+export const AttributeImpact = z.object({
+  views: z.array(z.object({ id: Uuid, name: z.string(), uses: z.array(z.enum(['group', 'filter', 'sort'])).min(1) })),
+  forms: z.array(z.object({ id: Uuid, name: z.string() })),
+  rules: z.number().int().min(0),
+  emptyCount: z.number().int().min(0).optional(),
+  optionCounts: z.record(Uuid, z.number().int().min(0)).optional(),
+  duplicateCount: z.number().int().min(0).optional(),
+});
+/** What changing or archiving an attribute touches. */
+export type AttributeImpact = z.infer<typeof AttributeImpact>;
+
 export const attributesContract = {
   list: oc.input(ListAttributesInput).output(z.array(AttributeDefinition)),
   create: oc.input(CreateAttributeInput).output(AttributeDefinition),
@@ -258,4 +281,6 @@ export const attributesContract = {
   reorder: oc.input(ReorderAttributeInput).output(z.array(AttributeDefinition)),
   archive: oc.input(AttributeWriteInput).output(z.array(AttributeDefinition)),
   restore: oc.input(AttributeWriteInput).output(z.array(AttributeDefinition)),
+  /** Read only: `FORBIDDEN` without `schema.manage`, `NOT_FOUND` for an attribute the reader can't see. */
+  impact: oc.input(AttributeImpactInput).output(AttributeImpact),
 };

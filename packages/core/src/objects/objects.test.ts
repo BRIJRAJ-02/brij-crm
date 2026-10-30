@@ -163,6 +163,31 @@ describe('creating an object (AC-223, AC-244, AC-245)', () => {
     expect((await listObjects(scope)).some((object) => object.id === refused.id)).toBe(false);
   });
 
+  it('makes a Stage with its stages and a Priority with its levels (flow pass, 30 Oct 2026)', async () => {
+    const { scope } = await workspace();
+    const made = await createObject(scope, {
+      ...projects(),
+      attributes: [
+        {
+          title: 'Stage',
+          type: 'status',
+          options: [{ id: newId(), label: 'Not started', hue: 'gray', outcome: 'open' }],
+        },
+        { title: 'Priority', type: 'select', options: [{ id: newId(), label: 'Low', hue: 'gray' }] },
+        { title: 'Owner', type: 'actor_reference' },
+      ],
+    });
+    const own = (await listObjectAttributes(scope, made.id)).filter((attribute) => !attribute.isSystem);
+    expect(
+      own.map((attribute) => [attribute.title, attribute.type, attribute.options?.map((option) => option.label)]),
+    ).toEqual([
+      ['Name', 'text', undefined],
+      ['Stage', 'status', ['Not started']],
+      ['Priority', 'select', ['Low']],
+      ['Owner', 'actor_reference', undefined],
+    ]);
+  });
+
   it('answers the same object for the same id again, writing nothing twice; another actor gets ID_TAKEN', async () => {
     const { scope } = await workspace();
     const input = projects();

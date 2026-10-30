@@ -344,6 +344,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
         mutationIds.push(input.mutationId);
         return behaviour.attributeWrite();
       }),
+      impact: os.attributes.impact.handler(() => notServed()),
       restore: os.attributes.restore.handler(({ input }) => {
         mutationIds.push(input.mutationId);
         return behaviour.attributeWrite();

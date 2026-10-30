@@ -88,6 +88,16 @@ export const strings = {
   somethingWrong: 'Something went wrong. Try again in a moment.',
   /** The archive confirm (spec 0012, screens). */
   confirmTitle: (title: string) => `Archive ${title}?`,
+  /** The archive confirm's one line of what uses it (flow pass, 30 October 2026). */
+  usedBy: (uses: string) => `Used by: ${uses}`,
+  groupedBy: (view: string) => `${view} (group by)`,
+  /** Under Required and Unique once ticked: what Save would meet, linked to the records. */
+  emptyRecords: (count: number) => (count === 1 ? '1 record is empty' : `${String(count)} records are empty`),
+  optionArchived: (label: string) => `${label} archived.`,
+  /** An archived option's records moved where its menu said. */
+  recordsMoved: (label: string) => `Moving its records to ${label}.`,
+  moveRecordsFailed: (label: string, why: string) => `Couldn’t move its records to ${label}. ${why}`,
+  sharedValues: (count: number) => (count === 1 ? '1 value is shared' : `${String(count)} values are shared`),
   confirmText: 'It leaves every table and form. Its values are kept and come back if you restore it.',
   confirmBoth:
     'It leaves every table and form. Its values are kept and come back if you restore it. It is one end of a relationship: the other end is archived with it, and both come back together.',

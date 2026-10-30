@@ -207,6 +207,7 @@ export {
   type EditAttributeInput,
   type NewAttributeOption,
 } from './attributes/attributes.ts';
+export { attributeImpact } from './attributes/impact.ts';
 export {
   archiveOption,
   createOption,

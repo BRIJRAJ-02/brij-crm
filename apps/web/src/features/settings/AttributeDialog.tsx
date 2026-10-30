@@ -13,6 +13,7 @@ import {
   toFieldAttribute,
   type AttributeChanges,
   type AttributeDefinition,
+  type AttributeImpact,
   type MemberSummary,
   type NewOption,
   type ObjectSummary,
@@ -35,6 +36,8 @@ import { useMatch, useRouteContext } from '@tanstack/react-router';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { strings } from './attribute-strings.ts';
 import { defaultArchivedNotice } from './default-notice.ts';
+import { emptyRecordsHref } from './impact-lines.ts';
+import { moveOptionRecords } from './move-option-records.ts';
 import { NewObjectDialog } from './NewObjectDialog.tsx';
 import { formRefusals } from './refusals.ts';
 import { requiredWhenLine } from './required-when.ts';
@@ -242,6 +245,25 @@ export function AttributeDialog({
       setBackTitle(undefined);
     }
   }
+  // An existing attribute's uses and counts (flow pass, 30 October 2026), read as its settings open: "N records" on
+  // each option, and what Required and Unique would meet. Settings managers only; a failed read shows nothing.
+  const [held, setHeld] = useState<{ readonly id: string; readonly impact: AttributeImpact } | undefined>(undefined);
+  const impactFor = isOpen && canManage && attribute !== undefined && !attribute.isSystem ? attribute.id : undefined;
+  // Only the read for this opening's attribute counts; another's (or a closed dialog's) shows nothing.
+  const impact = held !== undefined && held.id === impactFor ? held.impact : undefined;
+  useEffect(() => {
+    if (impactFor === undefined) return;
+    let isCurrent = true;
+    data.attributes.impact(slug, impactFor).then(
+      (next) => {
+        if (isCurrent) setHeld({ id: impactFor, impact: next });
+      },
+      () => undefined,
+    );
+    return () => {
+      isCurrent = false;
+    };
+  }, [data, slug, impactFor]);
   const displays = useMemo(() => toActorDisplays(members), [members]);
   const ruleAttributes = useMemo(
     () => (objectAttributes === undefined ? undefined : conditionAttributesOf(objectAttributes)),
@@ -384,27 +406,45 @@ export function AttributeDialog({
           onMove: (optionId, position) => {
             track(optionId, () => data.options.reorder(slug, objectId, optionId, position));
           },
-          onArchive: (optionId) => {
+          onArchive: (optionId, moveTo) => {
             track(optionId, () =>
               data.options.archive(slug, objectId, optionId).then(() => {
-                // The default named it (late trap #34): new records quietly stopped getting it. Said once it's done.
-                // With Undo: archiving asks nothing first, and restoring brings the default back exactly.
-                const said = defaultArchivedNotice(attribute, options, optionId);
-                if (said !== undefined) {
-                  toasts.toast(
-                    {
-                      tone: 'info',
-                      message: said,
-                      action: {
-                        label: strings.undo,
-                        onAction: () => {
-                          track(optionId, () => data.options.restore(slug, objectId, optionId));
-                        },
-                      },
+                // Its records go where the menu said, as a background bulk edit (spec 0022's path).
+                if (moveTo !== undefined) {
+                  const to = options.find((option) => option.id === moveTo)?.label ?? '';
+                  moveOptionRecords(data, slug, {
+                    objectId,
+                    attributeId: attribute.id,
+                    from: optionId,
+                    to: moveTo,
+                  }).then(
+                    () => {
+                      toasts.toast({ tone: 'success', message: strings.recordsMoved(to) });
                     },
-                    { timeout: 10_000 },
+                    (error: unknown) => {
+                      toasts.toast({ tone: 'danger', message: strings.moveRecordsFailed(to, refusedWords(error)) });
+                    },
                   );
                 }
+                // The default named it (late trap #34): new records quietly stopped getting it. Said once it's done.
+                // With Undo: archiving asks nothing first, and restoring brings the default back exactly.
+                // Always with Undo (flow pass, 30 October 2026): archiving asks nothing first. The default's
+                // notice when it named the option (late trap #34), else plainly what happened.
+                const label = options.find((option) => option.id === optionId)?.label ?? '';
+                const said = defaultArchivedNotice(attribute, options, optionId) ?? strings.optionArchived(label);
+                toasts.toast(
+                  {
+                    tone: 'info',
+                    message: said,
+                    action: {
+                      label: strings.undo,
+                      onAction: () => {
+                        track(optionId, () => data.options.restore(slug, objectId, optionId));
+                      },
+                    },
+                  },
+                  { timeout: 10_000 },
+                );
               }),
             );
           },
@@ -413,6 +453,8 @@ export function AttributeDialog({
           },
           pending,
           errors: optionErrors,
+          ...(impact?.optionCounts === undefined ? {} : { recordCounts: impact.optionCounts }),
+          canMoveRecords: attribute.type === 'status' || (attribute.type === 'select' && !attribute.isMulti),
         };
 
   // A side of a two way relationship opens the relationship dialog in edit mode (spec 0014).
@@ -479,6 +521,17 @@ export function AttributeDialog({
         {...(rulesNote === undefined ? {} : { rulesNote })}
         {...(apiNames === undefined ? {} : { apiNames })}
         {...(duplicatesLink === undefined ? {} : { duplicatesLink })}
+        {...(attribute === undefined || duplicatesLink === undefined || (impact?.emptyCount ?? 0) === 0
+          ? {}
+          : {
+              requiredMeets: {
+                label: strings.emptyRecords(impact?.emptyCount ?? 0),
+                href: emptyRecordsHref(duplicatesLink.href, attribute.id),
+              },
+            })}
+        {...(duplicatesLink === undefined || (impact?.duplicateCount ?? 0) === 0
+          ? {}
+          : { uniqueMeets: { label: strings.sharedValues(impact?.duplicateCount ?? 0), href: duplicatesLink.href } })}
         // Relationship chosen in the type picker: its step takes this dialog's place, in the same Modal (spec 0014).
         {...(attribute === undefined && relationshipDraft !== undefined
           ? {

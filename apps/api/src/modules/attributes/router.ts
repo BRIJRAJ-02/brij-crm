@@ -1,5 +1,6 @@
 import {
   archiveAttributes,
+  attributeImpact,
   createAttribute,
   editAttribute,
   listObjectAttributes,
@@ -65,6 +66,9 @@ export const attributesRouter = member.attributes.router({
     commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
       archiveAttributes(context.scope, { attributeId: input.attributeId }, hooks),
     ),
+  ),
+  impact: member.attributes.impact.handler(({ context, input }) =>
+    attributeImpact(context.scope, { attributeId: input.attributeId }),
   ),
   restore: member.attributes.restore.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, (hooks) =>

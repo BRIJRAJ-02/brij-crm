@@ -22,6 +22,7 @@ import type {
   SyncScope,
   SyncStarted,
   AttributeDefinition,
+  AttributeImpact,
   BookAsHostInput,
   BookingAssignment,
   ReassignedBooking,
@@ -355,6 +356,7 @@ export type {
   ValidationRuleInput,
   ValidationRuleView,
   AttributeDefinition,
+  AttributeImpact,
   AttributeOption,
   AttributeRelationship,
   AttributeType,
@@ -622,7 +624,7 @@ export {
   liveOptionCount,
   type BoardSettings,
 } from '@crm/contracts/board';
-export { DRAFT_LINK_MAX, FILTER_EDIT_MS, type DraftQuery } from './views/draft.ts';
+export { draftParam, DRAFT_LINK_MAX, FILTER_EDIT_MS, type DraftQuery } from './views/draft.ts';
 export type {
   NewView,
   SavedViewSnapshot,
@@ -4315,6 +4317,13 @@ export function createDataLayer({
             call((options) => api.attributes.list({ workspace, objectId, includeArchived: true }, options)),
           ),
         ),
+      /**
+       * What changing or archiving an attribute touches (flow pass, 30 October 2026): the views, forms and rules
+       * using it, and for a reader who sees every record the empty, per option and shared value counts. Read each
+       * time its settings or archive confirm open, never cached: the counts move with every edit.
+       */
+      impact: (workspace: string, attributeId: string): Promise<AttributeImpact> =>
+        beforeRead(workspace).then(() => call((options) => api.attributes.impact({ workspace, attributeId }, options))),
       /** A new attribute's id: mint it once per dialog, and send the same one again on a retry. */
       newId: () => mintId(),
       /**

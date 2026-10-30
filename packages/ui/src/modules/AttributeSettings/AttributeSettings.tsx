@@ -100,10 +100,15 @@ export interface AttributeSettingsOptionWrites {
   readonly onAdd: (option: OptionsEditorOption) => void;
   readonly onChange: (id: string, change: OptionsEditorChange) => void;
   readonly onMove: (id: string, position: number) => void;
-  readonly onArchive: (id: string) => void;
+  /** `moveTo`: the option the records holding it go to, chosen in its menu (see OptionsEditor). */
+  readonly onArchive: (id: string, moveTo?: string) => void;
   readonly onRestore: (id: string) => void;
   readonly pending?: ReadonlySet<string>;
   readonly errors?: Readonly<Partial<Record<string, string>>>;
+  /** Live records holding each option, by id: "N records" per row, and where they go as one archives. */
+  readonly recordCounts?: Readonly<Record<string, number>>;
+  /** The records of an archived option may move to another (a single select or a status). */
+  readonly canMoveRecords?: boolean;
 }
 
 /** What the person chose, and which settings they changed (an edit sends only those). */
@@ -205,6 +210,12 @@ export interface AttributeSettingsProps {
    * archives this attribute and opens a create with the same name. None when absent.
    */
   readonly onRecreate?: () => void;
+  /**
+   * Editing: what ticking Required or Unique would meet (flow pass, 30 October 2026), each `{ label, href }` linking
+   * to the records ("12 records are empty", "3 values are shared"), shown under its box once ticked. None when absent.
+   */
+  readonly requiredMeets?: { readonly label: string; readonly href: string };
+  readonly uniqueMeets?: { readonly label: string; readonly href: string };
 }
 
 /** What the member editor's search answers (its list type is the field set's union of display shapes). */
@@ -306,6 +317,8 @@ export function AttributeSettings({
   step,
   onArchive,
   onRecreate,
+  requiredMeets,
+  uniqueMeets,
 }: AttributeSettingsProps) {
   const formId = useId();
   const isReadOnly = readOnlyReason !== undefined;
@@ -383,6 +396,8 @@ export function AttributeSettings({
           apiNames={apiNames}
           duplicatesLink={duplicatesLink}
           onRecreate={isReadOnly ? undefined : onRecreate}
+          requiredMeets={requiredMeets}
+          uniqueMeets={uniqueMeets}
         />
       )}
     </Modal>
@@ -413,6 +428,8 @@ interface AttributeFormProps {
   readonly apiNames: AttributeSettingsApiNames | undefined;
   readonly duplicatesLink: AttributeSettingsProps['duplicatesLink'];
   readonly onRecreate: (() => void) | undefined;
+  readonly requiredMeets: AttributeSettingsProps['requiredMeets'];
+  readonly uniqueMeets: AttributeSettingsProps['uniqueMeets'];
 }
 
 function AttributeForm({
@@ -438,6 +455,8 @@ function AttributeForm({
   apiNames,
   duplicatesLink,
   onRecreate,
+  requiredMeets,
+  uniqueMeets,
 }: AttributeFormProps) {
   const isCreating = attribute === undefined;
   const isReadOnly = readOnlyReason !== undefined;
@@ -764,6 +783,10 @@ function AttributeForm({
           }}
           {...(errorOf('isRequired') === undefined ? {} : { error: errorOf('isRequired') })}
         />
+        {/* Ticked now on an attribute that wasn't required: the records it would meet, one press away. */}
+        {!isCreating && !attribute.isRequired && isRequired && requiredMeets !== undefined && (
+          <Link href={requiredMeets.href}>{requiredMeets.label}</Link>
+        )}
         {allowsUnique && (
           <Checkbox
             label={strings.unique}
@@ -776,6 +799,12 @@ function AttributeForm({
             {...(errorOf('isUnique') === undefined ? {} : { error: errorOf('isUnique') })}
           />
         )}
+        {allowsUnique &&
+          !isCreating &&
+          !attribute.isUnique &&
+          isUnique &&
+          uniqueMeets !== undefined &&
+          !hasDuplicates && <Link href={uniqueMeets.href}>{uniqueMeets.label}</Link>}
         {/* Refused for values records share: the way to them, so the switch isn't a dead end. */}
         {allowsUnique && duplicatesLink !== undefined && hasDuplicates && (
           <Link href={duplicatesLink.href}>{duplicatesLink.label}</Link>
@@ -1175,6 +1204,8 @@ function OptionsSetting({
         onRestore={writes.onRestore}
         {...(writes.pending === undefined ? {} : { pending: writes.pending })}
         {...(writes.errors === undefined ? {} : { errors: writes.errors })}
+        {...(writes.recordCounts === undefined ? {} : { recordCounts: writes.recordCounts })}
+        {...(writes.canMoveRecords === true ? { canMoveRecords: true } : {})}
       />
     );
   }
