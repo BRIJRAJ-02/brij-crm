@@ -27,7 +27,8 @@ export const MAX_NOTIFICATION_CURSOR = 256;
 
 /**
  * Why a member was notified (decision 8); `form_submission`, a form they're told about got one (spec 0023, AC-568);
- * `join_request`, someone asks to join (flow pass); `task_due`, a task assigned to them is due today (migration 0135).
+ * `join_request`, someone asks to join (flow pass); `task_due`, a task assigned to them is due today (migration 0135);
+ * `automation`, an automation's notify action (parity #53).
  */
 export const NotificationKind = z.enum([
   'mention',
@@ -36,6 +37,7 @@ export const NotificationKind = z.enum([
   'form_submission',
   'join_request',
   'task_due',
+  'automation',
 ]);
 /** Why a member was notified. */
 export type NotificationKind = z.infer<typeof NotificationKind>;

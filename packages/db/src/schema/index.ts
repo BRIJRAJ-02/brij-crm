@@ -57,4 +57,5 @@ export { bookingPageRotations, rotationAssignments, rotationMembers, rotationRos
 export { memberBookingLimits, scheduleDelegations } from './scheduling.ts';
 export { accessRules, recordRules, teamMembers, teams } from './teams.ts';
 export { routingDecisions } from './routing.ts';
+export { automationRuns, automations } from './automations.ts';
 export { importRowOutcome, importRows, imports, importStatus } from './imports.ts';

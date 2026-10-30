@@ -18,6 +18,7 @@ import type { CaptureListState, CaptureListView } from './captures/list.ts';
 import type { HomeHeld, HomeMetricsState, HomeRecentsState, TeamTodayState } from './home/store.ts';
 import type { RoutingReportHeld, RoutingReportState } from './routing/reports.ts';
 import type { PageRulesHeld } from './routing/page-rules.ts';
+import type { AutomationsHeld, AutomationsState } from './automations/store.ts';
 import type {
   EmailPreferencesState,
   EmailPreferencesStore,
@@ -373,6 +374,11 @@ export function useBookingsCalendar(view: BookingsCalendarHeld): BookingsCalenda
  */
 export function useMeetings(list: MeetingsHeld): MeetingsState {
   return useRetained(list);
+}
+
+/** Settings › Automations (parity #53): the held list and run log, re-rendering as they change. Held while mounted. */
+export function useAutomations(held: AutomationsHeld): AutomationsState {
+  return useRetained(held);
 }
 
 /** Home's Team today (spec 0041), re-rendering when it is read again. Held while the screen is mounted. */

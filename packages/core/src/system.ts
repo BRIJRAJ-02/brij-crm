@@ -5,7 +5,17 @@
 // import only in the worker entry, `apps/api/src/jobs/**`,
 // `apps/api/src/realtime/**` and `packages/core/scripts/**`.
 export { audiences } from './access/audiences.ts';
-export { enterAsActor, systemScope, type ActorDoorDeps } from './access/door.ts';
+export { enterAsActor, enterAsAutomation, systemScope, type ActorDoorDeps } from './access/door.ts';
+// Automations (parity #53): the worker's `crm_automation` task runs the queued runs as the member each runs as; the
+// due sweep queues the tasks that came due; the daily cleanup prunes old runs and long deleted automations.
+export {
+  derivedTaskId,
+  pruneAutomations,
+  queueDueAutomations,
+  runAutomationQueue,
+  type AutomationLog,
+  type AutomationRunDeps,
+} from './automations/run.ts';
 export { SYSTEM_ACTOR } from './engine/scope.ts';
 // The daily cleanup's fan out (spec 0008, milestone 3): lists every workspace and starts a system job in each.
 export {

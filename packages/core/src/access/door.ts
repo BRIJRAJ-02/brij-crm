@@ -367,6 +367,25 @@ export async function enterAsActor(
 }
 
 /**
+ * The scope an automation's actions run in (parity #53): the access of the member it runs as, as they stand now (their
+ * current role and rules, so a demoted member's automations shrink with them), with the actor stamped `automation`
+ * and the automation's id, so history and tasks say "Automation" rather than naming the person. Never wider than
+ * that member: the access is the one `enterAsActor` would mint for them. NOT_FOUND for a member removed since, a
+ * deleted workspace and a role the code doesn't know. Exported only from `@crm/core/system`.
+ */
+export async function enterAsAutomation(
+  deps: ActorDoorDeps,
+  input: { readonly workspaceId: string; readonly automationId: string; readonly memberId: string },
+): Promise<EngineScope> {
+  const { workspaceId, automationId, memberId } = input;
+  if (!isUuid(workspaceId) || !isUuid(automationId) || !isUuid(memberId)) throw notFound();
+  const found = await activeMember(deps.db, workspaceId, { memberId }, deps.rules);
+  if (found === undefined) throw notFound();
+  const scope = memberScope(deps, workspaceId, found.member, found.rules);
+  return rescope(scope, { type: 'automation', id: automationId }, scope.access);
+}
+
+/**
  * An active member's scope inside a transaction already open on their workspace, as they stand now: what a system
  * job uses to cut what it tells one member to what that member may see (a form's submission notice, late trap #19).
  * Reads their row and their rules through `tx`, on the database and in the workspace of `beside` (the job's own

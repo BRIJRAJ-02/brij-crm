@@ -36,6 +36,13 @@ import { Logger, run, type Runner as GraphileRunner, type Task } from 'graphile-
 import * as z from 'zod';
 import { errorFields } from '../log.ts';
 import { CUTOFF_TASK, type CutOffResult, type CutOffTry } from '../realtime/cutoff.ts';
+import {
+  AUTOMATION_DUE_CRONTAB,
+  AUTOMATION_DUE_PAGE,
+  AUTOMATION_DUE_PAGES_A_CALL,
+  AUTOMATION_DUE_TASK,
+  AUTOMATION_TASK,
+} from './automation.ts';
 import { BOOKING_MAIL_TASK } from './booking-mail.ts';
 import { EMAIL_TASK, EmailPayload, type EmailRun, type EmailTry } from './email.ts';
 import { NOTIFICATION_EMAIL_TASK } from './notification-email.ts';
@@ -86,6 +93,8 @@ export const RUNNER_TASKS: readonly string[] = [
   SCHEDULING_NOTICE_TASK,
   CALENDAR_HEALTH_TASK,
   CALENDAR_HEALTH_EMAIL_TASK,
+  AUTOMATION_TASK,
+  AUTOMATION_DUE_TASK,
 ];
 
 /**
@@ -197,6 +206,11 @@ export interface JobRunnersOptions {
    */
   readonly schedulingNotice?: (payload: unknown) => Promise<void>;
   /**
+   * Automations (parity #53): one workspace's queued runs (`runAutomationTask`), told how to queue its own next call.
+   * With it, the light runner takes `crm_automation` and holds the hourly `crm_cron_automation_due` line.
+   */
+  readonly automation?: (payload: unknown, again: (workspaceId: string) => Promise<void>) => Promise<void>;
+  /**
    * Calendar health (spec 0037, AC-1310, AC-1311): one episode's email (`runCalendarHealthEmailTask`), and who hears
    * a held sweep (Sentry's warning). With it, the light runner takes `crm_calendar_health_email` and holds the
    * `crm_cron_calendar_health` crontab line.
@@ -287,6 +301,36 @@ export function digestTask(
     // More than a call reads: the rest in a continuation, after the last member reached.
     await helpers.addJob(DIGEST_TASK, { after }, { jobKey: 'crm-digest-continue', maxAttempts: 5 });
     log.info('notification.digest.continues', { queued });
+  };
+}
+
+/**
+ * The automations due sweep (parity #53): pages the live workspaces holding an enabled task due automation (ids only)
+ * and queues each one's `crm_automation` task with `due` set, keyed per workspace so a sweep run twice queues one. A
+ * call reads at most 5,000 workspaces; the next hour's sweep reaches the rest from the start, so a later one keeps its turn
+ * only while fewer hold the automation.
+ */
+export function automationDueTask(
+  queue: Pick<QueueConnection, 'automationDueWorkspaces'>,
+  log: { info(message: string, fields?: Record<string, unknown>): void },
+): Task {
+  return async (_payload, helpers) => {
+    let after: string | undefined;
+    let queued = 0;
+    for (let page = 0; page < AUTOMATION_DUE_PAGES_A_CALL; page += 1) {
+      const ids = await queue.automationDueWorkspaces(after, AUTOMATION_DUE_PAGE);
+      for (const workspaceId of ids) {
+        await helpers.addJob(
+          AUTOMATION_TASK,
+          { workspaceId, due: true },
+          { jobKey: `crm-automation-due:${workspaceId}`, maxAttempts: 5 },
+        );
+        queued += 1;
+      }
+      after = ids.at(-1) ?? after;
+      if (ids.length < AUTOMATION_DUE_PAGE) break;
+    }
+    log.info('automation.due.queued', { queued });
   };
 }
 
@@ -610,6 +654,7 @@ export async function startJobRunners(options: JobRunnersOptions): Promise<JobRu
       const notificationEmail = lane === LANES.light ? options.notificationEmail : undefined;
       const schedulingNotice = lane === LANES.light ? options.schedulingNotice : undefined;
       const calendarHealth = lane === LANES.light ? options.calendarHealth : undefined;
+      const automation = lane === LANES.light ? options.automation : undefined;
       const cutOff = lane === LANES.light ? options.cutOff : undefined;
       runners.push(
         watch(
@@ -652,6 +697,27 @@ export async function startJobRunners(options: JobRunnersOptions): Promise<JobRu
                       options.onActivity,
                     ),
                   }),
+              ...(automation === undefined
+                ? {}
+                : {
+                    [AUTOMATION_TASK]: counted(
+                      (payload, helpers) =>
+                        automation(payload, async (workspaceId) => {
+                          await helpers.addJob(
+                            AUTOMATION_TASK,
+                            { workspaceId },
+                            { jobKey: `crm-automation:${workspaceId}`, jobKeyMode: 'preserve_run_at', maxAttempts: 5 },
+                          );
+                        }),
+                      inFlight,
+                      options.onActivity,
+                    ),
+                    [AUTOMATION_DUE_TASK]: counted(
+                      automationDueTask(options.queue, options.log),
+                      inFlight,
+                      options.onActivity,
+                    ),
+                  }),
               ...(calendarHealth === undefined
                 ? {}
                 : {
@@ -672,13 +738,17 @@ export async function startJobRunners(options: JobRunnersOptions): Promise<JobRu
             },
             // The daily cleanup's line, the digest's hourly one beside the email task that sends it, and the calendar
             // health sweep's quarter hourly one beside its email task.
-            ...(daily === undefined && notificationEmail === undefined && calendarHealth === undefined
+            ...(daily === undefined &&
+            notificationEmail === undefined &&
+            calendarHealth === undefined &&
+            automation === undefined
               ? {}
               : {
                   crontab: [
                     ...(daily === undefined ? [] : [DAILY_CRONTAB]),
                     ...(notificationEmail === undefined ? [] : [DIGEST_CRONTAB]),
                     ...(calendarHealth === undefined ? [] : [CALENDAR_HEALTH_CRONTAB]),
+                    ...(automation === undefined ? [] : [AUTOMATION_DUE_CRONTAB]),
                   ].join('\n'),
                 }),
             // Completions and failures go through Graphile's batcher (with no wait), which a stop flushes before

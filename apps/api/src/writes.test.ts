@@ -22,6 +22,9 @@ const { ownerUrl } = inject('testDatabase');
 /** The procedures that change nothing. Every other procedure is a write, and must be in WRITES below. */
 const READS: ReadonlySet<string> = new Set([
   'system.status',
+  // Automations (parity #53): the list and the run log.
+  'automations.list',
+  'automations.runs',
   // Fails on purpose when switched on (spec 0010); it writes nothing either way.
   'system.testFault',
   'me.get',
@@ -2442,6 +2445,64 @@ Object.assign(WRITES, {
   },
 });
 
+// Automations (parity #53): one `automations` row naming nothing, whatever the write changed.
+const DUE_DEFINITION = {
+  trigger: { kind: 'task_due' as const },
+  actions: [{ kind: 'notify' as const, who: { kind: 'owner' as const }, message: 'Due' }],
+};
+Object.assign(WRITES, {
+  'automations.create': async (m: Member, mutationId: string) => {
+    await m.client.automations.create({ workspace: m.slug, id: newId(), definition: DUE_DEFINITION, mutationId });
+    return [{ kind: 'automations', mutation_id: mutationId }];
+  },
+  'automations.update': async (m: Member, mutationId: string) => {
+    const made = await m.client.automations.create({
+      workspace: m.slug,
+      id: newId(),
+      definition: DUE_DEFINITION,
+      mutationId: newId(),
+    });
+    await m.client.automations.update({
+      workspace: m.slug,
+      automationId: made.id,
+      definition: DUE_DEFINITION,
+      mutationId,
+    });
+    return [{ kind: 'automations' }, { kind: 'automations', mutation_id: mutationId }];
+  },
+  'automations.setEnabled': async (m: Member, mutationId: string) => {
+    const made = await m.client.automations.create({
+      workspace: m.slug,
+      id: newId(),
+      definition: DUE_DEFINITION,
+      mutationId: newId(),
+    });
+    await m.client.automations.setEnabled({ workspace: m.slug, automationId: made.id, enabled: false, mutationId });
+    return [{ kind: 'automations' }, { kind: 'automations', mutation_id: mutationId }];
+  },
+  'automations.remove': async (m: Member, mutationId: string) => {
+    const made = await m.client.automations.create({
+      workspace: m.slug,
+      id: newId(),
+      definition: DUE_DEFINITION,
+      mutationId: newId(),
+    });
+    await m.client.automations.remove({ workspace: m.slug, automationId: made.id, mutationId });
+    return [{ kind: 'automations' }, { kind: 'automations', mutation_id: mutationId }];
+  },
+  'automations.restore': async (m: Member, mutationId: string) => {
+    const made = await m.client.automations.create({
+      workspace: m.slug,
+      id: newId(),
+      definition: DUE_DEFINITION,
+      mutationId: newId(),
+    });
+    await m.client.automations.remove({ workspace: m.slug, automationId: made.id, mutationId: newId() });
+    await m.client.automations.restore({ workspace: m.slug, automationId: made.id, mutationId });
+    return [{ kind: 'automations' }, { kind: 'automations' }, { kind: 'automations', mutation_id: mutationId }];
+  },
+});
+
 /** How many writes (each one poke) a case in WRITES makes before and with its own. */
 const WRITES_MADE: Readonly<Record<string, number>> = {
   // Lists (spec 0048): the list, its person and their entry first, then the case's own writes.
@@ -2456,6 +2517,10 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'teams.delete': 2,
   'teams.changeMembers': 2,
   // Imports (spec 0040): the import made (and its rows staged) first, then the write.
+  'automations.update': 2,
+  'automations.setEnabled': 2,
+  'automations.remove': 2,
+  'automations.restore': 3,
   'imports.stage': 2,
   'imports.start': 3,
   'imports.undo': 5,

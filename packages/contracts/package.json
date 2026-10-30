@@ -26,6 +26,7 @@
     "./link-limits": "./src/link-limits.ts",
     "./link-page": "./src/booking/link-page-rules.ts",
     "./task-limits": "./src/task-limits.ts",
+    "./automation-limits": "./src/automation-limits.ts",
     "./account-limits": "./src/account-limits.ts",
     "./note-limits": "./src/note-limits.ts",
     "./mentions": "./src/mentions.ts",

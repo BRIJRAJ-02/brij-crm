@@ -390,6 +390,15 @@ export const ACCESS_TABLE = {
   readMyPreferences: { anyMember: true },
   updateMyPreferences: { anyMember: true },
   updateCalendarSettings: { permission: 'workspace.manage' },
+  // Automations (parity #53): all of it needs automations.manage; a run executes as the member the automation
+  // runs as (`enterAsAutomation`), so the worker's part is the system's.
+  listAutomations: { permission: 'automations.manage' },
+  createAutomation: { permission: 'automations.manage' },
+  updateAutomation: { permission: 'automations.manage' },
+  setAutomationEnabled: { permission: 'automations.manage' },
+  deleteAutomation: { permission: 'automations.manage' },
+  restoreAutomation: { permission: 'automations.manage' },
+  listAutomationRuns: { permission: 'automations.manage' },
   // Forms (spec 0023): any member reads the forms on objects they can see; changing one, or acting on a
   // submission, needs forms.manage. A submission reads through its main record. The public form and submit take
   // only the scope the form's own public key made.

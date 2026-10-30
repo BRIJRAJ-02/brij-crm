@@ -157,6 +157,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
     `);
     expect(definers.rows).toEqual([
       { name: 'crm_archive_profile_item', owner: 'crm_handle' },
+      // The workspaces holding an enabled task due automation, ids only (parity #53, migration 0140).
+      { name: 'crm_automation_due_workspaces', owner: 'crm_sweep' },
       { name: 'crm_booking_by_token', owner: 'crm_booking_lookup' },
       { name: 'crm_booking_owner_pages', owner: 'crm_booking_lookup' },
       { name: 'crm_booking_owner_slugs', owner: 'crm_booking_lookup' },
@@ -170,6 +172,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_count_item_press', owner: 'crm_handle' },
       { name: 'crm_count_profile_view', owner: 'crm_handle' },
       { name: 'crm_delete_profile_item', owner: 'crm_handle' },
+      // The workspace's automation task (parity #53, migration 0140).
+      { name: 'crm_enqueue_automation', owner: 'crm_queue' },
       { name: 'crm_enqueue_booking_mail', owner: 'crm_queue' },
       { name: 'crm_enqueue_calendar_sync', owner: 'crm_queue' },
       { name: 'crm_enqueue_email', owner: 'crm_queue' },
@@ -245,6 +249,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
     expect(hardening.rows).toEqual([
       // A plpgsql body: it raises PROFILE_ITEM_LIMIT and the one heading, one page rules on a restore.
       { name: 'crm_archive_profile_item', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
+      { name: 'crm_automation_due_workspaces', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_booking_by_token', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_booking_owner_pages', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_booking_owner_slugs', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
@@ -259,6 +264,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_count_profile_view', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       // A plpgsql body: it answers whether the block was the owner's, and closes the gap it left.
       { name: 'crm_delete_profile_item', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
+      { name: 'crm_enqueue_automation', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_enqueue_booking_mail', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_enqueue_calendar_sync', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_enqueue_email', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
@@ -378,6 +384,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_enqueue_email',
         'crm_enqueue_notification_email',
         'crm_enqueue_scheduling_notice',
+        'crm_enqueue_automation',
       ],
       [
         'crm_enqueue_job(uuid, timestamp with time zone)',
@@ -386,18 +393,25 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_enqueue_email(uuid)',
         'crm_enqueue_notification_email(uuid)',
         'crm_enqueue_scheduling_notice(uuid, uuid)',
+        'crm_enqueue_automation()',
       ],
-      ['app', 'app', 'app', 'app', 'app', 'app'],
+      ['app', 'app', 'app', 'app', 'app', 'app', 'app'],
     ],
     [
       'crm_sweep',
-      ['crm_workspace_ids', 'crm_notification_digests_due', 'crm_calendar_health_candidates'],
+      [
+        'crm_workspace_ids',
+        'crm_notification_digests_due',
+        'crm_calendar_health_candidates',
+        'crm_automation_due_workspaces',
+      ],
       [
         'crm_workspace_ids(uuid, integer)',
         'crm_notification_digests_due(uuid, uuid, integer)',
         'crm_calendar_health_candidates(integer)',
+        'crm_automation_due_workspaces(uuid, integer)',
       ],
-      ['worker', 'worker', 'worker'],
+      ['worker', 'worker', 'worker', 'worker'],
     ],
     [
       'crm_purge',
@@ -957,7 +971,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
   });
 
   describe('crm_workspace_ids (spec 0008, milestone 3, AC-112, AC-115)', () => {
-    it('gives crm_sweep select on workspaces.id and deleted_at, the digest’s columns and the calendar health sweep’s, and nothing else', async () => {
+    it('gives crm_sweep select on workspaces.id and deleted_at, the digest’s columns, the calendar health sweep’s and the automations sweep’s, and nothing else', async () => {
       // From the catalog, by every route, as for crm_relay: no table privilege, two column grants, no role.
       const tables = await owner.query<{ table: string }>(`
         select n.nspname || '.' || c.relname as table
@@ -974,6 +988,11 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         where a.grantee = 'crm_sweep'::regrole order by 1
       `);
       expect(columns.rows).toEqual([
+        // The automations sweep's (parity #53, migration 0140).
+        { column: 'automations.deleted_at', privilege: 'SELECT' },
+        { column: 'automations.enabled', privilege: 'SELECT' },
+        { column: 'automations.trigger_kind', privilege: 'SELECT' },
+        { column: 'automations.workspace_id', privilege: 'SELECT' },
         // The calendar health sweep's (spec 0037, migration 0134).
         { column: 'calendar_connections.health_broken_at', privilege: 'SELECT' },
         { column: 'calendar_connections.health_notified_at', privilege: 'SELECT' },
