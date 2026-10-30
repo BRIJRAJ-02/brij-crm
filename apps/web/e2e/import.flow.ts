@@ -55,7 +55,9 @@ test('a People CSV imports through its steps, and its summary says what it did',
   await expect(page.getByText('1 cell in E-mail can’t be read')).toBeVisible();
   const leave = page.getByRole('checkbox', { name: 'Leave this cell empty' });
   await expect(leave).toBeChecked();
-  await leave.uncheck();
+  // The library's checkbox hides its input under the label: press the label, as a person does.
+  await page.getByText('Leave this cell empty', { exact: true }).click();
+  await expect(leave).not.toBeChecked();
   await checkScreen(page, 'import-review');
   await page.getByRole('button', { name: 'Continue' }).click();
 

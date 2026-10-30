@@ -52,7 +52,7 @@ import type { ShownColumn, ShownLayout } from '../views/layout.ts';
 import { avatarAttribute } from './columns.ts';
 import { groupingGap, groupPlan, useGroupedRows } from './grouped.ts';
 import { useColumnCalcs } from './calcs.ts';
-import { createdToast } from './created.ts';
+import { CREATED_TOAST_MS, createdToast } from './created.ts';
 import { createEditors } from './create-editors.ts';
 import { namePreset } from './name-preset.ts';
 import { NewRecordDialog } from './NewRecordDialog.tsx';
@@ -829,6 +829,7 @@ export function RecordsScreen({
                       params: { slug, object: object.apiSlug, recordId: record.id, tab: 'overview' },
                     });
                   }),
+                  { timeout: CREATED_TOAST_MS },
                 );
                 // "Create more" keeps the dialog, and focus in it, for the next record.
                 if (keepOpen) return;

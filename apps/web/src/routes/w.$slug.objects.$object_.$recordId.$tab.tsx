@@ -1,10 +1,7 @@
 import { isDataError } from '@crm/data';
 import { LoadingNow } from '@crm/ui';
 import { createFileRoute, redirect, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
-import { detailAttributes, isRecordId, isRecordTab, relatedSides } from '../features/records/details.ts';
-import { isThreadParam } from '../features/comments/entries.ts';
-import { isNoteParam } from '../features/notes/entries.ts';
-import { isTaskParam } from '../features/tasks/entries.ts';
+import { isNoteParam, isRecordId, isRecordTab, isTaskParam, isThreadParam } from '../features/records/params.ts';
 import { RecordPage, RecordPendingPage } from '../features/records/RecordPage.tsx';
 import { failedPage, missingPage } from '../features/workspace/ObjectScreen.tsx';
 import { strings } from '../features/workspace/strings.ts';
@@ -66,6 +63,9 @@ export const Route = createFileRoute('/w/$slug/objects/$object_/$recordId/$tab')
       context.data.access.mine(params.slug).catch(() => undefined),
     ]);
     const meId = access?.memberId;
+    // Loaded here rather than imported, so the first load doesn't carry the record page's helpers (and the words
+    // that share their chunk); the route's component chunk, started beside this loader, holds it already.
+    const { detailAttributes, relatedSides } = await import('../features/records/details.ts');
     const shown = detailAttributes(attributes);
     const sides = relatedSides(attributes, objects);
     // An address that can't be a record's id names no record: the page says so, as for a missing one.

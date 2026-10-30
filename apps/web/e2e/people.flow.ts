@@ -36,13 +36,13 @@ test.describe('the People table', () => {
     await expect(page.getByText('Nickname added.')).toBeVisible();
     await showColumn(page, 'Nickname');
 
-    // The same name again takes the same API name, refused inline on that field.
+    // The same name again would take the same API name: refused on the Name field before anything is sent.
     await page.getByRole('button', { name: 'Add attribute' }).first().click();
     await addDialog.getByLabel('Name', { exact: true }).fill('Nickname');
     await addDialog.getByRole('button', { name: /Type$/ }).click();
     await page.getByRole('option', { name: 'Rating' }).click();
     await addDialog.getByRole('button', { name: 'Create attribute' }).click();
-    await expect(addDialog.getByText('An attribute here already uses this API name. Pick another.')).toBeVisible();
+    await expect(addDialog.getByText('Another attribute here has this name. Pick another.')).toBeVisible();
     await checkScreen(page, '3-add-attribute-taken');
     await addDialog.getByRole('button', { name: 'Cancel' }).click();
     await expect(addDialog).toBeHidden();
@@ -79,7 +79,8 @@ test.describe('the People table', () => {
     await expect(newDialog.getByText('Another record already has this value for Email addresses.')).toBeVisible();
     await checkScreen(page, '4-new-person-refused');
     await newDialog.getByRole('button', { name: 'Cancel' }).click();
-    await expect(grid).toHaveAttribute('aria-rowcount', '3');
+    // The header, the two people and the footer: no third row.
+    await expect(grid).toHaveAttribute('aria-rowcount', '4');
 
     // Edit a cell: it shows at once and stays after a reload (AC-36).
     const jobTitle = await cellAt(page, 0, 'Job title');

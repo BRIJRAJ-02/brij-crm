@@ -158,7 +158,8 @@ test.describe('live updates between two browsers', () => {
     const createdAt = Date.now();
     await addPerson(writer, 'Grace', lastName, `grace-${tag}@example.com`);
     timings.push({ change: 'create', ms: (await seen(reader, '[role="grid"]', fullName)) - createdAt });
-    if (STATE === undefined) await expect(readerGrid).toHaveAttribute('aria-rowcount', '2');
+    // The header, the new row and the footer ("+ New person" and the count).
+    if (STATE === undefined) await expect(readerGrid).toHaveAttribute('aria-rowcount', '3');
     // Where the reader shows the new person (first in an empty table; somewhere on screen in a deployed one).
     const readerRow = await reader
       .locator(`[data-cell$=":${String(nameColumn)}"]`, { hasText: fullName })

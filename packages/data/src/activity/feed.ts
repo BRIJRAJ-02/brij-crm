@@ -534,8 +534,11 @@ export function createActivityFeeds({
     });
 
     const isCurrent = () => feeds.get(key) === feed;
+    // How many entries the full feed draws: the range on screen counts drawn entries, and grouped changes draw
+    // fewer than `held` holds, so nearing the end is measured against these.
+    let drawn = 0;
     const onRangeChange = (range: { readonly start: number; readonly end: number }) => {
-      if (range.end >= held.length - LOAD_AHEAD) loadMore();
+      if (range.end >= drawn - LOAD_AHEAD) loadMore();
     };
     const stateOf = (cut?: number): ActivityState => {
       // One actor's changes in the same second read as one entry (Show all opens them).
@@ -543,6 +546,7 @@ export function createActivityFeeds({
       const more = cut === undefined ? cursor !== undefined : held.length > cut || cursor !== undefined;
       // The full feed draws one entry still loading past the loaded ones while there are more.
       const tail = cut === undefined && cursor !== undefined ? 1 : 0;
+      if (cut === undefined) drawn = shown.length;
       return {
         status,
         entries: shown,

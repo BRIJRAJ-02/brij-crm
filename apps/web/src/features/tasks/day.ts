@@ -5,15 +5,10 @@
 import type { TaskEntry, TaskSection } from '@crm/ui';
 import { useEffect, useState } from 'react';
 import { strings } from './strings.ts';
+import { dayAt } from './today.ts';
 
 /** A group of My tasks' open list, in its order. */
 export type DayGroup = 'overdue' | 'today' | 'upcoming' | 'none';
-
-/** The day it is at `now` in `timeZone`, as `YYYY-MM-DD`. */
-export function dayAt(now: number, timeZone: string): string {
-  // en-CA writes dates as YYYY-MM-DD.
-  return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
-}
 
 /** One hour, the most a daylight saving change moves a midnight. */
 const HOUR_MS = 3_600_000;

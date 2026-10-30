@@ -51,11 +51,3 @@ export function tabCount(total: { readonly count: number; readonly atLeast: bool
   if (total === undefined || (total.count === 0 && !total.atLeast)) return {};
   return { count: total.count, countMax: 10_000, isCountAtLeast: total.atLeast };
 }
-
-/** Whether a `task` search param names a task (a uuid) or a new one. */
-export function isTaskParam(value: unknown): value is string {
-  return (
-    typeof value === 'string' &&
-    (value === 'new' || /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value))
-  );
-}

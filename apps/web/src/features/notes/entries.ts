@@ -53,11 +53,3 @@ export function findLoaded<Note extends { readonly id: string }>(
   }
   return undefined;
 }
-
-/** Whether a `note` search param names a note (a uuid) or a new one. */
-export function isNoteParam(value: unknown): value is string {
-  return (
-    typeof value === 'string' &&
-    (value === 'new' || /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value))
-  );
-}

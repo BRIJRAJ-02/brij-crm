@@ -83,6 +83,8 @@ const data = createDataLayer({
   }),
   // The session ended under the person: sign in says so, and whether a change was lost with it.
   onSignedOut: (redirectTo, { unsaved }) => {
+    // Nothing of the workspace stays behind sign in: a toast naming a record (Ada Lovelace created) goes too.
+    toasts.queue.clear();
     goTo(signInHref(redirectTo, unsaved ? 'unsaved' : 'ended'));
   },
   onSessionChange: forgetPages,

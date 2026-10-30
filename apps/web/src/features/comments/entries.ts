@@ -7,13 +7,6 @@ import type { CommentItem, CommentThreadItem } from '@crm/ui';
 import { actorDisplay } from '../notes/entries.ts';
 import { strings } from './strings.ts';
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-/** Whether `?thread=` names a thread: a uuid, anything else is dropped. */
-export function isThreadParam(value: unknown): value is string {
-  return typeof value === 'string' && UUID.test(value);
-}
-
 /** The active members as the composer's `@` list and the mentions' names. */
 export function memberDisplays(members: readonly MemberSummary[]): readonly ActorDisplay[] {
   return members.map((member) => ({ type: 'member', id: member.id, name: member.name, email: member.email }));

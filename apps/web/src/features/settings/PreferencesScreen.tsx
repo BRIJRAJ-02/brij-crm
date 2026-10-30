@@ -20,7 +20,7 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactN
 import { zoneItems, zoneMatches } from '../booking/hours.ts';
 import { offsetLabel, zoneName } from '../../public/booking/time.ts';
 import { browserZone } from '../booking/zone.ts';
-import { dayAt } from '../tasks/day.ts';
+import { dayAt } from '../tasks/today.ts';
 import {
   BROWSER_ZONE,
   dateFormatChoices,

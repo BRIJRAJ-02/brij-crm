@@ -58,9 +58,8 @@ import {
   savedQuery,
   toViewQuery,
   withDefaultOrderAsNone,
-  withHeaderSort,
-  withSearch,
 } from './query.ts';
+import { withHeaderSort, withSearch } from './screen-query.ts';
 import { runExport } from '../imports/export-run.ts';
 import { TransferMenu } from './TransferMenu.tsx';
 import { strings } from './strings.ts';

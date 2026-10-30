@@ -1,7 +1,7 @@
 // The inbox's address (spec 0038, AC-1170): the tab, the kind, unread only and the task dialog, read by the route
 // itself, so it stays apart from the rows' code (`entries.ts`), which loads with the screen.
 import type { NotificationKind } from '@crm/data';
-import { isTaskParam } from '../tasks/entries.ts';
+import { isTaskParam } from '../records/params.ts';
 
 /** The kind filter as the address spells it. */
 export type InboxKind = 'mentions' | 'replies' | 'assignments' | 'submissions';

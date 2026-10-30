@@ -60,7 +60,8 @@ test.describe('trash', () => {
     await expect(bar(page).getByRole('status').filter({ hasText: 'selected' })).toHaveText('2 selected');
     await checkScreen(page, 'trash-bar');
     await bar(page).getByRole('button', { name: 'Delete' }).click();
-    await expect(page.getByRole('alertdialog')).toHaveCount(0);
+    // No confirm opens: the only alert dialogs are toasts (each toast is one), Deleted 2 people. with its Undo.
+    await expect(page.locator('[role="alertdialog"]:not([data-toast-region] *)')).toHaveCount(0);
     await expect(page.getByText('Deleted 2 people.')).toBeVisible();
     await expect(table(page).getByRole('rowheader', { name: /Ada Byron/ })).toHaveCount(0);
     await expect(bar(page)).toHaveCount(0);

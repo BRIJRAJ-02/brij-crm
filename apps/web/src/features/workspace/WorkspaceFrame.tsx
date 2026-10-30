@@ -38,7 +38,7 @@ import { settingsNav, visibleSettingsNav, type SettingsPageId } from '../setting
 import { useToday } from '../tasks/day.ts';
 import { useCommandMenu } from '../command/CommandMenuProvider.tsx';
 import { COMMAND_MENU_KEYS, SEARCH_KEYS } from '../command/keys.ts';
-import { strings as commandStrings } from '../command/strings.ts';
+import { strings as commandStrings } from '../command/frame-strings.ts';
 import { strings as settingsStrings } from '../settings/strings.ts';
 import { CalendarBanner } from './CalendarBanner.tsx';
 import { homeHref, newWorkspaceHref, settingsHomeHref, workspaceHref } from './objects.ts';

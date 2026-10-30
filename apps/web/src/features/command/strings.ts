@@ -76,10 +76,5 @@ export const strings = {
   inviteTerms: ['team', 'people', 'add members', 'teammates'],
   /** The three theme actions as one choice, for screen readers (Q47). */
   theme: 'Theme',
-  /** Create a <object> on an object with only boards, which have no new record dialog. */
-  openTableToCreate: (singular: string) => `Open a table view to add a ${singular.toLocaleLowerCase()}`,
   themeOn: { light: 'Light theme on', dark: 'Dark theme on', system: 'Theme follows your system' },
-  /** Shortcut list entries (AC-1099). */
-  openMenu: 'Open the command menu',
-  openSearch: 'Search',
 } as const;
