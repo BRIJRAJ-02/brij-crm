@@ -27,8 +27,18 @@ export interface CapturesListProps {
   readonly groups?: readonly LinkGridGroup[];
   /** With no cards: the empty state's New booking page or New form; left out without the permission to make one. */
   readonly newAction?: ReactNode;
+<<<<<<< HEAD
   /** With no cards: the empty state's words and icon. */
   readonly empty: { readonly title: string; readonly text?: string; readonly icon: IconName };
+=======
+  /** With no cards: the empty state's words and icon, and an optional drawing (SpotIllustration) in place of the icon. */
+  readonly empty: {
+    readonly title: string;
+    readonly text: string;
+    readonly icon: IconName;
+    readonly illustration?: ReactNode;
+  };
+>>>>>>> 1b8fa2ab5 (feat(ui): SpotIllustration, a still drawing for first empty screens, and CapturesList passes it to EmptyState (spec 0058))
   /** A list that didn't load: its title, and Try again. */
   readonly errorTitle: string;
   readonly onRetry: () => void;
@@ -62,6 +72,7 @@ export function CapturesList({
           <EmptyState
             title={empty.title}
             icon={empty.icon}
+            {...(empty.illustration === undefined ? {} : { illustration: empty.illustration })}
             {...(newAction === undefined ? {} : { actions: newAction })}
           >
             {empty.text}
