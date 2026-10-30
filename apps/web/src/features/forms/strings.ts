@@ -51,10 +51,11 @@ export const strings = {
   deleteForm: 'Delete form',
   /** A destructive confirm names the thing in its question (the owner's rule, 21 October 2026). */
   deleteTitle: (name: string) => `Delete “${name}”?`,
+  /** One line under the question (spec 0058, AC-18): what goes, and what stays. */
   deleteText: (submissions: number) =>
     submissions === 0
-      ? 'The form and its link are gone for good; nothing was sent to it yet.'
-      : `The form, its link and its ${count(submissions, 'submission', 'submissions')} are gone for good; the people and records they made stay.`,
+      ? 'The form and its link are gone for good.'
+      : `Its ${count(submissions, 'submission is', 'submissions are')} gone for good; records stay.`,
   /** The confirm's commit: the verb last, never OK. */
   deleteFormAction: 'Delete form',
   deleted: (name: string) => `Deleted “${name}”.`,
@@ -190,10 +191,9 @@ export const strings = {
   retargetFailed: 'That didn’t change where submissions go.',
   retargetTitle: 'Change which object submissions are saved to?',
   retargetOffTitle: 'Stop saving submissions to the CRM?',
-  retargetText: (filed: number, from: string, to: string) =>
-    `${count(filed, 'question is', 'questions are')} saved to ${from} fields. On ${to}, only questions whose label matches a field stay saved; the rest are kept with the submission only.`,
-  retargetOffText: (filed: number, from: string) =>
-    `${count(filed, 'question is', 'questions are')} saved to ${from} fields. Submissions will make no record, and every answer is kept with the submission only.`,
+  /** One line each (spec 0058, AC-18): what the change loses. */
+  retargetText: (to: string) => `Only questions matching a ${to} field stay saved.`,
+  retargetOffText: 'New submissions make no record. Answers stay with them.',
   thisObject: 'this object',
   savingWaits: (objectName: string) =>
     `Changes here go live when you publish. Until then, submissions are still saved to ${objectName}.`,
@@ -295,8 +295,7 @@ export const strings = {
   siteAdd: 'Add site',
   siteRemove: (origin: string) => `Remove ${origin}`,
   siteRemoveTitle: (origin: string) => `Remove ${origin}?`,
-  siteRemoveText:
-    'Your own HTML on that site stops posting to the form at once. Embeds and the hosted page keep working.',
+  siteRemoveText: 'Your own HTML there stops posting at once. Embeds keep working.',
   siteRemoveAction: 'Remove site',
   siteNotHttps: 'Use the site’s https address, such as https://acme.com.',
   siteTaken: 'That site is in the list already.',
@@ -322,8 +321,7 @@ export const strings = {
   secretHide: 'Hide',
   secretRotate: 'Rotate secret',
   secretRotateTitle: 'Rotate the signing secret?',
-  secretRotateText:
-    'A new secret takes over at once and posts signed with the old one are refused. This can’t be undone, so update your server right after.',
+  secretRotateText: 'The old secret stops working at once.',
   secretRotateAction: 'Rotate secret',
   secretRotated: 'New signing secret made. Update your server.',
   pausedTitle: 'This form is paused',
