@@ -4,8 +4,9 @@
 // the members the form lists (its maker unless changed, 30 October 2026), as most form tools tell a form's owner and a lead's owner. Each email holds only
 // what that member may see: the submission as `getSubmission` would show them, so an answer filed on a field hidden
 // from them is absent, and a member who can't open the submission gets nothing. A member turns these off with the
-// email's preferences link (the `form_submissions` topic). Spam never reaches here: the job leaves it alone.
-// The daily digest is still spec 0023 milestone 3's.
+// email's preferences link (the `form_submissions` topic). Spam never reaches here: the job leaves it alone. Each
+// member told also gets it in their inbox, and one who takes the daily digest (spec 0038) gets it there in place of
+// the email.
 import { sql } from 'drizzle-orm';
 import { EmailAddress, EmailTimeZone, type EmailRow, type FormSubmissionEmail } from '@crm/contracts/emails';
 import type { FormDocument, SubmissionAnswer } from '@crm/contracts';
@@ -16,6 +17,7 @@ import { isRefusal } from '../engine/refusals.ts';
 import type { WriteContext } from '../engine/write.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import { queueFormSubmissionNotice } from '../emails/queue.ts';
+import { notifySubmission } from '../notifications/notify.ts';
 import { visitorOf } from './public.ts';
 import { viewIn } from './submissions.ts';
 import { loadForm, loadVersions } from './shared.ts';
@@ -76,14 +78,21 @@ export async function tellTeam(
   if (rules === undefined) return;
   const { tx, scope } = context;
   try {
-    await tx.transaction((inner) => tellEach(inner, scope, rules, submissionId));
+    const told = await tx.transaction((inner) => tellEach(inner, scope, rules, submissionId));
+    // Their open inboxes hear of it through one `notifications` outbox row.
+    if (told.length > 0) context.record({ notifications: told });
   } catch {
     // Left out, never thrown: the submission commits as filing left it.
   }
 }
 
 /** The notices themselves, inside `tellTeam`'s savepoint. */
-async function tellEach(tx: WorkspaceTx, scope: EngineScope, rules: RuleSource, submissionId: string): Promise<void> {
+async function tellEach(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  rules: RuleSource,
+  submissionId: string,
+): Promise<readonly string[]> {
   const found = await tx.execute<NoticeRow>(sql`
     select s.form_id::text, s.version_id::text, s.state::text,
       to_char(s.received_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as received_at,
@@ -95,21 +104,24 @@ async function tellEach(tx: WorkspaceTx, scope: EngineScope, rules: RuleSource, 
     where s.workspace_id = ${scope.workspaceId} and s.id = ${submissionId} and s.state in ('processed', 'failed')
   `);
   const row = found.rows[0];
-  if (row === undefined) return;
+  if (row === undefined) return [];
   const form = await loadForm(tx, row.form_id);
   const version = (await loadVersions(tx, [row.version_id])).get(row.version_id);
-  if (form === undefined || version === undefined) return;
+  if (form === undefined || version === undefined) return [];
   // A listed member who has left gets nothing: `memberScopeIn` answers only an active member.
   const told = [...new Set([row.lead_owner, ...row.listed].filter((id): id is string => id !== null))];
+  const changed: string[] = [];
   for (const memberId of told) {
     try {
-      await tx.transaction((one) =>
+      const inbox = await tx.transaction((one) =>
         tellOne(one, { scope, rules, submissionId, row, form, document: version.document }, memberId),
       );
+      if (inbox) changed.push(memberId);
     } catch {
       // This member's notice is left out; the others still go.
     }
   }
+  return changed;
 }
 
 /** What every member's notice of one submission shares. */
@@ -122,17 +134,24 @@ interface Notice {
   readonly document: FormDocument;
 }
 
-/** One member's notice, under its own savepoint. */
-async function tellOne(tx: WorkspaceTx, notice: Notice, memberId: string): Promise<void> {
+/**
+ * One member's notice, under its own savepoint: the inbox row, then the email with the answers they may see, unless
+ * their daily digest carries it instead. Answers whether their inbox changed.
+ */
+async function tellOne(tx: WorkspaceTx, notice: Notice, memberId: string): Promise<boolean> {
   const { scope, rules, submissionId, row, form, document } = notice;
   const reader = await memberScopeIn(tx, scope, rules, memberId);
-  if (reader === undefined) return;
+  if (reader === undefined) return false;
   const view = await viewIn(tx, reader, submissionId).catch((error: unknown) => {
     // A submission this member can't open isn't theirs to hear about (hidden means absent).
     if (isRefusal(error) && error.refusal.code === 'NOT_FOUND') return undefined;
     throw error;
   });
-  if (view === undefined) return;
+  if (view === undefined) return false;
+  const inbox = await notifySubmission(tx, { workspaceId: scope.workspaceId, memberId, submissionId });
+  // Told already (a second processing, or a job that gave up after one did): nothing more.
+  if (inbox === undefined) return false;
+  if (inbox.digestOnly) return true;
   const seen = Object.fromEntries(view.answers.map((answer) => [answer.key, answer.value]));
   const visitor = visitorOf(document, seen);
   const zone = await tx.execute<{ time_zone: string | null }>(
@@ -154,4 +173,5 @@ async function tellOne(tx: WorkspaceTx, notice: Notice, memberId: string): Promi
     filed: row.state === 'processed',
   };
   await queueFormSubmissionNotice(tx, { submissionId, memberId, params });
+  return true;
 }

@@ -27,7 +27,7 @@ import styles from './NotificationList.module.css';
 import { strings } from './strings.ts';
 
 /** Why a member was notified. */
-export type NotificationItemKind = 'mention' | 'reply' | 'task_assigned';
+export type NotificationItemKind = 'mention' | 'reply' | 'task_assigned' | 'form_submission';
 
 /** One notification, as the inbox shows it. */
 export interface NotificationItem {
@@ -43,6 +43,8 @@ export interface NotificationItem {
   readonly record?: RecordRefDisplay;
   /** A mention in a note, not a comment: the sentence says so. */
   readonly isNote?: boolean;
+  /** A form's new submission: the form's name, which its sentence names ("New submission to Contact us"). */
+  readonly formName?: string;
   /** The comment's start (mention tokens kept), or the task's title. */
   readonly excerpt: string;
 }
@@ -176,7 +178,11 @@ export function NotificationList({
       );
     }
     const sentence =
-      item.isNote === true ? strings.mentionInNote(item.actor.name) : strings.sentence[item.kind](item.actor.name);
+      item.kind === 'form_submission'
+        ? strings.submission(item.formName ?? strings.someForm)
+        : item.isNote === true
+          ? strings.mentionInNote(item.actor.name)
+          : strings.sentence[item.kind](item.actor.name);
     return (
       <GridListItem
         id={row.id}

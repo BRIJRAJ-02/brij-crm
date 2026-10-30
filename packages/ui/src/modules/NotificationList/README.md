@@ -23,7 +23,7 @@ New (spec 0038, the inventory's NotificationInbox). No list in the library marks
 />
 ```
 
-- An item is `{ id, kind, actor, createdAt, isRead, isDone, record?, excerpt }`; the sentence comes from the kind ("Ada Lovelace mentioned you", "replied in a thread", "assigned you a task").
+- An item is `{ id, kind, actor, createdAt, isRead, isDone, record?, isNote?, formName?, excerpt }`; the sentence comes from the kind ("Ada Lovelace mentioned you", "replied in a thread", "assigned you a task"), and a form's new submission (`form_submission`, spec 0023) is named by its form instead of its actor: "New submission to Contact us", with the record it filed as the chip and no excerpt.
 - Unread rows show the accent dot and a bolder sentence, and read "Unread" first to a screen reader.
 - The order is the screen's (newest first). A row still loading draws a skeleton and tells the source it is on screen, which loads the next 50.
 

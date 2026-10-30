@@ -3,9 +3,10 @@
 // (AC-1181). What a notification is about is resolved through the access
 // door when it is read (AC-1166): a comment's record through `readRecords`
 // with the reader's access (live, on a live object they may read, inside
-// their record rule), a task through the task rule (`readTaskViews`). One the
-// reader may not see is absent from the list and the count, and comes back if
-// access returns. Marks and settings go through `runWrite`, so the member's
+// their record rule), a task through the task rule (`readTaskViews`), a form's
+// new submission as the reader may open it (`submissionNotices`, spec 0023
+// AC-568). One the reader may not see is absent from the list and the count,
+// and comes back if access returns. Marks and settings go through `runWrite`, so the member's
 // other tabs hear of them through one `notifications` outbox row naming them.
 import { sql, type SQL } from 'drizzle-orm';
 import {
@@ -30,6 +31,7 @@ import { canonicalId, isUuid, uuidList } from '../engine/ids.ts';
 import { inputInvalid, refuse } from '../engine/refusals.ts';
 import type { Actor, EngineScope } from '../engine/scope.ts';
 import { runWrite, type AfterWrite, type WriteContext } from '../engine/write.ts';
+import { submissionNotices } from '../forms/submissions.ts';
 import { linkedDisplays, readTaskViews } from '../tasks/tasks.ts';
 import type { RemovalEffect } from '../members/removal-effect.ts';
 
@@ -88,6 +90,7 @@ interface NotificationRow extends Record<string, unknown> {
   readonly comment_id: string | null;
   readonly task_id: string | null;
   readonly note_id: string | null;
+  readonly submission_id: string | null;
   readonly body: string | null;
   /** A note mention's note title, while the note is live (null when it is in the trash or gone). */
   readonly note_title: string | null;
@@ -98,7 +101,8 @@ interface NotificationRow extends Record<string, unknown> {
 const NOTIFICATION_COLUMNS = sql`n.id::text as id, n.kind, n.actor_type, n.actor_id::text as actor_id,
   ${millis('n.created_at')} as created_at, ${millis('n.read_at')} as read_at, ${millis('n.done_at')} as done_at,
   n.record_id::text as record_id, n.thread_id::text as thread_id, n.comment_id::text as comment_id,
-  n.task_id::text as task_id, n.note_id::text as note_id, c.body, nt.title as note_title`;
+  n.task_id::text as task_id, n.note_id::text as note_id, n.submission_id::text as submission_id, c.body,
+  nt.title as note_title`;
 
 /** The comment a notification is about, joined when it is live (a deleted one's notifications are gone already). */
 const COMMENT_JOIN = sql`left join comments c on c.workspace_id = n.workspace_id and c.id = n.comment_id
@@ -117,6 +121,8 @@ async function visibleViews(
 ): Promise<readonly NotificationView[]> {
   if (rows.length === 0) return [];
   const recordIds = rows.flatMap((row) => (row.task_id === null && row.record_id !== null ? [row.record_id] : []));
+  const submissionIds = rows.flatMap((row) => (row.submission_id === null ? [] : [row.submission_id]));
+  const submissions = await submissionNotices(tx, scope, submissionIds);
   const taskIds = rows.flatMap((row) => (row.task_id === null ? [] : [row.task_id]));
   const records: ReadonlyMap<string, RecordRefDisplay> =
     recordIds.length === 0 ? new Map() : await linkedDisplays(tx, scope.access, recordIds);
@@ -137,6 +143,21 @@ async function visibleViews(
       if (task === undefined) return [];
       const [record] = task.records;
       return [{ ...base, taskId: row.task_id, excerpt: task.title, ...(record === undefined ? {} : { record }) }];
+    }
+    if (row.submission_id !== null) {
+      // A form's new submission: shown while the reader may open it, with the record it filed when they may see it.
+      const notice = submissions.get(row.submission_id);
+      if (notice === undefined) return [];
+      return [
+        {
+          ...base,
+          submissionId: row.submission_id,
+          formId: notice.formId,
+          formName: notice.formName,
+          ...(notice.record === undefined ? {} : { record: notice.record }),
+          excerpt: '',
+        },
+      ];
     }
     if (row.note_id !== null) {
       // A mention in a note (spec 0019): shown while the note is live and its record reads for the reader.
@@ -572,10 +593,12 @@ export async function unemailedNotifications(
       where member_id = ${me}::uuid and topic = 'mentions' and not subscribed
     `);
     const mentionsOn = offRows.rows.length === 0;
-    // The digest holds every kind still unread (AC-1178); an email after a notification, the kinds switched on.
+    // The digest holds every kind still unread (AC-1178); an email after a notification, the kinds switched on. A
+    // form's new submission is emailed on its own, with its answers, unless the member takes the digest: then only
+    // the digest holds it (`tellOne` marks it emailed when its own email goes).
     const kinds: NotificationKind[] = (
       options.digest
-        ? (['mention', 'reply', 'task_assigned'] as const)
+        ? (['mention', 'reply', 'task_assigned', 'form_submission'] as const)
         : [
             ...(settings.emailMentions ? (['mention'] as const) : []),
             ...(settings.emailReplies ? (['reply'] as const) : []),

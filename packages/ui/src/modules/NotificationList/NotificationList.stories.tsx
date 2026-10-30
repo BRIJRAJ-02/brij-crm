@@ -42,6 +42,16 @@ function sampleItems(): readonly NotificationItem[] {
       isDone: false,
       excerpt: 'Call Globex about the security review',
     },
+    {
+      id: 'n4',
+      kind: 'form_submission',
+      actor: { type: 'system', id: null, name: 'System' },
+      createdAt: '2026-10-07T08:30:00.000Z',
+      isRead: false,
+      isDone: false,
+      formName: 'Contact us',
+      excerpt: '',
+    },
   ];
 }
 

@@ -12,6 +12,7 @@ import { SYSTEM_ACTOR } from '../engine/scope.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
 import { runWrite } from '../engine/write.ts';
 import { jobKinds } from '../jobs/kinds/index.ts';
+import { listNotifications, unemailedNotifications } from '../notifications/inbox.ts';
 import { testScope } from '../testing.ts';
 import { createForm, getForm, NOTIFY_MEMBER_UNKNOWN, publishForm, saveFormDraft, updateFormSettings } from './forms.ts';
 import { answerWords } from './notify.ts';
@@ -273,6 +274,64 @@ describe('the team’s notice of a new submission (AC-1047, late trap #19)', () 
       sql`select to_member_id::text as member from emails where kind = 'form_submission'`,
     );
     expect(sent).toEqual([{ member: w.ada }]);
+  });
+
+  it('puts it in each told member’s inbox, and in the daily digest in place of the email for one who takes it', async () => {
+    const w = await world();
+    // Bea, the lead's owner, takes the daily digest; Ada, listed, gets an email each.
+    await w.query(sql`insert into notification_settings (workspace_id, member_id, digest, time_zone)
+      values (${w.workspaceId}, ${w.bea}, true, 'Europe/London')`);
+    const id = await submit(w.form.publicKey, { name: 'Asha Rao', email: 'asha@northwind.example' });
+    await runWrite(w.system, (context) => processSubmission(context, id, new Date(), undefined, rules));
+    await runWrite(w.system, (context) => processSubmission(context, id, new Date(), undefined, rules));
+    const emails = await w.query<{ member: string }>(
+      sql`select to_member_id::text as member from emails where kind = 'form_submission'`,
+    );
+    expect(emails).toEqual([{ member: w.ada }]);
+    const rows = await w.query<{ member: string; emailed: boolean }>(
+      sql`select member_id::text as member, emailed_at is not null as emailed from notifications
+          where submission_id = ${id} order by member_id = ${w.ada} desc`,
+    );
+    expect(rows).toEqual([
+      { member: w.ada, emailed: true },
+      { member: w.bea, emailed: false },
+    ]);
+    const asMember = (memberId: string, role: 'owner' | 'member') =>
+      testScope({ db, workspaceId: w.workspaceId, actor: { type: 'member', id: memberId }, role });
+    const [inAdas] = (await listNotifications(asMember(w.ada, 'owner'), { status: 'inbox' })).items;
+    expect(inAdas).toMatchObject({
+      kind: 'form_submission',
+      submissionId: id,
+      formId: w.form.id,
+      formName: 'Contact us',
+      record: { name: 'Asha Rao' },
+      excerpt: '',
+    });
+    // Ada's was emailed already; Bea's waits for her digest, and only the digest holds it.
+    expect((await unemailedNotifications(asMember(w.ada, 'owner'), { digest: true })).items).toEqual([]);
+    expect((await unemailedNotifications(asMember(w.bea, 'member'))).items).toEqual([]);
+    const digest = await unemailedNotifications(asMember(w.bea, 'member'), { digest: true });
+    expect(digest.items.map((item) => item.submissionId)).toEqual([id]);
+    // People closed to members: Bea's inbox no longer shows it (hidden means absent), nor her digest.
+    const closed: AccessRules = {
+      levels: [
+        {
+          subject: { type: 'role', role: 'member' },
+          target: { type: 'object', objectId: w.form.mainObjectId ?? '' },
+          level: 'none',
+        },
+      ],
+      records: [],
+    };
+    const shut = testScope({
+      db,
+      workspaceId: w.workspaceId,
+      actor: { type: 'member', id: w.bea },
+      role: 'member',
+      rules: closed,
+    });
+    expect((await listNotifications(shut, { status: 'inbox' })).items).toEqual([]);
+    expect((await unemailedNotifications(shut, { digest: true })).items).toEqual([]);
   });
 
   it('tells nobody from a registry built without rules (fail closed)', async () => {

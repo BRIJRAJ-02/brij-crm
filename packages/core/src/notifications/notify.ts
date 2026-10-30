@@ -7,14 +7,20 @@
 // whose inbox changed is recorded in `Change.notifications`, so one
 // `notifications` outbox row names them, and those whose settings email that
 // kind get the email task queued (`crm_enqueue_notification_email`, 5 minutes
-// on, one waiting row per member).
+// on, one waiting row per member). A form's new submission (spec 0023, AC-568)
+// is written by the processing job through `notifySubmission`, which emails it
+// itself, with its answers, or leaves it for the member's daily digest.
 import { sql } from 'drizzle-orm';
 import type { NotificationKind } from '@crm/contracts';
+import type { WorkspaceTx } from '@crm/db';
 import { uuidList } from '../engine/ids.ts';
 import type { WriteContext } from '../engine/write.ts';
 
+/** The kinds a member's switches email after a notification (a form's submission is emailed by its own job). */
+type SwitchedKind = Exclude<NotificationKind, 'form_submission'>;
+
 /** The settings column that says whether a kind is emailed. */
-const EMAIL_COLUMN: Readonly<Record<NotificationKind, string>> = {
+const EMAIL_COLUMN: Readonly<Record<SwitchedKind, string>> = {
   mention: 'email_mentions',
   reply: 'email_replies',
   task_assigned: 'email_assignments',
@@ -42,7 +48,7 @@ function actingMember(context: WriteContext): string | undefined {
  * A mention queues nothing for a member who turned the `mentions` topic off
  * from an email's preferences link: the email would hold nothing for them.
  */
-async function queueEmail(context: WriteContext, memberIds: readonly string[], kind: NotificationKind): Promise<void> {
+async function queueEmail(context: WriteContext, memberIds: readonly string[], kind: SwitchedKind): Promise<void> {
   if (memberIds.length === 0) return;
   const column = sql.raw(`s.${EMAIL_COLUMN[kind]}`);
   const fallback = kind === 'reply' ? sql`false` : sql`true`;
@@ -219,4 +225,34 @@ export async function notifyTaskAssigned(
     await queueEmail(context, recipients, 'task_assigned');
   }
   if (changed.length > 0) context.record({ notifications: changed });
+}
+
+/**
+ * A form's new submission in one member's inbox (spec 0023, AC-568, AC-1047), in the processing job's transaction,
+ * once per member and submission. The caller has already checked the member may open it, and the inbox checks
+ * again on every read. A member who takes the daily digest (and hasn't turned these emails off) gets it there, so
+ * the caller sends no email of its own; anyone else gets the caller's email, so the row is marked emailed now and
+ * no notifications email repeats it. Answers undefined when the member already had it, so nothing is sent twice.
+ */
+export async function notifySubmission(
+  tx: WorkspaceTx,
+  input: { readonly workspaceId: string; readonly memberId: string; readonly submissionId: string },
+): Promise<{ readonly digestOnly: boolean } | undefined> {
+  const made = await tx.execute<{ digest_only: boolean }>(sql`
+    with choice as (
+      select coalesce((select s.digest from notification_settings s where s.member_id = ${input.memberId}::uuid), false)
+        and not exists (
+          select 1 from email_preferences p
+          where p.member_id = ${input.memberId}::uuid and p.topic = 'form_submissions' and not p.subscribed
+        ) as digest
+    )
+    insert into notifications (workspace_id, member_id, kind, actor_type, submission_id, emailed_at)
+    select ${input.workspaceId}::uuid, ${input.memberId}::uuid, 'form_submission', 'system', ${input.submissionId}::uuid,
+      case when choice.digest then null else now() end
+    from choice
+    on conflict (workspace_id, member_id, submission_id) where submission_id is not null do nothing
+    returning emailed_at is null as digest_only
+  `);
+  const [row] = made.rows;
+  return row === undefined ? undefined : { digestOnly: row.digest_only };
 }
