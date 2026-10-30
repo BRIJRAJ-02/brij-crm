@@ -160,7 +160,8 @@ export function ManagePage({ token, isWelcome, locale, now }: ManagePageProps) {
     body: details,
     location: whereOf(booking),
   }).toString()}`;
-  const who = [`${booking.hostName} (${strings.host})`, `${booking.visitorName} (${booking.visitorEmail})`].join(', ');
+  // The host is named in the summary above ("with Ada Lovelace"), so Who is the guest who booked.
+  const who = `${booking.visitorName} (${booking.visitorEmail})`;
   const changed = (next: PublicManagedBooking, kind: 'moved' | 'cancelled') => {
     setLoaded({ state: 'ready', booking: next });
     setNotice(kind);

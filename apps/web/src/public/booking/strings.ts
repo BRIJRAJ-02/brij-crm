@@ -138,7 +138,6 @@ export const strings = {
   withHost: (host: string) => `with ${host}`,
   where: 'Where',
   yourNote: 'Your note',
-  host: 'Host',
   alsoInvited: (names: string) => `Also invited: ${names}`,
   joinCall: 'Join the call',
   addToCalendar: 'Add to calendar',

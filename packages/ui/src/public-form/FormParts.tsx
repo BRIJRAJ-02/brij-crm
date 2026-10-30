@@ -13,6 +13,7 @@ import { Skeleton } from '../atoms/Skeleton/Skeleton.tsx';
 import { VisuallyHidden } from '../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { poweredByHref } from '../lib/powered-by.ts';
 import { Callout } from '../molecules/Callout/Callout.tsx';
+import { Card } from '../molecules/Card/Card.tsx';
 import { DescriptionList, type DescriptionItem } from '../molecules/DescriptionList/DescriptionList.tsx';
 import type { ProductLogo } from '../modules/AuthLayout/AuthLayout.tsx';
 import styles from './FormParts.module.css';
@@ -194,7 +195,9 @@ export function FormThanks({
         : {
             summary: (
               <div className={styles.sent}>
-                <DescriptionList items={sent} />
+                <Card tone="sunken">
+                  <DescriptionList items={sent} />
+                </Card>
               </div>
             ),
           })}
