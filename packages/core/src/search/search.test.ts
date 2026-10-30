@@ -15,6 +15,8 @@ import { createWorkspace } from '../engine/workspaces.ts';
 import { removeMember } from '../members/members.ts';
 import { rescope, testScope } from '../testing.ts';
 import { createView, deleteView } from '../views/manage.ts';
+import { saveNote } from '../notes/notes.ts';
+import { createTask } from '../tasks/tasks.ts';
 import { listRecents, RECENTS_KEPT, visitRecent } from './recents.ts';
 import { globalSearchMode, searchWorkspace, wantsSimilar } from './search.ts';
 
@@ -106,6 +108,36 @@ async function world() {
     acmeDeals,
   };
 }
+
+describe('notes and tasks by title (the flow pass of 30 Oct 2026)', () => {
+  it('finds them through their own rules: a note follows its record, a task the task rule', async () => {
+    const w = await world();
+    const note = newId();
+    await saveNote(w.owner, { id: note, recordId: w.acme, title: 'Acme renewal' });
+    const task = newId();
+    await createTask(w.owner, { id: task, title: 'Call Acme back', recordIds: [w.acme] });
+    const found = await searchWorkspace(w.owner, { query: 'acme' });
+    expect(found.notes?.map((hit) => [hit.id, hit.title, hit.record.recordId])).toEqual([
+      [note, 'Acme renewal', w.acme],
+    ]);
+    expect(found.tasks).toEqual([{ id: task, title: 'Call Acme back', isDone: false }]);
+    // Bea's rule keeps her to her own companies: Acme Inc's note and task are absent for her.
+    const bea = w.as(w.bea, {
+      levels: [],
+      records: [
+        {
+          subject: { type: 'role', role: 'member' },
+          objectId: w.companies,
+          kind: 'own',
+          attributeId: w.attribute('companies.owner'),
+        },
+      ],
+    });
+    const asBea = await searchWorkspace(bea, { query: 'acme' });
+    expect(asBea.notes).toEqual([]);
+    expect(asBea.tasks).toEqual([]);
+  });
+});
 
 const recordIds = (found: Awaited<ReturnType<typeof searchWorkspace>>) => found.records.map((hit) => hit.ref.recordId);
 
@@ -245,8 +277,8 @@ describe('hidden means absent (AC-1089, AC-1090)', () => {
     const bea = w.as(w.bea, rules);
     const asBea = await searchWorkspace(bea, { query: 'acme' });
     // Acme Inc is the owner's (outside Bea's rule), Ada matched on a hidden email, the view is on Deals (none).
-    expect(asBea).toEqual({ records: [], views: [] });
-    expect(await searchWorkspace(bea, { query: 'acme.com' })).toEqual({ records: [], views: [] });
+    expect(asBea).toEqual({ records: [], views: [], notes: [], tasks: [] });
+    expect(await searchWorkspace(bea, { query: 'acme.com' })).toEqual({ records: [], views: [], notes: [], tasks: [] });
     // An exact hidden name answers just as nothing does.
     expect(await searchWorkspace(bea, { query: 'Acme Inc' })).toEqual(
       await searchWorkspace(bea, { query: 'Qqqqq Zzzz' }),

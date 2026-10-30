@@ -339,6 +339,15 @@ describe('the security review (spec 0019, milestones 3 and 4)', () => {
     const bea = w.as(w.ownCompanies);
     expect((await listNotes(bea, { recordId: mine })).items.map((note) => note.id)).toEqual([onMine.id]);
     expect(await refusalOf(listNotes(bea, { recordId: theirs }))).toMatchObject({ code: 'NOT_FOUND' });
+    // The workspace's Notes page: the owner sees both, last edited first, each with its record; Bea only hers.
+    const all = await listNotes(w.scope, {});
+    expect(all.items.map((note) => [note.id, note.record?.recordId])).toEqual([
+      [onTheirs.id, theirs],
+      [onMine.id, mine],
+    ]);
+    expect(all.total).toBeUndefined();
+    expect((await listNotes(bea, {})).items.map((note) => note.id)).toEqual([onMine.id]);
+    expect((await listNotes(w.as(w.level('none')), {})).items).toEqual([]);
     expect(await refusalOf(getNote(bea, { noteId: onTheirs.id }))).toMatchObject({ code: 'NOT_FOUND' });
     expect(await refusalOf(saveNote(bea, { id: onTheirs.id, recordId: theirs, title: 'Mine now' }))).toMatchObject({
       code: 'NOT_FOUND',

@@ -107,6 +107,7 @@ export const recordsRouter = member.records.router({
     const page = await getActivity(context.scope, {
       recordId: input.recordId,
       ...(input.cursor === undefined ? {} : { cursor: input.cursor }),
+      ...(input.kinds === undefined ? {} : { kinds: input.kinds }),
       ...(input.limit === undefined ? {} : { limit: input.limit }),
     });
     return page.nextCursor === undefined

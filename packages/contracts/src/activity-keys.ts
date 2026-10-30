@@ -30,6 +30,8 @@ export const ACTIVITY_RANKS = {
   meeting: 6,
   // A form submission that touched the record (spec 0023, AC-561).
   submission: 7,
+  // The record moved to the trash (it reads as of its delete; a restore clears it).
+  deleted: 8,
   created: 9,
 } as const;
 
