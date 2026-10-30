@@ -39,7 +39,7 @@ test.describe('the form journey', () => {
     // The first publish, in one step: name it, check where the answers go, publish.
     await page.getByRole('button', { name: 'Publish', exact: true }).click();
     const publish = page.getByRole('dialog', { name: 'Publish your form' });
-    await publish.getByLabel('Name').fill(`Talk to us ${tag}`);
+    await publish.getByRole('textbox', { name: 'Name', exact: true }).fill(`Talk to us ${tag}`);
     await expect(publish.getByRole('button', { name: /Save to$/ })).toContainText('People');
     await publish.getByRole('button', { name: 'Publish', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Your form is live' })).toBeVisible({ timeout: 30_000 });

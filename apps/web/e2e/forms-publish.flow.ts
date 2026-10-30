@@ -22,8 +22,8 @@ test.describe('a form’s first publish', () => {
     await page.getByRole('button', { name: 'Publish', exact: true }).click();
     const publish = page.getByRole('dialog', { name: 'Publish your form' });
     await expect(publish).toBeVisible();
-    await expect(publish.getByLabel('Name')).toBeFocused();
-    await publish.getByLabel('Name').fill(`Publish flow ${tag}`);
+    await expect(publish.getByRole('textbox', { name: 'Name', exact: true })).toBeFocused();
+    await publish.getByRole('textbox', { name: 'Name', exact: true }).fill(`Publish flow ${tag}`);
     // Where submissions go and each answer's field are already there: no second step.
     await expect(publish.getByRole('button', { name: /Save to$/ })).toBeVisible();
     await expect(publish.getByRole('button', { name: 'Next' })).toHaveCount(0);
