@@ -202,6 +202,22 @@ function checkMovable(row: BookingRow, page: PageRecord, now: Date): void {
 /** The booking's length in minutes. */
 const minutesOf = (row: BookingRow) => Math.round((row.endsAt.getTime() - row.startsAt.getTime()) / 60_000);
 
+/** A booking given a new length may start at any free five minutes (`BOOKING_DURATION_STEP` in the contracts). */
+const RESIZE_STEP = 5;
+
+/**
+ * Refuses a new length for a round robin booking: its seats were picked for the length it was booked with, so it
+ * keeps that and moves instead (a cancelled one books again).
+ */
+function checkResizable(team: unknown, row: BookingRow, minutes: number | undefined): void {
+  if (team === undefined || minutes === undefined || minutes === minutesOf(row)) return;
+  throw refuseOn(
+    'CONFIG_INVALID',
+    'A round robin meeting keeps its length. Move it, or cancel it and book again.',
+    'minutes',
+  );
+}
+
 /**
  * The calendars' busy times without the booking's own time: its event is on
  * the host's calendar, and a move may overlap where it is now.
@@ -231,6 +247,7 @@ async function slotsFor(
   memberIds: readonly string[],
   busy: MembersBusy,
   range: { readonly from: Date; readonly to: Date; readonly now: Date },
+  minutes?: number,
 ) {
   const held = await bookedSpans(tx, memberIds, page.id, range.from, range.to, row.id);
   const closed = await membersClosed(
@@ -242,8 +259,11 @@ async function slotsFor(
   );
   // The host's meeting limits (spec 0037, AC-1298), the booking being moved not counted against its new time.
   const limits = await limitChecks(tx, [row.hostMemberId], range.from, range.to, row.id);
+  const length = minutes ?? minutesOf(row);
   return pageSlots(page, {
-    duration: minutesOf(row),
+    duration: length,
+    // A new length starts at any free five minutes; the same length keeps the page's own step.
+    ...(length === minutesOf(row) ? {} : { stepMinutes: RESIZE_STEP }),
     from: range.from,
     to: range.to,
     now: range.now,
@@ -313,13 +333,14 @@ async function roundRobinTeam(
 export async function readMoveSlots(
   target: ChangeTarget,
   deps: ChangeDeps,
-  range: { readonly from: Date; readonly to: Date },
+  range: { readonly from: Date; readonly to: Date; readonly minutes?: number },
 ): Promise<PublicSlots> {
   const now = deps.now?.() ?? new Date();
   const found = await inWorkspace(target.scope, async (tx) => {
     const read = await readTarget(tx, target, false);
     checkMovable(read.row, read.page, now);
     const team = await roundRobinTeam(tx, read.page);
+    checkResizable(team, read.row, range.minutes);
     return { ...read, team, memberIds: team === undefined ? await membersOf(tx, read.page) : [] };
   });
   const { row, page, team, memberIds } = found;
@@ -337,7 +358,9 @@ export async function readMoveSlots(
     new Date(range.from.getTime() - BUSY_MARGIN_MS),
     new Date(range.to.getTime() + BUSY_MARGIN_MS),
   );
-  const slots = await inWorkspace(target.scope, (tx) => slotsFor(tx, page, row, memberIds, busy, { ...range, now }));
+  const slots = await inWorkspace(target.scope, (tx) =>
+    slotsFor(tx, page, row, memberIds, busy, { from: range.from, to: range.to, now }, range.minutes),
+  );
   return {
     slots: slots.map((slot) => ({ start: slot.start.toISOString(), end: slot.end.toISOString() })),
     calendar: busy.blocked ? 'unreachable' : 'ok',
@@ -394,20 +417,28 @@ async function afterCommit(
  * the same length, a time the page offers now. Answers whether it moved (the
  * same time again changes nothing). Refuses SLOT_TAKEN when the time is gone,
  * LIMIT_REACHED after 5 moves, BOOKING_CLOSED once it is cancelled, has
- * started, or its page stopped taking bookings.
+ * started, or its page stopped taking bookings. With `minutes` it takes a new
+ * length too (the host dragging a booking's foot on the week), at any free
+ * five minutes; a round robin booking refuses that (CONFIG_INVALID on `minutes`).
  */
 export async function moveBooking(
   target: ChangeTarget,
   deps: ChangeDeps,
-  input: { readonly start: Date },
+  input: { readonly start: Date; readonly minutes?: number },
 ): Promise<{ readonly moved: boolean }> {
   const now = deps.now?.() ?? new Date();
   const start = input.start;
+  /** Whether the booking is already where (and as long as) it was asked to be: nothing changes then. */
+  const isAsked = (row: BookingRow) =>
+    row.startsAt.getTime() === start.getTime() &&
+    row.status === 'confirmed' &&
+    (input.minutes === undefined || input.minutes === minutesOf(row));
   const first = await inWorkspace(target.scope, async (tx) => {
     const found = await readTarget(tx, target, false);
-    if (found.row.startsAt.getTime() === start.getTime() && found.row.status === 'confirmed') return undefined;
+    if (isAsked(found.row)) return undefined;
     checkMovable(found.row, found.page, now);
     const team = await roundRobinTeam(tx, found.page);
+    checkResizable(team, found.row, input.minutes);
     return { ...found, team, memberIds: team === undefined ? await membersOf(tx, found.page) : [] };
   });
   if (first === undefined) return { moved: false };
@@ -429,13 +460,13 @@ export async function moveBooking(
   const moved = await inWorkspace(target.scope, async (tx) => {
     for (const memberId of [...memberIds].sort()) await lockKey(tx, hostLockKey(target.scope.workspaceId, memberId));
     const { row, page } = await readTarget(tx, target, true);
-    if (row.startsAt.getTime() === start.getTime() && row.status === 'confirmed') return undefined;
+    if (isAsked(row)) return undefined;
     checkMovable(row, page, now);
-    const offered = await slotsFor(tx, page, row, memberIds, busy, { from: dayFrom, to: dayTo, now });
+    const offered = await slotsFor(tx, page, row, memberIds, busy, { from: dayFrom, to: dayTo, now }, input.minutes);
     if (!offered.some((slot) => slot.start.getTime() === start.getTime())) {
       throw refuseOn('SLOT_TAKEN', 'That time has just gone. Pick another.', 'start');
     }
-    const end = new Date(start.getTime() + minutesOf(row) * 60_000);
+    const end = new Date(start.getTime() + (input.minutes ?? minutesOf(row)) * 60_000);
     const blockStart = new Date(start.getTime() - page.bufferBefore * 60_000);
     const blockEnd = new Date(end.getTime() + page.bufferAfter * 60_000);
     try {

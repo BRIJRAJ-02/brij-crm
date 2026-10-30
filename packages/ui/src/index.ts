@@ -262,6 +262,7 @@ export { SectionList, type SectionListProps, type SectionListSection } from './m
 export {
   WeekCalendar,
   type WeekCalendarBlock,
+  type WeekCalendarMove,
   type WeekCalendarSpan,
   type WeekCalendarDay,
   type WeekCalendarProps,
