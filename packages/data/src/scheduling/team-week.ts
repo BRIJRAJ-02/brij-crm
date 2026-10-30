@@ -16,7 +16,7 @@ import type {
   TeamWeekRow,
   WeeklyHours,
 } from '@crm/contracts';
-import { footerOf, weekDates, weekMinutesOf } from '@crm/contracts/roster';
+import { footerOf, mondayOf, weekDates, weekMinutesOf } from '@crm/contracts/roster';
 import { toDataError, type DataError } from '../errors.ts';
 import type { Notice } from '../notice.ts';
 import { refusalSummary } from '../refusals.ts';
@@ -258,6 +258,18 @@ export function createTeamWeekStore(deps: TeamWeekDeps) {
   };
 
   return {
+    /** The Monday of `date`'s week, or with none this week's in `timeZone` (the reader's): the week a screen opens. */
+    weekOf(date: string | undefined, timeZone: string): string {
+      if (date !== undefined) return mondayOf(date);
+      const parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).formatToParts(new Date(now()));
+      const part = (type: string) => parts.find((each) => each.type === type)?.value ?? '';
+      return mondayOf(`${part('year')}-${part('month')}-${part('day')}`);
+    },
     /** One week of the roster (its Monday), searched by name ('' for everyone). */
     held: (workspace: string, weekStart: string, search = ''): TeamWeekHeld =>
       of(workspace, weekStart, search.trim()).held,

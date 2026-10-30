@@ -12,8 +12,14 @@ import { drawnSections, PAGE_LINKS, sectionMoveIndex, topEntries, universeOf } f
 const tree = readFileSync(new URL('../../routeTree.gen.ts', import.meta.url), 'utf8');
 /** Every route's full path, as the generated tree states them. */
 const fullPaths = new Set([...tree.matchAll(/fullPath: '([^']+)'/g)].map((match) => match[1]));
-/** Whether an address the sidebar links to (with `$slug`) is a route, with or without the trailing slash. */
-const isRoute = (href: string) => fullPaths.has(href) || fullPaths.has(`${href}/`);
+/**
+ * Whether an address the sidebar links to (with `$slug`) is a route, with or without the trailing slash. A query is a
+ * view of its route (the Roster is Availability's `?view=team`, spec 0037).
+ */
+const isRoute = (link: string) => {
+  const href = link.split('?')[0] ?? link;
+  return fullPaths.has(href) || fullPaths.has(`${href}/`);
+};
 
 describe('the sidebar’s routes (AC-944)', () => {
   it('reads the generated tree', () => {
@@ -40,7 +46,7 @@ describe('the sidebar’s routes (AC-944)', () => {
   it('draws one Bookings row and one Captures row, as round 6 did (the owner, 22 October 2026)', () => {
     // Link page leads: it is the surface a member opens most, and it answered inside Settings › Account › Profile
     // until 25 October 2026 (the owner). The inbox follows: a mention or an assignment lands there (spec 0038).
-    expect(Object.keys(PAGE_LINKS)).toEqual(['linkPage', 'inbox', 'tasks', 'bookings', 'captures']);
+    expect(Object.keys(PAGE_LINKS)).toEqual(['linkPage', 'inbox', 'tasks', 'bookings', 'roster', 'captures']);
     expect(PAGE_LINKS.linkPage?.href('acme')).toBe('/w/acme/link-page');
     expect(PAGE_LINKS.inbox?.href('acme')).toBe('/w/acme/inbox');
     expect(PAGE_LINKS.bookings?.href('acme')).toBe('/w/acme/bookings/calendar');

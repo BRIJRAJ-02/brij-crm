@@ -35,6 +35,7 @@ New. A booking page needs several windows a day (split shifts), a day turned off
 - **Copy** follows the first window, with the tooltip "Copy to other days": a Popover of the other days with Select all and **Apply**, which calls `onChange` for each day chosen with this day's windows.
 - The days part by their rhythm (each row a control's height with `space-4` above and below), with no rules between them, so no line competes with the fields.
 - In a narrow card (under 480px) the day and Copy share a line and the windows sit under them at the card's start, and a day off says Unavailable on its own line in the times' column, right after the day, as on a wide card.
+- `isSingleDay` edits one date's hours, not a week (the Team week's cell, spec 0037): no Copy times to and no Set all days, since there is no other day. Why a variant: the cell's Popover needs exactly a row's switch, windows, + and −, and a second copy of that row would have duplicated its Selects, steps and labels.
 - `isReadOnly` shows the week as text, each day's windows or "Unavailable", with no controls: hours that come from elsewhere, such as a page that follows its member's hours.
 - `error` on a row shows under its windows, at their start and no wider than them, as an alert (overlapping windows, an end before its start: the caller checks).
 
