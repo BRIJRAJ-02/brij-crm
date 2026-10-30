@@ -88,11 +88,13 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
   const cards: readonly LinkGridCard[] = pages.map((page) => {
     const isPending = list.status === 'ready' && list.pendingIds.has(page.id);
     const isOff = page.status === 'paused';
+    // A member sees the workspace's links to copy and open (owner, 30 Oct 2026): no editor, switch or menu.
+    const isViewOnly = page.scope === 'workspace' && !page.canChange;
     return {
       id: page.id,
       groupId: page.scope === 'workspace' ? WORKSPACE_GROUP : MEMBERS_GROUP,
       title: page.title,
-      href: pageEditorHref(slug, page.id),
+      ...(isViewOnly ? {} : { href: pageEditorHref(slug, page.id) }),
       // Pages have no colour of their own yet: the card takes a stable one from the page's id.
       colourKey: page.id,
       facts: factsOf(page),
@@ -101,23 +103,29 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
       // Off shows in the muted title and the switch; the badge is for what they can't say.
       ...(isPending
         ? { badge: strings.copying }
-        : page.pausedReason === 'host_removed'
-          ? { badge: strings.hostRemoved }
-          : page.isPrivate
-            ? { badge: strings.linkOnly }
-            : {}),
+        : isViewOnly
+          ? { badge: strings.viewOnly }
+          : page.pausedReason === 'host_removed'
+            ? { badge: strings.hostRemoved }
+            : page.isPrivate
+              ? { badge: strings.linkOnly }
+              : {}),
       isOff,
       isPending,
-      toggle: {
-        label: strings.isOn(page.title),
-        isSelected: page.status === 'live',
-        onChange: (isOn: boolean) => {
-          setStatus(page, isOn ? 'live' : 'paused');
-        },
-        isDisabled: !page.canChange,
-        disabledReason: strings.notYours,
-        hint: page.status === 'live' ? strings.takingBookings : strings.notTakingBookings,
-      },
+      ...(isViewOnly
+        ? {}
+        : {
+            toggle: {
+              label: strings.isOn(page.title),
+              isSelected: page.status === 'live',
+              onChange: (isOn: boolean) => {
+                setStatus(page, isOn ? 'live' : 'paused');
+              },
+              isDisabled: !page.canChange,
+              disabledReason: strings.notYours,
+              hint: page.status === 'live' ? strings.takingBookings : strings.notTakingBookings,
+            },
+          }),
       copyValue: publicBookingUrl(page),
       actions: (
         <>

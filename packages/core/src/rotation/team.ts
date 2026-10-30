@@ -20,7 +20,7 @@ import { DateTime } from 'luxon';
 import { defaultAvailability, type BookingAvailability } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { resolveMany } from '../availability/resolve.ts';
-import { blockedTime } from '../booking/blocks.ts';
+import { blockedTimes } from '../booking/blocks.ts';
 import type { BusyReader } from '../booking/calendar.ts';
 import type { BookedSpan, Span } from '../booking/engine.ts';
 import {
@@ -244,12 +244,14 @@ export async function memberClosed(
   from: Date,
   to: Date,
 ): Promise<ReadonlyMap<string, MembersClosed>> {
-  const found = new Map<string, MembersClosed>();
-  for (const memberId of memberIds) {
-    const closed = await blockedTime(tx, memberId, from, to, page);
-    found.set(memberId, { busy: closed.busy, openHolds: page.isPrivate ? closed.openHolds : [] });
-  }
-  return found;
+  // One read for every member: "Everyone on the roster" may be the whole workspace.
+  const closed = await blockedTimes(tx, memberIds, from, to, page);
+  return new Map(
+    memberIds.map((memberId) => {
+      const theirs = closed.get(memberId) ?? { busy: [], openHolds: [] };
+      return [memberId, { busy: theirs.busy, openHolds: page.isPrivate ? theirs.openHolds : [] }] as const;
+    }),
+  );
 }
 
 /**

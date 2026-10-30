@@ -5,7 +5,7 @@
 // everyone's. A page the reader may not see answers as absent (NOT_FOUND).
 // Pages are settings, not CRM data: their writes store no outbox row.
 import { randomBytes } from 'node:crypto';
-import { and, asc, desc, eq, gte, inArray, isNull, like, lt, notInArray, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNull, like, lt, notInArray, or, sql } from 'drizzle-orm';
 import {
   defaultAvailability,
   PERMISSIONS,
@@ -225,9 +225,12 @@ function viewOf(
     fileToCrm: page.fileToCrm,
     answersObjectId: page.answersObjectId,
     ...(page.status === 'paused' && page.pausedReason !== undefined ? { pausedReason: page.pausedReason } : {}),
-    ...(hosts === undefined ? {} : { hosts }),
+    // Who hosts it and how it routes are for those who manage it: a member seeing a workspace link gets neither.
+    ...(hosts === undefined || !mayChange(scope, page) ? {} : { hosts }),
     // Hidden means absent (spec 0009): a rule over a field the reader can't see isn't sent, not even its id.
-    ...(page.kind === 'round_robin' ? { routing: { rules: [...rulesSeen(page.routingRules ?? [], unseen)] } } : {}),
+    ...(page.kind === 'round_robin' && mayChange(scope, page)
+      ? { routing: { rules: [...rulesSeen(page.routingRules ?? [], unseen)] } }
+      : {}),
     bookingsThisMonth: count,
     canChange: mayChange(scope, page),
     createdAt: page.createdAt.toISOString(),
@@ -236,8 +239,9 @@ function viewOf(
 }
 
 /**
- * The pages the reader may see (AC-645): their own, or every live page with `booking.admin` (workspace links
- * included); newest first.
+ * The pages the reader may see (AC-645): their own and the workspace's links, or every page with `booking.admin`;
+ * newest first. A workspace link the reader may not change comes without its hosts and routing: they may copy and
+ * open it, nothing more.
  */
 export async function listBookingPages(
   scope: EngineScope,
@@ -253,8 +257,14 @@ export async function listBookingPages(
       .where(
         and(
           isNull(bookingPages.deletedAt),
-          // A workspace link is nobody's own: only `booking.admin` lists it, whoever made it.
-          mine === undefined ? undefined : and(eq(bookingPages.ownerMemberId, mine), eq(bookingPages.scope, 'member')),
+          // A member's own pages, and the workspace's links (owner, 30 Oct 2026: the company's front door, which every
+          // member may see and copy; only `booking.admin` changes one, whoever made it).
+          mine === undefined
+            ? undefined
+            : or(
+                and(eq(bookingPages.ownerMemberId, mine), eq(bookingPages.scope, 'member')),
+                eq(bookingPages.scope, 'workspace'),
+              ),
         ),
       )
       .orderBy(desc(bookingPages.createdAt), asc(bookingPages.id))

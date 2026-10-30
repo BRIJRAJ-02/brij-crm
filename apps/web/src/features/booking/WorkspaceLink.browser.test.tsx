@@ -185,6 +185,21 @@ describe('Captures › Links: the Workspace group', () => {
     await checkEverywhere('links-grouped');
   });
 
+  it('shows a member the workspace link to copy and open, with no editor, switch or menu', async () => {
+    await render([
+      pageOf('1', 'Intro call'),
+      pageOf('2', 'Talk to us', { kind: 'round_robin', scope: 'workspace', canChange: false }),
+    ]);
+    const workspace = page.getByRole('list', { name: strings.workspaceGroup });
+    await expect.element(workspace.getByText(strings.viewOnly)).toBeVisible();
+    expect(workspace.getByRole('link', { name: 'Talk to us' }).elements()).toHaveLength(0);
+    expect(workspace.getByRole('switch').elements()).toHaveLength(0);
+    expect(workspace.getByRole('button', { name: strings.more('Talk to us') }).elements()).toHaveLength(0);
+    await expect.element(workspace.getByRole('button', { name: /Copy link/ })).toBeVisible();
+    await expect.element(workspace.getByRole('button', { name: strings.openPage('Talk to us') })).toBeVisible();
+    await checkEverywhere('links-member');
+  });
+
   it('stays one grid with no headings while the workspace has no link of its own', async () => {
     await render([pageOf('1', 'Intro call'), pageOf('3', 'Demo', { kind: 'round_robin' })]);
     expect(page.getByRole('heading', { level: 2, name: strings.workspaceGroup }).elements()).toHaveLength(0);

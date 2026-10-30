@@ -27,6 +27,8 @@ export const strings = {
   kindLabel: { personal: 'One on one', collective: 'Collective', round_robin: 'Round robin' },
   /** A workspace link's kind on its card, in place of Round robin. */
   workspaceLink: 'Workspace link',
+  /** A workspace link a member may copy and open, not change. */
+  viewOnly: 'View only',
   /** Captures › Links' groups, when the workspace has a link of its own. */
   workspaceGroup: 'Workspace',
   workspaceGroupLine: 'Links that book whoever in the workspace is free, in turn',

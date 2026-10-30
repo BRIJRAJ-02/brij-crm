@@ -171,14 +171,21 @@ describe('the workspace link: making and managing it', () => {
     const bea = await w.addMember('Bea Boss', 'admin');
     const sam = await w.addMember('Sam Lee');
     const { page } = await workspaceLink(bea.scope);
-    // Bea made it; as a plain member she manages nothing of it, nor lists it as her own.
+    // Bea made it; as a plain member she manages nothing of it. Every member sees it, to copy and open: the
+    // company's front door (owner, 30 Oct 2026), with no hosts or routing, and changes nothing.
     const beaDemoted = rescope(bea.scope, { role: 'member' });
     for (const scope of [sam.scope, beaDemoted]) {
       expect(
         await refusalOf(updateBookingPage(scope, { pageId: page.id, settings: { title: 'Mine now' } })),
       ).toMatchObject({ code: 'NOT_FOUND' });
+      expect(
+        await refusalOf(updateBookingPage(scope, { pageId: page.id, settings: { status: 'paused' } })),
+      ).toMatchObject({ code: 'NOT_FOUND' });
       expect(await refusalOf(deleteBookingPage(scope, { pageId: page.id }))).toMatchObject({ code: 'NOT_FOUND' });
-      expect((await listBookingPages(scope, NOW)).map((each) => each.id)).not.toContain(page.id);
+      const seen = (await listBookingPages(scope, NOW)).find((each) => each.id === page.id);
+      expect(seen).toMatchObject({ scope: 'workspace', canChange: false, publicKey: page.publicKey });
+      expect(seen?.hosts).toBeUndefined();
+      expect(seen?.routing).toBeUndefined();
       expect(await refusalOf(listBookings(scope, { pageId: page.id, when: 'upcoming' }, NOW))).toMatchObject({
         code: 'NOT_FOUND',
       });
@@ -348,6 +355,26 @@ describe('the workspace link: who it books', () => {
     const lee = await w.addMember('Lee Chan');
     const roster = (await listRotations(w.owner, NOW))[0];
     expect(roster?.members.find((member) => member.memberId === lee.id)?.count).toBe(2);
+  });
+});
+
+describe('the roster read', () => {
+  it('reaches every table it joins by an index, never a scan of the workspace (EXPLAIN)', async () => {
+    const w = await workspace();
+    await w.addMember('Sam Lee');
+    await workspaceLink(w.owner);
+    const plan = await db.withWorkspace(w.workspaceId, async (tx) => {
+      const [rotation] = (
+        await tx.execute<{ id: string }>(sql`select id::text from rotations where follows = 'everyone'`)
+      ).rows;
+      // Tiny tables read cheapest by a scan; with scans priced out, any one left has no index to take instead.
+      await tx.execute(sql`set local enable_seqscan = off`);
+      const explained = await tx.execute<{ 'QUERY PLAN': unknown }>(
+        sql`explain (format json) select * from rotation_roster where rotation_id = ${rotation?.id ?? null}::uuid and is_on`,
+      );
+      return JSON.stringify(explained.rows[0]?.['QUERY PLAN']);
+    });
+    expect(plan).not.toContain('"Seq Scan"');
   });
 });
 
