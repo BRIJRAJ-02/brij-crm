@@ -14,7 +14,7 @@ const tree = readFileSync(new URL('../../routeTree.gen.ts', import.meta.url), 'u
 const fullPaths = new Set([...tree.matchAll(/fullPath: '([^']+)'/g)].map((match) => match[1]));
 /**
  * Whether an address the sidebar links to (with `$slug`) is a route, with or without the trailing slash. A query is a
- * view of its route (the Roster is Availability's `?view=team`, spec 0037).
+ * view of its route.
  */
 const isRoute = (link: string) => {
   const href = link.split('?')[0] ?? link;

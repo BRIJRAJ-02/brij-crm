@@ -361,9 +361,7 @@ describe('New meeting', () => {
     await userEvent.click(page.getByRole('button', { name: /For$/ }));
     await userEvent.click(page.getByRole('option', { name: 'Sam' }));
     const warning = page.getByRole('status').filter({ hasText: 'Sam is at their limit of 5 meetings that day.' });
-    await expect
-      .element(warning)
-      .toHaveTextContent('Sam is at their limit of 5 meetings that day. Booking anyway goes over it.');
+    await expect.element(warning).toHaveTextContent('Sam is at their limit of 5 meetings that day.');
     expect(limitsAt).toHaveBeenLastCalledWith({ memberId: sam, at: '2026-10-23T09:30:00.000Z' });
     // Book it still books.
     await userEvent.fill(page.getByRole('textbox', { name: 'With' }), 'Ada');
@@ -377,8 +375,7 @@ describe('New meeting', () => {
       Promise.resolve({ day: { limit: 4, count: 6 }, week: { limit: 20, count: 20 } }),
     );
     await open({ limitsAt });
-    const words =
-      'You’re past your limit of 4 meetings that day and at your limit of 20 meetings that week. Booking anyway goes over both.';
+    const words = 'You’re past your limit of 4 meetings that day and at your limit of 20 meetings that week.';
     const warning = page.getByRole('status').filter({ hasText: 'past your limit' });
     await expect.element(warning).toHaveTextContent(words);
     const shown = warning.element();

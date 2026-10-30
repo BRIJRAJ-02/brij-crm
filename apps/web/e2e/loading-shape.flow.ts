@@ -61,6 +61,8 @@ const ALL_SCREENS: readonly Screen[] = [
   { name: 'bookings availability', start: at('bookings/calendar'), target: tab('Availability') },
   // Calendars and Round robin came up out of Settings into Bookings (25 October 2026), so they are walked as the
   // tabs they are; each draws its body inside the frame the tab strip already holds.
+  // The Roster, a tab of its own from 31 October 2026: its week's bar and the grid's skeleton rows.
+  { name: 'bookings roster', start: at('bookings/calendar'), target: tab('Roster') },
   { name: 'bookings round robin', start: at('bookings/calendar'), target: tab('Round robin') },
   { name: 'bookings calendars', start: at('bookings/calendar'), target: tab('Calendars') },
   { name: 'captures links', start: at('tasks'), target: sidebar('Captures') },
