@@ -2,7 +2,7 @@
 export const strings = {
   loading: 'Loading activity',
   empty: 'No activity yet',
-  emptyBody: 'Changes, notes, tasks, emails and meetings show here as they happen.',
+  emptyBody: 'Changes, notes, tasks, comments and meetings show here as they happen.',
   failed: 'Activity didn’t load',
   noAccess: 'You can’t see this activity',
   noAccessBody: 'Ask a workspace admin for access.',

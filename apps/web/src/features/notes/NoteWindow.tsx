@@ -1,7 +1,7 @@
 // Brief
 // Purpose: one note, on `?note=<id>` (or `?note=new`) over the record page, written as a page (Notion's centre peek).
 // Main task: write what was learned (a title and the body), and trust that it's saved.
-// Leaves out: writing together in real time and versions (#27), comments on a passage (#29), moving a note, a note page.
+// Leaves out: writing together in real time and versions (#27), comments on a passage (#29), moving a note, templates.
 import {
   NOTE_TITLE_MAX,
   type ActorDisplay,
@@ -27,7 +27,7 @@ import {
 } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { offerUndo } from './delete.ts';
+import { deleteWithUndo } from '../tasks/undo-delete.ts';
 import { NoteEditor } from './editor.ts';
 import { actorDisplay } from './entries.ts';
 import { strings } from './strings.ts';
@@ -73,12 +73,6 @@ const LOADING_SESSION: NoteSession = {
   dismissNotice: () => undefined,
 };
 
-/** The delete's confirm: open, waiting on the server, or refused with the reason. */
-interface Confirming {
-  readonly isBusy: boolean;
-  readonly error?: string;
-}
-
 /**
  * The bar's word on the note: its save state while it saves ("Saving…",
  * "Saved", "Not saved. Retrying…", "Not saved."), else when it was last edited.
@@ -114,8 +108,9 @@ function statusOf(state: NoteSessionState): ReactNode | undefined {
  * no box around either. A new note stores nothing until it holds text, then
  * saves itself as it is typed; a note that doesn't exist, was deleted, or is
  * hidden says so. Closing with a save pending closes at once; the save
- * finishes in the data layer. Deleting asks first, since a note can't be
- * brought back from the Trash.
+ * finishes in the data layer. Delete is one click: the window closes and
+ * the toast offers Undo for 10 seconds (the owner's rule: Undo deletes never
+ * ask first).
  */
 export function NoteWindow(props: NoteWindowProps) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
@@ -125,7 +120,6 @@ export function NoteWindow(props: NoteWindowProps) {
   const noteId = note === 'new' ? newId : note;
   const [opened, setOpened] = useState<NoteSession | 'failed' | undefined>(undefined);
   const [attempt, setAttempt] = useState(0);
-  const [confirming, setConfirming] = useState<Confirming | undefined>(undefined);
   // One delete, and one close: a second press (a double click) does nothing, and a window that closed (stepping Back)
   // never closes again, whatever a late click outside it says.
   const isRemoving = useRef(false);
@@ -193,36 +187,27 @@ export function NoteWindow(props: NoteWindowProps) {
       },
     );
   };
-  // The confirm's Delete note: busy until the server answers; a refusal stays in the confirm with its reason (the
-  // note shows again behind it), a delete that lands closes both and offers Undo for 10 seconds.
+  // Delete note: the window closes at once and the toast offers Undo; a refusal takes the toast back and says why.
   const remove = () => {
     if (isRemoving.current) return;
     isRemoving.current = true;
-    setConfirming({ isBusy: true });
-    void data.notes.remove(slug, record.recordId, noteId).then((failure) => {
-      if (failure !== undefined) {
-        isRemoving.current = false;
-        setConfirming({ isBusy: false, error: `${strings.notDeleted} ${failure.message}` });
-        return;
-      }
-      setConfirming(undefined);
-      close();
-      offerUndo({
-        toasts,
-        restore: () => data.notes.restore(slug, record.recordId, noteId),
-        words: {
-          deleted: strings.noteDeleted,
-          undo: strings.undo,
-          notRestored: (reason) => `${strings.notRestored} ${reason}`,
-        },
-        listLabel: strings.listLabel,
-      });
+    close();
+    deleteWithUndo({
+      toasts,
+      remove: () => data.notes.remove(slug, record.recordId, noteId),
+      restore: () => data.notes.restore(slug, record.recordId, noteId),
+      words: {
+        deleted: strings.noteDeleted,
+        undo: strings.undo,
+        notDeleted: (reason) => `${strings.notDeleted} ${reason}`,
+        notRestored: (reason) => `${strings.notRestored} ${reason}`,
+      },
+      listLabel: strings.listLabel,
     });
   };
 
   const isReady = state.status === 'ready';
-  // While its delete is out the note shows as it was: the data layer takes it away at once, and puts it back if refused.
-  const isUnavailable = state.isUnavailable && confirming?.isBusy !== true;
+  const isUnavailable = state.isUnavailable;
   const isEditable = isReady && state.canChange && !state.isUnavailable;
   const title = !isReady
     ? strings.note
@@ -320,81 +305,51 @@ export function NoteWindow(props: NoteWindowProps) {
   }
 
   return (
-    <>
-      <Modal
-        variant="peek"
-        title={title}
-        context={
-          <RecordChip display={record} isFlat {...(props.recordHref === undefined ? {} : { href: props.recordHref })} />
-        }
-        isOpen
-        onOpenChange={(open) => {
-          if (!open) close();
-        }}
-        {...(status === undefined ? {} : { status })}
-        headerActions={
-          <>
-            {isReady && state.saveState === 'failed' && state.refusal === undefined && (
-              <Button variant="ghost" size="sm" onPress={session.retry}>
-                {strings.retry}
-              </Button>
-            )}
-            {isReady && !state.isNew && (
-              <MenuTrigger>
-                <Tooltip content={strings.more}>
-                  <Button variant="ghost" icon="ellipsis" label={strings.more} />
-                </Tooltip>
-                <Menu
-                  label={strings.more}
-                  onAction={(key) => {
-                    if (key === 'copy') copyLink();
-                    if (key === 'delete') setConfirming({ isBusy: false });
-                  }}
-                >
-                  <MenuItem id="copy" icon="link">
-                    {strings.copyLink}
-                  </MenuItem>
-                  {state.canChange ? (
-                    <MenuItem id="delete" icon="trash" isDanger>
-                      {strings.deleteNote}
-                    </MenuItem>
-                  ) : null}
-                </Menu>
-              </MenuTrigger>
-            )}
-          </>
-        }
-      >
-        {body}
-      </Modal>
-      {confirming !== undefined && (
-        <Modal
-          tone="danger"
-          title={strings.deleteQuestion(state.title)}
-          isOpen
-          isBusy={confirming.isBusy}
-          onOpenChange={(open) => {
-            if (!open && !confirming.isBusy) setConfirming(undefined);
-          }}
-          actions={
-            <>
-              <Button slot="close" kbd="ESC" isDisabled={confirming.isBusy}>
-                {strings.cancel}
-              </Button>
-              <Button variant="danger-solid" icon="trash" isPending={confirming.isBusy} onPress={remove}>
-                {strings.deleteNote}
-              </Button>
-            </>
-          }
-        >
-          {strings.deleteText}
-          {confirming.error !== undefined && (
-            <Callout tone="danger" isAnnounced>
-              {confirming.error}
-            </Callout>
+    <Modal
+      variant="peek"
+      title={title}
+      context={
+        <RecordChip display={record} isFlat {...(props.recordHref === undefined ? {} : { href: props.recordHref })} />
+      }
+      isOpen
+      onOpenChange={(open) => {
+        if (!open) close();
+      }}
+      {...(status === undefined ? {} : { status })}
+      headerActions={
+        <>
+          {isReady && state.saveState === 'failed' && state.refusal === undefined && (
+            <Button variant="ghost" size="sm" onPress={session.retry}>
+              {strings.retry}
+            </Button>
           )}
-        </Modal>
-      )}
-    </>
+          {isReady && !state.isNew && (
+            <MenuTrigger>
+              <Tooltip content={strings.more}>
+                <Button variant="ghost" icon="ellipsis" label={strings.more} />
+              </Tooltip>
+              <Menu
+                label={strings.more}
+                onAction={(key) => {
+                  if (key === 'copy') copyLink();
+                  if (key === 'delete') remove();
+                }}
+              >
+                <MenuItem id="copy" icon="link">
+                  {strings.copyLink}
+                </MenuItem>
+                {state.canChange ? (
+                  <MenuItem id="delete" icon="trash" isDanger>
+                    {strings.deleteNote}
+                  </MenuItem>
+                ) : null}
+              </Menu>
+            </MenuTrigger>
+          )}
+        </>
+      }
+    >
+      {body}
+    </Modal>
   );
 }
