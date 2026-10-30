@@ -507,6 +507,7 @@ export function useBulkActions({
       */}
       <Modal
         title={isEditJob ? bulkStrings.confirmEditTitle(jobWords) : bulkStrings.confirmTitle(jobWords)}
+        variant="confirm"
         tone="danger"
         isOpen={isReviewing && bulkJob.isCounted}
         onOpenChange={(isOpen) => {

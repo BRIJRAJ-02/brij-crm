@@ -137,9 +137,8 @@ function EditDialog({
       }}
       actions={
         <>
-          <Button kbd="ESC" onPress={leave}>
-            {strings.cancel}
-          </Button>
+          {/* Closing asks the dialog to close, which goes through leave() and its guard. */}
+          <Button slot="close">{strings.cancel}</Button>
           <Button variant="primary" onPress={save}>
             {strings.save}
           </Button>
@@ -150,20 +149,15 @@ function EditDialog({
       {isLeaving && (
         <Modal
           title={strings.discardTitle}
+          variant="confirm"
+          tone="danger"
           isOpen
           onOpenChange={(isOpen) => {
             if (!isOpen) setLeaving(false);
           }}
           actions={
             <>
-              <Button
-                kbd="ESC"
-                onPress={() => {
-                  setLeaving(false);
-                }}
-              >
-                {strings.keepEditing}
-              </Button>
+              <Button slot="close">{strings.keepEditing}</Button>
               <Button variant="danger-solid" onPress={onClose}>
                 {strings.discard}
               </Button>

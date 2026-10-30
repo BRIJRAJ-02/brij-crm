@@ -82,6 +82,32 @@ const VisitorBar = lazy(() => visitorModule.then((module) => ({ default: module.
 const ChatPanel = lazy(() => import('./ChatPanel.tsx').then((module) => ({ default: module.ChatPanel })));
 const BookingDetails = lazy(() => detailsModule.then((module) => ({ default: module.BookingDetails })));
 
+/** One minute in milliseconds. */
+const MINUTE_MS = 60_000;
+
+/** The instant `now` gives, read again just after each minute turns: a clock's minute that never goes stale. */
+function useMinute(now: () => number): number {
+  const [minute, setMinute] = useState(now);
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const next = () => {
+      // A beat past the turn, so the reading lands in the new minute.
+      timer = setTimeout(
+        () => {
+          setMinute(now());
+          next();
+        },
+        MINUTE_MS - (now() % MINUTE_MS) + 50,
+      );
+    };
+    next();
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [now]);
+  return minute;
+}
+
 /**
  * The details step once its code is in, which it nearly always is by the time a visitor presses Book: drawn at once,
  * so it slides in with the step rather than after a Suspense fallback's hold. Until then (or if it failed) the page
@@ -552,8 +578,10 @@ function Booking({
   const [matchOpen, setMatchOpen] = useState(connected === 'connected');
   // Book by chat's conversation (spec 0042), kept while the length, the zone or the view changes.
   const [chatMemory, setChatMemory] = useState<ChatMemory | undefined>(undefined);
-  // The time now in the zone in use, on the page's clock (12 or 24 hours), beside its name.
-  const clockNow = timeLabel(new Date(now()).toISOString(), zone, locale, hour12);
+  // The time now in the zone in use, on the page's clock (12 or 24 hours), beside its name: it ticks on each minute's
+  // turn, so a page left open never shows a stale time.
+  const minute = useMinute(now);
+  const clockNow = timeLabel(new Date(minute).toISOString(), zone, locale, hour12);
   const zones = useMemo(() => zoneItems(zone, now(), clockNow), [zone, now, clockNow]);
   // The tab names the meeting and the host: "Intro call with Ada · Timefix".
   useEffect(() => {

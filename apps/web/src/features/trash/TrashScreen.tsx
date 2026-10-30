@@ -549,6 +549,7 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
             */}
       <Modal
         title={jobTitle}
+        variant="confirm"
         tone={isRestoreJob ? 'default' : 'danger'}
         isOpen={isReviewing && bulkJob.isCounted}
         onOpenChange={(isOpen) => {

@@ -355,8 +355,9 @@ function GroupRows({ builder, group, path }: GroupRowsProps) {
               {strings.removeGroup}
             </Button>
           )}
-          {/* The top group's foot ends with Clear all, on the same row as Add filter, as Attio's does. */}
-          {path.length === 0 && (
+          {/* The top group's foot ends with Clear all, on the same row as Add filter, as Attio's does: only while
+              there is something to clear. */}
+          {path.length === 0 && value.conditions.length > 0 && (
             <span className={styles.clearAll}>
               <Button
                 variant="ghost"
