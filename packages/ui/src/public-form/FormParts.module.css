@@ -15,6 +15,29 @@
 
 @layer components {
   .root {
+    /* The workspace's brand (spec 0060, AC-4, AC-5): the accent pair its stylesheet sets at the page's root, or an
+       app preview's, its light or dark half picked by the form's own Colour. With no brand each name falls back to
+       the token it stands in for, so a form without one draws exactly as before. `--form-none` is the guaranteed
+       invalid value, which makes a mix of a missing brand invalid so its reader falls back too. */
+    --form-none: initial;
+    --form-brand-accent: light-dark(var(--brand-accent, var(--form-none)), var(--brand-accent-dark, var(--form-none)));
+    --form-brand-on-accent: light-dark(
+      var(--brand-on-accent, var(--form-none)),
+      var(--brand-on-accent-dark, var(--form-none))
+    );
+    --form-brand-link: light-dark(var(--brand-link, var(--form-none)), var(--brand-link-dark, var(--form-none)));
+    /* A tenth of the link colour over the surface: the link keeps 4.5:1 on it for any accent. */
+    --form-brand-soft: color-mix(in oklab, var(--form-brand-link) 10%, var(--surface));
+    --form-brand-focus: 0 0 0 var(--border-width-thick) var(--form-brand-accent);
+    --form-accent: var(--form-brand-accent, var(--accent));
+    --form-accent-hover: var(--form-brand-accent, var(--accent-hover));
+    --form-on-accent: var(--form-brand-on-accent, var(--on-accent));
+    --form-link: var(--form-brand-link, var(--link));
+    --form-accent-soft: var(--form-brand-soft, var(--accent-soft));
+    --form-accent-border: var(--form-brand-accent, var(--accent-border));
+    --form-accent-line: var(--form-brand-accent, var(--accent-line));
+    --form-focus: var(--form-brand-focus, var(--shadow-focus));
+
     display: flex;
     flex-direction: column;
     gap: var(--space-24);
@@ -56,6 +79,16 @@
      field, read at the body size rather than the app's dense label size. A choice group's question (the strong
      label) comes down to the same regular weight, so every question reads alike. The foot keeps the small size. */
   .card {
+    /* The form's controls read the accent through the library's own names, so the brand reaches each of them: the
+       button, a chosen option, links and focus rings. One level in, where the names above were worked out. */
+    --accent: var(--form-accent);
+    --accent-hover: var(--form-accent-hover);
+    --on-accent: var(--form-on-accent);
+    --link: var(--form-link);
+    --accent-soft: var(--form-accent-soft);
+    --accent-border: var(--form-accent-border);
+    --accent-line: var(--form-accent-line);
+    --shadow-focus: var(--form-focus);
     --text-label: var(--text-body);
     --tracking-label: var(--tracking-body);
     --text-label-strong: var(--text-body);
@@ -87,6 +120,17 @@
       background: var(--surface-raised);
       box-shadow: var(--shadow-md);
     }
+  }
+
+  /* The workspace's logo over the form (spec 0060, AC-4): a control's height, as wide as it needs up to a column,
+     never cropped or stretched, on the form's own start edge. */
+  .brandLogo {
+    align-self: flex-start;
+    block-size: var(--size-input);
+    inline-size: auto;
+    max-inline-size: var(--size-column);
+    margin-block-end: var(--space-20);
+    object-fit: contain;
   }
 
   .header {

@@ -72,6 +72,11 @@
     border-radius: var(--radius-md);
   }
 
+  /* A link page's rounded face (spec 0060, AC-13): the largest square takes the card corner. */
+  .root[data-shape='square'][data-size='hero'] {
+    border-radius: var(--radius-xl);
+  }
+
   .root[data-hue='gray'] {
     background: var(--tag-gray-bg);
     color: var(--tag-gray-text);

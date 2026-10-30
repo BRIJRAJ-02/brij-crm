@@ -6,7 +6,57 @@ import { TileGrid } from '../../molecules/TileGrid/TileGrid.tsx';
 import { BookingFoot } from '../BookingFrame/BookingFrame.tsx';
 import { settleAnimations } from '../../workbench/animations.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
-import { LinkPage, LinkPageThumbnail, LinkPageTile, type LinkPageBlock } from './LinkPage.tsx';
+import { LinkPage, LinkPageThumbnail, LinkPageTile, type LinkPageBlock, type PageLook } from './LinkPage.tsx';
+
+/** The look a page has never touched (spec 0054), with the four keys spec 0060 added at their defaults. */
+const PLAIN: PageLook = {
+  ground: 'plain',
+  hue: 'blue',
+  mode: 'light',
+  shape: 'soft',
+  fill: 'plain',
+  font: 'sans',
+  gradient: 'dawn',
+  pattern: 'dots',
+  header: 'centred',
+  avatar: 'circle',
+};
+
+/** The fourteen looks of the gallery (spec 0060, AC-8), as `PAGE_THEME_PRESETS` in the contracts writes them. */
+const LOOKS: readonly (readonly [string, string, PageLook])[] = [
+  ['plain', 'Plain', PLAIN],
+  ['paper', 'Paper', { ...PLAIN, ground: 'paper' }],
+  ['bold', 'Bold', { ...PLAIN, ground: 'tint', shape: 'pill', fill: 'solid' }],
+  ['ink', 'Ink', { ...PLAIN, ground: 'ink', mode: 'dark', fill: 'outline' }],
+  ['quiet', 'Quiet', { ...PLAIN, ground: 'paper', shape: 'square', font: 'mono' }],
+  ['dawn', 'Dawn', { ...PLAIN, ground: 'gradient', gradient: 'dawn', shape: 'pill', fill: 'soft', font: 'friendly' }],
+  ['ocean', 'Ocean', { ...PLAIN, ground: 'gradient', gradient: 'ocean', fill: 'solid', font: 'geometric' }],
+  ['mint', 'Mint', { ...PLAIN, ground: 'gradient', gradient: 'mint', fill: 'outline', font: 'grotesk' }],
+  [
+    'studio',
+    'Studio',
+    { ...PLAIN, ground: 'pattern', pattern: 'grid', shape: 'square', fill: 'outline', font: 'grotesk' },
+  ],
+  ['editorial', 'Editorial', { ...PLAIN, ground: 'paper', header: 'left', font: 'editorial' }],
+  ['night', 'Night', { ...PLAIN, ground: 'ink', mode: 'dark', fill: 'outline', font: 'display' }],
+  [
+    'peach',
+    'Peach',
+    { ...PLAIN, ground: 'gradient', gradient: 'peach', shape: 'pill', fill: 'solid', font: 'friendly' },
+  ],
+  ['graphite', 'Graphite', { ...PLAIN, ground: 'gradient', gradient: 'graphite', mode: 'dark', font: 'mono' }],
+  ['gallery', 'Gallery', { ...PLAIN, ground: 'image', header: 'cover', avatar: 'rounded', font: 'classic' }],
+];
+
+/** An orange brand, as `brandProperties(brandVariables({ accent: '#e8590c' }))` makes it (spec 0060, AC-7). */
+const ORANGE_BRAND = [
+  ['--brand-accent', '#e65708'],
+  ['--brand-on-accent', '#000000'],
+  ['--brand-link', '#b74300'],
+  ['--brand-accent-dark', '#e8590c'],
+  ['--brand-on-accent-dark', '#000000'],
+  ['--brand-link-dark', '#fd6c2b'],
+] as const;
 
 const meta = {
   title: 'Modules/LinkPage',
@@ -205,7 +255,7 @@ export const FormBlock: Story = {
 export const Themed: Story = {
   args: {
     person: { name: 'Ada Lovelace', id: 'ada', bio: 'Numbers, engines and the odd poem.' },
-    theme: { ground: 'tint', hue: 'purple', mode: 'light', shape: 'pill', fill: 'solid', font: 'mono' },
+    theme: { ...PLAIN, ground: 'tint', hue: 'purple', shape: 'pill', fill: 'solid', font: 'mono' },
     blocks: [
       { kind: 'page', id: 'chat', title: 'Quick chat', href: '/ada/quick-chat', facts: '30 min' },
       { kind: 'link', id: 'site', title: 'ada.dev', href: 'https://ada.dev', hue: 'purple' },
@@ -226,7 +276,7 @@ export const Themed: Story = {
 export const ThemedDark: Story = {
   args: {
     person: { name: 'Ada Lovelace', id: 'ada', bio: 'Numbers, engines and the odd poem.' },
-    theme: { ground: 'ink', hue: 'blue', mode: 'dark', shape: 'square', fill: 'outline', font: 'sans' },
+    theme: { ...PLAIN, ground: 'ink', mode: 'dark', shape: 'square', fill: 'outline' },
     blocks: [{ kind: 'link', id: 'site', title: 'ada.dev', href: 'https://ada.dev', hue: 'blue' }],
   },
 };
@@ -295,8 +345,9 @@ export const Tiles: Story = {
 };
 
 /**
- * Five looks in miniature, as Appearance's presets and the theme gallery draw them (spec 0058, AC-10): each the real
- * ground, typeface, shape and fill, at a tile's size.
+ * The fourteen looks in miniature, as the Design panel's gallery draws them (spec 0058, AC-10; spec 0060, AC-8):
+ * each the real ground, header, face, typeface, shape and fill, at a tile's size. Gallery's photos stand in until
+ * there are some.
  */
 export const Thumbnails: Story = {
   render: () => (
@@ -305,39 +356,151 @@ export const Thumbnails: Story = {
         variant="choice"
         label="Look"
         defaultValue="plain"
-        tiles={(
-          [
-            [
-              'plain',
-              'Plain',
-              { ground: 'plain', hue: 'gray', mode: 'light', shape: 'soft', fill: 'plain', font: 'sans' },
-            ],
-            [
-              'quiet',
-              'Quiet',
-              { ground: 'paper', hue: 'gray', mode: 'light', shape: 'square', fill: 'plain', font: 'mono' },
-            ],
-            [
-              'bold',
-              'Bold',
-              { ground: 'tint', hue: 'purple', mode: 'light', shape: 'pill', fill: 'solid', font: 'sans' },
-            ],
-            ['ink', 'Ink', { ground: 'ink', hue: 'blue', mode: 'dark', shape: 'soft', fill: 'outline', font: 'sans' }],
-            [
-              'fresh',
-              'Fresh',
-              { ground: 'tint', hue: 'green', mode: 'light', shape: 'pill', fill: 'soft', font: 'sans' },
-            ],
-          ] as const
-        ).map(([id, name, theme]) => ({ id, name, thumbnail: <LinkPageThumbnail theme={theme} /> }))}
+        tiles={LOOKS.map(([id, name, theme]) => ({ id, name, thumbnail: <LinkPageThumbnail theme={theme} /> }))}
       />
     </Stage>
   ),
   play: async ({ canvasElement }) => {
     const thumbs = canvasElement.querySelectorAll('[data-thumbnail]');
-    await expect(thumbs).toHaveLength(5);
+    await expect(thumbs).toHaveLength(14);
     await expect(thumbs[0]).toHaveAttribute('aria-hidden', 'true');
   },
+};
+
+/** The same gallery in the owner's own colour: every fill and the solid rows take the brand (spec 0060, AC-14). */
+export const ThumbnailsBranded: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage>
+      <TileGrid
+        variant="choice"
+        label="Look"
+        defaultValue="bold"
+        tiles={LOOKS.map(([id, name, theme]) => ({
+          id,
+          name,
+          thumbnail: <LinkPageThumbnail theme={theme} variables={ORANGE_BRAND} />,
+        }))}
+      />
+    </Stage>
+  ),
+};
+
+/** A brand's accent on the page (spec 0060, AC-5, AC-14): Save contact, the solid rows and the focus ring. */
+export const Branded: Story = {
+  args: {
+    person: PERSON,
+    theme: { ...PLAIN, shape: 'pill', fill: 'solid' },
+    variables: ORANGE_BRAND,
+  },
+  render: (args) => (
+    <Stage width="fill" height="page">
+      <LinkPage {...args} blocks={anishBlocks()} />
+    </Stage>
+  ),
+  play: async ({ canvasElement }) => {
+    const root = canvasElement.querySelector<HTMLElement>('[data-page-ground]');
+    // Only the checked names reach the root, and the rows draw in the brand, not the product's blue.
+    await expect(root?.style.getPropertyValue('--brand-accent')).toBe('#e65708');
+    const row = canvasElement.querySelector('a[href^="/"]');
+    await expect(row === null ? '' : getComputedStyle(row).backgroundColor).toBe('rgb(230, 87, 8)');
+  },
+};
+
+/** Anything but a brand name and a checked value is dropped before it reaches the page (spec 0060, AC-22). */
+export const BrandRefused: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: {
+    person: PERSON,
+    theme: PLAIN,
+    variables: [
+      ['--brand-accent', 'red;}body{display:none'],
+      ['color', '#000000'],
+      ['--page-cover-image', 'url("https://elsewhere.example/x.png")'],
+    ],
+  },
+  render: (args) => (
+    <Stage width="fill" height="page">
+      <LinkPage {...args} blocks={anishBlocks().slice(0, 2)} />
+    </Stage>
+  ),
+  play: async ({ canvasElement }) => {
+    await expect(canvasElement.querySelector('[data-page-ground]')?.getAttribute('style')).toBeNull();
+  },
+};
+
+/** The left header (spec 0060, AC-13): the face, then the name and bio beside it, in the Editorial pack. */
+export const HeaderLeft: Story = {
+  args: { person: PERSON, theme: { ...PLAIN, ground: 'paper', header: 'left', font: 'editorial' } },
+  render: (args) => (
+    <Stage width="phone" height="page">
+      <LinkPage {...args} blocks={anishBlocks().slice(0, 3)} />
+    </Stage>
+  ),
+};
+
+/**
+ * The cover header and a photo ground (spec 0060, AC-11, AC-13): the band the rounded face overlaps, and the column
+ * on a solid sheet so no word sits on the photo. The stand in draws where a story has no photo route.
+ */
+export const HeaderCoverOnPhoto: Story = {
+  args: {
+    person: PERSON,
+    theme: { ...PLAIN, ground: 'image', header: 'cover', avatar: 'rounded', font: 'classic', mode: 'dark' },
+    photos: { cover: true, ground: true },
+  },
+  render: (args) => (
+    <Stage width="phone" height="page">
+      <LinkPage {...args} blocks={anishBlocks().slice(0, 3)} />
+    </Stage>
+  ),
+};
+
+/** A photo look with no photo yet draws as the plain, centred page, never an empty band (spec 0060, AC-10). */
+export const PhotoLookWithoutPhotos: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { person: PERSON, theme: { ...PLAIN, ground: 'image', header: 'cover' } },
+  render: (args) => (
+    <Stage width="phone" height="page">
+      <LinkPage {...args} blocks={anishBlocks().slice(0, 2)} />
+    </Stage>
+  ),
+  play: async ({ canvasElement }) => {
+    const root = canvasElement.querySelector('[data-page-ground]');
+    await expect(root).toHaveAttribute('data-page-ground', 'plain');
+    await expect(root).toHaveAttribute('data-page-header', 'centred');
+  },
+};
+
+/** A gradient, a pattern and no face (spec 0060, AC-10, AC-13), following the visitor's light or dark (AC-15). */
+export const GradientFollowsVisitor: Story = {
+  args: {
+    person: PERSON,
+    theme: { ...PLAIN, ground: 'gradient', gradient: 'dusk', mode: 'system', avatar: 'none', font: 'display' },
+  },
+  render: (args) => (
+    <Stage width="phone" height="page">
+      <LinkPage {...args} blocks={anishBlocks().slice(0, 3)} />
+    </Stage>
+  ),
+  play: async ({ canvasElement }) => {
+    // Follow the visitor pins nothing, so the page takes whichever theme it is read in.
+    await expect(canvasElement.querySelector('[data-page-ground]')).not.toHaveAttribute('data-theme');
+  },
+};
+
+/** The Studio pattern in the Grotesk pack. */
+export const Pattern: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: {
+    person: PERSON,
+    theme: { ...PLAIN, ground: 'pattern', pattern: 'waves', shape: 'square', fill: 'outline', font: 'grotesk' },
+  },
+  render: (args) => (
+    <Stage width="phone" height="page">
+      <LinkPage {...args} blocks={anishBlocks().slice(0, 3)} />
+    </Stage>
+  ),
 };
 
 /** A one pixel PNG, as our own origin's icon route would answer one. `data:` is in the pages' `img-src`. */

@@ -1,4 +1,4 @@
-// The library never imports `@crm/contracts`, so `PageLook` repeats the six keys of `PageTheme` by hand. This test
+// The library never imports `@crm/contracts`, so `PageLook` repeats the ten keys of `PageTheme` by hand. This test
 // reads the contracts' source as text and fails when the two drift apart: a key added there and not here would
 // draw nothing, and a value added there and not in the stylesheet would draw as the default with no warning.
 import { readFileSync } from 'node:fs';
@@ -15,34 +15,75 @@ function setOf(name: string): readonly string[] {
   return [...(found?.[1] ?? '').matchAll(/'([a-z]+)'/g)].map((match) => match[1] ?? '');
 }
 
+/** The words `PageLook` allows for one key, as `LinkPage.tsx` writes them. */
+function lookOf(key: string): readonly string[] {
+  const body = /export interface PageLook \{([^}]*)\}/.exec(MODULE)?.[1] ?? '';
+  const line = new RegExp(`readonly ${key}: ([^;]*);`).exec(body)?.[1] ?? '';
+  return [...line.matchAll(/'([a-z]+)'/g)].map((match) => match[1] ?? '');
+}
+
+/** Each key, the contracts' list of its words, and the default the root draws with no block of its own. */
+const KEYS = [
+  ['ground', 'PAGE_GROUNDS', 'plain'],
+  ['mode', 'PAGE_MODES', 'light'],
+  ['shape', 'PAGE_SHAPES', 'soft'],
+  ['fill', 'PAGE_FILLS', 'plain'],
+  ['font', 'PAGE_FONTS', 'sans'],
+  ['gradient', 'PAGE_GRADIENTS', undefined],
+  ['pattern', 'PAGE_PATTERNS', undefined],
+  ['header', 'PAGE_HEADERS', 'centred'],
+  ['avatar', 'PAGE_AVATARS', 'circle'],
+] as const;
+
+/**
+ * A value a look block may hold: a token, `none` or `transparent`, or a gradient or a mix built from tokens and
+ * keywords alone (spec 0060: gradients and patterns may use token only functions). No number, unit or colour.
+ */
+function isTokenOnly(value: string): boolean {
+  if (['none', 'transparent', '0', 'border-box'].includes(value) || value.startsWith('var(--')) return true;
+  if (!/^(?:(?:repeating-)?(?:linear|radial)-gradient|calc)\(/.test(value)) return false;
+  // Strip every token, then every keyword the functions take; nothing may be left but punctuation.
+  const rest = value
+    .replaceAll(/var\(--[a-z0-9-]+\)/g, '')
+    .replaceAll(
+      /\b(?:repeating-)?(?:linear|radial)-gradient\b|\bcalc\b|\b(?:to|at|circle|bottom|right|top|left|transparent)\b/g,
+      '',
+    )
+    .replaceAll(/[\s(),+]/g, '');
+  return rest === '';
+}
+
 describe('the page look the library draws', () => {
-  it('knows the same six keys the contract does', () => {
-    const keys = [...MODULE.matchAll(/'data-page-([a-z]+)': look\.([a-z]+),/g)].map((match) => match[1]);
-    expect(new Set(keys)).toEqual(new Set(['ground', 'hue', 'mode', 'shape', 'fill', 'font']));
-    // And each attribute carries the key of the same name: no crossed wires.
-    for (const [, attribute, field] of MODULE.matchAll(/'data-page-([a-z]+)': look\.([a-z]+),/g)) {
-      expect(attribute).toBe(field);
+  it('knows the same ten keys the contract does, with the same words', () => {
+    const contractKeys = [...CONTRACT.matchAll(/^\s+([a-z]+): z\.enum\(/gm)].map((match) => match[1]);
+    const attributes = [...MODULE.matchAll(/'data-page-([a-z]+)':/g)].map((match) => match[1]);
+    expect(new Set(attributes)).toEqual(new Set(contractKeys));
+    expect(contractKeys).toHaveLength(10);
+    for (const [key, name] of KEYS) {
+      expect(new Set(lookOf(key)), `${key} takes the contract's words`).toEqual(new Set(setOf(name)));
     }
   });
 
+  it('carries each key on the attribute of the same name', () => {
+    for (const [, attribute, field] of MODULE.matchAll(/'data-page-([a-z]+)': look\.([a-z]+),/g)) {
+      expect(attribute).toBe(field);
+    }
+    // Ground and header are the two worked out first, from the photos the page has.
+    expect(MODULE).toContain("'data-page-ground': ground,");
+    expect(MODULE).toContain("'data-page-header': header,");
+  });
+
   it('has a stylesheet block for every value of every set that changes anything', () => {
-    // `plain`, `light` and `sans` are the defaults the root already carries, so they need no block of their own.
-    const defaults = new Set(['plain', 'light', 'sans', 'soft']);
-    for (const [key, name] of [
-      ['ground', 'PAGE_GROUNDS'],
-      ['shape', 'PAGE_SHAPES'],
-      ['fill', 'PAGE_FILLS'],
-      ['font', 'PAGE_FONTS'],
-    ] as const) {
+    for (const [key, name, fallback] of KEYS) {
+      if (key === 'mode') continue;
       for (const value of setOf(name)) {
-        if (key === 'ground' && value === 'plain') continue;
-        if (key === 'shape' && value === 'soft') continue;
-        if (key === 'fill' && value === 'plain') continue;
-        if (key === 'font' && value === 'sans') continue;
+        // No face is drawn by leaving the face out, in the markup: there is nothing for a block to style.
+        if (value === fallback || (key === 'avatar' && value === 'none')) continue;
         expect(STYLES, `${key}=${value} has a block`).toContain(`[data-page-${key}='${value}']`);
       }
-      expect(defaults.size).toBeGreaterThan(0);
     }
+    // Light and dark pin the tokens through `data-theme`; follow the visitor sets none.
+    expect(MODULE).toContain("look.mode === 'system' ? {} : { 'data-theme': look.mode }");
   });
 
   it('draws the tint ground in every one of the library’s own nine hues', () => {
@@ -60,15 +101,31 @@ describe('the page look the library draws', () => {
     const blocks = [...STYLES.matchAll(/\[data-page-[a-z]+='[a-z]+'\][^{]*\{([^}]*)\}/g)].map(
       (match) => match[1] ?? '',
     );
-    expect(blocks.length).toBeGreaterThan(10);
+    expect(blocks.length).toBeGreaterThan(30);
     for (const block of blocks) {
-      for (const [, value] of block.matchAll(/:\s*([^;]+);/g)) {
-        const kept = (value ?? '').trim();
-        expect(
-          kept === 'none' || kept === 'transparent' || kept.startsWith('var(--'),
-          `"${kept}" is a token, none or transparent`,
-        ).toBe(true);
+      for (const [, property, value] of block.matchAll(/([a-z-]+):\s*([^;]+);/g)) {
+        const kept = (value ?? '').replaceAll(/\s+/g, ' ').trim();
+        // Layout words a block may set (a header's direction, a thumbnail's hidden row) are not values in the data.
+        if (
+          /^(?:display|flex-direction|align-items|align-self|text-align|flex|background-size|background-position)$/.test(
+            property ?? '',
+          )
+        )
+          continue;
+        expect(isTokenOnly(kept), `${property ?? ''}: "${kept}" is a token, none or transparent`).toBe(true);
       }
+    }
+  });
+
+  it('never lets a brand reach the page without its token to fall back on', () => {
+    // A page with no brand draws exactly as before (AC-17): every brand name has the token it stands in for.
+    for (const [, name] of STYLES.matchAll(/var\(--(brand-[a-z-]+)\)/g)) {
+      expect.fail(`--${name ?? ''} is read with no fallback`);
+    }
+    for (const name of ['accent', 'on-accent', 'link', 'accent-soft', 'accent-border', 'accent-hover']) {
+      expect(STYLES, `--page-${name} falls back to --${name}`).toMatch(
+        new RegExp(`--page-${name}: var\\(--page-brand-[a-z-]+, var\\(--${name}\\)\\);`),
+      );
     }
   });
 });

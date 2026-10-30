@@ -44,7 +44,10 @@ A person's public profile, `/<handle>`, the Cal.com profile the owner pointed at
 Why a variant here rather than a new module: it is the booking pages' own page, so it keeps their background, centred column, card and foot, which live in this folder. The column is wider than BookingMessage's so a row's title and chips fit.
 
 ```tsx
-<BookingProfile person={{ name: 'Ada Lovelace', id: 'ada', bio: 'Product at Acme.' }} claimHref={claimPageHref('booking_profile')}>
+<BookingProfile
+  person={{ name: 'Ada Lovelace', id: 'ada', bio: 'Product at Acme.' }}
+  claimHref={claimPageHref('booking_profile')}
+>
   <BookingProfileSection title="Sales">
     <LinkList label="Sales" searchLabel="Search" isToolbarHidden rows={rows} onOpen={open} />
   </BookingProfileSection>
@@ -80,3 +83,8 @@ None of its own. A view or a step chosen from the keyboard (the view switch's ar
 ## Differences from the artifact
 
 Not in the artifact.
+
+## Brand kit
+
+`brand` (spec 0060, AC-4) is the workspace's kit: `logo` (a path on our own origin, through `safeImageSrc`, with its `alt`) heads the rail at a control's height, never cropped, and `variables` (an app preview's accent custom properties, set through the CSSOM) stands in for the page's brand stylesheet. The page's stylesheet sets `--brand-accent`, `--brand-on-accent`, `--brand-link` and their `-dark` halves at the root; the frame picks the half its colour scheme asks for with `light-dark()` and points the library's own names (`--accent`, `--link`, `--accent-soft`, `--shadow-focus`, …) at them one level in, so the chosen day, the chosen time, Book, links and focus rings all wear the brand. With no brand each name falls back to its token and the page draws exactly as before. `PageBrand` is the shape the hosted form takes too.
+

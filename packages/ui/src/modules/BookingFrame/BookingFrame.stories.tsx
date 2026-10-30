@@ -74,6 +74,36 @@ export const ChooseATime: Story = {
   },
 };
 
+/** An orange brand, as `brandProperties(brandVariables({ accent: '#e8590c' }))` makes it (spec 0060, AC-7). */
+const ORANGE_BRAND = [
+  ['--brand-accent', '#e65708'],
+  ['--brand-on-accent', '#000000'],
+  ['--brand-link', '#b74300'],
+  ['--brand-accent-dark', '#e8590c'],
+  ['--brand-on-accent-dark', '#000000'],
+  ['--brand-link-dark', '#fd6c2b'],
+] as const;
+
+/** A stand in logo: a mark and a word, in one fill. */
+const LOGO = `data:image/svg+xml,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 60"><circle cx="30" cy="30" r="24" fill="#e8590c"/><rect x="66" y="18" width="160" height="24" rx="6" fill="#e8590c"/></svg>',
+)}`;
+
+/**
+ * The workspace's brand kit (spec 0060, AC-4): its logo heads the rail, and its accent marks the chosen day, the
+ * chosen time, Book and the focus ring. The steps and the requests are the same as without it.
+ */
+export const Branded: Story = {
+  args: { brand: { logo: { src: LOGO, alt: 'Acme' }, variables: ORANGE_BRAND } },
+  render: (args) => <Interactive {...args} />,
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('img', { name: 'Acme' })).toBeInTheDocument();
+    await userEvent.click(canvas.getByRole('button', { name: /^9:30 AM/ }));
+    const book = canvas.getByRole('button', { name: 'Book Thu Oct 8 at 9:30 AM' });
+    await expect(getComputedStyle(book).backgroundColor).toBe('rgb(230, 87, 8)');
+  },
+};
+
 /** The host's social links (booking socials, 25 Oct 2026): the last line of their block, under the facts. */
 const SOCIALS = [
   { network: 'linkedin', href: 'https://linkedin.com/in/ada-lovelace', label: 'ada-lovelace' },

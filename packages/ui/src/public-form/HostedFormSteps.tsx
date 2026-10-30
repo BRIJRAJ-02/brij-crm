@@ -92,6 +92,7 @@ export function HostedFormSteps({
   onStale,
   now = Date.now,
   logo = TIMEFIX_LOGO,
+  brand,
 }: HostedFormStepsProps) {
   const [index, setIndex] = useState(0);
   const [hasMoved, setMoved] = useState(false);
@@ -283,6 +284,7 @@ export function HostedFormSteps({
       form={form}
       mode={mode}
       kind={isOpen ? 'open' : 'card'}
+      {...(brand === undefined ? {} : { brand })}
       container={refs.container}
       {...(preview ? { previewNote: words.previewNote } : {})}
       foot={<FormFoot form={form} mode={mode} logo={logo} state={state} />}

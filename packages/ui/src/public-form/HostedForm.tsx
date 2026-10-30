@@ -2,6 +2,7 @@ import { VisuallyHidden } from '../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import type { PublicForm } from '@crm/contracts/forms';
 import { Button } from '../atoms/Button/Button.tsx';
 import type { ProductLogo } from '../modules/AuthLayout/AuthLayout.tsx';
+import type { PageBrand } from '../modules/BookingFrame/BookingFrame.tsx';
 import {
   ErrorSummary,
   FormAlert,
@@ -54,6 +55,11 @@ export interface HostedFormProps {
   readonly now?: () => number;
   /** The Timefix wordmark under the form; the web app serves these two by default. */
   readonly logo?: ProductLogo;
+  /**
+   * The workspace's brand kit, for an app preview (spec 0060, AC-1): its logo and its accent's custom properties.
+   * Left out, the form wears the brand its own read names (its logo; the page's stylesheet brings the accent).
+   */
+  readonly brand?: PageBrand;
 }
 
 /**
@@ -76,6 +82,7 @@ export function HostedForm({
   onStale,
   now = Date.now,
   logo = TIMEFIX_LOGO,
+  brand,
 }: HostedFormProps) {
   const { state, refs } = useHostedForm({
     form,
@@ -152,6 +159,7 @@ export function HostedForm({
     <FormFrame
       form={form}
       mode={mode}
+      {...(brand === undefined ? {} : { brand })}
       container={refs.container}
       {...(preview ? { previewNote: words.previewNote } : {})}
       foot={<FormFoot form={form} mode={mode} logo={logo} state={state} />}

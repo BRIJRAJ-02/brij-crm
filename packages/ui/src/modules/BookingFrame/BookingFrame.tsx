@@ -5,6 +5,8 @@ import { Button, ButtonLink } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
+import { safeImageSrc } from '../../lib/safe-image-src.ts';
+import { usePageVariables, type PageVariables } from '../../lib/page-variables.ts';
 import { poweredByHref, type PoweredByPage } from '../../lib/powered-by.ts';
 import { SocialLinks, type SocialLinkItem } from '../../molecules/SocialLinks/SocialLinks.tsx';
 import type { ProductLogo } from '../AuthLayout/AuthLayout.tsx';
@@ -94,6 +96,20 @@ export interface BookingFrameProps {
    */
   readonly claimHref?: string;
   readonly logo?: ProductLogo;
+  /**
+   * The workspace's brand kit (spec 0060, AC-4): its logo at the head of the rail, on our own origin (the page's
+   * `logo?v=` route), named by `alt`. Its accent arrives as the page's brand stylesheet; the app's preview passes
+   * the same custom properties as `variables` instead. Nothing the page does changes with it.
+   */
+  readonly brand?: PageBrand;
+}
+
+/** A booking page's or form's brand kit, as the library draws it (spec 0060, AC-4). */
+export interface PageBrand {
+  /** The logo, on our own origin, and what it says (the workspace's name). */
+  readonly logo?: { readonly src: string; readonly alt: string };
+  /** The accent's custom properties, for an app preview (`brandProperties()`); the live page has a stylesheet. */
+  readonly variables?: PageVariables;
 }
 
 /** The web app's own wordmark files (apps/web/public/brand). */
@@ -129,8 +145,11 @@ export function BookingFrame({
   isCompact = false,
   claimHref,
   logo = TIMEFIX_LOGO,
+  brand,
 }: BookingFrameProps) {
   const isLoading = host === undefined || title === undefined;
+  const variables = usePageVariables(brand?.variables);
+  const brandLogo = brand?.logo === undefined ? undefined : safeImageSrc(brand.logo.src);
   // Only a view changed after the first paint moves: the page's first view is simply there. One chosen from the
   // keyboard (the switch's arrows, Enter on Book or Back) shows at once, decided as it changes: keys never wait.
   const { isFocusVisible } = useFocusVisible();
@@ -140,9 +159,13 @@ export function BookingFrame({
   const isCardCovered = isCovered && coverPlace === 'card';
   const claim = claimHref === undefined ? {} : { claimHref };
   return (
-    <main className={styles.root} {...(isCompact ? { 'data-compact': true } : {})}>
+    <main className={styles.root} ref={variables} {...(isCompact ? { 'data-compact': true } : {})}>
       <div className={styles.layout}>
         <aside className={styles.rail} aria-label={strings.about} aria-busy={isLoading || undefined}>
+          {/* The workspace's own logo heads the rail (spec 0060, AC-4): its mark, before the host it books with. */}
+          {brandLogo !== undefined && brand?.logo !== undefined && (
+            <img className={styles.brandLogo} src={brandLogo} alt={brand.logo.alt} decoding="async" />
+          )}
           {isLoading ? (
             /* The shape the host will take, line for line, so nothing moves when the page's facts arrive. */
             <div className={styles.identity}>

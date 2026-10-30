@@ -1,4 +1,6 @@
 import { useId, useState, type ReactNode } from 'react';
+// The link page's font packs (spec 0060, AC-12): faces the browser fetches only once text is drawn in them.
+import '@crm/tokens/packs.css';
 import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
 import { ButtonLink } from '../../atoms/Button/Button.tsx';
 import { CopyButton } from '../../atoms/Button/CopyButton.tsx';
@@ -11,6 +13,7 @@ import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import type { Hue } from '../../hue.ts';
 import { safeHref } from '../../lib/safe-href.ts';
 import { safeImageSrc } from '../../lib/safe-image-src.ts';
+import { usePageVariables, type PageVariables } from '../../lib/page-variables.ts';
 import { initialsOf } from '../../lib/stable-hue.ts';
 import styles from './LinkPage.module.css';
 import { strings } from './strings.ts';
@@ -188,45 +191,77 @@ export interface LinkPageProps {
   /** A visitor pressed a block (a press counter's beacon). Never holds up the navigation. */
   readonly onPress?: (id: string) => void;
   /**
-   * The look its owner picked (spec 0054): six names, which become six data attributes on this root, and one block
-   * of this module's stylesheet each. No value is passed, nothing is styled inline and no CSS is made at run time.
+   * The look its owner picked (spec 0054, widened by spec 0060): ten names, which become data attributes on this
+   * root, and one block of this module's stylesheet each. No value is passed and no CSS is made at run time.
    * Missing while the page loads, so the loading state draws on the plain ground in the visitor's own light or dark
-   * and the look lands with the content, in one step (AC-5413). `layout="blocks"` ignores it: an editor's "How it
-   * looks" shows the one block being typed, in the app's own colours, not a page in miniature.
+   * and the look lands with the content, in one step (AC-5413). `layout="blocks"` draws the one block being typed
+   * on the look's own ground (spec 0060, AC-16).
    */
   readonly theme?: PageLook;
+  /**
+   * Which photos the page has (spec 0060, AC-10, AC-13): a photo ground without one draws as `plain`, and a cover
+   * header without one as `centred`, so a look never draws an empty band. The photos themselves arrive as
+   * `--page-cover-image` and `--page-ground-image`, from the page's own stylesheet or `variables`.
+   */
+  readonly photos?: LinkPagePhotos;
+  /**
+   * The page's own values, for the app's previews (spec 0060, AC-7): the accent's custom properties from
+   * `brandProperties()` and the photos' `url()`s, set on this root. The live page leaves it out, since its own
+   * stylesheet (`look.css`) sets the same names. Anything but those names, a checked hex or our own api is dropped.
+   */
+  readonly variables?: PageVariables;
+}
+
+/** Which of its two photos a link page has. */
+export interface LinkPagePhotos {
+  readonly cover?: boolean;
+  readonly ground?: boolean;
 }
 
 /**
- * A page's look as this module takes it: the six names of `PageTheme` in `@crm/contracts`, repeated here because
+ * A page's look as this module takes it: the ten names of `PageTheme` in `@crm/contracts`, repeated here because
  * the library never imports the contracts (its own rule). `page-theme.test.ts` fails if the two drift apart.
  */
 export interface PageLook {
-  readonly ground: 'plain' | 'paper' | 'tint' | 'ink';
+  readonly ground: 'plain' | 'paper' | 'tint' | 'ink' | 'gradient' | 'pattern' | 'image';
   readonly hue: Hue;
-  readonly mode: 'light' | 'dark';
+  readonly mode: 'light' | 'dark' | 'system';
   readonly shape: 'soft' | 'pill' | 'square';
   readonly fill: 'plain' | 'soft' | 'outline' | 'solid';
-  readonly font: 'sans' | 'mono';
+  readonly font: 'sans' | 'mono' | 'grotesk' | 'editorial' | 'classic' | 'friendly' | 'geometric' | 'display';
+  readonly gradient: 'dawn' | 'dusk' | 'mint' | 'ocean' | 'peach' | 'grape' | 'sand' | 'graphite';
+  readonly pattern: 'dots' | 'grid' | 'lines' | 'waves';
+  readonly header: 'centred' | 'cover' | 'left';
+  readonly avatar: 'circle' | 'rounded' | 'none';
 }
 
 /**
- * The six attributes a look becomes, and `data-theme`, which pins light or dark for everything inside this root:
- * the token layer only follows the system where no `data-theme` is set, so a visitor's own phone or app choice
- * never decides somebody else's page (AC-5406).
+ * The attributes a look becomes, and `data-theme`, which pins light or dark for everything inside this root: the
+ * token layer only follows the system where no `data-theme` is set, so a visitor's own phone or app choice never
+ * decides somebody else's page (AC-5406). `system` (spec 0060, AC-15) is the one mode that sets none, so the page
+ * takes the visitor's own. A photo ground or cover the page has no photo for draws as `plain` or `centred`.
  */
-function lookAttributes(look: PageLook | undefined) {
+function lookAttributes(look: PageLook | undefined, photos: LinkPagePhotos | undefined) {
   if (look === undefined) return {};
+  const ground = look.ground === 'image' && photos?.ground !== true ? 'plain' : look.ground;
+  const header = look.header === 'cover' && photos?.cover !== true ? 'centred' : look.header;
   return {
-    'data-theme': look.mode,
-    'data-page-ground': look.ground,
+    ...(look.mode === 'system' ? {} : { 'data-theme': look.mode }),
+    'data-page-ground': ground,
     'data-page-hue': look.hue,
     'data-page-mode': look.mode,
     'data-page-shape': look.shape,
     'data-page-fill': look.fill,
     'data-page-font': look.font,
+    'data-page-gradient': look.gradient,
+    'data-page-pattern': look.pattern,
+    'data-page-header': header,
+    'data-page-avatar': look.avatar,
   };
 }
+
+/** Every photo, for a thumbnail: a gallery tile shows what its look draws once the photos are there. */
+const ALL_PHOTOS: LinkPagePhotos = { cover: true, ground: true };
 
 /** How many skeleton blocks stand in while the page loads. */
 const LOADING_BLOCKS = 5;
@@ -801,21 +836,34 @@ function Group({
 export interface LinkPageThumbnailProps {
   /** The look to draw. */
   readonly theme: PageLook;
+  /** The page's own accent and photos (LinkPage's `variables`), so a gallery shows each look in the owner's colour. */
+  readonly variables?: PageVariables;
 }
 
 /**
- * A link page in miniature, in one look: its ground, a face, a sample of its typeface and three rows in its shape
- * and fill (spec 0058, AC-10). It draws from the same look attributes and stylesheet blocks as the page itself, so a
- * preset or gallery tile shows the real look, never a picture of it. It fills its slot (TileGrid's choice
- * thumbnail), never moves, takes no focus and is hidden from screen readers: the tile's own name says which look it
- * is.
+ * A link page in miniature, in one look: its ground, its header (a cover band, the face beside the name, or centred),
+ * the face's shape, a sample of its typeface and three rows in its shape and fill (spec 0058, AC-10; spec 0060,
+ * AC-8). It draws from the same look attributes and stylesheet blocks as the page itself, so a preset or gallery tile
+ * shows the real look, never a picture of it. A photo it has no photo for draws as a quiet placeholder rather than as
+ * the plain look. It fills its slot (TileGrid's choice thumbnail), never moves, takes no focus and is hidden from
+ * screen readers: the tile's own name says which look it is.
  */
-export function LinkPageThumbnail({ theme }: LinkPageThumbnailProps) {
+export function LinkPageThumbnail({ theme, variables }: LinkPageThumbnailProps) {
   return (
-    <div className={styles.root} data-thumbnail {...lookAttributes(theme)} aria-hidden="true" inert>
+    <div
+      className={styles.root}
+      data-thumbnail
+      {...lookAttributes(theme, ALL_PHOTOS)}
+      ref={usePageVariables(variables)}
+      aria-hidden="true"
+      inert
+    >
       <div className={styles.thumb}>
-        <span className={styles.thumbFace} />
-        <span className={styles.thumbSample}>{strings.thumbnailSample}</span>
+        {theme.header === 'cover' && <span className={styles.thumbCover} />}
+        <span className={styles.thumbHead}>
+          {theme.avatar !== 'none' && <span className={styles.thumbFace} />}
+          <span className={styles.thumbSample}>{strings.thumbnailSample}</span>
+        </span>
         <span className={styles.thumbRow} />
         <span className={styles.thumbRow} />
         <span className={styles.thumbRow} />
@@ -842,6 +890,8 @@ export function LinkPage({
   caption,
   onPress,
   theme,
+  photos,
+  variables,
   openFolder,
   onOpenFolder,
 }: LinkPageProps) {
@@ -859,6 +909,8 @@ export function LinkPage({
   // A page whose only block is the contact card has no rows: its card is the header's Save contact, so the list
   // draws its empty state rather than an empty group.
   const groups = blocks === undefined ? [] : groupsOf(blocks);
+  const look = lookAttributes(theme, photos);
+  const variablesRef = usePageVariables(variables);
   if (layout === 'blocks') {
     return (
       <div
@@ -872,19 +924,24 @@ export function LinkPage({
             {caption}
           </p>
         )}
-        <div className={styles.blocks} inert>
-          {/* A contact card draws as the page's Save contact, which is where a visitor meets it. */}
-          <Actions contact={contact} share={undefined} onPress={undefined} />
-          {groupsOf(blocks ?? []).map((group, index) => (
-            <Group
-              key={group.heading?.id ?? `top-${String(index)}`}
-              rows={group.rows}
-              onPress={undefined}
-              onToggleFolder={toggleFolder}
-              {...(shownFolder === undefined ? {} : { openFolder: shownFolder })}
-              {...(group.heading === undefined ? {} : { heading: group.heading })}
-            />
-          ))}
+        {/* The block on the page's own ground, in its own look (spec 0060, AC-16): the page in a slice. */}
+        <div className={styles.root} data-draft {...look} ref={variablesRef}>
+          <div className={styles.column}>
+            <div className={styles.blocks} inert>
+              {/* A contact card draws as the page's Save contact, which is where a visitor meets it. */}
+              <Actions contact={contact} share={undefined} onPress={undefined} />
+              {groupsOf(blocks ?? []).map((group, index) => (
+                <Group
+                  key={group.heading?.id ?? `top-${String(index)}`}
+                  rows={group.rows}
+                  onPress={undefined}
+                  onToggleFolder={toggleFolder}
+                  {...(shownFolder === undefined ? {} : { openFolder: shownFolder })}
+                  {...(group.heading === undefined ? {} : { heading: group.heading })}
+                />
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -894,7 +951,8 @@ export function LinkPage({
     <Root
       className={styles.root}
       data-preview={isPreview || undefined}
-      {...lookAttributes(theme)}
+      {...look}
+      ref={variablesRef}
       {...(isPreview ? { inert: true } : {})}
     >
       <div className={styles.column}>
@@ -917,26 +975,38 @@ export function LinkPage({
             </>
           ) : (
             <>
-              <Avatar
-                name={person.name}
-                id={person.id}
-                size="hero"
-                isDecorative
-                {...(person.image === undefined ? {} : { src: person.image })}
-              />
-              <h1 className={styles.name}>{person.name}</h1>
-              {person.bio !== undefined && person.bio !== '' && <p className={styles.bio}>{person.bio}</p>}
-              {address !== undefined && (
-                <span className={styles.address}>
-                  <CopyButton
-                    value={address.value}
-                    label={address.label}
-                    name={strings.copyAddress(address.label)}
-                    announcement={strings.addressCopied}
-                    isRound
+              {/* The cover photo (spec 0060, AC-13): a band the face overlaps, drawn from the page's own stylesheet. */}
+              {theme?.header === 'cover' && photos?.cover === true && (
+                <span className={styles.cover} aria-hidden="true" />
+              )}
+              {theme?.avatar !== 'none' && (
+                <span className={styles.face}>
+                  <Avatar
+                    name={person.name}
+                    id={person.id}
+                    size="hero"
+                    shape={theme?.avatar === 'rounded' ? 'square' : 'circle'}
+                    isDecorative
+                    {...(person.image === undefined ? {} : { src: person.image })}
                   />
                 </span>
               )}
+              {/* The words beside the face in the left header, and in the column under it otherwise. */}
+              <div className={styles.who}>
+                <h1 className={styles.name}>{person.name}</h1>
+                {person.bio !== undefined && person.bio !== '' && <p className={styles.bio}>{person.bio}</p>}
+                {address !== undefined && (
+                  <span className={styles.address}>
+                    <CopyButton
+                      value={address.value}
+                      label={address.label}
+                      name={strings.copyAddress(address.label)}
+                      announcement={strings.addressCopied}
+                      isRound
+                    />
+                  </span>
+                )}
+              </div>
             </>
           )}
         </header>
