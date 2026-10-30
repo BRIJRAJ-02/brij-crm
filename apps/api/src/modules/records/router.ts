@@ -1,5 +1,6 @@
 import {
   addRecord,
+  aggregateMatches,
   bulkEditRecords,
   countMatches,
   countRecordsByObject,
@@ -62,6 +63,23 @@ export const recordsRouter = member.records.router({
     context.readGate.run(context.scope.workspaceId, async () => ({
       counts: await countRecordsByObject(context.scope),
     })),
+  ),
+  // A column's calculation (the CRM flow pass): one statement or two through the door, in the same read gate.
+  aggregate: member.records.aggregate.handler(({ context, input, signal }) =>
+    context.readGate.run(context.scope.workspaceId, () =>
+      aggregateMatches(
+        context.scope,
+        {
+          objectId: input.objectId,
+          attributeId: input.attributeId,
+          fn: input.fn,
+          ...(input.filter === undefined ? {} : { filter: input.filter }),
+          ...(input.now === undefined ? {} : { now: input.now }),
+          ...(input.timeZone === undefined ? {} : { timeZone: input.timeZone }),
+        },
+        signal,
+      ),
+    ),
   ),
   // The record picker's search (spec 0014): cancelled with its request, in the same read gate.
   search: member.records.search.handler(({ context, input, signal }) =>

@@ -100,7 +100,6 @@ export function GridHeaderCell({
     else if (key === 'hide') actions.onHide();
     else if (key === 'ascending' || key === 'descending') actions.onSort?.(key);
     else if (key === 'filter') actions.onFilter?.();
-    else if (key === 'resize') actions.onStartResize();
   };
 
   const startResize = (event: ReactPointerEvent<HTMLSpanElement>) => {
@@ -207,9 +206,6 @@ export function GridHeaderCell({
           )}
           <MenuItem id="hide" icon="eye-off">
             {strings.hide}
-          </MenuItem>
-          <MenuItem id="resize" icon="arrow-left-right">
-            {strings.resize}
           </MenuItem>
           {(actions.onSort !== undefined || actions.onFilter !== undefined) && <MenuSeparator />}
           {actions.onSort !== undefined && (

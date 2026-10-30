@@ -152,17 +152,22 @@ function itemMatches(
       return op === 'before' ? at < bound : at > bound;
     }
     case 'within':
-    case 'within_last': {
+    case 'within_last':
+    case 'within_next':
+    case 'more_than_ago': {
       if (!('range' in condition)) return false;
-      const last = op === 'within_last';
+      const last = op === 'within_last' || op === 'more_than_ago';
       if (type === 'date') {
         if (typeof item !== 'string') return false;
         const [start, end] = dateRange(clock, condition.range, last);
+        // More than N ago: before the first day of the last N.
+        if (op === 'more_than_ago') return item < start;
         return item >= start && item < end;
       }
       const at = Date.parse(String(field(item, 'at') ?? item));
       if (Number.isNaN(at)) return false;
       const [start, end, exclusive] = timeRange(clock, condition.range, last);
+      if (op === 'more_than_ago') return at < start;
       return at >= start && (exclusive ? at < end : at <= end);
     }
     case 'is_any_of':

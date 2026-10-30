@@ -5,7 +5,7 @@
 import { createHash } from 'node:crypto';
 import { asc, eq, sql, type SQL } from 'drizzle-orm';
 import { schema, type WorkspaceTx } from '@crm/db';
-import { canJump, FilterGroup, SortRules } from '@crm/contracts/values';
+import { aggregatesFor, canJump, FilterGroup, SortRules, type AggregateFn } from '@crm/contracts/values';
 import { canonicalId, isUuid } from '../ids.ts';
 import { LIMITS } from '../limits.ts';
 import { readEntriesById, type EntryView } from '../lists.ts';
@@ -1173,6 +1173,130 @@ export async function countIn(
   );
   const n = result.rows[0]?.n ?? 0;
   return n > cap ? { count: cap, atLeast: true } : { count: n, atLeast: false };
+}
+
+/** A column's calculation as `records.aggregate` answers it. */
+export interface Aggregate {
+  readonly count?: number;
+  readonly atLeast?: boolean;
+  readonly amounts?: { readonly value: string; readonly currency?: string }[];
+  readonly tooMany?: boolean;
+}
+
+/** The most currencies one sum names (a currency column's amounts, one per currency). */
+const AGGREGATE_CURRENCIES = 200;
+
+/**
+ * A column's calculation across every record a view's filter matches (the CRM
+ * flow pass): `count` holds a value and `count_empty` none, counted as
+ * `countMatches` counts (exact to 10,000, then `atLeast`); for a number or a
+ * currency `sum`, `avg`, `min` and `max`, read off the stored keys (exact
+ * decimals; a currency one per currency). With no filter and no record rule
+ * the amounts come from the attribute's keys alone, index only; a filtered view
+ * works them out over at most 10,000 matching records, answering `tooMany`
+ * past it rather than a part. Through the access door: a hidden object is
+ * `NOT_FOUND`, a hidden or archived attribute `FILTER_INVALID`, and a record
+ * rule narrows what counts. In its own statement timeout, cancelled with its
+ * request (`QUERY_CANCELLED`).
+ */
+export async function aggregateMatches(
+  scope: EngineScope,
+  query: {
+    readonly objectId: string;
+    readonly filter?: FilterGroup;
+    readonly attributeId: string;
+    readonly fn: AggregateFn;
+  } & QueryClock,
+  signal?: AbortSignal,
+  tuning: { readonly cap?: number } = {},
+): Promise<Aggregate> {
+  const cancelled = () => refuse('QUERY_CANCELLED', 'The calculation took too long or was cancelled.');
+  try {
+    return await withCancel(scope, 'count', signal, cancelled, (tx, checkpoint) =>
+      aggregateIn(tx, scope, query, checkpoint, tuning.cap ?? COUNT_CAP),
+    );
+  } catch (error) {
+    if (postgresError(error)?.code === '57014') throw cancelled();
+    throw error;
+  }
+}
+
+async function aggregateIn(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  query: {
+    readonly objectId: string;
+    readonly filter?: FilterGroup;
+    readonly attributeId: string;
+    readonly fn: AggregateFn;
+  } & QueryClock,
+  checkpoint: () => void,
+  cap: number,
+): Promise<Aggregate> {
+  const { attributeId: asked, fn, ...view } = query;
+  // The column's own attribute, as the principal sees it: hidden or archived is an unknown one.
+  if (!isUuid(asked)) throw refuse('FILTER_INVALID', 'A filter or sort names an attribute that is not on this object.');
+  const attributeId = canonicalId(asked);
+  if (fn === 'count' || fn === 'count_empty') {
+    // A count is the view's filter and the column's emptiness, counted as the view's count is.
+    const condition = { attributeId, operator: fn === 'count' ? 'is_not_empty' : 'is_empty' } as const;
+    const filter: FilterGroup =
+      view.filter === undefined || view.filter.conditions.length === 0
+        ? { conjunction: 'and', conditions: [condition] }
+        : { conjunction: 'and', conditions: [view.filter, condition] };
+    return countIn(tx, scope, { ...view, filter }, checkpoint);
+  }
+  await tx.execute(sql`set local statement_timeout = ${sql.raw(`'${STATEMENT_TIMEOUT}'`)}`);
+  const { context, level } = await prepare(tx, scope, view);
+  checkpoint();
+  const attribute = context.attributes.get(attributeId);
+  if (attribute === undefined || attribute.objectId !== level.objectId || level.listId !== null) {
+    throw refuse('FILTER_INVALID', 'A filter or sort names an attribute that is not on this object.');
+  }
+  if (!aggregatesFor(attribute.type).includes(fn)) {
+    throw refuse('FILTER_INVALID', 'Sums, averages, least and most are for numbers and currency.');
+  }
+  const filter = compileFilter(context, level, view.filter);
+  const { tables, where } = fromParts(context, level);
+  const amount = {
+    sum: sql`trim_scale(sum(k.number_key)::numeric / 10000)::text`,
+    avg: sql`trim_scale(round(avg(k.number_key) / 10000, 4))::text`,
+    min: sql`trim_scale(min(k.number_key)::numeric / 10000)::text`,
+    max: sql`trim_scale(max(k.number_key)::numeric / 10000)::text`,
+  }[fn];
+  const code = attribute.type === 'currency' ? sql`k.code_key::text` : sql`null::text`;
+  const filtered =
+    (view.filter !== undefined && view.filter.conditions.length > 0) || levelRule(context, level) !== undefined;
+  let rows: readonly { readonly code: string | null; readonly value: string | null }[];
+  if (!filtered) {
+    // The whole object: the attribute's live keys alone, index only.
+    const result = await tx.execute<{ code: string | null; value: string | null }>(sql`
+      select ${code} as code, ${amount} as value from sort_keys k
+      where k.attribute_id = ${attributeId} and k.live and k.number_key is not null
+      group by 1 order by count(*) desc limit ${AGGREGATE_CURRENCIES}
+    `);
+    rows = result.rows;
+  } else {
+    // A filtered view: worked out over its matching records, never more than `cap` of them.
+    const matched = await tx.execute<{ n: number }>(
+      sql`select count(*)::int as n from (select 1 from ${tables} where ${where} and ${filter} limit ${cap + 1}) s`,
+    );
+    checkpoint();
+    if ((matched.rows[0]?.n ?? 0) > cap) return { tooMany: true };
+    const result = await tx.execute<{ code: string | null; value: string | null }>(sql`
+      select ${code} as code, ${amount} as value
+      from (select r.workspace_id, r.id from ${tables} where ${where} and ${filter}) m
+      join sort_keys k on k.workspace_id = m.workspace_id and k.owner_id = m.id
+        and k.attribute_id = ${attributeId} and k.live and k.number_key is not null
+      group by 1 order by count(*) desc limit ${AGGREGATE_CURRENCIES}
+    `);
+    rows = result.rows;
+  }
+  return {
+    amounts: rows.flatMap((row) =>
+      row.value === null ? [] : [{ value: row.value, ...(row.code === null ? {} : { currency: row.code }) }],
+    ),
+  };
 }
 
 /**

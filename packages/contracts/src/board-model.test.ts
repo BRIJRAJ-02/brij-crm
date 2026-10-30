@@ -7,6 +7,9 @@ import {
   columnFilter,
   groupableAttributes,
   groupCondition,
+  groupKeyOf,
+  groupKindOf,
+  groupValueOf,
   isGroupable,
   liveOptionCount,
   type BoardAttribute,
@@ -46,9 +49,24 @@ describe('which attributes group a board', () => {
     expect(isGroupable({ ...STAGE, isArchived: true })).toBe(false);
   });
 
-  it('lists status attributes first by position, then single selects', () => {
+  it('takes a checkbox and a member field holding one person, never Created by nor several people', () => {
+    expect(groupKindOf(attribute(11, { type: 'checkbox' }))).toBe('checkbox');
+    expect(groupKindOf(OWNER)).toBe('member');
+    expect(groupKindOf(STAGE)).toBe('option');
+    expect(isGroupable({ ...OWNER, isMulti: true })).toBe(false);
+    expect(isGroupable({ ...OWNER, isSystem: true })).toBe(false);
+  });
+
+  it('lists status attributes first by position, then single selects, members and checkboxes', () => {
     const second = attribute(9, { type: 'status', position: 1 });
-    expect(groupableAttributes([...DEALS, second]).map((each) => each.id)).toEqual([second.id, STAGE.id, PRIORITY.id]);
+    const done = attribute(10, { type: 'checkbox' });
+    expect(groupableAttributes([...DEALS, second, done]).map((each) => each.id)).toEqual([
+      second.id,
+      STAGE.id,
+      PRIORITY.id,
+      OWNER.id,
+      done.id,
+    ]);
   });
 });
 
@@ -87,7 +105,7 @@ describe('a stored board config', () => {
   it('refuses a grouping that is not a live status or single select', () => {
     for (const groupBy of [TAGS.id, VALUE.id, id(99)]) {
       expect(boardConfigProblem({ ...good, groupByAttributeId: groupBy }, DEALS)).toBe(
-        'Boards group by a status or single select field.',
+        'Boards group by a status, a single select, a checkbox or a member field.',
       );
     }
   });
@@ -120,6 +138,39 @@ describe('a column filter', () => {
       conditions: [groupCondition(STAGE.id, null)],
     });
     expect(columnFilter({ conjunction: 'and', conditions: [] }, STAGE.id, null).conditions).toHaveLength(1);
+  });
+});
+
+describe('a checkbox or member column', () => {
+  it('filters by the checked state, and a member by id', () => {
+    expect(groupCondition(id(11), 'checked', 'checkbox')).toEqual({ attributeId: id(11), operator: 'is_checked' });
+    expect(groupCondition(id(11), 'unchecked', 'checkbox')).toEqual({
+      attributeId: id(11),
+      operator: 'is_not_checked',
+    });
+    expect(groupCondition(OWNER.id, id(60), 'member')).toEqual({
+      attributeId: OWNER.id,
+      operator: 'is',
+      value: id(60),
+    });
+    expect(FilterGroup.safeParse(columnFilter(undefined, id(11), 'checked', 'checkbox')).success).toBe(true);
+  });
+
+  it('maps a value to its column and a column back to the value a move writes', () => {
+    expect(groupKeyOf('checkbox', true)).toBe('checked');
+    expect(groupKeyOf('checkbox', null)).toBe('unchecked');
+    expect(groupKeyOf('member', { type: 'member', id: id(60) })).toBe(id(60));
+    expect(groupKeyOf('member', { type: 'system', id: null })).toBeNull();
+    expect(groupKeyOf('option', id(50))).toBe(id(50));
+    expect(groupValueOf('checkbox', 'unchecked')).toBe(false);
+    expect(groupValueOf('member', id(60))).toEqual({ type: 'member', id: id(60) });
+    expect(groupValueOf('member', null)).toBeNull();
+  });
+
+  it('parses checked and unchecked as column ids in records.groups', () => {
+    const input = { workspace: 'acme', objectId: id(1), groupBy: id(11), groupIds: ['unchecked', 'checked'] };
+    expect(RecordGroupsInput.safeParse(input).success).toBe(true);
+    expect(RecordGroupsInput.safeParse({ ...input, groupIds: ['maybe'] }).success).toBe(false);
   });
 });
 

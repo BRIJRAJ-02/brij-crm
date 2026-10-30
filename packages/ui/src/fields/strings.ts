@@ -73,6 +73,8 @@ export const strings = {
     after: 'is after',
     within: 'is within',
     within_last: 'is within the last',
+    within_next: 'is within the next',
+    more_than_ago: 'is more than',
     at_least: 'is at least',
     at_most: 'is at most',
     is_any_of: 'is any of',

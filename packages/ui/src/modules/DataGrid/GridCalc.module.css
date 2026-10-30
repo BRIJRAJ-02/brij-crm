@@ -1,0 +1,33 @@
+@layer components {
+  /* Fills its footer cell, so hovering anywhere in the cell shows the quiet trigger. */
+  .root {
+    display: flex;
+    flex: 1;
+    align-self: stretch;
+    align-items: center;
+    min-inline-size: 0;
+  }
+
+  .reveal {
+    display: flex;
+    min-inline-size: 0;
+    transition: opacity var(--duration-hover) var(--ease-hover);
+  }
+
+  /* Nothing chosen: "+ Calculate" waits until the cell is hovered or holds the grid's focus. */
+  .root[data-empty]:not([data-active], :focus-within) > .reveal {
+    opacity: 0;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .root[data-empty]:hover > .reveal {
+      opacity: 1;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .reveal {
+      transition: none;
+    }
+  }
+}

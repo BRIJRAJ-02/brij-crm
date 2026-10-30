@@ -3,7 +3,9 @@
 // reload, back and forward and a copied link keep it), or only in this page's
 // memory when it is too long for a link. Equal to the saved query, it is no
 // draft. The draft remembers the view's query version when it began, which
-// Save sends so a clash is never silent (AC-469).
+// Save sends so a clash is never silent (AC-469). The data layer keeps each
+// view's draft for the tab too, so leaving through the sidebar or another
+// view and opening it again brings the draft back, Save and Discard showing.
 import type { DraftQuery } from '@crm/data';
 import { useRouteContext } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
@@ -34,6 +36,9 @@ export interface ViewDraft {
 
 /** What the hook needs: the saved query and its version, the URL's draft, and how to write it. */
 export interface ViewDraftInput {
+  readonly slug: string;
+  /** The view the draft belongs to: its draft is kept in the data layer for this tab under this id. */
+  readonly viewId: string | undefined;
   readonly saved: DraftQuery;
   readonly savedVersion: number;
   /** The `draft` search param now. */
@@ -50,6 +55,8 @@ export interface ViewDraftInput {
 
 /** The view's draft over the route's `draft` search param. */
 export function useViewDraft({
+  slug,
+  viewId,
   saved,
   savedVersion,
   param,
@@ -61,11 +68,25 @@ export function useViewDraft({
   const { data } = useRouteContext({ from: '__root__' });
   // The same question in two forms (the default order stored, or asked as none) is no draft.
   const isSame = (a: DraftQuery, b: DraftQuery) => data.views.isSameQuery(normalize(a), normalize(b));
-  const [draft, setDraft] = useState<Draft | undefined>(() =>
-    opened === undefined || param === undefined ? undefined : { query: opened, text: param, base: savedVersion },
-  );
+  const [draft, setDraft] = useState<Draft | undefined>(() => {
+    if (param !== undefined)
+      return opened === undefined ? undefined : { query: opened, text: param, base: savedVersion };
+    // Opened with no draft in the address: the one this tab kept for the view, if any.
+    const kept = viewId === undefined ? undefined : data.views.keptDraft(slug, viewId);
+    return kept === undefined
+      ? undefined
+      : { query: kept.query, text: data.views.draftParam(kept.query), base: kept.base };
+  });
   // The param as this tab last wrote or read it: a different one came from back, forward or a typed address.
   const known = useRef(param);
+  // A kept draft brought back goes into the address too, so a reload or a copied link keeps it.
+  useEffect(() => {
+    if (param !== undefined || draft?.text === undefined) return;
+    known.current = draft.text;
+    write(draft.text, true);
+    // Once, for the draft the screen opened with.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   useEffect(() => {
     if (param === known.current) return;
     known.current = param;
@@ -96,6 +117,12 @@ export function useViewDraft({
     write(next, replace);
   };
   const isDraft = draft !== undefined && !isSame(draft.query, saved);
+  // The tab keeps what shows as a draft for the view, and forgets it once saved, discarded or equal to the saved.
+  const kept = isDraft ? draft : undefined;
+  useEffect(() => {
+    if (viewId === undefined) return;
+    data.views.keepDraft(slug, viewId, kept === undefined ? undefined : { query: kept.query, base: kept.base });
+  }, [data, slug, viewId, kept]);
   return {
     query: isDraft ? draft.query : saved,
     isDraft,

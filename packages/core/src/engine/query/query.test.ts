@@ -378,8 +378,11 @@ const is = (key: string, operator: string, value?: unknown): FilterCondition =>
   ({ attributeId: id(key), operator, ...(value === undefined ? {} : { value }) }) as FilterCondition;
 const list = (key: string, operator: string, values: readonly unknown[]): FilterCondition =>
   ({ attributeId: id(key), operator, values }) as FilterCondition;
-const range = (key: string, operator: 'within' | 'within_last', value: unknown): FilterCondition =>
-  ({ attributeId: id(key), operator, range: value }) as FilterCondition;
+const range = (
+  key: string,
+  operator: 'within' | 'within_last' | 'within_next' | 'more_than_ago',
+  value: unknown,
+): FilterCondition => ({ attributeId: id(key), operator, range: value }) as FilterCondition;
 const between = (key: string, from: unknown, to: unknown): FilterCondition => ({
   attributeId: id(key),
   operator: 'between',
@@ -439,6 +442,8 @@ describe('the compiler matches the reference evaluator', () => {
     ],
     ['date within the next 2 weeks', () => and(range('launch', 'within', { amount: 2, unit: 'week' }))],
     ['date within the last month', () => and(range('launch', 'within_last', { amount: 1, unit: 'month' }))],
+    ['date within the next 10 days', () => and(range('launch', 'within_next', { amount: 10, unit: 'day' }))],
+    ['date more than 30 days ago', () => and(range('launch', 'more_than_ago', { amount: 30, unit: 'day' }))],
     ['date this week (Sunday start, New York)', () => and(range('launch', 'within', 'this_week'))],
     [
       'date this month and last month',
@@ -449,6 +454,8 @@ describe('the compiler matches the reference evaluator', () => {
       () => or(is('landed', 'before', moment(-24 * 30)), is('landed', 'after', moment(24 * 30))),
     ],
     ['timestamp within the last 10 days', () => and(range('landed', 'within_last', { amount: 10, unit: 'day' }))],
+    ['timestamp more than 20 days ago', () => and(range('landed', 'more_than_ago', { amount: 20, unit: 'day' }))],
+    ['interaction more than 2 days ago', () => and(range('contact', 'more_than_ago', { amount: 2, unit: 'day' }))],
     ['timestamp this month in New York', () => and(range('landed', 'within', 'this_month'))],
     ['checkbox checked', () => and(is('crewed', 'is_checked'))],
     ['checkbox not checked', () => and(is('crewed', 'is_not_checked'))],

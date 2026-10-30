@@ -5,8 +5,10 @@
 // store, a view per object, and optimistic creates and edits (loaded when a
 // screen first asks for records), patched in place by live change events
 // while a screen shows a workspace (the realtime client loads with the first).
+import type { AggregateFn, FilterGroup } from '@crm/contracts/values';
 import type {
   ActivityKind,
+  RecordAggregate,
   RecordsExportView,
   StartExportInput,
   ImportLinks,
@@ -215,6 +217,7 @@ import type { NavChangeOptions, NavSnapshot, NavSource, NavStore } from './navig
 import { draftParam, isSameQuery, readDraft, type DraftQuery } from './views/draft.ts';
 import {
   createViewsStore,
+  type KeptDraft,
   type NewView,
   type SavedViewSource,
   type SaveQueryInput,
@@ -613,13 +616,19 @@ export {
   BOARD_MAX_COLUMNS,
   boardColumnIds,
   boardDefaults,
+  CHECKBOX_COLUMNS,
+  columnFilter,
   groupableAttributes,
+  groupKindOf,
+  groupValueOf,
   isGroupable,
   liveOptionCount,
   type BoardSettings,
+  type GroupKind,
 } from '@crm/contracts/board';
 export { DRAFT_LINK_MAX, FILTER_EDIT_MS, type DraftQuery } from './views/draft.ts';
 export type {
+  KeptDraft,
   NewView,
   SavedViewSnapshot,
   SavedViewSource,
@@ -731,6 +740,8 @@ export {
 export type { NameState, RecordRef } from './records/names.ts';
 export type { WindowCount, WindowMode } from './records/windows.ts';
 export type { FilterGroup, SortRule, SortRules } from '@crm/contracts/values';
+export { aggregatesFor, type AggregateFn } from '@crm/contracts/views';
+export type { RecordAggregate } from '@crm/contracts';
 
 /**
  * A value this tab saved was replaced by someone else's later save (spec
@@ -4594,6 +4605,38 @@ export function createDataLayer({
           .then(() => call((options) => api.records.objectCounts({ workspace }, options)))
           .then((answer) => answer.counts),
       /**
+       * A column's calculation across every record a view matches (the CRM
+       * flow pass, `records.aggregate`): a count of the filled or the empty,
+       * or for a number or currency the sum, average, least or most (one per
+       * currency). One read per footer, never per row and never cached; the
+       * screen asks again when the view's question or count moves. Relative
+       * dates in the filter resolve in the member's time zone.
+       */
+      aggregate: (
+        workspace: string,
+        objectId: string,
+        input: { readonly attributeId: string; readonly fn: AggregateFn; readonly filter?: FilterGroup | undefined },
+        signal?: AbortSignal,
+      ): Promise<RecordAggregate> =>
+        beforeRead(workspace).then(() =>
+          call(
+            (options) =>
+              api.records.aggregate(
+                {
+                  workspace,
+                  objectId,
+                  attributeId: input.attributeId,
+                  fn: input.fn,
+                  ...(input.filter === undefined ? {} : { filter: input.filter }),
+                  now: new Date().toISOString(),
+                  timeZone: zoneOf(workspace),
+                },
+                options,
+              ),
+            signal,
+          ),
+        ),
+      /**
        * Makes a record at once (see the records layer) with `id` (from
        * `newId`); rejects with the refusals when the server says no. Sending the
        * same id again after a lost answer gets the record already made.
@@ -5826,6 +5869,16 @@ export function createDataLayer({
       markOpened: (workspace: string, viewId: string) => {
         views.markOpened(workspace, viewId);
       },
+      /**
+       * Keeps a view's unsaved filter and sorts for this tab, by view id
+       * (undefined forgets them): leaving the view keeps its draft, and opening
+       * it again brings it back.
+       */
+      keepDraft: (workspace: string, viewId: string, draft: KeptDraft | undefined) => {
+        views.keepDraft(workspace, viewId, draft);
+      },
+      /** The draft this tab kept for a view, if any. */
+      keptDraft: (workspace: string, viewId: string): KeptDraft | undefined => views.keptDraft(workspace, viewId),
       /** A draft's URL text (base64url of its canonical JSON), or undefined past `DRAFT_LINK_MAX`. */
       draftParam: (query: DraftQuery): string | undefined => draftParam(query),
       /** A link's draft, checked (loads the schemas on first use), or undefined when it can't be read. */

@@ -56,6 +56,7 @@ import { fromTsv, planPaste, toTsv } from './grid-clipboard.ts';
 import { focusLater } from '../../lib/focus-later.ts';
 import { groupMap, type GridGroup } from './grid-groups.ts';
 import { GridGroupRow, groupCellKey } from './GridGroupRow.tsx';
+import { GridCalc, type ColumnCalc } from './GridCalc.tsx';
 import {
   hideColumn,
   moveColumn,
@@ -135,6 +136,11 @@ export interface DataGridProps<Row> {
   readonly cellErrors?: ReadonlyMap<string, string>;
   /** Calculations by column id, computed by the screen across all matching rows. */
   readonly footer?: Readonly<Record<string, ReactNode>>;
+  /**
+   * Each column's calculation in the footer, by column id (the CRM flow pass): a quiet "+ Calculate" opening a Menu
+   * of what its type can work out, or the one chosen with its value. Enter or Space on the footer cell opens it.
+   */
+  readonly calculations?: Readonly<Record<string, ColumnCalc>>;
   /**
    * A ghost "+ New person" at the start of the footer, under the row header: a click, or Enter or Space on that
    * footer cell, calls `onAdd`. It draws the footer even with no `footer`. Leave it out where the person may not
@@ -331,6 +337,7 @@ export function DataGrid<Row>({
   confirmsPaste = true,
   cellErrors,
   footer,
+  calculations,
   addRow,
   floatingBar,
   status = 'ready',
@@ -384,7 +391,7 @@ export function DataGrid<Row>({
   const count = status === 'ready' ? rows.count : 0;
   // The drawn lines: the rows, and each group's header before its first row.
   const lines = useMemo(() => groupMap(status === 'ready' ? (groups ?? []) : [], count), [groups, count, status]);
-  const hasFooter = (footer !== undefined || addRow !== undefined) && count > 0;
+  const hasFooter = (footer !== undefined || addRow !== undefined || calculations !== undefined) && count > 0;
   const hasFloatingBar = floatingBar !== undefined && floatingBar !== null && floatingBar !== false;
   const rowCount = count + (hasFooter ? 1 : 0);
 
@@ -400,6 +407,8 @@ export function DataGrid<Row>({
   const [range, setRange] = useState<CellRange | undefined>(undefined);
   const [editingAt, setEditing] = useState<Editing | undefined>(undefined);
   const [menuFor, setMenuFor] = useState<string | undefined>(undefined);
+  // The footer calculation whose Menu is open, by column id.
+  const [calcMenuFor, setCalcMenuFor] = useState<string | undefined>(undefined);
   const [resizing, setResizing] = useState<string | undefined>(undefined);
   const [localErrors, setLocalErrors] = useState<ReadonlyMap<string, string>>(() => new Map());
   const [anchorRow, setAnchorRow] = useState<number | undefined>(undefined);
@@ -1084,6 +1093,17 @@ export function DataGrid<Row>({
       setMenuFor(column.id);
       return;
     }
+    // Alt with Left or Right on a header resizes its column, and stays in resize mode: then Left and Right alone step
+    // it (the column menu's Resize item went, 30 October 2026).
+    if (event.altKey && (event.key === 'ArrowLeft' || event.key === 'ArrowRight') && focus.row < 0) {
+      if (column !== undefined) {
+        event.preventDefault();
+        const forward = (event.key === 'ArrowRight') === (getComputedStyle(event.currentTarget).direction !== 'rtl');
+        setResizing(column.id);
+        resizeBy(column.id, forward ? RESIZE_STEP : -RESIZE_STEP);
+        return;
+      }
+    }
     // Up or Down onto a group's header line: focus goes to its fold button, a stop of its own in the column of lines.
     if (
       (event.key === 'ArrowUp' || event.key === 'ArrowDown') &&
@@ -1124,11 +1144,18 @@ export function DataGrid<Row>({
       }
       return;
     }
-    // The footer reads; nothing in it edits. Its row header's "+ New" adds a row.
+    // The footer reads; nothing in it edits. Its row header's "+ New" adds a row; a column's cell opens its
+    // calculation.
     if (focus.row >= count) {
-      if (focus.col === 1 && addRow !== undefined && (event.key === 'Enter' || event.key === ' ')) {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      if (focus.col === 1 && addRow !== undefined) {
         event.preventDefault();
         addRow.onAdd();
+        return;
+      }
+      if (column !== undefined && calculations?.[column.id] !== undefined) {
+        event.preventDefault();
+        setCalcMenuFor(column.id);
       }
       return;
     }
@@ -1671,6 +1698,7 @@ export function DataGrid<Row>({
       {drawn.flatMap((each, index) => {
         const place = placeOf(each);
         const adds = addRow !== undefined && place.col === 1;
+        const calc = adds ? undefined : calculations?.[each.column.id];
         return [
           index === leadIndex ? <Spacer key="lead" width={leadSpacer} /> : null,
           <div
@@ -1705,6 +1733,17 @@ export function DataGrid<Row>({
               </span>
             )}
             {footer?.[each.column.id]}
+            {calc !== undefined && (
+              <GridCalc
+                name={each.column.attribute.name}
+                calc={calc}
+                isActive={isFocusedAt(count, place.col)}
+                isOpen={calcMenuFor === each.column.id}
+                onOpenChange={(isOpen) => {
+                  setCalcMenuFor(isOpen ? each.column.id : undefined);
+                }}
+              />
+            )}
           </div>,
         ];
       })}

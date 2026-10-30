@@ -130,6 +130,8 @@ export function KanbanColumn({
           >
             {column.isCountAtLeast === true ? strings.atLeast(number) : number}
           </span>
+          {/* The column's total: a strip is too narrow for it. */}
+          {column.total !== undefined && !isCollapsed && <span className={styles.total}>{column.total}</span>}
         </h3>
         {/* A strip is too narrow for it, and a column that refuses cards (archived, required) takes no new one. */}
         {onAddCard !== undefined && !isCollapsed && refusal === undefined && (

@@ -1,8 +1,10 @@
 // Brief
-// Purpose: see one object's records as a pipeline, a column per option of a status or select field (spec 0021).
+// Purpose: see one object's records as a pipeline, a column per option, member or checked state of a field (spec 0021).
 // Main task: see where every record stands and drag a card to its next column, live for everyone.
 // Leaves out: the stuck badge (milestone 3).
 import {
+  columnFilter,
+  groupValueOf,
   isDataError,
   toActorDisplays,
   toFieldAttribute,
@@ -37,6 +39,7 @@ import {
 import { useNavigate, useRouteContext, useRouter } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useMemberPicker } from '../records/members.ts';
+import { useAggregates } from '../workspace/calcs.ts';
 import { AttributeDialog } from '../settings/AttributeDialog.tsx';
 import { NewRecordDialog } from '../workspace/NewRecordDialog.tsx';
 import { createEditors } from '../workspace/create-editors.ts';
@@ -76,7 +79,11 @@ export interface BoardScreenProps {
   /** The dialog that request opened has closed. */
   readonly onAddAttributeClosed?: () => void;
   /** The view's own actions, under "This view" in the switcher's menu, and what runs one (spec 0020). */
-  readonly viewMenu?: { readonly actions: readonly ViewAction[]; readonly onAction: (id: string) => void };
+  readonly viewMenu?: {
+    readonly actions: readonly ViewAction[];
+    readonly onAction: (id: string) => void;
+    readonly onMoveView?: (viewId: string, direction: 'up' | 'down') => void;
+  };
   /** The Table and Board switch, at the end of the view bar. */
   readonly layoutSwitch: ViewLayoutSwitch;
   /** The view's Toolbar (sorts, filters, Save) and any notice under it, given what to say to screen readers. */
@@ -172,9 +179,9 @@ export function BoardScreen(props: BoardScreenProps) {
     };
   }, [object, attributes, preset, groupBy]);
   const addToColumn = (columnId: string) => {
-    if (groupBy === undefined) return;
-    const option = columnId === NO_VALUE_COLUMN ? null : columnId;
-    setPreset({ [groupBy.id]: option !== null && groupBy.isMulti ? [option] : option });
+    if (outcome.kind !== 'board' || groupBy === undefined) return;
+    const value = groupValueOf(outcome.groupKind, columnId === NO_VALUE_COLUMN ? null : columnId);
+    setPreset({ [groupBy.id]: value !== null && groupBy.isMulti ? [value] : value });
     setCreating(true);
   };
   // The dialog's Owner: a Menu of the workspace's members, "Me" first.
@@ -223,6 +230,7 @@ export function BoardScreen(props: BoardScreenProps) {
             onViewChange={onViewChange}
             {...(onCreateView === undefined ? {} : { onCreateView })}
             {...(viewMenu === undefined ? {} : { actions: viewMenu.actions, onAction: viewMenu.onAction })}
+            {...(viewMenu?.onMoveView === undefined ? {} : { onMoveView: viewMenu.onMoveView })}
             {...(viewSettings === undefined ? {} : { settings: viewSettings })}
             layout={layoutSwitch}
           >
@@ -251,7 +259,7 @@ export function BoardScreen(props: BoardScreenProps) {
               <EmptyState
                 icon="kanban"
                 title={strings.nothingToGroupTitle(object.pluralName)}
-                // Only owners and admins change the schema (spec 0009, AC-136); others see the sentence alone.
+                // Only owners and admins change the schema (spec 0009, AC-136); others see the title alone.
                 {...(canChangeSchema
                   ? {
                       actions: (
@@ -261,9 +269,7 @@ export function BoardScreen(props: BoardScreenProps) {
                       ),
                     }
                   : {})}
-              >
-                {strings.nothingToGroupText}
-              </EmptyState>
+              />
             ) : outcome.kind === 'group-archived' ? (
               <EmptyState
                 icon="archive"
@@ -367,12 +373,13 @@ function useBoardStore(
   const asked = useMemo(
     () => ({
       groupBy: plan.groupBy.id,
+      groupKind: plan.groupKind,
       columnIds: plan.columnIds,
       archivedIds: plan.archivedIds,
       ...(query.filter === undefined ? {} : { filter: query.filter }),
       ...(query.sorts === undefined ? {} : { sorts: query.sorts }),
     }),
-    [plan.groupBy.id, plan.columnIds, plan.archivedIds, query.filter, query.sorts],
+    [plan.groupBy.id, plan.groupKind, plan.columnIds, plan.archivedIds, query.filter, query.sorts],
   );
   const key = JSON.stringify([objectId, asked]);
   const [held, setHeld] = useState<{ readonly key: string; readonly store: BoardStore<RecordsView> }>();
@@ -456,6 +463,8 @@ function BoardBody({
   }
   return (
     <LoadedBoard
+      slug={slug}
+      filter={query.filter}
       store={store}
       attributeIds={attributeIds}
       label={label}
@@ -478,6 +487,9 @@ function BoardBody({
 }
 
 interface LoadedBoardProps {
+  readonly slug: string;
+  /** The view's filter, which each column's total runs under with the column's own condition. */
+  readonly filter: ViewQuery['filter'];
   readonly store: BoardStore<RecordsView>;
   readonly attributeIds: readonly string[];
   readonly label: string;
@@ -493,6 +505,8 @@ interface LoadedBoardProps {
 }
 
 function LoadedBoard({
+  slug,
+  filter,
   store,
   attributeIds,
   label,
@@ -508,6 +522,35 @@ function LoadedBoard({
 }: LoadedBoardProps) {
   const board: BoardView = useBoard(store, attributeIds);
   const memberDisplays = useMemo(() => toActorDisplays(members), [members]);
+  // Column totals (Board settings' Column total, the CRM flow pass): one sum per column that holds cards, read
+  // again when a column's count moves; never added up from the cards loaded.
+  const totalId = plan.total?.id;
+  const holdingKey = board.columns
+    .filter((column) => (column.state?.count.count ?? 0) > 0)
+    .map((column) => column.id ?? NO_VALUE_COLUMN)
+    .join('\u0000');
+  const asks = useMemo(
+    () =>
+      totalId === undefined || holdingKey === ''
+        ? []
+        : holdingKey.split('\u0000').map((key) => {
+            const id = key === NO_VALUE_COLUMN ? null : key;
+            return {
+              key,
+              attributeId: totalId,
+              fn: 'sum' as const,
+              filter: columnFilter(filter, plan.groupBy.id, id, plan.groupKind),
+            };
+          }),
+    // The columns holding cards, as one string: a new array each render must not ask again.
+    [totalId, holdingKey, filter, plan.groupBy.id, plan.groupKind],
+  );
+  const totals = useAggregates(
+    slug,
+    object.id,
+    asks,
+    board.columns.map((column) => String(column.state?.count.count ?? '')).join(','),
+  );
   const options = useMemo(
     () => new Map((plan.groupBy.options ?? []).map((option) => [option.id, option])),
     [plan.groupBy.options],
@@ -553,6 +596,9 @@ function LoadedBoard({
       ...(option === undefined ? {} : { hue: option.hue }),
       count: state?.count.count ?? 0,
       ...(state?.count.atLeast === true ? { isCountAtLeast: true } : {}),
+      ...(totalId === undefined || (state?.count.count ?? 0) === 0
+        ? {}
+        : { total: totals.get(column.id ?? NO_VALUE_COLUMN) ?? workspaceStrings.calcPending }),
       ...(option?.isArchived === true ? { isArchived: true } : {}),
       // The no value column stays a slim strip while it holds nothing (once its count is in, so it never flickers).
       ...(column.id === null && state !== undefined ? { isCollapsedWhenEmpty: true } : {}),

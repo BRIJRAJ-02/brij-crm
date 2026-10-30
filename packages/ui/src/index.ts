@@ -543,6 +543,7 @@ export {
   type ToolbarProps,
   type TopBarProps,
   type ViewAction,
+  type ViewActionChoice,
   type ViewBarProps,
   type ViewChoice,
   type ViewLayoutSwitch,

@@ -15,7 +15,15 @@ import { Field } from '../../molecules/Field/Field.tsx';
 import { FilterChip } from '../../molecules/FilterChip/FilterChip.tsx';
 import { focusLater } from '../../lib/focus-later.ts';
 import { SegmentedControl, type Segment } from '../../molecules/SegmentedControl/SegmentedControl.tsx';
-import { Menu, MenuItem, MenuSection, MenuSeparator, MenuTrigger, type MenuKey } from '../../molecules/Menu/Menu.tsx';
+import {
+  Menu,
+  MenuItem,
+  MenuSection,
+  MenuSeparator,
+  MenuTrigger,
+  SubmenuTrigger,
+  type MenuKey,
+} from '../../molecules/Menu/Menu.tsx';
 import { useDelayedLoading } from '../../provider/useDelayedLoading.ts';
 import styles from './Toolbar.module.css';
 import { strings } from './strings.ts';
@@ -100,6 +108,8 @@ export interface ViewChoice {
   readonly section?: string;
   /** A locked view (spec 0020): the lock icon in place of its own, and "Locked" at the end of its menu item. */
   readonly isLocked?: boolean;
+  /** It can move among the views of its group: Alt with the up or down arrow moves it (`onMoveView`). */
+  readonly isMovable?: boolean;
 }
 
 /** A choice's icon: the lock on a locked view. */
@@ -122,6 +132,20 @@ export interface ViewAction {
   readonly isDanger?: boolean;
   /** Starts a group of its own after a hairline: Rename, Duplicate and Copy link; then sharing; then Delete. */
   readonly startsGroup?: boolean;
+  /**
+   * The action is a choice of states (Who can see it): a submenu of them, the current one checked. Choosing one
+   * runs `onAction` with `<action id>/<choice id>`.
+   */
+  readonly choices?: readonly ViewActionChoice[];
+}
+
+/** One state of a choice action ("Only me", "Everyone", "Everyone, only admins edit"). */
+export interface ViewActionChoice {
+  readonly id: string;
+  readonly label: string;
+  readonly isSelected?: boolean;
+  /** Why it can't be chosen now, shown under it, the item disabled. */
+  readonly reason?: string;
 }
 
 /** The view bar's View settings button: what opens the settings, and its anchor for the popover. */
@@ -161,6 +185,8 @@ interface ViewBarSwitcher {
    */
   readonly actions?: readonly ViewAction[];
   readonly onAction?: (id: string) => void;
+  /** Moves a view (`isMovable`) up or down its group from the keyboard (Alt with an arrow on its item). */
+  readonly onMoveView?: (id: string, direction: 'up' | 'down') => void;
   /** The views are still coming: the switcher is a skeleton until they arrive. */
   readonly isLoading?: boolean;
   /**
@@ -180,6 +206,7 @@ interface ViewBarToolsOnly {
   readonly onCreateView?: never;
   readonly actions?: never;
   readonly onAction?: never;
+  readonly onMoveView?: never;
   readonly isLoading?: never;
   readonly settings?: never;
   readonly layout?: never;
@@ -213,12 +240,18 @@ export function ViewBar(props: ViewBarProps) {
     onCreateView,
     actions = [],
     onAction: onViewAction,
+    onMoveView,
     isLoading = false,
     settings,
     layout,
   } = props;
   const current = views.find((view) => view.id === currentViewId) ?? views[0];
-  const actionIds = new Set(actions.map((action) => `${ACTION}${action.id}`));
+  const actionIds = new Set(
+    actions.flatMap((action) => [
+      `${ACTION}${action.id}`,
+      ...(action.choices ?? []).map((choice) => `${ACTION}${action.id}/${choice.id}`),
+    ]),
+  );
   const onAction = (key: MenuKey) => {
     if (key === CREATE) onCreateView?.();
     else if (actionIds.has(String(key))) onViewAction?.(String(key).slice(ACTION.length));
@@ -231,6 +264,13 @@ export function ViewBar(props: ViewBarProps) {
       id={view.id}
       icon={choiceIcon(view)}
       {...(view.isLocked === true ? { meta: strings.locked } : {})}
+      {...(view.isMovable === true && onMoveView !== undefined
+        ? {
+            onMove: (direction: 'up' | 'down') => {
+              onMoveView(view.id, direction);
+            },
+          }
+        : {})}
     >
       {view.name}
     </MenuItem>
@@ -272,16 +312,38 @@ export function ViewBar(props: ViewBarProps) {
               <MenuSection label={strings.thisView} selectionMode="none">
                 {actions.flatMap((action, index) => [
                   ...(action.startsGroup === true && index > 0 ? [<MenuSeparator key={`group-${action.id}`} />] : []),
-                  <MenuItem
-                    key={action.id}
-                    id={`${ACTION}${action.id}`}
-                    icon={action.icon}
-                    isDisabled={action.reason !== undefined}
-                    {...(action.reason === undefined ? {} : { description: action.reason })}
-                    {...(action.isDanger === true ? { isDanger: true } : {})}
-                  >
-                    {action.label}
-                  </MenuItem>,
+                  action.choices === undefined ? (
+                    <MenuItem
+                      key={action.id}
+                      id={`${ACTION}${action.id}`}
+                      icon={action.icon}
+                      isDisabled={action.reason !== undefined}
+                      {...(action.reason === undefined ? {} : { description: action.reason })}
+                      {...(action.isDanger === true ? { isDanger: true } : {})}
+                    >
+                      {action.label}
+                    </MenuItem>
+                  ) : (
+                    // A choice of states: its submenu, the current one checked.
+                    <SubmenuTrigger key={action.id}>
+                      <MenuItem id={`${ACTION}${action.id}`} icon={action.icon}>
+                        {action.label}
+                      </MenuItem>
+                      <Menu label={action.label} onAction={onAction}>
+                        {action.choices.map((choice) => (
+                          <MenuItem
+                            key={choice.id}
+                            id={`${ACTION}${action.id}/${choice.id}`}
+                            isChecked={choice.isSelected === true}
+                            isDisabled={choice.reason !== undefined}
+                            {...(choice.reason === undefined ? {} : { description: choice.reason })}
+                          >
+                            {choice.label}
+                          </MenuItem>
+                        ))}
+                      </Menu>
+                    </SubmenuTrigger>
+                  ),
                 ])}
               </MenuSection>
             )}

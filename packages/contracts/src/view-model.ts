@@ -8,6 +8,8 @@
 // brings the view back exactly as it was.
 import type { FilterCondition, FilterGroup } from './values/filters.ts';
 import type { SortRule } from './values/sorts.ts';
+import type { AggregateFn } from './values/aggregates.ts';
+export { AGGREGATE_FNS, aggregatesFor, type AggregateFn } from './values/aggregates.ts';
 
 /** What the view rules need to know of an attribute (an `AttributeDefinition`, or the engine's own). */
 export interface ViewAttribute {
@@ -182,6 +184,7 @@ export interface StoredColumn {
   readonly attributeId: string;
   readonly width?: number | undefined;
   readonly isHidden?: boolean | undefined;
+  readonly calc?: AggregateFn | undefined;
 }
 
 /** The layout part of a view's config. */
@@ -196,6 +199,8 @@ export interface EffectiveColumn {
   readonly attributeId: string;
   readonly width?: number;
   readonly isHidden: boolean;
+  /** The calculation its footer shows. */
+  readonly calc?: AggregateFn;
 }
 
 /** The most columns a view pins: the name and up to four more. */
@@ -224,6 +229,7 @@ export function effectiveColumns(
         attributeId: column.attributeId,
         ...(column.width === undefined ? {} : { width: column.width }),
         isHidden: column.isHidden === true,
+        ...(column.calc === undefined ? {} : { calc: column.calc }),
       },
     ];
   });

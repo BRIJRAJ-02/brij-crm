@@ -32,8 +32,11 @@ export const SINGLE_VALUE_OPERATORS = [
 /** Operators that take a list of 1 to 100 values (option ids, record references, members). */
 export const LIST_OPERATORS = ['is_any_of', 'contains_any_of', 'contains_all_of', 'contains_none_of'] as const;
 
-/** Operators that resolve a span of time against "today" in the viewer's time zone. */
-export const RELATIVE_OPERATORS = ['within', 'within_last'] as const;
+/**
+ * Operators that resolve a span of time against "today" in the viewer's time zone: within a named range, within the
+ * last or the next N units, and more than N units ago (before the start of the last N).
+ */
+export const RELATIVE_OPERATORS = ['within', 'within_last', 'within_next', 'more_than_ago'] as const;
 
 /** Operators that take no operand. */
 export const BARE_OPERATORS = [

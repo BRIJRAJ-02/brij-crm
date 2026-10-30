@@ -176,7 +176,10 @@ function timeRange(context: EvaluateContext, range: RelativeRange, last: boolean
 
 function inTime(context: EvaluateContext, at: number, condition: FilterCondition): boolean {
   if (!('range' in condition)) return false;
-  const [start, end, exclusive] = timeRange(context, condition.range, condition.operator === 'within_last');
+  const last = condition.operator === 'within_last' || condition.operator === 'more_than_ago';
+  const [start, end, exclusive] = timeRange(context, condition.range, last);
+  // More than N ago: before the start of the last N.
+  if (condition.operator === 'more_than_ago') return at < start;
   return at >= start && (exclusive ? at < end : at <= end);
 }
 
@@ -250,10 +253,13 @@ function itemMatches(
       return op === 'before' ? ms < bound : ms > bound;
     }
     case 'within':
-    case 'within_last': {
+    case 'within_last':
+    case 'within_next':
+    case 'more_than_ago': {
       if (!('range' in condition)) return false;
       if (attribute.type === 'date') {
-        const [start, end] = dateRange(context, condition.range, op === 'within_last');
+        const [start, end] = dateRange(context, condition.range, op === 'within_last' || op === 'more_than_ago');
+        if (op === 'more_than_ago') return (item as string) < start;
         return (item as string) >= start && (item as string) < end;
       }
       return inTime(context, Date.parse((field(item, 'at') ?? item) as string), condition);

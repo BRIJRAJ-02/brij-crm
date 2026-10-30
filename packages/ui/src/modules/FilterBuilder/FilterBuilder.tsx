@@ -580,7 +580,7 @@ function OperandDisplay({ builder, attribute, leaf }: OperandProps) {
     );
   }
   if ('values' in leaf) return shown(leaf.values, listAttribute(attribute));
-  if ('range' in leaf) return <RangeText range={leaf.range} />;
+  if ('range' in leaf) return <RangeText range={leaf.range} isAgo={leaf.operator === 'more_than_ago'} />;
   // A country is a code, and a text match is the words typed: neither is a value of the attribute's own type.
   if (leaf.operator === 'country_is' && typeof leaf.value === 'string') return <CountryText code={leaf.value} />;
   if ('value' in leaf && operandOf(attribute, leaf.operator) === 'text' && typeof leaf.value === 'string') {
@@ -598,12 +598,12 @@ function CountryText({ code }: { readonly code: string }) {
 }
 
 /** A relative range as words: "this week", or "7 days" with the number in the provider's language. */
-function RangeText({ range }: { readonly range: RelativeRange }) {
+function RangeText({ range, isAgo }: { readonly range: RelativeRange; readonly isAgo: boolean }) {
   const { locale } = useFormatSettings();
   const text =
     typeof range === 'string'
       ? strings.ranges[range]
-      : strings.lastAmount(
+      : (isAgo ? strings.agoAmount : strings.lastAmount)(
           memoIntl(`plain:${locale}`, () => new Intl.NumberFormat(locale)).format(range.amount),
           strings.units[range.unit],
         );
@@ -650,7 +650,10 @@ function AmountField({
   );
 }
 
-/** "Within" takes a named range (this week); "within the last" an amount of days, weeks, months or years. */
+/**
+ * "Within" takes a named range (this week); "within the last", "within the next" and "is more than … ago" an amount
+ * of days, weeks, months or years.
+ */
 function RangeEditor({
   name,
   operator,
@@ -658,7 +661,7 @@ function RangeEditor({
   onChange,
 }: {
   readonly name: string;
-  readonly operator: 'within' | 'within_last';
+  readonly operator: 'within' | 'within_last' | 'within_next' | 'more_than_ago';
   readonly range: RelativeRange;
   readonly onChange: (range: RelativeRange) => void;
 }): ReactElement {
@@ -702,6 +705,7 @@ function RangeEditor({
           }
         }}
       />
+      {operator === 'more_than_ago' && <span className={styles.lead}>{strings.ago}</span>}
     </span>
   );
 }

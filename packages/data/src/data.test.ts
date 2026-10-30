@@ -400,6 +400,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       count: os.records.count.handler(() => ({ count: behaviour.count(), atLeast: false })),
       objectCounts: os.records.objectCounts.handler(notServed),
       groups: os.records.groups.handler(notServed),
+      aggregate: os.records.aggregate.handler(notServed),
       get: os.records.get.handler(({ input }) => behaviour.get(input.ids)),
       create: os.records.create.handler(notServed),
       setValues: os.records.setValues.handler(async ({ input }) => {

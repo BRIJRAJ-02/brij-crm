@@ -29,7 +29,7 @@ import type {
   UpdateManyResults,
   WrittenRecord,
 } from '@crm/contracts';
-import { BOARD_BLOCK } from '@crm/contracts/board';
+import { BOARD_BLOCK, groupKeyOf, groupValueOf } from '@crm/contracts/board';
 import { applyOp, type BulkOp } from '@crm/contracts/bulk-ops';
 import { canJump, type JumpAttribute } from '@crm/contracts/jump';
 import type { FilterGroup, Hue, RecordRefDisplay, SortRules } from '@crm/contracts/values';
@@ -3311,7 +3311,7 @@ export function createRecordsLayer({
   // Boards (spec 0021), one per question, shared by every screen asking it, gone 30 seconds after the last.
   const boards = new Map<string, { readonly board: BoardStore<RecordsView>; unused?: ReturnType<typeof setTimeout> }>();
   const boardKeyOf = (workspace: string, objectId: string, query: BoardQuery) =>
-    `${keyOf(workspace, objectId, { ...(query.filter === undefined ? {} : { filter: query.filter }), ...(query.sorts === undefined ? {} : { sorts: query.sorts }) })}\u0000${canonicalJson({ groupBy: query.groupBy, columns: query.columnIds, archived: [...(query.archivedIds ?? [])].sort() })}`;
+    `${keyOf(workspace, objectId, { ...(query.filter === undefined ? {} : { filter: query.filter }), ...(query.sorts === undefined ? {} : { sorts: query.sorts }) })}\u0000${canonicalJson({ groupBy: query.groupBy, kind: query.groupKind ?? 'option', columns: query.columnIds, archived: [...(query.archivedIds ?? [])].sort() })}`;
 
   const records = {
     /**
@@ -3334,6 +3334,7 @@ export function createRecordsLayer({
       if (held !== undefined) return held.board;
       // Each column's window by option id ('' for no value), for placing moved cards.
       const columns = new Map<string, ViewEntry>();
+      const kind = query.groupKind ?? 'option';
       const columnKeyOf = (id: string | null) => id ?? '';
       /**
        * Where a card shows (spec 0021): in the column of its grouping value as
@@ -3349,7 +3350,7 @@ export function createRecordsLayer({
         ...made,
         created: (recordId) => {
           const value = store.get(recordId)?.values[query.groupBy];
-          if ((typeof value === 'string' ? value : '') === columnKeyOf(columnId)) made.created(recordId);
+          if (columnKeyOf(groupKeyOf(kind, value)) === columnKeyOf(columnId)) made.created(recordId);
         },
       });
       const place = (id: string) => {
@@ -3357,8 +3358,7 @@ export function createRecordsLayer({
         if (!entries.some((entry) => entry.shows(id) || entry.hidesMoved(id))) return;
         const body = store.get(id);
         if (body === undefined || !Object.hasOwn(body.values, query.groupBy)) return;
-        const value = body.values[query.groupBy];
-        const here = typeof value === 'string' ? value : '';
+        const here = columnKeyOf(groupKeyOf(kind, body.values[query.groupBy]));
         for (const [key, entry] of columns) entry.placeMoved(id, key === here);
       };
       const stopPlacing = store.subscribe((ids) => {
@@ -3412,7 +3412,7 @@ export function createRecordsLayer({
           const outcome = await edit(
             workspace,
             undefined,
-            [{ rowId: recordId, columnId: query.groupBy, value: toColumnId }],
+            [{ rowId: recordId, columnId: query.groupBy, value: groupValueOf(kind, toColumnId) }],
             'cell',
           );
           if (outcome.kind !== 'done' || outcome.landed > 0) return outcome.kind === 'done';

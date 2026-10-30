@@ -162,7 +162,7 @@ export interface CommandPlace {
 }
 
 /** What a view page is asked to do from the menu, as its address carries it (`?do=`). */
-export type ViewRequest = 'export' | 'new-view';
+export type ViewRequest = 'export' | 'new-view' | 'rename';
 
 /**
  * The actions (AC-1075, AC-1086, AC-1087): Create a <object> for each live

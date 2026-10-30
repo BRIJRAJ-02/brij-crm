@@ -114,6 +114,13 @@ export const strings = {
   creating: 'Creating',
   /** The table's footer, under the name column: how many records the view holds ("10,000+ records"). */
   recordCount: (count: string, isOne: boolean) => (isOne ? `${count} record` : `${count} records`),
+  /** A footer calculation (the CRM flow pass): a filtered view too large to add up, nothing to add, a failed read. */
+  calcTooMany: 'over 10,000 rows',
+  calcNothing: '—',
+  calcFailed: 'unavailable',
+  calcMore: (shown: string, more: number) => `${shown} and ${String(more)} more`,
+  /** While a column's total is read. */
+  calcPending: '…',
   /** The person's own filter changed while rows were ticked: the old rows can't be known to match. */
   selectionCleared: 'Selection cleared: the filter changed.',
   cancel: 'Cancel',

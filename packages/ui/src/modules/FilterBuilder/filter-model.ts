@@ -50,10 +50,12 @@ export function operandOf(attribute: FieldAttribute, operator: FilterOperator): 
   return operatorsFor(attribute).find((each) => each.operator === operator)?.operand ?? 'value';
 }
 
-/** Where a relative range starts: this week for "within", the last 7 days for "within the last". */
-const DEFAULT_RANGE: { readonly within: RelativeRange; readonly within_last: RelativeRange } = {
+/** Where a relative range starts: this week for "within", 7 days for the others, 30 for "more than … ago". */
+const DEFAULT_RANGE: Readonly<Record<'within' | 'within_last' | 'within_next' | 'more_than_ago', RelativeRange>> = {
   within: 'this_week',
   within_last: { amount: 7, unit: 'day' },
+  within_next: { amount: 7, unit: 'day' },
+  more_than_ago: { amount: 30, unit: 'day' },
 };
 
 /** A condition on `attribute` with `operator` (its type's first, by default) and no operand yet. */
@@ -66,7 +68,8 @@ export function conditionOn(attribute: FieldAttribute, operator?: FilterOperator
     case 'list':
       return { attributeId, operator: chosen as Extract<LeafCondition, { values: unknown }>['operator'], values: [] };
     case 'relative': {
-      const relative = chosen === 'within' ? 'within' : 'within_last';
+      const relative =
+        chosen === 'within' || chosen === 'within_next' || chosen === 'more_than_ago' ? chosen : 'within_last';
       return { attributeId, operator: relative, range: DEFAULT_RANGE[relative] };
     }
     case 'none':

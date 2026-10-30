@@ -290,7 +290,10 @@ function timeRange(clock: QueryClock, range: RelativeRange, last: boolean): Peri
 
 function relativeRange(condition: FilterCondition): { range: RelativeRange; last: boolean } {
   if (!('range' in condition)) invalid('Give the span of time.');
-  return { range: condition.range, last: condition.operator === 'within_last' };
+  return {
+    range: condition.range,
+    last: condition.operator === 'within_last' || condition.operator === 'more_than_ago',
+  };
 }
 
 function within(column: SQL, period: Period): SQL {
@@ -305,9 +308,15 @@ function timeCondition(context: CompileContext, column: SQL, condition: FilterCo
     case 'after':
       return sql`${column} > ${timestampOperand(valueOf(condition))}::timestamptz`;
     case 'within':
-    case 'within_last': {
+    case 'within_last':
+    case 'within_next': {
       const { range, last } = relativeRange(condition);
       return within(column, timeRange(context.clock, range, last));
+    }
+    // More than N ago: before the start of the last N.
+    case 'more_than_ago': {
+      const { range } = relativeRange(condition);
+      return sql`${column} < ${timeRange(context.clock, range, true).start}`;
     }
     default:
       return undefined;
@@ -553,10 +562,16 @@ function valuePredicate(context: CompileContext, attribute: AttributeDef, condit
         case 'after':
           return sql`v.date_value > ${dateOperand(valueOf(condition))}::date`;
         case 'within':
-        case 'within_last': {
+        case 'within_last':
+        case 'within_next': {
           const { range, last } = relativeRange(condition);
           const days = dateRange(context.clock, range, last);
           return within(sql`v.date_value`, { ...days, endExclusive: true });
+        }
+        // More than N ago: before the first day of the last N.
+        case 'more_than_ago': {
+          const { range } = relativeRange(condition);
+          return sql`v.date_value < ${dateRange(context.clock, range, true).start}`;
         }
         default:
           return undefined;
