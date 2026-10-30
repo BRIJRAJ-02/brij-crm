@@ -68,6 +68,8 @@ export const ENGINE_REFUSAL_CODES = [
   // team before teams exist); a delegate holding 50 or a member with 20 delegates.
   'DELEGATE_INVALID',
   'DELEGATION_LIMIT',
+  // Time off (spec 0037, AC-1288): a member with 50 upcoming time off entries.
+  'TIME_OFF_LIMIT',
   // The sidebar (spec 0034, AC-934): 50 favourites, or 400 stored items.
   'NAV_LIMIT',
   // Domain join (spec 0031, AC-819): a domain the admin's own verified email isn't at, or a public mail domain.

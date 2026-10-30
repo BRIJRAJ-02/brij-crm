@@ -55,7 +55,9 @@ export function BookingsTopBar({ slug, actionSlot }: BookingsTopBarProps) {
   const [isAddingPage, setAddingPage] = useState(false);
   const navigate = useNavigate();
   const canBookTeams = useCan('booking.admin');
-  const bookable = pages.status === 'ready' ? pages.items.filter((page) => page.status === 'live') : [];
+  // The member's own pages (an admin's, everyone's): a workspace link they may only see isn't theirs to book on.
+  const bookable =
+    pages.status === 'ready' ? pages.items.filter((page) => page.status === 'live' && page.canChange) : [];
   const connections =
     calendar.status === 'ready' ? calendar.connections.filter((connection) => connection.status !== 'revoked') : [];
   const hasNoPage = pages.status === 'ready' && bookable.length === 0;
@@ -115,7 +117,7 @@ export function BookingsTopBar({ slug, actionSlot }: BookingsTopBarProps) {
   };
 
   // Pages but none on: New goes to them to turn one on, rather than making another.
-  const hasPage = pages.status === 'ready' && pages.items.length > 0;
+  const hasPage = pages.status === 'ready' && pages.items.some((page) => page.canChange);
   const button =
     hasNoPage && hasPage ? (
       <ButtonLink variant="primary" icon="plus" label={strings.turnOnPageFirst} href={linksHref(slug)}>

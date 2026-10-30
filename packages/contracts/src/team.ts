@@ -86,6 +86,11 @@ export const AUDIT_ACTIONS = [
   'schedule.changed',
   'block.created',
   'block.removed',
+  // Time off added, changed or removed (spec 0037, AC-1282): the target is the member who is away; the row keeps
+  // the dates, the reason code and the stand in, never the note.
+  'time_off.created',
+  'time_off.changed',
+  'time_off.deleted',
   // A booking made, moved or cancelled by someone other than its host: the target is the booking, `memberId` the host.
   'booking.changed_for',
 ] as const;

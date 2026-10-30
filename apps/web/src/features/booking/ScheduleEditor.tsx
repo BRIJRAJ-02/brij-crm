@@ -45,6 +45,8 @@ export interface ScheduleEditorProps {
   readonly isReadOnly?: boolean;
   /** Above the week: whose hours these are and who is told, and who changed them last (AC-1265, AC-1268). */
   readonly notice?: ReactNode;
+  /** The member's time off (spec 0037, AC-1286), first in the aside: it closes every page, not one schedule. */
+  readonly timeOff?: ReactNode;
 }
 
 /**
@@ -62,6 +64,7 @@ export function ScheduleEditor({
   onNotice,
   isReadOnly = false,
   notice,
+  timeOff,
 }: ScheduleEditorProps) {
   const draft = useScheduleDraft({
     data,
@@ -92,6 +95,7 @@ export function ScheduleEditor({
         }
         aside={
           <>
+            {timeOff}
             <DaysOff availability={shown} onChange={() => undefined} isReadOnly />
             <UsedBy slug={slug} schedule={schedule} />
           </>
@@ -123,6 +127,7 @@ export function ScheduleEditor({
       }
       aside={
         <>
+          {timeOff}
           <DaysOff availability={shown} onChange={change} />
           <UsedBy slug={slug} schedule={schedule} />
         </>
@@ -286,12 +291,13 @@ export function WeekCardPending() {
 }
 
 /** The editor while the schedules load: its week and its side cards in their places. */
-export function ScheduleEditorPending() {
+export function ScheduleEditorPending({ timeOff }: { readonly timeOff?: ReactNode } = {}) {
   return (
     <Layout
       week={<WeekCardPending />}
       aside={
         <>
+          {timeOff}
           {/* Days off in its loaded anatomy: a row's place, then Add day off under it. */}
           <Card title={strings.daysOff} isBusy>
             <EmptyState layout="row" isLoading title={strings.daysOffLoading} />

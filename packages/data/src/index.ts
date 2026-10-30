@@ -169,6 +169,17 @@ export type {
   SchedulingLevel,
   VisibleMember,
 } from './scheduling/access.ts';
+export type {
+  TimeOffBooking,
+  TimeOffDraft,
+  TimeOffEntry,
+  TimeOffHeld,
+  TimeOffList,
+  TimeOffReason,
+  TimeOffSaved,
+  TimeOffState,
+  TimeOffStore,
+} from './scheduling/time-off.ts';
 import {
   createPreferencesStore,
   type MemberPreferences,
@@ -3322,6 +3333,8 @@ export function createDataLayer({
           settings?: Partial<BookingPageSettings>;
           /** `round_robin` (spec 0029) needs `booking.admin` and its hosts. */
           kind?: 'personal' | 'round_robin';
+          /** `workspace`: the workspace's own link (`booking.admin`), booking everyone on the roster unless `hosts` says. */
+          scope?: 'workspace';
           hosts?: TeamHosts;
         },
       ): Promise<BookingPageView> =>
@@ -3441,10 +3454,11 @@ export function createDataLayer({
                         title,
                         scheduleId: page.ownerMemberId === me ? page.scheduleId : null,
                       },
-                      // A round robin page’s copy books from the same hosts.
+                      // A round robin page’s copy books from the same hosts; a workspace link's copy is the workspace's.
                       ...(page.kind === 'round_robin' && page.hosts !== undefined
                         ? { kind: 'round_robin' as const, hosts: page.hosts }
                         : {}),
+                      scope: page.scope,
                       mutationId: mintId(),
                     },
                     options,

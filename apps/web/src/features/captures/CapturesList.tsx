@@ -2,7 +2,15 @@
 // Purpose: the one shape both Captures tabs draw (Links' booking pages, Forms' forms), so they read as one kind of thing.
 // Main task: a grid of link cards across the whole view, each opening its editor, with Copy link, Open and the menu in its footer; the search at the end of the tabs bar; or, with none, the empty state centred in the view, with New.
 // Leaves out: what a card says and does (each tab builds its cards), and the tabs header (the Captures layout).
-import { EmptyState, LinkGrid, LinkListToolbar, PageColumn, type IconName, type LinkGridCard } from '@crm/ui';
+import {
+  EmptyState,
+  LinkGrid,
+  LinkListToolbar,
+  PageColumn,
+  type IconName,
+  type LinkGridCard,
+  type LinkGridGroup,
+} from '@crm/ui';
 import { useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useCapturesToolbarSlot } from './toolbarSlot.ts';
@@ -15,6 +23,8 @@ export interface CapturesListProps {
   readonly searchLabel: string;
   readonly status: 'loading' | 'error' | 'ready';
   readonly cards: readonly LinkGridCard[];
+  /** The cards in titled groups (Links: the workspace's own links apart from members' pages); one grid without. */
+  readonly groups?: readonly LinkGridGroup[];
   /** With no cards: the empty state's New booking page or New form; left out without the permission to make one. */
   readonly newAction?: ReactNode;
   /** With no cards: the empty state's words and icon. */
@@ -35,6 +45,7 @@ export function CapturesList({
   searchLabel,
   status,
   cards,
+  groups,
   newAction,
   empty,
   errorTitle,
@@ -72,6 +83,7 @@ export function CapturesList({
           <LinkGrid
             label={label}
             cards={cards}
+            {...(groups === undefined ? {} : { groups })}
             query={query}
             onQueryChange={setQuery}
             status={status}

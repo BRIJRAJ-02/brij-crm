@@ -87,16 +87,24 @@ export const TimeBlockView = z.object({
 /** A block as its member sees it. */
 export type TimeBlockView = z.infer<typeof TimeBlockView>;
 
+/** What a calendar read draws: a block, a hold, or time off (`away`, spec 0037), drawn as all day items. */
+export const TimeBlockOccurrenceKind = z.enum(['block', 'hold', 'away']);
+/** What a calendar read draws. */
+export type TimeBlockOccurrenceKind = z.infer<typeof TimeBlockOccurrenceKind>;
+
 /** One time a block closes inside a calendar read: a once block's span, or one week's turn of a weekly block. */
 export const TimeBlockOccurrence = z.object({
   /** The block's id plus, for a weekly block, its date: unique within a read. */
   key: z.string(),
   blockId: Uuid,
-  kind: TimeBlockKind,
+  kind: TimeBlockOccurrenceKind,
   repeat: TimeBlockRepeat,
   label: z.string().optional(),
   startsAt: Timestamp,
   endsAt: Timestamp,
+  /** Time off's first and last day (calendar dates in the zone it was chosen in), drawn as all day. */
+  fromDate: DateValue.optional(),
+  toDate: DateValue.optional(),
 });
 /** One time a block closes inside a calendar read. */
 export type TimeBlockOccurrence = z.infer<typeof TimeBlockOccurrence>;

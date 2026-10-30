@@ -295,7 +295,11 @@ export function RotationsScreen({ data, slug, people, canManage, inFrame = false
             <Card
               key={rotation.id}
               title={rotation.name}
-              description={strings.summary(rotation.strategy, rotation.windowDays, rotation.pages)}
+              description={
+                rotation.follows === 'everyone'
+                  ? strings.rosterSummary(rotation.members.filter((member) => member.isOn).length, rotation.pages)
+                  : strings.summary(rotation.strategy, rotation.windowDays, rotation.pages)
+              }
               {...(rotation.canChange
                 ? {
                     actions: (
@@ -314,9 +318,12 @@ export function RotationsScreen({ data, slug, people, canManage, inFrame = false
                           <MenuItem id="edit" icon="pencil">
                             {strings.edit}
                           </MenuItem>
-                          <MenuItem id="delete" icon="trash" isDanger>
-                            {strings.delete}
-                          </MenuItem>
+                          {/* Everyone on the roster follows the workspace: its link keeps it, so it isn't deleted here. */}
+                          {rotation.follows !== 'everyone' && (
+                            <MenuItem id="delete" icon="trash" isDanger>
+                              {strings.delete}
+                            </MenuItem>
+                          )}
                         </Menu>
                       </MenuTrigger>
                     ),

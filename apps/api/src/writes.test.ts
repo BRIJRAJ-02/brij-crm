@@ -166,6 +166,7 @@ const READS: ReadonlySet<string> = new Set([
   // Availability schedules (spec 0035).
   'schedules.members',
   'schedules.list',
+  'timeOff.list',
   'schedules.get',
   // Round robin (spec 0029): the rotations a member may see, and why a booking went to its host.
   'rotations.list',
@@ -1627,6 +1628,50 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     await m.client.bookings.blocks.remove({ workspace: m.slug, id: block.id, mutationId });
     return [];
   },
+  // Time off (spec 0037): settings, as blocks are, with no outbox row; screens read again on focus.
+  'timeOff.create': async (m, mutationId) => {
+    await m.client.timeOff.create({
+      workspace: m.slug,
+      id: newId(),
+      fromDate: '2030-11-03',
+      toDate: '2030-11-07',
+      reason: 'vacation',
+      mutationId,
+    });
+    return [];
+  },
+  'timeOff.update': async (m, mutationId) => {
+    const made = await m.client.timeOff.create({
+      workspace: m.slug,
+      id: newId(),
+      fromDate: '2030-11-03',
+      toDate: '2030-11-07',
+      reason: 'vacation',
+      mutationId: newId(),
+    });
+    await m.client.timeOff.update({
+      workspace: m.slug,
+      id: made.entry.id,
+      fromDate: '2030-11-04',
+      toDate: '2030-11-07',
+      reason: 'travel',
+      updatedAt: made.entry.updatedAt,
+      mutationId,
+    });
+    return [];
+  },
+  'timeOff.delete': async (m, mutationId) => {
+    const made = await m.client.timeOff.create({
+      workspace: m.slug,
+      id: newId(),
+      fromDate: '2030-11-03',
+      toDate: '2030-11-07',
+      reason: 'sick',
+      mutationId: newId(),
+    });
+    await m.client.timeOff.delete({ workspace: m.slug, id: made.entry.id, mutationId });
+    return [];
+  },
   // Imports (spec 0040): made, staged and started through the one write path; start and undo each start a job.
   'imports.create': async (m, mutationId) => {
     await importOf(m, mutationId);
@@ -2209,6 +2254,8 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'profile.archiveItem': 2,
   'profile.deleteItem': 2,
   'bookings.blocks.remove': 2,
+  'timeOff.update': 2,
+  'timeOff.delete': 2,
   'bookings.bookAsHost': 2,
   'bookings.cancel': 3,
   'bookings.markNoShow': 3,

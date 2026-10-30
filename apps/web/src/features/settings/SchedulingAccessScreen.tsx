@@ -5,7 +5,7 @@
 // Leaves out: teams (not built), roles (Settings › Members), the reach of other people (the Members page's column).
 import type { DelegationView, MemberView, MyAccess, SchedulingAccessStore, SchedulingLevel } from '@crm/data';
 import { ROLE_LABELS } from '@crm/data';
-import { useDelegations } from '@crm/data/react';
+import { useScheduling } from '@crm/data/react';
 import {
   Avatar,
   Badge,
@@ -49,7 +49,7 @@ const levelBadge = (level: SchedulingLevel) => (
 /** Settings › Account › Scheduling access. */
 export function SchedulingAccessScreen({ scheduling, toasts, slug, access, members }: SchedulingAccessScreenProps) {
   const me = access.memberId;
-  const state = useDelegations(scheduling.delegations(slug, 'mine'));
+  const state = useScheduling(scheduling.delegations(slug, 'mine'));
   const [isAdding, setAdding] = useState(false);
   const [question, setQuestion] = useState<RemoveAccessQuestion | undefined>(undefined);
   // Where focus goes once a confirm or the Add dialog closes: the row it came from may be gone.

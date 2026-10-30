@@ -55,6 +55,9 @@ export const AUDIT_KINDS = {
     'schedule.changed',
     'block.created',
     'block.removed',
+    'time_off.created',
+    'time_off.changed',
+    'time_off.deleted',
     'booking.changed_for',
   ],
 } as const satisfies Record<AuditKindName, readonly AuditAction[]>;

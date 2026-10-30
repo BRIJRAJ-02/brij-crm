@@ -7,6 +7,7 @@
 import { and, asc, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
 import {
   PERMISSIONS,
+  ROTATION_MEMBERS,
   type CreateRotationInput,
   type RotationMemberInput,
   type RotationView,
@@ -21,6 +22,7 @@ import { refuse, refuseOn } from '../engine/refusals.ts';
 import { uuidArray } from '../engine/ids.ts';
 import { actorRow } from '../engine/scope.ts';
 import { lockRotation, windowCounts, windowStart } from './ledger.ts';
+import { keepRosterRows, rosterCalibration } from './roster.ts';
 import { eligibleMembers, ROTATION_ROLES, rulesOf } from './team.ts';
 
 const {
@@ -31,6 +33,7 @@ const {
   forms,
   members,
   rotationMembers,
+  rotationRoster,
   rotations,
 } = schema;
 
@@ -54,31 +57,34 @@ async function viewsOf(
   const ids = rows.map((row) => row.id);
   const everyone = can(scope.access, 'booking.admin');
   const me = memberOf(scope);
+  // Through `rotation_roster`: "Everyone on the roster" lists every active member who isn't a guest.
   const held = await tx
     .select({
-      rotationId: rotationMembers.rotationId,
-      memberId: rotationMembers.memberId,
+      rotationId: rotationRoster.rotationId,
+      memberId: rotationRoster.memberId,
       name: members.name,
-      weight: rotationMembers.weight,
-      priority: rotationMembers.priority,
-      dailyCap: rotationMembers.dailyCap,
-      weeklyCap: rotationMembers.weeklyCap,
-      isOn: rotationMembers.isOn,
-      calibration: rotationMembers.calibration,
+      weight: rotationRoster.weight,
+      priority: rotationRoster.priority,
+      dailyCap: rotationRoster.dailyCap,
+      weeklyCap: rotationRoster.weeklyCap,
+      isOn: rotationRoster.isOn,
+      calibration: rotationRoster.calibration,
+      stored: rotationRoster.stored,
+      joinsLate: rotationRoster.joinsLate,
       // Qualified by hand: drizzle writes a column unqualified in a select, and `member_id` would be `c`'s own.
       hasCalendar: sql<boolean>`exists (
         select 1 from ${calendarConnections} c
-        where c.workspace_id = "rotation_members"."workspace_id" and c.member_id = "rotation_members"."member_id"
+        where c.workspace_id = "rotation_roster"."workspace_id" and c.member_id = "rotation_roster"."member_id"
           and c.status in ('syncing', 'connected')
       )`,
     })
-    .from(rotationMembers)
+    .from(rotationRoster)
     .innerJoin(
       members,
-      and(eq(members.workspaceId, rotationMembers.workspaceId), eq(members.id, rotationMembers.memberId)),
+      and(eq(members.workspaceId, rotationRoster.workspaceId), eq(members.id, rotationRoster.memberId)),
     )
-    .where(inArray(rotationMembers.rotationId, ids))
-    .orderBy(asc(rotationMembers.position), asc(rotationMembers.memberId));
+    .where(inArray(rotationRoster.rotationId, ids))
+    .orderBy(asc(rotationRoster.position), asc(members.name), asc(rotationRoster.memberId));
   // Each rotation's live counts over its own window, in one grouped read.
   const counted = await tx.execute<{ rotation_id: string; member_id: string; count: number }>(sql`
     select a.rotation_id::text as rotation_id, a.member_id::text as member_id, sum(a.units)::int as count
@@ -114,16 +120,28 @@ async function viewsOf(
     .where(and(inArray(bookingPageRotations.rotationId, ids), isNull(bookingPages.deletedAt)))
     .groupBy(bookingPageRotations.rotationId);
   const pageCounts = new Map(pages.map((row) => [row.rotationId, row.count]));
-  return rows.map((row) => ({
-    id: row.id,
-    name: row.name,
-    strategy: rulesOf(row).strategy,
-    windowDays: row.windowDays === 7 || row.windowDays === 90 ? row.windowDays : 30,
-    evenGap: row.evenGap,
-    returning: rulesOf(row).returning,
-    members: held
-      .filter((member) => member.rotationId === row.id)
-      .map((member) => ({
+  return rows.map((row) => {
+    const listed = held.filter((member) => member.rotationId === row.id);
+    // Someone in "Everyone on the roster" with no row yet counts from the pool's average (`rosterCalibration`).
+    const calibrated = rosterCalibration(
+      listed.map((member) => ({
+        stored: member.stored,
+        joinsLate: member.joinsLate,
+        isOn: member.isOn,
+        weight: member.weight,
+        calibration: member.calibration,
+        count: counts.get(`${row.id}:${member.memberId}`) ?? 0,
+      })),
+    );
+    return {
+      id: row.id,
+      ...(row.follows === 'everyone' ? { follows: 'everyone' as const } : {}),
+      name: row.name,
+      strategy: rulesOf(row).strategy,
+      windowDays: row.windowDays === 7 || row.windowDays === 90 ? row.windowDays : 30,
+      evenGap: row.evenGap,
+      returning: rulesOf(row).returning,
+      members: listed.map((member, index) => ({
         memberId: member.memberId,
         name: member.name,
         weight: member.weight,
@@ -134,16 +152,17 @@ async function viewsOf(
         hasCalendar: member.hasCalendar,
         ...(everyone || member.memberId === me
           ? {
-              count: (counts.get(`${row.id}:${member.memberId}`) ?? 0) + member.calibration,
+              count: (counts.get(`${row.id}:${member.memberId}`) ?? 0) + (calibrated[index] ?? member.calibration),
               upcoming: upcoming.get(`${row.id}:${member.memberId}`) ?? 0,
             }
           : {}),
       })),
-    pages: pageCounts.get(row.id) ?? 0,
-    canChange: everyone,
-    createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString(),
-  }));
+      pages: pageCounts.get(row.id) ?? 0,
+      canChange: everyone,
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+    };
+  });
 }
 
 /** The rotations the reader may see (AC-752): every live one with `booking.admin`, else the ones they're in. */
@@ -161,7 +180,7 @@ export async function listRotations(scope: EngineScope, now: Date = new Date()):
           isNull(rotations.deletedAt),
           everyone
             ? undefined
-            : sql`exists (select 1 from ${rotationMembers} m where m.workspace_id = "rotations"."workspace_id"
+            : sql`exists (select 1 from ${rotationRoster} m where m.workspace_id = "rotations"."workspace_id"
                 and m.rotation_id = "rotations"."id" and m.member_id = ${me ?? null}::uuid)`,
         ),
       )
@@ -328,7 +347,11 @@ export async function updateRotation(
       .returning();
     if (row === undefined) throw refuse('NOT_FOUND', NOT_FOUND_MESSAGE);
     if (input.members !== undefined) {
-      await replaceMembers(tx, scope, row, input.members, now);
+      if (row.follows === 'everyone') await setRosterSettings(tx, scope, row, input.members);
+      else {
+        checkMemberCount(input.members);
+        await replaceMembers(tx, scope, row, input.members, now);
+      }
       await checkStillBooks(tx, row.id);
     }
     return firstOf(await viewsOf(tx, scope, [row], now));
@@ -369,6 +392,69 @@ async function checkStillBooks(tx: WorkspaceTx, rotationId: string): Promise<voi
     `${named} ${pages.length === 1 ? 'books' : 'book'} through this group, so it needs someone switched on. Keep someone on, or pause ${pages.length === 1 ? 'that page' : 'those pages'} first.`,
     'members',
   );
+}
+
+/** A rotation of chosen people holds 2 to 20 (AC-728): the contract lets a roster change name up to 200. */
+function checkMemberCount(list: readonly RotationMemberInput[]): void {
+  // An empty list falls to the live page check (`checkStillBooks`), as it always has.
+  if ((list.length > 0 && list.length < ROTATION_MEMBERS.min) || list.length > ROTATION_MEMBERS.max) {
+    throw refuseOn(
+      'CONFIG_INVALID',
+      `A rotation holds ${String(ROTATION_MEMBERS.min)} to ${String(ROTATION_MEMBERS.max)} members.`,
+      'members',
+    );
+  }
+}
+
+/**
+ * Sets the own settings of the people named in "Everyone on the roster" (on or off, weight, priority, caps), each
+ * stored as their row; nobody joins or leaves by it, since its members are the workspace's. Someone named who has
+ * left the roster since the list was read (removed, or made a guest) is skipped. Rows not stored yet take the pool's
+ * average now (AC-730), as their first assignment would have; then one update sets everyone named.
+ */
+async function setRosterSettings(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  rotation: RotationRow,
+  list: readonly RotationMemberInput[],
+): Promise<void> {
+  const listed = await tx
+    .select({ memberId: rotationRoster.memberId })
+    .from(rotationRoster)
+    .where(
+      and(
+        eq(rotationRoster.rotationId, rotation.id),
+        inArray(
+          rotationRoster.memberId,
+          list.map((member) => member.memberId),
+        ),
+      ),
+    );
+  const onRoster = new Set(listed.map((member) => member.memberId));
+  const kept = list.filter((member) => onRoster.has(member.memberId));
+  if (kept.length === 0) return;
+  await keepRosterRows(
+    tx,
+    scope,
+    rotation.id,
+    kept.map((member) => member.memberId),
+  );
+  const by = actorRow(scope.actor);
+  const values = sql.join(
+    kept.map(
+      (member) =>
+        sql`(${member.memberId}::uuid, ${member.weight}::smallint, ${member.priority}::smallint, ${member.dailyCap}::smallint, ${member.weeklyCap}::smallint, ${member.isOn}::boolean)`,
+    ),
+    sql`, `,
+  );
+  await tx.execute(sql`
+    update rotation_members m
+    set weight = v.weight, priority = v.priority, daily_cap = v.daily_cap, weekly_cap = v.weekly_cap, is_on = v.is_on,
+      updated_at = now(), updated_by_type = ${by.type}, updated_by_id = ${by.id}::uuid,
+      updated_by_member_id = ${by.memberId}::uuid
+    from (values ${values}) as v (member_id, weight, priority, daily_cap, weekly_cap, is_on)
+    where m.workspace_id = ${scope.workspaceId}::uuid and m.rotation_id = ${rotation.id}::uuid and m.member_id = v.member_id
+  `);
 }
 
 /** Replaces a rotation's members, keeping the stayers' counts and calibrating the joiners (AC-730). */

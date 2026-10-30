@@ -10,6 +10,7 @@ import type { EngineScope } from '../access/mint.ts';
 import { actorRow } from '../engine/scope.ts';
 import { lockKey } from '../booking/locks.ts';
 import type { PickDetail, PickReason } from './pick.ts';
+import { keepRosterRow } from './roster.ts';
 
 const { rotationAssignments } = schema;
 
@@ -98,8 +99,13 @@ export interface AssignmentRow {
   readonly detail: PickDetail | Readonly<Record<string, unknown>>;
 }
 
-/** Writes one ledger row in the caller's transaction (which holds the rotation's lock), as the scope's actor. */
+/**
+ * Writes one ledger row in the caller's transaction (which holds the rotation's lock), as the scope's actor. In
+ * "Everyone on the roster", someone's first row stores their settings row first, with the calibration they were
+ * picked at (`keepRosterRow`).
+ */
 export async function writeAssignment(tx: WorkspaceTx, scope: EngineScope, row: AssignmentRow): Promise<string> {
+  await keepRosterRow(tx, scope, row.rotationId, row.memberId);
   const by = actorRow(scope.actor);
   const [made] = await tx
     .insert(rotationAssignments)

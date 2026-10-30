@@ -16,6 +16,7 @@ import {
   jsonb,
   numeric,
   pgTable,
+  pgView,
   primaryKey,
   smallint,
   text,
@@ -47,11 +48,20 @@ export const rotations = pgTable(
      * owner, AC-739), `last_host` (the host they met last on a page using the rotation), or `none` (the rotation).
      */
     returning: text('returning').notNull().default('owner'),
+    /**
+     * Null: the people chosen (`rotation_members`). `everyone` (workspace link, migration 0128): every active member
+     * who isn't a guest, worked out on each read (`rotationRoster`); a `rotation_members` row then only holds that
+     * person's own settings. One per workspace (`rotations_everyone`).
+     */
+    follows: text('follows'),
     ...auditColumns(),
     deletedAt: timestamptz('deleted_at'),
   },
   (t) => [
     primaryKey({ name: 'rotations_pkey', columns: [t.workspaceId, t.id] }),
+    uniqueIndex('rotations_everyone')
+      .on(t.workspaceId)
+      .where(sql`${t.follows} = 'everyone' and ${t.deletedAt} is null`),
     index('rotations_live')
       .on(t.workspaceId, t.createdAt)
       .where(sql`${t.deletedAt} is null`),
@@ -60,6 +70,7 @@ export const rotations = pgTable(
     check('rotations_even_gap', sql`${t.evenGap} between 1 and 10`),
     check('rotations_returning', sql`${t.returning} in ('owner', 'last_host', 'none')`),
     check('rotations_window', sql`${t.windowDays} in (7, 30, 90)`),
+    check('rotations_follows', sql`${t.follows} is null or ${t.follows} = 'everyone'`),
     ...actorConstraints('rotations', 'created_by', t.workspaceId, {
       type: t.createdByType,
       id: t.createdById,
@@ -214,6 +225,28 @@ export const rotationAssignments = pgTable(
     }),
   ],
 );
+
+/**
+ * Who is in each rotation (migration 0128, a view with the reader's own row level security): a rotation's stored
+ * members, or, for the everyone rotation, every active owner, admin and member with their stored settings when they
+ * have any (`stored`). Every read of a rotation's members goes through it, so the everyone rotation follows
+ * membership with nothing to keep in step. Written by hand in the migration; drizzle only reads it.
+ */
+export const rotationRoster = pgView('rotation_roster', {
+  workspaceId: uuid('workspace_id').notNull(),
+  rotationId: uuid('rotation_id').notNull(),
+  memberId: uuid('member_id').notNull(),
+  weight: smallint('weight').notNull(),
+  priority: smallint('priority').notNull(),
+  dailyCap: smallint('daily_cap'),
+  weeklyCap: smallint('weekly_cap'),
+  isOn: boolean('is_on').notNull(),
+  calibration: numeric('calibration', { precision: 10, scale: 2, mode: 'number' }).notNull(),
+  position: smallint('position').notNull(),
+  stored: boolean('stored').notNull(),
+  /** No row yet, and joined the workspace after the everyone rotation was made: starts at the pool's average. */
+  joinsLate: boolean('joins_late').notNull(),
+}).existing();
 
 /** The rotations a round robin page books from, one host from each, by position (spec 0037, AC-1319: up to 3). */
 export const bookingPageRotations = pgTable(

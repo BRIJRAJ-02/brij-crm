@@ -47,7 +47,12 @@ export const TeamTodayItem = z.object({
 export type TeamTodayItem = z.infer<typeof TeamTodayItem>;
 
 /** One member's day, by start. */
-export const TeamTodayMember = z.object({ memberId: Uuid, items: z.array(TeamTodayItem) });
+export const TeamTodayMember = z.object({
+  memberId: Uuid,
+  items: z.array(TeamTodayItem),
+  /** On time off during the day (spec 0037, AC-1287): the column's status reads "Away". Never the reason. */
+  away: z.boolean().optional(),
+});
 /** One member's day. */
 export type TeamTodayMember = z.infer<typeof TeamTodayMember>;
 
