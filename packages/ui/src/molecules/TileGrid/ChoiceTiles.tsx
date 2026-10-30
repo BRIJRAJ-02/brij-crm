@@ -1,5 +1,6 @@
-import { useId, type ReactNode } from 'react';
-import { Button as AriaButton, RadioButton, RadioField, RadioGroup, Text } from 'react-aria-components';
+import { useContext, useId, useRef, type ReactNode } from 'react';
+import { mergeProps, useFocusRing, useHover, useRadio } from 'react-aria';
+import { Button as AriaButton, RadioGroup, RadioGroupStateContext } from 'react-aria-components';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
 import { Tooltip } from '../../atoms/Tooltip/Tooltip.tsx';
@@ -109,6 +110,65 @@ function ActionTile({ tile, onAction }: { readonly tile: ChoiceTile; readonly on
 }
 
 /**
+ * One tile of a select grid. The tile is the radio's label, and the radio itself is a real input laid, unseen, over
+ * the tick's corner, so a click anywhere on the tile, on its name, or on the radio picks it, and nothing covers the
+ * radio (React Aria's own RadioButton clips its input to nothing, which only a forced click reaches).
+ */
+function SelectTile({ tile }: { readonly tile: ChoiceTile }) {
+  const state = useContext(RadioGroupStateContext);
+  if (state === null) throw new Error('A select tile renders inside its RadioGroup.');
+  const inputRef = useRef<HTMLInputElement>(null);
+  const nameId = useId();
+  const descriptionId = useId();
+  const reasonId = useId();
+  const reason = reasonOf(tile);
+  const describedBy = [
+    ...(reason === undefined ? [] : [reasonId]),
+    ...(tile.description === undefined ? [] : [descriptionId]),
+  ].join(' ');
+  const { inputProps, labelProps, isSelected, isDisabled, isPressed } = useRadio(
+    {
+      value: tile.id,
+      isDisabled: tile.isDisabled === true,
+      'aria-labelledby': nameId,
+      ...(describedBy === '' ? {} : { 'aria-describedby': describedBy }),
+    },
+    state,
+    inputRef,
+  );
+  const { focusProps, isFocusVisible } = useFocusRing();
+  const { hoverProps, isHovered } = useHover({ isDisabled });
+  return (
+    <label
+      {...mergeProps(labelProps, hoverProps)}
+      className={styles.tile}
+      data-tile=""
+      data-mode="select"
+      data-selected={isSelected || undefined}
+      data-disabled={isDisabled || undefined}
+      data-pressed={isPressed || undefined}
+      data-hovered={isHovered || undefined}
+      data-focus-visible={isFocusVisible || undefined}
+    >
+      <input {...mergeProps(inputProps, focusProps)} ref={inputRef} className={styles.input} />
+      <Picture tile={tile} />
+      <span id={nameId} className={styles.name}>
+        {tile.name}
+      </span>
+      {reason !== undefined && (
+        <span id={reasonId} className={styles.reason}>
+          {reason}
+        </span>
+      )}
+      {tile.description !== undefined && <VisuallyHidden id={descriptionId}>{tile.description}</VisuallyHidden>}
+      <span className={styles.tick} aria-hidden="true">
+        <Icon name="check" size="sm" />
+      </span>
+    </label>
+  );
+}
+
+/**
  * Equal size tiles to pick from by sight: a picture slot (a Lucide mark or a thumbnail), a short name, and for
  * `select` a ring and a tick on the chosen one. `select` is a radio group (one tab stop, arrows move and pick);
  * `action` is a group of buttons. Internal: reached through `TileGrid variant="choice"`.
@@ -135,28 +195,7 @@ export function ChoiceTiles(props: ChoiceTilesProps) {
     >
       {tiles.map((tile) => (
         <WithTip key={tile.id} tile={tile}>
-          <RadioField
-            className={styles.tile}
-            data-tile=""
-            data-mode="select"
-            value={tile.id}
-            isDisabled={tile.isDisabled === true}
-          >
-            <RadioButton className={styles.button}>
-              <Picture tile={tile} />
-              <span className={styles.name}>{tile.name}</span>
-              <span className={styles.tick} aria-hidden="true">
-                <Icon name="check" size="sm" />
-              </span>
-            </RadioButton>
-            {(tile.description !== undefined || reasonOf(tile) !== undefined) && (
-              <Text slot="description" className={styles.reason}>
-                {reasonOf(tile)}
-                {reasonOf(tile) !== undefined && tile.description !== undefined && ' '}
-                {tile.description !== undefined && <VisuallyHidden>{tile.description}</VisuallyHidden>}
-              </Text>
-            )}
-          </RadioField>
+          <SelectTile tile={tile} />
         </WithTip>
       ))}
     </RadioGroup>
