@@ -53,8 +53,14 @@ Delight (these pages are client facing, so the first impression is the product):
 Marketing:
 - **AC-22**: The Timefix marketing site (`apps/marketing`) shows the new look. Its booking, forms and link page screens are retaken from the updated app (light and dark, 3840 by 2400 as today), and the All features sheet and tab copy are corrected to match what shipped. The site follows its owner rules (no pricing, no blue gradient, Host Grotesk headline, one primary per view) and ships on its own, apart from the CRM push.
 
+Owner decisions taken the industry standard way (31 Oct, "rest take industry standard decisions"):
+- **AC-23**: A link page whose handle you claim yourself (first run or Settings) is live at once, like Linktree. The top of the link page screen shows one clear Live or Private switch. A page made for you inside another workspace stays private until you open it once (privacy first), and the switch shows that state plainly. The old "goes public the first time you edit or share" panel is removed.
+- **AC-24**: On `/b/:key` the time zone stays visible. The Month, List and Chat view switch and the 12h/24h toggle move into one compact control group in the corner of the picker, like Cal.com. "Connect your calendar" becomes a small secondary link. Nothing is removed and every control still works with the keyboard.
+- **AC-25**: First run keeps every step (the owner likes the stepped card). The Calendar and Invite steps show a clear Skip as their secondary action.
+- **AC-26**: "Powered by Timefix" stays on every public page with no way to remove it (owner, 31 Oct). Its look is polished to sit quietly and aligned at the foot of each page.
+
 Safety rails:
-- **AC-20**: Nothing changes in behaviour or addresses. `/b/:key`, `/f/:key` and `/<handle>` keep their routes, requests and behaviour, the Content Security Policy gains no origin, and existing tests still pass.
+- **AC-20**: Apart from AC-23 and AC-24, nothing changes in behaviour or addresses. `/b/:key`, `/f/:key` and `/<handle>` keep their routes and requests, the Content Security Policy gains no origin, and existing tests still pass (tests that assert the old private panel or control layout are updated, not deleted).
 
 ## Decision
 
@@ -97,8 +103,8 @@ Replace text with visuals using the library we already have (TileGrid, EmptyStat
 | 0 Library | `packages/ui/src/molecules/TileGrid`, `EmptyState`, `Modal` (drawer variant if needed), `packages/ui/src/modules/ReadyPanel`, their stories and tests, `packages/ui/README` entries | AC-1, AC-2, AC-4 for new pieces. Lands first so other lanes use real props. |
 | A Booking | `apps/web/src/features/booking/{NewPageDialog,RotationDialog,RotationsScreen,TimeOffDialog,NewScheduleDialog,RenameScheduleDialog,DeleteScheduleDialog,DeletePageDialog,LinksScreen,PageEditor}.tsx` and their `*strings.ts` files | AC-5, 8 (Links empty), 12, 15, 17, 18 |
 | B Forms | `apps/web/src/features/forms/{PublishDialog,SyncDialog,FormConfirms,InstallTab,FormsScreen,FormEditor}.tsx`, `forms/strings.ts` | AC-6, 8 (Forms empty), 11, 13, 14, 18 |
-| C Link page and first run | `apps/web/src/features/link-page/{registry,AppearanceCard,ImportLinksModal,LinkPageLoader,LinkPagePending,LinkPageHomeCard,SharingCard,ShareLinkPageModal}.tsx`, its strings, `apps/web/src/features/welcome/{DoneStep}.tsx` and `welcome/strings.ts` | AC-7, 8 (link page), 9, 10, 16, 18 |
-| D Visitor side | `apps/web/src/public/booking/ManagePage.tsx`, `packages/ui/src/modules/{BookingReceipt,BookingChanges}`, `packages/ui/src/public-form/{HostedForm,HostedFormSteps,FormParts}.tsx` and CSS | AC-19, 20, 21 |
+| C Link page and first run | `apps/web/src/features/link-page/{registry,AppearanceCard,ImportLinksModal,LinkPageLoader,LinkPagePending,LinkPageHomeCard,LinkPageScreen,SharingCard,ShareLinkPageModal,private-page}.tsx`, its strings, `apps/web/src/features/welcome/{DoneStep,CalendarStep,InviteStep}.tsx` and `welcome/strings.ts`, plus the server rule that decides when a page is public (find it under `apps/api` or `packages/core` for spec 0056) | AC-7, 8 (link page), 9, 10, 16, 18, 23, 25 |
+| D Visitor side | `apps/web/src/public/booking/{ManagePage,BookingPage}.tsx`, the footer of the public pages, `packages/ui/src/modules/{BookingReceipt,BookingChanges}`, `packages/ui/src/public-form/{HostedForm,HostedFormSteps,FormParts}.tsx` and CSS | AC-19, 20, 21, 24, 26 |
 | M Marketing | `apps/marketing/` only (its screens in `public/shots/`, the tabs and the All features sheet copy). Starts after lanes A to D land. Uses the marketing README rules and the demo workspace reseed. | AC-22 |
 
 Each lane also owns the matching `*.browser.test.tsx` files and the Storybook stories of what it changes. Strings stay in the existing `*strings.ts` files. A lane that needs a library change asks Lane 0, it does not edit the library itself.
@@ -140,7 +146,8 @@ Approach: Tracer Bullet. Lane 0 and one thin thread (booking Ready panel) go fir
 3. Lane A: NewPageDialog, RotationDialog and drawer, TimeOffDialog, schedule dialogs, Links empty state, one line confirms, satisfies **AC-3, AC-8, AC-12, AC-15, AC-17, AC-18**
 4. Lane B: merge PublishDialog to one step with the mapping table, SyncDialog preview, Install tiles and For developers disclosure, Ready panel on first publish, Forms empty state, one line confirms, satisfies **AC-3, AC-6, AC-8, AC-11, AC-13, AC-14, AC-18**
 5. Lane C: block kind grid, preset thumbnails, import preview, inline handle field, Done step tiles, link page empty state, one line confirms, satisfies **AC-3, AC-7, AC-8, AC-9, AC-10, AC-16, AC-18**
-6. Lane D: form thanks summary card and booking manage summary card, satisfies **AC-19, AC-20**
+6. Lane D: form thanks summary card, booking manage summary card, the compact control group on `/b/:key` and the polished footer, satisfies **AC-19, AC-20, AC-24, AC-26**
+6a. Lane C, same slice: the Live or Private switch and the self claimed handle going live at once, and Skip on the Calendar and Invite steps, satisfies **AC-23, AC-25**
 7. Delight pass across lanes A to D: copy confirmation, ease in of Ready panel and tiles, success check, warm one line confirmations, satisfies **AC-21**
 8. Lane M, after A to D land: retake the booking, forms and link page screens from a reseeded demo workspace, update tab copy and the All features sheet against the shipped code, satisfies **AC-22**
 9. Verify pass: run the alignment probe and motion checks across all lanes, screenshots in light and dark inside the real layout, satisfies **AC-1, AC-2, AC-4, AC-20**
@@ -162,7 +169,7 @@ Approach: Tracer Bullet. Lane 0 and one thin thread (booking Ready panel) go fir
 
 ## Follow-up
 
-- [ ] Owner calls still open, deferred out of this phase: link page public by default, hiding visitor controls on `/b/:key`, removing first run steps (conflicts with the 22 Oct onboarding decision), custom accent colour, one shared brand kit, removing "Powered by Timefix".
+- [ ] Decided 31 Oct and moved to later specs: custom accent colour (any colour with a contrast guard) and one shared brand kit for link page, booking and forms (spec 0060). "Powered by Timefix" stays (AC-26).
 - [ ] Phase 2 spec: link page themes v2 (gallery, looks, font packs, backgrounds, cover and avatar shapes, contrast guard).
 - [ ] Phase 3 and later: link page blocks and reach, booking behaviour, forms layouts and fields, custom domain.
 - [ ] Check branches `wip/formdesign`, `wip/forms2`, `wip/forms-track`, `wip/forms-questions` before Lane B starts, so work is not duplicated.
