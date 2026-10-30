@@ -94,6 +94,8 @@ export const FormView = FormSummary.extend({
   /** Who owns the records it creates: a fixed member, or (spec 0029 milestone 3) a round robin rotation; at most one. */
   ownerMemberId: Uuid.optional(),
   ownerRotationId: Uuid.optional(),
+  /** Who is told about each new submission besides the lead's owner (AC-568); members who left are left out. */
+  notifyMemberIds: z.array(Uuid),
   /** Who saved the draft last, when someone else may have (the "Bea changed this form" notice). */
   draftSavedByMemberId: Uuid.optional(),
   allowedOrigins: z.array(z.string()),
@@ -158,6 +160,8 @@ export const UpdateFormSettingsInput = WorkspaceScoped.extend({
   ownerRotationId: Uuid.nullable().optional(),
   allowedOrigins: z.array(FormOrigin).max(20, { error: 'List at most 20 sites.' }).optional(),
   requireSignature: z.boolean().optional(),
+  /** Who is told about each new submission besides the lead's owner, replacing the list; `[]` is nobody else. */
+  notifyMemberIds: z.array(Uuid).max(20, { error: 'Tell at most 20 people.' }).optional(),
   mutationId: Uuid,
 }).refine((input) => !(typeof input.ownerMemberId === 'string' && typeof input.ownerRotationId === 'string'), {
   error: 'Pick a teammate or a round robin group as the owner, not both.',

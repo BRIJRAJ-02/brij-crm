@@ -10,7 +10,7 @@
 // form's `revision`; a save that started from another one is refused
 // `FORM_CHANGED`, so nobody's draft is overwritten.
 import { randomBytes } from 'node:crypto';
-import { and, desc, eq, isNull, max, ne, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, max, ne, sql } from 'drizzle-orm';
 import type { PgUpdateSetSource } from 'drizzle-orm/pg-core';
 import {
   defaultQuestions,
@@ -153,6 +153,7 @@ async function viewOf(tx: WorkspaceTx, scope: EngineScope, form: FormRow): Promi
     hasUnpublished: form.draftVersionId !== form.liveVersionId,
     ...(form.ownerMemberId === null ? {} : { ownerMemberId: form.ownerMemberId }),
     ...(form.ownerRotationId === null ? {} : { ownerRotationId: form.ownerRotationId }),
+    notifyMemberIds: [...form.notifyMemberIds],
     ...(draft.updatedByMemberId === null ? {} : { draftSavedByMemberId: draft.updatedByMemberId }),
     allowedOrigins: [...form.allowedOrigins],
     requireSignature: form.requireSignature,
@@ -368,6 +369,21 @@ async function takeSlug(tx: WorkspaceTx, scope: EngineScope, form: FormRow, slug
   }
 }
 
+/** What listing someone to tell who isn't an active member answers. */
+export const NOTIFY_MEMBER_UNKNOWN = 'Pick people who are in this workspace.';
+
+/** Refuses a list to tell that names anyone who isn't an active member; answers it without repeats, in its order. */
+async function checkNotify(tx: WorkspaceTx, memberIds: readonly string[]): Promise<string[]> {
+  const unique = [...new Set(memberIds)];
+  if (unique.length === 0) return [];
+  const found = await tx
+    .select({ id: members.id })
+    .from(members)
+    .where(and(inArray(members.id, unique), eq(members.status, 'active')));
+  if (found.length !== unique.length) throw refuseOn('CONFIG_INVALID', NOTIFY_MEMBER_UNKNOWN, 'notifyMemberIds');
+  return unique;
+}
+
 /** Refuses an owner who isn't an active member. */
 async function checkOwner(tx: WorkspaceTx, memberId: string): Promise<void> {
   const [found] = await tx
@@ -457,7 +473,10 @@ async function insertForm(
     mainObjectId: input.objectId,
     publicKey: newPublicKey(),
     signingSecret: newSecret(),
-    ...(scope.actor.type === 'member' && scope.actor.id !== null ? { ownerMemberId: scope.actor.id } : {}),
+    // Its maker owns its leads and hears of each submission until someone changes either (AC-567, AC-568).
+    ...(scope.actor.type === 'member' && scope.actor.id !== null
+      ? { ownerMemberId: scope.actor.id, notifyMemberIds: [scope.actor.id] }
+      : {}),
     ...audit(scope),
   });
   const [version] = await tx
@@ -782,12 +801,14 @@ export interface FormSettingsInput {
   readonly ownerRotationId?: string | null;
   readonly allowedOrigins?: readonly string[];
   readonly requireSignature?: boolean;
+  /** Who is told about each new submission besides the lead's owner, replacing the list. */
+  readonly notifyMemberIds?: readonly string[];
 }
 
 /**
  * Changes what applies at once (0023-experience.md, Settings): the name, the
  * address (the old link stops working, AC-552), the owner of new records
- * (AC-567), and the sites that may post their own form and whether their
+ * (AC-567), who hears of each submission (AC-568), and the sites that may post their own form and whether their
  * posts must be signed. The draft's revision stays, so an open editor's
  * quiet save still lands.
  */
@@ -809,11 +830,13 @@ export async function updateFormSettings(
       if (input.ownerRotationId !== undefined && input.ownerRotationId !== null) {
         await checkOwnerRotation(tx, scope, input.ownerRotationId);
       }
+      const notify = input.notifyMemberIds === undefined ? undefined : await checkNotify(tx, input.notifyMemberIds);
       const set: PgUpdateSetSource<typeof forms> = {
         ...(input.name === undefined ? {} : { name: input.name.trim() }),
         ...ownerColumns(input),
         ...(input.allowedOrigins === undefined ? {} : { allowedOrigins: [...new Set(input.allowedOrigins)] }),
         ...(input.requireSignature === undefined ? {} : { requireSignature: input.requireSignature }),
+        ...(notify === undefined ? {} : { notifyMemberIds: notify }),
       };
       if (Object.keys(set).length > 0) await touchForm(tx, scope, form.id, set, false);
       // Who gets the form's new records is audited when it changes, as its routing rules are.

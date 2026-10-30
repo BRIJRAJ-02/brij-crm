@@ -1,5 +1,5 @@
 // The team's notice of a new submission (spec 0023 AC-1047, late trap #19), against a real Postgres as the app
-// role: processing a submission queues one email to the lead's owner and one to the form's maker, each holding only
+// role: processing a submission queues one email to the lead's owner and one to each member the form lists, each holding only
 // the answers that member may see, once however often it is processed.
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
@@ -13,7 +13,7 @@ import { createWorkspace } from '../engine/workspaces.ts';
 import { runWrite } from '../engine/write.ts';
 import { jobKinds } from '../jobs/kinds/index.ts';
 import { testScope } from '../testing.ts';
-import { createForm, publishForm, saveFormDraft, updateFormSettings } from './forms.ts';
+import { createForm, getForm, NOTIFY_MEMBER_UNKNOWN, publishForm, saveFormDraft, updateFormSettings } from './forms.ts';
 import { answerWords } from './notify.ts';
 import { formsProcess, processSubmission } from './process.ts';
 import { submitForm } from './public.ts';
@@ -123,7 +123,7 @@ describe('the team’s notice of a new submission (AC-1047, late trap #19)', () 
     expect(toAda?.params).toMatchObject({
       formName: 'Contact us',
       submitter: { name: 'Asha Rao', email: 'asha@northwind.example' },
-      reason: 'maker',
+      reason: 'listed',
       filed: true,
       submissionPath: expect.stringMatching(
         new RegExp(`^/w/[^/]+/captures/forms/${w.form.id}\\?tab=submissions&submission=${id}$`),
@@ -208,6 +208,40 @@ describe('the team’s notice of a new submission (AC-1047, late trap #19)', () 
       sql`select count(*)::int as n from emails where kind = 'form_submission' group by to_member_id`,
     );
     expect(sent).toEqual([{ n: 1 }, { n: 1 }]);
+  });
+
+  it('tells the people the form lists, as changed, and refuses a list naming someone who isn’t a member', async () => {
+    const w = await world();
+    const ada = testScope({ db, workspaceId: w.workspaceId, actor: { type: 'member', id: w.ada } });
+    // A new form lists its maker.
+    expect((await getForm(ada, { formId: w.form.id })).notifyMemberIds).toEqual([w.ada]);
+    // Ada takes herself off and lists nobody: only Bea, the lead's owner, hears of the next one.
+    const changed = await updateFormSettings(ada, { formId: w.form.id, notifyMemberIds: [] });
+    expect(changed.notifyMemberIds).toEqual([]);
+    const first = await submit(w.form.publicKey, { name: 'Asha Rao', email: 'asha@northwind.example' });
+    await runWrite(w.system, (context) => processSubmission(context, first, new Date(), undefined, rules));
+    // Bea off the owner seat and on the list: she is told as listed, once though named twice.
+    await updateFormSettings(ada, { formId: w.form.id, ownerMemberId: null, notifyMemberIds: [w.bea, w.bea] });
+    const second = await submit(w.form.publicKey, { name: 'Ben Ode', email: 'ben@northwind.example' });
+    await runWrite(w.system, (context) => processSubmission(context, second, new Date(), undefined, rules));
+    const sent = await w.query<{ member: string; submission: string; reason: string }>(
+      sql`select to_member_id::text as member, split_part(key, ':', 2) as submission, params->>'reason' as reason
+          from emails where kind = 'form_submission' order by created_at`,
+    );
+    expect(sent).toEqual([
+      { member: w.bea, submission: first, reason: 'lead' },
+      { member: w.bea, submission: second, reason: 'listed' },
+    ]);
+    // Someone who left, or never was a member, can't be listed; the list stays as it was.
+    await w.query(sql`update members set status = 'removed' where id = ${w.bea}`);
+    await expect(updateFormSettings(ada, { formId: w.form.id, notifyMemberIds: [w.ada, w.bea] })).rejects.toMatchObject(
+      { refusal: { code: 'CONFIG_INVALID', message: NOTIFY_MEMBER_UNKNOWN, field: 'notifyMemberIds' } },
+    );
+    await expect(updateFormSettings(ada, { formId: w.form.id, notifyMemberIds: [newId()] })).rejects.toMatchObject({
+      refusal: { code: 'CONFIG_INVALID' },
+    });
+    // Bea, listed before she left, drops out of the list the form shows.
+    expect((await getForm(ada, { formId: w.form.id })).notifyMemberIds).toEqual([]);
   });
 
   it('tells nobody from a registry built without rules (fail closed)', async () => {

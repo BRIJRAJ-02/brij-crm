@@ -40,6 +40,8 @@ export interface FormRow {
   readonly ownerMemberId: string | null;
   /** The rotation that gives each new lead its owner (spec 0029 milestone 3); null when a member or nobody does. */
   readonly ownerRotationId: string | null;
+  /** Who is told about each new submission besides the lead's owner, in the list's order, members who left left out. */
+  readonly notifyMemberIds: readonly string[];
   readonly allowedOrigins: readonly string[];
   readonly requireSignature: boolean;
   readonly signingSecret: string;
@@ -82,6 +84,10 @@ const FORM_COLUMNS = {
   revision: forms.revision,
   ownerMemberId: forms.ownerMemberId,
   ownerRotationId: forms.ownerRotationId,
+  notifyMemberIds: sql<
+    string[]
+  >`array(select m.id::text from members m, unnest(${forms.notifyMemberIds}) with ordinality as n(id, position)
+    where m.workspace_id = ${forms.workspaceId} and m.id = n.id and m.status = 'active' order by n.position)`,
   allowedOrigins: forms.allowedOrigins,
   requireSignature: forms.requireSignature,
   signingSecret: forms.signingSecret,

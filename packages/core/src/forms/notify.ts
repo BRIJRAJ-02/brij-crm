@@ -1,11 +1,11 @@
 // The team's notice of a new submission (spec 0023, AC-1047; late trap #19): before, a submission told nobody, so a
 // lead sat unseen until someone happened to open the form's Submissions tab. When the processing job ends a
 // submission (processed, kept, or failed to file), it queues one email each to the member the lead was given to and
-// the member who made the form, as most form tools tell a form's owner and a lead's owner. Each email holds only
+// the members the form lists (its maker unless changed, 30 October 2026), as most form tools tell a form's owner and a lead's owner. Each email holds only
 // what that member may see: the submission as `getSubmission` would show them, so an answer filed on a field hidden
 // from them is absent, and a member who can't open the submission gets nothing. A member turns these off with the
 // email's preferences link (the `form_submissions` topic). Spam never reaches here: the job leaves it alone.
-// Choosing who is told per form, and the daily digest, are spec 0023 milestone 3's.
+// The daily digest is still spec 0023 milestone 3's.
 import { sql } from 'drizzle-orm';
 import { EmailAddress, EmailTimeZone, type EmailRow, type FormSubmissionEmail } from '@crm/contracts/emails';
 import type { FormDocument, SubmissionAnswer } from '@crm/contracts';
@@ -55,14 +55,15 @@ interface NoticeRow extends Record<string, unknown> {
   readonly received_at: string;
   readonly state: string;
   readonly lead_owner: string | null;
-  readonly maker: string | null;
+  /** The members the form lists (`forms.notify_member_ids`). */
+  readonly listed: readonly string[];
   readonly slug: string;
   readonly workspace_zone: string;
 }
 
 /**
  * Queues the notice of a submission the processing job just ended, in its transaction, to the member its lead went
- * to and the form's maker: once each (the key is the submission and the member), cut to what each may see. Without
+ * to and the members the form lists: once each (the key is the submission and the member), cut to what each may see. Without
  * `rules` (a registry built with none) it tells nobody, rather than read members with none: fail closed. Each member
  * is told under a savepoint of their own, and anything that goes wrong only leaves that notice out: a notice never
  * decides whether the submission is filed (security review).
@@ -86,7 +87,7 @@ async function tellEach(tx: WorkspaceTx, scope: EngineScope, rules: RuleSource, 
   const found = await tx.execute<NoticeRow>(sql`
     select s.form_id::text, s.version_id::text, s.state::text,
       to_char(s.received_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as received_at,
-      s.assignment->>'memberId' as lead_owner, f.created_by_member_id::text as maker,
+      s.assignment->>'memberId' as lead_owner, f.notify_member_ids::text[] as listed,
       w.slug, w.time_zone as workspace_zone
     from form_submissions s
     join forms f on f.workspace_id = s.workspace_id and f.id = s.form_id
@@ -98,7 +99,8 @@ async function tellEach(tx: WorkspaceTx, scope: EngineScope, rules: RuleSource, 
   const form = await loadForm(tx, row.form_id);
   const version = (await loadVersions(tx, [row.version_id])).get(row.version_id);
   if (form === undefined || version === undefined) return;
-  const told = [...new Set([row.lead_owner, row.maker].filter((id): id is string => id !== null))];
+  // A listed member who has left gets nothing: `memberScopeIn` answers only an active member.
+  const told = [...new Set([row.lead_owner, ...row.listed].filter((id): id is string => id !== null))];
   for (const memberId of told) {
     try {
       await tx.transaction((one) =>
@@ -148,7 +150,7 @@ async function tellOne(tx: WorkspaceTx, notice: Notice, memberId: string): Promi
     submittedAt: row.received_at,
     ...(timeZone.success ? { timeZone: timeZone.data } : {}),
     submissionPath: `/w/${encodeURIComponent(row.slug)}/captures/forms/${form.id}?tab=submissions&submission=${submissionId}`,
-    reason: memberId === row.lead_owner ? 'lead' : 'maker',
+    reason: memberId === row.lead_owner ? 'lead' : 'listed',
     filed: row.state === 'processed',
   };
   await queueFormSubmissionNotice(tx, { submissionId, memberId, params });

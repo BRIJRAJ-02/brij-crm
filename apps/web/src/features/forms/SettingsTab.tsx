@@ -73,12 +73,17 @@ type AfterKind = FormDocument['after']['kind'];
 const questionHref = (slug: string, formId: string, questionId: string) =>
   `/w/${slug}/captures/forms/${formId}?question=${encodeURIComponent(questionId)}`;
 
-/** The settings that apply when saved: the name, the address and the owner. */
+/** The settings that apply when saved: the name, the address, the owner and who is emailed each submission. */
 interface Applied {
   readonly name: string;
   readonly address: string;
   readonly owner: string;
+  readonly notify: readonly string[];
 }
+
+/** Whether two lists name the same people in the same order. */
+const sameList = (a: readonly string[], b: readonly string[]) =>
+  a.length === b.length && a.every((id, index) => id === b[index]);
 
 /** Props for useFormSettings. */
 export interface FormSettingsInput {
@@ -98,13 +103,18 @@ export function useFormSettings({ slug, form, onFormChange }: FormSettingsInput)
     name: form.name,
     address: form.publicKey,
     owner: form.ownerRotationId === undefined ? (form.ownerMemberId ?? NOBODY) : groupOption(form.ownerRotationId),
+    notify: form.notifyMemberIds,
   };
   // Only the edits are held, so a change made elsewhere (the first publish, a rename) shows here at once.
   const [edits, setEdits] = useState<Partial<Applied>>({});
   const values: Applied = { ...saved, ...edits };
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [failure, setFailure] = useState<{ readonly message: string; readonly field?: string } | undefined>(undefined);
-  const isDirty = values.name !== saved.name || values.address !== saved.address || values.owner !== saved.owner;
+  const isDirty =
+    values.name !== saved.name ||
+    values.address !== saved.address ||
+    values.owner !== saved.owner ||
+    !sameList(values.notify, saved.notify);
 
   const set = (patch: Partial<Applied>) => {
     setEdits((before) => ({ ...before, ...patch }));
@@ -121,6 +131,7 @@ export function useFormSettings({ slug, form, onFormChange }: FormSettingsInput)
         ...(values.name === saved.name ? {} : { name: values.name.trim() }),
         ...(addressChanged ? { slug: values.address } : {}),
         ...(values.owner === saved.owner ? {} : ownerChange(values.owner)),
+        ...(sameList(values.notify, saved.notify) ? {} : { notifyMemberIds: values.notify }),
       })
       .then(
         (view) => {
@@ -163,7 +174,7 @@ export function useFormSettings({ slug, form, onFormChange }: FormSettingsInput)
     />
   );
 
-  const fieldError = (field: 'name' | 'slug' | 'owner') =>
+  const fieldError = (field: 'name' | 'slug' | 'owner' | 'notifyMemberIds') =>
     failure !== undefined &&
     (failure.field === field ||
       (field === 'owner' && (failure.field === 'ownerMemberId' || failure.field === 'ownerRotationId')))
@@ -321,6 +332,13 @@ export function SettingsTab({
       ? [{ id: groupOption(chosenGroupId), label: strings.groupUnknown, group: strings.ownerGroups }]
       : []),
     ...(ownerLeft ? [{ id: settings.values.owner, label: strings.ownerFormer }] : []),
+  ];
+  // Who is emailed each submission: any teammate; one listed whom the reader can't list stays shown as former.
+  const notifyItems = [
+    ...members.map((member) => ({ id: member.id, label: member.name })),
+    ...settings.values.notify
+      .filter((id) => !members.some((member) => member.id === id))
+      .map((id) => ({ id, label: strings.noticesFormer })),
   ];
   // One line under it: who gets new records, or why nobody will.
   const ownerHint = ownerLeft
@@ -708,6 +726,23 @@ export function SettingsTab({
           )}
         </Card>
       )}
+      <Card title={strings.noticesTitle}>
+        <Select
+          label={strings.noticesLabel}
+          selectionMode="multiple"
+          placeholder={strings.noticesNobody}
+          hint={strings.noticesHint(isFiling)}
+          items={notifyItems}
+          values={settings.values.notify}
+          isReadOnly={isReadOnly}
+          {...(settings.fieldError('notifyMemberIds') === undefined
+            ? {}
+            : { error: settings.fieldError('notifyMemberIds') ?? '' })}
+          onValuesChange={(ids) => {
+            settings.set({ notify: ids });
+          }}
+        />
+      </Card>
       <Card
         title={strings.spamTitle}
         {...(isPublished

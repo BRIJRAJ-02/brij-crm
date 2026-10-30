@@ -223,6 +223,16 @@ export const strings = {
   /** A group the form names that the reader can't list: it still hands out new records. */
   groupHidden: 'New records go to a round robin group you can’t see.',
   groupsFailed: 'Your round robin groups didn’t load.',
+  // Who hears of each new submission (AC-568, AC-1047): the lead's owner always, and the people listed here.
+  noticesTitle: 'Notifications',
+  noticesLabel: 'Email each new submission to',
+  noticesNobody: 'Nobody else',
+  noticesHint: (filing: boolean) =>
+    filing
+      ? 'The new record’s owner is always emailed too. Each person sees only the answers they have access to.'
+      : 'Each person sees only the answers they have access to.',
+  /** Someone the form lists who has left, or whom the reader can't list. */
+  noticesFormer: 'Former member',
   spamTitle: 'Spam',
   spamSummary: 'On. Doubtful sends wait for review.',
   detailsTitle: 'Details',

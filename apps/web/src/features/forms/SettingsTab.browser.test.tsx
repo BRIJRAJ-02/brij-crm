@@ -69,7 +69,10 @@ const DRAFT: FormDocument = {
 };
 
 /** A published form owned by Ada unless the test says otherwise. */
-function formView(owner: { readonly ownerMemberId?: string; readonly ownerRotationId?: string }): FormView {
+function formView(
+  owner: { readonly ownerMemberId?: string; readonly ownerRotationId?: string },
+  notifyMemberIds: readonly string[] = [],
+): FormView {
   return {
     id: '0199f0a0-0000-7000-8000-0000000000f1',
     name: 'Contact us',
@@ -88,6 +91,7 @@ function formView(owner: { readonly ownerMemberId?: string; readonly ownerRotati
     live: DRAFT,
     hasUnpublished: false,
     ...owner,
+    notifyMemberIds: [...notifyMemberIds],
     allowedOrigins: [],
     requireSignature: false,
     workspaceKey: 'ws_0123456789abcdef',
@@ -147,10 +151,13 @@ function fakeData(groups: readonly RotationView[], bookingPages: readonly Bookin
       updateSettings: (_slug: string, _formId: string, settings: Record<string, unknown>) => {
         saves.push(settings);
         return Promise.resolve(
-          formView({
-            ...(typeof settings.ownerMemberId === 'string' ? { ownerMemberId: settings.ownerMemberId } : {}),
-            ...(typeof settings.ownerRotationId === 'string' ? { ownerRotationId: settings.ownerRotationId } : {}),
-          }),
+          formView(
+            {
+              ...(typeof settings.ownerMemberId === 'string' ? { ownerMemberId: settings.ownerMemberId } : {}),
+              ...(typeof settings.ownerRotationId === 'string' ? { ownerRotationId: settings.ownerRotationId } : {}),
+            },
+            Array.isArray(settings.notifyMemberIds) ? (settings.notifyMemberIds as string[]) : [],
+          ),
         );
       },
     },
@@ -274,6 +281,38 @@ describe('the owner of a form’s new records', () => {
     await expect
       .element(page.getByText('They’ve left the workspace, so new records get no owner. Pick another.'))
       .toBeVisible();
+  });
+});
+
+describe('who is emailed each new submission (AC-568, AC-1047)', () => {
+  it('lists the people the form tells, saves a change alone, and says the owner is told too', async () => {
+    const fake = await show(formView({ ownerMemberId: ADA }, [ADA]), []);
+    const notify = page.getByRole('button', { name: /Email each new submission to$/ });
+    await expect.element(notify).toHaveTextContent('Ada Lovelace');
+    await expect
+      .element(
+        page.getByText(
+          'The new record’s owner is always emailed too. Each person sees only the answers they have access to.',
+        ),
+      )
+      .toBeVisible();
+    await notify.click();
+    await page.getByRole('listbox').getByRole('option', { name: /Bea/ }).click();
+    await userEvent.keyboard('{Escape}');
+    await page.getByRole('button', { name: 'Save' }).click();
+    await expect.poll(() => fake.saves).toEqual([{ notifyMemberIds: [ADA, BEA] }]);
+  });
+
+  it('names someone listed who has left as a former member, and nobody as Nobody else', async () => {
+    await show(formView({ ownerMemberId: ADA }, ['0199a6f2-0000-7000-8000-0000000000ff']), []);
+    await expect
+      .element(page.getByRole('button', { name: /Email each new submission to$/ }))
+      .toHaveTextContent('Former member');
+    shown?.unmount();
+    await show(formView({ ownerMemberId: ADA }), []);
+    await expect
+      .element(page.getByRole('button', { name: /Email each new submission to$/ }))
+      .toHaveTextContent('Nobody else');
   });
 });
 

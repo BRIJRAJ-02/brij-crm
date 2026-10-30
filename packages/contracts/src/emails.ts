@@ -95,8 +95,11 @@ export const FormSubmissionEmail = z.strictObject({
   timeZone: EmailTimeZone.optional(),
   /** Where the submission opens in the app. */
   submissionPath: AppPath,
-  /** Why this member is told: the lead went to them, or they made the form (a member who is both reads `lead`). */
-  reason: z.enum(['lead', 'maker']).optional(),
+  /**
+   * Why this member is told: the lead went to them, or the form lists them (a member who is both reads `lead`).
+   * `maker` only on an email queued before forms listed who they tell (30 October 2026).
+   */
+  reason: z.enum(['lead', 'listed', 'maker']).optional(),
   /** False when it couldn't be added to the CRM (it ended `failed`), so the reader knows to act on it. */
   filed: z.boolean().optional(),
 });

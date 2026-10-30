@@ -5272,7 +5272,10 @@ export function createDataLayer({
             call((options) => api.forms.publish({ workspace, formId, ...input, mutationId: mintId() }, options)),
           land: landForm(formId),
         }),
-      /** The settings that apply at once: name, address, owner (a member or a rotation), the sites that may post, signatures. */
+      /**
+       * The settings that apply at once: name, address, owner (a member or a rotation), who hears of each submission,
+       * the sites that may post, signatures.
+       */
       updateSettings: (
         workspace: string,
         formId: string,
@@ -5283,6 +5286,7 @@ export function createDataLayer({
           readonly ownerRotationId?: string | null;
           readonly allowedOrigins?: readonly string[];
           readonly requireSignature?: boolean;
+          readonly notifyMemberIds?: readonly string[];
         },
       ) =>
         formLists.write(workspace, {
@@ -5294,6 +5298,7 @@ export function createDataLayer({
                   formId,
                   ...settings,
                   allowedOrigins: settings.allowedOrigins === undefined ? undefined : [...settings.allowedOrigins],
+                  notifyMemberIds: settings.notifyMemberIds === undefined ? undefined : [...settings.notifyMemberIds],
                   mutationId: mintId(),
                 },
                 options,
