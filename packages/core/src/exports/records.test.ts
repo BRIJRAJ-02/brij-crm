@@ -2,6 +2,7 @@
 // the job writes only what the member may see (a record rule and a hidden
 // field), guards formula like text, writes the name first, and only the
 // starter reads the file; past the limit it refuses before anything starts.
+// Its snapshot keeps every row once though records change between batches.
 import { sql } from 'drizzle-orm';
 import { createDatabase } from '@crm/db';
 import { afterAll, describe, expect, inject, it } from 'vitest';
@@ -9,6 +10,7 @@ import type { RuleSource } from '../access/door.ts';
 import { NO_RULES, type AccessRules } from '../access/policy.ts';
 import { newId } from '../engine/ids.ts';
 import { createRecord, setRecordValues } from '../engine/records.ts';
+import { deleteRecords } from '../engine/trash.ts';
 import { exportFile, exportPart } from '../forms/export.ts';
 import { jobKinds } from '../jobs/kinds/index.ts';
 import { rescope } from '../testing.ts';
@@ -104,38 +106,84 @@ describe('records exports', () => {
     expect(await refusalOf(exportFile(w.owner, { exportId: started.id }))).toMatchObject({ code: 'NOT_FOUND' });
   });
 
-  it('says a sorted export saw records change while it was written, and an unsorted one never (late trap #40)', async () => {
+  it('writes every record of its snapshot once, in its order, though records change between batches (late trap #40)', async () => {
     const w = await world();
-    const ada = await w.person('Ada', 'ada@example.com', 'Analyst');
-    await w.person('Bob', 'bob@example.com', 'Designer');
-    const resultOf = async (jobId: string) =>
-      (
-        await db.withWorkspace(w.workspaceId, (tx) =>
-          tx.execute<{ result: Record<string, unknown> | null }>(
-            sql`select result from jobs where id = ${jobId}::uuid`,
-          ),
-        )
-      ).rows[0]?.result;
-    const start = (sorted: boolean) =>
-      startRecordsExport(w.owner, registry, {
-        id: newId(),
-        objectId: w.people,
-        attributeIds: [w.attribute('job_title')],
-        ...(sorted ? { sorts: [{ attributeId: w.attribute('job_title'), direction: 'ascending' as const }] } : {}),
-        timeZone: 'UTC',
-      });
-    const sorted = await start(true);
-    const plain = await start(false);
-    // A record's sorted value changes after the exports started, before they are written.
-    await setRecordValues(w.owner, {
-      recordId: ada.recordId,
-      values: { [w.attribute('job_title')]: { value: 'Zoologist' } },
+    rulesByWorkspace.delete(w.workspaceId);
+    // 205 records, so the file takes two batches of 200.
+    const label = (index: number) => String(index).padStart(3, '0');
+    const made: string[] = [];
+    for (let index = 0; index < 205; index += 1) {
+      const { recordId } = await w.person(`P${label(index)}`, `p${label(index)}@example.com`, `T${label(index)}`);
+      made.push(recordId);
+    }
+    const started = await startRecordsExport(w.owner, registry, {
+      id: newId(),
+      objectId: w.people,
+      attributeIds: [w.attribute('job_title')],
+      sorts: [{ attributeId: w.attribute('job_title'), direction: 'ascending' }],
+      timeZone: 'UTC',
     });
-    const run = runnerFor(registry);
-    expect((await drive(run, w.workspaceId, sorted.jobId)).at(-1)).toBe('succeeded');
-    expect((await drive(run, w.workspaceId, plain.jobId)).at(-1)).toBe('succeeded');
-    expect(await resultOf(sorted.jobId)).toMatchObject({ changedWhileWritten: true });
-    expect(await resultOf(plain.jobId)).not.toHaveProperty('changedWhileWritten');
+    // One batch a slice: the snapshot, then the first 200 rows; the records change before the last 5 are written.
+    const run = runnerFor(registry, undefined, { sliceMs: 0 });
+    for (let slice = 0; slice < 2; slice += 1) {
+      expect(await run.runner.runSlice({ workspaceId: w.workspaceId, jobId: started.jobId })).not.toBe('succeeded');
+    }
+    const title = (recordId: string | undefined, value: string) =>
+      setRecordValues(w.owner, { recordId: recordId ?? '', values: { [w.attribute('job_title')]: { value } } });
+    // Paged by keyset, P000 would come round again past the cursor and P200 would fall behind it, unwritten.
+    await title(made[0], 'T999');
+    await title(made[200], 'A');
+    await deleteRecords(w.owner, { objectId: w.people, recordIds: [made[201] ?? ''], batchId: newId() });
+    await w.person('Added', 'added@example.com', 'T150b');
+    expect((await drive(run, w.workspaceId, started.jobId)).at(-1)).toBe('succeeded');
+    const lines = (await fileOf(w.owner, started.id)).split('\r\n').slice(1, -1);
+    // Each once, in the snapshot's order: P000 as it was when written, P200 as it is now, P201 gone, Added absent.
+    const expected = Array.from({ length: 205 }, (_, index) => index)
+      .filter((index) => index !== 201)
+      .map((index) => `P${label(index)} Test,${index === 200 ? 'A' : `T${label(index)}`}`);
+    expect(lines).toEqual(expected);
+    expect((await getRecordsExport(w.owner, { exportId: started.id })).rowCount).toBe(204);
+    // The snapshot cleared itself as the file was written.
+    const left = await db.withWorkspace(w.workspaceId, (tx) =>
+      tx.execute<{ n: number }>(sql`select count(*)::int as n from job_items where job_id = ${started.jobId}::uuid`),
+    );
+    expect(left.rows[0]?.n).toBe(0);
+  }, 120_000);
+
+  it('leaves out a snapshot record the member can no longer see when it is written', async () => {
+    const w = await world();
+    const own: AccessRules = {
+      levels: [],
+      records: [
+        {
+          subject: { type: 'role', role: 'member' },
+          objectId: w.people,
+          kind: 'own',
+          attributeId: w.attribute('owner'),
+        },
+      ],
+    };
+    rulesByWorkspace.set(w.workspaceId, own);
+    const member = rescope(w.member, { rules: own });
+    await w.person('Ada', 'ada@example.com', 'Analyst', w.memberId);
+    const bob = await w.person('Bob', 'bob@example.com', 'Designer', w.memberId);
+    await w.person('Secret', 'secret@example.com', 'Spy', w.ownerId);
+    const started = await startRecordsExport(member, registry, {
+      id: newId(),
+      objectId: w.people,
+      attributeIds: [w.attribute('job_title')],
+      timeZone: 'UTC',
+    });
+    const run = runnerFor(registry, undefined, { sliceMs: 0 });
+    // The snapshot holds Ada and Bob (Secret is outside the rule); then Bob moves to the owner.
+    expect(await run.runner.runSlice({ workspaceId: w.workspaceId, jobId: started.jobId })).not.toBe('succeeded');
+    await setRecordValues(w.owner, {
+      recordId: bob.recordId,
+      values: { [w.attribute('owner')]: { value: { type: 'member', id: w.ownerId } } },
+    });
+    expect((await drive(run, w.workspaceId, started.jobId)).at(-1)).toBe('succeeded');
+    expect(await fileOf(member, started.id)).toBe('﻿Name,Job title\r\nAda Test,Analyst\r\n');
+    expect((await getRecordsExport(member, { exportId: started.id })).rowCount).toBe(1);
   });
 
   it('refuses a view past the limit with its count, and an object the member can’t see', async () => {
