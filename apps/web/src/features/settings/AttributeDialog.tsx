@@ -1,8 +1,9 @@
 // Brief
 // Purpose: create or edit one attribute of an object, from settings, the table's "+" header or a column's menu.
 // Main task: name it, pick one of the fifteen types, set its settings, options, rules and default, then Create or Save.
-// Leaves out: changing a type (#14); an existing attribute's options save as they change; Relationship hands over
-// to RelationshipSettings' step in the same Modal, and a relationship's side opens RelationshipDialog (spec 0014).
+// Leaves out: changing a type in place (Wrong type? archives it and starts a new one with its name); an existing
+// attribute's options save as they change; Relationship hands over to RelationshipSettings' step in the same Modal,
+// and a relationship's side opens RelationshipDialog (spec 0014).
 // Rules (spec 0013) go with Save; their conditions name the object's own attributes, never a relationship.
 import {
   isDataError,
@@ -72,6 +73,12 @@ export interface AttributeDialogProps {
   readonly duplicatesLink?: { readonly label: string; readonly href: string } | undefined;
   /** On create, the type chosen at the start (a picker key, `select` for a board with nothing to group by). */
   readonly initialTypeKey?: string | undefined;
+  /** On create, the name it starts with (Archive and recreate keeps the old one's). */
+  readonly initialTitle?: string | undefined;
+  /** Editing: the footer's quiet Archive, which the host answers with its archive confirm. None when absent. */
+  readonly onArchive?: (() => void) | undefined;
+  /** Editing: "Wrong type? Archive and recreate", which the host answers. None when absent. */
+  readonly onRecreate?: (() => void) | undefined;
   readonly onClose: () => void;
   /** The server agreed: the attribute as it is now, and whether it is new. */
   readonly onSaved: (attribute: AttributeDefinition, isNew: boolean) => void;
@@ -179,6 +186,9 @@ export function AttributeDialog({
   objectAttributes,
   duplicatesLink,
   initialTypeKey,
+  initialTitle,
+  onArchive,
+  onRecreate,
   onClose,
   onSaved,
 }: AttributeDialogProps) {
@@ -414,6 +424,14 @@ export function AttributeDialog({
         if (!open) onClose();
       }}
       {...(initialTypeKey === undefined ? {} : { initialTypeKey })}
+      {...(initialTitle === undefined || attribute !== undefined ? {} : { initialTitle })}
+      // The name every record goes by never archives; a system attribute has nothing to archive or recreate.
+      {...(attribute === undefined || attribute.isPrimary || attribute.isSystem
+        ? {}
+        : {
+            ...(onArchive === undefined ? {} : { onArchive }),
+            ...(onRecreate === undefined ? {} : { onRecreate }),
+          })}
       {...(attribute === undefined
         ? {}
         : {

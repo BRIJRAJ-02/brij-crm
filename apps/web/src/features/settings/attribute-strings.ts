@@ -17,6 +17,8 @@ export const strings = {
     return `Required when ${named} ${titles.length === 1 ? 'matches' : 'match'} (set through the API).`;
   },
   newAttribute: 'New attribute',
+  /** Beside a create button off at its plan limit (New object, New attribute, the grid's "+"). */
+  atLimit: (limit: number) => `${String(limit)} of ${String(limit)} used. Archive one first.`,
   /** The attribute meter (AC-227). */
   attributes: 'Attributes',
   attributeLimit: 'Attributes',
@@ -60,6 +62,7 @@ export const strings = {
   moved: (title: string, place: number, of: number) => `${title} moved to ${String(place)} of ${String(of)}.`,
   moveFailed: (title: string, why: string) => `Couldn’t move ${title}. ${why}`,
   restoreFailed: (title: string, why: string) => `Couldn’t restore ${title}. ${why}`,
+  archiveFailed: (title: string, why: string) => `Couldn’t archive ${title}. ${why}`,
   restored: (titles: string) => `${titles} restored.`,
   archivedToast: (titles: string) => `${titles} archived.`,
   created: (title: string) => `${title} added.`,
@@ -70,6 +73,11 @@ export const strings = {
   /** Why a dialog opened read only. */
   systemReason: (title: string) => `${title} is set by the system.`,
   memberReason: 'Only workspace owners and admins can change attributes.',
+  /** A relationship's Type cell: its far object and how many each record links to. */
+  relationshipType: (plural: string, holdsOne: boolean) => `→ ${plural} · ${holdsOne ? 'one' : 'many'}`,
+  /** The search above a long list of attributes, and what it says when nothing matches. */
+  searchAttributes: 'Search attributes',
+  noMatches: (query: string) => `No attribute matches “${query}”`,
   /** The type picker's entry that hands over to the relationship dialog (spec 0014). */
   relationship: 'Relationship',
   loading: 'Loading attributes',

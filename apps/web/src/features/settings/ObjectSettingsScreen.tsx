@@ -23,6 +23,7 @@ import { useState } from 'react';
 import { objectHref } from '../workspace/objects.ts';
 import { useCan } from '../workspace/WorkspacePage.tsx';
 import { strings as attributeStrings } from './attribute-strings.ts';
+import { useAtLimit } from './AtLimit.tsx';
 import { AttributesTab } from './AttributesTab.tsx';
 import { ConfigurationTab, useObjectConfiguration } from './ConfigurationTab.tsx';
 import { isObjectTab, objectSettingsHref, type ObjectTab } from './nav.ts';
@@ -99,6 +100,7 @@ export function ObjectSettingsScreen({
   const [isCreating, setCreating] = useState(false);
   const [isMoving, setMoving] = useState(false);
   const showsNew = canManage && tab === 'attributes' && attributesPage !== undefined;
+  const limit = useAtLimit(attributesPage?.usage?.attributes[object.id]);
   // The Configuration tab's names and look, held here so its SaveBar sits at the view's foot on either tab.
   const configuration = useObjectConfiguration(slug, object);
   return (
@@ -122,8 +124,9 @@ export function ObjectSettingsScreen({
                     {strings.openRecords(object.pluralName)}
                   </ButtonLink>
                 )}
+                {showsNew && limit.reason}
                 {showsNew && (
-                  <Button variant="primary" icon="plus" onPress={() => setCreating(true)}>
+                  <Button variant="primary" icon="plus" {...limit.buttonProps} onPress={() => setCreating(true)}>
                     {attributeStrings.newAttribute}
                   </Button>
                 )}

@@ -9,6 +9,10 @@ export const strings = {
   saving: 'Saving',
   cancel: 'Cancel',
   close: 'Close',
+  /** Editing: the footer's quiet danger action, opening the screen's archive confirm. */
+  archive: 'Archive',
+  /** Editing, under the type: archive this one and start a new one with the same name. */
+  wrongType: 'Wrong type? Archive and recreate',
   name: 'Name',
   nameMissing: 'Name the attribute.',
   type: 'Type',

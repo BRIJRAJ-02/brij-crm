@@ -106,3 +106,57 @@ export function pickerTypeOf(type: string, isMulti: boolean): PickerType | undef
   if (type === 'select') return PICKER_TYPES.find((entry) => entry.key === (isMulti ? 'multi_select' : 'select'));
   return PICKER_TYPES.find((entry) => entry.type === type);
 }
+
+// The type an attribute's name suggests, and the options a guessed select or status starts with (flow pass,
+// 30 October 2026): the new object dialog's rows and the attribute dialog's Type follow the name until the person
+// picks a type.
+
+/** A type a name may suggest: the picker's types but File (a name never says "file" reliably). */
+export type GuessedType = Exclude<PickerType['type'], 'file'>;
+
+/** Words in an attribute's name, and the type each suggests; the first match wins. */
+const TYPE_WORDS: readonly (readonly [RegExp, GuessedType])[] = [
+  [/\be-?mail/, 'email'],
+  [/\b(phone|mobile|cell|fax|whatsapp)/, 'phone'],
+  [/\b(website|url|link|linkedin|twitter|domain|site|web)\b/, 'url'],
+  [/^(stage|status|pipeline stage|deal stage)$/, 'status'],
+  [/^(priority|severity|tier|category|type|kind|segment|industry|source)$/, 'select'],
+  [/^(owner|assignee|assigned to|account owner|manager|rep|lead owner)$/, 'actor_reference'],
+  [/\b(amount|price|cost|fee|revenue|budget|salary|value|total|balance|spend|mrr|arr)\b/, 'currency'],
+  [/\b(quantity|qty|count|number|age|hours|score|units|size|weight|seats|year|bedrooms|capacity)\b/, 'number'],
+  [/\b(date|deadline|due|birthday|birth|start|end|created|renewal|expires|expiry|closed)\b/, 'date'],
+  [/\b(address|city|country|location|region|state)\b/, 'location'],
+  [/\b(rating|stars)\b/, 'rating'],
+  [/^(is|has|can|active|paid|done|verified|approved)\b|\?$/, 'checkbox'],
+  [/\b(notes?|description|details|summary|comments?|bio|about|message|body)\b/, 'long_text'],
+];
+
+/** The type a name suggests ("Email" is email, "Due date" is date, "Stage" is status), plain text when none does. */
+export function typeFor(name: string): GuessedType {
+  const lower = name.trim().toLowerCase();
+  return TYPE_WORDS.find(([pattern]) => pattern.test(lower))?.[1] ?? 'text';
+}
+
+/** One option a guessed select or status starts with. */
+export interface StarterOption {
+  readonly label: string;
+  readonly hue: HueName;
+  readonly outcome?: StageOutcome;
+}
+
+/** A priority's three levels, the one select whose options a name gives away. */
+const PRIORITY: readonly StarterOption[] = [
+  { label: 'Low', hue: 'gray' },
+  { label: 'Medium', hue: 'yellow' },
+  { label: 'High', hue: 'red' },
+];
+
+/**
+ * The options a new attribute starts with when made without the dialog's options editor (the new object dialog's
+ * rows): a status its starter stages, a select named Priority its three levels, anything else none.
+ */
+export function starterOptionsFor(title: string, type: string): readonly StarterOption[] {
+  if (type === 'status') return STARTER_STAGES;
+  if (type === 'select' && /^priority$/i.test(title.trim())) return PRIORITY;
+  return [];
+}

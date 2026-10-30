@@ -1,6 +1,5 @@
 // Settings › Objects in Chromium: the Archived disclosure shows only while something is archived (SW18: "Archived
-// 0" opened onto nothing), and the Object column's InfoTip says what the drag order is for, only to someone who may
-// drag (SW15).
+// 0" opened onto nothing), and the Object column carries no InfoTip (flow pass, 30 Oct 2026: the sidebar owns order).
 import type { DataLayer, ObjectSummary, Usage } from '@crm/data';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { page } from 'vitest/browser';
@@ -72,19 +71,9 @@ describe('the Archived disclosure (SW18)', () => {
   });
 });
 
-describe('the Object column’s InfoTip (SW15)', () => {
-  it('says what the drag order is for, to someone who may drag', async () => {
+describe('the Object column (flow pass, 30 Oct 2026)', () => {
+  it('has no InfoTip and no Move up or Move down: the sidebar owns the order', async () => {
     await renderObjects([PEOPLE], ['schema.manage']);
-    await expect.element(page.getByRole('rowheader', { name: /People/ })).toBeVisible();
-    const header = page.getByRole('columnheader', { name: /Object/ });
-    await header.getByRole('button').click();
-    await expect
-      .element(page.getByText('Drag, or use Move up and Move down, to change the order objects show in the sidebar.'))
-      .toBeVisible();
-  });
-
-  it('is left out for someone who can’t drag', async () => {
-    await renderObjects([PEOPLE], []);
     await expect.element(page.getByRole('rowheader', { name: /People/ })).toBeVisible();
     expect(
       page

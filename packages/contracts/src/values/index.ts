@@ -100,8 +100,12 @@ export {
   PICKER_TYPES,
   pickerTypeOf,
   STARTER_STAGES,
+  starterOptionsFor,
+  typeFor,
+  type GuessedType,
   type PickerType,
   type StageOutcome,
+  type StarterOption,
   type StarterStage,
 } from './picker.ts';
 export {

@@ -553,7 +553,15 @@ export {
   WORKSPACE_PURGE_DAYS,
   type InviteLinkDays,
 } from '@crm/contracts/team-limits';
-export { freeHue, PICKER_TYPES, STARTER_STAGES, type PickerType } from '@crm/contracts/picker';
+export {
+  freeHue,
+  PICKER_TYPES,
+  STARTER_STAGES,
+  starterOptionsFor,
+  typeFor,
+  type GuessedType,
+  type PickerType,
+} from '@crm/contracts/picker';
 export {
   MAX_PENDING_OPTIONS,
   withPendingOptions,
@@ -815,7 +823,17 @@ export interface NewObject {
   readonly icon: ObjectSummary['icon'];
   readonly hue: ObjectSummary['hue'];
   /** First attributes beside Name, made in the same transaction as the object. */
-  readonly attributes?: readonly { readonly title: string; readonly type: PickerAttributeType }[];
+  readonly attributes?: readonly {
+    readonly title: string;
+    readonly type: PickerAttributeType;
+    /** A select's or status attribute's first options (a guessed Stage's stages, a Priority's levels). */
+    readonly options?: readonly {
+      readonly id: string;
+      readonly label: string;
+      readonly hue: ObjectSummary['hue'];
+      readonly outcome?: 'open' | 'won' | 'lost';
+    }[];
+  }[];
 }
 
 /** What settings may change on an object (spec 0012, AC-224). Its API name never changes. */
@@ -3848,7 +3866,15 @@ export function createDataLayer({
               ...(input.apiSlug === undefined ? {} : { apiSlug: input.apiSlug }),
               icon: input.icon,
               hue: input.hue,
-              ...(input.attributes === undefined ? {} : { attributes: input.attributes.map((a) => ({ ...a })) }),
+              ...(input.attributes === undefined
+                ? {}
+                : {
+                    attributes: input.attributes.map((a) => ({
+                      title: a.title,
+                      type: a.type,
+                      ...(a.options === undefined ? {} : { options: a.options.map((option) => ({ ...option })) }),
+                    })),
+                  }),
               mutationId,
             },
             options,
