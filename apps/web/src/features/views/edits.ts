@@ -25,6 +25,7 @@ export function layoutOf(columns: readonly ShownColumn[], pinnedCount: number): 
       attributeId: column.id,
       ...(column.width === undefined ? {} : { width: Math.min(MAX_WIDTH, Math.max(1, Math.round(column.width))) }),
       ...(column.isHidden ? { isHidden: true } : {}),
+      ...(column.calc === undefined ? {} : { calc: column.calc }),
     })),
     pinnedCount: Math.min(5, Math.max(1, pinnedCount)),
   };

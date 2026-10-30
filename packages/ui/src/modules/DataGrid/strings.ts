@@ -4,6 +4,8 @@ export const strings = {
   selectOnScreen: 'Select the rows on screen',
   /** The "+" header after the last column (spec 0012), when the screen gives none of its own. */
   addColumn: 'Add attribute',
+  /** The "+" menu's last item, under the hidden columns. */
+  newColumnItem: 'New attribute…',
   untitled: 'Untitled',
   columnOptions: (name: string) => `${name} options`,
   moveLeft: 'Move left',
@@ -14,9 +16,24 @@ export const strings = {
   sortAscending: 'Sort ascending',
   sortDescending: 'Sort descending',
   filter: 'Filter',
-  resize: 'Resize',
   /** Shown on the header while resizing, and announced as the width changes. */
   resizeHint: 'Left and Right change the width. Enter or Esc to finish.',
+  /** A column's footer calculation (the CRM flow pass). */
+  calculate: 'Calculate',
+  calculateColumn: (name: string) => `Calculate ${name}`,
+  calcs: {
+    count: 'Count',
+    count_empty: 'Empty',
+    sum: 'Sum',
+    avg: 'Average',
+    min: 'Min',
+    max: 'Max',
+  },
+  calcNone: 'None',
+  /** While a calculation is worked out. */
+  calcPending: '…',
+  /** A filtered view too large to add up. */
+  calcTooMany: 'too many rows',
   /** What a group header's count counts, read after the number. */
   groupRows: 'records',
   /** What a screen reader hears as a column moves by pointer. */
@@ -76,4 +93,5 @@ export const strings = {
   shortcutPaste: 'Paste',
   shortcutLink: 'Follow the link in the cell',
   shortcutMenu: 'Open the column menu (on a header)',
+  shortcutResize: 'Resize the column (on a header)',
 } as const;

@@ -144,11 +144,13 @@ test.describe('the core loop by keyboard', () => {
     await page.keyboard.type('Grace');
     await page.keyboard.press('Tab');
     await page.keyboard.type('Hopper');
-    // Email waits behind "Add more fields" (spec 0012), the next stop; Enter opens it.
-    await page.keyboard.press('Tab');
-    await focusedWithRing(page, dialog.getByRole('button', { name: /Add more fields/ }), 'Add more fields');
+    // Company is asked at once (a link to one record, the flow pass); Email waits behind "Add more fields" (spec
+    // 0012), a few stops on; Enter opens it.
+    const addMore = dialog.getByRole('button', { name: /Add more fields/ });
+    await tabTo(page, addMore, 4);
+    await focusedWithRing(page, addMore, 'Add more fields');
     await page.keyboard.press('Enter');
-    await tabTo(page, dialog.getByLabel('Email address', { exact: true }), 6);
+    await tabTo(page, dialog.getByLabel('Email address', { exact: true }), 10);
     await focusedWithRing(page, dialog.getByLabel('Email address', { exact: true }), 'Email address');
     await page.keyboard.type(`grace-${tag}@example.com`);
     await page.keyboard.press('ControlOrMeta+Enter');

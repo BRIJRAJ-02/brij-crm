@@ -50,6 +50,12 @@ export const bookingPages = pgTable(
      */
     slug: text('slug').notNull(),
     kind: text('kind').notNull().default('personal'),
+    /**
+     * Whose page it is (workspace link, migration 0128): `member`, a person's, or `workspace`, the workspace's own
+     * round robin link. A workspace page's `owner_member_id` is only who made it; it has no `owner_user_id`, so it is
+     * on nobody's profile and has no `/<handle>/<slug>` address, and its slug is unique among the workspace's pages.
+     */
+    scope: text('scope').notNull().default('member'),
     ownerMemberId: uuid('owner_member_id').notNull(),
     /**
      * The owner member's identity (`auth.user.id`), kept by the trigger crm_booking_pages_owner_user (0086) from
@@ -158,7 +164,10 @@ export const bookingPages = pgTable(
     uniqueIndex('booking_pages_public_key').on(t.publicKey),
     uniqueIndex('booking_pages_slug')
       .on(t.workspaceId, t.ownerMemberId, t.slug)
-      .where(sql`${t.deletedAt} is null`),
+      .where(sql`${t.deletedAt} is null and ${t.scope} = 'member'`),
+    uniqueIndex('booking_pages_workspace_slug')
+      .on(t.workspaceId, t.slug)
+      .where(sql`${t.deletedAt} is null and ${t.scope} = 'workspace'`),
     // A profile's listed pages, in the owner's order: read only through crm_booking_profile_pages.
     index('booking_pages_profile')
       .on(t.ownerUserId, t.profilePosition, t.id)
@@ -175,6 +184,8 @@ export const bookingPages = pgTable(
     check('booking_pages_profile_position', sql`${t.profilePosition} between 0 and 999`),
     check('booking_pages_slug_shape', sql`${t.slug} ~ '^[a-z0-9]+(-[a-z0-9]+)*$' and char_length(${t.slug}) <= 60`),
     check('booking_pages_kind', sql`${t.kind} in ('personal', 'collective', 'round_robin')`),
+    check('booking_pages_scope', sql`${t.scope} in ('member', 'workspace')`),
+    check('booking_pages_scope_kind', sql`${t.scope} = 'member' or ${t.kind} = 'round_robin'`),
     check('booking_pages_status', sql`${t.status} in ('live', 'paused')`),
     check('booking_pages_paused_reason', sql`${t.pausedReason} is null or ${t.pausedReason} = 'host_removed'`),
     check('booking_pages_hours_mode', sql`${t.hoursMode} in ('mine', 'own')`),

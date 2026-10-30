@@ -24,8 +24,9 @@ import { refuse } from '../engine/refusals.ts';
 import { actorRow } from '../engine/scope.ts';
 import { writeAudit } from '../members/audit.ts';
 import { lockRotation, windowStart } from './ledger.ts';
+import { keepRosterRow, rosterCalibration } from './roster.ts';
 
-const { members, rotationAssignments, rotationMembers, rotations } = schema;
+const { members, rotationAssignments, rotationRoster, rotations } = schema;
 /** Whoever made an adjustment. */
 const adjuster = alias(members, 'adjuster');
 
@@ -141,21 +142,24 @@ export async function rotationDistribution(
   const me = memberOf(scope);
   return inWorkspace(scope, async (tx) => {
     const rotation = await liveRotation(tx, input.rotationId);
+    // Through `rotation_roster`: "Everyone on the roster" holds every active member who isn't a guest.
     const pool = await tx
       .select({
-        memberId: rotationMembers.memberId,
+        memberId: rotationRoster.memberId,
         name: members.name,
-        weight: rotationMembers.weight,
-        isOn: rotationMembers.isOn,
-        calibration: rotationMembers.calibration,
+        weight: rotationRoster.weight,
+        isOn: rotationRoster.isOn,
+        calibration: rotationRoster.calibration,
+        stored: rotationRoster.stored,
+        joinsLate: rotationRoster.joinsLate,
       })
-      .from(rotationMembers)
+      .from(rotationRoster)
       .innerJoin(
         members,
-        and(eq(members.workspaceId, rotationMembers.workspaceId), eq(members.id, rotationMembers.memberId)),
+        and(eq(members.workspaceId, rotationRoster.workspaceId), eq(members.id, rotationRoster.memberId)),
       )
-      .where(eq(rotationMembers.rotationId, rotation.id))
-      .orderBy(asc(rotationMembers.position));
+      .where(eq(rotationRoster.rotationId, rotation.id))
+      .orderBy(asc(rotationRoster.position), asc(members.name));
     if (!everyone && !pool.some((member) => member.memberId === me)) throw refuse('NOT_FOUND', MISSING);
     const since = windowStart(now, rotation.windowDays);
     const ids = pool.map((member) => member.memberId);
@@ -206,9 +210,15 @@ export async function rotationDistribution(
     const weekStarts = Array.from({ length: WEEKS }, (_, index) =>
       new Date(firstWeek.getTime() + index * WEEK_MS).toISOString().slice(0, 10),
     );
-    const countOf = (memberId: string) =>
-      counted.filter((row) => row.memberId === memberId).reduce((sum, row) => sum + row.units, 0) +
-      (pool.find((member) => member.memberId === memberId)?.calibration ?? 0);
+    const unitsOf = (memberId: string) =>
+      counted.filter((row) => row.memberId === memberId).reduce((sum, row) => sum + row.units, 0);
+    // Someone in "Everyone on the roster" with no row yet counts from the pool's average (`rosterCalibration`).
+    const calibrated = new Map(
+      rosterCalibration(pool.map((member) => ({ ...member, count: unitsOf(member.memberId) }))).map(
+        (calibration, index) => [pool[index]?.memberId ?? '', calibration],
+      ),
+    );
+    const countOf = (memberId: string) => unitsOf(memberId) + (calibrated.get(memberId) ?? 0);
     const on = pool.filter((member) => member.isOn);
     const total = on.reduce((sum, member) => sum + countOf(member.memberId), 0);
     const weights = on.reduce((sum, member) => sum + member.weight, 0);
@@ -268,10 +278,12 @@ export async function adjustCount(
     const rotation = await liveRotation(tx, input.rotationId);
     await lockRotation(tx, scope.workspaceId, rotation.id);
     const [pooled] = await tx
-      .select({ memberId: rotationMembers.memberId })
-      .from(rotationMembers)
-      .where(and(eq(rotationMembers.rotationId, rotation.id), eq(rotationMembers.memberId, input.memberId)));
+      .select({ memberId: rotationRoster.memberId })
+      .from(rotationRoster)
+      .where(and(eq(rotationRoster.rotationId, rotation.id), eq(rotationRoster.memberId, input.memberId)));
     if (pooled === undefined) throw refuse('NOT_FOUND', 'They aren’t in this rotation.');
+    // In "Everyone on the roster", their row first, so the adjustment moves them from the average they stand at.
+    await keepRosterRow(tx, scope, rotation.id, input.memberId);
     const by = actorRow(scope.actor);
     const [made] = await tx
       .insert(rotationAssignments)

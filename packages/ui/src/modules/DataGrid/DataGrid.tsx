@@ -30,6 +30,7 @@ import { CheckboxMark } from '../../atoms/Checkbox/Checkbox.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { AnchoredTooltip, Tooltip, TOOLTIP_DELAY_MS } from '../../atoms/Tooltip/Tooltip.tsx';
+import { Menu, MenuItem, MenuSeparator, MenuTrigger } from '../../molecules/Menu/Menu.tsx';
 import { SharedTooltipContext } from '../../atoms/TruncatedText/TruncatedText.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { clearedValueOf, fieldTypeOf, readOnlyReasonOf } from '../../fields/registry.ts';
@@ -56,6 +57,7 @@ import { fromTsv, planPaste, toTsv } from './grid-clipboard.ts';
 import { focusLater } from '../../lib/focus-later.ts';
 import { groupMap, type GridGroup } from './grid-groups.ts';
 import { GridGroupRow, groupCellKey } from './GridGroupRow.tsx';
+import { GridCalc, type ColumnCalc } from './GridCalc.tsx';
 import {
   hideColumn,
   moveColumn,
@@ -136,6 +138,11 @@ export interface DataGridProps<Row> {
   /** Calculations by column id, computed by the screen across all matching rows. */
   readonly footer?: Readonly<Record<string, ReactNode>>;
   /**
+   * Each column's calculation in the footer, by column id (the CRM flow pass): a quiet "+ Calculate" opening a Menu
+   * of what its type can work out, or the one chosen with its value. Enter or Space on the footer cell opens it.
+   */
+  readonly calculations?: Readonly<Record<string, ColumnCalc>>;
+  /**
    * A ghost "+ New person" at the start of the footer, under the row header: a click, or Enter or Space on that
    * footer cell, calls `onAdd`. It draws the footer even with no `footer`. Leave it out where the person may not
    * create.
@@ -200,6 +207,14 @@ export interface DataGridProps<Row> {
   readonly onAddColumn?: () => void;
   /** The "+" header's name for screen readers and its tooltip ("Add attribute" when absent). */
   readonly addColumnLabel?: string;
+  /**
+   * Makes the "+" header a Menu (flow pass, 30 October 2026): these items first (the view's hidden columns, one
+   * press shows one), then "New attribute…", which calls `onAddColumn`. Without items, "+" calls `onAddColumn` at
+   * once, as before.
+   */
+  readonly addColumnItems?: readonly AddColumnItem[];
+  /** One of `addColumnItems` was chosen. */
+  readonly onAddColumnItem?: (id: string) => void;
   /**
    * Items a column's menu adds after its own (spec 0012: Edit attribute,
    * Archive attribute), per column; none for a column it answers none for.
@@ -331,6 +346,7 @@ export function DataGrid<Row>({
   confirmsPaste = true,
   cellErrors,
   footer,
+  calculations,
   addRow,
   floatingBar,
   status = 'ready',
@@ -353,6 +369,8 @@ export function DataGrid<Row>({
   onEditingChange,
   onAddColumn,
   addColumnLabel = strings.addColumn,
+  addColumnItems,
+  onAddColumnItem,
   columnActions: columnActionsOf,
   focusColumn,
 }: DataGridProps<Row>) {
@@ -384,7 +402,7 @@ export function DataGrid<Row>({
   const count = status === 'ready' ? rows.count : 0;
   // The drawn lines: the rows, and each group's header before its first row.
   const lines = useMemo(() => groupMap(status === 'ready' ? (groups ?? []) : [], count), [groups, count, status]);
-  const hasFooter = (footer !== undefined || addRow !== undefined) && count > 0;
+  const hasFooter = (footer !== undefined || addRow !== undefined || calculations !== undefined) && count > 0;
   const hasFloatingBar = floatingBar !== undefined && floatingBar !== null && floatingBar !== false;
   const rowCount = count + (hasFooter ? 1 : 0);
 
@@ -400,6 +418,10 @@ export function DataGrid<Row>({
   const [range, setRange] = useState<CellRange | undefined>(undefined);
   const [editingAt, setEditing] = useState<Editing | undefined>(undefined);
   const [menuFor, setMenuFor] = useState<string | undefined>(undefined);
+  // The footer calculation whose Menu is open, by column id.
+  const [calcMenuFor, setCalcMenuFor] = useState<string | undefined>(undefined);
+  // The "+" header's menu, opened by a press or by Enter while the header has focus.
+  const [isAddMenuOpen, setAddMenuOpen] = useState(false);
   const [resizing, setResizing] = useState<string | undefined>(undefined);
   const [localErrors, setLocalErrors] = useState<ReadonlyMap<string, string>>(() => new Map());
   const [anchorRow, setAnchorRow] = useState<number | undefined>(undefined);
@@ -1086,6 +1108,17 @@ export function DataGrid<Row>({
       setMenuFor(column.id);
       return;
     }
+    // Alt with Left or Right on a header resizes its column, and stays in resize mode: then Left and Right alone step
+    // it (the column menu's Resize item went, 30 October 2026).
+    if (event.altKey && (event.key === 'ArrowLeft' || event.key === 'ArrowRight') && focus.row < 0) {
+      if (column !== undefined) {
+        event.preventDefault();
+        const forward = (event.key === 'ArrowRight') === (getComputedStyle(event.currentTarget).direction !== 'rtl');
+        setResizing(column.id);
+        resizeBy(column.id, forward ? RESIZE_STEP : -RESIZE_STEP);
+        return;
+      }
+    }
     // Up or Down onto a group's header line: focus goes to its fold button, a stop of its own in the column of lines.
     if (
       (event.key === 'ArrowUp' || event.key === 'ArrowDown') &&
@@ -1120,17 +1153,26 @@ export function DataGrid<Row>({
     if (focus.row < 0) {
       if (event.key === 'Enter' || event.key === ' ') {
         event.preventDefault();
-        if (focus.col >= colCount) onAddColumn?.();
-        else if (column === undefined) toggleScreen();
+        if (focus.col >= colCount) {
+          if (addColumnItems !== undefined && addColumnItems.length > 0) setAddMenuOpen(true);
+          else onAddColumn?.();
+        } else if (column === undefined) toggleScreen();
         else setMenuFor(column.id);
       }
       return;
     }
-    // The footer reads; nothing in it edits. Its row header's "+ New" adds a row.
+    // The footer reads; nothing in it edits. Its row header's "+ New" adds a row; a column's cell opens its
+    // calculation.
     if (focus.row >= count) {
-      if (focus.col === 1 && addRow !== undefined && (event.key === 'Enter' || event.key === ' ')) {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      if (focus.col === 1 && addRow !== undefined) {
         event.preventDefault();
         addRow.onAdd();
+        return;
+      }
+      if (column !== undefined && calculations?.[column.id] !== undefined) {
+        event.preventDefault();
+        setCalcMenuFor(column.id);
       }
       return;
     }
@@ -1389,9 +1431,9 @@ export function DataGrid<Row>({
   const hasFilter = onFilter !== undefined;
   const hasExtras = columnActionsOf !== undefined;
   // The "+" header (spec 0012): kept stable through a scroll, pressing the latest handler.
-  const latestAdd = useRef(onAddColumn);
+  const latestAdd = useRef({ onAddColumn, onAddColumnItem });
   useLayoutEffect(() => {
-    latestAdd.current = onAddColumn;
+    latestAdd.current = { onAddColumn, onAddColumnItem };
   });
   const hasAdd = onAddColumn !== undefined;
   const isAddFocused = focus.row === -1 && focus.col === colCount;
@@ -1403,11 +1445,17 @@ export function DataGrid<Row>({
             label: addColumnLabel,
             isFocused: isAddFocused,
             onPress: () => {
-              latestAdd.current?.();
+              latestAdd.current.onAddColumn?.();
             },
+            items: addColumnItems ?? [],
+            onItem: (id: string) => {
+              latestAdd.current.onAddColumnItem?.(id);
+            },
+            isMenuOpen: isAddMenuOpen,
+            onMenuOpenChange: setAddMenuOpen,
           }
         : undefined,
-    [hasAdd, colCount, addColumnLabel, isAddFocused],
+    [hasAdd, colCount, addColumnLabel, isAddFocused, addColumnItems, isAddMenuOpen],
   );
   const headerHandlers = useMemo<HeaderHandlers>(
     () => ({
@@ -1673,6 +1721,7 @@ export function DataGrid<Row>({
       {drawn.flatMap((each, index) => {
         const place = placeOf(each);
         const adds = addRow !== undefined && place.col === 1;
+        const calc = adds ? undefined : calculations?.[each.column.id];
         return [
           index === leadIndex ? <Spacer key="lead" width={leadSpacer} /> : null,
           <div
@@ -1707,6 +1756,17 @@ export function DataGrid<Row>({
               </span>
             )}
             {footer?.[each.column.id]}
+            {calc !== undefined && (
+              <GridCalc
+                name={each.column.attribute.name}
+                calc={calc}
+                isActive={isFocusedAt(count, place.col)}
+                isOpen={calcMenuFor === each.column.id}
+                onOpenChange={(isOpen) => {
+                  setCalcMenuFor(isOpen ? each.column.id : undefined);
+                }}
+              />
+            )}
           </div>,
         ];
       })}
@@ -1896,12 +1956,26 @@ interface GridHeaderProps {
   readonly hideColumnLocks: boolean;
 }
 
+/** The "+" menu's own last item, which creates a column. */
+const NEW_COLUMN = '__new_column';
+
+/** One item the "+" header's menu offers before its own: a hidden column to show. */
+export interface AddColumnItem {
+  readonly id: string;
+  readonly label: string;
+}
+
 /** The "+" header after the last column. */
 interface AddColumnHeader {
   readonly col: number;
   readonly label: string;
   readonly isFocused: boolean;
   readonly onPress: () => void;
+  /** With items, "+" opens a menu: these, then `label`. */
+  readonly items: readonly AddColumnItem[];
+  readonly onItem: (id: string) => void;
+  readonly isMenuOpen: boolean;
+  readonly onMenuOpenChange: (isOpen: boolean) => void;
 }
 
 /** The header row: the checkbox for the rows on screen, then a header per drawn column. Memoised, so a scroll step skips it. */
@@ -2012,9 +2086,32 @@ const GridHeader = memo(function GridHeader({
             data-focused={addColumn.isFocused || undefined}
             tabIndex={addColumn.isFocused ? 0 : -1}
           >
-            <Tooltip content={addColumn.label}>
-              <Button variant="ghost" icon="plus" label={addColumn.label} onPress={addColumn.onPress} />
-            </Tooltip>
+            {addColumn.items.length === 0 ? (
+              <Tooltip content={addColumn.label}>
+                <Button variant="ghost" icon="plus" label={addColumn.label} onPress={addColumn.onPress} />
+              </Tooltip>
+            ) : (
+              <MenuTrigger isOpen={addColumn.isMenuOpen} onOpenChange={addColumn.onMenuOpenChange}>
+                <Button variant="ghost" icon="plus" label={addColumn.label} />
+                <Menu
+                  label={addColumn.label}
+                  onAction={(key) => {
+                    if (key === NEW_COLUMN) addColumn.onPress();
+                    else addColumn.onItem(String(key));
+                  }}
+                >
+                  {addColumn.items.map((item) => (
+                    <MenuItem key={item.id} id={item.id} icon="eye">
+                      {item.label}
+                    </MenuItem>
+                  ))}
+                  <MenuSeparator />
+                  <MenuItem id={NEW_COLUMN} icon="plus">
+                    {strings.newColumnItem}
+                  </MenuItem>
+                </Menu>
+              </MenuTrigger>
+            )}
           </div>
         )}
       </div>

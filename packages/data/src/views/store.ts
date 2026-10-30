@@ -172,6 +172,12 @@ export interface SaveQueryInput {
   readonly force?: boolean;
 }
 
+/** A view's draft kept in this tab: its filter and sorts, and the view's query version it began on. */
+export interface KeptDraft {
+  readonly query: { readonly filter?: FilterGroup | undefined; readonly sorts: readonly SortRule[] };
+  readonly base: number;
+}
+
 const LOADING_LIST: ViewsListSnapshot = Object.freeze({ status: 'loading', views: Object.freeze([]) });
 const LOADING_VIEW: SavedViewSnapshot = Object.freeze({ status: 'loading' });
 
@@ -326,6 +332,8 @@ export function createViewsStore(deps: ViewsDeps) {
   const layers = new Map<string, { readonly layout: ViewLayout; readonly isLocal: boolean }>();
   const saves = new Map<string, { queued?: ViewLayout; inFlight: boolean; lastSent: number; cancel?: () => void }>();
   const opened = new Map<string, { readonly viewId: string; readonly at: number }>();
+  // Each view's unsaved filter and sorts in this tab, so leaving the view and coming back keeps them.
+  const drafts = new Map<string, KeptDraft>();
   const now = deps.now ?? Date.now;
 
   /** The body as shown: the server's view with this tab's layout on top. */
@@ -689,6 +697,16 @@ export function createViewsStore(deps: ViewsDeps) {
         opened.delete(markKey);
       });
     },
+    /**
+     * Keeps a view's unsaved filter and sorts for this tab (undefined forgets
+     * them), so the view opened again shows the draft with Save and Discard.
+     */
+    keepDraft(workspace: string, viewId: string, draft: KeptDraft | undefined) {
+      if (draft === undefined) drafts.delete(key(workspace, viewId));
+      else drafts.set(key(workspace, viewId), draft);
+    },
+    /** The draft this tab kept for a view, if any. */
+    keptDraft: (workspace: string, viewId: string): KeptDraft | undefined => drafts.get(key(workspace, viewId)),
     /** A live `views` event: the object's list and the bodies it concerns are read again, coalesced per object. */
     changed(workspace: string, event: LiveEventOf<'views'>) {
       if (event.objectId === undefined) return;
@@ -714,6 +732,7 @@ export function createViewsStore(deps: ViewsDeps) {
       layers.clear();
       servers.clear();
       opened.clear();
+      drafts.clear();
       lists.clear();
       bodies.clear();
     },

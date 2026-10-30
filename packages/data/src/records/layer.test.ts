@@ -4,6 +4,10 @@
 import {
   MAX_BATCH_RECORDS as CONTRACT_MAX_BATCH,
   type AddLinksInput,
+  type AggregateGroupsInput,
+  type AggregateRecordsInput,
+  type RecordAggregateGroups,
+  type RecordAggregates,
   type AttributeDefinition,
   type BatchResults,
   type LinksWritten,
@@ -117,6 +121,9 @@ function fakeApi() {
   const linkAdds: Pending<AddLinksInput, Omit<LinksWritten, 'echoes'>>[] = [];
   const linkRemoves: Pending<RemoveLinksInput, Omit<LinksWritten, 'echoes'>>[] = [];
   const groups: Pending<GroupsRequest, GroupsAnswer>[] = [];
+  // A view's calculations (the CRM flow pass): a footer's asks, and a board's column totals.
+  const aggregates: Pending<AggregateRecordsInput, RecordAggregates>[] = [];
+  const aggregateGroups: Pending<AggregateGroupsInput, RecordAggregateGroups>[] = [];
   // What each records.get asked for besides its ids: the attributes (spec 0006, AC-55).
   const getAttributes: (readonly string[] | undefined)[] = [];
   const queue =
@@ -171,9 +178,13 @@ function fakeApi() {
     linksRemove: async (input) => ({ ...(await queue(linkRemoves)(input)), echoes: 2 }),
     // Spec 0021: a board's first cards and counts.
     groups: (input, signal) => queue(groups)(input, signal),
+    aggregate: (input, signal) => queue(aggregates)(input, signal),
+    aggregateGroups: (input, signal) => queue(aggregateGroups)(input, signal),
   };
   return {
     api,
+    aggregates,
+    aggregateGroups,
     queries,
     counts,
     creates,
@@ -2971,5 +2982,119 @@ describe('moving a card (spec 0021, milestone 2)', () => {
     frame();
     expect(counts).toHaveLength(0);
     expect(lead.getSnapshot().count).toEqual({ count: 12_345, atLeast: false });
+  });
+});
+
+describe('a view’s calculations (the CRM flow pass)', () => {
+  const AMOUNT = 'attr-amount';
+  const footer = [
+    { attributeId: CITY, fn: 'count' as const },
+    { attributeId: AMOUNT, fn: 'sum' as const },
+  ];
+
+  it('asks a whole footer in one read, shared by every screen in any ask order, through whenFree', async () => {
+    const { layer, aggregates, waits } = setup();
+    const source = layer.aggregates(WS, { objectId: PEOPLE, asks: footer });
+    // The same question with its asks moved (a column dragged) is the same entry: nothing is asked again.
+    expect(layer.aggregates(WS, { objectId: PEOPLE, asks: [...footer].reverse() })).toBe(source);
+    const release = source.retain();
+    await settle();
+    expect(aggregates).toHaveLength(1);
+    expect(aggregates[0]?.input.asks).toEqual([
+      { attributeId: AMOUNT, fn: 'sum' },
+      { attributeId: CITY, fn: 'count' },
+    ]);
+    expect(source.getSnapshot().status).toBe('loading');
+    // The read gate is busy: the layer waits and asks again, as every read does.
+    aggregates[0]?.fail(dataError('TOO_MANY_REQUESTS', 'Busy.', undefined, 1));
+    await settle();
+    await settle();
+    expect(waits.length).toBeGreaterThan(0);
+    expect(aggregates).toHaveLength(2);
+    aggregates[1]?.answer({ answers: [{ amounts: [{ value: '42' }] }, { count: 3, atLeast: false }] });
+    await settle();
+    const state = source.getSnapshot();
+    expect(state.status).toBe('ready');
+    expect(state.answers?.get(`${AMOUNT}:sum`)).toEqual({ amounts: [{ value: '42' }] });
+    expect(state.answers?.get(`${CITY}:count`)).toEqual({ count: 3, atLeast: false });
+    release();
+  });
+
+  it('reads again 1.5 s after a live change naming an asked attribute, keeping the answers shown meanwhile', async () => {
+    const { layer, aggregates, frame, tick } = setup();
+    const source = layer.aggregates(WS, { objectId: PEOPLE, asks: footer });
+    const release = source.retain();
+    await settle();
+    aggregates[0]?.answer({ answers: [{ amounts: [{ value: '42' }] }, { count: 3, atLeast: false }] });
+    await settle();
+    // A change naming only the owner moves nothing asked: no read.
+    layer.changed(WS, PEOPLE, [idAt(1)], [OWNER]);
+    frame();
+    tick(5000);
+    await settle();
+    expect(aggregates).toHaveLength(1);
+    // A burst naming the amount: one read 1.5 s after it (the trailing wait's cap is the store's own test).
+    layer.changed(WS, PEOPLE, [idAt(1)], [AMOUNT]);
+    layer.changed(WS, PEOPLE, [idAt(2)], [AMOUNT]);
+    frame();
+    tick(1000);
+    await settle();
+    expect(aggregates).toHaveLength(1);
+    tick(500);
+    await settle();
+    expect(aggregates).toHaveLength(2);
+    expect(source.getSnapshot()).toMatchObject({ status: 'ready', isRefreshing: true });
+    expect(source.getSnapshot().answers?.get(`${AMOUNT}:sum`)).toEqual({ amounts: [{ value: '42' }] });
+    aggregates[1]?.answer({ answers: [{ amounts: [{ value: '50' }] }, { count: 3, atLeast: false }] });
+    await settle();
+    expect(source.getSnapshot().answers?.get(`${AMOUNT}:sum`)).toEqual({ amounts: [{ value: '50' }] });
+    // A record made elsewhere moves every count: read again.
+    layer.changed(WS, PEOPLE, [idAt(9)], [NAME], { createdIds: [idAt(9)] });
+    frame();
+    tick(1500);
+    await settle();
+    expect(aggregates).toHaveLength(3);
+    release();
+  });
+
+  it('reads again after this tab’s own edit to an asked attribute', async () => {
+    const { layer, aggregates, edits, tick } = await readyView();
+    const source = layer.aggregates(WS, { objectId: PEOPLE, asks: footer });
+    const release = source.retain();
+    await settle();
+    aggregates[0]?.answer({ answers: [{ amounts: [] }, { count: 3, atLeast: false }] });
+    await settle();
+    void layer.setValues(WS, [{ rowId: idAt(0), columnId: CITY, value: 'Paris' }]);
+    await settle();
+    edits[0]?.answer(rowOf(idAt(0), { [NAME]: 'P0', [CITY]: 'Paris' }, { [CITY]: version(2) }));
+    await settle();
+    tick(1500);
+    await settle();
+    expect(aggregates).toHaveLength(2);
+    release();
+  });
+
+  it('asks a board’s column totals in one grouped read, each answer under its column', async () => {
+    const { layer, aggregateGroups } = setup();
+    const source = layer.aggregates(WS, {
+      objectId: PEOPLE,
+      asks: [{ attributeId: AMOUNT, fn: 'sum' }],
+      groupBy: OWNER,
+      groupIds: [null, ME],
+    });
+    const release = source.retain();
+    await settle();
+    expect(aggregateGroups).toHaveLength(1);
+    expect(aggregateGroups[0]?.input).toMatchObject({ groupBy: OWNER, groupIds: [null, ME] });
+    aggregateGroups[0]?.answer({
+      groups: [
+        { id: null, answers: [{ amounts: [{ value: '1' }] }] },
+        { id: ME, answers: [{ amounts: [{ value: '2' }] }] },
+      ],
+    });
+    await settle();
+    expect(source.getSnapshot().answers?.get(`${ME}|${AMOUNT}:sum`)).toEqual({ amounts: [{ value: '2' }] });
+    expect(source.getSnapshot().answers?.get(`|${AMOUNT}:sum`)).toEqual({ amounts: [{ value: '1' }] });
+    release();
   });
 });

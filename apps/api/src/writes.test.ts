@@ -85,6 +85,9 @@ const READS: ReadonlySet<string> = new Set([
   'records.count',
   'records.objectCounts',
   'records.groups',
+  // A column's calculation (the CRM flow pass): a read.
+  'records.aggregate',
+  'records.aggregateGroups',
   'records.get',
   'records.activity',
   // How long a record has sat in its current stage (a status attribute's history): a read.

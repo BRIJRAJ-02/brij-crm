@@ -30,7 +30,8 @@ export type AccessEntry =
   | { readonly publicForm: true }
   /**
    * Booking pages (spec 0025): `booking.manage` first (403 `FORBIDDEN`), then the reader's own pages, or anyone's
-   * with `booking.admin`; another's page answers as absent. A booking: its host, a co-host, its page's owner, or
+   * with `booking.admin`; another's page answers as absent (a workspace link is `booking.admin`'s alone, and its maker
+   * owns nothing of it). A booking: its host, a co-host, its page's owner (never a workspace link's maker), or
    * `booking.admin` (`booking/seen.ts`, the one rule); the Bookings reads take `hosts: 'mine'` unless asked for all.
    */
   | { readonly bookingPages: true }

@@ -1,7 +1,7 @@
 import { isDataError, type MemberView } from '@crm/data';
 import { Card, LoadingNow, PageColumn, Skeleton, TileGrid, TopBar } from '@crm/ui';
 import { createFileRoute, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
-import { dayAt } from '../features/tasks/day.ts';
+import { dayAt } from '../features/tasks/today.ts';
 import { aheadRange, dayRange } from '../features/home/agenda.ts';
 import { weekStartOf } from '../features/home/metrics.ts';
 import { HomeScreen } from '../features/home/HomeScreen.tsx';

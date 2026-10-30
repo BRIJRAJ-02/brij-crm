@@ -23,6 +23,11 @@ export interface BoardColumn {
   readonly count: number;
   /** The count is a floor (a filtered count past its cap): it shows as "10,000+". */
   readonly isCountAtLeast?: boolean;
+  /**
+   * The column's total of the field the view totals ("$42,300", the CRM flow pass), worked out by the screen across
+   * every card in the column; "…" while it is read. Absent, nothing shows.
+   */
+  readonly total?: string;
   readonly cards: ListSource<BoardCard>;
   /** An archived option: shown while it has cards, and never a drop target. */
   readonly isArchived?: boolean;

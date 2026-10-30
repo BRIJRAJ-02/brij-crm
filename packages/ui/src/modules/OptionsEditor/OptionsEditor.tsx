@@ -70,8 +70,16 @@ export interface OptionsEditorProps {
   readonly onChange: (id: string, change: OptionsEditorChange) => void;
   /** Moves an option to `position` in the whole order, archived options counted. */
   readonly onMove: (id: string, position: number) => void;
-  /** After create: the row menu's Archive. */
-  readonly onArchive?: (id: string) => void;
+  /**
+   * After create: the row menu's Archive. With `recordCounts`, an option records hold asks where they go in the
+   * same menu (flow pass, 30 October 2026): "Archive, move to <option>" for each other live option (`moveTo`), or
+   * "Archive, leave N records on it".
+   */
+  readonly onArchive?: (id: string, moveTo?: string) => void;
+  /** Live records holding each option, by id (one grouped read): "N records" on each row that has any. */
+  readonly recordCounts?: Readonly<Record<string, number>>;
+  /** Offer "Archive, move to…" (a single select or a status; a multi select's records keep their other options). */
+  readonly canMoveRecords?: boolean;
   /** After create: the Archived group's Restore. */
   readonly onRestore?: (id: string) => void;
   /** Before create: the row menu's Remove (a draft option leaves the list). */
@@ -95,6 +103,9 @@ export interface OptionsEditorProps {
    */
   readonly onInvalidChange?: (isInvalid: boolean) => void;
 }
+
+/** A row menu key that archives and moves the option's records to the option after it. */
+const MOVE_PREFIX = 'move:';
 
 /** The row being added: its id, the label typed so far, and the hue it will take. */
 interface Draft {
@@ -141,6 +152,8 @@ export function OptionsEditor({
   onChange,
   onMove,
   onArchive,
+  recordCounts,
+  canMoveRecords = false,
   onRestore,
   onRemove,
   pending = new Set(),
@@ -389,6 +402,7 @@ export function OptionsEditor({
               const isPending = pending.has(option.id);
               const error = local[option.id] ?? errors[option.id];
               const daysError = local[`${option.id}:days`];
+              const held = recordCounts?.[option.id] ?? 0;
               return (
                 <GridListItem id={id} textValue={name} className={styles.row}>
                   <SortableRowGrip id={id} label={strings.move(name)} isDisabled={isReadOnly} />
@@ -495,6 +509,7 @@ export function OptionsEditor({
                         </span>
                       </>
                     ))}
+                  {held > 0 && <span className={styles.meta}>{strings.recordCount(held)}</span>}
                   {/* Choices are saved with their form, so no row waits on the server. */}
                   {!isReadOnly && !isChoice && (
                     <span className={styles.pending}>{isPending && <Spinner label={strings.saving} />}</span>
@@ -522,9 +537,13 @@ export function OptionsEditor({
                           else if (key === 'remove') {
                             removeRow(index, option.id);
                             return;
-                          } else if (key === 'archive') {
+                          } else if (key === 'archive' || String(key).startsWith(MOVE_PREFIX)) {
                             const next = after ?? before;
-                            onArchive?.(option.id);
+                            const moveTo = String(key).startsWith(MOVE_PREFIX)
+                              ? String(key).slice(MOVE_PREFIX.length)
+                              : undefined;
+                            if (moveTo === undefined) onArchive?.(option.id);
+                            else onArchive?.(option.id, moveTo);
                             focusIn(
                               next === undefined
                                 ? (root) => root.querySelector<HTMLElement>('[data-adder] button')
@@ -542,9 +561,20 @@ export function OptionsEditor({
                           {strings.moveDown}
                         </MenuItem>
                         {(onArchive !== undefined || onRemove !== undefined) && <MenuSeparator />}
+                        {/* Records hold it: each place they may go, then leaving them; none: Archive alone. */}
+                        {onArchive !== undefined &&
+                          canMoveRecords &&
+                          held > 0 &&
+                          live
+                            .filter((each) => each.id !== option.id)
+                            .map((each) => (
+                              <MenuItem key={each.id} id={`${MOVE_PREFIX}${each.id}`} icon="archive" isDanger>
+                                {strings.archiveMoveTo(each.label)}
+                              </MenuItem>
+                            ))}
                         {onArchive !== undefined && (
                           <MenuItem id="archive" icon="archive" isDanger>
-                            {strings.archive}
+                            {held > 0 ? strings.archiveLeave(held) : strings.archive}
                           </MenuItem>
                         )}
                         {onRemove !== undefined && (

@@ -6,10 +6,16 @@ import * as z from 'zod';
 import { RecordActivity, RecordActivityInput } from './activity.ts';
 import { ApiRefusal } from './errors.ts';
 import { ActorReferenceValue, Timestamp } from './values/attribute-values.ts';
+import {
+  AGGREGATE_CURRENCIES,
+  AGGREGATE_FNS,
+  MAX_AGGREGATE_ASKS,
+  MAX_GROUP_AGGREGATE_ASKS,
+} from './values/aggregates.ts';
 import { FilterGroup } from './values/filters.ts';
 import { RecordRefDisplay } from './values/options.ts';
 import { SortRules } from './values/sorts.ts';
-import { BOARD_GROUPS_PER_CALL, BOARD_MAX_GROUP_LIMIT } from './board-model.ts';
+import { BOARD_GROUPS_PER_CALL, BOARD_MAX_COLUMNS, BOARD_MAX_GROUP_LIMIT, CHECKBOX_COLUMNS } from './board-model.ts';
 import { WorkspaceScoped } from './workspaces.ts';
 import { Uuid, uuidV7 } from './values/ids.ts';
 
@@ -155,6 +161,11 @@ export const RecordCount = z.object({
 /** A count of records. */
 export type RecordCount = z.infer<typeof RecordCount>;
 
+/** A board column's id: an option's or a member's id, or a checkbox's `checked` or `unchecked`. */
+export const GroupId = z.union([Uuid, z.enum(CHECKBOX_COLUMNS)]);
+/** A board column's id. */
+export type GroupId = z.infer<typeof GroupId>;
+
 /**
  * How many live records each object holds, by object id, in one read (Settings › Objects' Records column): only
  * objects the caller sees with no record rule, whose stored count is theirs to know (`records.count` answers the rest).
@@ -166,9 +177,10 @@ export type ObjectRecordCounts = z.infer<typeof ObjectRecordCounts>;
 /**
  * The first cards of a board's columns (spec 0021): the object's records in
  * the view's `filter` and `sorts`, split by the grouping attribute `groupBy`
- * (a status, or a select holding one value). `groupIds` names 1 to 12
- * columns, each an option id of `groupBy`, or `null` for the records with no
- * value. Each group answers up to `limit` records (25 when not given) and
+ * (a status, a select holding one value, a checkbox or a member field
+ * holding one person). `groupIds` names 1 to 12 columns, each an option id
+ * of `groupBy`, a member's id, `checked` or `unchecked` for a checkbox, or
+ * `null` for the records with no value. Each group answers up to `limit` records (25 when not given) and
  * the count as `records.count` would: exact with no filter, however large;
  * with a filter, exact up to 10,000, else 10,000 with `atLeast`. With
  * `probeArchived`, the answer also names the archived options of `groupBy`
@@ -178,7 +190,7 @@ export const RecordGroupsInput = WorkspaceScoped.extend({
   objectId: Uuid,
   groupBy: Uuid,
   groupIds: z
-    .array(Uuid.nullable())
+    .array(GroupId.nullable())
     .min(1, 'Name at least one column.')
     .max(BOARD_GROUPS_PER_CALL, `Read at most ${String(BOARD_GROUPS_PER_CALL)} columns at once.`)
     .refine((ids) => new Set(ids).size === ids.length, { error: 'Name each column once.' }),
@@ -199,7 +211,7 @@ export type RecordGroupsInput = z.infer<typeof RecordGroupsInput>;
 
 /** One column's first cards, the cursor for its next page, and its count. */
 export const RecordGroup = z.object({
-  id: Uuid.nullable(),
+  id: GroupId.nullable(),
   records: z.array(RecordView),
   nextCursor: z.string().optional(),
   count: z.number().int().min(0),
@@ -215,6 +227,91 @@ export const RecordGroups = z.object({
 });
 /** A board's columns. */
 export type RecordGroups = z.infer<typeof RecordGroups>;
+
+/** One calculation over a column (the CRM flow pass). */
+export const AggregateFnSchema = z.enum(AGGREGATE_FNS);
+
+/** One calculation asked: an attribute of the object, and what to work out over it. */
+export const AggregateAsk = z.object({ attributeId: Uuid, fn: AggregateFnSchema });
+/** One calculation asked. */
+export type AggregateAsk = z.infer<typeof AggregateAsk>;
+
+/**
+ * A view's calculations across every record its `filter` matches (the CRM
+ * flow pass): for each ask, `count` holds a value, `count_empty` holds none,
+ * and for a number or a currency `sum`, `avg`, `min` and `max`. Up to 50 asks
+ * (a table's whole footer) in one transaction and one statement, through the
+ * access door: a hidden attribute or object refuses as a filter would.
+ */
+export const AggregateRecordsInput = WorkspaceScoped.extend({
+  objectId: Uuid,
+  asks: z
+    .array(AggregateAsk)
+    .min(1, 'Ask for at least one calculation.')
+    .max(MAX_AGGREGATE_ASKS, `Ask for at most ${String(MAX_AGGREGATE_ASKS)} calculations at once.`),
+  filter: FilterGroup.optional(),
+  ...QueryClock,
+});
+/** A view's calculations. */
+export type AggregateRecordsInput = z.infer<typeof AggregateRecordsInput>;
+
+/**
+ * What one calculation answers: a count (capped as `records.count` is, with
+ * `atLeast`), or the amounts as exact decimal text, one per currency for a
+ * currency (none when nothing holds a value). `tooMany` when a filtered view
+ * matches more records than an amount is worked out over (10,000), or a
+ * currency column holds more than 200 currencies: nothing is shown rather than
+ * a part.
+ */
+export const RecordAggregate = z.object({
+  count: z.number().int().min(0).optional(),
+  atLeast: z.boolean().optional(),
+  amounts: z
+    .array(z.object({ value: z.string(), currency: z.string().optional() }))
+    .max(AGGREGATE_CURRENCIES)
+    .optional(),
+  tooMany: z.boolean().optional(),
+});
+/** A column's calculation's answer. */
+export type RecordAggregate = z.infer<typeof RecordAggregate>;
+
+/** Each ask's answer, in the order asked. */
+export const RecordAggregates = z.object({ answers: z.array(RecordAggregate).max(MAX_AGGREGATE_ASKS) });
+/** A view's calculations' answers. */
+export type RecordAggregates = z.infer<typeof RecordAggregates>;
+
+/**
+ * A board's column totals (the CRM flow pass): the same calculations, amounts
+ * only, once per column of `groupBy` (an option, Checked or Not checked, a
+ * member, or `null` for no value), in one statement grouped by the column's
+ * value rather than a read per column.
+ */
+export const AggregateGroupsInput = WorkspaceScoped.extend({
+  objectId: Uuid,
+  groupBy: Uuid,
+  groupIds: z
+    .array(GroupId.nullable())
+    .min(1, 'Name at least one column.')
+    .max(BOARD_MAX_COLUMNS + 1, `Name at most ${String(BOARD_MAX_COLUMNS + 1)} columns.`)
+    .refine((ids) => new Set(ids).size === ids.length, { error: 'Name each column once.' }),
+  asks: z
+    .array(AggregateAsk.extend({ fn: z.enum(['sum', 'avg', 'min', 'max']) }))
+    .min(1, 'Ask for at least one calculation.')
+    .max(MAX_GROUP_AGGREGATE_ASKS, `Ask for at most ${String(MAX_GROUP_AGGREGATE_ASKS)} totals at once.`),
+  filter: FilterGroup.optional(),
+  ...QueryClock,
+});
+/** A board's column totals. */
+export type AggregateGroupsInput = z.infer<typeof AggregateGroupsInput>;
+
+/** Each column's answers, in the order of `groupIds`, each in the order asked. */
+export const RecordAggregateGroups = z.object({
+  groups: z
+    .array(z.object({ id: GroupId.nullable(), answers: z.array(RecordAggregate).max(MAX_GROUP_AGGREGATE_ASKS) }))
+    .max(BOARD_MAX_COLUMNS + 1),
+});
+/** A board's column totals' answers. */
+export type RecordAggregateGroups = z.infer<typeof RecordAggregateGroups>;
 
 /** Records by id, up to 500, in the order asked. */
 export const GetRecordsInput = WorkspaceScoped.extend({
@@ -470,6 +567,8 @@ export const recordsContract = {
   count: oc.input(CountRecordsInput).output(RecordCount),
   objectCounts: oc.input(WorkspaceScoped).output(ObjectRecordCounts),
   groups: oc.input(RecordGroupsInput).output(RecordGroups),
+  aggregate: oc.input(AggregateRecordsInput).output(RecordAggregates),
+  aggregateGroups: oc.input(AggregateGroupsInput).output(RecordAggregateGroups),
   get: oc.input(GetRecordsInput).output(z.array(RecordView)),
   create: oc.input(CreateRecordInput).output(WrittenRecord),
   setValues: oc.input(SetValuesInput).output(WrittenRecord),

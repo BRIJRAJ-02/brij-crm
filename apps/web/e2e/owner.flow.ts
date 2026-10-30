@@ -63,6 +63,8 @@ test('Owner is set from a cell, the record page, bulk Edit and New deal', async 
   // The timeline's newest entry names each change.
   const newest = page.getByRole('feed', { name: 'Recent activity' }).getByRole('article').first();
   await expect(newest).toHaveAccessibleName(/cleared Owner/);
+  // One person's changes in the same second read as one entry ("changed 2 attributes"): the next waits a second.
+  await page.waitForTimeout(1_100);
   await details.getByRole('button', { name: 'Edit Owner' }).click();
   await memberItem(page, 'Ada Lovelace').click();
   await expect(details).toContainText('Ada Lovelace');

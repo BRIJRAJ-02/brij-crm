@@ -11,6 +11,8 @@ export const strings = {
   save: 'Save',
   saving: 'Saving',
   cancel: 'Cancel',
+  /** Back to the attribute form the relationship step took over from. */
+  back: 'Back',
   close: 'Close',
   object: 'Object',
   relatedObject: 'Related object',

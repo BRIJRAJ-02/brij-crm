@@ -20,6 +20,7 @@ import {
 } from '@crm/contracts';
 import { boardConfigProblem, isGroupable, type BoardAttribute, type BoardSettings } from '@crm/contracts/board';
 import { mergeLayout, viewRule, type ViewAction, type ViewRuleReason } from '@crm/contracts/views';
+import { aggregatesFor, type AggregateFn } from '@crm/contracts/values';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { touched } from '../engine/definitions.ts';
 import { checkId, isUuidV7 } from '../engine/ids.ts';
@@ -243,8 +244,7 @@ function checkLayoutIds(
 
 /**
  * Refuses board settings a board can't show (spec 0021, `boardConfigProblem`,
- * `CONFIG_INVALID`): grouped by anything but a live status or single select
- * of the object, more than 6 card fields, one twice, or the primary one. It
+ * `CONFIG_INVALID`): grouped by anything `isGroupable` refuses, more than 6 card fields, one twice, or the primary one. It
  * judges what the caller sent against the attributes they see.
  */
 async function checkBoard(
@@ -258,7 +258,7 @@ async function checkBoard(
   if (problem !== undefined) throw refuse('CONFIG_INVALID', problem);
 }
 
-/** Refuses a table grouped by anything but a live status or single select of the object (`CONFIG_INVALID`). */
+/** Refuses a table grouped by anything a board can't group by (`isGroupable`, `CONFIG_INVALID`). */
 async function checkGroupBy(
   tx: WorkspaceTx,
   scope: EngineScope,
@@ -268,7 +268,25 @@ async function checkGroupBy(
   if (typeof groupBy !== 'string') return;
   const attribute = (await boardAttributes(tx, scope, objectId)).find((each) => each.id === groupBy.toLowerCase());
   if (attribute === undefined || !isGroupable(attribute)) {
-    throw refuse('CONFIG_INVALID', 'Tables group by a status or single select field.');
+    throw refuse('CONFIG_INVALID', 'Tables group by a status, a single select, a checkbox or a member field.');
+  }
+}
+
+/** Refuses a column calculation its attribute's type doesn't offer (a sum of text; `aggregatesFor`, `CONFIG_INVALID`). */
+async function checkCalcs(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  objectId: string,
+  columns: readonly { readonly attributeId: string; readonly calc?: AggregateFn | undefined }[],
+): Promise<void> {
+  const calculated = columns.filter((column) => column.calc !== undefined);
+  if (calculated.length === 0) return;
+  const types = new Map((await boardAttributes(tx, scope, objectId)).map((each) => [each.id, each.type]));
+  for (const column of calculated) {
+    const type = types.get(column.attributeId.toLowerCase());
+    if (type === undefined || column.calc === undefined || !aggregatesFor(type).includes(column.calc)) {
+      throw refuse('CONFIG_INVALID', 'Sums, averages, least and most are for numbers and currency.');
+    }
   }
 }
 
@@ -386,6 +404,7 @@ export async function createView(
       checkLayoutIds(config.data, visible.any, object.pluralName);
       await checkBoard(tx, scope, object.id, config.data.board);
       await checkGroupBy(tx, scope, object.id, config.data.groupBy);
+      await checkCalcs(tx, scope, object.id, config.data.columns);
       const filter =
         config.data.filter === undefined || config.data.filter.conditions.length === 0 ? undefined : config.data.filter;
       await checkViewQuery(tx, scope, {
@@ -512,6 +531,7 @@ export async function setViewLayout(
       checkLayoutIds(layout, visible.any, pluralName);
       await checkBoard(tx, scope, row.objectId, layout.board);
       await checkGroupBy(tx, scope, row.objectId, layout.groupBy);
+      await checkCalcs(tx, scope, row.objectId, layout.columns);
       const stored = configOf(row.config);
       const merged = mergeLayout(stored.columns, layout, visible.live);
       const board =

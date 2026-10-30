@@ -6,7 +6,7 @@
 // 0037, AC-1272) made or removed for a colleague they Manage, with their own
 // `booking.manage` (AC-1275); never shown to anyone but the member. Every block
 // made or removed writes one audit row naming whose time it is (AC-1263).
-import { and, asc, eq, getTableColumns, sql } from 'drizzle-orm';
+import { and, asc, eq, getTableColumns, inArray, sql } from 'drizzle-orm';
 import { DateTime } from 'luxon';
 import { PERMISSIONS, type TimeBlockOccurrence, type TimeBlockView } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
@@ -259,12 +259,23 @@ function auditFieldsOf(row: BlockRow): Readonly<Record<string, unknown>> {
 
 /** A member's blocks that can touch `[from, to)`: once ones overlapping it, and every weekly one begun by its end. */
 async function blocksTouching(tx: WorkspaceTx, member: string, from: Date, to: Date): Promise<readonly BlockRow[]> {
+  return blocksOfMembersTouching(tx, [member], from, to);
+}
+
+/** Every block of these members touching [from, to), in one read (a team's slots read every host's at once). */
+async function blocksOfMembersTouching(
+  tx: WorkspaceTx,
+  memberIds: readonly string[],
+  from: Date,
+  to: Date,
+): Promise<readonly BlockRow[]> {
+  if (memberIds.length === 0) return [];
   return tx
     .select(blockColumns())
     .from(bookingTimeBlocks)
     .where(
       and(
-        eq(bookingTimeBlocks.memberId, member),
+        inArray(bookingTimeBlocks.memberId, [...memberIds]),
         // Plain comparisons on the stored ends, not `during &&`: under row level security only leakproof operators
         // reach the index, and range overlap isn't one.
         sql`((${bookingTimeBlocks.repeat} = 'once' and ${bookingTimeBlocks.endsAt} > ${from.toISOString()}::timestamptz
@@ -379,15 +390,31 @@ export async function blockedTime(
   to: Date,
   page: { readonly id: string; readonly isPrivate: boolean },
 ): Promise<{ readonly busy: readonly Span[]; readonly openHolds: readonly Span[] }> {
-  const rows = await blocksTouching(tx, member, from, to);
-  const busy: Span[] = [];
-  const openHolds: Span[] = [];
-  for (const row of rows) {
+  return (await blockedTimes(tx, [member], from, to, page)).get(member) ?? { busy: [], openHolds: [] };
+}
+
+/**
+ * `blockedTime` for many members in one read: a team page's slots (every host of "Everyone on the roster") read their
+ * blocks together rather than one query per member.
+ */
+export async function blockedTimes(
+  tx: WorkspaceTx,
+  memberIds: readonly string[],
+  from: Date,
+  to: Date,
+  page: { readonly id: string; readonly isPrivate: boolean },
+): Promise<ReadonlyMap<string, { readonly busy: readonly Span[]; readonly openHolds: readonly Span[] }>> {
+  const found = new Map<string, { busy: Span[]; openHolds: Span[] }>(
+    memberIds.map((memberId) => [memberId, { busy: [], openHolds: [] }]),
+  );
+  for (const row of await blocksOfMembersTouching(tx, memberIds, from, to)) {
+    const theirs = found.get(row.memberId);
+    if (theirs === undefined) continue;
     const usable = row.kind === 'hold' && page.isPrivate && (row.pageId === null || row.pageId === page.id);
     for (const occurrence of occurrencesOf(row, from, to)) {
       const span = { start: new Date(occurrence.startsAt), end: new Date(occurrence.endsAt) };
-      (usable ? openHolds : busy).push(span);
+      (usable ? theirs.openHolds : theirs.busy).push(span);
     }
   }
-  return { busy, openHolds };
+  return found;
 }

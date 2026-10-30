@@ -10,6 +10,7 @@ import {
   Card,
   Disclosure,
   EmptyState,
+  Field,
   iconOf,
   InfoTip,
   Icon,
@@ -88,6 +89,28 @@ function AttributeName({ attribute }: { readonly attribute: AttributeDefinition 
   );
 }
 
+/** An attribute's type: a relationship names its far object with its tile and how many it holds ("→ Companies · many"). */
+function TypeCell({
+  attribute,
+  objects,
+}: {
+  readonly attribute: AttributeDefinition;
+  readonly objects: readonly ObjectSummary[];
+}) {
+  const relationship = attribute.relationship;
+  const far = objects.find((each) => each.id === relationship?.targetObjectIds[0]);
+  if (relationship === undefined || far === undefined) return typeLabelOf(attribute.type);
+  return (
+    <>
+      <Icon name={far.icon} tile={far.hue} />
+      {strings.relationshipType(far.pluralName, relationship.farHoldsOne)}
+    </>
+  );
+}
+
+/** Above this many attributes, the tab offers a search by title. */
+const SEARCH_FROM = 10;
+
 /**
  * Whether a select or status default names an archived option (spec 0012,
  * AC-236): the default stays stored, and new records get the first live
@@ -164,7 +187,14 @@ export function AttributesTab({
   const [archivingId, setArchiving] = useState<string | undefined>(undefined);
   const archiving = live.find((attribute) => attribute.id === archivingId);
   const [restoring, setRestoring] = useState<string | undefined>(undefined);
+  // Archive and recreate: the archived one's name, which the create starts with.
+  const [recreateTitle, setRecreateTitle] = useState<string | undefined>(undefined);
   const [isMoving, setMovingHere] = useState(false);
+  // A search by title, offered once the list is long; a filtered list can't be dragged (its places are partial).
+  const [query, setQuery] = useState('');
+  const hasSearch = live.length > SEARCH_FROM;
+  const needle = hasSearch ? query.trim().toLowerCase() : '';
+  const shown = needle === '' ? live : live.filter((attribute) => attribute.title.toLowerCase().includes(needle));
   // The page's header says a move is under way, so nothing above the table shifts while it waits.
   const setMoving = (moving: boolean) => {
     setMovingHere(moving);
@@ -218,12 +248,34 @@ export function AttributesTab({
     );
   };
 
+  /**
+   * Wrong type? (flow pass, 30 October 2026): archives the attribute (Undo restores it) and opens a create with its
+   * name; its API name is held by the archived one, so the new one quietly takes the next free one.
+   */
+  const recreate = (attribute: AttributeDefinition) => {
+    data.attributes.archive(slug, attribute.id).then(
+      (ends) => {
+        onSelect(undefined);
+        setRecreateTitle(attribute.title);
+        onCreatingChange(true);
+        toasts.toast({
+          tone: 'success',
+          message: strings.archivedToast(titlesOf(ends)),
+          action: { label: strings.undo, onAction: () => restore(attribute) },
+        });
+      },
+      (error: unknown) => {
+        toasts.toast({ tone: 'danger', message: strings.archiveFailed(attribute.title, why(error)) });
+      },
+    );
+  };
+
   const liveCell = (attribute: AttributeDefinition, column: string) => {
     switch (column) {
       case 'title':
         return <AttributeName attribute={attribute} />;
       case 'type':
-        return typeLabelOf(attribute.type);
+        return <TypeCell attribute={attribute} objects={objects} />;
       case 'rules':
         return <AttributeRules attribute={attribute} />;
       default: {
@@ -283,7 +335,7 @@ export function AttributesTab({
       case 'title':
         return <AttributeName attribute={attribute} />;
       case 'type':
-        return typeLabelOf(attribute.type);
+        return <TypeCell attribute={attribute} objects={objects} />;
       case 'rules':
         // Archived because the object at its relationship's other end is: the reason, and no Restore of its own.
         return isOwnArchive(attribute) ? <AttributeRules attribute={attribute} /> : archivedByReason(attribute);
@@ -308,7 +360,7 @@ export function AttributesTab({
       case 'title':
         return <AttributeName attribute={attribute} />;
       case 'type':
-        return typeLabelOf(attribute.type);
+        return <TypeCell attribute={attribute} objects={objects} />;
       default:
         return null;
     }
@@ -317,7 +369,7 @@ export function AttributesTab({
   const liveTable = {
     label: strings.attributes,
     columns: COLUMNS,
-    rows: live,
+    rows: shown,
     getRowId: (attribute: AttributeDefinition) => attribute.id,
     renderCell: liveCell,
     // On a phone the table scrolls sideways in its own frame, so names stay on one line and the rules stay whole.
@@ -325,11 +377,14 @@ export function AttributesTab({
     onRowAction: (id: string) => {
       onSelect(id);
     },
-    emptyState: (
-      <EmptyState title={strings.noAttributes}>
-        {canManage ? strings.noAttributesText : strings.noAttributesMemberText}
-      </EmptyState>
-    ),
+    emptyState:
+      needle === '' ? (
+        <EmptyState title={strings.noAttributes}>
+          {canManage ? strings.noAttributesText : strings.noAttributesMemberText}
+        </EmptyState>
+      ) : (
+        <EmptyState title={strings.noMatches(query.trim())} />
+      ),
   };
   const meter = usage?.attributes[object.id];
   return (
@@ -341,7 +396,18 @@ export function AttributesTab({
           <Meter label={strings.attributeLimit} value={meter.used} maxValue={meter.limit} />
         ))}
       {!canManage && <Callout>{strings.readOnlyNote}</Callout>}
-      {canManage ? (
+      {hasSearch && (
+        <Field
+          label={strings.searchAttributes}
+          isLabelHidden
+          variant="search"
+          size="sm"
+          placeholder={strings.searchAttributes}
+          value={query}
+          onChange={setQuery}
+        />
+      )}
+      {canManage && needle === '' ? (
         <Table
           {...liveTable}
           getRowLabel={(attribute) => attribute.title}
@@ -390,11 +456,25 @@ export function AttributesTab({
         optionsLimit={usage?.optionsPerAttribute}
         objectAttributes={attributes}
         duplicatesLink={{ label: strings.openTable(object.pluralName), href: objectHref(slug, object) }}
+        initialTitle={isCreating ? recreateTitle : undefined}
+        {...(canManage && selected !== undefined
+          ? {
+              onArchive: () => {
+                onSelect(undefined);
+                setArchiving(selected.id);
+              },
+              onRecreate: () => {
+                recreate(selected);
+              },
+            }
+          : {})}
         onClose={() => {
+          setRecreateTitle(undefined);
           if (isCreating) onCreatingChange(false);
           else onSelect(undefined);
         }}
         onSaved={(saved, isNew) => {
+          setRecreateTitle(undefined);
           if (isNew) onCreatingChange(false);
           else onSelect(undefined);
           toasts.toast({ tone: 'success', message: isNew ? strings.created(saved.title) : strings.saved(saved.title) });

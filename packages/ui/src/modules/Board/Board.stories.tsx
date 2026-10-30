@@ -341,6 +341,35 @@ export const CountAtLeast: Story = {
   },
 };
 
+/** A column totalling the view's currency field: the total at the heading's end, after the count. */
+export const ColumnTotal: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage height="grid">
+      <Board
+        label="Deals by stage"
+        columns={[
+          {
+            id: STAGE_IDS.lead,
+            title: 'Lead',
+            hue: 'gray',
+            count: 2,
+            total: '$42,300',
+            cards: arraySource<BoardCard>(CARDS.slice(0, 2), (card) => card.id),
+          },
+        ]}
+        cardFields={CARD_FIELDS}
+        showEmptyColumns
+        isReadOnly
+        onMove={() => undefined}
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('heading', { name: /Lead/ })).toHaveTextContent('$42,300');
+  },
+};
+
 /** A column of 2,000 cards draws only those on screen; the source hears the range. */
 export const LongColumn: Story = {
   parameters: { crm: { screenshot: false } },

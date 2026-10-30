@@ -93,6 +93,25 @@ describe('the board a view shows', () => {
     expect(planBoard([crowded], undefined)).toEqual({ kind: 'too-many', title: 'crowd', count: 51 });
   });
 
+  it('groups by a member field, a column per member by name after no one, and by a checkbox in two columns', () => {
+    const members = [
+      { id: 'm2', name: 'Zoe' },
+      { id: 'm1', name: 'Ada' },
+    ];
+    const byOwner = planBoard(DEALS, { groupByAttributeId: 'owner', cardFields: [], showEmptyColumns: true }, members);
+    if (byOwner.kind !== 'board') throw new Error('A board.');
+    expect(byOwner.groupKind).toBe('member');
+    expect(byOwner.columnIds).toEqual([null, 'm1', 'm2']);
+    expect(byOwner.groupBy.options?.map((each) => each.label)).toEqual(['Ada', 'Zoe']);
+    const done = attribute('done', { type: 'checkbox' });
+    const byDone = planBoard([...DEALS, done], { groupByAttributeId: 'done', cardFields: [], showEmptyColumns: true });
+    if (byDone.kind !== 'board') throw new Error('A board.');
+    expect(byDone.columnIds).toEqual(['unchecked', 'checked']);
+    // Only members and checkboxes: the first member field groups by default.
+    const people = planBoard([NAME, OWNER], undefined, members);
+    expect(people.kind === 'board' && people.groupBy.id).toBe('owner');
+  });
+
   it('falls back to the defaults when the stored grouping field is no longer groupable', () => {
     const plan = planBoard(DEALS, { groupByAttributeId: 'value', cardFields: [], showEmptyColumns: true });
     expect(plan.kind === 'board' && plan.groupBy.id).toBe('stage');

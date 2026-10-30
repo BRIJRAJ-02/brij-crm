@@ -27,7 +27,7 @@ import styles from './NotificationList.module.css';
 import { strings } from './strings.ts';
 
 /** Why a member was notified. */
-export type NotificationItemKind = 'mention' | 'reply' | 'task_assigned';
+export type NotificationItemKind = 'mention' | 'reply' | 'task_assigned' | 'join_request';
 
 /** One notification, as the inbox shows it. */
 export interface NotificationItem {

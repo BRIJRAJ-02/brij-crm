@@ -7,7 +7,7 @@ import { Hue } from './values/hues.ts';
 import { ObjectIcon } from './values/object-icons.ts';
 import { WorkspaceScoped } from './workspaces.ts';
 import { Uuid, uuidV7 } from './values/ids.ts';
-import { PickerAttributeType } from './attributes.ts';
+import { NewAttributeOption, PickerAttributeType } from './attributes.ts';
 
 /**
  * One object: its id, its address in URLs and the API (`apiSlug`,
@@ -67,6 +67,8 @@ export const CreateObjectInput = WorkspaceScoped.extend({
       z.object({
         title: z.string().trim().min(1, 'Name the attribute.').max(100, 'Use at most 100 characters.'),
         type: PickerAttributeType,
+        /** A select's or status attribute's first options (a guessed Stage's stages, a Priority's levels). */
+        options: z.array(NewAttributeOption).max(20, 'Start an attribute with at most 20 options.').optional(),
       }),
     )
     .max(30, 'Start with at most 30 attributes.')

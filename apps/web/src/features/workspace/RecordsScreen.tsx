@@ -3,6 +3,7 @@
 // Main task: read and edit records in place (a paste or clear is one change, undone with ⌘Z), add a record and a column, live.
 // Leaves out: which filter, sorts and columns run and saving them (the view screen, spec 0020, hands them in), and presence.
 import {
+  aggregatesFor,
   queryKey,
   toFieldAttribute,
   withPendingOptions,
@@ -35,7 +36,7 @@ import {
   type ViewLayoutSwitch,
   type ViewSettingsTrigger,
 } from '@crm/ui';
-import { columnWidthFor, DataGrid, type GridColumn } from '@crm/ui/grid';
+import { columnWidthFor, DataGrid, type ColumnCalc, type GridColumn } from '@crm/ui/grid';
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ArchiveAttributeDialog } from '../settings/ArchiveAttributeDialog.tsx';
@@ -50,6 +51,7 @@ import { useBulkActions, useTableSelection } from './BulkActions.tsx';
 import type { ShownColumn, ShownLayout } from '../views/layout.ts';
 import { avatarAttribute } from './columns.ts';
 import { groupingGap, groupPlan, useGroupedRows } from './grouped.ts';
+import { useColumnCalcs } from './calcs.ts';
 import { CREATED_TOAST_MS, createdToast } from './created.ts';
 import { createEditors } from './create-editors.ts';
 import { namePreset } from './name-preset.ts';
@@ -86,7 +88,11 @@ export interface RecordsScreenProps {
   /** The view bar's View settings button, which opens the view's columns. */
   readonly viewSettings?: ViewSettingsTrigger;
   /** The view's own actions, under "This view" in the switcher's menu, and what runs one (spec 0020). */
-  readonly viewMenu?: { readonly actions: readonly ViewAction[]; readonly onAction: (id: string) => void };
+  readonly viewMenu?: {
+    readonly actions: readonly ViewAction[];
+    readonly onAction: (id: string) => void;
+    readonly onMoveView?: (viewId: string, direction: 'up' | 'down') => void;
+  };
   /**
    * Add attribute asked from View settings (it moved there from the view bar, 21 October 2026): a new object
    * each time opens the attribute dialog here, which owns it.
@@ -314,8 +320,8 @@ export function RecordsScreen({
   const isReordering = useDelayedLoading(shown.key !== wanted);
   const state = useView(view, visible);
   // Grouped (13 Oct reference batch 4): the rows through the board's per group windows, folded groups unread.
-  const groupingPlan = useMemo(() => groupPlan(attributes, groupBy), [attributes, groupBy]);
-  const ungrouped = useMemo(() => groupingGap(attributes, groupBy), [attributes, groupBy]);
+  const groupingPlan = useMemo(() => groupPlan(attributes, groupBy, members), [attributes, groupBy, members]);
+  const ungrouped = useMemo(() => groupingGap(attributes, groupBy, members), [attributes, groupBy, members]);
   const [folded, setFolded] = useState<ReadonlySet<string>>(() => new Set());
   const grouped = useGroupedRows(slug, object.id, groupingPlan, query, visible, folded);
   // The count spoken after a new question's rows are in (spec 0020, AC-487), once per question.
@@ -449,6 +455,44 @@ export function RecordsScreen({
   });
   const rowHeader = object.primaryAttributeId ?? columns[0]?.id ?? '';
   const newRecord = strings.newRecord(object.singularName);
+  // Footer calculations (the CRM flow pass): each shown column but the name offers what its type can work out; the
+  // view keeps the choice in its columns, and the whole footer is one read across every matching record, read again
+  // by the data layer after changes that may move it.
+  const shownColumns = useMemo(() => layout.columns.filter((column) => !column.isHidden), [layout.columns]);
+  const calcValues = useColumnCalcs(slug, object.id, shown.query.filter, shownColumns);
+  const calculations = useMemo(() => {
+    const types = new Map(attributes.map((attribute) => [attribute.id, attribute.type]));
+    const choose = (columnId: string, calc: ColumnCalc['chosen']) => {
+      onLayoutChange({
+        ...layout,
+        columns: layout.columns.map((column) => {
+          if (column.id !== columnId) return column;
+          const { calc: _old, ...rest } = column;
+          return calc === undefined ? rest : { ...rest, calc };
+        }),
+      });
+    };
+    return Object.fromEntries(
+      shownColumns.flatMap((column): [string, ColumnCalc][] => {
+        const type = types.get(column.id);
+        if (type === undefined || column.id === rowHeader) return [];
+        const value = calcValues.get(column.id);
+        return [
+          [
+            column.id,
+            {
+              choices: aggregatesFor(type),
+              ...(column.calc === undefined ? {} : { chosen: column.calc }),
+              ...(value === undefined ? {} : { value }),
+              onChange: (fn) => {
+                choose(column.id, fn);
+              },
+            },
+          ],
+        ];
+      }),
+    );
+  }, [attributes, shownColumns, calcValues, rowHeader, layout, onLayoutChange]);
 
   // The name the menu's Create <object> named … typed, for the dialog it opened; New starts empty.
   const [createPreset, setCreatePreset] = useState<Readonly<Record<string, unknown>> | undefined>(undefined);
@@ -514,6 +558,7 @@ export function RecordsScreen({
             onViewChange={onViewChange ?? (() => undefined)}
             {...(onCreateView === undefined ? {} : { onCreateView })}
             {...(viewMenu === undefined ? {} : { actions: viewMenu.actions, onAction: viewMenu.onAction })}
+            {...(viewMenu?.onMoveView === undefined ? {} : { onMoveView: viewMenu.onMoveView })}
             {...(viewSettings === undefined ? {} : { settings: viewSettings })}
             {...(layoutSwitch === undefined ? {} : { layout: layoutSwitch })}
           >
@@ -556,8 +601,8 @@ export function RecordsScreen({
               getValue={(row, columnId) => row.values[columnId] ?? null}
               isCellKnown={isCellKnown}
               rowNotes={state.rowNotes}
-              // The count under the name column, once known ("10,000+ records" past a filtered view's cap). Per
-              // column sums and averages wait for a server aggregate: the grid never computes over loaded rows.
+              // The count under the name column, once known ("10,000+ records" past a filtered view's cap). Each
+              // other column's calculation is the server's aggregate (`calculations`), never the loaded rows.
               {...(state.status === 'ready'
                 ? {
                     footer: {
@@ -568,6 +613,7 @@ export function RecordsScreen({
                     },
                   }
                 : {})}
+              calculations={calculations}
               // A ghost "+ New person" after the last row, for members who may create (Twenty's "+ Add New").
               {...(object.access === 'write' ? { addRow: { label: newRecord, onAdd: openCreate } } : {})}
               floatingBar={bulk.bar}
@@ -616,12 +662,18 @@ export function RecordsScreen({
                     },
                   })}
               onColumnsChange={(next, pinnedCount) => {
+                // A column's calculation stays with it as it moves, hides or resizes.
+                const calcs = new Map(layout.columns.map((column) => [column.id, column.calc]));
                 onLayoutChange({
-                  columns: next.map((column) => ({
-                    id: column.id,
-                    isHidden: column.isHidden === true,
-                    width: column.width,
-                  })),
+                  columns: next.map((column) => {
+                    const calc = calcs.get(column.id);
+                    return {
+                      id: column.id,
+                      isHidden: column.isHidden === true,
+                      width: column.width,
+                      ...(calc === undefined ? {} : { calc }),
+                    };
+                  }),
                   pinnedCount,
                 });
               }}
@@ -711,6 +763,20 @@ export function RecordsScreen({
                       setAdding(true);
                     },
                     addColumnLabel: attributeStrings.addAttribute,
+                    // "+" offers the view's hidden columns first (flow pass, 30 October 2026): a blank create was
+                    // the only way, so hidden ones came back as duplicates. One press shows one, focused.
+                    addColumnItems: columns
+                      .filter((column) => column.isHidden === true)
+                      .map((column) => ({ id: column.id, label: column.attribute.name })),
+                    onAddColumnItem: (columnId: string) => {
+                      onLayoutChange({
+                        columns: layout.columns.map((column) =>
+                          column.id === columnId ? { ...column, isHidden: false } : column,
+                        ),
+                        pinnedCount: layout.pinnedCount,
+                      });
+                      setFocusColumn({ id: columnId });
+                    },
                     columnActions: (columnId: string) => {
                       const attribute = attributes.find((each) => each.id === columnId);
                       if (attribute === undefined || attribute.isSystem) return [];

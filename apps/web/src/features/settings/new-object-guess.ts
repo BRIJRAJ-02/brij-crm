@@ -1,7 +1,7 @@
-// What the New object dialog guesses from what is typed: the plural of a name, an icon and a colour for it, the
-// type of an attribute from its name, and the starter attributes a common object suggests. Pure; the person can
-// change every guess, and a guess never overwrites what they chose.
-import type { Hue, ObjectIcon, PickerAttributeType } from '@crm/data';
+// What the New object dialog guesses from what is typed: the plural of a name, an icon and a colour for it, and the
+// starter attributes a common object suggests (an attribute's type from its name is `typeFor`, in contracts). Pure;
+// the person can change every guess, and a guess never overwrites what they chose.
+import { typeFor, type GuessedType, type Hue, type ObjectIcon } from '@crm/data';
 
 /** The plural of an English name: "Company" is "Companies", "Box" is "Boxes", "Project" is "Projects". */
 export function pluralOf(singular: string): string {
@@ -124,7 +124,10 @@ export function hueFor(name: string, hues: readonly Hue[], taken: readonly Hue[]
   return pool[start % pool.length] ?? 'gray';
 }
 
-/** Types an inline row offers: the ones that need nothing more to be useful (a select waits for its options on the Attributes tab). */
+/**
+ * Types an inline row offers: every guess a name can make. A status starts with its stages and a Priority select
+ * with Low, Medium and High (`starterOptionsFor`); any other select gets its options on the Attributes tab.
+ */
 export const INLINE_TYPES = [
   'text',
   'long_text',
@@ -132,35 +135,18 @@ export const INLINE_TYPES = [
   'currency',
   'date',
   'checkbox',
+  'select',
+  'status',
+  'actor_reference',
   'rating',
   'email',
   'phone',
   'url',
   'location',
-] as const satisfies readonly PickerAttributeType[];
+] as const satisfies readonly GuessedType[];
 
 /** An attribute type an inline row offers. */
 export type InlineType = (typeof INLINE_TYPES)[number];
-
-/** Words in an attribute's name, and the type each suggests; the first match wins. */
-const TYPE_WORDS: readonly (readonly [RegExp, InlineType])[] = [
-  [/\be-?mail/, 'email'],
-  [/\b(phone|mobile|cell|fax|whatsapp)/, 'phone'],
-  [/\b(website|url|link|linkedin|twitter|domain|site|web)\b/, 'url'],
-  [/\b(amount|price|cost|fee|revenue|budget|salary|value|total|balance|spend|mrr|arr)\b/, 'currency'],
-  [/\b(quantity|qty|count|number|age|hours|score|units|size|weight|seats)\b/, 'number'],
-  [/\b(date|deadline|due|birthday|birth|start|end|created|renewal|expires|expiry|closed)\b/, 'date'],
-  [/\b(address|city|country|location|region|state)\b/, 'location'],
-  [/\b(rating|stars)\b/, 'rating'],
-  [/^(is|has|can|active|paid|done|verified|approved)\b|\?$/, 'checkbox'],
-  [/\b(notes?|description|details|summary|comments?|bio|about|message|body)\b/, 'long_text'],
-];
-
-/** The type a name suggests ("Email" is email, "Due date" is date), plain text when none does. */
-export function typeFor(name: string): InlineType {
-  const lower = name.trim().toLowerCase();
-  return TYPE_WORDS.find(([pattern]) => pattern.test(lower))?.[1] ?? 'text';
-}
 
 /** One starter attribute suggestion. */
 export interface Starter {

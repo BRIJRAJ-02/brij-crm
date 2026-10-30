@@ -41,6 +41,11 @@ import {
 
 const { joinRequests, members, workspaceDomains, workspaces } = schema;
 
+/** The roles holding `members.invite`: who approves a request to join. */
+const INVITERS = Object.entries(ROLE_PERMISSIONS)
+  .filter(([, granted]) => (granted as readonly string[]).includes('members.invite'))
+  .map(([role]) => role);
+
 /** How long a declined request still reads as pending to the person who asked (AC-820). */
 const DECLINE_QUIET_DAYS = 30;
 
@@ -282,7 +287,8 @@ export async function requestToJoin(
   if (scope === undefined) throw refuse('NOT_FOUND', WORKSPACE_NOT_FOUND);
   const { result } = await runWrite(
     scope,
-    async ({ tx }) => {
+    async (context) => {
+      const { tx } = context;
       // One asker at a time per person and workspace, so two tabs make one request.
       await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`join:${id}:${person.id}`}, 0))`);
       const standing = await standingIn(tx, id, person, domain);
@@ -313,19 +319,34 @@ export async function requestToJoin(
         .select({ name: members.name, email: members.email })
         .from(members)
         .where(
-          and(
-            eq(members.workspaceId, id),
-            eq(members.status, 'active'),
-            inArray(
-              sql`${members.role}::text`,
-              Object.entries(ROLE_PERMISSIONS)
-                .filter(([, granted]) => (granted as readonly string[]).includes('members.invite'))
-                .map(([role]) => role),
-            ),
-          ),
+          and(eq(members.workspaceId, id), eq(members.status, 'active'), inArray(sql`${members.role}::text`, INVITERS)),
         )
         .orderBy(asc(members.name))
         .limit(20);
+      // In the app too (flow pass, 30 October 2026): every approver finds it in their inbox (the email's 20 cap
+      // isn't theirs), which opens Members › Joining. The row names the request by id; who asked is read from the
+      // request while it is open.
+      const approvers = await tx
+        .select({ id: members.id })
+        .from(members)
+        .where(
+          and(eq(members.workspaceId, id), eq(members.status, 'active'), inArray(sql`${members.role}::text`, INVITERS)),
+        );
+      if (approvers.length > 0) {
+        await tx
+          .insert(schema.notifications)
+          .values(
+            approvers.map((admin) => ({
+              workspaceId: id,
+              memberId: admin.id,
+              kind: 'join_request' as const,
+              actorType: 'system' as const,
+              joinRequestId: requestId,
+            })),
+          )
+          .onConflictDoNothing();
+        context.record({ notifications: approvers.map((admin) => admin.id) });
+      }
       return {
         joinable,
         notice: {

@@ -372,4 +372,18 @@ describe('the views store’s writes (milestone 2)', () => {
     h.store.markOpened('acme', B);
     expect(list.getSnapshot().lastOpenedViewId).toBe(B);
   });
+
+  it('keeps each view’s draft for the tab by id, forgets it on undefined, and drops all on clear', () => {
+    const h = harness();
+    const draft = { query: { sorts: [{ attributeId: 'name', direction: 'ascending' as const }] }, base: 3 };
+    h.store.keepDraft('acme', A, draft);
+    expect(h.store.keptDraft('acme', A)).toEqual(draft);
+    expect(h.store.keptDraft('acme', B)).toBeUndefined();
+    expect(h.store.keptDraft('other', A)).toBeUndefined();
+    h.store.keepDraft('acme', A, undefined);
+    expect(h.store.keptDraft('acme', A)).toBeUndefined();
+    h.store.keepDraft('acme', B, draft);
+    h.store.clear();
+    expect(h.store.keptDraft('acme', B)).toBeUndefined();
+  });
 });

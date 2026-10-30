@@ -29,6 +29,11 @@ export const strings = {
   filterComments: 'Comments',
   filterMeetings: 'Meetings',
   details: 'Details',
+  /** The ⋯ at the foot of Details, for schema managers (flow pass, 30 October 2026). */
+  detailsActions: 'Attribute actions',
+  addAttribute: 'Add attribute',
+  manageAttributes: 'Manage attributes',
+  attributeAdded: (title: string) => `${title} added.`,
   recentActivity: 'Recent activity',
   /** The stat strip under the header (the tabs keep the counts): when it last changed, its next meeting, its stage. */
   lastActivity: 'Last activity',

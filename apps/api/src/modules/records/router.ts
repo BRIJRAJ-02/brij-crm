@@ -1,5 +1,7 @@
 import {
   addRecord,
+  aggregateGroups,
+  aggregateMatches,
   bulkEditRecords,
   countMatches,
   countRecordsByObject,
@@ -61,6 +63,48 @@ export const recordsRouter = member.records.router({
   objectCounts: member.records.objectCounts.handler(({ context }) =>
     context.readGate.run(context.scope.workspaceId, async () => ({
       counts: await countRecordsByObject(context.scope),
+    })),
+  ),
+  // A view's calculations (the CRM flow pass): a whole footer, up to 50 asks, as one statement through the door,
+  // taking one place in the read gate.
+  aggregate: member.records.aggregate.handler(({ context, input, signal }) =>
+    context.readGate.run(context.scope.workspaceId, async () => ({
+      answers: [
+        ...(
+          await aggregateMatches(
+            context.scope,
+            {
+              objectId: input.objectId,
+              asks: input.asks,
+              ...(input.filter === undefined ? {} : { filter: input.filter }),
+              ...(input.now === undefined ? {} : { now: input.now }),
+              ...(input.timeZone === undefined ? {} : { timeZone: input.timeZone }),
+            },
+            signal,
+          )
+        ).answers,
+      ],
+    })),
+  ),
+  // A board's column totals: every column's amounts in one statement grouped by the column's value, one place in
+  // the read gate.
+  aggregateGroups: member.records.aggregateGroups.handler(({ context, input, signal }) =>
+    context.readGate.run(context.scope.workspaceId, async () => ({
+      groups: (
+        await aggregateGroups(
+          context.scope,
+          {
+            objectId: input.objectId,
+            groupBy: input.groupBy,
+            groupIds: input.groupIds,
+            asks: input.asks,
+            ...(input.filter === undefined ? {} : { filter: input.filter }),
+            ...(input.now === undefined ? {} : { now: input.now }),
+            ...(input.timeZone === undefined ? {} : { timeZone: input.timeZone }),
+          },
+          signal,
+        )
+      ).groups.map((group) => ({ id: group.id, answers: [...group.answers] })),
     })),
   ),
   // The record picker's search (spec 0014): cancelled with its request, in the same read gate.

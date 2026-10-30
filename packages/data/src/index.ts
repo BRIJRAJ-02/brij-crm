@@ -24,6 +24,7 @@ import type {
   SyncScope,
   SyncStarted,
   AttributeDefinition,
+  AttributeImpact,
   BookAsHostInput,
   BookingAssignment,
   ReassignedBooking,
@@ -226,6 +227,7 @@ import type { NavChangeOptions, NavSnapshot, NavSource, NavStore } from './navig
 import { draftParam, isSameQuery, readDraft, type DraftQuery } from './views/draft.ts';
 import {
   createViewsStore,
+  type KeptDraft,
   type NewView,
   type SavedViewSource,
   type SaveQueryInput,
@@ -257,6 +259,7 @@ import type { RecordAttributes, RecordSubscription } from './records/one.ts';
 import { createRecordSearch, type RecordSearch } from './records/search.ts';
 import { createBookingLink } from './bookings/link.ts';
 import type { BoardQuery, BoardStore } from './records/board.ts';
+import { lazyAggregateSource, type AggregateQuestion, type AggregateSource } from './records/aggregate-source.ts';
 import type { PurgeSummary, RestoreSummary, Trash, TrashView } from './trash/store.ts';
 import type {
   BulkEditRequest,
@@ -368,6 +371,7 @@ export type {
   ValidationRuleInput,
   ValidationRuleView,
   AttributeDefinition,
+  AttributeImpact,
   AttributeOption,
   AttributeRelationship,
   AttributeType,
@@ -568,7 +572,15 @@ export {
   WORKSPACE_PURGE_DAYS,
   type InviteLinkDays,
 } from '@crm/contracts/team-limits';
-export { freeHue, PICKER_TYPES, STARTER_STAGES, type PickerType } from '@crm/contracts/picker';
+export {
+  freeHue,
+  PICKER_TYPES,
+  STARTER_STAGES,
+  starterOptionsFor,
+  typeFor,
+  type GuessedType,
+  type PickerType,
+} from '@crm/contracts/picker';
 export {
   MAX_PENDING_OPTIONS,
   withPendingOptions,
@@ -624,13 +636,19 @@ export {
   BOARD_MAX_COLUMNS,
   boardColumnIds,
   boardDefaults,
+  CHECKBOX_COLUMNS,
+  columnFilter,
   groupableAttributes,
+  groupKindOf,
+  groupValueOf,
   isGroupable,
   liveOptionCount,
   type BoardSettings,
+  type GroupKind,
 } from '@crm/contracts/board';
-export { DRAFT_LINK_MAX, FILTER_EDIT_MS, type DraftQuery } from './views/draft.ts';
+export { draftParam, DRAFT_LINK_MAX, FILTER_EDIT_MS, type DraftQuery } from './views/draft.ts';
 export type {
+  KeptDraft,
   NewView,
   SavedViewSnapshot,
   SavedViewSource,
@@ -742,6 +760,17 @@ export {
 export type { NameState, RecordRef } from './records/names.ts';
 export type { WindowCount, WindowMode } from './records/windows.ts';
 export type { FilterGroup, SortRule, SortRules } from '@crm/contracts/values';
+export { aggregatesFor, type AggregateFn } from '@crm/contracts/views';
+export type { RecordAggregate } from '@crm/contracts';
+export {
+  aggregateKey,
+  NO_AGGREGATES,
+  type AggregateAnswers,
+  type AggregateAskSpec,
+  type AggregateQuestion,
+  type AggregateSource,
+  type AggregateState,
+} from './records/aggregate-source.ts';
 
 /**
  * A value this tab saved was replaced by someone else's later save (spec
@@ -830,7 +859,17 @@ export interface NewObject {
   readonly icon: ObjectSummary['icon'];
   readonly hue: ObjectSummary['hue'];
   /** First attributes beside Name, made in the same transaction as the object. */
-  readonly attributes?: readonly { readonly title: string; readonly type: PickerAttributeType }[];
+  readonly attributes?: readonly {
+    readonly title: string;
+    readonly type: PickerAttributeType;
+    /** A select's or status attribute's first options (a guessed Stage's stages, a Priority's levels). */
+    readonly options?: readonly {
+      readonly id: string;
+      readonly label: string;
+      readonly hue: ObjectSummary['hue'];
+      readonly outcome?: 'open' | 'won' | 'lost';
+    }[];
+  }[];
 }
 
 /** What settings may change on an object (spec 0012, AC-224). Its API name never changes. */
@@ -1083,6 +1122,8 @@ export function createDataLayer({
   let allAttributes = new Map<string, Promise<AttributeDefinition[]>>();
   // The records layer, loaded with the first screen that shows records.
   let records: Promise<RecordsLayer> | undefined;
+  /** The records layer once loaded, so a screen's calculations source comes back at once (and the same each time). */
+  let recordsLoaded: RecordsLayer | undefined;
   // Options a cell made, shown by their label until the attribute's own list holds them (spec 0012, AC-238).
   const pendingOptions = createPendingOptions();
   // Records' timelines (spec 0017), loaded with the first record page.
@@ -2422,6 +2463,14 @@ export function createDataLayer({
           ),
         signal,
       ),
+    aggregate: (input, signal) =>
+      call((options) => api.records.aggregate({ ...input, asks: [...input.asks] }, options), signal),
+    aggregateGroups: (input, signal) =>
+      call(
+        (options) =>
+          api.records.aggregateGroups({ ...input, groupIds: [...input.groupIds], asks: [...input.asks] }, options),
+        signal,
+      ),
     get: (input) =>
       call((options) =>
         api.records.get(
@@ -3070,46 +3119,51 @@ export function createDataLayer({
   };
 
   const recordsLayer = (): Promise<RecordsLayer> => {
-    records ??= import('./records/layer.ts').then(({ createRecordsLayer }) =>
-      createRecordsLayer({
-        api: recordsApi,
-        notify,
-        mintId,
-        refusals: { refusalFor, refusalSummary },
-        watch,
-        mutations,
-        beforeRead,
-        // The person's member id in the workspace (cached with their role), so their own saves raise no notice.
-        memberOf: (workspace) =>
-          cached(access, workspace, () => call((options) => api.access.mine({ workspace }, options))).then(
-            (mine) => mine.memberId,
-            () => undefined,
-          ),
-        onReplaced: (notice) => {
-          void tellReplaced(notice);
-        },
-        describe: describeObject,
-        definitionsOf,
-        // Relative dates ("today", "this week") and rules resolve in the member's Preferences time zone.
-        timeZone: zoneOf,
-        // A cell's new option (spec 0012, AC-238): its label shows while it is made, on every try. Landed, the
-        // object's attributes are read again (its own definitions echo is skipped) and the pages reload.
-        cellOptions: {
-          asked: (workspace, option) => {
-            pendingOptions.add(workspace, option);
+    records ??= import('./records/layer.ts')
+      .then(({ createRecordsLayer }) =>
+        createRecordsLayer({
+          api: recordsApi,
+          notify,
+          mintId,
+          refusals: { refusalFor, refusalSummary },
+          watch,
+          mutations,
+          beforeRead,
+          // The person's member id in the workspace (cached with their role), so their own saves raise no notice.
+          memberOf: (workspace) =>
+            cached(access, workspace, () => call((options) => api.access.mine({ workspace }, options))).then(
+              (mine) => mine.memberId,
+              () => undefined,
+            ),
+          onReplaced: (notice) => {
+            void tellReplaced(notice);
           },
-          refused: (workspace, attributeId, id) => {
-            pendingOptions.remove(workspace, attributeId, id);
+          describe: describeObject,
+          definitionsOf,
+          // Relative dates ("today", "this week") and rules resolve in the member's Preferences time zone.
+          timeZone: zoneOf,
+          // A cell's new option (spec 0012, AC-238): its label shows while it is made, on every try. Landed, the
+          // object's attributes are read again (its own definitions echo is skipped) and the pages reload.
+          cellOptions: {
+            asked: (workspace, option) => {
+              pendingOptions.add(workspace, option);
+            },
+            refused: (workspace, attributeId, id) => {
+              pendingOptions.remove(workspace, attributeId, id);
+            },
+            made: (workspace, objectId, made) => {
+              pendingOptions.resolve(workspace, made.attributeId, made.id, made.resolvedId);
+              usage.delete(workspace);
+              dropAllAttributes(workspace, objectId);
+              reloadIfChanged([refreshAttributes(workspace, objectId)]);
+            },
           },
-          made: (workspace, objectId, made) => {
-            pendingOptions.resolve(workspace, made.attributeId, made.id, made.resolvedId);
-            usage.delete(workspace);
-            dropAllAttributes(workspace, objectId);
-            reloadIfChanged([refreshAttributes(workspace, objectId)]);
-          },
-        },
-      }),
-    );
+        }),
+      )
+      .then((layer) => {
+        recordsLoaded = layer;
+        return layer;
+      });
     return records;
   };
 
@@ -3279,6 +3333,8 @@ export function createDataLayer({
           settings?: Partial<BookingPageSettings>;
           /** `round_robin` (spec 0029) needs `booking.admin` and its hosts. */
           kind?: 'personal' | 'round_robin';
+          /** `workspace`: the workspace's own link (`booking.admin`), booking everyone on the roster unless `hosts` says. */
+          scope?: 'workspace';
           hosts?: TeamHosts;
         },
       ): Promise<BookingPageView> =>
@@ -3398,10 +3454,11 @@ export function createDataLayer({
                         title,
                         scheduleId: page.ownerMemberId === me ? page.scheduleId : null,
                       },
-                      // A round robin page’s copy books from the same hosts.
+                      // A round robin page’s copy books from the same hosts; a workspace link's copy is the workspace's.
                       ...(page.kind === 'round_robin' && page.hosts !== undefined
                         ? { kind: 'round_robin' as const, hosts: page.hosts }
                         : {}),
+                      scope: page.scope,
                       mutationId: mintId(),
                     },
                     options,
@@ -3871,7 +3928,15 @@ export function createDataLayer({
               ...(input.apiSlug === undefined ? {} : { apiSlug: input.apiSlug }),
               icon: input.icon,
               hue: input.hue,
-              ...(input.attributes === undefined ? {} : { attributes: input.attributes.map((a) => ({ ...a })) }),
+              ...(input.attributes === undefined
+                ? {}
+                : {
+                    attributes: input.attributes.map((a) => ({
+                      title: a.title,
+                      type: a.type,
+                      ...(a.options === undefined ? {} : { options: a.options.map((option) => ({ ...option })) }),
+                    })),
+                  }),
               mutationId,
             },
             options,
@@ -4312,6 +4377,13 @@ export function createDataLayer({
             call((options) => api.attributes.list({ workspace, objectId, includeArchived: true }, options)),
           ),
         ),
+      /**
+       * What changing or archiving an attribute touches (flow pass, 30 October 2026): the views, forms and rules
+       * using it, and for a reader who sees every record the empty, per option and shared value counts. Read each
+       * time its settings or archive confirm open, never cached: the counts move with every edit.
+       */
+      impact: (workspace: string, attributeId: string): Promise<AttributeImpact> =>
+        beforeRead(workspace).then(() => call((options) => api.attributes.impact({ workspace, attributeId }, options))),
       /** A new attribute's id: mint it once per dialog, and send the same one again on a retry. */
       newId: () => mintId(),
       /**
@@ -4604,6 +4676,20 @@ export function createDataLayer({
         beforeRead(workspace)
           .then(() => call((options) => api.records.objectCounts({ workspace }, options)))
           .then((answer) => answer.counts),
+      /**
+       * A view's calculations across every record it matches (the CRM flow
+       * pass): a table's footer, every ask in one `records.aggregate`, or a
+       * board's column totals (`groupBy` and `groupIds`) in one
+       * `records.aggregateGroups`; counts of the filled or the empty, or for a
+       * number or currency the sum, average, least or most (one per
+       * currency). One store in the records layer, shared by every screen
+       * asking the same question in any ask order, read again after the
+       * changes that may move it (see the records layer). `useAggregates`
+       * reads it; answers sit under `aggregateKey`.
+       */
+      aggregates: (workspace: string, question: AggregateQuestion): AggregateSource =>
+        recordsLoaded?.aggregates(workspace, question) ??
+        lazyAggregateSource(recordsLayer().then((layer) => layer.aggregates(workspace, question))),
       /**
        * Makes a record at once (see the records layer) with `id` (from
        * `newId`); rejects with the refusals when the server says no. Sending the
@@ -5837,6 +5923,16 @@ export function createDataLayer({
       markOpened: (workspace: string, viewId: string) => {
         views.markOpened(workspace, viewId);
       },
+      /**
+       * Keeps a view's unsaved filter and sorts for this tab, by view id
+       * (undefined forgets them): leaving the view keeps its draft, and opening
+       * it again brings it back.
+       */
+      keepDraft: (workspace: string, viewId: string, draft: KeptDraft | undefined) => {
+        views.keepDraft(workspace, viewId, draft);
+      },
+      /** The draft this tab kept for a view, if any. */
+      keptDraft: (workspace: string, viewId: string): KeptDraft | undefined => views.keptDraft(workspace, viewId),
       /** A draft's URL text (base64url of its canonical JSON), or undefined past `DRAFT_LINK_MAX`. */
       draftParam: (query: DraftQuery): string | undefined => draftParam(query),
       /** A link's draft, checked (loads the schemas on first use), or undefined when it can't be read. */

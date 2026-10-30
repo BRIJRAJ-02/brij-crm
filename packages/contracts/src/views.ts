@@ -6,6 +6,7 @@
 import { oc } from '@orpc/contract';
 import * as z from 'zod';
 import { decodeDraftText, MAX_PINNED } from './view-model.ts';
+import { AGGREGATE_FNS } from './values/aggregates.ts';
 import { FilterGroup } from './values/filters.ts';
 import { SortRules } from './values/sorts.ts';
 import { WorkspaceScoped } from './workspaces.ts';
@@ -17,20 +18,28 @@ export const MAX_VIEW_COLUMNS = 250;
 /** The most bytes a view's config takes, serialised (`CONFIG_INVALID` past it). */
 export const MAX_VIEW_CONFIG_BYTES = 65_536;
 
-/** One column of a view: the attribute, its width in pixels (the grid clamps it), and whether it is hidden. */
+/**
+ * One column of a view: the attribute, its width in pixels (the grid clamps it), whether it is hidden, and the
+ * calculation its footer shows (`records.aggregate`; the engine checks it fits the type).
+ */
 export const ViewColumn = z.strictObject({
   attributeId: Uuid,
   width: z.number().int().min(1).max(2000).optional(),
   isHidden: z.boolean().optional(),
+  calc: z.enum(AGGREGATE_FNS).optional(),
 });
 /** One column of a view. */
 export type ViewColumn = z.infer<typeof ViewColumn>;
 
-/** A board's settings (#21 fills them): the grouping attribute, the fields on each card, and empty columns. */
+/**
+ * A board's settings (#21 fills them): the grouping attribute, the fields on each card, empty columns, and the
+ * currency field each column header totals (the CRM flow pass).
+ */
 export const BoardConfig = z.strictObject({
   groupByAttributeId: Uuid,
   cardFields: z.array(Uuid).max(6),
   showEmptyColumns: z.boolean(),
+  totalAttributeId: Uuid.optional(),
 });
 /** A board's settings. */
 export type BoardConfig = z.infer<typeof BoardConfig>;

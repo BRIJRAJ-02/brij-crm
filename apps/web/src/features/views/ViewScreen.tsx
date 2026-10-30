@@ -1,7 +1,7 @@
 // Brief
 // Purpose: slice one object the way you work and keep it (spec 0020).
 // Main task: filter and sort the table, lay out its columns, then save it, or keep it as a view of its own.
-// Leaves out: grouping inside the table, saving a search, charts, and sharing outside the workspace.
+// Leaves out: saving a search, charts, and sharing outside the workspace.
 import {
   BOARD_MAX_CARD_FIELDS,
   FILTER_EDIT_MS,
@@ -68,12 +68,15 @@ import { ViewChangedDialog } from './ViewChangedDialog.tsx';
 import { memberName, useViewMenu } from './ViewMenu.tsx';
 import { ViewToolbar } from './ViewToolbar.tsx';
 
-/** What the route opened with: the link's draft, read and checked, and what became of it. */
+/**
+ * What the route opened with: the link's draft, or the one this tab kept for the view, read and checked the same
+ * way, and what became of it.
+ */
 export interface OpenedDraft {
   readonly query: DraftQuery | undefined;
-  /** The link's draft couldn't be read (AC-467's toast). */
+  /** The draft couldn't be read (AC-467's toast). */
   readonly unreadable: boolean;
-  /** The link's draft named fields this person can't use (AC-467's Callout). */
+  /** The draft named fields this person can't use, or archived since (AC-467's Callout). */
   readonly dropped: boolean;
 }
 
@@ -143,6 +146,9 @@ const CLEARED_TOLD_MS = 10_000;
 
 /** How long an Undo toast stays (a discarded draft, a shared view's columns), in ms. */
 const UNDO_MS = 8_000;
+
+/** How long a deleted view's Undo stays, in ms (its config is kept this long, in the toast's action). */
+const DELETE_UNDO_MS = 10_000;
 
 /** How long switching a board to Table waits for the first rows before showing the table loading in place. */
 const TABLE_GRACE_MS = 300;
@@ -230,6 +236,8 @@ export function ViewScreen(props: ViewScreenProps) {
   // A locked view the person may not change (AC-476): their filters, sorts and columns stay in this tab, unsaved.
   const isLockedForMe = view !== undefined && view.visibility === 'workspace' && view.isLocked && !canManage;
   const draft = useViewDraft({
+    slug,
+    viewId: view?.id,
     saved,
     savedVersion: followed.version,
     param,
@@ -474,6 +482,16 @@ export function ViewScreen(props: ViewScreenProps) {
     ],
     [attributes],
   );
+  // A board's Show total of: none, or one of the object's live currency fields.
+  const totalChoices = useMemo(
+    () => [
+      { id: 'none', label: strings.noTotal },
+      ...attributes
+        .filter((attribute) => attribute.type === 'currency' && !attribute.isArchived)
+        .map((attribute) => ({ id: attribute.id, label: attribute.title })),
+    ],
+    [attributes],
+  );
   const viewId = view?.id;
   useEffect(
     () => () => {
@@ -537,24 +555,6 @@ export function ViewScreen(props: ViewScreenProps) {
       exporting.current = false;
     });
   };
-  // The command menu's Export this view and Create a view (`?do=`): run once, then dropped from the address. Read
-  // through refs, so a new callback each render never runs one twice.
-  const latest = useRef({ exportView, taken: props.onRequestTaken });
-  useEffect(() => {
-    latest.current = { exportView, taken: props.onRequestTaken };
-  });
-  const { request } = props;
-  // Create a view opens its dialog in render, as the create request does; the export runs after, once.
-  const [seenRequest, setSeenRequest] = useState<ViewRequest | undefined>(undefined);
-  if (request !== seenRequest) {
-    setSeenRequest(request);
-    if (request === 'new-view') setCreateMode('create');
-  }
-  useEffect(() => {
-    if (request === undefined) return;
-    if (request === 'export') latest.current.exportView();
-    latest.current.taken?.();
-  }, [request]);
   const [isDuplicating, setDuplicating] = useState(false);
   const duplicate = () => {
     // One copy per press: a second press while the first is on its way adds nothing.
@@ -574,7 +574,12 @@ export function ViewScreen(props: ViewScreenProps) {
       .then(
         (made) => {
           setDuplicating(false);
-          openView(made, strings.duplicated(made.name));
+          // The copy opens with Rename, its name selected: one step to name it, no "copy" kept by accident.
+          void navigate({
+            to: '/w/$slug/objects/$object/views/$viewId',
+            params: { slug, object: object.apiSlug, viewId: made.id },
+            search: { do: 'rename' },
+          });
         },
         (error: unknown) => {
           setDuplicating(false);
@@ -592,16 +597,6 @@ export function ViewScreen(props: ViewScreenProps) {
   const [filterOn, setFilterOn] = useState<{ readonly attributeId: string } | undefined>(undefined);
   const canSave = view !== undefined && !isLockedForMe;
   const filtered = running?.filter !== undefined || isSearching;
-  // The switcher (AC-473): the default, the other shared views, then a Private section; locked ones marked.
-  const choices: readonly ViewChoice[] = (list.views.length > 0 ? list.views : view === undefined ? [] : [view]).map(
-    (each) => ({
-      id: each.id,
-      name: each.name,
-      ...(each.visibility === 'workspace' && each.isLocked ? { isLocked: true } : {}),
-      ...(each.visibility === 'private' ? { section: strings.privateSection } : {}),
-    }),
-  );
-
   // Table or Board (spec 0021, AC-492): the view's kind, switched for everyone on it through `views.setLayout`
   // (on a locked view the person may not change, for this tab only). The first switch to Board fills the
   // defaults; with nothing to group by it saves the kind alone. Back to Table keeps the board settings.
@@ -623,8 +618,8 @@ export function ViewScreen(props: ViewScreenProps) {
   // Planned over the archived attributes too, so a grouping field archived since says so rather than the board
   // quietly grouping by the next field and saving that over it (late trap #14).
   const boardOutcome = useMemo(
-    () => (kind === 'board' ? planBoard(queried, storedBoard) : undefined),
-    [kind, queried, storedBoard],
+    () => (kind === 'board' ? planBoard(queried, storedBoard, members) : undefined),
+    [kind, queried, storedBoard, members],
   );
   // A board view showing defaults it never stored (saved with nothing to group by): the first time it can group,
   // the defaults are saved like any layout change, once per visit (AC-492). Never over a grouping the view does
@@ -703,12 +698,8 @@ export function ViewScreen(props: ViewScreenProps) {
     changeBoardLayout({ board: { ...boardPlan.settings, cardFields: ids } });
   };
   const switchView = (viewId: string) => {
-    // The view already open: nothing changes, and its draft stays.
+    // The view already open: nothing changes. Another view keeps this one's draft for when it opens again.
     if (viewId === view?.id) return;
-    // Another view drops this one's draft (AC-466); Back brings it back.
-    if (draft.isDraft && view !== undefined) {
-      toasts.toast({ tone: 'info', message: strings.draftLeft(view.name) });
-    }
     void navigate({
       to: '/w/$slug/objects/$object/views/$viewId',
       params: { slug, object: object.apiSlug, viewId },
@@ -732,8 +723,48 @@ export function ViewScreen(props: ViewScreenProps) {
       // This tab's own delete: the view going away is no news here.
       leaving.current = isDeleting;
     },
-    onDeleted: (name) => {
-      toasts.toast({ tone: 'success', message: strings.deleted(name) });
+    onDeleted: (gone) => {
+      // Undo makes it again from what it was, under the same id when the server takes it (a delete is hard, so the
+      // id is free again), else a new one; its place, lock and default don't come back. Known limit: `gone.config` is
+      // this person's copy, which leaves out the columns a field rule hides from them, so a view restored by someone
+      // who can't see every field comes back without those columns (the server keeps no deleted view to restore).
+      const restore = (id: string) =>
+        data.views.create(slug, {
+          id,
+          objectId: gone.objectId,
+          name: gone.name,
+          kind: gone.kind,
+          visibility: gone.visibility,
+          config: gone.config,
+        });
+      toasts.toast(
+        {
+          tone: 'success',
+          message: strings.deleted(gone.name),
+          action: {
+            label: strings.undo,
+            onAction: () => {
+              restore(gone.id)
+                .catch((error: unknown) => {
+                  if (isDataError(error) && error.code === 'ID_TAKEN') return restore(data.views.newId());
+                  throw error;
+                })
+                .then(
+                  (made) => {
+                    openView(made, strings.restored(made.name));
+                  },
+                  (error: unknown) => {
+                    toasts.toast({
+                      tone: 'danger',
+                      message: isDataError(error) ? error.message : strings.actionFailed,
+                    });
+                  },
+                );
+            },
+          },
+        },
+        { timeout: DELETE_UNDO_MS },
+      );
       void navigate({
         to: '/w/$slug/objects/$object',
         params: { slug, object: object.apiSlug },
@@ -741,6 +772,35 @@ export function ViewScreen(props: ViewScreenProps) {
       });
     },
   });
+  // The command menu's Export this view and Create a view (`?do=`): run once, then dropped from the address. Read
+  // through refs, so a new callback each render never runs one twice.
+  const latest = useRef({ exportView, taken: props.onRequestTaken, rename: (): void => undefined });
+  useEffect(() => {
+    latest.current = { exportView, taken: props.onRequestTaken, rename: viewMenu.rename };
+  });
+  const { request } = props;
+  // Create a view opens its dialog in render, as the create request does; the export runs after, once.
+  const [seenRequest, setSeenRequest] = useState<ViewRequest | undefined>(undefined);
+  if (request !== seenRequest) {
+    setSeenRequest(request);
+    if (request === 'new-view') setCreateMode('create');
+  }
+  useEffect(() => {
+    if (request === undefined) return;
+    if (request === 'export') latest.current.exportView();
+    if (request === 'rename') latest.current.rename();
+    latest.current.taken?.();
+  }, [request]);
+  // The switcher (AC-473): the default, the other shared views, then a Private section; locked ones marked.
+  const choices: readonly ViewChoice[] = (list.views.length > 0 ? list.views : view === undefined ? [] : [view]).map(
+    (each) => ({
+      id: each.id,
+      name: each.name,
+      ...(each.visibility === 'workspace' && each.isLocked ? { isLocked: true } : {}),
+      ...(each.visibility === 'private' ? { section: strings.privateSection } : {}),
+      ...(viewMenu.isMovable(each.id) ? { isMovable: true } : {}),
+    }),
+  );
   // A table's "Add attribute" from View settings: asked of the table, which owns the attribute dialog.
   const [addRequest, setAddRequest] = useState<object | undefined>(undefined);
   // The view bar's end before View settings: the lock line. View settings is the bar's one button, then Table or
@@ -892,6 +952,25 @@ export function ViewScreen(props: ViewScreenProps) {
           {...(boardPlan === undefined
             ? { label: strings.columns, fields }
             : { label: strings.cardFields, fields: cardFields, maxShown: BOARD_MAX_CARD_FIELDS })}
+          {...(boardPlan !== undefined && totalChoices.length > 1
+            ? {
+                // A board's column total (the CRM flow pass): the sum of one currency field in each column header.
+                header: (
+                  <Select
+                    label={strings.showTotalOf}
+                    size="sm"
+                    items={totalChoices}
+                    value={boardPlan.total?.id ?? 'none'}
+                    onChange={(id) => {
+                      const { totalAttributeId: _old, ...rest } = boardPlan.settings;
+                      changeBoardLayout({
+                        board: id === null || id === 'none' ? rest : { ...rest, totalAttributeId: id },
+                      });
+                    }}
+                  />
+                ),
+              }
+            : {})}
           {...(boardPlan === undefined && groupChoices.length > 1
             ? {
                 header: (
@@ -916,14 +995,15 @@ export function ViewScreen(props: ViewScreenProps) {
               changeCardFields(next);
               return;
             }
-            const widths = new Map(layout.columns.map((column) => [column.id, column.width]));
+            const kept = new Map(layout.columns.map((column) => [column.id, column]));
             changeLayout({
               columns: next.map((field) => {
-                const width = widths.get(field.attribute.id);
+                const { width, calc } = kept.get(field.attribute.id) ?? {};
                 return {
                   id: field.attribute.id,
                   isHidden: !field.isShown && field.isLocked !== true,
                   ...(width === undefined ? {} : { width }),
+                  ...(calc === undefined ? {} : { calc }),
                 };
               }),
               pinnedCount: layout.pinnedCount,

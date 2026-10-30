@@ -364,6 +364,84 @@ export const RunViewAction: Story = {
   },
 };
 
+/** Who can see it: one action whose submenu holds its three states, the current one checked; choosing runs `id/choice`. */
+export const WhoCanSeeIt: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => {
+    function Bar() {
+      const [ran, setRan] = useState('');
+      return (
+        <>
+          <ViewBar
+            views={VIEWS}
+            currentViewId="all"
+            onViewChange={fn()}
+            actions={[
+              {
+                id: 'who',
+                label: 'Who can see it',
+                icon: 'users',
+                choices: [
+                  { id: 'private', label: 'Only me', reason: 'Make another view the default first.' },
+                  { id: 'workspace', label: 'Everyone', isSelected: true },
+                  { id: 'locked', label: 'Everyone, only admins edit' },
+                ],
+              },
+            ]}
+            onAction={setRan}
+          />
+          <output>{ran}</output>
+        </>
+      );
+    }
+    return <Bar />;
+  },
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'All companies' }));
+    await userEvent.click(await within(document.body).findByRole('menuitem', { name: 'Who can see it' }));
+    const locked = await within(document.body).findByRole('menuitem', { name: 'Everyone, only admins edit' });
+    await expect(within(document.body).getByRole('menuitem', { name: /Only me/ })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    await userEvent.click(locked);
+    await waitFor(() => expect(canvas.getByRole('status')).toHaveTextContent('who/locked'));
+  },
+};
+
+/** In the switcher, Alt with an arrow moves a movable view up or down its group; focus stays on it. */
+export const MoveViewByKeyboard: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => {
+    function Bar() {
+      const [moved, setMoved] = useState('');
+      return (
+        <>
+          <ViewBar
+            views={VIEWS.map((view) => ({ ...view, isMovable: view.id !== 'all' }))}
+            currentViewId="all"
+            onViewChange={fn()}
+            onMoveView={(id, direction) => {
+              setMoved(`${id} ${direction}`);
+            }}
+          />
+          <output>{moved}</output>
+        </>
+      );
+    }
+    return <Bar />;
+  },
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'All companies' }));
+    const item = await within(document.body).findByRole('menuitemradio', { name: 'By stage' });
+    await expect(item).toHaveAttribute('aria-keyshortcuts', 'Alt+ArrowUp Alt+ArrowDown');
+    item.focus();
+    await userEvent.keyboard('{Alt>}{ArrowUp}{/Alt}');
+    await waitFor(() => expect(canvas.getByRole('status')).toHaveTextContent('board up'));
+    await expect(item).toHaveFocus();
+  },
+};
+
 /** The sort chip in the filter chips' shape: one sort, more, a long name, and read only. */
 export const SortChips: Story = {
   render: () => (

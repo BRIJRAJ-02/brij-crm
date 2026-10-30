@@ -79,6 +79,9 @@ export const strings = {
   columns: 'Columns',
   /** A table's View settings: the rows in runs by a status or single select (13 Oct reference batch 4). */
   groupBy: 'Group by',
+  /** A board's View settings: the currency field each column header totals (the CRM flow pass). */
+  showTotalOf: 'Show total of',
+  noTotal: 'Nothing',
   noGrouping: 'None',
   /** A board's View settings: what its cards show. */
   cardFields: 'Card fields',
@@ -86,41 +89,34 @@ export const strings = {
   rename: 'Rename',
   renameTitle: 'Rename view',
   duplicate: 'Duplicate',
-  duplicated: (name: string) => `Duplicated as ${name}.`,
   copyLink: 'Copy link',
   linkCopied: 'Link copied',
   copyFailed: 'Couldn’t copy the link. Copy it from the address bar.',
   linkTooLong: 'This filter is too long for a link. Save it as a view to share it.',
-  moveUp: 'Move up',
-  moveDown: 'Move down',
-  shareWithEveryone: 'Share with everyone',
   makePrivate: 'Make private',
+  /** Who can see it (30 October 2026): one choice in place of Share, Make private and Lock. */
+  whoCanSee: 'Who can see it',
+  onlyMe: 'Only me',
+  everyone: 'Everyone',
+  everyoneAdminsEdit: 'Everyone, only admins edit',
   shared: (name: string) => `${name} is shared with everyone.`,
   madePrivate: (name: string) => `${name} is only yours now.`,
   /** Make private asks first: everyone else loses the view (the owner's rule for ending actions, 21 October 2026). */
   makePrivateTitle: (name: string) => `Make ${name} private?`,
   makePrivateText: 'Only you will see this view, and everyone else loses it from their list.',
   makingPrivate: 'Making private',
-  lock: 'Lock',
-  unlock: 'Unlock',
   locked: (name: string) => `${name} is locked.`,
   unlocked: (name: string) => `${name} is unlocked.`,
   setDefault: 'Set as default',
   // Late trap #27: a member's last opened view still wins for them (AC-462), so the toast says who lands on it.
   isDefaultNow: (name: string) => `${name} is the default view.`,
   deleteView: 'Delete view',
-  deleting: 'Deleting',
-  deleteSharedTitle: (name: string) => `Delete ${name} for everyone?`,
-  deletePrivateTitle: (name: string) => `Delete ${name}?`,
-  /** What a delete does, and that it can't be undone, in one sentence (the owner's rule for every confirm, 21 Oct). */
-  deleteSharedText: 'Everyone who sees this view loses it for good, and its records stay.',
-  deletePrivateText: 'This view goes for good, and its records stay.',
   deleted: (name: string) => `Deleted ${name}.`,
+  /** Undo on a deleted view brought it back. */
+  restored: (name: string) => `${name} is back.`,
   /** Another member deleted the view this tab was on (AC-474). */
   deletedBy: (name: string, defaultName: string) =>
     `${name} isn’t available to you any more, so you’re on ${defaultName}.`,
-  /** Opening another view dropped this one's unsaved filters and sorts (AC-466). */
-  draftLeft: (name: string) => `Your changes on ${name} weren’t saved. Back brings them back.`,
   movedUp: (name: string) => `Moved ${name} up.`,
   movedDown: (name: string) => `Moved ${name} down.`,
   renaming: 'Renaming',

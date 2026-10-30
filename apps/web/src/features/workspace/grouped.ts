@@ -1,4 +1,5 @@
-// A table grouped by a status or single select (13 Oct reference batch 4): the
+// A table grouped by a status, a single select, a checkbox or a member field
+// (13 Oct reference batch 4, the CRM flow pass): the
 // view's rows in runs, one per option, read through the board's per group
 // windows (spec 0021). One `records.groups` aggregate gives every group its
 // count and first page; each open group's window then pages on as the grid
@@ -10,6 +11,7 @@ import {
   liveOptionCount,
   type AttributeDefinition,
   type BoardStore,
+  type MemberSummary,
   type RecordView,
   type RecordsView,
   type ViewQuery,
@@ -35,11 +37,12 @@ export interface GroupedRows {
 export function groupPlan(
   attributes: readonly AttributeDefinition[],
   groupBy: string | undefined,
+  members: readonly Pick<MemberSummary, 'id' | 'name'>[] = [],
 ): BoardPlan | undefined {
   if (groupBy === undefined) return undefined;
   const attribute = attributes.find((each) => each.id === groupBy);
   if (attribute === undefined || !isGroupable(attribute)) return undefined;
-  const plan = planBoard(attributes, { groupByAttributeId: groupBy, cardFields: [], showEmptyColumns: false });
+  const plan = planBoard(attributes, { groupByAttributeId: groupBy, cardFields: [], showEmptyColumns: false }, members);
   return plan.kind === 'board' && plan.groupBy.id === groupBy ? plan : undefined;
 }
 
@@ -50,13 +53,14 @@ export function groupPlan(
 export function groupingGap(
   attributes: readonly AttributeDefinition[],
   groupBy: string | undefined,
+  members: readonly Pick<MemberSummary, 'id' | 'name'>[] = [],
 ): string | undefined {
-  if (groupBy === undefined || groupPlan(attributes, groupBy) !== undefined) return undefined;
+  if (groupBy === undefined || groupPlan(attributes, groupBy, members) !== undefined) return undefined;
   const attribute = attributes.find((each) => each.id === groupBy);
   if (attribute === undefined) return strings.groupingGone;
   if (attribute.isArchived) return strings.groupingArchived(attribute.title);
   if (!isGroupable(attribute)) return strings.groupingCant(attribute.title);
-  const count = liveOptionCount(attribute.options ?? []);
+  const count = attribute.type === 'actor_reference' ? members.length : liveOptionCount(attribute.options ?? []);
   return count > BOARD_MAX_COLUMNS ? strings.groupingTooMany(attribute.title, count, BOARD_MAX_COLUMNS) : undefined;
 }
 
@@ -100,6 +104,7 @@ function useGroupStore(
         ? undefined
         : {
             groupBy: plan.groupBy.id,
+            groupKind: plan.groupKind,
             columnIds: plan.columnIds,
             archivedIds: plan.archivedIds,
             ...(query.filter === undefined ? {} : { filter: query.filter }),

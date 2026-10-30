@@ -33,6 +33,8 @@ export const OPERATOR_PHRASES: Readonly<Record<FilterCondition['operator'], stri
   after: 'is after',
   within: 'is within',
   within_last: 'is within the last',
+  within_next: 'is within the next',
+  more_than_ago: 'is more than',
   at_least: 'is at least',
   at_most: 'is at most',
   is_any_of: 'is any of',
@@ -113,7 +115,9 @@ function leafWords(leaf: FilterCondition, attributes: ReadonlyMap<string, NamedA
     const words = leaf.values.map((each) => operandWords(attribute, each));
     return `${phrase} ${listWords(words, leaf.operator === 'contains_all_of' ? 'and' : 'or')}`;
   }
-  if ('range' in leaf) return `${phrase} ${rangeWords(leaf.range)}`;
+  if ('range' in leaf) {
+    return `${phrase} ${rangeWords(leaf.range)}${leaf.operator === 'more_than_ago' ? ' ago' : ''}`;
+  }
   return phrase;
 }
 

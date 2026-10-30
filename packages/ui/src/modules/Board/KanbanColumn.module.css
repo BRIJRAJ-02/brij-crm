@@ -55,6 +55,16 @@
     letter-spacing: var(--tracking-label);
   }
 
+  /* The total sits at the heading's end, after the count, in the same quiet label type. */
+  .total {
+    margin-inline-start: auto;
+    color: var(--text-secondary);
+    font: var(--text-label);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: var(--tracking-label);
+    white-space: nowrap;
+  }
+
   .refusal {
     margin: 0;
     padding-inline: var(--space-4);

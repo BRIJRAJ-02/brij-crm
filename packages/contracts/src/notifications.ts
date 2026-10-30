@@ -26,7 +26,7 @@ export const NOTIFICATION_MARK_MAX = 100;
 export const MAX_NOTIFICATION_CURSOR = 256;
 
 /** Why a member was notified (decision 8). */
-export const NotificationKind = z.enum(['mention', 'reply', 'task_assigned']);
+export const NotificationKind = z.enum(['mention', 'reply', 'task_assigned', 'join_request']);
 /** Why a member was notified. */
 export type NotificationKind = z.infer<typeof NotificationKind>;
 
@@ -54,6 +54,8 @@ export const NotificationView = z.object({
   taskId: Uuid.optional(),
   /** A mention in a note (with its record in `record`): the note window opens on it. */
   noteId: Uuid.optional(),
+  /** Someone asks to join (flow pass, 30 Oct 2026): shown to holders of `members.invite` while it is open. */
+  joinRequestId: Uuid.optional(),
   excerpt: z.string(),
 });
 /** One notification as its recipient sees it. */

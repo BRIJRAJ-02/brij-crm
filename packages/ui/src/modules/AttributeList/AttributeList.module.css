@@ -128,6 +128,17 @@
     margin-inline-start: calc(-1 * var(--space-6));
   }
 
+  /* Show N empty values at the start, the list's own actions at the end. */
+  .foot {
+    display: flex;
+    align-items: center;
+  }
+
+  .actions {
+    display: flex;
+    margin-inline-start: auto;
+  }
+
   .toggle {
     display: flex;
     align-items: center;

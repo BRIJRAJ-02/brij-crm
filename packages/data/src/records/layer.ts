@@ -8,8 +8,13 @@
 // and an undo stack. createDataLayer loads this module when a screen first
 // asks for records, so it stays out of the first load.
 import type {
+  AggregateGroupsInput,
+  AggregateRecordsInput,
   AttributeDefinition,
   BatchResults,
+  RecordAggregate,
+  RecordAggregateGroups,
+  RecordAggregates,
   CreateRecordInput,
   DeleteManyInput,
   DeleteManyResults,
@@ -29,7 +34,7 @@ import type {
   UpdateManyResults,
   WrittenRecord,
 } from '@crm/contracts';
-import { BOARD_BLOCK } from '@crm/contracts/board';
+import { BOARD_BLOCK, groupKeyOf, groupValueOf } from '@crm/contracts/board';
 import { applyOp, type BulkOp } from '@crm/contracts/bulk-ops';
 import { canJump, type JumpAttribute } from '@crm/contracts/jump';
 import type { FilterGroup, Hue, RecordRefDisplay, SortRules } from '@crm/contracts/values';
@@ -48,6 +53,8 @@ import {
   type UndoCell,
   type UndoKind,
 } from './history.ts';
+import { aggregateKey, type AggregateQuestion, type AggregateSource } from './aggregate-source.ts';
+import { createAggregateStore } from './aggregates.ts';
 import { createReferenceNames, type NameState, type RecordRef } from './names.ts';
 import { createRecordSubscriptions, type RecordAttributes, type RecordSubscription } from './one.ts';
 import { createPlainStore, sameData } from './plain-store.ts';
@@ -205,6 +212,10 @@ export interface RecordsApi {
   ) => Promise<RecordCount>;
   /** A board's first cards and counts, up to 12 columns a call (spec 0021). */
   readonly groups: (input: GroupsRequest, signal: AbortSignal) => Promise<GroupsAnswer>;
+  /** A view's calculations, up to 50 asks in one read (the CRM flow pass). */
+  readonly aggregate: (input: AggregateRecordsInput, signal: AbortSignal) => Promise<RecordAggregates>;
+  /** A board's column totals in one read (the CRM flow pass). */
+  readonly aggregateGroups: (input: AggregateGroupsInput, signal: AbortSignal) => Promise<RecordAggregateGroups>;
   /** Records by id; with `attributeIds`, only those and the primary. */
   readonly get: (input: {
     readonly workspace: string;
@@ -1151,6 +1162,79 @@ export function createRecordsLayer({
 
   /** Sends a write, sending it again when it never reached the server (its ids make a repeat harmless). */
   const delivered = <T>(run: () => Promise<T>): Promise<T> => sendDelivered(run, wait);
+
+  /**
+   * A question's calculations (the CRM flow pass): a table's whole footer in one `records.aggregate`, a board's
+   * column totals in one `records.aggregateGroups`, each through `whenFree` (a 429 from the read gate waits and
+   * tries again), with the clock every read sends.
+   */
+  const askAggregates = async (
+    workspace: string,
+    question: AggregateQuestion,
+    signal: AbortSignal,
+  ): Promise<ReadonlyMap<string, RecordAggregate>> => {
+    await beforeRead(workspace);
+    const base = {
+      workspace,
+      objectId: question.objectId,
+      ...(question.filter === undefined ? {} : { filter: question.filter }),
+      now: new Date(now()).toISOString(),
+      timeZone: timeZone(workspace),
+    };
+    if (question.groupBy !== undefined) {
+      const amounts = question.asks.flatMap((ask) =>
+        ask.fn === 'count' || ask.fn === 'count_empty' ? [] : [{ attributeId: ask.attributeId, fn: ask.fn }],
+      );
+      const answer = await whenFree(
+        () =>
+          api.aggregateGroups(
+            { ...base, groupBy: question.groupBy ?? '', groupIds: [...(question.groupIds ?? [])], asks: amounts },
+            signal,
+          ),
+        signal,
+      );
+      return new Map(
+        answer.groups.flatMap((group) =>
+          amounts.flatMap((ask, index) => {
+            const each = group.answers[index];
+            return each === undefined ? [] : [[aggregateKey(ask.attributeId, ask.fn, group.id), each] as const];
+          }),
+        ),
+      );
+    }
+    const answer = await whenFree(() => api.aggregate({ ...base, asks: [...question.asks] }, signal), signal);
+    return new Map(
+      question.asks.flatMap((ask, index) => {
+        const each = answer.answers[index];
+        return each === undefined ? [] : [[aggregateKey(ask.attributeId, ask.fn), each] as const];
+      }),
+    );
+  };
+  const aggregates = createAggregateStore({
+    ask: askAggregates,
+    later,
+    now,
+    canonical: canonicalJson,
+    filterAttributes,
+  });
+
+  /**
+   * This tab's own write: the calculations it may move are marked stale as it shows and again once it lands or
+   * rolls back (its echo never comes back live), so the footer and board totals catch up after the wait.
+   */
+  const ownWrite = <T>(
+    workspace: string,
+    objectId: string | undefined,
+    attributeIds: readonly string[] | undefined,
+    lifecycle: boolean,
+    work: () => Promise<T>,
+  ): Promise<T> => {
+    const touch = () => {
+      aggregates.touched(workspace, objectId, attributeIds, lifecycle);
+    };
+    touch();
+    return work().finally(touch);
+  };
 
   /**
    * Records gone from a window: out of its rows (the later ones reload), and
@@ -2268,9 +2352,20 @@ export function createRecordsLayer({
    * range clear. Over 500 records, or more than one request can carry, it is
    * refused before anything shows. Each record's cells show at once and land
    * or roll back on their own; one toast with Retry covers the refused ones;
-   * what landed goes on the undo stack.
+   * what landed goes on the undo stack. The calculations over the cells' attributes read again after it.
    */
-  async function edit(
+  function edit(
+    workspace: string,
+    objectId: string | undefined,
+    changes: readonly SentChange[],
+    kind: UndoKind,
+  ): Promise<EditOutcome> {
+    const object = objectId ?? store.get(changes[0]?.rowId ?? '')?.objectId;
+    const attributeIds = [...new Set(changes.map((change) => change.columnId))];
+    return ownWrite(workspace, object, attributeIds, false, () => editCells(workspace, objectId, changes, kind));
+  }
+
+  async function editCells(
     workspace: string,
     objectId: string | undefined,
     changes: readonly SentChange[],
@@ -3266,6 +3361,14 @@ export function createRecordsLayer({
         const held = ids.filter((id) => viewsOf(workspace).some((entry) => entry.shows(id)));
         // A record a screen subscribes to (a record page) reads what it shows that changed.
         subscriptions.changed(workspace, change.ids, change.attributes, change.lifecycle);
+        // Calculations over the object (footers, board totals) naming a changed attribute, or any after a record was
+        // made, deleted or restored, read again after the wait.
+        aggregates.touched(
+          workspace,
+          objectId,
+          change.attributes === 'all' ? undefined : [...change.attributes],
+          change.lifecycle.size > 0,
+        );
         // Visible attributes (spec 0006, AC-55): only what the event names and the windows read, plus what every
         // write moves when a window shows it. An event naming only attributes no window reads fetches nothing.
         const read = new Set(entries.flatMap((entry) => entry.attributes()));
@@ -3311,7 +3414,7 @@ export function createRecordsLayer({
   // Boards (spec 0021), one per question, shared by every screen asking it, gone 30 seconds after the last.
   const boards = new Map<string, { readonly board: BoardStore<RecordsView>; unused?: ReturnType<typeof setTimeout> }>();
   const boardKeyOf = (workspace: string, objectId: string, query: BoardQuery) =>
-    `${keyOf(workspace, objectId, { ...(query.filter === undefined ? {} : { filter: query.filter }), ...(query.sorts === undefined ? {} : { sorts: query.sorts }) })}\u0000${canonicalJson({ groupBy: query.groupBy, columns: query.columnIds, archived: [...(query.archivedIds ?? [])].sort() })}`;
+    `${keyOf(workspace, objectId, { ...(query.filter === undefined ? {} : { filter: query.filter }), ...(query.sorts === undefined ? {} : { sorts: query.sorts }) })}\u0000${canonicalJson({ groupBy: query.groupBy, kind: query.groupKind ?? 'option', columns: query.columnIds, archived: [...(query.archivedIds ?? [])].sort() })}`;
 
   const records = {
     /**
@@ -3334,6 +3437,7 @@ export function createRecordsLayer({
       if (held !== undefined) return held.board;
       // Each column's window by option id ('' for no value), for placing moved cards.
       const columns = new Map<string, ViewEntry>();
+      const kind = query.groupKind ?? 'option';
       const columnKeyOf = (id: string | null) => id ?? '';
       /**
        * Where a card shows (spec 0021): in the column of its grouping value as
@@ -3349,7 +3453,7 @@ export function createRecordsLayer({
         ...made,
         created: (recordId) => {
           const value = store.get(recordId)?.values[query.groupBy];
-          if ((typeof value === 'string' ? value : '') === columnKeyOf(columnId)) made.created(recordId);
+          if (columnKeyOf(groupKeyOf(kind, value)) === columnKeyOf(columnId)) made.created(recordId);
         },
       });
       const place = (id: string) => {
@@ -3357,8 +3461,7 @@ export function createRecordsLayer({
         if (!entries.some((entry) => entry.shows(id) || entry.hidesMoved(id))) return;
         const body = store.get(id);
         if (body === undefined || !Object.hasOwn(body.values, query.groupBy)) return;
-        const value = body.values[query.groupBy];
-        const here = typeof value === 'string' ? value : '';
+        const here = columnKeyOf(groupKeyOf(kind, body.values[query.groupBy]));
         for (const [key, entry] of columns) entry.placeMoved(id, key === here);
       };
       const stopPlacing = store.subscribe((ids) => {
@@ -3412,7 +3515,7 @@ export function createRecordsLayer({
           const outcome = await edit(
             workspace,
             undefined,
-            [{ rowId: recordId, columnId: query.groupBy, value: toColumnId }],
+            [{ rowId: recordId, columnId: query.groupBy, value: groupValueOf(kind, toColumnId) }],
             'cell',
           );
           if (outcome.kind !== 'done' || outcome.landed > 0) return outcome.kind === 'done';
@@ -3788,6 +3891,7 @@ export function createRecordsLayer({
     reload: (workspace: string, objectId?: string): void => {
       for (const entry of viewsOf(workspace)) if (objectId === undefined || entry.objectId === objectId) entry.reread();
       subscriptions.reload(workspace, objectId);
+      aggregates.touched(workspace, objectId, undefined, true);
     },
 
     /**
@@ -3823,12 +3927,54 @@ export function createRecordsLayer({
       undoing.clear();
       optionLooks.clear();
       madeOptions.clear();
+      aggregates.clear();
     },
 
     /** How many record bodies the store holds now (for tests and the gate). */
     size: () => store.size(),
   };
-  return records;
+  // This tab's own writes that don't go through `edit` mark the calculations they may move stale too (cell edits,
+  // option cells and board moves do so in `edit`).
+  const objectOfRecord = (recordId: string) => store.get(recordId)?.objectId;
+  return {
+    ...records,
+    create: (...args: Parameters<typeof records.create>) =>
+      ownWrite(args[0], args[1], undefined, true, () => records.create(...args)),
+    changeLink: (workspace: string, change: LinkChange) =>
+      ownWrite(workspace, objectOfRecord(change.recordId), [change.attributeId], false, () =>
+        records.changeLink(workspace, change),
+      ),
+    editLinks: (workspace: string, cell: LinkCell) =>
+      ownWrite(workspace, objectOfRecord(cell.recordId), [cell.attributeId], false, () =>
+        records.editLinks(workspace, cell),
+      ),
+    deleteMany: (workspace: string, objectId: string, recordIds: readonly string[]) =>
+      ownWrite(workspace, objectId, undefined, true, () => records.deleteMany(workspace, objectId, recordIds)),
+    restoreDeleted: (workspace: string, objectId: string, batchId: string, count: number) =>
+      ownWrite(workspace, objectId, undefined, true, () => records.restoreDeleted(workspace, objectId, batchId, count)),
+    bulkEdit: (workspace: string, objectId: string, recordIds: readonly string[], request: BulkEditRequest) =>
+      ownWrite(workspace, objectId, [request.attributeId], false, () =>
+        records.bulkEdit(workspace, objectId, recordIds, request),
+      ),
+    undo: {
+      ...records.undo,
+      // An undo may put back any object's cells, a delete or a create: every calculation of the workspace.
+      run: (workspace: string, only?: string) =>
+        ownWrite(workspace, undefined, undefined, true, () => records.undo.run(workspace, only)),
+    },
+    /**
+     * A view's calculations (the CRM flow pass): a table's footer (every ask
+     * in one read) or a board's column totals (one read for every column),
+     * shared by every screen asking the same question in any ask order. The
+     * answers stay on screen while a newer read is out, and read again 1.5 s
+     * after a change that may move them (at most 5 s after the first): a live
+     * records change for the object naming an ask's or the filter's
+     * attribute, a record made, deleted or restored, a reload, or this tab's
+     * own write. `useAggregates` reads it.
+     */
+    aggregates: (workspace: string, question: AggregateQuestion): AggregateSource =>
+      aggregates.source(workspace, question),
+  };
 }
 
 /** The records layer, as createDataLayer holds it once loaded. */

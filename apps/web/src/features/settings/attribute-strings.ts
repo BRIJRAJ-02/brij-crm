@@ -17,6 +17,8 @@ export const strings = {
     return `Required when ${named} ${titles.length === 1 ? 'matches' : 'match'} (set through the API).`;
   },
   newAttribute: 'New attribute',
+  /** Beside a create button off at its plan limit (New object, New attribute, the grid's "+"). */
+  atLimit: (limit: number) => `${String(limit)} of ${String(limit)} used. Archive one first.`,
   /** The attribute meter (AC-227). */
   attributes: 'Attributes',
   attributeLimit: 'Attributes',
@@ -60,6 +62,7 @@ export const strings = {
   moved: (title: string, place: number, of: number) => `${title} moved to ${String(place)} of ${String(of)}.`,
   moveFailed: (title: string, why: string) => `Couldn’t move ${title}. ${why}`,
   restoreFailed: (title: string, why: string) => `Couldn’t restore ${title}. ${why}`,
+  archiveFailed: (title: string, why: string) => `Couldn’t archive ${title}. ${why}`,
   restored: (titles: string) => `${titles} restored.`,
   archivedToast: (titles: string) => `${titles} archived.`,
   created: (title: string) => `${title} added.`,
@@ -70,13 +73,31 @@ export const strings = {
   /** Why a dialog opened read only. */
   systemReason: (title: string) => `${title} is set by the system.`,
   memberReason: 'Only workspace owners and admins can change attributes.',
+  /** A relationship's Type cell: its far object and how many each record links to. */
+  relationshipType: (plural: string, holdsOne: boolean) => `→ ${plural} · ${holdsOne ? 'one' : 'many'}`,
+  /** The search above a long list of attributes, and what it says when nothing matches. */
+  searchAttributes: 'Search attributes',
+  noMatches: (query: string) => `No attribute matches “${query}”`,
   /** The type picker's entry that hands over to the relationship dialog (spec 0014). */
   relationship: 'Relationship',
+  /** Last in the relationship step's related object list: an object that doesn't exist yet. */
+  newObjectItem: 'New object…',
+  objectCreated: (plural: string) => `${plural} created.`,
   loading: 'Loading attributes',
   loadFailed: 'Couldn’t load the attributes',
   somethingWrong: 'Something went wrong. Try again in a moment.',
   /** The archive confirm (spec 0012, screens). */
   confirmTitle: (title: string) => `Archive ${title}?`,
+  /** The archive confirm's one line of what uses it (flow pass, 30 October 2026). */
+  usedBy: (uses: string) => `Used by: ${uses}`,
+  groupedBy: (view: string) => `${view} (group by)`,
+  /** Under Required and Unique once ticked: what Save would meet, linked to the records. */
+  emptyRecords: (count: number) => (count === 1 ? '1 record is empty' : `${String(count)} records are empty`),
+  optionArchived: (label: string) => `${label} archived.`,
+  /** An archived option's records moved where its menu said. */
+  recordsMoved: (label: string) => `Moving its records to ${label}.`,
+  moveRecordsFailed: (label: string, why: string) => `Couldn’t move its records to ${label}. ${why}`,
+  sharedValues: (count: number) => (count === 1 ? '1 value is shared' : `${String(count)} values are shared`),
   confirmText: 'It leaves every table and form. Its values are kept and come back if you restore it.',
   confirmBoth:
     'It leaves every table and form. Its values are kept and come back if you restore it. It is one end of a relationship: the other end is archived with it, and both come back together.',

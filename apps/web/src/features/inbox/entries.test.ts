@@ -1,6 +1,6 @@
 import type { NotificationView } from '@crm/data';
 import { describe, expect, it } from 'vitest';
-import { targetOf } from './entries.ts';
+import { targetOf, toNotificationItem } from './entries.ts';
 import { inboxSearch, notificationKind } from './search.ts';
 
 const ID = '11111111-1111-4111-8111-111111111111';
@@ -57,5 +57,21 @@ describe('targetOf', () => {
       taskId: ID,
     });
     expect(targetOf('acme', mention, new Map())).toBeUndefined();
+  });
+});
+
+describe('a join request (flow pass, 30 Oct 2026)', () => {
+  const asked: NotificationView = {
+    id: ID,
+    kind: 'join_request',
+    actor: { type: 'system', id: null },
+    createdAt: '2026-10-30T09:00:00.000Z',
+    joinRequestId: THREAD,
+    excerpt: 'Cy Young',
+  };
+
+  it('is about the person asking, and opens Members where Approve and Decline are', () => {
+    expect(toNotificationItem(asked, [])).toMatchObject({ kind: 'join_request', actor: { name: 'Cy Young' } });
+    expect(targetOf('acme', asked, slugs)).toEqual({ kind: 'href', href: '/w/acme/settings/members' });
   });
 });

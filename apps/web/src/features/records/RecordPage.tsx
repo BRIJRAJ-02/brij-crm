@@ -64,7 +64,7 @@ import { TasksTab } from '../tasks/TasksTab.tsx';
 import { FavouriteButton } from '../workspace/FavouriteButton.tsx';
 import { objectHref } from '../workspace/objects.ts';
 import { strings as workspaceStrings } from '../workspace/strings.ts';
-import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
+import { useCan, WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { ActivityTab } from './ActivityTab.tsx';
 import { recordHref, recordName } from './details.ts';
 import { isRecordTab, type RecordTab } from './params.ts';
@@ -375,6 +375,8 @@ function RecordScreen({
   readonly trashed?: TrashedState;
 }) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
+  // Details' ⋯ (Add attribute, Manage attributes): owners and admins only (spec 0009, AC-136).
+  const canChangeSchema = useCan('schema.manage');
   const navigate = useNavigate();
   const live = useLiveStatus(data.live);
   const unnamed = strings.unnamed(object.singularName);
@@ -891,6 +893,7 @@ function RecordScreen({
                 <>
                   <RecordDetails
                     attributes={attributes}
+                    {...(canChangeSchema && !isTrashed && !isLost ? { schemaObject: object } : {})}
                     members={members}
                     record={shown}
                     cellErrors={state.cellErrors}

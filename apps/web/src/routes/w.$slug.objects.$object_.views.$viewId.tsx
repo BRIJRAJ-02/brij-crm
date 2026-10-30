@@ -38,7 +38,7 @@ interface ViewSearch {
   readonly new?: true;
   /** The name the new record dialog starts with (the command menu's Create <object> named …). */
   readonly name?: string;
-  /** Export this view, or open Create view, once it shows (the command menu's actions). */
+  /** Export this view, open Create view (the command menu's actions), or Rename (a duplicate just made), once it shows. */
   readonly do?: ViewRequest;
 }
 
@@ -47,7 +47,7 @@ export const Route = createFileRoute('/w/$slug/objects/$object_/views/$viewId')(
     ...(typeof search.draft === 'string' && search.draft !== '' ? { draft: search.draft } : {}),
     ...(search.new === true || search.new === 1 || search.new === '1' || search.new === 'true' ? { new: true } : {}),
     ...(typeof search.name === 'string' && search.name.trim() !== '' ? { name: search.name.slice(0, 200) } : {}),
-    ...(search.do === 'export' || search.do === 'new-view' ? { do: search.do } : {}),
+    ...(search.do === 'export' || search.do === 'new-view' || search.do === 'rename' ? { do: search.do } : {}),
   }),
   loaderDeps: () => ({}),
   // Entering the view (again) reads it afresh: the records a cached match held are let go 30 seconds after
@@ -83,7 +83,20 @@ export const Route = createFileRoute('/w/$slug/objects/$object_/views/$viewId')(
     // A link's draft, checked; one that doesn't read is dropped with a toast (AC-467).
     const search = location.search as ViewSearch;
     const linked = search.draft === undefined ? undefined : await context.data.views.readDraft(search.draft);
-    const query = linked ?? savedQuery(body.view);
+    // No draft in the address: the one this tab kept for the view, which the screen brings back, read through the
+    // same check as a link's (one too long for a link is the tab's own and runs as kept). One that no longer reads
+    // is dropped with the same toast; one naming a field archived since drops that condition with the dropped notice,
+    // as a link's does, never reaching the server as FILTER_INVALID.
+    const keptRaw = search.draft === undefined ? context.data.views.keptDraft(params.slug, params.viewId) : undefined;
+    const keptText = keptRaw === undefined ? undefined : context.data.views.draftParam(keptRaw.query);
+    const kept =
+      keptRaw === undefined
+        ? undefined
+        : keptText === undefined
+          ? keptRaw.query
+          : await context.data.views.readDraft(keptText);
+    const opened = linked ?? kept;
+    const query = opened ?? savedQuery(body.view);
     // A through condition's far attributes are read first, so one the reader can't use drops out before it runs;
     // past the first hop, or when that read fails, it is kept unchecked for the server (late trap #45): the first
     // rows are the view's, never every record.
@@ -144,9 +157,10 @@ export const Route = createFileRoute('/w/$slug/objects/$object_/views/$viewId')(
         records,
         recordsQuery,
         opened: {
-          query: linked,
-          unreadable: search.draft !== undefined && linked === undefined,
-          dropped: linked !== undefined && effective.status === 'ready' && effective.dropped,
+          query: opened,
+          unreadable:
+            (search.draft !== undefined && linked === undefined) || (keptRaw !== undefined && kept === undefined),
+          dropped: opened !== undefined && effective.status === 'ready' && effective.dropped,
         },
       },
     };

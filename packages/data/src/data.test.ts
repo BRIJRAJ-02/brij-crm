@@ -344,6 +344,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
         mutationIds.push(input.mutationId);
         return behaviour.attributeWrite();
       }),
+      impact: os.attributes.impact.handler(() => notServed()),
       restore: os.attributes.restore.handler(({ input }) => {
         mutationIds.push(input.mutationId);
         return behaviour.attributeWrite();
@@ -400,6 +401,8 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       count: os.records.count.handler(() => ({ count: behaviour.count(), atLeast: false })),
       objectCounts: os.records.objectCounts.handler(notServed),
       groups: os.records.groups.handler(notServed),
+      aggregate: os.records.aggregate.handler(notServed),
+      aggregateGroups: os.records.aggregateGroups.handler(notServed),
       get: os.records.get.handler(({ input }) => behaviour.get(input.ids)),
       create: os.records.create.handler(notServed),
       setValues: os.records.setValues.handler(async ({ input }) => {
@@ -3083,6 +3086,7 @@ describe('a team page’s routing rules (spec 0043, AC-1608)', () => {
     title: 'Demo',
     description: '',
     slug: 'demo',
+    scope: 'member',
     durations: [30],
     location: { type: 'video' },
     bufferBefore: 0,

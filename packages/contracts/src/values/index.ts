@@ -2,6 +2,15 @@
 // a pure Zod entry with no oRPC and no I/O, so packages/ui can parse what its
 // editors emit (spec 0003).
 export {
+  AGGREGATE_CURRENCIES,
+  AGGREGATE_FNS,
+  aggregatesFor,
+  MAX_AGGREGATE_ASKS,
+  MAX_GROUP_AGGREGATE_ASKS,
+  NUMERIC_AGGREGATES,
+  type AggregateFn,
+} from './aggregates.ts';
+export {
   ActorReferenceValue,
   ATTRIBUTE_VALUE_INVALID,
   AttributeType,
@@ -100,8 +109,12 @@ export {
   PICKER_TYPES,
   pickerTypeOf,
   STARTER_STAGES,
+  starterOptionsFor,
+  typeFor,
+  type GuessedType,
   type PickerType,
   type StageOutcome,
+  type StarterOption,
   type StarterStage,
 } from './picker.ts';
 export {

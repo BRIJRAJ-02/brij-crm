@@ -17,6 +17,22 @@
     min-inline-size: 0;
   }
 
+  /* Grouped: each group's heading over its own grid, the grids' own padding keeping the gutter. */
+  .groups {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .group {
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+  }
+
+  .groupBar {
+    padding: var(--space-16) var(--space-16) 0;
+  }
+
   .message {
     display: flex;
     flex-direction: column;

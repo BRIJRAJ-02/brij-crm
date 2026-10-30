@@ -20,6 +20,7 @@ import {
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { DataGrid, type GridStatus, type RowNote, type RowSource } from './DataGrid.tsx';
 import type { GridEditorProps } from './GridCell.tsx';
+import type { ColumnCalc } from './GridCalc.tsx';
 import type { GridColumnAction } from './GridHeaderCell.tsx';
 import type { GridColumn } from './grid-columns.ts';
 import type { GridGroup } from './grid-groups.ts';
@@ -31,6 +32,8 @@ interface SampleGridProps {
   readonly status?: GridStatus;
   readonly selected?: readonly string[];
   readonly footer?: Readonly<Record<string, ReactNode>>;
+  /** Each column's footer calculation, by column id. */
+  readonly calculations?: Readonly<Record<string, ColumnCalc>>;
   /** The footer's ghost "+ New company" under the row header. */
   readonly addRow?: { readonly label: string; readonly onAdd: () => void };
   /** Rows at these indexes are still loading. */
@@ -51,6 +54,9 @@ interface SampleGridProps {
   readonly onRetry?: () => void;
   /** The "+" header after the last column (spec 0012). */
   readonly onAddColumn?: () => void;
+  /** The "+" header's menu: hidden columns to show, then New attribute. */
+  readonly addColumnItems?: readonly { readonly id: string; readonly label: string }[];
+  readonly onAddColumnItem?: (id: string) => void;
   /** The screen's own column menu items (spec 0012). */
   readonly columnActions?: (columnId: string) => readonly GridColumnAction[];
   /** "Create" in a select or status cell's list (spec 0012, AC-238). */
@@ -72,6 +78,7 @@ function SampleGrid({
   status = 'ready',
   selected = [],
   footer,
+  calculations,
   addRow,
   isLoading,
   cellErrors,
@@ -84,6 +91,8 @@ function SampleGrid({
   unnamed = [],
   onRetry = () => undefined,
   onAddColumn,
+  addColumnItems,
+  onAddColumnItem,
   columnActions,
   onCreateOption,
   floatingBar,
@@ -170,6 +179,7 @@ function SampleGrid({
         editorProps={editorProps}
         onRetry={onRetry}
         {...(footer === undefined ? {} : { footer })}
+        {...(calculations === undefined ? {} : { calculations })}
         {...(addRow === undefined ? {} : { addRow })}
         {...(cellErrors === undefined ? {} : { cellErrors })}
         {...(onRowOpen === undefined ? {} : { onRowOpen })}
@@ -178,6 +188,8 @@ function SampleGrid({
         {...(sort === undefined ? {} : { sort, onSort: () => undefined })}
         {...(withAvatars ? { rowAvatar: () => undefined, untitled: 'Unnamed company' } : {})}
         {...(onAddColumn === undefined ? {} : { onAddColumn })}
+        {...(addColumnItems === undefined ? {} : { addColumnItems })}
+        {...(onAddColumnItem === undefined ? {} : { onAddColumnItem })}
         {...(columnActions === undefined ? {} : { columnActions })}
         {...(onCreateOption === undefined ? {} : { onCreateOption })}
         {...(floatingBar === undefined ? {} : { floatingBar })}
@@ -692,6 +704,37 @@ export const SchemaActions: Story = {
   },
 };
 
+/**
+ * "+" with hidden columns (flow pass, 30 October 2026): a Menu listing them first, so one press shows one, then
+ * New attribute… for a new one. Enter on the header opens it.
+ */
+export const AddColumnMenu: Story = {
+  args: {
+    onAddColumn: fn(),
+    addColumnItems: [
+      { id: 'domain', label: 'Domain' },
+      { id: 'owner', label: 'Owner' },
+    ],
+    onAddColumnItem: fn(),
+  },
+  parameters: { crm: { screenshot: false } },
+  play: async ({ args, canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Add attribute' }));
+    const menu = await waitFor(() => {
+      const found = document.querySelector('[role="menu"]');
+      if (found === null) throw new globalThis.Error('No menu yet.');
+      return found;
+    });
+    await expect(menu).toHaveTextContent('Domain');
+    await expect(menu).toHaveTextContent('New attribute…');
+    const domain = menu.querySelector('[data-key="domain"]');
+    if (!(domain instanceof HTMLElement)) throw new globalThis.Error('No Domain item.');
+    await userEvent.click(domain);
+    await waitFor(() => expect(args.onAddColumnItem).toHaveBeenCalledWith('domain'));
+    await waitFor(() => expect(document.querySelector('[role="menu"]')).toBeNull());
+  },
+};
+
 /** Twenty columns: the unpinned ones virtualise too, and the name stays pinned while the rest scroll. */
 export const ManyColumns: Story = {
   args: { columnCount: 20 },
@@ -1008,6 +1051,36 @@ export const FooterByKeyboard: Story = {
   },
 };
 
+/**
+ * Footer calculations (the CRM flow pass): a chosen one reads its name and value; an empty column's quiet
+ * "+ Calculate" shows on its focused cell, and Enter opens its Menu of what the type can work out.
+ */
+export const Calculations: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: {
+    calculations: {
+      arr: {
+        choices: ['count', 'count_empty', 'sum', 'avg', 'min', 'max'],
+        chosen: 'sum',
+        value: 'USD 91,234,560',
+        onChange: fn(),
+      },
+      employees: { choices: ['count', 'count_empty', 'sum', 'avg', 'min', 'max'], onChange: fn() },
+    },
+  },
+  play: async ({ args, canvas, userEvent }) => {
+    const press = presser((keys) => userEvent.keyboard(keys));
+    await expect(canvas.getByRole('button', { name: 'Sum USD 91,234,560' })).toBeInTheDocument();
+    await userEvent.tab();
+    await press(['{Meta>}{End}{/Meta}'], '200:9');
+    await press(['{Home}', '{ArrowRight}', '{ArrowRight}', '{ArrowRight}'], '200:3');
+    await press(['{Enter}']);
+    const average = await within(document.body).findByRole('menuitemradio', { name: 'Average' });
+    await userEvent.click(average);
+    await expect(args.calculations?.employees?.onChange).toHaveBeenCalledWith('avg');
+  },
+};
+
 /** Space on the header's checkbox selects the rows on screen, and again clears them (AC-8). */
 export const HeaderCheckbox: Story = {
   parameters: { crm: { screenshot: false } },
@@ -1159,7 +1232,7 @@ export const RatingKeys: Story = {
   },
 };
 
-/** Resize from the column menu: Left and Right step the width, which is announced, and any other key leaves (AC-8). */
+/** Resize from the header: Alt with Right starts it, then Left and Right step the width, announced; any other key leaves (AC-8). */
 export const ResizeByKeyboard: Story = {
   parameters: { crm: { screenshot: false } },
   play: async ({ canvas, userEvent }) => {
@@ -1168,9 +1241,7 @@ export const ResizeByKeyboard: Story = {
     await userEvent.tab();
     await press(['{ArrowRight}'], '0:2');
     await press(['{ArrowUp}'], '-1:2');
-    await press(['{Alt>}{ArrowDown}{/Alt}']);
-    await waitFor(() => expect(document.querySelector('[role="menu"]')).not.toBeNull());
-    await press(['{End}', '{Enter}'], '-1:2');
+    await press(['{Alt>}{ArrowRight}{/Alt}'], '-1:2');
     await waitFor(() => expect(width()).toBeGreaterThan(0));
     const before = width();
     await press(['{ArrowRight}']);
@@ -1191,7 +1262,7 @@ export const HideKeepsFocus: Story = {
     await press(['{ArrowUp}'], '-1:2');
     await press(['{Alt>}{ArrowDown}{/Alt}']);
     await waitFor(() => expect(document.querySelector('[role="menu"]')).not.toBeNull());
-    await press(['{End}', '{ArrowUp}', '{Enter}'], '-1:2');
+    await press(['{End}', '{Enter}'], '-1:2');
     await expect(cell(canvasElement, -1, 2)).toHaveTextContent('Employees');
   },
 };
@@ -1206,7 +1277,7 @@ export const PinFromMenu: Story = {
     await press(['{ArrowUp}'], '-1:2');
     await press(['{Alt>}{ArrowDown}{/Alt}']);
     await waitFor(() => expect(document.querySelector('[role="menu"]')).not.toBeNull());
-    await press(['{End}', '{ArrowUp}', '{ArrowUp}', '{Enter}'], '-1:2');
+    await press(['{End}', '{ArrowUp}', '{Enter}'], '-1:2');
     await waitFor(() => expect(cell(canvasElement, -1, 2)).toHaveAttribute('data-sticky'));
     await waitFor(() => expect(document.querySelector('[role="menu"]')).toBeNull());
   },

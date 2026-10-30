@@ -5,7 +5,17 @@
 import { createHash } from 'node:crypto';
 import { asc, eq, sql, type SQL } from 'drizzle-orm';
 import { schema, type WorkspaceTx } from '@crm/db';
-import { canJump, FilterGroup, SortRules } from '@crm/contracts/values';
+import { BOARD_MAX_COLUMNS, CHECKBOX_COLUMNS, groupCondition, groupKindOf } from '@crm/contracts/board';
+import {
+  AGGREGATE_CURRENCIES,
+  aggregatesFor,
+  canJump,
+  FilterGroup,
+  MAX_AGGREGATE_ASKS,
+  MAX_GROUP_AGGREGATE_ASKS,
+  SortRules,
+  type AggregateFn,
+} from '@crm/contracts/values';
 import { canonicalId, isUuid } from '../ids.ts';
 import { LIMITS } from '../limits.ts';
 import { readEntriesById, type EntryView } from '../lists.ts';
@@ -1173,6 +1183,406 @@ export async function countIn(
   );
   const n = result.rows[0]?.n ?? 0;
   return n > cap ? { count: cap, atLeast: true } : { count: n, atLeast: false };
+}
+
+/** One calculation's answer as `records.aggregate` answers it. */
+export interface Aggregate {
+  readonly count?: number;
+  readonly atLeast?: boolean;
+  readonly amounts?: { readonly value: string; readonly currency?: string }[];
+  readonly tooMany?: boolean;
+}
+
+/** One calculation asked: an attribute of the object, and what to work out over it. */
+export interface AggregateAsk {
+  readonly attributeId: string;
+  readonly fn: AggregateFn;
+}
+
+/** A view's calculations: its object and filter, and up to `MAX_AGGREGATE_ASKS` asks. */
+export type AggregateQuery = QueryClock & {
+  readonly objectId: string;
+  readonly filter?: FilterGroup;
+  readonly asks: readonly AggregateAsk[];
+};
+
+/** A board's column totals: the view's amount calculations once per column of `groupBy`. */
+export type AggregateGroupsQuery = AggregateQuery & {
+  readonly groupBy: string;
+  /** Each an option, `checked` or `unchecked`, a member's id, or null for the records with no value. */
+  readonly groupIds: readonly (string | null)[];
+};
+
+/** One board column's answers, in the order asked. */
+export interface AggregateGroup {
+  readonly id: string | null;
+  readonly answers: readonly Aggregate[];
+}
+
+/** For tests: a lower cap on the records amounts are worked out over, and on the currencies one amount names. */
+export interface AggregateTuning {
+  readonly cap?: number;
+  readonly currencies?: number;
+}
+
+const UNKNOWN_ATTRIBUTE = 'A filter or sort names an attribute that is not on this object.';
+
+/** An ask as checked against what the principal sees: its attribute's definition. */
+interface CheckedAsk {
+  readonly attribute: AttributeDef;
+  readonly fn: AggregateFn;
+}
+
+/** One row of the statement: a slot (a count, an amount attribute, or -1 for how many matched), a column, a currency. */
+type AggregateRow = {
+  readonly slot: number;
+  readonly grp: string | null;
+  readonly code: string | null;
+  readonly n: number;
+  readonly sum: string | null;
+  readonly avg: string | null;
+  readonly min: string | null;
+  readonly max: string | null;
+};
+
+/** Every figure over the keys `k` joined at once: exact decimals off the stored keys (amounts times 10,000). */
+const AMOUNT_FIGURES = sql`count(*)::int as n,
+  trim_scale(sum(k.number_key)::numeric / 10000)::text as sum,
+  trim_scale(round(avg(k.number_key) / 10000, 4))::text as avg,
+  trim_scale(min(k.number_key)::numeric / 10000)::text as min,
+  trim_scale(max(k.number_key)::numeric / 10000)::text as max`;
+
+/** No figures: a count's row, or how many matched. */
+const NO_FIGURES = sql`null::text as sum, null::text as avg, null::text as min, null::text as max`;
+
+/**
+ * The keys an amount reads: a number's, or a currency's with its code, so each kind's own partial index
+ * (`sort_keys_number`, `sort_keys_currency`, migration 0010) serves it, index only.
+ */
+const keyedAmount = (attribute: AttributeDef): SQL =>
+  attribute.type === 'currency'
+    ? sql`k.code_key is not null and k.number_key is not null`
+    : sql`k.number_key is not null`;
+
+/** A slot number as an int literal (our own small integers, never input). */
+const slotOf = (n: number): SQL => sql.raw(`${String(Math.trunc(n))}::int`);
+
+/** The row that says how many records the one scan matched (up to `cap` + 1). */
+const MATCHED_ROW = sql`select -1::int as slot, null::text as grp, null::text as code, (select n from t) as n, ${NO_FIGURES}`;
+
+/** Parts of one statement, each in brackets, joined by `union all`. */
+const unionAll = (parts: readonly SQL[]): SQL =>
+  sql.join(
+    parts.map((part) => sql`(${part})`),
+    sql` union all `,
+  );
+
+/**
+ * A view's calculations across every record its filter matches (the CRM flow
+ * pass), up to `MAX_AGGREGATE_ASKS` at once, in one transaction, one
+ * `prepare` and one statement: `count` holds a value and `count_empty` none,
+ * exact to 10,000 then `atLeast` as `countMatches` counts; for a number or a
+ * currency `sum`, `avg`, `min` and `max`, off the stored keys (exact decimals;
+ * a currency one per currency, `tooMany` past 200). With no filter and no
+ * record rule the amounts come from each attribute's keys alone, index only;
+ * otherwise the filter runs once, over at most 10,000 matching records, and
+ * the amounts and counts are worked out over that one scan (the amounts
+ * `tooMany` past it, never a part; a count past it counts on alone, capped).
+ * Through the access door: a hidden object is `NOT_FOUND`, a hidden or
+ * archived attribute `FILTER_INVALID`, and a record rule narrows what counts.
+ * In its own statement timeout, cancelled with its request (`QUERY_CANCELLED`).
+ */
+export async function aggregateMatches(
+  scope: EngineScope,
+  query: AggregateQuery,
+  signal?: AbortSignal,
+  tuning: AggregateTuning = {},
+): Promise<{ readonly answers: readonly Aggregate[] }> {
+  const cancelled = () => refuse('QUERY_CANCELLED', 'The calculation took too long or was cancelled.');
+  try {
+    return await withCancel(scope, 'count', signal, cancelled, (tx, checkpoint) =>
+      aggregateIn(tx, scope, query, checkpoint, tuning),
+    );
+  } catch (error) {
+    if (postgresError(error)?.code === '57014') throw cancelled();
+    throw error;
+  }
+}
+
+/**
+ * A board's column totals (the CRM flow pass): the view's amount
+ * calculations once per column of `groupBy`, in one statement grouped by the
+ * column's value, never a read per column. A whole object grouped by options
+ * or a checkbox, under no record rule, reads the stored keys alone; otherwise
+ * the filter runs once over at most 10,000 matching records, each labelled
+ * with its column, and past that every column answers `tooMany`. Refuses as
+ * `records.groups` does: a hidden object `NOT_FOUND`, a hidden grouping
+ * attribute `FILTER_INVALID`, one that can't group `CONFIG_INVALID`.
+ */
+export async function aggregateGroups(
+  scope: EngineScope,
+  query: AggregateGroupsQuery,
+  signal?: AbortSignal,
+  tuning: AggregateTuning = {},
+): Promise<{ readonly groups: readonly AggregateGroup[] }> {
+  const cancelled = () => refuse('QUERY_CANCELLED', 'The column totals took too long or were cancelled.');
+  try {
+    return await withCancel(scope, 'count', signal, cancelled, (tx, checkpoint) =>
+      aggregateGroupsIn(tx, scope, query, checkpoint, tuning),
+    );
+  } catch (error) {
+    if (postgresError(error)?.code === '57014') throw cancelled();
+    throw error;
+  }
+}
+
+/** The view prepared once, and each ask checked against the attributes the principal sees. */
+async function prepareAggregate(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  query: AggregateQuery,
+  checkpoint: () => void,
+  maxAsks: number,
+) {
+  const { asks, ...view } = query;
+  if (asks.length === 0 || asks.length > maxAsks) {
+    throw inputInvalid('asks', `Ask for 1 to ${String(maxAsks)} calculations at once.`);
+  }
+  await tx.execute(sql`set local statement_timeout = ${sql.raw(`'${STATEMENT_TIMEOUT}'`)}`);
+  const { context, level } = await prepare(tx, scope, view);
+  checkpoint();
+  const checked = asks.map(({ attributeId, fn }): CheckedAsk => {
+    // The column's own attribute, as the principal sees it: hidden or archived is an unknown one.
+    const attribute = isUuid(attributeId) ? context.attributes.get(canonicalId(attributeId)) : undefined;
+    if (attribute === undefined || attribute.objectId !== level.objectId || level.listId !== null) {
+      throw refuse('FILTER_INVALID', UNKNOWN_ATTRIBUTE);
+    }
+    if (!aggregatesFor(attribute.type).includes(fn)) {
+      throw refuse('FILTER_INVALID', 'Sums, averages, least and most are for numbers and currency.');
+    }
+    return { attribute, fn };
+  });
+  const filtered =
+    (view.filter !== undefined && view.filter.conditions.length > 0) || levelRule(context, level) !== undefined;
+  return {
+    context,
+    level,
+    asks: checked,
+    filter: compileFilter(context, level, view.filter),
+    ...fromParts(context, level),
+    filtered,
+  };
+}
+
+/** Each distinct amount attribute once (every figure is read for it), by id, with its slot. */
+function amountSlots(
+  asks: readonly CheckedAsk[],
+  first: number,
+): ReadonlyMap<string, { readonly slot: number; readonly attribute: AttributeDef }> {
+  const slots = new Map<string, { readonly slot: number; readonly attribute: AttributeDef }>();
+  for (const ask of asks) {
+    if (ask.fn === 'count' || ask.fn === 'count_empty' || slots.has(ask.attribute.id)) continue;
+    slots.set(ask.attribute.id, { slot: first + slots.size, attribute: ask.attribute });
+  }
+  return slots;
+}
+
+/** One amount's answer from its rows (one per currency, most held first), or `tooMany` past `currencies` of them. */
+function amountAnswer(rows: readonly AggregateRow[], fn: AggregateFn, currencies: number): Aggregate {
+  if (rows.length > currencies) return { tooMany: true };
+  const figure = (row: AggregateRow) =>
+    fn === 'sum' ? row.sum : fn === 'avg' ? row.avg : fn === 'min' ? row.min : fn === 'max' ? row.max : null;
+  return {
+    amounts: [...rows]
+      .sort((x, y) => y.n - x.n)
+      .flatMap((row) => {
+        const value = figure(row);
+        return value === null ? [] : [{ value, ...(row.code === null ? {} : { currency: row.code }) }];
+      }),
+  };
+}
+
+async function aggregateIn(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  query: AggregateQuery,
+  checkpoint: () => void,
+  tuning: AggregateTuning,
+): Promise<{ readonly answers: readonly Aggregate[] }> {
+  const cap = tuning.cap ?? COUNT_CAP;
+  const currencies = tuning.currencies ?? AGGREGATE_CURRENCIES;
+  const { context, level, asks, filter, tables, where, filtered } = await prepareAggregate(
+    tx,
+    scope,
+    query,
+    checkpoint,
+    MAX_AGGREGATE_ASKS,
+  );
+  // Counts take slots 0 to n - 1: each ask's own condition, a flag on the one scan of matching records.
+  const counts = asks.flatMap((ask) =>
+    ask.fn === 'count' || ask.fn === 'count_empty'
+      ? [
+          compileFilter(context, level, {
+            conjunction: 'and',
+            conditions: [{ attributeId: ask.attribute.id, operator: ask.fn === 'count' ? 'is_not_empty' : 'is_empty' }],
+          }),
+        ]
+      : [],
+  );
+  // Amounts take the slots after them, one per attribute.
+  const amounts = amountSlots(asks, counts.length);
+  const flag = (n: number) => sql.raw(`f${String(n)}`);
+  const parts: SQL[] = [];
+  // How many matched, when the amounts are worked out over the matching records (past `cap`, they are tooMany).
+  if (filtered && amounts.size > 0) parts.push(MATCHED_ROW);
+  for (const [n, predicate] of counts.entries()) {
+    // At most `cap` matched: counted off the one scan. More: this count's own capped scan, as `countMatches` counts.
+    parts.push(sql`select ${slotOf(n)} as slot, null::text as grp, null::text as code,
+      case when (select n from t) <= ${cap} then (select count(*)::int from m where ${flag(n)})
+        else (select count(*)::int from (
+          select 1 from ${tables} where ${where} and ${filter} and ${predicate} limit ${cap + 1}
+        ) s)
+      end as n, ${NO_FIGURES}`);
+  }
+  for (const { slot, attribute } of amounts.values()) {
+    const keys = filtered
+      ? sql`from m join sort_keys k on k.workspace_id = m.workspace_id and k.owner_id = m.id
+          and k.attribute_id = ${attribute.id} and k.live and ${keyedAmount(attribute)}
+          where (select n from t) <= ${cap}`
+      : // The whole object: the attribute's live keys alone, index only.
+        sql`from sort_keys k where k.attribute_id = ${attribute.id} and k.live and ${keyedAmount(attribute)}`;
+    parts.push(sql`select ${slotOf(slot)} as slot, null::text as grp, q.code, q.n, q.sum, q.avg, q.min, q.max from (
+      select k.code_key::text as code, ${AMOUNT_FIGURES} ${keys}
+      group by 1 order by count(*) desc limit ${currencies + 1}
+    ) q`);
+  }
+  // The one scan of matching records, read only when a count or a filtered amount needs it.
+  const flags = counts.map((predicate, n) => sql`, (${predicate}) as ${flag(n)}`);
+  const scan =
+    counts.length > 0 || filtered
+      ? sql`with m as materialized (
+          select r.workspace_id, r.id${sql.join(flags, sql``)} from ${tables} where ${where} and ${filter}
+          limit ${cap + 1}
+        ), t as (select count(*)::int as n from m) `
+      : sql``;
+  const { rows } = await tx.execute<AggregateRow>(sql`${scan}${unionAll(parts)}`);
+  checkpoint();
+  const matched = rows.find((row) => row.slot === -1)?.n ?? 0;
+  let countSlot = 0;
+  return {
+    answers: asks.map((ask): Aggregate => {
+      if (ask.fn === 'count' || ask.fn === 'count_empty') {
+        const slot = countSlot;
+        countSlot += 1;
+        const n = rows.find((row) => row.slot === slot)?.n ?? 0;
+        return n > cap ? { count: cap, atLeast: true } : { count: n, atLeast: false };
+      }
+      if (filtered && matched > cap) return { tooMany: true };
+      const slot = amounts.get(ask.attribute.id)?.slot;
+      return amountAnswer(
+        rows.filter((row) => row.slot === slot),
+        ask.fn,
+        currencies,
+      );
+    }),
+  };
+}
+
+async function aggregateGroupsIn(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  query: AggregateGroupsQuery,
+  checkpoint: () => void,
+  tuning: AggregateTuning,
+): Promise<{ readonly groups: readonly AggregateGroup[] }> {
+  const cap = tuning.cap ?? COUNT_CAP;
+  const currencies = tuning.currencies ?? AGGREGATE_CURRENCIES;
+  const { groupBy: askedGroupBy, groupIds: askedIds, ...view } = query;
+  const { context, level, asks, filter, tables, where, filtered } = await prepareAggregate(
+    tx,
+    scope,
+    view,
+    checkpoint,
+    MAX_GROUP_AGGREGATE_ASKS,
+  );
+  if (asks.some((ask) => ask.fn === 'count' || ask.fn === 'count_empty')) {
+    throw inputInvalid('asks', 'A board column totals amounts only.');
+  }
+  // The grouping attribute, as `records.groups` checks it: a hidden one answers as any filter naming it would.
+  const groupBy = isUuid(askedGroupBy) ? context.attributes.get(canonicalId(askedGroupBy)) : undefined;
+  if (groupBy === undefined || groupBy.objectId !== level.objectId) throw refuse('FILTER_INVALID', UNKNOWN_ATTRIBUTE);
+  const kind = groupKindOf({
+    type: groupBy.type,
+    isMulti: groupBy.isMulti,
+    isSystem: groupBy.isSystem,
+    isArchived: false,
+  });
+  if (kind === undefined) {
+    throw refuse('CONFIG_INVALID', 'Boards group by a status, a single select, a checkbox or a member field.');
+  }
+  const allowed = (id: string | null) =>
+    kind === 'checkbox'
+      ? id !== null && (CHECKBOX_COLUMNS as readonly string[]).includes(id)
+      : id === null || isUuid(id);
+  if (askedIds.length === 0 || askedIds.length > BOARD_MAX_COLUMNS + 1 || !askedIds.every(allowed)) {
+    throw refuse('CONFIG_INVALID', 'A column is not one this field groups by.');
+  }
+  const groupIds = askedIds.map((id) => (id !== null && kind !== 'checkbox' ? canonicalId(id) : id));
+  const amounts = amountSlots(asks, 0);
+  // A whole object grouped by an option or a checkbox: each amount key beside its record's grouping key, both
+  // stored, so no record is read. Otherwise one scan of the matching records, each labelled with its column.
+  const whole = !filtered && kind !== 'member';
+  const parts: SQL[] = whole ? [] : [MATCHED_ROW];
+  const label = whole
+    ? kind === 'checkbox'
+      ? sql`case when g.bool_key then 'checked' else 'unchecked' end`
+      : sql`g.option_id::text`
+    : sql`m.g::text`;
+  for (const { slot, attribute } of amounts.values()) {
+    const keys = whole
+      ? sql`from sort_keys k
+          left join sort_keys g on g.workspace_id = k.workspace_id and g.owner_id = k.owner_id
+            and g.attribute_id = ${groupBy.id} and g.live
+          where k.attribute_id = ${attribute.id} and k.live and ${keyedAmount(attribute)}`
+      : sql`from m join sort_keys k on k.workspace_id = m.workspace_id and k.owner_id = m.id
+            and k.attribute_id = ${attribute.id} and k.live and ${keyedAmount(attribute)}
+          where (select n from t) <= ${cap} and m.g >= 0`;
+    parts.push(sql`select ${slotOf(slot)} as slot, q.grp, q.code, q.n, q.sum, q.avg, q.min, q.max from (
+      select ${label} as grp, k.code_key::text as code, ${AMOUNT_FIGURES},
+        row_number() over (partition by ${label} order by count(*) desc) as rank
+      ${keys}
+      group by 1, 2
+    ) q where q.rank <= ${currencies + 1}`);
+  }
+  const labels = groupIds.map((id, index) => {
+    const condition = groupCondition(groupBy.id, id, kind);
+    return sql` when ${compileFilter(context, level, { conjunction: 'and', conditions: [condition] })} then ${slotOf(index)}`;
+  });
+  const scan = whole
+    ? sql``
+    : sql`with m as materialized (
+        select r.workspace_id, r.id, case${sql.join(labels, sql``)} else -1 end as g
+        from ${tables} where ${where} and ${filter} limit ${cap + 1}
+      ), t as (select count(*)::int as n from m) `;
+  const { rows } = await tx.execute<AggregateRow>(sql`${scan}${unionAll(parts)}`);
+  checkpoint();
+  const tooMany = !whole && (rows.find((row) => row.slot === -1)?.n ?? 0) > cap;
+  // Each row's column: the stored key's own value on the whole path, the column's position in `groupIds` otherwise.
+  const columnOf = (row: AggregateRow): string | null => (whole ? row.grp : (groupIds[Number(row.grp)] ?? null));
+  return {
+    groups: groupIds.map((id, index) => ({
+      id: askedIds[index] ?? id,
+      answers: asks.map((ask): Aggregate => {
+        if (tooMany) return { tooMany: true };
+        const slot = amounts.get(ask.attribute.id)?.slot;
+        return amountAnswer(
+          rows.filter((row) => row.slot === slot && columnOf(row) === id),
+          ask.fn,
+          currencies,
+        );
+      }),
+    })),
+  };
 }
 
 /**

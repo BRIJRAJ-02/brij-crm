@@ -114,6 +114,35 @@ export const Forms: Story = {
   },
 };
 
+/**
+ * Grouped (Captures › Links with a workspace link, 30 Oct 2026): each group under its h2 with its own grid, the cards'
+ * titles h3s. No baseline yet: its screenshot joins with the next visual run in the pinned image.
+ */
+export const Grouped: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage width="fill">
+      <LinkGrid
+        {...args}
+        groups={[
+          { id: 'workspace', label: 'Workspace', description: 'Book whoever is working, round robin' },
+          { id: 'members', label: 'Members’ pages' },
+        ]}
+        cards={[
+          page('talk-to-us', 'Talk to us', 'blue', ['30 min', 'Workspace link'], { groupId: 'workspace' }),
+          ...pages().map((card) => ({ ...card, groupId: 'members' })),
+        ]}
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('heading', { level: 2, name: 'Workspace' })).toBeInTheDocument();
+    await expect(canvas.getByRole('list', { name: 'Workspace' }).querySelectorAll('li')).toHaveLength(1);
+    await expect(canvas.getByRole('list', { name: 'Members’ pages' }).querySelectorAll('li')).toHaveLength(4);
+    await expect(canvas.getByRole('heading', { level: 3, name: 'Talk to us' })).toBeInTheDocument();
+  },
+};
+
 /** Many cards: the grid wraps them into rows. */
 export const Many: Story = {
   render: (args) => (

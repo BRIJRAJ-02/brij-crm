@@ -31,7 +31,14 @@ import { blockOccurrences } from './blocks.ts';
 import { handLinkOf, linkedRecords, linksOf, seenLinks } from './links.ts';
 import { shownAsEvent } from './owned.ts';
 import { shownAnswers } from './questions.ts';
-import { bookingAccess, bookingReaderIn, bookingReaderOf, seesBookingSql, type BookingReader } from './seen.ts';
+import {
+  bookingAccess,
+  bookingReaderIn,
+  bookingReaderOf,
+  pageManagerColumn,
+  seesBookingSql,
+  type BookingReader,
+} from './seen.ts';
 
 const { bookingPages, bookings, members } = schema;
 
@@ -104,7 +111,7 @@ function visibleTo(reader: BookingReader, hosts: BookingHosts = 'mine') {
       pageId: bookings.pageId,
       hostMemberId: bookings.hostMemberId,
       // Every Bookings read joins the page already.
-      pageOwnerMemberId: bookingPages.ownerMemberId,
+      pageOwnerMemberId: pageManagerColumn,
     },
     { everyone: hosts === 'all' || reader.member === undefined },
   );
@@ -118,7 +125,7 @@ function visibleTo(reader: BookingReader, hosts: BookingHosts = 'mine') {
 async function seeOnlyOf(
   tx: WorkspaceTx,
   reader: BookingReader,
-  rows: readonly { readonly booking: typeof bookings.$inferSelect; readonly pageOwner: string }[],
+  rows: readonly { readonly booking: typeof bookings.$inferSelect; readonly pageOwner: string | null }[],
 ): Promise<ReadonlySet<string>> {
   const me = reader.member;
   if (reader.admin || me === undefined || reader.everyone === 'manage') return new Set();
@@ -269,7 +276,7 @@ export async function listWorkspaceBookings(
       .select({
         booking: bookings,
         pageTitle: bookingPages.title,
-        pageOwner: bookingPages.ownerMemberId,
+        pageOwner: pageManagerColumn,
         location: bookingPages.location,
         // Whether the host is still here (spec 0031, AC-815): a removed host's bookings say so.
         hostStatus: members.status,
@@ -345,7 +352,7 @@ export async function readBookingsCalendar(
       .select({
         booking: bookings,
         pageTitle: bookingPages.title,
-        pageOwner: bookingPages.ownerMemberId,
+        pageOwner: pageManagerColumn,
         location: bookingPages.location,
         hostName: members.name,
         hostAway: hostAwayColumn,
@@ -528,7 +535,7 @@ export async function listMeetings(
             .select({
               booking: bookings,
               pageTitle: bookingPages.title,
-              pageOwner: bookingPages.ownerMemberId,
+              pageOwner: pageManagerColumn,
               location: bookingPages.location,
               // The host, for a colleague's booking and a removed host's (spec 0031, AC-815; spec 0037).
               hostStatus: members.status,

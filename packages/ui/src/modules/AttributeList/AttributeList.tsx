@@ -60,6 +60,11 @@ export interface AttributeListProps {
    * the row is under a pointer or holds focus.
    */
   readonly emptyValues?: 'show' | 'fold';
+  /**
+   * The list's own actions at its foot, after Show N empty values (flow pass, 30 October 2026): a record page's ⋯
+   * with Add attribute and Manage attributes, for schema managers only. Nothing when absent.
+   */
+  readonly actions?: ReactNode;
 }
 
 /** At most this many rows with something in them and a folded list opens shown: a new record, still to fill in. */
@@ -90,6 +95,7 @@ export function AttributeList({
   editorProps,
   isLoading = false,
   emptyValues = 'show',
+  actions,
 }: AttributeListProps) {
   const showSkeleton = useDelayedLoading(isLoading);
   // A record with almost nothing filled in (one just made) opens with every row shown: filling it in is the task.
@@ -154,20 +160,25 @@ export function AttributeList({
             </Disclosure>
           ),
         )}
-      {folded > 0 && (
-        <span className={styles.more}>
-          <Button
-            variant="ghost"
-            icon={isShowingEmpty ? 'chevron-up' : 'chevron-down'}
-            isExpanded={isShowingEmpty}
-            controls={listId}
-            onPress={() => {
-              setShowingEmpty((was) => !was);
-            }}
-          >
-            {isShowingEmpty ? strings.hideEmpty : strings.showEmpty(folded)}
-          </Button>
-        </span>
+      {(folded > 0 || actions !== undefined) && (
+        <div className={styles.foot}>
+          {folded > 0 && (
+            <span className={styles.more}>
+              <Button
+                variant="ghost"
+                icon={isShowingEmpty ? 'chevron-up' : 'chevron-down'}
+                isExpanded={isShowingEmpty}
+                controls={listId}
+                onPress={() => {
+                  setShowingEmpty((was) => !was);
+                }}
+              >
+                {isShowingEmpty ? strings.hideEmpty : strings.showEmpty(folded)}
+              </Button>
+            </span>
+          )}
+          {actions !== undefined && <span className={styles.actions}>{actions}</span>}
+        </div>
       )}
     </section>
   );
