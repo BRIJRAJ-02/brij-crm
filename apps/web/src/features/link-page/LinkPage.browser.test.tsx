@@ -43,8 +43,14 @@ async function render(data: Partial<DataLayer>, screen: () => ReactNode) {
   });
 }
 
-const link = (id: string, title: string, url: string): ProfileItem =>
-  ({ kind: 'link', id, title, url, hue: 'blue', updatedAt: '2026-10-31T10:00:00.000Z' });
+const link = (id: string, title: string, url: string): ProfileItem => ({
+  kind: 'link',
+  id,
+  title,
+  url,
+  hue: 'blue',
+  updatedAt: '2026-10-31T10:00:00.000Z',
+});
 
 describe('a link page with no handle (AC-8)', () => {
   it('claims the address right here, checked first, and never sends anyone to Profile', async () => {
@@ -151,7 +157,9 @@ describe('Appearance’s starting looks (AC-10)', () => {
     expect(grounds).toEqual(PAGE_THEME_PRESETS.map((preset) => preset.theme.ground));
     // The page stands on Plain (the default look), so Plain is the one ticked.
     await expect.element(looks.getByRole('radio', { name: 'Plain' })).toBeChecked();
-    await looks.getByText('Ink', { exact: true }).click();
+    // Picked from the keyboard (the whole tile is the press target for a pointer): Plain, Paper, Bold, Ink.
+    (looks.getByRole('radio', { name: 'Plain' }).element() as HTMLElement).focus();
+    await userEvent.keyboard('{ArrowDown}{ArrowDown}{ArrowDown}');
     expect(onChange).toHaveBeenLastCalledWith(ink.theme);
   });
 });
@@ -213,10 +221,11 @@ describe('deleting a block (AC-18)', () => {
     const dialog = openDialog('alertdialog');
     expect(dialog?.textContent).toContain('Delete Portfolio?');
     expect(dialog?.textContent).toContain('It leaves your page for good. Archive keeps it.');
-    const buttons = [...(dialog?.querySelectorAll('button') ?? [])]
-      .map((button) => button.textContent.trim())
-      .filter((text) => text !== '');
-    expect(buttons.slice(-2)).toEqual(['Cancel', 'Delete block']);
+    // Two buttons, Cancel first (its Esc keycap beside it) and the danger last.
+    const buttons = [...(dialog?.querySelectorAll('button') ?? [])].map((button) => button.textContent.trim());
+    expect(buttons).toHaveLength(2);
+    expect(buttons[0]).toMatch(/^Cancel/);
+    expect(buttons[1]).toBe('Delete block');
     await page.getByRole('button', { name: 'Delete block' }).click();
     expect(onDelete).toHaveBeenCalledTimes(1);
   });
@@ -267,7 +276,8 @@ describe('the Live or Private switch (AC-23)', () => {
     await expect.element(live).toBeChecked();
     // A live page is never opened again: nothing to ask.
     expect(show).not.toHaveBeenCalled();
-    await userEvent.click(live);
+    (live.element() as HTMLElement).focus();
+    await userEvent.keyboard(' ');
     await expect.element(page.getByText('That didn’t save. Try again.')).toBeVisible();
     await expect.element(live).toBeChecked();
   });
