@@ -3,7 +3,7 @@
 // toast region (and the Button it draws).
 import { createContext, useContext, useSyncExternalStore } from 'react';
 import type { KeyboardPlatform } from '../atoms/Kbd/shortcuts.ts';
-import { todayIn, type DateFormat } from '../lib/format.ts';
+import type { DateFormat } from '../lib/format.ts';
 import { regionDefaults } from '../lib/region-defaults.ts';
 import type { WeekStart } from '../lib/month.ts';
 import type { Clock } from './clock.ts';
@@ -56,7 +56,11 @@ export function useTodayReader(): () => string {
   const clock = useContext(ClockContext);
   const { timeZone } = useFormatSettings();
   if (clock === undefined) throw new Error('Wrap the app in <UiProvider> to read today.');
-  return () => todayIn(clock.now(), timeZone);
+  // Swedish writes a date as YYYY-MM-DD: the day in the zone, with no date library in the first load.
+  return () =>
+    new Intl.DateTimeFormat('sv-SE', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(
+      clock.now(),
+    );
 }
 
 /** The shared clock's time, in milliseconds. Re-renders on each tick (every 30 seconds). */
