@@ -18,6 +18,7 @@ import { TimeZoneName } from './booking/settings.ts';
 import { Uuid } from './values/ids.ts';
 import { checkSocialLink, socialLinkProblem } from './values/social.ts';
 import { SOCIAL_LINK_NAMES, SOCIAL_LINK_NETWORKS, SOCIAL_LINKS_MAX } from './values/social-networks.ts';
+import { BrandHex, ImageVersion } from './workspace-brand.ts';
 import { WorkspaceScoped } from './workspaces.ts';
 
 /** A member's name in a workspace: 1 to 80 characters, trimmed (AC-821). */
@@ -258,6 +259,40 @@ export const ImportProfileLinksInput = WorkspaceScoped.extend({
 export type ImportProfileLinksInput = z.infer<typeof ImportProfileLinksInput>;
 
 /**
+ * The caller's own link page accent, and its photos (spec 0060, AC-13, AC-14): what the Design panel reads beside
+ * the look. No accent follows the workspace's brand; no dark accent lifts the light one; a photo is its version,
+ * served at `lookImagePath(handle, slot, version)`.
+ */
+export const ProfileLook = z.object({
+  accent: BrandHex.optional(),
+  accentDark: BrandHex.optional(),
+  cover: ImageVersion.optional(),
+  ground: ImageVersion.optional(),
+});
+/** The caller's own link page accent and photos. */
+export type ProfileLook = z.infer<typeof ProfileLook>;
+
+/**
+ * Sets or clears the caller's own link page accent pair (spec 0060, AC-14), whole: `null` clears one, and the page
+ * then follows the workspace's brand. A dark accent needs a light one beside it.
+ */
+export const SaveProfileAccentInput = WorkspaceScoped.extend({
+  accent: BrandHex.nullable(),
+  accentDark: BrandHex.nullable(),
+  mutationId: Uuid,
+}).refine((input) => input.accentDark === null || input.accent !== null, {
+  error: 'Pick the main colour before a dark one.',
+  path: ['accentDark'],
+});
+/** Sets or clears the caller's own link page accent pair. */
+export type SaveProfileAccentInput = z.infer<typeof SaveProfileAccentInput>;
+
+/** The accent pair as saved. */
+export const ProfileAccent = z.object({ accent: BrandHex.nullable(), accentDark: BrandHex.nullable() });
+/** The accent pair as saved. */
+export type ProfileAccent = z.infer<typeof ProfileAccent>;
+
+/**
  * The profile procedures: any active member, for themself only. The link page's (spec 0051) act on the caller's own
  * account in every workspace: the owner is the session's, never an input, and no role reaches another person's.
  */
@@ -270,6 +305,10 @@ export const profileContract = {
   formChoices: oc.input(WorkspaceScoped).output(z.array(ProfileFormChoice)),
   /** The look of the caller's own link page (spec 0054): read with the profile, saved whole. */
   saveTheme: oc.input(WorkspaceScoped.extend({ theme: PageTheme, mutationId: Uuid })).output(PageTheme),
+  /** The caller's own link page accent and photos (spec 0060), for the Design panel. */
+  look: oc.input(WorkspaceScoped).output(ProfileLook),
+  /** The caller's own link page accent pair (spec 0060, AC-14): their page and personal booking pages wear it. */
+  saveAccent: oc.input(SaveProfileAccentInput).output(ProfileAccent),
   /** Whether search engines may show the caller's own link page (spec 0055, AC-5506): read with the profile. */
   setIndexable: oc
     .input(WorkspaceScoped.extend({ indexable: z.boolean(), mutationId: Uuid }))

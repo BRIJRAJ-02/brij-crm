@@ -46,7 +46,8 @@
     "./roster": "./src/booking/roster.ts",
     "./zones": "./src/booking/zones.ts",
     "./emails": "./src/emails.ts",
-    "./brand": "./src/brand.ts"
+    "./brand": "./src/brand.ts",
+    "./brand-colour": "./src/brand-colour.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
