@@ -11,7 +11,8 @@
 // task on one. A far record it made for a relation name stays too once
 // somebody else has edited it, linked to it or written on it. A row taken back is
 // marked `undone`, so a batch tried again never puts anything back twice; a
-// row whose every value was edited since stays `updated`, its note saying so.
+// row whose every value was edited since stays `updated`, its note saying so. Into an "Each record once" list, the
+// entry values a row changed on an entry already there go back the same way.
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import * as z from 'zod';
 import { schema } from '@crm/db';
@@ -49,7 +50,15 @@ type UndoRow = {
   readonly written: unknown;
   readonly made: unknown;
   readonly entry_id: string | null;
+  readonly entry_changes: unknown;
 };
+
+/** What a row changed on an entry already in an "Each record once" list (`EntryChanges` in kind.ts). */
+const EntryBefore = z.object({
+  entryId: z.uuid(),
+  before: z.record(z.string(), z.unknown()),
+  written: z.record(z.string(), z.string()),
+});
 
 /** Far records a row made for its relation names (`createMissing`). */
 const Made = z.array(z.object({ objectId: z.uuid(), recordId: z.uuid() }));
@@ -168,17 +177,36 @@ async function madeWorkedOn(
   return new Set([...found.rows.map((row) => row.id), ...attached]);
 }
 
+/** How many values went back, how many were kept (changed since), and the first refusal. */
+interface PutBack {
+  readonly restored: number;
+  readonly kept: number;
+  readonly refused?: string;
+}
+
+/** Two put backs as one: a row's record values and its entry's. */
+function both(a: PutBack, b: PutBack): PutBack {
+  const refused = a.refused ?? b.refused;
+  return {
+    restored: a.restored + b.restored,
+    kept: a.kept + b.kept,
+    ...(refused === undefined ? {} : { refused }),
+  };
+}
+
+const NOTHING: PutBack = { restored: 0, kept: 0 };
+
 /**
- * Puts one updated record's values back, one attribute at a time, each in its
+ * Puts one updated record's (or entry's) values back, one attribute at a time, each in its
  * own savepoint with the version the import wrote: one changed since is kept.
  * Answers how many went back and how many were kept.
  */
 async function putBack(
   context: WriteContext,
-  recordId: string,
+  owner: { readonly recordId: string } | { readonly entryId: string },
   before: z.infer<typeof Before>,
   written: z.infer<typeof Written>,
-): Promise<{ readonly restored: number; readonly kept: number; readonly refused?: string }> {
+): Promise<PutBack> {
   let restored = 0;
   let kept = 0;
   let refused: string | undefined;
@@ -187,7 +215,7 @@ async function putBack(
     if (versionId === undefined) continue;
     const result = await context.perRecord((inner) =>
       updateRecord(inner, {
-        recordId,
+        ...owner,
         values: { [attributeId]: { value: was.value ?? null, ifVersionId: versionId } },
       }),
     );
@@ -220,7 +248,7 @@ export function recordsImportUndo(): KindDefinition<ImportUndoParams> {
         return { finished: true, items: items.map((item) => ({ position: item.position, state: 'skipped' })) };
       }
       const found = await tx.execute<UndoRow>(sql`
-        select id::text, outcome::text, record_id::text, before, written, made, entry_id::text from import_rows
+        select id::text, outcome::text, record_id::text, before, written, made, entry_id::text, entry_changes from import_rows
         where workspace_id = ${scope.workspaceId} and import_id = ${row.id}
           and id = any(array(select jsonb_array_elements_text(${JSON.stringify(items.map((item) => item.itemId))}::jsonb))::uuid[])
       `);
@@ -398,11 +426,24 @@ export function recordsImportUndo(): KindDefinition<ImportUndoParams> {
         }
         const before = Before.safeParse(staged.before);
         const written = Written.safeParse(staged.written);
-        if (!before.success || !written.success) {
+        // Into an "Each record once" list that held the record already: the entry's values the row changed go back too.
+        const entry = EntryBefore.safeParse(staged.entry_changes);
+        const recordBack = before.success && written.success;
+        if (!recordBack && !entry.success) {
           outcomes.set(item.itemId, { position: item.position, state: 'skipped' });
           continue;
         }
-        const result = await putBack(context, staged.record_id, before.data, written.data);
+        const result = both(
+          recordBack ? await putBack(context, { recordId: staged.record_id }, before.data, written.data) : NOTHING,
+          entry.success
+            ? await putBack(
+                context,
+                { entryId: entry.data.entryId },
+                Object.fromEntries(Object.entries(entry.data.before).map(([id, value]) => [id, { value }])),
+                entry.data.written,
+              )
+            : NOTHING,
+        );
         if (result.refused !== undefined && result.restored === 0) {
           outcomes.set(item.itemId, {
             position: item.position,
