@@ -653,6 +653,26 @@ export function toEntryView(row: AuditRow, names: AuditNames): AuditEntryView | 
         changes: kind === 'renamed' ? change('name', plain(before.name), plain(after.name)) : [],
       };
     }
+    case 'automation.changed': {
+      const kind = after.change;
+      if (
+        kind !== 'created' &&
+        kind !== 'updated' &&
+        kind !== 'enabled' &&
+        kind !== 'disabled' &&
+        kind !== 'deleted' &&
+        kind !== 'restored'
+      ) {
+        return undefined;
+      }
+      return {
+        ...base,
+        action,
+        target: workspace,
+        params: { change: kind, object: text(after.object) ?? 'records' },
+        changes: [],
+      };
+    }
     case 'access.rule_set': {
       const level = after.level;
       const records = after.records;

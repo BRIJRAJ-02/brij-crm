@@ -121,6 +121,9 @@ export const AUDIT_ACTIONS = [
   'booking_page.changed_for',
   // Who is in a rotation changed (spec 0037, AC-1264): the target is the rotation; `after` lists who joined and left.
   'rotation.changed',
+  // Automations (parity #53): made, changed, switched on or off, deleted or brought back. The target is the
+  // automation; `after` holds `change` and the name its trigger's object had then (`tasks` for a task due one).
+  'automation.changed',
 ] as const;
 /** One action the audit log records. */
 export const AuditAction = z.enum(AUDIT_ACTIONS);

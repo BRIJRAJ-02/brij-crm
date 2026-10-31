@@ -236,6 +236,7 @@ describe('the meetings outbox row (AC-610)', () => {
     definitions: [],
     members: [],
     access: [],
+    accessRules: [],
     jobs: [],
     views: [],
     tasks: [],

@@ -6,6 +6,7 @@ import type { BoardStatus, BoardStore } from './records/board.ts';
 import type { DataError } from './errors.ts';
 import type { OperatorHeld } from './operator/store.ts';
 import type { RecordFacts, RecordFactsState } from './records/facts.ts';
+import type { ObjectAccessSource, ObjectAccessState } from './access/rules-store.ts';
 import type { ActivityFeed, ActivityState } from './activity/feed.ts';
 import type { LinkSection, LinkSectionState } from './links/sections.ts';
 import type { AccountSecurityState, AccountSecurityView } from './account/security.ts';
@@ -278,6 +279,17 @@ export function useActivityStatus(feed: ActivityFeed): ActivityState['status'] {
  */
 export function useLatestActivityAt(feed: ActivityFeed): string | undefined {
   return useSyncExternalStore(feed.subscribe, () => feed.getSnapshot().entries[0]?.at);
+}
+
+/**
+ * The moment of the newest call or meeting logged in a record's feed (the CRM flow pass): what the stat strip keys
+ * its Last contacted read on, so a call just logged reads it again and an edit does not.
+ */
+export function useLatestLoggedContactAt(feed: ActivityFeed): string | undefined {
+  return useSyncExternalStore(
+    feed.subscribe,
+    () => feed.getSnapshot().entries.find((entry) => entry.kind === 'call' || entry.kind === 'logged_meeting')?.at,
+  );
 }
 
 /**
@@ -614,6 +626,11 @@ export function useNotificationSettings(settings: InboxSettings): InboxSettingsS
  */
 export function useRecordFacts(facts: RecordFacts): RecordFactsState {
   return useRetained(facts);
+}
+
+/** An object's access for its Access tab (spec 0032), held while the tab shows it and live across admins. */
+export function useObjectAccess(source: ObjectAccessSource): ObjectAccessState {
+  return useRetained(source);
 }
 
 /** One held operator console read (spec 0047): its state, kept current while the screen shows it. */

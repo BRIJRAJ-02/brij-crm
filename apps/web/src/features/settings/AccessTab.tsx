@@ -18,6 +18,7 @@ import {
   type SubjectAccess,
   type TeamView,
 } from '@crm/data';
+import { useObjectAccess } from '@crm/data/react';
 import {
   Badge,
   Button,
@@ -37,10 +38,10 @@ import {
   SettingsStack,
   Table,
   type TableColumn,
+  focusLater,
   type Toasts,
 } from '@crm/ui';
 import { useMemo, useRef, useState } from 'react';
-import { focusTitle } from '../navigation/focus-title.ts';
 import { AccessFields } from './AccessFields.tsx';
 import { useAccessPreview } from './AccessPreview.tsx';
 import { expected, keyOf, roleOf, type Rule } from './access-grid.ts';
@@ -54,7 +55,7 @@ export interface AccessTabProps {
   readonly toasts: Toasts;
   readonly slug: string;
   readonly object: ObjectSummary;
-  /** The object's access as the server answered. */
+  /** The object's access as the route read it: shown at once, then held live through the data layer. */
   readonly access: ObjectAccess;
   /** The workspace's teams, for their names and the Add team menu. */
   readonly teams: readonly TeamView[];
@@ -102,12 +103,17 @@ const messageOf = (error: unknown) => (isDataError(error) ? error.message : stri
 
 /** The Access tab: a grid of who can see and edit, a line for the result, and Add team. */
 export function AccessTab({ data, toasts, slug, object, access: initial, teams, members }: AccessTabProps) {
-  const [access, setAccess] = useState(initial);
+  // Held in the data layer, so another admin's change shows here as it lands.
+  const source = useMemo(() => data.accessRules.view(slug, object.id, initial), [data, slug, object.id, initial]);
+  const access = useObjectAccess(source).access ?? initial;
   // What the last change took away from people who had it (AC-850); its Undo is the toast.
   const [less, setLess] = useState<AccessImpact | undefined>(undefined);
   const preview = useAccessPreview({ data, toasts, slug, objectId: object.id, teams, members });
-  // The latest change sent for each subject: an older answer arriving late never lands over a newer change.
+  // The latest change sent for each subject: an older answer's toast never shows over a newer change.
   const sent = useRef(new Map<string, number>());
+  // Each team row's remove button and Add team, so focus goes to the next row when one leaves.
+  const removeButtons = useRef(new Map<string, HTMLButtonElement>());
+  const addButton = useRef<HTMLButtonElement>(null);
   // The toast of the last change, so each change replaces the one before it rather than stacking its own Undo.
   const lastToast = useRef<string | undefined>(undefined);
   const teamNames = useMemo(() => new Map(teams.map((team) => [team.id, team.name])), [teams]);
@@ -117,9 +123,9 @@ export function AccessTab({ data, toasts, slug, object, access: initial, teams, 
     subject.type === 'role' ? strings.roleGroups[subject.role] : (teamNames.get(subject.teamId) ?? '');
 
   /**
-   * Sends one subject's access and shows it at once; the latest answer replaces what is shown and a quiet toast offers
-   * Undo (`back`, what the subject had). A refusal reads the object again, so the grid is what the server holds, with
-   * its reason. The controls never go disabled meanwhile: a keyboard user's focus stays where it is.
+   * Sends one subject's access and shows it at once (the data layer's held source); the latest answer replaces what is
+   * shown and a quiet toast offers Undo (`back`, what the subject had). A refusal reads the object again, so the grid
+   * is what the server holds, with its reason. The controls never go disabled meanwhile: focus stays where it is.
    */
   const persist = (
     subject: RuleSubject,
@@ -129,48 +135,49 @@ export function AccessTab({ data, toasts, slug, object, access: initial, teams, 
     const key = keyOf(subject);
     const mine = (sent.current.get(key) ?? 0) + 1;
     sent.current.set(key, mine);
-    setAccess((current) => expected(current, subject, rule, teamNames));
     const isLatest = () => sent.current.get(key) === mine;
-    data.accessRules.set(slug, object.id, subject, rule).then(
-      ({ access: next, impact }) => {
-        // An older answer never lands over a newer change.
-        if (!isLatest()) return;
-        setAccess(next);
-        preview.refresh();
-        // An Undo (it has none of its own) brings access back, so what was taken away is no longer news.
-        if (undo === undefined) {
-          setLess(undefined);
-          return;
-        }
-        if (lastToast.current !== undefined) toasts.dismiss(lastToast.current);
-        // Taking access from people who had it says how many, as chips (AC-850); the toast offers Undo either way.
-        setLess(impact.people > 0 ? impact : undefined);
-        lastToast.current = toasts.toast({
-          tone: 'success',
-          message: undo.message,
-          action: {
-            label: strings.undo,
-            onAction: () => {
-              persist(subject, undo.back);
+    data.accessRules
+      .change(slug, object.id, subject, rule, (current) => expected(current, subject, rule, teamNames))
+      .then(
+        ({ impact }) => {
+          // An older answer's toast never shows over a newer change.
+          if (!isLatest()) return;
+          preview.refresh();
+          // An Undo (it has none of its own) brings access back, so what was taken away is no longer news.
+          if (undo === undefined) {
+            setLess(undefined);
+            return;
+          }
+          if (lastToast.current !== undefined) toasts.dismiss(lastToast.current);
+          // Taking access from people who had it says how many, as chips (AC-850); the toast offers Undo either way.
+          setLess(impact.people > 0 ? impact : undefined);
+          lastToast.current = toasts.toast({
+            tone: 'success',
+            message: undo.message,
+            action: {
+              label: strings.undo,
+              onAction: () => {
+                persist(subject, undo.back);
+              },
             },
-          },
-        });
-      },
-      (error: unknown) => {
-        toasts.toast({ tone: 'danger', message: messageOf(error) });
-        if (!isLatest()) return;
-        data.accessRules.get(slug, object.id).then(setAccess, () => undefined);
-      },
-    );
+          });
+        },
+        (error: unknown) => {
+          toasts.toast({ tone: 'danger', message: messageOf(error) });
+        },
+      );
   };
 
   const removeTeam = (standing: SubjectAccess) => {
+    // The button that asked goes away with its row: focus moves to the next team's, else the one before, else Add team.
+    const teamKeys = access.subjects.flatMap((each) => (each.subject.type === 'team' ? [keyOf(each.subject)] : []));
+    const at = teamKeys.indexOf(keyOf(standing.subject));
+    const nextKey = teamKeys[at + 1] ?? teamKeys[at - 1];
     persist(standing.subject, null, {
       message: strings.teamRemoved(nameOf(standing.subject)),
       back: backOf(standing),
     });
-    // The button that asked went away with the row.
-    focusTitle();
+    focusLater(() => (nextKey === undefined ? addButton.current : (removeButtons.current.get(nextKey) ?? null)));
   };
 
   const change = (standing: SubjectAccess, next: Partial<Rule>) => {
@@ -285,6 +292,11 @@ export function AccessTab({ data, toasts, slug, object, access: initial, teams, 
       default:
         return isTeam ? (
           <Button
+            ref={(button) => {
+              const rowKey = keyOf(standing.subject);
+              if (button === null) removeButtons.current.delete(rowKey);
+              else removeButtons.current.set(rowKey, button);
+            }}
             variant="ghost"
             icon="x"
             label={strings.removeRow(who)}
@@ -327,7 +339,9 @@ export function AccessTab({ data, toasts, slug, object, access: initial, teams, 
           ) : (
             addable.length > 0 && (
               <MenuTrigger>
-                <Button icon="plus">{strings.addTeam}</Button>
+                <Button ref={addButton} icon="plus">
+                  {strings.addTeam}
+                </Button>
                 <Menu
                   label={strings.addTeam}
                   onAction={(key) => {

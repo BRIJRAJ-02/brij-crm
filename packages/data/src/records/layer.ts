@@ -3253,6 +3253,8 @@ export function createRecordsLayer({
     const gone: string[] = [];
     const marks: (readonly [string, string])[] = [];
     const cells: UndoCell[] = [];
+    // A new email may file the person under their company (spec 0059): the undo takes that back with the edit.
+    const filed: FiledLink[] = [];
     let updated = 0;
     let firstReason: string | undefined;
     for (const result of results) {
@@ -3262,6 +3264,10 @@ export function createRecordsLayer({
         if (layer === undefined) store.receive([row]);
         else layer.confirm(row);
         landed.push(row);
+        if (result.filedCompany !== undefined) {
+          filed.push(filedLink(row.id, result.filedCompany));
+          companyFiled(workspace, result.filedCompany);
+        }
         const versionId = result.written?.[attributeId];
         if (versionId === undefined) continue;
         updated += 1;
@@ -3298,15 +3304,17 @@ export function createRecordsLayer({
       const order = entry.orderAttributes();
       if (order.any || order.ids.has(attributeId)) entry.markDirty();
     }
-    const pushed = cells.length > 0;
+    const pushed = cells.length > 0 || filed.length > 0;
     if (pushed) {
       undo.push(workspace, {
         id: mutationId,
         kind: 'bulk',
         objectId,
         cells,
+        ...(filed.length === 0 ? {} : { filed }),
         ...(request.group === undefined ? {} : { group: request.group }),
       });
+      tellFiled(workspace, mutationId, filed);
     }
     const refused = marks.length + gone.length;
     return {

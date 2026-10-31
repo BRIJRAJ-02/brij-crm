@@ -685,7 +685,7 @@ export async function setObjectAccess(
         options.source,
       );
       // Everyone the subject covers reads their access again, and the relay drops the workspace's audiences.
-      context.record({ access: coveredIds });
+      context.record({ access: coveredIds, accessRules: [objectId] });
       return { access: await readAccess(tx, scope.workspaceId, objectId), impact };
     },
     hooks,

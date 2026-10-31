@@ -1245,6 +1245,7 @@ const DATA_CASES: Readonly<Record<string, DataCase>> = {
   ),
   entriesForRecord: refused('NOT_FOUND', (scope, world) => core.entriesForRecord(scope, { recordId: world.recordId })),
   getActivity: refused('NOT_FOUND', (scope, world) => core.getActivity(scope, { recordId: world.recordId })),
+  getLastContacted: refused('NOT_FOUND', (scope, world) => core.getLastContacted(scope, { recordId: world.recordId })),
   getStageSince: refused('NOT_FOUND', (scope, world) =>
     core.getStageSince(scope, { recordId: world.recordId, attributeId: world.stage }),
   ),
@@ -1593,6 +1594,17 @@ const DATA_CASES: Readonly<Record<string, DataCase>> = {
     return core.undoEntriesJob(scope, registry, { id: core.newId(), jobId: started.id });
   }),
   editEntry: refused('FORBIDDEN', (scope, world) => core.editEntry(scope, { entryId: world.entryId, values: {} })),
+  // A list field of many entries (AC-4826): the list at write before the field or any entry is read.
+  editEntries: refused('FORBIDDEN', (scope, world) =>
+    core.editEntries(scope, {
+      listId: world.listId,
+      entryIds: [world.entryId],
+      edit: { attributeId: core.newId(), op: 'clear' },
+    }),
+  ),
+  setEntriesValues: refused('FORBIDDEN', (scope, world) =>
+    core.setEntriesValues(scope, { listId: world.listId, items: [{ entryId: world.entryId, values: {} }] }),
+  ),
   // A batch answers per entry (AC-4818): each refused, the call itself answered.
   removeEntries: refused('FORBIDDEN', async (scope, world) =>
     entryOutcome(await core.removeEntries(scope, { entryIds: [world.entryId] })),

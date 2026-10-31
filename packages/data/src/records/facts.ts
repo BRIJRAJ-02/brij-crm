@@ -1,10 +1,11 @@
 // A record's facts for the stat strip under its header (13 Oct reference
-// batch 4): its next meeting, and on a status attribute when it entered the
-// stage it is in now (a deal's stage age). Each source is read when a screen
+// batch 4): its next meeting, when it was last contacted (the CRM flow pass),
+// and on a status attribute when it entered the stage it is in now (a deal's
+// stage age). Each source is read when a screen
 // first holds it, and again each time a screen comes back to it, so a page
 // opened again shows what is true now. Per record and status attribute, one
 // source, kept while anything holds it.
-import type { MeetingPage, StageSince } from '@crm/contracts';
+import type { LastContacted, MeetingPage, StageSince } from '@crm/contracts';
 import { toDataError, type DataError } from '../errors.ts';
 
 /** The record's next meeting: what it is and when it starts. */
@@ -19,6 +20,8 @@ export interface RecordFactsState {
   readonly nextMeeting?: NextMeeting;
   /** When the record entered its current stage, ISO 8601 in UTC. */
   readonly stageSince?: string;
+  /** When the record was last contacted (a call or meeting already past), ISO 8601 in UTC. */
+  readonly lastContacted?: string;
   readonly error?: DataError;
 }
 
@@ -42,6 +45,7 @@ export interface RecordFactsApi {
     readonly recordId: string;
     readonly attributeId: string;
   }) => Promise<StageSince>;
+  readonly lastContacted: (input: { readonly workspace: string; readonly recordId: string }) => Promise<LastContacted>;
 }
 
 /** What the store needs: its calls, and the time now (ISO), so a meeting already over is no one's next. */
@@ -52,7 +56,11 @@ export interface RecordFactsDeps {
 
 /** The store: one `RecordFacts` per record and stage attribute. */
 export interface RecordFactsStore {
-  /** `stageKey` (the stage the record shows now) makes a moved record a new source, read afresh. */
+  /**
+   * `stageKey` (the stage the record shows now, and anything else that should read the facts again, such as the
+   * newest activity) makes a new source, read afresh; it shows what the record's previous source showed meanwhile, so
+   * the strip never flashes back to loading.
+   */
   readonly forRecord: (
     workspace: string,
     recordId: string,
@@ -64,8 +72,15 @@ export interface RecordFactsStore {
 /** Creates the facts store. */
 export function createRecordFactsStore({ api, now }: RecordFactsDeps): RecordFactsStore {
   const sources = new Map<string, RecordFacts>();
-  const make = (key: string, workspace: string, recordId: string, stageAttributeId: string | undefined) => {
-    let state: RecordFactsState = { status: 'loading' };
+  const make = (
+    key: string,
+    workspace: string,
+    recordId: string,
+    stageAttributeId: string | undefined,
+    seed: RecordFactsState | undefined,
+  ) => {
+    // What the record showed until this read lands (a moved stage's old age, for the moment the read takes).
+    let state: RecordFactsState = seed?.status === 'ready' ? seed : { status: 'loading' };
     let holders = 0;
     let asked = 0;
     const listeners = new Set<() => void>();
@@ -82,8 +97,9 @@ export function createRecordFactsStore({ api, now }: RecordFactsDeps): RecordFac
         stageAttributeId === undefined
           ? Promise.resolve<StageSince>({})
           : api.stageSince({ workspace, recordId, attributeId: stageAttributeId }),
+        api.lastContacted({ workspace, recordId }),
       ]).then(
-        ([page, stage]) => {
+        ([page, stage, contacted]) => {
           if (mine !== asked) return;
           const first = page.items[0];
           const isNext = first !== undefined && first.endsAt >= now() && first.status !== 'cancelled';
@@ -91,6 +107,7 @@ export function createRecordFactsStore({ api, now }: RecordFactsDeps): RecordFac
             status: 'ready',
             ...(isNext ? { nextMeeting: { title: first.title, startsAt: first.startsAt } } : {}),
             ...(stage.since === undefined ? {} : { stageSince: stage.since }),
+            ...(contacted.at === undefined ? {} : { lastContacted: contacted.at }),
           });
         },
         (error: unknown) => {
@@ -109,10 +126,12 @@ export function createRecordFactsStore({ api, now }: RecordFactsDeps): RecordFac
       getSnapshot: () => state,
       retain: () => {
         holders += 1;
+        // Held again after its last screen let go (a remount): it is the record's source again.
+        if (holders === 1) sources.set(key, facts);
         read();
         return () => {
           holders -= 1;
-          if (holders === 0) sources.delete(key);
+          if (holders === 0 && sources.get(key) === facts) sources.delete(key);
         };
       },
     };
@@ -123,7 +142,10 @@ export function createRecordFactsStore({ api, now }: RecordFactsDeps): RecordFac
       const key = `${workspace}:${recordId}:${stageAttributeId ?? ''}:${stageKey ?? ''}`;
       const held = sources.get(key);
       if (held !== undefined) return held;
-      const made = make(key, workspace, recordId, stageAttributeId);
+      const prefix = `${workspace}:${recordId}:`;
+      // The newest of the record's sources: what the strip shows now.
+      const previous = [...sources.entries()].filter(([each]) => each.startsWith(prefix)).at(-1)?.[1];
+      const made = make(key, workspace, recordId, stageAttributeId, previous?.getSnapshot());
       sources.set(key, made);
       return made;
     },

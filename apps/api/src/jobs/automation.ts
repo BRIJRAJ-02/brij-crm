@@ -3,7 +3,8 @@
 // workspace's queued runs through core's `runAutomationQueue`, each as the member its automation runs as. A call that
 // ran out of time queues itself again. `crm_cron_automation_due` is the sweep: it pages the workspaces with an
 // enabled task due automation (`crm_automation_due_workspaces`, ids only) and queues each one's task with `due` set,
-// which also queues the runs for tasks that came due and prunes old runs.
+// which also queues the runs for tasks that came due and prunes old runs. A call that crashed (Graphile tries it
+// again) can leave a run `running`: the call that finds one queues itself for when it may be put back.
 import { pruneAutomations, queueDueAutomations, runAutomationQueue, type AutomationRunDeps } from '@crm/core/system';
 import * as z from 'zod';
 
@@ -20,9 +21,12 @@ export const AUTOMATION_DUE_PAGES_A_CALL = 10;
 export const AutomationPayload = z.strictObject({ workspaceId: z.uuid(), due: z.literal(true).optional() });
 export type AutomationPayload = z.infer<typeof AutomationPayload>;
 
-/** What the task needs besides core's deps: how to queue the next call when this one ran out of time. */
+/**
+ * What the task needs besides core's deps: how to queue the next call, at once when this one ran out of time, or `at`
+ * a time when a run a crashed call left `running` may be put back.
+ */
 export interface AutomationTaskDeps extends AutomationRunDeps {
-  readonly again: (workspaceId: string) => Promise<void>;
+  readonly again: (workspaceId: string, at?: Date) => Promise<void>;
 }
 
 /** Runs one workspace's queued automation runs. A payload that is not ours is logged and dropped. */
@@ -37,12 +41,14 @@ export async function runAutomationTask(deps: AutomationTaskDeps, payload: unkno
     const queued = await queueDueAutomations(deps, workspaceId);
     deps.log.info('automation.due', { workspaceId, queued });
   }
-  const { ran, more } = await runAutomationQueue(deps, workspaceId);
+  const { ran, more, staleAt } = await runAutomationQueue(deps, workspaceId);
   if (ran > 0) deps.onStored?.();
   if (more) {
     await deps.again(workspaceId);
     return;
   }
+  // A run a crashed call left `running`: this task comes back once it may be put back, and runs it again.
+  if (staleAt !== undefined) await deps.again(workspaceId, staleAt);
   // Caught up: one batch of old runs and long deleted automations goes (an indexed probe when there is none).
   const pruned = await pruneAutomations(deps, workspaceId);
   if (pruned.runs + pruned.automations > 0) deps.log.info('automation.pruned', { workspaceId, ...pruned });

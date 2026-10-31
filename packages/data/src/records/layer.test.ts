@@ -2135,6 +2135,104 @@ describe('bulk edit (spec 0022, AC-530, AC-540)', () => {
     expect(await layer.undo.run(WS)).toEqual({ kind: 'nothing' });
   });
 
+  it('undoes an Apply whose email field filed companies: each filing goes back with its field, in one press', async () => {
+    const COMPANIES = '0199a6f2-0000-7000-8000-00000000000b';
+    const EMAIL = 'attr-email';
+    const COMPANY = 'attr-company';
+    const filed: FiledNotice[] = [];
+    const { layer, bulkEdits, batches, deletes, frame } = await readyView({
+      onFiled: (notice) => filed.push(notice),
+    });
+    const group = 'apply-2';
+    const ids = [idAt(0), idAt(1)];
+    const first = layer.bulkEdit(WS, PEOPLE, ids, {
+      attributeId: CITY,
+      type: 'text',
+      isMulti: false,
+      op: 'set',
+      value: 'Paris',
+      group,
+    });
+    frame();
+    await settle();
+    bulkEdits[0]?.answer([
+      { recordId: idAt(0), record: edited(0, 'Paris', 4), written: { [CITY]: version(4) }, before: 'London' },
+      { recordId: idAt(1), record: edited(1, 'Paris', 5), written: { [CITY]: version(5) }, before: 'Leeds' },
+    ]);
+    await first;
+    const second = layer.bulkEdit(WS, PEOPLE, ids, {
+      attributeId: EMAIL,
+      type: 'email_address',
+      isMulti: true,
+      op: 'add',
+      value: 'team@acme.com',
+      group,
+    });
+    frame();
+    await settle();
+    // Ada's email made Acme; Bo was filed under Beta, which was there already.
+    const company = (row: number, made: boolean) => ({
+      objectId: COMPANIES,
+      recordId: idAt(8000 + row),
+      name: row === 0 ? 'Acme' : 'Beta',
+      made,
+      attributeId: COMPANY,
+      linkVersionId: version(20 + row),
+    });
+    bulkEdits[1]?.answer(
+      [0, 1].map((row) => ({
+        recordId: idAt(row),
+        record: edited(row, 'Paris', 4 + row),
+        written: { [EMAIL]: version(10 + row) },
+        before: [],
+        filedCompany: company(row, row === 0),
+      })),
+    );
+    await second;
+    // Said once, for the field that filed.
+    expect(filed.map((each) => each.companies)).toEqual([
+      [
+        { name: 'Acme', made: true },
+        { name: 'Beta', made: false },
+      ],
+    ]);
+    const undone = layer.undo.run(WS);
+    await settle();
+    // The newest field first, each record's Company cleared in the same write while it holds the filed link.
+    expect(batches[0]?.input.items).toEqual(
+      [0, 1].map((row) => ({
+        recordId: idAt(row),
+        values: {
+          [EMAIL]: { value: [], ifVersionId: version(10 + row) },
+          [COMPANY]: { value: null, ifVersionId: version(20 + row) },
+        },
+      })),
+    );
+    batches[0]?.answer({
+      results: [0, 1].map((row) => ({ recordId: idAt(row), record: edited(row, 'Paris', 30 + row) })),
+      echoes: 1,
+    });
+    await settle();
+    // Only the company the edit made goes to the trash, and only while nothing links to it.
+    expect(deletes[0]?.input).toMatchObject({ objectId: COMPANIES, recordIds: [idAt(8000)], unlinkedOnly: true });
+    deletes[0]?.answer([{ recordId: idAt(8000), state: 'deleted' }]);
+    await settle();
+    expect(batches[1]?.input.items).toEqual([
+      { recordId: idAt(0), values: { [CITY]: { value: 'London', ifVersionId: version(4) } } },
+      { recordId: idAt(1), values: { [CITY]: { value: 'Leeds', ifVersionId: version(5) } } },
+    ]);
+    batches[1]?.answer({
+      results: [
+        { recordId: idAt(0), record: edited(0, 'London', 40) },
+        { recordId: idAt(1), record: edited(1, 'Leeds', 41) },
+      ],
+      echoes: 1,
+    });
+    // The edited cells are counted; the filings are not cells the person changed.
+    expect(await undone).toMatchObject({ kind: 'undone', action: 'bulk', cells: 2, undone: 4 });
+    expect(await layer.undo.run(WS)).toEqual({ kind: 'nothing' });
+  });
+
   it('rolls a refused record back with its cell marked, and a retry that changed nothing pushes no undo', async () => {
     const { layer, view, bulkEdits, frame } = await readyView();
     const editing = layer.bulkEdit(WS, PEOPLE, [idAt(0), idAt(1)], {

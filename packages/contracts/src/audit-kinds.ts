@@ -46,6 +46,7 @@ export const AUDIT_KINDS = {
     'list.updated',
     'list.archived',
     'list.restored',
+    'automation.changed',
   ],
   // Who may see and edit an object's records (spec 0032) is a security setting.
   security: ['workspace_security.changed', 'workspace_security.signed_out_everyone', 'access.rule_set'],

@@ -65,7 +65,16 @@ export function useAccessPreview({ data, toasts, slug, objectId, teams, members 
       (error: unknown) => {
         if (asked.current !== mine) return;
         setPhase({ kind: 'failed' });
-        toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : strings.previewFailed });
+        toasts.toast({
+          tone: 'danger',
+          message: isDataError(error) ? error.message : strings.previewFailed,
+          action: {
+            label: strings.previewRetry,
+            onAction: () => {
+              start(as);
+            },
+          },
+        });
       },
     );
   };

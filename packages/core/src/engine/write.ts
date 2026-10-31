@@ -172,6 +172,11 @@ export interface Change {
    * workspace is cut.
    */
   readonly access: readonly string[];
+  /**
+   * Objects whose access rules the write set (spec 0032): an `access` row even when it names no member (a team with
+   * nobody in it, a workspace with no Members), so another admin's open Access tab reads the object again.
+   */
+  readonly accessRules: readonly string[];
   /** Background jobs the write started, moved on or ended (spec 0008), each with its starter. */
   readonly jobs: readonly JobChange[];
   /** Saved views the write made, changed or deleted (spec 0020), private ones included. */
@@ -345,6 +350,7 @@ const LIST_KEYS = [
   'definitions',
   'members',
   'access',
+  'accessRules',
   'jobs',
   'views',
   'tasks',
@@ -479,6 +485,7 @@ export async function runWrite<T>(
           definitions: [] as DefinitionChange[],
           members: [] as string[],
           access: [] as string[],
+          accessRules: [] as string[],
           jobs: [] as JobChange[],
           views: [] as ViewChange[],
           tasks: [] as TaskChange[],
@@ -523,6 +530,7 @@ export async function runWrite<T>(
             append(collected.definitions, part.definitions);
             append(collected.members, part.members);
             append(collected.access, part.access);
+            append(collected.accessRules, part.accessRules);
             append(collected.jobs, part.jobs);
             append(collected.views, part.views);
             append(collected.tasks, part.tasks);
@@ -577,6 +585,7 @@ export async function runWrite<T>(
           definitions: [...collected.definitions],
           members: [...new Set(collected.members)],
           access: [...new Set(collected.access)],
+          accessRules: [...new Set(collected.accessRules)],
           // One entry per job: a slice's batches name the same job again.
           jobs: [...new Map(collected.jobs.map((job) => [job.jobId, job])).values()],
           // One entry per view: a write that touches a view twice names it once.

@@ -779,6 +779,19 @@ export async function updateRecord(
 }
 
 /**
+ * `updateRecord`, also answering the company the person's email filed them under (spec 0059), so a bulk edit can
+ * hand it to the browser's undo as a cell edit does.
+ */
+export async function updateRecordFiling(
+  context: WriteContext,
+  input: RecordValues,
+  visible?: ReadonlySet<string>,
+): Promise<{ readonly results: Record<string, AttributeResult>; readonly filedCompany?: FiledCompany }> {
+  const { results, filedCompany } = await updateOwner(context, input, visible);
+  return filedCompany === undefined ? { results } : { results, filedCompany };
+}
+
+/**
  * `updateRecord` for a batch that counts its own record slots (an import, spec 0040): a company the person's
  * filing makes (spec 0059) fits in `room` and takes no slot, and the answer's `filedCompany` says so.
  */

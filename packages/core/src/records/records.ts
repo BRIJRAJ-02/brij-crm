@@ -454,7 +454,13 @@ export async function bulkEditRecords(
       return { recordId: outcome.recordId, refusals: [{ code: 'RECORD_DELETED', message: TRASHED_SINCE }] };
     }
     return outcome.state === 'changed'
-      ? { recordId: outcome.recordId, record, written: { [attributeId]: outcome.versionId }, before: outcome.before }
+      ? {
+          recordId: outcome.recordId,
+          record,
+          written: { [attributeId]: outcome.versionId },
+          before: outcome.before,
+          ...(outcome.filedCompany === undefined ? {} : { filedCompany: outcome.filedCompany }),
+        }
       : { recordId: outcome.recordId, record };
   });
 }

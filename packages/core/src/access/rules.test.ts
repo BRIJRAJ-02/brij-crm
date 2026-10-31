@@ -393,6 +393,22 @@ describe('the change itself (AC-851, AC-852)', () => {
     expect(await w.audit()).toHaveLength(2);
   });
 
+  it('stores an access row naming nobody for a rule covering nobody, so other admins’ Access tabs read it again', async () => {
+    const w = await world();
+    const empty = await createTeam(w.owner, { name: 'Empty' });
+    await setObjectAccess(
+      w.owner,
+      { objectId: w.companies, subject: { type: 'team', teamId: empty.id }, rule: { level: 'read', records: 'all' } },
+      [outboxHook()],
+    );
+    const rows = await testQuery<{ item_ids: string[] }>(
+      ownerUrl,
+      `select item_ids::text[] as item_ids from outbox where workspace_id = $1 and kind = 'access' order by seq`,
+      [w.workspaceId],
+    );
+    expect(rows).toEqual([{ item_ids: [] }]);
+  });
+
   it('puts members with equal results in one audience, and a restricted member apart from the open one', async () => {
     const w = await world();
     const ada = await w.add('Ada');

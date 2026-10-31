@@ -20,7 +20,7 @@ import { FilterGroup } from './values/filters.ts';
 import { SortRules } from './values/sorts.ts';
 import { WorkspaceScoped } from './workspaces.ts';
 import { Uuid, uuidV7 } from './values/ids.ts';
-import { BULK_EXCEPT_MAX, BULK_IDS_MAX, BulkTarget } from './bulk.ts';
+import { BULK_EXCEPT_MAX, BULK_IDS_MAX, BulkEdit, BulkTarget } from './bulk.ts';
 import { JobView } from './jobs.ts';
 
 /** The most entries one batch write (`remove`, `restore`) names, and `get` reads. */
@@ -198,6 +198,58 @@ export const WrittenEntry = EntryView.extend({
 /** An entry a write answers. */
 export type WrittenEntry = z.infer<typeof WrittenEntry>;
 
+/**
+ * One list field of 1 to 500 entries of one list, changed by one operation
+ * (AC-4826), as `records.updateMany` changes a record field: each entry's new
+ * value from its current one under its lock, an unchanged entry writing nothing.
+ */
+export const UpdateEntriesInput = WorkspaceScoped.extend({
+  listId: Uuid,
+  entryIds: z
+    .array(Uuid)
+    .min(1, 'Choose at least one entry.')
+    .max(MAX_ENTRY_BATCH, `Change at most ${String(MAX_ENTRY_BATCH)} entries at once.`),
+  edit: BulkEdit,
+  timeZone: z.string().min(1).max(64).optional(),
+  mutationId: Uuid,
+});
+/** Entries to edit. */
+export type UpdateEntriesInput = z.infer<typeof UpdateEntriesInput>;
+
+/** Old values put back on 1 to 500 entries of one list, each with the version it must still hold (a bulk edit's undo). */
+export const SetEntriesValuesInput = WorkspaceScoped.extend({
+  listId: Uuid,
+  items: z
+    .array(z.object({ entryId: Uuid, values: z.record(z.uuid(), ValueChangeInput) }))
+    .min(1, 'Choose at least one entry.')
+    .max(MAX_ENTRY_BATCH, `Change at most ${String(MAX_ENTRY_BATCH)} entries at once.`),
+  mutationId: Uuid,
+});
+/** Old values to put back. */
+export type SetEntriesValuesInput = z.infer<typeof SetEntriesValuesInput>;
+
+/**
+ * Each entry's outcome in a batch write, in the order asked: the fresh `entry`
+ * when it landed, with `written` (the versions made) and, for a bulk edit,
+ * `before` (the value read under its lock) only when this call changed it; or
+ * its `refusals`. `records` holds the landed entries' records, read once.
+ */
+export const EntryEditResults = z.object({
+  results: z.array(
+    z.object({
+      entryId: Uuid,
+      entry: EntryView.optional(),
+      written: z.record(z.uuid(), Uuid).optional(),
+      before: z.unknown().optional(),
+      refusals: z.array(ApiRefusal).optional(),
+    }),
+  ),
+  records: z.array(RecordView),
+  echoes: z.number().int().min(0),
+});
+/** Each entry's outcome in a batch write. */
+export type EntryEditResults = z.infer<typeof EntryEditResults>;
+
 /** Entries to take out of their lists, or bring back (Undo), 1 to 500 at once. */
 export const EntryIdsInput = WorkspaceScoped.extend({
   entryIds: z
@@ -355,7 +407,9 @@ export type UndoEntriesJobInput = z.infer<typeof UndoEntriesJobInput>;
  * already in this list.") in a list that lets each record in once,
  * `CONFIG_INVALID` for another object's record, `RECORD_DELETED`,
  * `VALUE_REQUIRED` and `LIMIT_REACHED` (AC-4816); the same add again answers
- * the entry already made. `setValues` refuses as `records.setValues` does.
+ * the entry already made. `setValues` refuses as `records.setValues` does. `updateMany` (AC-4826)
+ * checks the list at write and the field and change as `records.updateMany`
+ * does, then answers per entry, as `setValuesBatch` (its undo) does.
  * `remove` and `restore` answer per entry. `addMany` adds up to 500 records,
  * each on its own: a record already in an "Each record once" list goes in
  * `alreadyIn`, any other refusal in `refused`, and neither fails the rest.
@@ -378,6 +432,8 @@ export const entriesContract = {
   addMany: oc.input(AddEntriesInput).output(AddedEntries),
   forRecord: oc.input(EntriesForRecordInput).output(z.object({ entries: z.array(EntryView) })),
   setValues: oc.input(SetEntryValuesInput).output(WrittenEntry),
+  updateMany: oc.input(UpdateEntriesInput).output(EntryEditResults),
+  setValuesBatch: oc.input(SetEntriesValuesInput).output(EntryEditResults),
   remove: oc.input(EntryIdsInput).output(EntryResults),
   restore: oc.input(EntryIdsInput).output(EntryResults),
   addMatching: oc.input(AddMatchingInput).output(JobView),
