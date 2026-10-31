@@ -3,9 +3,9 @@
 // delegate). `target_type` and `level` are text with no value check, as spec
 // 0032 keeps `access_rules.level`, so a value from a newer deploy fails closed
 // after a rollback; core validates both on write and reads an unknown one as
-// nothing. `target_team_id` has no foreign key yet: teams arrive with spec 0031
-// slice 8, whose migration adds it (AC-1443); until then core refuses a team
-// target. `created_by` is who granted it; `updated_by` who last set its level.
+// nothing. `target_team_id` points at `teams` with `on delete cascade`
+// (migration 0142, AC-1443), so a deleted team's delegations go with it.
+// `created_by` is who granted it; `updated_by` who last set its level.
 import { sql } from 'drizzle-orm';
 import {
   boolean,
@@ -20,6 +20,7 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 import { auditColumns, id, workspaceId } from './common.ts';
+import { teams } from './teams.ts';
 import { actorConstraints, members } from './workspaces.ts';
 
 /** One delegation of See or Manage over someone's scheduling (spec 0037, AC-1254). */
@@ -51,6 +52,11 @@ export const scheduleDelegations = pgTable(
       columns: [t.workspaceId, t.targetMemberId],
       foreignColumns: [members.workspaceId, members.id],
     }),
+    foreignKey({
+      name: 'schedule_delegations_target_team',
+      columns: [t.workspaceId, t.targetTeamId],
+      foreignColumns: [teams.workspaceId, teams.id],
+    }).onDelete('cascade'),
     // One delegation per delegate and target: a grant again changes its level. Its prefix also serves the delegate's
     // reach (the scheduling choke point's one query), the delegate cap and the removal.
     uniqueIndex('schedule_delegations_one').on(

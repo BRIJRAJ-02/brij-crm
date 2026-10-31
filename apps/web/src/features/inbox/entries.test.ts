@@ -83,3 +83,18 @@ describe('a join request (flow pass, 30 Oct 2026)', () => {
     expect(targetOf('acme', asked, slugs)).toEqual({ kind: 'href', href: '/w/acme/settings/members' });
   });
 });
+
+describe('someone changed the reader’s scheduling (spec 0037, AC-1264)', () => {
+  const changed: NotificationView = {
+    id: ID,
+    kind: 'scheduling_changed',
+    actor: { type: 'member', id: OBJECT },
+    createdAt: '2026-10-31T09:00:00.000Z',
+    excerpt: '',
+  };
+
+  it('is the actor’s doing, and opens the reader’s own Availability', () => {
+    expect(toNotificationItem(changed, [])).toMatchObject({ kind: 'scheduling_changed', excerpt: '' });
+    expect(targetOf('acme', changed, slugs)).toEqual({ kind: 'href', href: '/w/acme/bookings/availability' });
+  });
+});

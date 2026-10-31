@@ -4,6 +4,7 @@ import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
 import { TruncatedText } from '../../atoms/TruncatedText/TruncatedText.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { Popover } from '../../molecules/Popover/Popover.tsx';
+import { SectionBar } from '../../molecules/SectionBar/SectionBar.tsx';
 import { Table, type TableColumn } from '../../molecules/Table/Table.tsx';
 import { strings } from './strings.ts';
 import styles from './TeamWeek.module.css';
@@ -35,7 +36,7 @@ export type TeamWeekTone = 'usual' | 'override' | 'off' | 'away';
 export interface TeamWeekCell {
   readonly lines: readonly string[];
   readonly tone: TeamWeekTone;
-  /** What a screen reader hears for the cell: "Monday 3 November, Sam Lee: 9:00 AM to 5:00 PM, this week only". */
+  /** What a screen reader hears for the cell: "Monday 3 November, Sam Lee: 9:00 AM to 5:00 PM, this date only". */
   readonly label: string;
 }
 
@@ -59,7 +60,7 @@ export interface TeamWeekPerson {
 
 /**
  * The footer's day: how many work, and their hours ("4 people", "32 h"), and optionally one more quiet line under them
- * (the workspace link's coverage, "Link: 3"). `label` is what a screen reader hears for all of it.
+ * (the workspace link's coverage, "3 bookable"). `label` is what a screen reader hears for all of it.
  */
 export interface TeamWeekTotal {
   readonly value: string;
@@ -68,7 +69,7 @@ export interface TeamWeekTotal {
   readonly label: string;
 }
 
-/** One key of the legend under the grid: a tone's swatch and what it means ("Changed for this date"). */
+/** One key of the legend under the grid: a tone's look with what it means written inside it ("This date only"). */
 export interface TeamWeekLegendItem {
   readonly tone: TeamWeekTone;
   readonly label: string;
@@ -85,8 +86,8 @@ export interface TeamWeekProps {
   /** The footer row: its heading ("Working") and one total per day. */
   readonly footer?: { readonly label: string; readonly totals: readonly TeamWeekTotal[] };
   /**
-   * The quiet line under the grid: a swatch per tone and what it means, then one hint ("Select a day to change that
-   * date only"). It shows only with people.
+   * The quiet line under the grid: a key per tone, its look with its meaning inside it, then an optional hint. It
+   * shows only with people.
    */
   readonly legend?: { readonly items: readonly TeamWeekLegendItem[]; readonly hint?: string };
   /**
@@ -96,6 +97,8 @@ export interface TeamWeekProps {
   readonly renderEditor?: (personId: string, dayIndex: number, close: () => void) => ReactNode;
   /** The Popover's name ("Sam Lee, Tuesday 4 November"). */
   readonly editorLabel?: (personId: string, dayIndex: number) => string;
+  /** The heading the Popover shows over the editor ("Tue 4 · Sam Lee"), so it is plain whose day it is. */
+  readonly editorTitle?: (personId: string, dayIndex: number) => string;
   readonly isLoading?: boolean;
   /** What shows with no people: usually an EmptyState. */
   readonly emptyState?: ReactNode;
@@ -130,6 +133,7 @@ export function TeamWeek({
   legend,
   renderEditor,
   editorLabel,
+  editorTitle,
   isLoading = false,
   emptyState,
 }: TeamWeekProps) {
@@ -182,6 +186,7 @@ export function TeamWeek({
                   cell={cell}
                   join={join}
                   editorLabel={editorLabel?.(person.id, index) ?? cell.label}
+                  {...(editorTitle === undefined ? {} : { editorTitle: editorTitle(person.id, index) })}
                   renderEditor={(close) => renderEditor(person.id, index, close)}
                 />
               ) : (
@@ -196,11 +201,13 @@ export function TeamWeek({
       />
       {legend !== undefined && people.length > 0 && !isLoading && (
         <div className={styles.legend}>
+          {/* Each key is a small cell of its own look, its meaning written inside it, so it reads in both themes
+              without a swatch to match by eye. */}
           <ul className={styles.keys} aria-label={strings.legend}>
             {legend.items.map((item) => (
-              <li key={item.tone} className={styles.key}>
-                <span aria-hidden="true" className={styles.swatch} data-tone={item.tone} />
+              <li key={item.tone} className={styles.key} data-tone={item.tone}>
                 {item.label}
+                {item.tone === 'override' && <span aria-hidden="true" className={styles.dot} />}
               </li>
             ))}
           </ul>
@@ -284,16 +291,21 @@ function CellLines({ cell, join }: { readonly cell: TeamWeekCell; readonly join:
   );
 }
 
-/** An editable cell: a button the size of the cell, opening the editor in a Popover beside it. */
+/**
+ * An editable cell: a button the size of the cell, opening the editor in a Popover under it (above it, or shifted
+ * along, where the window has no room), headed by whose day it is. The cell keeps a ring while its editor is open.
+ */
 function EditableCell({
   cell,
   join,
   editorLabel,
+  editorTitle,
   renderEditor,
 }: {
   readonly cell: TeamWeekCell;
   readonly join: Join | undefined;
   readonly editorLabel: string;
+  readonly editorTitle?: string;
   readonly renderEditor: (close: () => void) => ReactNode;
 }) {
   const [isOpen, setOpen] = useState(false);
@@ -306,12 +318,17 @@ function EditableCell({
         data-tone={cell.tone}
         data-join={join}
         data-editable=""
+        data-open={isOpen || undefined}
         aria-label={cell.label}
       >
         <CellLines cell={cell} join={join} />
       </AriaButton>
-      <Popover label={editorLabel} triggerRef={trigger} placement="bottom start">
-        {renderEditor(() => setOpen(false))}
+      {/* A menu's width at least, growing with the editor's times at full size, never the narrow cell's. */}
+      <Popover label={editorLabel} triggerRef={trigger} placement="bottom start" width="menu">
+        <div className={styles.editor}>
+          {editorTitle !== undefined && <SectionBar title={editorTitle} isTitleQuiet />}
+          {renderEditor(() => setOpen(false))}
+        </div>
       </Popover>
     </DialogTrigger>
   );

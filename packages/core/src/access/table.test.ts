@@ -757,6 +757,16 @@ describe('the walk: a principal without the access is refused', () => {
         expect(week.rows.map((row) => row.memberId).filter((id) => id !== memberId)).toEqual([]);
         return;
       }
+      // The Team day (spec 0030, AC-769): a crafted `memberIds` naming others still answers the reader's column alone.
+      if (name === 'readTeamDay') {
+        const day = await core.readTeamDay(scope, {
+          day: new Date().toISOString().slice(0, 10),
+          timeZone: 'UTC',
+          memberIds: [ownerId, memberId],
+        });
+        expect(day.columns.map((column) => column.memberId)).toEqual([memberId]);
+        return;
+      }
       const answer = (await service(name)(scope, { memberIds: [ownerId] })) as
         readonly { readonly memberId: string }[] | { readonly members: readonly { readonly id: string }[] };
       const ids = Array.isArray(answer)

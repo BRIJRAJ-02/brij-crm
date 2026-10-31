@@ -56,8 +56,13 @@ export interface BookingListProps {
   /** What the list is ("Upcoming bookings"). */
   readonly label: string;
   readonly groups: readonly BookingListGroup[];
-  /** Opens a booking (its title is the button). */
-  readonly onOpen: (id: string) => void;
+  /**
+   * Opens a booking (its title is the button), with the row it was opened from, so a screen can anchor its card there
+   * (TeamDay's Needs a host lane).
+   */
+  readonly onOpen: (id: string, row: HTMLElement) => void;
+  /** The booking whose card is open beside its row: that row shows as open, its button expanded. */
+  readonly openId?: string;
   /** Shown with no rows: the tab's own EmptyState. */
   readonly emptyState?: ReactNode;
   /**
@@ -97,7 +102,7 @@ function openOnPress(event: MouseEvent<HTMLElement>, open: () => void) {
  * (Join, calendar, where it came from, who, the note); and the row's actions
  * at the end.
  */
-export function BookingList({ label, groups, onOpen, emptyState, placement = 'page' }: BookingListProps) {
+export function BookingList({ label, groups, onOpen, openId, emptyState, placement = 'page' }: BookingListProps) {
   const id = useId();
   if (groups.every((group) => group.rows.length === 0)) return <>{emptyState}</>;
   return (
@@ -115,7 +120,11 @@ export function BookingList({ label, groups, onOpen, emptyState, placement = 'pa
                   key={row.id}
                   className={styles.row}
                   data-pressable=""
-                  onClick={(event) => openOnPress(event, () => onOpen(row.id))}
+                  data-open={row.id === openId || undefined}
+                  onClick={(event) => {
+                    const element = event.currentTarget;
+                    openOnPress(event, () => onOpen(row.id, element));
+                  }}
                 >
                   <div className={styles.when} id={`${rowId}-when`}>
                     <span className={styles.date}>{row.date}</span>
@@ -128,7 +137,11 @@ export function BookingList({ label, groups, onOpen, emptyState, placement = 'pa
                       <Button
                         variant="ghost"
                         aria-describedby={row.guestName === undefined ? `${rowId}-when` : `${rowId}-when ${rowId}-who`}
-                        onPress={() => onOpen(row.id)}
+                        {...(openId === undefined ? {} : { isExpanded: row.id === openId })}
+                        onPress={(event) => {
+                          const element = event.target instanceof HTMLElement ? event.target.closest('li') : null;
+                          if (element !== null) onOpen(row.id, element);
+                        }}
                       >
                         {row.title}
                       </Button>

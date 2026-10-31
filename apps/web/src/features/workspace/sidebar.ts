@@ -5,20 +5,11 @@
 import type { NavEntry, NavPage, NavPrefs, NavSectionKey, NavState, NavUniverse, ObjectSummary } from '@crm/data';
 import { navKey, sectionItems, sectionOrder } from '@crm/data/navigation';
 import type { IconName } from '@crm/ui';
-import {
-  bookingsHref,
-  capturesHref,
-  inboxHref,
-  linkPageHref,
-  navObjects,
-  notesHref,
-  rosterHref,
-  tasksHref,
-} from './objects.ts';
+import { bookingsHref, capturesHref, inboxHref, linkPageHref, navObjects, notesHref, tasksHref } from './objects.ts';
 import { strings } from './strings.ts';
 
 /** A page the sidebar marks current that isn't an object's: Tasks, Bookings and Captures (the trash is in Settings). */
-export type SidebarPage = 'home' | 'linkPage' | 'inbox' | 'tasks' | 'notes' | 'bookings' | 'roster' | 'captures';
+export type SidebarPage = 'home' | 'linkPage' | 'inbox' | 'tasks' | 'notes' | 'bookings' | 'captures';
 
 /** One page the sidebar links to: its name, its icon and its address. */
 export interface SidebarPageLink {
@@ -41,7 +32,6 @@ export const PAGE_LINKS: { readonly [Page in NavPage]?: SidebarPageLink } = {
   tasks: { label: strings.tasks, icon: 'square-check', href: tasksHref },
   notes: { label: strings.notes, icon: 'notebook', href: notesHref },
   bookings: { label: strings.bookings, icon: 'calendar-days', href: bookingsHref },
-  roster: { label: strings.roster, icon: 'users', href: rosterHref },
   captures: { label: strings.captures, icon: 'link', href: capturesHref },
 };
 

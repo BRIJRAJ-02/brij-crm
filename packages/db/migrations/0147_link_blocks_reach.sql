@@ -1,4 +1,4 @@
--- Link page blocks and reach (spec 0061, 31 Oct 2026). Numbered 0144, after the brand kit's 0143.
+-- Link page blocks and reach (spec 0061, 31 Oct 2026). Numbered 0147, after the brand kit's 0146.
 --
 --
 -- What changes:

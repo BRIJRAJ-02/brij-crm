@@ -94,6 +94,7 @@ export const profileRouter = member.profile.router({
         {
           ...(input.name === undefined ? {} : { name: input.name }),
           ...(input.timeZone === undefined ? {} : { timeZone: input.timeZone }),
+          ...(input.jobTitle === undefined ? {} : { jobTitle: input.jobTitle }),
           ...(input.handle === undefined ? {} : { handle: input.handle }),
           ...(input.bio === undefined ? {} : { bio: input.bio }),
           ...(input.pictureHidden === undefined ? {} : { pictureHidden: input.pictureHidden }),

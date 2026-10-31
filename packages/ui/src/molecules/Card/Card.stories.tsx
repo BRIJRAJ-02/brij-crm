@@ -4,7 +4,7 @@ import { Button } from '../../atoms/Button/Button.tsx';
 import { Switch } from '../../atoms/Switch/Switch.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { DescriptionList } from '../DescriptionList/DescriptionList.tsx';
-import { Select } from '../Select/Select.tsx';
+import { Select } from '../Select/SelectWithFaces.tsx';
 import { Table } from '../Table/Table.tsx';
 import { Card } from './Card.tsx';
 

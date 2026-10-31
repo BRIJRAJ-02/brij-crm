@@ -33,6 +33,7 @@ New. The alignment asks for rows under grey day bands ("TODAY"), each with a dat
 />
 ```
 
+- `openId` marks the row whose card is open beside it (the selected surface, its button expanded), and `onOpen` gets the row's element besides its id, so a screen can anchor a card there. Why: TeamDay's Needs a host list (in its strip's popover or sheet) is the same booking row, and a card opened from a row belongs beside it.
 - The title is a ghost Button; `onOpen` gets the row's id. Its name is the title, and the row's time and who it is with describe it (not Join or the note, which would make every row long), so a screen reader hears which meeting each button opens ("Intro call, 6:00 PM – 6:30 PM, You and Ethan Brooks"). A press anywhere else on the row opens it too (`data-pressable`, and the row takes `surface-hover` under a fine pointer), except on its own links and actions or at the end of a text selection, as Cal.com's and Linear's rows open (22 October 2026: the title alone was a small target in a wide row). Why not a GridList: the row's guest link, Join and actions stay plain tab stops, and the keyboard path is unchanged.
 - `guestHref` links the guest's name to their person; without it the name is text.
 - `badge` ("Cancelled") is a Badge after the title.
