@@ -34,14 +34,16 @@
     display: inline-flex;
   }
 
+  /* The state's mark sits on the avatar's corner, outside its initials: a 16px dot hung past the circle's edge, so
+     "AL" never reads as "AI" under it. */
   .mark {
     position: absolute;
-    inset-block-end: calc(-1 * var(--space-4));
-    inset-inline-end: calc(-1 * var(--space-4));
+    inset-block-end: calc(-1 * var(--space-6));
+    inset-inline-end: calc(-1 * var(--space-6));
     display: inline-grid;
     place-items: center;
-    inline-size: var(--size-chip);
-    block-size: var(--size-chip);
+    inline-size: var(--space-16);
+    block-size: var(--space-16);
     border: var(--border-width-thick) solid var(--surface-subtle);
     border-radius: var(--radius-full);
     background: var(--tag-green-bg);

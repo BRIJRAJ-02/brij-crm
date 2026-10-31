@@ -21,6 +21,7 @@ New. Developer settings (#34, #39) show an API key's scopes or a webhook's last 
 - `layout`: `columns` (terms beside values, the default), `stacked` (terms above), or `compact`: columns on a tight rhythm (`space-4` between rows) with the terms in one fixed `size-column-narrow` column, so short values line up (a booking page's week, "Mon to Wed" over "Thu"; the owner, 22 October 2026: the default rhythm spread a seven row week too far).
 - `copy` (`{ value, label }`) puts an icon CopyButton after a description: shown on the row's hover or focus with a pointer, always under a finger, copying the raw value, which can differ from what shows (a phone shown spaced copies its E.164 number). Why a prop: a form submission's email and phone are copied far more than they are read, and a screen can't lay a button beside a value itself (22 October 2026).
 - `isPlaceholder` draws a description that stands in for a missing value ("No answer") in `text-tertiary`, so it never reads as an answer (22 October 2026).
+- `address` puts an email or web address on a line of its own under the description, in `text-secondary` (a booking's guest: their name, then their email). It never breaks at a hyphen or a dot and is never hyphenated; it breaks anywhere only when it is longer than the line (`line-break: anywhere`). Why a prop: a phone's narrow column broke "vera-1c8a…@example.com" at its hyphen, and a screen can't style a value's inside itself (spec 0058, 31 October 2026).
 - It is a real `<dl>`, so screen readers pair each term with its value.
 
 ## States

@@ -103,13 +103,14 @@ export function VisitorBar({
   if (person === undefined) {
     if (match !== undefined) {
       return (
-        // A small secondary link at the row's end (spec 0058, AC-24): booking is the page's one ask, so this offer
-        // stays quiet, and the dialog says what it reads before anything leaves for Google.
+        // A quiet secondary action at the row's end (spec 0058, AC-24): booking is the page's one ask, so this offer
+        // stays quiet (ghost, at the body's size so it still reads), and the dialog says what it reads before anything
+        // leaves for Google.
         <div ref={root} className={styles.root} tabIndex={-1}>
           <VisuallyHidden>{strings.invite}</VisuallyHidden>
           <Tooltip content={strings.readsOnly}>
             <Button
-              variant="link"
+              variant="ghost"
               provider="google"
               onPress={() => {
                 match.onOpenChange(true);
@@ -127,7 +128,7 @@ export function VisitorBar({
       <div ref={root} className={styles.root} tabIndex={-1}>
         <VisuallyHidden>{strings.invite}</VisuallyHidden>
         <Tooltip content={strings.readsOnly}>
-          <ButtonLink variant="link" href={connectHref} provider="google">
+          <ButtonLink variant="ghost" href={connectHref} provider="google">
             {strings.connect}
           </ButtonLink>
         </Tooltip>

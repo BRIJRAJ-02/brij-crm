@@ -1,6 +1,6 @@
 /* Tooltip: one line on the inverse surface, 11px, above its trigger by
    default. It fades in after React Aria's delay; from the keyboard it appears
-   at once. */
+   and goes at once. */
 @layer components {
   /* Shrinks in a flex row (a cell, a chip), so text inside can be cut. */
   .trigger {
@@ -67,7 +67,8 @@
     animation: fade-out var(--duration-exit) var(--ease-out) forwards;
   }
 
-  .root[data-opened-by='keyboard'][data-entering] {
+  /* Opened from the keyboard, it comes and goes at once: tabbing on never leaves it fading over the next control. */
+  .root[data-opened-by='keyboard']:is([data-entering], [data-exiting]) {
     animation: none;
   }
 
