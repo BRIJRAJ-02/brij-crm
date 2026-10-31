@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { FONT_PACKS } from '@crm/tokens/packs';
 import { FIRST_SCREEN_FONTS, layerOrder, preloadFonts, uiVite } from '@crm/ui/vite';
 import { sentryVitePlugin } from '@sentry/vite-plugin';
 import { tanstackRouter } from '@tanstack/router-plugin/vite';
@@ -179,6 +180,21 @@ function publicBookingPage(): Plugin {
 }
 
 /**
+ * Each font pack's heading face by its built (hashed) path, keyed by the `font` a look stores (spec 0060, AC-21), so
+ * the handle shell preloads the very file the pack's stylesheet fetches. A pack whose file the build didn't emit is
+ * left out, and its page simply goes without the preload.
+ */
+export function packFonts(assets: readonly string[]): Record<string, string> {
+  const fonts: Record<string, string> = {};
+  for (const [font, pack] of Object.entries(FONT_PACKS)) {
+    const stem = pack.heading.replace(/\.woff2$/, '');
+    const file = assets.find((name) => name.startsWith(`${stem}-`) && name.endsWith('.woff2'));
+    if (file !== undefined) fonts[font] = `/assets/${file}`;
+  }
+  return fonts;
+}
+
+/**
  * The built booking shell, written beside the handle Function as a module (spec 0055, AC-5501), so that function
  * answers `/<handle>` from bytes it already holds: no file read and no request for its own shell while a visitor
  * waits. The build is the only writer, and `build.test.ts` fails when what it wrote is not what `dist` holds.
@@ -196,9 +212,10 @@ function inlineBookingShell(): Plugin {
       order: 'post',
       handler() {
         const shell = readFileSync(path.join(outDir, 'book.html'), 'utf8');
+        const fonts = packFonts(readdirSync(path.join(outDir, 'assets')));
         writeFileSync(
           path.join(import.meta.dirname, 'api', 'shell.generated.mjs'),
-          `// Written by the build (crm:booking-shell in vite.config.ts). Never edit it, and never commit it.\nexport const BOOKING_SHELL = ${JSON.stringify(shell)};\n`,
+          `// Written by the build (crm:booking-shell in vite.config.ts). Never edit it, and never commit it.\nexport const BOOKING_SHELL = ${JSON.stringify(shell)};\nexport const PACK_FONTS = ${JSON.stringify(fonts)};\n`,
         );
       },
     },

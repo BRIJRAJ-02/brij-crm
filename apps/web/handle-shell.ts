@@ -58,6 +58,8 @@ export interface ShellProfile {
   readonly theme?: unknown;
   readonly indexable?: unknown;
   readonly version?: unknown;
+  /** The versions of the page's own stylesheet and photos (spec 0060, `PublicLook`). */
+  readonly look?: unknown;
 }
 
 /** A string, or undefined for anything else: a read's answer is parsed here, never trusted by its type. */
@@ -128,6 +130,50 @@ export function withBoot(shell: string, boot: ShellBoot): string {
   return `${shell.slice(0, headEnd)}${block}${shell.slice(headEnd)}`;
 }
 
+/** The id of the page's own stylesheet link, which the public bundle finds again (`wearStylesheet` in public/). */
+export const LOOK_LINK_ID = 'crm-look';
+
+/** A look's version and a font file's built path, as the shell will write them into an attribute. */
+const LOOK_VERSION = /^[0-9a-f]{12}$/;
+const LOOK_HANDLE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const FONT_FILE = /^\/assets\/[\w.-]+\.woff2$/;
+
+/**
+ * The link page's own look in its head (spec 0060, AC-20, AC-21): its stylesheet on our own api (the accent pair and
+ * any photo, `look.css?v=`), and a preload for its pack's heading face, by the built name the build handed over, so
+ * the name draws in its own face from the start. Inter is preloaded by the build on every public page already, so a
+ * file the shell names once is never named twice. Anything malformed writes nothing: the page draws its look from
+ * the shared stylesheet either way, in the product's accent.
+ */
+export function withLook(shell: string, profile: ShellProfile, fonts: Readonly<Record<string, string>> = {}): string {
+  const headEnd = shell.indexOf('</head>');
+  if (headEnd < 0) return shell;
+  const handle = text(profile.handle);
+  const look =
+    typeof profile.look === 'object' && profile.look !== null ? (profile.look as Record<string, unknown>) : {};
+  const version = text(look.version);
+  const theme =
+    typeof profile.theme === 'object' && profile.theme !== null ? (profile.theme as Record<string, unknown>) : {};
+  const font = text(theme.font);
+  const links: string[] = [];
+  if (
+    font !== undefined &&
+    Object.hasOwn(fonts, font) &&
+    FONT_FILE.test(fonts[font] ?? '') &&
+    !shell.includes(`href="${fonts[font] ?? ''}"`)
+  ) {
+    links.push(`    <link rel="preload" href="${fonts[font] ?? ''}" as="font" type="font/woff2" crossorigin>\n`);
+  }
+  if (handle !== undefined && LOOK_HANDLE.test(handle) && handle.length <= 40 && version !== undefined) {
+    if (LOOK_VERSION.test(version)) {
+      links.push(
+        `    <link rel="stylesheet" id="${LOOK_LINK_ID}" href="/api/public/handles/${handle}/look.css?v=${version}">\n`,
+      );
+    }
+  }
+  return links.length === 0 ? shell : `${shell.slice(0, headEnd)}${links.join('')}${shell.slice(headEnd)}`;
+}
+
 /** What the shell was built from, which the answer's own header reports so a miss is visible in production. */
 export type ShellOutcome = 'profile' | 'page' | 'unknown' | 'missed';
 
@@ -162,6 +208,11 @@ export interface ShellDeps {
    * shows a broken preview, which is worse than the small one.
    */
   readonly cardOrigin?: string;
+  /**
+   * The built path of each font pack's heading face, keyed by the `font` a look stores (spec 0060, AC-21): written
+   * by the build from `FONT_PACKS` in `@crm/tokens/packs`, so the preload names the file the stylesheet fetches.
+   */
+  readonly fonts?: Readonly<Record<string, string>>;
   /** The time now, in milliseconds: when a profile was read, so the page can tell an old shell's copy. */
   readonly now?: () => number;
   /** Where a miss is reported. */
@@ -218,7 +269,11 @@ export async function shellFor(pathname: string, deps: ShellDeps): Promise<Shell
     ...(look === undefined ? {} : { look }),
   };
   return {
-    body: withBoot(withMeta(deps.shell, source), { kind: 'profile', profile, readAt: (deps.now ?? Date.now)() }),
+    body: withBoot(withLook(withMeta(deps.shell, source), { ...profile, handle }, deps.fonts), {
+      kind: 'profile',
+      profile,
+      readAt: (deps.now ?? Date.now)(),
+    }),
     status: 200,
     outcome: 'profile',
     tags: linkPageCacheTags(parts.handle, handle),

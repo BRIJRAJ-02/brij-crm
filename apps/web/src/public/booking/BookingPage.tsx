@@ -41,6 +41,7 @@ import {
 } from '@crm/ui/public-booking';
 import { createElement, lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { railBrand, railHost, railTitle } from './host.ts';
+import { brandHref, wearStylesheet } from '../stylesheet.ts';
 import type { ChatMemory } from './ChatPanel.tsx';
 import type { Prefill } from './prefill.ts';
 import {
@@ -232,7 +233,10 @@ export function BookingPage({
     client.page(publicKey).then(
       (page) => {
         if (page.path !== undefined) onAddress?.(page.path);
-        setLoaded({ state: 'ready', page });
+        // The brand it wears (spec 0060, AC-4), waited on a moment so the page draws in its colour from the start.
+        void wearStylesheet(document, brandHref('booking', page.publicKey, page.brand?.version)).then(() => {
+          setLoaded({ state: 'ready', page });
+        });
       },
       (error: unknown) => {
         const code = isDataError(error) ? error.code : undefined;

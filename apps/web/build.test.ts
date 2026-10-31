@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
 import path from 'node:path';
 import { PLAIN_ERRORS } from '@crm/contracts/plain-words';
+import { FONT_PACKS } from '@crm/tokens/packs';
 import { build } from 'vite';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { firstLoad, type Manifest } from './first-load.ts';
@@ -129,6 +130,20 @@ describe('the built page', () => {
     // The meta block replaces the shell's own title and its noindex, so both have to be there to replace.
     expect(BOOKING_SHELL).toContain('<title>');
     expect(BOOKING_SHELL).toContain('name="robots"');
+  });
+
+  // A link page preloads its own pack's heading face by its built name (spec 0060, AC-21): every pack has one, and
+  // each names a file the build shipped, on our own origin.
+  it('hands the handle Function each font pack’s built heading face', async () => {
+    const generated = path.join(import.meta.dirname, 'api', 'shell.generated.mjs');
+    const { PACK_FONTS } = (await import(pathToFileURL(generated).href)) as {
+      PACK_FONTS: Readonly<Record<string, string>>;
+    };
+    expect(Object.keys(PACK_FONTS).sort()).toEqual(Object.keys(FONT_PACKS).sort());
+    for (const file of Object.values(PACK_FONTS)) {
+      expect(file).toMatch(/^\/assets\/[\w.-]+\.woff2$/);
+      expect(existsSync(path.join(outDir, file.slice(1))), file).toBe(true);
+    }
   });
 });
 

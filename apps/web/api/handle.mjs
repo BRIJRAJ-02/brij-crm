@@ -28,7 +28,7 @@ registerHooks({
 const { cacheControlFor, shellFor } = await import('../handle-shell.ts');
 // The built shell, written beside this file by the build (`crm:booking-shell` in vite.config.ts), so the function
 // reads no file and makes no request for its own bytes.
-const { BOOKING_SHELL } = await import('./shell.generated.mjs');
+const { BOOKING_SHELL, PACK_FONTS } = await import('./shell.generated.mjs');
 
 /** Reads one handle's public profile from this deployment's own api, through the same edge every visitor uses. */
 const readProfile = (origin) => async (handle, signal) => {
@@ -60,6 +60,8 @@ export async function GET(request) {
   const { body, status, outcome, tags } = await shellFor(url.pathname, {
     shell: BOOKING_SHELL,
     origin,
+    // Each font pack's heading face by its built name, so a link page preloads its own pack and no other (spec 0060).
+    fonts: PACK_FONTS,
     // The share card is served from the public origin too, by `api/card.mjs` in this same deployment, so a crawler
     // that follows the block reaches a picture on the address the page itself lives at (spec 0055, AC-5510).
     cardOrigin: origin,

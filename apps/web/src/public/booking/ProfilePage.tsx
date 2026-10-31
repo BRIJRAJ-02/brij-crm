@@ -24,8 +24,9 @@ import {
   useToasts,
 } from '@crm/ui/public-booking';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { wearStylesheet } from '../stylesheet.ts';
 import { claimHandleHref } from './claim.ts';
-import { blocksOf } from './link-page.ts';
+import { blocksOf, lookHref } from './link-page.ts';
 import { strings, tabTitle } from './strings.ts';
 
 /** The address as the visitor reads it in the bar: the host they are on, then the handle. */
@@ -250,6 +251,14 @@ export function ProfilePage({ handle, initial, onMoved }: ProfilePageProps) {
     scrollTo.current = undefined;
     row.scrollIntoView({ block: 'center' });
   }, [loaded.state]);
+  // The page's own stylesheet (spec 0060, AC-14): the shell links it in the head; a page drawn without that shell
+  // (a missed read, a moved handle, a new version since) links it here, from the same api.
+  const lookVersion = loaded.state === 'ready' ? loaded.profile.look?.version : undefined;
+  const lookHandle = loaded.state === 'ready' ? loaded.profile.handle : undefined;
+  useEffect(() => {
+    if (lookHandle === undefined) return;
+    void wearStylesheet(document, lookHref(lookHandle, lookVersion));
+  }, [lookHandle, lookVersion]);
   useEffect(() => {
     // The tab says what the heading says, with the product, as the booking pages' tabs do (QA Q76).
     if (loaded.state === 'ready') document.title = tabTitle(loaded.profile.name);
