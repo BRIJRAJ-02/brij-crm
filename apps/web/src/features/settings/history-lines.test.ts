@@ -414,6 +414,14 @@ const SENTENCES: readonly (readonly [AuditEntryView, string])[] = [
     'Ada Lovelace booked Intro call on dayTime(2026-10-24T09:30) for Bea Rao',
   ],
   [
+    { ...base, action: 'automation.changed', target: workspace, params: { change: 'created', object: 'Deals' } },
+    'Ada Lovelace made an automation for Deals',
+  ],
+  [
+    { ...base, action: 'automation.changed', target: workspace, params: { change: 'disabled', object: 'tasks' } },
+    'Ada Lovelace switched off an automation for tasks',
+  ],
+  [
     {
       ...base,
       action: 'team.changed',

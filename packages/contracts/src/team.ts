@@ -116,6 +116,9 @@ export const AUDIT_ACTIONS = [
   'list.updated',
   'list.archived',
   'list.restored',
+  // Automations (parity #53): made, changed, switched on or off, deleted or brought back. The target is the
+  // automation; `after` holds `change` and the name its trigger's object had then (`tasks` for a task due one).
+  'automation.changed',
 ] as const;
 /** One action the audit log records. */
 export const AuditAction = z.enum(AUDIT_ACTIONS);

@@ -253,6 +253,19 @@ const SENTENCES: SentenceTemplates = {
       }
     }
   },
+  // Automations (parity #53): "Ada switched off an automation for Deals".
+  'automation.changed': (entry) => {
+    const { change, object } = entry.params;
+    const verb = {
+      created: 'made',
+      updated: 'changed',
+      enabled: 'switched on',
+      disabled: 'switched off',
+      deleted: 'deleted',
+      restored: 'restored',
+    }[change];
+    return actor(`${verb} an automation for ${object}`);
+  },
   'access.rule_set': (entry) => {
     const { object, who, level, records, fields, isDefault } = entry.params;
     if (isDefault) return actor(`set ${who} back to the default access to ${object}`);

@@ -233,7 +233,7 @@ export function composeJobTasks(options: JobTasksOptions): JobTasks {
 
   // Automations (parity #53): each queued run enters as the member its automation runs as (the same rules the
   // requests use), writes with the outbox hook only, and tells `onStored` when a run stored an event.
-  const automation = (payload: unknown, again: (workspaceId: string) => Promise<void>) =>
+  const automation = (payload: unknown, again: (workspaceId: string, at?: Date) => Promise<void>) =>
     runAutomationTask(
       {
         door: { db, rules: APP_RULES },

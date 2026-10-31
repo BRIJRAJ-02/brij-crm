@@ -92,12 +92,14 @@ export function derivedTaskId(runId: string, index: number): string {
 /**
  * Runs the workspace's queued automation runs, oldest first, for up to about 15 seconds. Answers how many it ran and
  * whether more are waiting (the task queues itself again then). Runs left `running` by a worker that died are put
- * back first.
+ * back first. Once the queue is empty, a run still `running` (a call that crashed, or one another worker holds)
+ * answers `staleAt`, when it may be put back: the task queues a call for then, so a crash is retried by the job
+ * itself, not only by the next write or the hourly sweep.
  */
 export async function runAutomationQueue(
   deps: AutomationRunDeps,
   workspaceId: string,
-): Promise<{ readonly ran: number; readonly more: boolean }> {
+): Promise<{ readonly ran: number; readonly more: boolean; readonly staleAt?: Date }> {
   const now = deps.now ?? (() => new Date());
   const started = now().getTime();
   const system = deps.systemScope(workspaceId);
@@ -110,11 +112,26 @@ export async function runAutomationQueue(
   let ran = 0;
   while (now().getTime() - started < SLICE_MS) {
     const run = await claim(system);
-    if (run === undefined) return { ran, more: false };
+    if (run === undefined) {
+      const staleAt = await nextStale(system);
+      return staleAt === undefined ? { ran, more: false } : { ran, more: false, staleAt };
+    }
     await runOne(deps, system, run);
     ran += 1;
   }
   return { ran, more: true };
+}
+
+/** When the oldest run still `running` may be put back (`automation_runs_running`), or nothing when none is. */
+async function nextStale(system: EngineScope): Promise<Date | undefined> {
+  const result = await inWorkspace(system, (tx) =>
+    tx.execute<{ at: string | null }>(sql`
+      select (min(claimed_at) + ${`${String(STALE_MINUTES)} minutes`}::interval + interval '5 seconds')::text as at
+      from automation_runs where status = 'running'
+    `),
+  );
+  const at = result.rows[0]?.at ?? null;
+  return at === null ? undefined : new Date(at);
 }
 
 /** Claims the oldest queued run (skipping any another worker holds), or nothing. */

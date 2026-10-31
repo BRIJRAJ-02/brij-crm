@@ -338,6 +338,15 @@ export const AuditEntryView = z.discriminatedUnion('action', [
     booking,
     z.strictObject({ host: AuditPerson, change: z.enum(['made', 'moved', 'cancelled']) }),
   ),
+  /** An automation made, changed, switched on or off, deleted or brought back (parity #53): its trigger's object. */
+  entry(
+    ['automation.changed'],
+    workspace,
+    z.strictObject({
+      change: z.enum(['created', 'updated', 'enabled', 'disabled', 'deleted', 'restored']),
+      object: z.string(),
+    }),
+  ),
   /** A list made, changed, archived or restored (spec 0048); a rename shows as the name's change. */
   entry(['list.created', 'list.updated', 'list.archived', 'list.restored'], list, NoParams),
 ]);

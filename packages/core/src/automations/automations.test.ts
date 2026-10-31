@@ -121,6 +121,21 @@ describe('a record created', () => {
     expect(await w.tasks()).toHaveLength(1);
   });
 
+  it('answers when a run a crashed call left running may be put back, and runs it then', async () => {
+    const w = await world();
+    await w.make(createdDeal(w.deals));
+    await w.deal('Acme');
+    // A call that crashed after its claim: the run sits `running`, claimed just now.
+    await w.q(sql`update automation_runs set status = 'running', claimed_at = now()`);
+    const first = await w.run();
+    expect(first.ran).toBe(0);
+    expect((first.staleAt?.getTime() ?? 0) - Date.now()).toBeGreaterThan(4 * 60_000);
+    // The call the task queues for that time puts the run back and runs it.
+    await w.q(sql`update automation_runs set claimed_at = now() - interval '6 minutes'`);
+    expect(await w.run()).toEqual({ ran: 1, more: false });
+    expect(await w.tasks()).toHaveLength(1);
+  });
+
   it('makes a task id the same for a run and its place, shaped as a UUID v7', () => {
     const run = newId();
     expect(derivedTaskId(run, 0)).toBe(derivedTaskId(run, 0));
@@ -137,6 +152,18 @@ describe('a record created', () => {
     await w.make(createdDeal(w.objects.people ?? ''));
     await w.deal('Acme');
     expect(await w.q(sql`select 1 from automation_runs`)).toHaveLength(0);
+    // Each change has its audit row for Settings › History, naming the trigger's object, never the definition.
+    expect(
+      await w.q(
+        sql`select after->>'change' as change, after->>'object' as object from audit_events where action = 'automation.changed' order by at, id`,
+      ),
+    ).toEqual([
+      { change: 'created', object: 'Deals' },
+      { change: 'disabled', object: 'Deals' },
+      { change: 'created', object: 'Deals' },
+      { change: 'deleted', object: 'Deals' },
+      { change: 'created', object: 'People' },
+    ]);
   });
 });
 
