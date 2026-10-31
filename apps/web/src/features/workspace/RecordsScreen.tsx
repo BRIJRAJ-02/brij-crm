@@ -820,6 +820,7 @@ export function RecordsScreen({
               singularName={object.singularName}
               objectKey={objectKey}
               objectId={object.id}
+              objectSlug={object.apiSlug}
               memberPicker={memberPicker}
               {...(createPreset === undefined ? {} : { preset: createPreset })}
               onCreated={(record, keepOpen) => {

@@ -53,6 +53,8 @@ export interface NewRecordDialogProps {
   readonly objectKey?: string;
   /** The object's id: an option made here ("Create "<typed>"") is made on its attribute. */
   readonly objectId: string;
+  /** The object's API name, for the addresses of the records a likely duplicate hint names (spec 0049). */
+  readonly objectSlug?: string;
   /** The screen's member picker: an Owner is chosen with it, "Me" first, and a "current user" default shows as Me. */
   readonly memberPicker: MemberPicker;
   /** Mints the new record's id, once per opening: a second press after a lost answer sends the same one. */
@@ -165,6 +167,7 @@ export function NewRecordDialog({
   singularName,
   objectKey,
   objectId,
+  objectSlug,
   memberPicker,
   first,
   more,
@@ -216,6 +219,7 @@ export function NewRecordDialog({
         singularName={singularName}
         {...(objectKey === undefined ? {} : { objectKey })}
         objectId={objectId}
+        {...(objectSlug === undefined ? {} : { objectSlug })}
         memberPicker={memberPicker}
         newId={newId}
         first={first}
@@ -236,7 +240,16 @@ export function NewRecordDialog({
 /** Props for the dialog's form. */
 interface NewRecordFormProps extends Pick<
   NewRecordDialogProps,
-  'first' | 'more' | 'onCreate' | 'singularName' | 'newId' | 'objectKey' | 'objectId' | 'memberPicker' | 'preset'
+  | 'first'
+  | 'more'
+  | 'onCreate'
+  | 'singularName'
+  | 'newId'
+  | 'objectKey'
+  | 'objectId'
+  | 'objectSlug'
+  | 'memberPicker'
+  | 'preset'
 > {
   readonly onCreated: (record: RecordView) => void;
   readonly formId: string;
@@ -252,6 +265,7 @@ function NewRecordForm({
   singularName,
   objectKey,
   objectId,
+  objectSlug,
   memberPicker,
   newId,
   first,
@@ -303,7 +317,8 @@ function NewRecordForm({
   );
   const duplicateState = useDuplicateCheck(duplicates);
   const matched = new Set(matchedAttributes(editors, objectKey).map((each) => each.id));
-  const [hintFor, setHintFor] = useState<string | undefined>(undefined);
+  // Said in one place, under the record's name, so later fields never move as the person goes on.
+  const hintFor = first.find((editor) => editor.isPrimary)?.id ?? first[0]?.id;
 
   /** One editor's value committed: what it shows, and what Create sends (a list where the attribute holds one). */
   const commitValue = (definition: AttributeDefinition, value: unknown) => {
@@ -312,7 +327,6 @@ function NewRecordForm({
       [definition.id]: definition.isMulti && value !== null && !Array.isArray(value) ? [value] : value,
     };
     if (matched.has(definition.id)) {
-      setHintFor(definition.id);
       duplicates.ask(matchedValues(editors, sending.current, objectKey));
     }
     setValues((shown) => ({ ...shown, [definition.id]: value }));
@@ -418,10 +432,10 @@ function NewRecordForm({
     );
   };
   const editorWithHint = (definition: AttributeDefinition) =>
-    hintFor === definition.id && objectKey !== undefined ? (
+    hintFor === definition.id && objectSlug !== undefined ? (
       <Fragment key={definition.id}>
         {editorFor(definition)}
-        <DuplicateHint slug={slug} objectSlug={objectKey} state={duplicateState} />
+        <DuplicateHint slug={slug} objectSlug={objectSlug} state={duplicateState} />
       </Fragment>
     ) : (
       editorFor(definition)

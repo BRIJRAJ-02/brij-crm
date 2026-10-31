@@ -5,6 +5,7 @@
 import type { DuplicatePairsList } from '@crm/data';
 import { useDuplicatePairs } from '@crm/data/react';
 import { Button, ButtonLink, Callout, Link } from '@crm/ui';
+import { useState } from 'react';
 import { recordHref } from '../records/details.ts';
 import { mergeFor } from './launch.ts';
 import { duplicatesHref } from './paths.ts';
@@ -22,7 +23,10 @@ export interface DuplicateBannerProps {
 
 /** The banner, or nothing when the record has no likely pair. */
 export function DuplicateBanner({ slug, object, recordId, pairs }: DuplicateBannerProps) {
-  const state = useDuplicatePairs(pairs);
+  const now = useDuplicatePairs(pairs);
+  // While a fresh read is out (after an edit), the last answer stays, so the banner never blinks out and back.
+  const [state, setShown] = useState(now);
+  if (now !== state && (now.status === 'ready' || state.status !== 'ready')) setShown(now);
   const dismiss = useDismiss(pairs);
   if (state.status !== 'ready' || state.pairs.length === 0) return null;
   const [pair] = state.pairs;
@@ -32,7 +36,6 @@ export function DuplicateBanner({ slug, object, recordId, pairs }: DuplicateBann
       <Callout
         tone="warning"
         placement="banner"
-        isAnnounced
         actions={
           <ButtonLink variant="secondary" href={duplicatesHref(slug, object.apiSlug, recordId)}>
             {strings.review}
@@ -49,7 +52,6 @@ export function DuplicateBanner({ slug, object, recordId, pairs }: DuplicateBann
     <Callout
       tone="warning"
       placement="banner"
-      isAnnounced
       actions={
         <>
           {launch !== undefined && (

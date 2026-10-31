@@ -60,7 +60,7 @@ export function DuplicatesScreen({ slug, object, recordId, pairs }: DuplicatesSc
         page={{
           topBar,
           body: (
-            <EmptyState icon="lock" title={strings.noAccess(object.pluralName)}>
+            <EmptyState tone="locked" title={strings.noAccess(object.pluralName)}>
               {strings.noAccessText}
             </EmptyState>
           ),
@@ -99,9 +99,14 @@ export function DuplicatesScreen({ slug, object, recordId, pairs }: DuplicatesSc
 
   const body = (
     <PageColumn>
+      {recordId !== undefined && state.pairs.length > 0 && (
+        <Callout actions={<Link href={duplicatesHref(slug, object.apiSlug)}>{strings.showAll}</Link>}>
+          {strings.narrowed}
+        </Callout>
+      )}
       <Table
         label={strings.tableLabel}
-        columns={COLUMNS}
+        columns={launch !== undefined || mayDismiss ? COLUMNS : COLUMNS.filter((column) => column.id !== 'actions')}
         rows={state.pairs}
         getRowId={pairKey}
         isLoading={state.status === 'loading'}

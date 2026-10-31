@@ -29,6 +29,7 @@ export const strings = {
   emptyText: 'Records with the same name, email or domain show here.',
   emptyRecord: 'No likely duplicates of this record',
   showAll: 'Show all',
+  narrowed: 'Showing one record’s likely duplicates.',
   failedTitle: 'Duplicates couldn’t load',
   failedText: 'Check your connection, then try again.',
   tryAgain: 'Try again',
@@ -38,7 +39,8 @@ export const strings = {
   /** Not a duplicate's toast, with Undo (AC-4908). */
   dismissed: 'Marked as not a duplicate',
   undo: 'Undo',
-  dismissFailed: 'Couldn’t mark it. Try again.',
-  restoreFailed: 'Couldn’t undo. Try again.',
+  dismissFailed: 'Couldn’t mark it as not a duplicate. It’s back in the list.',
+  restoreFailed: 'Couldn’t undo.',
+  retry: 'Retry',
   unnamed: 'Unnamed record',
 };

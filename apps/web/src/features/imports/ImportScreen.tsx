@@ -994,7 +994,7 @@ export function ImportScreen({
                   { value: 'errors', label: strings.filters.errors(errors) },
                   ...(likelyCount > 0 ? [{ value: 'duplicates', label: strings.filters.duplicates(likelyCount) }] : []),
                 ]}
-                value={filter}
+                value={filter === 'duplicates' && likelyCount === 0 ? 'all' : filter}
                 onChange={(value) => {
                   setFilter(value as Filter);
                   setPage(1);
