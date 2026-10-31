@@ -1287,9 +1287,12 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
       [made.id],
     );
     await m.client.computed.refill({ workspace: m.slug, attributeId: made.id, mutationId });
+    // Each write changes the definition and starts the attribute's fill job: its definitions row, then its jobs row.
     return [
       { kind: 'definitions', object_id: m.companies.id, attribute_ids: [made.id], mutation_id: madeWith },
+      { kind: 'jobs', mutation_id: madeWith },
       { kind: 'definitions', object_id: m.companies.id, attribute_ids: [made.id], mutation_id: mutationId },
+      { kind: 'jobs', mutation_id: mutationId },
     ];
   },
   // Attribute writes (spec 0012, milestone 2): one definitions row per object, naming the attributes changed.
