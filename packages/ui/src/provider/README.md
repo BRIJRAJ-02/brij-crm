@@ -1,6 +1,8 @@
 # UiProvider and toasts
 
-`UiProvider` wraps the app once and gives every component the language, the time zone, the router, the shared clock and the toasts. This folder also holds `createToasts()` and the toast region, `createClock()` and `useDelayedLoading()`.
+`UiProvider` wraps the app once and gives every component the language, the time zone, the router, the shared clock and the toasts, with the icon registry and the brand marks' artwork in reach. This folder also holds `createToasts()` and the toast region, `createClock()` and `useDelayedLoading()`.
+
+`UiProviderBase` is UiProvider without the icon registry and the brand artwork. Only the hosted form mounts it, so its first load carries neither: it draws only the base icons (`atoms/Icon/base-icons.ts`) and never a brand mark.
 
 ## Why it exists
 
