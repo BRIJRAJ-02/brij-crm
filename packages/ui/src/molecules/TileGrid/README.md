@@ -38,7 +38,10 @@ New, and the one grid of cards: SettingsLayout's `SettingsGrid` drew the same gr
 - A disabled tile takes no focus, so its tooltip is out of a keyboard's reach: give it a `disabledReason` ("At the limit"), a few words shown on the tile under its name and read as its description.
 - A tile with a description is wrapped by its tooltip's trigger; the wrapper fills the grid cell, so every tile is one size with or without one (`ChoiceDisabled` checks it with the alignment probe).
 - Why a variant, not a new component: it is the same grid of equal cells, with tiles that are pickable rather than Cards. The block kind grid, preset thumbnails and embed tiles all use it; the radio group (`Radio variant="cards"`) is a list of sentences, which is what this replaces.
-- Motion: hover colour, selection ring and tick only; nothing moves on first paint; reduced motion keeps the colour change and the tick fades without scaling.
+- `hue` tints an `icon` tile's picture slot in a data hue (its tag colours) with the mark drawn `lg` in the hue's text colour, so a grid of kinds (Add block) reads at a glance instead of as grey boxes. A `thumbnail` keeps its own colours.
+- Focus is the library's ring, as on a primary Button: the accent line just outside the tile past a hairline gap, plus the soft halo, so a focused chosen tile differs from a chosen one (spec 0058, AC-4).
+- The tracks are `auto-fit`: a short run (three embed tiles in a wide card) shares the whole row and ends on the container's right edge.
+- Motion: hover colour, selection ring and tick only; nothing moves on first paint; under reduced motion the tick is there at once, with no fade or scale (spec 0058, AC-2).
 
 ## States
 

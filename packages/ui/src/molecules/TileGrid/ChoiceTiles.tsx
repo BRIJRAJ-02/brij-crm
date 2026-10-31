@@ -3,6 +3,7 @@ import { mergeProps, useFocusRing, useHover, useRadio } from 'react-aria';
 import { Button as AriaButton, RadioGroup, RadioGroupStateContext } from 'react-aria-components';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
+import type { Hue } from '../../hue.ts';
 import { Tooltip } from '../../atoms/Tooltip/Tooltip.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import styles from './ChoiceTiles.module.css';
@@ -15,6 +16,11 @@ export interface ChoiceTile {
   readonly name: string;
   /** A Lucide mark drawn large in the picture slot. Use this or `thumbnail`. */
   readonly icon?: IconName;
+  /**
+   * Tints an `icon` tile's picture slot in a data hue (its tag colours), so a grid of kinds reads at a glance rather
+   * than as grey boxes. Ignored with a `thumbnail`, which brings its own colours.
+   */
+  readonly hue?: Hue;
   /** A small picture of the real thing (a preset's look, an embed's placement). Decoration: hidden from screen readers. */
   readonly thumbnail?: ReactNode;
   /** A sentence about it, shown as a tooltip and read by screen readers as its description. */
@@ -60,8 +66,13 @@ export type ChoiceTilesProps = ChoiceSelectProps | ChoiceActionProps;
 
 function Picture({ tile }: { readonly tile: ChoiceTile }) {
   return (
-    <span className={styles.picture} aria-hidden="true" data-kind={tile.thumbnail === undefined ? 'icon' : 'thumbnail'}>
-      {tile.thumbnail ?? (tile.icon !== undefined && <Icon name={tile.icon} size="md" />)}
+    <span
+      className={styles.picture}
+      aria-hidden="true"
+      data-kind={tile.thumbnail === undefined ? 'icon' : 'thumbnail'}
+      data-hue={tile.thumbnail === undefined ? tile.hue : undefined}
+    >
+      {tile.thumbnail ?? (tile.icon !== undefined && <Icon name={tile.icon} size="lg" />)}
     </span>
   );
 }
