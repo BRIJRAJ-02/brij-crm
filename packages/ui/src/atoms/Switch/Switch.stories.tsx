@@ -27,14 +27,17 @@ export const Default: Story = {
  * The word beside it is the state (the link page's Live or Private): it reads "Private" while off and "Live" once on,
  * and the accessible name stays "Live" in both, so a screen reader hears on or off, never a double negative.
  */
-export const StateLabels: Story = {
-  args: { label: 'Live', stateLabels: { on: 'Live', off: 'Private' } },
+export const OffLabel: Story = {
+  args: { label: 'Live', offLabel: 'Private' },
+  // Its look is Default's with another word; the play checks which word shows.
+  parameters: { crm: { screenshot: false } },
   play: async ({ canvas, userEvent }) => {
     const toggle = canvas.getByRole('switch', { name: 'Live' });
-    await expect(canvas.getByText('Private')).toBeVisible();
+    const word = canvas.getByText('Live');
+    await expect(getComputedStyle(word, '::after').visibility).toBe('visible');
     await userEvent.click(toggle);
     await expect(toggle).toBeChecked();
-    await expect(canvas.getByText('Live', { selector: '[aria-hidden="true"]' })).toBeVisible();
+    await expect(getComputedStyle(word, '::after').visibility).toBe('hidden');
   },
 };
 
