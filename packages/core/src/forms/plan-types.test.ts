@@ -53,11 +53,11 @@ const OPTIONS = new Map([
   [
     ID.tags,
     [
-      { id: 'o1', label: 'Sales' },
-      { id: 'o2', label: 'Support' },
+      { id: '0199f0a0-0000-7000-8000-0000000000e1', label: 'Sales' },
+      { id: '0199f0a0-0000-7000-8000-0000000000e2', label: 'Support' },
     ],
   ],
-  [ID.plan, [{ id: 'o3', label: 'Pro' }]],
+  [ID.plan, [{ id: '0199f0a0-0000-7000-8000-0000000000e3', label: 'Pro' }]],
 ]);
 
 const question = (key: string, answerType: FormDocument['questions'][number]['answerType'], attributeId: string) => ({
@@ -112,7 +112,7 @@ describe('filing the new answer types (spec 0063, AC-6307)', () => {
       },
     );
     expect(refused).toEqual([]);
-    expect(planned[0]?.value).toEqual(['o1', 'o2']);
+    expect(planned[0]?.value).toEqual(['0199f0a0-0000-7000-8000-0000000000e1', '0199f0a0-0000-7000-8000-0000000000e2']);
   });
 
   it('refuses a multi select on a field that holds one choice, saying why', () => {
