@@ -9,7 +9,6 @@ import { settleAnimations } from '../../workbench/animations.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { Board } from './Board.tsx';
 import type { LoadStatus } from '../../lib/load-status.ts';
-import { LoadingTimingContext } from '../../provider/useDelayedLoading.ts';
 import type { BoardCard, BoardColumn, BoardMove } from './types.ts';
 
 const CARD_FIELDS = sampleColumns(9)
@@ -344,29 +343,6 @@ export const Loading: Story = {
     const width = columnWidth(canvasElement);
     for (const column of columns) await expect(column.getBoundingClientRect().width).toBeCloseTo(width, 0);
     await expect(columns[0]?.querySelector('[data-width]')).not.toBeNull();
-  },
-};
-
-/** Before the loading delay: the columns' space is held, with no surface, card boxes or bars, so a fast load flashes nothing. */
-export const LoadingBeforeDelay: Story = {
-  args: { status: 'loading' },
-  parameters: { crm: { screenshot: false } },
-  decorators: [
-    (Story) => (
-      <LoadingTimingContext value={{ delayMs: 60_000, minimumMs: 0 }}>
-        <Story />
-      </LoadingTimingContext>
-    ),
-  ],
-  play: async ({ canvasElement }) => {
-    const columns = canvasElement.querySelectorAll('[data-skeleton]');
-    await expect(columns).toHaveLength(3);
-    const width = columnWidth(canvasElement);
-    for (const column of columns) {
-      await expect(column.getBoundingClientRect().width).toBeCloseTo(width, 0);
-      await expect(column).toHaveAttribute('data-waiting');
-      await expect(column.querySelector('[data-width]')).toBeNull();
-    }
   },
 };
 

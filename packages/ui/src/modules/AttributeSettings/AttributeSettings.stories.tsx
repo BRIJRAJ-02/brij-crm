@@ -942,7 +942,8 @@ export const ChangeType: Story = {
     await userEvent.click(within(dialog).getByRole('button', { name: 'Change type…' }));
     await waitFor(() => expect(dialog).toHaveAccessibleName('Change type'));
     await waitFor(() => expect(document.activeElement?.getAttribute('aria-haspopup')).toBe('listbox'));
-    await expect(within(dialog).getByText('All 1,204 values convert. Unique turns off.')).toBeInTheDocument();
+    // The check answers after the picker opens: waited for, as a slower engine draws it later.
+    await expect(await within(dialog).findByText('All 1,204 values convert. Unique turns off.')).toBeInTheDocument();
     await expect(within(dialog).getByRole('button', { name: 'Change type' })).toBeEnabled();
     await userEvent.click(within(dialog).getByRole('button', { name: 'Back' }));
     await waitFor(() => expect(dialog).toHaveAccessibleName('Edit attribute'));

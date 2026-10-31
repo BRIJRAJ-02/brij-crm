@@ -46,11 +46,15 @@ test('a record opens from the table, edits in place, and keeps its tab', async (
   await jobTitle.press('Enter');
   await expect(page.getByRole('region', { name: 'Details' })).toContainText('Rear admiral');
 
-  // The name edits only here, and the header follows it at once.
-  await page.getByRole('button', { name: 'Edit Name' }).click();
-  const first = page.getByRole('textbox', { name: 'First name' });
+  // A named record renames from More actions (its name is the header, no longer a Details row), and the header
+  // follows it at once.
+  await page.getByRole('button', { name: 'More actions' }).first().click();
+  await page.getByRole('menuitem', { name: 'Rename' }).click();
+  const rename = page.getByRole('dialog', { name: 'Rename person' });
+  const first = rename.getByRole('textbox', { name: 'First name' });
   await first.fill('Amazing Grace');
-  await first.press('Enter');
+  await rename.getByRole('button', { name: 'Rename' }).click();
+  await expect(rename).toBeHidden();
   await expect(page.getByRole('heading', { level: 2, name: 'Amazing Grace Hopper' })).toBeVisible();
   await expect(page).toHaveTitle('Amazing Grace Hopper · Timefix');
 
