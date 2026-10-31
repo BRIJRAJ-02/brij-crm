@@ -124,6 +124,7 @@ const SHARE = {
 
 /** The owner's colour (spec 0061, AC-6124): a dark purple that keeps 4.5 to 1 on white. */
 export const Coloured: Story = {
+  parameters: { crm: { screenshot: false } },
   args: { ...SHARE, colour: '#5b21b6' },
   play: async ({ canvasElement }) => {
     const code = canvasElement.querySelector('svg');
@@ -143,6 +144,7 @@ export const ColourRefused: Story = {
 
 /** The person's picture in the centre, at a fifth of the code, the code at its highest error correction. */
 export const CentrePicture: Story = {
+  parameters: { crm: { screenshot: false } },
   args: { ...SHARE, picture: CENTRE },
   play: async ({ canvasElement }) => {
     await expect(canvasElement.querySelector('svg image')).not.toBeNull();
@@ -151,6 +153,7 @@ export const CentrePicture: Story = {
 
 /** A frame with its label under the code: "Scan me". */
 export const Framed: Story = {
+  parameters: { crm: { screenshot: false } },
   args: { ...SHARE, frameLabel: 'Scan me' },
   play: async ({ canvasElement }) => {
     await expect(canvasElement.querySelector('svg text')?.textContent).toBe('Scan me');

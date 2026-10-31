@@ -1,7 +1,6 @@
 // A link page's media block (spec 0061, AC-6106, AC-6127), its own chunk: loaded only on a page that has one.
 import { useEffect, useRef, useState } from 'react';
-import { Icon } from '../../atoms/Icon/Icon.tsx';
-import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
+import { Button } from '../../atoms/Button/Button.tsx';
 import { safeImageSrc } from '../../lib/safe-image-src.ts';
 import type { LinkPageBlock, LinkPageMediaProvider } from './LinkPage.tsx';
 import styles from './LinkPageMedia.module.css';
@@ -50,6 +49,10 @@ export function LinkPageMedia({ block, onPress, isTile }: LinkPageMediaProps) {
   useEffect(() => {
     if (isPlaying) frameRef.current?.focus();
   }, [isPlaying]);
+  const play = () => {
+    setPlaying(true);
+    onPress?.();
+  };
   const posterImage =
     poster === undefined || block.poster === undefined ? null : (
       <img
@@ -85,20 +88,30 @@ export function LinkPageMedia({ block, onPress, isTile }: LinkPageMediaProps) {
             />
           </>
         ) : (
-          <button
-            type="button"
+          // The whole poster plays on a click, as a visitor expects; the one control, for the keyboard and screen
+          // readers, is the library's round Play button in its middle (its press is the poster's click).
+          // A mouse's larger target only: `presentation`, since the Play button inside is the control.
+          <div
             className={styles.poster}
-            onClick={() => {
-              setPlaying(true);
-              onPress?.();
+            role="presentation"
+            onClick={(event) => {
+              // The button's own press plays it; this is the rest of the poster.
+              if (event.target instanceof Element && event.target.closest('button') !== null) return;
+              play();
             }}
           >
             {posterImage}
-            <span className={styles.play} aria-hidden="true">
-              <Icon name="play" />
+            <span className={styles.play}>
+              <Button
+                variant="primary"
+                size="touch"
+                isRound
+                icon="play"
+                label={strings.play(block.title)}
+                onPress={play}
+              />
             </span>
-            <VisuallyHidden>{strings.play(block.title)}</VisuallyHidden>
-          </button>
+          </div>
         )}
       </div>
       <figcaption className={styles.caption}>

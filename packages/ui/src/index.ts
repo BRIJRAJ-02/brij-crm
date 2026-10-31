@@ -258,14 +258,21 @@ export { LinkListRowOrder } from './modules/LinkList/RowOrder.tsx';
 /** A person's link page (spec 0051): the public page at `/<handle>`, and the editor's phone preview of it. */
 export {
   LinkPage,
+  LinkPageHold,
   LinkPageThumbnail,
   LinkPageTile,
   type LinkPageBlock,
+  type LinkPageHoldProps,
   type LinkPageMark,
+  type LinkPageMediaProvider,
+  type LinkPageNotice,
+  type LinkPagePicture,
   type LinkPagePerson,
   type LinkPagePhotos,
   type LinkPageProps,
   type LinkPageThumbnailProps,
+  type LinkPageTileSize,
+  type LinkPageTimes,
   type PageLook,
 } from './modules/LinkPage/LinkPage.tsx';
 /** Titled sections, each a Card, that move as wholes: a profile's sections in Settings › Profile (owner ask A102). */

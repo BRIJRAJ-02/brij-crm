@@ -5,6 +5,8 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it } from 'vitest';
 import '../../styles/index.css';
+import { createToasts } from '../../provider/toasts.tsx';
+import { UiProvider } from '../../provider/UiProvider.tsx';
 import type { LinkPageBlock } from './LinkPage.tsx';
 import { LinkPageMedia, playerSrc } from './LinkPageMedia.tsx';
 
@@ -25,7 +27,11 @@ async function draw(block: Extract<LinkPageBlock, { kind: 'media' }>, onPress?: 
   document.body.append(host);
   root = createRoot(host);
   await act(async () => {
-    root?.render(<LinkPageMedia block={block} isTile={false} {...(onPress === undefined ? {} : { onPress })} />);
+    root?.render(
+      <UiProvider locale="en-GB" timeZone="Europe/London" toasts={createToasts()} navigate={() => undefined}>
+        <LinkPageMedia block={block} isTile={false} {...(onPress === undefined ? {} : { onPress })} />
+      </UiProvider>,
+    );
     await Promise.resolve();
   });
   return host;
@@ -52,8 +58,10 @@ describe('the media facade', () => {
     expect(drawn.textContent).toContain('Plays from YouTube');
     const play = drawn.querySelector('button');
     if (play === null) throw new Error('No Play button');
-    expect(play.textContent).toContain(`Play ${VIDEO.title}`);
-    const before = play.getBoundingClientRect();
+    expect(play.getAttribute('aria-label')).toBe(`Play ${VIDEO.title}`);
+    const poster = play.closest('[role="presentation"]');
+    if (poster === null) throw new Error('No poster');
+    const before = poster.getBoundingClientRect();
     await act(async () => {
       play.click();
       await Promise.resolve();

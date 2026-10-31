@@ -63,19 +63,11 @@
     background: transparent;
   }
 
+  /* The whole poster plays on a click (its Play button is the control the keyboard reaches), so it says so. */
   .poster {
     display: grid;
     place-items: center;
-    background: none;
-    color: inherit;
-    font: inherit;
-    outline: none;
-  }
-
-  /* Inside the card's clipped corners, so the ring draws within the stage. */
-  .poster:focus-visible {
-    outline: var(--border-width-thick) solid var(--page-accent, var(--accent));
-    outline-offset: calc(var(--border-width-thick) * -1);
+    cursor: pointer;
   }
 
   .posterImage {
@@ -86,26 +78,12 @@
     object-fit: cover;
   }
 
-  /* The one Play mark: the accent's own pair, so it holds its contrast on any poster. */
+  /* The Play button over the poster, its own stacking place so the picture never covers it. */
   .play {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    inline-size: var(--size-toolbar);
-    block-size: var(--size-toolbar);
-    border-radius: var(--radius-full);
-    background: var(--page-accent, var(--accent));
-    box-shadow: var(--shadow-md);
-    color: var(--page-on-accent, var(--on-accent));
     position: relative;
-    transition: background-color var(--duration-hover) var(--ease-hover);
-  }
-
-  /* Hover takes the accent's own hover pair, never a fade, which would read as disabled. */
-  @media (hover: hover) and (pointer: fine) {
-    .poster:hover .play {
-      background: var(--page-accent-hover, var(--accent-hover));
-    }
+    display: flex;
+    border-radius: var(--radius-full);
+    box-shadow: var(--shadow-md);
   }
 
   .caption {
@@ -134,10 +112,6 @@
   @media (forced-colors: active) {
     .root {
       border-color: CanvasText;
-    }
-
-    .poster:focus-visible {
-      outline: var(--border-width-thick) solid Highlight;
     }
   }
 }

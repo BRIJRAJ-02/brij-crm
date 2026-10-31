@@ -1,7 +1,5 @@
 // A link page's picture block (spec 0061, AC-6108), its own chunk: loaded only on a page that has one.
 import { useState } from 'react';
-import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
-import { safeHref } from '../../lib/safe-href.ts';
 import { safeImageSrc } from '../../lib/safe-image-src.ts';
 import type { LinkPageBlock } from './LinkPage.tsx';
 import styles from './LinkPageImage.module.css';
@@ -14,6 +12,11 @@ export interface LinkPageImageProps {
   readonly onPress?: () => void;
   /** Drawn as a grid tile: the picture fills the tile, cropped to it. */
   readonly isTile: boolean;
+  /**
+   * Where pressing the picture goes, checked by the page (a web address only). Passed in rather than checked here,
+   * so this chunk shares no helper the page's first load splits on.
+   */
+  readonly webHref?: string;
 }
 
 /**
@@ -21,13 +24,13 @@ export interface LinkPageImageProps {
  * with its alt text, the caption under it, and, when the owner gave one, the picture as a link to a web page in a
  * new tab. A picture whose address isn't ours draws as its alt text in the same box, never as a broken image.
  */
-export function LinkPageImage({ block, onPress, isTile }: LinkPageImageProps) {
+export function LinkPageImage({ block, onPress, isTile, webHref }: LinkPageImageProps) {
   const [failed, setFailed] = useState<string | undefined>(undefined);
   const checked = safeImageSrc(block.image.src);
   // One that fails to load draws its alt text, as one whose address isn't ours does: never a broken image.
   const src = checked === failed ? undefined : checked;
-  const href = block.href === undefined ? undefined : safeHref(block.href);
-  const web = href !== undefined && /^https?:/i.test(href) ? href : undefined;
+  // The page checked the link already (`linkTarget`): a web address, or nothing.
+  const web = webHref;
   const picture =
     src === undefined ? (
       <span className={styles.missing}>{block.alt}</span>
@@ -57,9 +60,9 @@ export function LinkPageImage({ block, onPress, isTile }: LinkPageImageProps) {
           target="_blank"
           rel="noopener noreferrer nofollow"
           onClick={onPress}
+          aria-label={strings.linkedPicture(block.alt)}
         >
           {picture}
-          <VisuallyHidden>{strings.newTab}</VisuallyHidden>
         </a>
       )}
       {block.caption !== undefined && block.caption !== '' && (

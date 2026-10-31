@@ -1044,7 +1044,7 @@ const LazyMedia = lazy<ComponentType<LinkPageMediaProps>>(() =>
   ),
 );
 const LazyImage = lazy<ComponentType<LinkPageImageProps>>(() =>
-  import('./LinkPageImage.tsx').then(
+  import('./LinkPageGallery.tsx').then(
     (module) => ({ default: module.LinkPageImage }),
     () => ({ default: ImageUnloaded }),
   ),
@@ -1165,6 +1165,12 @@ export function LinkPageHold({ block, isTile = false }: LinkPageHoldProps) {
   );
 }
 
+/** A picture's link, checked here by the page's one rule: a web address only, else none. */
+function webHrefOf(href: string | undefined): { readonly webHref?: string } {
+  const target = href === undefined ? undefined : linkTarget(href);
+  return target?.scheme === 'web' ? { webHref: target.href } : {};
+}
+
 /** A media, picture or gallery block, from its own chunk, as a whole row or as a tile. */
 function LazyPictureBlock({
   block,
@@ -1188,7 +1194,7 @@ function LazyPictureBlock({
   if (block.kind === 'image') {
     return (
       <Suspense fallback={hold}>
-        <LazyImage block={block} isTile={isTile} {...pressed} />
+        <LazyImage block={block} isTile={isTile} {...pressed} {...webHrefOf(block.href)} />
       </Suspense>
     );
   }

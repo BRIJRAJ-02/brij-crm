@@ -46,6 +46,8 @@ export const strings = {
     soundcloud: 'SoundCloud',
     applemusic: 'Apple Music',
   },
+  /** A picture that is a link, named by its alt text and where it opens. */
+  linkedPicture: (alt: string) => `${alt} (opens in a new tab)`,
   /** A gallery's pictures, for screen readers (AC-6109). */
   gallery: 'Pictures',
   /** A gallery picture's button: it opens the picture large. */

@@ -6,6 +6,10 @@ import { focusLater } from '../../lib/focus-later.ts';
 import { safeImageSrc } from '../../lib/safe-image-src.ts';
 import type { LinkPageBlock } from './LinkPage.tsx';
 import styles from './LinkPageGallery.module.css';
+
+// A picture block loads from this same chunk (spec 0061, AC-6126): a chunk of its own would reach the page's shared
+// helpers without Button, and the bundler would split them out of the hosted form's first load (measured: 0.3 kB).
+export { LinkPageImage } from './LinkPageImage.tsx';
 import { strings } from './strings.ts';
 
 /** Props for LinkPageGallery. */

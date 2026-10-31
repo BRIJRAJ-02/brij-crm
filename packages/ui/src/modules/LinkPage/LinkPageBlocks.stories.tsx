@@ -44,6 +44,13 @@ const MOSS = photo('#d9f99d', '#166534');
 const DUSK = photo('#c4b5fd', '#7c2d12');
 const TALL = photo('#e0e7ff', '#312e81', 800, 1200);
 
+/** Waits until every picture on the page has decoded (or failed), so a screenshot never catches one mid load. */
+async function picturesDrawn(root: HTMLElement) {
+  await Promise.all(
+    [...root.ownerDocument.querySelectorAll('img')].map((image) => image.decode().catch(() => undefined)),
+  );
+}
+
 const PERSON = {
   name: 'Anish Gupta',
   id: 'anish',
@@ -120,9 +127,8 @@ function featuredBlocks(): readonly LinkPageBlock[] {
 
 /** Thumbnails in their tiles, a broken one falling back to its letter, and featured cards that never animate in. */
 export const ThumbnailsAndFeatured: Story = {
-  parameters: { crm: { preview: true } },
   args: { blocks: featuredBlocks() },
-  play: async ({ canvas }) => {
+  play: async ({ canvas, canvasElement }) => {
     await settleAnimations();
     const launch = canvas.getByRole('link', { name: /Timefix 2\.0 is out/ });
     await expect(launch).toHaveAttribute('data-featured', '');
@@ -138,6 +144,7 @@ export const ThumbnailsAndFeatured: Story = {
     );
     const report = probeAlignment({ root: 'main', ignoreSpacing: '*' });
     await expect(report.failures).toEqual([]);
+    await picturesDrawn(canvasElement);
   },
 };
 
@@ -258,12 +265,12 @@ export const GridWide: Story = {
     await expect(launch?.top).toBe(site?.top);
     await expect(intro?.top).toBeGreaterThan(site?.top ?? 0);
     await expectReadingOrder(first);
+    await picturesDrawn(canvasElement);
   },
 };
 
 /** The grid on a dark look, with every tile's picture and fallbacks. */
 export const GridDark: Story = {
-  parameters: { crm: { screenshot: true } },
   args: {
     blocks: gridBlocks(),
     pageLayout: 'grid',
@@ -274,6 +281,10 @@ export const GridDark: Story = {
       <LinkPage {...args} />
     </Stage>
   ),
+  play: async ({ canvasElement }) => {
+    await settleAnimations();
+    await picturesDrawn(canvasElement);
+  },
 };
 
 const SOCIAL_LINKS = [
@@ -336,9 +347,13 @@ export const Media: Story = {
     await expect(canvasElement.querySelector('iframe')).toBeNull();
     // A video's stage is 16 by 9, once the block's own stylesheet has arrived with its chunk.
     await waitFor(() => {
-      const stage = canvas.getByRole('button', { name: 'Play Scheduling that books itself' }).getBoundingClientRect();
+      const stage = canvas
+        .getByRole('button', { name: 'Play Scheduling that books itself' })
+        .closest('[role="presentation"]')
+        ?.getBoundingClientRect() ?? { width: 0, height: 1 };
       return expect(Math.abs(stage.width / stage.height - 16 / 9)).toBeLessThan(0.02);
     });
+    await picturesDrawn(canvasElement);
   },
 };
 
@@ -357,7 +372,7 @@ export const Picture: Story = {
       { kind: 'image', id: 'tall', image: TALL, alt: 'The view from the office' },
     ],
   },
-  play: async ({ canvas }) => {
+  play: async ({ canvas, canvasElement }) => {
     const picture = await canvas.findByRole('img', { name: 'Anish on stage at SaaStr' });
     await expect(picture).toHaveAttribute('width', '1200');
     await expect(picture).toHaveAttribute('loading', 'lazy');
@@ -366,6 +381,7 @@ export const Picture: Story = {
       'noopener noreferrer nofollow',
     );
     await expect(canvas.getByText('Talking calendars at SaaStr')).toBeVisible();
+    await picturesDrawn(canvasElement);
   },
 };
 
@@ -380,7 +396,7 @@ const GALLERY = [
 /** A gallery as a swipe row: Previous and Next under it, each picture opening large in the viewer (AC-6109). */
 export const GalleryRow: Story = {
   args: { blocks: [{ kind: 'gallery', id: 'offsite', images: GALLERY, display: 'row' }] },
-  play: async ({ canvas }) => {
+  play: async ({ canvas, canvasElement }) => {
     const second = await canvas.findByRole('button', { name: 'The team by the sea, open large' });
     await userEvent.click(second);
     await settleAnimations();
@@ -397,31 +413,34 @@ export const GalleryRow: Story = {
     await waitFor(() =>
       expect(canvas.getByRole('button', { name: 'The view from the office, open large' })).toHaveFocus(),
     );
+    await picturesDrawn(canvasElement);
   },
 };
 
 /** The same gallery as a grid of squares. */
 export const GalleryGrid: Story = {
   args: { blocks: [{ kind: 'gallery', id: 'offsite', images: GALLERY, display: 'grid' }] },
-  play: async ({ canvas }) => {
+  play: async ({ canvas, canvasElement }) => {
     const first = await canvas.findByRole('button', { name: 'Morning at the offsite, open large' });
     const second = canvas.getByRole('button', { name: 'The team by the sea, open large' });
     await expect(Math.round(first.getBoundingClientRect().top)).toBe(Math.round(second.getBoundingClientRect().top));
     await expect(Math.round(first.getBoundingClientRect().width)).toBe(
       Math.round(first.getBoundingClientRect().height),
     );
+    await picturesDrawn(canvasElement);
   },
 };
 
 /** The viewer open over the page, as a visitor sees it. */
 export const GalleryViewer: Story = {
   args: { blocks: [{ kind: 'gallery', id: 'offsite', images: GALLERY, display: 'row' }] },
-  play: async ({ canvas }) => {
+  play: async ({ canvas, canvasElement }) => {
     await userEvent.click(await canvas.findByRole('button', { name: 'Dinner at dusk, open large' }));
     await settleAnimations();
     const viewer = within(document.body).getByRole('dialog', { name: 'Dinner at dusk' });
     await expect(viewer).toBeVisible();
     await expect(within(viewer).getByRole('button', { name: 'Next picture' })).toBeVisible();
+    await picturesDrawn(canvasElement);
   },
 };
 
@@ -545,6 +564,7 @@ function holdNavigation(): () => void {
 
 /** A link with an age notice (AC-6113): the sheet first; Go back opens and counts nothing, Continue does both. */
 export const Notice: Story = {
+  parameters: { crm: { screenshot: false } },
   args: {
     blocks: [
       { kind: 'link', id: 'shop', title: 'The wine club', href: 'https://example.com/wine', hue: 'red', notice: '18' },
@@ -672,6 +692,14 @@ export const AllKindsDark: Story = {
       <LinkPage {...args} />
     </Stage>
   ),
+  play: async ({ canvas, canvasElement }) => {
+    // Every lazy part landed, so the screenshot is the page and not its held boxes.
+    await canvas.findByRole('button', { name: /Play Scheduling/ });
+    await canvas.findByRole('list', { name: /Next open times/ });
+    await canvas.findByRole('button', { name: /Morning at the offsite/ });
+    await settleAnimations();
+    await picturesDrawn(canvasElement);
+  },
 };
 
 /** A media block whose player address the check refused: its poster and "Can’t play here", never a dead Play. */
@@ -688,9 +716,10 @@ export const MediaRefused: Story = {
       },
     ],
   },
-  play: async ({ canvas }) => {
+  play: async ({ canvas, canvasElement }) => {
     await canvas.findByText('Can’t play here');
     await expect(canvas.queryByRole('button', { name: /Play/ })).toBeNull();
+    await picturesDrawn(canvasElement);
   },
 };
 
@@ -770,5 +799,6 @@ export const Holds: Story = {
     await expect(height(galleries[0]?.parentElement)).toBe(height(held('gallery')[0]));
     await expect(height(galleries[1]?.parentElement)).toBe(height(held('gallery')[1]));
     await expect(height(canvas.getByRole('region', { name: 'Intro call' }))).toBe(height(held('times')[0]));
+    await picturesDrawn(canvasElement);
   },
 };
