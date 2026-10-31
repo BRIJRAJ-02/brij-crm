@@ -7,7 +7,7 @@ export const strings = {
   /** Said once to a member who may read the kit but not change it. */
   readOnly: 'Only owners and admins change the brand.',
   logo: 'Logo',
-  logoText: 'On every booking page and form, the sidebar and the browser tab. A square mark reads best at small sizes.',
+  logoText: 'On booking pages, forms, the sidebar and the browser tab. A square mark reads best small.',
   logoDrop: 'Add your logo',
   logoReplace: 'Replace logo',
   logoAlt: 'Your logo',

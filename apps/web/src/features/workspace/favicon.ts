@@ -70,35 +70,47 @@ const ICON_SIDE = 64;
 const ICON_PAD = 4;
 const ICON_CORNER = 12;
 
-/** The plate: the product's near white (`on-accent`), as the sidebar's head draws a logo's. A canvas takes no token. */
-const PLATE = '#fcfdff';
+/** The plate's colour when the page has no tokens to read (a canvas takes no `var()`): `on-accent`'s near white. */
+const PLATE_FALLBACK = '#fcfdff';
+
+/** The plate: the same token the sidebar's head draws a logo's plate with, read off the page. */
+function plateColour(): string {
+  const token = getComputedStyle(document.documentElement).getPropertyValue('--on-accent').trim();
+  return token === '' ? PLATE_FALLBACK : token;
+}
+
+/** What the tab's icon becomes: the route's own address (a square logo), a squared copy, or nothing (it failed). */
+type Icon =
+  { readonly kind: 'route' } | { readonly kind: 'squared'; readonly href: string } | { readonly kind: 'failed' };
 
 /**
- * The logo at `src` drawn whole inside a square, as a PNG data address, or undefined when it is square already (the
- * route's own address serves) or can't be drawn (the route's address serves too).
+ * The logo at `src` made ready for the tab: decoded first, so the tab never shows a squashed or broken picture on
+ * the way. A square one is worn from its route; one that isn't is drawn whole inside a square on the plate.
  */
-async function squareIcon(src: string): Promise<string | undefined> {
+async function iconFor(src: string): Promise<Icon> {
   try {
     const image = new Image();
     image.src = src;
     await image.decode();
     const { naturalWidth: width, naturalHeight: height } = image;
-    if (width === 0 || height === 0 || width === height) return undefined;
+    if (width === 0 || height === 0) return { kind: 'failed' };
+    if (width === height) return { kind: 'route' };
     const canvas = document.createElement('canvas');
     canvas.width = ICON_SIDE;
     canvas.height = ICON_SIDE;
     const context = canvas.getContext('2d');
-    if (context === null) return undefined;
-    context.fillStyle = PLATE;
+    // No canvas here: the route's picture is still better than none, squashed or not.
+    if (context === null) return { kind: 'route' };
+    context.fillStyle = plateColour();
     context.beginPath();
     context.roundRect(0, 0, ICON_SIDE, ICON_SIDE, ICON_CORNER);
     context.fill();
     const box = containBox(width, height, ICON_SIDE - 2 * ICON_PAD);
     context.drawImage(image, box.x + ICON_PAD, box.y + ICON_PAD, box.width, box.height);
-    return canvas.toDataURL('image/png');
+    return { kind: 'squared', href: canvas.toDataURL('image/png') };
   } catch {
-    // Not decodable here (gone, or the browser refused it): the route's own address stays the icon.
-    return undefined;
+    // Gone (removed in another tab), refused or not a picture: the product's icons stay.
+    return { kind: 'failed' };
   }
 }
 
@@ -106,14 +118,15 @@ async function squareIcon(src: string): Promise<string | undefined> {
 export function useWorkspaceFavicon(src: string | undefined): void {
   useEffect(() => {
     if (src === undefined) return undefined;
-    const worn = wearFavicon(document, src);
     let isCurrent = true;
-    void squareIcon(src).then((square) => {
-      if (isCurrent && square !== undefined) worn.point(square);
+    let worn: WornFavicon | undefined;
+    void iconFor(src).then((icon) => {
+      if (!isCurrent || icon.kind === 'failed') return;
+      worn = wearFavicon(document, icon.kind === 'squared' ? icon.href : src);
     });
     return () => {
       isCurrent = false;
-      worn.restore();
+      worn?.restore();
     };
   }, [src]);
 }

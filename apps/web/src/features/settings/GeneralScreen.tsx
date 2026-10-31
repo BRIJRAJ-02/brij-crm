@@ -5,7 +5,9 @@
 // pick its time zone, currency or country (saved at once, with Undo); owners can delete it.
 // Leaves out: a Save bar and a leave check (each change saves on its own), the logo upload (Brand holds it, spec 0060; a row here links there), and members (their own page).
 import { isDataError, type DataLayer, type WorkspaceSettings } from '@crm/data';
+import { useWorkspaceLogo } from '@crm/data/react';
 import {
+  Avatar,
   Button,
   ButtonLink,
   Callout,
@@ -88,6 +90,8 @@ export function GeneralScreen({
   // The name as typed, until the page reads the saved one back; left undefined, the field shows what is saved.
   const [nameDraft, setNameDraft] = useState<string | undefined>(undefined);
   const name = nameDraft ?? settings.name;
+  // The workspace's logo, as the sidebar's head wears it (spec 0060): no read of its own.
+  const logo = useWorkspaceLogo(data.workspaceLogo, slug);
   const [nameError, setNameError] = useState<string | undefined>(undefined);
   // The name on its way, so Enter and then leaving the field send it once.
   const sending = useRef<string | undefined>(undefined);
@@ -342,7 +346,18 @@ export function GeneralScreen({
           </SettingsRow>
           {/* Where a workspace's logo is looked for; it is set in Brand, beside the colour, so this row only links
               there (spec 0060): one upload drives the sidebar's head and the tab's icon. */}
-          <SettingsRow title={strings.logo} description={strings.logoText}>
+          <SettingsRow
+            title={strings.logo}
+            description={mayManage ? strings.logoText : strings.logoTextReadOnly}
+            // The logo itself, as the sidebar's head draws it, when the workspace has one.
+            {...(logo === undefined
+              ? {}
+              : {
+                  leading: (
+                    <Avatar name={strings.logoAlt} src={logo} fit="contain" shape="square" size="md" isDecorative />
+                  ),
+                })}
+          >
             <ButtonLink href={brandSettingsHref(slug)} icon="palette">
               {strings.openBrand}
             </ButtonLink>

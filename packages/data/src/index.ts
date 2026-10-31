@@ -1319,17 +1319,22 @@ export function createDataLayer({
   // the sidebar's head and the tab's icon follow it. Null is a workspace with no logo; absent is not read yet.
   const logos = new Map<string, string | null>();
   const logoListeners = new Set<() => void>();
+  // Bumped by every logo save or removal and every sign out: an access read that started before one may not put
+  // back the version it carried, which the save or the sign out has since made stale.
+  let logoStamp = 0;
   const setLogo = (workspace: string, version: string | null) => {
     if (logos.get(workspace) === version) return;
     logos.set(workspace, version);
     for (const listener of logoListeners) listener();
   };
-  /** The person's access in a workspace, the logo version it carries noted on the way. */
-  const loadAccess = (workspace: string, options: { readonly signal?: AbortSignal }) =>
-    api.access.mine({ workspace }, options).then((mine) => {
-      setLogo(workspace, mine.workspaceLogo ?? null);
+  /** The person's access in a workspace, the logo version it carries noted on the way unless something newer landed. */
+  const loadAccess = (workspace: string, options: { readonly signal?: AbortSignal }) => {
+    const stamp = logoStamp;
+    return api.access.mine({ workspace }, options).then((mine) => {
+      if (stamp === logoStamp) setLogo(workspace, mine.workspaceLogo ?? null);
       return mine;
     });
+  };
   // The audit log a History screen holds, per workspace (spec 0046): opening it again while held answers this one.
   const auditLogs = new Map<string, AuditLog>();
   // The roles every role picker offers (spec 0037, AC-1439), per workspace, for the app load.
@@ -1442,7 +1447,9 @@ export function createDataLayer({
     members = new Map();
     teams = new Map();
     access = new Map();
+    logoStamp += 1;
     logos.clear();
+    for (const listener of logoListeners) listener();
     auditLogs.clear();
     roles = new Map();
     attributes = new Map();
@@ -5413,6 +5420,7 @@ export function createDataLayer({
             mintId,
             send: sendImage,
             onLogo: (workspace, version) => {
+              logoStamp += 1;
               setLogo(workspace, version ?? null);
             },
           }),

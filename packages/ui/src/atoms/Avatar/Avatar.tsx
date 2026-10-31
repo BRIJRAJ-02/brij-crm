@@ -36,7 +36,8 @@ export interface AvatarProps {
   readonly mark?: ReactNode;
   /**
    * How a picture fills the tile. `cover` (the default) fills it, as a face or a site's icon should. `contain` keeps
-   * the whole picture inside the tile with nothing cut, on no fill once it has loaded: a workspace's own logo, which
+   * the whole picture inside the tile with nothing cut, on a light plate with a hairline (its letter waits on the
+   * same plate): a workspace's own logo, which
    * may be a wide wordmark whose letters a crop would cut off (spec 0060).
    */
   readonly fit?: 'cover' | 'contain';
