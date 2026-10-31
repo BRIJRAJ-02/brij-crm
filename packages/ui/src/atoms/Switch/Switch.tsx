@@ -1,3 +1,4 @@
+import type { Ref } from 'react';
 import { SwitchButton, SwitchField, Text } from 'react-aria-components';
 import { VisuallyHidden } from '../VisuallyHidden/VisuallyHidden.tsx';
 import styles from './Switch.module.css';
@@ -26,6 +27,8 @@ export interface SwitchProps {
   readonly isDisabled?: boolean;
   readonly isReadOnly?: boolean;
   readonly name?: string;
+  /** The switch's own input, for a screen that moves focus to it (a "Turn on Live" elsewhere that then goes away). */
+  readonly inputRef?: Ref<HTMLInputElement | null>;
 }
 
 /** Turns a setting on or off at once, with no Save: notifications, a feature, a sync. */
@@ -41,6 +44,7 @@ export function Switch({
   isDisabled = false,
   isReadOnly = false,
   name,
+  inputRef,
 }: SwitchProps) {
   return (
     <SwitchField
@@ -51,6 +55,7 @@ export function Switch({
       {...(defaultSelected === undefined ? {} : { defaultSelected })}
       {...(onChange === undefined ? {} : { onChange })}
       {...(name === undefined ? {} : { name })}
+      {...(inputRef === undefined ? {} : { inputRef })}
     >
       <SwitchButton className={styles.root} data-label-hidden={isLabelHidden || undefined}>
         <span className={styles.track} aria-hidden="true">

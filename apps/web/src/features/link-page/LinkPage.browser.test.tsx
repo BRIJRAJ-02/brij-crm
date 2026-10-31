@@ -161,7 +161,7 @@ describe('the bar on a phone (AC-1)', () => {
       await render({}, () => (
         <TopBar title="Link page" icon="id-card">
           <HeaderActions
-            live={{ isLive: true, setLive: () => undefined }}
+            live={{ isLive: true, setLive: () => undefined, goLive: () => undefined, switchRef: { current: null } }}
             handle="ada-lovelace-2"
             isEditing
             onEditing={() => undefined}
@@ -355,7 +355,41 @@ function Live({ data, isPublic }: { readonly data: DataLayer; readonly isPublic:
   return <LiveSwitch live={live} />;
 }
 
+/** The bar's switch beside the overview, as the screen holds them, the overview's Turn on Live through `goLive`. */
+function LiveOverview({ data }: { readonly data: DataLayer }) {
+  const live = useLinkPageLive(data, 'acme', false);
+  return (
+    <>
+      <LiveSwitch live={live} />
+      <LinkPageOverview
+        data={data}
+        slug="acme"
+        handle="ada"
+        address="https://timefix.com/ada"
+        isPublic={live.isLive}
+        isEmpty={false}
+        onEdit={() => undefined}
+        onAdd={() => undefined}
+        onGoLive={live.goLive}
+      />
+    </>
+  );
+}
+
 describe('the Live or Private switch (AC-23)', () => {
+  it('moves focus to the switch when the overview’s Turn on Live goes away with the Private state', async () => {
+    const show = vi.fn((_slug: string, live?: boolean) => Promise.resolve({ isPublic: live ?? true }));
+    const walletLink = () => Promise.resolve({});
+    const data = { linkPage: { load: () => Promise.resolve({ show, walletLink }) } } as unknown as DataLayer;
+    await render(data, () => <LiveOverview data={data} />);
+    await userEvent.click(page.getByRole('button', { name: 'Turn on Live' }));
+    const live = page.getByRole('switch', { name: 'Live' });
+    await expect.element(live).toBeChecked();
+    await expect.element(live).toHaveFocus();
+    expect(page.getByRole('button', { name: 'Turn on Live' }).query()).toBeNull();
+    expect(show).toHaveBeenLastCalledWith('acme', true);
+  });
+
   it('puts a page made for its owner live as they open it, says so once with Undo, and Undo makes it private', async () => {
     const show = vi.fn((_slug: string, live?: boolean) => Promise.resolve({ isPublic: live ?? true }));
     const data = { linkPage: { load: () => Promise.resolve({ show }) } } as unknown as DataLayer;

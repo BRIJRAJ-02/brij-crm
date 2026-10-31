@@ -187,7 +187,7 @@ export function LinkPageScreen({ data, linkPage, slug, profile, isEditing, onEdi
               profile={profile}
               handle={handle}
               isLive={live.isLive}
-              onGoLive={() => live.setLive(true)}
+              onGoLive={live.goLive}
               isEditing={isEditing}
               onEditing={onEditing}
             />
