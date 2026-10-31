@@ -6,6 +6,7 @@ import type { Database, IdentityStore } from '@crm/db';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { MailMessage } from '../mail/mailer.ts';
 import { createMailpitMailer } from '../mail/mailpit.ts';
+import { LOCAL_CENTRIFUGO_TOKEN_SECRET } from '../env.ts';
 import { APP_RULES } from '../rules.ts';
 import { MAILPIT_URL, rpcClient, signIn, signInApp, testConnections } from '../../test/sign-in.ts';
 import { memberWithWorkspace, refusal } from '../../test/workspace.ts';
@@ -21,7 +22,8 @@ beforeAll(() => {
   ({ db, identity } = testConnections());
   ({ app } = signInApp(
     { db, identity },
-    {},
+    // Live updates on, so the subscription token answers each member's audience channel (spec 0007, milestone 4).
+    { CENTRIFUGO_TOKEN_SECRET: LOCAL_CENTRIFUGO_TOKEN_SECRET },
     {
       // The app's own rules: the stored ones (the test server names none unless asked).
       rules: APP_RULES,
@@ -238,5 +240,44 @@ describe('access rules (AC-843, AC-844, AC-851, AC-854)', () => {
         }),
       ),
     ).toMatchObject({ code: 'NOT_FOUND', status: 404 });
+  });
+});
+
+// Audience channels (spec 0007 milestone 4, spec 0009 milestone 3, AC-145): the subscription token signs the
+// caller's own audience channel, taken from the policy the door sealed. With no rules everyone shares
+// `workspace:<id>`; a rule that restricts the Member role moves members to `workspace:<id>.<key>`, and the owner
+// stays on the open one. The browser names only the workspace, never a channel.
+describe('audience channels (AC-145)', () => {
+  it("signs each member's own audience channel, and moves it when a rule changes their policy", async () => {
+    const owner = await memberWithWorkspace(app);
+    const workspace = owner.slug;
+    const ada = await teammate(owner);
+    const open = `workspace:${owner.workspace.id}`;
+    const channelOf = async (client: Owner['client']) =>
+      (await client.realtime.subscriptionToken({ workspace })).channel;
+    expect(await channelOf(owner.client)).toBe(open);
+    expect(await channelOf(ada.client)).toBe(open);
+
+    await owner.client.accessRules.set({
+      workspace,
+      objectId: owner.people.id,
+      subject: MEMBER,
+      rule: { level: 'none', records: 'all' },
+      mutationId: newId(),
+    });
+    const restricted = await channelOf(ada.client);
+    expect(restricted).toMatch(new RegExp(`^workspace:${owner.workspace.id}\\.[0-9a-f]{16}$`));
+    // The owner's policy restricts nothing: still the one open channel.
+    expect(await channelOf(owner.client)).toBe(open);
+
+    // The rule given back: Ada's policy is open again, and so is her channel.
+    await owner.client.accessRules.set({
+      workspace,
+      objectId: owner.people.id,
+      subject: MEMBER,
+      rule: { level: 'write', records: 'all' },
+      mutationId: newId(),
+    });
+    expect(await channelOf(ada.client)).toBe(open);
   });
 });

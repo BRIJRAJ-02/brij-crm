@@ -579,13 +579,7 @@ export type { TeamWriteOptions } from './teams/teams.ts';
 export { membersAffectedByTeamChange } from './teams/reach.ts';
 export { PREFERENCES_MEMBERS_ONLY, readMyPreferences, updateMyPreferences } from './members/preferences.ts';
 export { outboxEvent, stubEvent, wireEvent } from './realtime/events.ts';
-export {
-  AUDIENCES_NEED_CHANNELS,
-  isAudiencesNeedChannels,
-  planDelivery,
-  workspaceEvent,
-  type Delivery,
-} from './realtime/plan.ts';
+export { planDelivery, type Delivery } from './realtime/plan.ts';
 export { audienceOf, catchUp, CATCH_UP_MAX_ROWS, createCollapse, workspaceHead } from './realtime/catch-up.ts';
 export {
   cancelJob,

@@ -138,6 +138,7 @@ interface RelayOptions extends Partial<
     | 'selfDormant'
     | 'onWork'
     | 'cutOff'
+    | 'accessChanged'
     | 'durableCutOff'
     | 'now'
   >
@@ -200,6 +201,7 @@ function relayTo(centrifugoUrl: string, options: RelayOptions = {}) {
     ...(options.selfDormant === undefined ? {} : { selfDormant: options.selfDormant }),
     ...(options.onWork === undefined ? {} : { onWork: options.onWork }),
     ...(options.cutOff === undefined ? {} : { cutOff: options.cutOff }),
+    ...(options.accessChanged === undefined ? {} : { accessChanged: options.accessChanged }),
     ...(options.durableCutOff === undefined ? {} : { durableCutOff: options.durableCutOff }),
     ...(options.now === undefined ? {} : { now: options.now }),
   });
@@ -1606,30 +1608,113 @@ describe('the relay plans each row for its workspace’s audience (spec 0007, mi
     expect(relay.cachedAudiences()).toBe(1);
   });
 
-  it('reports a workspace with more than one audience as such, once, and publishes none of it', async () => {
+  /** A stored rule that takes the workspace's object from the Member role (spec 0032), as the owner writes it. */
+  async function hideFromMembers(workspaceId: string): Promise<void> {
+    await testQuery(
+      ownerUrl,
+      `insert into access_rules (workspace_id, id, subject_type, subject_role, object_id, level, created_by_type, updated_by_type)
+       values ($1, $2, 'role', 'member', (select id from objects where workspace_id = $1), 'none', 'system', 'system')`,
+      [workspaceId, randomUUID()],
+    );
+  }
+
+  it('publishes every seq to every audience channel, and a hidden object’s ids only to who may read it (AC-86)', async () => {
     const centrifugo = await fakeCentrifugo();
     servers.push(centrifugo);
     const workspaceId = await workspace();
-    await events(workspaceId, [1]);
-    // Two audiences, as #24's rules would make: the relay refuses before it reads either policy.
-    const one = { key: 'open', policy: {}, members: [] } as unknown as Audience;
-    const two = { ...one, key: 'other' };
-    // 100 ms a poll on the relay's clock: its retries (50 ms, doubling) come every few polls, however slow.
-    const clock = pollClock(100);
-    const turns: number[] = [];
-    const { warnings } = relayTo(centrifugo.url, {
-      audiences: () => Promise.resolve([one, two]),
-      now: clock.now,
-      wrap: clock.tick(turnsOf(workspaceId, clock.now, turns)),
+    await member(workspaceId, 'owner');
+    const ada = await member(workspaceId);
+    await hideFromMembers(workspaceId);
+    // Another workspace, with no rules: one audience, its own one channel.
+    const elsewhere = await workspace();
+    await member(elsewhere);
+    await events(workspaceId, [1, 2]);
+    await row(workspaceId, 3, 'access', [ada]);
+    await events(workspaceId, [4]);
+    await events(elsewhere, [1]);
+    const changed: { workspaceId: string; memberIds: readonly string[]; published: number }[] = [];
+    relayTo(centrifugo.url, {
+      // The real loader: the stored rule splits the owner (open) from Ada (members see no Things).
+      audiences: loadAudiences,
+      accessChanged: (id, memberIds) => {
+        changed.push({ workspaceId: id, memberIds, published: centrifugo.published.length });
+        return Promise.resolve();
+      },
     });
-    await expect
-      .poll(() => warnings.filter((line) => line.message.includes('more than one audience')).length, WAIT)
-      .toBe(1);
-    // Four more failed turns, and still the one report.
-    await expect.poll(() => turns.length, WAIT).toBeGreaterThanOrEqual(5);
-    expect(warnings.filter((line) => line.message.includes('more than one audience'))).toHaveLength(1);
-    expect(centrifugo.seqs(workspaceId)).toEqual([]);
-    expect(await unpublished(workspaceId)).toEqual([1]);
+    const open = `workspace:${workspaceId}`;
+    const on = (channel: string) => centrifugo.published.filter((item) => item.channel === channel);
+    await expect.poll(() => on(open).map((item) => item.data.seq), WAIT).toEqual([1, 2, 3, 4]);
+    const restricted = [...new Set(centrifugo.published.map((item) => item.channel))].find((channel) =>
+      channel.startsWith(`${open}.`),
+    );
+    if (restricted === undefined) throw new Error('No restricted audience channel was published to.');
+    const key = restricted.slice(open.length + 1);
+    expect(key).toMatch(/^[0-9a-f]{16}$/);
+    await expect.poll(() => on(restricted).map((item) => item.data.seq), WAIT).toEqual([1, 2, 3, 4]);
+    await expect.poll(() => unpublished(workspaceId), WAIT).toEqual([]);
+    // The open audience gets each records row whole; Ada's channel gets the stub for each, and the access row whole.
+    const recordIds = on(open).flatMap((item) => (item.data.recordIds as string[] | undefined) ?? []);
+    expect(recordIds).toHaveLength(3);
+    expect(on(restricted).map((item) => item.data)).toEqual([
+      { seq: 1, at: expect.any(String) as string, kind: 'restricted' },
+      { seq: 2, at: expect.any(String) as string, kind: 'restricted' },
+      { seq: 3, at: expect.any(String) as string, kind: 'access', memberIds: [ada] },
+      { seq: 4, at: expect.any(String) as string, kind: 'restricted' },
+    ]);
+    const restrictedFrames = JSON.stringify(on(restricted));
+    for (const id of recordIds) expect(restrictedFrames).not.toContain(id);
+    // Each publish has its own idempotency key: the open one keeps today's, the other adds its policy key.
+    expect(on(open).map((item) => item.idempotencyKey)).toEqual([1, 2, 3, 4].map((seq) => `${workspaceId}:${seq}`));
+    expect(on(restricted).map((item) => item.idempotencyKey)).toEqual(
+      [1, 2, 3, 4].map((seq) => `${workspaceId}:${seq}:${key}`),
+    );
+    // Every channel's copy of a row goes before the next row.
+    const order = centrifugo.published.filter((item) => item.channel.startsWith(open)).map((item) => item.data.seq);
+    expect(order).toEqual([...order].sort((a, b) => Number(a) - Number(b)));
+    // AC-84: Ada is disconnected once, after the access row went out on both channels and before row 4.
+    expect(changed).toHaveLength(1);
+    expect(changed[0]).toMatchObject({ workspaceId, memberIds: [ada] });
+    const beforeFour = centrifugo.published.findIndex((item) => item.channel.startsWith(open) && item.data.seq === 4);
+    expect(changed[0]?.published).toBeLessThanOrEqual(beforeFour);
+    // Cross workspace: the other workspace has its one open channel, which carries none of these rows.
+    const otherChannels = new Set(
+      centrifugo.published.filter((item) => item.channel.includes(elsewhere)).map((item) => item.channel),
+    );
+    expect([...otherChannels]).toEqual([`workspace:${elsewhere}`]);
+    const otherFrames = JSON.stringify(on(`workspace:${elsewhere}`));
+    for (const id of recordIds) expect(otherFrames).not.toContain(id);
+    expect(centrifugo.seqs(elsewhere)).toEqual([1]);
+  });
+
+  it('marks a row only once every audience channel took it, and sends it again without repeats', async () => {
+    const workspaceId = await workspace();
+    await member(workspaceId, 'owner');
+    await member(workspaceId);
+    await hideFromMembers(workspaceId);
+    let refusals = 0;
+    // Ada's copy of row 2 is refused once: row 1 is marked, row 2 waits, and the open copy of row 2 that landed is
+    // dropped as a repeat when the whole row goes again.
+    const centrifugo = await fakeCentrifugo({
+      refuse: (publication) => {
+        if (publication.channel === `workspace:${workspaceId}` || publication.data.seq !== 2 || refusals > 0) {
+          return false;
+        }
+        refusals += 1;
+        return true;
+      },
+    });
+    servers.push(centrifugo);
+    await events(workspaceId, [1, 2]);
+    relayTo(centrifugo.url);
+    await expect.poll(() => unpublished(workspaceId), WAIT).toEqual([]);
+    expect(refusals).toBe(1);
+    const seqsOn = (restricted: boolean) =>
+      centrifugo.published
+        .filter((item) => item.channel.startsWith(`workspace:${workspaceId}`))
+        .filter((item) => (item.channel === `workspace:${workspaceId}`) !== restricted)
+        .map((item) => item.data.seq);
+    expect(seqsOn(false)).toEqual([1, 2]);
+    expect(seqsOn(true)).toEqual([1, 2]);
   });
 
   it('fails the turn of a workspace whose audiences fail to load, and publishes it once they load', async () => {

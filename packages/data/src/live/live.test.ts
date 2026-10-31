@@ -57,6 +57,7 @@ function setup(options: Setup = {}) {
   const channels: LiveChannel[] = [];
   const unlistened: string[] = [];
   const trouble = new Set<() => void>();
+  const accessChanged = new Set<() => Promise<void>>();
   let opened = 0;
   let closed = 0;
   const transport: LiveTransport = {
@@ -70,6 +71,12 @@ function setup(options: Setup = {}) {
       trouble.add(listener);
       return () => {
         trouble.delete(listener);
+      };
+    },
+    onAccessChanged: (listener) => {
+      accessChanged.add(listener);
+      return () => {
+        accessChanged.delete(listener);
       };
     },
     close: () => {
@@ -159,6 +166,8 @@ function setup(options: Setup = {}) {
     channels,
     unlistened,
     trouble,
+    /** What Centrifugo closing the connection with 4500 runs (spec 0007, AC-84), as the client wrapper does. */
+    accessChanged: () => Promise.all([...accessChanged].map((listener) => listener())),
     calls,
     statuses,
     afters,
@@ -647,5 +656,82 @@ describe('watching', () => {
     release();
     await t.elapse(jitter);
     expect(t.calls).toEqual([`records ${WS} ${ROW(1)}`]);
+  });
+});
+
+// Audience channels (spec 0007, milestone 4): the door names the channel, so after an access change the client asks
+// again and moves when the person's audience moved, catching up there from its watermark (every channel carries
+// every seq). A token renewal that names another channel moves too; one that is refused stops listening.
+describe('the audience channel', () => {
+  /** A token source whose channel the test moves. */
+  function door() {
+    let channel: string | undefined = 'workspace:acme-id';
+    let asked = 0;
+    return {
+      token: () => {
+        asked += 1;
+        return Promise.resolve(channel === undefined ? undefined : { channel, token: `token-${channel}`, head: 0 });
+      },
+      move: (to: string | undefined) => {
+        channel = to;
+      },
+      asked: () => asked,
+    };
+  }
+
+  it('moves to the new channel after an access change, catching up from the watermark there at once', async () => {
+    const tokens = door();
+    const t = setup({ token: tokens.token, head: 3 });
+    await t.subscribed();
+    t.channel().onPublication(event(4));
+    expect(t.live.watermark(WS)).toBe(4);
+    // Same audience: nothing moves.
+    await t.live.rejoin(WS);
+    expect(t.channels.map((channel) => channel.name)).toEqual(['workspace:acme-id']);
+    tokens.move('workspace:acme-id.0123456789abcdef');
+    await t.live.rejoin(WS);
+    expect(t.unlistened).toEqual(['workspace:acme-id']);
+    const moved = t.channels[1];
+    expect(moved).toMatchObject({
+      name: 'workspace:acme-id.0123456789abcdef',
+      token: 'token-workspace:acme-id.0123456789abcdef',
+    });
+    moved?.onSubscribed({ wasRecovering: false, recovered: false });
+    await settle();
+    expect(t.afters).toEqual([4]);
+    // The new channel's next seq applies on the same watermark.
+    moved?.onPublication(event(5));
+    expect(t.live.watermark(WS)).toBe(5);
+  });
+
+  it('asks every watched workspace again on a 4500 close, and stops listening where it is refused', async () => {
+    const tokens = door();
+    const t = setup({ token: tokens.token });
+    await t.subscribed();
+    const before = tokens.asked();
+    tokens.move(undefined);
+    await t.accessChanged();
+    expect(tokens.asked()).toBe(before + 1);
+    expect(t.unlistened).toEqual(['workspace:acme-id']);
+    expect(t.statuses).toContain('paused');
+    // Nothing left to rejoin.
+    await t.live.rejoin(WS);
+    expect(tokens.asked()).toBe(before + 1);
+  });
+
+  it('moves rather than renewing when the renewed token names another channel', async () => {
+    const tokens = door();
+    const t = setup({ token: tokens.token });
+    await t.subscribed();
+    expect(await t.channel().renew()).toBe('token-workspace:acme-id');
+    tokens.move('workspace:acme-id.fedcba9876543210');
+    // The old subscription gets no token for a channel it isn't (Centrifugo would close the whole connection).
+    expect(await t.channel().renew()).toBeUndefined();
+    await settle();
+    await settle();
+    expect(t.channels.map((channel) => channel.name)).toEqual([
+      'workspace:acme-id',
+      'workspace:acme-id.fedcba9876543210',
+    ]);
   });
 });

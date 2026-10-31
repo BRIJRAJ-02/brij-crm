@@ -390,6 +390,8 @@ export const ACCESS_TABLE = {
   runSchedulingNotice: { system: true },
   // Spec 0031, AC-817: the relay's read of whom a removal cuts off.
   removedUserIds: { system: true },
+  // Spec 0007, AC-84: the relay's read of whom an `access` row disconnects with 4500.
+  memberUserIds: { system: true },
   // Milestone 2: Add as person creates a person through the door (write on People, the record's own read first);
   // the workspace's calendar settings are read by any member and changed by owners and admins.
   addMeetingAttendee: { data: 'write' },

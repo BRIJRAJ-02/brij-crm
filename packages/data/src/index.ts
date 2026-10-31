@@ -1949,10 +1949,12 @@ export function createDataLayer({
     });
   });
   router.on('access', (workspace, event) => {
-    // The person's access changed: everything held is read again under it (spec 0009, AC-146; milestone 4 adds
-    // the new channel and the 4500 disconnect).
+    // The person's access changed: everything held is read again under it (spec 0009, AC-146), and the live client
+    // asks for its channel again, moving when the person's audience did (spec 0007, milestone 4; the relay's 4500
+    // disconnect does the same, and whichever comes first asks once).
     void namesMe(workspace, event.memberIds).then((named) => {
       if (!named) return;
+      void live?.then((loaded) => loaded.rejoin(workspace)).catch(() => undefined);
       spread(`resync ${workspace}`, () => {
         access.delete(workspace);
         router.resync(workspace);
