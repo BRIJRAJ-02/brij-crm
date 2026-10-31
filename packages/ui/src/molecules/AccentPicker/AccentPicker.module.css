@@ -8,7 +8,6 @@
     flex-direction: column;
     align-items: flex-start;
     gap: var(--space-8);
-    container-type: inline-size;
   }
 
   /* The swatches, then Any colour at the end of the same row, on the same gap. */
@@ -20,11 +19,11 @@
     gap: var(--space-6);
   }
 
-  /* Narrower than the default, the nine picks and Any colour on one line (11 swatches, 280px; the nearest
-     breakpoint, 320px): rows of six and five, Any colour ending the second, rather than one swatch wrapping alone
-     (a phone, 31 Oct 2026). The ten radios wrap at six, four on the second row; Any colour steps back two columns
-     from beside the group's box to sit right after them. */
-  @container (inline-size < 320px) {
+  /* On a phone (the page's container under 480px), where the default, the nine picks and Any colour (11 swatches,
+     280px) no longer fit one line: rows of six and five, Any colour ending the second, rather than one swatch
+     wrapping alone (31 Oct 2026). Wider, they keep one row. The ten radios wrap at six, four on the second row; Any
+     colour steps back two columns from beside the group's box to sit right after them. */
+  @container (inline-size < 480px) {
     .swatches {
       max-inline-size: calc(6 * var(--size-tile) + 5 * var(--space-6));
     }
