@@ -243,7 +243,6 @@ export const strings = {
   bulkRoleText: 'Some of them will lose access they have now.',
   bulkRoleChanged: (count: number, role: string) =>
     `${String(count)} ${count === 1 ? 'person is' : 'people are'} now ${role}.`,
-  selectMember: (name: string) => `Select ${name}`,
   roleCustomDown: (name: string) => `${name} will lose some of what they can do now.`,
   custom: 'Custom',
 } as const;

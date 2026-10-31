@@ -100,6 +100,7 @@ describe('the role page', () => {
 describe('What can Priya do (AC-1243)', () => {
   const words: CapabilityWords = {
     reach: { self: 'Only their own', team: 'Their teams', everyone: 'Everyone' },
+    allButAdmins: 'Everyone but owners and admins',
     and: (a, b) => `${a} and ${b}`,
     ownersAndAdmins: 'Owners and admins',
     holdersOf: (name) => `Everyone with ${name}`,
@@ -121,7 +122,8 @@ describe('What can Priya do (AC-1243)', () => {
   it('says whom they reach through their role and their delegations', () => {
     expect(reachLine(LEAD, [grant('priya', 'bea', 'view')], 'view', nameOf, words)).toBe('Their teams and Bea');
     expect(reachLine(MEMBER, [grant('priya', 'bea', 'view')], 'manage', nameOf, words)).toBe('Only their own');
-    expect(reachLine(DESK, [], 'manage', nameOf, words)).toBe('Everyone');
+    expect(reachLine(DESK, [], 'manage', nameOf, words)).toBe('Everyone but owners and admins');
+    expect(reachLine(ADMIN, [], 'manage', nameOf, words)).toBe('Everyone');
   });
 
   it('names who manages their scheduling: owners and admins, roles that reach them, and their delegates', () => {

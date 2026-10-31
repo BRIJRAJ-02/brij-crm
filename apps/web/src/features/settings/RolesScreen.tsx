@@ -294,7 +294,14 @@ function Compare({ roles }: { readonly roles: readonly RoleDefinition[] }) {
     }
     const role = roles.find((each) => each.id === column);
     if (role === undefined) return null;
-    if (row.kind === 'data') return role.dataAccess === 'write' ? strings.readWrite : strings.readOnly;
+    // An icon, as every other row's cell is, so the role columns line up from group to group.
+    if (row.kind === 'data') {
+      return role.dataAccess === 'write' ? (
+        <Icon name="pencil" tone="muted" label={`${role.label}: ${strings.readWrite}`} />
+      ) : (
+        <Icon name="eye" tone="muted" label={`${role.label}: ${strings.readOnly}`} />
+      );
+    }
     const label = PERMISSIONS[row.id].label;
     return role.permissions.includes(row.id) ? (
       <Icon name="check" tone="success" label={strings.holds(role.label, label)} />

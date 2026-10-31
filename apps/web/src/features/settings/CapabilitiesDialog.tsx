@@ -37,6 +37,7 @@ export interface CapabilitiesDialogProps {
 
 const WORDS: CapabilityWords = {
   reach: roleStrings.reach,
+  allButAdmins: roleStrings.allButAdmins,
   and: strings.capabilities.and,
   ownersAndAdmins: strings.capabilities.ownersAndAdmins,
   holdersOf: strings.capabilities.holdersOf,

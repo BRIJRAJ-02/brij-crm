@@ -74,6 +74,7 @@ describe('inviting and accepting (AC-803 to AC-806)', () => {
       workspaceName: 'Acme',
       inviterName: 'Ada',
       role: 'admin',
+      roleLabel: 'Admin',
       invitedEmailMasked: `${invitee.email.slice(0, 1)}***@${invitee.email.split('@')[1] ?? ''}`,
     });
     // Someone else, signed in, is refused and joins nothing.

@@ -10,6 +10,8 @@ export type NameOf = (memberId: string) => string | undefined;
 /** Copy the lines are built from (the dialog passes its strings, so this file holds no words of its own). */
 export interface CapabilityWords {
   readonly reach: Readonly<Record<Reach, string>>;
+  /** A custom role's Everyone, which never reaches owners and admins (decision 7). */
+  readonly allButAdmins: string;
   readonly and: (a: string, b: string) => string;
   readonly ownersAndAdmins: string;
   /** "Everyone with Receptionist". */
@@ -38,6 +40,7 @@ export function reachLine(
 ): string {
   const own = roleReach(role)[level === 'view' ? 'see' : 'manage'];
   const counts = held.filter((each) => (level === 'view' ? true : each.level === 'manage'));
+  if (own === 'everyone' && role.builtIn === undefined) return words.allButAdmins;
   if (own === 'everyone' || counts.some((each) => each.target.type === 'everyone')) return words.reach.everyone;
   const names = counts.flatMap((each) => {
     if (each.target.type !== 'member') return [];
