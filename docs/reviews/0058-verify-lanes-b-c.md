@@ -58,3 +58,26 @@ Nothing in verify.md or the scope was ticked, because the verdict is FAIL.
 - Done step: the preview's link rows are skeleton bars, which look like it is still loading.
 - Forms empty state: there are two primaries, the bar's New and the empty state's New form.
 - In this setup Centrifugo refused the socket (403), because :5280 isn't an allowed origin. This comes from the environment, not from these lanes.
+
+## Fixes after this verify (31 October 2026)
+
+Rechecked in the real app (own database `crm_vl1fix`, api :3200, Vite :5280, one headless Chromium, light and dark, then reduced motion). Shots: `.../scratchpad/vlfix/shots/`.
+
+- **AC-4 / AC-9, keyboard: fixed.** The Add modal's frame keeps focus on the tiles while an arrow swaps the kind: an editor's form focuses its first field only for the kind the modal opened on (`useFocusesFirstField`). Enter, Space or a click on a tile moves to that kind's first field. Arrowed from Link to Section with focus on each tile, then Enter landed in "What they said" (`lp-add-focus`). Covered by `LinkPage.browser.test.tsx`, "the Add modal's keyboard".
+- **AC-4, focus ring: fixed.** A focused tile now draws the library ring (the accent line outside the tile past a hairline gap, plus the halo), so a focused chosen tile differs from a chosen one in both themes (`lp-add-focus-dark`, story `ChoiceTinted`).
+- **AC-2, reduced motion: fixed.** Modal and scrim, ReadyPanel and its mark, and the tile tick change at once under reduced motion: no animations ran on open, on the Ready panel or on a tick, and Esc closed in about 50 ms.
+- **AC-1: fixed.** Popup heads have 16 px on both sides; the close button's optical offset moved to a negative margin. Select and Disclosure triggers, and Table cells, drop the button and cell UA 1 px. ChoiceTiles use `auto-fit`, so the Ready panel's and Install's embed tiles end on the right edge (Ready: link row, last tile and grid all end at 984 px; `form-ready`, `form-install`). The probe passes on Add, Ready and Sync. Install's one hit is the false positive noted above (a layout container's 776 px padding).
+- **Live switch:** reads "Live" when on and "Private" when off; its accessible name stays "Live" (Switch `stateLabels`, `lp-switch-on`, `lp-switch-off`).
+- **Skip for now:** both steps use the ghost button. The filled look in `fr-invite` was the pointer resting over it after the Calendar step's Skip (`fr-invite` now).
+- **Ready panel:** one primary (Done); Copy link is secondary (`copyVariant`). With no preview, a line beside the QR says to point a phone's camera at it.
+- **Add block tiles:** each kind's picture slot is tinted in its data hue, with the mark at one and a half `size-icon` (Icon `lg`).
+- **Sync:** one count line ("2 already match.") replaces the Stats row, and the dialog says "File …" as the menu does (`form-sync-all`).
+- **Done step preview:** the placeholder rows show only on Your link; Invite and Done show the real rows alone (`fr-done`).
+- **Dark mode phone preview:** the page fills the phone's screen to its foot (`lp-screen-dark`).
+
+## Left as is, by decision
+
+- AC-13 keeps dropdowns for Saved as: the mapping must stay editable.
+- AC-8's inline claim is only reachable with no handle. `ClaimLink` lives in the app (no Storybook there); `LinkPage.browser.test.tsx`, "a link page with no handle", renders and drives it.
+- AC-16's preview list needs the network (linktr.ee); the hint line passes.
+- Plain, Paper and Quiet looking alike is spec 0060's 14 looks.
