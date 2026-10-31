@@ -2,7 +2,7 @@
 // Purpose: Settings › Workspace › General (spec 0031, AC-822, AC-823): the workspace's name, web address, time zone,
 // and the currency and country new money and phone fields start in.
 // Main task: rename it (saved when the field is left or on Enter, with Undo), change its address (its own dialog), or
-// pick its time zone, currency or country (saved at once, with Undo); owners can delete it.
+// pick its time zone, currency or country (saved at once, with Undo); owners can export everything or delete it.
 // Leaves out: a Save bar and a leave check (each change saves on its own), the logo (no row until upload arrives with #32), and members (their own page).
 import { isDataError, type DataLayer, type WorkspaceSettings } from '@crm/data';
 import {
@@ -26,6 +26,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { zoneItems, zoneLabel, zoneMatches } from '../booking/hours.ts';
 import { ChangeAddressDialog } from './ChangeAddressDialog.tsx';
 import { DeleteWorkspaceDialog } from './DeleteWorkspaceDialog.tsx';
+import { WorkspaceExportSection } from './WorkspaceExportSection.tsx';
 import { nameCommit } from './general-form.ts';
 import { useCan, useMyAccess } from '../workspace/WorkspacePage.tsx';
 import { SettingsPage } from './SettingsPage.tsx';
@@ -41,6 +42,8 @@ export interface GeneralScreenProps {
   readonly mayManage: boolean;
   /** Whether the reader may delete it (`workspace.delete`, owners). */
   readonly mayDelete: boolean;
+  /** Whether the reader may export everything (`workspace.export`, owners). */
+  readonly mayExport?: boolean;
   /** The app's address, for the workspace's full link. */
   readonly origin: string;
   /** A change landed: the route reads the settings again. */
@@ -78,6 +81,7 @@ export function GeneralScreen({
   settings,
   mayManage,
   mayDelete,
+  mayExport = false,
   origin,
   onChanged,
   onMoved,
@@ -417,6 +421,7 @@ export function GeneralScreen({
           </SettingsRow>
         </Card>
       </SettingsSection>
+      {mayExport && <WorkspaceExportSection data={data} toasts={toasts} slug={slug} />}
       {mayDelete && (
         <SettingsSection title={strings.danger}>
           <Card>
@@ -476,6 +481,7 @@ export function GeneralPending() {
   const access = useMyAccess();
   const mayManage = useCan('workspace.manage');
   const mayDelete = useCan('workspace.delete');
+  const mayExport = useCan('workspace.export');
   return (
     <SettingsPage title={strings.generalTitle} isLoading>
       {access !== undefined && !mayManage && <Callout tone="info">{strings.readOnly}</Callout>}
@@ -502,6 +508,17 @@ export function GeneralPending() {
           </SettingsRow>
         </Card>
       </SettingsSection>
+      {mayExport && (
+        <SettingsSection title={strings.yourData}>
+          <Card>
+            <SettingsRow title={strings.exportEverything} description={strings.exportEverythingText}>
+              <Button icon="download" isDisabled>
+                {strings.export}
+              </Button>
+            </SettingsRow>
+          </Card>
+        </SettingsSection>
+      )}
       {mayDelete && (
         <SettingsSection title={strings.danger}>
           <Card>

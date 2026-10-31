@@ -162,6 +162,20 @@ const data = createDataLayer({
       });
       return;
     }
+    // The owner's full workspace export (lane wip/crm-dataio): its end offers the zip, wherever the owner is now.
+    if (job.kind === 'workspace.export' && job.status === 'succeeded' && exportId !== undefined) {
+      toasts.toast({
+        tone: 'success',
+        message: exportToast.workspaceReady,
+        action: {
+          label: exportToast.download,
+          onAction: () => {
+            window.location.assign(data.exports.downloadPath(workspace, exportId));
+          },
+        },
+      });
+      return;
+    }
     // An import or its undo (spec 0040, AC-1125): View opens the import's summary, not the jobs page; on that
     // summary already, the page says it all, so no toast.
     const importId =

@@ -800,6 +800,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
     exports: {
       start: os.exports.start.handler(notServed),
       get: os.exports.get.handler(notServed),
+      startWorkspace: os.exports.startWorkspace.handler(notServed),
     },
     bookingPages: {
       list: os.bookingPages.list.handler(notServed),

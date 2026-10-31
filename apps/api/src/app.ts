@@ -562,6 +562,8 @@ export function createApp({
   // starter.
   mountExports(app, {
     auth,
+    // A workspace export's zip (lane wip/crm-dataio) is read from the same private store as pictures.
+    files: pictureFiles,
     enter: (session, slug) =>
       enterWorkspace({ db, identity, log, rules }, { userId: session.user.id, slug, session: doorSession(session) }),
   });

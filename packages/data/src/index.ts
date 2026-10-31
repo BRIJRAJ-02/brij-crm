@@ -8,6 +8,7 @@
 import type {
   ActivityKind,
   RecordsExportView,
+  WorkspaceExportView,
   StartExportInput,
   ImportLinks,
   DuplicatePair,
@@ -921,6 +922,7 @@ export type {
   StagedRow,
   StageResult,
   RecordsExportView,
+  WorkspaceExportView,
 } from '@crm/contracts';
 export {
   applyOp,
@@ -7162,6 +7164,8 @@ export function createDataLayer({
           readonly sorts?: StartExportInput['sorts'];
           readonly attributeIds: readonly string[];
           readonly recordIds?: readonly string[];
+          /** CSV unless an Excel workbook is asked for. */
+          readonly format?: 'csv' | 'xlsx';
         },
       ): Promise<RecordsExportView> => {
         const { recordIds, ...rest } = input;
@@ -7188,6 +7192,18 @@ export function createDataLayer({
         call((options) => api.exports.get({ workspace, exportId }, options)),
       /** The export a job this tab started wrote, for the finish toast's Download. */
       forJob: (jobId: string): RecordsExportView | undefined => exportJobs.get(jobId),
+      /**
+       * The full workspace export (lane wip/crm-dataio, owners only): starts its job under the id the screen minted
+       * (`newId`), and follows it, so its progress and end reach the jobs store and the finish toast. Refusals as
+       * `DataError` (`FORBIDDEN`, `LIMIT_REACHED` while one is running).
+       */
+      startWorkspace: async (workspace: string, id: string): Promise<WorkspaceExportView> => {
+        const view = await sendImport(
+          (mutationId) => (options) => api.exports.startWorkspace({ workspace, id, mutationId }, options),
+        );
+        await followJob(workspace, view.jobId);
+        return view;
+      },
       /** Where a finished export downloads from (the same route serves every export). */
       downloadPath: (workspace: string, exportId: string): string =>
         `/api/exports/${encodeURIComponent(exportId)}/download?workspace=${encodeURIComponent(workspace)}`,
