@@ -34,14 +34,14 @@ describe('destinationHint', () => {
       calendar(MAIN, 'Main', { isDestination: true }),
     ];
     expect(destinationHint({ status: 'unusable', calendarId: WORK, isOwner: true }, calendars)).toBe(
-      'Your calendar Work stopped taking bookings, so this page uses your default calendar Main.',
+      'Your calendar Work stopped taking bookings. Using Main for now.',
     );
   });
 
   it('names a calendar that went by the name the page kept', () => {
     const calendars = [calendar(MAIN, 'Main', { isDestination: true })];
     expect(destinationHint({ status: 'unusable', removedName: 'Team', isOwner: true }, calendars)).toBe(
-      'Your calendar Team stopped taking bookings, so this page uses your default calendar Main.',
+      'Your calendar Team stopped taking bookings. Using Main for now.',
     );
   });
 

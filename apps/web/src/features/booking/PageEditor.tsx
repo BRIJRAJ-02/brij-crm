@@ -802,7 +802,11 @@ export function PageEditor({
               title={sharingStrings.title}
               isOpen={isSharing}
               onOpenChange={setSharing}
-              actions={<Button slot="close">{sharingStrings.close}</Button>}
+              actions={
+                <Button slot="close" variant="primary">
+                  {sharingStrings.close}
+                </Button>
+              }
             >
               {hasShared && (
                 <SharingPanel

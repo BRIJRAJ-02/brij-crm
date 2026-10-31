@@ -4,7 +4,17 @@
 // Leaves out: editing a page (its editor), forms (their own tab) and the bookings list (Bookings).
 import { isDataError, type BookingPageView, type DataLayer } from '@crm/data';
 import { useCaptureList } from '@crm/data/react';
-import { Button, focusLater, Menu, MenuItem, MenuSeparator, MenuTrigger, Tooltip, type LinkGridCard } from '@crm/ui';
+import {
+  Button,
+  focusLater,
+  Menu,
+  MenuItem,
+  MenuSeparator,
+  MenuTrigger,
+  SpotIllustration,
+  Tooltip,
+  type LinkGridCard,
+} from '@crm/ui';
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useState } from 'react';
 import { CapturesList } from '../captures/CapturesList.tsx';
@@ -238,7 +248,8 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
               </Button>
             ),
           })}
-      empty={{ title: strings.emptyTitle, icon: 'calendar-clock' }}
+      // The first empty moment shows what will be here (spec 0058, AC-8): the drawing, the title and New, no paragraph.
+      empty={{ title: strings.emptyTitle, icon: 'calendar-clock', illustration: <SpotIllustration kind="booking" /> }}
       errorTitle={strings.failedTitle}
       onRetry={() => {
         data.bookingPages.view(slug).reload();

@@ -8,6 +8,8 @@ export const sharingStrings = {
   close: 'Done',
   add: 'Add an editor',
   addPlaceholder: 'Add an editor…',
+  /** Under the picker: what an editor may do (spec 0037, AC-1331), in one line. */
+  addHint: 'Editors can change it, not delete it.',
   full: 'Full: 20 editors',
   /** The Editor badge on what the reader edits (AC-1332). */
   editorBadge: 'Editor',

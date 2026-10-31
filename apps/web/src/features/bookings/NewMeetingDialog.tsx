@@ -391,6 +391,8 @@ export function NewMeetingDialog({
   return (
     <Modal
       title={strings.newMeeting}
+      // Seven fields: the form dialog's width, as New record's (Modal README).
+      variant="form"
       isOpen
       isDismissable={!isDirty}
       isBusy={busy}

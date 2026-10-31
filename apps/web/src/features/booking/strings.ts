@@ -38,7 +38,7 @@ export const strings = {
   viewOnly: 'View only',
   /** Captures › Links' groups, when the workspace has a link of its own. */
   workspaceGroup: 'Workspace',
-  workspaceGroupLine: 'Links that book whoever in the workspace is free, in turn',
+  workspaceGroupLine: 'They book whoever is free, in turn',
   membersGroup: 'Members’ pages',
   /** The reader's own pages, once the list holds someone else's too (spec 0037, AC-1273). */
   yourGroup: 'Your pages',
@@ -127,7 +127,7 @@ export const strings = {
   slugRequired: 'Give the page a web address.',
   slugInvalid: 'Use lowercase letters, numbers and single hyphens.',
   onLinkPage: 'On your link page',
-  onLinkPageLine: 'Public pages join your link page. Move, hide or archive them there.',
+  onLinkPageLine: 'Public pages show on your link page.',
   linkPage: 'Link page',
   editLinkPage: 'Edit link page',
   /**
@@ -142,7 +142,7 @@ export const strings = {
   afterBooking: 'After someone books',
   addToCrm: 'Add bookers to People',
   targetsFailedTitle: 'Where answers go didn’t load',
-  targetsFailed: 'The object’s fields couldn’t be read, so questions can’t be filed onto them right now.',
+  targetsFailed: 'Its fields couldn’t be read. Try again.',
   /** The Questions tab's object picker (booking answers parity, 27 Oct 2026), in the forms editor's words. */
   answersObject: 'Where the answers go',
   answersObjectMoved: (objectName: string) =>
@@ -159,9 +159,9 @@ export const strings = {
   answersObjectAddField: 'Add an email field',
   tryAgain: 'Try again',
   /** Book by chat (spec 0042) doesn't ask the page's questions yet (spec 0057 follow up). */
-  chatAsksNone: 'Visitors who book by chat skip these questions, since they’re all optional.',
+  chatAsksNone: 'Book by chat skips these optional questions.',
   /** A required question turns Book by chat off: chat can't ask it. */
-  chatOffRequired: 'Book by chat is off while a question must be answered: chat can’t ask it.',
+  chatOffRequired: 'Book by chat is off: it can’t ask a required question.',
   durations: 'Durations',
   location: 'Location',
   locations: { video: 'Video', address: 'In person', phone: 'Phone', custom: 'Somewhere else' },
@@ -177,10 +177,9 @@ export const strings = {
   /** The Hours tab's way to Availability, where every schedule is kept. */
   manageSchedules: 'Manage schedules',
   /** Under the Schedule picker when other pages book by the same schedule. */
-  sharedSchedule: (name: string, pages: number) =>
-    `${String(pages)} pages use ${name}. Changes here apply to all of them.`,
+  sharedSchedule: (name: string, pages: number) => `${String(pages)} pages use ${name}. Changes apply to all.`,
   /** Why the week shows read only when the owner's schedules couldn't be read. */
-  hoursUnreadable: 'Couldn’t load the schedules, so these hours show read only. Reload to edit them.',
+  hoursUnreadable: 'Couldn’t load the schedules. Reload to edit.',
   /** Why the Schedule picker waits: its hours have changes not saved yet. */
   saveHoursFirst: 'Save or discard the changes to these hours first.',
   followOwnerHint: 'This page books by its owner’s schedule.',
@@ -207,7 +206,7 @@ export const strings = {
   reservedTime: 'Reserved time',
   /** The Hours and Meeting tabs' sections (22 Oct 2026). */
   calendarSection: 'Calendar',
-  reservedTimeLine: 'This page can also book your reserved time: time only your link only pages can book.',
+  reservedTimeLine: 'It can also book your reserved time.',
   /** On Minimum notice, while the page is link only. */
   noticeIgnored: 'Link only pages ignore this.',
   statusFailed: (title: string) => `Couldn’t change ${title}. Try again.`,
@@ -224,11 +223,11 @@ export const strings = {
       example: 'With 15 minutes, after a meeting ending at 10:00 AM the first slot is 10:15 AM.',
     },
     after: {
-      text: 'Free time kept after each meeting, to wrap up or get to the next one.',
+      text: 'Free time after each meeting.',
       example: 'With 10 minutes, a 9:00 to 9:30 AM booking keeps 9:30 to 9:40 AM free.',
     },
     notice: {
-      text: 'How much warning you need before a meeting. Times sooner than this are hidden.',
+      text: 'Warning you need before a meeting.',
       example: 'With 4 hours, at 1:00 PM the first slot offered is 5:00 PM.',
     },
     ahead: {
@@ -240,7 +239,7 @@ export const strings = {
       example: 'With 3, a day with three meetings is full.',
     },
     step: {
-      text: 'How often a start time is offered. Meeting length starts one right after another.',
+      text: 'How often a start time is offered.',
       example: 'On Meeting length, a 30 minute meeting offers 9:00, 9:30 and 10:00 AM.',
     },
   },
@@ -251,7 +250,7 @@ export const strings = {
   /** InfoTips on the editor's settings that a new member wouldn't read from the label alone. */
   tips: {
     bufferBefore: {
-      text: 'Time kept free before each meeting, so nobody books right up to its start.',
+      text: 'Free time before each meeting.',
       example: 'With 15 minutes, a 10:00 AM meeting keeps 9:45 to 10:00 clear.',
     },
     bufferAfter: {
@@ -259,11 +258,11 @@ export const strings = {
       example: 'With 10 minutes, nothing can start before 11:10 AM after a meeting that ends at 11:00.',
     },
     notice: {
-      text: 'How much warning you need before a meeting. Times sooner than this are hidden.',
+      text: 'Warning you need before a meeting.',
       example: 'With 4 hours, a 2:00 PM slot can’t be booked after 10:00 AM that day.',
     },
     window: {
-      text: 'How many days ahead people can book. The window moves forward each day.',
+      text: 'How many days ahead people can book.',
       example: 'With 30 days, on 1 March people can book up to about 31 March.',
     },
     dailyLimit: {
@@ -271,7 +270,7 @@ export const strings = {
       example: 'With 3, once three people book Tuesday, Tuesday shows no times.',
     },
     step: {
-      text: 'How often a start time is offered. Meeting length starts one right after another.',
+      text: 'How often a start time is offered.',
       example: 'With 15 minutes, a 30 minute meeting offers 9:00, 9:15, 9:30 and so on.',
     },
   },
@@ -317,11 +316,9 @@ export const strings = {
   destinationFellBack: (name: string | undefined, fallback: string | undefined) => {
     const stopped =
       name === undefined ? 'Your calendar stopped taking bookings' : `Your calendar ${name} stopped taking bookings`;
-    return fallback === undefined
-      ? `${stopped}. Pick another.`
-      : `${stopped}, so this page uses your default calendar ${fallback}.`;
+    return fallback === undefined ? `${stopped}. Pick another.` : `${stopped}. Using ${fallback} for now.`;
   },
-  destinationUnusableColleague: 'The owner’s pick can’t take bookings now, so they go on the owner’s default.',
+  destinationUnusableColleague: 'The owner’s pick can’t take bookings, so their default is used.',
   destinationFailed: 'Couldn’t load calendars. Reload the page to try again.',
   destinationOwnerOnly: 'Only the page’s owner sees their calendars.',
   /** Where someone else's page's events go, read only (spec 0037, AC-1273): only its owner chooses. */

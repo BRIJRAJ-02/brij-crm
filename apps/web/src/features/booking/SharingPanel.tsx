@@ -4,18 +4,7 @@
 // Leaves out: teams as editors (lane L3a), what an editor may do (the server's), and the page's or rotation's own settings.
 import { isDataError, type DataLayer, type EditorResource, type EditorView } from '@crm/data';
 import { useCaptureList } from '@crm/data/react';
-import {
-  Avatar,
-  Button,
-  EmptyState,
-  Modal,
-  Select,
-  SettingsRow,
-  SettingsStack,
-  Skeleton,
-  focusLater,
-  type Toasts,
-} from '@crm/ui';
+import { Avatar, Button, EmptyState, Modal, Select, SettingsRow, Skeleton, focusLater, type Toasts } from '@crm/ui';
 import { useRef, useState } from 'react';
 import { sharingStrings as strings } from './sharing-strings.ts';
 
@@ -94,12 +83,14 @@ export function SharingPanel({
   const addable = people.filter((person) => !held.has(person.id) && person.role !== 'owner' && person.role !== 'admin');
   const isFull = editors.length >= EDITORS_MAX;
   return (
-    <SettingsStack>
+    <>
       {canChange && (
         <Select
           triggerRef={pickerRef}
           label={strings.add}
           isLabelHidden
+          // What an editor may do, in one line (spec 0058, AC-3): the rest is the server's.
+          hint={strings.addHint}
           savesOnPick
           isSearchable
           placeholder={isFull ? strings.full : addable.length === 0 ? strings.nobodyToAdd : strings.addPlaceholder}
@@ -168,8 +159,8 @@ export function SharingPanel({
           </>
         }
       >
-        <p>{strings.removeText(asked?.name ?? '', resourceName)}</p>
+        {strings.removeText(asked?.name ?? '', resourceName)}
       </Modal>
-    </SettingsStack>
+    </>
   );
 }
