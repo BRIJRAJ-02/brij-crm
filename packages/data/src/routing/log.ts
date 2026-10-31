@@ -107,13 +107,13 @@ function heldRead<S>(
     });
   };
   return {
-    subscribe(listener: () => void) {
+    subscribe: (listener: () => void) => {
       listeners.add(listener);
       return () => listeners.delete(listener);
     },
     getSnapshot: () => state,
     set,
-    retain() {
+    retain: () => {
       held += 1;
       if (held === 1) {
         read();
@@ -137,11 +137,8 @@ function heldRead<S>(
 
 /** A stable key for a filter set: its fields in order. */
 function filtersKey(filters: RoutingDecisionFilters): string {
-  return JSON.stringify(
-    Object.entries(filters)
-      .filter(([, value]) => value !== undefined)
-      .sort(),
-  );
+  // Absent filters are absent keys (the screen never sets one to undefined), so the entries are the filters set.
+  return JSON.stringify(Object.entries(filters).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
 }
 
 /** The Routing tab's store: the Overview per workspace, and the Decisions log per workspace and filters. */
