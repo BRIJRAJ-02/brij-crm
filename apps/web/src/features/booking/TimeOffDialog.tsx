@@ -172,8 +172,6 @@ function TimeOffForm({
       <Modal
         title={first === undefined ? strings.savedTitle : strings.savedTitleFor(first)}
         icon="calendar"
-        // Announced politely as the dialog turns: the time off is saved, and what is left to do.
-        status={first === undefined ? strings.inside(count) : strings.insideFor(first, count)}
         isOpen={isOpen}
         onOpenChange={(open) => {
           if (!open) close();
@@ -191,13 +189,20 @@ function TimeOffForm({
                 {strings.openBookings}
               </Button>
             )}
-            <Button variant="primary" onPress={close}>
+            {/* Focus lands on the answer, not the title bar's close. */}
+            {/* eslint-disable-next-line jsx-a11y-x/no-autofocus -- the dialog turns to this step, and Done answers it */}
+            <Button variant="primary" autoFocus onPress={close}>
               {strings.done}
             </Button>
           </>
         }
       >
-        <Callout tone="warning" title={first === undefined ? strings.inside(count) : strings.insideFor(first, count)}>
+        {/* The count says once, here, and is announced as the dialog turns. */}
+        <Callout
+          tone="warning"
+          isAnnounced
+          title={first === undefined ? strings.inside(count) : strings.insideFor(first, count)}
+        >
           {first !== undefined && saved.moreInside > 0
             ? `${strings.insideKept} ${strings.insideMore(saved.moreInside)}`
             : strings.insideKept}
@@ -273,6 +278,8 @@ function TimeOffForm({
         )}
         <DateRangePicker
           label={strings.days}
+          // Time off is planned ahead: no Last month here.
+          presets="future"
           // A colleague's days are in their zone: the one hint kept, as it stops a wrong entry.
           {...(first === undefined ? {} : { hint: strings.daysZoneFor(first) })}
           value={range}

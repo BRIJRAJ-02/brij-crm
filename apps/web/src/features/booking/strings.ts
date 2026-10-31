@@ -69,7 +69,7 @@ export const strings = {
   deleteTitle: (title: string) => `Delete “${title}”?`,
   /** Someone else's page (spec 0037, AC-1273): whose it is, said in the confirm. */
   deleteTitleFor: (owner: string, title: string) => `Delete ${firstOf(owner)}’s “${title}”?`,
-  deleteText: 'The link stops working, and this can’t be undone. Bookings already made stay.',
+  deleteText: 'Its link stops working. Bookings already made stay.',
   deleteAction: 'Delete booking page',
   deletePage: 'Delete booking page',
   deleting: 'Deleting',
