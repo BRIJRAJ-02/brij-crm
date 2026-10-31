@@ -105,7 +105,7 @@ function Asked({
       {question.chips !== undefined && question.chips.length > 0 && (
         <FieldGroup label={strings.whatChanges} layout="row">
           {question.chips.map((chip) => (
-            <Badge key={chip} size="chip" text={chip} dot="orange" />
+            <Badge key={chip} size="chip" text={chip} />
           ))}
         </FieldGroup>
       )}

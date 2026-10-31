@@ -52,7 +52,11 @@ export const strings = {
   roleChanged: (name: string, role: string) => `${name} is now ${article(role)} ${role}.`,
   /** A role change that takes access away asks first (the owner, 21 October 2026). */
   roleDownTitle: (name: string, role: string) => `Make ${name} ${article(role)} ${role}?`,
-  roleDownText: (name: string, from: string) => `${name} loses what the ${from} role gives.`,
+  /** What a step down takes, by the role left: an owner's billing and owners, an admin's members and settings. */
+  roleDownText: (name: string, from: string) =>
+    from === 'owner'
+      ? `${name} can no longer manage billing or owners.`
+      : `${name} can no longer manage members or settings.`,
   roleGuestText: (name: string) => `${name} will see only what’s shared with guests.`,
   roleDownAction: (role: string) => `Make ${role}`,
   whatChanges: 'What changes',
@@ -60,6 +64,7 @@ export const strings = {
   guestPages: (count: number) => `${String(count)} ${count === 1 ? 'page' : 'pages'} paused`,
   guestRotations: (count: number) => `Leaves ${String(count)} round ${count === 1 ? 'robin' : 'robins'}`,
   guestBookings: (count: number) => `${String(count)} ${count === 1 ? 'booking needs' : 'bookings need'} a host`,
+  guestUncounted: 'Couldn’t count what changes',
   guestDelegations: (count: number) => `${String(count)} scheduling ${count === 1 ? 'share' : 'shares'} removed`,
   removed: (name: string) => `${name} was removed from the workspace.`,
   /** Invite pressed with no role this person may invite as: the server lets only owners and admins invite. */

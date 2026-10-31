@@ -181,6 +181,8 @@ export async function schedulingReach(tx: WorkspaceTx, scope: EngineScope): Prom
   const all = roleReach(access);
   const self = selfOf(principal);
   if (principal.kind !== 'member') return { ...NOBODY, all };
+  // A guest reaches nobody, whatever a delegation says (spec 0031, slice 9): guests are never delegates.
+  if (principal.role === 'guest') return { ...NOBODY, self };
   if (all === 'manage') return { ...NOBODY, self, all };
   const me = principal.memberId;
   const teamLevel = teamRoleReach(access);

@@ -120,6 +120,18 @@ function seesUnlinked(access: Access): boolean {
   return !(access.principal.kind === 'member' && access.principal.role === 'guest');
 }
 
+/**
+ * A guest's tasks are their own (spec 0031, slice 9): they may give one to nobody else, so a task never becomes a
+ * way to notify or email a member they can't otherwise reach. Refuses FORBIDDEN.
+ */
+function checkGuestAssignee(access: Access, assignee: string | null | undefined): void {
+  const { principal } = access;
+  if (principal.kind !== 'member' || principal.role !== 'guest') return;
+  if (assignee !== undefined && assignee !== null && assignee !== principal.memberId) {
+    throw refuse('FORBIDDEN', 'Guests can only keep tasks for themselves.');
+  }
+}
+
 /** The member the principal is, if a member: the assignee rule reads it. */
 function memberOf(access: Access): string | undefined {
   return access.principal.kind === 'member' ? access.principal.memberId : undefined;
@@ -418,6 +430,7 @@ export async function createTask(
 ): Promise<TaskView> {
   checkScope(scope);
   if (!principalReaches(scope.access, 'write')) throw refuse('FORBIDDEN', NOT_FOR_KEYS);
+  checkGuestAssignee(scope.access, input.assigneeMemberId);
   if (!isUuidV7(input.id)) throw inputInvalid('id', 'The task id must be a UUID v7.');
   const id = canonicalId(input.id);
   const title = checkTitle(input.title);
@@ -491,6 +504,7 @@ export async function updateTask(
   checkScope(scope);
   if (!principalReaches(scope.access, 'read')) throw refuse('NOT_FOUND', UNKNOWN_TASK);
   if (!principalReaches(scope.access, 'write')) throw refuse('FORBIDDEN', NOT_FOR_KEYS);
+  checkGuestAssignee(scope.access, input.assigneeMemberId);
   const taskId = checkId(input.taskId, UNKNOWN_TASK);
   const title = input.title === undefined ? undefined : checkTitle(input.title);
   const description = input.description === undefined ? undefined : checkDescription(input.description);

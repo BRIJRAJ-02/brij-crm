@@ -12,7 +12,14 @@ import { TodaySection } from './sections/TodaySection.tsx';
 
 /** Home's registry. */
 export const HOME_SECTIONS: readonly HomeSection[] = [
-  { id: 'today', title: 'Today', width: 'half', isVisible: () => true, Component: TodaySection },
+  // Today's meetings and the way to Bookings: for those who book (a guest has no scheduling, spec 0031 slice 9).
+  {
+    id: 'today',
+    title: 'Today',
+    width: 'half',
+    isVisible: (context) => context.permissions.includes('booking.manage'),
+    Component: TodaySection,
+  },
   {
     id: 'linkPage',
     title: linkPageStrings.title,

@@ -6,13 +6,15 @@ import { afterAll, describe, expect, inject, it } from 'vitest';
 import { defaultAvailability, PERMISSIONS } from '@crm/contracts';
 import { createDatabase } from '@crm/db';
 import { saveDefaultHours } from '../availability/schedules.ts';
-import { createBookingPage } from '../booking/pages.ts';
+import { audiences } from '../access/audiences.ts';
+import { systemScope } from '../access/door.ts';
+import { createBookingPage, updateBookingPage } from '../booking/pages.ts';
 import { newId } from '../engine/ids.ts';
 import { createRotation, updateRotation } from '../rotation/rotations.ts';
 import { grantDelegation } from '../scheduling/delegations.ts';
 import { createTask, listTasks } from '../tasks/tasks.ts';
 import { jobTestKit, refusalOf } from '../../test/jobs-kit.ts';
-import { inviteMembers } from './invitations.ts';
+import { inviteMembers, setInviteLink } from './invitations.ts';
 import { listMembers, previewGuest, setMemberRole } from './members.ts';
 
 const { appUrl, ownerUrl } = inject('testDatabase');
@@ -167,5 +169,67 @@ describe('seats (AC-809)', () => {
     expect(await refusalOf(setMemberRole(full, { memberId: w.gus, role: 'member' }))).toMatchObject({
       code: 'SEAT_LIMIT',
     });
+  });
+});
+
+describe('what a guest can never be or do (spec 0031, slice 9)', () => {
+  it('is never a delegate, nor delegated over, and reaches nobody', async () => {
+    const w = await world();
+    await setMemberRole(w.owner, { memberId: w.gus, role: 'guest' });
+    expect(
+      await refusalOf(
+        grantDelegation(w.owner, { delegateMemberId: w.gus, target: { type: 'everyone' }, level: 'view' }),
+      ),
+    ).toMatchObject({ code: 'DELEGATE_INVALID' });
+    expect(
+      await refusalOf(
+        grantDelegation(w.owner, {
+          delegateMemberId: w.hal,
+          target: { type: 'member', memberId: w.gus },
+          level: 'manage',
+        }),
+      ),
+    ).toMatchObject({ code: 'DELEGATE_INVALID' });
+  });
+
+  it('can’t have a page of theirs turned back on, until they are a member again', async () => {
+    const w = await world();
+    const page = await createBookingPage(w.gusScope, { id: newId(), title: 'Intro', timeZone: 'UTC' }, NOW);
+    await setMemberRole(w.owner, { memberId: w.gus, role: 'guest' });
+    expect(
+      await refusalOf(updateBookingPage(w.owner, { pageId: page.id, settings: { status: 'live' } }, NOW)),
+    ).toMatchObject({ code: 'MEMBER_INVALID' });
+    await setMemberRole(w.owner, { memberId: w.gus, role: 'member' });
+    expect(await updateBookingPage(w.owner, { pageId: page.id, settings: { status: 'live' } }, NOW)).toMatchObject({
+      status: 'live',
+    });
+  });
+
+  it('keeps tasks for themselves only', async () => {
+    const w = await world();
+    await setMemberRole(w.owner, { memberId: w.gus, role: 'guest' });
+    const guest = w.as(w.gus, 'guest');
+    expect(
+      await refusalOf(createTask(guest, { id: newId(), title: 'Ping Hal', assigneeMemberId: w.hal })),
+    ).toMatchObject({ code: 'FORBIDDEN' });
+    expect(await createTask(guest, { id: newId(), title: 'Mine', assigneeMemberId: w.gus })).toMatchObject({
+      title: 'Mine',
+    });
+  });
+
+  it('hears live changes on an audience of their own, apart from the members’ (spec 0007, milestone 4)', async () => {
+    const w = await world();
+    await setMemberRole(w.owner, { memberId: w.gus, role: 'guest' });
+    const groups = await audiences(systemScope(db, w.workspaceId));
+    const theirs = groups.find((group) => group.members.some((member) => member.memberId === w.gus));
+    expect(theirs?.members.map((member) => member.memberId)).toEqual([w.gus]);
+    expect(theirs?.policy.defaultObject).toBe('none');
+  });
+
+  it('keeps a guest invite link a guest one when only its expiry changes', async () => {
+    const w = await world();
+    expect(await setInviteLink(w.owner, { enabled: true, role: 'guest' })).toMatchObject({ role: 'guest' });
+    expect(await setInviteLink(w.owner, { enabled: true, expiresInDays: 7 })).toMatchObject({ role: 'guest' });
+    expect(await setInviteLink(w.owner, { enabled: true, role: 'member' })).toMatchObject({ role: 'member' });
   });
 });
