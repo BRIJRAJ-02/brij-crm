@@ -303,21 +303,22 @@ export function AppearanceCard({ theme, onChange, refusal, extras }: AppearanceC
             onChange={(accent) => {
               extras.onAccent(accent, accent === undefined ? undefined : look?.accentDark);
             }}
-          />
-        )}
-        {/* A separate colour for dark pages (AC-6), once there is a colour of the page's own to set it beside. */}
-        {extras !== undefined && look?.accent !== undefined && (
-          <Disclosure title={strings.colourMore} variant="quiet">
-            <AccentPicker
-              label={strings.colourMore}
-              defaultName={strings.colourDarkDefault}
-              {...(look.accentDark === undefined ? {} : { value: look.accentDark })}
-              quickPicks={extras.quickPicks}
-              onChange={(accentDark) => {
-                extras.onAccent(look.accent, accentDark);
-              }}
-            />
-          </Disclosure>
+          >
+            {/* A separate colour for dark pages (AC-6), once there is a colour of the page's own to set it beside. */}
+            {look?.accent !== undefined && (
+              <Disclosure title={strings.colourMore} variant="quiet">
+                <AccentPicker
+                  label={strings.colourMore}
+                  defaultName={strings.colourDarkDefault}
+                  {...(look.accentDark === undefined ? {} : { value: look.accentDark })}
+                  quickPicks={extras.quickPicks}
+                  onChange={(accentDark) => {
+                    extras.onAccent(look.accent, accentDark);
+                  }}
+                />
+              </Disclosure>
+            )}
+          </AccentPicker>
         )}
         {row(strings.ground, GROUNDS, groundId(theme))}
         {/* The tint takes the person's hue, which changes nothing under any other background. */}

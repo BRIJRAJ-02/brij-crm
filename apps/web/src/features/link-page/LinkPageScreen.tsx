@@ -370,10 +370,17 @@ function Blocks({
   const [lookRefusal, setLookRefusal] = useState<DataError | undefined>(undefined);
   const [sending, setSending] = useState<PhotoSlot | undefined>(undefined);
   const ownAccent = dragged ?? extrasRead?.accent;
-  const colours =
-    ownAccent === undefined
-      ? brand.colours(extrasRead?.workspaceAccent, extrasRead?.workspaceAccentDark)
-      : brand.colours(ownAccent, extrasRead?.accentDark);
+  // Worked out once per colour, not per render: the guard is a search, and the tiles and phone all read it.
+  const accentDark = extrasRead?.accentDark;
+  const workspaceAccent = extrasRead?.workspaceAccent;
+  const workspaceAccentDark = extrasRead?.workspaceAccentDark;
+  const colours = useMemo(
+    () =>
+      ownAccent === undefined
+        ? brand.colours(workspaceAccent, workspaceAccentDark)
+        : brand.colours(ownAccent, accentDark),
+    [brand, ownAccent, accentDark, workspaceAccent, workspaceAccentDark],
+  );
   const photoSrc = (slot: PhotoSlot, version: string) => brand.photoSrc(handle, slot, version);
   const lookVariables = useMemo(() => {
     const photoPairs = (['cover', 'ground'] as const).flatMap((slot) => {
@@ -705,19 +712,9 @@ function Blocks({
       // lives on the public pages' own entry, which the app's bundle has no reason to pull in.
       // The phone beside the editor shows the look being picked, so its mark follows that, not the app's theme.
       foot={<BookingFoot page="booking_profile" {...(theme.mode === 'system' ? {} : { scheme: theme.mode })} />}
-      // A new look remounts the phone, which fades the page in on its new ground (spec 0060, AC-18).
-      key={[
-        theme.ground,
-        theme.hue,
-        theme.mode,
-        theme.shape,
-        theme.fill,
-        theme.font,
-        theme.gradient,
-        theme.pattern,
-        theme.header,
-        theme.avatar,
-      ].join(' ')}
+      // A new ground remounts the phone, which fades the page in on it (spec 0060, AC-18).
+      // Only a new ground, mode or header: a font or a button shape changes in place, keeping the phone's scroll.
+      key={[theme.ground, theme.gradient, theme.pattern, theme.mode, theme.header].join(' ')}
       person={{
         name: profile.name.trim() || handle,
         id: handle,

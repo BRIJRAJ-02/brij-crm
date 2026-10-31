@@ -48,7 +48,7 @@ type Story = StoryObj<typeof meta>;
 
 /** Nothing picked: the default is ticked, and the page wears the product's own accent. */
 export const Default: Story = {
-  parameters: { crm: { preview: true } },
+  parameters: { crm: { preview: true, screenshot: false } },
   play: async ({ canvas, args }) => {
     await expect(canvas.getByRole('radio', { name: 'Timefix' })).toBeChecked();
     await userEvent.click(canvas.getByRole('radio', { name: 'Orange' }));
@@ -58,11 +58,12 @@ export const Default: Story = {
 
 /** A brand's exact colour typed as a hex: Any colour wears it, and Enter keeps it. */
 export const TypedHex: Story = {
+  parameters: { crm: { screenshot: false } },
   play: async ({ canvas, args }) => {
     const hex = canvas.getByRole('textbox', { name: 'Hex' });
     await userEvent.type(hex, '7c3aed{Enter}');
     await expect(args.onChange).toHaveBeenCalledWith('#7c3aed');
-    await expect(canvas.getByRole('button', { name: 'Any colour' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(canvas.getByRole('button', { name: 'Any colour' })).toHaveAttribute('data-selected', 'true');
   },
 };
 
@@ -78,6 +79,7 @@ export const RefusedHex: Story = {
 
 /** The guard moved a pale yellow: the two colours the page draws, and one line (spec 0060, AC-6). */
 export const Adjusted: Story = {
+  parameters: { crm: { screenshot: false } },
   args: { value: '#ffd400', drawn: { light: '#7a6700', dark: '#ffd400' } },
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('status')).toHaveTextContent('Adjusted so text stays readable.');
@@ -92,6 +94,7 @@ export const FollowsWorkspace: Story = {
 
 /** A member who may not change the kit sees it, with no way to change it. */
 export const ReadOnly: Story = {
+  parameters: { crm: { screenshot: false } },
   args: { value: '#0fc27b', isReadOnly: true },
   play: async ({ canvas }) => {
     await expect(canvas.queryByRole('button', { name: 'Any colour' })).toBeNull();

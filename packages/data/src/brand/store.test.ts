@@ -84,4 +84,34 @@ describe('the brand store', () => {
     expect(store.photoSrc('../x', 'cover', '0123456789ab')).toBeUndefined();
     expect(store.logoSrc('acme', 'nope')).toBeUndefined();
   });
+
+  it('keeps the latest of two quick picks, whichever answer comes back first', async () => {
+    const answers: ((value: { canEdit: boolean; accent?: string }) => void)[] = [];
+    const store = openBrand({
+      brand: {
+        get: () => Promise.resolve({ accent: '#1f5fd6', canEdit: true }),
+        save: () => new Promise((resolve) => answers.push(resolve)),
+      },
+      profile: { look: () => Promise.resolve({}), saveAccent: () => Promise.reject(new Error('unused')) },
+      call: (run) => run({}),
+      mintId: () => '018f0000-0000-7000-8000-000000000000',
+      send: () => Promise.resolve({}),
+      now: () => 0,
+    });
+    await store.readKit('acme');
+    const first = store.saveKit('acme', '#ff5b59');
+    const second = store.saveKit('acme', '#fb8f3c');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    // Sent one after another: only the first is out until it answers.
+    expect(answers).toHaveLength(1);
+    answers[0]?.({ canEdit: true, accent: '#ff5b59' });
+    await first;
+    const between = store.kit('acme').getSnapshot();
+    expect(between.status === 'ready' && between.value.accent).toBe('#fb8f3c');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    answers[1]?.({ canEdit: true, accent: '#fb8f3c' });
+    await second;
+    const after = store.kit('acme').getSnapshot();
+    expect(after.status === 'ready' && after.value.accent).toBe('#fb8f3c');
+  });
 });

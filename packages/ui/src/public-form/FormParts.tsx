@@ -5,7 +5,7 @@ import {
   type PublicForm,
   type PublicQuestion,
 } from '@crm/contracts/forms';
-import type { ReactNode, Ref } from 'react';
+import { useState, type ReactNode, type Ref } from 'react';
 import { Button } from '../atoms/Button/Button.tsx';
 import { Icon } from '../atoms/Icon/Icon.tsx';
 import { Link } from '../atoms/Link/Link.tsx';
@@ -56,7 +56,10 @@ export function FormGround({
   readonly children: ReactNode;
 }) {
   const variables = usePageVariables(brand?.variables);
-  const logo = brand?.logo === undefined ? undefined : safeImageSrc(brand.logo.src);
+  // A logo that fails (a stale version, a removed file) leaves the form rather than drawing a broken picture.
+  const [failedLogo, setFailedLogo] = useState<string | undefined>(undefined);
+  const logoSrc = brand?.logo === undefined ? undefined : safeImageSrc(brand.logo.src);
+  const logo = logoSrc === failedLogo ? undefined : logoSrc;
   return (
     <div ref={container}>
       {previewNote !== undefined && (
@@ -77,7 +80,15 @@ export function FormGround({
         <div className={styles.card}>
           {/* The workspace's own logo over the form (spec 0060, AC-4). */}
           {logo !== undefined && brand?.logo !== undefined && (
-            <img className={styles.brandLogo} src={logo} alt={brand.logo.alt} decoding="async" />
+            <img
+              className={styles.brandLogo}
+              src={logo}
+              alt={brand.logo.alt}
+              decoding="async"
+              onError={() => {
+                setFailedLogo(logo);
+              }}
+            />
           )}
           {children}
         </div>

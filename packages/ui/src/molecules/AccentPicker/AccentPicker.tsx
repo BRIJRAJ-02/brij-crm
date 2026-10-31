@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { Button as AriaButton, RadioButton, RadioField, RadioGroup } from 'react-aria-components';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { Tooltip } from '../../atoms/Tooltip/Tooltip.tsx';
@@ -12,6 +12,21 @@ import { strings } from './strings.ts';
 
 /** A colour as the picker takes and gives it: `#` and six lowercase hex digits. */
 const HEX = /^#[0-9a-f]{6}$/;
+
+/**
+ * The tick drawn on a swatch of `hex`: black on a light colour, white on a dark one, whichever reads better (WCAG
+ * relative luminance against the 0.179 crossover), so a pale yellow still shows that it is chosen.
+ */
+function markOn(hex: string | undefined): string | undefined {
+  if (hex === undefined || !HEX.test(hex)) return undefined;
+  const n = Number.parseInt(hex.slice(1), 16);
+  const linear = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((c) => {
+    const v = c / 255;
+    return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+  });
+  const luminance = 0.2126 * (linear[0] ?? 0) + 0.7152 * (linear[1] ?? 0) + 0.0722 * (linear[2] ?? 0);
+  return luminance > 0.179 ? '#000000' : '#ffffff';
+}
 
 /** One quick pick: a hue of the library's nine, and the colour it stands for. */
 export interface AccentQuickPick {
@@ -46,6 +61,8 @@ export interface AccentPickerProps {
   /** Shows the colour without letting it change (a member who may not edit the brand kit). */
   readonly isReadOnly?: boolean;
   readonly isDisabled?: boolean;
+  /** Under the hex, on the picker's own left edge: a Disclosure with a second colour (a dark one, under More). */
+  readonly children?: ReactNode;
 }
 
 /** The radio value of the default swatch, beside the picks' own hexes. */
@@ -69,6 +86,7 @@ export function AccentPicker({
   drawn,
   isReadOnly = false,
   isDisabled = false,
+  children,
 }: AccentPickerProps) {
   const picks = quickPicks.filter((pick) => HEX.test(pick.value));
   const picked = value !== undefined && HEX.test(value) ? value : undefined;
@@ -146,7 +164,10 @@ export function AccentPicker({
               <RadioButton
                 className={styles.swatch}
                 data-default=""
-                style={{ '--swatch': defaultValue !== undefined && HEX.test(defaultValue) ? defaultValue : undefined }}
+                style={{
+                  '--swatch': defaultValue !== undefined && HEX.test(defaultValue) ? defaultValue : undefined,
+                  '--swatch-mark': markOn(defaultValue),
+                }}
               >
                 {({ isSelected }) => isSelected && <Icon name="check" size="xs" />}
               </RadioButton>
@@ -160,7 +181,10 @@ export function AccentPicker({
               className={styles.field}
             >
               <Tooltip content={hueNames[pick.hue]}>
-                <RadioButton className={styles.swatch} style={{ '--swatch': pick.value }}>
+                <RadioButton
+                  className={styles.swatch}
+                  style={{ '--swatch': pick.value, '--swatch-mark': markOn(pick.value) }}
+                >
                   {({ isSelected }) => isSelected && <Icon name="check" size="xs" />}
                 </RadioButton>
               </Tooltip>
@@ -176,9 +200,8 @@ export function AccentPicker({
               data-any=""
               data-selected={isAny || undefined}
               aria-label={strings.anyColour}
-              aria-pressed={isAny}
               isDisabled={isDisabled}
-              style={{ '--swatch': isAny ? picked : undefined }}
+              style={{ '--swatch': isAny ? picked : undefined, '--swatch-mark': isAny ? markOn(picked) : undefined }}
               onPress={() => {
                 const input = native.current;
                 if (input === null) return;
@@ -240,6 +263,7 @@ export function AccentPicker({
           {strings.adjusted}
         </p>
       )}
+      {children}
     </div>
   );
 }

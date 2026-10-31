@@ -130,7 +130,7 @@ export function BrandScreen({ brand, slug, toasts }: BrandScreenProps) {
           heading={strings.sampleChooseTime}
           aside={
             <SlotList
-              heading={strings.sampleChooseTime}
+              heading={strings.sampleDay}
               slots={SAMPLE_TIMES.map((time) => ({ id: time, label: time, name: time }))}
               value={SAMPLE_TIMES[1]}
               onChange={() => undefined}
@@ -187,34 +187,34 @@ export function BrandScreen({ brand, slug, toasts }: BrandScreenProps) {
               {kit === undefined ? (
                 <Skeleton shape="field" />
               ) : canEdit ? (
-                <FileDrop
-                  label={kit.logo === undefined ? strings.logoDrop : strings.logoReplace}
-                  acceptedTypes={BRAND_PHOTO_TYPES}
-                  maxSize={BRAND_PHOTO_PICK_MAX_BYTES}
-                  isDisabled={isSending}
-                  {...(logoSrc === undefined ? {} : { preview: { src: logoSrc, alt: strings.logoAlt } })}
-                  onFiles={(files) => {
-                    const [file] = files;
-                    if (file !== undefined) sendLogo(file);
-                  }}
-                />
-              ) : (
-                logoSrc !== undefined && (
+                <>
                   <FileDrop
-                    label={strings.logo}
-                    variant="button"
-                    isDisabled
-                    preview={{ src: logoSrc, alt: strings.logoAlt }}
-                    onFiles={() => undefined}
+                    label={kit.logo === undefined ? strings.logoDrop : strings.logoReplace}
+                    acceptedTypes={BRAND_PHOTO_TYPES}
+                    maxSize={BRAND_PHOTO_PICK_MAX_BYTES}
+                    isDisabled={isSending}
+                    {...(logoSrc === undefined ? {} : { preview: { src: logoSrc, alt: strings.logoAlt } })}
+                    onFiles={(files) => {
+                      const [file] = files;
+                      if (file !== undefined) sendLogo(file);
+                    }}
                   />
-                )
+                  {kit.logo !== undefined && (
+                    <Button variant="ghost" icon="trash" label={strings.logoRemove} onPress={() => setRemoving(true)} />
+                  )}
+                </>
+              ) : logoSrc === undefined ? (
+                strings.noLogo
+              ) : (
+                <FileDrop
+                  label={strings.logo}
+                  variant="button"
+                  isDisabled
+                  preview={{ src: logoSrc, alt: strings.logoAlt }}
+                  onFiles={() => undefined}
+                />
               )}
             </SettingsRow>
-            {canEdit && kit.logo !== undefined && (
-              <Button variant="ghost" size="md" icon="trash" onPress={() => setRemoving(true)}>
-                {strings.logoRemove}
-              </Button>
-            )}
             <SettingsRow title={strings.colour} description={strings.colourText} control="field">
               {kit === undefined ? (
                 <Skeleton shape="field" />
@@ -231,24 +231,25 @@ export function BrandScreen({ brand, slug, toasts }: BrandScreenProps) {
                   onChange={(next) => {
                     save(next, next === undefined ? undefined : kit.accentDark);
                   }}
-                />
+                >
+                  {/* A separate colour for dark pages (AC-6), once there is a colour to set it beside. */}
+                  {kit.accent !== undefined && (
+                    <Disclosure title={strings.colourMore} variant="quiet">
+                      <AccentPicker
+                        label={strings.colourMore}
+                        defaultName={strings.colourDarkDefault}
+                        {...(kit.accentDark === undefined ? {} : { value: kit.accentDark })}
+                        quickPicks={brand.quickPicks}
+                        isReadOnly={!canEdit}
+                        onChange={(nextDark) => {
+                          save(kit.accent, nextDark);
+                        }}
+                      />
+                    </Disclosure>
+                  )}
+                </AccentPicker>
               )}
             </SettingsRow>
-            {/* A separate colour for dark pages (AC-6), once there is a colour to set it beside. */}
-            {kit?.accent !== undefined && (
-              <Disclosure title={strings.colourMore} variant="quiet">
-                <AccentPicker
-                  label={strings.colourMore}
-                  defaultName={strings.colourDarkDefault}
-                  {...(kit.accentDark === undefined ? {} : { value: kit.accentDark })}
-                  quickPicks={brand.quickPicks}
-                  isReadOnly={!canEdit}
-                  onChange={(nextDark) => {
-                    save(kit.accent, nextDark);
-                  }}
-                />
-              </Disclosure>
-            )}
           </Card>
         )}
       </PreviewLayout>

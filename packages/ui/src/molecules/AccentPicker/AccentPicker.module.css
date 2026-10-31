@@ -42,9 +42,8 @@
     border: var(--border-width-hairline) solid var(--border);
     border-radius: var(--radius-sm);
     background: var(--swatch, var(--accent));
-    color: var(--surface-raised);
+    color: var(--swatch-mark, var(--on-accent));
     outline: none;
-    transition: scale var(--duration-press) var(--ease-out);
   }
 
   /* The default draws the colour it stands for, and Any colour an empty square with a plus until it holds one. */
@@ -54,15 +53,11 @@
   }
 
   .swatch[data-any][data-selected] {
-    color: var(--surface-raised);
+    color: var(--swatch-mark, var(--on-accent));
   }
 
   .swatch[data-selected] {
     box-shadow: var(--shadow-focus);
-  }
-
-  .swatch[data-pressed] {
-    scale: var(--scale-enter);
   }
 
   .swatch[data-focus-visible] {
@@ -72,12 +67,6 @@
 
   .swatch[data-disabled] {
     opacity: var(--opacity-disabled);
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .swatch {
-      transition: none;
-    }
   }
 
   /* The system picker: there to be opened, never seen. */

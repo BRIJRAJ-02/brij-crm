@@ -149,7 +149,10 @@ export function BookingFrame({
 }: BookingFrameProps) {
   const isLoading = host === undefined || title === undefined;
   const variables = usePageVariables(brand?.variables);
-  const brandLogo = brand?.logo === undefined ? undefined : safeImageSrc(brand.logo.src);
+  // A logo that fails (a stale version, a removed file) leaves the rail rather than drawing a broken picture.
+  const [failedLogo, setFailedLogo] = useState<string | undefined>(undefined);
+  const logoSrc = brand?.logo === undefined ? undefined : safeImageSrc(brand.logo.src);
+  const brandLogo = logoSrc === failedLogo ? undefined : logoSrc;
   // Only a view changed after the first paint moves: the page's first view is simply there. One chosen from the
   // keyboard (the switch's arrows, Enter on Book or Back) shows at once, decided as it changes: keys never wait.
   const { isFocusVisible } = useFocusVisible();
@@ -164,7 +167,15 @@ export function BookingFrame({
         <aside className={styles.rail} aria-label={strings.about} aria-busy={isLoading || undefined}>
           {/* The workspace's own logo heads the rail (spec 0060, AC-4): its mark, before the host it books with. */}
           {brandLogo !== undefined && brand?.logo !== undefined && (
-            <img className={styles.brandLogo} src={brandLogo} alt={brand.logo.alt} decoding="async" />
+            <img
+              className={styles.brandLogo}
+              src={brandLogo}
+              alt={brand.logo.alt}
+              decoding="async"
+              onError={() => {
+                setFailedLogo(brandLogo);
+              }}
+            />
           )}
           {isLoading ? (
             /* The shape the host will take, line for line, so nothing moves when the page's facts arrive. */

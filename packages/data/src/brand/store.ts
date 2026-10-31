@@ -138,25 +138,37 @@ function holder<Value>(load: () => Promise<Value>, now: () => number) {
     );
     return reading;
   };
+  // Changes go out one after another, so the server sees them in the order they were made, and only the latest
+  // decides what shows: an earlier answer never lays its value over a newer pick, and an earlier refusal never
+  // takes a newer pick away (it still comes back, so the screen says why).
+  let queue: Promise<unknown> = Promise.resolve();
+  let made = 0;
   /**
-   * Shows `next` at once, then runs `send`; its answer stands, a refusal puts back what was there. Answers the
-   * refusal, or undefined when it landed, so the screen can say why beside the control.
+   * Shows `next` at once, then runs `send` after every change before it; the latest change's answer stands, and
+   * its refusal puts back what was there before it. Answers the refusal, or undefined when it landed, so the
+   * screen can say why beside the control.
    */
   const change = async (
     next: (value: Value) => Value,
     send: () => Promise<(value: Value) => Value>,
   ): Promise<DataError | undefined> => {
     if (state.status !== 'ready') return undefined;
+    made += 1;
+    const mine = made;
     const was = state.value;
     set({ status: 'ready', value: next(was), isSaving: true });
+    const sent = queue.then(send);
+    queue = sent.catch(() => undefined);
     try {
-      const landed = await send();
-      // Read afresh: a read may have landed while the change was out.
-      const after = held.getSnapshot();
-      set({ status: 'ready', value: landed(after.status === 'ready' ? after.value : was), isSaving: false });
+      const landed = await sent;
+      if (mine === made) {
+        // Read afresh: a read may have landed while the change was out.
+        const after = held.getSnapshot();
+        set({ status: 'ready', value: landed(after.status === 'ready' ? after.value : was), isSaving: false });
+      }
       return undefined;
     } catch (error) {
-      set({ status: 'ready', value: was, isSaving: false });
+      if (mine === made) set({ status: 'ready', value: was, isSaving: false });
       return toDataError(error);
     }
   };

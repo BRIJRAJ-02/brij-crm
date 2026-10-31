@@ -11,6 +11,8 @@ export const strings = {
   logoDrop: 'Add your logo',
   logoReplace: 'Replace logo',
   logoAlt: 'Your logo',
+  /** A member's view of a kit with no logo. */
+  noLogo: 'No logo',
   logoRemove: 'Remove logo',
   logoRemoving: 'Remove the logo?',
   logoRemoveText: 'Booking pages and forms show no logo.',
@@ -33,6 +35,7 @@ export const strings = {
   sampleMeeting: 'Intro call',
   sampleLength: '30 min',
   sampleChooseTime: 'Choose a time',
+  sampleDay: 'Tomorrow',
   /** The sample form the preview draws. */
   sampleHeadline: 'Tell us about your project',
   sampleName: 'Your name',

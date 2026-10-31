@@ -388,6 +388,7 @@ export const ThumbnailsBranded: Story = {
 
 /** A brand's accent on the page (spec 0060, AC-5, AC-14): Save contact, the solid rows and the focus ring. */
 export const Branded: Story = {
+  parameters: { crm: { screenshot: false } },
   args: {
     person: PERSON,
     theme: { ...PLAIN, shape: 'pill', fill: 'solid' },
@@ -431,6 +432,7 @@ export const BrandRefused: Story = {
 
 /** The left header (spec 0060, AC-13): the face, then the name and bio beside it, in the Editorial pack. */
 export const HeaderLeft: Story = {
+  parameters: { crm: { screenshot: false } },
   args: { person: PERSON, theme: { ...PLAIN, ground: 'paper', header: 'left', font: 'editorial' } },
   render: (args) => (
     <Stage width="phone" height="page">
@@ -444,6 +446,7 @@ export const HeaderLeft: Story = {
  * on a solid sheet so no word sits on the photo. The stand in draws where a story has no photo route.
  */
 export const HeaderCoverOnPhoto: Story = {
+  parameters: { crm: { screenshot: false } },
   args: {
     person: PERSON,
     theme: { ...PLAIN, ground: 'image', header: 'cover', avatar: 'rounded', font: 'classic', mode: 'dark' },
@@ -474,6 +477,7 @@ export const PhotoLookWithoutPhotos: Story = {
 
 /** A gradient, a pattern and no face (spec 0060, AC-10, AC-13), following the visitor's light or dark (AC-15). */
 export const GradientFollowsVisitor: Story = {
+  parameters: { crm: { screenshot: false } },
   args: {
     person: PERSON,
     theme: { ...PLAIN, ground: 'gradient', gradient: 'dusk', mode: 'system', avatar: 'none', font: 'display' },

@@ -56,6 +56,16 @@ export const Sizes: Story = {
   },
 };
 
+/** A square at hero size takes the card corner: a link page's rounded face (spec 0060, AC-13). */
+export const SquareHero: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage>
+      <Avatar name="Ada Lovelace" hue="purple" shape="square" size="hero" />
+    </Stage>
+  ),
+};
+
 /** A mark in place of initials, for a face that isn't a person: a form, the system, on the neutral square. */
 export const Mark: Story = {
   render: () => (

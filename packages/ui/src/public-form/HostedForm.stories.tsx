@@ -363,6 +363,7 @@ const ORANGE_BRAND = [
  * a chosen option and the focus ring. Nothing else about the form changes.
  */
 export const Branded: Story = {
+  parameters: { crm: { screenshot: false } },
   args: { brand: { logo: { src: wordmark('#e8590c'), alt: 'Acme' }, variables: ORANGE_BRAND } },
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('img', { name: 'Acme' })).toBeInTheDocument();

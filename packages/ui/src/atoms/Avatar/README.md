@@ -38,3 +38,5 @@ It takes no focus.
 
 - `size` is a named step, not a number; `hue` replaces `color`, and `id` seeds the hue.
 - `isDecorative` replaces `decorative`. Outside pictures are refused: a Google account picture comes through the api's own origin routes, and other outside pictures wait for #32.
+
+A square at `hero` size takes the card corner (`radius-xl`): a link page's rounded face (spec 0060, AC-13).

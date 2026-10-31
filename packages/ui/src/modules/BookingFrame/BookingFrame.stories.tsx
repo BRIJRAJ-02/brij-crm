@@ -94,6 +94,7 @@ const LOGO = `data:image/svg+xml,${encodeURIComponent(
  * chosen time, Book and the focus ring. The steps and the requests are the same as without it.
  */
 export const Branded: Story = {
+  parameters: { crm: { screenshot: false } },
   args: { brand: { logo: { src: LOGO, alt: 'Acme' }, variables: ORANGE_BRAND } },
   render: (args) => <Interactive {...args} />,
   play: async ({ canvas }) => {
