@@ -52,13 +52,15 @@
     padding: 0;
     border: 0;
     border-radius: var(--page-radius-card, var(--radius-md));
-    background: var(--surface-sunken);
+    background: var(--page-card-hover, var(--surface-hover));
     overflow: hidden;
     outline: none;
   }
 
+  /* Inside the picture: the row scrolls, and a ring outside it would be clipped on every side. */
   .shot:focus-visible {
-    box-shadow: var(--shadow-focus);
+    outline: var(--border-width-thick) solid var(--page-accent, var(--accent));
+    outline-offset: calc(var(--border-width-thick) * -1);
   }
 
   .root[data-fill] .shot,

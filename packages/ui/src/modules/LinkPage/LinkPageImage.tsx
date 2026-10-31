@@ -1,4 +1,5 @@
 // A link page's picture block (spec 0061, AC-6108), its own chunk: loaded only on a page that has one.
+import { useState } from 'react';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { safeHref } from '../../lib/safe-href.ts';
 import { safeImageSrc } from '../../lib/safe-image-src.ts';
@@ -21,7 +22,10 @@ export interface LinkPageImageProps {
  * new tab. A picture whose address isn't ours draws as its alt text in the same box, never as a broken image.
  */
 export function LinkPageImage({ block, onPress, isTile }: LinkPageImageProps) {
-  const src = safeImageSrc(block.image.src);
+  const [failed, setFailed] = useState<string | undefined>(undefined);
+  const checked = safeImageSrc(block.image.src);
+  // One that fails to load draws its alt text, as one whose address isn't ours does: never a broken image.
+  const src = checked === failed ? undefined : checked;
   const href = block.href === undefined ? undefined : safeHref(block.href);
   const web = href !== undefined && /^https?:/i.test(href) ? href : undefined;
   const picture =
@@ -36,6 +40,9 @@ export function LinkPageImage({ block, onPress, isTile }: LinkPageImageProps) {
         alt={block.alt}
         loading="lazy"
         decoding="async"
+        onError={() => {
+          setFailed(src);
+        }}
       />
     );
   return (

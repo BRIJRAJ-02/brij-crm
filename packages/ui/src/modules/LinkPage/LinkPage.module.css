@@ -1036,6 +1036,13 @@
     inline-size: min(var(--size-dialog-wide), calc(100cqi - var(--space-16) * 2));
   }
 
+  /* On a grid page a section's heading and the person's words line up with the tiles' words, not the list's inset. */
+  .root[data-grid] .heading,
+  .root[data-grid] .writing,
+  .root[data-grid] .said {
+    padding-inline: var(--space-12);
+  }
+
   /* A run of tiles: its own size container, so a column's width is known, and rows exactly that tall. Two columns,
      four from the container breakpoint, in order: no dense packing, so nothing ever moves ahead of its place. */
   .tilesRoom {
@@ -1076,35 +1083,15 @@
     grid-row: span 2;
   }
 
-  /* A link's or booking page's tile: the row's card, its tile at the top or its picture filling it, its words at
-     the foot. */
-  .tileCard {
-    box-sizing: border-box;
-    display: flex;
-    flex: 1;
+  /* A link's or booking page's tile: the row's own card (`.block`), stood on end, its tile at the top or its picture
+     filling it, its words at the foot. */
+  .block[data-card='tile'] {
     flex-direction: column;
-    min-inline-size: 0;
-    border: var(--page-card-border-width) solid var(--page-card-border);
+    align-items: stretch;
+    gap: 0;
+    padding: 0;
     border-radius: var(--page-radius-card);
-    background: var(--page-card);
-    box-shadow: var(--page-card-shadow);
-    color: var(--page-card-text);
-    text-decoration: none;
     overflow: hidden;
-    outline: none;
-    transition:
-      background-color var(--duration-hover) var(--ease-hover),
-      border-color var(--duration-hover) var(--ease-hover);
-  }
-
-  .tileCard:focus-visible {
-    box-shadow: var(--shadow-focus);
-  }
-
-  @media (hover: hover) and (pointer: fine) {
-    .tileCard:not([data-inert]):hover {
-      background: var(--page-card-hover);
-    }
   }
 
   .tileTop {
@@ -1126,37 +1113,166 @@
     padding: var(--space-12);
   }
 
-  /* A lazy block's place while its chunk loads (AC-6126): its own shape, so nothing moves when it lands. */
-  .hold {
+  /* A lazy block's place while its chunk loads (AC-6126): the block's own outer shape, so nothing moves when it
+     lands. A media card's stage and caption, a picture's ratio and caption line, a gallery's row or squares, a times
+     card's title, line, chips and More times. */
+  .holdCard {
+    box-sizing: border-box;
     display: flex;
+    flex: none;
+    flex-direction: column;
+    border: var(--page-card-border-width) solid var(--page-card-border);
+    border-radius: var(--page-radius-card);
+    background: var(--page-card);
+    overflow: hidden;
+  }
+
+  .holdCard[data-fill],
+  .holdPicture[data-fill],
+  .holdGallery[data-fill] {
+    flex: 1;
+    min-block-size: 0;
+  }
+
+  .holdCard[data-times] {
+    gap: var(--space-12);
+    padding: var(--space-12);
+  }
+
+  .holdStage {
+    display: flex;
+    flex: none;
+  }
+
+  .holdStage[data-hold='video'] {
+    aspect-ratio: 16 / 9;
+  }
+
+  .holdStage[data-hold='audio'] {
+    block-size: calc(var(--size-column-narrow) + var(--space-32));
+  }
+
+  .holdStage[data-provider='applemusic'] {
+    block-size: calc(var(--size-column-narrow) + var(--space-32) + var(--space-24));
+  }
+
+  .holdCard[data-fill] .holdStage {
+    flex: 1;
+    aspect-ratio: auto;
+  }
+
+  .holdHead {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .holdCaption {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding: var(--space-12);
+  }
+
+  .holdTitle {
+    display: flex;
+    font: var(--text-title);
+  }
+
+  .holdLine {
+    display: flex;
+    font: var(--text-label);
+  }
+
+  .holdPicture {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+  }
+
+  .holdFrame {
+    display: flex;
+    aspect-ratio: var(--hold-ratio, 4 / 3);
     border-radius: var(--page-radius-card);
     overflow: hidden;
   }
 
-  .hold[data-hold='video'] {
-    aspect-ratio: 16 / 9;
-  }
-
-  .hold[data-hold='audio'] {
-    block-size: calc(var(--size-column-narrow) + var(--space-32));
-  }
-
-  .hold[data-hold='picture'] {
-    aspect-ratio: var(--hold-ratio, 4 / 3);
-  }
-
-  .hold[data-hold='row'] {
-    block-size: var(--size-column);
-  }
-
-  .hold[data-hold='times'] {
-    block-size: calc(var(--size-toolbar) * 3);
-  }
-
-  .hold[data-fill] {
+  .holdPicture[data-fill] .holdFrame {
     flex: 1;
-    block-size: auto;
     aspect-ratio: auto;
+  }
+
+  .holdGallery {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+  }
+
+  .holdShots {
+    display: flex;
+    flex: 1;
+    gap: var(--space-8);
+  }
+
+  .holdGallery[data-display='grid'] .holdShots {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .holdSteps {
+    display: none;
+    block-size: var(--size-control);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .holdSteps {
+      display: block;
+    }
+  }
+
+  .holdShot {
+    display: flex;
+    flex: 1;
+    block-size: var(--size-column);
+    border-radius: var(--page-radius-card);
+    overflow: hidden;
+  }
+
+  .holdGallery[data-display='grid'] .holdShot {
+    block-size: auto;
+    aspect-ratio: 1;
+  }
+
+  .holdGallery[data-fill] .holdShot {
+    block-size: 100%;
+  }
+
+  .holdChips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-8);
+  }
+
+  /* A touch control's height, as Button's touch size writes it. */
+  .holdChip,
+  .holdMore {
+    display: flex;
+    block-size: calc(var(--size-input) + var(--space-12) + var(--space-2));
+  }
+
+  .holdChip {
+    inline-size: var(--size-column-narrow);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+  }
+
+  /* A picture's or the media's stand in when its chunk couldn't load: its alt text, quietly, on the card. */
+  .unloaded {
+    margin: 0;
+    padding: var(--space-12);
+    border-radius: var(--page-radius-card);
+    background: var(--page-card);
+    color: var(--page-card-quiet);
   }
 
   /* The banner (AC-6112): one line at the very top in the page's soft accent, its close at the end. */
@@ -1164,10 +1280,10 @@
     display: flex;
     align-items: center;
     gap: var(--space-8);
-    padding: var(--space-6) var(--space-6) var(--space-6) var(--space-12);
-    border-radius: var(--page-radius);
+    padding: var(--space-2) var(--space-2) var(--space-2) var(--space-12);
+    border-radius: var(--page-radius-card);
     background: var(--page-accent-soft);
-    color: var(--page-link);
+    color: var(--page-text);
   }
 
   .bannerText {
@@ -1181,7 +1297,7 @@
   }
 
   .bannerLink {
-    color: inherit;
+    color: var(--page-link);
     text-decoration: underline;
     text-underline-offset: var(--space-2);
     border-radius: var(--radius-xs);
@@ -1218,13 +1334,11 @@
   }
 
   @media (forced-colors: active) {
-    .block,
-    .tileCard {
+    .block {
       border-color: CanvasText;
     }
 
     .block:focus-visible,
-    .tileCard:focus-visible,
     .bannerLink:focus-visible {
       outline: var(--border-width-thick) solid Highlight;
     }

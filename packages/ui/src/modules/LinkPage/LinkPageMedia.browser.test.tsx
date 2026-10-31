@@ -78,12 +78,9 @@ describe('the media facade', () => {
       'https://open.spotify.com/embed/track/1',
     );
     const drawn = await draw({ ...VIDEO, frame: 'https://evil.example/embed/x' });
-    const play = drawn.querySelector('button');
-    expect(play?.disabled).toBe(true);
-    await act(async () => {
-      play?.click();
-      await Promise.resolve();
-    });
+    // No dead Play: no button at all, and the caption says it can't play here.
+    expect(drawn.querySelector('button')).toBeNull();
+    expect(drawn.textContent).toContain('Can’t play here');
     expect(drawn.querySelector('iframe')).toBeNull();
   });
 });

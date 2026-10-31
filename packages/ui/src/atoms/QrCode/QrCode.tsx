@@ -49,6 +49,9 @@ const CONTRAST_MIN = 4.5;
 /** The band under the code that holds the frame's label, in modules. */
 const LABEL_BAND = 5;
 
+/** About how wide one character of the label is, in modules, at its size of 3: a wide face's 0.6 em. */
+const LABEL_CHAR = 1.8;
+
 /** How far outside the quiet zone the frame's line runs, in modules, so the code keeps its whole quiet margin. */
 const FRAME_OUT = 2;
 
@@ -177,6 +180,10 @@ export function QrCode({ value, label, children, size: width = 'md', ref, colour
             dominantBaseline="middle"
             fontSize={3}
             fontWeight={600}
+            // A long label on a small code is fitted to the code's width rather than running past the frame.
+            {...(named.length * LABEL_CHAR > size - 2
+              ? { textLength: size - 2, lengthAdjust: 'spacingAndGlyphs' }
+              : {})}
           >
             {named}
           </text>

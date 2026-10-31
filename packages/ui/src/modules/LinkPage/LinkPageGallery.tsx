@@ -2,6 +2,7 @@
 import { useEffect, useId, useRef, useState, type PointerEvent } from 'react';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Modal } from '../../molecules/Modal/Modal.tsx';
+import { focusLater } from '../../lib/focus-later.ts';
 import { safeImageSrc } from '../../lib/safe-image-src.ts';
 import type { LinkPageBlock } from './LinkPage.tsx';
 import styles from './LinkPageGallery.module.css';
@@ -25,11 +26,13 @@ const SWIPE = 48;
  */
 export function LinkPageGallery({ block, isTile }: LinkPageGalleryProps) {
   const [open, setOpen] = useState<number | undefined>(undefined);
+  // Pictures that failed to load leave the gallery, so neither the row nor the viewer shows a broken one.
+  const [failed, setFailed] = useState<readonly string[]>([]);
   const trackRef = useRef<HTMLUListElement>(null);
   const trackId = useId();
   const pictures = block.images.flatMap((image) => {
     const src = safeImageSrc(image.src);
-    return src === undefined ? [] : [{ ...image, src }];
+    return src === undefined || failed.includes(src) ? [] : [{ ...image, src }];
   });
   if (pictures.length === 0) return null;
   const display = isTile ? 'row' : block.display;
@@ -61,6 +64,9 @@ export function LinkPageGallery({ block, isTile }: LinkPageGalleryProps) {
                 alt={strings.openPicture(picture.alt)}
                 loading="lazy"
                 decoding="async"
+                onError={() => {
+                  setFailed((was) => [...was, picture.src]);
+                }}
               />
             </button>
           </li>
@@ -94,8 +100,10 @@ export function LinkPageGallery({ block, isTile }: LinkPageGalleryProps) {
         pictures={pictures}
         at={open}
         onMove={setOpen}
-        onClose={() => {
+        onClose={(at) => {
           setOpen(undefined);
+          // Back to the picture the viewer was showing, not only the one that opened it: the row scrolls to it.
+          focusLater(() => trackRef.current?.querySelectorAll('button').item(at));
         }}
       />
     </div>
@@ -121,7 +129,7 @@ function Viewer({
   }[];
   readonly at: number | undefined;
   readonly onMove: (index: number) => void;
-  readonly onClose: () => void;
+  readonly onClose: (at: number) => void;
 }) {
   const startX = useRef<number | undefined>(undefined);
   // The picture last shown, kept while the viewer closes so its exit draws what it showed.
@@ -152,7 +160,7 @@ function Viewer({
       status={strings.pictureOf(shown + 1, count)}
       isOpen={isOpen}
       onOpenChange={(next) => {
-        if (!next) onClose();
+        if (!next) onClose(shown);
       }}
       {...(count < 2
         ? {}

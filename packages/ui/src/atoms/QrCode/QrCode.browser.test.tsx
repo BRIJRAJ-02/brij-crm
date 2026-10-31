@@ -127,6 +127,7 @@ describe('a styled QR code (spec 0061, AC-6124)', () => {
     expect(await decodeDrawn({ colour: '#1f2937' })).toBe(ADDRESS);
     expect(await decodeDrawn({ colour: '#5b21b6', picture: centrePicture() })).toBe(ADDRESS);
     expect(await decodeDrawn({ colour: '#14532d', picture: centrePicture(), frameLabel: 'Scan me' })).toBe(ADDRESS);
+    expect(await decodeDrawn({ frameLabel: 'W'.repeat(20) })).toBe(ADDRESS);
   });
 
   it('draws a colour it refuses as the plain dark code, never a light one', () => {

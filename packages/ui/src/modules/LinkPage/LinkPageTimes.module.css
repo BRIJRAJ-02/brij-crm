@@ -23,6 +23,18 @@
     overflow-wrap: anywhere;
   }
 
+  .head {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .length {
+    color: var(--page-card-quiet, var(--text-secondary));
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
   .chips {
     display: flex;
     flex-wrap: wrap;
@@ -40,7 +52,8 @@
   .chipLoading {
     display: flex;
     inline-size: var(--size-column-narrow);
-    block-size: calc(var(--size-toolbar) - var(--space-4));
+    /* A touch control's height, as Button's touch size writes it. */
+    block-size: calc(var(--size-input) + var(--space-12) + var(--space-2));
     border-radius: var(--radius-md);
     overflow: hidden;
   }

@@ -2,11 +2,14 @@ import {
   createContext,
   lazy,
   Suspense,
+  useCallback,
   useContext,
+  useEffect,
   useId,
   useMemo,
   useRef,
   useState,
+  type ComponentType,
   type MouseEvent,
   type ReactNode,
 } from 'react';
@@ -29,6 +32,12 @@ import { safeImageSrc } from '../../lib/safe-image-src.ts';
 import { usePageVariables, type PageVariables } from '../../lib/page-variables.ts';
 import { initialsOf } from '../../lib/stable-hue.ts';
 import styles from './LinkPage.module.css';
+// Types only: erased, so none of these chunks joins the first load.
+import type { LinkPageGalleryProps } from './LinkPageGallery.tsx';
+import type { LinkPageImageProps } from './LinkPageImage.tsx';
+import type { LinkPageMediaProps } from './LinkPageMedia.tsx';
+import type { LinkPageNoticeProps } from './LinkPageNotice.tsx';
+import type { LinkPageTimesProps } from './LinkPageTimes.tsx';
 import { strings } from './strings.ts';
 
 /** A social network whose own mark a link shows (ProviderMark's social marks). */
@@ -986,33 +995,172 @@ function runsOf(blocks: readonly LinkPageBlock[], layout: 'list' | 'grid'): Run[
 // Media, a picture, a gallery, next times and the notice sheet each load as their own chunk, and only when a block
 // of that kind is on the page (spec 0061, AC-6126): the first load holds rows, featured cards, the socials row and
 // the banner. Until a chunk arrives, its block holds its own box (`Hold`), so nothing moves when it does.
-const LazyMedia = lazy(() => import('./LinkPageMedia.tsx').then((module) => ({ default: module.LinkPageMedia })));
-const LazyImage = lazy(() => import('./LinkPageImage.tsx').then((module) => ({ default: module.LinkPageImage })));
-const LazyGallery = lazy(() => import('./LinkPageGallery.tsx').then((module) => ({ default: module.LinkPageGallery })));
-const LazyTimes = lazy(() => import('./LinkPageTimes.tsx').then((module) => ({ default: module.LinkPageTimes })));
-const LazyNotice = lazy(() => import('./LinkPageNotice.tsx').then((module) => ({ default: module.LinkPageNotice })));
-
-/** The box a lazy block holds while its chunk loads: its own shape, quietly, out of the accessibility tree. */
-function Hold({
-  shape,
-  picture,
-  isTile,
-}: {
-  readonly shape: 'video' | 'audio' | 'picture' | 'row' | 'times';
-  readonly picture?: LinkPagePicture;
-  readonly isTile: boolean;
-}) {
+/**
+ * What a block draws when its chunk can't load (an old page asking for a file a newer deploy replaced, a dropped
+ * connection): never the route's error, never a hole. Media keeps its title as a plain link to the provider's player,
+ * a picture its alt text, a gallery nothing, next times its More times, which still books.
+ */
+function MediaUnloaded({ block }: LinkPageMediaProps) {
   return (
-    <span
-      className={styles.hold}
-      data-hold={shape}
-      data-fill={isTile || undefined}
-      aria-hidden="true"
-      {...(picture === undefined
-        ? {}
-        : { style: { '--hold-ratio': `${String(picture.width)} / ${String(picture.height)}` } })}
-    >
-      <Skeleton shape="fill" />
+    <span className={styles.block} data-inert="">
+      <LinkPageTile block={block} />
+      <BlockText title={block.title} line={strings.cantPlay} />
+    </span>
+  );
+}
+
+function ImageUnloaded({ block }: LinkPageImageProps) {
+  return <p className={styles.unloaded}>{block.alt}</p>;
+}
+
+function GalleryUnloaded(_: LinkPageGalleryProps) {
+  return null;
+}
+
+function TimesUnloaded({ block }: LinkPageTimesProps) {
+  const href = samePath(block.href);
+  return href === undefined ? null : (
+    <ButtonLink size="touch" iconRight="arrow-right" href={href}>
+      {`${block.title} · ${strings.moreTimes}`}
+    </ButtonLink>
+  );
+}
+
+/** The notice chunk couldn't load: the page stops asking, so a noticed link opens rather than doing nothing. */
+function NoticeUnloaded({ onUnavailable }: LinkPageNoticeProps) {
+  useEffect(() => {
+    onUnavailable?.();
+  }, [onUnavailable]);
+  return null;
+}
+
+// Media, a picture, a gallery, next times and the notice sheet each load as their own chunk, and only when a block
+// of that kind is on the page (spec 0061, AC-6126): the first load holds rows, featured cards, the socials row and
+// the banner. Until a chunk arrives, its block holds its own box (`LinkPageHold`), so nothing moves when it does.
+const LazyMedia = lazy<ComponentType<LinkPageMediaProps>>(() =>
+  import('./LinkPageMedia.tsx').then(
+    (module) => ({ default: module.LinkPageMedia }),
+    () => ({ default: MediaUnloaded }),
+  ),
+);
+const LazyImage = lazy<ComponentType<LinkPageImageProps>>(() =>
+  import('./LinkPageImage.tsx').then(
+    (module) => ({ default: module.LinkPageImage }),
+    () => ({ default: ImageUnloaded }),
+  ),
+);
+const LazyGallery = lazy<ComponentType<LinkPageGalleryProps>>(() =>
+  import('./LinkPageGallery.tsx').then(
+    (module) => ({ default: module.LinkPageGallery }),
+    () => ({ default: GalleryUnloaded }),
+  ),
+);
+const LazyTimes = lazy<ComponentType<LinkPageTimesProps>>(() =>
+  import('./LinkPageTimes.tsx').then(
+    (module) => ({ default: module.LinkPageTimes }),
+    () => ({ default: TimesUnloaded }),
+  ),
+);
+const LazyNotice = lazy<ComponentType<LinkPageNoticeProps>>(() =>
+  import('./LinkPageNotice.tsx').then(
+    (module) => ({ default: module.LinkPageNotice }),
+    () => ({ default: NoticeUnloaded }),
+  ),
+);
+
+/** How many skeleton chips a times block holds while it loads: LinkPageTimes' own loading state. */
+const HOLD_CHIPS = 3;
+
+/** Props for LinkPageHold. */
+export interface LinkPageHoldProps {
+  readonly block: Extract<LinkPageBlock, { kind: 'media' | 'image' | 'gallery' | 'times' }>;
+  readonly isTile?: boolean;
+}
+
+/**
+ * The box a lazy block holds while its chunk loads (AC-6126): the same outer shape the block draws (a media card's
+ * stage and caption, a picture in its own ratio with its caption's line, a gallery's row or its squares, a times
+ * card's title, chips and More times), quietly, out of the accessibility tree, so nothing moves when it lands.
+ * Exported for its story, which holds each beside the block it stands for.
+ */
+export function LinkPageHold({ block, isTile = false }: LinkPageHoldProps) {
+  const fill = isTile || undefined;
+  if (block.kind === 'media') {
+    const shape = block.provider === 'youtube' || block.provider === 'vimeo' ? 'video' : 'audio';
+    return (
+      <span className={styles.holdCard} data-fill={fill} data-hold-for="media" aria-hidden="true">
+        <span className={styles.holdStage} data-hold={shape} data-provider={block.provider}>
+          <Skeleton shape="fill" />
+        </span>
+        <span className={styles.holdCaption}>
+          <span className={styles.holdTitle}>
+            <Skeleton shape="text" width="medium" />
+          </span>
+          <span className={styles.holdLine}>
+            <Skeleton shape="text" width="short" />
+          </span>
+        </span>
+      </span>
+    );
+  }
+  if (block.kind === 'image') {
+    const hasCaption = block.caption !== undefined && block.caption !== '';
+    return (
+      <span className={styles.holdPicture} data-fill={fill} data-hold-for="image" aria-hidden="true">
+        <span
+          className={styles.holdFrame}
+          style={{ '--hold-ratio': `${String(block.image.width)} / ${String(block.image.height)}` }}
+        >
+          <Skeleton shape="fill" />
+        </span>
+        {hasCaption && !isTile && (
+          <span className={styles.holdLine}>
+            <Skeleton shape="text" width="long" />
+          </span>
+        )}
+      </span>
+    );
+  }
+  if (block.kind === 'gallery') {
+    const isGrid = block.display === 'grid' && !isTile;
+    return (
+      <span
+        className={styles.holdGallery}
+        data-display={isGrid ? 'grid' : 'row'}
+        data-fill={fill}
+        data-hold-for="gallery"
+        aria-hidden="true"
+      >
+        <span className={styles.holdShots}>
+          {Array.from({ length: isGrid ? block.images.length : 1 }, (_, index) => (
+            <span key={index} className={styles.holdShot}>
+              <Skeleton shape="fill" />
+            </span>
+          ))}
+        </span>
+        {/* Previous and Next's row under a swipe row, where a fine pointer draws them. */}
+        {!isGrid && !isTile && block.images.length > 1 && <span className={styles.holdSteps} />}
+      </span>
+    );
+  }
+  return (
+    <span className={styles.holdCard} data-times="" data-hold-for="times" aria-hidden="true">
+      <span className={styles.holdHead}>
+        <span className={styles.holdTitle}>
+          <Skeleton shape="text" width="medium" />
+        </span>
+        <span className={styles.holdLine}>
+          <Skeleton shape="text" width="short" />
+        </span>
+      </span>
+      <span className={styles.holdChips}>
+        {Array.from({ length: HOLD_CHIPS }, (_, index) => (
+          <span key={index} className={styles.holdChip}>
+            <Skeleton shape="fill" />
+          </span>
+        ))}
+      </span>
+      <span className={styles.holdMore} />
     </span>
   );
 }
@@ -1029,23 +1177,23 @@ function LazyPictureBlock({
 }) {
   const press = onPress === undefined ? undefined : () => onPress(block.id);
   const pressed = press === undefined ? {} : { onPress: press };
+  const hold = <LinkPageHold block={block} isTile={isTile} />;
   if (block.kind === 'media') {
-    const isVideo = block.provider === 'youtube' || block.provider === 'vimeo';
     return (
-      <Suspense fallback={<Hold shape={isVideo ? 'video' : 'audio'} isTile={isTile} />}>
+      <Suspense fallback={hold}>
         <LazyMedia block={block} isTile={isTile} {...pressed} />
       </Suspense>
     );
   }
   if (block.kind === 'image') {
     return (
-      <Suspense fallback={<Hold shape="picture" picture={block.image} isTile={isTile} />}>
+      <Suspense fallback={hold}>
         <LazyImage block={block} isTile={isTile} {...pressed} />
       </Suspense>
     );
   }
   return (
-    <Suspense fallback={<Hold shape="row" isTile={isTile} />}>
+    <Suspense fallback={hold}>
       <LazyGallery block={block} isTile={isTile} />
     </Suspense>
   );
@@ -1080,14 +1228,15 @@ function LinkTile({ block, onPress }: { readonly block: LinkBlock; readonly onPr
   );
   if (target === undefined) {
     return (
-      <span className={styles.tileCard} data-inert="">
+      <span className={styles.block} data-card="tile" data-inert="">
         {body}
       </span>
     );
   }
   return (
     <a
-      className={styles.tileCard}
+      className={styles.block}
+      data-card="tile"
       href={target.href}
       onClick={click.onClick}
       {...(isWeb ? { target: '_blank', rel: relOf(block) } : block.notice === undefined ? {} : { rel: 'nofollow' })}
@@ -1153,11 +1302,11 @@ function PageTile({
     </>
   );
   return target === undefined ? (
-    <span className={styles.tileCard} data-inert="">
+    <span className={styles.block} data-card="tile" data-inert="">
       {body}
     </span>
   ) : (
-    <a className={styles.tileCard} href={target} onClick={onPress}>
+    <a className={styles.block} data-card="tile" href={target} onClick={onPress}>
       {body}
     </a>
   );
@@ -1229,7 +1378,7 @@ function ApartBlockView({
   }
   if (block.kind === 'times') {
     return (
-      <Suspense fallback={<Hold shape="times" isTile={false} />}>
+      <Suspense fallback={<LinkPageHold block={block} />}>
         <LazyTimes
           block={block}
           level={level}
@@ -1466,7 +1615,9 @@ function Banner({
           </a>
         )}
       </p>
-      {onClose !== undefined && <Button variant="ghost" icon="x" label={strings.closeBanner} onPress={onClose} />}
+      {onClose !== undefined && (
+        <Button variant="ghost" size="touch" icon="x" label={strings.closeBanner} onPress={onClose} />
+      )}
     </section>
   );
 }
@@ -1554,16 +1705,22 @@ export function LinkPage({
   const [heldContinued, setHeldContinued] = useState<readonly string[]>([]);
   const isHeld = onContinueNotice === undefined;
   const [asking, setAsking] = useState<LinkBlock | undefined>(undefined);
+  // The notice sheet's chunk couldn't load: the page stops asking rather than leave noticed links doing nothing.
+  const [isAskingOff, setAskingOff] = useState(false);
+  const stopAsking = useCallback(() => {
+    setAskingOff(true);
+    setAsking(undefined);
+  }, []);
   // Only the page itself asks before a noticed link: the editor's preview and a draft are inert anyway.
   const isLive = layout === 'page' && !isPreview;
   const actions = useMemo<PageActions>(
     () => ({
       layout: pageLayout,
-      isContinued: (id) => !isLive || (isHeld ? heldContinued : (continuedNotices ?? [])).includes(id),
+      isContinued: (id) => !isLive || isAskingOff || (isHeld ? heldContinued : (continuedNotices ?? [])).includes(id),
       ask: setAsking,
       onTimesNear,
     }),
-    [pageLayout, isLive, isHeld, heldContinued, continuedNotices, onTimesNear],
+    [pageLayout, isLive, isAskingOff, isHeld, heldContinued, continuedNotices, onTimesNear],
   );
   const banner = blocks?.find((block) => block.kind === 'banner');
   // A socials row block puts the person's marks where the owner placed it, so the header's own row steps aside.
@@ -1793,6 +1950,7 @@ export function LinkPage({
                 setAsking(undefined);
               }}
               onContinue={continueNotice}
+              onUnavailable={stopAsking}
             />
           </Suspense>
         )}

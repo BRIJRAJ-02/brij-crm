@@ -112,3 +112,57 @@ export const Small: Story = {
     await expect(Math.round(code.getBoundingClientRect().width)).toBe(120);
   },
 };
+
+/** A small square picture on our origin, as a `data:` image: the person's own picture in the code's centre. */
+const CENTRE =
+  'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 4 4"%3E%3Crect width="4" height="4" fill="%23e8590c"/%3E%3Ccircle cx="2" cy="2" r="1.2" fill="%23fff8e7"/%3E%3C/svg%3E';
+
+const SHARE = {
+  value: 'https://timefix.com/anish?utm_source=qr&utm_medium=print',
+  label: 'QR code for your link page',
+};
+
+/** The owner's colour (spec 0061, AC-6124): a dark purple that keeps 4.5 to 1 on white. */
+export const Coloured: Story = {
+  args: { ...SHARE, colour: '#5b21b6' },
+  play: async ({ canvasElement }) => {
+    const code = canvasElement.querySelector('svg');
+    await expect(code?.style.getPropertyValue('--qr-modules')).toBe('#5b21b6');
+  },
+};
+
+/** A colour too light to scan: the code stays the plain dark one. */
+export const ColourRefused: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { ...SHARE, colour: '#fbbf24' },
+  play: async ({ canvasElement }) => {
+    const code = canvasElement.querySelector('svg');
+    await expect(code?.style.getPropertyValue('--qr-modules')).toBe('');
+  },
+};
+
+/** The person's picture in the centre, at a fifth of the code, the code at its highest error correction. */
+export const CentrePicture: Story = {
+  args: { ...SHARE, picture: CENTRE },
+  play: async ({ canvasElement }) => {
+    await expect(canvasElement.querySelector('svg image')).not.toBeNull();
+  },
+};
+
+/** A frame with its label under the code: "Scan me". */
+export const Framed: Story = {
+  args: { ...SHARE, frameLabel: 'Scan me' },
+  play: async ({ canvasElement }) => {
+    await expect(canvasElement.querySelector('svg text')?.textContent).toBe('Scan me');
+  },
+};
+
+/** All three together, filling a dialog's width, as the share Modal draws it to be saved. */
+export const Styled: Story = {
+  args: { ...SHARE, colour: '#14532d', picture: CENTRE, frameLabel: 'Book a call with me', size: 'fill' },
+  render: (args) => (
+    <Stage width="narrow-fill">
+      <QrCode {...args} />
+    </Stage>
+  ),
+};

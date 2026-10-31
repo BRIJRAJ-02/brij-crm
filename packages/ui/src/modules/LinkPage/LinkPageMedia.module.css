@@ -22,7 +22,7 @@
     position: relative;
     display: flex;
     flex: none;
-    background: var(--surface-sunken);
+    background: var(--page-card-hover, var(--surface-hover));
   }
 
   .root[data-shape='video'] .stage {
@@ -57,6 +57,10 @@
     margin: 0;
     padding: 0;
     border: 0;
+  }
+
+  .frame {
+    background: transparent;
   }
 
   .poster {
@@ -94,17 +98,14 @@
     box-shadow: var(--shadow-md);
     color: var(--page-on-accent, var(--on-accent));
     position: relative;
-    transition: opacity var(--duration-hover) var(--ease-hover);
+    transition: background-color var(--duration-hover) var(--ease-hover);
   }
 
+  /* Hover takes the accent's own hover pair, never a fade, which would read as disabled. */
   @media (hover: hover) and (pointer: fine) {
-    .poster:not(:disabled):hover .play {
-      opacity: var(--opacity-busy);
+    .poster:hover .play {
+      background: var(--page-accent-hover, var(--accent-hover));
     }
-  }
-
-  .poster:disabled .play {
-    opacity: var(--opacity-disabled);
   }
 
   .caption {

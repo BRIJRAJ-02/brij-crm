@@ -80,9 +80,12 @@ export function LinkPageTimes({ block, level, onPress, onNear }: LinkPageTimesPr
   const isLoading = times === undefined || times.status === 'loading';
   return (
     <section ref={rootRef} className={styles.root} aria-labelledby={titleId} aria-busy={isLoading || undefined}>
-      <Title id={titleId} className={styles.title}>
-        {block.title}
-      </Title>
+      <span className={styles.head}>
+        <Title id={titleId} className={styles.title}>
+          {block.title}
+        </Title>
+        <span className={styles.length}>{strings.minutes(block.duration)}</span>
+      </span>
       {isLoading ? (
         <div className={styles.chips}>
           <VisuallyHidden>{strings.timesLoading}</VisuallyHidden>
@@ -99,7 +102,6 @@ export function LinkPageTimes({ block, level, onPress, onNear }: LinkPageTimesPr
               <ButtonLink
                 size="touch"
                 href={chipHref(block.href, start, block.duration)}
-                label={strings.timeChip(format.format(new Date(start)), block.duration)}
                 {...(onPress === undefined ? {} : { onPress })}
               >
                 {format.format(new Date(start))}
@@ -113,6 +115,7 @@ export function LinkPageTimes({ block, level, onPress, onNear }: LinkPageTimesPr
       <span className={styles.more}>
         <ButtonLink
           variant="ghost"
+          size="touch"
           iconRight="arrow-right"
           href={block.href}
           {...(onPress === undefined ? {} : { onPress })}

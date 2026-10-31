@@ -36,6 +36,8 @@ export const strings = {
   play: (title: string) => `Play ${title}`,
   /** Under a media block's title, before anything loads from the provider (AC-6106). */
   playsFrom: (provider: string) => `Plays from ${provider}`,
+  /** A media block that can't play here: its player's address was refused, or its code couldn't load. */
+  cantPlay: 'Can’t play here',
   /** Each provider's own name, for "Plays from YouTube": `MEDIA_PROVIDER_NAMES` in the contracts, repeated here. */
   providers: {
     youtube: 'YouTube',
@@ -53,14 +55,12 @@ export const strings = {
   next: 'Next picture',
   /** The viewer's place in the gallery, beside its title: "2 of 5". */
   pictureOf: (at: number, of: number) => `${String(at)} of ${String(of)}`,
-  /** The viewer's title, for screen readers: the picture's own alt text names it. */
-  viewer: 'Picture',
   /** A next times block (AC-6110). */
   moreTimes: 'More times',
   noTimes: 'No open times in the next two weeks',
   timesLoading: 'Loading open times…',
-  /** A next times chip's name: the day and time, then the length. */
-  timeChip: (when: string, minutes: number) => `${when}, ${String(minutes)} min`,
+  /** Under a next times block's title: the length its chips are for. */
+  minutes: (minutes: number) => `${String(minutes)} min`,
   /** The times' list, for screen readers. */
   times: (title: string) => `Next open times for ${title}`,
   /** The notice sheet (AC-6113): its two answers. The question itself is `profileNoticeSentence`, from the caller. */

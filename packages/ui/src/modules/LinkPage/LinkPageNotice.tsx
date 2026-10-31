@@ -24,6 +24,8 @@ export interface LinkPageNoticeProps {
   readonly onClose: () => void;
   /** Continue: the link opens (it is a real link) and counts, and is remembered for the visit. */
   readonly onContinue: (id: string) => void;
+  /** Called only by the page's stand in when this chunk couldn't load (the page then stops asking); unused here. */
+  readonly onUnavailable?: () => void;
 }
 
 /**

@@ -50,42 +50,50 @@ export function LinkPageMedia({ block, onPress, isTile }: LinkPageMediaProps) {
   useEffect(() => {
     if (isPlaying) frameRef.current?.focus();
   }, [isPlaying]);
+  const posterImage =
+    poster === undefined || block.poster === undefined ? null : (
+      <img
+        className={styles.posterImage}
+        src={poster}
+        width={block.poster.width}
+        height={block.poster.height}
+        alt={strings.thumbAlt}
+        loading="lazy"
+        decoding="async"
+      />
+    );
   return (
     <figure className={styles.root} data-shape={shape} data-provider={block.provider} data-fill={isTile || undefined}>
       <div className={styles.stage}>
-        {isPlaying && src !== undefined ? (
-          <iframe
-            ref={frameRef}
-            className={styles.frame}
-            src={src}
-            title={block.title}
-            allow="autoplay; encrypted-media; picture-in-picture; fullscreen; clipboard-write"
-            allowFullScreen
-            // YouTube refuses a frame that sends no referrer; the origin alone, never the page's path.
-            referrerPolicy="strict-origin-when-cross-origin"
-            sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-presentation"
-          />
+        {src === undefined ? (
+          // A player address the check refused: the poster alone and a line saying so, never a dead Play.
+          posterImage
+        ) : isPlaying ? (
+          <>
+            {/* The poster stays under the player until the player paints over it, so Play never flashes white. */}
+            {posterImage}
+            <iframe
+              ref={frameRef}
+              className={styles.frame}
+              src={src}
+              title={block.title}
+              allow="autoplay; encrypted-media; picture-in-picture; fullscreen; clipboard-write"
+              allowFullScreen
+              // YouTube refuses a frame that sends no referrer; the origin alone, never the page's path.
+              referrerPolicy="strict-origin-when-cross-origin"
+              sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-presentation"
+            />
+          </>
         ) : (
           <button
             type="button"
             className={styles.poster}
-            disabled={src === undefined}
             onClick={() => {
               setPlaying(true);
               onPress?.();
             }}
           >
-            {poster !== undefined && block.poster !== undefined && (
-              <img
-                className={styles.posterImage}
-                src={poster}
-                width={block.poster.width}
-                height={block.poster.height}
-                alt={strings.thumbAlt}
-                loading="lazy"
-                decoding="async"
-              />
-            )}
+            {posterImage}
             <span className={styles.play} aria-hidden="true">
               <Icon name="play" />
             </span>
@@ -95,7 +103,9 @@ export function LinkPageMedia({ block, onPress, isTile }: LinkPageMediaProps) {
       </div>
       <figcaption className={styles.caption}>
         <span className={styles.title}>{block.title}</span>
-        <span className={styles.line}>{strings.playsFrom(strings.providers[block.provider])}</span>
+        <span className={styles.line}>
+          {src === undefined ? strings.cantPlay : strings.playsFrom(strings.providers[block.provider])}
+        </span>
       </figcaption>
     </figure>
   );

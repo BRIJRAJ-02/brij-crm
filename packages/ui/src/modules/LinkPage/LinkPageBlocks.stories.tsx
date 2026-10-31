@@ -6,7 +6,7 @@ import { probeAlignment } from '../../lib/alignment-probe.ts';
 import { settleAnimations } from '../../workbench/animations.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { BookingFoot } from '../BookingFrame/BookingFrame.tsx';
-import { LinkPage, type LinkPageBlock, type LinkPagePicture, type PageLook } from './LinkPage.tsx';
+import { LinkPage, LinkPageHold, type LinkPageBlock, type LinkPagePicture, type PageLook } from './LinkPage.tsx';
 
 /** The look a page has never touched. */
 const PLAIN: PageLook = {
@@ -391,10 +391,12 @@ export const GalleryRow: Story = {
     await expect(within(document.body).getByRole('dialog', { name: 'A walk in the woods' })).toBeVisible();
     await userEvent.keyboard('{ArrowLeft}{ArrowLeft}{ArrowLeft}');
     await expect(within(document.body).getByRole('dialog', { name: 'The view from the office' })).toBeVisible();
-    // Escape closes it, and focus goes back to the picture that opened it.
+    // Escape closes it, and focus goes back to the picture it was showing, the row scrolled to it.
     await userEvent.keyboard('{Escape}');
     await waitFor(() => expect(within(document.body).queryByRole('dialog')).toBeNull());
-    await waitFor(() => expect(second).toHaveFocus());
+    await waitFor(() =>
+      expect(canvas.getByRole('button', { name: 'The view from the office, open large' })).toHaveFocus(),
+    );
   },
 };
 
@@ -457,9 +459,11 @@ export const Times: Story = {
     const chips = within(list).getAllByRole('link');
     await expect(chips).toHaveLength(6);
     // The stories read in London, in English (US): 15:00 UTC on 8 October is 4:00 PM there.
-    await expect(chips[0]).toHaveAccessibleName(/Oct 8, 4:00.PM, 30 min/);
+    await expect(chips[0]).toHaveAccessibleName(/Oct 8, 4:00.PM/);
     await expect(chips[0]).toHaveAttribute('href', '/anish/intro-call?at=2026-10-08T15%3A00%3A00.000Z&len=30');
     await expect(canvas.getByRole('link', { name: 'More times' })).toHaveAttribute('href', '/anish/intro-call');
+    // The length is said once, under the title, for everyone.
+    await expect(canvas.getByText('30 min')).toBeVisible();
     const report = probeAlignment({ root: '[aria-labelledby]', ignoreSpacing: '*' });
     await expect(report.failures).toEqual([]);
     await expect(canvasElement.querySelector('[aria-busy="true"]')).toBeNull();
@@ -668,4 +672,103 @@ export const AllKindsDark: Story = {
       <LinkPage {...args} />
     </Stage>
   ),
+};
+
+/** A media block whose player address the check refused: its poster and "Can’t play here", never a dead Play. */
+export const MediaRefused: Story = {
+  args: {
+    blocks: [
+      {
+        kind: 'media',
+        id: 'talk',
+        provider: 'youtube',
+        title: 'Scheduling that books itself',
+        frame: 'https://elsewhere.example/embed/x',
+        poster: SEA,
+      },
+    ],
+  },
+  play: async ({ canvas }) => {
+    await canvas.findByText('Can’t play here');
+    await expect(canvas.queryByRole('button', { name: /Play/ })).toBeNull();
+  },
+};
+
+/** A picture whose address isn't ours: its alt text in its place, on the page's own card colours. */
+export const PictureRefused: Story = {
+  args: {
+    theme: { ...PLAIN, ground: 'ink', mode: 'light' },
+    // The foot's own colours on ink are another story's (ThemedDark); this one is the picture's alt text.
+    foot: undefined,
+    blocks: [
+      {
+        kind: 'image',
+        id: 'stage',
+        image: { src: 'https://elsewhere.example/x.png', width: 1200, height: 800 },
+        alt: 'Anish on stage at SaaStr',
+        caption: 'Talking calendars at SaaStr',
+      },
+    ],
+  },
+  play: async ({ canvas }) => {
+    await settleAnimations();
+    await expect(await canvas.findByText('Anish on stage at SaaStr')).toBeVisible();
+    await expect(canvas.queryByRole('img', { name: 'Anish on stage at SaaStr' })).toBeNull();
+  },
+};
+
+/** The blocks each lazy part draws, the same blocks' held boxes after them. */
+function heldBlocks() {
+  return [
+    {
+      kind: 'media',
+      id: 'talk',
+      provider: 'youtube',
+      title: 'Scheduling that books itself',
+      frame: 'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ',
+      poster: SEA,
+    },
+    { kind: 'image', id: 'stage', image: DUSK, alt: 'Anish on stage', caption: 'Talking calendars at SaaStr' },
+    { kind: 'gallery', id: 'offsite', images: GALLERY, display: 'grid' },
+    { kind: 'gallery', id: 'row', images: GALLERY, display: 'row' },
+    TIMES_BLOCK,
+  ] as const satisfies readonly LinkPageBlock[];
+}
+
+/**
+ * Each lazy block beside the box it holds while its chunk loads (AC-6126): the same height, so the page doesn't move
+ * when a chunk lands.
+ */
+export const Holds: Story = {
+  args: {
+    blocks: heldBlocks(),
+    onTimesNear: fn(),
+    after: (
+      <>
+        {heldBlocks().map((block) => (
+          <LinkPageHold key={block.id} block={block} />
+        ))}
+      </>
+    ),
+  },
+  play: async ({ canvas, canvasElement }) => {
+    await canvas.findByRole('button', { name: /Play Scheduling/ });
+    await canvas.findByRole('img', { name: 'Anish on stage' });
+    await canvas.findByRole('region', { name: 'Intro call' });
+    await settleAnimations();
+    const height = (element: Element | null | undefined) => Math.round(element?.getBoundingClientRect().height ?? -1);
+    const held = (kind: string) => canvasElement.querySelectorAll(`[data-hold-for="${kind}"]`);
+    // Wait for each chunk's own stylesheet, then hold every block to its box.
+    await waitFor(async () => {
+      const media = canvas.getByRole('button', { name: /Play Scheduling/ }).closest('figure');
+      await expect(height(media)).toBe(height(held('media')[0]));
+    });
+    await expect(height(canvas.getByRole('img', { name: 'Anish on stage' }).closest('figure'))).toBe(
+      height(held('image')[0]),
+    );
+    const galleries = canvas.getAllByRole('list', { name: 'Pictures' });
+    await expect(height(galleries[0]?.parentElement)).toBe(height(held('gallery')[0]));
+    await expect(height(galleries[1]?.parentElement)).toBe(height(held('gallery')[1]));
+    await expect(height(canvas.getByRole('region', { name: 'Intro call' }))).toBe(height(held('times')[0]));
+  },
 };

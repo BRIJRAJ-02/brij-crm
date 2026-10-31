@@ -15,7 +15,7 @@
   .frame {
     display: flex;
     border-radius: var(--page-radius-card, var(--radius-md));
-    background: var(--surface-sunken);
+    background: var(--page-card-hover, var(--surface-hover));
     overflow: hidden;
     outline: none;
   }
@@ -25,8 +25,10 @@
     min-block-size: 0;
   }
 
+  /* Inside the frame's clipped corners, as every pressable picture on the page draws it. */
   .frame[data-link]:focus-visible {
-    box-shadow: var(--shadow-focus);
+    outline: var(--border-width-thick) solid var(--page-accent, var(--accent));
+    outline-offset: calc(var(--border-width-thick) * -1);
   }
 
   .picture {
@@ -39,9 +41,12 @@
     object-fit: cover;
   }
 
+  /* The alt text in the picture's place, on the page's own card pair, so it holds its contrast in every look. */
   .missing {
+    flex: 1;
     padding: var(--space-12);
-    color: var(--page-text-quiet, var(--text-secondary));
+    background: var(--page-card, var(--surface-raised));
+    color: var(--page-card-quiet, var(--text-secondary));
   }
 
   .caption {
