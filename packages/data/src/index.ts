@@ -39,7 +39,11 @@ import type {
   RotationView,
   RoutingDecision,
   RoutingRules,
+  RoutingTestInput,
+  RoutingTestResult,
+  SkillGroup,
   TeamHosts,
+  WonStage,
   TaskMine,
   BulkAction,
   BulkEdit,
@@ -147,6 +151,7 @@ import {
   type RoutingReportSurface,
 } from './routing/reports.ts';
 import { createPageRules, type PageRulesHeld } from './routing/page-rules.ts';
+import { createRoutingSkills, type RoutingSettingsState, type RoutingSkillsState } from './routing/skills.ts';
 import {
   createRoutingLog,
   type RoutingDecisionFilters,
@@ -402,8 +407,17 @@ export type {
   RoutingReportRow,
   RoutingRule,
   RoutingRules,
+  RoutingSettings,
+  RoutingSkill,
   RoutingStepView,
   RoutingSurface,
+  RoutingTestResult,
+  MemberSkills,
+  RequiredSkills,
+  RouteHosts,
+  SkillGroup,
+  SkillsView,
+  WonStage,
   ShowWhen,
   TeamHosts,
   DateOverride,
@@ -560,6 +574,7 @@ export type {
   RoutingHeld,
   RoutingOverviewState,
 } from './routing/log.ts';
+export type { RoutingSettingsState, RoutingSharedState, RoutingSkillsState } from './routing/skills.ts';
 export type {
   EmailPreference,
   EmailPreferencesState,
@@ -2191,6 +2206,38 @@ export function createDataLayer({
           api.routing.decisions({ workspace, ...filters, ...(cursor === undefined ? {} : { cursor }) }, options),
         ),
       ),
+  });
+  // Routing's shared layer (spec 0037, L7): skills and who holds them, and Won means, held per workspace, read again
+  // on return; every write shown at once and taken back on a refusal.
+  const routingSkills = createRoutingSkills({
+    list: (workspace) =>
+      beforeRead(workspace).then(() => call((options) => api.routing.skills.list({ workspace }, options))),
+    create: (workspace, input) =>
+      call((options) => api.routing.skills.create({ workspace, ...input, mutationId: mintId() }, options)),
+    update: (workspace, input) =>
+      call((options) => api.routing.skills.update({ workspace, ...input, mutationId: mintId() }, options)),
+    remove: (workspace, id) =>
+      call((options) => api.routing.skills.delete({ workspace, id, mutationId: mintId() }, options)),
+    setMember: (workspace, memberId, skillIds) =>
+      call((options) =>
+        api.routing.memberSkills.set({ workspace, memberId, skillIds: [...skillIds], mutationId: mintId() }, options),
+      ),
+    settings: (workspace) =>
+      beforeRead(workspace).then(() => call((options) => api.routing.settings.get({ workspace }, options))),
+    setSettings: (workspace, wonStage, updatedAt) =>
+      call((options) =>
+        api.routing.settings.set(
+          {
+            workspace,
+            wonStage:
+              wonStage === null ? null : { attributeId: wonStage.attributeId, optionIds: [...wonStage.optionIds] },
+            ...(updatedAt === undefined ? {} : { updatedAt }),
+            mutationId: mintId(),
+          },
+          options,
+        ),
+      ),
+    mintId,
   });
 
   // Availability schedules (spec 0035): a held list per workspace and member, patched by every write, read again on
@@ -3873,6 +3920,53 @@ export function createDataLayer({
       /** One decision by id (a link to it): its explanation, or NOT_FOUND. */
       decision: (workspace: string, id: string): Promise<RoutingDecision> =>
         beforeRead(workspace).then(() => call((options) => api.routing.decision({ workspace, id }, options))),
+      /**
+       * Routing › Skills (spec 0037, AC-1382): the workspace's skills and who holds them (`view`, held while a screen
+       * shows them, for any member), and the writes of holders of routing.manage. Each write shows at once and puts
+       * its change back on a refusal (`SKILL_IN_USE`, `SKILL_LIMIT`, `CONFIG_INVALID` on `name`), rejecting with it.
+       */
+      skills: {
+        view: (workspace: string): RoutingHeld<RoutingSkillsState> => routingSkills.view(workspace),
+        /** A new skill at the end of its group; answers its id. */
+        create: (workspace: string, group: SkillGroup, name: string): Promise<string> =>
+          routingSkills.create(workspace, group, name),
+        update: (
+          workspace: string,
+          id: string,
+          change: { readonly group?: SkillGroup; readonly name?: string },
+        ): Promise<void> => routingSkills.update(workspace, id, change),
+        remove: (workspace: string, id: string): Promise<void> => routingSkills.remove(workspace, id),
+        /** One member's skills, replaced. */
+        setMember: (workspace: string, memberId: string, skillIds: readonly string[]): Promise<void> =>
+          routingSkills.setMember(workspace, memberId, skillIds),
+      },
+      /** The workspace's routing settings (AC-1351): Won means (AC-1385), for holders of routing.manage. */
+      settings: {
+        view: (workspace: string): RoutingHeld<RoutingSettingsState> => routingSkills.settings(workspace),
+        /** Won means set, or cleared with null; `STALE` reads the settings again and rejects. */
+        setWonStage: (workspace: string, wonStage: WonStage | null): Promise<void> =>
+          routingSkills.setWonStage(workspace, wonStage),
+      },
+      /**
+       * Routing › Test (AC-1392): what a surface's rules would decide for typed answers and an email. Stores nothing
+       * but an audit row when an email is given; no screen holds its answer beyond the tab's own state.
+       */
+      test: (
+        workspace: string,
+        input: Pick<RoutingTestInput, 'surface' | 'answers' | 'email'>,
+      ): Promise<RoutingTestResult> =>
+        call((options) =>
+          api.routing.test(
+            {
+              workspace,
+              surface: input.surface,
+              answers: input.answers,
+              ...(input.email === undefined ? {} : { email: input.email }),
+              mutationId: mintId(),
+            },
+            options,
+          ),
+        ),
     },
     home: {
       /**

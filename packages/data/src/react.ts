@@ -26,6 +26,7 @@ import type { HomeHeld, HomeMetricsState, HomeRecentsState, TeamTodayState } fro
 import type { RoutingReportHeld, RoutingReportState } from './routing/reports.ts';
 import type { PageRulesHeld } from './routing/page-rules.ts';
 import type { RoutingDecisionsHeld, RoutingDecisionsState, RoutingHeld, RoutingOverviewState } from './routing/log.ts';
+import type { RoutingSettingsState, RoutingSkillsState } from './routing/skills.ts';
 import type {
   EmailPreferencesState,
   EmailPreferencesStore,
@@ -393,6 +394,16 @@ export function useRoutingOverview(view: RoutingHeld<RoutingOverviewState>): Rou
 
 /** Bookings › Routing › Decisions (AC-1383), re-rendering as pages land. Held while mounted. */
 export function useRoutingDecisions(view: RoutingDecisionsHeld): RoutingDecisionsState {
+  return useRetained(view);
+}
+
+/** Routing › Skills (spec 0037, AC-1382): the skills and who holds them, re-rendering as writes show and land. Held while mounted. */
+export function useRoutingSkills(view: RoutingHeld<RoutingSkillsState>): RoutingSkillsState {
+  return useRetained(view);
+}
+
+/** The workspace's routing settings (spec 0037, AC-1385), re-rendering as a change shows and lands. Held while mounted. */
+export function useRoutingSettings(view: RoutingHeld<RoutingSettingsState>): RoutingSettingsState {
   return useRetained(view);
 }
 

@@ -7,6 +7,7 @@ import { oc } from '@orpc/contract';
 import * as z from 'zod';
 import { CONDITION_OPS, CONDITIONS_MAX, isHiddenFact, isRecordFact, NUMBER_OPS, VALUELESS_OPS } from './show-when.ts';
 import { QUESTION_KEY } from './answer-types.ts';
+import { REQUIRED_SKILLS_MAX } from './routing-limits.ts';
 import { Uuid, uuidWith } from '../values/ids.ts';
 import { WorkspaceScoped } from '../workspaces.ts';
 
@@ -65,9 +66,6 @@ export const ROUTING_RULES_MAX = 20;
 /** At most this many hosts a route narrows to (AC-1604, AC-1608). */
 export const ROUTE_HOSTS_MAX = 8;
 
-/** At most this many skills a host route requires (spec 0037, AC-1356). */
-export const REQUIRED_SKILLS_MAX = 3;
-
 /** Some members of a team page's rotations, by name: one is a specific host. */
 export const NamedHosts = z
   .array(Uuid)
@@ -93,16 +91,6 @@ export type RequiredSkills = z.infer<typeof RequiredSkills>;
 export const RouteHosts = z.union([NamedHosts, RequiredSkills]);
 /** Who a route narrows to. */
 export type RouteHosts = z.infer<typeof RouteHosts>;
-
-/** The named members of a route's hosts, or undefined when it names skills (or nobody). */
-export function namedHosts(hosts: RouteHosts | undefined): readonly string[] | undefined {
-  return Array.isArray(hosts) ? hosts : undefined;
-}
-
-/** The skills a route's hosts require, or undefined when it names people (or nobody). */
-export function requiredSkills(hosts: RouteHosts | undefined): readonly string[] | undefined {
-  return hosts === undefined || Array.isArray(hosts) ? undefined : hosts.requireSkillIds;
-}
 
 /** An https address a rule sends visitors to (http only for localhost, for local testing). */
 const RouteUrl = z

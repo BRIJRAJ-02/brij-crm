@@ -789,6 +789,18 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       overview: os.routing.overview.handler(notServed),
       decisions: os.routing.decisions.handler(notServed),
       decision: os.routing.decision.handler(notServed),
+      skills: {
+        list: os.routing.skills.list.handler(notServed),
+        create: os.routing.skills.create.handler(notServed),
+        update: os.routing.skills.update.handler(notServed),
+        delete: os.routing.skills.delete.handler(notServed),
+      },
+      memberSkills: { set: os.routing.memberSkills.set.handler(notServed) },
+      settings: {
+        get: os.routing.settings.get.handler(notServed),
+        set: os.routing.settings.set.handler(notServed),
+      },
+      test: os.routing.test.handler(notServed),
     },
     audit: {
       list: os.audit.list.handler(({ input }) => {

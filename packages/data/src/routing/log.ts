@@ -73,7 +73,7 @@ function browserReturn(refresh: () => void): () => void {
 }
 
 /** One held read: `run` reads it again, and the holding, return and listeners are kept here. */
-function heldRead<S>(
+export function heldRead<S>(
   first: S,
   run: (set: (next: S) => void, get: () => S) => Promise<void>,
   deps: Pick<RoutingLogDeps, 'onReturn' | 'now'>,
