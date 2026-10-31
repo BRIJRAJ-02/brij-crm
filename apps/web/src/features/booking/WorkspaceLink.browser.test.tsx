@@ -228,15 +228,24 @@ describe('Everyone on the roster: its dialog', () => {
       ),
       { data, pattern: '/w/$slug/bookings/round-robin', at: '/w/acme/bookings/round-robin' },
     );
+    // The count on the dialog's Members row; the table waits in the drawer (spec 0058, AC-12).
     await expect.element(page.getByText(rotationStrings.rosterNote(4, 5))).toBeVisible();
-    expect(page.getByRole('button', { name: new RegExp(rotationStrings.addMember) }).elements()).toHaveLength(0);
-    expect(page.getByRole('row').elements()).toHaveLength(PEOPLE.length + 1);
+    expect(page.getByRole('row').elements()).toHaveLength(0);
     await checkEverywhere('roster-dialog', () => document.querySelector('[role="dialog"]'));
-    // Kim back on, then Save: only Kim is sent.
+    await userEvent.click(page.getByRole('button', { name: rotationStrings.editMembersFor(ROSTER.name) }));
+    const drawer = page.getByRole('dialog', { name: rotationStrings.members(ROSTER.name) });
+    await expect.element(drawer).toBeVisible();
+    expect(drawer.getByRole('button', { name: new RegExp(rotationStrings.addMember) }).elements()).toHaveLength(0);
+    expect(drawer.getByRole('row').elements()).toHaveLength(PEOPLE.length + 1);
+    await checkEverywhere('roster-drawer', () => document.querySelector('[role="dialog"]'));
+    // Kim back on, then Done and Save: only Kim is sent.
     const kim = PEOPLE[3];
-    const kimSwitch = page.getByRole('switch').elements()[3];
+    const kimSwitch = drawer.getByRole('switch').elements()[3];
     if (kim === undefined || kimSwitch === undefined) throw new Error('Kim’s row is missing.');
     await userEvent.click(kimSwitch, { force: true });
+    await userEvent.click(drawer.getByRole('button', { name: rotationStrings.done }));
+    // Back on the row that opened it.
+    await expect.element(page.getByRole('button', { name: rotationStrings.editMembersFor(ROSTER.name) })).toHaveFocus();
     await userEvent.click(page.getByRole('button', { name: rotationStrings.save }));
     await vi.waitFor(() => expect(update).toHaveBeenCalled());
     expect(update).toHaveBeenCalledWith(

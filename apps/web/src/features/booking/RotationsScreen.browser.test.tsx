@@ -252,12 +252,47 @@ describe('the group dialog', () => {
     expect(page.getByText(strings.nameRequired).elements()).toEqual([]);
   });
 
+  it('opens on Fair with the rarely changed settings folded and the members in a drawer (spec 0058, AC-12)', async () => {
+    await renderDialog(layerWith([]));
+    await expect.element(page.getByRole('radio', { name: strings.fairCard })).toBeChecked();
+    // Count meetings and Returning guests fold under More options, closed for a new group.
+    const more = page.getByRole('button', { name: strings.moreOptions });
+    await expect.element(more).toHaveAttribute('aria-expanded', 'false');
+    expect(page.getByRole('button', { name: new RegExp(strings.window) }).elements()).toEqual([]);
+    // No member picker or table in the popup: one Members row opens the drawer.
+    expect(page.getByRole('table').elements()).toEqual([]);
+    expect(page.getByRole('button', { name: new RegExp(strings.addMember) }).elements()).toEqual([]);
+    const addMembers = page.getByRole('button', { name: strings.addMembersFor(strings.newRotation) });
+    await userEvent.click(addMembers);
+    const drawer = page.getByRole('dialog', { name: strings.members(strings.newRotation) });
+    await expect.element(drawer.getByRole('button', { name: new RegExp(strings.addMember) })).toBeVisible();
+    // Done brings focus back to the row that opened it, not the name field.
+    await userEvent.click(drawer.getByRole('button', { name: strings.done }));
+    await expect.element(addMembers).toHaveFocus();
+    // Create with too few members says so in the popup, with the way back to the drawer.
+    await userEvent.type(page.getByRole('textbox', { name: strings.name }), 'Sales');
+    await userEvent.click(page.getByRole('button', { name: strings.create }));
+    const alert = page.getByRole('alert').filter({ hasText: strings.needTwo });
+    await expect.element(alert).toBeVisible();
+    // Fixed from the Members row's button, right above it.
+    await expect.element(page.getByRole('button', { name: strings.addMembersFor('Sales') })).toBeVisible();
+  });
+
+  it('keeps an edited group’s non default settings open', async () => {
+    await renderDialog(layerWith([]), { ...SALES, windowDays: 90 });
+    await expect
+      .element(page.getByRole('button', { name: strings.moreOptions }))
+      .toHaveAttribute('aria-expanded', 'true');
+    await expect.element(page.getByRole('button', { name: `About ${strings.window}` })).toBeVisible();
+  });
+
   it('says who can join in the picker’s hint, with no link away from the group', async () => {
     await renderDialog(layerWith([SALES]), SALES);
-    await expect.element(page.getByText(strings.membersHint(2))).toBeVisible();
+    await expect.element(page.getByText(strings.membersCount(2))).toBeVisible();
+    await userEvent.click(page.getByRole('button', { name: strings.editMembersFor(SALES.name) }));
+    const drawer = page.getByRole('dialog', { name: strings.members(SALES.name) });
+    await expect.element(drawer.getByText(strings.membersHint(2))).toBeVisible();
     expect(page.getByRole('link').elements()).toEqual([]);
-    // The window's help.
-    await expect.element(page.getByRole('button', { name: `About ${strings.window}` })).toBeVisible();
   });
 
   it('offers a refused member’s hours in a new tab, and to remove them, for the member that was sent', async () => {
@@ -299,26 +334,31 @@ describe('the group dialog', () => {
     // A new tab, so the group being made stays.
     expect(toHours.element().getAttribute('target')).toBe('_blank');
 
-    // Ada leaves the draft from above Maya: the refusal still names Maya, and still opens Maya's hours. Focus moves
-    // on to the next row's remove.
-    await userEvent.click(page.getByRole('button', { name: strings.remove(ADA.name), exact: true }));
+    // Ada leaves the draft from above Maya, in the drawer: focus moves on to the next row's remove. Back in the
+    // popup, the refusal still names Maya, and still opens Maya's hours.
+    const editMembers = page.getByRole('button', { name: strings.editMembersFor(withLee.name) });
+    await userEvent.click(editMembers);
+    const drawer = page.getByRole('dialog', { name: strings.members(withLee.name) });
+    await userEvent.click(drawer.getByRole('button', { name: strings.remove(ADA.name), exact: true }));
+    await expect.element(drawer.getByRole('button', { name: strings.remove(MAYA.name), exact: true })).toHaveFocus();
+    await userEvent.click(drawer.getByRole('button', { name: strings.done }));
     await expect.element(alert).toBeVisible();
     expect(toHours.element().getAttribute('href')).toBe(`/w/acme/bookings/availability?member=${MAYA.id}`);
-    await expect.element(page.getByRole('button', { name: strings.remove(MAYA.name), exact: true })).toHaveFocus();
 
     // Removing Maya takes the refusal with her, and focus goes to Save, not the title bar's Close.
     const removeMaya = alert.getByRole('button', { name: strings.removeRefused(MAYA.name), exact: true });
     await expect.element(removeMaya).toHaveTextContent(strings.removeFromGroup);
     await userEvent.click(removeMaya);
     expect(page.getByRole('alert').filter({ hasText: refused }).elements()).toEqual([]);
-    expect(page.getByRole('button', { name: strings.remove(MAYA.name), exact: true }).elements()).toEqual([]);
     const save = page.getByRole('button', { name: strings.save, exact: true });
     await expect.element(save).toHaveFocus();
 
-    // The last row's remove, with no row after it, hands focus to Save too.
-    await userEvent.click(page.getByRole('button', { name: strings.remove(LEE.name), exact: true }));
-    expect(page.getByRole('button', { name: strings.remove(LEE.name), exact: true }).elements()).toEqual([]);
-    await expect.element(save).toHaveFocus();
+    // The last row's remove, with no row after it, hands focus to the drawer's Done.
+    await userEvent.click(editMembers);
+    expect(drawer.getByRole('button', { name: strings.remove(MAYA.name), exact: true }).elements()).toEqual([]);
+    await userEvent.click(drawer.getByRole('button', { name: strings.remove(LEE.name), exact: true }));
+    expect(drawer.getByRole('button', { name: strings.remove(LEE.name), exact: true }).elements()).toEqual([]);
+    await expect.element(drawer.getByRole('button', { name: strings.done })).toHaveFocus();
   });
 
   it('keeps Remove from group to its short words for a long name at 390', async () => {

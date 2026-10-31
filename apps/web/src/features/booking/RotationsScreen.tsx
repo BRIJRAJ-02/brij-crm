@@ -13,6 +13,7 @@ import {
   Callout,
   Card,
   EmptyState,
+  focusLater,
   Menu,
   MenuItem,
   MenuTrigger,
@@ -26,7 +27,7 @@ import {
   RecordChip,
 } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useBookingsActionSlot } from '../bookings/toolbarSlot.ts';
 import { linksHref } from '../captures/tabs.ts';
@@ -220,6 +221,13 @@ export function RotationsScreen({ data, slug, people, canManage, inFrame = false
       </Button>
     );
 
+  // What opened the group dialog, where focus goes back once it closes: New group, or the card's ··· button. The
+  // dialog steps aside for its Members drawer, so it can't hand focus back by itself.
+  const newRef = useRef<HTMLButtonElement>(null);
+  const menuRefs = useRef(new Map<string, HTMLButtonElement>());
+  const focusOpener = (target: RotationView | 'new') => {
+    focusLater(() => (target === 'new' ? newRef.current : menuRefs.current.get(target.id)) ?? newRef.current);
+  };
   const open = (target: RotationView | 'new') => {
     setOpened((count) => count + 1);
     setEditing(target);
@@ -244,7 +252,7 @@ export function RotationsScreen({ data, slug, people, canManage, inFrame = false
   };
 
   const newButton = canManage ? (
-    <Button variant="primary" icon="plus" onPress={() => open('new')}>
+    <Button variant="primary" icon="plus" ref={newRef} onPress={() => open('new')}>
       {strings.newRotation}
     </Button>
   ) : undefined;
@@ -327,7 +335,15 @@ export function RotationsScreen({ data, slug, people, canManage, inFrame = false
                         {/* What the reader edits without being an admin (spec 0037, AC-1332). */}
                         {rotation.isEditor === true && <Badge text={sharingStrings.editorBadge} isWhole />}
                         <MenuTrigger>
-                          <Button variant="ghost" icon="ellipsis" label={strings.rowActions(rotation.name)} />
+                          <Button
+                            variant="ghost"
+                            icon="ellipsis"
+                            label={strings.rowActions(rotation.name)}
+                            ref={(element: HTMLButtonElement | null) => {
+                              if (element === null) menuRefs.current.delete(rotation.id);
+                              else menuRefs.current.set(rotation.id, element);
+                            }}
+                          />
                           <Menu
                             label={strings.rowActions(rotation.name)}
                             onAction={(key) => {
@@ -384,16 +400,18 @@ export function RotationsScreen({ data, slug, people, canManage, inFrame = false
                 </TabPanel>
                 {rotation.canChange && (
                   <TabPanel id="sharing">
-                    <SharingPanel
-                      data={data}
-                      slug={slug}
-                      resourceType="rotation"
-                      resourceId={rotation.id}
-                      resourceName={rotation.name}
-                      canChange={rotation.canManage !== false && canManage}
-                      people={people}
-                      toasts={toasts}
-                    />
+                    <SettingsStack>
+                      <SharingPanel
+                        data={data}
+                        slug={slug}
+                        resourceType="rotation"
+                        resourceId={rotation.id}
+                        resourceName={rotation.name}
+                        canChange={rotation.canManage !== false && canManage}
+                        people={people}
+                        toasts={toasts}
+                      />
+                    </SettingsStack>
                   </TabPanel>
                 )}
               </Tabs>
@@ -409,7 +427,11 @@ export function RotationsScreen({ data, slug, people, canManage, inFrame = false
           people={people}
           {...(editing === 'new' ? {} : { rotation: editing })}
           isOpen
-          onClose={() => setEditing(undefined)}
+          onClose={() => {
+            const before = editing;
+            setEditing(undefined);
+            focusOpener(before);
+          }}
           onSaved={(saved) => {
             const before = editing;
             setEditing(undefined);
@@ -418,26 +440,30 @@ export function RotationsScreen({ data, slug, people, canManage, inFrame = false
               message: before === 'new' ? strings.made(saved.name) : strings.saved(saved.name),
             });
             // Everyone removed who still has upcoming bookings here: offer to hand each on (AC-750).
-            if (before !== 'new') {
-              setQueue(
-                before.members
-                  .filter(
-                    (member) =>
-                      (member.upcoming ?? 0) > 0 && !saved.members.some((each) => each.memberId === member.memberId),
-                  )
-                  .map((member) => ({
-                    rotation: saved,
-                    memberId: member.memberId,
-                    name: member.name,
-                    count: member.upcoming ?? 0,
-                  })),
-              );
-            }
+            const queued =
+              before === 'new'
+                ? []
+                : before.members
+                    .filter(
+                      (member) =>
+                        (member.upcoming ?? 0) > 0 && !saved.members.some((each) => each.memberId === member.memberId),
+                    )
+                    .map((member) => ({
+                      rotation: saved,
+                      memberId: member.memberId,
+                      name: member.name,
+                      count: member.upcoming ?? 0,
+                    }));
+            if (before !== 'new') setQueue(queued);
+            // The hand on prompt takes focus itself; otherwise back to what opened the dialog.
+            if (queued.length === 0) focusOpener(before === 'new' ? saved : before);
           }}
         />
       )}
       <Modal
         title={strings.handOnTitle(handing?.name ?? '', handing?.count ?? 0)}
+        // A rotate confirm (spec 0058, AC-18): the question, one line and two buttons; Keep them toasts what stays.
+        variant="confirm"
         isOpen={handing !== undefined}
         isBusy={isHandingBusy}
         onOpenChange={(isOpen) => {
@@ -479,10 +505,8 @@ export function RotationsScreen({ data, slug, people, canManage, inFrame = false
           </>
         }
       >
-        <SettingsStack>
-          {deleteError !== undefined && <Callout tone="danger">{deleteError}</Callout>}
-          {strings.deleteText}
-        </SettingsStack>
+        {deleteError !== undefined && <Callout tone="danger">{deleteError}</Callout>}
+        {strings.deleteText}
       </Modal>
       {canInvite && (
         <InviteTeamDialog

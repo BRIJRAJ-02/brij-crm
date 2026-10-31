@@ -1,6 +1,8 @@
 // Brief
 // Purpose: make or change a rotation (spec 0029, AC-728, AC-729; spec 0037): its name, how it picks, the window it counts over, where returning guests go, and its 2 to 20 members.
-// Main task: add the people who share the meetings, set each one's weight, priority, daily and weekly caps and on or off, then Create or Save.
+// Main task: name it, keep Fair or pick another rule, add the people who share the meetings in the Members drawer (each one's weight, priority, daily and weekly caps and on or off), then Create or Save.
+// The popup diet (spec 0058, AC-12): the rule's help sits in one InfoTip, the window and returning guests fold under
+// More options, and the member table opens in a drawer, so the popup holds a name, a rule and one Members row.
 // "Everyone on the roster" (the workspace link's rotation, 30 Oct 2026) holds every active member by itself: no Add or
 // Remove, only each person's own settings.
 // Leaves out: shares and history (the Rotations screen), teams (#23 brings rotations that follow a team), and marking who
@@ -17,6 +19,7 @@ import {
   Button,
   ButtonLink,
   Callout,
+  Disclosure,
   Field,
   focusLater,
   InfoTip,
@@ -24,7 +27,7 @@ import {
   Radio,
   RadioGroup,
   Select,
-  SettingsStack,
+  SettingsRow,
   Switch,
   Table,
   type SelectItem,
@@ -107,6 +110,12 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
   const [id] = useState(() => data.rotations.newId());
   const [isBusy, setBusy] = useState(false);
   const [isConfirming, setConfirming] = useState(false);
+  // The member table's drawer (spec 0058, AC-12): open, the group's dialog steps aside, as it does for the confirm.
+  const [isManaging, setManaging] = useState(false);
+  // Opened already where a draft sets them, so nothing set is hidden from whoever edits the group.
+  const [isMoreOpen, setMoreOpen] = useState(
+    rotation !== undefined && (rotation.windowDays !== 30 || rotation.returning !== 'owner'),
+  );
   // What went wrong, and the member a refusal was about, taken from the list that was sent, not the draft since.
   const [failure, setFailure] = useState<
     { readonly message: string; readonly memberId?: string; readonly isReach?: boolean } | undefined
@@ -134,6 +143,9 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
       : members.length > 20
         ? strings.tooMany
         : undefined;
+  // What the drawer holds that stops Create or Save, said in the popup too once tried: the drawer is shut by then.
+  const membersError =
+    countError ?? (members.some((member) => weightOf(member.weight) === undefined) ? strings.weightInvalid : undefined);
   // A refusal about one member ("Maya Patel needs to set hours or connect a calendar first.") offers to remove them,
   // and, while they are an active member (so hours are what they lack), their hours in a new tab, so the group stays.
   const refused = failure?.memberId;
@@ -143,6 +155,9 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
   // Where focus goes once a member's row or the refusal's Remove from group leaves with them: Create or Save, or the
   // next row's remove button. Left to itself it would fall to the title bar's Close, where Enter loses the draft.
   const saveRef = useRef<HTMLButtonElement>(null);
+  // The drawer's Done, where a last row's remove hands focus, and the Members row's button, where closing it returns.
+  const doneRef = useRef<HTMLButtonElement>(null);
+  const membersRef = useRef<HTMLButtonElement>(null);
   const removeRefs = useRef(new Map<string, HTMLButtonElement>());
   const removeMember = (memberId: string, focusNext: 'row' | 'save') => {
     const index = members.findIndex((each) => each.memberId === memberId);
@@ -150,7 +165,19 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
     setMembers((current) => current.filter((each) => each.memberId !== memberId));
     // The refusal was about them, so it goes with them.
     if (failure?.memberId === memberId) setFailure(undefined);
-    focusLater(() => (next === undefined ? undefined : removeRefs.current.get(next)) ?? saveRef.current);
+    focusLater(
+      () =>
+        (next === undefined ? undefined : removeRefs.current.get(next)) ??
+        (focusNext === 'row' ? doneRef.current : saveRef.current),
+    );
+  };
+  const openMembers = () => {
+    setManaging(true);
+  };
+  const closeMembers = () => {
+    setManaging(false);
+    // Back on the row that opened it, not the dialog's first field.
+    focusLater(() => membersRef.current);
   };
 
   const submit = () => {
@@ -305,8 +332,7 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
     <>
       <Modal
         title={rotation === undefined ? strings.newRotation : strings.editRotation}
-        variant="window"
-        isOpen={isOpen && !isConfirming}
+        isOpen={isOpen && !isConfirming && !isManaging}
         isDismissable={false}
         isBusy={isBusy}
         onOpenChange={(open) => {
@@ -329,96 +355,113 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
           </>
         }
       >
-        <SettingsStack>
-          {failure !== undefined && (
-            <Callout
-              tone="danger"
-              {...(refused === undefined
-                ? {}
-                : {
-                    actions: (
-                      <>
-                        {isRoster ? (
-                          // Nobody leaves Everyone on the roster by a save: the fix is to switch them off.
-                          <Button
-                            onPress={() => {
-                              change(refused, { isOn: false });
-                              setFailure(undefined);
-                              focusLater(() => saveRef.current);
-                            }}
-                          >
-                            {strings.switchOffRefused(nameOf(refused))}
-                          </Button>
-                        ) : (
-                          <Button
-                            label={strings.removeRefused(nameOf(refused))}
-                            onPress={() => {
-                              removeMember(refused, 'save');
-                            }}
-                          >
-                            {strings.removeFromGroup}
-                          </Button>
-                        )}
-                        {isRefusedActive && (
-                          <ButtonLink
-                            href={availabilityHref(slug, refused)}
-                            isExternal
-                            icon="external-link"
-                            label={strings.setHoursFor(nameOf(refused))}
-                          >
-                            {strings.setHours}
-                          </ButtonLink>
-                        )}
-                      </>
-                    ),
-                  })}
-            >
-              {failure.message}
-            </Callout>
-          )}
-          <Field
-            label={strings.name}
-            // A new group starts with its name, so the field takes focus as the dialog opens (Q102).
-            autoFocus={rotation === undefined}
-            placeholder={strings.namePlaceholder}
-            // Everyone on the roster is named by the workspace link that books it.
-            isReadOnly={isRoster}
-            value={name}
-            onChange={(next) => {
-              setName(next);
-              // Typing is the fix: the error goes as soon as there is a name again (SS-R3).
-              setNameError(undefined);
-            }}
-            maxLength={80}
-            isRequired
-            {...(nameError === undefined ? {} : { error: nameError })}
-          />
-          <RadioGroup
-            label={strings.strategy}
-            variant="cards"
-            value={strategy}
-            onChange={(value) => {
-              if (value === 'fair' || value === 'priority' || value === 'even') setStrategy(value);
-            }}
+        {failure !== undefined && (
+          <Callout
+            tone="danger"
+            {...(refused === undefined
+              ? {}
+              : {
+                  actions: (
+                    <>
+                      {isRoster ? (
+                        // Nobody leaves Everyone on the roster by a save: the fix is to switch them off.
+                        <Button
+                          onPress={() => {
+                            change(refused, { isOn: false });
+                            setFailure(undefined);
+                            focusLater(() => saveRef.current);
+                          }}
+                        >
+                          {strings.switchOffRefused(nameOf(refused))}
+                        </Button>
+                      ) : (
+                        <Button
+                          label={strings.removeRefused(nameOf(refused))}
+                          onPress={() => {
+                            removeMember(refused, 'save');
+                          }}
+                        >
+                          {strings.removeFromGroup}
+                        </Button>
+                      )}
+                      {isRefusedActive && (
+                        <ButtonLink
+                          href={availabilityHref(slug, refused)}
+                          isExternal
+                          icon="external-link"
+                          label={strings.setHoursFor(nameOf(refused))}
+                        >
+                          {strings.setHours}
+                        </ButtonLink>
+                      )}
+                    </>
+                  ),
+                })}
           >
-            <Radio value="fair" icon="scale" description={strings.fairLine}>
-              {strings.fairCard}
-            </Radio>
-            <Radio value="priority" icon="star" description={strings.priorityLine}>
-              {strings.priorityCard}
-            </Radio>
-            <Radio value="even" icon="users" description={strings.evenLine}>
-              {strings.evenCard}
-            </Radio>
-          </RadioGroup>
-          {strategy === 'even' && (
-            <Select
-              label={strings.evenGap}
-              items={GAPS}
-              value={String(evenGap)}
-              onChange={(value) => setEvenGap(Number(value ?? 3))}
-            />
-          )}
+            {failure.message}
+          </Callout>
+        )}
+        <Field
+          label={strings.name}
+          // A new group starts with its name, so the field takes focus as the dialog opens (Q102).
+          autoFocus={rotation === undefined}
+          placeholder={strings.namePlaceholder}
+          // Everyone on the roster is named by the workspace link that books it.
+          isReadOnly={isRoster}
+          value={name}
+          onChange={(next) => {
+            setName(next);
+            // Typing is the fix: the error goes as soon as there is a name again (SS-R3).
+            setNameError(undefined);
+          }}
+          maxLength={80}
+          isRequired
+          {...(nameError === undefined ? {} : { error: nameError })}
+        />
+        <RadioGroup
+          label={strings.strategy}
+          // Three short words in a row; what each rule does waits in the tip (spec 0058, AC-12).
+          info={<InfoTip label={strings.strategy}>{strings.strategyInfo}</InfoTip>}
+          orientation="horizontal"
+          value={strategy}
+          onChange={(value) => {
+            if (value === 'fair' || value === 'priority' || value === 'even') setStrategy(value);
+          }}
+        >
+          <Radio value="fair">{strings.fairCard}</Radio>
+          <Radio value="priority">{strings.priorityCard}</Radio>
+          <Radio value="even">{strings.evenCard}</Radio>
+        </RadioGroup>
+        {strategy === 'even' && (
+          <Select
+            label={strings.evenGap}
+            items={GAPS}
+            value={String(evenGap)}
+            onChange={(value) => setEvenGap(Number(value ?? 3))}
+          />
+        )}
+        <SettingsRow
+          title={strings.membersRow}
+          description={
+            isRoster
+              ? strings.rosterNote(members.filter((member) => member.isOn).length, members.length)
+              : strings.membersCount(members.length)
+          }
+        >
+          <Button
+            ref={membersRef}
+            icon={members.length === 0 ? 'plus' : 'pencil'}
+            label={(members.length === 0 ? strings.addMembersFor : strings.editMembersFor)(
+              name.trim() === '' ? strings.newRotation : name.trim(),
+            )}
+            onPress={openMembers}
+          >
+            {members.length === 0 ? strings.addMembers : strings.editMembers}
+          </Button>
+        </SettingsRow>
+        {/* The Members row's button above is the way to fix it. */}
+        {hasTried && membersError !== undefined && <Callout tone="danger">{membersError}</Callout>}
+        <Disclosure variant="fields" title={strings.moreOptions} isExpanded={isMoreOpen} onExpandedChange={setMoreOpen}>
           <Select
             label={strings.window}
             info={<InfoTip label={strings.window}>{strings.windowInfo}</InfoTip>}
@@ -428,48 +471,58 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
           />
           <Select
             label={strings.returning}
-            hint={strings.returningHint}
+            info={<InfoTip label={strings.returning}>{strings.returningInfo}</InfoTip>}
             items={RETURNING}
             value={returning}
             onChange={(value) => {
               if (value === 'owner' || value === 'last_host' || value === 'none') setReturning(value);
             }}
           />
-          {isRoster ? (
-            <Callout tone="info">
-              {strings.rosterNote(members.filter((member) => member.isOn).length, members.length)}
-            </Callout>
-          ) : (
-            <Select
-              label={strings.addMember}
-              placeholder={left.length === 0 ? strings.noMembersLeft : strings.addMemberPlaceholder}
-              items={left}
-              isSearchable
-              isDisabled={left.length === 0 || members.length >= 20}
-              value={null}
-              // Who can join, in plain words (SS-R1): a link here would open the reader's own hours, not a teammate's.
-              hint={strings.membersHint(members.length)}
-              {...(hasTried && countError !== undefined ? { error: countError } : {})}
-              onChange={(memberId) => {
-                if (memberId === null) return;
-                setMembers((current) => [
-                  ...current,
-                  { memberId, weight: '100', priority: 2, dailyCap: null, weeklyCap: null, isOn: true },
-                ]);
-              }}
-            />
-          )}
-          {members.length > 0 && (
-            <Table
-              label={strings.members(name.trim() === '' ? strings.newRotation : name.trim())}
-              isScrollable
-              columns={isRoster ? ROSTER_COLUMNS : COLUMNS}
-              rows={members}
-              getRowId={(member) => member.memberId}
-              renderCell={renderCell}
-            />
-          )}
-        </SettingsStack>
+        </Disclosure>
+      </Modal>
+      <Modal
+        title={strings.members(name.trim() === '' ? strings.newRotation : name.trim())}
+        variant="drawer"
+        isOpen={isOpen && isManaging && !isConfirming}
+        onOpenChange={(open) => {
+          if (!open) closeMembers();
+        }}
+        actions={
+          <Button variant="primary" ref={doneRef} onPress={closeMembers}>
+            {strings.done}
+          </Button>
+        }
+      >
+        {!isRoster && (
+          <Select
+            label={strings.addMember}
+            placeholder={left.length === 0 ? strings.noMembersLeft : strings.addMemberPlaceholder}
+            items={left}
+            isSearchable
+            isDisabled={left.length === 0 || members.length >= 20}
+            value={null}
+            // Who can join, in plain words (SS-R1): a link here would open the reader's own hours, not a teammate's.
+            hint={strings.membersHint(members.length)}
+            {...(hasTried && countError !== undefined ? { error: countError } : {})}
+            onChange={(memberId) => {
+              if (memberId === null) return;
+              setMembers((current) => [
+                ...current,
+                { memberId, weight: '100', priority: 2, dailyCap: null, weeklyCap: null, isOn: true },
+              ]);
+            }}
+          />
+        )}
+        {members.length > 0 && (
+          <Table
+            label={strings.members(name.trim() === '' ? strings.newRotation : name.trim())}
+            isScrollable
+            columns={isRoster ? ROSTER_COLUMNS : COLUMNS}
+            rows={members}
+            getRowId={(member) => member.memberId}
+            renderCell={renderCell}
+          />
+        )}
       </Modal>
       <Modal
         title={strings.removeTitle(
