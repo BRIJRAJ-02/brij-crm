@@ -17,7 +17,9 @@ export interface KindPickerProps {
 /**
  * Every kind as a tile: its icon over a short name, picked by sight (spec 0058, AC-9). The line about each kind is
  * its tooltip and its description for screen readers, never a paragraph under it; a kind that is full is off, with
- * the limit's sentence in its tooltip instead. One tab stop, the arrows move and pick, as any radio group.
+ * the limit's sentence in its tooltip instead. One tab stop, the arrows move and pick, as any radio group; the
+ * frame (BlockEditorFrame) keeps focus on the tiles while arrows swap the fields under them, and moves on to the
+ * fields only once a kind is picked with Enter, Space or a click (AC-4).
  */
 export function KindPicker({ value, fullReason, onChange }: KindPickerProps) {
   return (
@@ -32,6 +34,7 @@ export function KindPicker({ value, fullReason, onChange }: KindPickerProps) {
           id: kind,
           name: entry.label,
           icon: entry.icon,
+          hue: entry.hue,
           description: full ?? entry.description,
           ...(full === undefined ? {} : { isDisabled: true }),
         };

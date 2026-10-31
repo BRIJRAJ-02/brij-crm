@@ -267,6 +267,71 @@ export const ChoiceKeyboard: Story = {
   },
 };
 
+const TINTED: readonly ChoiceTile[] = [
+  { id: 'link', name: 'Link', icon: 'link', hue: 'blue' },
+  { id: 'booking', name: 'Booking page', icon: 'calendar', hue: 'green' },
+  { id: 'signup', name: 'Email signup', icon: 'mail', hue: 'orange' },
+  { id: 'text', name: 'Writing', icon: 'file-text', hue: 'gray' },
+  { id: 'faq', name: 'Questions', icon: 'circle-question-mark', hue: 'yellow' },
+  { id: 'quote', name: 'Testimonial', icon: 'message-square', hue: 'red' },
+];
+
+function Tinted() {
+  const [value, setValue] = useState<string | null>('link');
+  return (
+    <Stage width="fill">
+      <TileGrid variant="choice" label="Block kind" tiles={TINTED} value={value} onChange={setValue} />
+    </Stage>
+  );
+}
+
+/**
+ * Kinds tinted in their data hue with a large mark, so the grid reads at a glance (spec 0058, AC-9). Tab lands on
+ * the chosen tile and draws the library's focus ring outside its accent border, so a focused chosen tile differs
+ * from a chosen one (AC-4); an arrow moves the ring and the choice together.
+ */
+export const ChoiceTinted: Story = {
+  render: () => <Tinted />,
+  play: async ({ canvas }) => {
+    const link = canvas.getByRole('radio', { name: 'Link' });
+    const tileOf = (radio: HTMLElement) => radio.closest('[data-tile]');
+    await expect(getComputedStyle(tileOf(link) ?? link).outlineStyle).toBe('none');
+    await userEvent.tab();
+    await expect(link).toHaveFocus();
+    await expect(getComputedStyle(tileOf(link) ?? link).outlineStyle).toBe('solid');
+    await userEvent.keyboard('{ArrowRight}');
+    const booking = canvas.getByRole('radio', { name: 'Booking page' });
+    await expect(booking).toHaveFocus();
+    await expect(booking).toBeChecked();
+    await expect(getComputedStyle(tileOf(link) ?? link).outlineStyle).toBe('none');
+  },
+};
+
+/** A short run in a wide slot: the tiles share the whole row and end on its right edge (auto-fit, spec 0058 AC-1). */
+export const ChoiceFillsRow: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage width="fill">
+      <TileGrid
+        variant="choice"
+        label="How it shows"
+        tiles={[
+          { id: 'inline', name: 'In the page', icon: 'file' },
+          { id: 'popup', name: 'Popup', icon: 'layers' },
+          { id: 'corner', name: 'Corner button', icon: 'message-square' },
+        ]}
+        defaultValue="inline"
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const group = canvas.getByRole('radiogroup', { name: 'How it shows' });
+    const tiles = [...group.querySelectorAll('[data-tile]')];
+    const last = tiles.at(-1)?.getBoundingClientRect();
+    await expect(Math.round(last?.right ?? 0)).toBe(Math.round(group.getBoundingClientRect().right));
+  },
+};
+
 /** Action mode: each tile starts something at once (Add block). A description reaches screen readers and a tooltip. */
 export const ChoiceAction: Story = {
   parameters: { crm: { screenshot: false } },

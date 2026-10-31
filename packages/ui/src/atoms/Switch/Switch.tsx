@@ -12,6 +12,12 @@ export interface SwitchProps {
    * row's "Check for conflicts" then names its own calendar.
    */
   readonly labelContext?: string;
+  /**
+   * A small status word beside the switch while it is off ("Private"), where off has a name of its own. The label
+   * stays the one name, so voice control says "click Live"; the word is the switch's description, so a screen reader
+   * hears "Live, switch, off, Private". Drawn by CSS from a data attribute, so Switch's first load barely grows.
+   */
+  readonly offStatus?: string;
   /** A line under the label that says more. */
   readonly description?: string;
   readonly isSelected?: boolean;
@@ -27,6 +33,7 @@ export function Switch({
   label,
   isLabelHidden = false,
   labelContext,
+  offStatus,
   description,
   isSelected,
   defaultSelected,
@@ -58,6 +65,7 @@ export function Switch({
         )}
         {labelContext !== undefined && <VisuallyHidden> {labelContext}</VisuallyHidden>}
       </SwitchButton>
+      {offStatus !== undefined && <Text slot="description" className={styles.status} data-status={offStatus} />}
       {description !== undefined && (
         <Text slot="description" className={styles.description}>
           {description}

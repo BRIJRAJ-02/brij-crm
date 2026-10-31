@@ -1,0 +1,8 @@
+/* HostedFormPreview: the form's own ground under it. The phone's screen stretches its one child to the frame's foot
+   (PreviewLayout), so this ground, in the form's own look (`data-theme`), runs to the bottom of the phone instead
+   of stopping where a short form does over the app's surface (a light form in dark mode). */
+@layer components {
+  .ground {
+    background: var(--surface);
+  }
+}

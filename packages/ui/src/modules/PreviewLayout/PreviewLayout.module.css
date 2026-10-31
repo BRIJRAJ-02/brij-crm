@@ -211,13 +211,21 @@
     box-shadow: var(--shadow-xs);
   }
 
+  /* A column, so the page it shows fills the phone to its foot: a short page's own ground (a light page in dark
+     mode) runs to the bottom of the frame instead of stopping where its content does over the app's surface. */
   .screen {
+    display: flex;
+    flex-direction: column;
     overflow: auto;
     outline: none;
     inline-size: var(--phone-width);
     block-size: var(--phone-height);
     transform: scale(var(--phone-scale));
     transform-origin: 0 0;
+  }
+
+  .screen > :only-child {
+    flex: 1 0 auto;
   }
 
   /* A long preview's screen, or a long page's frame, takes focus to be scrolled: the phone's outline shows it. */

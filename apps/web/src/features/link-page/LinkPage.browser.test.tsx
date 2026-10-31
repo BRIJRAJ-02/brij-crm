@@ -12,14 +12,17 @@ import {
   type ProfileItem,
   type ProfileLinkImport,
 } from '@crm/data';
-import type { ReactNode } from 'react';
+import { Field, Form } from '@crm/ui';
+import { useState, type ReactNode } from 'react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
 import { deferred, openDialog, renderInApp, type InApp } from '../../testing/renderInApp.tsx';
 import { AppearanceCard } from './AppearanceCard.tsx';
 import { ClaimLink } from './ClaimLink.tsx';
 import { ImportLinksModal } from './ImportLinksModal.tsx';
+import { BlockEditorFrame, useFocusesFirstField } from './editors.tsx';
 import { DeleteBlockDialog, KindPicker } from './KindPicker.tsx';
+import type { AddableKind } from './registry.tsx';
 import { LinkPageOverview } from './LinkPageOverview.tsx';
 import { LiveSwitch, useLinkPageLive } from './private-page.tsx';
 
@@ -137,6 +140,56 @@ describe('the Add modal’s kinds (AC-9)', () => {
     (grid.getByRole('radio', { name: 'Link' }).element() as HTMLElement).focus();
     await userEvent.keyboard('{ArrowRight}');
     expect(onChange).toHaveBeenLastCalledWith('page');
+  });
+});
+
+/** A kind's fields as a block editor draws them: one form that focuses its first field only when the frame says. */
+function KindFields({ kind }: { readonly kind: AddableKind }) {
+  const focusFirst = useFocusesFirstField();
+  return (
+    <Form id={`fields-${kind}`} label={kind} onSubmit={() => undefined} focusesFirstField={focusFirst}>
+      <Field label={`${kind} title`} name="title" />
+    </Form>
+  );
+}
+
+/** The Add modal: the frame, the kind picker in it, and the chosen kind's fields under it. */
+function AddModal() {
+  const [kind, setKind] = useState<AddableKind>('link');
+  return (
+    <BlockEditorFrame
+      title="Add to your link page"
+      leading={<KindPicker value={kind} fullReason={() => undefined} onChange={setKind} />}
+      onClose={() => undefined}
+    >
+      <KindFields key={kind} kind={kind} />
+    </BlockEditorFrame>
+  );
+}
+
+describe('the Add modal’s keyboard (AC-4, AC-9)', () => {
+  it('lets the arrows cross every kind, and moves to the fields only once a kind is picked', async () => {
+    await render({}, () => <AddModal />);
+    const grid = page.getByRole('radiogroup', { name: 'What are you adding' });
+    // It opens on Link with its first field ready to type in.
+    await expect.element(page.getByRole('textbox', { name: 'link title' })).toHaveFocus();
+    (grid.getByRole('radio', { name: 'Link' }).element() as HTMLElement).focus();
+    // Every arrow swaps the fields under the grid and leaves focus on the tiles.
+    const names = ['Booking page', 'Timefix form', 'Email signup', 'Writing', 'Questions', 'Testimonial'];
+    for (const name of names) {
+      await userEvent.keyboard('{ArrowRight}');
+      await expect.element(grid.getByRole('radio', { name })).toHaveFocus();
+      await expect.element(grid.getByRole('radio', { name })).toBeChecked();
+    }
+    await expect.element(page.getByRole('textbox', { name: 'testimonial title' })).not.toHaveFocus();
+    // Enter picks the focused kind and moves on to its fields.
+    await userEvent.keyboard('{Enter}');
+    await expect.element(page.getByRole('textbox', { name: 'testimonial title' })).toHaveFocus();
+    // Back on the grid, Space picks too.
+    (grid.getByRole('radio', { name: 'Testimonial' }).element() as HTMLElement).focus();
+    await userEvent.keyboard('{ArrowRight}');
+    await userEvent.keyboard(' ');
+    await expect.element(page.getByRole('textbox', { name: 'contact title' })).toHaveFocus();
   });
 });
 

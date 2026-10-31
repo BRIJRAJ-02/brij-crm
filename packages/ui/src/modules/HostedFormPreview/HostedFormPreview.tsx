@@ -2,6 +2,7 @@ import type { PublicForm } from '@crm/contracts/forms';
 import { HostedForm } from '../../public-form/HostedForm.tsx';
 import type { ProductLogo } from '../AuthLayout/AuthLayout.tsx';
 import type { PageBrand } from '../BookingFrame/BookingFrame.tsx';
+import styles from './HostedFormPreview.module.css';
 
 /** Props for HostedFormPreview. */
 export interface HostedFormPreviewProps {
@@ -23,15 +24,19 @@ export interface HostedFormPreviewProps {
 /**
  * The form a visitor fills in, drawn by the hosted page's own component, so
  * the builder shows exactly what goes live: the same tree, the same controls.
+ * It sits on the form's own ground, which fills whatever height it is given.
  */
 export function HostedFormPreview({ form, mode = 'preview', logo, brand }: HostedFormPreviewProps) {
+  // The ground in the form's own look, so a short form's colour fills the phone to its foot (spec 0058).
   return (
-    <HostedForm
-      key={mode}
-      form={form}
-      mode={mode}
-      {...(logo === undefined ? {} : { logo })}
-      {...(brand === undefined ? {} : { brand })}
-    />
+    <div className={styles.ground} data-theme={form.look.colour}>
+      <HostedForm
+        key={mode}
+        form={form}
+        mode={mode}
+        {...(logo === undefined ? {} : { logo })}
+        {...(brand === undefined ? {} : { brand })}
+      />
+    </div>
   );
 }

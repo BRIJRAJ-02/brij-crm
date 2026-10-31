@@ -230,8 +230,6 @@ export const strings = {
   viewPage: 'View page',
   /** The header's pill: the address itself, so its name says what pressing it does. */
   openAddress: (address: string) => `${address}, open your page`,
-  /** The same pill while the page is private: the lock's meaning in its name too. */
-  openPrivateAddress: (address: string) => `${address}, private, open your page`,
   /** The header's Share: it opens the QR and the address to hand on. */
   share: 'Share',
   /**
@@ -239,6 +237,8 @@ export const strings = {
    * so a screen reader hears "Live, switch, off" for a private page, never a double negative.
    */
   live: 'Live',
+  /** The word beside that switch while it is off: the state, shown to the eye only. */
+  private: 'Private',
   /** Under the address while the page is private: what that means, in one line, the same words everywhere. */
   privateLine: homeStrings.privateLine,
   /** The Share modal's way out of Private, beside that line. */

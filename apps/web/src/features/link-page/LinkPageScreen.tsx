@@ -203,9 +203,9 @@ export function LinkPageScreen({ data, linkPage, brand, slug, profile, isEditing
 }
 
 /**
- * The header's actions, as the owner's design draws them: the one Live or Private switch (spec 0058, AC-23), the
- * page's address as a pill that opens it, and Share, which opens the one Share modal (the QR, the address and the
- * two ways to go on; Home's card opens the same one). Sharing never changes whether the page is live: the switch is
+ * The header's actions, as the owner's design draws them: the one Live or Private switch (spec 0058, AC-23), then,
+ * once Live, the page's address as a pill that opens it, and Share, which opens the one Share modal (the QR, the
+ * address and the two ways to go on; Home's card opens the same one). Sharing never changes whether the page is live: the switch is
  * the one place that does, and the modal says when the page is private.
  */
 function HeaderActions({
@@ -227,21 +227,25 @@ function HeaderActions({
   return (
     <>
       <LiveSwitch live={live} />
-      <ButtonLink
-        variant="secondary"
-        isRound
-        // While private the address carries a lock, so the bar says Private in edit mode too, beside the switch.
-        {...(live.isLive ? {} : { icon: 'lock' as const })}
-        iconRight="external-link"
-        href={address}
-        isExternal
-        label={live.isLive ? strings.openAddress(shown) : strings.openPrivateAddress(shown)}
-      >
-        {shown}
-      </ButtonLink>
-      <Button icon="share" onPress={() => setSharing(true)}>
-        {strings.share}
-      </Button>
+      {/* Sharing is offered only for a page visitors can open: while Private the switch beside it says so, and
+          the address and Share wait for Live (an unpublished page offers no link, as Notion's and Webflow's do). */}
+      {live.isLive && (
+        <>
+          <ButtonLink
+            variant="secondary"
+            isRound
+            iconRight="external-link"
+            href={address}
+            isExternal
+            label={strings.openAddress(shown)}
+          >
+            {shown}
+          </ButtonLink>
+          <Button icon="share" onPress={() => setSharing(true)}>
+            {strings.share}
+          </Button>
+        </>
+      )}
       {/* Edit page lives on the page's own card; the bar carries only the way back out of the builder. */}
       {isEditing && (
         <Button variant="primary" icon="check" onPress={() => onEditing(false)}>
