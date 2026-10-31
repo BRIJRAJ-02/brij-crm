@@ -120,6 +120,9 @@ export function Board({
   const [hasHeld, setHasHeld] = useState<ReadonlySet<string>>(() => new Set());
   const holding = columns.filter((column) => column.count > 0 && !hasHeld.has(column.id));
   if (holding.length > 0) setHasHeld(new Set([...hasHeld, ...holding.map((column) => column.id)]));
+  // Stages made here from "+ Add stage", by name: each shows while empty, so a new stage never vanishes into the
+  // hidden empty columns the moment it is made.
+  const [added, setAdded] = useState<ReadonlySet<string>>(() => new Set());
   // A press that ends a drag never opens the card it dropped.
   const isMovingRef = useRef(false);
   if (status === 'error') {
@@ -158,10 +161,13 @@ export function Board({
   // An archived option shows only while it still has cards. Other empty columns follow the
   // setting, and show while a card is moving, so there is always somewhere to drop it.
   const isMoving = draggingFrom !== undefined;
+  const isAdded = (column: BoardColumn) => added.has(column.title.toLowerCase());
   const visible = columns.filter((column) =>
-    column.count > 0 ? true : column.isArchived !== true && (showEmptyColumns || isMoving),
+    column.count > 0 ? true : column.isArchived !== true && (showEmptyColumns || isMoving || isAdded(column)),
   );
-  const hiddenEmpty = columns.filter((column) => column.count === 0 && column.isArchived !== true).length;
+  const hiddenEmpty = columns.filter(
+    (column) => column.count === 0 && column.isArchived !== true && !isAdded(column),
+  ).length;
   const number = memoIntl(`plain:${locale}`, () => new Intl.NumberFormat(locale)).format(hiddenEmpty);
   const plural = memoIntl(`plural:${locale}`, () => new Intl.PluralRules(locale)).select(hiddenEmpty);
   const titleOf = (id: string | undefined) => columns.find((column) => column.id === id)?.title ?? '';
@@ -273,7 +279,14 @@ export function Board({
           />
         ))}
         {/* Where a new stage goes: after the last one, in a column's own width. Never while a card moves. */}
-        {addColumn !== undefined && !isMoving && <AddColumn add={addColumn} />}
+        {addColumn !== undefined && !isMoving && (
+          <AddColumn
+            add={addColumn}
+            onAdded={(title) => {
+              setAdded((was) => new Set([...was, title.toLowerCase()]));
+            }}
+          />
+        )}
         {onShowEmptyColumnsChange !== undefined && hiddenEmpty > 0 && !isMoving && (
           <span className={styles.hidden}>
             {showEmptyColumns ? (
@@ -309,7 +322,14 @@ export function Board({
  * and clears the field for the next one; Esc, or leaving it empty, puts the button back. A refused name stays in the
  * field, and the screen says why.
  */
-function AddColumn({ add }: { readonly add: BoardAddColumn }) {
+function AddColumn({
+  add,
+  onAdded,
+}: {
+  readonly add: BoardAddColumn;
+  /** The stage was made, under this name. */
+  readonly onAdded: (title: string) => void;
+}) {
   const [isTyping, setTyping] = useState(false);
   const [name, setName] = useState('');
   const [isPending, setPending] = useState(false);
@@ -324,8 +344,10 @@ function AddColumn({ add }: { readonly add: BoardAddColumn }) {
     add.onAdd(title).then(
       (refused) => {
         setPending(false);
-        if (refused === undefined) setName('');
-        else setError(refused);
+        if (refused === undefined) {
+          setName('');
+          onAdded(title);
+        } else setError(refused);
       },
       () => {
         setPending(false);
