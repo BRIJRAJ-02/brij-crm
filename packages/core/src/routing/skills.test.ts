@@ -167,10 +167,13 @@ const bookInput = (start: string, email: string): PublicBookInput => ({
 const setRules = (w: World, rules: RoutingRule[]) =>
   updateBookingPage(w.owner, { pageId: w.page.id, settings: {}, routing: { rules } }, NOW);
 
-/** "Speaks <skills>": a team page rule taking everyone (an answered email) to the members holding `skillIds`. */
+/**
+ * "Speaks <skills>": a team page rule taking everyone to the members holding `skillIds`. Known always has a value
+ * (`new` for a visitor with no record), while a page's facts hold no email: only its own questions and record fields.
+ */
 const needsSkills = (id: string, skillIds: string[]): RoutingRule => ({
   id,
-  when: { join: 'all', rules: [{ key: 'email', op: 'is_answered' }] },
+  when: { join: 'all', rules: [{ key: KNOWN_FACT, op: 'is_answered' }] },
   then: { kind: 'hosts', hosts: { requireSkillIds: skillIds, ifNoneFree: 'whole_rotation' } },
 });
 
