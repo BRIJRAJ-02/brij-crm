@@ -1954,8 +1954,9 @@ export function createDataLayer({
     // disconnect does the same, and whichever comes first asks once).
     void namesMe(workspace, event.memberIds).then((named) => {
       if (!named) return;
-      void live?.then((loaded) => loaded.rejoin(workspace)).catch(() => undefined);
       spread(`resync ${workspace}`, () => {
+        // Spread as the reads are, so a rule change naming a whole team doesn't ask the door in step.
+        void live?.then((loaded) => loaded.rejoin(workspace)).catch(() => undefined);
         access.delete(workspace);
         router.resync(workspace);
         // Whose scheduling they reach may have changed too (spec 0037, AC-1274): Bookings' lists and weeks and Home's

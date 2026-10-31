@@ -8,6 +8,9 @@ import { Centrifuge, UnauthorizedError } from 'centrifuge';
 import { ACCESS_CHANGED_DISCONNECT_CODE, SIGNED_OUT_DISCONNECT_CODE } from '@crm/contracts/codes';
 import type { LiveChannel, LiveTransport, OpenTransport, TokenSource } from './live.ts';
 
+/** The longest a 4500 close waits for the channels to be asked for again before reconnecting. */
+const REJOIN_WAIT_MS = 8_000;
+
 /** A token callback for the client: no token (signed out, or no longer a member) stops trying. */
 const tokenFor = (source: TokenSource) => async (): Promise<string> => {
   const token = await source();
@@ -28,7 +31,11 @@ export const openCentrifuge: OpenTransport = (url, connectionToken) => {
     if (context.code === ACCESS_CHANGED_DISCONNECT_CODE) {
       // The person's access in a workspace changed (spec 0007, AC-84): each watched workspace asks the door for its
       // audience channel again before the client reconnects, so no subscription comes back on a channel it left.
-      void Promise.all([...accessListeners].map((listener) => listener().catch(() => undefined))).then(() => {
+      // A slow answer never keeps the tab offline: past `REJOIN_WAIT_MS` it reconnects anyway (a workspace still
+      // asking subscribes once its answer lands).
+      const asked = Promise.all([...accessListeners].map((listener) => listener().catch(() => undefined)));
+      const waited = new Promise((resolve) => setTimeout(resolve, REJOIN_WAIT_MS));
+      void Promise.race([asked, waited]).then(() => {
         client.connect();
       });
       return;

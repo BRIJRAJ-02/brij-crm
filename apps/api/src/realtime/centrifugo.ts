@@ -190,7 +190,8 @@ export function createCentrifugoDisconnect(options: CentrifugoOptions): {
             commands: userIds.map((user) => ({
               disconnect: { user, disconnect: { code: why.code, reason: why.reason } },
             })),
-            parallel: false,
+            // Each close stands alone: no order to keep, so Centrifugo may run them at once.
+            parallel: true,
           }),
           signal: AbortSignal.timeout(timeoutMs),
         });

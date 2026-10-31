@@ -13,7 +13,7 @@ import { audiences, systemScope, viewFacts } from '@crm/core/system';
 import { createDatabase, createOutboxReader, openDirectConnection, type Database, type OutboxReader } from '@crm/db';
 import { testQuery } from '@crm/db/testing';
 import { createCentrifugoPublisher } from './centrifugo.ts';
-import { createRelay, type Relay, type RelayDeps } from './relay.ts';
+import { createRelay, movedMembers, type Relay, type RelayDeps } from './relay.ts';
 
 const { appUrl, ownerUrl, adminUrl, workerUrl } = inject('relayDatabase');
 const API_KEY = 'test-centrifugo-key';
@@ -1731,5 +1731,36 @@ describe('the relay plans each row for its workspace’s audience (spec 0007, mi
     expect(await unpublished(workspaceId)).toEqual([1, 2]);
     failing = false;
     await expect.poll(() => centrifugo.seqs(workspaceId), WAIT).toEqual([1, 2]);
+  });
+});
+
+// Whom an access row disconnects (spec 0007, AC-84): only those whose audience it moved, when the audiences it was
+// planned with were read before it committed; everyone it names otherwise.
+describe('movedMembers', () => {
+  const [ada, bea, cal] = [randomUUID(), randomUUID(), randomUUID()];
+  const at = '2026-10-31T09:00:00.000Z';
+  const committed = Date.parse(at);
+  const audience = (key: string, ids: readonly string[]): Audience =>
+    ({ key, policy: {}, members: ids.map((memberId) => ({ memberId, permissions: [] })) }) as unknown as Audience;
+  const access = (itemIds: readonly string[]) =>
+    ({ seq: 9, kind: 'access', itemIds, at }) as unknown as Parameters<typeof movedMembers>[0];
+  const restricted = '0123456789abcdef';
+
+  it('disconnects nobody when the row moved no audience (a role or team change with no rules)', () => {
+    const open = [audience('open', [ada, bea])];
+    expect(movedMembers(access([ada, bea]), committed - 60_000, open, open)).toEqual([]);
+  });
+
+  it('disconnects those it moved to another audience or out of the workspace, and nobody else', () => {
+    const before = [audience('open', [ada, bea, cal])];
+    const after = [audience('open', [cal]), audience(restricted, [ada])];
+    expect(movedMembers(access([ada, bea, cal]), committed - 60_000, before, after)).toEqual([ada, bea]);
+  });
+
+  it('disconnects everyone named when the audiences may have been read after the row, or could not be read again', () => {
+    const open = [audience('open', [ada, bea])];
+    expect(movedMembers(access([ada, bea]), committed, open, open)).toEqual([ada, bea]);
+    expect(movedMembers(access([ada, bea]), undefined, open, open)).toEqual([ada, bea]);
+    expect(movedMembers(access([ada, ada]), committed - 60_000, open, undefined)).toEqual([ada]);
   });
 });

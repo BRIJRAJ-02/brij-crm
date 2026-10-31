@@ -334,6 +334,39 @@ export function publishesFor(
   return { items, perRow: Math.max(1, audiences.length) };
 }
 
+/**
+ * How far a read of audiences must start before a row's commit to count as showing who was where before it:
+ * room for the clocks of the worker and the database to differ, and for the read itself.
+ */
+const BEFORE_MARGIN_MS = 2_000;
+
+/**
+ * Whom an `access` row disconnects with 4500 (AC-84): the members it names
+ * whose audience it moved (another key, or none: removed). Only a read of the
+ * audiences that started before the row committed (`readAt`, wall clock)
+ * shows where they were; without one, or without the audiences after, every
+ * member it names, since their browsers may sit on a channel that no longer
+ * exists and would hear nothing more. So a role or team change in a workspace
+ * whose audiences it didn't change costs no reconnect at all.
+ */
+export function movedMembers(
+  row: OutboxRow,
+  readAt: number | undefined,
+  before: readonly Audience[],
+  after: readonly Audience[] | undefined,
+): readonly string[] {
+  const named = [...new Set(row.itemIds)];
+  if (after === undefined || readAt === undefined || readAt + BEFORE_MARGIN_MS >= Date.parse(row.at)) return named;
+  const keyIn = (audiences: readonly Audience[]) => {
+    const keys = new Map<string, string>();
+    for (const audience of audiences) for (const member of audience.members) keys.set(member.memberId, audience.key);
+    return keys;
+  };
+  const was = keyIn(before);
+  const now = keyIn(after);
+  return named.filter((memberId) => was.get(memberId) !== now.get(memberId));
+}
+
 /** Whether any of a batch's rows needs facts loaded before it is planned (`views` rows, spec 0020). */
 const needsFacts = (rows: readonly OutboxRow[]): boolean =>
   rows.some((row) => row.kind === 'views' || row.kind === 'tasks');
@@ -474,6 +507,9 @@ export function createRelay(deps: RelayDeps): Relay {
   // When each workspace last took a turn: one quiet for a whole quiet spell lets go of its audiences, so a busy
   // worker that never goes dormant holds only the workspaces that write.
   const audienceUsed = new Map<string, number>();
+  // When each cached read of audiences started (wall clock): one that started before an `access` row committed
+  // shows who was where before it, so the relay can tell whose audience the row moved (AC-84).
+  const audienceReadAt = new WeakMap<Promise<readonly Audience[]>, number>();
   function audiencesOf(workspaceId: string): Promise<readonly Audience[]> {
     const now = clock();
     for (const [id, at] of audienceUsed) {
@@ -484,7 +520,10 @@ export function createRelay(deps: RelayDeps): Relay {
     audienceUsed.set(workspaceId, now);
     const held = audienceCache.get(workspaceId);
     if (held !== undefined) return held;
+    // The wall clock, as commit times are (`row.at`): whether this read can predate a row is judged against it.
+    const startedAt = Date.now();
     const loading = deps.audiences(workspaceId);
+    audienceReadAt.set(loading, startedAt);
     audienceCache.set(workspaceId, loading);
     loading.catch(() => {
       if (audienceCache.get(workspaceId) === loading) audienceCache.delete(workspaceId);
@@ -580,7 +619,8 @@ export function createRelay(deps: RelayDeps): Relay {
     stats.pending(workspaceId, read.length, read[0]?.at);
     const retrying = retries.has(workspaceId);
     if (!retrying) sawWork();
-    const audiences = await audiencesOf(workspaceId);
+    const audiencesRead = audiencesOf(workspaceId);
+    const audiences = await audiencesRead;
     // Each row is one publish per audience: a workspace of several audiences sends fewer rows a call, so one call
     // never carries more than `MAX_PUBLISHES` (one row at least). The rest go in the next batch, which the mark reads.
     const fits = read.slice(0, Math.max(1, Math.floor(MAX_PUBLISHES / Math.max(1, audiences.length))));
@@ -667,12 +707,18 @@ export function createRelay(deps: RelayDeps): Relay {
       // removed member is refused one) and catches up there. Best effort: a browser also switches on hearing the
       // `access` event that names its member, and its token runs out within the hour.
       if (row?.kind === 'access' && deps.accessChanged !== undefined) {
-        await deps.accessChanged(workspaceId, row.itemIds).catch((error: unknown) => {
-          log.warn('Disconnecting members whose access changed failed; their browsers move on the access event', {
-            workspaceId,
-            ...errorFields(error),
+        const readAt = audienceReadAt.get(audiencesRead);
+        // The audiences after the row: the next turn plans with them, so reading them here costs nothing more.
+        const after = await audiencesOf(workspaceId).catch(() => undefined);
+        const moved = movedMembers(row, readAt, audiences, after);
+        if (moved.length > 0) {
+          await deps.accessChanged(workspaceId, moved).catch((error: unknown) => {
+            log.warn('Disconnecting members whose access changed failed; their browsers move on the access event', {
+              workspaceId,
+              ...errorFields(error),
+            });
           });
-        });
+        }
       }
     }
     const landed = rows[outcome.published - 1];

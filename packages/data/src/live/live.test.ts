@@ -710,13 +710,53 @@ describe('the audience channel', () => {
     await t.subscribed();
     const before = tokens.asked();
     tokens.move(undefined);
-    await t.accessChanged();
+    const closed = t.accessChanged();
+    // After its spread (0 to 2 seconds, the middle here), never in step with every other browser.
+    await settle();
+    expect(tokens.asked()).toBe(before);
+    await t.elapse(jitter);
+    await closed;
     expect(tokens.asked()).toBe(before + 1);
     expect(t.unlistened).toEqual(['workspace:acme-id']);
     expect(t.statuses).toContain('paused');
     // Nothing left to rejoin.
     await t.live.rejoin(WS);
     expect(tokens.asked()).toBe(before + 1);
+  });
+
+  it('never stays on the old channel when asking fails: it lets go and subscribes again from scratch', async () => {
+    let failing = false;
+    let channel = 'workspace:acme-id';
+    const t = setup({
+      token: () =>
+        failing
+          ? Promise.reject(new Error('offline'))
+          : Promise.resolve({ channel, token: `token-${channel}`, head: 0 }),
+    });
+    await t.subscribed();
+    failing = true;
+    channel = 'workspace:acme-id.0123456789abcdef';
+    await t.live.rejoin(WS);
+    expect(t.unlistened).toEqual(['workspace:acme-id']);
+    expect(t.statuses).toContain('paused');
+    // The retry loop's backoff: the next ask lands, and the channel it names is listened to.
+    failing = false;
+    for (const each of t.waits.splice(0)) each.resolve();
+    await settle();
+    await settle();
+    expect(t.channels.map((each) => each.name)).toEqual(['workspace:acme-id', 'workspace:acme-id.0123456789abcdef']);
+  });
+
+  it('skips asking on a 4500 close right after the access event asked', async () => {
+    const tokens = door();
+    const t = setup({ token: tokens.token });
+    await t.subscribed();
+    await t.live.rejoin(WS);
+    const asked = tokens.asked();
+    const closed = t.accessChanged();
+    await t.elapse(jitter);
+    await closed;
+    expect(tokens.asked()).toBe(asked);
   });
 
   it('moves rather than renewing when the renewed token names another channel', async () => {
