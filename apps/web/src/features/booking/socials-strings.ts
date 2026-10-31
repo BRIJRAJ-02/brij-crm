@@ -10,6 +10,8 @@ export const strings = {
   add: 'Add social links',
   team: 'A team page names no host before booking, so it shows no one’s social links.',
   notOwner: 'Only the page’s owner chooses whether it shows their social links.',
+  /** The same on a page whose owner is named (spec 0037, AC-1273). */
+  setBy: (name: string) => `Set by ${name.trim().split(/\s+/)[0] ?? name}`,
   failed: 'Couldn’t load your social links.',
   tryAgain: 'Try again',
   dialogTitle: 'Social links',

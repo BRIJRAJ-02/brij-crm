@@ -38,6 +38,17 @@ describe('placeBlocks', () => {
     expect(slot(layout, 'second')).toMatchObject({ lanes: 1, indent: 1 });
   });
 
+  it('never cascades with a nestAfter of Infinity: a Team day column puts every overlap side by side', () => {
+    const layout = placeBlocks(
+      [atMinute('call', 660, 690), atMinute('busy', 675, 720), atMinute('late', 700, 730)],
+      Number.POSITIVE_INFINITY,
+    );
+    expect(slot(layout, 'call')).toMatchObject({ lane: 0, lanes: 2, indent: 0 });
+    expect(slot(layout, 'busy')).toMatchObject({ lane: 1, lanes: 2, indent: 0 });
+    // 'late' starts after 'call' ends: it takes the first free lane rather than sitting over 'busy'.
+    expect(slot(layout, 'late')).toMatchObject({ lane: 0, indent: 0 });
+  });
+
   it('indents a block that starts well after the one it overlaps, over it', () => {
     const layout = placeBlocks([at('long', 9, 12), at('later', 10, 11)]);
     expect(slot(layout, 'long')).toMatchObject({ lane: 0, lanes: 1, indent: 0 });

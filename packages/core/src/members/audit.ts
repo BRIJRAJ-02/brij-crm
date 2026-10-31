@@ -48,18 +48,32 @@ export async function writeAudit(
   entry: AuditEntry,
   source: AuditSource = {},
 ): Promise<void> {
+  await writeAudits(tx, workspaceId, actor, [entry], source);
+}
+
+/** Writes several audit rows for `actor` in `tx` in one statement (a change that ends many things at once). */
+export async function writeAudits(
+  tx: WorkspaceTx,
+  workspaceId: string,
+  actor: Actor,
+  entries: readonly AuditEntry[],
+  source: AuditSource = {},
+): Promise<void> {
+  if (entries.length === 0) return;
   const by = actorRow(actor);
-  await tx.insert(auditEvents).values({
-    workspaceId,
-    actorType: by.type,
-    actorId: by.id,
-    actorMemberId: by.memberId,
-    action: entry.action,
-    targetType: entry.targetType,
-    targetId: entry.targetId,
-    before: entry.before ?? null,
-    after: entry.after ?? null,
-    ip: ipOf(source.ip),
-    requestId: source.requestId?.slice(0, 200) ?? null,
-  });
+  await tx.insert(auditEvents).values(
+    entries.map((entry) => ({
+      workspaceId,
+      actorType: by.type,
+      actorId: by.id,
+      actorMemberId: by.memberId,
+      action: entry.action,
+      targetType: entry.targetType,
+      targetId: entry.targetId,
+      before: entry.before ?? null,
+      after: entry.after ?? null,
+      ip: ipOf(source.ip),
+      requestId: source.requestId?.slice(0, 200) ?? null,
+    })),
+  );
 }

@@ -6,7 +6,7 @@
 //   each of their upcoming bookings is flagged "Needs a host", a round robin one queued to be reseated (AC-749);
 // - their scheduling delegations go, both ways (a guest is never a delegate, AC-1255), with `access` rows.
 // - their calendars stay connected but stop filing meetings into the CRM (sync off), since a guest writes no records.
-// - their link page hides (its rows kept, back as it was if they are a member again; migration 0142).
+// - their link page hides (its rows kept, back as it was if they are a member again; migration 0145).
 // What stays: their records, tasks and teams; access rules decide what they see from now.
 import { sql } from 'drizzle-orm';
 import type { GuestPreview } from '@crm/contracts';
@@ -70,7 +70,7 @@ export async function countBecomingGuest(
           and (d.delegate_member_id = ${memberId}::uuid or d.target_member_id = ${memberId}::uuid)) as delegations
   `);
   const row = found.rows[0];
-  // Their link page, while it is live: a guest's is hidden (kept) by `crm_workspace_member` (migration 0142).
+  // Their link page, while it is live: a guest's is hidden (kept) by `crm_workspace_member` (migration 0145).
   const profile = (await publicProfilesOf(tx, workspaceId, [row?.user_id])).get(row?.user_id ?? '');
   return {
     pausedPages: pages,

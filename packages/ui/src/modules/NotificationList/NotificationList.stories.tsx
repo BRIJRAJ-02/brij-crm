@@ -72,6 +72,8 @@ interface SampleProps {
   readonly onMark?: (id: string, mark: NotificationMark) => void;
   readonly onRetry?: () => void;
   readonly isFiltered?: boolean;
+  /** Adds a scheduling change someone made (spec 0037, AC-1264). */
+  readonly withScheduling?: boolean;
 }
 
 /** The inbox in a fixed height slot, marking rows as the screen would. */
@@ -82,8 +84,22 @@ function SampleInbox({
   onMark,
   onRetry,
   isFiltered = false,
+  withScheduling = false,
 }: SampleProps) {
-  const [items, setItems] = useState(isEmpty ? [] : sampleItems());
+  const [items, setItems] = useState(() => {
+    if (isEmpty) return [];
+    if (!withScheduling) return sampleItems();
+    const scheduling: NotificationItem = {
+      id: 'n5',
+      kind: 'scheduling_changed',
+      actor: GRACE ?? { type: 'system', id: null, name: 'System' },
+      createdAt: '2026-10-08T14:25:00.000Z',
+      isRead: false,
+      isDone: false,
+      excerpt: '',
+    };
+    return [scheduling, ...sampleItems()];
+  });
   const source = arraySource(items, (item) => item.id);
   return (
     <Stage height="grid">
@@ -140,6 +156,17 @@ export const Default: Story = {
     await expect(canvas.getByText('Contact us got a new submission')).toBeInTheDocument();
     await userEvent.click(canvas.getByText('Alan Turing replied in a thread'));
     await expect(args.onAction).toHaveBeenCalledWith('n2');
+  },
+};
+
+/** Someone else changed the reader's scheduling (spec 0037, AC-1264): the actor's sentence, no chip or excerpt. */
+export const SchedulingChanged: Story = {
+  args: { withScheduling: true, onAction: fn() },
+  // The row is Default's, with another sentence.
+  parameters: { crm: { screenshot: false } },
+  play: async ({ args, canvas, userEvent }) => {
+    await userEvent.click(canvas.getByText('Grace Hopper changed your scheduling'));
+    await expect(args.onAction).toHaveBeenCalledWith('n5');
   },
 };
 

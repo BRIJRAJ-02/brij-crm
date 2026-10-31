@@ -30,7 +30,7 @@ afterAll(async () => {
 });
 
 let made = 0;
-/** A workspace with Acme Inc, Ada at acme.com, a shared "Acme deals" view, and a second member, Bea. */
+/** A workspace with Acme Inc, Ada at acme.example (a name reserved for examples, so no company is filed from it), a shared "Acme deals" view, and a second member, Bea. */
 async function world() {
   made += 1;
   const created = await createWorkspace(db, {
@@ -89,7 +89,7 @@ async function world() {
   const as = (memberId: string, rules?: AccessRules) =>
     rescope(owner, { actor: { type: 'member', id: memberId }, role: 'member', ...(rules ? { rules } : {}) });
   const acme = await company('Acme Inc', ['acmecorp.io']);
-  const ada = await person('Ada', ['ada@acme.com']);
+  const ada = await person('Ada', ['ada@acme.example']);
   const acmeDeals = await view('Acme deals', deals, 'workspace');
   return {
     ...created,
@@ -165,7 +165,7 @@ describe('searching (AC-1078 to AC-1081, AC-1084)', () => {
     const found = await searchWorkspace(w.owner, { query: 'acme' });
     expect(recordIds(found)).toEqual([w.acme, w.ada]);
     expect(found.records[0]).toMatchObject({ match: 'prefix', detail: 'acmecorp.io', ref: { name: 'Acme Inc' } });
-    expect(found.records[1]).toMatchObject({ match: 'contains', detail: 'ada@acme.com', ref: { name: 'Ada' } });
+    expect(found.records[1]).toMatchObject({ match: 'contains', detail: 'ada@acme.example', ref: { name: 'Ada' } });
     expect(found.views).toEqual([
       { id: w.acmeDeals, objectId: w.deals, name: 'Acme deals', kind: 'table', isDefault: false },
     ]);
@@ -278,7 +278,12 @@ describe('hidden means absent (AC-1089, AC-1090)', () => {
     const asBea = await searchWorkspace(bea, { query: 'acme' });
     // Acme Inc is the owner's (outside Bea's rule), Ada matched on a hidden email, the view is on Deals (none).
     expect(asBea).toEqual({ records: [], views: [], notes: [], tasks: [] });
-    expect(await searchWorkspace(bea, { query: 'acme.com' })).toEqual({ records: [], views: [], notes: [], tasks: [] });
+    expect(await searchWorkspace(bea, { query: 'acme.example' })).toEqual({
+      records: [],
+      views: [],
+      notes: [],
+      tasks: [],
+    });
     // An exact hidden name answers just as nothing does.
     expect(await searchWorkspace(bea, { query: 'Acme Inc' })).toEqual(
       await searchWorkspace(bea, { query: 'Qqqqq Zzzz' }),

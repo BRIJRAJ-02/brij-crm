@@ -97,13 +97,15 @@ export const members = pgTable(
     role: memberRole('role').notNull().default('member'),
     /**
      * Their custom role (spec 0037, AC-1233), with `role` then `member`; none holds a built in role. The foreign key
-     * to `workspace_roles` (`on delete restrict`: a delete moves its holders first) is in migration 0143's SQL.
+     * to `workspace_roles` (`on delete restrict`: a delete moves its holders first) is in migration 0146's SQL.
      */
     customRoleId: uuid('custom_role_id'),
     /** Their picture, once file storage (#32) arrives; until then none, and screens show initials (spec 0031). */
     avatarUrl: text('avatar_url'),
     /** Their time zone in this workspace, an IANA name (spec 0031, slice 7); none means the browser's. */
     timeZone: text('time_zone'),
+    /** Their job title (spec 0037, AC-1441): a label on the Team day, 1 to 60 characters, never read by access. */
+    jobTitle: text('job_title'),
     /** When they left or were removed (spec 0031, AC-814); never set while `status` is `active`. */
     leftAt: timestamptz('left_at'),
     /** Who removed them (themself when they left). */
@@ -144,6 +146,7 @@ export const members = pgTable(
     // An active member never carries a leaving time; a removal sets one (rows removed before it take their last update's).
     check('members_left', sql`${t.status} = 'removed' or ${t.leftAt} is null`),
     check('members_time_zone', sql`char_length(${t.timeZone}) between 1 and 64`),
+    check('members_job_title', sql`char_length(${t.jobTitle}) between 1 and 60`),
     check('members_custom_role', sql`${t.customRoleId} is null or ${t.role} = 'member'`),
     // A role's holders: its count on the Roles page, and the move when it is deleted (AC-1238).
     index('members_custom_role')

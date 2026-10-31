@@ -39,7 +39,7 @@ export const invitations = pgTable(
     /** The invited address, lowercase; null for the invite link. */
     email: text('email'),
     role: memberRole('role').notNull(),
-    /** The custom role it gives (spec 0037, AC-1236), with `role` then `member`; the foreign key is in migration 0143. */
+    /** The custom role it gives (spec 0037, AC-1236), with `role` then `member`; the foreign key is in migration 0146. */
     customRoleId: uuid('custom_role_id'),
     status: text('status').notNull().default('open'),
     /** The SHA-256 of the link's token, as 64 lowercase hex digits. An email invitation's token is never stored. */

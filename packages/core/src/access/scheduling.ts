@@ -5,12 +5,12 @@
 //
 // The reach is the most open of (AC-1253):
 // - the role: `schedule.manage` or `schedule.view` over every member (owners and admins hold both); the `.team` pair
-//   over members who share a team, which reaches nobody until teams exist (spec 0031 slice 8), so it fails closed;
-// - delegations naming the caller (`schedule_delegations`): a member, or everyone. A team target reaches nobody
-//   until teams exist. A level or target the code doesn't know grants nothing (AC-1223).
+//   over the active members who share any of the caller's teams (spec 0031 slice 8);
+// - delegations naming the caller (`schedule_delegations`): a member, a team (its active members at the moment of
+//   the check) or everyone. A level or target the code doesn't know grants nothing (AC-1223, AC-1254).
 // Decision 7: reach from anything but the built in Owner or Admin role never covers an owner or an admin. Over them
 // only a delegation they granted themself counts, or, over an admin, one an owner granted (its granter's role now).
-// An everyone delegation leaves them out.
+// Team scope, a team delegation and an everyone delegation leave them out.
 //
 // The door never reads any of this (AC-1259): CRM requests pay nothing. One query reads it, inside the service's own
 // transaction, and only when the role doesn't already manage everyone.
@@ -100,12 +100,30 @@ export function customRoleReach(access: Access): SchedulingLevel | undefined {
   return undefined;
 }
 
-/** One delegation naming the caller, as the reach query reads it, and the member it reaches. */
+/**
+ * The reach over team mates that the role gives (pure, AC-1253): `schedule.manage.team` or `schedule.view.team`, for
+ * a member only. Owners and admins hold both, but they already reach everyone at Manage.
+ */
+export function teamRoleReach(access: Access): SchedulingLevel | undefined {
+  if (access.principal.kind !== 'member') return undefined;
+  if (can(access, 'schedule.manage.team')) return 'manage';
+  if (can(access, 'schedule.view.team')) return 'view';
+  return undefined;
+}
+
+/**
+ * What a reach row's `target_type` is when the row comes from the role's team scope rather than a stored delegation:
+ * the query writes it, and no stored row is ever read as one, since each arm filters its own stored type.
+ */
+export const TEAM_SCOPE = 'role_team';
+
+/** One delegation naming the caller (or one team mate the role reaches), as the reach query reads it. */
 export interface DelegationReachRow {
+  /** `member`, `team`, `everyone` (stored), or `role_team` (`TEAM_SCOPE`, the role's team scope). */
   readonly target_type: string;
   readonly level: string;
   readonly granted_by_self: boolean;
-  /** The member reached: the target (a member delegation), or each active member (an everyone delegation). */
+  /** The member reached: the target (a member delegation), or each active member of the team or the workspace. */
   readonly member_id: string | null;
   /** That member's role now. */
   readonly member_role: string | null;
@@ -117,6 +135,9 @@ export interface DelegationReachRow {
    */
   readonly member_owns_hours?: boolean | null;
 }
+
+/** The targets a reach row may name; anything else grants nothing (AC-1223). */
+const KNOWN_TARGETS: ReadonlySet<string> = new Set(['member', 'team', 'everyone', TEAM_SCOPE]);
 
 /** A role the code knows that is an owner's or an admin's; an unknown one counts as one (fail closed). */
 const isProtected = (role: string | null): boolean => role === null || !isRole(role) || role !== 'member';
@@ -132,8 +153,8 @@ const ownsHours = (role: string | null, custom: boolean | null | undefined): boo
 
 /**
  * The reach from the caller's delegations (pure, AC-1270): each row's level over its member, the highest level per
- * member, with decision 7 and decision 9 applied. Unknown levels and targets, a team target, and rows naming no
- * active member grant nothing.
+ * member, with decision 7 and decision 9 applied. Unknown levels and targets, and rows naming no active member,
+ * grant nothing.
  */
 export function combineReach(
   self: string | undefined,
@@ -150,12 +171,12 @@ export function combineReach(
     const level = parseSchedulingLevel(row.level);
     const memberId = row.member_id;
     if (level === undefined || memberId === null || memberId === self) continue;
-    if (row.target_type !== 'member' && row.target_type !== 'everyone') continue;
+    if (!KNOWN_TARGETS.has(row.target_type)) continue;
     const guarded = isProtected(row.member_role);
     if (guarded) {
-      // Owners and admins: never through everyone; through a member delegation only their own grant, or an owner's
-      // over an admin.
-      if (row.target_type === 'everyone') continue;
+      // Owners and admins: never through everyone, a team or the role's team scope; through a member delegation
+      // only their own grant, or an owner's over an admin.
+      if (row.target_type !== 'member') continue;
       const byOwner = row.grantor_role === 'owner' && row.member_role === 'admin';
       if (!row.granted_by_self && !byOwner) continue;
     }
@@ -193,8 +214,12 @@ export async function schedulingReach(tx: WorkspaceTx, scope: EngineScope): Prom
   if (all === 'manage') return { ...NOBODY, self, all };
   const me = principal.memberId;
   const custom = customRoleReach(access);
-  // Two arms, so each takes its index: a member delegation's target by the members key, an everyone delegation's
-  // members by the workspace's active members. The granter is whoever last set the level.
+  const teamLevel = teamRoleReach(access);
+  // One arm per target, so each takes its index: a member delegation's target by the members key, a team
+  // delegation's members through `team_members` (its active members now, AC-1254), an everyone delegation's by the
+  // workspace's active members, and, when the role holds a `.team` permission, the active members sharing any of
+  // the caller's teams (read from `team_members`, never the door's `teamIds`, so a change since the request counts).
+  // The granter is whoever last set the level.
   const found = await tx.execute<DelegationReachRow & Record<string, unknown>>(sql`
     select d.target_type, d.level, d.granted_by_self, t.id::text as member_id, t.role::text as member_role,
       g.role::text as grantor_role, 'availability.own' = any(cr.permissions) as member_owns_hours
@@ -210,6 +235,23 @@ export async function schedulingReach(tx: WorkspaceTx, scope: EngineScope): Prom
     join members t on t.workspace_id = d.workspace_id and t.status = 'active' and t.id <> d.delegate_member_id
     where d.workspace_id = ${scope.workspaceId}::uuid and d.delegate_member_id = ${me}::uuid
       and d.target_type = 'everyone'
+    union all
+    select d.target_type, d.level, d.granted_by_self, t.id::text, t.role::text, null, null
+    from schedule_delegations d
+    join team_members tm on tm.workspace_id = d.workspace_id and tm.team_id = d.target_team_id
+    join members t on t.workspace_id = tm.workspace_id and t.id = tm.member_id and t.status = 'active'
+    where d.workspace_id = ${scope.workspaceId}::uuid and d.delegate_member_id = ${me}::uuid
+      and d.target_type = 'team'
+    ${
+      teamLevel === undefined
+        ? sql``
+        : sql`union all
+    select ${TEAM_SCOPE}::text, ${teamLevel}::text, false, t.id::text, t.role::text, null, null
+    from team_members mine
+    join team_members tm on tm.workspace_id = mine.workspace_id and tm.team_id = mine.team_id
+    join members t on t.workspace_id = tm.workspace_id and t.id = tm.member_id and t.status = 'active'
+    where mine.workspace_id = ${scope.workspaceId}::uuid and mine.member_id = ${me}::uuid`
+    }
     ${
       custom === undefined
         ? sql``
@@ -290,6 +332,21 @@ export function managesPageOf(booking: { readonly ownerMemberId: string | null }
  */
 export function rolesManagingEveryone(): readonly Role[] {
   return ROLES.filter((role) => (ROLE_PERMISSIONS[role] as readonly string[]).includes('schedule.manage'));
+}
+
+/**
+ * The built in roles whose holders' reach runs through their teams (a `.team` permission, without `schedule.manage`
+ * over everyone): whose open screens read again when someone sharing a team with them joins, leaves, changes role or
+ * becomes a guest (AC-1274). None today: owners and admins already manage everyone, and Member holds no `.team`.
+ */
+export function rolesWithTeamScope(): readonly Role[] {
+  return ROLES.filter((role) => {
+    const held = ROLE_PERMISSIONS[role] as readonly string[];
+    return (
+      !held.includes('schedule.manage') &&
+      (held.includes('schedule.manage.team') || held.includes('schedule.view.team'))
+    );
+  });
 }
 
 /** What a member outside the caller's See reach reads as: the same sentence as one who doesn't exist (AC-1258). */

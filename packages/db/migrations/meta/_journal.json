@@ -999,15 +999,36 @@
     {
       "idx": 142,
       "version": "7",
-      "when": 1795500900000,
-      "tag": "0142_guest_role",
+      "when": 1795500800000,
+      "tag": "0142_member_job_title",
       "breakpoints": true
     },
     {
       "idx": 143,
       "version": "7",
-      "when": 1795501900000,
-      "tag": "0143_custom_roles",
+      "when": 1795500900000,
+      "tag": "0143_scheduling_notice_inbox",
+      "breakpoints": true
+    },
+    {
+      "idx": 144,
+      "version": "7",
+      "when": 1795501000000,
+      "tag": "0144_team_delegations",
+      "breakpoints": true
+    },
+    {
+      "idx": 145,
+      "version": "7",
+      "when": 1795502000000,
+      "tag": "0145_guest_role",
+      "breakpoints": true
+    },
+    {
+      "idx": 146,
+      "version": "7",
+      "when": 1795502100000,
+      "tag": "0146_custom_roles",
       "breakpoints": true
     }
   ]

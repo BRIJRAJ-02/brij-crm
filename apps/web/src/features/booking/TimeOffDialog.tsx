@@ -1,5 +1,5 @@
 // Brief
-// Purpose: Add or edit time off (spec 0037, AC-1281, AC-1285, AC-1286): whole days away, for the reader or a colleague they manage.
+// Purpose: Add or edit time off (spec 0037, AC-1281, AC-1285, AC-1286): whole days away, for the reader or a colleague they manage (picked in For, AC-1272, when opened from Bookings).
 // Main task: pick the days, a reason, optionally who covers and a note, then Save; when meetings are already booked inside, the dialog lists them before it closes.
 // Leaves out: part days (Block time on the Bookings week), repeating leave, and moving the meetings inside (they stay; Bookings flags them Host away).
 import { isDataError, type DataLayer, type TimeOffEntry, type TimeOffReason, type TimeOffSaved } from '@crm/data';
@@ -21,6 +21,7 @@ import { timeOffStrings as strings } from './time-off-strings.ts';
 
 const REASONS: readonly TimeOffReason[] = ['vacation', 'sick', 'travel', 'holiday', 'other'];
 const NOBODY = 'nobody';
+const ME = 'me';
 const NOTE_MAX = 200;
 
 /** Someone who could cover. */
@@ -38,14 +39,23 @@ export interface TimeOffDialogProps {
   readonly member: { readonly id: string; readonly name: string } | undefined;
   /** The entry to change; undefined adds one. */
   readonly entry: TimeOffEntry | undefined;
+  /** A new entry's first and last day to start on (the Team day's drawn day); absent, Days starts empty. */
+  readonly initialDay?: string | undefined;
   readonly isOpen: boolean;
   /** Who may cover: active members other than the one away. */
   readonly people: readonly StandinChoice[];
+  /**
+   * The colleagues the reader Manages (spec 0037, AC-1272): with any, a new entry for the reader asks For whom, Me
+   * first. Left out where the dialog already knows whose (a colleague's Availability, a Team day column).
+   */
+  readonly forPeople?: readonly StandinChoice[];
   readonly onClose: () => void;
   /** Saved: the screen says so. */
   readonly onSaved: (saved: TimeOffSaved, isNew: boolean) => void;
-  /** Open Bookings, from the meetings inside. */
-  readonly onOpenBookings: () => void;
+  /** Open Bookings, from the meetings inside; absent where the reader is on Bookings already. */
+  readonly onOpenBookings?: () => void;
+  /** The reader, left out of Who covers while the time off is their own (a For pick lists them). */
+  readonly meId?: string | undefined;
 }
 
 /** The dialog: one Modal, the form first, then (only when meetings are inside) what was saved over. */
@@ -68,19 +78,32 @@ export function TimeOffDialog(props: TimeOffDialogProps) {
 function TimeOffForm({
   data,
   slug,
-  member,
+  member: given,
   entry,
   isOpen,
-  people,
+  people: everyone,
+  forPeople = [],
+  meId,
   onClose,
   onSaved,
   onOpenBookings,
+  initialDay,
 }: TimeOffDialogProps) {
   const { locale, timeZone } = useFormatSettings();
+  // For whom (AC-1272): only a new entry for the reader, by someone who Manages others.
+  const offersFor = given === undefined && entry === undefined && forPeople.length > 0;
+  const [forId, setForId] = useState(ME);
+  const member = given ?? (forId === ME ? undefined : forPeople.find((person) => person.id === forId));
+  const away = member?.id ?? meId;
+  const people = away === undefined ? everyone : everyone.filter((person) => person.id !== away);
   const store = data.scheduling.loaded()?.timeOff;
   const [id] = useState(() => store?.newId() ?? '');
   const [range, setRange] = useState<{ readonly start: string; readonly end: string } | null>(
-    entry === undefined ? null : { start: entry.fromDate, end: entry.toDate },
+    entry === undefined
+      ? initialDay === undefined
+        ? null
+        : { start: initialDay, end: initialDay }
+      : { start: entry.fromDate, end: entry.toDate },
   );
   const [reason, setReason] = useState<TimeOffReason>(entry?.reason ?? 'vacation');
   const [standin, setStandin] = useState<string>(entry?.standinMemberId ?? NOBODY);
@@ -158,7 +181,7 @@ function TimeOffForm({
         actions={
           <>
             {/* Bookings opens the reader's own: for a colleague's time off it wouldn't show these meetings. */}
-            {first === undefined && (
+            {first === undefined && onOpenBookings !== undefined && (
               <Button
                 onPress={() => {
                   close();
@@ -212,7 +235,36 @@ function TimeOffForm({
     >
       {errors.form !== undefined && <Callout tone="danger">{errors.form}</Callout>}
       <Form id={formId} label={title} onSubmit={save}>
-        {first !== undefined && (
+        {offersFor && (
+          <Select
+            label={strings.forLabel}
+            isSearchable={forPeople.length > 8}
+            items={[
+              { id: ME, label: strings.forMe },
+              ...forPeople.map((person) => ({
+                id: person.id,
+                label: person.name,
+                leading: (
+                  <Avatar
+                    name={person.name}
+                    id={person.id}
+                    size="xs"
+                    {...(person.avatarUrl === undefined ? {} : { src: person.avatarUrl })}
+                    isDecorative
+                  />
+                ),
+              })),
+            ]}
+            value={forId}
+            onChange={(next) => {
+              const id = next ?? ME;
+              setForId(id);
+              // Nobody covers for themself.
+              if (standin === id) setStandin(NOBODY);
+            }}
+          />
+        )}
+        {first !== undefined && !offersFor && (
           <Callout tone="info">{entry === undefined ? strings.onBehalf(first) : strings.onBehalfEdit(first)}</Callout>
         )}
         <DateRangePicker
@@ -240,7 +292,6 @@ function TimeOffForm({
         />
         <Select
           label={strings.standin}
-          hint={first === undefined ? strings.standinHint : strings.standinHintFor(first)}
           isSearchable
           items={[
             { id: NOBODY, label: strings.nobody },
@@ -265,15 +316,7 @@ function TimeOffForm({
           }}
           {...(errors.standin === undefined ? {} : { error: errors.standin })}
         />
-        <Field
-          label={strings.note}
-          hint={first === undefined ? strings.noteHint : strings.noteHintFor(first)}
-          isMultiline
-          maxLength={NOTE_MAX}
-          showCounter
-          value={note}
-          onChange={setNote}
-        />
+        <Field label={strings.note} isMultiline maxLength={NOTE_MAX} showCounter value={note} onChange={setNote} />
       </Form>
     </Modal>
   );

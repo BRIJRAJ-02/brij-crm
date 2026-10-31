@@ -22,6 +22,7 @@ import {
   type Role,
   type RolesList,
   type RolesOverview,
+  type TeamView,
 } from '@crm/data';
 import {
   Avatar,
@@ -103,6 +104,8 @@ export interface MembersScreenProps {
   readonly roles: RolesList;
   /** Every role with what it holds (`roles.overview`): whether a change takes access away, "What can Priya do". */
   readonly overview: RolesOverview;
+  /** The workspace's teams, for team delegations in the Scheduling access column (undefined: not read). */
+  readonly teams?: readonly TeamView[] | undefined;
 }
 
 const MEMBER_COLUMNS: readonly TableColumn[] = [
@@ -171,6 +174,7 @@ export function MembersScreen({
   access,
   roles,
   overview,
+  teams,
 }: MembersScreenProps) {
   const router = useRouter();
   // Owners and admins see who has two factor sign in (spec 0033, AC-895): decided by access, so it never slides in.
@@ -524,7 +528,16 @@ export function MembersScreen({
       case 'twoFactor':
         return member.twoFactor === true ? strings.twoFactorOn : strings.twoFactorOff;
       case 'scheduling':
-        return <SchedulingAccessCell data={data} toasts={toasts} slug={slug} me={access.memberId} member={member} />;
+        return (
+          <SchedulingAccessCell
+            data={data}
+            toasts={toasts}
+            slug={slug}
+            me={access.memberId}
+            member={member}
+            teams={teams}
+          />
+        );
       case 'calendar':
         // A guest connects no calendar (spec 0031, slice 9).
         return member.role === 'guest' ? null : <CalendarHealthChip state={health.get(member.id)} name={member.name} />;

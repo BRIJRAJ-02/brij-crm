@@ -81,6 +81,83 @@ describe('declaredIcon', () => {
     const late = `${'<!-- padding -->'.repeat(8000)}<link rel="icon" href="/late.png">`;
     expect(declaredIcon(late, page)).toBeUndefined();
   });
+
+  it('reads no sizes by rel, the link block’s pick', () => {
+    const html = '<link rel="icon" sizes="16x16" href="/small.png"><link rel="icon" sizes="192x192" href="/big.png">';
+    expect(declaredIcon(html, page)?.href).toBe('https://example.com/small.png');
+  });
+});
+
+// A company's logo (spec 0059, AC-5904): the declared icon that best fills a 48 pixel tile at twice the density, by
+// `sizes`: the smallest of at least 96, else the largest.
+describe('declaredIcon, for a logo', () => {
+  const page = new URL('https://acme.com/');
+  const logo = (html: string) => declaredIcon(html, page, 'logo')?.href;
+
+  it('takes the smallest icon of at least 96, whichever rel and order it comes in', () => {
+    const html = [
+      '<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">',
+      '<link rel="icon" sizes="512x512" href="/512.png">',
+      '<link rel="icon" sizes="16x16 192x192" href="/multi.ico">',
+      '<link rel="apple-touch-icon" sizes="180x180" href="/touch.png">',
+      '<link rel="shortcut icon" href="/favicon.ico">',
+    ].join('');
+    expect(logo(html)).toBe('https://acme.com/touch.png');
+  });
+
+  it('takes the largest when none is large enough', () => {
+    const html = [
+      '<link rel="icon" sizes="16x16" href="/16.png">',
+      '<link rel="icon" sizes="48x48" href="/48.png">',
+      '<link rel="icon" sizes="32x32" href="/32.png">',
+    ].join('');
+    expect(logo(html)).toBe('https://acme.com/48.png');
+  });
+
+  it('reads a touch icon with no sizes as Apple’s 180, and an icon with none (or `any`) below every stated size', () => {
+    expect(logo('<link rel="icon" href="/plain.png"><link rel="apple-touch-icon" href="/touch.png">')).toBe(
+      'https://acme.com/touch.png',
+    );
+    expect(
+      logo('<link rel="apple-touch-icon" href="/touch.png"><link rel="icon" sizes="128x128" href="/128.png">'),
+    ).toBe('https://acme.com/128.png');
+    expect(logo('<link rel="icon" sizes="any" href="/any.png"><link rel="icon" sizes="32x32" href="/32.png">')).toBe(
+      'https://acme.com/32.png',
+    );
+  });
+
+  it('breaks a tie by the better rel, then by the first declared', () => {
+    expect(
+      logo(
+        '<link rel="apple-touch-icon" sizes="64x64" href="/touch.png"><link rel="icon" sizes="64x64" href="/icon.png">',
+      ),
+    ).toBe('https://acme.com/icon.png');
+    expect(logo('<link rel="icon" sizes="48x48" href="/one.png"><link rel="icon" sizes="48X48" href="/two.png">')).toBe(
+      'https://acme.com/one.png',
+    );
+  });
+
+  it('passes over an SVG, by its type or its name, since one is never answered', () => {
+    const html = [
+      '<link rel="icon" type="image/svg+xml" sizes="128x128" href="/mark">',
+      '<link rel="icon" sizes="any" href="/mark.svg">',
+      '<link rel="icon" sizes="32x32" href="/favicon-32.png">',
+    ].join('');
+    expect(logo(html)).toBe('https://acme.com/favicon-32.png');
+  });
+
+  it('still refuses an icon that is not on a plain https site, however well sized', () => {
+    const html =
+      '<link rel="icon" sizes="128x128" href="https://10.0.0.1/big.png"><link rel="icon" sizes="16x16" href="/small.png">';
+    expect(logo(html)).toBe('https://acme.com/small.png');
+  });
+
+  it('reads a head of unclosed tags in a moment, since any signed in person can have one read', () => {
+    const hostile = '<link"'.repeat(Math.floor((64 * 1024) / 6));
+    const started = performance.now();
+    expect(logo(hostile)).toBeUndefined();
+    expect(performance.now() - started).toBeLessThan(1000);
+  });
 });
 
 describe('faviconVersion', () => {

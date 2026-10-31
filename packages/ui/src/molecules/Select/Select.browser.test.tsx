@@ -9,7 +9,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { userEvent } from 'vitest/browser';
 import { createToasts } from '../../provider/toasts.tsx';
 import { UiProvider } from '../../provider/UiProvider.tsx';
-import { Select, type SelectItem, type SelectProps } from './Select.tsx';
+import { Select } from './SelectWithFaces.tsx';
+import type { SelectItem, SelectProps } from './Select.tsx';
 
 const mounted: (() => void)[] = [];
 

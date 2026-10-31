@@ -2,6 +2,8 @@
 // One folder per feature; the access door (spec 0005, thin #9) is `access/`.
 export { getSystemStatus, type SystemDeps } from './system/status.ts';
 export * from './engine/index.ts';
+// A company's logo from our own origin (spec 0059): the address a record's picture names, and which domains may have one.
+export { companyLogoPath, isLogoDomain, LOGO_PATH } from './engine/logos.ts';
 export {
   enterDeletedWorkspace,
   enterPublicForm,
@@ -513,6 +515,7 @@ export { createTimeBlock, removeTimeBlock, type TimeBlockDraft } from './booking
 export { bookAsHost, HOST_BOOKING_MINUTES, type HostBookingDeps, type HostBookingInput } from './booking/host.ts';
 export { listMeetings, listWorkspaceBookings, readBookingsCalendar } from './booking/list.ts';
 export { readTeamToday } from './home/team-today.ts';
+export { readTeamDay } from './booking/team-day.ts';
 export {
   createHomeMetricsCache,
   readHomeMetrics,

@@ -74,9 +74,9 @@ const overlaps = (a: Timed, b: { readonly start: number; readonly end: number })
  * starts later than that sits over the latest block it overlaps, indented a step, so the earlier one's title still
  * shows. A block widens into lanes to its right that stay free for its whole time. When a region holds more lanes
  * than fit at `MIN_LANE`, the last lane that fits becomes "+N" and the rest wait there: nothing is lost, only
- * folded.
+ * folded. `nestAfter` of Infinity never nests: every overlap sits side by side (a Team day's narrow columns).
  */
-export function placeBlocks<B extends Timed>(blocks: readonly B[]): DayLayout<B> {
+export function placeBlocks<B extends Timed>(blocks: readonly B[], nestAfter = NEST_AFTER): DayLayout<B> {
   const sorted = [...blocks].sort((a, b) => a.startMinute - b.startMinute || b.endMinute - a.endMinute);
   const groups: Group[] = [];
   const entries: Entry<B>[] = [];
@@ -92,7 +92,7 @@ export function placeBlocks<B extends Timed>(blocks: readonly B[]): DayLayout<B>
 
   for (const block of sorted) {
     const active = entries.flatMap((entry, index) => (entry.block.endMinute > block.startMinute ? [index] : []));
-    const near = active.filter((index) => block.startMinute - (entries[index]?.block.startMinute ?? 0) < NEST_AFTER);
+    const near = active.filter((index) => block.startMinute - (entries[index]?.block.startMinute ?? 0) < nestAfter);
     const latest = (list: readonly number[]) => list[list.length - 1];
     const sibling = latest(near);
     const parent = latest(active);

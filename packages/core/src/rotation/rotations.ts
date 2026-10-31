@@ -21,6 +21,8 @@ import { inWorkspace } from '../access/run.ts';
 import { refuse, refuseOn } from '../engine/refusals.ts';
 import { uuidArray } from '../engine/ids.ts';
 import { actorRow } from '../engine/scope.ts';
+import { writeAudit } from '../members/audit.ts';
+import { queueSchedulingNotice } from '../scheduling/notice.ts';
 import { lockRotation, windowCounts, windowStart } from './ledger.ts';
 import { keepRosterRows, rosterCalibration } from './roster.ts';
 import { eligibleMembers, GUESTS_CANT_HOST, ROTATION_ROLES, rulesOf } from './team.ts';
@@ -285,6 +287,13 @@ export async function createRotation(
       })
       .returning();
     if (row === undefined) throw new Error('The rotation was not created.');
+    await membersChanged(
+      tx,
+      scope,
+      row,
+      input.members.map((member) => member.memberId),
+      [],
+    );
     await tx.insert(rotationMembers).values(
       input.members.map((member, position) => ({
         workspaceId: scope.workspaceId,
@@ -307,6 +316,33 @@ export async function createRotation(
     );
     return firstOf(await viewsOf(tx, scope, [row], now));
   });
+}
+
+/**
+ * Who is in a rotation changed (spec 0037, AC-1264): one `rotation.changed` row naming who joined and who left, and
+ * each of them told, by the notice, when someone else made the change ("Added to the Sales rotation"). Nothing when
+ * nobody joined or left.
+ */
+async function membersChanged(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  rotation: { readonly id: string; readonly name: string },
+  added: readonly string[],
+  removed: readonly string[],
+): Promise<void> {
+  if (added.length === 0 && removed.length === 0) return;
+  await writeAudit(tx, scope.workspaceId, scope.actor, {
+    action: 'rotation.changed',
+    targetType: 'rotation',
+    targetId: rotation.id,
+    before: { name: rotation.name },
+    after: { name: rotation.name, added: [...added], removed: [...removed] },
+  });
+  const actor = memberOf(scope);
+  if (actor === undefined) return;
+  for (const memberId of [...new Set([...added, ...removed])]) {
+    if (memberId !== actor) await queueSchedulingNotice(tx, actor, memberId);
+  }
 }
 
 /** The one view a single row made. */
@@ -486,6 +522,13 @@ async function replaceMembers(
           0,
         ) / on.length;
   const leaving = before.filter((member) => !list.some((each) => each.memberId === member.memberId));
+  await membersChanged(
+    tx,
+    scope,
+    rotation,
+    joining.map((member) => member.memberId),
+    leaving.map((member) => member.memberId),
+  );
   if (leaving.length > 0) {
     await tx.delete(rotationMembers).where(
       and(

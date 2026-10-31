@@ -38,6 +38,9 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   'isInvitedEmail',
   // The name typed on the invite card, cleaned and cut to 80 characters: pure, it reads nothing.
   'typedMemberName',
+  // A company's logo address and which domains may have one (spec 0059): pure, they read nothing.
+  'companyLogoPath',
+  'isLogoDomain',
   // Domain join (spec 0031, slice 6): the signed in person's own workspaces to ask, through the door's domain
   // lookup and a system scope in each.
   'listJoinable',
@@ -699,6 +702,16 @@ describe('the walk: a principal without the access is refused', () => {
         const monday = new Date(now.getTime() - ((now.getUTCDay() + 6) % 7) * 86_400_000).toISOString().slice(0, 10);
         const week = await core.readTeamWeek(scope, { now: () => now }, { weekStart: monday });
         expect(week.rows.map((row) => row.memberId).filter((id) => id !== memberId)).toEqual([]);
+        return;
+      }
+      // The Team day (spec 0030, AC-769): a crafted `memberIds` naming others still answers the reader's column alone.
+      if (name === 'readTeamDay') {
+        const day = await core.readTeamDay(scope, {
+          day: new Date().toISOString().slice(0, 10),
+          timeZone: 'UTC',
+          memberIds: [ownerId, memberId],
+        });
+        expect(day.columns.map((column) => column.memberId)).toEqual([memberId]);
         return;
       }
       const answer = (await service(name)(scope, { memberIds: [ownerId] })) as

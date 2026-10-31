@@ -59,6 +59,11 @@ export const BookingPageView = BookingPageSettings.extend({
   ownerMemberId: Uuid,
   /** The owner's handle, when they have one: the page's address is then `/<handle>/<slug>`, else `/b/<publicKey>`. */
   handle: z.string().optional(),
+  /**
+   * The owner's name, on someone else's personal page (spec 0037, AC-1273): Captures › Links lists it under their
+   * name and its editor says "Editing Bea's page". Absent on the reader's own pages and on workspace links.
+   */
+  ownerName: z.string().optional(),
   /** The hours the page books by now: its schedule's, or the owner's default's (spec 0035), read only here. */
   availability: BookingAvailability,
   /** That schedule's name ("Working hours" while its owner has saved none), read only here. */
@@ -74,7 +79,10 @@ export const BookingPageView = BookingPageSettings.extend({
   routing: RoutingRules.optional(),
   /** Confirmed bookings starting this calendar month (UTC). */
   bookingsThisMonth: z.number().int().min(0),
-  /** The reader may change it: their own page with `booking.manage`, anyone's with `booking.admin`. */
+  /**
+   * The reader may change it: their own page with `booking.manage`, a personal page of someone whose scheduling they
+   * Manage (spec 0037, decision 13), anyone's with `booking.admin`.
+   */
   canChange: z.boolean(),
   createdAt: Timestamp,
   updatedAt: Timestamp,

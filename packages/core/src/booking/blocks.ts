@@ -379,6 +379,28 @@ export async function blockOccurrences(
 }
 
 /**
+ * `blockOccurrences` for many members in one read (the Team day, spec 0030, AC-778): each member's occurrences by
+ * start, every member asked for present (empty when they closed nothing).
+ */
+export async function blockOccurrencesOfMembers(
+  tx: WorkspaceTx,
+  memberIds: readonly string[],
+  from: Date,
+  to: Date,
+): Promise<ReadonlyMap<string, readonly TimeBlockOccurrence[]>> {
+  const rows = await blocksOfMembersTouching(tx, memberIds, from, to);
+  return new Map(
+    memberIds.map((member) => [
+      member,
+      rows
+        .filter((row) => row.memberId === member)
+        .flatMap((row) => occurrencesOf(row, from, to))
+        .sort((a, b) => a.startsAt.localeCompare(b.startsAt) || a.key.localeCompare(b.key)),
+    ]),
+  );
+}
+
+/**
  * What the member's blocks mean to one page's slots (AC-706, AC-707): every
  * block, and every hold the page can't use, is busy; a private page's usable
  * holds (shared, or carved for it) open as extra windows instead.

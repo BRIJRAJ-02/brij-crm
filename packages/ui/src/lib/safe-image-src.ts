@@ -5,8 +5,8 @@
  * Returns the src when the image may load: a path or URL on `origin`,
  * `data:image/…` or `blob:`. Returns `undefined` otherwise, so the caller shows
  * its fallback. A Google account picture comes through the api's own origin
- * routes (23 Oct 2026); other outside images (enriched logos) wait for #32 and
- * #47 to serve them through our origin.
+ * routes (23 Oct 2026), and a company's logo through `/api/logos/<domain>`
+ * (spec 0059), so neither is ever an outside address here.
  */
 export function safeImageSrc(src: string | undefined, origin: string = globalThis.location.origin): string | undefined {
   const value = src?.trim() ?? '';

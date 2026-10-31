@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, waitFor } from 'storybook/test';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { DeferredSelect, DeferredSelectFrom, type DeferredSelectProps, type SelectModule } from './DeferredSelect.tsx';
-import { Select } from './Select.tsx';
+import { Select } from './SelectWithFaces.tsx';
 
 const ZONES = [
   { id: 'Asia/Kolkata', label: 'Kolkata time', description: 'GMT+5:30' },
@@ -39,7 +39,7 @@ const HOLD_MS = 600;
 const held = (): Promise<SelectModule> =>
   new Promise((resolve) => {
     setTimeout(resolve, HOLD_MS);
-  }).then(() => import('./Select.tsx'));
+  }).then(() => import('./SelectWithFaces.tsx'));
 const failing = (): Promise<SelectModule> => Promise.reject(new Error('the chunk did not load'));
 
 function Held(args: DeferredSelectProps) {

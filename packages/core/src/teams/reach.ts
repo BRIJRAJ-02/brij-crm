@@ -1,18 +1,20 @@
 // Whose screens read again when a team's membership changes (spec 0031, AC-825): the one place that decides which
 // members an `access` outbox row names after `changeTeamMembers` (and a team's creation or deletion) commits.
 //
-// Today that is the people who joined or left, whose teams (and so whose access) changed, and the team's other
-// members, because a `team` record rule shows each of them the records of everyone in the team. Spec 0037 (AC-1274)
-// extends this function with the delegates whose scheduling reach runs through the team, so their Bookings lists and
-// weeks read again: add them to the result here, in the same transaction, and nothing else changes.
+// That is the people who joined or left, whose teams (and so whose access) changed, and the team's other members,
+// because a `team` record rule shows each of them the records of everyone in the team, and a `.team` scheduling
+// permission reaches team mates. Spec 0037 (AC-1274) adds the delegates holding a delegation over the team, whose
+// scheduling reach runs through it, so their Roster, Bookings lists and weeks read again.
 import { and, eq, inArray } from 'drizzle-orm';
 import { schema, type WorkspaceTx } from '@crm/db';
+import { teamDelegates } from '../scheduling/delegations.ts';
 
 const { teamMembers } = schema;
 
 /**
- * The members an `access` row names after `teamId`'s membership changed by `changed`: those people and everyone who
- * is in the team now, each once. Read inside the change's own transaction, after the change.
+ * The members an `access` row names after `teamId`'s membership changed by `changed`: those people, everyone who is
+ * in the team now and the team's delegates (AC-1274), each once. Read inside the change's own transaction, after the
+ * change.
  */
 export async function membersAffectedByTeamChange(
   tx: WorkspaceTx,
@@ -24,7 +26,8 @@ export async function membersAffectedByTeamChange(
     .select({ memberId: teamMembers.memberId })
     .from(teamMembers)
     .where(and(eq(teamMembers.workspaceId, workspaceId), eq(teamMembers.teamId, teamId)));
-  return [...new Set([...changed, ...rows.map((row) => row.memberId)])];
+  const delegates = await teamDelegates(tx, workspaceId, [teamId]);
+  return [...new Set([...changed, ...rows.map((row) => row.memberId), ...delegates])];
 }
 
 /**

@@ -7,11 +7,10 @@
 // existing person's values are never overwritten. The forms matching module
 // (spec 0023) takes this over at landing; the free domain list here is its
 // seam until the `free-email-domains` package arrives.
-import { sql } from 'drizzle-orm';
 import { emailDomain } from '@crm/contracts';
-import type { WorkspaceTx } from '@crm/db';
+import { bySlug, hasCompany, holderOf, ownerValue } from '../engine/filing.ts';
 import { insertRecord, updateRecord } from '../engine/records.ts';
-import { loadAttributes, type AttributeDef } from '../engine/values.ts';
+import { loadAttributes } from '../engine/values.ts';
 import type { WriteContext } from '../engine/write.ts';
 
 /** Free email providers: a person on one gets no company (spec 0023's list replaces this). */
@@ -43,46 +42,6 @@ export function splitName(name: string): { readonly firstName: string; readonly 
   const words = name.trim().split(/\s+/);
   if (words.length < 2) return { firstName: name.trim() };
   return { firstName: words.slice(0, -1).join(' '), lastName: words.at(-1) ?? '' };
-}
-
-/** The attribute of an object with this api slug, live. */
-function bySlug(attributes: ReadonlyMap<string, AttributeDef>, apiSlug: string): AttributeDef | undefined {
-  return [...attributes.values()].find((attribute) => attribute.apiSlug === apiSlug && attribute.archivedAt === null);
-}
-
-/** The object's live `owner` attribute set to the member, when it has one that names members; nothing otherwise. */
-function ownerValue(
-  attributes: ReadonlyMap<string, AttributeDef>,
-  memberId: string | undefined,
-): Readonly<Record<string, unknown>> {
-  const owner = memberId === undefined ? undefined : bySlug(attributes, 'owner');
-  if (owner?.type !== 'actor_reference' || memberId === undefined) return {};
-  const value = { type: 'member', id: memberId };
-  return { [owner.id]: owner.isMulti ? [value] : value };
-}
-
-/** The live record holding `key` as a current unique value of `attribute`, if any. */
-async function holderOf(tx: WorkspaceTx, attributeId: string, key: string): Promise<string | undefined> {
-  const found = await tx.execute<{ record_id: string }>(sql`
-    select v.record_id::text as record_id
-    from "values" v
-    join records r on r.workspace_id = v.workspace_id and r.id = v.record_id and r.deleted_at is null
-    where v.attribute_id = ${attributeId}::uuid and v.unique_key = ${key} and v.active_until is null
-    limit 1
-  `);
-  return found.rows[0]?.record_id;
-}
-
-/** Whether the person links a company now. */
-async function hasCompany(tx: WorkspaceTx, personId: string, attribute: AttributeDef): Promise<boolean> {
-  if (attribute.relationshipId === null) return true;
-  const found = await tx.execute(sql`
-    select 1 from record_links
-    where relationship_id = ${attribute.relationshipId}::uuid and active_until is null
-      and (from_record_id = ${personId}::uuid or to_record_id = ${personId}::uuid)
-    limit 1
-  `);
-  return found.rows.length > 0;
 }
 
 /**
