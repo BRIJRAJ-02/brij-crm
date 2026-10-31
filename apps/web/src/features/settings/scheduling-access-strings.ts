@@ -64,6 +64,10 @@ export const strings = {
   removed: 'Access removed.',
   everyonesPossessive: 'everyone’s',
   possessive: (name: string) => `${name}’s`,
+  /** A team's, as English writes it: "Sales’", "Support’s". */
+  teamPossessive: (name: string) => (name.endsWith('s') ? `${name}’` : `${name}’s`),
+  formerTeam: 'Deleted team',
+  formerTeamPossessive: 'a deleted team’s',
 
   // The Members page's column (AC-1267).
   column: 'Scheduling access',
@@ -84,6 +88,8 @@ export const strings = {
   targetPlaceholder: 'Choose',
   everyoneOption: 'Everyone',
   everyoneOptionText: 'Every member but owners and admins',
+  /** A team in the Give access picker: its people now; joiners are reached as they join. */
+  teamOptionText: (count: number) => `Team · ${String(count)} ${count === 1 ? 'person' : 'people'}`,
   give: 'Give access',
   given: (delegate: string, level: 'view' | 'manage', whose: string) =>
     `${delegate} can now ${levelWord(level)} ${whose} scheduling.`,

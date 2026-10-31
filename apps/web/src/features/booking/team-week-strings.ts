@@ -21,6 +21,10 @@ export const teamWeekStrings = {
   previousWeek: 'Previous week',
   nextWeek: 'Next week',
   search: 'Search people',
+  /** The team filter (AC-1289). */
+  teamFilter: 'Filter by team',
+  everyone: 'Everyone',
+  teamSize: (count: number) => (count === 1 ? '1 person' : `${String(count)} people`),
   hours,
   people: (count: number) => (count === 1 ? '1 person' : `${String(count)} people`),
   nobody: 'Nobody',
@@ -110,6 +114,7 @@ export const teamWeekStrings = {
   failed: 'Couldn’t load the roster.',
   noMatch: 'No one matches',
   noMatchBody: 'Try another name.',
+  noMatchInTeam: 'Try another team or name.',
   showMore: 'Show more',
   moreFailed: 'Couldn’t load more people.',
   tryAgain: 'Try again',

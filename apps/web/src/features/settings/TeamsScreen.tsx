@@ -13,6 +13,12 @@ import { focusTitle } from '../navigation/focus-title.ts';
 import { objectSettingsHref } from './nav.ts';
 import { SettingsPage } from './SettingsPage.tsx';
 import { TeamDialog } from './TeamDialog.tsx';
+import {
+  delegationsOverTeam,
+  forgetTeamDelegations,
+  TeamDeleteDialog,
+  type TeamDeleteQuestion,
+} from './TeamDeleteDialog.tsx';
 import { strings } from './teams-strings.ts';
 
 /** Props for the Teams page: what its route loaded through the data layer. */
@@ -90,17 +96,37 @@ export function TeamsScreen({ data, toasts, slug, teams, members, canManage }: T
     }
   };
 
-  // A delete is one click with Undo: a team no rule names holds no access, so nothing is lost. The Undo makes the
-  // same team again, with the same id and people.
-  const remove = (team: TeamView) => {
+  // A team that scheduling access names asks first (spec 0037, AC-1269): its delegations go with it, and Undo
+  // can't bring them back.
+  const [question, setQuestion] = useState<TeamDeleteQuestion | undefined>(undefined);
+  const ask = (team: TeamView) => {
     if (deleting !== undefined) return;
+    setDeleting(team.id);
+    void delegationsOverTeam(data, slug, team.id).then((over) => {
+      if (over.length === 0) {
+        remove(team, true);
+        return;
+      }
+      setDeleting(undefined);
+      setQuestion({ team, over });
+    });
+  };
+
+  // A delete is one click with Undo: a team no rule names holds no access, so nothing is lost. The Undo makes the
+  // same team again, with the same id and people. One that took scheduling access with it was confirmed: no Undo.
+  const remove = (team: TeamView, isUndoable: boolean) => {
     setDeleting(team.id);
     data.teams.delete(slug, team.id).then(
       async () => {
+        if (!isUndoable) forgetTeamDelegations(data, slug);
         await reload();
         setDeleting(undefined);
         // The button that asked went away with the row.
         focusTitle();
+        if (!isUndoable) {
+          toasts.toast({ tone: 'success', message: strings.deleted(team.name) });
+          return;
+        }
         toasts.toast({
           tone: 'success',
           message: strings.deleted(team.name),
@@ -213,7 +239,7 @@ export function TeamsScreen({ data, toasts, slug, teams, members, canManage }: T
             label={strings.removeTeam(team.name)}
             isPending={deleting === team.id}
             onPress={() => {
-              remove(team);
+              ask(team);
             }}
           />
         );
@@ -262,6 +288,15 @@ export function TeamsScreen({ data, toasts, slug, teams, members, canManage }: T
           onSave={(change) => save(editing, change)}
         />
       )}
+      <TeamDeleteDialog
+        question={question}
+        onConfirm={(team) => {
+          remove(team, false);
+        }}
+        onClose={() => {
+          setQuestion(undefined);
+        }}
+      />
     </SettingsPage>
   );
 }

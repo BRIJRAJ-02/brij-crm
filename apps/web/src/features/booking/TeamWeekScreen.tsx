@@ -1,7 +1,7 @@
 // Brief
 // Purpose: the Roster (spec 0037, job J6): Availability's Team view, the team's bookable hours for one dated week, people down the side and the days across, with a footer counting who works.
 // Main task: read who works when, and (with Manage) change one person's day for that date only, copy a week to the next, or set usual hours for several people.
-// Leaves out: shifts with roles or places, publishing, labour cost, painting cells by drag, and a team filter (no teams yet). The workspace link's coverage is one quiet line under each day's total ("Link: 3"), only while the workspace has a link.
+// Leaves out: shifts with roles or places, publishing, labour cost and painting cells by drag. The workspace link's coverage is one quiet line under each day's total ("Link: 3"), only while the workspace has a link.
 import {
   clockLabel,
   isDataError,
@@ -57,6 +57,7 @@ import {
 import { todayIn } from './hours.ts';
 import { availabilityHref } from './links.ts';
 import { teamWeekHref } from './team-week-links.ts';
+import { TeamWeekTeamFilter, useWorkspaceTeams } from './TeamWeekTeamFilter.tsx';
 import { teamWeekStrings as words } from './team-week-strings.ts';
 import { timeOffStrings } from './time-off-strings.ts';
 
@@ -264,6 +265,10 @@ export function TeamWeekScreen({ data, slug, week, search, zone, members }: Team
   // "Set usual hours" for one person (from their row) or several ("Set usual hours for…"); undefined when closed.
   const [usualFor, setUsualFor] = useState<readonly string[] | undefined>(undefined);
   const [query, setQuery] = useState(search);
+  // The team filter (AC-1289): the screen's own choice, kept while the week changes; a team since deleted is none.
+  const teams = useWorkspaceTeams(data, slug);
+  const [chosenTeam, setTeam] = useState('');
+  const teamId = teams.some((team) => team.id === chosenTeam) ? chosenTeam : '';
   // The search reaches the address a moment after typing stops, so each key doesn't read the week again.
   useEffect(() => {
     if (query.trim() === search) return undefined;
@@ -271,7 +276,7 @@ export function TeamWeekScreen({ data, slug, week, search, zone, members }: Team
     return () => clearTimeout(timer);
   }, [query, search, navigate, slug, week]);
   if (scheduling === undefined) return <TeamWeekPending week={week} />;
-  const held = scheduling.teamWeek.held(slug, week, search);
+  const held = scheduling.teamWeek.held(slug, week, search, teamId);
   return (
     <Loaded
       held={held}
@@ -283,6 +288,8 @@ export function TeamWeekScreen({ data, slug, week, search, zone, members }: Team
       members={members}
       query={query}
       onQuery={setQuery}
+      teamFilter={<TeamWeekTeamFilter teams={teams} value={teamId} onChange={setTeam} />}
+      isTeamChosen={teamId !== ''}
       slot={slot}
       copying={copying}
       onCopy={setCopying}
@@ -308,6 +315,8 @@ function Loaded({
   members,
   query,
   onQuery,
+  teamFilter,
+  isTeamChosen,
   slot,
   copying,
   onCopy,
@@ -325,6 +334,9 @@ function Loaded({
   readonly members: readonly VisibleMember[];
   readonly query: string;
   readonly onQuery: (query: string) => void;
+  /** The team filter's Select (absent while the workspace has no teams). */
+  readonly teamFilter: ReactNode;
+  readonly isTeamChosen: boolean;
   readonly slot: HTMLElement | null;
   readonly copying: readonly TeamWeekRow[] | undefined;
   readonly onCopy: (rows: readonly TeamWeekRow[] | undefined) => void;
@@ -493,6 +505,7 @@ function Loaded({
       isTitleQuiet
       end={
         <>
+          {teamFilter}
           <Field
             label={words.search}
             isLabelHidden
@@ -534,7 +547,9 @@ function Loaded({
           days={days}
           people={people}
           isLoading={state.status === 'loading'}
-          emptyState={<EmptyState title={words.noMatch}>{words.noMatchBody}</EmptyState>}
+          emptyState={
+            <EmptyState title={words.noMatch}>{isTeamChosen ? words.noMatchInTeam : words.noMatchBody}</EmptyState>
+          }
           {...(footer === undefined ? {} : { footer })}
           legend={legend}
           editorLabel={(memberId, index) =>

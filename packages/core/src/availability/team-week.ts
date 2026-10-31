@@ -162,7 +162,12 @@ const zoneOrUtc = (zone: string | null | undefined): string =>
 export async function readTeamWeek(
   scope: EngineScope,
   deps: { readonly now: () => Date },
-  input: { readonly weekStart: string; readonly search?: string | undefined; readonly cursor?: string | undefined },
+  input: {
+    readonly weekStart: string;
+    readonly search?: string | undefined;
+    readonly teamId?: string | undefined;
+    readonly cursor?: string | undefined;
+  },
 ): Promise<TeamWeek> {
   checkScope(scope);
   const now = deps.now();
@@ -183,6 +188,14 @@ export async function readTeamWeek(
     const named = reach.all === undefined ? [me, ...reach.members.keys()].filter(isUuid) : undefined;
     const within = named === undefined ? sql`true` : sql`m.id = any(${uuidList(named)})`;
     const matching = search === '' ? sql`true` : sql`m.name ilike ${likeText(search)}`;
+    // The team filter (AC-1289) narrows within the reach, never past it: a team's ids are as open as the member list.
+    const inTeam =
+      input.teamId === undefined
+        ? sql`true`
+        : isUuid(input.teamId)
+          ? sql`exists (select 1 from team_members tm where tm.workspace_id = m.workspace_id
+              and tm.team_id = ${input.teamId}::uuid and tm.member_id = m.id)`
+          : sql`false`;
     // The reader first on the first page; later pages carry on by name after the cursor, the reader left out.
     const paged =
       after === undefined
@@ -208,7 +221,7 @@ export async function readTeamWeek(
       join workspaces w on w.id = m.workspace_id
       left join availability_schedules s on s.workspace_id = m.workspace_id and s.member_id = m.id and s.is_default
       where m.workspace_id = ${scope.workspaceId}::uuid and m.status = 'active' and m.role::text <> 'guest'
-        and ${within} and ${matching} and ${paged}
+        and ${within} and ${matching} and ${inTeam} and ${paged}
       order by ${order}
       limit ${TEAM_WEEK.rowsPerPage + 1}
     `);

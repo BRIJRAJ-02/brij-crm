@@ -146,6 +146,7 @@ export interface SchedulingAccessWire<O> {
           readonly workspace: string;
           readonly weekStart: string;
           readonly search?: string;
+          readonly teamId?: string;
           readonly cursor?: string;
         },
         options: O,
