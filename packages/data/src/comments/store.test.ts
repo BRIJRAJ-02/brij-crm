@@ -247,6 +247,7 @@ describe('the inbox and its count', () => {
           emailReplies: false,
           emailAssignments: true,
           digest: false,
+          followedRecords: true,
           version: 0,
         }),
       setSettings: () => Promise.reject(dataError('INPUT_INVALID', 'Bad.')),

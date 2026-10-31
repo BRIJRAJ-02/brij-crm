@@ -26,7 +26,7 @@ import {
 import type { RecordRefDisplay } from '@crm/contracts/values';
 import type { WorkspaceTx } from '@crm/db';
 import { checkScope } from '../access/mint.ts';
-import { can } from '../access/policy.ts';
+import { can, fieldLevel } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
 import { canonicalId, isUuid, uuidList } from '../engine/ids.ts';
 import { inputInvalid, refuse } from '../engine/refusals.ts';
@@ -55,6 +55,7 @@ export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = Object.freeze
   emailReplies: false,
   emailAssignments: true,
   digest: false,
+  followedRecords: true,
   version: 0,
 });
 
@@ -103,6 +104,8 @@ interface NotificationRow extends Record<string, unknown> {
   readonly body: string | null;
   /** A note mention's note title, while the note is live (null when it is in the trash or gone). */
   readonly note_title: string | null;
+  /** A followed record's activity (`record_activity`): attribute ids and counts, never a value. */
+  readonly activity: unknown;
   /** The sort moment for the cursor: made (inbox) or done (done), with microseconds. */
   readonly at: string;
 }
@@ -113,7 +116,7 @@ const NOTIFICATION_COLUMNS = sql`n.id::text as id, n.kind, n.actor_type, n.actor
   n.task_id::text as task_id, n.note_id::text as note_id, n.submission_id::text as submission_id,
   n.join_request_id::text as join_request_id, jr.name as join_name, n.automation_id::text as automation_id,
   jsonb_path_query_first(au.actions, '$[*] ? (@.kind == "notify").message') #>> '{}' as automation_message,
-  n.due_task_id::text as due_task_id, dtk.title as due_title, c.body, nt.title as note_title`;
+  n.due_task_id::text as due_task_id, dtk.title as due_title, c.body, nt.title as note_title, n.activity`;
 
 /** The comment a notification is about, joined when it is live (a deleted one's notifications are gone already). */
 const COMMENT_JOIN = sql`left join comments c on c.workspace_id = n.workspace_id and c.id = n.comment_id
@@ -144,6 +147,21 @@ async function visibleViews(
   const tasks = new Map(
     (taskIds.length === 0 ? [] : await readTaskViews(tx, scope, [...new Set(taskIds)])).map((task) => [task.id, task]),
   );
+  const activities = new Map(
+    rows.flatMap((row) => (row.kind === 'record_activity' ? [[row.id, activityOf(row.activity)] as const] : [])),
+  );
+  // A followed record's changed fields count only while the attribute lives (and, below, while the reader sees it).
+  const fieldIds = [...new Set([...activities.values()].flatMap((activity) => activity.fields))];
+  const liveFields =
+    fieldIds.length === 0
+      ? new Set<string>()
+      : new Set(
+          (
+            await tx.execute<{ id: string }>(
+              sql`select id::text as id from attributes where id = any(${uuidList(fieldIds)}) and archived_at is null`,
+            )
+          ).rows.map((row) => row.id),
+        );
   return rows.flatMap((row): NotificationView[] => {
     const base = {
       id: row.id,
@@ -175,6 +193,25 @@ async function visibleViews(
       // Someone asks to join: shown while the request is open and the reader may still approve it.
       if (row.join_name === null || !can(scope.access, 'members.invite')) return [];
       return [{ ...base, joinRequestId: row.join_request_id, excerpt: excerptOf(row.join_name, NOTIFICATION_EXCERPT) }];
+    }
+    if (row.kind === 'record_activity') {
+      // Someone changed a record the reader follows: shown while they may read it, counting only the fields they
+      // may see; one whose every change is hidden from them is absent.
+      const record = row.record_id === null ? undefined : records.get(row.record_id);
+      const activity = activities.get(row.id);
+      if (record === undefined || activity === undefined) return [];
+      const fields = activity.fields.filter(
+        (id) => liveFields.has(id) && fieldLevel(scope.access, { id, objectId: record.objectId }) !== 'hidden',
+      ).length;
+      if (fields === 0 && activity.notes === 0 && activity.comments === 0 && activity.tasks === 0) return [];
+      return [
+        {
+          ...base,
+          record,
+          activity: { fields, notes: activity.notes, comments: activity.comments, tasks: activity.tasks },
+          excerpt: '',
+        },
+      ];
     }
     if (row.kind === 'scheduling_changed') {
       // Someone changed the reader's own scheduling (spec 0037, AC-1264): about them alone, so always theirs to see.
@@ -220,6 +257,24 @@ async function visibleViews(
       },
     ];
   });
+}
+
+/** A stored `activity` as counts and attribute ids; anything it doesn't hold reads as none. */
+export function activityOf(stored: unknown): {
+  readonly fields: readonly string[];
+  readonly notes: number;
+  readonly comments: number;
+  readonly tasks: number;
+} {
+  const value = typeof stored === 'object' && stored !== null ? (stored as Record<string, unknown>) : {};
+  const count = (key: string) => {
+    const n = value[key];
+    return typeof n === 'number' && Number.isInteger(n) && n > 0 ? n : 0;
+  };
+  const fields = Array.isArray(value.fields)
+    ? value.fields.filter((id): id is string => typeof id === 'string' && isUuid(id))
+    : [];
+  return { fields, notes: count('notes'), comments: count('comments'), tasks: count('tasks') };
 }
 
 /** Encodes where a page ended as the opaque cursor. */
@@ -459,6 +514,7 @@ interface SettingsRow extends Record<string, unknown> {
   readonly email_replies: boolean;
   readonly email_assignments: boolean;
   readonly digest: boolean;
+  readonly follow_notices: boolean;
   readonly time_zone: string | null;
   readonly version: number;
 }
@@ -472,6 +528,7 @@ const settingsOf = (row: SettingsRow | undefined): NotificationSettings =>
         emailReplies: row.email_replies,
         emailAssignments: row.email_assignments,
         digest: row.digest,
+        followedRecords: row.follow_notices,
         ...(row.time_zone === null ? {} : { timeZone: row.time_zone }),
         version: row.version,
       };
@@ -479,7 +536,7 @@ const settingsOf = (row: SettingsRow | undefined): NotificationSettings =>
 /** Reads the caller's settings row, if they have one. */
 async function settingsRow(tx: WorkspaceTx, me: string, lock = false): Promise<SettingsRow | undefined> {
   const rows = await tx.execute<SettingsRow>(sql`
-    select email_mentions, email_replies, email_assignments, digest, time_zone, version
+    select email_mentions, email_replies, email_assignments, digest, follow_notices, time_zone, version
     from notification_settings where member_id = ${me}::uuid
     ${lock ? sql`for update` : sql``}
   `);
@@ -518,6 +575,8 @@ export interface SetNotificationSettingsInput {
   readonly emailReplies?: boolean;
   readonly emailAssignments?: boolean;
   readonly digest?: boolean;
+  /** Notices about records the member follows, in the inbox. */
+  readonly followedRecords?: boolean;
   /** The browser's IANA zone, stored with the digest (AC-1178). */
   readonly timeZone?: string;
 }
@@ -549,6 +608,7 @@ export async function setNotificationSettings(
         emailReplies: input.emailReplies ?? before.emailReplies,
         emailAssignments: input.emailAssignments ?? before.emailAssignments,
         digest: input.digest ?? before.digest,
+        followedRecords: input.followedRecords ?? before.followedRecords,
         timeZone: input.timeZone ?? before.timeZone,
       };
       if (next.digest && next.timeZone === undefined) throw inputInvalid('timeZone', DIGEST_ZONE_MESSAGE);
@@ -562,6 +622,7 @@ export async function setNotificationSettings(
         next.emailReplies === before.emailReplies &&
         next.emailAssignments === before.emailAssignments &&
         next.digest === before.digest &&
+        next.followedRecords === before.followedRecords &&
         next.timeZone === before.timeZone;
       if (same) return before;
       if (
@@ -570,20 +631,21 @@ export async function setNotificationSettings(
         next.emailReplies === stored.emailReplies &&
         next.emailAssignments === stored.emailAssignments &&
         next.digest === stored.digest &&
+        next.followedRecords === stored.followedRecords &&
         next.timeZone === stored.timeZone
       ) {
         return before;
       }
       const rows = await tx.execute<SettingsRow>(sql`
         insert into notification_settings (workspace_id, member_id, email_mentions, email_replies, email_assignments,
-          digest, time_zone, version)
+          digest, follow_notices, time_zone, version)
         values (${scope.workspaceId}::uuid, ${me}::uuid, ${next.emailMentions}, ${next.emailReplies},
-          ${next.emailAssignments}, ${next.digest}, ${next.timeZone ?? null}, 1)
+          ${next.emailAssignments}, ${next.digest}, ${next.followedRecords}, ${next.timeZone ?? null}, 1)
         on conflict (workspace_id, member_id) do update set email_mentions = excluded.email_mentions,
           email_replies = excluded.email_replies, email_assignments = excluded.email_assignments,
-          digest = excluded.digest, time_zone = excluded.time_zone,
+          digest = excluded.digest, follow_notices = excluded.follow_notices, time_zone = excluded.time_zone,
           version = notification_settings.version + 1, updated_at = now()
-        returning email_mentions, email_replies, email_assignments, digest, time_zone, version
+        returning email_mentions, email_replies, email_assignments, digest, follow_notices, time_zone, version
       `);
       // Turned on here, mentions are on: the `mentions` topic an email's link turned off goes back on with it.
       if (input.emailMentions === true) {

@@ -224,6 +224,25 @@ export {
 } from './objects/objects.ts';
 export { countRecordsByObject, getUsage } from './objects/usage.ts';
 export {
+  FOLLOW_BURST_MINUTES,
+  FOLLOW_NOTICE_RECORDS_MAX,
+  getFollow,
+  setFollow,
+  summarizeActivity,
+  type ActivitySummary,
+  type FollowState,
+  type RecordActivity,
+} from './follows/follows.ts';
+export {
+  addSampleData,
+  applySalesTemplate,
+  getSampleData,
+  removeSampleData,
+  SAMPLE_DATA_KIND,
+  sampleDataKind,
+  undoRemoveSampleData,
+} from './sample/sample.ts';
+export {
   archiveAttributes,
   createAttribute,
   editAttribute,

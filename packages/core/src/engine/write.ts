@@ -10,6 +10,7 @@ import type { Actor, EngineScope } from './scope.ts';
 import { inWorkspace } from '../access/run.ts';
 import type { RuleCache } from '../validation/rules.ts';
 import { planComputed } from '../computed/plan.ts';
+import { followUp, type RecordActivity } from '../follows/follows.ts';
 
 /** A record a write touched, with its object: the outbox groups a change by object. */
 export interface RecordRef {
@@ -342,8 +343,11 @@ function brand(change: Omit<CappedChange, typeof CAPPED>): CappedChange {
   return change as CappedChange;
 }
 
-/** The lists of a change that a write step adds to. */
-type ChangeLists = Omit<Change, 'kind' | 'workspaceId' | 'actor'>;
+/**
+ * The lists of a change that a write step adds to, and `activity`: what it did on records besides their values (a
+ * note, a comment, a task done), which only the follow step reads, so the hooks never see it.
+ */
+type ChangeLists = Omit<Change, 'kind' | 'workspaceId' | 'actor'> & { readonly activity: readonly RecordActivity[] };
 const LIST_KEYS = [
   'createdRecords',
   'deletedRecords',
@@ -376,6 +380,7 @@ const LIST_KEYS = [
   'notifications',
   'calendars',
   'files',
+  'activity',
 ] as const satisfies readonly (keyof ChangeLists)[];
 
 /**
@@ -512,6 +517,7 @@ export async function runWrite<T>(
           notifications: [] as string[],
           calendars: [] as string[],
           files: [] as FileChange[],
+          activity: [] as RecordActivity[],
         };
         // Record slots the write takes at its end; local to this attempt.
         let slots = 0;
@@ -558,6 +564,7 @@ export async function runWrite<T>(
             append(collected.notifications, part.notifications);
             append(collected.calendars, part.calendars);
             append(collected.files, part.files);
+            append(collected.activity, part.activity);
           },
           async perRecord(step) {
             const marks = LIST_KEYS.map((key) => collected[key].length);
@@ -578,6 +585,8 @@ export async function runWrite<T>(
         const result = await work(context);
         // Computed attributes (spec 0015): the lookups and rollups this write's change feeds are queued in it.
         await planComputed(context, collected);
+        // Following (collaboration): the follows the write implies, and its followers' notices, in its transaction.
+        await followUp(context, collected);
         // The record slots the work counted, last of its locks, before the hooks number the change from the row.
         if (slots !== 0) await takeRecordSlots(tx, scope, slots);
         // The full change: the outbox hook caps its own copy with `capChange`, and the audit log names every record.

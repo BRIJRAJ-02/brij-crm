@@ -429,6 +429,16 @@ export async function createTask(
   hooks: readonly AfterWrite[] = [],
 ): Promise<TaskView> {
   checkScope(scope);
+  const { result } = await runWrite(scope, (context) => createTaskIn(context, input), hooks);
+  const [view] = result;
+  // The writer made it, so they can see it: anything else is a bug, not a refusal.
+  if (view === undefined) throw new Error('A task just written could not be read back.');
+  return view;
+}
+
+/** `createTask` inside a write the caller holds (sample data's job): the same checks, rows and change. */
+export async function createTaskIn(context: WriteContext, input: CreateTaskInput): Promise<readonly TaskView[]> {
+  const { scope } = context;
   if (!principalReaches(scope.access, 'write')) throw refuse('FORBIDDEN', NOT_FOR_KEYS);
   checkGuestAssignee(scope.access, input.assigneeMemberId);
   if (!isUuidV7(input.id)) throw inputInvalid('id', 'The task id must be a UUID v7.');
@@ -438,46 +448,36 @@ export async function createTask(
   const dueOn = input.dueOn === undefined ? undefined : checkDueOn(input.dueOn);
   const recordIds = checkRecordIds(input.recordIds);
   if (recordIds.length > TASK_RECORDS_MAX) throw refuse('LIMIT_REACHED', LINKS_FULL);
-  const { result } = await runWrite(
-    scope,
-    async (context) => {
-      const { tx } = context;
-      if ((await replayOf(tx, scope, id)) === 'replay') return readTaskViews(tx, scope, [id], true);
-      const assignee =
-        input.assigneeMemberId === undefined ? undefined : await checkAssignee(context, input.assigneeMemberId);
-      await checkLinkable(context, recordIds);
-      const actor = scope.actor;
-      const memberId = actor.type === 'member' ? actor.id : null;
-      const inserted = await tx.execute(sql`
-        insert into tasks (workspace_id, id, title, description, due_on, assignee_member_id,
-          created_by_type, created_by_id, created_by_member_id, updated_by_type, updated_by_id, updated_by_member_id)
-        values (${scope.workspaceId}::uuid, ${id}::uuid, ${title}, ${description}, ${dueOn ?? null}::date, ${assignee ?? null}::uuid,
-          ${actor.type}, ${actor.id}::uuid, ${memberId}::uuid, ${actor.type}, ${actor.id}::uuid, ${memberId}::uuid)
-        on conflict (workspace_id, id) do nothing
-      `);
-      // Another try of the same create landed first, in a transaction that committed meanwhile.
-      if (inserted.rowCount === 0) {
-        if ((await replayOf(tx, scope, id)) === 'replay') return readTaskViews(tx, scope, [id], true);
-        throw refuse('ID_TAKEN', 'A task with that id already exists.');
-      }
-      if (recordIds.length > 0) {
-        await tx.execute(sql`
-          insert into task_records (workspace_id, task_id, record_id, position, created_by_type, created_by_id, created_by_member_id)
-          select ${scope.workspaceId}::uuid, ${id}::uuid, x.id, (x.n - 1)::smallint, ${actor.type}, ${actor.id}::uuid, ${memberId}::uuid
-          from unnest(${uuidList(recordIds)}) with ordinality as x(id, n)
-        `);
-      }
-      // Someone else assigned: they hear of it (spec 0038, AC-1165).
-      if (assignee !== undefined) await notifyTaskAssigned(context, { taskId: id, assignee, previous: null });
-      context.record({ tasks: [{ taskId: id, recordIds }] });
-      return readTaskViews(tx, scope, [id], true);
-    },
-    hooks,
-  );
-  const [view] = result;
-  // The writer made it, so they can see it: anything else is a bug, not a refusal.
-  if (view === undefined) throw new Error('A task just written could not be read back.');
-  return view;
+  const { tx } = context;
+  if ((await replayOf(tx, scope, id)) === 'replay') return readTaskViews(tx, scope, [id], true);
+  const assignee =
+    input.assigneeMemberId === undefined ? undefined : await checkAssignee(context, input.assigneeMemberId);
+  await checkLinkable(context, recordIds);
+  const actor = scope.actor;
+  const memberId = actor.type === 'member' ? actor.id : null;
+  const inserted = await tx.execute(sql`
+    insert into tasks (workspace_id, id, title, description, due_on, assignee_member_id,
+      created_by_type, created_by_id, created_by_member_id, updated_by_type, updated_by_id, updated_by_member_id)
+    values (${scope.workspaceId}::uuid, ${id}::uuid, ${title}, ${description}, ${dueOn ?? null}::date, ${assignee ?? null}::uuid,
+      ${actor.type}, ${actor.id}::uuid, ${memberId}::uuid, ${actor.type}, ${actor.id}::uuid, ${memberId}::uuid)
+    on conflict (workspace_id, id) do nothing
+  `);
+  // Another try of the same create landed first, in a transaction that committed meanwhile.
+  if (inserted.rowCount === 0) {
+    if ((await replayOf(tx, scope, id)) === 'replay') return readTaskViews(tx, scope, [id], true);
+    throw refuse('ID_TAKEN', 'A task with that id already exists.');
+  }
+  if (recordIds.length > 0) {
+    await tx.execute(sql`
+      insert into task_records (workspace_id, task_id, record_id, position, created_by_type, created_by_id, created_by_member_id)
+      select ${scope.workspaceId}::uuid, ${id}::uuid, x.id, (x.n - 1)::smallint, ${actor.type}, ${actor.id}::uuid, ${memberId}::uuid
+      from unnest(${uuidList(recordIds)}) with ordinality as x(id, n)
+    `);
+  }
+  // Someone else assigned: they hear of it (spec 0038, AC-1165).
+  if (assignee !== undefined) await notifyTaskAssigned(context, { taskId: id, assignee, previous: null });
+  context.record({ tasks: [{ taskId: id, recordIds }] });
+  return readTaskViews(tx, scope, [id], true);
 }
 
 /** The current links of a locked task, with each record's object and whether it is live. */
@@ -593,7 +593,13 @@ export async function updateTask(
         where id = ${taskId}::uuid
       `);
       const linked = [...new Set([...row.record_ids, ...added])];
-      context.record({ tasks: [{ taskId, recordIds: linked }] });
+      context.record({
+        tasks: [{ taskId, recordIds: linked }],
+        // A task done: the followers of each record it links hear of it (collaboration).
+        ...(input.isDone === true && !row.is_done
+          ? { activity: linked.map((recordId) => ({ recordId, kind: 'task_done' as const })) }
+          : {}),
+      });
       return readTaskViews(tx, scope, [taskId], true);
     },
     hooks,

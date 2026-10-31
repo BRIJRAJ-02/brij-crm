@@ -16,13 +16,17 @@ import { sql, type SQL } from 'drizzle-orm';
 import type { NotificationKind } from '@crm/contracts';
 import type { WorkspaceTx } from '@crm/db';
 import { uuidList } from '../engine/ids.ts';
+import { followTaskRecords } from '../follows/follows.ts';
 import type { WriteContext } from '../engine/write.ts';
 
 /**
  * The kinds a member's switches email after a notification (a form's submission, a join request and a scheduling
- * change each have their own email; an automation's notice is in app only).
+ * change each have their own email; an automation's notice and a followed record's activity are in app only).
  */
-type SwitchedKind = Exclude<NotificationKind, 'form_submission' | 'join_request' | 'automation' | 'scheduling_changed'>;
+type SwitchedKind = Exclude<
+  NotificationKind,
+  'form_submission' | 'join_request' | 'automation' | 'scheduling_changed' | 'record_activity'
+>;
 
 /** The settings column that says whether a kind is emailed. */
 // A join request has its own email (`requestToJoin`'s notice), so it never queues this one.
@@ -207,6 +211,8 @@ export async function notifyTaskAssigned(
 ): Promise<void> {
   const { taskId, assignee, previous } = input;
   if (assignee === previous) return;
+  // Given a task, they follow each record it links (collaboration), their own assignment included.
+  if (assignee !== null) await followTaskRecords(context, taskId, assignee);
   const changed: string[] = [];
   if (previous !== null) {
     const removed = await context.tx.execute<{ member_id: string }>(sql`

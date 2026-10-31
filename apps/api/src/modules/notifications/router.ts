@@ -59,6 +59,7 @@ export const notificationsRouter = member.notifications.router({
           ...(input.emailReplies === undefined ? {} : { emailReplies: input.emailReplies }),
           ...(input.emailAssignments === undefined ? {} : { emailAssignments: input.emailAssignments }),
           ...(input.digest === undefined ? {} : { digest: input.digest }),
+          ...(input.followedRecords === undefined ? {} : { followedRecords: input.followedRecords }),
           ...(input.timeZone === undefined ? {} : { timeZone: input.timeZone }),
         },
         hooks,

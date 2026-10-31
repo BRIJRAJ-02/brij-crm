@@ -547,7 +547,8 @@ export async function createComment(
         mentioned,
         ...(participants === undefined ? {} : { participants }),
       });
-      context.record({ comments: [{ threadId, recordId, objectId }] });
+      // Its record's followers hear of it (collaboration).
+      context.record({ comments: [{ threadId, recordId, objectId }], activity: [{ recordId, kind: 'comment' }] });
       return threadAfterWrite(tx, scope, threadId);
     },
     hooks,

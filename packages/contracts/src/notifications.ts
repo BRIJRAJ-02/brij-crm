@@ -29,7 +29,8 @@ export const MAX_NOTIFICATION_CURSOR = 256;
  * Why a member was notified (decision 8); `form_submission`, a form they're told about got one (spec 0023, AC-568);
  * `join_request`, someone asks to join (flow pass); `task_due`, a task assigned to them is due today (migration 0135);
  * `automation`, an automation's notify action (parity #53); `scheduling_changed`, someone else changed the member's
- * scheduling (spec 0037, AC-1264), naming only who.
+ * scheduling (spec 0037, AC-1264), naming only who; `record_activity`, someone else changed a record the member
+ * follows (collaboration), one notice per burst.
  */
 export const NotificationKind = z.enum([
   'mention',
@@ -40,6 +41,7 @@ export const NotificationKind = z.enum([
   'task_due',
   'automation',
   'scheduling_changed',
+  'record_activity',
 ]);
 /** Why a member was notified. */
 export type NotificationKind = z.infer<typeof NotificationKind>;
@@ -74,6 +76,18 @@ export const NotificationView = z.object({
   submissionId: Uuid.optional(),
   formId: Uuid.optional(),
   formName: z.string().optional(),
+  /**
+   * A followed record's activity (with the record in `record`): how many of its fields the reader may see changed,
+   * and how many notes, comments and tasks done. Counts only, never a value.
+   */
+  activity: z
+    .object({
+      fields: z.number().int().min(0),
+      notes: z.number().int().min(0),
+      comments: z.number().int().min(0),
+      tasks: z.number().int().min(0),
+    })
+    .optional(),
   excerpt: z.string(),
 });
 /** One notification as its recipient sees it. */
@@ -166,6 +180,8 @@ export const NotificationSettings = z.object({
   emailReplies: z.boolean(),
   emailAssignments: z.boolean(),
   digest: z.boolean(),
+  /** Notices about records the member follows, in the inbox (on by default). */
+  followedRecords: z.boolean(),
   timeZone: z.string().optional(),
   version: z.number().int().min(0),
 });
@@ -178,6 +194,7 @@ export const SetNotificationSettingsInput = WorkspaceScoped.extend({
   emailReplies: z.boolean().optional(),
   emailAssignments: z.boolean().optional(),
   digest: z.boolean().optional(),
+  followedRecords: z.boolean().optional(),
   timeZone: TimeZone.optional(),
   mutationId: Uuid,
 });

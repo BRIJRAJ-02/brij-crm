@@ -15,6 +15,7 @@ import {
 } from './modules/booking/router.ts';
 import { exportsRouter } from './modules/exports/router.ts';
 import { importsRouter } from './modules/imports/router.ts';
+import { followsRouter, sampleDataRouter } from './modules/follows/router.ts';
 import { jobsRouter } from './modules/jobs/router.ts';
 import { linksRouter } from './modules/links/router.ts';
 import { entriesRouter, listsRouter } from './modules/lists/router.ts';
@@ -118,4 +119,6 @@ export const router = base.router({
   preferences: preferencesRouter,
   imports: importsRouter,
   exports: exportsRouter,
+  follows: followsRouter,
+  sampleData: sampleDataRouter,
 });

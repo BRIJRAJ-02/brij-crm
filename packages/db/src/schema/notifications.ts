@@ -14,6 +14,7 @@ import {
   foreignKey,
   index,
   integer,
+  jsonb,
   pgEnum,
   pgTable,
   primaryKey,
@@ -41,6 +42,7 @@ export const notificationKind = pgEnum('notification_kind', [
   'task_due',
   'automation',
   'scheduling_changed',
+  'record_activity',
 ]);
 
 const actor = actorColumns('actor');
@@ -74,6 +76,11 @@ export const notifications = pgTable(
     automationId: uuid('automation_id'),
     automationRunId: uuid('automation_run_id'),
     dueTaskId: uuid('due_task_id'),
+    /**
+     * A followed record's activity (migration 0165, placeholder): what happened, by id and count only
+     * (`{ fields: [<attribute ids>], notes, comments, tasks }`), merged over a burst into one notice.
+     */
+    activity: jsonb('activity'),
     createdAt: timestamptz('created_at').notNull().defaultNow(),
     readAt: timestamptz('read_at'),
     doneAt: timestamptz('done_at'),
@@ -116,7 +123,7 @@ export const notifications = pgTable(
     // A comment notification names its comment, thread and record; a task one (assigned or due) its task; a note mention its note
     // and record; a submission one its submission (and its record, once filed); a join request its request
     // alone; an automation's its automation and run (and its record or its due task); someone changing the member's
-    // scheduling (0143) its actor alone. Kinds compare as text (0130, 0131, 0135, 0140, 0143): each value was added in
+    // scheduling (0143) its actor alone; a followed record's activity (0165) its record. Kinds compare as text (0130, 0131, 0135, 0140, 0143): each value was added in
     // its own migration's transaction.
     check(
       'notifications_subject',
@@ -140,7 +147,14 @@ export const notifications = pgTable(
           and ${t.submissionId} is null and ${t.joinRequestId} is null)
         or (${t.kind}::text = 'scheduling_changed' and ${t.actorMemberId} is not null and ${t.recordId} is null
           and ${t.threadId} is null and ${t.commentId} is null and ${t.taskId} is null and ${t.noteId} is null
+          and ${t.submissionId} is null and ${t.joinRequestId} is null and ${t.automationId} is null)
+        or (${t.kind}::text = 'record_activity' and ${t.recordId} is not null and ${t.activity} is not null
+          and ${t.threadId} is null and ${t.commentId} is null and ${t.taskId} is null and ${t.noteId} is null
           and ${t.submissionId} is null and ${t.joinRequestId} is null and ${t.automationId} is null)`,
+    ),
+    check(
+      'notifications_activity',
+      sql`${t.activity} is null or (${t.kind}::text = 'record_activity' and jsonb_typeof(${t.activity}) = 'object')`,
     ),
     foreignKey({
       name: 'notifications_automation',
@@ -224,6 +238,8 @@ export const notificationSettings = pgTable(
     emailReplies: boolean('email_replies').notNull().default(false),
     emailAssignments: boolean('email_assignments').notNull().default(true),
     digest: boolean('digest').notNull().default(false),
+    /** Notices about records the member follows, in the inbox (migration 0165, placeholder). */
+    followNotices: boolean('follow_notices').notNull().default(true),
     /** The browser's IANA time zone when the digest was turned on: the digest goes at 08:00 there. */
     timeZone: text('time_zone'),
     /** The member's local date of the last digest, so a day gets one. */

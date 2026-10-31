@@ -64,6 +64,8 @@ export const PURGE_DEPENDENTS: readonly PurgeDependent[] = Object.freeze([
   // first, since a notification's record has no foreign key action (spec 0038, AC-1160).
   removing('notifications', (ids) => sql`delete from notifications where record_id = any(${ids})`),
   removing('comments', (ids) => sql`delete from comments where record_id = any(${ids})`),
+  // The records' sample data marks (migration 0165, placeholder); their follows go by cascade.
+  removing('sample_data', (ids) => sql`delete from sample_data where record_id = any(${ids})`),
   removing('meeting_records', (ids) => sql`delete from meeting_records where record_id = any(${ids})`),
   removing(
     'meeting_attendees',

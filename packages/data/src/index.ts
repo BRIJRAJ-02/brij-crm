@@ -339,6 +339,8 @@ import type {
   NotificationSettingsChange,
 } from './inbox/store.ts';
 import { createUnreadCounts, type UnreadSource } from './inbox/unread.ts';
+import type { FollowHeld, FollowsStore } from './follows/store.ts';
+import type { SampleDataState } from '@crm/contracts';
 import type { createLive, Granted, Live, LiveStatus } from './live/live.ts';
 import { createMutationLog } from './live/mutations.ts';
 import { createLiveRouter } from './live/router.ts';
@@ -865,6 +867,8 @@ export type {
   NotificationSettingsChange,
 } from './inbox/store.ts';
 export { UNREAD_PAST_CAP, type UnreadSource } from './inbox/unread.ts';
+export type { FollowHeld, FollowSnapshot } from './follows/store.ts';
+export type { SampleDataState } from '@crm/contracts';
 export {
   isEditableHere,
   isAskedOnCreate,
@@ -1009,6 +1013,8 @@ interface CallOptions {
 
 /** The background job kind a bulk delete runs as (spec 0022): its end puts its batch on this tab's undo stack. */
 const DELETE_JOB = 'records.bulk_delete';
+/** Sample data's job: one batch over People, Companies and Deals. */
+const SAMPLE_DATA_JOB = 'workspace.sample_data';
 
 /** Waits `ms` before a write that never arrived goes again (`delivered`). */
 const resendAfter = (ms: number): Promise<void> =>
@@ -1339,6 +1345,8 @@ export function createDataLayer({
   let files: Promise<FilesStore> | undefined;
   // The inbox's lists and settings (spec 0038), loaded with the inbox or the notification settings.
   let inbox: Promise<InboxStore> | undefined;
+  // Record follows (collaboration), loaded with the first record header.
+  let follows: Promise<FollowsStore> | undefined;
   // The operator console's reads (spec 0047), held per question for the app load.
   const operatorStore = createOperatorStore({
     overview: (period) => call((options) => api.operator.overview({ period }, options)),
@@ -1441,6 +1449,9 @@ export function createDataLayer({
     });
     jobs.clear();
     views.clear();
+    void follows?.then((store) => {
+      store.clear();
+    });
     navStore?.clear();
     dueTasks.clear();
     // The last person's meetings and calendars (names, attendees) never show to the next one in this tab.
@@ -2326,9 +2337,10 @@ export function createDataLayer({
       // A bulk change ended (spec 0022): the tables of its object and the open trash read again now, so they show
       // its final state even where live updates are paused (its own coarse events reach live tabs anyway).
       const objectId = job.subject?.type === 'object' ? job.subject.id : undefined;
-      if (job.kind.startsWith('records.')) {
+      // Sample data (one job over People, Companies and Deals) reloads every table, as no event may come.
+      if (job.kind.startsWith('records.') || job.kind === SAMPLE_DATA_JOB) {
         void records?.then((layer) => {
-          layer.reload(workspace, objectId);
+          layer.reload(workspace, job.kind === SAMPLE_DATA_JOB ? undefined : objectId);
         });
         trashMoved(workspace);
       }
@@ -3615,6 +3627,20 @@ export function createDataLayer({
       }),
     );
     return comments;
+  };
+
+  const followsStore = (): Promise<FollowsStore> => {
+    follows ??= import('./follows/store.ts').then(({ createFollowsStore }) =>
+      createFollowsStore({
+        api: {
+          get: (input) => call((options) => api.follows.get({ ...input }, options)),
+          set: (input) => call((options) => api.follows.set({ ...input }, options)),
+        },
+        mintId,
+        notify,
+      }),
+    );
+    return follows;
   };
 
   const inboxStore = (): Promise<InboxStore> => {
@@ -6363,6 +6389,47 @@ export function createDataLayer({
       /** A comment's earlier texts, newest first (the "edited" popover). */
       versions: async (workspace: string, commentId: string): Promise<readonly CommentVersion[]> =>
         (await commentsStore()).versions(workspace, commentId),
+    },
+    follows: {
+      /** Whether the member follows a record, for its header's Follow; read it through `useFollow`. */
+      forRecord: async (workspace: string, recordId: string): Promise<FollowHeld> =>
+        (await followsStore()).forRecord(workspace, recordId),
+      /** Follows or unfollows at once; a refusal puts it back with a toast. Answers whether it landed. */
+      set: async (workspace: string, recordId: string, following: boolean): Promise<boolean> =>
+        (await followsStore()).set(workspace, recordId, following),
+    },
+    sampleData: {
+      /** Whether the workspace has sample data, the job adding it, and whether the member may manage it. */
+      get: (workspace: string): Promise<SampleDataState> =>
+        call((options) => api.sampleData.get({ workspace }, options)),
+      /**
+       * Adds sample data (and the Sales template): answers once the job started, then follows it, so the tables
+       * read again and `onJobFinished` hears its end. Rejects with a `DataError`.
+       */
+      add: async (workspace: string): Promise<void> => {
+        const { jobId } = await call((options) => api.sampleData.add({ workspace, mutationId: mintId() }, options));
+        void followJob(workspace, jobId);
+      },
+      /** Moves every sample record to the trash as one batch; answers it, for Undo. Rejects with a `DataError`. */
+      remove: async (workspace: string): Promise<{ readonly batchId: string; readonly records: number }> => {
+        const batchId = mintId();
+        const moved = await call((options) =>
+          api.sampleData.remove({ workspace, batchId, mutationId: mintId() }, options),
+        );
+        void records?.then((layer) => {
+          layer.reload(workspace);
+        });
+        trashMoved(workspace);
+        return { batchId, records: moved.records };
+      },
+      /** Brings a remove's batch back. Rejects with a `DataError`. */
+      undoRemove: async (workspace: string, batchId: string): Promise<void> => {
+        await call((options) => api.sampleData.undoRemove({ workspace, batchId, mutationId: mintId() }, options));
+        void records?.then((layer) => {
+          layer.reload(workspace);
+        });
+        trashMoved(workspace);
+      },
     },
     inbox: {
       /**

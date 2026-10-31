@@ -46,6 +46,8 @@ export const JOB_KINDS = {
   // Computed attributes (spec 0015): the system's own recomputes, started in the write that changed an input.
   'computed.recompute': { label: 'Updating computed values', lane: 'light', cancellable: false },
   'computed.fill': { label: 'Working out values', lane: 'heavy', cancellable: false },
+  // Sample data (one button on an empty workspace): a member's, a few dozen records, notes and tasks in one batch.
+  'workspace.sample_data': { label: 'Add sample data', lane: 'light', cancellable: false },
 } as const satisfies Record<
   string,
   { readonly label: string; readonly lane: 'heavy' | 'light'; readonly cancellable: boolean }
