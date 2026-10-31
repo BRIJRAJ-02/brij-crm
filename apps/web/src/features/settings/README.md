@@ -47,7 +47,7 @@ Each row says where it came from ("You added", "Priya added", "Through their rol
 ## Settings, Objects (`/w/$slug/settings/objects`, ObjectsScreen)
 
 - **Purpose**: every object, standard and custom, in the workspace's order (the sidebar's), and the archived ones.
-- **Main task**: owners and admins create an object, move one (drag its handle, or Move up and Move down in its row menu; the Object header's InfoTip says the order is the sidebar's), archive one, restore one from Archived (shown only while something is archived), or open one.
+- **Main task**: owners and admins create an object, move one (drag its handle, or Space and the arrows on it; the order is the sidebar's), archive one, restore one from Archived (shown only while something is archived), or open one.
 - **Leaves out**: an object's own settings (its page), the schema map (#56) and usage beyond the custom object meter (#38).
 
 ## New object (NewObjectDialog)

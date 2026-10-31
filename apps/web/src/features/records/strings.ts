@@ -9,7 +9,7 @@ export const strings = {
   /** A record that doesn't exist and one the person may not see read the same (AC-376, AC-384). */
   recordUnavailable: 'This record isn’t available',
   /** Under it: what to do next. */
-  recordUnavailableText: 'It may be deleted, or hidden from you.',
+  recordUnavailableText: 'It may be deleted, or you don’t have access.',
   backTo: (pluralName: string) => `Back to ${pluralName}`,
   /** A record in the trash, opened read only (AC-376). */
   wasDeleted: (singularName: string) => `This ${singularName.toLowerCase()} was deleted.`,

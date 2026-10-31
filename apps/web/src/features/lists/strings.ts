@@ -30,7 +30,7 @@ export const strings = {
   empty: (plural: string) => `No ${plural.toLowerCase()} in this list yet.`,
   failed: 'The list didn’t load.',
   notFoundTitle: 'This list isn’t here',
-  notFoundText: 'It may be archived, or hidden from you.',
+  notFoundText: 'It may be archived, or you don’t have access.',
   addField: 'Add field',
   unnamed: (singular: string) => `Unnamed ${singular.toLowerCase()}`,
   fieldAdded: (title: string) => `${title} added`,
@@ -106,7 +106,7 @@ export const strings = {
   saveFailed: 'The list wasn’t saved. Try again.',
   archive: 'Archive list',
   archiveTitle: (name: string) => `Archive ${name}?`,
-  archiveText: 'It leaves the sidebar. Entries are kept.',
+  archiveText: 'It leaves everyone’s sidebar. Restore it from Settings › Lists.',
   archiveAction: 'Archive',
   archivedToast: (name: string) => `${name} archived`,
   archiveFailed: 'The list wasn’t archived. Try again.',
@@ -116,7 +116,7 @@ export const strings = {
   archivedTitle: (name: string) => `${name} is archived`,
   archivedText: 'Its entries are kept.',
   // A list whose object is archived (AC-4832): it returns with the object.
-  objectArchivedText: (plural: string) => `Restore ${plural} to bring it back.`,
+  objectArchivedText: (plural: string) => `${plural} is archived too. Restoring it brings this list back.`,
   onlyManagers: (maker: string | undefined) =>
     maker === undefined
       ? 'Only owners and admins can change this list.'

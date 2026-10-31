@@ -34,7 +34,7 @@ export const bulkStrings = {
   cancel: 'Cancel',
   undo: 'Undo',
   /** An object the person may only read (spec 0009's words). */
-  readOnly: (pluralName: string) => `You can view ${pluralName} but not change them.`,
+  readOnly: (pluralName: string) => `${pluralName} are view only.`,
   /** A selection past what one request changes (spec 0022, milestones 1 and 2). */
   tooMany: 'At most 500 records at once.',
   /** "Delete 48 people?" (AC-525), danger tone. */
@@ -65,7 +65,7 @@ export const bulkStrings = {
   fieldAt: (place: number) => `Field ${String(place)}`,
   change: 'Change',
   /** Change's InfoTip, for a field that holds several values. */
-  changeHelp: 'Add keeps theirs. Remove takes out only yours. Replace swaps all for yours.',
+  changeHelp: 'Add keeps each record’s own. Remove takes out only yours. Replace swaps all.',
   changeExample: 'Add VIP: their other tags stay.',
   value: 'Value',
   ops: {
@@ -97,7 +97,7 @@ export const bulkStrings = {
       : `Updated ${records}. ${count(refused)} refused: see their cells.`,
   noneUpdated: (refused: number) =>
     refused === 1 ? '1 record refused. See its cell.' : `${count(refused)} records refused. See their cells.`,
-  nothingChanged: 'Nothing changed: they all had it.',
+  nothingChanged: 'Nothing changed: they already had that value.',
   /** Background changes (spec 0022, milestone 3): the bar, the confirm, the finish toast. */
   counting: 'Counting…',
   /** Counted and waiting for its confirm: the bar's full progress, beside Review. */

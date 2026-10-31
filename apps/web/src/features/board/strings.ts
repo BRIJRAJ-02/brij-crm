@@ -17,7 +17,7 @@ export const strings = {
   nothingToGroupTitle: (plural: string) => `${plural} have no field to group by`,
   addAttribute: 'Add attribute',
   /** Past 50 options (AC-494). */
-  tooManyTitle: 'Up to 50 columns',
+  tooManyTitle: 'Boards show up to 50 columns',
   tooManyText: (title: string, count: string) => `${title} has ${count} options.`,
   /** The grouping field was archived (AC-506). */
   groupArchivedTitle: (title: string) => `${title} is archived.`,

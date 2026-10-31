@@ -53,6 +53,8 @@ export const strings = {
   archivedByHidden: 'Links to an archived object',
   rowActions: (title: string) => `Actions for ${title}`,
   edit: 'Edit',
+  moveUp: 'Move up',
+  moveDown: 'Move down',
   archive: 'Archive',
   restore: 'Restore',
   restoring: 'Restoring',

@@ -59,7 +59,7 @@ export const strings = {
   seeFor: (who: string) => `Can see, ${who}`,
   editFor: (who: string) => `Can edit, ${who}`,
   recordsFor: (who: string) => `Records for ${who}`,
-  needsField: 'Needs a Member field, like Owner.',
+  needsField: 'Their own needs a Member field, like Owner.',
   scopes: {
     all: 'All records',
     own: 'Their own',

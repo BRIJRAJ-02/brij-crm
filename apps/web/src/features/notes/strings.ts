@@ -7,6 +7,8 @@ export const strings = {
   untitled: 'Untitled note',
   /** The Notes tab with none yet. */
   noNotes: 'No notes yet',
+  /** The workspace's Notes page can't make one: where notes are written. */
+  noNotesBody: 'Write notes on a record.',
   /** The Notes page's list didn't load. */
   loadFailedList: 'Notes didn’t load',
   listLabel: 'Notes',
@@ -86,10 +88,10 @@ export const strings = {
   logging: 'Logging',
   save: 'Save',
   /** The When row's error for a time more than a day ahead. */
-  tooFar: 'Only what already happened.',
+  tooFar: 'Log only what already happened.',
   logFailed: 'This wasn’t logged.',
   saveFailed: 'This wasn’t saved.',
-  linksNotSaved: 'Logged. The other records weren’t linked.',
+  linksNotSaved: 'Logged, but the links didn’t save. Open it to link them.',
   theirsOver: (name: string) => `${name} edited this too. Yours was saved over theirs.`,
   callDeleted: 'Call deleted',
   meetingDeleted: 'Meeting deleted',
