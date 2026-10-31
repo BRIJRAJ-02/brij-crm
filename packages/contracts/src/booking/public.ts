@@ -348,6 +348,15 @@ export const PublicBookInput = z.object({
    * page's questions as they are at booking time, anything else dropped.
    */
   answers: z.record(z.string().max(40), z.unknown()).optional(),
+  /**
+   * The link page the visitor booked from (spec 0061, AC-6119): only its handle, which the server checks names a page
+   * holding this booking page as a live block, and counts one booking that day. Nothing of it is stored on the
+   * booking; a `via` that doesn't check out is ignored, never refused. `.catch` so a bad one never fails a booking.
+   */
+  via: z
+    .object({ handle: z.string().max(40) })
+    .optional()
+    .catch(undefined),
 });
 /** A visitor's booking. */
 export type PublicBookInput = z.infer<typeof PublicBookInput>;

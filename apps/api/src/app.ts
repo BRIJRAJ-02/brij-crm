@@ -44,6 +44,7 @@ import { createDiskFileStore } from './storage/disk.ts';
 import { createForgetPicture, mountMyPicture } from './me-picture.ts';
 import { mountBrandLogo } from './brand-logo.ts';
 import { mountLinkPageImages } from './link-page-images.ts';
+import { mountLinkPagePictures } from './link-page-pictures.ts';
 import { mountLogos } from './logos.ts';
 import { createCaptchaVerifier, type CaptchaVerifier } from './forms/recaptcha.ts';
 import { createTicketBook, mountTickets } from './forms/ticket.ts';
@@ -66,7 +67,7 @@ import { mountBrandCss } from './public/brand-css.ts';
 import { mountLook } from './public/look.ts';
 import { mountSiteHits, SITE_HIT_PATH } from './public/site.ts';
 import { createPictureFetch, createPictureLoader, type PictureFetch } from './public/picture.ts';
-import { createOutsideFetch, type OutsideFetch } from './public/outside.ts';
+import { createOutsideFetch, createPinnedFetch, OUTSIDE_TIMEOUT_MS, type OutsideFetch } from './public/outside.ts';
 import { createFaviconFetch, type FaviconFetch } from './public/favicon.ts';
 import { createWalletLinks } from './wallet/wallet.ts';
 import { createApplePass } from './public/apple-pass.ts';
@@ -231,6 +232,8 @@ export interface AppServices {
    * seconds and 1 MB, which is a page of links with room to spare. A test passes its own.
    */
   readonly outsideFetch?: OutsideFetch;
+  /** The pinned outside read for a link page's pictures and media (spec 0061); tests pass their own. */
+  readonly linkPageFetch?: OutsideFetch;
   /**
    * Cuts a person's live connections when one of their sessions is signed
    * out elsewhere (spec 0033): the worker's notice where `WORKER_INTERNAL_URL`
@@ -268,6 +271,11 @@ export function createApp({
   const mailer = services.mailer ?? NO_MAILER;
   const outsideFetch =
     services.outsideFetch ?? createOutsideFetch({ timeoutMs: IMPORT_TIMEOUT_MS, maxBytes: IMPORT_MAX_BYTES });
+  // A link page's pictures and media (spec 0061, AC-6128): 3 seconds in all, at most 1 MB, and a connection pinned
+  // to the address it checked, since a link's own site sits behind no allow list.
+  const linkPageFetch =
+    services.linkPageFetch ??
+    createOutsideFetch({ fetch: createPinnedFetch(), timeoutMs: OUTSIDE_TIMEOUT_MS, maxBytes: 1024 * 1024 });
   // Who may start a workspace of their own (spec 0031, owner decision 3): the addresses sign up lets in by the list.
   const signupAllowlist = createAllowlist(env.APP_ENV, env.SIGNUP_ALLOWLIST);
   const signedOut = services.signedOut ?? NO_SIGNED_OUT;
@@ -493,6 +501,8 @@ export function createApp({
         rules,
         mailer,
         outsideFetch,
+        linkPageFetch,
+        files: pictureFiles,
         appUrl: env.APP_URL,
         publicOrigins,
         bookingOrigin,
@@ -689,6 +699,8 @@ export function createApp({
     // Page views for the console (spec 0047, AC-1625), counted after the answer.
     views: { visitorKey: visitors, keepAlive },
     edgeCache,
+    // A link page's pictures (spec 0061), from the same private store its photos are kept in.
+    ...(pictureFiles === undefined ? {} : { files: pictureFiles }),
   });
 
   // The marketing site's beacon (spec 0047, AC-1627): only from SITE_ORIGINS, 60 a minute per address.
@@ -723,6 +735,8 @@ export function createApp({
   };
   mountBrandLogo(app, { ...imageRoutes, edgeCache });
   mountLinkPageImages(app, imageRoutes);
+  // A link page's pictures and its Insights download (spec 0061), the same way.
+  mountLinkPagePictures(app, imageRoutes);
   // A company's logo from our own origin (spec 0059): a signed in person, a public host name, 300 a minute each.
   mountLogos(app, { auth, logos: logoFetch, limiter: createMemoryLimiter() });
 

@@ -26,6 +26,7 @@
 //   GET  /api/public/booking/:publicKey/picture  a personal page's host picture, from our origin (23 Oct 2026)
 //   GET  /api/public/profiles/:handle/picture    a profile's picture, likewise (`picture.ts` fetches both)
 //   GET  /api/public/profiles/:handle/offer      whether the address is free to claim (25 Oct 2026)
+//   …and a link page's pictures, next times, sitemap and robots (spec 0061), in `link-page.ts`
 //
 // A slots read from a recognised visitor with a calendar also reads their
 // busy times (at most 3 seconds, failing open) and answers which slots clash
@@ -80,8 +81,10 @@ import {
   enterBookingAddress,
   enterBookingPage,
   countItemPress,
+  countProfileBooking,
   countProfileView,
   enterContactCard,
+  viewFacts,
   enterLinkBlocks,
   enterLinkPage,
   enterShareImage,
@@ -111,6 +114,9 @@ import type { Context, Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import type { EdgeCache } from '../edge-cache.ts';
+import type { Geo } from '../edge.ts';
+import type { FileStore } from '../storage/blob.ts';
+import { mountLinkPageRoutes } from './link-page.ts';
 import { inputProblems, toApiError, type SchemaIssue } from '../errors.ts';
 import { errorFields, log } from '../log.ts';
 import type { WakeRelay } from '../realtime/wake.ts';
@@ -185,6 +191,8 @@ export interface PublicBookingServices {
    * (`linkPageCacheTags`), so its Live or Private switch deletes them at once. Absent, nothing is tagged.
    */
   readonly edgeCache?: EdgeCache;
+  /** The private store a link page's pictures are kept in (spec 0061); absent, a picture answers 404. */
+  readonly files?: FileStore;
 }
 
 /** What a booking refused by the bot checks answers: it names something the visitor can do. */
@@ -238,6 +246,8 @@ interface Variables {
   requestId: string;
   clientIp: string | undefined;
   origin: string | undefined;
+  /** The edge's country for the request, trusted only past the edge guard (spec 0061, AC-6116). */
+  geo?: Geo;
 }
 
 /** A `{ code, message }` answer at the code's status, never cached. */
@@ -448,6 +458,20 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
     }
   });
 
+  // A link page's pictures, next times, sitemap and robots (spec 0061), each through the door.
+  mountLinkPageRoutes(app, {
+    db,
+    slots: deps,
+    files: services.files,
+    edgeCache: services.edgeCache,
+    publicOrigin: services.ics.publicOrigin ?? services.ics.appOrigin,
+    now: () => services.now?.() ?? new Date(),
+    signedInAs: (c) => signedInAs(c),
+    limited,
+    addressOf: (c) => addressKey(c.get('clientIp')),
+    answer: (code, message) => answer(code, message),
+  });
+
   /** The signed in person's id on this request, or undefined: no session, or one that couldn't be read. */
   const signedInAs = async (c: Context<{ Variables: Variables }>): Promise<string | undefined> => {
     const auth = services.visitor?.auth;
@@ -477,15 +501,38 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
     });
   };
 
-  /** Counts a link page view in the background, unless it is the owner's own read. */
+  /** Our own hosts: a view from one of them is `Direct` (AC-6116). */
+  const ownHosts = [
+    ...new Set(
+      [...(services.publicOrigins ?? []), services.ics.publicOrigin ?? '', services.ics.appOrigin].flatMap((origin) =>
+        URL.canParse(origin) ? [new URL(origin).hostname] : [],
+      ),
+    ),
+  ];
+
+  /**
+   * Counts a link page view in the background, unless it is the owner's own read, with its four facts (spec 0061,
+   * AC-6116): the referring host and `utm_source` the page sent (`ref`, `src`), checked again; the edge's country;
+   * and the device class from the user agent, which is then dropped. No address, no agent, no cookie is kept.
+   */
   const countView = (c: Context<{ Variables: Variables }>, ownerUserId: string, workspaceId: string): void => {
     const visitor = profileVisitor(c, ownerUserId);
     if (visitor === undefined || services.views === undefined) return;
+    const ref = c.req.query('ref');
+    const src = c.req.query('src');
+    const country = c.get('geo')?.country;
+    const facts = viewFacts({
+      ...(ref === undefined ? {} : { referrer: ref }),
+      ...(src === undefined ? {} : { source: src }),
+      ...(country === undefined ? {} : { country }),
+      userAgent: c.req.header('user-agent') ?? '',
+      ownHosts,
+    });
     // Past 600 a minute for one page, reads are answered but not counted (AC-5126).
     if (!limiter(`profile:view-owner:${ownerUserId}`, BOOKING_LIMITS.viewsPerHandle).allowed) return;
     const counted = signedInAs(c)
       .then((userId) =>
-        userId === ownerUserId ? undefined : countProfileView({ db }, ownerUserId, workspaceId, visitor),
+        userId === ownerUserId ? undefined : countProfileView({ db }, ownerUserId, workspaceId, visitor, facts),
       )
       .catch((error: unknown) => {
         log.warn('profile.view.failed', { requestId: c.get('requestId'), ...errorFields(error) });
@@ -586,8 +633,8 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
         handleLookAnswer({ db }, found.owner),
       ]);
       // One view per page load (its first page, with no `q` at all: a cleared search sends an empty one), never a
-      // machine's or the owner's own (AC-5124),
-      // counted after the answer is made and never holding it up.
+      // machine's or the owner's own (AC-5124), counted after the answer is made and never holding it up. Its
+      // facts (`ref`, `src`, spec 0061) ride on the same read.
       if (c.req.query('q') === undefined && position === undefined)
         countView(c, found.owner.userId, found.owner.workspaceId);
       return ok(look === undefined ? page : { ...page, look });
@@ -606,9 +653,17 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
     // Per address only: a handle wide limit would let a few addresses switch off a person's Save contact for everyone.
     const refused = limited([[`booking:vcard:${addressKey(c.get('clientIp'))}`, BOOKING_LIMITS.vcardsPerAddress]]);
     if (refused !== undefined) return refused;
+    // Which card (spec 0061, AC-6114): absent, the first live one, so every link shared before keeps working. An id
+    // that is no card of this page is the same 404 as no card.
+    const card = c.req.query('card');
     try {
       const viewer = await signedInAs(c);
-      const contact = readContactCard(await enterContactCard({ db }, handle, viewer === undefined ? {} : { viewer }));
+      const contact = readContactCard(
+        await enterContactCard({ db }, handle, {
+          ...(viewer === undefined ? {} : { viewer }),
+          ...(card === undefined ? {} : { card }),
+        }),
+      );
       // The handle's own budget bounds the fetches of Google: past it, the card goes without its picture.
       const fetchesPicture =
         contact.picture !== undefined &&
@@ -1141,6 +1196,16 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
       );
       // The records it made reach screens live: wake the relay once the write committed.
       if (!booked.replayed) wakeRelay();
+      // A booking made from a link page (spec 0061, AC-6119): counted in the background once, only when that page
+      // holds this booking page as a live block; nothing about it is stored on the booking.
+      const via = input.data.via?.handle.toLowerCase();
+      if (!booked.replayed && via !== undefined && services.views !== undefined) {
+        services.views.keepAlive(
+          countProfileBooking({ db }, via, entry.pageId).catch((error: unknown) => {
+            log.warn('profile.booking.failed', { requestId: c.get('requestId'), ...errorFields(error) });
+          }),
+        );
+      }
       return ok({ booking: booked.booking, manageToken: booked.manageToken });
     } catch (error) {
       if (!toApiError(error).expected) {

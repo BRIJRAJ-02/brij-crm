@@ -10,8 +10,17 @@
 // No audit row: the blocks are the person's, not the workspace's, and a workspace's history is read by its admins.
 // (The identity login keeps the default grant every auth table gets; the app reaches the table only through here.)
 import {
+  csvLine,
+  CSV_BOM,
   HUES,
+  MEDIA_LINK_REFUSAL,
+  MEDIA_PROVIDER_NAMES,
   PAGE_THEME_REFUSAL,
+  PROFILE_BLOCK_KINDS,
+  PROFILE_CSV_MAX_DAYS,
+  PROFILE_OTHER,
+  PROFILE_VIEW_FACTS,
+  ProfileQrStyle,
   PageTheme,
   ProfileBlock,
   ProfileItem,
@@ -21,8 +30,15 @@ import {
   SHARE_IMAGE_TYPES,
   SkippedImportRow,
   PROFILE_COUNT_DAYS,
+  type MediaProvider,
   type ProfileCounts,
+  type ProfileDay,
+  type ProfileFactValue,
+  type ProfileImageKind,
+  type ProfileImageType,
+  type ProfileInsightDays,
   type ProfileItems,
+  type ProfileViewFact,
   type ProfileFormChoice,
   type ProfileFormFacts,
   type ProfilePageChoice,
@@ -39,6 +55,7 @@ import { imageTypeOf } from '../booking/image-type.ts';
 import { inWorkspace } from '../access/run.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import { postgresError, refuse, refuseOn } from '../engine/refusals.ts';
+import { mediaShareUrl, parseMediaLink } from './embeds.ts';
 
 const { bookingPages, forms, workspaces } = schema;
 
@@ -215,10 +232,11 @@ function itemOf(row: ItemRow, facts: BlockFacts, outside: ReadonlySet<string> = 
     ...(row.archived_at === null ? {} : { archivedAt: iso(row.archived_at) }),
   };
   let candidate: unknown;
-  if (row.kind === 'page') {
+  if (row.kind === 'page' || row.kind === 'times') {
     const found = row.page_id === null ? undefined : facts.pages.get(row.page_id);
     candidate = {
-      kind: 'page',
+      ...data,
+      kind: row.kind,
       workspaceId: row.workspace_id,
       pageId: row.page_id,
       ...stored,
@@ -242,6 +260,13 @@ function itemOf(row: ItemRow, facts: BlockFacts, outside: ReadonlySet<string> = 
       ...stored,
       ...(outside.has(row.id) ? { outsideWorkspace: true } : {}),
     };
+  } else if (row.kind === 'media') {
+    // The share link is rebuilt from the provider and id (spec 0061, AC-6105): what was pasted was never kept.
+    const provider = 'provider' in data && typeof data.provider === 'string' ? data.provider : '';
+    const ref = 'ref' in data && typeof data.ref === 'string' ? data.ref : '';
+    const known = Object.keys(MEDIA_PROVIDER_NAMES).find((each) => each === provider) as MediaProvider | undefined;
+    if (known === undefined) return undefined;
+    candidate = { ...data, kind: 'media', url: mediaShareUrl(known, ref), ...stored };
   } else {
     candidate = { ...data, kind: row.kind, ...stored };
   }
@@ -265,7 +290,13 @@ async function readRows(
 
 /** The facts of every booking page the rows name, as the door lets the owner place them now. */
 async function factsForRows(scope: EngineScope, rows: readonly ItemRow[]): Promise<BlockFacts> {
-  const pageIds = rows.flatMap((row) => (row.kind === 'page' && row.page_id !== null ? [row.page_id] : []));
+  const pageIds = [
+    ...new Set(
+      rows.flatMap((row) =>
+        (row.kind === 'page' || row.kind === 'times') && row.page_id !== null ? [row.page_id] : [],
+      ),
+    ),
+  ];
   const formIds = rows.flatMap((row) => (row.kind === 'form' && row.form_id !== null ? [row.form_id] : []));
   return {
     pages: pageIds.length === 0 ? new Map() : await factsOf(await enterOwnPages(scope, pageIds)),
@@ -462,17 +493,15 @@ function refusalOf(error: unknown): unknown {
   const pg = postgresError(error);
   if (pg === undefined) return error;
   if (pg.code === '54000') {
-    const kind = (['link', 'heading', 'page', 'contact', 'text', 'faq', 'form', 'testimonial'] as const).find(
-      (each) => each === pg.detail,
-    );
+    const kind = [...PROFILE_BLOCK_KINDS, 'featured' as const].find((each) => each === pg.detail);
     return refuse('LIMIT_REACHED', profileLimitSentence(kind ?? 'items'));
+  }
+  // A picture the block names that isn't one of the owner's own on this page (spec 0061, AC-6129).
+  if (pg.code === '42704' && pg.detail === 'image') {
+    return refuse('NOT_FOUND', 'That picture isn’t on your link page. Add it again.');
   }
   if (pg.code === '23505' && pg.constraint === 'profile_items_heading_once') {
     return refuseOn('CONFIG_INVALID', 'You already have a heading called that.', 'title');
-  }
-  // One live contact card (AC-5102): a second, or one restored beside another, is refused as the limit it is.
-  if (pg.code === '23505' && pg.constraint === 'profile_items_contact_once') {
-    return refuse('LIMIT_REACHED', profileLimitSentence('contact'));
   }
   if (pg.code === '23505' && pg.constraint === 'profile_items_page_once') {
     return refuse('CONFIG_INVALID', 'That booking page is on your link page already.');
@@ -495,15 +524,56 @@ function nextHue(links: number): (typeof HUES)[number] {
   return ring[links % ring.length] ?? 'blue';
 }
 
+/** A media block's provider, id and what was read of it once, ready to store (spec 0061, AC-6105). */
+export interface ResolvedMedia {
+  readonly provider: MediaProvider;
+  readonly ref: string;
+  readonly title?: string;
+  readonly poster?: string;
+}
+
+/** An object without its undefined and empty string fields: a field a person left empty is never stored. */
+function compact(fields: Readonly<Record<string, unknown>>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== undefined && value !== ''));
+}
+
+/**
+ * The fields every kind but a heading may share (spec 0061): its window, and on the kinds that take one its tile
+ * size, `small` (the default) left out so a block stored before grids is the same block.
+ */
+function sharedOf(block: ProfileBlock): Record<string, unknown> {
+  if (block.kind === 'heading') return {};
+  const size = 'size' in block && block.size !== 'small' ? block.size : undefined;
+  return compact({ showFrom: block.showFrom, hideAfter: block.hideAfter, size });
+}
+
 /** A block's fields as the definer stores them: its kind, its data, and the page or form it names, if any. */
-function storedOf(block: ProfileBlock, hue: (typeof HUES)[number]) {
-  if (block.kind === 'page') {
-    return { kind: block.kind, data: {}, workspaceId: block.workspaceId, pageId: block.pageId, formId: null };
+function storedOf(block: ProfileBlock, hue: (typeof HUES)[number], media?: ResolvedMedia) {
+  const shared = sharedOf(block);
+  if (block.kind === 'page' || block.kind === 'times') {
+    return { kind: block.kind, data: shared, workspaceId: block.workspaceId, pageId: block.pageId, formId: null };
+  }
+  if (block.kind === 'media') {
+    if (media === undefined) throw new Error('A media block is stored only once its link is read.');
+    return {
+      kind: block.kind,
+      data: compact({ ...shared, provider: media.provider, ref: media.ref, title: media.title, poster: media.poster }),
+      workspaceId: null,
+      pageId: null,
+      formId: null,
+    };
+  }
+  if (block.kind === 'socials' || block.kind === 'image' || block.kind === 'gallery' || block.kind === 'banner') {
+    const { kind, showFrom: _from, hideAfter: _after, ...fields } = block;
+    const kept = compact({ ...fields, ...shared });
+    // A gallery's `row` is its default, left out as a size's `small` is.
+    if (kind === 'gallery' && kept.display === 'row') delete kept.display;
+    return { kind, data: kept, workspaceId: null, pageId: null, formId: null };
   }
   if (block.kind === 'form') {
     return {
       kind: block.kind,
-      data: { label: block.label },
+      data: { label: block.label, ...shared },
       workspaceId: block.workspaceId,
       pageId: null,
       formId: block.formId,
@@ -522,8 +592,8 @@ function storedOf(block: ProfileBlock, hue: (typeof HUES)[number]) {
   }
   if (block.kind === 'contact') {
     // The card's fields as the schema kept them: an empty one was refused there, never stored.
-    const { kind, ...data } = block;
-    return { kind, data, workspaceId: null, pageId: null, formId: null };
+    const { kind, showFrom: _from, hideAfter: _after, ...data } = block;
+    return { kind, data: { ...compact(data), ...shared }, workspaceId: null, pageId: null, formId: null };
   }
   if (block.kind === 'testimonial') {
     return {
@@ -532,6 +602,7 @@ function storedOf(block: ProfileBlock, hue: (typeof HUES)[number]) {
         quote: block.quote,
         author: block.author,
         ...(block.role === undefined || block.role === '' ? {} : { role: block.role }),
+        ...shared,
       },
       workspaceId: null,
       pageId: null,
@@ -544,6 +615,7 @@ function storedOf(block: ProfileBlock, hue: (typeof HUES)[number]) {
       data: {
         items: block.items,
         ...(block.title === undefined || block.title === '' ? {} : { title: block.title }),
+        ...shared,
       },
       workspaceId: null,
       pageId: null,
@@ -553,7 +625,11 @@ function storedOf(block: ProfileBlock, hue: (typeof HUES)[number]) {
   if (block.kind === 'text') {
     return {
       kind: block.kind,
-      data: { body: block.body, ...(block.title === undefined || block.title === '' ? {} : { title: block.title }) },
+      data: {
+        body: block.body,
+        ...(block.title === undefined || block.title === '' ? {} : { title: block.title }),
+        ...shared,
+      },
       workspaceId: null,
       pageId: null,
       formId: null,
@@ -567,6 +643,13 @@ function storedOf(block: ProfileBlock, hue: (typeof HUES)[number]) {
       ...(block.note === undefined || block.note === '' ? {} : { note: block.note }),
       ...(block.icon === undefined ? {} : { icon: block.icon }),
       hue: block.hue ?? hue,
+      // Spec 0061: its picture, the featured card (a row is the default, left out) and its notice.
+      ...compact({
+        thumb: block.thumb,
+        style: block.style === 'featured' ? 'featured' : undefined,
+        notice: block.notice,
+      }),
+      ...shared,
     },
     workspaceId: null,
     pageId: null,
@@ -584,7 +667,18 @@ function storedOf(block: ProfileBlock, hue: (typeof HUES)[number]) {
 export async function saveProfileItem(
   scope: EngineScope,
   input: { readonly id: string; readonly block: ProfileBlock; readonly isEdit?: boolean },
-  options: { readonly publicOrigins?: readonly string[] } = {},
+  options: {
+    readonly publicOrigins?: readonly string[];
+    /**
+     * Reads a media block's title and poster once, on save (spec 0061, AC-6105): the api's outside fetch behind it,
+     * the poster stored as one of the owner's pictures (`addProfileImage`). Absent, or failing, the block keeps the
+     * provider's name as its title and no poster.
+     */
+    readonly readMedia?: (
+      provider: MediaProvider,
+      ref: string,
+    ) => Promise<{ readonly title?: string; readonly poster?: string }>;
+  } = {},
 ): Promise<ProfileItem> {
   const owner = ownerOf(scope);
   const parsed = ProfileBlock.safeParse(input.block);
@@ -597,16 +691,26 @@ export async function saveProfileItem(
   const block = parsed.data;
   // A block belongs to the workspace the session is in, whatever the block says (AC-5604); the definer checks the
   // page or form against that workspace again, from its own rows.
-  if ((block.kind === 'page' || block.kind === 'form') && block.workspaceId !== scope.workspaceId) {
+  if (
+    (block.kind === 'page' || block.kind === 'form' || block.kind === 'times') &&
+    block.workspaceId !== scope.workspaceId
+  ) {
     throw refuse('NOT_FOUND', NOT_IN_WORKSPACE);
   }
-  if (block.kind === 'page') {
+  if (block.kind === 'page' || block.kind === 'times') {
     const [entry] = await enterOwnPages(scope, [block.pageId]);
     if (entry === undefined) throw refuse('NOT_FOUND', NOT_IN_WORKSPACE);
   }
   if (block.kind === 'form') {
     const [entry] = await enterOwnForms(scope, [block.formId]);
     if (entry === undefined) throw refuse('NOT_FOUND', NOT_IN_WORKSPACE);
+  }
+  // A media block's link read into a provider and an id (AC-6105); what was pasted is never stored.
+  let media: ResolvedMedia | undefined;
+  if (block.kind === 'media') {
+    const parsedLink = parseMediaLink(block.url);
+    if (!parsedLink.ok) throw refuseOn('CONFIG_INVALID', MEDIA_LINK_REFUSAL, 'url');
+    media = await resolveMedia(scope, owner, input.id, block, parsedLink, options.readMedia);
   }
   const row = await inWorkspace(scope, async (tx) => {
     // A link to one of our own pages stays inside this workspace (spec 0056, AC-5610): another workspace's page, and
@@ -624,7 +728,7 @@ export async function saveProfileItem(
         throw refuse('NOT_FOUND', 'That block isn’t on your link page any more.');
       }
     }
-    const stored = storedOf(block, nextHue(live.filter((each) => each.kind === 'link').length));
+    const stored = storedOf(block, nextHue(live.filter((each) => each.kind === 'link').length), media);
     try {
       const saved = await tx.execute<ItemRow>(
         sql`select ${ITEM_COLUMNS} from crm_save_profile_item(${owner}::uuid, ${scope.workspaceId}::uuid, ${input.id}::uuid, ${stored.kind}, ${JSON.stringify(stored.data)}::jsonb, ${stored.pageId}::uuid, ${stored.formId}::uuid)`,
@@ -639,6 +743,42 @@ export async function saveProfileItem(
   const item = itemOf(row, await factsForRows(scope, [row]));
   if (item === undefined) throw new Error('A saved block read back as nothing.');
   return item;
+}
+
+/**
+ * A media block's stored fields (AC-6105): the same video again keeps the title and poster it has, so an edit never
+ * reads the provider again; a new one is read once through `readMedia`. The owner's own title always wins, and with
+ * none the provider's own, else the provider's name.
+ */
+async function resolveMedia(
+  scope: EngineScope,
+  owner: string,
+  id: string,
+  block: Extract<ProfileBlock, { kind: 'media' }>,
+  link: { readonly provider: MediaProvider; readonly ref: string },
+  readMedia?: (provider: MediaProvider, ref: string) => Promise<{ readonly title?: string; readonly poster?: string }>,
+): Promise<ResolvedMedia> {
+  const rows = await inWorkspace(scope, async (tx) => [
+    ...(await readRows(tx, owner, scope.workspaceId, false)),
+    ...(await readRows(tx, owner, scope.workspaceId, true)),
+  ]);
+  const held = rows.find((row) => row.id === id && row.kind === 'media');
+  const data: Readonly<Record<string, unknown>> =
+    typeof held?.data === 'object' && held.data !== null ? (held.data as Readonly<Record<string, unknown>>) : {};
+  const same = data.provider === link.provider && data.ref === link.ref;
+  const read: { readonly title?: string; readonly poster?: string } = same
+    ? {
+        ...(typeof data.title === 'string' ? { title: data.title } : {}),
+        ...(typeof data.poster === 'string' ? { poster: data.poster } : {}),
+      }
+    : await (readMedia?.(link.provider, link.ref) ?? Promise.resolve({})).catch(() => ({}));
+  const title = block.title ?? read.title ?? MEDIA_PROVIDER_NAMES[link.provider];
+  return {
+    provider: link.provider,
+    ref: link.ref,
+    title,
+    ...(read.poster === undefined ? {} : { poster: read.poster }),
+  };
 }
 
 /**
@@ -751,53 +891,304 @@ function dayBefore(day: string, back: number): string {
   return new Date(Date.parse(`${day}T00:00:00Z`) - back * 86_400_000).toISOString().slice(0, 10);
 }
 
-interface CountRow extends Record<string, unknown> {
-  readonly item_id: string | null;
-  readonly presses: string | number | null;
+/** One row of `crm_profile_insights`: a day, a metric and its key, and up to two counts. */
+interface InsightRow extends Record<string, unknown> {
+  readonly day: string;
+  readonly metric: string;
+  readonly key: string | null;
   readonly views: string | number | null;
   readonly visitors: string | number | null;
 }
 
-/** One period's rows from `crm_profile_counts`. */
-async function countsIn(
+/** The rows of one range from `crm_profile_insights`, the day as `YYYY-MM-DD`. */
+async function insightsIn(
   tx: WorkspaceTx,
   owner: string,
   workspace: string,
   from: string,
   to: string,
-): Promise<readonly CountRow[]> {
-  const found = await tx.execute<CountRow>(
-    sql`select item_id::text as item_id, presses, views, visitors from crm_profile_counts(${owner}::uuid, ${workspace}::uuid, ${from}::date, ${to}::date)`,
+): Promise<readonly InsightRow[]> {
+  const found = await tx.execute<InsightRow>(
+    sql`select day::text as day, metric, key, views, visitors from crm_profile_insights(${owner}::uuid, ${workspace}::uuid, ${from}::date, ${to}::date)`,
   );
   return found.rows;
 }
 
+/** Every UTC day from `from` to `to`, both included. */
+function daysFrom(from: string, to: string): readonly string[] {
+  const days: string[] = [];
+  for (let at = Date.parse(`${from}T00:00:00Z`); at <= Date.parse(`${to}T00:00:00Z`); at += 86_400_000) {
+    days.push(new Date(at).toISOString().slice(0, 10));
+  }
+  return days;
+}
+
+/** Each day's views and visitors over a range, every day present, oldest first. */
+function seriesOf(rows: readonly InsightRow[], from: string, to: string): ProfileDay[] {
+  const byDay = new Map(
+    rows
+      .filter((row) => row.metric === 'traffic')
+      .map((row) => [row.day, { views: Number(row.views ?? 0), visitors: Number(row.visitors ?? 0) }]),
+  );
+  return daysFrom(from, to).map((day) => ({ day, ...(byDay.get(day) ?? { views: 0, visitors: 0 }) }));
+}
+
+/** How many values of each fact Insights names before the rest are summed as `Other` (AC-6118). */
+const TOP_VALUES = 5;
+
+/** A fact's values over the period, the top 5 by views, then the rest (and the days' own `Other`) as `Other`. */
+function topValues(rows: readonly InsightRow[], fact: ProfileViewFact): ProfileFactValue[] {
+  const sums = new Map<string, { views: number; visitors: number }>();
+  for (const row of rows) {
+    if (row.metric !== fact || row.key === null) continue;
+    const held = sums.get(row.key) ?? { views: 0, visitors: 0 };
+    sums.set(row.key, {
+      views: held.views + Number(row.views ?? 0),
+      visitors: held.visitors + Number(row.visitors ?? 0),
+    });
+  }
+  const ranked = [...sums]
+    .filter(([value]) => value !== PROFILE_OTHER)
+    .map(([value, counts]) => ({ value, ...counts }))
+    .sort(
+      (left, right) =>
+        right.views - left.views || right.visitors - left.visitors || (left.value < right.value ? -1 : 1),
+    );
+  const top = ranked.slice(0, TOP_VALUES);
+  const rest = [
+    ...ranked.slice(TOP_VALUES),
+    { value: PROFILE_OTHER, ...(sums.get(PROFILE_OTHER) ?? { views: 0, visitors: 0 }) },
+  ];
+  const other = rest.reduce(
+    (sum, each) => ({ views: sum.views + each.views, visitors: sum.visitors + each.visitors }),
+    {
+      views: 0,
+      visitors: 0,
+    },
+  );
+  return other.views > 0 || other.visitors > 0 ? [...top, { value: PROFILE_OTHER, ...other }] : top;
+}
+
+/** The sum of one metric's `views` column over a set of rows. */
+function sumOf(rows: readonly InsightRow[], metric: string, column: 'views' | 'visitors' = 'views'): number {
+  return rows.reduce((sum, row) => (row.metric === metric ? sum + Number(row[column] ?? 0) : sum), 0);
+}
+
 /**
- * The caller's link page figures (spec 0051, AC-5127): over the last 30 UTC days, today included, the page's views
- * and visitors, the 30 days before them as the comparison, and each live block's presses. Their own only: the owner
- * is the session's identity. Reads two periods in one transaction; writes nothing.
+ * The caller's link page figures (spec 0051, AC-5127; spec 0061, AC-6118, AC-6119): over the last 7, 30 or 90 UTC
+ * days, today included, the page's views and visitors, the same span before them as the comparison, each live
+ * block's presses, each day's series for both spans, the top values of each fact, and the funnel from views to
+ * presses to bookings. Their own only: the owner is the session's identity. Reads two ranges in one transaction;
+ * writes nothing.
  */
-export async function readProfileCounts(scope: EngineScope, now: Date = new Date()): Promise<ProfileCounts> {
+export async function readProfileCounts(
+  scope: EngineScope,
+  now: Date = new Date(),
+  days: ProfileInsightDays = PROFILE_COUNT_DAYS,
+): Promise<ProfileCounts> {
   const owner = ownerOf(scope);
-  const days = PROFILE_COUNT_DAYS;
   const today = now.toISOString().slice(0, 10);
   const from = dayBefore(today, days - 1);
+  const beforeFrom = dayBefore(from, days);
+  const beforeTo = dayBefore(from, 1);
   const [current, before] = await inWorkspace(scope, async (tx) => [
-    await countsIn(tx, owner, scope.workspaceId, from, today),
-    await countsIn(tx, owner, scope.workspaceId, dayBefore(from, days), dayBefore(from, 1)),
+    await insightsIn(tx, owner, scope.workspaceId, from, today),
+    await insightsIn(tx, owner, scope.workspaceId, beforeFrom, beforeTo),
   ]);
-  const traffic = (rows: readonly CountRow[]) => {
-    const row = rows.find((each) => each.item_id === null);
-    return { views: Number(row?.views ?? 0), visitors: Number(row?.visitors ?? 0) };
-  };
+  const presses = new Map<string, number>();
+  for (const row of current) {
+    if (row.metric === 'press' && row.key !== null)
+      presses.set(row.key, (presses.get(row.key) ?? 0) + Number(row.views ?? 0));
+  }
+  const views = sumOf(current, 'traffic');
+  const pressed = [...presses.values()].reduce((sum, count) => sum + count, 0);
   return {
     days,
-    ...traffic(current),
-    before: traffic(before),
-    presses: current.flatMap((row) =>
-      row.item_id === null || Number(row.presses ?? 0) < 1 ? [] : [{ id: row.item_id, presses: Number(row.presses) }],
-    ),
+    views,
+    visitors: sumOf(current, 'traffic', 'visitors'),
+    before: { views: sumOf(before, 'traffic'), visitors: sumOf(before, 'traffic', 'visitors') },
+    presses: [...presses].flatMap(([id, count]) => (count < 1 ? [] : [{ id, presses: count }])),
+    series: seriesOf(current, from, today),
+    seriesBefore: seriesOf(before, beforeFrom, beforeTo),
+    facts: {
+      referrer: topValues(current, 'referrer'),
+      source: topValues(current, 'source'),
+      country: topValues(current, 'country'),
+      device: topValues(current, 'device'),
+    },
+    funnel: { views, presses: pressed, bookings: sumOf(current, 'bookings') },
   };
+}
+
+/** A UTC day as Insights takes it: `YYYY-MM-DD`, a real day. */
+function isDay(day: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(day) && new Date(`${day}T00:00:00Z`).toISOString().slice(0, 10) === day;
+}
+
+/** What one block is called in the CSV: its own words, else its kind. */
+function blockLabel(item: ProfileItem): string {
+  if ('title' in item && typeof item.title === 'string' && item.title !== '') return item.title;
+  if (item.kind === 'contact') return item.fullName;
+  if (item.kind === 'banner') return item.text;
+  if (item.kind === 'form') return item.label;
+  if ((item.kind === 'page' || item.kind === 'times') && item.page !== undefined) return item.page.title;
+  return item.kind;
+}
+
+/**
+ * The Insights CSV (spec 0061, AC-6120): one row per day, metric and key over `from` to `to` (both UTC days, at most
+ * 365 days), as `day,metric,key,count`: views, visitors, each block's presses (named by its words), bookings, and each
+ * fact's values' views and visitors. Every text cell goes through the formula guard (`csvLine`), so a title starting
+ * with `=` is written with a leading `'`. A range that isn't one is `CONFIG_INVALID`.
+ */
+export async function profileInsightsCsv(
+  scope: EngineScope,
+  range: { readonly from: string; readonly to: string },
+): Promise<string> {
+  const owner = ownerOf(scope);
+  if (!isDay(range.from) || !isDay(range.to) || range.from > range.to) {
+    throw refuse('CONFIG_INVALID', 'Pick a start day on or before the end day.');
+  }
+  const span = (Date.parse(`${range.to}T00:00:00Z`) - Date.parse(`${range.from}T00:00:00Z`)) / 86_400_000 + 1;
+  if (span > PROFILE_CSV_MAX_DAYS) throw refuse('CONFIG_INVALID', 'Download up to 365 days at a time.');
+  const rows = await inWorkspace(scope, (tx) => insightsIn(tx, owner, scope.workspaceId, range.from, range.to));
+  const items = await readAll(scope, owner);
+  const labels = new Map([...items.items, ...items.archived].map((item) => [item.id, blockLabel(item)]));
+  const lines: string[] = [csvLine(['day', 'metric', 'key', 'count'])];
+  const sorted = [...rows].sort((left, right) => (left.day < right.day ? -1 : left.day > right.day ? 1 : 0));
+  for (const row of sorted) {
+    const views = Number(row.views ?? 0);
+    const visitors = Number(row.visitors ?? 0);
+    if (row.metric === 'traffic') {
+      lines.push(csvLine([row.day, 'views', '', views]), csvLine([row.day, 'visitors', '', visitors]));
+    } else if (row.metric === 'bookings') {
+      lines.push(csvLine([row.day, 'bookings', '', views]));
+    } else if (row.metric === 'press' && row.key !== null) {
+      lines.push(csvLine([row.day, 'presses', labels.get(row.key) ?? row.key, views]));
+    } else if (PROFILE_VIEW_FACTS.some((fact) => fact === row.metric) && row.key !== null) {
+      lines.push(
+        csvLine([row.day, `${row.metric} views`, row.key, views]),
+        csvLine([row.day, `${row.metric} visitors`, row.key, visitors]),
+      );
+    }
+  }
+  return `${CSV_BOM}${lines.join('')}`;
+}
+
+/**
+ * Keeps one picture of the caller's own link page (spec 0061, AC-6101, AC-6108): its bytes are in the store already
+ * at `path`, made by the server for this person, this workspace and this id. Through `crm_add_profile_image`, which
+ * checks the membership, the page, and the limits (300 kept, 60 an hour).
+ */
+export async function addProfileImage(
+  scope: EngineScope,
+  image: {
+    readonly id: string;
+    readonly kind: ProfileImageKind;
+    readonly path: string;
+    readonly type: ProfileImageType;
+    readonly bytes: number;
+    readonly width: number;
+    readonly height: number;
+  },
+): Promise<void> {
+  const owner = ownerOf(scope);
+  await inWorkspace(scope, async (tx) => {
+    try {
+      await tx.execute(
+        sql`select crm_add_profile_image(${owner}::uuid, ${scope.workspaceId}::uuid, ${image.id}::uuid, ${image.kind}, ${image.path}, ${image.type}, ${image.bytes}::integer, ${image.width}::integer, ${image.height}::integer)`,
+      );
+    } catch (error) {
+      const pg = postgresError(error);
+      if (pg?.code === '54000') {
+        throw refuse(
+          'LIMIT_REACHED',
+          pg.detail === 'hour'
+            ? 'You’ve added a lot of pictures in the last hour. Try again later.'
+            : 'Your link page holds as many pictures as it can. Delete a few blocks with pictures first.',
+        );
+      }
+      if (pg?.code === 'P0002') throw refuse('NOT_FOUND', 'Pick a handle before you add a picture.');
+      if (pg?.code === '42501') throw refuse('FORBIDDEN', 'You’re not a member of this workspace.');
+      throw error;
+    }
+  });
+}
+
+/** One of the caller's own pictures, for their editor: where it is stored, or undefined when it isn't theirs here. */
+export async function readOwnProfileImage(
+  scope: EngineScope,
+  imageId: string,
+): Promise<{ readonly path: string; readonly type: string } | undefined> {
+  const owner = ownerOf(scope);
+  if (!isUuid(imageId)) return undefined;
+  const found = await inWorkspace(scope, (tx) =>
+    tx.execute<{ path: string; content_type: string }>(
+      sql`select path, content_type from crm_profile_image_of(${owner}::uuid, ${scope.workspaceId}::uuid, ${imageId}::uuid)`,
+    ),
+  );
+  const row = found.rows[0];
+  return row === undefined ? undefined : { path: row.path, type: row.content_type };
+}
+
+/**
+ * The saved address of one of the caller's own links (spec 0061, AC-6101): what "Use the site's picture" reads, so
+ * the server only ever reads an address the owner saved, never one in the request. Undefined for anything else.
+ */
+export async function readOwnLinkAddress(scope: EngineScope, itemId: string): Promise<string | undefined> {
+  const owner = ownerOf(scope);
+  if (!isUuid(itemId)) return undefined;
+  const rows = await inWorkspace(scope, async (tx) => [
+    ...(await readRows(tx, owner, scope.workspaceId, false)),
+    ...(await readRows(tx, owner, scope.workspaceId, true)),
+  ]);
+  const row = rows.find((each) => each.id === itemId && each.kind === 'link');
+  const data = typeof row?.data === 'object' && row.data !== null ? row.data : {};
+  return 'url' in data && typeof data.url === 'string' && /^https:\/\//i.test(data.url) ? data.url : undefined;
+}
+
+/** The caller's share QR style (spec 0061, AC-6124): what was saved, or the plain code. */
+export async function readQrStyle(scope: EngineScope): Promise<ProfileQrStyle> {
+  const owner = ownerOf(scope);
+  const found = await inWorkspace(scope, (tx) =>
+    tx.execute<{ style: unknown }>(
+      sql`select crm_profile_qr_style(${owner}::uuid, ${scope.workspaceId}::uuid) as style`,
+    ),
+  );
+  return ProfileQrStyle.safeParse(found.rows[0]?.style ?? {}).data ?? {};
+}
+
+/**
+ * Saves the caller's share QR style (spec 0061, AC-6124), whole, or clears it with `null`. The colour's contrast
+ * against the light background is checked by the schema (refused with its hint); a centre picture must be one of the
+ * owner's own on this page, which the definer checks again.
+ */
+export async function saveQrStyle(scope: EngineScope, style: ProfileQrStyle | null): Promise<ProfileQrStyle> {
+  const owner = ownerOf(scope);
+  const parsed = style === null ? undefined : ProfileQrStyle.safeParse(style);
+  if (parsed !== undefined && !parsed.success) {
+    const issue = parsed.error.issues[0];
+    const field = typeof issue?.path[0] === 'string' ? issue.path[0] : undefined;
+    const message = issue?.message ?? 'That style can’t be saved.';
+    throw field === undefined ? refuse('CONFIG_INVALID', message) : refuseOn('CONFIG_INVALID', message, field);
+  }
+  const kept = parsed?.data;
+  const empty = kept === undefined || Object.keys(kept).length === 0;
+  const saved = await inWorkspace(scope, async (tx) => {
+    try {
+      const answered = await tx.execute<{ style: unknown }>(
+        sql`select crm_save_profile_qr_style(${owner}::uuid, ${scope.workspaceId}::uuid, ${empty ? null : JSON.stringify(kept)}::jsonb) as style`,
+      );
+      return answered.rows[0]?.style;
+    } catch (error) {
+      const pg = postgresError(error);
+      if (pg?.code === 'P0002') throw refuse('NOT_FOUND', 'Pick a handle before you style its code.');
+      if (pg?.code === '22023') throw refuseOn('CONFIG_INVALID', 'That picture isn’t on your link page.', 'picture');
+      if (pg?.code === '42501') throw refuse('FORBIDDEN', 'You’re not a member of this workspace.');
+      throw error;
+    }
+  });
+  return ProfileQrStyle.safeParse(saved ?? {}).data ?? {};
 }
 
 /**

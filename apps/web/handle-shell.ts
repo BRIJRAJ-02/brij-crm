@@ -7,7 +7,14 @@
 // in any way at all, answers the plain shell rather than an error. And nothing is read off the request but its
 // path, so one handle has one answer for everybody and the edge can cache it (AC-5504).
 import { linkPageCacheTags } from '@crm/contracts/handles';
-import { BRAND_DESCRIPTION, withMeta, type MetaLook, type MetaSource } from './handle-meta.ts';
+import {
+  BRAND_DESCRIPTION,
+  withMeta,
+  withPageFacts,
+  type MetaLook,
+  type MetaSource,
+  type PageFacts,
+} from './handle-meta.ts';
 import { HANDLE_PATH } from './public-paths.ts';
 
 /** How long the profile read may take before the plain shell goes out instead (AC-5503). */
@@ -60,6 +67,45 @@ export interface ShellProfile {
   readonly version?: unknown;
   /** The versions of the page's own stylesheet and photos (spec 0060, `PublicLook`). */
   readonly look?: unknown;
+  /** The person's social links, as the profile read answers them (spec 0061, AC-6121). */
+  readonly socials?: unknown;
+  /** The page's first blocks, as the profile read answers them (spec 0061, AC-6122). */
+  readonly items?: unknown;
+}
+
+/**
+ * What structured data and crawler text say of a page (spec 0061, AC-6121, AC-6122), read from the profile answer
+ * and trusted in nothing: the social links' web addresses, and the live links' titles and web addresses in order,
+ * leaving out every link behind a notice. The picture only when the answer has one, on our own origin.
+ */
+export function pageFactsOf(profile: ShellProfile, name: string, url: string, origin: string): PageFacts {
+  const list = (value: unknown): readonly unknown[] => (Array.isArray(value) ? (value as readonly unknown[]) : []);
+  const field = (entry: unknown, key: string): string | undefined =>
+    typeof entry === 'object' && entry !== null && key in entry
+      ? text((entry as Record<string, unknown>)[key])
+      : undefined;
+  const web = (address: string | undefined) =>
+    address !== undefined && /^https?:\/\/[^\s]+$/i.test(address) ? address : undefined;
+  const sameAs = list(profile.socials).flatMap((entry) => {
+    const href = web(field(entry, 'href'));
+    return href === undefined ? [] : [href];
+  });
+  const links = list(profile.items).flatMap((entry) => {
+    if (field(entry, 'kind') !== 'link' || field(entry, 'notice') !== undefined) return [];
+    const title = field(entry, 'title');
+    const address = web(field(entry, 'url'));
+    return title === undefined || address === undefined ? [] : [{ title, url: address }];
+  });
+  const image = text(profile.image);
+  const bio = text(profile.bio);
+  return {
+    name,
+    url,
+    sameAs,
+    links,
+    ...(bio === undefined ? {} : { bio }),
+    ...(image !== undefined && image.startsWith('/api/public/') ? { image: `${origin}${image}` } : {}),
+  };
 }
 
 /** A string, or undefined for anything else: a read's answer is parsed here, never trusted by its type. */
@@ -268,8 +314,11 @@ export async function shellFor(pathname: string, deps: ShellDeps): Promise<Shell
     ...(bio === undefined ? {} : { description: bio }),
     ...(look === undefined ? {} : { look }),
   };
+  // Structured data on an indexable page, and the page as text for a crawler that runs no script (spec 0061).
+  const facts = pageFactsOf(profile, source.name, source.canonical, deps.origin);
+  const described = withPageFacts(withMeta(deps.shell, source), facts, source.indexable);
   return {
-    body: withBoot(withLook(withMeta(deps.shell, source), { ...profile, handle }, deps.fonts), {
+    body: withBoot(withLook(described, { ...profile, handle }, deps.fonts), {
       kind: 'profile',
       profile,
       readAt: (deps.now ?? Date.now)(),
