@@ -159,15 +159,17 @@ export function Board({
       </EmptyState>
     );
   }
-  // An archived option shows only while it still has cards. Other empty columns follow the
-  // setting, and show while a card is moving, so there is always somewhere to drop it.
+  // An archived option, and a column that takes no card (a required field's "No <field>"), show only while they
+  // still have cards: empty, neither has a use. Other empty columns follow the setting, and show while a card is
+  // moving, so there is always somewhere to drop it.
   const isMoving = draggingFrom !== undefined;
   const isAdded = (column: BoardColumn) => added.has(column.title.toLowerCase());
+  const isKeptOnlyFull = (column: BoardColumn) => column.isArchived === true || column.refusesDrop !== undefined;
   const visible = columns.filter((column) =>
-    column.count > 0 ? true : column.isArchived !== true && (showEmptyColumns || isMoving || isAdded(column)),
+    column.count > 0 ? true : !isKeptOnlyFull(column) && (showEmptyColumns || isMoving || isAdded(column)),
   );
   const hiddenEmpty = columns.filter(
-    (column) => column.count === 0 && column.isArchived !== true && !isAdded(column),
+    (column) => column.count === 0 && !isKeptOnlyFull(column) && !isAdded(column),
   ).length;
   const number = memoIntl(`plain:${locale}`, () => new Intl.NumberFormat(locale)).format(hiddenEmpty);
   const plural = memoIntl(`plural:${locale}`, () => new Intl.PluralRules(locale)).select(hiddenEmpty);

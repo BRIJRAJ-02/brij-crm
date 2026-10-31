@@ -134,17 +134,7 @@ export const DateDefault: Story = {
   play: async ({ args, userEvent }) => {
     const dialog = await openDialog();
     await userEvent.keyboard('Renewal');
-    const type = dialog.querySelector<HTMLElement>('button[aria-haspopup="listbox"]');
-    if (type === null) throw new globalThis.Error('No type picker.');
-    await userEvent.click(type);
-    const date = await waitFor(() => {
-      const found = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(
-        (option) => option.textContent === 'Date',
-      );
-      if (found === undefined) throw new globalThis.Error('No Date option.');
-      return found;
-    });
-    await userEvent.click(date);
+    await chooseType(dialog, 'Date', userEvent);
     await userEvent.click(within(dialog).getByRole('button', { name: 'More settings' }));
     const plusDays = await waitFor(() => within(dialog).getByRole('radio', { name: 'Today plus days' }));
     await userEvent.click(plusDays);
@@ -343,15 +333,9 @@ export const RelationshipEntry: Story = {
     const dialog = await openDialog();
     await waitFor(() => expect(inDialog(dialog, 'Name')).toHaveFocus());
     await userEvent.keyboard('Investors');
-    const type = dialog.querySelector<HTMLElement>('button[aria-haspopup="listbox"]');
-    if (type === null) throw new globalThis.Error('No type picker.');
-    await userEvent.click(type);
-    const options = await waitFor(() => {
-      const found = [...document.querySelectorAll<HTMLElement>('[role="option"]')];
-      if (found.length === 0) throw new globalThis.Error('No options.');
-      return found;
-    });
-    await expect(options.map((option) => option.textContent)).toEqual([
+    // The type tiles, by their names (each tile's few words are its description, not its name).
+    const options = within(dialog).getAllByRole('option');
+    await expect(options.map(nameOf)).toEqual([
       'Text',
       'Long text',
       'Date',
@@ -369,8 +353,6 @@ export const RelationshipEntry: Story = {
     await userEvent.click(last);
     await waitFor(() => expect(chooseRelationship).toHaveBeenCalledOnce());
     await expect(chooseRelationship).toHaveBeenCalledWith({ title: 'Investors' });
-    // The list has gone (its exit fade over) before the story ends.
-    await waitFor(() => expect(document.querySelector('[role="listbox"]')).toBeNull());
   },
 };
 
@@ -439,17 +421,7 @@ export const RelationshipHandOver: Story = {
     const dialog = await openDialog();
     await waitFor(() => expect(inDialog(dialog, 'Name')).toHaveFocus());
     await userEvent.keyboard('Investors');
-    const type = dialog.querySelector<HTMLElement>('button[aria-haspopup="listbox"]');
-    if (type === null) throw new globalThis.Error('No type picker.');
-    await userEvent.click(type);
-    const relationship = await waitFor(() => {
-      const found = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(
-        (option) => option.textContent === 'Relationship',
-      );
-      if (found === undefined) throw new globalThis.Error('No Relationship option.');
-      return found;
-    });
-    await userEvent.click(relationship);
+    await userEvent.click(within(dialog).getByRole('option', { name: 'Relationship' }));
     // The same dialog, now the relationship's: the related object has focus, the name typed is this side's.
     await waitFor(() => expect(dialog).toHaveAccessibleName('New relationship'));
     await waitFor(() => expect(document.activeElement?.getAttribute('aria-haspopup')).toBe('listbox'));
@@ -469,26 +441,22 @@ const optionIds = () => {
   };
 };
 
-/** Picks a type by its picker label. */
+/** An option's name: the text its label names (a type tile's few words are its description, apart). */
+function nameOf(option: HTMLElement): string {
+  const ids = option.getAttribute('aria-labelledby')?.split(' ') ?? [];
+  const label = ids.map((id) => document.getElementById(id)).find((each) => each !== null && option.contains(each));
+  return label?.textContent ?? option.textContent;
+}
+
+/** Picks a type by its tile's name, in the dialog's type picker (owner item 92); the tile keeps focus. */
 async function chooseType(
   dialog: HTMLElement,
   label: string,
   userEvent: { click: (element: Element) => Promise<void> },
 ) {
-  const type = dialog.querySelector<HTMLElement>('button[aria-haspopup="listbox"]');
-  if (type === null) throw new globalThis.Error('No type picker.');
-  await userEvent.click(type);
-  const option = await waitFor(() => {
-    const found = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(
-      (each) => each.textContent === label,
-    );
-    if (found === undefined) throw new globalThis.Error(`No ${label} option.`);
-    return found;
-  });
+  const option = within(dialog).getByRole('option', { name: label });
   await userEvent.click(option);
-  await waitFor(() => expect(document.querySelector('[role="listbox"]')).toBeNull());
-  // Focus is back on the picker, so ⌘↵ submits from there.
-  await waitFor(() => expect(type).toHaveFocus());
+  await waitFor(() => expect(option).toHaveAttribute('aria-selected', 'true'));
 }
 
 /**

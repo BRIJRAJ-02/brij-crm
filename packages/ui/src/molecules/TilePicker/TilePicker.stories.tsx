@@ -63,9 +63,8 @@ export const Narrow: Story = {
   ),
 };
 
-/** Disabled: nothing picks. */
+/** Disabled: nothing picks, and the label fades. */
 export const Disabled: Story = {
-  parameters: { crm: { screenshot: false } },
   args: { isDisabled: true },
   render: (args) => (
     <Stage width="dialog">

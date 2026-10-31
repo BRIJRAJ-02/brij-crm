@@ -1,5 +1,6 @@
 import { useId, type ReactNode } from 'react';
 import { Header, ListBox, ListBoxItem, ListBoxSection, Text } from 'react-aria-components';
+import { FieldLabel } from '../../atoms/FieldLabel/FieldLabel.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
@@ -63,9 +64,7 @@ export function TilePicker({ label, items, value, onChange, isDisabled = false, 
   );
   return (
     <div className={styles.root} data-invalid={error === undefined ? undefined : ''}>
-      <span id={labelId} className={styles.label}>
-        {label}
-      </span>
+      <FieldLabel as="text" id={labelId} label={label} tone="strong" isDisabled={isDisabled} />
       <ListBox
         aria-labelledby={labelId}
         {...(error === undefined ? {} : { 'aria-describedby': errorId })}

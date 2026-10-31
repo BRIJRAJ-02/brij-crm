@@ -290,8 +290,9 @@ const tileOrder = (items: readonly SelectItem[]): readonly SelectItem[] =>
 const RELATIONSHIP = 'relationship';
 
 /** The icon each computed kind shows in the picker, from icons the registry already holds. */
-const COMPUTED_ICONS: Readonly<Record<ComputedKind, 'link' | 'layers' | 'square-function'>> = {
-  lookup: 'link',
+const COMPUTED_ICONS: Readonly<Record<ComputedKind, 'search' | 'layers' | 'square-function'>> = {
+  // Not Link's own: the picker shows both side by side.
+  lookup: 'search',
   rollup: 'layers',
   formula: 'square-function',
 };
@@ -751,7 +752,8 @@ function AttributeForm({
   const itemOf = (each: PickerType): SelectItem => ({
     id: each.key,
     label: pickerLabel(each),
-    icon: fieldTypeOf(each.type).icon,
+    // Multi select apart from Select at a glance; every other entry its type's own icon.
+    icon: each.key === 'multi_select' ? 'list-checks' : fieldTypeOf(each.type).icon,
     ...(isCreating ? { group: strings.typeGroups[TYPE_GROUP[each.key] ?? 'basic'] } : {}),
   });
   // Creating: the offered entries, then Relationship when #15 gives it. Editing: the attribute's own type, which

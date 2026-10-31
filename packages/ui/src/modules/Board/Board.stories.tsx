@@ -414,7 +414,7 @@ export const Reorder: Story = {
   },
 };
 
-/** The story below: a required field's no value column next to Lead, saying whether a card is moving. */
+/** The story below: a required field's no value column, holding an older card, next to Lead, saying whether a card is moving. */
 function RefusingBoard() {
   const [moving, setMoving] = useState(false);
   return (
@@ -430,11 +430,12 @@ function RefusingBoard() {
             cards: arraySource<BoardCard>(CARDS.slice(0, 1), (card) => card.id),
           },
           {
+            // It holds a card from before Stage was required: an empty one isn't drawn at all.
             id: 'none',
             title: 'No Stage',
-            count: 0,
+            count: 1,
             refusesDrop: { reason: 'Stage is required, so cards can’t move here.' },
-            cards: arraySource<BoardCard>([], (card) => card.id),
+            cards: arraySource<BoardCard>(CARDS.slice(1, 2), (card) => card.id),
           },
           {
             id: 'won',
