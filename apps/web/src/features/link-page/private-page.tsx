@@ -115,12 +115,5 @@ export interface LiveSwitchProps {
  * under the address says what Private means.
  */
 export function LiveSwitch({ live }: LiveSwitchProps) {
-  return (
-    <Switch
-      label={strings.live}
-      stateLabels={{ on: strings.live, off: strings.private }}
-      isSelected={live.isLive}
-      onChange={live.setLive}
-    />
-  );
+  return <Switch label={strings.live} offLabel={strings.private} isSelected={live.isLive} onChange={live.setLive} />;
 }
