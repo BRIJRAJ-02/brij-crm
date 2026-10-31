@@ -79,9 +79,12 @@ describe('the icon registry', () => {
       'molecules/FileItem/FileItem.tsx',
       'molecules/Popover/Popover.tsx',
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
       'provider/toasts.tsx',
 >>>>>>> 26186211b (perf(ui): the hosted form mounts UiProviderBase, without the icon registry or brand art)
+=======
+>>>>>>> 65ed904c5 (perf(ui): draw toasts from ToastRegion.tsx, so the hosted form loads no toast region)
     ];
     const named = /(?:<Icon name|icon|iconRight)(?:=|: |=\{)['"]([a-z0-9-]+)['"]/g;
     const toneIcons = /TONE_ICONS[^=]*=\s*\{([^}]*)\}/;

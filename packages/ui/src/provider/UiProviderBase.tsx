@@ -4,10 +4,14 @@ import type { KeyboardPlatform } from '../atoms/Kbd/shortcuts.ts';
 import { createClock, type Clock } from './clock.ts';
 import { ClockContext, FormatContext, PlatformContext, ToastsContext, type FormatSettings } from './context.ts';
 <<<<<<< HEAD
+<<<<<<< HEAD
 import type { Toasts } from './toasts.tsx';
 =======
 import { ToastRegion, type Toasts } from './toasts.tsx';
 >>>>>>> 26186211b (perf(ui): the hosted form mounts UiProviderBase, without the icon registry or brand art)
+=======
+import type { Toasts } from './toasts.tsx';
+>>>>>>> 65ed904c5 (perf(ui): draw toasts from ToastRegion.tsx, so the hosted form loads no toast region)
 import { LOADING_TIMING, LoadingTimingContext, type LoadingTiming } from './useDelayedLoading.ts';
 
 export { useFormatSettings, useKeyboardPlatform, useNow, useToasts, type FormatSettings } from './context.ts';
@@ -38,12 +42,16 @@ export interface UiProviderProps extends FormatSettings {
 }
 
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 65ed904c5 (perf(ui): draw toasts from ToastRegion.tsx, so the hosted form loads no toast region)
 /** Props for UiProviderBase: UiProvider's, and what draws the toasts. */
 export interface UiProviderBaseProps extends UiProviderProps {
   /** UiProvider's ToastRegion. The hosted form raises no toasts, so it gives none and loads no toast region. */
   readonly toastRegion?: ReactNode;
 }
 
+<<<<<<< HEAD
 /**
  * UiProvider without the icon registry, the brand marks' artwork or the toast region: React Aria's language and
  * router, the shared clock and the toast queue. Only the hosted form mounts it directly, so its first load carries
@@ -54,6 +62,12 @@ export interface UiProviderBaseProps extends UiProviderProps {
  * clock and the toasts. Only the hosted form mounts it directly, so its first load carries the base icons alone
  * (`atoms/Icon/base-icons.ts`); everything else wraps itself in UiProvider.
 >>>>>>> 26186211b (perf(ui): the hosted form mounts UiProviderBase, without the icon registry or brand art)
+=======
+/**
+ * UiProvider without the icon registry, the brand marks' artwork or the toast region: React Aria's language and
+ * router, the shared clock and the toast queue. Only the hosted form mounts it directly, so its first load carries
+ * the base icons alone (`atoms/Icon/base-icons.ts`) and no toast region; everything else wraps itself in UiProvider.
+>>>>>>> 65ed904c5 (perf(ui): draw toasts from ToastRegion.tsx, so the hosted form loads no toast region)
  */
 export function UiProviderBase({
   locale,
@@ -66,11 +80,16 @@ export function UiProviderBase({
   platform,
   children,
 <<<<<<< HEAD
+<<<<<<< HEAD
   toastRegion,
 }: UiProviderBaseProps) {
 =======
 }: UiProviderProps) {
 >>>>>>> 26186211b (perf(ui): the hosted form mounts UiProviderBase, without the icon registry or brand art)
+=======
+  toastRegion,
+}: UiProviderBaseProps) {
+>>>>>>> 65ed904c5 (perf(ui): draw toasts from ToastRegion.tsx, so the hosted form loads no toast region)
   const [ownClock] = useState(() => clock ?? createClock({ visibility: document }));
   const [ownPlatform] = useState(() => platform ?? detectKeyboardPlatform(navigator));
   const settings = useMemo<FormatSettings>(() => ({ locale, timeZone }), [locale, timeZone]);
@@ -85,10 +104,14 @@ export function UiProviderBase({
                 <PlatformContext value={platform ?? ownPlatform}>
                   {children}
 <<<<<<< HEAD
+<<<<<<< HEAD
                   {toastRegion}
 =======
                   <ToastRegion toasts={toasts} />
 >>>>>>> 26186211b (perf(ui): the hosted form mounts UiProviderBase, without the icon registry or brand art)
+=======
+                  {toastRegion}
+>>>>>>> 65ed904c5 (perf(ui): draw toasts from ToastRegion.tsx, so the hosted form loads no toast region)
                 </PlatformContext>
               </LoadingTimingContext>
             </ToastsContext>
