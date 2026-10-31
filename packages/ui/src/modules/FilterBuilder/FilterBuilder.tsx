@@ -136,7 +136,8 @@ function operandAttribute(attribute: FieldAttribute): FieldAttribute {
   return {
     id: attribute.id,
     name: attribute.name,
-    type: isSystemOnly(attribute.type) ? 'date' : attribute.type,
+    // A moment is compared by its day (before, after): its operand is a date, as the engine reads one.
+    type: isSystemOnly(attribute.type) || attribute.type === 'timestamp' ? 'date' : attribute.type,
     allowMultiple: false,
     isRequired: false,
     isUnique: false,

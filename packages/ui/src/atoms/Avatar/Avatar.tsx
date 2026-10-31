@@ -39,7 +39,7 @@ export interface AvatarProps {
 /**
  * The sizes whose picture fades in over the initials once it has loaded (29 Oct 2026): a page's one big picture (a
  * link page's, a booking page's host, a record heading its page) otherwise sits as an empty tile and then pops. The
- * small ones in rows and chips show the picture at once, as before: a fade repeated down a table is noise.
+ * small ones in rows and chips swap their initials for the picture at once: a fade repeated down a table is noise.
  */
 const FADES_IN: ReadonlySet<AvatarSize> = new Set<AvatarSize>(['title', 'xl', 'hero']);
 
@@ -55,17 +55,18 @@ export function Avatar({ name, id, src, hue, size = 'sm', shape = 'circle', isDe
   const image = safeImageSrc(src);
   const showImage = image !== undefined && failed !== image;
   const fades = showImage && FADES_IN.has(size);
-  // While a fading picture loads, its initials hold the tile; once it has, they go, so a picture with clear parts
-  // (a company's logo) never shows letters through it.
-  const isWaiting = fades && loaded?.src !== image;
+  // While a picture loads, its initials hold the tile at every size, so a company whose site has no icon keeps its
+  // letter rather than an empty tile that fills in later (spec 0059, AC-5901). Once it has loaded they go, so a
+  // picture with clear parts (a company's logo) never shows letters through it.
+  const isWaiting = showImage && loaded?.src !== image;
   // A picture the browser already holds (a preloaded or a cached one) is complete before the first paint: it shows
   // straight away, with no initials and no fade.
   useLayoutEffect(() => {
     const element = picture.current;
-    if (fades && element !== null && element.complete && element.naturalWidth > 0) {
+    if (showImage && element !== null && element.complete && element.naturalWidth > 0) {
       setLoaded({ src: image, isCached: true });
     }
-  }, [fades, image]);
+  }, [showImage, image]);
   // One initial is the first word's: initialsOf on that word alone, so a letter built of several code points stays whole.
   const initials = mark ?? initialsOf(ONE_INITIAL.has(size) ? (name.trim().split(/\s+/u)[0] ?? '') : name);
   return (
@@ -84,7 +85,7 @@ export function Avatar({ name, id, src, hue, size = 'sm', shape = 'circle', isDe
             src={image}
             alt={strings.pictureAlt}
             ref={picture}
-            {...(fades ? { 'data-fade': isWaiting ? 'waiting' : loaded?.isCached === true ? 'shown' : 'in' } : {})}
+            data-fade={isWaiting ? 'waiting' : fades && loaded?.isCached !== true ? 'in' : 'shown'}
             onLoad={() => {
               setLoaded((now) => (now?.src === image ? now : { src: image, isCached: false }));
             }}

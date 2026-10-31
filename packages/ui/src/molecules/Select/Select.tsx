@@ -24,7 +24,6 @@ import {
 import { FocusScope, useFilter } from 'react-aria';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
-import { Tag } from '../../atoms/Tag/Tag.tsx';
 import type { Hue } from '../../hue.ts';
 import { Field } from '../Field/Field.tsx';
 import { InPopover, Popover, type PopoverPlacement } from '../Popover/Popover.tsx';
@@ -32,15 +31,21 @@ import { FieldLabel } from '../../atoms/FieldLabel/FieldLabel.tsx';
 import styles from './Select.module.css';
 import { strings } from './strings.ts';
 
-/** How options show: `plain` text (with an icon), `tag` (select attributes) or `dot` (statuses). */
+/**
+ * How options show: `plain` text (with an icon), `tag` (select attributes: each item's `face`) or `dot` (statuses).
+ * Select draws no Tag itself: the caller hands it in as `face`, so a page with Selects but no tags (the hosted form)
+ * never loads Tag.
+ */
 export type SelectOptionStyle = 'plain' | 'tag' | 'dot';
 
 /** One option in a Select. */
 export interface SelectItem {
   readonly id: string;
   readonly label: string;
-  /** The option's hue, for tags and dots. */
+  /** The option's hue, for dots. */
   readonly hue?: Hue;
+  /** What a `tag` option draws in place of its label, the same in the list and the field: a select attribute's Tag. */
+  readonly face?: ReactNode;
   readonly icon?: IconName;
   readonly description?: string;
   /** An archived option shows muted and can't be chosen, but stays shown when it is the current value. */
@@ -232,13 +237,7 @@ export const SelectFacesContext = createContext<SelectFaces | undefined>(undefin
 
 function Face({ item, optionStyle }: { readonly item: SelectItem; readonly optionStyle: SelectOptionStyle }) {
   const faces = use(SelectFacesContext);
-  if (optionStyle === 'tag') {
-    return (
-      <Tag hue={item.hue ?? 'gray'} isArchived={item.isArchived ?? false}>
-        {item.label}
-      </Tag>
-    );
-  }
+  if (optionStyle === 'tag' && item.face !== undefined) return item.face;
   if (optionStyle === 'dot' && faces !== undefined) return faces.dot(item);
   return (
     <>

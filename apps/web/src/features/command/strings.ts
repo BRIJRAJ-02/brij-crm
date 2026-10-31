@@ -22,6 +22,12 @@ export const strings = {
   goTo: 'Go to',
   settingsSection: 'Settings',
   actions: 'Actions',
+  /** Lists (spec 0048, AC-4827). */
+  listKind: (plural: string) => `List · ${plural}`,
+  createList: 'Create list',
+  createListTerms: ['new', 'add', 'pipeline'],
+  addRecordToList: (name: string, list: string) => `Add ${name} to ${list}`,
+  addToListTerms: ['list', 'pipeline'],
   /** Pages. */
   home: 'Home',
   myTasks: 'Tasks',
@@ -31,6 +37,8 @@ export const strings = {
   calendars: 'Calendars',
   roundRobin: 'Round robin',
   forms: 'Forms',
+  /** The charts page (the reports lane), which has no sidebar item: Home and this menu reach it. */
+  reports: 'Reports',
   /** The trash, a quick action now it left the sidebar (the owner, 22 October 2026). */
   trash: 'Open trash',
   settings: 'Settings',
@@ -42,6 +50,7 @@ export const strings = {
   availabilityTerms: ['hours', 'schedules', 'working hours'],
   bookingPagesTerms: ['links', 'scheduling links', 'captures'],
   formsTerms: ['enquiries', 'submissions', 'captures'],
+  reportsTerms: ['charts', 'forecast', 'pipeline', 'analytics', 'graph', 'dashboard'],
   trashTerms: ['deleted', 'bin', 'restore', 'go to trash'],
   settingsTerms: ['preferences', 'options'],
   preferencesTerms: ['theme', 'appearance', 'dark', 'light'],
@@ -61,6 +70,10 @@ export const strings = {
   /** The record page's own actions, named after it. */
   newNoteOn: (name: string) => `New note on ${name}`,
   newTaskOn: (name: string) => `New task on ${name}`,
+  logCallOn: (name: string) => `Log a call on ${name}`,
+  logMeetingOn: (name: string) => `Log a meeting on ${name}`,
+  callTerms: ['call', 'phone', 'log', 'activity', 'rang', 'spoke'],
+  meetingTerms: ['meeting', 'met', 'log', 'activity', 'visit'],
   noteTerms: ['note', 'write', 'add', 'create'],
   taskTerms: ['task', 'todo', 'to do', 'follow up', 'add', 'create'],
   addWord: 'add',

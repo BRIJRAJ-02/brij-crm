@@ -150,13 +150,13 @@ describe('the page’s words (SW10, SW11, SW13)', () => {
     expect(text).not.toContain('How long a sign in lasts here');
     // Off limits until the owner has two factor: the row says why, its link inline, and no Callout above the card.
     expect(page.getByRole('note').elements()).toHaveLength(0);
-    expect(text).toContain('You need two factor sign in yourself first. Set up yours');
+    expect(text).toContain('You need it yourself first. Set up yours');
     await expect
       .element(page.getByRole('link', { name: 'Set up yours' }))
       .toHaveAttribute('href', '/w/acme/settings/account/sign-in');
     await expect.element(page.getByRole('switch', { name: 'Require two factor sign in' })).toBeDisabled();
-    expect(text).toContain('How long people stay signed in before they sign in again.');
-    expect(text).toContain('Everyone signs in again. You stay signed in here.');
+    expect(text).not.toContain('How long people stay signed in before they sign in again.');
+    expect(text).toContain('Everyone signs in again.');
   });
 });
 
@@ -173,7 +173,7 @@ describe('sign out everyone’s step up, when the code can’t be sent', () => {
     const { layer, sends } = layerWith([{ ok: false, code: 'API_UNAVAILABLE', message: NOT_SENT }, { ok: true }]);
     await renderScreen(layer);
     const dialog = await openConfirm();
-    expect(dialog.element().textContent).toContain('First we’ll email you a 6 digit code.');
+    expect(dialog.element().textContent).toContain('We’ll email you a 6 digit code.');
     await dialog.getByRole('button', { name: 'Email me a code' }).click();
     await expect.element(dialog.getByText(NOT_SENT)).toBeVisible();
     expect(dialog.element().textContent).not.toContain(GENERIC);

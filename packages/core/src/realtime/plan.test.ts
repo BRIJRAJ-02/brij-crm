@@ -1,12 +1,12 @@
 // Delivery planning (spec 0007, milestone 2, AC-85 and AC-87): each audience's
 // copy of a row through spec 0009's `filterEvent`, the stub when nothing is
-// left, and one channel per workspace until milestone 4.
+// left, one copy per audience (spec 0007, milestone 4).
 import { ChangeEvent, ROLE_PERMISSIONS } from '@crm/contracts';
 import type { OutboxRow } from '@crm/db';
 import { describe, expect, it } from 'vitest';
 import type { Audience } from '../access/events.ts';
 import { roleAccess, type AccessRules } from '../access/policy.ts';
-import { isAudiencesNeedChannels, planDelivery, workspaceEvent } from './plan.ts';
+import { planDelivery } from './plan.ts';
 
 const id = (n: number) => `00000000-0000-7000-8000-${n.toString(16).padStart(12, '0')}`;
 const OBJECT = id(0xa);
@@ -121,22 +121,13 @@ describe('planDelivery', () => {
   });
 });
 
-describe('workspaceEvent, the one channel until milestone 4', () => {
-  it('is the one audience’s copy', () => {
-    const edit = row({ recordIds: [id(3)], attributeIds: [SHOWN] });
-    expect(workspaceEvent(edit, [everyone])).toEqual(planDelivery(edit, [everyone])[0]?.event);
-  });
-
-  it('refuses a workspace with more than one audience rather than send one copy to all', () => {
-    let thrown: unknown;
-    try {
-      workspaceEvent(row({}), [everyone, hiddenField]);
-    } catch (error) {
-      thrown = error;
-    }
-    expect(thrown).toBeInstanceOf(Error);
-    // Its own code, so the relay reports it as what it is, not as a database failure.
-    expect(isAudiencesNeedChannels(thrown)).toBe(true);
-    expect(isAudiencesNeedChannels(new Error('The pool is down.'))).toBe(false);
+describe('planDelivery for a workspace with no rules', () => {
+  it('answers exactly one copy, the whole event, under the open key (the one channel it always had)', () => {
+    const edit = row({ recordIds: [id(3)], attributeIds: [SHOWN], mutationId: id(9) });
+    const plan = planDelivery(edit, [everyone]);
+    expect(plan).toHaveLength(1);
+    expect(plan[0]?.audience).toBe('open');
+    expect(plan[0]?.event).toMatchObject({ recordIds: [id(3)], attributeIds: [SHOWN], mutationId: id(9) });
+    expect(hiddenField.key).toMatch(/^[0-9a-f]{16}$/);
   });
 });

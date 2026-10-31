@@ -108,6 +108,14 @@ export const PERMISSIONS = {
     group: 'Data',
     grant: 'any',
   },
+  // Lists (spec 0048, decision 1): members make their own working sets; managing someone else's needs schema.manage.
+  'lists.manage': {
+    message: 'Your role can’t make lists.',
+    label: 'Make lists',
+    description: 'Make lists and pipelines, and change the ones they made.',
+    group: 'Data',
+    grant: 'any',
+  },
   'records.purge': {
     message: 'Only workspace owners and admins can delete records forever.',
     label: 'Delete records forever',
@@ -284,7 +292,7 @@ const OWNER_ONLY: readonly Permission[] = PERMISSION_NAMES.filter((name) => PERM
 export const ROLE_PERMISSIONS = {
   owner: PERMISSION_NAMES,
   admin: PERMISSION_NAMES.filter((permission) => !OWNER_ONLY.includes(permission)),
-  member: ['records.export', 'booking.manage', 'availability.own'],
+  member: ['lists.manage', 'records.export', 'booking.manage', 'availability.own'],
 } as const satisfies Record<Role, readonly Permission[]>;
 
 /**
@@ -310,6 +318,8 @@ export const KEY_FORBIDDEN_PERMISSIONS: readonly Permission[] = [
   'schedule.view.team',
   'schedule.manage',
   'schedule.manage.team',
+  // Spec 0048: list definitions stay with people; a key reads and writes entries through `data.*`.
+  'lists.manage',
 ];
 
 /** The data level a key holds on every object, as a scope. A key with neither reads and writes no data. */
@@ -343,6 +353,8 @@ export const MyAccess = z.object({
   role: Role,
   roleLabel: z.string(),
   permissions: z.array(Permission),
+  /** The teams the caller is in (spec 0031, AC-825); absent from an answer that predates teams. */
+  teamIds: z.array(Uuid).optional(),
   /**
    * Whose scheduling the caller reaches beyond their own (spec 0037, AC-1261), for the screens to show their
    * pickers: someone else at all (See, Manage), and everyone. The server checks every call through the reach anyway.

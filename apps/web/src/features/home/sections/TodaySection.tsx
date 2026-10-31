@@ -69,11 +69,7 @@ export function TodaySection({ context }: HomeSectionProps) {
   }
   const { today: todays, next: after } = todayAndNext(agenda, today);
   if (todays.length === 0 && after === undefined) {
-    return frame(
-      <EmptyState icon="calendar" title={strings.noMeetings} layout="row">
-        {strings.noMeetingsText}
-      </EmptyState>,
-    );
+    return frame(<EmptyState icon="calendar" title={strings.noMeetings} layout="row" />);
   }
   const { earlier, next } = splitAgenda(todays, now);
   const people = objects.find((object) => object.standardKey === 'people');

@@ -17,8 +17,8 @@ Spec 0019: tasks on a record (milestone 1), My tasks (milestone 2) and deleting 
 ## The task dialog (TaskDialog)
 
 - **Purpose**: everything about one task, on `?task=<id>` (or `?task=new`) over whichever tab opened it.
-- **Main task**: set its title, when it's due, who has it and which records it is about.
-- **Leaves out**: comments on tasks, reminders, subtasks.
+- **Main task**: set its title and what it means (a plain text Description, up to 5,000 characters, saved on leaving the field), when it's due, who has it and which records it is about.
+- **Leaves out**: comments on tasks, rich text in the description, reminders beyond the due day's inbox notice (the daily cleanup tells the assignee once, on the UTC day it is due), subtasks.
 
 ## My tasks (MyTasksScreen)
 
@@ -33,7 +33,7 @@ Spec 0019: tasks on a record (milestone 1), My tasks (milestone 2) and deleting 
 - The quick add makes a task with the typed title, this record linked, assigned to the person (owner decision 1), no due date; it shows first with the "New" badge at once, and the field clears and keeps focus. The field stops typing at 2,000 characters (its count shows past 1,800), so it never sends a title the server refuses.
 - A tick shows at once; the task stays in the open list struck through until the list settles (1.5 seconds after the last change in it), then moves to Completed. A refused tick rolls back with a toast and Retry.
 - Completed is a Disclosure, closed by default; its done tasks are read when it first opens, newest done first, with their count.
-- The record chip on each row is the first linked record that isn't this one, with "+N" for the rest (`entries.ts`); this record shows only when it is the only link. A removed assignee reads "Former member". A task the person may not change has read only checkboxes and fields with "You can view this task but not change it."
+- The record chip on each row is the first linked record that isn't this one, with "+N" for the rest (`entries.ts`); this record shows only when it is the only link. A removed assignee reads "Former member". A task the person may not change has read only checkboxes and fields with "You can only view this task."
 - My tasks under Assigned to me leaves out the assignee avatar: every row is the member's own, so the same face on each said nothing (as Home's My tasks card already did). Created by me and All tasks keep it.
 - The dialog's fields are the field set's own editors (Date, Member, record reference), committed one by one as Details commits (optimistic, the refusal under the field). The title is one line that wraps as it grows (Field's `isWrapping`; Enter commits), its count only near the limit. Assignee and Records are each one field, chips inside, the record picker's object switcher ("Search in") inside its menu above the search, starting on the page's object; a pick on an object the person may only read is refused under the field before anything is sent, and so is a 21st record. The search is spec 0014's `records.search` through `data.records.search` (`useRecordSearch` in `features/records/links.ts`): the 20 most recently updated with nothing typed, a name prefix for one or two characters, then names, emails and domains that contain the text, 150 ms after the last key. "Create task" closes the dialog at once; a refusal raises a toast with Retry. Under the fields, "Created by" names who made it and when, as the fields label their values (a stacked DescriptionList). The More menu in the title bar, before Close, holds "Copy link" (the page's address with `?task=`) and "Delete task". A saved task has no footer.
 - Opening the dialog pushes `?task=` (Back closes it); closing it steps back when this page opened it, else replaces the address.

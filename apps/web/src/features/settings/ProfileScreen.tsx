@@ -16,10 +16,11 @@ import {
   Card,
   Field,
   SaveBar,
+  type SaveBarStatus,
   SettingsRow,
   SettingsSection,
+  sharedStrings,
   Skeleton,
-  type SaveBarStatus,
 } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { handleProblem } from '@crm/contracts/handles';
@@ -119,7 +120,7 @@ export function ProfileScreen({ data, slug, profile, onChanged, photoResult, onP
     setOpeningGoogle(true);
     data.auth.syncGooglePhoto(`/w/${encodeURIComponent(slug)}/settings/account/profile`).catch((error: unknown) => {
       setOpeningGoogle(false);
-      toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : strings.somethingWrong });
+      toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : sharedStrings.couldntDoThat });
     });
   };
   const [name, setName] = useState(profile.name);
@@ -186,7 +187,7 @@ export function ProfileScreen({ data, slug, profile, onChanged, photoResult, onP
       .catch((error: unknown) => {
         const field = isDataError(error) ? error.data?.refusals?.[0]?.field : undefined;
         setFailure({
-          message: isDataError(error) ? error.message : strings.somethingWrong,
+          message: isDataError(error) ? error.message : sharedStrings.couldntDoThat,
           ...(field === undefined ? {} : { field }),
         });
       })

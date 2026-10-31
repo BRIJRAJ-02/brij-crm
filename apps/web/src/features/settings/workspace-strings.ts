@@ -1,3 +1,4 @@
+import { sharedStrings } from '@crm/ui';
 import type { GooglePhotoResult } from './google-photo-result.ts';
 
 /** Settings › Workspace › General and Account › Profile copy (spec 0031, slice 7). */
@@ -7,7 +8,7 @@ export const strings = {
   workspaceSection: 'Details',
   name: 'Workspace name',
   timeZone: 'Time zone',
-  timeZoneInfo: 'New booking pages and members start in this time zone. Each person can pick their own.',
+  timeZoneInfo: 'Default for new pages and members.',
   copyAddress: 'Copy address',
   /** The address row: the whole link, read only; owners and admins change the part after /w/ in its dialog. */
   webAddress: 'Web address',
@@ -26,11 +27,10 @@ export const strings = {
   changeAddress: 'Change',
   changeAddressLabel: 'Change web address',
   moveTitle: 'Change the web address',
-  moveText: (from: string, to: string) =>
-    `The workspace moves from /w/${from} to /w/${to}. Links and bookmarks with /w/${from} keep working and open the new address, and no other workspace can take /w/${from}.`,
-  /** Before a new address is typed: what happens to the old one. */
-  moveTextAny: (from: string) =>
-    `Links and bookmarks with /w/${from} keep working and open the new address, and no other workspace can take /w/${from}.`,
+  /** The move as one line, once a new address is typed. */
+  moveFromTo: (from: string, to: string) => `/w/${from} → /w/${to}`,
+  /** Under it, always: links and bookmarks with the old address open the new one, and no one else can take it. */
+  oldLinksWork: 'Old links still work.',
   moveAction: 'Change address',
   moved: (to: string) => `The workspace is now at /w/${to}.`,
   /** It moved, but the page couldn't open there. */
@@ -45,22 +45,20 @@ export const strings = {
   zoneChanged: (zone: string) => `Time zone is now ${zone}.`,
   undo: 'Undo',
   /** An Undo pressed after the name or time zone changed again (here or by another admin): the newer one stays. */
-  undoStale: (what: 'name' | 'time zone') => `The ${what} changed again since, so nothing was undone.`,
+  undoStale: sharedStrings.undoStale,
   /** Said once, at the top of the page, to readers without `workspace.manage`; the fields keep their locks. */
-  readOnly: 'Only owners and admins can change this.',
+  readOnly: sharedStrings.ownersAndAdminsOnly,
   failed: 'Couldn’t load the settings',
   failedText: 'Check your connection, then try again.',
-  somethingWrong: 'Something went wrong. Try again in a moment.',
   // The danger zone (owners only).
   danger: 'Danger zone',
   /** Profile's first section: the picture, name and sign in email. */
   detailsSection: 'Your details',
   deleteRow: 'Delete workspace',
-  deleteRowText: 'Everyone loses access. Any owner can restore it for 30 days.',
+  deleteRowText: 'Restorable for 30 days.',
   deleteAction: 'Delete workspace',
   deleteTitle: (name: string) => `Delete ${name}?`,
-  deleteText:
-    'Everyone loses access now and gets an email. Any owner can restore it for 30 days, then it’s gone for good.',
+  deleteText: 'Everyone loses access. Restorable for 30 days.',
   /** A quiet line under the delete confirm's sentence (a link to export comes with export). */
   exportFirst: 'Export anything you want to keep first.',
   typeName: (name: string) => `Type “${name}” to confirm`,
@@ -74,14 +72,13 @@ export const strings = {
   profileTitle: 'Profile',
   /** The public profile on Profile (22 Oct 2026): the handle booking addresses start with, and a bio. */
   publicProfileSection: 'Public profile',
-  publicProfileText:
-    'Your booking pages in this workspace live at your handle here, and so does a page listing your public ones.',
+  publicProfileText: 'Your public address in this workspace.',
   handle: 'Handle',
-  handleNew: 'Suggested from your name. Claim it, or change it and save. Your pages keep their /b/ links until then.',
-  handleKept: 'Your handle in this workspace. If you change it, your old address keeps working.',
+  handleNew: 'Suggested. Claim it or change it.',
+  handleKept: 'Your old address keeps working if you change it.',
   /** Under the claim note when they already have a link page in another workspace of theirs (spec 0056, AC-5618). */
   otherLinkPages: (names: readonly string[]) =>
-    `You already have a link page in ${new Intl.ListFormat('en', { style: 'long', type: 'conjunction' }).format(names)}. Each workspace has its own.`,
+    `You have link pages in ${new Intl.ListFormat('en', { style: 'long', type: 'conjunction' }).format(names)}.`,
   handleFix: 'Fix your handle first.',
   claimHandle: 'Claim',
   bio: 'Bio',

@@ -13,6 +13,7 @@ import type {
 import type { ToastContent } from '@crm/ui';
 import { isPassing } from '../workspace/bulk.ts';
 import { strings } from './strings.ts';
+import { sharedStrings } from '@crm/ui';
 
 /** The trash's columns, by id: Name (the row header), Object, Deleted by, Deleted, Deleted forever on. */
 export const TRASH_COLUMNS = {
@@ -158,7 +159,7 @@ export function restoreToast(
 ): ToastContent | undefined {
   if (summary.kind === 'too-many') return { tone: 'danger', message: strings.tooMany };
   if (summary.kind === 'failed') {
-    const message = summary.error.message || strings.somethingWrong;
+    const message = summary.error.message || sharedStrings.couldntDoThat;
     return onRetry !== undefined && isPassing(summary.error.code)
       ? { tone: 'danger', message, action: { label: strings.retry, onAction: onRetry } }
       : { tone: 'danger', message };
@@ -191,7 +192,7 @@ export function canRestoreAll(objectId: string | undefined, objects: readonly Ob
 export function purgeToast(summary: PurgeSummary, onRetry?: () => void): ToastContent | undefined {
   if (summary.kind === 'too-many') return { tone: 'danger', message: strings.tooManyDelete };
   if (summary.kind === 'failed') {
-    const message = summary.error.message || strings.somethingWrong;
+    const message = summary.error.message || sharedStrings.couldntDoThat;
     return onRetry !== undefined && isPassing(summary.error.code)
       ? { tone: 'danger', message, action: { label: strings.retry, onAction: onRetry } }
       : { tone: 'danger', message };

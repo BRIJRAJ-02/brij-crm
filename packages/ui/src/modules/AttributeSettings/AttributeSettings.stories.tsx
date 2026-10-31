@@ -6,6 +6,7 @@ import type { FormRefusal } from '../../molecules/Form/Form.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { relationshipStep } from '../RelationshipSettings/RelationshipSettings.tsx';
 import { AttributeSettings, type AttributeSettingsProps } from './AttributeSettings.tsx';
+import { typeChangeStep, type TypeChangeStepProps } from './TypeChangeStep.tsx';
 
 /** The ten types without setup (spec 0012, milestone 2). */
 const WITHOUT_SETUP = [
@@ -124,7 +125,7 @@ export const DateDefault: Story = {
     await userEvent.clear(days);
     await userEvent.type(days, '9999');
     await userEvent.keyboard('{Meta>}{Enter}{/Meta}');
-    await waitFor(() => expect(dialog).toHaveTextContent('Give a whole number of days from 0 to 3,650.'));
+    await waitFor(() => expect(dialog).toHaveTextContent('A whole number, 0 to 3,650.'));
     await userEvent.clear(days);
     await userEvent.type(days, '7');
     await userEvent.keyboard('{Meta>}{Enter}{/Meta}');
@@ -225,7 +226,7 @@ export const ArchivedApiName: Story = {
     await userEvent.clear(inDialog(dialog, 'Name'));
     await userEvent.keyboard('Name');
     await userEvent.keyboard('{Meta>}{Enter}{/Meta}');
-    await waitFor(() => expect(dialog).toHaveTextContent('Another attribute here has this name. Pick another.'));
+    await waitFor(() => expect(dialog).toHaveTextContent('Name taken here. Pick another.'));
   },
 };
 
@@ -656,8 +657,8 @@ export const EditOptions: Story = {
   },
   play: async ({ userEvent }) => {
     const dialog = await openDialog();
-    await expect(dialog).toHaveTextContent('Changes to options save as you make them.');
-    await expect(dialog).toHaveTextContent('This option is archived. New records get Silver.');
+    await expect(dialog).toHaveTextContent('Options save as you go.');
+    await expect(dialog).toHaveTextContent('Archived. New records get Silver.');
     const silver = within(dialog).getByRole('textbox', { name: 'Option 1' });
     await userEvent.tripleClick(silver);
     await userEvent.keyboard('Steel{Enter}');
@@ -688,7 +689,7 @@ export const ArchivedDefault: Story = {
   parameters: { crm: { screenshot: false } },
   play: async () => {
     const dialog = await openDialog();
-    await expect(dialog).toHaveTextContent('This option is archived. New records get no value.');
+    await expect(dialog).toHaveTextContent('Archived. New records get no value.');
     await waitFor(() => expect(document.querySelector('[data-entering]')).toBeNull());
   },
 };
@@ -730,7 +731,7 @@ export const OptionRefusedKeepsCreate: Story = {
     await userEvent.click(within(dialog).getByRole('textbox', { name: 'New option' }));
     await userEvent.keyboard('Gold{Enter}gold');
     await userEvent.keyboard('{Meta>}{Enter}{/Meta}');
-    await waitFor(() => expect(dialog).toHaveTextContent('Fix the options marked above, then create the attribute.'));
+    await waitFor(() => expect(dialog).toHaveTextContent('Fix the options marked above.'));
     await expect(args.onSubmit).not.toHaveBeenCalled();
   },
 };
@@ -831,5 +832,146 @@ export const ReadOnlyRules: Story = {
     const dialog = await openDialog();
     await expect(dialog).toHaveTextContent('Reference can have at most 12 characters.');
     await expect(within(dialog).queryByRole('button', { name: 'Add rule' })).toBeNull();
+  },
+};
+
+/** What a check found, for the Change type stories. */
+type Check = TypeChangeStepProps['check'];
+
+/** Props for the Change type sample: the dialog's, the check it shows, and the filtered table's link. */
+type ChangingTypeProps = SampleProps & {
+  readonly check: Check;
+  readonly failedLink?: TypeChangeStepProps['failedLink'];
+};
+
+/** An edit whose "Change type…" opens the step in the same Modal, as the screen does, with a check fixed by `check`. */
+function ChangingType({ check, failedLink, ...args }: ChangingTypeProps) {
+  const [isOpen, setOpen] = useState(true);
+  const [isChanging, setChanging] = useState(false);
+  const [target, setTarget] = useState('long_text');
+  const [config, setConfig] = useState<Readonly<Record<string, unknown>>>({});
+  return (
+    <Stage>
+      <Button
+        onPress={() => {
+          setOpen(true);
+        }}
+      >
+        Edit attribute
+      </Button>
+      <AttributeSettings
+        {...args}
+        isOpen={isOpen}
+        onOpenChange={setOpen}
+        onChangeType={() => {
+          setChanging(true);
+        }}
+        {...(isChanging
+          ? {
+              step: typeChangeStep({
+                targets: ['long_text', 'email', 'link', 'phone'],
+                target,
+                config,
+                onTargetChange: setTarget,
+                onConfigChange: setConfig,
+                check,
+                onRetry: fn(),
+                failedLink,
+                isBusy: false,
+                onBack: () => {
+                  setChanging(false);
+                },
+                onApply: fn(),
+              }),
+            }
+          : {})}
+      />
+    </Stage>
+  );
+}
+
+const CONTACT = {
+  type: 'text' as const,
+  isMulti: false,
+  title: 'Contact',
+  apiSlug: 'contact',
+  isRequired: false,
+  isUnique: true,
+};
+
+/**
+ * Change type (the field types pass): "Change type…" under the type opens the step in the same dialog, its first
+ * safe target chosen and checked. Every value converts, Unique turns off: Change type is on. Back returns.
+ */
+export const ChangeType: Story = {
+  args: { attribute: CONTACT },
+  render: (args) => (
+    <ChangingType
+      {...args}
+      check={{ total: 1204, converts: 1204, fails: 0, consequences: ['Unique turns off.'], blockers: [] }}
+    />
+  ),
+  play: async ({ userEvent }) => {
+    const dialog = await openDialog();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Change type…' }));
+    await waitFor(() => expect(dialog).toHaveAccessibleName('Change type'));
+    await waitFor(() => expect(document.activeElement?.getAttribute('aria-haspopup')).toBe('listbox'));
+    await expect(within(dialog).getByText('All 1,204 values convert. Unique turns off.')).toBeInTheDocument();
+    await expect(within(dialog).getByRole('button', { name: 'Change type' })).toBeEnabled();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Back' }));
+    await waitFor(() => expect(dialog).toHaveAccessibleName('Edit attribute'));
+    // Back returns focus to what opened the step, and the settings as they were.
+    await waitFor(() => expect(within(dialog).getByRole('button', { name: 'Change type…' })).toHaveFocus());
+  },
+};
+
+/** Values that don't convert: the reason, the records as a filtered table, and Change type off until they're fixed. */
+export const ChangeTypeBlocked: Story = {
+  args: { attribute: CONTACT },
+  render: (args) => (
+    <ChangingType
+      {...args}
+      check={{
+        total: 1204,
+        converts: 1201,
+        fails: 3,
+        consequences: [],
+        blockers: ['3 values can’t become Email: Not an email address. Fix them first.'],
+      }}
+      failedLink={{ label: 'Show 3 records', href: '/w/acme/people' }}
+    />
+  ),
+  play: async ({ userEvent }) => {
+    const dialog = await openDialog();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Change type…' }));
+    await expect(within(dialog).getByRole('link', { name: 'Show 3 records' })).toBeInTheDocument();
+    await expect(within(dialog).getByRole('button', { name: 'Change type' })).toBeDisabled();
+  },
+};
+
+/** While the values are read: Change type waits. */
+export const ChangeTypeChecking: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { attribute: CONTACT },
+  render: (args) => <ChangingType {...args} check="loading" />,
+  play: async ({ userEvent }) => {
+    const dialog = await openDialog();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Change type…' }));
+    await expect(within(dialog).getByText('Checking every value…')).toBeInTheDocument();
+    await expect(within(dialog).getByRole('button', { name: 'Change type' })).toBeDisabled();
+  },
+};
+
+/** The check failed (offline, a timeout): it says so with Try again, and Change type waits. */
+export const ChangeTypeCheckFailed: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { attribute: CONTACT },
+  render: (args) => <ChangingType {...args} check="error" />,
+  play: async ({ userEvent }) => {
+    const dialog = await openDialog();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Change type…' }));
+    await expect(within(dialog).getByText('Couldn’t check the values.')).toBeInTheDocument();
+    await expect(within(dialog).getByRole('button', { name: 'Try again' })).toBeEnabled();
+    await expect(within(dialog).getByRole('button', { name: 'Change type' })).toBeDisabled();
   },
 };

@@ -13,15 +13,15 @@ import { useLinkSection } from '@crm/data/react';
 import {
   Button,
   Card,
-  RelatedRecords,
   type RelatedRecord,
+  RelatedRecords,
   type RelatedRecordsHandle,
   type RelatedRecordsPicker,
+  sharedStrings,
 } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useMemo, type Ref } from 'react';
 import { runUndo } from '../workspace/useUndoShortcut.ts';
-import { strings as workspaceStrings } from '../workspace/strings.ts';
 import type { RelatedSide } from './details.ts';
 import { useLinkEditing } from './links.ts';
 import { useRecordForm } from './RecordForm.tsx';
@@ -105,7 +105,7 @@ export function RelatedSections({ slug, recordId, related, canChange, link, hand
         });
       },
       () => {
-        toasts.toast({ tone: 'danger', message: workspaceStrings.somethingWrong });
+        toasts.toast({ tone: 'danger', message: sharedStrings.couldntDoThat });
       },
     );
   };

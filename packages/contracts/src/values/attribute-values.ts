@@ -45,8 +45,12 @@ export const MULTIPLE_VALUE_TYPES = [
   'file',
 ] as const satisfies readonly AttributeType[];
 
-/** The types only the system writes: people never edit them. */
-export const SYSTEM_ONLY_TYPES = ['timestamp', 'interaction'] as const satisfies readonly AttributeType[];
+/**
+ * The types only the system writes: people never edit them. A timestamp left this list with the date and time
+ * field (the field types pass, 31 October 2026): people pick one, as Attio's and Twenty's are; Created at and
+ * Updated at stay the system's as system attributes.
+ */
+export const SYSTEM_ONLY_TYPES = ['interaction'] as const satisfies readonly AttributeType[];
 
 /** The stable code on every refused attribute value. */
 export const ATTRIBUTE_VALUE_INVALID = 'ATTRIBUTE_VALUE_INVALID';

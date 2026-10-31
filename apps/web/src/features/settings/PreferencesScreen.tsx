@@ -103,9 +103,7 @@ export function PreferencesScreen({
       {customiseSidebar !== undefined && (
         <SettingsSection title={strings.sidebar}>
           <Card>
-            <SettingsRow title={strings.customise} description={strings.customiseDescription}>
-              {customiseSidebar}
-            </SettingsRow>
+            <SettingsRow title={strings.customise}>{customiseSidebar}</SettingsRow>
           </Card>
         </SettingsSection>
       )}
@@ -181,7 +179,7 @@ function MemberSections({
     <>
       <SettingsSection title={strings.dates}>
         <Card>
-          <SettingsRow title={strings.timeZone} description={strings.timeZoneDescription} control="field">
+          <SettingsRow title={strings.timeZone} control="field">
             <Select
               savesOnPick
               label={strings.timeZone}
@@ -217,7 +215,7 @@ function MemberSections({
       </SettingsSection>
       <SettingsSection title={strings.startPage}>
         <Card>
-          <SettingsRow title={strings.landing} description={strings.landingDescription} control="field">
+          <SettingsRow title={strings.landing} control="field">
             <Select
               savesOnPick
               label={strings.landing}

@@ -25,6 +25,7 @@ export const tasksRouter = member.tasks.router({
           {
             id: input.id,
             title: input.title,
+            ...(input.description === undefined ? {} : { description: input.description }),
             ...(input.dueOn === undefined ? {} : { dueOn: input.dueOn }),
             ...(input.assigneeMemberId === undefined ? {} : { assigneeMemberId: input.assigneeMemberId }),
             ...(input.recordIds === undefined ? {} : { recordIds: input.recordIds }),
@@ -44,6 +45,7 @@ export const tasksRouter = member.tasks.router({
           {
             taskId: input.taskId,
             ...(input.title === undefined ? {} : { title: input.title }),
+            ...(input.description === undefined ? {} : { description: input.description }),
             ...(input.dueOn === undefined ? {} : { dueOn: input.dueOn }),
             ...(input.assigneeMemberId === undefined ? {} : { assigneeMemberId: input.assigneeMemberId }),
             ...(input.isDone === undefined ? {} : { isDone: input.isDone }),

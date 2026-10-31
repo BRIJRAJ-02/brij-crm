@@ -14,6 +14,7 @@
 import { createHash } from 'node:crypto';
 import {
   KEY_DATA_SCOPES,
+  ROLE_DEFAULT_LEVEL,
   KEY_FORBIDDEN_PERMISSIONS,
   PERMISSION_NAMES,
   ROLE_PERMISSIONS,
@@ -78,8 +79,13 @@ export type Principal =
       /** The signed in identity (`auth.user.id`); a member made without one has none. */
       readonly userId?: string;
       readonly role: Role;
-      /** The member's teams, empty until #23. */
+      /** The member's teams (spec 0031, AC-825), empty for a member in none. */
       readonly teamIds: readonly string[];
+      /**
+       * The active members of those teams, the member included: who a `team` record rule matches (spec 0032,
+       * AC-847). Absent or empty, a team rule matches the member alone.
+       */
+      readonly teamMemberIds?: readonly string[];
     }
   | { readonly kind: 'api_key'; readonly keyId: string; readonly scopes: readonly string[] }
   /** A form writing its submissions' records (spec 0023): only what its published mapping names. */
@@ -129,10 +135,18 @@ export interface RecordRuleRow {
   readonly attributeId: string;
 }
 
-/** The workspace's rules: empty until #24 stores them (tests inject them through the door). */
+/**
+ * The rules that apply to a member, as the door's `RuleSource` read them (spec 0032, AC-841), and the teams it read
+ * them for: the member's team ids and the active members of those teams (spec 0031, AC-825). Both are empty for
+ * rules a test injects by hand, which name teams in their subjects and put the member in them through the principal.
+ */
 export interface AccessRules {
   readonly levels: readonly LevelRule[];
   readonly records: readonly RecordRuleRow[];
+  /** The member's own teams, when the source read them. */
+  readonly teamIds?: readonly string[];
+  /** The active members of those teams, when the source read them. */
+  readonly teamMemberIds?: readonly string[];
 }
 
 /** No rules at all: every role writes every object and field, with no record rule. */
@@ -203,48 +217,163 @@ function subjectMatches(subject: RuleSubject, principal: MemberPrincipal): boole
   return principal.teamIds.includes(subject.teamId);
 }
 
-const stricterObject = (a: ObjectLevel, b: ObjectLevel): ObjectLevel => (OBJECT_RANK[a] <= OBJECT_RANK[b] ? a : b);
+const higherObject = (a: ObjectLevel, b: ObjectLevel): ObjectLevel => (OBJECT_RANK[a] >= OBJECT_RANK[b] ? a : b);
 const stricterField = (a: FieldLevel, b: FieldLevel): FieldLevel => (FIELD_RANK[a] <= FIELD_RANK[b] ? a : b);
+const higherField = (a: FieldLevel, b: FieldLevel): FieldLevel => (FIELD_RANK[a] >= FIELD_RANK[b] ? a : b);
+
+/** What a record scope lets through, broadest first: a team's records show more than one's own. */
+const SCOPE_RANK: Readonly<Record<RecordRule['kind'], number>> = { team: 1, own: 0 };
 
 /**
- * The data policy the rules give a member. Every rule whose subject is the
- * member's role or one of their teams applies; where several apply to the
- * same object or field, the strictest wins (fail closed). A rule whose level
- * or kind the code doesn't know sets its object to `none`.
+ * What a role without a rule may do with an object (spec 0032, AC-844): owners and admins edit, as do members; a rule
+ * role the list gives a default (`ROLE_DEFAULT_LEVEL`) gets that; any other role gets nothing (fail closed). A team
+ * has no default: it only grants.
+ */
+const roleDefault = (role: string): ObjectLevel => {
+  if (role === 'owner' || role === 'admin') return 'write';
+  return Object.hasOwn(ROLE_DEFAULT_LEVEL, role)
+    ? ((ROLE_DEFAULT_LEVEL as Readonly<Record<string, ObjectLevel>>)[role] ?? 'none')
+    : 'none';
+};
+
+/** What one subject's stored rules say about one object, before they are read as levels. */
+interface StoredView {
+  level: string | undefined;
+  readonly fields: Map<string, string>;
+  record: { readonly kind: string; readonly attributeId: string } | undefined;
+}
+
+/** One subject's view of one object once read (spec 0032, AC-844, AC-845): a stored value the code doesn't know is `none`. */
+interface SubjectView {
+  readonly level: ObjectLevel;
+  readonly fields: ReadonlyMap<string, FieldLevel>;
+  /** The record rule it holds, if it narrows; undefined sees every record. */
+  readonly record: RecordRule | undefined;
+}
+
+/** Reads a subject's stored rules about an object as a view; `fallback` is the level it has with no object rule. */
+function readView(stored: StoredView | undefined, fallback: ObjectLevel): SubjectView {
+  const fields = new Map<string, FieldLevel>();
+  let unknown = false;
+  if (stored?.level !== undefined && !isObjectLevel(stored.level)) unknown = true;
+  for (const [attributeId, level] of stored?.fields ?? []) {
+    if (isFieldLevel(level)) fields.set(attributeId, level);
+    else unknown = true;
+  }
+  const record = stored?.record;
+  if (record !== undefined && record.kind !== 'own' && record.kind !== 'team') unknown = true;
+  if (unknown) return { level: 'none', fields: new Map(), record: undefined };
+  const level = stored?.level !== undefined && isObjectLevel(stored.level) ? stored.level : fallback;
+  return {
+    level,
+    fields,
+    record:
+      record === undefined || (record.kind !== 'own' && record.kind !== 'team')
+        ? undefined
+        : { kind: record.kind, attributeId: record.attributeId },
+  };
+}
+
+/**
+ * The data policy the rules give a member (spec 0032, AC-843 to AC-845). Owners and admins are never restricted. A
+ * member has one view of an object per subject that applies to them, their role and each of their teams. The
+ * role's level is its rule, else `write`; a team's is its rule, else nothing (a team only grants). They get the
+ * most open object level across their views, each field's most open level across the views that can see the
+ * object (never above that view's own object level), and the broadest record scope across those views. A view
+ * whose stored level or kind the code doesn't know sees nothing of the object (fail closed).
  */
 function memberPolicy(principal: MemberPrincipal, rules: AccessRules): DataPolicy {
+  // Owners and admins are never restricted by stored rules (AC-843): a rule can't name them (AC-842), and a team only
+  // grants, so they keep the open policy and its audience. Only rules injected by hand (tests) name their role.
+  const namesRole = (subject: RuleSubject) => subject.type === 'role' && subject.role === principal.role;
+  if (
+    (principal.role === 'owner' || principal.role === 'admin') &&
+    !rules.levels.some((rule) => namesRole(rule.subject)) &&
+    !rules.records.some((rule) => namesRole(rule.subject))
+  ) {
+    return OPEN_POLICY;
+  }
+  // The stored rules of every subject that applies, by subject ("role" or a team id) and then object.
+  const stored = new Map<string, Map<string, StoredView>>();
+  const storedOf = (subject: RuleSubject, objectId: string): StoredView | undefined => {
+    if (!subjectMatches(subject, principal)) return undefined;
+    const key = subject.type === 'role' ? 'role' : `team:${subject.teamId}`;
+    let byObject = stored.get(key);
+    if (byObject === undefined) {
+      byObject = new Map();
+      stored.set(key, byObject);
+    }
+    let view = byObject.get(objectId);
+    if (view === undefined) {
+      view = { level: undefined, fields: new Map(), record: undefined };
+      byObject.set(objectId, view);
+    }
+    return view;
+  };
+  for (const rule of rules.levels) {
+    const view = storedOf(rule.subject, rule.target.objectId);
+    if (view === undefined) continue;
+    if (rule.target.type === 'object') view.level = rule.level;
+    else view.fields.set(rule.target.attributeId, rule.level);
+  }
+  for (const rule of rules.records) {
+    const view = storedOf(rule.subject, rule.objectId);
+    if (view !== undefined) view.record = { kind: rule.kind, attributeId: rule.attributeId };
+  }
+  // What the role gets on an object no rule names: `write` for a member, nothing for a role the list gives nothing.
+  const defaultLevel = roleDefault(principal.role);
+  const objectIds = new Set<string>();
+  for (const byObject of stored.values()) for (const objectId of byObject.keys()) objectIds.add(objectId);
   const objects = new Map<string, ObjectLevel>();
   const fields = new Map<string, FieldLevel>();
   const records = new Map<string, RecordRule>();
-  const deny = (objectId: string) => objects.set(objectId, 'none');
-  const setObject = (objectId: string, level: ObjectLevel) =>
-    objects.set(objectId, stricterObject(objects.get(objectId) ?? level, level));
-  for (const rule of rules.levels) {
-    if (!subjectMatches(rule.subject, principal)) continue;
-    const { target } = rule;
-    if (target.type === 'object') {
-      if (isObjectLevel(rule.level)) setObject(target.objectId, rule.level);
-      else deny(target.objectId);
-    } else if (isFieldLevel(rule.level)) {
-      fields.set(target.attributeId, stricterField(fields.get(target.attributeId) ?? rule.level, rule.level));
-    } else {
-      deny(target.objectId);
+  for (const objectId of objectIds) {
+    // The role always has a view (its default when it holds no rule); a team has one only where it holds a rule.
+    const views: SubjectView[] = [readView(stored.get('role')?.get(objectId), roleDefault(principal.role))];
+    for (const [key, byObject] of stored) {
+      if (key === 'role') continue;
+      const team = byObject.get(objectId);
+      if (team !== undefined) views.push(readView(team, 'none'));
     }
-  }
-  for (const rule of rules.records) {
-    if (!subjectMatches(rule.subject, principal)) continue;
-    if (rule.kind !== 'own' && rule.kind !== 'team') {
-      deny(rule.objectId);
+    const seeing = views.filter((view) => view.level !== 'none');
+    if (seeing.length === 0) {
+      objects.set(objectId, 'none');
       continue;
     }
-    const earlier = records.get(rule.objectId);
-    // `own` is narrower than `team`: of two rules, own wins.
-    if (earlier === undefined || rule.kind === 'own') {
-      records.set(rule.objectId, Object.freeze({ kind: rule.kind, attributeId: rule.attributeId }));
+    // The views that reach the most records decide: a view that sees every record (no record rule) outranks a team's
+    // scope, which outranks one's own. The level comes from those views alone, so no one gets the level one rule gives
+    // on the records of another (write on one's own records and view on all of them is view on all, never write on
+    // all): at worst less than the union, never more.
+    const reach = (view: SubjectView): number => (view.record === undefined ? 2 : SCOPE_RANK[view.record.kind]);
+    const widest = Math.max(...seeing.map(reach));
+    const deciding = seeing.filter((view) => reach(view) === widest);
+    const level = deciding.reduce<ObjectLevel>((best, view) => higherObject(best, view.level), 'none');
+    // A level equal to the role's default restricts nothing: leaving it out keeps a member whose teams cancel a rule
+    // on the open policy (and its audience).
+    if (level !== defaultLevel) objects.set(objectId, level);
+    // A field some deciding view holds a rule for: the most open of those views, each capped at its own object level
+    // (a view with no rule for the field gives its object's level).
+    const fieldIds = new Set(deciding.flatMap((view) => [...view.fields.keys()]));
+    for (const attributeId of fieldIds) {
+      const best = deciding.reduce<FieldLevel>((most, view) => {
+        const ofObject = FIELD_OF_OBJECT[view.level];
+        return higherField(most, stricterField(view.fields.get(attributeId) ?? ofObject, ofObject));
+      }, 'hidden');
+      // A field as open as its object restricts nothing.
+      if (FIELD_RANK[best] < FIELD_RANK[FIELD_OF_OBJECT[level]]) fields.set(attributeId, best);
+    }
+    // No deciding view with a record rule sees every record. Of the rules left, the lowest field id is the one kept.
+    if (widest < 2) {
+      let kept: RecordRule | undefined;
+      for (const view of deciding) {
+        const rule = view.record;
+        if (rule !== undefined && (kept === undefined || rule.attributeId < kept.attributeId)) kept = rule;
+      }
+      if (kept !== undefined) records.set(objectId, Object.freeze({ kind: kept.kind, attributeId: kept.attributeId }));
     }
   }
   return sealPolicy({
-    defaultObject: 'write',
+    defaultObject: defaultLevel,
     objects: frozenRecord(objects),
     fields: frozenRecord(fields),
     records: frozenRecord(records),
@@ -300,7 +429,11 @@ export function keyAccess(keyId: string, scopes: readonly string[]): Access {
  * on its main object, and on that object's attributes only those its
  * published mapping names (`writable`); every other attribute of the object
  * hidden, and every other object out of reach. With no object (the public
- * endpoints, before processing) it reaches no data at all.
+ * endpoints, before processing) it reaches no data at all. A form filing
+ * People also files the person's company by their email (spec 0059,
+ * AC-5916): `filing` adds write on Companies with every attribute filing
+ * never writes hidden (`unwritten`: all but Domains and Name), and on the
+ * person's Company attribute, and nothing else.
  */
 export function formAccess(
   formId: string,
@@ -308,18 +441,36 @@ export function formAccess(
     readonly objectId: string;
     readonly attributeIds: readonly string[];
     readonly writable: ReadonlySet<string>;
+    readonly filing?: {
+      readonly companies: string;
+      readonly companyAttributeId: string;
+      readonly unwritten: readonly string[];
+    };
   },
 ): Access {
-  const fields =
+  const filing = target?.filing;
+  const fields: [string, FieldLevel][] =
     target === undefined
       ? []
-      : target.attributeIds.flatMap((id): [string, FieldLevel][] => (target.writable.has(id) ? [] : [[id, 'hidden']]));
+      : [
+          ...target.attributeIds.flatMap((id): [string, FieldLevel][] =>
+            target.writable.has(id) || id === filing?.companyAttributeId ? [] : [[id, 'hidden']],
+          ),
+          ...(filing?.unwritten ?? []).map((id): [string, FieldLevel] => [id, 'hidden']),
+        ];
+  const objects: [string, ObjectLevel][] =
+    target === undefined
+      ? []
+      : [
+          [target.objectId, 'write'],
+          ...(filing === undefined ? [] : [[filing.companies, 'write'] as [string, ObjectLevel]]),
+        ];
   return Object.freeze({
     principal: Object.freeze({ kind: 'form', formId }),
     permissions: Object.freeze([]),
     data: sealPolicy({
       defaultObject: 'none',
-      objects: frozenRecord(target === undefined ? [] : [[target.objectId, 'write' as const]]),
+      objects: frozenRecord(objects),
       fields: frozenRecord(fields),
       records: frozenRecord([]),
     }),
@@ -411,14 +562,15 @@ export function isOpen(access: Pick<Access, 'data'>): boolean {
 }
 
 /**
- * The members a record rule matches for this principal: the member themself
- * for `own`, and for `team` the members of their teams. Teams arrive with #23
- * (`teamIds` is empty until then), so until then a team rule matches the
- * member alone; a principal that isn't a member matches nobody (fail closed).
+ * The members a record rule matches for this principal: the member themself for `own`, and for `team` the members
+ * of their teams, themself included (spec 0032, AC-847). A member in no team matches themself alone, so a team scope
+ * never shows less than their own; a principal that isn't a member matches nobody (fail closed).
  */
-export function ruleMembers(access: Pick<Access, 'principal'>, _rule: RecordRule): readonly string[] {
+export function ruleMembers(access: Pick<Access, 'principal'>, rule: RecordRule): readonly string[] {
   const { principal } = access;
-  return principal.kind === 'member' ? [principal.memberId] : [];
+  if (principal.kind !== 'member') return [];
+  if (rule.kind === 'own') return [principal.memberId];
+  return [...new Set([principal.memberId, ...(principal.teamMemberIds ?? [])])];
 }
 
 /** The attributes the principal may see (read or write), in their order. */

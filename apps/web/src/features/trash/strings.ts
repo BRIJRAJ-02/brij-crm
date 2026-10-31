@@ -25,10 +25,8 @@ export const strings = {
   showAll: 'Show all objects',
   retry: 'Retry',
   restore: 'Restore',
-  /** No selected record's object is one the person may change (AC-534). */
-  cannotRestore: 'You can view these records but not restore them.',
-  /** The same for an owner or admin, whose Delete forever fails closed too (AC-538 as amended). */
-  cannotChange: 'You can view these records but not restore or delete them.',
+  /** No selected record's object is one the person may change (AC-534), or restore or delete (AC-538). */
+  viewOnly: 'View only.',
   /** Over the 500 a restore or Delete forever sends at once; Select all runs more as a background change. */
   tooMany: 'Pick up to 500 at a time, or use Select all to restore more.',
   tooManyDelete: 'Pick up to 500 at a time, or use Select all to delete more.',
@@ -47,7 +45,6 @@ export const strings = {
       ? '1 couldn’t be deleted; its row says why.'
       : `${new Intl.NumberFormat().format(refused)} couldn’t be deleted; each row says why.`,
   noneDeleted: (records: string) => `${records} couldn’t be deleted. Each row says why.`,
-  somethingWrong: 'Something went wrong. Try again in a moment.',
   /** Delete forever and Empty trash (spec 0022, milestone 4): owners and admins only. */
   deleteForever: 'Delete forever',
   emptyTrash: 'Empty trash',
@@ -63,7 +60,6 @@ export const strings = {
   deleteRecordsForever: (records: string) => `Delete ${records} forever`,
   confirmEmptyText: (records: string) => `${records} will be deleted forever. This can’t be undone.`,
   confirmRestoreTitle: (records: string) => `Restore ${records}?`,
-  confirmRestoreText: 'They come back with their links, list entries, notes and history.',
   cancel: 'Cancel',
   purgedOne: 'Deleted 1 record forever.',
   purged: (records: string) => `Deleted ${records} forever.`,

@@ -166,13 +166,9 @@ export function UsersScreen({
         onRowAction={(id) => void navigate({ href: adminUserHref(slug, id) })}
         emptyState={
           q === '' ? (
-            <EmptyState icon="users" title={strings.noUsers}>
-              {strings.noUsersText}
-            </EmptyState>
+            <EmptyState icon="users" title={strings.noUsers} />
           ) : (
-            <EmptyState icon="search" title={strings.noMatches}>
-              {strings.noMatchesText}
-            </EmptyState>
+            <EmptyState icon="search" title={strings.noMatches} />
           )
         }
       />

@@ -1160,5 +1160,29 @@ describe('a visitor mid fill when the form is published again (spec 0063, AC-630
     const kept = view.answers.map((answer) => answer.key);
     expect(kept).toContain('size');
     expect(kept).not.toContain('seats');
+describe('a submission files its person under their company (spec 0059, AC-5916)', () => {
+  it('links the person a form makes to the company of their work email, made by the form, and never on free mail', async () => {
+    const w = await workspace();
+    const live = await liveForm(w);
+    const companyOf = (email: string) =>
+      w.query<{ company: string | null; name: string | null; by: string }>(sql`
+        select c.id::text as company, n.text_value as name, c.created_by_type::text as by
+        from "values" e
+        join record_links l on l.active_until is null and (l.from_record_id = e.record_id or l.to_record_id = e.record_id)
+        join attributes a on a.relationship_id = l.relationship_id and a.id = ${w.attribute('people.company')}::uuid
+        join records c on c.id = case when l.from_record_id = e.record_id then l.to_record_id else l.from_record_id end
+        left join "values" n on n.record_id = c.id and n.attribute_id = ${w.attribute('companies.name')}::uuid
+          and n.active_until is null
+        where e.attribute_id = ${w.attribute('people.email_addresses')}::uuid and e.active_until is null
+          and e.text_value = ${email}
+      `);
+    for (const email of ['grace@initech.com', 'sam@gmail.com']) {
+      await submit(live.publicKey, body({ name: 'Grace Hopper', email }));
+    }
+    for (const each of await submissionIds(w, live.id)) await processNow(w, each.id);
+    expect(await companyOf('grace@initech.com')).toEqual([
+      { company: expect.any(String) as string, name: 'Initech', by: 'form' },
+    ]);
+    expect(await companyOf('sam@gmail.com')).toEqual([]);
   });
 });

@@ -1,11 +1,12 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
-import { FocusScope, useFocusVisible, useKeyboard } from 'react-aria';
+import { useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
+import { FocusScope, mergeProps, useFocusVisible, useKeyboard } from 'react-aria';
 import { Dialog, Heading } from 'react-aria-components';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { TruncatedText } from '../../atoms/TruncatedText/TruncatedText.tsx';
 import styles from './Panel.module.css';
 import { strings } from './strings.ts';
 import { PageEdge } from '../../lib/page-edge.ts';
+import { pathOf, stepOf } from '../../lib/step-keys.ts';
 
 /** How wide a panel is: `md` (`size-panel`, 400px) for a record, `lg` (`size-panel-wide`, 520px) for notes, email and larger tasks. */
 export type PanelWidth = 'md' | 'lg';
@@ -37,6 +38,11 @@ export interface PanelProps {
   readonly isFlush?: boolean;
   /** The content is a column of sections, space-20 apart: a submission's state, its answers, where it came from. */
   readonly isStacked?: boolean;
+  /**
+   * ↑ and ↓ inside the panel, where nothing else owns the arrows (a field, tabs, a list, a menu): step to the item
+   * above or below in the list the panel was opened from (the record panel).
+   */
+  readonly onStep?: (step: 'previous' | 'next') => void;
 }
 
 type Phase = 'open' | 'exiting' | 'closed';
@@ -84,6 +90,7 @@ export function Panel({
   variant = 'sheet',
   isFlush = false,
   isStacked = false,
+  onStep,
 }: PanelProps) {
   const ref = useRef<HTMLElement>(null);
   const subtitleId = useId();
@@ -96,6 +103,17 @@ export function Panel({
       else event.continuePropagation();
     },
   });
+  // ↑ and ↓ step through the list, where nothing in the panel owns the arrows. No motion: a key repeated
+  // hundreds of times a day swaps the content at once.
+  const onStepKey = (event: ReactKeyboardEvent<HTMLElement>) => {
+    // A key from an overlay opened inside the panel (a confirm, a date picker) reaches here through React's tree,
+    // not the page's: it belongs to that overlay, never to a step.
+    if (onStep === undefined || !(event.target instanceof Node) || !event.currentTarget.contains(event.target)) return;
+    const step = stepOf(event, pathOf(event.target, event.currentTarget));
+    if (step === undefined) return;
+    event.preventDefault();
+    onStep(step);
+  };
   if (phase === 'closed') return null;
   return (
     // A panel the person opened takes focus, as a dialog does, and gives it back after.
@@ -109,7 +127,7 @@ export function Panel({
         data-entering={phase === 'open' || undefined}
         data-exiting={phase === 'exiting' || undefined}
         data-opened-by={openedBy}
-        {...keyboardProps}
+        {...mergeProps(keyboardProps, { onKeyDown: onStepKey })}
       >
         <Dialog className={styles.dialog} {...(subtitle === undefined ? {} : { 'aria-describedby': subtitleId })}>
           <header className={styles.head}>

@@ -8,9 +8,16 @@ export const BULK_JOB_ACTIONS = {
   'records.bulk_delete': 'delete',
   'records.bulk_restore': 'restore',
   'records.purge': 'purge',
+  // A list's bulk changes (spec 0048): adding many records, removing many entries, and bringing them back.
+  'entries.bulk_add': 'listAdd',
+  'entries.bulk_remove': 'listRemove',
+  'entries.bulk_restore': 'listRestore',
 } as const;
 
+/** What a bulk job does: one of the record actions, or a list's. */
+export type BulkJobAction = (typeof BULK_JOB_ACTIONS)[keyof typeof BULK_JOB_ACTIONS];
+
 /** What a bulk job does, or undefined for any other kind. */
-export function bulkActionOf(kind: string): (typeof BULK_JOB_ACTIONS)[keyof typeof BULK_JOB_ACTIONS] | undefined {
+export function bulkActionOf(kind: string): BulkJobAction | undefined {
   return Object.hasOwn(BULK_JOB_ACTIONS, kind) ? BULK_JOB_ACTIONS[kind as keyof typeof BULK_JOB_ACTIONS] : undefined;
 }

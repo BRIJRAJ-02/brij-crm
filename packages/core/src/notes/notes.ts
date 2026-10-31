@@ -8,37 +8,57 @@
 // a repeat of the same save after a lost answer writes nothing, and a save
 // that started from an older version is told whose it replaced (AC-443). The
 // body is checked against 200 KB here, the one layer that does (AC-441).
+// A note links up to 20 records (migration 0135, `note_records`, its own
+// record first): it shows on each one's Notes tab and timeline, but its own
+// record alone still decides who may see and change it, and a link needs
+// `write` on the linked record's object, as a task's does.
+// A call or a meeting logged on a record is a note with a `kind` (migration
+// 0137): it also holds when it happened (`occurred_at`, default now, never a
+// day ahead), an optional duration and an optional outcome from its kind's own
+// set, and it is listed where it happened, not where it was last edited. The
+// kind never changes, and a plain note takes none of the details.
 import { sql, type SQL } from 'drizzle-orm';
 import {
+  ACTIVITY_AHEAD_MS,
+  ACTIVITY_DURATION_MAX,
+  ACTIVITY_KIND_FIXED,
+  ACTIVITY_TOO_FAR,
   NOTE_CONTENT_MAX_BYTES,
   NOTE_COUNT_CAP,
   NOTE_EMPTY,
+  NOTE_KINDS,
   NOTE_PAGE,
   NOTE_PAGE_MAX,
+  NOTE_RECORDS_MAX,
   NOTE_TITLE_MAX,
   NOTE_TOO_LONG,
   NoteCursor,
   noteBytes,
   noteExcerpt,
+  outcomesFor,
   richTextToPlain,
   type Note,
+  type NoteKind,
+  type NoteOutcome,
   type NotePage,
   type NoteSummary,
   type NoteHit,
+  type NoteLinks,
   type SaveNoteResult,
 } from '@crm/contracts';
-import { RichTextDocBody, type RichTextDoc } from '@crm/contracts/values';
+import { RichTextDocBody, type RecordRefDisplay, type RichTextDoc } from '@crm/contracts/values';
 import type { WorkspaceTx } from '@crm/db';
-import { canonicalId, checkId, isUuid, isUuidV7, uuidArray } from '../engine/ids.ts';
+import { canonicalId, checkId, isUuid, isUuidV7, uuidArray, uuidList } from '../engine/ids.ts';
 import { readRecords } from '../engine/records.ts';
 import { inputInvalid, refuse, refuseOn } from '../engine/refusals.ts';
 import type { Actor, EngineScope } from '../engine/scope.ts';
-import { runWrite, type AfterWrite } from '../engine/write.ts';
+import { runWrite, type AfterWrite, type NoteChange } from '../engine/write.ts';
 import { notifyNoteMentions } from '../notifications/notify.ts';
+import { checkLinkable, linkedDisplays } from '../tasks/tasks.ts';
 import { checkScope } from '../access/mint.ts';
 import { isOpen, objectLevel, type Access } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
-import { farVisibleSql, UNKNOWN_RECORD, visibleRecords } from '../access/visibility.ts';
+import { farVisibleSql, recordVisibleSql, UNKNOWN_RECORD, visibleRecords } from '../access/visibility.ts';
 
 /** What a note the reader can't see (or one that doesn't exist, or was deleted) answers. */
 export const UNKNOWN_NOTE = 'That note does not exist.';
@@ -48,6 +68,10 @@ export const NOTE_READ_ONLY = 'You can view this note but not change it.';
 export const NOTE_RECORD_TRASHED = 'Restore the record first.';
 /** What a cursor the server didn't make answers, on the `cursor` field. */
 export const NOTE_CURSOR_MESSAGE = 'That note cursor is not valid here. Start again from the top.';
+/** What linking a record the writer may not change answers. */
+export const NOTE_LINK_FORBIDDEN = "You can't link a note to a record you can't change.";
+/** What a 21st link answers. */
+export const NOTE_LINKS_FULL = `A note links at most ${String(NOTE_RECORDS_MAX)} records.`;
 /** The body of a note first saved with a title alone. */
 const EMPTY_DOC: RichTextDoc = { type: 'doc', content: [{ type: 'paragraph' }] };
 
@@ -72,14 +96,28 @@ export interface SaveNoteInput {
   readonly title?: string;
   /** Parsed here too, so any caller is held to the document's rules; the size is checked apart. */
   readonly content?: unknown;
+  /** A call or meeting logged on the record (a new note only); a plain note when absent. */
+  readonly kind?: NoteKind;
+  /** When a call or meeting happened: now when absent on a new one, never a day ahead. */
+  readonly occurredAt?: string;
+  /** A call's or meeting's length in minutes (1 to 1,440); null clears it. */
+  readonly durationMinutes?: number | null;
+  /** How a call or meeting went, from its kind's own set; null clears it. */
+  readonly outcome?: NoteOutcome | null;
   /** The version this save started from: null or absent for a new note. */
   readonly baseVersion?: number | null;
 }
 
 /** A moment as fixed width UTC text with milliseconds, as the shapes carry it. */
-const millis = (column: string) => sql.raw(`to_char(${column} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`);
+const millis = (column: string) => sql.raw(`to_char((${column}) at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`);
 /** A moment with microseconds, for cursors. */
-const micros = (column: string) => sql.raw(`to_char(${column} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`);
+const micros = (column: string) => sql.raw(`to_char((${column}) at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`);
+
+/**
+ * The moment a note is listed at, over a note aliased `n`: a plain note's last edit, a call's or meeting's when it
+ * happened (migration 0137). The Notes tab and the Notes page sort on it, and their cursors carry it.
+ */
+const LISTED = 'n.listed_at';
 
 /** A note's stored row, as the shapes need it (its text only as far as the excerpt reads). */
 interface NoteRow extends Record<string, unknown> {
@@ -89,6 +127,10 @@ interface NoteRow extends Record<string, unknown> {
   readonly title: string;
   readonly head: string;
   readonly version: number;
+  readonly kind: NoteKind;
+  readonly occurred_at: string;
+  readonly duration_minutes: number | null;
+  readonly outcome: NoteOutcome | null;
   readonly created_at: string;
   readonly created_by_type: Actor['type'];
   readonly created_by_id: string | null;
@@ -100,9 +142,10 @@ interface NoteRow extends Record<string, unknown> {
 
 /** The columns of `NoteRow`, over a note aliased `n` joined to its record aliased `r`. */
 const NOTE_COLUMNS = sql`n.id::text as id, n.record_id::text as record_id, r.object_id::text as object_id, n.title,
-  left(n.content_text, 600) as head, n.version, ${millis('n.created_at')} as created_at, n.created_by_type,
+  left(n.content_text, 600) as head, n.version, n.kind, ${millis('n.occurred_at')} as occurred_at, n.duration_minutes,
+  n.outcome, ${millis('n.created_at')} as created_at, n.created_by_type,
   n.created_by_id::text as created_by_id, ${millis('n.updated_at')} as updated_at, n.updated_by_type,
-  n.updated_by_id::text as updated_by_id, ${micros('n.updated_at')} as cursor_at`;
+  n.updated_by_id::text as updated_by_id, ${micros(LISTED)} as cursor_at`;
 
 /** A note's record, live on a live object: what every note read joins. */
 const LIVE_RECORD = sql`join records r on r.workspace_id = n.workspace_id and r.id = n.record_id
@@ -122,6 +165,10 @@ function summaryOf(row: NoteRow, access: Access): NoteSummary {
     title: row.title,
     excerpt: noteExcerpt(row.head),
     version: row.version,
+    kind: row.kind,
+    occurredAt: row.occurred_at,
+    ...(row.duration_minutes === null ? {} : { durationMinutes: row.duration_minutes }),
+    ...(row.outcome === null ? {} : { outcome: row.outcome }),
     canChange: canWrite(access, row.object_id),
     createdAt: row.created_at,
     createdBy: actorOf(row.created_by_type, row.created_by_id),
@@ -169,6 +216,51 @@ async function noteRow(
   return rows.rows[0];
 }
 
+/** One record a note links, with its object (for the outbox row that names it). */
+interface NoteLink {
+  readonly recordId: string;
+  readonly objectId: string;
+}
+
+/**
+ * The records a note links, its own record first, then the others in link
+ * order, whatever their state or visibility (migration 0135). Its own record
+ * comes from the note, so a note saved without its first link row still has it.
+ */
+async function noteLinks(tx: WorkspaceTx, noteId: string, home: NoteLink): Promise<readonly NoteLink[]> {
+  const rows = await tx.execute<{ record_id: string; object_id: string }>(sql`
+    select l.record_id::text as record_id, r.object_id::text as object_id
+    from note_records l join records r on r.workspace_id = l.workspace_id and r.id = l.record_id
+    where l.note_id = ${noteId}::uuid and l.record_id <> ${home.recordId}::uuid
+    order by l.position, l.record_id
+  `);
+  return [home, ...rows.rows.map((row) => ({ recordId: row.record_id, objectId: row.object_id }))];
+}
+
+/**
+ * The outbox's word on a note: one change per record it links, so every one of their screens reads it again; only
+ * its own record's names the note.
+ */
+const changesOf = (noteId: string, links: readonly NoteLink[]): NoteChange[] =>
+  links.map((link, at) => ({
+    noteId,
+    recordId: link.recordId,
+    objectId: link.objectId,
+    ...(at === 0 ? {} : { linked: true }),
+  }));
+
+/** The note's own record as its first link, for a note saved before its links existed (the deploy of 0135). */
+async function ensureOwnLink(tx: WorkspaceTx, noteId: string): Promise<void> {
+  await tx.execute(sql`
+    insert into note_records (workspace_id, note_id, record_id, position, created_at, created_by_type,
+      created_by_id, created_by_member_id)
+    select n.workspace_id, n.id, n.record_id, 0, n.created_at, n.created_by_type, n.created_by_id,
+      n.created_by_member_id
+    from notes n where n.id = ${noteId}::uuid
+    on conflict do nothing
+  `);
+}
+
 /** A title as stored: at most 200 characters, refused on `title` past that. */
 function checkTitle(title: string): string {
   // NUL can't be stored: refused as input (400), never a database error (500).
@@ -187,6 +279,61 @@ function checkContent(content: unknown): RichTextDoc {
   return parsed.data;
 }
 
+/** The typed details of a save, as given: only the ones the caller named. */
+interface Details {
+  readonly occurredAt?: string;
+  readonly durationMinutes?: number | null;
+  readonly outcome?: NoteOutcome | null;
+}
+
+/**
+ * The details a save names, checked against the note's kind: a plain note takes none (a null that clears nothing is
+ * let through); a call or meeting takes a time that is a moment, a whole duration of 1 to 1,440 minutes and an
+ * outcome from its kind's own set. Refused on the field, 400 `INPUT_INVALID`. Whether the time is a day ahead is
+ * the database's clock (`checkNotAhead`), not this process's.
+ */
+function checkDetails(kind: NoteKind, input: Details): Details {
+  const { occurredAt, durationMinutes, outcome } = input;
+  if (kind === 'note') {
+    if (occurredAt !== undefined) throw inputInvalid('occurredAt', 'A note has no time of its own.');
+    if (durationMinutes !== undefined && durationMinutes !== null) {
+      throw inputInvalid('durationMinutes', 'A note has no duration.');
+    }
+    if (outcome !== undefined && outcome !== null) throw inputInvalid('outcome', 'A note has no outcome.');
+    return {};
+  }
+  const moment = occurredAt === undefined ? Number.NaN : Date.parse(occurredAt);
+  // A moment Postgres reads the same: a real one between 1970 and the end of 9999.
+  if (occurredAt !== undefined && !(moment >= 0 && moment < Date.UTC(10000, 0, 1))) {
+    throw inputInvalid('occurredAt', 'Give the time as a date and time.');
+  }
+  if (
+    durationMinutes !== undefined &&
+    durationMinutes !== null &&
+    (!Number.isInteger(durationMinutes) || durationMinutes < 1 || durationMinutes > ACTIVITY_DURATION_MAX)
+  ) {
+    throw inputInvalid('durationMinutes', `A duration is 1 to ${String(ACTIVITY_DURATION_MAX)} minutes.`);
+  }
+  if (outcome !== undefined && outcome !== null && !outcomesFor(kind).includes(outcome)) {
+    throw inputInvalid('outcome', `That isn’t an outcome a ${kind} can have.`);
+  }
+  return {
+    // Written back as ISO 8601 in UTC, so what reaches SQL is a moment Postgres reads as this process did.
+    ...(occurredAt === undefined ? {} : { occurredAt: new Date(moment).toISOString() }),
+    ...(durationMinutes === undefined ? {} : { durationMinutes }),
+    ...(outcome === undefined ? {} : { outcome }),
+  };
+}
+
+/** Refuses a moment more than a day ahead of the database's clock (`occurredAt`): logging is for what happened. */
+async function checkNotAhead(tx: WorkspaceTx, occurredAt: string | undefined): Promise<void> {
+  if (occurredAt === undefined) return;
+  const rows = await tx.execute<{ ahead: boolean }>(
+    sql`select ${occurredAt}::timestamptz > now() + make_interval(secs => ${ACTIVITY_AHEAD_MS / 1000}) as ahead`,
+  );
+  if (rows.rows[0]?.ahead === true) throw inputInvalid('occurredAt', ACTIVITY_TOO_FAR);
+}
+
 /**
  * Saves a note (AC-439 to AC-443, AC-449): an upsert by the browser's id.
  * New: its record live, visible and on an object the writer may change, and a
@@ -195,7 +342,10 @@ function checkContent(content: unknown): RichTextDoc {
  * `NOT_FOUND`), the given fields written, the version one more, and when
  * `baseVersion` isn't the stored version, `overwrote` names whose save it
  * replaced. Nothing changed writes nothing (a repeated first save after a
- * lost answer included). One `notes` outbox row per change.
+ * lost answer included). One `notes` outbox row per change. A call or
+ * meeting (`kind`, a new note's only, for life; migration 0137) needs no text,
+ * and takes `occurredAt`, `durationMinutes` and `outcome` as `checkDetails`
+ * says; a plain note takes none.
  */
 export async function saveNote(
   scope: EngineScope,
@@ -208,6 +358,7 @@ export async function saveNote(
   const recordId = checkId(input.recordId, UNKNOWN_RECORD);
   const title = input.title === undefined ? undefined : checkTitle(input.title);
   const content = input.content === undefined ? undefined : checkContent(input.content);
+  if (input.kind !== undefined && !NOTE_KINDS.includes(input.kind)) throw inputInvalid('kind', ACTIVITY_KIND_FIXED);
   const { result } = await runWrite(
     scope,
     async (context): Promise<SaveNoteResult> => {
@@ -218,25 +369,58 @@ export async function saveNote(
       const saveExisting = async (
         stored: NonNullable<Awaited<ReturnType<typeof noteRow>>>,
       ): Promise<SaveNoteResult> => {
-        if (stored.record_id !== recordId) throw refuse('ID_TAKEN', 'A note with that id already exists.');
+        const home: NoteLink = { recordId: stored.record_id, objectId: stored.object_id };
+        // Seen first, so a note the writer can't see never says which records it links.
         if (stored.deleted || !stored.record_live) throw refuse('NOT_FOUND', UNKNOWN_NOTE);
-        if (!(await recordVisible(tx, scope.access, stored.object_id, recordId))) {
+        if (!(await recordVisible(tx, scope.access, stored.object_id, home.recordId))) {
           throw refuse('NOT_FOUND', UNKNOWN_NOTE);
         }
+        // Saved from its own record's page, or from the page of a record it links (migration 0135).
+        if (stored.record_id !== recordId) {
+          const linked = await tx.execute(
+            sql`select 1 from note_records where note_id = ${id}::uuid and record_id = ${recordId}::uuid`,
+          );
+          if (linked.rows.length === 0) throw refuse('ID_TAKEN', 'A note with that id already exists.');
+        }
         if (!canWrite(scope.access, stored.object_id)) throw refuse('FORBIDDEN', NOTE_READ_ONLY);
-        const changes = await tx.execute<{ title_changed: boolean; content_changed: boolean; content: unknown }>(sql`
+        // The kind is for life, and only a call or meeting has details (seen and changeable first, so a note the
+        // writer can't see never says what it is).
+        if (input.kind !== undefined && input.kind !== stored.kind) throw inputInvalid('kind', ACTIVITY_KIND_FIXED);
+        const details = checkDetails(stored.kind, input);
+        await checkNotAhead(tx, details.occurredAt);
+        const changes = await tx.execute<{
+          title_changed: boolean;
+          content_changed: boolean;
+          occurred_changed: boolean;
+          duration_changed: boolean;
+          outcome_changed: boolean;
+          content: unknown;
+        }>(sql`
           select ${title === undefined ? sql`false` : sql`title <> ${title}`} as title_changed,
             ${content === undefined ? sql`false` : sql`content <> ${JSON.stringify(content)}::jsonb`} as content_changed,
+            ${details.occurredAt === undefined ? sql`false` : sql`date_trunc('milliseconds', occurred_at) <> ${details.occurredAt}::timestamptz`} as occurred_changed,
+            ${details.durationMinutes === undefined ? sql`false` : sql`duration_minutes is distinct from ${details.durationMinutes}::smallint`} as duration_changed,
+            ${details.outcome === undefined ? sql`false` : sql`outcome is distinct from ${details.outcome}::text`} as outcome_changed,
             content
           from notes where id = ${id}::uuid
         `);
         const changed = changes.rows[0];
-        if (changed === undefined || (!changed.title_changed && !changed.content_changed)) {
+        if (
+          changed === undefined ||
+          (!changed.title_changed &&
+            !changed.content_changed &&
+            !changed.occurred_changed &&
+            !changed.duration_changed &&
+            !changed.outcome_changed)
+        ) {
           return { note: summaryOf(stored, scope.access) };
         }
         await tx.execute(sql`
           update notes set
             ${changed.title_changed && title !== undefined ? sql`title = ${title},` : sql``}
+            ${changed.occurred_changed && details.occurredAt !== undefined ? sql`occurred_at = ${details.occurredAt}::timestamptz,` : sql``}
+            ${changed.duration_changed && details.durationMinutes !== undefined ? sql`duration_minutes = ${details.durationMinutes}::smallint,` : sql``}
+            ${changed.outcome_changed && details.outcome !== undefined ? sql`outcome = ${details.outcome}::text,` : sql``}
             ${
               changed.content_changed && content !== undefined
                 ? sql`content = ${JSON.stringify(content)}::jsonb, content_text = ${richTextToPlain(content)},`
@@ -246,12 +430,13 @@ export async function saveNote(
             updated_by_id = ${actor.id}::uuid, updated_by_member_id = ${memberId}::uuid
           where id = ${id}::uuid
         `);
-        context.record({ notes: [{ noteId: id, recordId, objectId: stored.object_id }] });
+        await ensureOwnLink(tx, id);
+        context.record({ notes: changesOf(id, await noteLinks(tx, id, home)) });
         // Mentions the save added are notified, ones it removed taken back (spec 0038).
         if (changed.content_changed && content !== undefined) {
           await notifyNoteMentions(context, {
             noteId: id,
-            recordId,
+            recordId: home.recordId,
             before: mentionedIn(changed.content),
             after: mentionedIn(content),
           });
@@ -277,12 +462,21 @@ export async function saveNote(
         if (!canWrite(scope.access, record.objectId)) throw refuse('FORBIDDEN', NOTE_READ_ONLY);
         const body = content ?? EMPTY_DOC;
         const text = richTextToPlain(body);
-        if ((title ?? '').trim() === '' && text.trim() === '') throw refuseOn('CONFIG_INVALID', NOTE_EMPTY, 'content');
+        const kind = input.kind ?? 'note';
+        // A plain note needs a title or text; a logged call or meeting is its type, time and outcome, text or none.
+        if (kind === 'note' && (title ?? '').trim() === '' && text.trim() === '') {
+          throw refuseOn('CONFIG_INVALID', NOTE_EMPTY, 'content');
+        }
+        const details = checkDetails(kind, input);
+        await checkNotAhead(tx, details.occurredAt);
         const inserted = await tx.execute(sql`
-          insert into notes (workspace_id, id, record_id, title, content, content_text,
+          insert into notes (workspace_id, id, record_id, title, content, content_text, kind, occurred_at,
+            duration_minutes, outcome,
             created_by_type, created_by_id, created_by_member_id, updated_by_type, updated_by_id, updated_by_member_id)
           values (${scope.workspaceId}::uuid, ${id}::uuid, ${recordId}::uuid, ${title ?? ''}, ${JSON.stringify(body)}::jsonb,
-            ${text}, ${actor.type}, ${actor.id}::uuid, ${memberId}::uuid, ${actor.type}, ${actor.id}::uuid, ${memberId}::uuid)
+            ${text}, ${kind}, coalesce(${details.occurredAt ?? null}::timestamptz, now()),
+            ${details.durationMinutes ?? null}::smallint, ${details.outcome ?? null}::text,
+            ${actor.type}, ${actor.id}::uuid, ${memberId}::uuid, ${actor.type}, ${actor.id}::uuid, ${memberId}::uuid)
           on conflict (workspace_id, id) do nothing
         `);
         // Another try of this first save (a retry after a lost answer) committed meanwhile: read it, with its lock,
@@ -292,6 +486,14 @@ export async function saveNote(
           if (raced === undefined) throw new Error('A note that refused its insert could not be read.');
           return saveExisting(raced);
         }
+        // Its own record is its first link (migration 0135), made at the note's own moment.
+        await tx.execute(sql`
+          insert into note_records (workspace_id, note_id, record_id, position, created_by_type, created_by_id,
+            created_by_member_id)
+          values (${scope.workspaceId}::uuid, ${id}::uuid, ${recordId}::uuid, 0, ${actor.type}, ${actor.id}::uuid,
+            ${memberId}::uuid)
+          on conflict do nothing
+        `);
         context.record({ notes: [{ noteId: id, recordId, objectId: record.objectId }] });
         await notifyNoteMentions(context, { noteId: id, recordId, before: [], after: mentionedIn(body) });
         const made = await noteRow(tx, id);
@@ -319,7 +521,19 @@ export async function getNote(scope: EngineScope, input: { readonly noteId: stri
     if (row === undefined || !(await recordVisible(tx, scope.access, row.object_id, row.record_id))) {
       throw refuse('NOT_FOUND', UNKNOWN_NOTE);
     }
-    return { ...summaryOf(row, scope.access), content: row.content };
+    const links = await noteLinks(tx, noteId, { recordId: row.record_id, objectId: row.object_id });
+    const displays = await linkedDisplays(
+      tx,
+      scope.access,
+      links.map((link) => link.recordId),
+    );
+    const record = displays.get(row.record_id);
+    return {
+      ...summaryOf(row, scope.access),
+      ...(record === undefined ? {} : { record }),
+      content: row.content,
+      links: othersShown(links, displays),
+    };
   });
 }
 
@@ -333,7 +547,7 @@ function decodeNoteCursor(cursor: string): NoteCursor {
   }
   const bound = NoteCursor.safeParse(parsed);
   if (!bound.success) throw inputInvalid('cursor', NOTE_CURSOR_MESSAGE);
-  const moment = bound.data.updatedAt;
+  const moment = bound.data.at;
   // A moment the server wrote: fixed width UTC with microseconds that round trips, so a forged one never reaches a cast.
   const stamp = Date.parse(moment);
   if (
@@ -370,28 +584,34 @@ export async function listNotes(
     if (record === undefined || record.trashed || !(await recordVisible(tx, scope.access, record.objectId, recordId))) {
       throw refuse('NOT_FOUND', UNKNOWN_RECORD);
     }
-    const from = sql`from notes n ${LIVE_RECORD} where n.record_id = ${recordId}::uuid and n.deleted_at is null`;
+    // The notes on it and the notes linked to it (migration 0135), each read through its own record: live, and one
+    // the reader may see (a note linked here from a record they can't see is absent).
+    const own = recordVisibleSql(scope.access, 'r');
+    const from = sql`from notes n ${LIVE_RECORD}
+      where n.id in (
+        select l.note_id from note_records l where l.record_id = ${recordId}::uuid
+        union select n2.id from notes n2 where n2.record_id = ${recordId}::uuid
+      )
+      and n.deleted_at is null and r.deleted_at is null and o.archived_at is null${own === undefined ? sql`` : sql` and ${own}`}`;
     const bound =
       after === undefined
         ? sql``
-        : sql` and (n.updated_at < ${after.updatedAt}::timestamptz or (n.updated_at = ${after.updatedAt}::timestamptz and n.id > ${after.id}::uuid))`;
+        : sql` and (${sql.raw(LISTED)} < ${after.at}::timestamptz or (${sql.raw(LISTED)} = ${after.at}::timestamptz and n.id > ${after.id}::uuid))`;
     const page = await tx.execute<NoteRow>(sql`
       select ${NOTE_COLUMNS} ${from}${bound}
-      order by n.updated_at desc nulls last, n.id
+      order by ${sql.raw(LISTED)} desc nulls last, n.id
       limit ${limit + 1}
     `);
     const rows = page.rows.slice(0, limit);
     const last = rows.at(-1);
     const nextCursor =
       page.rows.length > limit && last !== undefined
-        ? Buffer.from(JSON.stringify({ updatedAt: last.cursor_at, id: last.id } satisfies NoteCursor)).toString(
-            'base64url',
-          )
+        ? Buffer.from(JSON.stringify({ at: last.cursor_at, id: last.id } satisfies NoteCursor)).toString('base64url')
         : undefined;
     const items = rows.map((row) => summaryOf(row, scope.access));
     if (after !== undefined) return { items, ...(nextCursor === undefined ? {} : { nextCursor }) };
     const counted = await tx.execute<{ n: number }>(
-      sql`select count(*)::int as n from (select 1 from notes n where n.record_id = ${recordId}::uuid and n.deleted_at is null limit ${NOTE_COUNT_CAP + 1}) c`,
+      sql`select count(*)::int as n from (select 1 ${from} limit ${NOTE_COUNT_CAP + 1}) c`,
     );
     const n = counted.rows[0]?.n ?? 0;
     return {
@@ -438,20 +658,18 @@ async function listWorkspaceNotes(scope: EngineScope, after: NoteCursor | undefi
     const bound =
       after === undefined
         ? sql``
-        : sql` and (n.updated_at < ${after.updatedAt}::timestamptz or (n.updated_at = ${after.updatedAt}::timestamptz and n.id > ${after.id}::uuid))`;
+        : sql` and (${sql.raw(LISTED)} < ${after.at}::timestamptz or (${sql.raw(LISTED)} = ${after.at}::timestamptz and n.id > ${after.id}::uuid))`;
     const page = await tx.execute<NoteRow>(sql`
       select ${NOTE_COLUMNS} from notes n ${LIVE_RECORD}
       where ${readable}${bound}
-      order by n.updated_at desc nulls last, n.id
+      order by ${sql.raw(LISTED)} desc nulls last, n.id
       limit ${limit + 1}
     `);
     const rows = page.rows.slice(0, limit);
     const last = rows.at(-1);
     const nextCursor =
       page.rows.length > limit && last !== undefined
-        ? Buffer.from(JSON.stringify({ updatedAt: last.cursor_at, id: last.id } satisfies NoteCursor)).toString(
-            'base64url',
-          )
+        ? Buffer.from(JSON.stringify({ at: last.cursor_at, id: last.id } satisfies NoteCursor)).toString('base64url')
         : undefined;
     const displays = await recordDisplays(
       tx,
@@ -526,7 +744,9 @@ export async function deleteNote(
           deleted_by_member_id = ${memberId}::uuid
         where id = ${noteId}::uuid
       `);
-      context.record({ notes: [{ noteId, recordId: row.record_id, objectId: row.object_id }] });
+      context.record({
+        notes: changesOf(noteId, await noteLinks(tx, noteId, { recordId: row.record_id, objectId: row.object_id })),
+      });
     },
     hooks,
   );
@@ -561,8 +781,115 @@ export async function restoreNote(
         update notes set deleted_at = null, deleted_by_type = null, deleted_by_id = null, deleted_by_member_id = null
         where id = ${noteId}::uuid
       `);
-      context.record({ notes: [{ noteId, recordId: row.record_id, objectId: row.object_id }] });
+      context.record({
+        notes: changesOf(noteId, await noteLinks(tx, noteId, { recordId: row.record_id, objectId: row.object_id })),
+      });
       return summaryOf(row, scope.access);
+    },
+    hooks,
+  );
+  return result;
+}
+
+/** The records a note links besides its own, as the reader sees them: live and visible, in link order. */
+function othersShown(links: readonly NoteLink[], displays: ReadonlyMap<string, RecordRefDisplay>): RecordRefDisplay[] {
+  return links.slice(1).flatMap((link) => {
+    const display = displays.get(link.recordId);
+    return display === undefined ? [] : [display];
+  });
+}
+
+/** Record ids, canonical and each once; a malformed one names no record. */
+function checkRecordIds(ids: readonly string[] | undefined): readonly string[] {
+  if (ids === undefined) return [];
+  return [...new Set(ids.map((id) => checkId(id, UNKNOWN_RECORD)))];
+}
+
+/**
+ * Links records to a note and unlinks others (migration 0135), under the
+ * note's row lock: the writer may change the note (`write` on its own
+ * record's object, else `FORBIDDEN`), and each record added is live, visible
+ * and on an object the writer may change, as a task's link is (`NOT_FOUND`,
+ * `FORBIDDEN`). Removed links are only those the writer can see, and never
+ * the note's own record; the 20 cap counts every link, hidden ones too
+ * (`LIMIT_REACHED`). Links keep their order, closed up to 0..n-1 with the
+ * note's own record first. Nothing changed writes nothing; anything else
+ * stores one `notes` outbox row per object, naming every record linked
+ * before or after, so each of their Notes tabs and timelines reads again.
+ */
+export async function linkNote(
+  scope: EngineScope,
+  input: {
+    readonly noteId: string;
+    readonly addRecordIds?: readonly string[];
+    readonly removeRecordIds?: readonly string[];
+  },
+  hooks: readonly AfterWrite[] = [],
+): Promise<NoteLinks> {
+  checkScope(scope);
+  const noteId = checkId(input.noteId, UNKNOWN_NOTE);
+  const adding = checkRecordIds(input.addRecordIds);
+  const removing = checkRecordIds(input.removeRecordIds);
+  const { result } = await runWrite(
+    scope,
+    async (context): Promise<NoteLinks> => {
+      const { tx } = context;
+      const row = await noteRow(tx, noteId, true);
+      if (row === undefined || row.deleted || !row.record_live) throw refuse('NOT_FOUND', UNKNOWN_NOTE);
+      if (!(await recordVisible(tx, scope.access, row.object_id, row.record_id))) {
+        throw refuse('NOT_FOUND', UNKNOWN_NOTE);
+      }
+      if (!canWrite(scope.access, row.object_id)) throw refuse('FORBIDDEN', NOTE_READ_ONLY);
+      const home: NoteLink = { recordId: row.record_id, objectId: row.object_id };
+      const links = await noteLinks(tx, noteId, home);
+      const current = new Set(links.map((link) => link.recordId));
+      const seen = await linkedDisplays(tx, scope.access, [...current]);
+      // A link the writer can't see answers as an unknown record, as it would anywhere else: never "already linked".
+      if (adding.some((id) => current.has(id) && !seen.has(id))) throw refuse('NOT_FOUND', UNKNOWN_RECORD);
+      const added = adding.filter((id) => !current.has(id));
+      const removed = removing.filter((id) => id !== home.recordId && current.has(id) && seen.has(id));
+      if (current.size - removed.length + added.length > NOTE_RECORDS_MAX) {
+        throw refuse('LIMIT_REACHED', NOTE_LINKS_FULL);
+      }
+      await checkLinkable(context, added, NOTE_LINK_FORBIDDEN);
+      if (added.length === 0 && removed.length === 0) return { noteId, links: othersShown(links, seen) };
+      const { actor } = scope;
+      const memberId = actor.type === 'member' ? actor.id : null;
+      if (removed.length > 0) {
+        await tx.execute(
+          sql`delete from note_records where note_id = ${noteId}::uuid and record_id = any(${uuidList(removed)})`,
+        );
+      }
+      // Its own record's row first (a note saved before its links existed has none), then the rest closed up in
+      // order: at most 20 rows, so a smallint never runs out however often links come and go.
+      await ensureOwnLink(tx, noteId);
+      await tx.execute(sql`
+        update note_records l set position = (o.n - 1)::smallint
+        from (
+          select record_id, row_number() over (order by (record_id = ${home.recordId}::uuid) desc, position, record_id) as n
+          from note_records where note_id = ${noteId}::uuid
+        ) o
+        where l.note_id = ${noteId}::uuid and l.record_id = o.record_id and l.position <> (o.n - 1)
+      `);
+      if (added.length > 0) {
+        await tx.execute(sql`
+          insert into note_records (workspace_id, note_id, record_id, position, created_by_type, created_by_id,
+            created_by_member_id)
+          select ${scope.workspaceId}::uuid, ${noteId}::uuid, x.id,
+            ((select count(*) from note_records c where c.note_id = ${noteId}::uuid) + x.n - 1)::smallint,
+            ${actor.type}, ${actor.id}::uuid, ${memberId}::uuid
+          from unnest(${uuidList(added)}) with ordinality as x(id, n)
+        `);
+      }
+      const after = await noteLinks(tx, noteId, home);
+      const touched = new Map([...links, ...after].map((link) => [link.recordId, link]));
+      context.record({ notes: changesOf(noteId, [...touched.values()]) });
+      const shown = await linkedDisplays(
+        tx,
+        scope.access,
+        after.map((link) => link.recordId),
+      );
+      return { noteId, links: othersShown(after, shown) };
     },
     hooks,
   );

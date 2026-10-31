@@ -48,19 +48,35 @@ export const Route = createFileRoute('/w/$slug')({
       // own sidebar comes in the same round (spec 0034, AC-936), so it never draws the default order first; a failed
       // sidebar read draws the defaults rather than failing the workspace. The member's preferences (time zone, date
       // format, week start) come too, before the first page draws a date; a failed read keeps the browser's defaults.
-      const [objects, access] = await Promise.all([
+      // The lists the member may read (spec 0048) fill the sidebar's Lists; a failed read leaves it empty.
+      const [objects, access, , , lists] = await Promise.all([
         context.data.objects.list(params.slug),
         context.data.access.mine(params.slug),
         context.data.nav.load(params.slug).catch(() => undefined),
         context.data.preferences.load(params.slug).catch(() => undefined),
+        context.data.lists.list(params.slug).catch(() => []),
       ]);
-      return { workspaceName: workspaceName ?? params.slug, objects, access, deleted: undefined, heldBack: undefined };
+      return {
+        workspaceName: workspaceName ?? params.slug,
+        objects,
+        lists,
+        access,
+        deleted: undefined,
+        heldBack: undefined,
+      };
     } catch (error) {
       if (isDataError(error) && error.code === 'NOT_FOUND') {
         // A deleted workspace's owner finds it here to restore within its window (spec 0031, AC-823); to anyone
         // else it is the same not found as an unknown address.
         const deleted = await context.data.workspace.deleted(params.slug).catch(() => undefined);
-        return { workspaceName: undefined, objects: undefined, access: undefined, deleted, heldBack: undefined };
+        return {
+          workspaceName: undefined,
+          objects: undefined,
+          lists: undefined,
+          access: undefined,
+          deleted,
+          heldBack: undefined,
+        };
       }
       // The workspace's sign in rules hold this session back (spec 0033, AC-894): its own page, never an error.
       if (isDataError(error) && (error.code === 'TWO_FACTOR_REQUIRED' || error.code === 'SIGN_IN_AGAIN')) {
@@ -68,6 +84,7 @@ export const Route = createFileRoute('/w/$slug')({
         return {
           workspaceName: workspaceName ?? params.slug,
           objects: undefined,
+          lists: undefined,
           access: undefined,
           deleted: undefined,
           heldBack,

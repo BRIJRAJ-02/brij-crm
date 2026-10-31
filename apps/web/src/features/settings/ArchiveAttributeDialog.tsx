@@ -4,7 +4,7 @@
 // <title> or Cancel.
 // Leaves out: deleting values; a restore from the Archived section brings it back at its old place.
 import { isDataError, type AttributeDefinition } from '@crm/data';
-import { Button, Callout, Modal } from '@crm/ui';
+import { Button, Callout, Modal, sharedStrings } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { strings } from './attribute-strings.ts';
@@ -71,7 +71,7 @@ function ArchiveConfirm({
       },
       (error: unknown) => {
         setBusy(false);
-        setFailure(isDataError(error) ? error.message : strings.somethingWrong);
+        setFailure(isDataError(error) ? error.message : sharedStrings.couldntDoThat);
       },
     );
   };

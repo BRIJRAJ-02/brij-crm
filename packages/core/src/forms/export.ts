@@ -10,6 +10,7 @@
 // the member who started an export reads it, for 7 days, and only while their
 // access is the one it was written under (`exportAccessKey`); the daily
 // cleanup deletes it after.
+import { createHash } from 'node:crypto';
 import { and, desc, eq, inArray, lt, lte, or, sql, type SQL } from 'drizzle-orm';
 import * as z from 'zod';
 import {
@@ -68,8 +69,20 @@ export const EXPORT_GREW = `This export grew past ${EXPORT_ROWS_MAX.toLocaleStri
  * nothing, so a starter who lost access loses the file too.
  */
 export function exportAccessKey(access: Access): string {
-  const teams = access.principal.kind === 'member' ? [...access.principal.teamIds].sort().join(',') : '';
-  return `${access.data.key}|${can(access, 'forms.manage') ? 'manage' : 'read'}|${teams}`;
+  const { principal } = access;
+  const teams = principal.kind === 'member' ? [...principal.teamIds].sort().join(',') : '';
+  // A `team` record rule reaches the records of everyone in the starter's teams (spec 0032, AC-847): when one of the
+  // people changes, the file is no longer what the starter may read, so who they are is part of the key.
+  const reachesTeammates =
+    principal.kind === 'member' && Object.values(access.data.records).some((rule) => rule.kind === 'team');
+  const mates =
+    principal.kind === 'member' && reachesTeammates
+      ? createHash('sha256')
+          .update([...(principal.teamMemberIds ?? [])].sort().join(','))
+          .digest('hex')
+          .slice(0, 16)
+      : '';
+  return `${access.data.key}|${can(access, 'forms.manage') ? 'manage' : 'read'}|${teams}${mates === '' ? '' : `|${mates}`}`;
 }
 
 /** How many submissions one batch reads. */

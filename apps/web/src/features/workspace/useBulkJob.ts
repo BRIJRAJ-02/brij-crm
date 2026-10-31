@@ -22,6 +22,7 @@ import { useJob } from '@crm/data/react';
 import { useRouteContext } from '@tanstack/react-router';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { bulkStrings, jobProgress, type ObjectNames } from './bulk.ts';
+import { bulkActionOf, type BulkJobAction } from './bulk-jobs.ts';
 
 /** The statuses a job never leaves. */
 const FINISHED: ReadonlySet<string> = new Set(['succeeded', 'failed', 'cancelled']);
@@ -44,7 +45,7 @@ export interface BulkNote {
 /** What a bar knows of the job it follows. */
 export interface BulkJob {
   /** What it does, while one is followed. */
-  readonly action: BulkAction | undefined;
+  readonly action: BulkJobAction | undefined;
   /** The job as held now, while one is followed. */
   readonly job: JobView | undefined;
   /** A job is starting or followed: the bar shows its progress in the actions' place. */
@@ -79,6 +80,16 @@ export interface BulkJob {
     action: BulkAction,
     target: BulkTarget,
     edit?: BulkEdit,
+    notesIn?: NotesIn,
+  ) => Promise<DataError | undefined>;
+  /**
+   * Starts a job some other start makes (a list's bulk add or removal, spec
+   * 0048), followed as `start` follows its own: `make` gets the id, minted once
+   * per `intent`, so pressing again for the same change names the same job.
+   */
+  readonly startWith: (
+    intent: string,
+    make: (id: string) => Promise<JobView>,
     notesIn?: NotesIn,
   ) => Promise<DataError | undefined>;
   /** Confirms the counted job: it runs on its snapshot. */
@@ -119,7 +130,7 @@ function intentOf(action: BulkAction, target: BulkTarget, edit: BulkEdit | undef
 export function useBulkJob(slug: string, names: ObjectNames, onNothingLeft?: () => void): BulkJob {
   const { data, toasts } = useRouteContext({ from: '__root__' });
   const [following, setFollowing] = useState<
-    { readonly jobId: string; readonly action: BulkAction; readonly notesIn: NotesIn } | undefined
+    { readonly jobId: string; readonly action: BulkJobAction; readonly notesIn: NotesIn } | undefined
   >(undefined);
   const [starting, setStarting] = useState(false);
   const [note, setNote] = useState<BulkNote | undefined>(undefined);
@@ -188,6 +199,35 @@ export function useBulkJob(slug: string, names: ObjectNames, onNothingLeft?: () 
     };
   }, [data, slug]);
 
+  /** Starts a job with an id minted once per intent, and follows it; answers why it was refused, if it was. */
+  const follow = async (
+    key: string,
+    make: (id: string) => Promise<JobView>,
+    notesIn: NotesIn,
+  ): Promise<DataError | undefined> => {
+    const id = intent.current?.key === key ? intent.current.id : data.jobs.newId();
+    intent.current = { key, id };
+    setStarting(true);
+    setNote(undefined);
+    try {
+      const made = await make(id);
+      // Followed: the next start is a new change.
+      intent.current = undefined;
+      // The screen went while it started: nobody is left to confirm it.
+      if (isGone.current) {
+        if (UNCONFIRMED.has(made.status)) void data.jobs.cancel(slug, made.id);
+        return undefined;
+      }
+      setFollowing({ jobId: made.id, action: bulkActionOf(made.kind) ?? 'edit', notesIn });
+      return undefined;
+    } catch (error) {
+      // The id stays: pressed again for the same change, a start that did land is answered, never made twice.
+      return isDataError(error) ? error : dataError('INTERNAL', bulkStrings.somethingWrong);
+    } finally {
+      setStarting(false);
+    }
+  };
+
   return {
     action: following?.action,
     job,
@@ -204,35 +244,19 @@ export function useBulkJob(slug: string, names: ObjectNames, onNothingLeft?: () 
     forget: () => {
       setNote(undefined);
     },
-    start: async (action, target, edit, notesIn = 'bar') => {
-      const key = intentOf(action, target, edit);
-      const id = intent.current?.key === key ? intent.current.id : data.jobs.newId();
-      intent.current = { key, id };
-      setStarting(true);
-      setNote(undefined);
-      try {
-        const made = await data.records.startBulk(slug, {
-          id,
-          action,
-          target,
-          ...(edit === undefined ? {} : { edit }),
-        });
-        // Followed: the next start is a new change.
-        intent.current = undefined;
-        // The screen went while it started: nobody is left to confirm it.
-        if (isGone.current) {
-          if (UNCONFIRMED.has(made.status)) void data.jobs.cancel(slug, made.id);
-          return undefined;
-        }
-        setFollowing({ jobId: made.id, action, notesIn });
-        return undefined;
-      } catch (error) {
-        // The id stays: pressed again for the same change, a start that did land is answered, never made twice.
-        return isDataError(error) ? error : dataError('INTERNAL', bulkStrings.somethingWrong);
-      } finally {
-        setStarting(false);
-      }
-    },
+    start: (action, target, edit, notesIn = 'bar') =>
+      follow(
+        intentOf(action, target, edit),
+        (id) =>
+          data.records.startBulk(slug, {
+            id,
+            action,
+            target,
+            ...(edit === undefined ? {} : { edit }),
+          }),
+        notesIn,
+      ),
+    startWith: (key, make, notesIn = 'bar') => follow(`other:${key}`, make, notesIn),
     // Both show at once in the store (the job leaves `ready`), so the confirm closes.
     confirm: () => {
       if (following !== undefined) void data.jobs.confirm(slug, following.jobId);

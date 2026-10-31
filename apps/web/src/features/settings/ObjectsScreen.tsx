@@ -16,6 +16,7 @@ import {
   MenuSeparator,
   MenuTrigger,
   Meter,
+  sharedStrings,
   Skeleton,
   Spinner,
   Table,
@@ -53,7 +54,7 @@ const COLUMNS: readonly TableColumn[] = [
 const number = (value: number) => new Intl.NumberFormat().format(value);
 
 /** The server's words for a failure, or the plain fallback. */
-const why = (error: unknown) => (isDataError(error) ? error.message : strings.somethingWrong);
+const why = (error: unknown) => (isDataError(error) ? error.message : sharedStrings.couldntDoThat);
 
 /** An object's tile and plural name, as the sidebar shows it. */
 function ObjectName({ object }: { readonly object: ObjectSummary }) {
@@ -205,9 +206,7 @@ export function ObjectsScreen({ slug, objects, usage, recordCounts }: ObjectsScr
       if (object !== undefined) open(object);
     },
     emptyState: (
-      <EmptyState title={strings.noLiveObjects}>
-        {canManage ? strings.noLiveObjectsText : strings.noLiveObjectsMemberText}
-      </EmptyState>
+      <EmptyState title={strings.noLiveObjects}>{canManage ? undefined : strings.noLiveObjectsMemberText}</EmptyState>
     ),
   };
   const meter = usage.customObjects;
@@ -233,7 +232,7 @@ export function ObjectsScreen({ slug, objects, usage, recordCounts }: ObjectsScr
       {canManage && meter !== undefined && (
         <Meter label={strings.customObjects} value={meter.used} maxValue={meter.limit} />
       )}
-      {!canManage && <Callout>{strings.readOnlyNote}</Callout>}
+      {!canManage && <Callout>{sharedStrings.ownersAndAdminsOnly}</Callout>}
       {canManage ? (
         <Table
           {...liveTable}

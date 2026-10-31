@@ -30,15 +30,17 @@ export interface StatsProps {
   readonly items: readonly StatItem[];
   /** Draws `items.length` (or 5) figures as skeletons while they load. */
   readonly isLoading?: boolean;
+  /** `large` sets each value in the page's biggest type: one headline figure on its own (a report's big number). */
+  readonly size?: 'default' | 'large';
 }
 
 /** A row of figures that wraps: Home's metrics, this week against last. Nothing at all with no figures. */
-export function Stats({ label, items, isLoading = false }: StatsProps) {
+export function Stats({ label, items, isLoading = false, size = 'default' }: StatsProps) {
   if (!isLoading && items.length === 0) return null;
   return (
     <div role="group" aria-label={label} aria-busy={isLoading || undefined}>
       {isLoading ? (
-        <div className={styles.root}>
+        <div className={styles.root} data-size={size}>
           {Array.from({ length: Math.max(items.length, LOADING_COUNT) }, (_, index) => (
             <div key={index} className={styles.stat}>
               <Skeleton width="short" />
@@ -49,7 +51,7 @@ export function Stats({ label, items, isLoading = false }: StatsProps) {
           ))}
         </div>
       ) : (
-        <dl className={styles.root}>
+        <dl className={styles.root} data-size={size}>
           {items.map((item) => (
             <div key={item.id} className={styles.stat}>
               <dt className={styles.label}>

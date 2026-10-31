@@ -67,11 +67,7 @@ function Transfer({
           {importStrings.exportShown(shownColumns)}
         </MenuItem>
         {allColumns > shownColumns && (
-          <MenuItem
-            id="export-all"
-            icon="eye"
-            {...(isTooMany ? tooMany : { description: importStrings.exportAllText })}
-          >
+          <MenuItem id="export-all" icon="eye" {...(isTooMany ? tooMany : {})}>
             {importStrings.exportAll(allColumns)}
           </MenuItem>
         )}

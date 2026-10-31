@@ -1,0 +1,39 @@
+/* Chart: its head (the table switch) and the frame the drawing, the figure or
+   a state stands in. The frame is 240px tall (`size-menu`) for bars and a
+   line, the drawing's height, so loading, empty and error states hold the
+   chart's place. The drawing's own styles are ChartPlot.module.css. */
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    min-inline-size: 0;
+  }
+
+  .head {
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .frame {
+    position: relative;
+    min-inline-size: 0;
+    transition: opacity var(--duration-hover) var(--ease-hover);
+  }
+
+  .frame[data-kind='bar'],
+  .frame[data-kind='line'] {
+    min-block-size: var(--size-menu);
+  }
+
+  /* A newer read is out: the figures stay, a step dimmer. */
+  .frame[data-refreshing] {
+    opacity: var(--opacity-disabled);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .frame {
+      transition: none;
+    }
+  }
+}

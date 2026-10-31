@@ -93,6 +93,7 @@ export { focusLater } from './lib/focus-later.ts';
 /** One Intl formatter per key (kind, language, zone, options), built once and reused: for screens that format many values each render. */
 export { memoIntl } from './lib/intl-memo.ts';
 export { safeHref } from './lib/safe-href.ts';
+export { strings as sharedStrings } from './lib/strings.ts';
 export { safeImageSrc } from './lib/safe-image-src.ts';
 export { Breadcrumbs, type BreadcrumbsProps, type Crumb } from './molecules/Breadcrumbs/Breadcrumbs.tsx';
 export { Callout, type CalloutPlacement, type CalloutProps, type CalloutTone } from './molecules/Callout/Callout.tsx';
@@ -199,6 +200,7 @@ export {
   type SpotIllustrationKind,
   type SpotIllustrationProps,
 } from './molecules/SpotIllustration/SpotIllustration.tsx';
+export { Sentence, type SentenceProps } from './molecules/Sentence/Sentence.tsx';
 export { Steps, type Step, type StepsProps, type StepsVariant } from './molecules/Steps/Steps.tsx';
 /** The rows to pick from under a field being typed in, focus staying in the field (Field's `combobox` names it). */
 export {
@@ -353,6 +355,7 @@ export {
   type VisitorBarPerson,
   type VisitorBarProps,
 } from './modules/VisitorBar/VisitorBar.tsx';
+export { SampleTable, type SampleTableProps } from './molecules/SampleTable/SampleTable.tsx';
 export { SectionBar, type SectionBarProps, type SectionBarVariant } from './molecules/SectionBar/SectionBar.tsx';
 export { PageColumn, type PageColumnProps } from './modules/PageColumn/PageColumn.tsx';
 export {
@@ -419,6 +422,11 @@ export {
   type AttributeSettingsValues,
 } from './modules/AttributeSettings/AttributeSettings.tsx';
 export {
+  typeChangeStep,
+  type TypeChangePreview,
+  type TypeChangeStepProps,
+} from './modules/AttributeSettings/TypeChangeStep.tsx';
+export {
   AttributeList,
   type AttributeEditorExtras,
   type AttributeItem,
@@ -426,7 +434,7 @@ export {
   type AttributeSection,
 } from './modules/AttributeList/AttributeList.tsx';
 export { Board, type BoardProps } from './modules/Board/Board.tsx';
-export type { BoardCard, BoardColumn, BoardMove } from './modules/Board/types.ts';
+export type { BoardAddColumn, BoardCard, BoardColumn, BoardMove } from './modules/Board/types.ts';
 export { BulkActionBar, type BulkActionBarProps } from './modules/BulkActionBar/BulkActionBar.tsx';
 export { SaveBar, type SaveBarProps, type SaveBarStatus } from './modules/SaveBar/SaveBar.tsx';
 export {
@@ -484,7 +492,12 @@ export {
   type SidebarProps,
   type SidebarState,
 } from './modules/Sidebar/Sidebar.tsx';
-export { NoteList, type NoteListItem, type NoteListProps } from './modules/NoteList/NoteList.tsx';
+export {
+  NoteList,
+  type NoteListActivity,
+  type NoteListItem,
+  type NoteListProps,
+} from './modules/NoteList/NoteList.tsx';
 export {
   CustomiseSidebar,
   type CustomiseSidebarItem,

@@ -177,7 +177,7 @@ export function listRoles(scope: EngineScope): RolesList {
 
 /**
  * The caller's own access (`access.mine`, spec 0009, AC-136): their role, its
- * label and their permissions, from the scope the door sealed, and whose
+ * label, their permissions and their teams (spec 0031, AC-825), from the scope the door sealed, and whose
  * scheduling they reach beyond their own (spec 0037, AC-1261), one read of the
  * reach. Only a member has a role.
  */
@@ -191,6 +191,7 @@ export async function getMyAccess(scope: EngineScope): Promise<MyAccess> {
     role: principal.role,
     roleLabel: ROLE_LABELS[principal.role],
     permissions: [...permissions],
+    teamIds: [...principal.teamIds],
     ...(scheduling === undefined ? {} : { scheduling }),
   };
 }

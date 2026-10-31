@@ -19,6 +19,7 @@ import { jobKinds } from '../jobs/kinds/index.ts';
 import { createTask } from '../tasks/tasks.ts';
 import { rescope } from '../testing.ts';
 import { jobTestKit, refusalOf } from '../../test/jobs-kit.ts';
+import { addListEntry, createList, queryEntries } from '../lists/lists.ts';
 import { mergeValue } from './kind.ts';
 import { MADE_KEPT_MESSAGE } from './undo.ts';
 import {
@@ -967,5 +968,114 @@ describe('relation columns (decision 7, milestone 5)', () => {
       }),
     );
     expect(refusal).toMatchObject({ code: 'CONFIG_INVALID' });
+  });
+});
+
+describe('importing into a list (spec 0048, AC-4833)', () => {
+  it('adds each row’s record with its list values, updates the entry of a record already in, and undoes the adds', async () => {
+    const w = await world();
+    const list = await createList(w.owner, { id: newId(), objectId: w.people, name: 'Shortlist', template: 'blank' });
+    const note = await createAttribute(w.owner, {
+      objectId: w.people,
+      listId: list.id,
+      id: newId(),
+      title: 'Note',
+      type: 'text',
+    });
+    const ada = await w.person('Ada', 'ada@example.com');
+    await addListEntry(w.owner, { id: newId(), listId: list.id, recordId: ada });
+    const settings = w.settings({
+      columns: [
+        { header: 'Name', target: { attributeId: w.attribute('name') } },
+        { header: 'Email', target: { attributeId: w.attribute('email_addresses') } },
+        { header: 'Note', target: { attributeId: note.id } },
+      ],
+    });
+    const rows = [
+      { rowNumber: 2, values: { ...w.row(2, 'Ada', 'ada@example.com').values, [note.id]: 'Again' } },
+      { rowNumber: 3, values: { ...w.row(3, 'Bo', 'bo@example.com').values, [note.id]: 'New' } },
+      // A second row for Bo in one file updates the entry the first row made.
+      { rowNumber: 4, values: { ...w.row(4, 'Bo', 'bo@example.com').values, [note.id]: 'Later' } },
+    ];
+    const id = newId();
+    const made = await createImport(w.owner, {
+      id,
+      objectId: w.people,
+      listId: list.id,
+      fileName: 'shortlist.csv',
+      rowCount: rows.length,
+      errorRows: 0,
+      settings,
+    });
+    expect(made.listId).toBe(list.id);
+    await stageImportRows(w.owner, { importId: id, rows }, [outboxHook()]);
+    const started = await startImport(w.owner, registry, id, [outboxHook()]);
+    expect((await drive(runnerFor(registry), w.workspaceId, started.jobId ?? '')).at(-1)).toBe('succeeded');
+    const page = await queryEntries(w.owner, { listId: list.id });
+    expect(page.entries).toHaveLength(2);
+    const noteOf = (recordId: string | undefined) =>
+      page.entries.find((entry) => entry.recordId === recordId)?.values[note.id];
+    expect(noteOf(ada)).toBe('Again');
+    const bo = page.records.find((record) => record.id !== ada)?.id;
+    expect(noteOf(bo)).toBe('Later');
+    // Undo takes the entry it added out (and Bo, whom it made), and leaves Ada's entry, which was there before.
+    const undoing = await undoImport(w.owner, registry, id, [outboxHook()]);
+    expect((await drive(runnerFor(registry), w.workspaceId, undoing.undoJobId ?? '')).at(-1)).toBe('succeeded');
+    const after = await queryEntries(w.owner, { listId: list.id });
+    expect(after.entries.map((entry) => entry.recordId)).toEqual([ada]);
+  });
+
+  it('refuses a list of another object', async () => {
+    const w = await world();
+    const [companies] = await testQuery<{ id: string }>(
+      ownerUrl,
+      `select id::text from objects where workspace_id = $1 and api_slug = 'companies'`,
+      [w.workspaceId],
+    );
+    const other = await createList(w.owner, {
+      id: newId(),
+      objectId: companies?.id ?? '',
+      name: 'Accounts',
+      template: 'blank',
+    });
+    expect(
+      await refusalOf(
+        createImport(w.owner, {
+          id: newId(),
+          objectId: w.people,
+          listId: other.id,
+          fileName: 'x.csv',
+          rowCount: 1,
+          errorRows: 0,
+          settings: w.settings(),
+        }),
+      ),
+    ).toMatchObject({ code: 'CONFIG_INVALID' });
+  });
+});
+
+describe('an import files people under their companies (spec 0059, AC-5916)', () => {
+  it('links rows at one new domain to one company it makes, counts it, and its undo takes the company back', async () => {
+    const w = await world();
+    const companiesOf = () =>
+      testQuery<{ id: string; deleted: boolean; linked: number }>(
+        ownerUrl,
+        `select r.id::text, r.deleted_at is not null as deleted,
+           (select count(*)::int from record_links l where l.active_until is null
+             and (l.from_record_id = r.id or l.to_record_id = r.id)) as linked
+         from records r join objects o on o.id = r.object_id
+         where r.workspace_id = $1 and o.standard_key = 'companies'`,
+        [w.workspaceId],
+      );
+    const { id, view } = await runImport(w, w.owner, w.settings(), [
+      w.row(2, 'Cy', 'cy@umbrella.io'),
+      w.row(3, 'Dot', 'dot@eu.umbrella.io'),
+      w.row(4, 'Eve', 'eve@gmail.com'),
+    ]);
+    expect(view.counts).toMatchObject({ created: 3, refused: 0 });
+    expect(await companiesOf()).toEqual([{ id: expect.any(String) as string, deleted: false, linked: 2 }]);
+    const undoing = await undoImport(w.owner, registry, id, [outboxHook()]);
+    expect((await drive(runnerFor(registry), w.workspaceId, undoing.undoJobId ?? '')).at(-1)).toBe('succeeded');
+    expect((await companiesOf()).map((each) => each.deleted)).toEqual([true]);
   });
 });

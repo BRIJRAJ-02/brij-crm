@@ -1,11 +1,11 @@
 // Brief
 // Purpose: invite people to the workspace by email, each with a role (spec 0031, AC-803).
 // Main task: type an address per row (+ Add another, or Enter, makes the next; a pasted list splits into rows), pick
-// each row's role where it differs, then Invite; the dialog then says who was invited.
+// each row's role where it differs, then Invite; a clean send closes the dialog with a toast, a partial one says who.
 // Leaves out: the invite link's settings (the Joining tab's Other ways to join; the foot only copies it, turning it on
 // as a Member link when off, with Undo), email domains, and a seat line (until #38 sets limits).
 import { isDataError, type DataLayer, type InviteLinkView, type RoleOption } from '@crm/data';
-import { Button, Callout, Disclosure, InviteRows, Modal, Skeleton, useDelayedLoading } from '@crm/ui';
+import { Button, Callout, Disclosure, InviteRows, Modal, sharedStrings, Skeleton, useDelayedLoading } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useState } from 'react';
 import { strings } from './members-strings.ts';
@@ -66,13 +66,27 @@ export function InviteDialog({
   read,
 }: InviteDialogProps) {
   const { toasts } = useRouteContext({ from: '__root__' });
-  const invite = useInvite({ data, slug, roles, defaultRole, memberEmails, invitedEmails, onInvited });
+  const invite = useInvite({
+    data,
+    slug,
+    roles,
+    defaultRole,
+    memberEmails,
+    invitedEmails,
+    onInvited,
+    // A clean send closes the dialog and says how many in a toast; only a partial one keeps the summary.
+    onClean: (count, reset) => {
+      toasts.toast({ tone: 'success', message: strings.invitedToast(count) });
+      reset();
+      onClose();
+    },
+  });
   const { sent, isBusy, failure, notice, valid } = invite;
   // Copy invite link (the foot): one press copies the workspace's link, turning it on as a Member link when it is
   // off (Undo turns it off again), rather than asking first (the owner, 30 October 2026: act, don't ask).
   const [isCopying, setCopying] = useState(false);
   const failed = (error: unknown) => {
-    toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : strings.somethingWrong });
+    toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : sharedStrings.couldntDoThat });
   };
   const copy = (link: InviteLinkView, turnedOn: boolean) => {
     if (link.token === undefined) return;

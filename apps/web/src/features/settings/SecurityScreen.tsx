@@ -62,7 +62,7 @@ function BusyRows({
 export function SecurityLoading() {
   return (
     <>
-      <SettingsSection title={strings.twoFactor.section} description={strings.twoFactor.description}>
+      <SettingsSection title={strings.twoFactor.section}>
         <BusyRows rows={1} />
       </SettingsSection>
       <DevicesLoading />
@@ -77,7 +77,7 @@ export function SecurityLoading() {
 /** The devices section while its list loads. */
 function DevicesLoading() {
   return (
-    <SettingsSection title={strings.devices} description={strings.devicesDescription}>
+    <SettingsSection title={strings.devices}>
       <BusyRows rows={3} hasLeading />
     </SettingsSection>
   );
@@ -228,7 +228,7 @@ export function SecurityScreen({ data, toasts, activity, onActivityRetry = () =>
   } else if (state.status === 'error') {
     // The section keeps its heading when the list fails, so the page holds its shape in every state.
     body = (
-      <SettingsSection title={strings.devices} description={strings.devicesDescription}>
+      <SettingsSection title={strings.devices}>
         <EmptyState tone="error" title={strings.failedTitle} onRetry={() => view.reload()}>
           {state.message}
         </EmptyState>
@@ -238,7 +238,6 @@ export function SecurityScreen({ data, toasts, activity, onActivityRetry = () =>
     body = (
       <SettingsSection
         title={strings.devices}
-        description={strings.devicesDescription}
         // The one action over the whole list sits at its heading, beside the rows it ends.
         {...(hasOthers
           ? {

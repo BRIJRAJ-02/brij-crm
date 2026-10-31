@@ -22,8 +22,7 @@ export const strings = {
   placeholderHint: 'Shown until they type',
   whereItGoes: 'Where it goes',
   /** Where it goes' InfoTip on a question. */
-  whereItGoesHelp:
-    'The field on the record that this answer fills in. Not filed keeps the answer on the submission only.',
+  whereItGoesHelp: 'The record field this answer fills in.',
   whereItGoesExample: 'Point a Job title question at Job title, and each person who answers gets it on their record.',
   notFiled: 'Not filed, kept with the submission',
   notFiledShort: 'Not filed',
@@ -125,8 +124,7 @@ export const strings = {
   /** Marks a booking's answers the person record didn't take (spec 0057, AC-5712). */
   notSavedMark: 'Not saved',
   notFiledBooking: 'Not filed, kept with the booking',
-  whereItGoesHelpBooking:
-    'The field on the person who booked that this answer fills in. Not filed keeps it with the booking only.',
+  whereItGoesHelpBooking: 'The booker’s field this answer fills in.',
   cantCreateBooking: 'You can’t add attributes, so this stays with the booking.',
   offCrm: 'Turn on Add to the CRM to file answers on the person.',
 } as const;

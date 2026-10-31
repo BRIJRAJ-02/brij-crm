@@ -13,7 +13,7 @@ import type { EngineScope } from './scope.ts';
 import { loadAttribute, type AttributeDef } from './values.ts';
 import { runWrite, type AfterWrite, type WriteContext } from './write.ts';
 import { inWorkspace } from '../access/run.ts';
-import { requirePermission } from '../access/check.ts';
+import { requireFieldManager, requireOptionManager } from '../lists/manager.ts';
 import { isOpen } from '../access/policy.ts';
 import { attributeVisible } from '../access/visibility.ts';
 
@@ -192,6 +192,12 @@ export async function insertOptionOf(
       })
       .returning({ id: attributeOptions.id });
     if (row === undefined) throw new Error('The option was not created.');
+    // A new open stage sits before the end stages (Won, Lost), so a stage added from a board or a cell never lands
+    // after them; every other option lands last.
+    if (isStatus && (input.outcome ?? 'open') === 'open') {
+      const before = await endStageIndex(tx, attribute.id, row.id);
+      if (before !== undefined) await renumber(tx, attribute.id, row.id, before);
+    }
     // The attribute's options changed: its object's (or list's) screens read its definition again.
     recordDefinition(context, attribute);
     return { optionId: row.id, replayed: false };
@@ -213,7 +219,7 @@ export async function insertOption(context: WriteContext, input: OptionInput): P
  * AC-236), refusing the 501st live one `LIMIT_REACHED` (AC-237).
  */
 export async function defineOption(scope: EngineScope, input: OptionInput, hooks: readonly AfterWrite[] = []) {
-  requirePermission(scope, 'schema.manage');
+  await requireFieldManager(scope, input.attributeId);
   const { result } = await runWrite(scope, (context) => insertOption(context, input), hooks);
   return result;
 }
@@ -238,6 +244,21 @@ export async function liveOptionLabelled(
       ),
     );
   return row?.id;
+}
+
+/**
+ * Where a new open stage goes in a status: the place of its first end stage (Won or Lost, archived ones too, since
+ * they keep their place), counted without the new stage itself; undefined when it has none, so the stage stays last.
+ */
+async function endStageIndex(tx: WorkspaceTx, attributeId: string, newId: string): Promise<number | undefined> {
+  const order = await tx
+    .select({ id: attributeOptions.id, outcome: attributeOptions.outcome })
+    .from(attributeOptions)
+    .where(eq(attributeOptions.attributeId, attributeId))
+    .orderBy(asc(attributeOptions.position), asc(attributeOptions.id));
+  const others = order.filter((row) => row.id !== newId);
+  const at = others.findIndex((row) => row.outcome !== null && row.outcome !== 'open');
+  return at === -1 ? undefined : at;
 }
 
 async function renumber(tx: WorkspaceTx, attributeId: string, optionId: string, position: number): Promise<void> {
@@ -273,7 +294,7 @@ export async function updateOption(
   input: OptionUpdate,
   hooks: readonly AfterWrite[] = [],
 ): Promise<OptionRef> {
-  requirePermission(scope, 'schema.manage');
+  await requireOptionManager(scope, input.optionId);
   const optionId = checkId(input.optionId, 'That option does not exist.');
   if (input.position !== undefined && (!Number.isInteger(input.position) || input.position < 0)) {
     throw refuseOn('CONFIG_INVALID', 'Give the position as a whole number from 0.', 'position');

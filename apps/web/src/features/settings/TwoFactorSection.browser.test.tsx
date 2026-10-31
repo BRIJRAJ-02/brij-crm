@@ -160,9 +160,9 @@ describe('two factor setup', () => {
 
     const qr = dialog.getByRole('img', { name: 'QR code for your authenticator app' }).element();
     const steps = [
-      '1. Open an authenticator app, like Google Authenticator, 1Password or Authy.',
+      '1. Open an authenticator app.',
       '2. Scan the code, or type the key.',
-      '3. Enter the 6 digit code it shows.',
+      '3. Enter the 6 digit code.',
     ].map((line) => dialog.getByText(line, { exact: true }).element().getBoundingClientRect());
     const code = qr.getBoundingClientRect();
     for (const step of steps) expect(step.left).toBeGreaterThanOrEqual(code.right);
@@ -255,7 +255,7 @@ describe('two factor, on', () => {
     await render(ON, data, () => undefined);
     const turnOff = page.getByRole('button', { name: 'Turn off' });
     await expect.element(turnOff).toHaveAttribute('data-variant', 'secondary');
-    await expect.element(page.getByText('Ask for a code from an app when you sign in.')).toBeVisible();
+    expect(page.getByText('Ask for a code from an app when you sign in.').elements()).toEqual([]);
     await expect.element(page.getByRole('button', { name: 'About Authenticator app' })).toBeVisible();
     const section = turnOff.element().closest('section');
     if (section === null) throw new Error('The section shows');

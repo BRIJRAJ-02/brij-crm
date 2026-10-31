@@ -69,7 +69,19 @@ export type AccessEntry =
    * owner; over an admin only by an owner); the delegate may remove their own; someone else's answer as absent.
    * `listDelegations` with `everyone: true` is `members.manage` alone (403 FORBIDDEN; the Members page's column).
    */
-  | { readonly delegation: true };
+  | { readonly delegation: true }
+  /**
+   * Lists (spec 0048, decision 1, AC-4834): making one needs `lists.manage` (403 `FORBIDDEN`, "Your role can't make
+   * lists.") and write on its object; changing one is `schema.manage`'s, or its maker's with `lists.manage`.
+   */
+  | { readonly listManager: true }
+  /**
+   * A change to one existing list (spec 0048, AC-4834): its managers only, `schema.manage` or its maker with
+   * `lists.manage` while they are still a member. A list the caller can't read answers `NOT_FOUND`, as an unknown one;
+   * anyone else who can read it gets 403 `FORBIDDEN` naming who may ("Only <maker>, owners and admins can change
+   * this list.").
+   */
+  | { readonly listMaker: true };
 
 /** Every exported service that takes a scope, and what it checks. */
 export const ACCESS_TABLE = {
@@ -88,6 +100,9 @@ export const ACCESS_TABLE = {
   restoreObject: { permission: 'schema.manage' },
   defineAttribute: { permission: 'schema.manage' },
   updateAttribute: { permission: 'schema.manage' },
+  // Changing an attribute's type in place, and what it would do (the field types lane).
+  changeAttributeType: { permission: 'schema.manage' },
+  checkTypeChange: { permission: 'schema.manage' },
   archiveAttribute: { permission: 'schema.manage' },
   restoreAttribute: { permission: 'schema.manage' },
   reorderAttribute: { permission: 'schema.manage' },
@@ -110,7 +125,12 @@ export const ACCESS_TABLE = {
   updateRelationship: { permission: 'schema.manage' },
   createRelationship: { permission: 'schema.manage' },
   renameRelationship: { permission: 'schema.manage' },
-  defineList: { permission: 'schema.manage' },
+  // Lists (spec 0048): lists.manage and write on the object (decision 1).
+  defineList: { listManager: true },
+  createList: { listManager: true },
+  updateList: { listMaker: true },
+  archiveList: { listMaker: true },
+  restoreList: { listMaker: true },
   // Removing records for good.
   eraseRecord: { permission: 'records.purge' },
   purgeDeleted: { permission: 'records.purge' },
@@ -124,6 +144,16 @@ export const ACCESS_TABLE = {
   // Spec 0031, AC-813: an owner hands the workspace on; anyone else is refused.
   transferOwnership: { ownerRules: true },
   listMembers: { anyMember: true },
+  // Teams (spec 0031, slice 8, AC-824, AC-827): every member reads them; owners and admins change them.
+  listTeams: { anyMember: true },
+  createTeam: { permission: 'teams.manage' },
+  renameTeam: { permission: 'teams.manage' },
+  deleteTeam: { permission: 'teams.manage' },
+  changeTeamMembers: { permission: 'teams.manage' },
+  // Access rules by role and team (spec 0032, AC-851): owners and admins read and set them.
+  getObjectAccess: { permission: 'access.manage' },
+  setObjectAccess: { permission: 'access.manage' },
+  previewAccess: { permission: 'access.manage' },
   // Spec 0037, AC-1439: the roles every role picker offers.
   listRoles: { anyMember: true },
   // A workspace's sign in rules (spec 0033, milestone 4): owners only.
@@ -201,6 +231,19 @@ export const ACCESS_TABLE = {
   getTimeInStages: { data: 'read' },
   getEntries: { data: 'read' },
   getRecordEntries: { data: 'read' },
+  // Lists and their entries (spec 0048): a list follows its object (decision 2); hidden is absent.
+  listLists: { data: 'read' },
+  getList: { data: 'read' },
+  listListAttributes: { data: 'read' },
+  queryEntries: { data: 'read' },
+  countEntries: { data: 'read' },
+  readEntryPage: { data: 'read' },
+  entryMembership: { data: 'read' },
+  entriesForRecord: { data: 'read' },
+  // A list's bulk jobs (AC-4817, AC-4825): the list's own write checks run inside.
+  startAddMatching: { data: 'write' },
+  startRemoveMatching: { data: 'write' },
+  undoEntriesJob: { data: 'write' },
   // The record page (spec 0017): its timeline and a record in the trash.
   getActivity: { data: 'read' },
   // 13 Oct reference batch 4: a record's stage age, read as its timeline is.
@@ -252,6 +295,11 @@ export const ACCESS_TABLE = {
   addEntry: { data: 'write' },
   removeEntry: { data: 'write' },
   restoreEntry: { data: 'write' },
+  addListEntry: { data: 'write' },
+  addListEntries: { data: 'write' },
+  editEntry: { data: 'write' },
+  removeEntries: { data: 'write' },
+  restoreEntries: { data: 'write' },
   // Background jobs (spec 0008): the starter or jobs.manage; the test job needs jobs.manage.
   getJob: { jobStarter: true },
   listJobs: { jobStarter: true },
@@ -271,6 +319,12 @@ export const ACCESS_TABLE = {
   // Locking a view and choosing the default (AC-475).
   setViewLocked: { permission: 'views.manage' },
   setDefaultView: { permission: 'views.manage' },
+  // Saved reports (the reports lane): shared with the workspace, shown to whoever may read the object and every
+  // field the report names; changed by its maker or a holder of views.manage.
+  listReports: { data: 'read' },
+  createReport: { data: 'read' },
+  updateReport: { data: 'read' },
+  deleteReport: { data: 'read' },
   // The relay's reads (`@crm/core/system`).
   audiences: { system: true },
   viewFacts: { system: true },
@@ -291,6 +345,7 @@ export const ACCESS_TABLE = {
   saveNote: { data: 'write' },
   deleteNote: { data: 'write' },
   restoreNote: { data: 'write' },
+  linkNote: { data: 'write' },
   // Comments (spec 0038): a thread follows its record; reading the record is enough to read and to comment (AC-1152).
   listThreads: { data: 'read' },
   getThreads: { data: 'read' },
@@ -335,6 +390,8 @@ export const ACCESS_TABLE = {
   runSchedulingNotice: { system: true },
   // Spec 0031, AC-817: the relay's read of whom a removal cuts off.
   removedUserIds: { system: true },
+  // Spec 0007, AC-84: the relay's read of whom an `access` row disconnects with 4500.
+  memberUserIds: { system: true },
   // Milestone 2: Add as person creates a person through the door (write on People, the record's own read first);
   // the workspace's calendar settings are read by any member and changed by owners and admins.
   addMeetingAttendee: { data: 'write' },
@@ -343,6 +400,15 @@ export const ACCESS_TABLE = {
   readMyPreferences: { anyMember: true },
   updateMyPreferences: { anyMember: true },
   updateCalendarSettings: { permission: 'workspace.manage' },
+  // Automations (parity #53): all of it needs automations.manage; a run executes as the member the automation
+  // runs as (`enterAsAutomation`), so the worker's part is the system's.
+  listAutomations: { permission: 'automations.manage' },
+  createAutomation: { permission: 'automations.manage' },
+  updateAutomation: { permission: 'automations.manage' },
+  setAutomationEnabled: { permission: 'automations.manage' },
+  deleteAutomation: { permission: 'automations.manage' },
+  restoreAutomation: { permission: 'automations.manage' },
+  listAutomationRuns: { permission: 'automations.manage' },
   // Forms (spec 0023): any member reads the forms on objects they can see; changing one, or acting on a
   // submission, needs forms.manage. A submission reads through its main record. The public form and submit take
   // only the scope the form's own public key made.

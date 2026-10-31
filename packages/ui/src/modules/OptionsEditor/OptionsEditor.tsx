@@ -94,7 +94,7 @@ export interface OptionsEditorProps {
   readonly labelMaxLength?: number;
   /** Opens with one blank row, ready to type in (a new select). */
   readonly startsWithBlank?: boolean;
-  /** A line under the group's label: how changes are kept ("Changes to options save as you make them."). */
+  /** A line under the group's label: how changes are kept ("Options save as you go."). */
   readonly hint?: string;
   /**
    * Told whenever a row's own check refuses what was typed or clears it (a

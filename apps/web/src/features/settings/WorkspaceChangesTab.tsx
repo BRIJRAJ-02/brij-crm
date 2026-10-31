@@ -101,11 +101,7 @@ export function WorkspaceChangesTab({ log }: WorkspaceChangesTabProps) {
         getRowId={(entry) => entry.id}
         renderCell={renderCell}
         isLoading={state.status === 'loading'}
-        emptyState={
-          <EmptyState icon="clock" title={strings.emptyTitle}>
-            {strings.emptyText}
-          </EmptyState>
-        }
+        emptyState={<EmptyState icon="clock" title={strings.emptyTitle} />}
       />
       {state.status === 'more-failed' && (
         // The rows stay; only the next page failed. The one button below turns into Try again, so focus stays on it.

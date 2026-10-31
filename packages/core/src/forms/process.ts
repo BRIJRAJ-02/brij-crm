@@ -23,6 +23,7 @@ import { fitsAttribute, type EngineRefusal, type FormDocument } from '@crm/contr
 import { isUnfillableRequired } from '@crm/contracts/values';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { decodeValue, encodeValue } from '../engine/columns.ts';
+import { companyFilingTarget } from '../engine/filing.ts';
 import { insertRecord, updateRecord } from '../engine/records.ts';
 import { uniqueKeyOf } from '../engine/unique.ts';
 import { currentItems, isArchivedNow, loadAttributes, type AttributeDef } from '../engine/values.ts';
@@ -956,6 +957,8 @@ export async function processSubmission(
     return;
   }
   const attributes = await loadAttributes(tx, target.objectId);
+  // A form filing People files the person's company by their email too (spec 0059), so its access reaches it.
+  const filing = await companyFilingTarget(tx, target.objectId, attributes);
   const filed = await fileAnswers(context, {
     submissionId: submission.id,
     answers: answersOf(submission.answers),
@@ -974,7 +977,12 @@ export async function processSubmission(
         enterAsForm(
           context.scope,
           form.id,
-          formAccess(form.id, { objectId: target.objectId, attributeIds: [...attributes.keys()], writable }),
+          formAccess(form.id, {
+            objectId: target.objectId,
+            attributeIds: [...attributes.keys()],
+            writable,
+            ...(filing === undefined ? {} : { filing }),
+          }),
         ),
       ),
   });

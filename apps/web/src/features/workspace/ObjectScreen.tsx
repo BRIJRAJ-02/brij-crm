@@ -13,19 +13,15 @@ import { WorkspacePage } from './WorkspacePage.tsx';
 export function noObjectsPage(workspaceName: string) {
   return {
     topBar: <TopBar title={workspaceName} />,
-    body: <EmptyState title={strings.noObjects}>{strings.noObjectsText}</EmptyState>,
+    body: <EmptyState title={strings.noObjects} />,
   };
 }
 
-/** An address inside the workspace that names nothing: what happened as the title, what to do under it, and the way to the person's workspace. */
+/** An address inside the workspace that names nothing: what happened as the title, and the way to the person's workspace. */
 export function missingPage(title: string, text: string) {
   return {
     topBar: <TopBar title={title} />,
-    body: (
-      <EmptyState icon="search" title={text} actions={<Link href="/">{strings.openWorkspace}</Link>}>
-        {strings.checkAddress}
-      </EmptyState>
-    ),
+    body: <EmptyState icon="search" title={text} actions={<Link href="/">{strings.openWorkspace}</Link>} />,
   };
 }
 

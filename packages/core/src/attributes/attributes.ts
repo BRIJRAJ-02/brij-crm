@@ -19,6 +19,7 @@ import { schema, type WorkspaceTx } from '@crm/db';
 import {
   archiveAttribute,
   defineAttribute,
+  insertAttribute,
   reorderAttribute,
   restoreAttribute,
   updateAttribute,
@@ -28,13 +29,15 @@ import { checkId } from '../engine/ids.ts';
 import { refuse } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import { ARCHIVED_BY } from '../engine/values.ts';
-import type { AfterWrite } from '../engine/write.ts';
+import { runWrite, type AfterWrite } from '../engine/write.ts';
 import { requirePermission } from '../access/check.ts';
 import { inWorkspace } from '../access/run.ts';
-import { objectLevel, readOnlyReason, visibleAttributes } from '../access/policy.ts';
+import { isOpen, objectLevel, readOnlyReason, visibleAttributes } from '../access/policy.ts';
+import { attributeVisible, UNKNOWN_LIST } from '../access/visibility.ts';
+import { canManageList, listManagersSentence, requireFieldManager } from '../lists/manager.ts';
 import { relationshipBlocks } from '../relationships/blocks.ts';
 
-const { attributeOptions, attributes, objects, validationRules } = schema;
+const { attributeOptions, attributes, lists, members, objects, validationRules } = schema;
 
 type AttributeRow = typeof attributes.$inferSelect & { readonly archivedBy: string | null };
 
@@ -70,6 +73,7 @@ function definitionOf(row: AttributeRow, context: DefinitionContext, readOnly?: 
   return {
     id: row.id,
     objectId: row.objectId ?? '',
+    ...(row.listId === null ? {} : { listId: row.listId }),
     apiSlug: row.apiSlug,
     title: row.title,
     ...(row.description === null || row.description === '' ? {} : { description: row.description }),
@@ -298,6 +302,105 @@ export async function listObjectAttributes(
 }
 
 /**
+ * The list a fields read or write names, if the caller may read it (spec 0048,
+ * decision 2): live, its object live and readable. Otherwise `NOT_FOUND`, as an
+ * unknown list. Answers whether they may manage it (AC-4834) and change its
+ * entries.
+ */
+async function readFieldsList(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  listId: string,
+  includeArchived: boolean,
+): Promise<{
+  readonly id: string;
+  readonly objectId: string;
+  readonly name: string;
+  readonly canManage: boolean;
+  readonly canWrite: boolean;
+}> {
+  const [list] = await tx
+    .select({
+      id: lists.id,
+      objectId: lists.objectId,
+      name: lists.name,
+      archivedAt: lists.archivedAt,
+      objectArchivedAt: objects.archivedAt,
+      createdByMemberId: lists.createdByMemberId,
+      makerStatus: members.status,
+    })
+    .from(lists)
+    .innerJoin(objects, and(eq(objects.workspaceId, lists.workspaceId), eq(objects.id, lists.objectId)))
+    .leftJoin(members, and(eq(members.workspaceId, lists.workspaceId), eq(members.id, lists.createdByMemberId)))
+    .where(and(eq(lists.workspaceId, scope.workspaceId), eq(lists.id, listId)));
+  const hidden =
+    list === undefined ||
+    (!includeArchived && (list.archivedAt !== null || list.objectArchivedAt !== null)) ||
+    (!isOpen(scope.access) &&
+      (objectLevel(scope.access, list.objectId) === 'none' || objectLevel(scope.access, list.id) === 'none'));
+  if (hidden) throw refuse('NOT_FOUND', UNKNOWN_LIST);
+  return {
+    id: list.id,
+    objectId: list.objectId,
+    name: list.name,
+    canManage: canManageList(scope, list, list.makerStatus === 'active'),
+    canWrite:
+      isOpen(scope.access) ||
+      (objectLevel(scope.access, list.objectId) === 'write' && objectLevel(scope.access, list.id) === 'write'),
+  };
+}
+
+/**
+ * A list's own fields (spec 0048, AC-4807), system ones included (Added and
+ * Added by), by position, with select and status options inline. Each carries
+ * `listId` and, as `objectId`, the list's object. A list the caller can't read
+ * is `NOT_FOUND`. A field reads as read only when the caller can't change the
+ * list's entries, and a system field always. With `includeArchived`, archived
+ * fields are listed too, marked.
+ */
+export async function listListAttributes(
+  scope: EngineScope,
+  listId: string,
+  options: { readonly includeArchived?: boolean } = {},
+): Promise<AttributeDefinition[]> {
+  const id = checkId(listId, UNKNOWN_LIST);
+  const includeArchived = options.includeArchived === true;
+  return inWorkspace(scope, async (tx) => {
+    const list = await readFieldsList(tx, scope, id, includeArchived);
+    const rows = await tx
+      .select({ attribute: attributes, archivedBy: ARCHIVED_BY })
+      .from(attributes)
+      .where(
+        includeArchived
+          ? and(eq(attributes.workspaceId, scope.workspaceId), eq(attributes.listId, id))
+          : and(
+              eq(attributes.workspaceId, scope.workspaceId),
+              eq(attributes.listId, id),
+              isNull(attributes.archivedAt),
+            ),
+      )
+      .orderBy(asc(attributes.position), asc(attributes.createdAt), asc(attributes.id));
+    // A list's fields follow its object's access (decision 2); a field rule hiding one leaves it out (hidden is absent).
+    const listed = rows
+      .filter(({ attribute }) => attributeVisible(scope.access, attribute))
+      .map(({ attribute, archivedBy }) => ({ ...attribute, archivedBy, objectId: list.objectId }));
+    const context: DefinitionContext = {
+      primaryAttributeId: null,
+      options: await optionsOf(
+        tx,
+        listed.filter((row) => OPTION_TYPES.includes(row.type)).map((row) => row.id),
+      ),
+      rules: new Map(),
+      canSeeObject: (far) => objectLevel(scope.access, far) !== 'none',
+    };
+    const readOnly = list.canWrite ? undefined : `You can view the entries of ${list.name} but not change them.`;
+    return listed.map((row) =>
+      definitionOf(row, context, row.isSystem ? `${row.title} is set by the system.` : readOnly),
+    );
+  });
+}
+
+/**
  * Some attributes' definitions, as the caller sees them, archived ones too,
  * in the order asked: one read per object they sit on. An attribute the
  * caller can't see (or one on a list) is left out.
@@ -314,9 +417,14 @@ export async function readDefinitions(
       ),
     ),
   ];
-  const listed = await Promise.all(
-    objectIds.map((objectId) => listObjectAttributes(scope, objectId, { includeArchived: true })),
-  );
+  // A list's field is read through its list (spec 0048, AC-4834), which answers only a list the caller may read.
+  const listIds = [...new Set(refs.flatMap((ref) => (ref.listId === null ? [] : [ref.listId])))];
+  const listed = await Promise.all([
+    ...objectIds.map((objectId) => listObjectAttributes(scope, objectId, { includeArchived: true })),
+    ...listIds.map((listId) =>
+      listListAttributes(scope, listId, { includeArchived: true }).catch(() => [] as AttributeDefinition[]),
+    ),
+  ]);
   const byId = new Map(listed.flat().map((definition) => [definition.id, definition]));
   return refs.flatMap((ref) => {
     const definition = byId.get(ref.attributeId);
@@ -335,6 +443,8 @@ export async function readOne(scope: EngineScope, ref: AttributeRef): Promise<At
 /** A new attribute, as settings and the table's "+" send it (spec 0012, AC-229). */
 export interface CreateAttributeInput {
   readonly objectId: string;
+  /** A field of one of the object's lists (spec 0048, AC-4811): its managers make it. */
+  readonly listId?: string | undefined;
   /** The UUID v7 the browser minted: the retry key (AC-244). */
   readonly id: string;
   readonly title: string;
@@ -377,6 +487,7 @@ export async function createAttribute(
   input: CreateAttributeInput,
   hooks: readonly AfterWrite[] = [],
 ): Promise<AttributeDefinition> {
+  if (input.listId !== undefined) return createListAttribute(scope, { ...input, listId: input.listId }, hooks);
   requirePermission(scope, 'schema.manage');
   const objectId = checkId(input.objectId, OBJECT_NOT_FOUND);
   // An object the caller can't see answers as an unknown one (spec 0009, AC-140).
@@ -416,6 +527,61 @@ export async function createAttribute(
   return readOne(scope, { attributeId: made.attributeId, objectId, listId: null });
 }
 
+/**
+ * A list's new field (spec 0048, AC-4811, AC-4834): its managers (`schema.manage`,
+ * or the list's maker with `lists.manage`) make it, of any type but a record
+ * reference; anyone else is 403 `FORBIDDEN` naming who may. A list the caller
+ * can't read is `NOT_FOUND`.
+ */
+async function createListAttribute(
+  scope: EngineScope,
+  input: CreateAttributeInput & { readonly listId: string },
+  hooks: readonly AfterWrite[],
+): Promise<AttributeDefinition> {
+  const listId = checkId(input.listId, UNKNOWN_LIST);
+  const title = input.title.trim();
+  const apiSlug =
+    input.apiSlug === undefined || input.apiSlug.trim() === '' ? toApiSlug(title, 'attribute') : input.apiSlug.trim();
+  const { result } = await runWrite(
+    scope,
+    async (context) => {
+      const list = await readFieldsList(context.tx, scope, listId, false);
+      if (list.objectId !== input.objectId.toLowerCase()) throw refuse('NOT_FOUND', UNKNOWN_LIST);
+      if (!list.canManage) throw refuse('FORBIDDEN', await listManagersSentence(context.tx, scope, listId));
+      return insertAttribute(context, {
+        id: input.id,
+        listId,
+        apiSlug,
+        title,
+        type: input.type,
+        ...(input.description === undefined || input.description.trim() === ''
+          ? {}
+          : { description: input.description }),
+        ...(input.isMulti === undefined ? {} : { isMulti: input.isMulti }),
+        ...(input.isRequired === undefined ? {} : { isRequired: input.isRequired }),
+        ...(input.isUnique === undefined ? {} : { isUnique: input.isUnique }),
+        ...(input.config === undefined ? {} : { config: input.config }),
+        ...(input.defaultValue === undefined ? {} : { defaultValue: input.defaultValue }),
+        ...(input.options === undefined
+          ? {}
+          : {
+              options: input.options.map((option) => ({
+                id: option.id,
+                label: option.label,
+                hue: option.hue,
+                ...(option.outcome === undefined ? {} : { outcome: option.outcome }),
+                ...(option.targetTimeInStage === undefined ? {} : { targetTimeInStage: option.targetTimeInStage }),
+              })),
+            }),
+      });
+    },
+    hooks,
+  );
+  const made = (await listListAttributes(scope, listId)).find((each) => each.id === result.attributeId);
+  if (made === undefined) throw refuse('NOT_FOUND', ATTRIBUTE_NOT_FOUND);
+  return made;
+}
+
 /** What settings may change on an attribute (AC-231): never its type, multiple setting or API name. */
 export interface EditAttributeInput {
   readonly attributeId: string;
@@ -440,7 +606,7 @@ export async function editAttribute(
   input: EditAttributeInput,
   hooks: readonly AfterWrite[] = [],
 ): Promise<AttributeDefinition> {
-  requirePermission(scope, 'schema.manage');
+  await requireFieldManager(scope, input.attributeId);
   const attributeId = checkId(input.attributeId, ATTRIBUTE_NOT_FOUND);
   const changed = await updateAttribute(
     scope,
@@ -469,9 +635,10 @@ export async function moveAttribute(
   input: { readonly attributeId: string; readonly position: number },
   hooks: readonly AfterWrite[] = [],
 ): Promise<AttributeDefinition[]> {
-  requirePermission(scope, 'schema.manage');
+  await requireFieldManager(scope, input.attributeId);
   const attributeId = checkId(input.attributeId, ATTRIBUTE_NOT_FOUND);
   const moved = await reorderAttribute(scope, { attributeId, position: input.position }, hooks);
+  if (moved.listId !== null) return listListAttributes(scope, moved.listId, { includeArchived: true });
   if (moved.objectId === null) return [];
   return listObjectAttributes(scope, moved.objectId, { includeArchived: true });
 }
@@ -487,7 +654,7 @@ export async function archiveAttributes(
   input: { readonly attributeId: string },
   hooks: readonly AfterWrite[] = [],
 ): Promise<AttributeDefinition[]> {
-  requirePermission(scope, 'schema.manage');
+  await requireFieldManager(scope, input.attributeId);
   const attributeId = checkId(input.attributeId, ATTRIBUTE_NOT_FOUND);
   return readDefinitions(scope, await archiveAttribute(scope, attributeId, hooks));
 }
@@ -504,7 +671,7 @@ export async function restoreAttributes(
   input: { readonly attributeId: string },
   hooks: readonly AfterWrite[] = [],
 ): Promise<AttributeDefinition[]> {
-  requirePermission(scope, 'schema.manage');
+  await requireFieldManager(scope, input.attributeId);
   const attributeId = checkId(input.attributeId, ATTRIBUTE_NOT_FOUND);
   return readDefinitions(scope, await restoreAttribute(scope, attributeId, hooks));
 }
