@@ -314,6 +314,34 @@ export const RangePresets: Story = {
   },
 };
 
+/**
+ * `presets="future"` for planning ahead (time off): Tomorrow, Rest of this week, Next week, Next month, and no past
+ * presets. Tomorrow sets the one day after today (the stories' 8 October) and closes.
+ */
+export const RangePresetsFuture: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: function Render() {
+    const [range, setRange] = useState<{ start: string; end: string } | null>(null);
+    return (
+      <Stage width="narrow">
+        <DateRangePicker label="Days" presets="future" value={range} onChange={setRange} defaultOpen />
+        <span>{range === null ? 'None' : `${range.start} to ${range.end}`}</span>
+      </Stage>
+    );
+  },
+  play: async ({ canvas }) => {
+    const calendar = await dialog();
+    const items = [...calendar.querySelectorAll('[role="menuitem"]')];
+    const labels = items.map((item) => item.textContent);
+    await expect(labels.some((label) => label.startsWith('Last'))).toBe(false);
+    await expect(labels.some((label) => label.startsWith('Next week'))).toBe(true);
+    const tomorrow = items.find((item) => item.textContent.startsWith('Tomorrow'));
+    if (tomorrow === undefined) throw new Error('no Tomorrow');
+    await userEvent.click(tomorrow);
+    await waitFor(() => expect(canvas.getByText('2026-10-09 to 2026-10-09')).toBeInTheDocument());
+  },
+};
+
 /** A range that matches a preset (This month) shows it checked. */
 export const RangePresetChecked: Story = {
   render: () => (
