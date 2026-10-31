@@ -10,12 +10,13 @@ import {
   DateRangePicker,
   DescriptionList,
   Field,
+  focusLater,
   Form,
   Modal,
   Select,
   useFormatSettings,
 } from '@crm/ui';
-import { useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { firstName } from './time-off.ts';
 import { timeOffStrings as strings } from './time-off-strings.ts';
 
@@ -114,6 +115,13 @@ function TimeOffForm({
   );
   const [saved, setSaved] = useState<TimeOffSaved | undefined>(undefined);
   const formId = useId();
+  // Saved over meetings, focus waits on Done, whether Save was pressed or ⌘↵ was (which blurs the field before it
+  // submits, so the turned dialog would otherwise put focus on its first stop, the title bar's close).
+  const doneRef = useRef<HTMLButtonElement>(null);
+  const isSaved = saved !== undefined;
+  useEffect(() => {
+    if (isSaved) focusLater(() => doneRef.current);
+  }, [isSaved]);
   const first = member === undefined ? undefined : firstName(member.name);
   const title =
     entry === undefined
@@ -189,9 +197,8 @@ function TimeOffForm({
                 {strings.openBookings}
               </Button>
             )}
-            {/* Focus lands on the answer, not the title bar's close. */}
-            {/* eslint-disable-next-line jsx-a11y-x/no-autofocus -- the dialog turns to this step, and Done answers it */}
-            <Button variant="primary" autoFocus onPress={close}>
+            {/* Focus lands on the answer, not the title bar's close (the effect above). */}
+            <Button variant="primary" ref={doneRef} onPress={close}>
               {strings.done}
             </Button>
           </>

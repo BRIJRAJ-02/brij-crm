@@ -175,6 +175,37 @@ describe('Time off', () => {
     await inside.getByRole('button', { name: 'Done' }).click();
   });
 
+  it('puts focus on Done after saving with the keyboard shortcut too', async () => {
+    await render(mine({ upcoming: [], past: [] }), {
+      inside: [
+        {
+          id: 'k1',
+          visitorName: 'Pat One',
+          pageTitle: 'Check up',
+          startsAt: '2030-11-04T09:00:00.000Z',
+          endsAt: '2030-11-04T09:30:00.000Z',
+        },
+      ],
+    });
+    await page.getByRole('button', { name: 'Add time off' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Add time off' });
+    const [first] = dialog.getByRole('spinbutton').elements();
+    if (first === undefined) throw new Error('no date segment');
+    await userEvent.click(first);
+    await userEvent.keyboard('04112030');
+    await userEvent.keyboard('05112030');
+    // ⌘↵ on a Mac, Ctrl+Enter elsewhere: both held, so it submits on either.
+    await userEvent.click(dialog.getByRole('textbox', { name: 'Note' }));
+    await userEvent.keyboard('{Control>}{Meta>}{Enter}{/Meta}{/Control}');
+    const inside = page.getByRole('dialog', { name: 'Time off saved' });
+    await expect.element(inside.getByText('1 meeting in this time off')).toBeVisible();
+    await expect.element(inside.getByRole('button', { name: 'Done' })).toHaveFocus();
+    // And it stays there once the turn settles.
+    await new Promise((done) => setTimeout(done, 300));
+    await expect.element(inside.getByRole('button', { name: 'Done' })).toHaveFocus();
+    await inside.getByRole('button', { name: 'Done' }).click();
+  });
+
   it('asks before deleting, saying what happens (AC-1445), then removes the row', async () => {
     const made = await render(mine());
     await page.getByRole('button', { name: 'Actions for 3 to 7 Nov 2030' }).click();
