@@ -36,8 +36,6 @@ export const strings = {
   recordCount: (count: number, shown: string) => (count === 1 ? '1 record' : `${shown} records`),
   rowActions: (plural: string) => `Actions for ${plural}`,
   open: 'Open',
-  moveUp: 'Move up',
-  moveDown: 'Move down',
   archive: 'Archive',
   restore: 'Restore',
   restoring: 'Restoring',

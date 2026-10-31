@@ -56,8 +56,6 @@ export const strings = {
   hideFromSidebar: 'Hide from sidebar',
   /** Hide from sidebar's toast on an object, with Undo. */
   hiddenFromSidebar: (pluralName: string) => `${pluralName} hidden from sidebar`,
-  moveUp: 'Move up',
-  moveDown: 'Move down',
   customiseSidebar: 'Customise sidebar',
   /** Customise sidebar's code didn't load. */
   customiseUnavailable: 'Couldn’t open. Reload.',

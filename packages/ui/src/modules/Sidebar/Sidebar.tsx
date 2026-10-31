@@ -552,7 +552,7 @@ export interface NavSectionProps {
   /** Folded, when the screen keeps the fold (spec 0034: stored per member). With it, pass `onFoldChange`. */
   readonly isFolded?: boolean;
   readonly onFoldChange?: (isFolded: boolean) => void;
-  /** The section's menu (Move up, Move down, Customise sidebar): a `Menu` opened by a quiet button after its label. */
+  /** The section's menu (Customise sidebar; moves are the grip's): a `Menu` opened by a quiet button after its label. */
   readonly menu?: ReactElement;
   /**
    * Lets its items be reordered (each `NavItem` needs an `id`) through the

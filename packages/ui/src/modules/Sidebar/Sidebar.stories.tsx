@@ -553,7 +553,6 @@ function CustomisableSidebar({
           onMoveSection={() => undefined}
           menu={
             <Menu label="Records options">
-              <MenuItem id="down">Move down</MenuItem>
               <MenuItem id="customise">Customise sidebar</MenuItem>
             </Menu>
           }

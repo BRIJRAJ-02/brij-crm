@@ -206,18 +206,23 @@ test.describe('sidebar', () => {
     }).toPass({ timeout: 20_000 });
     if (LIVE) await expect(records(second).first()).toHaveText('Companies', { timeout: 10_000 });
 
-    // Records below Bookings and Captures from its menu: past Lists first (an owner sees it empty, with its New
-    // list, spec 0048), then past Scheduling.
-    await nav(page).getByRole('button', { name: 'Records options' }).click();
-    await page.getByRole('menuitem', { name: 'Move down' }).click();
+    // Records below Bookings and Captures from the keyboard on its section grip (its menu holds no Move up or
+    // down): past Lists first (an owner sees it empty, with its New list, spec 0048), then past Scheduling.
+    const sectionGrip = nav(page).getByRole('button', { name: 'Move the Records section' });
+    const sectionDown = async () => {
+      await sectionGrip.focus();
+      await page.keyboard.press('Space');
+      await page.keyboard.press('ArrowDown');
+      await page.keyboard.press('Space');
+    };
+    await sectionDown();
     await expect(
       nav(page)
         .locator('button')
         .filter({ hasText: /^(Records|Lists)$/ })
         .first(),
     ).toHaveText('Lists');
-    await nav(page).getByRole('button', { name: 'Records options' }).click();
-    await page.getByRole('menuitem', { name: 'Move down' }).click();
+    await sectionDown();
     await expect(firstOf(page)).toHaveText('Bookings');
 
     // Customise sidebar brings Deals back.
