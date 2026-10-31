@@ -187,6 +187,7 @@ export function LinkPageScreen({ data, linkPage, slug, profile, isEditing, onEdi
               profile={profile}
               handle={handle}
               isLive={live.isLive}
+              onGoLive={() => live.setLive(true)}
               isEditing={isEditing}
               onEditing={onEditing}
             />
@@ -202,7 +203,7 @@ export function LinkPageScreen({ data, linkPage, slug, profile, isEditing, onEdi
  * address and the two ways to go on; Home's card opens the same one). Sharing never changes whether the page is live: the switch is
  * the one place that does, and the modal says when the page is private.
  */
-function HeaderActions({
+export function HeaderActions({
   live,
   handle,
   workspaceName,
@@ -225,9 +226,12 @@ function HeaderActions({
           the address and Share wait for Live (an unpublished page offers no link, as Notion's and Webflow's do). */}
       {live.isLive && (
         <>
+          {/* On a phone's narrow bar the address and Share drop their words for their icons (the overview's card
+              shows the address in full), so the bar never runs past the screen (spec 0058, AC-1). */}
           <ButtonLink
             variant="secondary"
             isRound
+            isLabelCollapsible
             iconRight="external-link"
             href={address}
             isExternal
@@ -235,14 +239,20 @@ function HeaderActions({
           >
             {shown}
           </ButtonLink>
-          <Button icon="share" onPress={() => setSharing(true)}>
+          <Button icon="share" isLabelCollapsible label={strings.share} onPress={() => setSharing(true)}>
             {strings.share}
           </Button>
         </>
       )}
       {/* Edit page lives on the page's own card; the bar carries only the way back out of the builder. */}
       {isEditing && (
-        <Button variant="primary" icon="check" onPress={() => onEditing(false)}>
+        <Button
+          variant="primary"
+          icon="check"
+          isLabelCollapsible
+          label={strings.doneEditing}
+          onPress={() => onEditing(false)}
+        >
           {strings.doneEditing}
         </Button>
       )}
@@ -267,6 +277,7 @@ function Blocks({
   profile,
   handle,
   isLive,
+  onGoLive,
   isEditing,
   onEditing,
 }: {
@@ -277,6 +288,8 @@ function Blocks({
   readonly handle: string;
   /** Whether the page is Live, as the switch in the bar holds it (spec 0058, AC-23). */
   readonly isLive: boolean;
+  /** Turns it Live, as the bar's switch does: the overview's Turn on Live while it is Private. */
+  readonly onGoLive: () => void;
   readonly isEditing: boolean;
   readonly onEditing: (isEditing: boolean) => void;
 }) {
@@ -764,6 +777,7 @@ function Blocks({
             onEditing(true);
             openAdd('link');
           }}
+          onGoLive={onGoLive}
         />
       </PreviewLayout>
     );

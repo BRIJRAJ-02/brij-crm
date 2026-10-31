@@ -189,8 +189,10 @@ export const strings = {
   private: 'Private',
   /** Under the address while the page is private: what that means, in one line, the same words everywhere. */
   privateLine: homeStrings.privateLine,
-  /** The Share modal's way out of Private, beside that line. */
+  /** The Share modal's way out of Private, beside that line, and the overview's while the page is Private. */
   goLive: 'Turn on Live',
+  /** The overview's line while the page is Private: nothing to share until it is Live. */
+  privateShareLine: 'Private. Turn on Live to share it.',
   /** The empty editor once an import has landed: its rows wait in Archived. */
   emptyArchived: 'Restore them from Archived below.',
   /** Said once, the first time a page made for its owner goes live as they open it, with Undo. */

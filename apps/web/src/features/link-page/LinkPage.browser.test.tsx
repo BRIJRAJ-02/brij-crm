@@ -4,6 +4,8 @@
 // and the list of what came across (AC-16), the delete confirm as one line and two buttons (AC-18), and the Live or
 // Private switch (AC-23): a page made for its owner goes live as they open it, said once with Undo, and the switch
 // sends their own choice.
+// The tokens, so the phone bar's widths below are the real ones.
+import '@crm/ui/styles.css';
 import {
   dataError,
   PAGE_THEME_PRESETS,
@@ -12,7 +14,7 @@ import {
   type ProfileItem,
   type ProfileLinkImport,
 } from '@crm/data';
-import { Field, Form } from '@crm/ui';
+import { Field, Form, TopBar } from '@crm/ui';
 import { useState, type ReactNode } from 'react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
@@ -24,6 +26,7 @@ import { BlockEditorFrame, useFocusesFirstField } from './editors.tsx';
 import { DeleteBlockDialog, KindPicker } from './KindPicker.tsx';
 import type { AddableKind } from './registry.tsx';
 import { LinkPageOverview } from './LinkPageOverview.tsx';
+import { HeaderActions } from './LinkPageScreen.tsx';
 import { LiveSwitch, useLinkPageLive } from './private-page.tsx';
 
 let shown: InApp | undefined;
@@ -103,16 +106,78 @@ describe('the overview’s first empty moment (AC-8) and a private page’s line
         isEmpty
         onEdit={onEdit}
         onAdd={onAdd}
+        onGoLive={() => undefined}
       />
     ));
     await expect.element(page.getByText('Nothing on your page yet')).toBeVisible();
-    await expect.element(page.getByText('Private. Only you can open it.')).toBeVisible();
+    await expect.element(page.getByText('Private. Turn on Live to share it.')).toBeVisible();
     // The old "goes public the first time you edit or share" panel is gone.
     expect(document.body.textContent).not.toContain('goes public');
     expect(page.getByRole('button', { name: 'Make it public' }).query()).toBeNull();
     await page.getByRole('button', { name: 'Add to your page' }).click();
     expect(onAdd).toHaveBeenCalledTimes(1);
     expect(onEdit).not.toHaveBeenCalled();
+  });
+});
+
+describe('a Private page’s overview (AC-23)', () => {
+  it('offers nothing to share, only Turn on Live, and every way to share comes back once Live', async () => {
+    const onGoLive = vi.fn();
+    const data = { linkPage: { load: () => new Promise(() => undefined) } } as unknown as DataLayer;
+    const overview = (isPublic: boolean) => (
+      <LinkPageOverview
+        data={data}
+        slug="acme"
+        handle="ada"
+        address="https://timefix.com/ada"
+        isPublic={isPublic}
+        isEmpty={false}
+        onEdit={() => undefined}
+        onAdd={() => undefined}
+        onGoLive={onGoLive}
+      />
+    );
+    await render(data, () => overview(false));
+    await expect.element(page.getByText('Private. Turn on Live to share it.')).toBeVisible();
+    expect(page.getByText('Share online').query()).toBeNull();
+    expect(page.getByText('Share in person').query()).toBeNull();
+    expect(page.getByRole('link', { name: /Open/ }).query()).toBeNull();
+    expect(page.getByRole('button', { name: 'Download' }).query()).toBeNull();
+    await expect.element(page.getByRole('button', { name: 'Edit page' })).toBeVisible();
+    await page.getByRole('button', { name: 'Turn on Live' }).click();
+    expect(onGoLive).toHaveBeenCalledTimes(1);
+    shown?.unmount();
+    await render(data, () => overview(true));
+    await expect.element(page.getByText('Share online')).toBeVisible();
+    await expect.element(page.getByText('Share in person')).toBeVisible();
+    expect(page.getByRole('button', { name: 'Turn on Live' }).query()).toBeNull();
+  });
+});
+
+describe('the bar on a phone (AC-1)', () => {
+  it.each([390, 320])('fits a %i px screen while Live and editing, with Share and Done in reach', async (width) => {
+    await page.viewport(width, 844);
+    try {
+      await render({}, () => (
+        <TopBar title="Link page" icon="id-card">
+          <HeaderActions
+            live={{ isLive: true, setLive: () => undefined }}
+            handle="ada-lovelace-2"
+            isEditing
+            onEditing={() => undefined}
+          />
+        </TopBar>
+      ));
+      const share = page.getByRole('button', { name: 'Share' });
+      const done = page.getByRole('button', { name: 'Done' });
+      await expect.element(share).toBeVisible();
+      await expect.element(page.getByRole('link', { name: /open your page/ })).toBeVisible();
+      // Nothing scrolls sideways, and the last control ends inside the screen.
+      expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
+      expect(done.element().getBoundingClientRect().right).toBeLessThanOrEqual(width);
+    } finally {
+      await page.viewport(1280, 800);
+    }
   });
 });
 
