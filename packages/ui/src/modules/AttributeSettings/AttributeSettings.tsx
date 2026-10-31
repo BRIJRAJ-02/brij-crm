@@ -39,6 +39,7 @@ import { Disclosure } from '../../molecules/Disclosure/Disclosure.tsx';
 import { Field } from '../../molecules/Field/Field.tsx';
 import { Form, type FormRefusal } from '../../molecules/Form/Form.tsx';
 import { Modal } from '../../molecules/Modal/Modal.tsx';
+import { TilePicker } from '../../molecules/TilePicker/TilePicker.tsx';
 import { Select } from '../../molecules/Select/SelectWithFaces.tsx';
 import { type SelectItem } from '../../molecules/Select/Select.tsx';
 import { HUES } from '../../hue.ts';
@@ -272,12 +273,26 @@ const TYPE_GROUP: Readonly<Record<string, 'basic' | 'contact' | 'choice' | 'rela
   member: 'relation',
 };
 
+/** The type groups in the order the picker shows them (owner item 92). */
+const GROUP_ORDER: readonly string[] = [
+  strings.typeGroups.basic,
+  strings.typeGroups.contact,
+  strings.typeGroups.choice,
+  strings.typeGroups.relation,
+  strings.typeGroups.computed,
+];
+
+/** The picker's items with their groups in GROUP_ORDER, each group's items in the list's order. */
+const tileOrder = (items: readonly SelectItem[]): readonly SelectItem[] =>
+  items.toSorted((a, b) => GROUP_ORDER.indexOf(a.group ?? '') - GROUP_ORDER.indexOf(b.group ?? ''));
+
 /** The key the picker offers Relationship under. */
 const RELATIONSHIP = 'relationship';
 
 /** The icon each computed kind shows in the picker, from icons the registry already holds. */
-const COMPUTED_ICONS: Readonly<Record<ComputedKind, 'link' | 'layers' | 'square-function'>> = {
-  lookup: 'link',
+const COMPUTED_ICONS: Readonly<Record<ComputedKind, 'search' | 'layers' | 'square-function'>> = {
+  // Not Link's own: the picker shows both side by side.
+  lookup: 'search',
   rollup: 'layers',
   formula: 'square-function',
 };
@@ -331,6 +346,10 @@ const OWN_LABELS: Readonly<Record<string, string>> = {
 };
 /** A picker entry's name: the picker's own label where it has one (Multi select, Link, Phone), else the type's. */
 export const pickerLabel = (entry: PickerType) => OWN_LABELS[entry.key] ?? typeLabelOf(entry.type);
+
+/** A picker entry's icon: Multi select its own, apart from Select's at a glance; every other its type's. */
+export const pickerIcon = (entry: PickerType) =>
+  entry.key === 'multi_select' ? ('list-checks' as const) : fieldTypeOf(entry.type).icon;
 
 /** The settings that land on Form fields by name; the rest are drawn with their own `error`. */
 const FORM_FIELDS: ReadonlySet<string> = new Set(['title', 'apiSlug', 'description', 'offsetDays']);
@@ -737,7 +756,7 @@ function AttributeForm({
   const itemOf = (each: PickerType): SelectItem => ({
     id: each.key,
     label: pickerLabel(each),
-    icon: fieldTypeOf(each.type).icon,
+    icon: pickerIcon(each),
     ...(isCreating ? { group: strings.typeGroups[TYPE_GROUP[each.key] ?? 'basic'] } : {}),
   });
   // Creating: the offered entries, then Relationship when #15 gives it. Editing: the attribute's own type, which
@@ -807,7 +826,6 @@ function AttributeForm({
   );
   const listError = shown.find((refusal) => refusal.attributeId === 'rules')?.message;
   const kinds = ruleKindsFor({ type, isMulti });
-  const typeHint = computedKind === undefined ? strings.typeHints[type] : strings.computedHints[computedKind];
   // More settings: closed on create; open on an edit that set any of them, and whenever one of them is refused.
   const [isMoreOpen, setMoreOpen] = useState(
     () =>
@@ -846,15 +864,33 @@ function AttributeForm({
       {readOnlyReason !== undefined && <Callout>{readOnlyReason}</Callout>}
       {/* The type first, then its name (owner item 92): what kind of field it is decides the rest. Focus still
           starts in the name, the one thing to type. */}
-      <Select
-        label={strings.type}
-        items={items}
-        value={typeKey}
-        onChange={chooseType}
-        {...(isCreating ? {} : { isReadOnly: true })}
-        {...(isCreating && typeHint !== undefined ? { hint: typeHint } : {})}
-        {...(errorOf('type') === undefined ? {} : { error: errorOf('type') })}
-      />
+      {isCreating ? (
+        // Every type in sight as a tile under its heading, with a few words each (owner item 92): what is possible
+        // shows at once, and picking one is the form's first step. Each tile is an option by its name alone.
+        <TilePicker
+          label={strings.type}
+          // In the groups' own order (Basic, Contact, Choice, Relation, Computed); the list order inside each.
+          items={tileOrder(items).map((item) => ({
+            id: item.id,
+            label: item.label,
+            icon: item.icon ?? 'type',
+            ...(strings.tileHints[item.id] === undefined ? {} : { hint: strings.tileHints[item.id] }),
+            ...(item.group === undefined ? {} : { group: item.group }),
+          }))}
+          value={typeKey}
+          onChange={chooseType}
+          {...(errorOf('type') === undefined ? {} : { error: errorOf('type') })}
+        />
+      ) : (
+        <Select
+          label={strings.type}
+          items={items}
+          value={typeKey}
+          onChange={chooseType}
+          isReadOnly
+          {...(errorOf('type') === undefined ? {} : { error: errorOf('type') })}
+        />
+      )}
       {/* The way out of a wrong type, quiet, since most never need it: in place when the change is safe, else the
           old way (archive it and start a new one with its name). */}
       {!isCreating && onChangeType !== undefined && (

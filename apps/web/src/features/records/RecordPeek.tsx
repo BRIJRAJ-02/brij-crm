@@ -19,6 +19,8 @@ import { tabCount } from '../tasks/entries.ts';
 import { strings as taskStrings } from '../tasks/strings.ts';
 import { TaskDialog } from '../tasks/TaskDialog.tsx';
 import { TasksTab } from '../tasks/TasksTab.tsx';
+import { RecordLists, RecordListsLoading, type RecordListsProps } from '../lists/RecordLists.tsx';
+import type { ListSectionSource } from '../lists/list-section.ts';
 import { ActivityTab } from './ActivityTab.tsx';
 import { recordHref, recordName } from './details.ts';
 import type { PeekLoadStep, PeekSteps, PeekTab } from './params.ts';
@@ -234,7 +236,7 @@ function LoadedPeek(
   const { slug, object, members, tab, onTabChange, onClose, sources } = props;
   // The record these sources are for: the one asked for once its sources arrive, the last one until then.
   const { recordId } = sources;
-  const { data } = useRouteContext({ from: '__root__' });
+  const { data, toasts } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
   const state = useRecord(sources.record);
   const openTotal = useTaskTotal(sources.open);
@@ -321,6 +323,19 @@ function LoadedPeek(
                 }
               : {})}
           />
+          {/* The Lists section, the record page's own, above the related ones as there. */}
+          {!isLost && (
+            <PeekLists
+              section={sources.listSection}
+              data={data}
+              toasts={toasts}
+              slug={slug}
+              object={object}
+              recordId={recordId}
+              record={shown.display}
+              members={members}
+            />
+          )}
           {!isLost && (
             <RelatedSections
               slug={slug}
@@ -501,4 +516,28 @@ function LoadedPeek(
       )}
     </>
   );
+}
+
+/** The props the panel's Lists section takes before its reads are in. */
+type PeekListsProps = Omit<RecordListsProps, 'lists' | 'layer' | 'source'> & {
+  readonly section: Promise<ListSectionSource | undefined>;
+};
+
+/**
+ * The panel's Lists section: its own loading state while the reads it started with the panel are still out, then
+ * the record page's section, or nothing when no list the person may read sits over the object.
+ */
+function PeekLists({ section, ...props }: PeekListsProps) {
+  const [read, setRead] = useState<{ readonly from: typeof section; readonly value: ListSectionSource | undefined }>();
+  useEffect(() => {
+    let isCurrent = true;
+    void section.then((value) => {
+      if (isCurrent) setRead({ from: section, value });
+    });
+    return () => {
+      isCurrent = false;
+    };
+  }, [section]);
+  if (read?.from !== section) return <RecordListsLoading />;
+  return read.value === undefined ? null : <RecordLists {...props} {...read.value} />;
 }

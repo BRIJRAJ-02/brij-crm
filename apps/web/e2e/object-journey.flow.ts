@@ -38,9 +38,7 @@ test.describe('the object journey', () => {
     await page.getByRole('button', { name: 'New attribute' }).click();
     const attribute = page.getByRole('dialog', { name: 'New attribute' });
     await attribute.getByLabel('Name', { exact: true }).fill('Stage');
-    await attribute.getByRole('button', { name: /Type$/ }).click();
-    await page.getByRole('option', { name: 'Status', exact: true }).click();
-    await expect(page.getByRole('listbox')).toBeHidden();
+    await attribute.getByRole('option', { name: 'Status', exact: true }).click();
     await attribute.getByRole('button', { name: 'Create attribute' }).click();
     await expect(attribute).toBeHidden({ timeout: 15_000 });
     await expect(page.getByText('Stage added.')).toBeVisible();

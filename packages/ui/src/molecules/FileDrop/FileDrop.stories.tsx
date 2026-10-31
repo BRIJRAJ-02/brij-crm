@@ -26,6 +26,26 @@ export const Default: Story = {
   },
 };
 
+/** Many types (a record's Files): the line keeps the size only, and the types wait for a refusal. */
+export const ManyTypes: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: {
+    label: 'Add files',
+    acceptedTypes: ['.pdf', '.png', '.jpg', '.gif', '.txt', '.csv', '.docx', '.xlsx'],
+    maxSize: 4_200_000,
+    allowsMultiple: true,
+  },
+  render: (args) => (
+    <Stage width="narrow">
+      <FileDrop {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText(/^up to \S+ MB$/)).toBeInTheDocument();
+    await expect(canvas.queryByText(/\.pdf/)).not.toBeInTheDocument();
+  },
+};
+
 /** A one pixel PNG, standing in for a picture our own origin serves. `data:` is in every policy here. */
 const PIXEL =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';

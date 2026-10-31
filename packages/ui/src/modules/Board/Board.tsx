@@ -123,10 +123,6 @@ export function Board({
   const [draggingFrom, setDraggingFrom] = useState<string | undefined>(undefined);
   // The column a moving card is over (itself or one of its cards): told once per change, not per frame.
   const [overGroup, setOverGroup] = useState<string | undefined>(undefined);
-  // Columns that have held cards while this board is up: a strip that filled never snaps shut under the pointer.
-  const [hasHeld, setHasHeld] = useState<ReadonlySet<string>>(() => new Set());
-  const holding = columns.filter((column) => column.count > 0 && !hasHeld.has(column.id));
-  if (holding.length > 0) setHasHeld(new Set([...hasHeld, ...holding.map((column) => column.id)]));
   // Stages made here from "+ Add stage", by name: each shows while empty, so a new stage never vanishes into the
   // hidden empty columns the moment it is made.
   const [added, setAdded] = useState<ReadonlySet<string>>(() => new Set());
@@ -163,15 +159,17 @@ export function Board({
       </EmptyState>
     );
   }
-  // An archived option shows only while it still has cards. Other empty columns follow the
-  // setting, and show while a card is moving, so there is always somewhere to drop it.
+  // An archived option, and a column that takes no card (a required field's "No <field>"), show only while they
+  // still have cards: empty, neither has a use. Other empty columns follow the setting, and show while a card is
+  // moving, so there is always somewhere to drop it.
   const isMoving = draggingFrom !== undefined;
   const isAdded = (column: BoardColumn) => added.has(column.title.toLowerCase());
+  const isKeptOnlyFull = (column: BoardColumn) => column.isArchived === true || column.refusesDrop !== undefined;
   const visible = columns.filter((column) =>
-    column.count > 0 ? true : column.isArchived !== true && (showEmptyColumns || isMoving || isAdded(column)),
+    column.count > 0 ? true : !isKeptOnlyFull(column) && (showEmptyColumns || isMoving || isAdded(column)),
   );
   const hiddenEmpty = columns.filter(
-    (column) => column.count === 0 && column.isArchived !== true && !isAdded(column),
+    (column) => column.count === 0 && !isKeptOnlyFull(column) && !isAdded(column),
   ).length;
   const number = memoIntl(`plain:${locale}`, () => new Intl.NumberFormat(locale)).format(hiddenEmpty);
   const plural = memoIntl(`plural:${locale}`, () => new Intl.PluralRules(locale)).select(hiddenEmpty);
@@ -252,12 +250,9 @@ export function Board({
             isReorderable={isReorderable}
             draggingFrom={draggingFrom}
             isOver={overGroup === column.id}
-            // A strip stays a strip while a card moves (it takes the drop as it is, so no column shifts under the
-            // pointer), and one that has held cards on this board stays wide when its last card leaves.
-            isCollapsed={
-              collapsedIds?.has(column.id) === true ||
-              (column.isCollapsedWhenEmpty === true && column.count === 0 && !hasHeld.has(column.id))
-            }
+            // A folded strip stays a strip while a card moves (it takes the drop as it is, so no column shifts under
+            // the pointer). The "No <field>" column is a column like the rest (owner item 60, 31 October 2026).
+            isCollapsed={collapsedIds?.has(column.id) === true}
             {...(onCollapsedChange === undefined
               ? {}
               : {

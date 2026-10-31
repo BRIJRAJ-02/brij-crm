@@ -79,7 +79,10 @@ test.describe('field types', () => {
     const dialog = page.getByRole('dialog', { name: 'New attribute' });
     await dialog.getByLabel('Name', { exact: true }).fill('Last contacted at');
     // A name ending "at" is a moment: the type follows it until the person picks one.
-    await expect(dialog.getByRole('button', { name: /Type$/ })).toContainText('Date and time');
+    await expect(dialog.getByRole('option', { name: 'Date and time', exact: true })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
     await dialog.getByRole('button', { name: 'Create attribute' }).click();
     await expect(dialog).toBeHidden();
     await expect(page.getByText('Last contacted at added.')).toBeVisible();

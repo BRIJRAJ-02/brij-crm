@@ -14,6 +14,7 @@ import type {
   RecordSubscription,
   TaskList,
 } from '@crm/data';
+import { readListSection, type ListSectionSource } from '../lists/list-section.ts';
 import { detailAttributes, relatedSides } from './details.ts';
 import type { RelatedSource } from './RelatedSections.tsx';
 
@@ -33,6 +34,11 @@ export interface PeekSources {
   readonly notes: NoteList;
   readonly comments: RecordComments;
   readonly files: RecordFilesSource;
+  /**
+   * The Lists section, as on the record's page, still on its way: the panel opens without waiting for it, and the
+   * section fills in after. It answers undefined when no list the person may read sits over the object.
+   */
+  readonly listSection: Promise<ListSectionSource | undefined>;
 }
 
 /** Opens one record's subscriptions for the panel, as the record page's route does for its page. */
@@ -46,6 +52,8 @@ export async function openPeek(
   const shown = detailAttributes(attributes);
   const [objects, access] = await Promise.all([data.objects.list(slug), data.access.mine(slug).catch(() => undefined)]);
   const sides = relatedSides(attributes, objects);
+  // Started now, never waited for: the Lists section draws its own loading state while it reads.
+  const listSection = readListSection(data, slug, object.id, recordId);
   const [record, feed, open, notes, comments, files, sections] = await Promise.all([
     data.records.one(
       slug,
@@ -89,5 +97,6 @@ export async function openPeek(
     notes,
     comments,
     files,
+    listSection,
   };
 }

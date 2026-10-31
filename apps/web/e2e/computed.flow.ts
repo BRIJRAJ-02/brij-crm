@@ -15,10 +15,9 @@ async function newAttribute(page: Page, slug: string, object: string, name: stri
   return dialog;
 }
 
-/** Picks an entry of the dialog's type picker. */
-async function pickType(page: Page, dialog: ReturnType<Page['getByRole']>, type: string) {
-  await dialog.getByRole('button', { name: /^Type/ }).click();
-  await page.getByRole('option', { name: type, exact: true }).click();
+/** Picks a tile of the dialog's type picker. */
+async function pickType(dialog: ReturnType<Page['getByRole']>, type: string) {
+  await dialog.getByRole('option', { name: type, exact: true }).click();
 }
 
 test.describe('computed attributes', () => {
@@ -32,7 +31,7 @@ test.describe('computed attributes', () => {
     await addPerson(page, 'Ada', 'Lovelace', `ada-${tag}@example.com`);
 
     const dialog = await newAttribute(page, slug, 'people', 'Name length');
-    await pickType(page, dialog, 'Formula');
+    await pickType(dialog, 'Formula');
     const formula = dialog.getByLabel('Formula');
     await formula.fill('LEN({{nmae}})');
     await expect(dialog.getByText('Unknown attribute {{nmae}} at character 5.')).toBeVisible();
@@ -61,7 +60,7 @@ test.describe('computed attributes', () => {
     await newWorkspace(page, `rollup-${tag}@example.com`, slug);
 
     const dialog = await newAttribute(page, slug, 'companies', 'Team size');
-    await pickType(page, dialog, 'Rollup');
+    await pickType(dialog, 'Rollup');
     // The sentence starts complete: Count across the first relationship.
     await expect(dialog.getByRole('button', { name: /^Calculation/ })).toContainText('Count');
     await dialog.getByRole('button', { name: 'Create attribute' }).click();
@@ -82,7 +81,7 @@ test.describe('computed attributes', () => {
     await newWorkspace(page, `lookup-${tag}@example.com`, slug);
 
     const dialog = await newAttribute(page, slug, 'people', 'Company domain');
-    await pickType(page, dialog, 'Lookup');
+    await pickType(dialog, 'Lookup');
     await expect(dialog.getByText('From')).toBeVisible();
     await dialog.getByRole('button', { name: 'Create attribute' }).click();
     await expect(dialog).toBeHidden();

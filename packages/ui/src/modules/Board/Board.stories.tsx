@@ -50,7 +50,7 @@ interface SampleProps {
   readonly status?: LoadStatus;
   readonly onRetry?: () => void;
   readonly startShowingEmpty?: boolean;
-  /** A "No Stage" column first, empty, which stays a slim strip. */
+  /** A "No Stage" column first, empty: a column like the others. */
   readonly withNoValue?: boolean;
   readonly onAddCard?: (columnId: string) => void;
   /** Columns fold into strips, held by the story as the screen keeps them per view. */
@@ -89,7 +89,7 @@ function SampleBoard({
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set(startCollapsed));
   const [added, setAdded] = useState<readonly string[]>([]);
   const columns: readonly BoardColumn[] = [
-    ...(withNoValue ? [{ id: 'none', title: 'No Stage', isArchived: false, isCollapsedWhenEmpty: true }] : []),
+    ...(withNoValue ? [{ id: 'none', title: 'No Stage', isArchived: false }] : []),
     ...SAMPLE_STAGES.map((stage) => ({ id: stage.id, title: stage.label, hue: stage.hue, isArchived: stage.archived })),
     { id: 'lost', title: 'Lost', hue: 'red' as const, isArchived: false },
     ...added.map((title) => ({ id: `added-${title}`, title, hue: 'gray' as const, isArchived: false })),
@@ -311,15 +311,17 @@ export const EmptyColumns: Story = {
   },
 };
 
-/** An empty "No Stage" column is a slim strip with its title and count, out of the way until a card moves. */
-export const CollapsedNoValue: Story = {
+/**
+ * An empty "No Stage" column is a column like the others: their width, the same head, and a short dashed drop zone
+ * (owner item 60: the slim strip with its title down it read as a clipped column).
+ */
+export const EmptyNoValue: Story = {
   args: { startShowingEmpty: true, withNoValue: true },
   play: async ({ canvas }) => {
-    const strip = canvas.getByRole('region', { name: /No Stage/ });
-    await expect(within(strip).queryByRole('grid')).not.toBeInTheDocument();
-    await expect(strip.getBoundingClientRect().width).toBeLessThan(80);
-    // The count pill: its number, then its noun for screen readers ("0 cards").
-    await expect(within(strip).getByText('0')).toHaveTextContent(/^0\s+cards$/);
+    const none = canvas.getByRole('region', { name: /No Stage/ });
+    const lost = canvas.getByRole('region', { name: /Lost/ });
+    await expect(within(none).getByRole('grid')).toBeInTheDocument();
+    await expect(none.getBoundingClientRect().width).toBe(lost.getBoundingClientRect().width);
   },
 };
 
@@ -390,7 +392,7 @@ export const Reorder: Story = {
   },
 };
 
-/** The story below: a required field's no value column next to Lead, saying whether a card is moving. */
+/** The story below: a required field's no value column, holding an older card, next to Lead, saying whether a card is moving. */
 function RefusingBoard() {
   const [moving, setMoving] = useState(false);
   return (
@@ -406,11 +408,12 @@ function RefusingBoard() {
             cards: arraySource<BoardCard>(CARDS.slice(0, 1), (card) => card.id),
           },
           {
+            // It holds a card from before Stage was required: an empty one isn't drawn at all.
             id: 'none',
             title: 'No Stage',
-            count: 0,
+            count: 1,
             refusesDrop: { reason: 'Stage is required, so cards can’t move here.' },
-            cards: arraySource<BoardCard>([], (card) => card.id),
+            cards: arraySource<BoardCard>(CARDS.slice(1, 2), (card) => card.id),
           },
           {
             id: 'won',

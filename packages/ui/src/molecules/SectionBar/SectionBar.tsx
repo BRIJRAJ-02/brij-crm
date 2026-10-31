@@ -27,7 +27,7 @@ interface SectionBarBaseProps {
 
 /**
  * The heading's type, one at a time: `isTitleQuiet` puts it in body strong (a bar whose heading is a place in time,
- * the week's dates, so the controls lead); `isTitleProminent` in heading type, 18px (a page's own opening line over
+ * the week's dates, so the controls lead); `isTitleProminent` in the note title type, 28px (a page's own opening line over
  * cards that carry title type themselves: Home's greeting over Today). Neither: title type.
  */
 export type SectionBarTitleType =

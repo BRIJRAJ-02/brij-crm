@@ -18,7 +18,7 @@ import { useRecordEntries } from '@crm/data/react';
 import {
   AttributeList,
   Button,
-  Card,
+  Disclosure,
   EmptyState,
   Menu,
   MenuItem,
@@ -108,22 +108,15 @@ function EntryCard({
     value: row.values[field.id] ?? null,
     ...(field.type === 'actor_reference' ? { display: memberPicker.displays } : {}),
   }));
+  // The list's name heads its entry with the entry's menu at the end of that line, rather than alone under the fields.
   return (
-    <AttributeList
+    // The default variant, as the Lists section over it: its chevron first and its menu always in sight (the
+    // label variant hid Open list until hover). An h4 under the section's h3.
+    <Disclosure
       key={row.id}
-      label={list.name}
-      sections={[{ id: row.id, title: list.name, items }]}
-      emptyValues="fold"
-      editorProps={(attribute) => (byId.get(attribute.id)?.type === 'actor_reference' ? memberPicker.extras : {})}
-      {...(list.canWrite
-        ? {
-            onCommit: (attributeId: string, value: unknown) => {
-              const field = byId.get(attributeId);
-              if (field !== undefined)
-                void layer.setCell(slug, list, row.id, { id: field.id, title: field.title }, value);
-            },
-          }
-        : {})}
+      title={list.name}
+      headingLevel={4}
+      defaultExpanded
       actions={
         <MenuTrigger>
           <Button variant="ghost" icon="ellipsis" label={strings.entryActions(list.name)} />
@@ -144,11 +137,36 @@ function EntryCard({
           </Menu>
         </MenuTrigger>
       }
-    />
+    >
+      <AttributeList
+        label={list.name}
+        sections={[{ id: row.id, items }]}
+        emptyValues="fold"
+        editorProps={(attribute) => (byId.get(attribute.id)?.type === 'actor_reference' ? memberPicker.extras : {})}
+        {...(list.canWrite
+          ? {
+              onCommit: (attributeId: string, value: unknown) => {
+                const field = byId.get(attributeId);
+                if (field !== undefined)
+                  void layer.setCell(slug, list, row.id, { id: field.id, title: field.title }, value);
+              },
+            }
+          : {})}
+      />
+    </Disclosure>
   );
 }
 
-/** The Lists section: one card per entry, ordered by the server (list name, then Added), and Add to list. */
+/** The Lists section while its reads are still out (the record panel opens without waiting for them). */
+export function RecordListsLoading() {
+  return (
+    <Disclosure title={strings.listsSection} isRuled defaultExpanded>
+      <Skeleton lines={2} />
+    </Disclosure>
+  );
+}
+
+/** The Lists section: a ruled section like the related ones, one entry per list, ordered by the server (list name, then Added), and Add to list. */
 export function RecordLists({
   data,
   toasts,
@@ -166,32 +184,41 @@ export function RecordLists({
   const writable = listsToAddTo(lists, object.id);
   const inLists = useMemo(() => new Set(state.rows.map((row) => row.entry.listId)), [state.rows]);
   const rows = state.rows.filter((row) => byId.has(row.entry.listId));
+  // A ruled section like each related object's under it, not a card of its own (one sidebar, one section shape).
   return (
-    <Card
+    <Disclosure
       title={strings.listsSection}
-      actions={
-        writable.length === 0 ? undefined : (
-          <AddToListMenu
-            data={data}
-            toasts={toasts}
-            slug={slug}
-            object={object}
-            lists={writable}
-            recordIds={[recordId]}
-            record={record}
-            inLists={inLists}
-          >
-            <Tooltip content={strings.addToListMenu}>
-              <Button variant="ghost" icon="plus" label={strings.addToListMenu} />
-            </Tooltip>
-          </AddToListMenu>
-        )
-      }
+      isRuled
+      defaultExpanded
+      {...(state.status === 'ready' ? { count: rows.length, countLabel: strings.listsNoun(rows.length) } : {})}
+      {...(writable.length === 0
+        ? {}
+        : {
+            actions: (
+              <AddToListMenu
+                data={data}
+                toasts={toasts}
+                slug={slug}
+                object={object}
+                lists={writable}
+                recordIds={[recordId]}
+                record={record}
+                inLists={inLists}
+              >
+                <Tooltip content={strings.addToListMenu}>
+                  <Button variant="ghost" icon="plus" label={strings.addToListMenu} />
+                </Tooltip>
+              </AddToListMenu>
+            ),
+          })}
     >
       {state.status === 'loading' ? (
         <Skeleton lines={2} />
+      ) : state.status === 'error' ? (
+        // A failed read never says "Not in any list": it says it couldn't tell, with Try again.
+        <EmptyState tone="error" title={strings.listsFailed} layout="row" onRetry={source.retry} />
       ) : rows.length === 0 ? (
-        <EmptyState title={strings.notInAny} />
+        <EmptyState title={strings.notInAny} layout="row" />
       ) : (
         rows.map((row) => {
           const list = byId.get(row.entry.listId);
@@ -210,6 +237,6 @@ export function RecordLists({
           );
         })
       )}
-    </Card>
+    </Disclosure>
   );
 }

@@ -43,8 +43,7 @@ test.describe('the People table', () => {
     await page.getByRole('button', { name: 'Add attribute' }).first().click();
     await chooseNewAttribute(page);
     await addDialog.getByLabel('Name', { exact: true }).fill('Nickname');
-    await addDialog.getByRole('button', { name: /Type$/ }).click();
-    await page.getByRole('option', { name: 'Rating' }).click();
+    await addDialog.getByRole('option', { name: 'Rating', exact: true }).click();
     await addDialog.getByRole('button', { name: 'Create attribute' }).click();
     await expect(addDialog.getByText('Name taken here. Pick another.')).toBeVisible();
     await checkScreen(page, '3-add-attribute-taken');

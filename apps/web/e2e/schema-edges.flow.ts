@@ -98,8 +98,7 @@ test.describe('the schema’s edges', () => {
     await page.getByRole('button', { name: 'New attribute' }).click();
     const dialog = page.getByRole('dialog', { name: 'New attribute' });
     await dialog.getByLabel('Name', { exact: true }).fill('Suppliers');
-    await dialog.getByRole('button', { name: /^Type/ }).click();
-    await page.getByRole('option', { name: 'Relationship' }).click();
+    await dialog.getByRole('option', { name: 'Relationship', exact: true }).click();
 
     // Back returns to the attribute form with the name kept.
     const step = page.getByRole('dialog', { name: 'New relationship' });
@@ -107,8 +106,10 @@ test.describe('the schema’s edges', () => {
     await expect(page.getByRole('dialog', { name: 'New attribute' }).getByLabel('Name', { exact: true })).toHaveValue(
       'Suppliers',
     );
-    await page.getByRole('dialog', { name: 'New attribute' }).getByRole('button', { name: /^Type/ }).click();
-    await page.getByRole('option', { name: 'Relationship' }).click();
+    await page
+      .getByRole('dialog', { name: 'New attribute' })
+      .getByRole('option', { name: 'Relationship', exact: true })
+      .click();
 
     // The related object doesn't exist yet: New object… makes it and comes back with it chosen.
     await step.getByRole('button', { name: /^Related object/ }).click();
@@ -153,15 +154,15 @@ test.describe('the schema’s edges', () => {
     await page.goto(`/w/${slug}/settings/objects/people/attributes`);
     await page.getByRole('button', { name: 'New attribute' }).click();
     const dialog = page.getByRole('dialog', { name: 'New attribute' });
-    const type = dialog.getByRole('button', { name: /^Type/ });
+    // The chosen tile is the type: it follows the name until a tile is picked.
+    const chosen = (name: string) => dialog.getByRole('option', { name, exact: true });
     await dialog.getByLabel('Name', { exact: true }).fill('Work email');
-    await expect(type).toContainText('Email');
+    await expect(chosen('Email')).toHaveAttribute('aria-selected', 'true');
     await dialog.getByLabel('Name', { exact: true }).fill('Due date');
-    await expect(type).toContainText('Date');
+    await expect(chosen('Date')).toHaveAttribute('aria-selected', 'true');
     // Picked, it stays whatever the name says.
-    await type.click();
-    await page.getByRole('option', { name: 'Text', exact: true }).click();
+    await chosen('Text').click();
     await dialog.getByLabel('Name', { exact: true }).fill('Renewal date');
-    await expect(type).toContainText('Text');
+    await expect(chosen('Text')).toHaveAttribute('aria-selected', 'true');
   });
 });

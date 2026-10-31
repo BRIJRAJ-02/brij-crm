@@ -511,6 +511,9 @@ export function DataGrid<Row>({
   const shiftPressed = useRef(false);
   // The last press's pointer: a row's checkbox ticks on a mouse's press but on a touch's tap.
   const pressedBy = useRef('mouse');
+  // The row whose Open in panel the pointer went down on, kept here (the row's cell is replaced as it takes focus) and
+  // cleared by every press first, so a press anywhere else never leaves it set.
+  const peekPress = useRef<(() => void) | undefined>(undefined);
   const within = useRef(false);
 
   // Only the rows on screen, plus the overscan, draw; and the focused and edited
@@ -1783,6 +1786,7 @@ export function DataGrid<Row>({
                     onOpenPanel: () => {
                       onRowOpen(id);
                     },
+                    peekPress,
                   }
                 : {})}
               {...(isEditing
@@ -1923,6 +1927,11 @@ export function DataGrid<Row>({
           onKeyDown={onKeyDown}
           onFocus={onFocus}
           onBlur={onBlur}
+          onPointerDownCapture={(event) => {
+            peekPress.current = undefined;
+            // A press on a control that names itself (Open in panel) has done what its tip said: the tip goes.
+            if (event.target instanceof Element && event.target.closest('[data-tip-label]') !== null) closeTip();
+          }}
           onPointerDown={onPointerDown}
           onPointerOver={onPointerOver}
           onPointerLeave={onPointerLeave}

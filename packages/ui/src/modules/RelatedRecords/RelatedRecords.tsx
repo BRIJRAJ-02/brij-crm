@@ -387,8 +387,9 @@ export function RelatedRecords({
   return (
     // A real section: a hairline over it and its title in the body's strong type, its Add always in reach (owner,
     // 31 Oct: an 11px label with a count read as a footnote).
-    <div ref={sectionRef} id={id} className={styles.root} data-section="">
+    <div ref={sectionRef} id={id} className={styles.root}>
       <Disclosure
+        isRuled
         title={title}
         isExpanded={isExpanded}
         onExpandedChange={setExpanded}

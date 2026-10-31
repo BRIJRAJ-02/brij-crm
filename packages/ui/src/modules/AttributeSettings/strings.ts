@@ -38,11 +38,29 @@ export const strings = {
     relation: 'Relation',
     computed: 'Computed',
   },
-  /** Under the type while creating, for the types whose name alone doesn't say what they hold. */
-  typeHints: {
-    status: 'Pipeline stages, one per record.',
-    actor_reference: 'A workspace member, like an owner.',
-    domain: 'A website, like acme.com.',
+  /** Each type tile's few words while creating (owner item 92), by picker key, computed kind or relationship. */
+  tileHints: {
+    text: 'A line of words',
+    long_text: 'Paragraphs of notes',
+    number: 'A count or amount',
+    currency: 'Money in a currency',
+    date: 'A day',
+    timestamp: 'A day and time',
+    checkbox: 'Yes or no',
+    select: 'One from a list',
+    multi_select: 'Several from a list',
+    status: 'Pipeline stages',
+    rating: 'One to five stars',
+    email: 'An email address',
+    phone: 'A phone number',
+    link: 'A web address',
+    location: 'An address or place',
+    member: 'A workspace member',
+    file: 'An uploaded file',
+    lookup: 'A related record’s field',
+    rollup: 'Totals of related records',
+    formula: 'Worked out from this record',
+    relationship: 'Links to other records',
   } as Partial<Record<string, string>>,
   /** The picker's own labels where they differ from the type's (AC-228). */
   multiSelect: 'Multi select',
@@ -136,10 +154,4 @@ export const strings = {
   workingOut: 'Working out',
   computedIncomplete: 'Finish the settings above first.',
   notUpdating: (reason: string) => `Not updating: ${reason}`,
-  /** Under the type while creating a computed attribute: what it does, in a few words. */
-  computedHints: {
-    lookup: 'Shows a field of a related record.',
-    rollup: 'Counts or adds up related records.',
-    formula: 'Works out a value from this record.',
-  } as Partial<Record<string, string>>,
 } as const;

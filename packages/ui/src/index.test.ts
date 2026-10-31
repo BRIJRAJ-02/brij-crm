@@ -208,6 +208,7 @@ describe('@crm/ui', () => {
       'TeamWeek',
       'ThemeSwitch',
       'TileGrid',
+      'TilePicker',
       'ToggleButton',
       'Toolbar',
       'ToolbarSearch',
