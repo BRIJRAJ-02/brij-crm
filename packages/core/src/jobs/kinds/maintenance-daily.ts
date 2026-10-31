@@ -714,8 +714,8 @@ async function orphanUploads(
 
 /**
  * The last phase (spec 0061): a link page's pictures that no block of their page uses, live or archived, nor its
- * share QR, made more than a day ago (`crm_profile_images_unused`). They are a person's, not a workspace's, so
- * whichever workspace's cleanup runs first takes them. The bytes go from the store first, then the rows
+ * share QR, made more than a day ago (`crm_profile_images_unused`), in this workspace only: both functions answer
+ * the slice's own workspace, so the app login never reaches another tenant's. The bytes go from the store first, then the rows
  * (`crm_drop_profile_images`, each checked unused again), in one transaction. Without a store the rows wait.
  */
 async function unusedLinkImages(

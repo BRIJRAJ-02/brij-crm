@@ -856,7 +856,9 @@ begin atomic
 end;
 --> statement-breakpoint
 -- Pictures no block of their page uses, live or archived, nor its share QR, made more than a day ago: the daily
--- cleanup removes their bytes from the store, then `crm_drop_profile_images` the rows. At most `max`.
+-- cleanup removes their bytes from the store, then `crm_drop_profile_images` the rows. At most `max`. Both answer
+-- only the transaction's own workspace (the cleanup's slice runs under it), so crm_app, which runs the slice, never
+-- lists or drops another tenant's pictures; a deleted workspace's go with its purge.
 create function crm_profile_images_unused(max integer)
   returns table (id uuid, path text)
   language sql
@@ -866,7 +868,8 @@ create function crm_profile_images_unused(max integer)
 begin atomic
   select m.id, m.path
   from auth.profile_images m
-  where m.created_at < pg_catalog.now() - interval '24 hours'
+  where m.workspace_id = nullif(pg_catalog.current_setting('app.workspace_id', true), '')::uuid
+    and m.created_at < pg_catalog.now() - interval '24 hours'
     and not exists (
       select 1 from auth.profile_items i
       where i.user_id = m.user_id and i.workspace_id = m.workspace_id
@@ -892,6 +895,7 @@ declare
 begin
   delete from auth.profile_images m
   where m.id = any (ids)
+    and m.workspace_id = nullif(pg_catalog.current_setting('app.workspace_id', true), '')::uuid
     and m.created_at < pg_catalog.now() - interval '24 hours'
     and not exists (
       select 1 from auth.profile_items i

@@ -3,6 +3,7 @@
 // served only while a live block of that page uses it and never another person's (AC-6129), a view's facts rolled up
 // and folded into Other past a day's 50 (AC-6116, AC-6117), and a booking counted only through a live block (AC-6119).
 import { randomBytes, randomUUID } from 'node:crypto';
+import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDatabase, type Database } from '@crm/db';
 import { testQuery } from '@crm/db/testing';
@@ -34,7 +35,7 @@ import {
   saveQrStyle,
 } from './items.ts';
 
-const { appUrl, ownerUrl } = inject('testDatabase');
+const { appUrl, ownerUrl, adminUrl } = inject('testDatabase');
 let db: Database;
 
 beforeAll(() => {
@@ -217,6 +218,29 @@ describe('a picture’s address (AC-6129)', () => {
     await saveQrStyle(ada.scope, { picture: { from: 'upload', image: id } });
     expect(await refusalOf(enterLinkImage({ db }, ada.handle, id))).toMatchObject({ code: 'NOT_FOUND' });
     expect(await readOwnProfileImage(ada.scope, id)).toMatchObject({ type: 'image/png' });
+  });
+
+  it('sweeps only the cleanup’s own workspace: the app login never lists or drops another tenant’s pictures', async () => {
+    const ada = await person('Ada');
+    const bob = await person('Bob');
+    const mine = await picture(ada);
+    const theirs = await picture(bob);
+    // Both unused for two days, so the sweep would take either (as a superuser: the table forces its policy).
+    await testQuery(
+      adminUrl,
+      `update auth.profile_images set created_at = now() - interval '2 days' where id = any ($1)`,
+      [[mine, theirs]],
+    );
+    const listed = await db.withWorkspace(ada.workspaceId, (tx) =>
+      tx.execute<{ id: string }>(sql`select id::text as id from crm_profile_images_unused(1000)`),
+    );
+    expect(listed.rows.map((row) => row.id)).toContain(mine);
+    expect(listed.rows.map((row) => row.id)).not.toContain(theirs);
+    const dropped = await db.withWorkspace(ada.workspaceId, (tx) =>
+      tx.execute<{ gone: number }>(sql`select crm_drop_profile_images(${`{${theirs}}`}::uuid[]) as gone`),
+    );
+    expect(dropped.rows[0]?.gone).toBe(0);
+    expect(await testQuery(adminUrl, `select 1 from auth.profile_images where id = $1`, [theirs])).toHaveLength(1);
   });
 
   it('is refused to the app login directly, as every link page table is', async () => {
