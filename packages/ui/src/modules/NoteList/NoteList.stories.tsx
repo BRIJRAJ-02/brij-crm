@@ -259,7 +259,7 @@ export const EmptyRow: Story = {
   },
 };
 
-/** The notes failed to load.
+/** The notes failed to load. */
 export const Failed: Story = {
   args: { status: 'error', onRetry: fn() },
   play: async ({ args, canvas, userEvent }) => {

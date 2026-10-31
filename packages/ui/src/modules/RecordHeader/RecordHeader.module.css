@@ -13,12 +13,13 @@
     container-type: inline-size;
   }
 
+  /* At least a column wide: past that the actions wrap under the name rather than cutting it to a few letters. */
   .text {
     display: flex;
     flex: 1;
     flex-direction: column;
     gap: var(--space-2);
-    min-inline-size: 0;
+    min-inline-size: min(100%, var(--size-column));
   }
 
   .name {

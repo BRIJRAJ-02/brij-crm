@@ -26,16 +26,21 @@ const isSame = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.st
 
 /**
  * A small form holding the name's one editor, focused as it opens. Enter or Rename saves it (nothing is sent when
- * it didn't change); Rename stays off while the name is blank, so a record never falls back to "Unnamed" by accident.
+ * it didn't change); a blank name keeps the dialog open with "Give it a name", so a record never falls back to "Unnamed".
  */
 export function RenameDialog({ attribute, value, singularName, isOpen, onClose, onSave }: RenameDialogProps) {
   const formId = useId();
   const [draft, setDraft] = useState<unknown>(value);
   // The editor commits on Enter in the same event that submits the form: the ref holds that commit for the submit.
   const latest = useRef<unknown>(value);
+  const [isBlank, setBlank] = useState(false);
   const save = () => {
     const next = latest.current;
-    if (!isFilled(next)) return;
+    // Blank: the dialog stays and says why, rather than letting the record fall back to "Unnamed".
+    if (!isFilled(next)) {
+      setBlank(true);
+      return;
+    }
     if (!isSame(next, value)) onSave(next);
     onClose();
   };
@@ -43,15 +48,15 @@ export function RenameDialog({ attribute, value, singularName, isOpen, onClose, 
     <Modal
       title={strings.renameTitle(singularName)}
       isOpen={isOpen}
-      // Once something is typed, only Cancel or Esc throws it away.
-      isDismissable={isSame(draft, value)}
+      // A click outside never throws a typed name away (the editor holds it until Enter or blur): Cancel or Esc does.
+      isDismissable={false}
       onOpenChange={(open) => {
         if (!open) onClose();
       }}
       actions={
         <>
           <Button slot="close">{strings.cancel}</Button>
-          <Button variant="primary" type="submit" form={formId} isDisabled={!isFilled(draft)}>
+          <Button variant="primary" type="submit" form={formId}>
             {strings.rename}
           </Button>
         </>
@@ -62,9 +67,11 @@ export function RenameDialog({ attribute, value, singularName, isOpen, onClose, 
           attribute={toFieldAttribute(attribute)}
           value={draft ?? null}
           surface="form"
+          {...(isBlank ? { error: strings.nameRequired } : {})}
           onCommit={(next) => {
             latest.current = next;
             setDraft(next);
+            setBlank(false);
           }}
         />
       </Form>
