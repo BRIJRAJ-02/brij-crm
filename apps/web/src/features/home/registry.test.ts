@@ -3,7 +3,7 @@
 // My tasks, the latest captures, and today against the next meeting.
 import type { FormSummary } from '@crm/data';
 import { describe, expect, it } from 'vitest';
-import { todayAndNext, type AgendaItem } from './agenda.ts';
+import { todayAndNext, upcomingAfter, type AgendaItem } from './agenda.ts';
 import { latestCaptures } from './captures.ts';
 import { duePrefix } from './due.ts';
 import { dayPartOf, firstNameOf, hourIn } from './greeting.ts';
@@ -156,5 +156,14 @@ describe('Today and the next meeting', () => {
     const split = todayAndNext([item('later', later, true), item('now', now), item('tomorrow', tomorrow)], today);
     expect(split.today.map((each) => each.id)).toEqual(['now']);
     expect(split.next?.id).toBe('tomorrow');
+  });
+
+  it('fills the card with the week’s next meetings, at least one, by start', () => {
+    const today = '2026-10-22';
+    const at = (day: number, hour: number) => new Date(2026, 9, day, hour).toISOString();
+    const items = [item('d', at(26, 9)), item('b', at(23, 9)), item('c', at(24, 9)), item('now', at(22, 15))];
+    expect(upcomingAfter(items, today, 0, 2).map((each) => each.id)).toEqual(['b', 'c']);
+    expect(upcomingAfter(items, today, 5, 5).map((each) => each.id)).toEqual(['b']);
+    expect(upcomingAfter([item('now', at(22, 15))], today, 1)).toEqual([]);
   });
 });

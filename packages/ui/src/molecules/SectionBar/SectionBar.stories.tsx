@@ -133,3 +133,16 @@ export const WithDescription: Story = {
     await expect(canvas.getByText('Thursday, 8 October')).toBeInTheDocument();
   },
 };
+
+/** A page's opening line in heading type, a step above the card titles under it (Home's greeting). */
+export const ProminentTitle: Story = {
+  render: () => (
+    <Stage width="fill">
+      <SectionBar title="Good afternoon, Ada" description="Thursday, 8 October" isTitleProminent />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const heading = canvas.getByRole('heading', { level: 2, name: 'Good afternoon, Ada' });
+    await expect(getComputedStyle(heading).fontSize).toBe('18px');
+  },
+};

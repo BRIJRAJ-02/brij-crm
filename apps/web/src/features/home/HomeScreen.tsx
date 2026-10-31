@@ -130,5 +130,5 @@ function Greeting({ name }: { readonly name: string | undefined }) {
     () => new Intl.DateTimeFormat(locale(), { weekday: 'long', day: 'numeric', month: 'long', timeZone }),
     [timeZone],
   );
-  return <SectionBar title={strings.greeting[part](name)} description={date.format(now)} />;
+  return <SectionBar title={strings.greeting[part](name)} description={date.format(now)} isTitleProminent />;
 }

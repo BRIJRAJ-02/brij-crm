@@ -19,6 +19,11 @@ export interface SectionBarProps {
    * rather than the section's name, so the controls lead.
    */
   readonly isTitleQuiet?: boolean;
+  /**
+   * The heading in heading type (18px) rather than title type: a page's own opening line over cards that carry
+   * title type themselves (Home's greeting over Today), so the page reads greeting, then card titles, then body.
+   */
+  readonly isTitleProminent?: boolean;
   /** Controls at the end (previous, Today, next, Filter). */
   readonly end?: ReactNode;
   /**
@@ -44,6 +49,7 @@ export function SectionBar({
   start,
   after,
   isTitleQuiet = false,
+  isTitleProminent = false,
   end,
   variant = 'inline',
 }: SectionBarProps) {
@@ -52,6 +58,7 @@ export function SectionBar({
       className={styles.root}
       data-variant={variant === 'bar' ? 'bar' : undefined}
       data-quiet-title={isTitleQuiet || undefined}
+      data-prominent-title={isTitleProminent || undefined}
     >
       {start !== undefined && <div className={styles.group}>{start}</div>}
       {title !== undefined &&

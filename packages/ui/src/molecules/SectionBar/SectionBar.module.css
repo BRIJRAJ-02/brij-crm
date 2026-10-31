@@ -41,6 +41,12 @@
     letter-spacing: var(--tracking-body-strong);
   }
 
+  /* A prominent heading: a page's opening line (Home's greeting) one step above the cards' titles under it. */
+  .root[data-prominent-title] .title {
+    font: var(--text-heading);
+    letter-spacing: var(--tracking-heading);
+  }
+
   /* A heading with its quiet line after it, on one baseline, the line wrapping under it when narrow. */
   .heading {
     display: flex;
