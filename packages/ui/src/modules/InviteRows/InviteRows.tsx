@@ -2,7 +2,7 @@ import { useEffect, useImperativeHandle, useRef, type ReactNode, type Ref } from
 import { Button } from '../../atoms/Button/Button.tsx';
 import { FieldLabel } from '../../atoms/FieldLabel/FieldLabel.tsx';
 import { Field } from '../../molecules/Field/Field.tsx';
-import { Select } from '../../molecules/Select/Select.tsx';
+import { Select } from '../../molecules/Select/SelectWithFaces.tsx';
 import {
   addRowAfter,
   createInviteRow,

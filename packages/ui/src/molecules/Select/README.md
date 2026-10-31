@@ -38,6 +38,10 @@ Ported from the artifact's Select card (version 8). It is the editor for select 
 
 - `group` on an option puts it under a heading: options with the same group follow one heading, in the order they come, after any without a group. Why a field: a booking page's "Add events to" lists each account's calendars under the account, as the Bookings calendars panel does.
 
+## SelectBase
+
+`SelectBase` (`Select.tsx`) is Select's body; `Select` (`SelectWithFaces.tsx`) wraps it with the `dot` and `badge` faces, which bring StatusDot and Badge. Use `Select` everywhere. Only the hosted form's questions and CountryPicker use `SelectBase`, since they draw plain options only: it keeps StatusDot, Badge and their CSS out of the form's first load (about 1 kB of CSS gzipped, 31 October 2026). Under `SelectBase` a `dot` option reads as its plain label and a `badge` isn't drawn.
+
 ## DeferredSelect
 
 The inline Select whose list loads apart from the page's first paint: `<DeferredSelect label="Time zone" items={zones} value={zone} onChange={setZone} placeholder="Choose a time zone" showsDescription isSearchable />`.
