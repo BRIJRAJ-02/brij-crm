@@ -13,7 +13,7 @@ import type {
   ProfileFormFacts,
   ProfilePageFacts,
 } from '@crm/data';
-import type { Hue, IconName, LinkPageBlock, LinkPageMark } from '@crm/ui';
+import type { Hue, IconName, LinkPageBlock, LinkPageMark, SocialLinkItem } from '@crm/ui';
 import type { ComponentType } from 'react';
 import {
   ContactEditor,
@@ -26,6 +26,15 @@ import {
   TestimonialEditor,
   TextEditor,
 } from './editors.tsx';
+import {
+  BannerEditor,
+  GalleryEditor,
+  ImageEditor,
+  MediaEditor,
+  SocialsEditor,
+  TimesChooser,
+} from './editors-reach.tsx';
+import { reachStrings } from './reach-strings.ts';
 import { strings } from './strings.ts';
 
 /**
@@ -58,13 +67,24 @@ export interface BlockEditorProps {
   readonly socialNetworks: readonly string[];
   /** The person's name, a new contact card's full name to start from. */
   readonly ownerName: string;
+  /** The person's social links as the page draws them, for a socials row's "How it looks" (spec 0061). */
+  readonly socialLinks: readonly SocialLinkItem[];
   /**
    * Checked and ready: the screen saves it (shown at once) and closes the Modal. A booking page comes with its
    * facts, so its row shows them before the server answers.
    */
-  /** The chosen page's or form's facts, so the row reads right before the server answers. */
-  readonly onSubmit: (draft: BlockDraft, facts?: ChosenFacts) => void;
+  /**
+   * The chosen page's or form's facts, so the row reads right before the server answers; and what to do once the
+   * add lands: a new link's own site picture, fetched by the saved link's id (spec 0061, AC-6101).
+   */
+  readonly onSubmit: (draft: BlockDraft, facts?: ChosenFacts, after?: AfterSave) => void;
   readonly onClose: () => void;
+}
+
+/** What follows a save once it lands. */
+export interface AfterSave {
+  /** Fetch the saved link's own site picture as its thumbnail. */
+  readonly siteThumb?: boolean;
 }
 
 /** What a chooser knows of what was picked, for the row it shows at once. */
@@ -99,21 +119,10 @@ export interface BlockKind {
  * signup makes a hosted form with one email field and then adds an ordinary `form` block for it, so it is an entry
  * in this picker and nothing else: no kind word, no column, no renderer and nothing new on the public page.
  */
-export type AddableKind = Exclude<ProfileBlockKind, SpecSixtyOneKind> | 'signup';
-
-/**
- * Spec 0061's kinds, which this editor doesn't add or draw yet (its R4 lane builds their editors): a row of one
- * says what it is and nothing more, and the preview leaves it out.
- */
-type SpecSixtyOneKind = 'socials' | 'media' | 'image' | 'gallery' | 'times' | 'banner';
-
-/** Whether a stored block is one of spec 0061's kinds, which this editor shows only by its name for now. */
-export function isNewKind(item: ProfileItem): item is Extract<ProfileItem, { kind: SpecSixtyOneKind }> {
-  return ['socials', 'media', 'image', 'gallery', 'times', 'banner'].includes(item.kind);
-}
+export type AddableKind = ProfileBlockKind | 'signup';
 
 /** Whether an entry makes a block of its own kind, or one of another kind (Email signup makes a form). */
-export function blockKindOf(kind: AddableKind): Exclude<ProfileBlockKind, SpecSixtyOneKind> {
+export function blockKindOf(kind: AddableKind): ProfileBlockKind {
   return kind === 'signup' ? 'form' : kind;
 }
 
@@ -125,7 +134,8 @@ export const BLOCK_KINDS: Readonly<Record<AddableKind, BlockKind>> = {
     icon: 'calendar-clock',
     hue: 'green',
     Editor: PageChooser,
-    isEditable: false,
+    // Its size and its window (spec 0061); the page itself is fixed, and pressing the row opens its own editor.
+    isEditable: true,
   },
   link: {
     label: strings.addLink,
@@ -184,6 +194,54 @@ export const BLOCK_KINDS: Readonly<Record<AddableKind, BlockKind>> = {
     Editor: TestimonialEditor,
     isEditable: true,
   },
+  socials: {
+    label: reachStrings.addSocials,
+    description: reachStrings.addSocialsText,
+    icon: 'at-sign',
+    hue: 'blue',
+    Editor: SocialsEditor,
+    isEditable: true,
+  },
+  media: {
+    label: reachStrings.addMedia,
+    description: reachStrings.addMediaText,
+    icon: 'play',
+    hue: 'red',
+    Editor: MediaEditor,
+    isEditable: true,
+  },
+  image: {
+    label: reachStrings.addImage,
+    description: reachStrings.addImageText,
+    icon: 'image',
+    hue: 'purple',
+    Editor: ImageEditor,
+    isEditable: true,
+  },
+  gallery: {
+    label: reachStrings.addGallery,
+    description: reachStrings.addGalleryText,
+    icon: 'layers',
+    hue: 'yellow',
+    Editor: GalleryEditor,
+    isEditable: true,
+  },
+  times: {
+    label: reachStrings.addTimes,
+    description: reachStrings.addTimesText,
+    icon: 'clock',
+    hue: 'green',
+    Editor: TimesChooser,
+    isEditable: true,
+  },
+  banner: {
+    label: reachStrings.addBanner,
+    description: reachStrings.addBannerText,
+    icon: 'megaphone',
+    hue: 'orange',
+    Editor: BannerEditor,
+    isEditable: true,
+  },
   heading: {
     label: strings.addHeading,
     description: strings.addHeadingText,
@@ -200,12 +258,18 @@ export const BLOCK_KINDS: Readonly<Record<AddableKind, BlockKind>> = {
 export const ADDABLE: readonly AddableKind[] = [
   'link',
   'page',
+  'times',
   'form',
   'signup',
+  'media',
+  'image',
+  'gallery',
+  'socials',
   'text',
   'faq',
   'testimonial',
   'contact',
+  'banner',
   'heading',
 ];
 
@@ -223,7 +287,30 @@ function shownAddress(url: string): string {
 
 /** How a block's row reads; a link to one of our pages outside this workspace leads with saying so, and is off. */
 export function rowWords(item: ProfileItem): BlockRowWords {
-  if (isNewKind(item)) return { title: item.kind, address: '' };
+  // Spec 0061's kinds: what each is, in the words its Add tile uses, with what it holds after.
+  if (item.kind === 'socials')
+    return { title: reachStrings.socials, address: reachStrings.socialsHint.split('.')[0] ?? '' };
+  if (item.kind === 'media') {
+    return {
+      title: item.title ?? reachStrings.mediaUntitled,
+      address: reachStrings.mediaRow(MEDIA_NAMES[item.provider]),
+    };
+  }
+  if (item.kind === 'image') return { title: item.caption ?? item.alt, address: reachStrings.image };
+  if (item.kind === 'gallery') {
+    return { title: reachStrings.gallery, address: reachStrings.galleryCount(item.images.length) };
+  }
+  if (item.kind === 'banner') return { title: item.text, address: reachStrings.banner };
+  if (item.kind === 'times') {
+    const minutes = item.page?.durations[0];
+    return item.page === undefined || minutes === undefined
+      ? { title: reachStrings.addTimes, address: reachStrings.timesUnavailable, isOff: true }
+      : {
+          title: item.page.title,
+          address: reachStrings.timesRow(minutes),
+          ...(item.page.status === 'live' ? {} : { isOff: true }),
+        };
+  }
   if (item.kind === 'link') {
     return item.outsideWorkspace === true
       ? { title: item.title, address: `${strings.notInWorkspace} · ${shownAddress(item.url)}`, isOff: true }
@@ -267,6 +354,15 @@ export function rowWords(item: ProfileItem): BlockRowWords {
   };
 }
 
+/** Each media service's own name ("Plays from YouTube"): `MEDIA_PROVIDER_NAMES` in the contracts. */
+const MEDIA_NAMES: Readonly<Record<'youtube' | 'vimeo' | 'spotify' | 'soundcloud' | 'applemusic', string>> = {
+  youtube: 'YouTube',
+  vimeo: 'Vimeo',
+  spotify: 'Spotify',
+  soundcloud: 'SoundCloud',
+  applemusic: 'Apple Music',
+};
+
 /** A contact card's line: its job title and company, after "Contact card" in the editor's row. */
 export function contactWords(card: { readonly jobTitle?: string; readonly company?: string }, inRow = false): string {
   return [...(inRow ? [strings.contactCard] : []), card.jobTitle, card.company]
@@ -274,9 +370,13 @@ export function contactWords(card: { readonly jobTitle?: string; readonly compan
     .join(' · ');
 }
 
-/** Where a person's contact card is saved from: its vCard on this origin (AC-5114). */
-export function contactHref(handle: string): string {
-  return `/api/public/handles/${encodeURIComponent(handle)}/contact.vcf`;
+/**
+ * Where a person's contact card is saved from: its vCard on this origin (AC-5114). With several cards (spec 0061,
+ * AC-6114) each names its own with `?card=`; without one the first card answers, as every link shared before does.
+ */
+export function contactHref(handle: string, card?: string): string {
+  const path = `/api/public/handles/${encodeURIComponent(handle)}/contact.vcf`;
+  return card === undefined ? path : `${path}?${new URLSearchParams({ card }).toString()}`;
 }
 
 /**
@@ -287,8 +387,66 @@ export function previewBlock(
   item: ProfileItem,
   handle: string,
   markOf: (url: string) => LinkPageMark | undefined,
+  more: PreviewMore = {},
 ): LinkPageBlock | undefined {
-  if (isNewKind(item)) return undefined;
+  // Outside its window a visitor doesn't see it, so neither does the phone (AC-6111): its row's chip says when.
+  if (more.now !== undefined && item.kind !== 'heading' && !isShownAt(item, more.now)) return undefined;
+  const picture = more.picture;
+  if (item.kind === 'socials') {
+    const links = more.socials ?? [];
+    return links.length === 0 ? undefined : { kind: 'socials', id: item.id, links };
+  }
+  if (item.kind === 'media') {
+    return {
+      kind: 'media',
+      id: item.id,
+      provider: item.provider,
+      title: item.title ?? reachStrings.mediaUntitled,
+      // The phone never plays: its page is inert, so no frame is ever built here.
+      frame: '',
+      ...(item.poster === undefined || picture === undefined ? {} : { poster: picture(item.poster) }),
+      ...(item.size === undefined ? {} : { size: item.size }),
+    };
+  }
+  if (item.kind === 'image') {
+    if (picture === undefined) return undefined;
+    return {
+      kind: 'image',
+      id: item.id,
+      image: picture(item.image),
+      alt: item.alt,
+      ...(item.caption === undefined ? {} : { caption: item.caption }),
+      ...(item.url === undefined ? {} : { href: item.url }),
+      ...(item.size === undefined ? {} : { size: item.size }),
+    };
+  }
+  if (item.kind === 'gallery') {
+    if (picture === undefined) return undefined;
+    return {
+      kind: 'gallery',
+      id: item.id,
+      images: item.images.map((each) => ({ ...picture(each.image), alt: each.alt })),
+      display: item.display ?? 'row',
+      ...(item.size === undefined ? {} : { size: item.size }),
+    };
+  }
+  if (item.kind === 'banner') {
+    return { kind: 'banner', id: item.id, text: item.text, ...(item.url === undefined ? {} : { href: item.url }) };
+  }
+  if (item.kind === 'times') {
+    const minutes = item.page?.durations[0];
+    if (item.page?.status !== 'live' || minutes === undefined) return undefined;
+    return {
+      kind: 'times',
+      id: item.id,
+      title: item.page.title,
+      href: `/${encodeURIComponent(handle)}/${encodeURIComponent(item.page.slug)}`,
+      duration: minutes,
+      // The editor reads no times: the phone shows the block's title and More times, which is how it reads when
+      // its times can't be read, and never a time that isn't real.
+      times: { status: 'error' },
+    };
+  }
   if (item.kind === 'heading')
     return {
       kind: 'heading',
@@ -327,7 +485,7 @@ export function previewBlock(
       kind: 'contact',
       id: item.id,
       title: item.fullName,
-      href: contactHref(handle),
+      href: contactHref(handle, item.id),
       ...(line === '' ? {} : { line }),
     };
   }
@@ -342,6 +500,10 @@ export function previewBlock(
       ...(item.note === undefined ? {} : { note: item.note }),
       ...(mark === undefined ? {} : { mark }),
       ...(item.icon === undefined ? {} : { icon: item.icon }),
+      ...(item.thumb === undefined || picture === undefined ? {} : { thumb: picture(item.thumb) }),
+      ...(item.style === undefined ? {} : { style: item.style }),
+      ...(item.notice === undefined ? {} : { notice: item.notice }),
+      ...(item.size === undefined ? {} : { size: item.size }),
     };
   }
   if (item.page?.status !== 'live') return undefined;
@@ -351,7 +513,26 @@ export function previewBlock(
     title: item.page.title,
     href: `/${encodeURIComponent(handle)}/${encodeURIComponent(item.page.slug)}`,
     facts: pageFacts(item.page),
+    ...(item.size === undefined ? {} : { size: item.size }),
   };
+}
+
+/** What the phone needs beyond a block itself to draw spec 0061's kinds. */
+export interface PreviewMore {
+  /** A stored picture as the owner's browser reads it. Without it, pictures are left out. */
+  readonly picture?: (imageId: string) => { readonly src: string; readonly width: number; readonly height: number };
+  /** The person's social links, for a socials row. */
+  readonly socials?: readonly SocialLinkItem[];
+  /** Now, for the window: a block outside its window is left out, as the public read leaves it out. */
+  readonly now?: Date;
+}
+
+/** Whether a block is inside its window at `now` (AC-6111): from its start, until its end. */
+export function isShownAt(item: ProfileItem, now: Date): boolean {
+  if (item.kind === 'heading') return true;
+  const at = now.getTime();
+  if (item.showFrom !== undefined && Date.parse(item.showFrom) > at) return false;
+  return !(item.hideAfter !== undefined && Date.parse(item.hideAfter) <= at);
 }
 
 /** A booking page choice as a block shown before the server answers. */
@@ -387,7 +568,11 @@ export function pressesChip(item: ProfileItem, counts: ProfileCounts | undefined
     item.kind === 'heading' ||
     item.kind === 'text' ||
     item.kind === 'faq' ||
-    item.kind === 'testimonial'
+    item.kind === 'testimonial' ||
+    // A socials row's presses are its links', a gallery's open a viewer, and a picture without a link goes nowhere.
+    item.kind === 'socials' ||
+    item.kind === 'gallery' ||
+    (item.kind === 'image' && item.url === undefined)
   ) {
     return [];
   }

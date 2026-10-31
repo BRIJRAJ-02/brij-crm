@@ -6,8 +6,10 @@
 // live event carries it; another tab's change shows when a screen next holds it, and an order made from a stale
 // list is refused by the server and read again.
 import type {
+  FetchedThumbnail,
   PageTheme,
   ProfileBlock,
+  ProfileQrStyle,
   ProfileCounts,
   ProfileFormChoice,
   ProfileItem,
@@ -41,6 +43,18 @@ import {
 } from '@crm/contracts/link-page';
 import type { PROFILE_HUES } from '@crm/contracts/link-page';
 import { toDataError, type DataError } from '../errors.ts';
+import {
+  checkReachBlock,
+  createReach,
+  linkExtrasOf,
+  linkExtrasProblems,
+  withExtras,
+  type DraftExtras,
+  type DraftLinkExtras,
+  type DraftWindow,
+  type ReachApi,
+  type ReachDraft,
+} from './reach.ts';
 import type { Notice } from '../notice.ts';
 
 /** The blocks as a screen holds them. */
@@ -154,7 +168,19 @@ export interface LinkPageDeps {
 /** The profile procedures the store calls, as the data layer's oRPC client answers them. */
 interface ProfileProcedures {
   readonly items: (input: { workspace: string }, options: { signal?: AbortSignal }) => Promise<ProfileItems>;
-  readonly counts: (input: { workspace: string }, options: { signal?: AbortSignal }) => Promise<ProfileCounts>;
+  readonly counts: (
+    input: { workspace: string; days?: 7 | 30 | 90 },
+    options: { signal?: AbortSignal },
+  ) => Promise<ProfileCounts>;
+  readonly fetchThumbnail: (
+    input: { workspace: string; id: string; mutationId: string },
+    options: { signal?: AbortSignal },
+  ) => Promise<FetchedThumbnail>;
+  readonly qrStyle: (input: { workspace: string }, options: { signal?: AbortSignal }) => Promise<ProfileQrStyle>;
+  readonly saveQrStyle: (
+    input: { workspace: string; style: ProfileQrStyle | null; mutationId: string },
+    options: { signal?: AbortSignal },
+  ) => Promise<ProfileQrStyle>;
   readonly pageChoices: (
     input: { workspace: string },
     options: { signal?: AbortSignal },
@@ -243,6 +269,20 @@ export type BlockProblems = Readonly<
       // One question's own two problems, by its place in the list: `question:0`, `answer:0`.
       | `question:${number}`
       | `answer:${number}`
+      // Spec 0061: a window's two ends, a link's card, size and notice, a picture and its words, a gallery's
+      // pictures (`alt:0` is the first one's description) and a banner's line.
+      | 'showFrom'
+      | 'hideAfter'
+      | 'style'
+      | 'size'
+      | 'thumb'
+      | 'notice'
+      | 'image'
+      | 'images'
+      | 'alt'
+      | 'caption'
+      | 'text'
+      | `alt:${number}`
       | ProfileContactField,
       string
     >
@@ -313,32 +353,86 @@ export function blockLimit(items: readonly ProfileItem[], kind: ProfileBlockKind
   return countOf(items, kind) >= PROFILE_LIMITS[kind] ? profileLimitSentence(kind) : undefined;
 }
 
-/** A block as the editor's Modal has it, before it is checked. */
+/** A block as the editor's Modal has it, before it is checked (spec 0061 added a window, sizes and six kinds). */
 export type BlockDraft =
-  | {
+  | ({
       readonly kind: 'link';
       readonly title: string;
       readonly url: string;
       readonly note: string;
       readonly icon?: string;
       readonly hue?: (typeof PROFILE_HUES)[number];
-    }
+    } & DraftExtras &
+      DraftLinkExtras)
   | { readonly kind: 'heading'; readonly title: string; readonly group?: 'open' | 'folder' }
-  | { readonly kind: 'text'; readonly title?: string; readonly body: string }
-  | { readonly kind: 'testimonial'; readonly quote: string; readonly author: string; readonly role?: string }
-  | {
+  | ({ readonly kind: 'text'; readonly title?: string; readonly body: string } & DraftWindow)
+  | ({
+      readonly kind: 'testimonial';
+      readonly quote: string;
+      readonly author: string;
+      readonly role?: string;
+    } & DraftWindow)
+  | ({
       readonly kind: 'faq';
       readonly title?: string;
       readonly items: readonly { readonly question: string; readonly answer: string }[];
-    }
-  | { readonly kind: 'page'; readonly workspaceId?: string; readonly pageId?: string }
-  | {
+    } & DraftWindow)
+  | ({ readonly kind: 'page'; readonly workspaceId?: string; readonly pageId?: string } & DraftExtras)
+  | ({
       readonly kind: 'form';
       readonly workspaceId?: string;
       readonly formId?: string;
       readonly label: string;
-    }
-  | ({ readonly kind: 'contact' } & Readonly<Partial<Record<ProfileContactField, string>>>);
+    } & DraftWindow)
+  | ({ readonly kind: 'contact' } & Readonly<Partial<Record<ProfileContactField, string>>> & DraftWindow)
+  | ReachDraft;
+
+/** The window and size a draft carries, whatever its kind. */
+function extrasOf(draft: BlockDraft): DraftExtras {
+  if (draft.kind === 'heading') return {};
+  return {
+    ...(draft.showFrom === undefined ? {} : { showFrom: draft.showFrom }),
+    ...(draft.hideAfter === undefined ? {} : { hideAfter: draft.hideAfter }),
+    ...('size' in draft && draft.size !== undefined ? { size: draft.size } : {}),
+  };
+}
+
+/**
+ * A block as typed, checked by the rules the server keeps: its own fields first, then spec 0061's window, size
+ * and a link's card (at most 3 featured). Each field's problem, or the block to send.
+ */
+export function checkBlock(
+  draft: BlockDraft,
+  items: readonly ProfileItem[],
+  editing?: string,
+): { readonly ok: true; readonly block: ProfileBlock } | { readonly ok: false; readonly problems: BlockProblems } {
+  if (
+    draft.kind === 'socials' ||
+    draft.kind === 'media' ||
+    draft.kind === 'image' ||
+    draft.kind === 'gallery' ||
+    draft.kind === 'times' ||
+    draft.kind === 'banner'
+  ) {
+    return checkReachBlock(draft);
+  }
+  const base = checkOwnFields(draft, items, editing);
+  const linkProblems = draft.kind === 'link' ? linkExtrasProblems(draft, items, editing) : {};
+  const withWindow = base.ok ? withExtras(base.block, extrasOf(draft)) : undefined;
+  const problems: Record<string, string | undefined> = {
+    ...(base.ok ? {} : base.problems),
+    ...linkProblems,
+    ...(withWindow === undefined || withWindow.ok ? {} : withWindow.problems),
+  };
+  if (!base.ok || withWindow === undefined || !withWindow.ok || Object.keys(linkProblems).length > 0) {
+    return { ok: false, problems };
+  }
+  const block = withWindow.block;
+  return {
+    ok: true,
+    block: block.kind === 'link' && draft.kind === 'link' ? { ...block, ...linkExtrasOf(draft) } : block,
+  };
+}
 
 /** A title's problem: present, one line, and short enough for its kind. */
 function titleProblem(title: string, kind: 'link' | 'heading'): string | undefined {
@@ -352,12 +446,13 @@ function titleProblem(title: string, kind: 'link' | 'heading'): string | undefin
 }
 
 /**
- * A block as typed, checked by the rules the server keeps (its kind's lengths, the address rule, a heading's text
- * once, ignoring case and surrounding spaces, among the blocks held): each field's problem, or the block to send.
- * No Zod: the store loads with the editor (its own chunk), and the server checks again with the schemas.
+ * A block's own fields as typed, checked by the rules the server keeps (its kind's lengths, the address rule, a
+ * heading's text once, ignoring case and surrounding spaces, among the blocks held): each field's problem, or the
+ * block to send. No Zod: the store loads with the editor (its own chunk), and the server checks again with the
+ * schemas.
  */
-export function checkBlock(
-  draft: BlockDraft,
+function checkOwnFields(
+  draft: Exclude<BlockDraft, ReachDraft>,
   items: readonly ProfileItem[],
   editing?: string,
 ): { readonly ok: true; readonly block: ProfileBlock } | { readonly ok: false; readonly problems: BlockProblems } {
@@ -824,6 +919,8 @@ export function openLinkPage(given: {
   readonly notify: (notice: Notice) => void;
   readonly summary: (error: DataError) => string;
   /** Email signup (spec 0052, AC-5217): the workspaces one may be made in, and the one call that makes it. */
+  /** Sends a picture to `/api/profile/images` for the workspace named (spec 0061): the stored picture. */
+  readonly upload: ReachApi['upload'];
   readonly signup: {
     readonly workspaces: () => Promise<
       readonly { readonly id: string; readonly slug: string; readonly name: string }[]
@@ -857,7 +954,20 @@ export function openLinkPage(given: {
     summary: given.summary,
   };
   const store = createLinkPageStore(deps);
+  // Spec 0061 (R4): pictures, a link's own site picture, Insights by period and the share QR's style.
+  const reach = createReach({
+    api: {
+      counts: (input) => call((options) => profile.counts(input, options)),
+      fetchThumbnail: (input) => call((options) => profile.fetchThumbnail(input, options)),
+      qrStyle: (input) => call((options) => profile.qrStyle(input, options)),
+      saveQrStyle: (input) => call((options) => profile.saveQrStyle(input, options)),
+      upload: given.upload,
+    },
+    mintId: given.mintId,
+  });
   return {
+    /** Spec 0061's reads and writes beside the blocks, and the rules its controls are worded with. */
+    reach,
     /** The blocks, held while a screen shows them (`useLinkPage`). */
     view: (workspace: string): LinkPageHeld => store.of(workspace),
     /**

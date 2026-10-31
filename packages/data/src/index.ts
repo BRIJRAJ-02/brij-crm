@@ -260,6 +260,15 @@ import type { LinkPageStore } from './link-page/store.ts';
 import type { BrandStore } from './brand/store.ts';
 export type { BlockDraft, BlockProblems, LinkPageHeld, LinkPageState, LinkPageStore } from './link-page/store.ts';
 export type {
+  DraftWindow,
+  InsightsHeld,
+  InsightsState,
+  LinkPageReach,
+  QrStyleHeld,
+  QrStyleState,
+  StoredPicture,
+} from './link-page/reach.ts';
+export type {
   BrandColours,
   BrandHeld,
   BrandHeldState,
@@ -550,6 +559,8 @@ export type {
   ProfileBlock,
   ProfileCounts,
   ProfileBlockKind,
+  ProfileQrStyle,
+  FetchedThumbnail,
   ProfileItem,
   ProfileLinkIcon,
   ProfileLinkImport,
@@ -5126,6 +5137,25 @@ export function createDataLayer({
             call,
             mintId,
             notify,
+            // A link page's picture (spec 0061, AC-6101, AC-6108): the bytes as the body, to our own upload route.
+            upload: async (workspace, picture) => {
+              const response = await fetch(new URL('/api/profile/images', origin).href, {
+                method: 'POST',
+                headers: { 'x-crm-workspace': workspace, 'content-type': picture.type },
+                body: picture,
+                credentials: 'include',
+              }).catch((error: unknown) => {
+                throw toDataError(error);
+              });
+              const answer: unknown = await response.json().catch(() => undefined);
+              const fields = typeof answer === 'object' && answer !== null ? (answer as Record<string, unknown>) : {};
+              if (!response.ok) throw toDataError({ ...fields, status: response.status });
+              const { image, width, height } = fields;
+              if (typeof image !== 'string' || typeof width !== 'number' || typeof height !== 'number') {
+                throw toDataError({ code: 'INTERNAL', message: 'The picture didn’t upload. Try again.' });
+              }
+              return { image, width, height };
+            },
             summary: refusalSummary,
             signup: {
               /** The workspaces an Email signup form may be made in: the person's own, oldest first (AC-5217). */

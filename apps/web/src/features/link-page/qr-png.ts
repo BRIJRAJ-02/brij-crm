@@ -5,14 +5,50 @@
 /** How many pixels a side the saved PNG is. */
 export const QR_PNG_SIZE = 1024;
 
+/**
+ * A picture already drawn on the page, as a `data:` address: an SVG loaded as an image (the PNG's canvas, a saved
+ * file) reads nothing from outside itself, so a centre picture (spec 0061, AC-6124) has to travel inside it. It is
+ * from our own origin, so the canvas stays readable.
+ */
+async function inlined(href: string): Promise<string | undefined> {
+  if (href.startsWith('data:')) return href;
+  const image = new Image();
+  image.src = href;
+  try {
+    await image.decode();
+  } catch {
+    return undefined;
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width = image.naturalWidth;
+  canvas.height = image.naturalHeight;
+  canvas.getContext('2d')?.drawImage(image, 0, 0);
+  return canvas.toDataURL('image/png');
+}
+
 /** The code's SVG with its token colours written in, at `size` pixels, as markup an image can load on its own. */
-function standalone(svg: SVGSVGElement, size: number): string {
+async function standalone(svg: SVGSVGElement, size: number): Promise<string> {
   const copy = svg.cloneNode(true);
   if (!(copy instanceof SVGSVGElement)) throw new Error('The QR code is not an SVG.');
-  const shapes = svg.querySelectorAll('rect, path');
-  copy.querySelectorAll('rect, path').forEach((shape, index) => {
+  for (const picture of copy.querySelectorAll('image')) {
+    const href = picture.getAttribute('href') ?? '';
+    const data = href === '' ? undefined : await inlined(href);
+    if (data === undefined) picture.remove();
+    else picture.setAttribute('href', data);
+  }
+  const shapes = svg.querySelectorAll('rect, path, text');
+  copy.querySelectorAll('rect, path, text').forEach((shape, index) => {
     const drawn = shapes[index];
-    if (drawn !== undefined) shape.setAttribute('fill', getComputedStyle(drawn).fill);
+    if (drawn !== undefined) {
+      const look = getComputedStyle(drawn);
+      shape.setAttribute('fill', look.fill);
+      // A styled code's frame is a line, and its label words (spec 0061, AC-6124): both carry their look too.
+      if (look.stroke !== 'none' && look.stroke !== '') shape.setAttribute('stroke', look.stroke);
+      if (shape.tagName === 'text') {
+        shape.setAttribute('font-family', look.fontFamily);
+        shape.setAttribute('font-weight', look.fontWeight);
+      }
+    }
     shape.removeAttribute('class');
   });
   copy.removeAttribute('class');
@@ -24,7 +60,7 @@ function standalone(svg: SVGSVGElement, size: number): string {
 
 /** The QR code `svg` draws, as a square PNG `size` pixels a side, every module sharp. */
 export async function qrPng(svg: SVGSVGElement, size = QR_PNG_SIZE): Promise<Blob> {
-  const source = URL.createObjectURL(new Blob([standalone(svg, size)], { type: 'image/svg+xml' }));
+  const source = URL.createObjectURL(new Blob([await standalone(svg, size)], { type: 'image/svg+xml' }));
   try {
     const image = new Image(size, size);
     image.src = source;
@@ -45,6 +81,11 @@ export async function qrPng(svg: SVGSVGElement, size = QR_PNG_SIZE): Promise<Blo
   } finally {
     URL.revokeObjectURL(source);
   }
+}
+
+/** The QR code `svg` draws as a file of its own (spec 0061, AC-6124): its colours written in, 1024 a side. */
+export async function qrSvg(svg: SVGSVGElement, size = QR_PNG_SIZE): Promise<Blob> {
+  return new Blob([await standalone(svg, size)], { type: 'image/svg+xml' });
 }
 
 /** Saves `blob` as `fileName` through the browser's own download. */

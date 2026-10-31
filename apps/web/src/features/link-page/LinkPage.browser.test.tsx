@@ -11,6 +11,7 @@ import {
   PAGE_THEME_PRESETS,
   DEFAULT_PAGE_THEME,
   type DataLayer,
+  type LinkPageStore,
   type ProfileItem,
   type ProfileLinkImport,
 } from '@crm/data';
@@ -48,6 +49,26 @@ async function render(data: Partial<DataLayer>, screen: () => ReactNode) {
     at: '/w/acme/link-page',
   });
 }
+
+/** A held value that stays loading: Insights and the code's style, which these pieces never wait on. */
+const loading = { status: 'loading' } as const;
+const waiting = {
+  subscribe: () => () => undefined,
+  getSnapshot: () => loading,
+  retain: () => () => undefined,
+  retry: () => undefined,
+};
+
+/** The link page store as the overview reads it (spec 0061): Insights and the code's style, both still loading. */
+const linkPageStore = {
+  reach: {
+    insights: () => waiting,
+    insightDays: [7, 30, 90],
+    qrStyle: () => waiting,
+    pictureSrc: (_slug: string, id: string) => `/api/profile/images/${id}`,
+    insightsCsvHref: () => '/api/profile/insights.csv',
+  },
+} as unknown as LinkPageStore;
 
 const link = (id: string, title: string, url: string): ProfileItem => ({
   kind: 'link',
@@ -107,6 +128,9 @@ describe('the overview’s first empty moment (AC-8) and a private page’s line
         onEdit={onEdit}
         onAdd={onAdd}
         onGoLive={() => undefined}
+        linkPage={linkPageStore}
+        items={[]}
+        quickPicks={[]}
       />
     ));
     await expect.element(page.getByText('Nothing on your page yet')).toBeVisible();
@@ -135,6 +159,9 @@ describe('a Private page’s overview (AC-23)', () => {
         onEdit={() => undefined}
         onAdd={() => undefined}
         onGoLive={onGoLive}
+        linkPage={linkPageStore}
+        items={[]}
+        quickPicks={[]}
       />
     );
     await render(data, () => overview(false));
@@ -240,7 +267,19 @@ describe('the Add modal’s keyboard (AC-4, AC-9)', () => {
     await expect.element(page.getByRole('textbox', { name: 'link title' })).toHaveFocus();
     (grid.getByRole('radio', { name: 'Link' }).element() as HTMLElement).focus();
     // Every arrow swaps the fields under the grid and leaves focus on the tiles.
-    const names = ['Booking page', 'Timefix form', 'Email signup', 'Writing', 'Questions', 'Testimonial'];
+    const names = [
+      'Booking page',
+      'Next times',
+      'Timefix form',
+      'Email signup',
+      'Video or music',
+      'Picture',
+      'Gallery',
+      'Social icons',
+      'Writing',
+      'Questions',
+      'Testimonial',
+    ];
     for (const name of names) {
       await userEvent.keyboard('{ArrowRight}');
       await expect.element(grid.getByRole('radio', { name })).toHaveFocus();
@@ -409,6 +448,9 @@ function LiveOverview({ data }: { readonly data: DataLayer }) {
         onEdit={() => undefined}
         onAdd={() => undefined}
         onGoLive={live.goLive}
+        linkPage={linkPageStore}
+        items={[]}
+        quickPicks={[]}
       />
     </>
   );

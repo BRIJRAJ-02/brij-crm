@@ -32,7 +32,23 @@ const page = (status: 'live' | 'paused'): ProfileItem => ({
 
 describe('the block registry', () => {
   it('offers every kind it has an editor for, in the Add menu’s order', () => {
-    expect(ADDABLE).toEqual(['link', 'page', 'form', 'signup', 'text', 'faq', 'testimonial', 'contact', 'heading']);
+    expect(ADDABLE).toEqual([
+      'link',
+      'page',
+      'times',
+      'form',
+      'signup',
+      'media',
+      'image',
+      'gallery',
+      'socials',
+      'text',
+      'faq',
+      'testimonial',
+      'contact',
+      'banner',
+      'heading',
+    ]);
     // Email signup is an entry, not a kind: what it makes, and so what it needs room for, is a form (AC-5217).
     expect(blockKindOf('signup')).toBe('form');
     for (const kind of ADDABLE) {
@@ -120,7 +136,7 @@ describe('the block registry', () => {
       id: 'c',
       title: 'Ada Lovelace',
       line: 'Founder · Acme',
-      href: '/api/public/handles/ada%20lovelace/contact.vcf',
+      href: '/api/public/handles/ada%20lovelace/contact.vcf?card=c',
     });
     const bare: ProfileItem = { kind: 'contact', id: 'd', fullName: 'Ada', updatedAt: '' };
     expect(rowWords(bare).address).toBe('Contact card');
@@ -243,5 +259,68 @@ describe('the block registry', () => {
       pressesChip({ kind: 'faq', id: 'f', items: [{ question: 'Q', answer: 'A' }], updatedAt: '' }, counts(1, 1, 0)),
     ).toEqual([]);
     expect(pressesChip(link, undefined)).toEqual([]);
+  });
+});
+
+describe('spec 0061’s kinds in the editor (R4)', () => {
+  const picture = (id: string) => ({ src: `/api/profile/images/${id}?workspace=acme`, width: 4, height: 3 });
+  const more = { picture, socials: [{ network: 'github' as const, href: 'https://github.com/ada', label: 'ada' }] };
+
+  it('reads each new kind’s row in the words of its Add tile', () => {
+    expect(
+      rowWords({ kind: 'media', id: 'm', provider: 'vimeo', ref: '1', url: 'https://vimeo.com/1', updatedAt: '' }),
+    ).toEqual({ title: 'Video or music', address: 'Plays from Vimeo' });
+    expect(rowWords({ kind: 'banner', id: 'b', text: 'Sale on', updatedAt: '' })).toEqual({
+      title: 'Sale on',
+      address: 'Banner',
+    });
+    expect(
+      rowWords({
+        kind: 'gallery',
+        id: 'g',
+        images: [
+          { image: 'a', alt: 'A' },
+          { image: 'b', alt: 'B' },
+        ],
+        updatedAt: '',
+      }).address,
+    ).toBe('2 pictures');
+    expect(rowWords({ kind: 'times', id: 't', workspaceId: 'w', pageId: 'x', updatedAt: '' })).toMatchObject({
+      isOff: true,
+    });
+  });
+
+  it('draws pictures from the owner’s own copy, a socials row from their links, and leaves out a block out of its window', () => {
+    const image: ProfileItem = { kind: 'image', id: 'i', image: 'pic', alt: 'A cat', size: 'wide', updatedAt: '' };
+    expect(previewBlock(image, 'ada', () => undefined, more)).toEqual({
+      kind: 'image',
+      id: 'i',
+      image: picture('pic'),
+      alt: 'A cat',
+      size: 'wide',
+    });
+    expect(previewBlock({ kind: 'socials', id: 's', updatedAt: '' }, 'ada', () => undefined, more)).toEqual({
+      kind: 'socials',
+      id: 's',
+      links: more.socials,
+    });
+    // No links, no row: a socials row with nothing in it draws nothing on the page either.
+    expect(previewBlock({ kind: 'socials', id: 's', updatedAt: '' }, 'ada', () => undefined, {})).toBeUndefined();
+    const later = { ...image, showFrom: '2026-12-01T00:00:00.000Z' };
+    expect(
+      previewBlock(later, 'ada', () => undefined, { ...more, now: new Date('2026-11-01T00:00:00Z') }),
+    ).toBeUndefined();
+    expect(
+      previewBlock(later, 'ada', () => undefined, { ...more, now: new Date('2026-12-02T00:00:00Z') }),
+    ).toMatchObject({ kind: 'image' });
+  });
+
+  it('shows no clicks chip on a socials row, a gallery or a picture with nowhere to go', () => {
+    const counts = { days: 30, views: 1, visitors: 1, before: { views: 0, visitors: 0 }, presses: [] };
+    expect(pressesChip({ kind: 'socials', id: 's', updatedAt: '' }, counts)).toEqual([]);
+    expect(pressesChip({ kind: 'image', id: 'i', image: 'p', alt: 'A', updatedAt: '' }, counts)).toEqual([]);
+    expect(
+      pressesChip({ kind: 'image', id: 'i', image: 'p', alt: 'A', url: 'https://ada.dev', updatedAt: '' }, counts),
+    ).toEqual(['No clicks yet']);
   });
 });

@@ -279,6 +279,9 @@ export const strings = {
   moreFor: (title: string) => `More for ${title}`,
   removeFor: (title: string) => `Delete ${title}`,
   editPage: 'Edit booking page',
+  /** A placed booking page block's own editor (spec 0061): its size and window, the page itself fixed. */
+  editPageBlock: 'Booking page block',
+  pageFixed: 'To show another page, add it as a new block.',
   edit: 'Edit',
   copyLink: 'Copy link',
   copied: 'Link copied.',

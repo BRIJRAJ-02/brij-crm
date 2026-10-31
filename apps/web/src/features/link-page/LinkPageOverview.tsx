@@ -2,13 +2,28 @@
 // Purpose: what the Link page opens on (the owner's design, 27 October 2026): the page as something to hand out,
 // not a builder. Its address to copy, its code to scan, and the page itself beside them.
 // Main task: share the page in a message or across a table; Edit page is the one way into the editor.
-// Leaves out: the blocks, the look and sharing settings, which Edit page opens; the figures (phase 3); and any way to
-// share while the page is Private: then one line and Turn on Live, the bar's switch in words (spec 0058, AC-23).
-import type { DataLayer } from '@crm/data';
-import { Button, ButtonLink, Card, EmptyState, Field, FieldGroup, QrCode, Separator, SpotIllustration } from '@crm/ui';
+// Leaves out: the blocks, the look and sharing settings, which Edit page opens; and any way to share while the page
+// is Private: then one line and Turn on Live, the bar's switch in words (spec 0058, AC-23). Insights (spec 0061)
+// sit under the card once the page holds something.
+import type { DataLayer, LinkPageStore, ProfileItem } from '@crm/data';
+import {
+  Button,
+  ButtonLink,
+  Card,
+  EmptyState,
+  Field,
+  FieldGroup,
+  QrCode,
+  Separator,
+  SpotIllustration,
+  type AccentQuickPick,
+} from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useRef, useState } from 'react';
 import { homeStrings } from './home-strings.ts';
+import { Insights } from './Insights.tsx';
+import { reachStrings } from './reach-strings.ts';
+import { drawnQrStyle, QrStyleModal, ShareLinksModal, useQrStyle } from './ShareTools.tsx';
 import { qrPng, saveFile } from './qr-png.ts';
 import { shareStrings } from './share-strings.ts';
 import { useWalletLink } from './private-page.tsx';
@@ -32,6 +47,14 @@ export interface LinkPageOverviewProps {
   readonly onAdd: () => void;
   /** Turns the page Live: the same switch as the bar's, offered here while it is Private. */
   readonly onGoLive: () => void;
+  /** The link page's store: Insights, the code's style and the pictures (spec 0061). */
+  readonly linkPage: LinkPageStore;
+  /** The live and archived blocks, to name each block's clicks in Insights. */
+  readonly items: readonly ProfileItem[];
+  /** The person's own picture, when it shows on their pages: a choice for the code's middle. */
+  readonly personImage?: string | undefined;
+  /** The code's quick colour picks: the brand kit's nine. */
+  readonly quickPicks: readonly AccentQuickPick[];
 }
 
 /** Share online and Share in person, then, while the page holds nothing, its first empty moment. */
@@ -45,8 +68,16 @@ export function LinkPageOverview({
   onEdit,
   onAdd,
   onGoLive,
+  linkPage,
+  items,
+  personImage,
+  quickPicks,
 }: LinkPageOverviewProps) {
   const { toasts } = useRouteContext({ from: '__root__' });
+  const [isMarking, setMarking] = useState(false);
+  const [isStyling, setStyling] = useState(false);
+  // The code in the owner's saved style (AC-6124), here and in what Download code saves.
+  const qrStyle = drawnQrStyle(useQrStyle(linkPage, slug), linkPage, slug, personImage);
   const codeRef = useRef<SVGSVGElement>(null);
   const [isSaving, setSaving] = useState(false);
   const wallet = useWalletLink(data, slug, isPublic);
@@ -80,9 +111,14 @@ export function LinkPageOverview({
             label={strings.shareOnline}
             hint={strings.pasteItAnywhere}
             action={
-              <ButtonLink variant="ghost" size="sm" href={address} isExternal icon="arrow-up-right">
-                {homeStrings.open}
-              </ButtonLink>
+              <>
+                <Button variant="ghost" size="sm" icon="link" onPress={() => setMarking(true)}>
+                  {reachStrings.shareLinksOpen}
+                </Button>
+                <ButtonLink variant="ghost" size="sm" href={address} isExternal icon="arrow-up-right">
+                  {homeStrings.open}
+                </ButtonLink>
+              </>
             }
           >
             <Field
@@ -96,12 +132,15 @@ export function LinkPageOverview({
           </FieldGroup>
           <Separator />
           <FieldGroup tone="heading" headingLevel={3} label={strings.shareInPerson} hint={strings.scanIt}>
-            <QrCode ref={codeRef} value={address} label={shareStrings.qrLabel} size="sm">
+            <QrCode ref={codeRef} value={address} label={shareStrings.qrLabel} size="sm" {...qrStyle}>
               <p>
                 <strong>{shown}</strong>
               </p>
               <Button icon="download" isPending={isSaving} onPress={download}>
                 {strings.downloadCode}
+              </Button>
+              <Button variant="ghost" icon="palette" onPress={() => setStyling(true)}>
+                {reachStrings.qrStyle}
               </Button>
               {wallet !== undefined && (
                 <ButtonLink href={wallet} isExternal icon="wallet">
@@ -134,6 +173,20 @@ export function LinkPageOverview({
             {strings.startText}
           </EmptyState>
         </Card>
+      )}
+      {!isEmpty && <Insights linkPage={linkPage} slug={slug} items={items} />}
+      <ShareLinksModal address={address} isOpen={isMarking} onClose={() => setMarking(false)} />
+      {isStyling && (
+        <QrStyleModal
+          linkPage={linkPage}
+          slug={slug}
+          handle={handle}
+          address={address}
+          {...(personImage === undefined ? {} : { personImage })}
+          quickPicks={quickPicks}
+          isOpen
+          onClose={() => setStyling(false)}
+        />
       )}
     </>
   );
