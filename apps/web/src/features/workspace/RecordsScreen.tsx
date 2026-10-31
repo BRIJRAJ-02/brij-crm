@@ -417,6 +417,10 @@ export function RecordsScreen({
   const [focusColumn, setFocusColumn] = useState<{ readonly id: string } | undefined>(undefined);
   // Only owners and admins change the schema (spec 0009, AC-136); the server refuses anyone else on its own.
   const canChangeSchema = useCan('schema.manage');
+  // Rows tick only for someone who can act on them: edit, delete, add to a list, or export. A guest viewing a shared
+  // object can do none of these, so the grid offers no ticks and no select all (spec 0031, slice 9).
+  const canExport = useCan('records.export');
+  const canActOnRows = object.access === 'write' || canExport;
   // The object's attributes against its plan limit (the field types pass): the "+" header's New attribute turns off
   // at the limit with the reason, as Settings' New attribute does. Read for schema managers only, again whenever the
   // attributes change; an unread count leaves it on (the server still refuses past it).
@@ -676,6 +680,7 @@ export function RecordsScreen({
               floatingBar={bulk.bar}
               selection={ticked.selection}
               onSelectionChange={ticked.setSelection}
+              isSelectable={canActOnRows}
               onEditingChange={(isOpen) => {
                 view.holdSettle(isOpen);
                 isEditing.current = isOpen;

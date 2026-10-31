@@ -3,6 +3,8 @@
 // levels and targets, a removed target, decision 7 (owners and admins) and decision 9 (hours set by others).
 import { describe, expect, it } from 'vitest';
 import { ROLE_PERMISSIONS } from '@crm/contracts';
+import type { WorkspaceTx } from '@crm/db';
+import type { EngineScope } from './mint.ts';
 import { keyAccess, roleAccess, SYSTEM_ACCESS, type Access, emailLinkAccess } from './policy.ts';
 import {
   canActFor,
@@ -14,6 +16,7 @@ import {
   reachSummary,
   roleReach,
   rolesWithTeamScope,
+  schedulingReach,
   TEAM_SCOPE,
   teamRoleReach,
   type DelegationReachRow,
@@ -211,7 +214,7 @@ describe('the reach from delegations', () => {
     expect(canActFor(allowed, OWEN, 'manage')).toBe(true);
     expect(canActFor(allowed, ADA, 'manage')).toBe(true);
     // A role the code doesn't know counts as an owner's (fail closed).
-    const unknown = combineReach(ME, undefined, [row({ member_id: BEA, member_role: 'guest' })]);
+    const unknown = combineReach(ME, undefined, [row({ member_id: BEA, member_role: 'contractor' })]);
     expect(canActFor(unknown, BEA, 'view')).toBe(false);
   });
 
@@ -280,5 +283,39 @@ describe('the helpers that compare member ids (AC-1221)', () => {
     expect(managesPageOf({ ownerMemberId: BEA }, member('member'))).toBe(false);
     expect(managesPageOf({ ownerMemberId: BEA }, member('admin'))).toBe(true);
     expect(managesPageOf({ ownerMemberId: BEA }, SYSTEM_ACCESS)).toBe(true);
+  });
+});
+
+describe('a guest in a team (spec 0031 slice 9, beside the team reach of AC-1253)', () => {
+  const TEAM = '0190f0f0-0000-7000-8000-0000000000aa';
+  const WORKSPACE = '0190f0f0-0000-7000-8000-0000000000bb';
+
+  it('reaches nobody but themselves through their team, before any delegation is read', async () => {
+    const guest = roleAccess({ kind: 'member', memberId: ME, role: 'guest', teamIds: [TEAM] });
+    expect(teamRoleReach(guest)).toBeUndefined();
+    // The guest's reach reads nothing: a query here would mean a delegation or a team could still widen it.
+    const tx = new Proxy(
+      {},
+      {
+        get: () => {
+          throw new Error('A guest’s reach reads no delegations.');
+        },
+      },
+    ) as unknown as WorkspaceTx;
+    const scope = { workspaceId: WORKSPACE, access: guest } as unknown as EngineScope;
+    const reached = await schedulingReach(tx, scope);
+    expect(reached.all).toBeUndefined();
+    expect(reached.members.size).toBe(0);
+    expect(canActFor(reached, ME, 'manage')).toBe(true);
+    expect(canActFor(reached, BEA, 'view')).toBe(false);
+  });
+
+  it('is never reached through a team, a team delegation or everyone: only what is shared with them', () => {
+    const combined = combineReach(ME, undefined, [
+      row({ target_type: TEAM_SCOPE, member_id: BEA, member_role: 'guest', grantor_role: null }),
+      row({ target_type: 'team', member_id: BEA, member_role: 'guest', grantor_role: null }),
+      row({ target_type: 'everyone', member_id: BEA, member_role: 'guest', grantor_role: null }),
+    ]);
+    expect(canActFor(combined, BEA, 'view')).toBe(false);
   });
 });

@@ -4,7 +4,7 @@
 // Main task: tick who can edit and who can see; pick which records (all, their own, their team's); add a team; fold
 // open Fields to hide or lock fields; Preview as to see the result as someone would. A change that takes access away
 // from people says how many, as chips, with Undo.
-// Leaves out: the Guest role (not built yet), and per list access.
+// Leaves out: per list access, and edit for guests (they view at most, spec 0031 AC-828).
 import {
   isDataError,
   type AccessImpact,
@@ -195,9 +195,11 @@ export function AccessTab({ data, toasts, slug, object, access: initial, teams, 
     { kind: 'fixed' },
     ...access.subjects.map((standing): Row => ({ kind: 'subject', subject: standing.subject, standing })),
   ];
-  // The line speaks of Members and teams; another role (Guest) gets its own sentence when it joins the list.
+  // The line speaks of Members and teams, and of Guests once a rule shares the object with them.
   const role = access.subjects.find((each) => roleOf(each.subject) === 'member');
+  const guest = access.subjects.find((each) => roleOf(each.subject) === 'guest');
   const summary = summarizeAccess({
+    ...(guest === undefined ? {} : { guest }),
     object: object.pluralName,
     role: role ?? { level: 'write', records: 'all', isDefault: true },
     teams: access.subjects.flatMap((each) =>
@@ -235,9 +237,17 @@ export function AccessTab({ data, toasts, slug, object, access: initial, teams, 
     const { standing } = row;
     const who = nameOf(standing.subject);
     const isTeam = standing.subject.type === 'team';
+    const isGuest = roleOf(standing.subject) === 'guest';
     switch (column) {
       case 'who':
-        return who;
+        return isGuest ? (
+          <>
+            {who}
+            <InfoTip label={who}>{strings.guestsTip}</InfoTip>
+          </>
+        ) : (
+          who
+        );
       case 'see':
         // A team in the grid sees by being in it; taking its access away is its X, the one way out.
         return (
@@ -257,14 +267,17 @@ export function AccessTab({ data, toasts, slug, object, access: initial, teams, 
             label={strings.editFor(who)}
             isLabelHidden
             isSelected={standing.level === 'write'}
+            // A guest views at most: the server refuses edit for them, so the box never offers it.
+            isDisabled={isGuest}
             onChange={(isSelected) => {
               change(standing, { level: isSelected ? 'write' : 'read' });
             }}
           />
         );
       case 'records':
-        // Nothing to scope by without a Member field; nothing to scope when they can't see the object at all.
-        if (owner === undefined) return strings.scopes.all;
+        // Nothing to scope by without a Member field; nothing to scope when they can't see the object at all. Guests
+        // own no records and sit in no team's scope that means anything to them: all the object's, or nothing.
+        if (owner === undefined || (isGuest && standing.level !== 'none')) return strings.scopes.all;
         return standing.level === 'none' ? null : (
           <Select
             label={strings.recordsFor(who)}

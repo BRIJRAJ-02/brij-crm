@@ -33,6 +33,8 @@ import type {
   BookingAssignment,
   ReassignedBooking,
   RotationAdjustment,
+  EditorResource,
+  EditorView,
   ReassignedUpcoming,
   RotationDistribution,
   RotationMemberInput,
@@ -96,6 +98,7 @@ import type {
   RelationshipView,
   Role,
   ScheduleMember,
+  GuestPreview,
   RemovalPreview,
   RolesList,
   SubmissionState,
@@ -433,6 +436,8 @@ export type {
   BookingAssignment,
   ReassignedBooking,
   RotationAdjustment,
+  EditorResource,
+  EditorView,
   ReassignedUpcoming,
   RotationDistribution,
   RotationMemberInput,
@@ -522,6 +527,7 @@ export type {
   AuditTarget,
   AuditValue,
   Role,
+  GuestPreview,
   RemovalPreview,
   RoleOption,
   RolesList,
@@ -1434,6 +1440,9 @@ export function createDataLayer({
     pageRules.clear();
     formLists.clear();
     reportLists.clear();
+    // Who edits what (spec 0037, AC-1331), and the rotations: the next person reads their own.
+    rotationLists.clear();
+    editorLists.clear();
     schedules.clear();
     preferences.clear();
     accessLoaded?.clear();
@@ -2607,6 +2616,17 @@ export function createDataLayer({
   // Settings › Rotations (spec 0029): one held list per workspace, patched by every rotation write below.
   const rotationLists = createCaptureList<RotationView>({
     read: (workspace) => call((options) => api.rotations.list({ workspace }, options)),
+  });
+  // Sharing (spec 0037, AC-1331): one held list per page or rotation, keyed `workspace|type|id`, patched by `set`.
+  const editorKey = (workspace: string, type: EditorResource, id: string) => `${workspace}|${type}|${id}`;
+  const editorLists = createCaptureList<EditorView>({
+    read: (key) => {
+      const [workspace = '', type = '', id = ''] = key.split('|');
+      const resourceType: EditorResource = type === 'booking_page' ? 'booking_page' : 'rotation';
+      return call((options) => api.editors.list({ workspace, resourceType, resourceId: id }, options)).then(
+        (answer) => answer.editors,
+      );
+    },
   });
   const formLists = createCaptureList<FormSummary>({
     read: (workspace) =>
@@ -4143,6 +4163,47 @@ export function createDataLayer({
           ...shownDrop(rotationLists.items(workspace), rotationId),
         }),
     },
+    /**
+     * Sharing on a booking page or a rotation (spec 0037, AC-1331): its editors as a held list (`view`), and `set`,
+     * which shows the new list at once and puts the old one back on a refusal (`EDITOR_LIMIT`, `CONFIG_INVALID` on
+     * `memberIds.<n>`, `FORBIDDEN`), which it rejects with. Only `booking.admin` sets them.
+     */
+    editors: {
+      /** A page's or rotation's editors; `useCaptureList` reads it. */
+      view: (workspace: string, resourceType: EditorResource, resourceId: string): CaptureListView<EditorView> =>
+        editorLists.view(editorKey(workspace, resourceType, resourceId)),
+      /** Replaces the editors with `editors`, in order shown; the server's answer put in place. */
+      set: (
+        workspace: string,
+        resourceType: EditorResource,
+        resourceId: string,
+        editors: readonly EditorView[],
+      ): Promise<readonly EditorView[]> => {
+        const key = editorKey(workspace, resourceType, resourceId);
+        const before = editorLists.items(key) ?? [];
+        return editorLists
+          .write(key, {
+            send: () =>
+              call((options) =>
+                api.editors.set(
+                  {
+                    workspace,
+                    resourceType,
+                    resourceId,
+                    memberIds: editors.map((each) => each.id),
+                    mutationId: mintId(),
+                  },
+                  options,
+                ),
+              ),
+            show: () => [...editors],
+            undo: (now) =>
+              now.length === editors.length && now.every((each, index) => each === editors[index]) ? before : now,
+            land: (_items, answer) => answer.editors,
+          })
+          .then((answer) => answer.editors);
+      },
+    },
     audit: {
       /**
        * Settings › History › Workspace changes (spec 0046): one paged read of the workspace's audit log, its first
@@ -4798,6 +4859,13 @@ export function createDataLayer({
         beforeRead(workspace).then(() =>
           call((options) => api.members.removalPreview({ workspace, memberId }, options)),
         ),
+      /**
+       * What making a member a guest will do (spec 0031, slice 9), for the confirm: pages that pause, rotations they
+       * leave, upcoming bookings that need a host, delegations that go. Read fresh each time. Refusals:
+       * `FORBIDDEN`, `NOT_FOUND`.
+       */
+      guestPreview: (workspace: string, memberId: string): Promise<GuestPreview> =>
+        beforeRead(workspace).then(() => call((options) => api.members.guestPreview({ workspace, memberId }, options))),
       /**
        * Removes a member (spec 0031, AC-811, AC-816), handing their records
        * and open tasks to `reassignTo` as a background job when one is given

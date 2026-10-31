@@ -36,6 +36,17 @@ afterAll(async () => {
 });
 
 const MEMBER = { type: 'role', role: 'member' } as const;
+const GUEST = { type: 'role', role: 'guest' } as const;
+/** The Guest role's row with no rule (spec 0031, AC-828): sees nothing. */
+const GUESTS_NONE = {
+  subject: GUEST,
+  level: 'none',
+  records: 'all',
+  defaultLevel: 'none',
+  isDefault: true,
+  fields: {},
+  people: 0,
+} as const;
 const team = (teamId: string) => ({ type: 'team', teamId }) as const;
 
 let made = 0;
@@ -122,6 +133,7 @@ describe('reading an object’s access (AC-851)', () => {
         fields: {},
         people: 2,
       },
+      GUESTS_NONE,
     ]);
   });
 
@@ -174,6 +186,7 @@ describe('the Member role restricts and a team grants (AC-843, AC-844)', () => {
         fields: {},
         people: 2,
       },
+      GUESTS_NONE,
       {
         subject: team(sales.id),
         level: 'write',
@@ -211,6 +224,7 @@ describe('the Member role restricts and a team grants (AC-843, AC-844)', () => {
         fields: {},
         people: 2,
       },
+      GUESTS_NONE,
     ]);
   });
 
@@ -218,7 +232,7 @@ describe('the Member role restricts and a team grants (AC-843, AC-844)', () => {
     const w = await world();
     const other = await world();
     const foreign = await createTeam(other.owner, { name: 'Sales' });
-    for (const role of ['owner', 'admin', 'guest']) {
+    for (const role of ['owner', 'admin', 'viewer']) {
       expect(
         await refusalOf(
           setObjectAccess(w.owner, {
@@ -238,7 +252,25 @@ describe('the Member role restricts and a team grants (AC-843, AC-844)', () => {
         }),
       ),
     ).toMatchObject({ code: 'NOT_FOUND' });
-    expect((await getObjectAccess(w.owner, { objectId: w.companies })).subjects).toHaveLength(1);
+    expect((await getObjectAccess(w.owner, { objectId: w.companies })).subjects).toHaveLength(2);
+  });
+
+  it('shares an object with guests to view, never to edit (spec 0031, AC-828)', async () => {
+    const w = await world();
+    const gus = await w.add('Gus', 'guest');
+    expect(objectLevel((await w.enter(gus)).access, w.companies)).toBe('none');
+    expect(
+      await refusalOf(
+        setObjectAccess(w.owner, { objectId: w.companies, subject: GUEST, rule: { level: 'write', records: 'all' } }),
+      ),
+    ).toEqual({ code: 'CONFIG_INVALID', message: 'Guests can view, never edit.' });
+    await setObjectAccess(w.owner, { objectId: w.companies, subject: GUEST, rule: { level: 'read', records: 'all' } });
+    const guest = await w.enter(gus);
+    expect(objectLevel(guest.access, w.companies)).toBe('read');
+    const access = await getObjectAccess(w.owner, { objectId: w.companies });
+    expect(access.subjects.find((each) => each.subject.type === 'role' && each.subject.role === 'guest')).toMatchObject(
+      { level: 'read', isDefault: false, people: 1 },
+    );
   });
 
   it('keeps one workspace’s rules out of another’s', async () => {

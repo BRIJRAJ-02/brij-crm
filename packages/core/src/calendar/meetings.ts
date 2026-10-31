@@ -124,10 +124,12 @@ export async function meetingViews(
     (await readRecords(tx, access, personIds, { attributeIds: [] })).map((view) => [view.id, view.display]),
   );
   const byMeeting = new Map<string, MeetingAttendeeView[]>();
+  // A guest reads no colleague's address (spec 0031, AC-829): a member attendee shows by name alone.
+  const isGuest = access.principal.kind === 'member' && access.principal.role === 'guest';
   for (const row of attendees) {
     const person = row.person_record_id === null ? undefined : people.get(row.person_record_id);
     const view: MeetingAttendeeView = {
-      email: row.email,
+      ...(isGuest && row.member_id !== null ? {} : { email: row.email }),
       ...(row.name === null ? {} : { name: row.name }),
       response: row.response,
       isOrganizer: row.is_organizer,

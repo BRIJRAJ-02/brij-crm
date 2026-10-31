@@ -1021,14 +1021,28 @@
       "idx": 145,
       "version": "7",
       "when": 1795501100000,
-      "tag": "0145_record_merged_into",
+      "tag": "0145_scheduling_editors",
       "breakpoints": true
     },
     {
       "idx": 146,
       "version": "7",
-      "when": 1795501101000,
-      "tag": "0146_duplicates",
+      "when": 1795501200000,
+      "tag": "0146_guest_role",
+      "breakpoints": true
+    },
+    {
+      "idx": 147,
+      "version": "7",
+      "when": 1795501201000,
+      "tag": "0147_record_merged_into",
+      "breakpoints": true
+    },
+    {
+      "idx": 148,
+      "version": "7",
+      "when": 1795501202000,
+      "tag": "0148_duplicates",
       "breakpoints": true
     }
   ]

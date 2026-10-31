@@ -65,6 +65,8 @@ const READS: ReadonlySet<string> = new Set([
   'invitations.link',
   // What a removal will do, for the remove dialog (slice 5, AC-816).
   'members.removalPreview',
+  // What making a member a guest will do, for the confirm dialog (slice 9, AC-1432).
+  'members.guestPreview',
   // Domain join (slice 6): the workspaces to ask, a workspace's domains, and its open requests.
   'join.list',
   'joinRequests.domains',
@@ -210,6 +212,8 @@ const READS: ReadonlySet<string> = new Set([
   // Round robin (spec 0029): the rotations a member may see, and why a booking went to its host.
   'rotations.list',
   'rotations.distribution',
+  // Page and rotation editors (spec 0037, AC-1331): Sharing's list.
+  'editors.list',
   'bookings.assignments',
   // The sidebar (spec 0034).
   'nav.get',
@@ -2470,6 +2474,19 @@ Object.assign(WRITES, {
     await m.client.rotations.delete({ workspace: m.slug, rotationId: rotation.id, mutationId });
     return [];
   },
+  // Sharing (spec 0037, AC-1331): the rotation's second member made its editor; settings, so no outbox row.
+  'editors.set': async (m: Member, mutationId: string) => {
+    const rotation = await rotationOn(m);
+    const other = rotation.members.find((member) => member.name === 'Kim Park');
+    await m.client.editors.set({
+      workspace: m.slug,
+      resourceType: 'rotation',
+      resourceId: rotation.id,
+      memberIds: [other?.memberId ?? ''],
+      mutationId,
+    });
+    return [];
+  },
 });
 
 /** A comment by the member on a new person of theirs, made in its own write: its record and thread. */
@@ -2754,6 +2771,7 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'rotations.undoAdjustment': 3,
   'rotations.update': 2,
   'rotations.delete': 2,
+  'editors.set': 2,
   'bookingPages.delete': 2,
   'bookingPages.reorderProfile': 2,
   'profile.saveTheme': 2,

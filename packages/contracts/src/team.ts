@@ -128,6 +128,9 @@ export const AUDIT_ACTIONS = [
   // Two records merged (spec 0049, AC-4915): the target is the kept record; `before` names the merged one, `after`
   // what moved (others' notes and comments included, accepted on purpose).
   'record.merged',
+  // Who may edit a booking page or a rotation changed (spec 0037, AC-1331): the target is the page or the rotation;
+  // `after` lists the members added and removed as editors.
+  'editors.changed',
 ] as const;
 /** One action the audit log records. */
 export const AuditAction = z.enum(AUDIT_ACTIONS);
@@ -207,7 +210,7 @@ export type InvitePeek = z.infer<typeof InvitePeek>;
 
 export { INVITE_LINK_DAYS, INVITE_LINK_USES_MAX, type InviteLinkDays } from './team-limits.ts';
 
-/** The roles an invite link may give (AC-818): never owner or admin (guest joins with slice 9). */
+/** The roles an invite link may give (AC-818): member or guest, never owner or admin. */
 export const InviteLinkRole = Role.exclude(['owner', 'admin']);
 /** A role an invite link may give. */
 export type InviteLinkRole = z.infer<typeof InviteLinkRole>;

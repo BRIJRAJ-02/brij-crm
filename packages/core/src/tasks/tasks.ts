@@ -112,6 +112,26 @@ function principalReaches(access: Access, need: 'read' | 'write'): boolean {
   return need === 'read' ? level === 'read' || level === 'write' : level === 'write';
 }
 
+/**
+ * Whether a task linking no records is open to the principal: to everyone but a guest (spec 0031, slice 9), who sees
+ * and changes only what is shared with them, so an unlinked task is theirs only as its assignee or creator.
+ */
+function seesUnlinked(access: Access): boolean {
+  return !(access.principal.kind === 'member' && access.principal.role === 'guest');
+}
+
+/**
+ * A guest's tasks are their own (spec 0031, slice 9): they may give one to nobody else, so a task never becomes a
+ * way to notify or email a member they can't otherwise reach. Refuses FORBIDDEN.
+ */
+function checkGuestAssignee(access: Access, assignee: string | null | undefined): void {
+  const { principal } = access;
+  if (principal.kind !== 'member' || principal.role !== 'guest') return;
+  if (assignee !== undefined && assignee !== null && assignee !== principal.memberId) {
+    throw refuse('FORBIDDEN', 'Guests can only keep tasks for themselves.');
+  }
+}
+
 /** The member the principal is, if a member: the assignee rule reads it. */
 function memberOf(access: Access): string | undefined {
   return access.principal.kind === 'member' ? access.principal.memberId : undefined;
@@ -182,7 +202,7 @@ const isCreator = (row: Pick<TaskRow, 'created_by_type' | 'created_by_id'>, acto
 
 /**
  * The task rule (spec 0009's Decision, AC-447): visible when it links no
- * records at all (and never did one removed for good since: late trap #79),
+ * records at all (and never did one removed for good since: late trap #79; never to a guest),
  * the reader is its assignee or creator, or one of its links is to a live
  * record the reader may see.
  */
@@ -192,7 +212,7 @@ export function taskVisible(
   seen: ReadonlyMap<string, RecordRefDisplay>,
 ): boolean {
   const me = memberOf(scope.access);
-  if (row.record_ids.length === 0 && !row.links_purged) return true;
+  if (row.record_ids.length === 0 && !row.links_purged && seesUnlinked(scope.access)) return true;
   if (me !== undefined && row.assignee_member_id === me) return true;
   if (isCreator(row, scope.actor)) return true;
   return row.record_ids.some((id) => seen.has(id));
@@ -209,7 +229,7 @@ export function taskChangeable(
   seen: ReadonlyMap<string, RecordRefDisplay>,
 ): boolean {
   const me = memberOf(scope.access);
-  if (row.record_ids.length === 0 && !row.links_purged) return true;
+  if (row.record_ids.length === 0 && !row.links_purged && seesUnlinked(scope.access)) return true;
   if (me !== undefined && row.assignee_member_id === me) return true;
   if (isCreator(row, scope.actor)) return true;
   return row.record_ids.some((id) => {
@@ -410,6 +430,7 @@ export async function createTask(
 ): Promise<TaskView> {
   checkScope(scope);
   if (!principalReaches(scope.access, 'write')) throw refuse('FORBIDDEN', NOT_FOR_KEYS);
+  checkGuestAssignee(scope.access, input.assigneeMemberId);
   if (!isUuidV7(input.id)) throw inputInvalid('id', 'The task id must be a UUID v7.');
   const id = canonicalId(input.id);
   const title = checkTitle(input.title);
@@ -483,6 +504,7 @@ export async function updateTask(
   checkScope(scope);
   if (!principalReaches(scope.access, 'read')) throw refuse('NOT_FOUND', UNKNOWN_TASK);
   if (!principalReaches(scope.access, 'write')) throw refuse('FORBIDDEN', NOT_FOR_KEYS);
+  checkGuestAssignee(scope.access, input.assigneeMemberId);
   const taskId = checkId(input.taskId, UNKNOWN_TASK);
   const title = input.title === undefined ? undefined : checkTitle(input.title);
   const description = input.description === undefined ? undefined : checkDescription(input.description);
@@ -768,7 +790,11 @@ function taskVisibleSql(scope: Pick<EngineScope, 'access' | 'actor'>): SQL {
     ...(me === undefined ? [] : [sql`t.assignee_member_id = ${me}::uuid`]),
     actor.id === null ? sql`false` : sql`(t.created_by_type = ${actor.type} and t.created_by_id = ${actor.id}::uuid)`,
     linkedLive,
-    sql`(not t.links_purged and (select count(*) from task_records l where l.workspace_id = t.workspace_id and l.task_id = t.id) = 0)`,
+    ...(seesUnlinked(scope.access)
+      ? [
+          sql`(not t.links_purged and (select count(*) from task_records l where l.workspace_id = t.workspace_id and l.task_id = t.id) = 0)`,
+        ]
+      : []),
   ];
   return sql`(${sql.join(parts, sql` or `)})`;
 }

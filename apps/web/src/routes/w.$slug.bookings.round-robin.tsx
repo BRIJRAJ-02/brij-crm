@@ -20,7 +20,9 @@ export const Route = createFileRoute('/w/$slug/bookings/round-robin')({
         context.data.members.list(params.slug),
         context.data.rotations.view(params.slug).ready(),
       ]);
-      return { page: { canManage: access.permissions.includes('booking.admin'), people } };
+      // A guest is never offered as a member of a group or as its editor: guests take no bookings (spec 0031, slice 9).
+      const hosts = people.filter((person) => person.role !== 'guest');
+      return { page: { canManage: access.permissions.includes('booking.admin'), people: hosts } };
     } catch (error) {
       // The frame above shows "workspace not found" for this one.
       if (isDataError(error) && error.code === 'NOT_FOUND') return { page: undefined };

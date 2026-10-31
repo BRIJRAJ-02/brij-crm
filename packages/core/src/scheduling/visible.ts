@@ -25,8 +25,8 @@ export async function listVisibleMembers(scope: EngineScope): Promise<VisibleMem
     // Without a reach over everyone, only the caller and the members reached one by one are named in the read.
     const named = reach.all === undefined ? [me, ...reach.members.keys()] : undefined;
     const within = named === undefined ? sql`true` : sql`id = any(${uuidList(named)})`;
-    const rows = await tx.execute<{ id: string; name: string }>(sql`
-      select id::text as id, name from members
+    const rows = await tx.execute<{ id: string; name: string; role: string }>(sql`
+      select id::text as id, name, role::text as role from members
       where workspace_id = ${scope.workspaceId}::uuid and status = 'active' and ${within}
       order by (id = ${me}::uuid) desc, lower(name), id
       limit ${VISIBLE_MAX}
@@ -38,15 +38,17 @@ export async function listVisibleMembers(scope: EngineScope): Promise<VisibleMem
 /**
  * The rows the caller may See, each with what they may do (pure, AC-1261): Manage over them, and their hours, which a
  * delegation the member granted themself never reaches while their hours are set by others (AC-1255). The caller's
- * own hours are theirs to change only with `booking.manage` and `availability.own` (AC-1260).
+ * own hours are theirs to change only with `booking.manage` and `availability.own` (AC-1260). A guest is never listed
+ * but as the caller (spec 0031, slice 9): guests take no bookings, so no host picker, For or Roster offers one.
  */
 export function visibleOf(
-  rows: readonly { readonly id: string; readonly name: string }[],
+  rows: readonly { readonly id: string; readonly name: string; readonly role?: string }[],
   reach: SchedulingReach,
   me: string,
   ownHours: boolean,
 ): VisibleMembers['members'] {
   return rows
+    .filter((row) => row.id === me || row.role !== 'guest')
     .filter((row) => canActFor(reach, row.id, 'view'))
     .map((row) => ({
       id: row.id,

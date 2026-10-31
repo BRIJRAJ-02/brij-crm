@@ -98,4 +98,13 @@ describe('where a workspace opens', () => {
     expect(landingTarget({ kind: 'tasks' }, [])).toEqual({ kind: 'tasks' });
     expect(landingTarget(undefined, [])).toEqual({ kind: 'home' });
   });
+
+  it('opens a guest on what is shared with them, or on nothing when nothing is (spec 0031, AC-828)', () => {
+    expect(landingTarget(undefined, OBJECTS, true)).toMatchObject({ kind: 'object' });
+    expect(landingTarget({ kind: 'object', objectId: 'b' }, OBJECTS, true)).toEqual({
+      kind: 'object',
+      apiSlug: 'companies',
+    });
+    expect(landingTarget({ kind: 'home' }, [], true)).toEqual({ kind: 'nothing' });
+  });
 });

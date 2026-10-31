@@ -236,6 +236,13 @@ const roleDefault = (role: string): ObjectLevel => {
     : 'none';
 };
 
+/**
+ * The most a role may ever do with an object, whatever its rules or its teams grant: a guest reads at most, never
+ * edits (spec 0031, AC-828), so a team rule giving a guest's team edit gives the guest view. Other roles are uncapped.
+ */
+const capped = (role: string, level: ObjectLevel): ObjectLevel =>
+  role === 'guest' && level === 'write' ? 'read' : level;
+
 /** What one subject's stored rules say about one object, before they are read as levels. */
 interface StoredView {
   level: string | undefined;
@@ -347,7 +354,10 @@ function memberPolicy(principal: MemberPrincipal, rules: AccessRules): DataPolic
     const reach = (view: SubjectView): number => (view.record === undefined ? 2 : SCOPE_RANK[view.record.kind]);
     const widest = Math.max(...seeing.map(reach));
     const deciding = seeing.filter((view) => reach(view) === widest);
-    const level = deciding.reduce<ObjectLevel>((best, view) => higherObject(best, view.level), 'none');
+    const level = capped(
+      principal.role,
+      deciding.reduce<ObjectLevel>((best, view) => higherObject(best, view.level), 'none'),
+    );
     // A level equal to the role's default restricts nothing: leaving it out keeps a member whose teams cancel a rule
     // on the open policy (and its audience).
     if (level !== defaultLevel) objects.set(objectId, level);

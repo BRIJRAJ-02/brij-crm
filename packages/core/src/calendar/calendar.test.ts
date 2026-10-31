@@ -516,6 +516,32 @@ describe('privacy (AC-611, AC-612) and reads (AC-608)', () => {
     expect(meetingEntries[0]?.meeting).toMatchObject({ title: 'Meeting m30', videoUrl: 'https://meet.google.com/m30' });
   });
 
+  it('shows a guest the colleagues on a meeting by name, never by address (spec 0031, AC-829)', async () => {
+    const w = await world();
+    const bea = await w.person('Bea', ['bea@globex.com']);
+    const connection = await w.connect(w.ownerId, 'ada@acme.dev');
+    w.fake.put('ada@acme.dev', meeting('intro', day(2), [self('ada@acme.dev'), guest('bea@globex.com')]));
+    await w.sync(connection.id);
+    const people = w.objects.people ?? '';
+    // People shared with Guests, to view.
+    const shared: AccessRules = {
+      levels: [
+        { subject: { type: 'role', role: 'guest' }, target: { type: 'object', objectId: people }, level: 'read' },
+      ],
+      records: [],
+    };
+    const asGuest = rescope(w.owner, { actor: { type: 'member', id: w.bea }, role: 'guest', rules: shared });
+    const [seen] = (await listMeetingsForRecord(asGuest, { recordId: bea })).items;
+    const ada = seen?.attendees.find((each) => each.memberId === w.ownerId);
+    expect(ada).toBeDefined();
+    expect(ada).not.toHaveProperty('email');
+    // The outside attendee keeps their address: it is the shared record's own.
+    expect(seen?.attendees.find((each) => each.memberId === undefined)).toMatchObject({ email: 'bea@globex.com' });
+    // A member reads both addresses.
+    const [member] = (await listMeetingsForRecord(w.as(w.bea), { recordId: bea })).items;
+    expect(member?.attendees.map((each) => each.email).sort()).toEqual(['ada@acme.dev', 'bea@globex.com']);
+  });
+
   it('answers NOT_FOUND for a record the reader can’t see', async () => {
     const w = await world();
     const bea = await w.person('Bea', ['bea@globex.com']);
