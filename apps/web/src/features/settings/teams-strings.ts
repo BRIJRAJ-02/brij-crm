@@ -1,5 +1,6 @@
 import type { ObjectAccessLevel, RecordScope, RuleRole } from '@crm/data';
 import { sharedStrings } from '@crm/ui';
+import { strings as accessStrings } from './scheduling-access-strings.ts';
 
 /** Settings › Workspace › Teams' copy (spec 0031, slice 8) and an object's Access tab (spec 0032). */
 export const strings = {
@@ -32,6 +33,16 @@ export const strings = {
   deleted: (name: string) => `${name} deleted.`,
   undo: 'Undo',
   restored: (name: string) => `${name} is back.`,
+  /** The confirm when scheduling access names the team (spec 0037, AC-1269). */
+  deleteTitle: (name: string) => `Delete ${name}?`,
+  deleteTeam: 'Delete team',
+  keepTeam: 'Keep team',
+  loseScheduling: (people: number, level: 'view' | 'manage' | 'both', team: string) =>
+    `${String(people)} ${people === 1 ? 'person loses' : 'people lose'} access to ${
+      level === 'manage' ? 'manage' : level === 'view' ? 'see' : 'see or manage'
+    } ${accessStrings.teamPossessive(team)} scheduling.`,
+  /** The same confirm when who loses access couldn't be read: the delete still takes it. */
+  loseSchedulingUnknown: (team: string) => `Scheduling access over ${team} goes with it.`,
   /** An object's Access tab. */
   accessTab: 'Access',
   accessLoading: 'Loading access',

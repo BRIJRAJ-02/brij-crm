@@ -43,13 +43,18 @@ New. Nothing in the library places things on a time axis. Board and DataGrid are
 - `kind: 'blocked'` and `kind: 'held'` are time the member closed (spec 0027): hatched on the subtle surface in secondary text, a solid edge for a block and a dashed one for a hold. They open a card like any block.
 - Closed time (busy, blocked and held) sits under bookings and events, full width, a later one over an earlier, so a long day of blocked time stays whole with what is on it drawn over it. Where a block would cover its title, starting with it or before it and running into it (a booking at the same time as Busy, a cancelled one included, or an event running past its start), it leaves that layer and takes a lane beside the block, laid out like an event (`liftClosed` in `placeBlocks.ts`), so Busy is never hidden under a card (the owner, 23 October 2026: Busy vanished under a cancelled booking).
 - `kind: 'busy'` is the member's own calendar time with nobody else invited (spec 0024, the owner's call on 20 October 2026): titled Busy by the screen, plain on the subtle surface in secondary text with a hairline edge, never hatched, so it reads apart from time the member closed. Like closed time it sits under bookings and events, full width, and opens a card.
-- `provider` draws that brand's small ProviderMark before the title: `timefix` on a booking, the calendar's brand (`google-calendar`, `outlook`, `apple-calendar`) on an event, so where a block came from reads at a glance. The mark is decoration; the title and the block's popover name it in words.
-- The now line shows in today's column only.
+- `provider` draws that brand's small ProviderMark before the title: `timefix` on a booking, the calendar's brand (`google-calendar`, `outlook`, `apple-calendar`) on an event, so where a block came from reads at a glance. The mark is decoration; the title and the block's popover name it in words, and a `timefix` block's name adds "Timefix booking".
+- The now line shows in today's column only (in the `team` view, where every column is the same day, across all of them).
 - The open block's card is a Popover anchored to the block: it sits beside it and flips when there's no room. Escape, or pressing outside, closes it and puts focus back on the block.
 - On a week narrower than `bp-container-md`, where one day takes the width, the card opens under its block rather than beside it, so it stays on screen.
 - `focusDay` (a new `{ dayKey, blockId? }` each time) puts focus on that block while it is still on the week, else on that day's column, once any closing overlay has gone and only when focus fell to the page. Why a prop: the week owns its columns and blocks, and nothing outside could focus one without reaching into its DOM; a screen needs it after a change made through a dialog outside the block's card (a block removed, a booking cancelled). A card closed with Escape after the screen opened it again goes back to its block the same way.
-- Below 480px of its container, the header stays as seven day buttons and the grid shows the selected day alone.
+- Below 480px of its container, the header stays as seven day buttons and the grid shows the selected day alone (in the `team` view, the selected person alone, with Previous and Next person in the corner).
 
+- `view="team"` (TeamDay, spec 0030) draws any number of columns, each a person rather than a day: each column at least `size-column` (200px, never squeezed to fit), scrolling sideways under its heads pinned to the top and the hour axis pinned to the start (`scroll-padding` keeps what is focused clear of both, and a sideways scroll snaps to a column's edge); blocks that overlap in a column always sit side by side, never cascading one over another (`placeBlocks`'s `nestAfter` of Infinity), since a person's column is too narrow for an indent to leave the one under it readable; the now line runs across every column; drawing, blocks, cards and keys work as on the week. Why a variant: a team's day is the same grid of hours turned to people (timefix's one per member), and a second calendar would have had to copy placement, drawing and keys.
+- A day's `head` (a node) is drawn in place of its weekday and date in the `team` view: TeamDay's person. Why a prop: only the screen knows the person; the column keeps its `label` as its name.
+- A day's `band` (`{ label, startMinute, endMinute }`) draws a stretch down the column under everything on it, a quiet wash of the yellow tag's surface so what sits on it still reads, its word once as a yellow chip pinned under the heads: TeamDay's time off. Decoration: the column's `label` says it.
+- A day's `canDraw: false` keeps that column from drawing (no crosshair, no span, no Enter, no draw hint), so the cue matches what it does: a colleague the reader may only See.
+- `focusDay.isAsked` moves focus even though another control holds it (an issue picked from a menu, whose trigger has focus once the menu closes), so the block scrolls into view.
 - `isFill` makes the grid take the height its parent gives, the hours scrolling inside, never fewer than six on screen, and draws it flush, with no card edge or corners, since it is then the page itself (the owner, 22 October 2026). Without it the hours show twelve at a time, in a card. Why a variant: Bookings › Calendar is the page itself and should reach the view's foot (the owner, 22 October 2026); a grid among other content keeps its twelve hours.
 
 ## States
@@ -59,12 +64,12 @@ Blocks (bookings, events, closed and busy time) of every length, a quarter hour 
 ## Keyboard
 
 - One day column is in the tab order.
-- Left and Right move to the previous or next day (and select it).
+- Left and Right move to the previous or next day (and select it); in the `team` view, the previous or next person.
 - Up and Down move between that day's blocks and "+N" chips by start: the order they read down the screen.
 - Enter or Space on a day (not on a block) draws a span there, when drawing is on.
 - Enter or Space opens the focused block, or the list of a focused "+N" chip (the arrows stay the week's, so Down never opens a list).
 - Escape closes its card.
-- The day header buttons select a day.
+- The day header buttons select a day (the `team` view's heads are labels; Previous and Next person select on a phone).
 
 ## Differences from the artifact
 

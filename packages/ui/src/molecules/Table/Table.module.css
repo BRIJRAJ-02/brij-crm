@@ -291,16 +291,20 @@
     inline-size: var(--table-lead);
   }
 
-  /* The column for now (today): its header in the link colour over an accent line. */
-  .column[data-current] {
-    border-block-end: var(--border-width-thick) solid var(--accent-line);
-    color: var(--link);
-  }
-
-  /* A quiet column (a weekend): the whole column a step off the page. */
+  /* A quiet column (a weekend): the whole column a step down into the page, sunken in both themes (surface-subtle
+     sat a hair under the page in dark and didn't show, 31 October 2026). */
   .column[data-tone='quiet'],
   .row:not([data-selected], [data-hovered]) > .cell[data-tone='quiet'] {
-    background: var(--surface-subtle);
+    background: var(--surface-sunken);
+  }
+
+  /* The column for now (today): its header on the accent's soft surface too, after the quiet tint so today wins where
+     it falls on a weekend (the owner, 31 October 2026: the line alone was lost in dark). Only the header: down the
+     whole column the same blue swallowed a week's own blue blocks (a change for one date). */
+  .column[data-current] {
+    border-block-end: var(--border-width-thick) solid var(--accent-line);
+    background: var(--accent-soft);
+    color: var(--link);
   }
 
   /* A row of sums: a control's edge above it, and it never takes a hover. */

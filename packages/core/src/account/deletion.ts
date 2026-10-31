@@ -290,7 +290,7 @@ export async function deleteMyAccount(
     const forget: AfterWrite = async (_change, tx) => {
       await tx
         .update(members)
-        .set({ name: DELETED_USER_NAME, email: deletedEmail(memberId), userId: null })
+        .set({ name: DELETED_USER_NAME, email: deletedEmail(memberId), userId: null, jobTitle: null })
         .where(and(eq(members.workspaceId, scope.workspaceId), eq(members.id, memberId)));
       await writeAudit(tx, scope.workspaceId, scope.actor, {
         action: 'account.deleted',

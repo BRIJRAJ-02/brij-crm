@@ -230,7 +230,7 @@ export const ShortBlocks: Story = {
     await expect(start).toHaveTextContent('4:00 PM');
     await expect(wordsInside(ghost, start).centred).toBe(true);
     // Half an hour shows its start alone, so the title keeps its room, but still reads the whole time.
-    const half = within(canvasElement).getByRole('button', { name: 'Ada Lovelace, 10:00 – 10:30 AM' });
+    const half = within(canvasElement).getByRole('button', { name: 'Ada Lovelace, 10:00 – 10:30 AM, Timefix booking' });
     await expect(half.querySelector('[class*="block-time"]')).toHaveTextContent(/^10:00 AM$/);
     // A longer block shows the whole time, and says who it is with in its name.
     const long = within(canvasElement).getByRole('button', { name: 'Alan Turing, 11:00 – 11:45 AM, Intro' });

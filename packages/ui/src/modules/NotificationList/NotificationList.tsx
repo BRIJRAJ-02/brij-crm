@@ -31,7 +31,14 @@ import { strings } from './strings.ts';
 
 /** Why a member was notified. */
 export type NotificationItemKind =
-  'mention' | 'reply' | 'task_assigned' | 'task_due' | 'form_submission' | 'join_request' | 'automation';
+  | 'mention'
+  | 'reply'
+  | 'task_assigned'
+  | 'task_due'
+  | 'form_submission'
+  | 'join_request'
+  | 'automation'
+  | 'scheduling_changed';
 
 /** One notification, as the inbox shows it. */
 export interface NotificationItem {

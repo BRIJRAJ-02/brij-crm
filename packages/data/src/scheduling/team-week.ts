@@ -60,6 +60,7 @@ export interface TeamWeekApi {
     readonly workspace: string;
     readonly weekStart: string;
     readonly search?: string;
+    readonly teamId?: string;
     readonly cursor?: string;
   }) => Promise<TeamWeek>;
   readonly setDay: (input: {
@@ -118,14 +119,14 @@ export function weekWith(
   return { ...week, rows, footer: footerOf(weekDates(week.weekStart), rows) };
 }
 
-/** The roster's weeks held per workspace, week and search. */
+/** The roster's weeks held per workspace, week, search and team (AC-1289). */
 export function createTeamWeekStore(deps: TeamWeekDeps) {
   const now = deps.now ?? Date.now;
   const weeks = new Map<string, ReturnType<typeof make>>();
-  const keyOf = (workspace: string, weekStart: string, search: string) =>
-    `${workspace}\u0000${weekStart}\u0000${search}`;
+  const keyOf = (workspace: string, weekStart: string, search: string, teamId: string) =>
+    `${workspace}\u0000${weekStart}\u0000${search}\u0000${teamId}`;
 
-  function make(workspace: string, weekStart: string, search: string) {
+  function make(workspace: string, weekStart: string, search: string, teamId: string) {
     let state: TeamWeekState = { status: 'loading' };
     let reading: Promise<void> | undefined;
     let readAt: number | undefined;
@@ -145,6 +146,7 @@ export function createTeamWeekStore(deps: TeamWeekDeps) {
         workspace,
         weekStart,
         ...(search === '' ? {} : { search }),
+        ...(teamId === '' ? {} : { teamId }),
         ...(cursor === undefined ? {} : { cursor }),
       });
     const read = (): Promise<void> => {
@@ -244,11 +246,11 @@ export function createTeamWeekStore(deps: TeamWeekDeps) {
     };
   }
 
-  const of = (workspace: string, weekStart: string, search: string) => {
-    const key = keyOf(workspace, weekStart, search);
+  const of = (workspace: string, weekStart: string, search: string, teamId: string) => {
+    const key = keyOf(workspace, weekStart, search, teamId);
     const found = weeks.get(key);
     if (found !== undefined) return found;
-    const made = make(workspace, weekStart, search);
+    const made = make(workspace, weekStart, search, teamId);
     weeks.set(key, made);
     return made;
   };
@@ -275,9 +277,9 @@ export function createTeamWeekStore(deps: TeamWeekDeps) {
       const part = (type: string) => parts.find((each) => each.type === type)?.value ?? '';
       return mondayOf(`${part('year')}-${part('month')}-${part('day')}`);
     },
-    /** One week of the roster (its Monday), searched by name ('' for everyone). */
-    held: (workspace: string, weekStart: string, search = ''): TeamWeekHeld =>
-      of(workspace, weekStart, search.trim()).held,
+    /** One week of the roster (its Monday), searched by name ('' for everyone), narrowed to one team ('' for none). */
+    held: (workspace: string, weekStart: string, search = '', teamId = ''): TeamWeekHeld =>
+      of(workspace, weekStart, search.trim(), teamId).held,
     /**
      * One cell's change (AC-1291): at once in every held week showing that member and date, then the answer's day and
      * version; put back with a toast if refused. Answers whether it landed.
@@ -395,6 +397,15 @@ export function createTeamWeekStore(deps: TeamWeekDeps) {
     /** Someone's schedules or time off changed (a `schedules` event, a resync): the held weeks read again. */
     changed(workspace: string): void {
       for (const week of inWorkspace(workspace)) week.stale();
+    },
+    /**
+     * Who is in which team changed (a live `members` event): the weeks narrowed to a team read again, since a joiner or
+     * a leaver changes their rows though nobody's schedule changed (AC-1289).
+     */
+    teamsChanged(workspace: string): void {
+      for (const [key, week] of weeks) {
+        if (key.startsWith(`${workspace}\u0000`) && !key.endsWith('\u0000')) week.stale();
+      }
     },
     /** Signed out: forgets every workspace's. */
     clear(): void {

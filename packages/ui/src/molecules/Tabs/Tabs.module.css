@@ -27,6 +27,8 @@
     z-index: var(--z-sticky);
     flex: none;
     min-block-size: var(--size-bar);
+    /* The tools' own space-16 sets them apart from the tabs, so the row needs no gap of its own. */
+    column-gap: 0;
     background: var(--surface);
   }
 
@@ -102,9 +104,12 @@
     transition: color var(--duration-hover) var(--ease-hover);
   }
 
-  /* In the bar, a tab and the tools beside it fill its height, the underline on its hairline. */
+  /* In the bar, a tab and the tools beside it fill its height, the underline on its hairline. Tabs sit a little
+     closer than elsewhere (space-6 each side, space-2 apart), so six of them and a tab's tools share one row on a
+     1280 screen (Bookings, 31 October 2026: the Roster made six, and List's tools wrapped under them). */
   .bar[data-variant='bar'] .tab {
     block-size: calc(var(--size-bar) - var(--border-width-hairline));
+    padding-inline: var(--space-6);
   }
 
   /* No inset (a settings page): the first tab's label lines up with the table's first column, the tools end
@@ -156,8 +161,9 @@
      rather than cutting the last tab (Tasks, Bookings; the owner, 21 October 2026). */
   .bar[data-variant='bar'] .list {
     flex: 1 0 auto;
+    gap: var(--space-2);
     max-inline-size: 100%;
-    padding-inline: calc(var(--space-16) - var(--space-8));
+    padding-inline: calc(var(--space-16) - var(--space-6)) 0;
   }
 
   .tab[data-selected] {

@@ -51,8 +51,9 @@ export interface HoursEditorProps {
    */
   readonly isLoading?: boolean;
   /**
-   * One date's hours, not a week (the Team week's cell, spec 0037): no Copy times to and no Set all days, since
-   * there is no other day to copy to or set. Give it the one row.
+   * One date's hours, not a week (the Team week's cell, spec 0037): Working on its own line, then the windows at full
+   * width, with no Copy times to and no Set all days, since there is no other day to copy to or set. Sized by its
+   * content, not as a container, so it opens whole in a popover. Give it the one row.
    */
   readonly isSingleDay?: boolean;
 }
@@ -356,6 +357,23 @@ export function HoursEditor({
       {strings.to}
     </span>
   );
+  if (isSingleDay) {
+    const row = rows[0];
+    return row === undefined ? null : (
+      <SingleDay
+        row={row}
+        label={label}
+        isDisabled={isDisabled}
+        onChange={onChange}
+        time={time}
+        to={to}
+        starts={starts}
+        ends={ends}
+        locale={locale}
+        hourClock={hourClock}
+      />
+    );
+  }
   return (
     <div className={styles.root}>
       <ul className={styles.rows} aria-label={label}>
@@ -446,7 +464,7 @@ export function HoursEditor({
                   </p>
                 )}
               </div>
-              {isOn && !isSingleDay && (
+              {isOn && (
                 <div className={styles.copy}>
                   <CopyTo
                     from={row}
@@ -462,19 +480,123 @@ export function HoursEditor({
           );
         })}
       </ul>
-      {!isSingleDay && (
-        <div className={styles.setAll}>
-          <SetAll
-            start={allStart ?? '09:00'}
-            end={allEnd ?? '17:00'}
-            isDisabled={isDisabled || on.length === 0}
-            time={time}
-            starts={starts}
-            ends={ends}
-            to={to}
-            onApply={setAll}
-          />
-        </div>
+      <div className={styles.setAll}>
+        <SetAll
+          start={allStart ?? '09:00'}
+          end={allEnd ?? '17:00'}
+          isDisabled={isDisabled || on.length === 0}
+          time={time}
+          starts={starts}
+          ends={ends}
+          to={to}
+          onApply={setAll}
+        />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * One date's hours (`isSingleDay`, the Team week's cell): Working on one line, then each window on its own line, its
+ * start, "to" and end at full width with + (the first) or − (the others) after them. An end is offered only after its
+ * start, and a start moved past its end takes the end an hour on, so a window never turns inside out.
+ */
+function SingleDay({
+  row,
+  label,
+  isDisabled,
+  onChange,
+  time,
+  to,
+  starts,
+  ends,
+  locale,
+  hourClock,
+}: {
+  readonly row: HoursRow;
+  readonly label: string;
+  readonly isDisabled: boolean;
+  readonly onChange: (rowId: string, ranges: readonly HoursRange[]) => void;
+  readonly time: (
+    name: string,
+    items: readonly SelectItem[],
+    value: string | null,
+    onPick: (id: string) => void,
+  ) => ReactNode;
+  readonly to: ReactNode;
+  readonly starts: readonly SelectItem[];
+  readonly ends: readonly SelectItem[];
+  readonly locale: string;
+  readonly hourClock: HoursClock;
+}) {
+  const isOn = row.ranges.length > 0;
+  const replace = (index: number, range: HoursRange) =>
+    onChange(
+      row.id,
+      row.ranges.map((each, at) => (at === index ? range : each)),
+    );
+  return (
+    <div className={styles.single}>
+      <Switch
+        label={strings.working}
+        isSelected={isOn}
+        isDisabled={isDisabled}
+        onChange={(selected) => onChange(row.id, selected ? [nextRange([])] : [])}
+      />
+      {isOn && (
+        <ul className={styles.singleRanges} aria-label={label}>
+          {row.ranges.map((range, index) => (
+            <li key={`${String(index)}-${range[0]}`} className={styles.range}>
+              {time(strings.from(row.label, index + 1), starts, range[0], (id) =>
+                replace(index, [id, minutesOf(range[1]) > minutesOf(id) ? range[1] : nextEnd(id)]),
+              )}
+              {to}
+              {time(
+                strings.until(row.label, index + 1),
+                ends.filter((item) => minutesOf(item.id) > minutesOf(range[0])),
+                range[1],
+                (id) => replace(index, [range[0], id]),
+              )}
+              {index === 0 ? (
+                hasRoomAfter(row.ranges) && (
+                  <Tooltip content={strings.addHint}>
+                    <Button
+                      variant="ghost"
+                      icon="plus"
+                      label={strings.addRange(row.label)}
+                      isDisabled={isDisabled}
+                      onPress={() => onChange(row.id, [...row.ranges, nextRange(row.ranges)])}
+                    />
+                  </Tooltip>
+                )
+              ) : (
+                <Tooltip content={strings.removeHint}>
+                  <Button
+                    variant="ghost"
+                    icon="minus"
+                    label={strings.removeRange(
+                      row.label,
+                      timeLabel(range[0], locale, hourClock),
+                      timeLabel(range[1], locale, hourClock),
+                    )}
+                    isDisabled={isDisabled}
+                    onPress={() =>
+                      onChange(
+                        row.id,
+                        row.ranges.filter((_, at) => at !== index),
+                      )
+                    }
+                  />
+                </Tooltip>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {row.error !== undefined && (
+        <p className={styles.error} role="alert">
+          {row.error}
+        </p>
       )}
     </div>
   );
