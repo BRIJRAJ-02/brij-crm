@@ -168,6 +168,7 @@ export async function rotationDistribution(
     if (!everyone && !pool.some((member) => member.memberId === me)) throw refuse('NOT_FOUND', MISSING);
     // A member's own row, and the rows of those they may See (AC-1330): one reach read, only for them.
     const reach = everyone ? undefined : await schedulingReach(tx, scope);
+    const seesOthers = everyone || (reach !== undefined && (reach.all !== undefined || reach.members.size > 0));
     const shows = (memberId: string) =>
       everyone || memberId === me || (reach !== undefined && canActFor(reach, memberId, 'view'));
     const since = windowStart(now, rotation.windowDays);
@@ -265,7 +266,8 @@ export async function rotationDistribution(
       windowDays: rotation.windowDays,
       weekStarts,
       rows,
-      adjustments: (await adjustmentsOf(tx, rotation.id, everyone ? undefined : me)).filter((each) =>
+      // Everyone's for a reader who sees others' rows, then only the rows they see (AC-1330); else their own.
+      adjustments: (await adjustmentsOf(tx, rotation.id, seesOthers ? undefined : me)).filter((each) =>
         shows(each.memberId),
       ),
       canAdjust: everyone,

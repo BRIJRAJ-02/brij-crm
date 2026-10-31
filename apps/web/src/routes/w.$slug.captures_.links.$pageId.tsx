@@ -27,7 +27,7 @@ export const Route = createFileRoute('/w/$slug/captures_/links/$pageId')({
   shouldReload: ({ cause }) => cause !== 'stay',
   loader: async ({ context, params }) => {
     try {
-      const [page, mine, targets, objects] = await Promise.all([
+      const [page, mine, targets, objects, everyone] = await Promise.all([
         context.data.bookingPages.get(params.slug, params.pageId),
         context.data.access.mine(params.slug),
         // Where its questions' answers may be filed (spec 0057): the page's object and its attributes, beside the page rather
@@ -35,6 +35,9 @@ export const Route = createFileRoute('/w/$slug/captures_/links/$pageId')({
         context.data.bookingPages.attributes(params.slug, params.pageId).catch(() => undefined),
         // The objects the Questions tab's "Where the answers go" picker offers; a failed read leaves it out.
         context.data.objects.list(params.slug).catch(() => []),
+        // The workspace's members, for Sharing's picker (an admin's); cached for the app load, so this costs nothing
+        // when Bookings or Settings read them already. A failed read leaves the picker empty.
+        context.data.members.list(params.slug).catch(() => undefined),
         // The reader's calendars, primed so the editor's calendar note is in its first paint; a failed read just
         // leaves the note out.
         context.data.calendar
@@ -62,9 +65,10 @@ export const Route = createFileRoute('/w/$slug/captures_/links/$pageId')({
         page.kind === 'round_robin'
           ? (await Promise.all([context.data.members.list(params.slug), context.data.rotations.held(params.slug)]))[0]
           : undefined;
-      // Sharing's picker (spec 0037, AC-1331): the workspace's members, for an admin; a failed read leaves none.
+      // Sharing's picker (spec 0037, AC-1331), for an admin: the members who aren't admins, but the page's owner, who
+      // edits it already. Read beside the page above; a failed read leaves none.
       const sharingPeople = mine.permissions.includes('booking.admin')
-        ? (people ?? (await context.data.members.list(params.slug).catch(() => undefined)))
+        ? everyone?.filter((member) => member.role === 'member' && member.id !== page.ownerMemberId)
         : undefined;
       // Its Routing card (spec 0043): the person's and company's fields rules may read; a failed read leaves none.
       const fields =
