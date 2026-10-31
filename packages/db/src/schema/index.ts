@@ -59,3 +59,4 @@ export { accessRules, recordRules, teamMembers, teams } from './teams.ts';
 export { routingDecisions } from './routing.ts';
 export { automationRuns, automations } from './automations.ts';
 export { importRowOutcome, importRows, imports, importStatus } from './imports.ts';
+export { publicDomains } from './domains.ts';

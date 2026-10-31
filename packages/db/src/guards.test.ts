@@ -110,7 +110,10 @@ describe('every tenant table', () => {
             row.index === 'workspace_domains_domain_lookup' ||
             // Deleting an account closes and blanks the person's join requests (spec 0033), found only through
             // crm_domain_lookup's crm_join_requests_of.
-            row.index === 'join_requests_by_user'
+            row.index === 'join_requests_by_user' ||
+            // A proved custom domain belongs to one link page everywhere (spec 0064, AC-6408), read only through
+            // crm_host_lookup's crm_live_domain_handle and crm_domain_host_bound.
+            row.index === 'public_domains_host_bound'
           ),
       )
       .map((row) => row.index);
@@ -172,10 +175,14 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_count_item_press', owner: 'crm_handle' },
       { name: 'crm_count_profile_view', owner: 'crm_handle' },
       { name: 'crm_delete_profile_item', owner: 'crm_handle' },
+      // Whether a custom domain is proved by another row (spec 0064, migration 0145).
+      { name: 'crm_domain_host_bound', owner: 'crm_host_lookup' },
       // The workspace's automation task (parity #53, migration 0140).
       { name: 'crm_enqueue_automation', owner: 'crm_queue' },
       { name: 'crm_enqueue_booking_mail', owner: 'crm_queue' },
       { name: 'crm_enqueue_calendar_sync', owner: 'crm_queue' },
+      // A custom domain's next check (spec 0064, migration 0145).
+      { name: 'crm_enqueue_domain_check', owner: 'crm_queue' },
       { name: 'crm_enqueue_email', owner: 'crm_queue' },
       { name: 'crm_enqueue_job', owner: 'crm_queue' },
       { name: 'crm_enqueue_notification_email', owner: 'crm_queue' },
@@ -193,6 +200,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_invitation_by_token', owner: 'crm_invitation_lookup' },
       { name: 'crm_invitation_open_for', owner: 'crm_invitation_lookup' },
       { name: 'crm_join_requests_of', owner: 'crm_domain_lookup' },
+      // The handle a live custom domain serves (spec 0064, migration 0145).
+      { name: 'crm_live_domain_handle', owner: 'crm_host_lookup' },
       { name: 'crm_notification_digests_due', owner: 'crm_sweep' },
       { name: 'crm_operator_daily', owner: 'crm_operator' },
       { name: 'crm_operator_members', owner: 'crm_operator' },
@@ -264,9 +273,11 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_count_profile_view', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       // A plpgsql body: it answers whether the block was the owner's, and closes the gap it left.
       { name: 'crm_delete_profile_item', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
+      { name: 'crm_domain_host_bound', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_enqueue_automation', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_enqueue_booking_mail', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_enqueue_calendar_sync', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
+      { name: 'crm_enqueue_domain_check', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_enqueue_email', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_enqueue_job', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_enqueue_notification_email', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
@@ -282,6 +293,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_invitation_by_token', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_invitation_open_for', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_join_requests_of', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      { name: 'crm_live_domain_handle', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_notification_digests_due', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_operator_daily', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_operator_members', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
@@ -336,7 +348,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
     ]);
   });
 
-  it('lets no role but crm_booking_lookup, crm_calendar_lookup, crm_domain_lookup, crm_form_lookup, crm_invitation_lookup, crm_operator, crm_purge, crm_relay, crm_search, crm_sweep and the owner bypass it, outside the superusers', async () => {
+  it('lets no role but crm_booking_lookup, crm_calendar_lookup, crm_domain_lookup, crm_form_lookup, crm_host_lookup, crm_invitation_lookup, crm_operator, crm_purge, crm_relay, crm_search, crm_sweep and the owner bypass it, outside the superusers', async () => {
     const bypass = await owner.query<{ role: string }>(`
       select rolname as role from pg_roles
       where rolbypassrls and not rolsuper
@@ -348,6 +360,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       'crm_calendar_lookup',
       'crm_domain_lookup',
       'crm_form_lookup',
+      'crm_host_lookup',
       'crm_invitation_lookup',
       'crm_operator',
       'crm_purge',
@@ -385,6 +398,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_enqueue_notification_email',
         'crm_enqueue_scheduling_notice',
         'crm_enqueue_automation',
+        'crm_enqueue_domain_check',
       ],
       [
         'crm_enqueue_job(uuid, timestamp with time zone)',
@@ -394,8 +408,9 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_enqueue_notification_email(uuid)',
         'crm_enqueue_scheduling_notice(uuid, uuid)',
         'crm_enqueue_automation()',
+        'crm_enqueue_domain_check(uuid, integer)',
       ],
-      ['app', 'app', 'app', 'app', 'app', 'app', 'app'],
+      ['app', 'app', 'app', 'app', 'app', 'app', 'app', 'app'],
     ],
     [
       'crm_sweep',
@@ -461,6 +476,12 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
     ],
     ['crm_address', ['crm_claim_workspace_address'], ['crm_claim_workspace_address(text)'], ['app']],
     ['crm_calendar_lookup', ['crm_calendar_account_shared'], ['crm_calendar_account_shared(uuid)'], ['app']],
+    [
+      'crm_host_lookup',
+      ['crm_live_domain_handle', 'crm_domain_host_bound'],
+      ['crm_live_domain_handle(text)', 'crm_domain_host_bound(text, uuid)'],
+      ['app', 'app'],
+    ],
     [
       'crm_operator',
       [
@@ -2117,8 +2138,14 @@ describe('the auth schema: global identity, outside row level security (spec 000
     `);
     // But the purge (spec 0031, AC-823), which removes a purged workspace's directory rows through its functions,
     // the address claim (migration 0083), which moves a workspace's address through its one function, and the
-    // handles (migration 0086), which claim a person's handle and read it back through theirs.
-    expect(schema.rows.map((row) => row.grantee).sort()).toEqual(['crm_address', 'crm_handle', 'crm_purge']);
+    // handles (migration 0086), which claim a person's handle and read it back through theirs, and the custom domain
+    // lookup (spec 0064, migration 0145), which reads four columns of a link page to answer its handle.
+    expect(schema.rows.map((row) => row.grantee).sort()).toEqual([
+      'crm_address',
+      'crm_handle',
+      'crm_host_lookup',
+      'crm_purge',
+    ]);
     const tables = await owner.query<{ grant: string }>(`
       select table_name || ' ' || privilege_type as grant from information_schema.role_table_grants
       where table_schema = 'auth'

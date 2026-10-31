@@ -50,6 +50,8 @@ export default server({
     'src/calendar/google.ts',
     'src/calendar/microsoft.ts',
     'src/forms/recaptcha.ts',
+    // Vercel's Domains API (spec 0064, AC-6409), at its constant address: the one module that talks to Vercel.
+    'src/vendors/vercel-domains.ts',
     // A test stands in for the network rather than reaching it.
     '**/*.test.ts',
     'test/**',

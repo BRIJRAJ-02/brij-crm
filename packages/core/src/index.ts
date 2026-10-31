@@ -783,3 +783,41 @@ export { toEntryView, type AuditNames, type AuditRow } from './audit/view.ts';
  */
 export { isImportableHost, readImportedPage, LINK_IMPORT_HOSTS, LINK_IMPORT_MAX } from './booking/link-import.ts';
 export type { ImportedPage, ImportedRow, ImportSkip, SkippedRow } from './booking/link-import.ts';
+// Custom domains for a link page (spec 0064, slice 1): the host rules, where a check leaves a domain, and the
+// owner's own row (the check job saves any row of a workspace through the system's scope).
+export {
+  apexOf,
+  HOST_REFUSALS,
+  normaliseHost,
+  OWN_APEXES,
+  ownershipName,
+  ownershipValue,
+  wwwOf,
+  type HostCheck,
+  type HostRefusal,
+  type NormalHost,
+} from './domains/hosts.ts';
+export {
+  CHECK_EVERY_SECONDS,
+  CHECK_NOW_EVERY_SECONDS,
+  decideCheck,
+  DOMAIN_PROBLEMS,
+  LIVE_CHECK_EVERY_SECONDS,
+  recordsFor,
+  VERCEL_DEFAULT_CNAME,
+  WAIT_FOR_TXT_MS,
+  type CheckDecision,
+  type CheckObservation,
+  type VercelHostView,
+} from './domains/status.ts';
+export {
+  addMyDomain,
+  getMyDomain,
+  markDomainDetached,
+  readDomainForCheck,
+  removeMyDomain,
+  restartDomain,
+  saveDomainCheck,
+  viewOf as domainViewOf,
+  type DomainRow,
+} from './domains/store.ts';

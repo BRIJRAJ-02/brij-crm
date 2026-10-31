@@ -9,6 +9,7 @@
 // this app builds one. A `member` handler sees `context.scope` and neither
 // `context.db` nor `context.identity`, so the door is its only way to the data. The contract walking
 // test fails if a procedure outside the bootstrap list isn't built on `member`.
+import type { DomainCheckDeps } from './modules/domains/check.ts';
 import { type AppEnvironment, contract, WorkspaceScoped } from '@crm/contracts';
 import {
   enterWorkspace,
@@ -120,6 +121,11 @@ export interface RequestContext extends ResponseHeadersPluginContext {
   publicOrigins: readonly string[];
   /** Where handle pages are served (`BOOKING_PUBLIC_ORIGIN`, else the app's): a link page's address in an email. */
   bookingOrigin: string;
+  /**
+   * Custom domains for a link page (spec 0064): Vercel's wrapper and the TXT lookup a check uses, absent where this
+   * deployment has no Vercel domain settings (AC-6409), and the card is then hidden.
+   */
+  domainChecks: DomainCheckDeps | undefined;
   /**
    * The cross instance limiter (`auth.rate_limit`, through the identity
    * store), and only that piece of identity, so a member handler can limit

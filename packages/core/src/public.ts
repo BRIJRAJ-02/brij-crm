@@ -90,3 +90,5 @@ export { addGuests, cancelBooking, guestTarget, moveBooking, readMoveSlots, remo
 // An email's preferences link (the emails lane): its token read, the member's narrow scope, and their choices.
 export { enterEmailLink } from './access/door.ts';
 export { readEmailLinkToken, readEmailPreferences, setEmailPreference } from './emails/preferences.ts';
+// A custom domain's host to its handle (spec 0064, AC-6404, AC-6406), the one public read of `public_domains`.
+export { liveDomainHandle } from './domains/public.ts';

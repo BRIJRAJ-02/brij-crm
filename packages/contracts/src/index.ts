@@ -46,6 +46,7 @@ import { viewsContract } from './views.ts';
 import { workspacesContract } from './workspaces.ts';
 import { deletedWorkspaceContract, workspaceContract } from './workspace-settings.ts';
 import { profileContract } from './profile.ts';
+import { domainsContract } from './domains.ts';
 import { schedulingContract } from './scheduling.ts';
 
 export * from './access.ts';
@@ -110,6 +111,7 @@ export * from './values/index.ts';
 export * from './workspaces.ts';
 export * from './workspace-settings.ts';
 export * from './profile.ts';
+export * from './domains.ts';
 
 /**
  * The one contract the web app, the API and the worker share. Each feature
@@ -131,6 +133,8 @@ export const contract = {
   deletedWorkspace: deletedWorkspaceContract,
   // Settings › Account › Profile (spec 0031, slice 7).
   profile: profileContract,
+  // A link page's custom domain (spec 0064, slice 1): the caller's own page only.
+  domains: domainsContract,
   // A workspace's sign in rules (spec 0033, milestone 4): owners only.
   workspaceSecurity: workspaceSecurityContract,
   objects: objectsContract,

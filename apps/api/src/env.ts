@@ -269,6 +269,47 @@ const walletFields = {
   APPLE_WALLET_WWDR: optional(z.string().min(1)),
 };
 
+// Custom domains for link pages (spec 0064, AC-6409): Vercel's Domains API on this deployment's own project. All
+// three optional, so the app boots without them and the Domain card is simply hidden ("not set up"). The token is a
+// Vercel access token scoped to the project's team; the team id is left out for a project on a personal account.
+// Nothing here is ever logged or answered.
+const vercelDomainFields = {
+  VERCEL_DOMAINS_TOKEN: optional(z.string().trim().min(20, 'VERCEL_DOMAINS_TOKEN is a Vercel access token.')),
+  VERCEL_PROJECT_ID: optional(
+    z
+      .string()
+      .trim()
+      .regex(/^prj_[A-Za-z0-9]{8,64}$/, 'VERCEL_PROJECT_ID is the project id, `prj_` and letters.'),
+  ),
+  VERCEL_TEAM_ID: optional(
+    z
+      .string()
+      .trim()
+      .regex(/^team_[A-Za-z0-9]{8,64}$/, 'VERCEL_TEAM_ID is the team id, `team_` and letters.'),
+  ),
+};
+
+/** Where custom domains are added: the Vercel project and its team, and the token that may change it. */
+export interface VercelDomainSettings {
+  readonly token: string;
+  readonly projectId: string;
+  readonly teamId?: string;
+}
+
+/**
+ * The Vercel domain settings, or undefined while the token or the project is unset (AC-6409): the feature is then
+ * off and says so, and no value is ever made up in their place.
+ */
+export function vercelDomainSettings(env: {
+  readonly VERCEL_DOMAINS_TOKEN?: string | undefined;
+  readonly VERCEL_PROJECT_ID?: string | undefined;
+  readonly VERCEL_TEAM_ID?: string | undefined;
+}): VercelDomainSettings | undefined {
+  const { VERCEL_DOMAINS_TOKEN: token, VERCEL_PROJECT_ID: projectId, VERCEL_TEAM_ID: teamId } = env;
+  if (token === undefined || projectId === undefined) return undefined;
+  return { token, projectId, ...(teamId === undefined ? {} : { teamId }) };
+}
+
 /** The wallet variables as parsed, before they are checked together. */
 interface WalletFields {
   readonly WALLET_PASSES?: 'on' | 'off' | undefined;
@@ -539,6 +580,7 @@ export const ApiEnv = z
     LOAD_TIMING: optional(z.enum(['on', 'off'])),
     ...calendarFields,
     ...walletFields,
+    ...vercelDomainFields,
     // Forms (spec 0023): reCAPTCHA v3's keys, the site key sent to browsers and the secret the API verifies tokens
     // with. Both or neither, and optional everywhere: unset, the honeypot, the fill time and the rate limits decide
     // alone; set, the score is one more spam signal.
@@ -737,6 +779,7 @@ export const WorkerEnv = z
     WORKER_IDLE_SLEEP_SECONDS: optional(z.coerce.number().int().min(0).max(86_400)),
     ...calendarFields,
     ...walletFields,
+    ...vercelDomainFields,
   })
   .superRefine((env, issues) => {
     const missing = (path: string, message: string) => issues.addIssue({ code: 'custom', path: [path], message });

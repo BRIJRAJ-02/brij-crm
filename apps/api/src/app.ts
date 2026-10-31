@@ -1,3 +1,4 @@
+import { createDomainChecks, type DomainCheckDeps } from './modules/domains/check.ts';
 import { createHmac, randomUUID } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -226,6 +227,11 @@ export interface AppServices {
    * is set, else nothing (tests pass their own to see it called).
    */
   readonly signedOut?: SignedOutNotice;
+  /**
+   * Custom domains (spec 0064): Vercel's wrapper and the TXT lookup, built from the Vercel domain settings unless a
+   * test passes its own (a fake Vercel and resolver); `null` turns the feature off whatever the settings say.
+   */
+  readonly domainChecks?: DomainCheckDeps | null;
 }
 
 /** The import's bounds (spec 0055, AC-5525): a page of links, read once. */
@@ -260,6 +266,9 @@ export function createApp({
   // Who may start a workspace of their own (spec 0031, owner decision 3): the addresses sign up lets in by the list.
   const signupAllowlist = createAllowlist(env.APP_ENV, env.SIGNUP_ALLOWLIST);
   const signedOut = services.signedOut ?? NO_SIGNED_OUT;
+  // Custom domains (spec 0064, AC-6409): on only with VERCEL_DOMAINS_TOKEN and VERCEL_PROJECT_ID.
+  const domainChecks =
+    services.domainChecks === undefined ? createDomainChecks(env, log) : (services.domainChecks ?? undefined);
   // The job kinds (spec 0008): the test kind only locally and in previews.
   const jobs = services.jobs ?? jobKinds({ environment: env.APP_ENV, rules });
   const rpc = createRpcHandler(router);
@@ -480,6 +489,7 @@ export function createApp({
         appUrl: env.APP_URL,
         publicOrigins,
         bookingOrigin,
+        domainChecks,
         // Only the limiter's one call, so a member handler holds nothing else of global identity at run time.
         limiter: { consumeRateLimit: (key, rule, cost) => identity.consumeRateLimit(key, rule, cost) },
         mayStartWorkspace: (email) => signupAllowlist.allows(email),
