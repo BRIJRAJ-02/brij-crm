@@ -133,8 +133,8 @@ import type { FetchLike } from './fetch.ts';
 import { refusalFor, refusalSummary } from './refusals.ts';
 import { delivered } from './delivered.ts';
 import { stageChunks } from './imports/stage.ts';
+import type * as DayEdits from './bookings/team-day.ts';
 import { createJobsStore, type JobsScope, type JobsView, type TestJobSettings } from './jobs/store.ts';
-import { blockedOnDay, reassignedOnDay, unblockedOnDay } from './bookings/team-day.ts';
 import {
   createBookingsStore,
   type BookingsCalendarHeld,
@@ -2376,6 +2376,30 @@ export function createDataLayer({
       call((options) => api.bookings.link({ workspace, bookingId, recordId, mutationId: mintId() }, options)),
   });
 
+  // The Team day's optimistic edits (`bookings/team-day.ts`, spec 0030, AC-781) load with the first Team day read
+  // (`import()`), never in the first load: no day is held before then, so a write has nothing to show them on. One
+  // made in the moment before they arrive shows once the day reads again.
+  let dayEdits: typeof DayEdits | undefined;
+  let dayEditsLoading: Promise<void> | undefined;
+  const loadDayEdits = () => {
+    dayEditsLoading ??= import('./bookings/team-day.ts').then(
+      (edits) => {
+        dayEdits = edits;
+      },
+      () => {
+        dayEditsLoading = undefined;
+      },
+    );
+  };
+  /** Shows `edit` on the workspace's held Team days once their edits have loaded; answers how to put them back. */
+  type DayShown = Parameters<typeof DayEdits.unblockedOnDay>[0];
+  const patchDays = (workspace: string, edit: (edits: typeof DayEdits, shown: DayShown) => DayShown): (() => void) => {
+    const edits = dayEdits;
+    return edits === undefined
+      ? () => undefined
+      : bookingsLists.patchTeamDays(workspace, (shown) => edit(edits, shown));
+  };
+
   // Scheduling access (spec 0037): delegations both ways and the caller's See reach, one copy per workspace. The
   // store loads with the first screen that asks (`import()`), never in the first load; until then nothing is held,
   // so a sign out or a live event has nothing of it to clear or read again.
@@ -4188,7 +4212,7 @@ export function createDataLayer({
         const restoreDays =
           memberId === undefined
             ? () => undefined
-            : bookingsLists.patchTeamDays(workspace, (shown) => reassignedOnDay(shown, bookingId, memberId));
+            : patchDays(workspace, (edits, shown) => edits.reassignedOnDay(shown, bookingId, memberId));
         const restore = () => {
           restoreLists();
           restoreDays();
@@ -4258,7 +4282,10 @@ export function createDataLayer({
        * held while the screen shows it (`useTeamDay`) and kept current as the week is. Blocks drawn on a column and a
        * booking handed to another host show in it at once (AC-781).
        */
-      teamDay: (workspace: string, query: TeamDayQuery): TeamDayHeld => bookingsLists.teamDay(workspace, query),
+      teamDay: (workspace: string, query: TeamDayQuery): TeamDayHeld => {
+        loadDayEdits();
+        return bookingsLists.teamDay(workspace, query);
+      },
       /**
        * Bookings' list: every meeting on a tab (bookings and the member's own calendar events), narrowed to a source
        * and the calendars panel's pick, a page at a time (`useMeetings`; More reads the next). While held, what it
@@ -4400,7 +4427,7 @@ export function createDataLayer({
           const restoreDays =
             team === undefined
               ? () => undefined
-              : bookingsLists.patchTeamDays(workspace, (shown) => blockedOnDay(shown, team.memberId, id, team.preview));
+              : patchDays(workspace, (edits, shown) => edits.blockedOnDay(shown, team.memberId, id, team.preview));
           const restore = () => {
             restoreRanges();
             restoreDays();
@@ -4422,7 +4449,7 @@ export function createDataLayer({
             ...shown,
             blocks: shown.blocks.filter((turn) => turn.blockId !== blockId),
           }));
-          const restoreDays = bookingsLists.patchTeamDays(workspace, (shown) => unblockedOnDay(shown, blockId));
+          const restoreDays = patchDays(workspace, (edits, shown) => edits.unblockedOnDay(shown, blockId));
           const restore = () => {
             restoreRanges();
             restoreDays();
