@@ -76,13 +76,14 @@ describe('Sync earlier submissions (AC-14)', () => {
     expect(started).toEqual(['unfiled']);
   });
 
-  it('All reads its own counts, says once that the ones it can’t sync stay as they are, and syncs all', async () => {
+  it('All reads its own counts, says once that the ones it can’t sync stay as they are, and names the ones it changes', async () => {
     const started = await open();
     // The segment's label takes the press, as a pointer's would.
     await userEvent.click(
       page.getByRole('radiogroup', { name: 'Which submissions' }).getByText('All', { exact: true }),
     );
-    const sync = page.getByRole('button', { name: 'Sync 42 submissions' });
+    // 9 new and 20 updated: the button counts what changes, never the 11 that already match.
+    const sync = page.getByRole('button', { name: 'Sync 29 submissions' });
     await expect.element(sync).toBeEnabled();
     await expect
       .element(page.getByRole('group', { name: 'What syncing would do' }))
@@ -90,6 +91,16 @@ describe('Sync earlier submissions (AC-14)', () => {
     await expect.element(page.getByText('Any that can’t be synced stay as they are.')).toBeVisible();
     await userEvent.click(sync);
     expect(started).toEqual(['all']);
+  });
+
+  it('with every submission already matching says so in one line and offers no Sync', async () => {
+    const matching: SyncPreview = { ...PREVIEWS.unfiled, total: 2, creates: 0, updates: 0, unchanged: 2 };
+    await open({ unfiled: matching, all: matching });
+    await expect
+      .element(page.getByRole('group', { name: 'What syncing would do' }))
+      .toHaveTextContent('All 2 already match.');
+    expect(page.getByRole('button', { name: /^Sync/ }).query()).toBeNull();
+    await expect.element(page.getByRole('button', { name: /^Done/ })).toBeVisible();
   });
 
   it('with nothing to sync says so in one row and offers no Sync', async () => {

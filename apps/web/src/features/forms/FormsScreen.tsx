@@ -178,12 +178,12 @@ export function FormsScreen({ slug }: FormsScreenProps) {
       searchLabel={strings.searchForms}
       status={list.status}
       cards={cards}
-      // An empty list offers New in its middle too: the same as the TopBar's.
+      // An empty list offers New in its middle too, as a secondary: the TopBar's New stays the one primary.
       {...(create?.create === undefined
         ? {}
         : {
             newAction: (
-              <Button variant="primary" icon="plus" onPress={create.create} isPending={create.isPending}>
+              <Button icon="plus" onPress={create.create} isPending={create.isPending}>
                 {strings.newForm}
               </Button>
             ),

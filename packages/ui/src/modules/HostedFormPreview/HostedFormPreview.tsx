@@ -2,6 +2,7 @@ import type { PublicForm } from '@crm/contracts/forms';
 import { HostedForm } from '../../public-form/HostedForm.tsx';
 import { HostedFormSteps } from '../../public-form/HostedFormSteps.tsx';
 import type { ProductLogo } from '../AuthLayout/AuthLayout.tsx';
+import styles from './HostedFormPreview.module.css';
 
 /** Props for HostedFormPreview. */
 export interface HostedFormPreviewProps {
@@ -26,20 +27,27 @@ export interface HostedFormPreviewProps {
 /**
  * The form a visitor fills in, drawn by the hosted page's own component, so
  * the builder shows exactly what goes live: the same tree, the same controls,
- * in the form's own layout (Classic, Steps or One at a time, spec 0063).
+ * in the form's own layout (Classic, Steps or One at a time, spec 0063). It
+ * sits on the form's own ground, which fills whatever height it is given.
  */
 export function HostedFormPreview({ form, mode = 'preview', logo, step }: HostedFormPreviewProps) {
   const layout = form.layout ?? 'classic';
   const logoProps = logo === undefined ? {} : { logo };
-  // A change of layout starts the preview again, from its first step.
-  if (layout === 'classic') return <HostedForm key={`${mode}-${layout}`} form={form} mode={mode} {...logoProps} />;
+  // The ground in the form's own look, so a short form's colour fills the phone to its foot (spec 0058). A change
+  // of layout starts the preview again, from its first step.
   return (
-    <HostedFormSteps
-      key={`${mode}-${layout}`}
-      form={form}
-      mode={mode}
-      {...logoProps}
-      {...(step === undefined ? {} : { previewStep: step })}
-    />
+    <div className={styles.ground} data-theme={form.look.colour}>
+      {layout === 'classic' ? (
+        <HostedForm key={`${mode}-${layout}`} form={form} mode={mode} {...logoProps} />
+      ) : (
+        <HostedFormSteps
+          key={`${mode}-${layout}`}
+          form={form}
+          mode={mode}
+          {...logoProps}
+          {...(step === undefined ? {} : { previewStep: step })}
+        />
+      )}
+    </div>
   );
 }

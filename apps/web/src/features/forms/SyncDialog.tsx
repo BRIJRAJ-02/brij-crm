@@ -75,6 +75,11 @@ export function SyncDialog({ slug, formId, reason, isOpen, onClose, onStarted }:
   // A scope just changed and its preview is on its way.
   const shown: PreviewState = state.scope === scope ? state : { status: 'loading', scope };
   const preview = shown.status === 'ready' ? shown.preview : undefined;
+  // What the sync would change: the button names this count, so it never offers to sync what already matches. Counts
+  // that cover only the newest can't say the rest match, so then it names every submission in scope.
+  const toSync = preview === undefined ? undefined : preview.capped ? preview.total : preview.creates + preview.updates;
+  // Nothing to write (none in scope, or every one already matches or can't be synced): one line, and no Sync.
+  const isNothing = toSync === 0;
 
   const start = () => {
     if (isStarting) return;
@@ -102,19 +107,19 @@ export function SyncDialog({ slug, formId, reason, isOpen, onClose, onStarted }:
         if (!open) onClose();
       }}
       // Said once, beside the one button, only when some would be left as they are.
-      {...(preview !== undefined && preview.failures > 0 ? { hint: strings.syncFailuresText } : {})}
+      {...(preview !== undefined && preview.failures > 0 && !isNothing ? { hint: strings.syncFailuresText } : {})}
       actions={
         <>
           <Button slot="close" isDisabled={isStarting}>
-            {reason === 'menu' ? strings.cancel : strings.notNow}
+            {isNothing ? strings.done : reason === 'menu' ? strings.cancel : strings.notNow}
           </Button>
-          {preview?.total !== 0 && (
-            <Button variant="primary" isPending={isStarting} isDisabled={preview === undefined} onPress={start}>
+          {!isNothing && (
+            <Button variant="primary" isPending={isStarting} isDisabled={toSync === undefined} onPress={start}>
               {isStarting
                 ? strings.syncStarting
-                : preview === undefined
+                : toSync === undefined
                   ? strings.syncStartPlain
-                  : strings.syncStart(preview.total)}
+                  : strings.syncStart(toSync)}
             </Button>
           )}
         </>
@@ -166,7 +171,13 @@ export function SyncDialog({ slug, formId, reason, isOpen, onClose, onStarted }:
         // The counts are the preview, in one line read at a glance; the total is on the button that starts it.
         // A count of none is left out; while loading, a skeleton line holds the line's place.
         <div aria-label={strings.syncPreview} role="group">
-          {preview === undefined ? <Skeleton lines={1} /> : strings.syncSummary(preview)}
+          {preview === undefined ? (
+            <Skeleton lines={1} />
+          ) : isNothing && preview.failures === 0 ? (
+            strings.syncAllMatch(preview.unchanged)
+          ) : (
+            strings.syncSummary(preview)
+          )}
         </div>
       )}
       {preview?.capped === true && <p>{strings.syncCapped(preview.checked)}</p>}

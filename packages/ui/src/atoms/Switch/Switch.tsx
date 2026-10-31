@@ -13,11 +13,11 @@ export interface SwitchProps {
    */
   readonly labelContext?: string;
   /**
-   * The words shown beside the switch for each state ("Live" and "Private"), where the word itself is the state, as
-   * on a page that is published or not. Only the eye gets them: the accessible name stays `label`, so a screen
-   * reader hears "Live, switch, off", never "Private, switch, off".
+   * A small status word beside the switch while it is off ("Private"), where off has a name of its own. The label
+   * stays the one name, so voice control says "click Live"; the word is the switch's description, so a screen reader
+   * hears "Live, switch, off, Private". Drawn by CSS from a data attribute, so Switch's first load barely grows.
    */
-  readonly stateLabels?: { readonly on: string; readonly off: string };
+  readonly offStatus?: string;
   /** A line under the label that says more. */
   readonly description?: string;
   readonly isSelected?: boolean;
@@ -33,7 +33,7 @@ export function Switch({
   label,
   isLabelHidden = false,
   labelContext,
-  stateLabels,
+  offStatus,
   description,
   isSelected,
   defaultSelected,
@@ -53,33 +53,19 @@ export function Switch({
       {...(name === undefined ? {} : { name })}
     >
       <SwitchButton className={styles.root} data-label-hidden={isLabelHidden || undefined}>
-        {({ isSelected: isOn }) => (
-          <>
-            <span className={styles.track} aria-hidden="true">
-              <span className={styles.knob} />
-            </span>
-            {isLabelHidden ? (
-              <VisuallyHidden>{label}</VisuallyHidden>
-            ) : stateLabels === undefined ? (
-              <span className={styles.label} data-described={description === undefined ? undefined : ''}>
-                {label}
-              </span>
-            ) : (
-              <>
-                <VisuallyHidden>{label}</VisuallyHidden>
-                <span
-                  className={styles.label}
-                  data-described={description === undefined ? undefined : ''}
-                  aria-hidden="true"
-                >
-                  {isOn ? stateLabels.on : stateLabels.off}
-                </span>
-              </>
-            )}
-            {labelContext !== undefined && <VisuallyHidden> {labelContext}</VisuallyHidden>}
-          </>
+        <span className={styles.track} aria-hidden="true">
+          <span className={styles.knob} />
+        </span>
+        {isLabelHidden ? (
+          <VisuallyHidden>{label}</VisuallyHidden>
+        ) : (
+          <span className={styles.label} data-described={description === undefined ? undefined : ''}>
+            {label}
+          </span>
         )}
+        {labelContext !== undefined && <VisuallyHidden> {labelContext}</VisuallyHidden>}
       </SwitchButton>
+      {offStatus !== undefined && <Text slot="description" className={styles.status} data-status={offStatus} />}
       {description !== undefined && (
         <Text slot="description" className={styles.description}>
           {description}
