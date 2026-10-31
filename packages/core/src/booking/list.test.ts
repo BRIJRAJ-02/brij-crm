@@ -287,8 +287,8 @@ describe('the bookings list (AC-646)', () => {
       to: '2026-11-09T00:00:00.000Z',
     });
     expect(mirrored.bookings.map((each) => each.id)).toEqual([kept.bookingId, gone.bookingId]);
-    // The booking's own event never shows as an event of its own. (The design review above sits two days from now,
-    // so from 31 October 2026 it falls in this week too: only the mirror is checked.)
-    expect(mirrored.events.filter((each) => each.title === 'Quick chat with Kept')).toEqual([]);
+    // Only the mirror is checked: the Design review above sits two days from today, so it falls in this week on some
+    // days of the year.
+    expect(mirrored.events.map((each) => each.id)).not.toContain(stored.rows[0]?.id);
   });
 });
