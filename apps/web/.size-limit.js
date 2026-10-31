@@ -64,6 +64,9 @@ export default [
   // What is left, 1.17 kB, is the question's own code and the lazy boundary: measured, and no more than measured.
   // Raising this is a spec change, so it is the owner's call; it was taken while they waited on the deploy and is
   // theirs to reverse.
+  // 31 October 2026: room won back without a raise. The form mounts UiProviderBase (no icon registry, brand art or
+  // toast region), its questions use SelectBase (no StatusDot or Badge), and Lucide's shape keys are numbered: from
+  // 222.99 kB and 16.98 kB to about 188.6 kB and 15.4 kB. These lines stay where they were.
   { name: 'Hosted form JavaScript (gzipped)', path: inDist(form.js), limit: '223 kB', gzip: true, running: false },
   { name: 'Hosted form CSS (gzipped)', path: inDist(form.css), limit: '17 kB', gzip: true, running: false },
   { name: 'Booking page JavaScript (gzipped)', path: inDist(book.js), limit: '230 kB', gzip: true, running: false },
