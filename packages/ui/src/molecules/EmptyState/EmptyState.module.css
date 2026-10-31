@@ -25,6 +25,15 @@
     color: var(--text-secondary);
   }
 
+  /* The illustration slot: a picture over the title in place of the icon tile, centred, at most size-column wide. */
+  .illustration {
+    display: grid;
+    place-content: center;
+    max-inline-size: var(--size-column);
+    margin-block-end: var(--space-8);
+    color: var(--text-tertiary);
+  }
+
   .root[data-tone='error'] .icon {
     color: var(--danger);
   }

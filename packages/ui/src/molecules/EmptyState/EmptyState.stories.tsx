@@ -1,7 +1,9 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
+import { probeAlignment } from '../../lib/alignment-probe.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
+import { SpotIllustration } from '../SpotIllustration/SpotIllustration.tsx';
 import { EmptyState } from './EmptyState.tsx';
 
 const meta = {
@@ -122,5 +124,39 @@ export const Loading: Story = {
     await expect(status).toHaveAttribute('aria-busy', 'true');
     await expect(status).toHaveTextContent('Loading');
     await expect(canvas.queryByText('Deals you add or import show here.')).toBeNull();
+  },
+};
+
+/** A first empty moment: a picture of what will be here over one heading, one line and one action, all on one centre line. */
+export const Illustration: Story = {
+  parameters: { crm: { preview: true } },
+  args: {
+    title: 'No booking pages yet',
+    children: 'Make one and share the link.',
+    illustration: <SpotIllustration kind="booking" />,
+    actions: (
+      <Button variant="primary" icon="plus">
+        New booking page
+      </Button>
+    ),
+  },
+  render: (args) => (
+    <Stage width="fill">
+      <div data-slot="">
+        <EmptyState {...args} />
+      </div>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    // The picture is decoration: the heading alone says what is missing.
+    await expect(canvas.getByText('No booking pages yet')).toBeVisible();
+    const status = canvas.getByRole('status');
+    // The picture draws at its own size: the slot shrink wraps, so a picture with no width of its own vanishes.
+    await expect(status.firstElementChild?.getBoundingClientRect().width ?? 0).toBeGreaterThan(0);
+    const centre = (element: Element) =>
+      element.getBoundingClientRect().left + element.getBoundingClientRect().width / 2;
+    for (const child of status.children) await expect(Math.abs(centre(child) - centre(status))).toBeLessThan(1);
+    const report = probeAlignment({ root: 'body', ignoreSpacing: '*' });
+    await expect(report.failures).toEqual([]);
   },
 };

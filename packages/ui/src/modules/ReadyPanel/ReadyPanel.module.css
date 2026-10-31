@@ -1,0 +1,168 @@
+/* ReadyPanel (spec 0058): the "done, here is your link" moment. One column on one left and right edge, blocks
+   space-16 apart: the head (a success mark and the heading), the link label, the link row (the address in a read
+   only box, then Copy and Share, all size-input tall), the QR and the preview (at most size-column tall) side by side at one height, then more,
+   then the buttons at the end. It eases in on opacity and a small rise; the mark pops in on opacity and scale. */
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-16);
+    box-sizing: border-box;
+    min-inline-size: 0;
+    color: var(--text);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    animation: enter var(--duration-modal) var(--ease-out) backwards;
+  }
+
+  .head {
+    display: flex;
+    gap: var(--space-12);
+    align-items: center;
+  }
+
+  .check {
+    display: grid;
+    flex: none;
+    place-content: center;
+    inline-size: var(--size-input);
+    block-size: var(--size-input);
+    border-radius: var(--radius-full);
+    background: var(--success);
+    color: var(--on-accent);
+    animation: pop var(--duration-modal) var(--ease-out) backwards;
+    animation-delay: var(--duration-hover);
+  }
+
+  .titles {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    min-inline-size: 0;
+  }
+
+  .title {
+    margin: 0;
+    color: var(--text);
+    font: var(--text-title);
+    letter-spacing: var(--tracking-title);
+  }
+
+  .message {
+    margin: 0;
+    color: var(--text-secondary);
+    text-wrap: pretty;
+  }
+
+  .linkLabel {
+    margin-block-end: calc(-1 * var(--space-8));
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .link {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-8);
+    align-items: center;
+  }
+
+  /* The address: a read only box that takes the room left of the buttons, cut with an ellipsis, all selectable. */
+  .address {
+    display: flex;
+    flex: 1 1 var(--size-column);
+    align-items: center;
+    box-sizing: border-box;
+    min-inline-size: 0;
+    block-size: var(--size-input);
+    padding-inline: var(--space-8);
+    overflow: hidden;
+    border: var(--border-width-hairline) solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface-subtle);
+    color: var(--text);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    user-select: all;
+  }
+
+  /* The QR and the preview share a height (the QR's), side by side; a narrow slot stacks them. */
+  .visual {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-16);
+    align-items: stretch;
+  }
+
+  .qr {
+    display: flex;
+    flex: none;
+  }
+
+  /* The preview is a glimpse, capped at size-column tall: a taller picture (a whole phone) is cut at the cap, its
+     top kept in view (safe centring falls back to the start when the content overflows). */
+  .preview {
+    display: flex;
+    flex: 1 1 var(--size-column);
+    align-items: safe center;
+    justify-content: safe center;
+    box-sizing: border-box;
+    min-inline-size: 0;
+    min-block-size: var(--size-column-narrow);
+    max-block-size: var(--size-column);
+    overflow: hidden;
+    border: var(--border-width-hairline) solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    background: var(--surface-subtle);
+  }
+
+  .more {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-8);
+    align-items: center;
+    justify-content: flex-end;
+  }
+
+  @keyframes enter {
+    from {
+      opacity: 0;
+      translate: 0 var(--space-8);
+    }
+  }
+
+  @keyframes pop {
+    from {
+      opacity: 0;
+      scale: var(--scale-shrunk);
+    }
+  }
+
+  @keyframes fade {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .root,
+    .check {
+      animation-name: fade;
+      animation-delay: initial;
+    }
+  }
+
+  @media (forced-colors: active) {
+    .address,
+    .preview {
+      border-color: CanvasText;
+    }
+  }
+}
