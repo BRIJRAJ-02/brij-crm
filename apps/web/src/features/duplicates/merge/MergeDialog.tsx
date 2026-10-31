@@ -54,6 +54,8 @@ export interface MergeDialogProps {
     readonly keptName: string;
     readonly mergedId: string;
   }) => void;
+  /** The dialog closed without a merge (Cancel, Esc, Close). */
+  readonly onCancel?: (() => void) | undefined;
 }
 
 /** An answer to one read, keyed by the pair and attempt it was for. */
@@ -101,7 +103,16 @@ const firstChoice = () =>
  * refusal stays in the dialog, a changed record reading both again. While a read is out the last answer stays on
  * screen (its choices off), so focus never falls out of the dialog.
  */
-export function MergeDialog({ slug, object, attributes, members, recordIds, onClose, onMerged }: MergeDialogProps) {
+export function MergeDialog({
+  slug,
+  object,
+  attributes,
+  members,
+  recordIds,
+  onClose,
+  onMerged,
+  onCancel,
+}: MergeDialogProps) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
   const [picked, setPicked] = useState<RecordRefDisplay | undefined>(undefined);
   const [pickError, setPickError] = useState<string | undefined>(undefined);
@@ -170,6 +181,7 @@ export function MergeDialog({ slug, object, attributes, members, recordIds, onCl
     if (pending) return;
     reset();
     onClose();
+    onCancel?.();
   };
 
   const merge = () => {

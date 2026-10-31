@@ -11,6 +11,11 @@ export interface MergeDialogSetup {
   readonly attributes: readonly AttributeDefinition[];
   readonly members: readonly MemberSummary[];
   readonly onMerged?: MergeDialogProps['onMerged'];
+  /**
+   * The dialog closed without a merge (Cancel, Esc, Close): put focus back where it was opened from, since a
+   * menu item that opened it is gone by then.
+   */
+  readonly onCancel?: () => void;
 }
 
 /**
@@ -33,6 +38,7 @@ export function useMergeDialog(setup: MergeDialogSetup): {
         onClose={() => {
           setRecordIds(undefined);
         }}
+        onCancel={setup.onCancel}
       />
     ),
   };

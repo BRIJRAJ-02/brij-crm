@@ -47,6 +47,9 @@ export function RecordActions({
     object,
     attributes,
     members,
+    onCancel: () => {
+      focusLater(() => moreRef.current);
+    },
     onMerged: ({ keptId, mergedId }) => {
       // This record was the one merged away: on to the one it went into, focus on its title (the trigger is gone).
       if (mergedId === recordId) {
