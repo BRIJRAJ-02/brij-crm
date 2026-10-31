@@ -11,6 +11,7 @@
 //    ends `failed` (`queue_lost`), then emails made more than 30 days ago go,
 //    whatever became of them, 500 a batch. A sent one kept only its kind, key
 //    and outcome; one never sent goes too, with what it would have said.
+// 1c2. `webhooks` (spec 0064, AC-6425): webhook deliveries made more than 30 days ago, 500 a batch.
 // 1d. `nav` (spec 0034, AC-940): each member's stored sidebar loses the views
 //    and records that point at nothing any more, 500 rows a batch.
 // 1e. `notifications` (spec 0038, AC-1175): notifications marked done more
@@ -45,7 +46,7 @@ import { sql } from 'drizzle-orm';
 import * as z from 'zod';
 import { purgeBatch, type RemovedCounts } from '../../engine/deletion.ts';
 import { pruneNavRows } from '../../navigation/navigation.ts';
-import { SPAM_FILES_KEPT_DAYS, UPLOAD_KEPT_HOURS } from '@crm/contracts';
+import { SPAM_FILES_KEPT_DAYS, UPLOAD_KEPT_HOURS, WEBHOOK_LOG_DAYS } from '@crm/contracts';
 import { ensureLinkPage, publicProfilesOf } from '../../booking/handles.ts';
 import { RESTORE_WINDOW } from '../../engine/limits.ts';
 import type { WriteContext } from '../../engine/write.ts';
@@ -73,6 +74,7 @@ const PHASES = [
   'purge',
   'notes_tasks',
   'emails',
+  'webhooks',
   'nav',
   'notifications',
   'views',
@@ -118,6 +120,8 @@ const Totals = z.object({
   tasks: Count.default(0),
   // Added by the emails lane: a checkpoint stored before it reads as none removed yet.
   emails: Count.default(0),
+  // Added by spec 0064: webhook deliveries past their 30 days.
+  webhooks: Count.default(0),
   // Added by spec 0034: the sidebars that lost an item pointing at nothing.
   sidebars: Count.default(0),
   // Added by spec 0038.
@@ -155,6 +159,7 @@ const NO_TOTALS: Totals = {
   notes: 0,
   tasks: 0,
   emails: 0,
+  webhooks: 0,
   sidebars: 0,
   notifications: 0,
   views: 0,
@@ -219,6 +224,7 @@ const plus = (totals: Totals, more: Partial<Totals>): Totals => ({
   notes: totals.notes + (more.notes ?? 0),
   tasks: totals.tasks + (more.tasks ?? 0),
   emails: totals.emails + (more.emails ?? 0),
+  webhooks: totals.webhooks + (more.webhooks ?? 0),
   sidebars: totals.sidebars + (more.sidebars ?? 0),
   notifications: totals.notifications + (more.notifications ?? 0),
   views: totals.views + (more.views ?? 0),
@@ -297,6 +303,22 @@ async function oldEmails(context: WriteContext, at: Checkpoint, limit: number): 
   const totals = plus(at.totals, { emails: removed.rowCount ?? 0 });
   const full = (lost.rowCount ?? 0) >= limit || (removed.rowCount ?? 0) >= limit;
   return outcome(full ? { ...at, totals } : nextPhase(at, totals), at, totals, count);
+}
+
+/**
+ * Phase 1c2 (spec 0064, AC-6425): webhook deliveries made more than `WEBHOOK_LOG_DAYS` ago go, whatever became of
+ * them, `limit` a batch through `webhook_deliveries_created`. A waiting try of one finds it gone and sends nothing.
+ */
+async function oldWebhookDeliveries(context: WriteContext, at: Checkpoint, limit: number): Promise<StepOutcome> {
+  const removed = await context.tx.execute(sql`
+    delete from webhook_deliveries where id in (
+      select id from webhook_deliveries where created_at < now() - make_interval(days => ${WEBHOOK_LOG_DAYS})
+      order by created_at limit ${limit}
+    )
+  `);
+  const count = removed.rowCount ?? 0;
+  const totals = plus(at.totals, { webhooks: count });
+  return outcome(count >= limit ? { ...at, totals } : nextPhase(at, totals), at, totals, count);
 }
 
 /**
@@ -765,6 +787,8 @@ export function maintenanceDaily(queue?: QueueRows, uploads?: UploadStore): Kind
           return notesAndTasks(context, at, limit);
         case 'emails':
           return oldEmails(context, at, limit);
+        case 'webhooks':
+          return oldWebhookDeliveries(context, at, limit);
         case 'nav':
           return navRows(context, at, limit);
         case 'notifications':

@@ -76,6 +76,8 @@ import { operatorList } from './orpc.ts';
 import { router as appRouter } from './router.ts';
 import { createRpcHandler } from './rpc.ts';
 import type { RequestTiming } from './timing.ts';
+import type { WebhookUrlProblem } from '@crm/core';
+import { createHostCheck, createWebhookSender, type WebhookSender } from './jobs/webhook-deliver.ts';
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
@@ -220,6 +222,12 @@ export interface AppServices {
    * is set, else nothing (tests pass their own to see it called).
    */
   readonly signedOut?: SignedOutNotice;
+  /**
+   * Webhooks (spec 0064): the sender Send test event and Resend use, and the resolved address check for an endpoint
+   * being added. The real ones unless a test passes its own (a fake receiver, a fake resolver).
+   */
+  readonly webhookSender?: WebhookSender;
+  readonly webhookHostCheck?: (url: URL) => Promise<WebhookUrlProblem | undefined>;
 }
 
 /** The import's bounds (spec 0055, AC-5525): a page of links, read once. */
@@ -254,6 +262,15 @@ export function createApp({
   // Who may start a workspace of their own (spec 0031, owner decision 3): the addresses sign up lets in by the list.
   const signupAllowlist = createAllowlist(env.APP_ENV, env.SIGNUP_ALLOWLIST);
   const signedOut = services.signedOut ?? NO_SIGNED_OUT;
+  // Webhooks (spec 0064), only where `WEBHOOK_SECRET_KEY` is set: the key, the sender and the address check.
+  const webhooks =
+    env.webhookKey === undefined
+      ? undefined
+      : {
+          key: env.webhookKey,
+          send: services.webhookSender ?? createWebhookSender(),
+          checkHost: services.webhookHostCheck ?? createHostCheck(),
+        };
   // The job kinds (spec 0008): the test kind only locally and in previews.
   const jobs = services.jobs ?? jobKinds({ environment: env.APP_ENV, rules });
   const rpc = createRpcHandler(router);
@@ -469,6 +486,7 @@ export function createApp({
         rules,
         mailer,
         outsideFetch,
+        webhooks,
         appUrl: env.APP_URL,
         publicOrigins,
         bookingOrigin,

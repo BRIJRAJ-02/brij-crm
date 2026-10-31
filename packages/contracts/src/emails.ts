@@ -365,6 +365,20 @@ export const CalendarReconnectAskedEmail = z.strictObject({
 /** The asked to reconnect email's params. */
 export type CalendarReconnectAskedEmail = z.infer<typeof CalendarReconnectAskedEmail>;
 
+/**
+ * A webhook endpoint turned off (spec 0064, AC-6423): every delivery to it failed for 3 days. Sent to each of the
+ * workspace's owners and admins, once per time it turns off. The address is the endpoint's own host and path, with
+ * no query (a token a receiver put there stays out of the email).
+ */
+export const WebhookEndpointOffEmail = z.strictObject({
+  /** The endpoint's host and path. */
+  endpoint: Line,
+  /** Settings › Webhooks, where it is turned back on. */
+  settingsPath: AppPath,
+});
+/** A webhook endpoint turned off. */
+export type WebhookEndpointOffEmail = z.infer<typeof WebhookEndpointOffEmail>;
+
 /** Every email with a template, and its params' schema. The sign in code is drawn on its own (`renderSignInCode`). */
 export const EMAIL_PARAMS = {
   form_submission: FormSubmissionEmail,
@@ -379,6 +393,7 @@ export const EMAIL_PARAMS = {
   workspace_welcome: WorkspaceWelcomeEmail,
   scheduling_changed: SchedulingChangedEmail,
   standin_covering: StandinCoveringEmail,
+  webhook_endpoint_off: WebhookEndpointOffEmail,
 } as const;
 
 /** A kind of email with a template. */
@@ -407,6 +422,7 @@ export const QUEUED_EMAIL_KINDS = [
   'workspace_welcome',
   'scheduling_changed',
   'standin_covering',
+  'webhook_endpoint_off',
 ] as const satisfies readonly EmailKind[];
 /** A kind that goes through the workspace email queue. */
 export const QueuedEmailKind = z.enum(QUEUED_EMAIL_KINDS);

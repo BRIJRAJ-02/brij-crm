@@ -132,6 +132,16 @@ export const ACCESS_TABLE = {
   signOutEveryone: { permission: 'security.manage' },
   // Settings › History › Workspace changes (spec 0046, AC-4622): owners and admins read the audit log.
   listAuditEvents: { permission: 'audit.read' },
+  // Settings › Webhooks (spec 0064, AC-6419 to AC-6425): owners and admins.
+  listWebhooks: { permission: 'webhooks.manage' },
+  createWebhook: { permission: 'webhooks.manage' },
+  updateWebhook: { permission: 'webhooks.manage' },
+  rotateWebhookSecret: { permission: 'webhooks.manage' },
+  deleteWebhook: { permission: 'webhooks.manage' },
+  listWebhookDeliveries: { permission: 'webhooks.manage' },
+  prepareWebhookTest: { permission: 'webhooks.manage' },
+  prepareWebhookResend: { permission: 'webhooks.manage' },
+  recordWebhookSend: { permission: 'webhooks.manage' },
   // Invitations (spec 0031, slice 2).
   inviteMembers: { permission: 'members.invite' },
   listInvitations: { permission: 'members.invite' },
@@ -333,6 +343,9 @@ export const ACCESS_TABLE = {
   meetingFacts: { system: true },
   // The member told of someone else's change to their scheduling (spec 0037, AC-1264): the worker's task.
   runSchedulingNotice: { system: true },
+  // A queued webhook delivery, read and recorded by the worker's task (spec 0064, AC-6423).
+  loadWebhookDelivery: { system: true },
+  finishWebhookDelivery: { system: true },
   // Spec 0031, AC-817: the relay's read of whom a removal cuts off.
   removedUserIds: { system: true },
   // Milestone 2: Add as person creates a person through the door (write on People, the record's own read first);

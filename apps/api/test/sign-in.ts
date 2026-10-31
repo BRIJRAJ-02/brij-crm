@@ -22,6 +22,7 @@ import type { router } from '../src/router.ts';
 import { EDGE_HEADER, ORIGIN_HEADER } from '../src/edge.ts';
 import { APP_URL, TEST_EDGE_SECRET, testEnv, testServices } from '../src/testing.ts';
 import { totpCode } from '../src/auth/two-factor.ts';
+import type { WebhookSender } from '../src/jobs/webhook-deliver.ts';
 
 /** What Vercel's middleware adds to every request it proxies (outside local; ignored locally). */
 const THROUGH_THE_EDGE = { [EDGE_HEADER]: TEST_EDGE_SECRET, [ORIGIN_HEADER]: APP_URL };
@@ -64,6 +65,7 @@ export function signInApp(
     calendar?: CalendarServices;
     signedOut?: SignedOutNotice;
     files?: FileStore;
+    webhookSender?: WebhookSender;
   } = {},
 ) {
   const env = testEnv(overrides);
@@ -80,6 +82,7 @@ export function signInApp(
     ...(options.calendar ? { calendar: options.calendar } : {}),
     ...(options.signedOut ? { signedOut: options.signedOut } : {}),
     ...(options.files ? { files: options.files } : {}),
+    ...(options.webhookSender ? { webhookSender: options.webhookSender } : {}),
   });
   return { app: createApp({ services, env, ...(options.router ? { router: options.router } : {}) }), services };
 }

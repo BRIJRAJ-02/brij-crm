@@ -219,6 +219,7 @@ async function openWorker(hooks: {
       ...(jobTasks.email === undefined ? {} : { email: jobTasks.email }),
       notificationEmail: jobTasks.notificationEmail,
       schedulingNotice: jobTasks.schedulingNotice,
+      ...(jobTasks.webhookDeliver === undefined ? {} : { webhookDeliver: jobTasks.webhookDeliver }),
       calendarHealth: jobTasks.calendarHealth,
       ...(cutOff === undefined ? {} : { cutOff }),
       // The daily cleanup (milestone 3): the outbox, the dead queue rows, then one maintenance job a workspace.

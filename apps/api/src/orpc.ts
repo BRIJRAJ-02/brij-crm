@@ -38,6 +38,8 @@ import { setRequestScope } from './monitoring/sentry.ts';
 import type { SignedOutNotice } from './realtime/signed-out.ts';
 import type { RealtimeTokens } from './realtime/tokens.ts';
 import type { WakeRelay } from './realtime/wake.ts';
+import type { WebhookKey, WebhookUrlProblem } from '@crm/core';
+import type { WebhookSender } from './jobs/webhook-deliver.ts';
 
 /** What every procedure receives. */
 export interface RequestContext extends ResponseHeadersPluginContext {
@@ -111,6 +113,12 @@ export interface RequestContext extends ResponseHeadersPluginContext {
    * too, rather than calling the network itself.
    */
   outsideFetch: OutsideFetch;
+  /**
+   * Webhooks (spec 0064): the sealing key, the one sender (Send test event and Resend send from the request) and the
+   * resolved address check, or undefined where `WEBHOOK_SECRET_KEY` is unset: the list says so and the writes answer
+   * 503 `API_UNAVAILABLE`.
+   */
+  webhooks: WebhookServices | undefined;
   /** The app's own address (`APP_URL`): an invitation's link is `<appUrl>/invite/<token>`. */
   appUrl: string;
   /**
@@ -183,6 +191,13 @@ export interface RequestContext extends ResponseHeadersPluginContext {
    * failure logged and dropped.
    */
   noteActivity: (userId: string) => void;
+}
+
+/** What the webhook procedures need from the app (spec 0064). */
+export interface WebhookServices {
+  readonly key: WebhookKey;
+  readonly send: WebhookSender;
+  readonly checkHost: (url: URL) => Promise<WebhookUrlProblem | undefined>;
 }
 
 /** Who the console counts a super admin: a verified email on the list. Never a workspace role. */

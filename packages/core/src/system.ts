@@ -63,3 +63,11 @@ export {
   runCalendarHealthEmail,
   type CalendarHealthEmailOutcome,
 } from './calendar/health-notices.ts';
+// Webhook deliveries (spec 0064, AC-6421, AC-6423): the worker's `crm_webhook_deliver` task reads one queued delivery
+// and records how its try went, queueing the next or giving up.
+export {
+  finishWebhookDelivery,
+  loadWebhookDelivery,
+  type WebhookFinished,
+  type WebhookLoad,
+} from './webhooks/deliver.ts';

@@ -30,6 +30,7 @@ import { enqueueBookingMail, recordEvent } from './mail-queue.ts';
 import { loadPage } from './slots.ts';
 import { manageTokenFor, type ManageLinkKey } from './tokens.ts';
 import { matchVisitor } from './visitor.ts';
+import { queueBookingWebhook } from '../webhooks/queue.ts';
 
 const { attributes, bookingPageMembers, bookings, members, objects } = schema;
 
@@ -231,6 +232,8 @@ export async function bookAsHost(
         }
         // The reminders with the booking; the confirmation after its event, so it knows whether the calendar invited them.
         await enqueueBookingMail(tx, bookingId, ['reminder_24h', 'reminder_1h']);
+        // Subscribed endpoints hear of it with the booking (spec 0064, AC-6422).
+        await queueBookingWebhook(tx, 'booking.created', bookingId);
       } catch (error) {
         if (postgresError(error)?.code === '23P01') throw refuse('SLOT_TAKEN', TAKEN);
         // The same key on this page from someone else's booking: a client reused it, so nothing is booked.

@@ -56,3 +56,4 @@ export { bookingPageRotations, rotationAssignments, rotationMembers, rotationRos
 export { memberBookingLimits, scheduleDelegations } from './scheduling.ts';
 export { routingDecisions } from './routing.ts';
 export { importRowOutcome, importRows, imports, importStatus } from './imports.ts';
+export { webhookDeliveries, webhookEndpoints } from './webhooks.ts';

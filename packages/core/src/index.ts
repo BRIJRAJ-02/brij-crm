@@ -712,6 +712,45 @@ export {
  * `toEntryView` is its pure row mapping (only known keys, never a linked record, AC-4610).
  */
 export { listAuditEvents, AUDIT_CURSOR_MESSAGE } from './audit/audit.ts';
+
+/**
+ * Settings › Webhooks (spec 0064, AC-6419 to AC-6426): the endpoints and their log behind `webhooks.manage`, the
+ * sealed secret and the signature, the address rules (the api's sender asks them before every send), and Send test
+ * event and Resend, which the api sends from the request and records here.
+ */
+export {
+  createWebhook,
+  deleteWebhook,
+  listWebhookDeliveries,
+  listWebhooks,
+  rotateWebhookSecret,
+  updateWebhook,
+  type WebhookDeps,
+} from './webhooks/endpoints.ts';
+export {
+  prepareWebhookResend,
+  prepareWebhookTest,
+  recordWebhookSend,
+  retryDelaySeconds,
+  WEBHOOK_BACKOFF_SECONDS,
+  WEBHOOK_FAILING_DAYS,
+  type WebhookFailure,
+  type WebhookSend,
+  type WebhookSendResult,
+} from './webhooks/deliver.ts';
+export {
+  decodeWebhookKey,
+  signatureHeader,
+  verifySignature,
+  SIGNATURE_HEADER,
+  type WebhookKey,
+} from './webhooks/signing.ts';
+export {
+  resolvedProblem,
+  WEBHOOK_URL_MESSAGES,
+  webhookUrlProblem,
+  type WebhookUrlProblem,
+} from './webhooks/addresses.ts';
 export { toEntryView, type AuditNames, type AuditRow } from './audit/view.ts';
 /**
  * Bringing somebody's link in bio page across (spec 0055, AC-5524, AC-5525): the hosts we will read, and the

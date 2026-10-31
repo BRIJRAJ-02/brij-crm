@@ -8,6 +8,7 @@ import { connectedCalendar, jobKinds, NO_CALENDAR, type JobRegistry, type QueueR
 import { purgeWorkspace, runDailyCleanup, syncConnection, systemScope } from '@crm/core/system';
 import type { CalendarSyncInput, CalendarSyncOutcome, DailyCleanupInput, DailyCleanupReport } from '@crm/core/system';
 import type { AppEnvironment } from '@crm/contracts';
+import type { WebhookKey } from '@crm/core';
 import type { Database, QueueConnection } from '@crm/db';
 import { bookingLinkKey } from '../booking-link.ts';
 import { createFreeDomains } from '../calendar/free-domains.ts';
@@ -27,6 +28,7 @@ import { runnerTasks } from './graphile.ts';
 import { runNotificationEmail } from './notification-email.ts';
 import { runSchedulingNoticeTask } from './scheduling-notice.ts';
 import { runCalendarHealthEmailTask } from './calendar-health.ts';
+import { createWebhookSender, runWebhookDelivery } from './webhook-deliver.ts';
 import { raiseIssue } from '../monitoring/sentry.ts';
 import { createJobRunner } from './runner.ts';
 
@@ -46,6 +48,8 @@ export interface JobTasksEnv {
   readonly MAILPIT_URL?: string | undefined;
   readonly BLOB_READ_WRITE_TOKEN?: string | undefined;
   readonly calendar: CalendarSettings | undefined;
+  /** The webhook sealing key (`WEBHOOK_SECRET_KEY`, spec 0064); without it nothing is sent. */
+  readonly webhookKey?: WebhookKey | undefined;
 }
 
 /** What `composeJobTasks` needs: the environment, the tenant pool, and who hears that a job stored a change. */
@@ -72,6 +76,8 @@ export interface JobTasks {
   readonly notificationEmail: (payload: unknown) => Promise<void>;
   /** One member's scheduling notice (spec 0037), as the system: it queues a `scheduling_changed` email. */
   readonly schedulingNotice: (payload: unknown) => Promise<void>;
+  /** One webhook delivery's try (spec 0064), where `WEBHOOK_SECRET_KEY` is set; off, its rows wait. */
+  readonly webhookDeliver: ((payload: unknown) => Promise<void>) | undefined;
   /**
    * Calendar health (spec 0037, AC-1310, AC-1311): one episode's email as the system, and the held sweep's one
    * Sentry warning (`CALENDAR_OUTAGE`, counts only).
@@ -237,10 +243,27 @@ export function composeJobTasks(options: JobTasksOptions): JobTasks {
     },
   };
 
+  // Webhooks (spec 0064, AC-6423): each queued delivery sent through the one sender as the system. Without the key
+  // no endpoint can exist, and the task isn't run.
+  const webhookKey = env.webhookKey;
+  const webhookDeliver =
+    webhookKey === undefined
+      ? undefined
+      : (() => {
+          const send = createWebhookSender();
+          return (payload: unknown) =>
+            runWebhookDelivery(
+              { systemScope: (workspaceId) => systemScope(db, workspaceId), key: webhookKey, send, log },
+              payload,
+            );
+        })();
+  if (webhookDeliver === undefined) log.info('webhooks.off', { reason: 'WEBHOOK_SECRET_KEY is not set' });
+
   return {
     registry,
     runner,
     calendar,
+    webhookDeliver,
     bookingMail,
     email,
     notificationEmail,
@@ -262,6 +285,10 @@ export function composeJobTasks(options: JobTasksOptions): JobTasks {
         },
         input,
       ),
-    tasks: runnerTasks({ calendar: calendar !== undefined, email: email !== undefined }),
+    tasks: runnerTasks({
+      calendar: calendar !== undefined,
+      email: email !== undefined,
+      webhooks: webhookDeliver !== undefined,
+    }),
   };
 }

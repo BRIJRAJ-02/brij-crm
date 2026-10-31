@@ -14,6 +14,7 @@ import {
 import { formConfirmation, formSubmission } from './templates/forms.ts';
 import { memberInvite } from './templates/invite.ts';
 import { importFinished, jobFailed, schedulingChanged, standinCovering } from './templates/team.ts';
+import { webhookEndpointOff } from './templates/webhooks.ts';
 import { workspaceWelcome } from './templates/welcome.ts';
 
 /** One queued kind of email. */
@@ -176,6 +177,12 @@ export const CATALOG: Catalog = {
       openPath: '/w/acme',
       linkPage: { handle: 'ada-lovelace', editPath: '/w/acme/link-page' },
     },
+  },
+  webhook_endpoint_off: {
+    template: webhookEndpointOff,
+    // Owners' and admins' notice about the workspace's own automation, as a failed job's is.
+    medium: 'email_job',
+    sample: { endpoint: 'hooks.acme.example/timefix', settingsPath: '/w/acme/settings/webhooks' },
   },
 };
 

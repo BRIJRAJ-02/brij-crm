@@ -106,6 +106,7 @@ import {
 } from '../routing/booking.ts';
 import { enqueueBookingMail, recordEvent } from './mail-queue.ts';
 import { ensureManageToken, managePath, manageTokenFor, type ManageLinkKey } from './tokens.ts';
+import { queueBookingWebhook } from '../webhooks/queue.ts';
 
 const { bookingHosts, bookingPages, bookings, members, workspaces } = schema;
 
@@ -1100,6 +1101,8 @@ export async function bookPublicSlot(
         }
         // The reminders with the booking; the confirmation after its event, so it knows whether the calendar invited them.
         await enqueueBookingMail(tx, bookingId, ['reminder_24h', 'reminder_1h']);
+        // Subscribed endpoints hear of it with the booking (spec 0064, AC-6422): queued here, sent by the worker.
+        await queueBookingWebhook(tx, 'booking.created', bookingId);
       } catch (error) {
         // The locks should make this unreachable: a write that skipped them, refused by the database.
         if (postgresError(error)?.code === '23P01') throw refuse('SLOT_TAKEN', SLOT_TAKEN_MESSAGE);

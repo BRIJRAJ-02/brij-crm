@@ -40,6 +40,7 @@ import { BOOKING_MAIL_TASK } from './booking-mail.ts';
 import { EMAIL_TASK, EmailPayload, type EmailRun, type EmailTry } from './email.ts';
 import { NOTIFICATION_EMAIL_TASK } from './notification-email.ts';
 import { SCHEDULING_NOTICE_TASK } from './scheduling-notice.ts';
+import { WEBHOOK_TASK } from './webhook-deliver.ts';
 import {
   CALENDAR_HEALTH_CRONTAB,
   CALENDAR_HEALTH_EMAIL_TASK,
@@ -94,8 +95,17 @@ export const RUNNER_TASKS: readonly string[] = [
  * worker's check awake: a row of a task it doesn't run would keep it awake
  * forever.
  */
-export function runnerTasks(running: { readonly calendar: boolean; readonly email: boolean }): readonly string[] {
-  return [...RUNNER_TASKS, ...(running.calendar ? [CALENDAR_TASK] : []), ...(running.email ? [EMAIL_TASK] : [])];
+export function runnerTasks(running: {
+  readonly calendar: boolean;
+  readonly email: boolean;
+  readonly webhooks?: boolean;
+}): readonly string[] {
+  return [
+    ...RUNNER_TASKS,
+    ...(running.calendar ? [CALENDAR_TASK] : []),
+    ...(running.email ? [EMAIL_TASK] : []),
+    ...(running.webhooks === true ? [WEBHOOK_TASK] : []),
+  ];
 }
 
 /** A calendar sync's payload: the workspace and the connection, ids only (what `crm_enqueue_calendar_sync` writes). */
@@ -196,6 +206,12 @@ export interface JobRunnersOptions {
    * retry.
    */
   readonly schedulingNotice?: (payload: unknown) => Promise<void>;
+  /**
+   * Webhook deliveries (spec 0064, AC-6423): one queued delivery's try (`runWebhookDelivery`), where
+   * `WEBHOOK_SECRET_KEY` is set. With it, the light runner takes `crm_webhook_deliver`; a receiver's failure queues
+   * its own next try, and only the database throws, for Graphile's 3 tries.
+   */
+  readonly webhookDeliver?: (payload: unknown) => Promise<void>;
   /**
    * Calendar health (spec 0037, AC-1310, AC-1311): one episode's email (`runCalendarHealthEmailTask`), and who hears
    * a held sweep (Sentry's warning). With it, the light runner takes `crm_calendar_health_email` and holds the
@@ -609,6 +625,7 @@ export async function startJobRunners(options: JobRunnersOptions): Promise<JobRu
       const email = lane === LANES.light ? options.email : undefined;
       const notificationEmail = lane === LANES.light ? options.notificationEmail : undefined;
       const schedulingNotice = lane === LANES.light ? options.schedulingNotice : undefined;
+      const webhookDeliver = lane === LANES.light ? options.webhookDeliver : undefined;
       const calendarHealth = lane === LANES.light ? options.calendarHealth : undefined;
       const cutOff = lane === LANES.light ? options.cutOff : undefined;
       runners.push(
@@ -651,6 +668,11 @@ export async function startJobRunners(options: JobRunnersOptions): Promise<JobRu
                       inFlight,
                       options.onActivity,
                     ),
+                  }),
+              ...(webhookDeliver === undefined
+                ? {}
+                : {
+                    [WEBHOOK_TASK]: counted((payload) => webhookDeliver(payload), inFlight, options.onActivity),
                   }),
               ...(calendarHealth === undefined
                 ? {}

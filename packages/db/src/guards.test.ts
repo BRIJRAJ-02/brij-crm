@@ -177,6 +177,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_enqueue_notification_email', owner: 'crm_queue' },
       // The member told of someone else's change to their scheduling (spec 0037, migration 0122).
       { name: 'crm_enqueue_scheduling_notice', owner: 'crm_queue' },
+      // One webhook delivery's next try (spec 0064, slice 3).
+      { name: 'crm_enqueue_webhook_delivery', owner: 'crm_queue' },
       { name: 'crm_ensure_public_profile', owner: 'crm_handle' },
       { name: 'crm_form_by_key', owner: 'crm_form_lookup' },
       // The forms a person may place on their link page (spec 0052, migration 0104).
@@ -227,6 +229,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_sweep_profile_counts', owner: 'crm_handle' },
       // A deleted account's handles freed after their 90 days (late trap #73, migration 0126).
       { name: 'crm_sweep_released_handles', owner: 'crm_handle' },
+      // The link pages that carry a form, for a webhook's link_page.signup (spec 0064, slice 3).
+      { name: 'crm_webhook_form_handles', owner: 'crm_handle' },
       { name: 'crm_workspace_has_domain', owner: 'crm_domain_lookup' },
       { name: 'crm_workspace_ids', owner: 'crm_sweep' },
       // Whether a person is an active member of a workspace: crm_handle's definers ask it (spec 0056, migration 0113).
@@ -265,6 +269,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_enqueue_job', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_enqueue_notification_email', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_enqueue_scheduling_notice', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
+      { name: 'crm_enqueue_webhook_delivery', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       // A plpgsql body: it tries a handle, then the next, and raises PROFILE_HANDLE_BASE.
       { name: 'crm_ensure_public_profile', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_form_by_key', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
@@ -322,6 +327,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_sweep_profile_counts', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       // A plpgsql body: it answers how many held handles it freed.
       { name: 'crm_sweep_released_handles', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
+      { name: 'crm_webhook_form_handles', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_workspace_has_domain', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_workspace_ids', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_workspace_member', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
@@ -378,6 +384,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_enqueue_email',
         'crm_enqueue_notification_email',
         'crm_enqueue_scheduling_notice',
+        'crm_enqueue_webhook_delivery',
       ],
       [
         'crm_enqueue_job(uuid, timestamp with time zone)',
@@ -386,8 +393,9 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_enqueue_email(uuid)',
         'crm_enqueue_notification_email(uuid)',
         'crm_enqueue_scheduling_notice(uuid, uuid)',
+        'crm_enqueue_webhook_delivery(uuid)',
       ],
-      ['app', 'app', 'app', 'app', 'app', 'app'],
+      ['app', 'app', 'app', 'app', 'app', 'app', 'app'],
     ],
     [
       'crm_sweep',
@@ -514,6 +522,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         // An old handle let go to make room at the cap (late trap #76, migration 0124): called only by the two
         // above that take a handle, as crm_pack_profile_items is, so it has no signature below.
         'crm_make_handle_room',
+        // The link pages carrying a form, for a webhook's link_page.signup (spec 0064, slice 3).
+        'crm_webhook_form_handles',
       ],
       [
         'crm_save_public_profile(uuid, uuid, text, text)',
@@ -545,10 +555,11 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_ensure_public_profile(uuid, uuid, text)',
         'crm_show_public_profile(uuid, uuid)',
         'crm_sweep_released_handles(integer)',
+        'crm_webhook_form_handles(uuid)',
       ],
       // One per signature: every one of these is crm_app's to call and nobody else's. Counted from the list
       // rather than written out, since a signature added without the count moved read as unreachable and passed.
-      Array.from({ length: 29 }, () => 'app'),
+      Array.from({ length: 30 }, () => 'app'),
     ],
   ])(
     'keeps %s unable to log in, owning only %s, and out of the app’s reach',

@@ -51,6 +51,7 @@ import {
 import { ensureManageToken, managePath, type ManageLinkKey } from './tokens.ts';
 import { bookingAccess, bookingReaderIn, bookingReaderOf, pageManagerOf } from './seen.ts';
 import { limitChecks } from '../scheduling/limits.ts';
+import { queueBookingWebhook } from '../webhooks/queue.ts';
 
 const { bookings, bookingHosts } = schema;
 
@@ -454,6 +455,7 @@ export async function moveBooking(
       if (updated === undefined) throw new Error('The booking was not moved.');
       // The emails with the change; the reminders again for the new time, replacing the old ones.
       await enqueueBookingMail(tx, updated.id, ['moved', 'reminder_24h', 'reminder_1h']);
+      await queueBookingWebhook(tx, 'booking.rescheduled', updated.id);
       await auditChangedFor(tx, target, row, 'moved');
       return updated;
     } catch (error) {
@@ -577,6 +579,7 @@ async function moveTeamBooking(
         'reminder_24h',
         'reminder_1h',
       ]);
+      await queueBookingWebhook(tx, 'booking.rescheduled', updated.id);
       return { updated, organiserChanged };
     } catch (error) {
       if (postgresError(error)?.code === '23P01') {
@@ -629,6 +632,8 @@ export async function cancelBooking(
       .returning();
     if (updated === undefined) throw new Error('The booking was not cancelled.');
     await enqueueBookingMail(tx, updated.id, ['cancelled']);
+    // Subscribed endpoints hear of each change in its own transaction (spec 0064, AC-6422).
+    await queueBookingWebhook(tx, 'booking.cancelled', updated.id);
     await auditChangedFor(tx, target, row, 'cancelled');
     return updated;
   });
@@ -802,6 +807,7 @@ export async function markNoShow(
       targetType: 'booking',
       targetId: row.id,
     });
+    if (input.noShow) await queueBookingWebhook(tx, 'booking.no_show', row.id);
     return { noShow: input.noShow };
   });
 }

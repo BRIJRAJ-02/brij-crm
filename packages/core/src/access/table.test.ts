@@ -246,6 +246,13 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   'readImportedPage',
   // A new membership's link page (26 Oct 2026): the editor's path, pure, for the approval email.
   'linkPageEditPath',
+  // Webhooks (spec 0064): the backoff, the sealing key, the signature and the address rules are pure.
+  'retryDelaySeconds',
+  'decodeWebhookKey',
+  'signatureHeader',
+  'verifySignature',
+  'resolvedProblem',
+  'webhookUrlProblem',
 ]);
 
 const exported = { ...core, ...system } as Record<string, unknown>;

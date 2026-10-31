@@ -41,6 +41,7 @@ import {
   type SpamJudgement,
   type TicketVerdict,
 } from './spam.ts';
+import { queueFormWebhooks } from '../webhooks/queue.ts';
 
 const { bookingPages, formSubmissions } = schema;
 
@@ -538,6 +539,8 @@ export async function submitForm(
       await attachUploads(tx, { submissionId: row.id, ids: claimedIds });
       if (state === 'received') {
         await startJob(context, registry, { kind: FORMS_PROCESS, params: { submissionId: row.id } });
+        // Subscribed endpoints hear of a submission taken as received, in its own transaction (spec 0064, AC-6422).
+        await queueFormWebhooks(tx, { submissionId: row.id, formId: form.id, referrer: cameFrom.referrer });
       }
       // Routing (spec 0043, AC-1606): only a submission taken as received is routed; spam and held ones get the fallback.
       const route =

@@ -4,11 +4,12 @@
 // commits (and not when refused); and each stores exactly one outbox row per
 // object it touched, with its mutation id. A new write procedure fails here
 // until it is added to WRITES, which proves it pokes.
+import { randomBytes } from 'node:crypto';
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { contract, DEFAULT_PAGE_THEME, defaultAvailability } from '@crm/contracts';
-import { newId, NO_CALENDAR } from '@crm/core';
+import { decodeWebhookKey, newId, NO_CALENDAR } from '@crm/core';
 import { bookPublicSlot, enterBookingPage } from '@crm/core/public';
 import type { Database, IdentityStore } from '@crm/db';
 import { testQuery } from '@crm/db/testing';
@@ -39,6 +40,9 @@ const READS: ReadonlySet<string> = new Set([
   'account.deletion.check',
   // A workspace's sign in rules (spec 0033, milestone 4): reading them.
   'workspaceSecurity.get',
+  // Settings › Webhooks (spec 0064): the endpoints and a page of one's log.
+  'webhooks.list',
+  'webhooks.deliveries',
   'workspaces.slugAvailable',
   'objects.list',
   'attributes.list',
@@ -202,7 +206,8 @@ beforeAll(() => {
   ({ db, identity } = testConnections());
   ({ app } = signInApp(
     { db, identity },
-    {},
+    // Webhooks (spec 0064) are on only with a sealing key: a fresh one for this suite.
+    { webhookKey: decodeWebhookKey(randomBytes(32).toString('base64')) },
     {
       wakeRelay: () => (pokes += 1),
       mailer: {
@@ -506,7 +511,54 @@ async function sharedViewOf(m: Member, name = 'Pipeline'): Promise<string> {
   return id;
 }
 
+/** A webhook endpoint made through the API (its own write before the case's). */
+async function webhookOf(m: Member): Promise<string> {
+  const made = await m.client.webhooks.create({
+    workspace: m.slug,
+    url: 'https://hooks.example.com/timefix',
+    events: ['booking.created'],
+    mutationId: newId(),
+  });
+  return made.endpoint.id;
+}
+
 const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly Partial<OutboxRow>[]>> = {
+  // Webhooks (spec 0064): a workspace's own automation settings, which nobody's screen follows live, so no row.
+  'webhooks.create': async (m, mutationId) => {
+    await m.client.webhooks.create({
+      workspace: m.slug,
+      url: 'https://hooks.example.com/timefix',
+      events: ['form.submitted'],
+      mutationId,
+    });
+    return [];
+  },
+  'webhooks.update': async (m, mutationId) => {
+    const endpointId = await webhookOf(m);
+    await m.client.webhooks.update({ workspace: m.slug, endpointId, status: 'off', mutationId });
+    return [];
+  },
+  'webhooks.rotateSecret': async (m, mutationId) => {
+    const endpointId = await webhookOf(m);
+    await m.client.webhooks.rotateSecret({ workspace: m.slug, endpointId, mutationId });
+    return [];
+  },
+  'webhooks.delete': async (m, mutationId) => {
+    const endpointId = await webhookOf(m);
+    await m.client.webhooks.delete({ workspace: m.slug, endpointId, mutationId });
+    return [];
+  },
+  'webhooks.test': async (m, mutationId) => {
+    const endpointId = await webhookOf(m);
+    await m.client.webhooks.test({ workspace: m.slug, endpointId, mutationId });
+    return [];
+  },
+  'webhooks.resend': async (m, mutationId) => {
+    const endpointId = await webhookOf(m);
+    const ping = await m.client.webhooks.test({ workspace: m.slug, endpointId, mutationId: newId() });
+    await m.client.webhooks.resend({ workspace: m.slug, deliveryId: ping.id, mutationId });
+    return [];
+  },
   // A workspace's sign in rules (spec 0033): the door reads them on every request, so no screen needs an event.
   'workspaceSecurity.set': async (m) => {
     await m.client.workspaceSecurity.set({ workspace: m.slug, sessionLengthDays: 7 });
@@ -2285,6 +2337,12 @@ Object.assign(WRITES, {
 
 /** How many writes (each one poke) a case in WRITES makes before and with its own. */
 const WRITES_MADE: Readonly<Record<string, number>> = {
+  // Webhooks (spec 0064): the endpoint made first (and a test event before a resend).
+  'webhooks.update': 2,
+  'webhooks.rotateSecret': 2,
+  'webhooks.delete': 2,
+  'webhooks.test': 2,
+  'webhooks.resend': 3,
   // Imports (spec 0040): the import made (and its rows staged) first, then the write.
   'imports.stage': 2,
   'imports.start': 3,

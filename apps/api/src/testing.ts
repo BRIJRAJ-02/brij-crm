@@ -2,7 +2,14 @@
 // database that is never reached, and a way to read the log lines it writes.
 import type { FileStore } from './storage/blob.ts';
 import { ENGINE_REFUSAL_CODES, type EngineRefusal } from '@crm/contracts';
-import { isInvitedEmail, NO_RULE_SOURCE, twoFactorRequiredBy, type JobRegistry, type RuleSource } from '@crm/core';
+import {
+  isInvitedEmail,
+  NO_RULE_SOURCE,
+  twoFactorRequiredBy,
+  type JobRegistry,
+  type RuleSource,
+  type WebhookUrlProblem,
+} from '@crm/core';
 import { createDatabase, createIdentityStore, type Database, type IdentityStore } from '@crm/db';
 import { ORPCError, os } from '@orpc/server';
 import { vi } from 'vitest';
@@ -14,6 +21,7 @@ import type { ApiEnv } from './env.ts';
 import type { MailMessage, Mailer } from './mail/mailer.ts';
 import type { Analytics } from './monitoring/posthog.ts';
 import type { OutsideFetch } from './public/outside.ts';
+import type { WebhookSender } from './jobs/webhook-deliver.ts';
 import type { SignedOutNotice } from './realtime/signed-out.ts';
 import { NO_WAKE, type WakeRelay } from './realtime/wake.ts';
 import type { RequestContext } from './orpc.ts';
@@ -92,6 +100,10 @@ export function testServices(
     files?: FileStore;
     /** The one outside read (spec 0055): a fixed page unless given, so no test ever reaches the network. */
     outsideFetch?: OutsideFetch;
+    /** The webhook sender (spec 0064): a receiver that answers 200 unless given, so no test reaches the network. */
+    webhookSender?: WebhookSender;
+    /** The resolved address check for a new endpoint: every host public unless given. */
+    webhookHostCheck?: (url: URL) => Promise<WebhookUrlProblem | undefined>;
   } = {},
 ): AppServices {
   const db = options.db ?? unreachableDatabase();
@@ -121,7 +133,14 @@ export function testServices(
     ...(options.signedOut === undefined ? {} : { signedOut: options.signedOut }),
     ...(options.files === undefined ? {} : { files: options.files }),
     outsideFetch: options.outsideFetch ?? testOutsideFetch(),
+    webhookSender: options.webhookSender ?? testWebhookSender(),
+    webhookHostCheck: options.webhookHostCheck ?? (() => Promise.resolve(undefined)),
   };
+}
+
+/** A webhook receiver that takes every delivery with 200 and `ok`, so no test reaches the network. */
+export function testWebhookSender(): WebhookSender {
+  return () => Promise.resolve({ ok: true, status: 200, ms: 5, excerpt: 'ok' });
 }
 
 /** The page every import reads in a test: two rows it can make, and one it cannot. No network, no resolver. */
