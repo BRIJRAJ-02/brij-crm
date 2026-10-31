@@ -25,7 +25,7 @@ export function heldPermissions(row: {
   if (row.customRoleId !== null) {
     return row.role === 'member' && row.customPermissions !== null ? customRolePermissions(row.customPermissions) : [];
   }
-  return isRole(row.role) ? (ROLE_PERMISSIONS[row.role as Role] as readonly Permission[]) : [];
+  return isRole(row.role) ? (ROLE_PERMISSIONS[row.role] as readonly Permission[]) : [];
 }
 
 /** An active member and what they hold now, held `for share` (the member row), or undefined. */

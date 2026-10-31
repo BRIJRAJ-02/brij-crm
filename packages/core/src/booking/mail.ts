@@ -17,7 +17,7 @@
 // - reminders: the visitor, 24 hours and 1 hour before, only while the
 //   booking is confirmed and that close (a stale reminder sends nothing).
 // A guest never gets the visitor's link: it is the visitor's key.
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { DateTime } from 'luxon';
 import { zoneDisplay } from '@crm/contracts/zones';
 import { schema } from '@crm/db';

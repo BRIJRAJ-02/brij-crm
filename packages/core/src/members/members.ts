@@ -2,7 +2,7 @@
 // screens show, a page at a time, and the owner rules for changing a member's
 // role, removing them or leaving. Every change writes its audit row in its own
 // transaction. Everything goes through the scope the access door made.
-import { and, asc, count, eq, gt, ilike, inArray, ne, notInArray, or, sql } from 'drizzle-orm';
+import { and, asc, count, eq, gt, ilike, inArray, notInArray, or, sql } from 'drizzle-orm';
 import * as z from 'zod';
 import {
   LAST_OWNER_MESSAGE,
