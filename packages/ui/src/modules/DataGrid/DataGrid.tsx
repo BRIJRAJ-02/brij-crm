@@ -511,6 +511,8 @@ export function DataGrid<Row>({
   const shiftPressed = useRef(false);
   // The last press's pointer: a row's checkbox ticks on a mouse's press but on a touch's tap.
   const pressedBy = useRef('mouse');
+  // Whether the pointer went down on a row's Open in panel, kept here: the row's cell is replaced as it takes focus.
+  const peekPress = useRef(false);
   const within = useRef(false);
 
   // Only the rows on screen, plus the overscan, draw; and the focused and edited
@@ -1783,6 +1785,7 @@ export function DataGrid<Row>({
                     onOpenPanel: () => {
                       onRowOpen(id);
                     },
+                    peekPress,
                   }
                 : {})}
               {...(isEditing

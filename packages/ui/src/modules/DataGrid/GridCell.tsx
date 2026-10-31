@@ -97,6 +97,11 @@ export interface GridCellProps {
    * hover (owner, 31 October 2026), that opens the record beside the grid.
    */
   readonly onOpenPanel?: () => void;
+  /**
+   * Whether a press began on Open in panel, held by the grid: focusing a row gives it an element of its own, so the
+   * press's start and its release land on two different cells, and only a flag that outlives the first cell can join them.
+   */
+  readonly peekPress?: { current: boolean };
   /** A checkbox value: a click on the mark toggles it. */
   readonly onToggle?: () => void;
   /** On the row header: the row's note (spec 0006, AC-56), drawn after the value and read with it. */
@@ -144,6 +149,7 @@ export function GridCell({
   onDoubleClick,
   onOpen,
   onOpenPanel,
+  peekPress,
   onToggle,
   note,
   comments,
@@ -210,11 +216,13 @@ export function GridCell({
   };
   // Open in panel is heard in the capture phase, before its Button (which stops its own events): pressing a row's cell
   // focuses it and gives the row an element of its own, so the press and its release meet different elements and
-  // the Button's own press never fires. It opens as the pointer lifts on it, or on a click with no pointer behind it
+  // the Button's own press never fires; the grid holds whether the press began on it (`peekPress`), since the cell that
+  // heard the press is gone by the release. It opens as the pointer lifts on it, or on a click with no pointer behind it
   // (a screen reader's, `detail` 0). Only a press that both started and ended on it counts: a drag (a range, a text
   // selection) that merely ends over it opens nothing.
   const isOnPeek = (target: EventTarget) => target instanceof Element && target.closest('[data-peek]') !== null;
-  const peekPressed = useRef(false);
+  const ownPress = useRef(false);
+  const peekPressed = peekPress ?? ownPress;
   const onPointerDownCapture = (event: PointerEvent<HTMLDivElement>) => {
     peekPressed.current = event.button === 0 && isOnPeek(event.target);
   };
