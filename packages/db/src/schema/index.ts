@@ -54,5 +54,5 @@ export { auditEvents, invitations, joinRequests, workspaceDomains, workspaceSecu
 export { emailPreferences, emails, emailStatus } from './emails.ts';
 export { bookingPageRotations, rotationAssignments, rotationMembers, rotationRoster, rotations } from './rotation.ts';
 export { memberBookingLimits, scheduleDelegations, schedulingEditors } from './scheduling.ts';
-export { routingDecisions } from './routing.ts';
+export { memberSkills, routingDecisions, routingSettings, routingSkills } from './routing.ts';
 export { importRowOutcome, importRows, imports, importStatus } from './imports.ts';

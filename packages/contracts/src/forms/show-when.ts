@@ -50,15 +50,28 @@ export interface ShowWhen {
 export type Facts = Readonly<Record<string, unknown>>;
 
 /**
- * A record fact's key (AC-1603): `person.` or `company.`, then the field's attribute id as a uuid in its one
- * canonical spelling (lower case, 8-4-4-4-12 digits), the second group. Anything else is no record fact: it fails
- * `FactKey` at the boundary, so a malformed id (36 dashes once answered 500) never reaches the database's uuid cast.
+ * A record fact's key (AC-1603; spec 0037, AC-1393): `person.`, `company.` or `deal.`, then the field's attribute id
+ * as a uuid in its one canonical spelling (lower case, 8-4-4-4-12 digits), the second group. Anything else is no
+ * record field: it fails `FactKey` at the boundary, so a malformed id (36 dashes once answered 500) never reaches the
+ * database's uuid cast.
  */
-export const RECORD_FACT = /^(person|company)\.([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/;
+export const RECORD_FACT = /^(person|company|deal)\.([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/;
 
-/** True when a key names a record field, not an answer. */
+/**
+ * What the CRM knows of the guest (spec 0037, AC-1393): `new`, `person` (a person holds their email), `company` (and
+ * that person has a company) or `customer` (a deal of theirs or their company's is in a Won means stage). Its key has
+ * a dot, which no question key can, so a question never reads as it.
+ */
+export const KNOWN_FACT = 'crm.known';
+
+/** Known's values, in order (spec 0037, AC-1393). */
+export const KNOWN_VALUES = ['new', 'person', 'company', 'customer'] as const;
+/** One of Known's values. */
+export type KnownValue = (typeof KNOWN_VALUES)[number];
+
+/** True when a key reads what the CRM holds (a record field or Known), not an answer: only a team page reads one. */
 export function isRecordFact(key: string): boolean {
-  return RECORD_FACT.test(key);
+  return key === KNOWN_FACT || RECORD_FACT.test(key);
 }
 
 /**

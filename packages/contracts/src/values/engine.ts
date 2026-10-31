@@ -74,6 +74,9 @@ export const ENGINE_REFUSAL_CODES = [
   'EDITOR_LIMIT',
   // Routing (spec 0037, AC-1341): a booking page a published form's rule, or its After someone sends it, still books.
   'ROUTING_IN_USE',
+  // Skills (spec 0037, AC-1382): a skill a host route names, or the workspace's 100th.
+  'SKILL_IN_USE',
+  'SKILL_LIMIT',
   // The sidebar (spec 0034, AC-934): 50 favourites, or 400 stored items.
   'NAV_LIMIT',
   // Domain join (spec 0031, AC-819): a domain the admin's own verified email isn't at, or a public mail domain.

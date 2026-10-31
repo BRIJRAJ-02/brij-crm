@@ -35,6 +35,7 @@ import { FORMS_PROCESS } from './process.ts';
 import { attachUploads, claimSpamUploads, claimUploads } from './uploads.ts';
 import { pageFreeTime, pageFreeTimeWithin, type FreeTimeDeps } from '../routing/free-time.ts';
 import { recordSteps, routeSubmission, storedRoute, submissionDecision } from '../routing/forms.ts';
+import { routeHostIds } from '../routing/hosts.ts';
 import { workspaceAddressProblem } from '../booking/workspace-addresses.ts';
 import { loadForm, loadVersions, publicFormOf, workspacePublicKey, type FormRow } from './shared.ts';
 import {
@@ -615,10 +616,12 @@ async function plannedBooking(
         and(eq(bookingPages.id, route.bookingPageId), eq(bookingPages.status, 'live'), isNull(bookingPages.deletedAt)),
       );
     if (live !== undefined) {
+      // Named hosts, or the members with the required skills (spec 0037, AC-1356), as the decision stored them.
+      const hosts = await routeHostIds(tx, route.bookingPageId, route.hosts);
       return {
         pageId: route.bookingPageId,
         viaRule: true,
-        ...(route.hosts === undefined ? {} : { hosts: route.hosts }),
+        ...(hosts === undefined ? {} : { hosts }),
       };
     }
   }

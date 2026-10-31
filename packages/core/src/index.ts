@@ -681,6 +681,10 @@ export { decideRoute, recordFactKeys, type RouteDecision } from './routing/decid
 export { routingReport } from './routing/report.ts';
 // Bookings › Routing (spec 0037, L6): the Overview and the Decisions log, for holders of routing.manage.
 export { routingDecision, routingDecisions, routingOverview } from './routing/log.ts';
+// Routing's shared layer (spec 0037, L7): skills and who holds them, the settings (Won means), and Test.
+export { createSkill, deleteSkill, listSkills, setMemberSkills, updateSkill } from './routing/skills.ts';
+export { getRoutingSettings, setRoutingSettings } from './routing/settings.ts';
+export { routingTest } from './routing/test.ts';
 export { searchWorkspace, type GlobalSearchInput } from './search/search.ts';
 export { listRecents, visitRecent, RECENTS_KEPT, type RecentVisit } from './search/recents.ts';
 export {

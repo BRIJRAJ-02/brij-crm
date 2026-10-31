@@ -489,6 +489,15 @@ export const ACCESS_TABLE = {
   // Sharing (spec 0037, AC-1331): whoever may change the page or rotation lists its editors; only booking.admin sets them.
   listEditors: { editor: 'resource' },
   setEditors: { permission: 'booking.admin' },
+  // Routing's shared layer (spec 0037, L7): skills listed for any member; the rest for routing.manage.
+  listSkills: { anyMember: true },
+  createSkill: { permission: 'routing.manage' },
+  updateSkill: { permission: 'routing.manage' },
+  deleteSkill: { permission: 'routing.manage' },
+  setMemberSkills: { permission: 'routing.manage' },
+  getRoutingSettings: { permission: 'routing.manage' },
+  setRoutingSettings: { permission: 'routing.manage' },
+  routingTest: { permission: 'routing.manage' },
   // Scheduling access (spec 0037, J1): delegations, and the members in See reach (`members.visible`, AC-1261).
   listDelegations: { delegation: true },
   grantDelegation: { delegation: true },

@@ -16,7 +16,7 @@ import { calendarContract } from './calendar.ts';
 import { homeContract } from './home.ts';
 import { commentsContract } from './comments.ts';
 import { formsContract, submissionsContract } from './forms/forms.ts';
-import { routingContract } from './forms/routing.ts';
+import { routingContract } from './forms/routing-shared.ts';
 import { exportsContract, importsContract } from './imports.ts';
 import { jobsContract } from './jobs.ts';
 import { meContract } from './me.ts';

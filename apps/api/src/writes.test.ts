@@ -191,6 +191,9 @@ const READS: ReadonlySet<string> = new Set([
   'routing.overview',
   'routing.decisions',
   'routing.decision',
+  // Routing's skills (any member) and its settings (spec 0037, L7).
+  'routing.skills.list',
+  'routing.settings.get',
 ]);
 
 let db: Database;
@@ -2171,6 +2174,76 @@ Object.assign(WRITES, {
   },
 });
 
+/** A skill of the member's workspace, made through the procedure. */
+async function skillOn(m: Member): Promise<string> {
+  const id = newId();
+  await m.client.routing.skills.create({
+    workspace: m.slug,
+    id,
+    group: 'language',
+    name: 'Spanish',
+    mutationId: newId(),
+  });
+  return id;
+}
+
+// Routing's shared layer (spec 0037, L7): skills, member skills, Won means and Test are settings and an audit row,
+// so no outbox row.
+Object.assign(WRITES, {
+  'routing.skills.create': async (m: Member, mutationId: string) => {
+    await m.client.routing.skills.create({ workspace: m.slug, id: newId(), group: 'region', name: 'EMEA', mutationId });
+    return [];
+  },
+  'routing.skills.update': async (m: Member, mutationId: string) => {
+    const id = await skillOn(m);
+    await m.client.routing.skills.update({ workspace: m.slug, id, name: 'Español', mutationId });
+    return [];
+  },
+  'routing.skills.delete': async (m: Member, mutationId: string) => {
+    const id = await skillOn(m);
+    await m.client.routing.skills.delete({ workspace: m.slug, id, mutationId });
+    return [];
+  },
+  'routing.memberSkills.set': async (m: Member, mutationId: string) => {
+    const id = await skillOn(m);
+    const [me] = await testQuery<{ id: string }>(
+      ownerUrl,
+      `select id::text from members where workspace_id = $1 and status = 'active' limit 1`,
+      [m.workspace.id],
+    );
+    await m.client.routing.memberSkills.set({ workspace: m.slug, memberId: me?.id ?? '', skillIds: [id], mutationId });
+    return [];
+  },
+  'routing.settings.set': async (m: Member, mutationId: string) => {
+    const [won] = await testQuery<{ attribute_id: string; option_id: string }>(
+      ownerUrl,
+      `select a.id::text as attribute_id, o.id::text as option_id
+       from attributes a
+       join objects b on b.id = a.object_id and b.standard_key = 'deals'
+       join attribute_options o on o.attribute_id = a.id and o.outcome = 'won'
+       where a.workspace_id = $1 and a.api_slug = 'stage' limit 1`,
+      [m.workspace.id],
+    );
+    await m.client.routing.settings.set({
+      workspace: m.slug,
+      wonStage: { attributeId: won?.attribute_id ?? '', optionIds: [won?.option_id ?? ''] },
+      mutationId,
+    });
+    return [];
+  },
+  'routing.test': async (m: Member, mutationId: string) => {
+    const form = await formOn(m);
+    await m.client.routing.test({
+      workspace: m.slug,
+      surface: { kind: 'form', formId: form.id },
+      answers: {},
+      email: 'ada@example.com',
+      mutationId,
+    });
+    return [];
+  },
+});
+
 /** A comment by the member on a new person of theirs, made in its own write: its record and thread. */
 async function commentOn(m: Member): Promise<{ readonly recordId: string; readonly threadId: string }> {
   const recordId = await personFor(m);
@@ -2370,6 +2443,11 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'rotations.update': 2,
   'rotations.delete': 2,
   'editors.set': 2,
+  // Routing (spec 0037, L7): a skill made first.
+  'routing.skills.update': 2,
+  'routing.skills.delete': 2,
+  'routing.memberSkills.set': 2,
+  'routing.test': 2,
   'bookingPages.delete': 2,
   'bookingPages.reorderProfile': 2,
   'profile.saveTheme': 2,

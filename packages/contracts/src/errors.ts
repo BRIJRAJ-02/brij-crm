@@ -91,6 +91,9 @@ export const ERROR_MAP = {
   EDITOR_LIMIT: CONFLICT,
   // Routing (spec 0037, AC-1341): "Rule 3 of Contact us sends people here. Change the rule first."
   ROUTING_IN_USE: CONFLICT,
+  // Skills (spec 0037, AC-1382): "Spanish is used by Rule 3 of Intro call." and "A workspace can have at most 100 skills."
+  SKILL_IN_USE: CONFLICT,
+  SKILL_LIMIT: CONFLICT,
   // The sidebar (spec 0034, AC-934): "You have 50 favourites. Remove one first."
   NAV_LIMIT: CONFLICT,
   // Domain join (spec 0031, AC-819).

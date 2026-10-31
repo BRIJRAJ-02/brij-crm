@@ -241,6 +241,9 @@ const SENTENCES: SentenceTemplates = {
     ),
   'rotation.changed': (entry, w) => actor(`changed who is in ${w.thing(entry.target)}`),
   'editors.changed': (entry, w) => actor(`changed who can edit ${w.thing(entry.target)}`),
+  'routing.settings_changed': () => actor('changed the routing settings'),
+  'routing.skills_changed': () => actor('changed routing skills'),
+  'routing.tested': () => actor('tested routing'),
 };
 
 /** A delegation's level as its verb: See or Manage. */

@@ -301,6 +301,20 @@ const FIXTURES: Record<ListedAuditAction, readonly AuditRow[]> = {
   'editors.changed': [
     row('editors.changed', 'rotation', rotation, { after: { name: 'Sales', added: [bea], removed: [] } }),
   ],
+  'routing.settings_changed': [
+    row('routing.settings_changed', 'workspace', newId(), { before: { wonStage: null }, after: { wonStage: null } }),
+  ],
+  'routing.skills_changed': [
+    row('routing.skills_changed', 'workspace', newId(), {
+      after: { skill: { id: newId(), group: 'language', name: 'Spanish' } },
+    }),
+  ],
+  // The email Test named stays in the row; the entry never carries it.
+  'routing.tested': [
+    row('routing.tested', 'workspace', newId(), {
+      after: { surface: 'booking_page', surfaceId: newId(), email: 'ada@example.com' },
+    }),
+  ],
 };
 
 const view = (each: AuditRow): AuditEntryView => {

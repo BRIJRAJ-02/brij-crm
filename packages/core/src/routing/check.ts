@@ -3,8 +3,15 @@
 // access door like After someone sends it, hosts only on a round robin page,
 // and every host named must be in that page's rotations. A team page's rules
 // may read only the record fields their writer can see.
-import { and, eq, isNull } from 'drizzle-orm';
-import { isHiddenFact, NUMBER_OPS, type RoutingRule } from '@crm/contracts';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
+import {
+  isHiddenFact,
+  namedHosts,
+  NUMBER_OPS,
+  requiredSkills,
+  type RouteHosts,
+  type RoutingRule,
+} from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
 import type { EngineScope } from '../access/mint.ts';
 import type { Access } from '../access/policy.ts';
@@ -13,7 +20,7 @@ import { bookingTargetProblem } from '../booking/pages.ts';
 import { refuseOn } from '../engine/refusals.ts';
 import { fieldsSeen, ruleFields } from './seen.ts';
 
-const { bookingPageRotations, bookingPages, rotationRoster, rotations } = schema;
+const { bookingPageRotations, bookingPages, rotationRoster, rotations, routingSkills } = schema;
 
 /** A rule's name in a sentence: "Rule 2" or "Rule 2, “Enterprise”,". */
 export function ruleName(rule: RoutingRule, index: number): string {
@@ -53,8 +60,11 @@ export async function pageHostPool(
   return { kind: page.kind, members: new Set(rows.map((row) => row.memberId)) };
 }
 
-/** Refuses hosts that aren't a round robin page's, or aren't in its rotations. */
-async function checkHosts(tx: WorkspaceTx, pageId: string, hosts: readonly string[], name: string): Promise<void> {
+/**
+ * Refuses hosts that aren't a round robin page's, or aren't in its rotations; and required skills (spec 0037,
+ * AC-1356) the workspace doesn't hold.
+ */
+async function checkHosts(tx: WorkspaceTx, pageId: string, routeHosts: RouteHosts, name: string): Promise<void> {
   const pool = await pageHostPool(tx, pageId);
   if (pool === undefined) return;
   if (pool.kind !== 'round_robin') {
@@ -64,6 +74,18 @@ async function checkHosts(tx: WorkspaceTx, pageId: string, hosts: readonly strin
       'routing',
     );
   }
+  const skills = requiredSkills(routeHosts);
+  if (skills !== undefined) {
+    const found = await tx
+      .select({ id: routingSkills.id })
+      .from(routingSkills)
+      .where(inArray(routingSkills.id, [...skills]));
+    if (found.length !== new Set(skills).size) {
+      throw refuseOn('CONFIG_INVALID', `${name} needs a skill that was deleted. Pick other skills.`, 'routing');
+    }
+    return;
+  }
+  const hosts = namedHosts(routeHosts) ?? [];
   if (hosts.some((host) => !pool.members.has(host))) {
     throw refuseOn(
       'CONFIG_INVALID',
@@ -87,8 +109,12 @@ export async function checkFormRoutes(
 ): Promise<void> {
   // A route already set (its page and its hosts) stays for others to edit; a new page, or new hosts on a page, goes
   // through the door, so only someone who may use the page decides whose leads it gets.
-  const routeKey = (pageId: string, hosts: readonly string[] | undefined) =>
-    `${pageId}|${[...(hosts ?? [])].sort().join(',')}`;
+  const routeKey = (pageId: string, hosts: RouteHosts | undefined) => {
+    const skills = requiredSkills(hosts);
+    return skills === undefined
+      ? `${pageId}|${[...(namedHosts(hosts) ?? [])].sort().join(',')}`
+      : `${pageId}|skills:${[...skills].sort().join(',')}`;
+  };
   const known = new Set(
     before.flatMap((rule) => (rule.then.kind === 'book' ? [routeKey(rule.then.bookingPageId, rule.then.hosts)] : [])),
   );

@@ -327,6 +327,8 @@ export const AuditEntryView = z.discriminatedUnion('action', [
     z.union([rotation, bookingPage]),
     z.strictObject({ added: z.number().int().min(0), removed: z.number().int().min(0) }),
   ),
+  /** Bookings › Routing (spec 0037): its settings or skills changed, or a Test run; what changed stays in the row. */
+  entry(['routing.settings_changed', 'routing.skills_changed', 'routing.tested'], workspace, NoParams),
 ]);
 /** One row of Workspace changes. */
 export type AuditEntryView = z.infer<typeof AuditEntryView>;
