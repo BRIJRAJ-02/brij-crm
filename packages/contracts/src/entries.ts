@@ -20,6 +20,8 @@ import { FilterGroup } from './values/filters.ts';
 import { SortRules } from './values/sorts.ts';
 import { WorkspaceScoped } from './workspaces.ts';
 import { Uuid, uuidV7 } from './values/ids.ts';
+import { BULK_EXCEPT_MAX, BULK_IDS_MAX, BulkTarget } from './bulk.ts';
+import { JobView } from './jobs.ts';
 
 /** The most entries one batch write (`remove`, `restore`) names, and `get` reads. */
 export const MAX_ENTRY_BATCH = 500;
@@ -266,6 +268,81 @@ export const EntryGroups = z.object({ groups: z.array(EntryGroup) });
 export type EntryGroups = z.infer<typeof EntryGroups>;
 
 /**
+ * Adds every record a selection names to a list as a background job (spec
+ * 0048, AC-4825): more than 500 ticked records, or every record an object
+ * view matches ("all matching"), counted first and confirmed with
+ * `jobs.confirm`, as spec 0022's bulk jobs are. `id` is the browser's UUID v7,
+ * so a retry answers the same job. The target is an object's (`ids` or
+ * `matching` over the list's object).
+ */
+export const AddMatchingInput = WorkspaceScoped.extend({
+  id: uuidV7('The job id must be a UUID v7.'),
+  listId: Uuid,
+  target: BulkTarget,
+  timeZone: z.string().min(1).max(64).optional(),
+  mutationId: Uuid,
+});
+/** A bulk add to start. */
+export type AddMatchingInput = z.infer<typeof AddMatchingInput>;
+
+/**
+ * What a bulk removal works on (AC-4817): entries by id, or every entry a
+ * list view's filter matches (`asOf` when Select all was pressed), minus up to
+ * 1,000 left out.
+ */
+export const EntryTarget = z.discriminatedUnion('kind', [
+  z.strictObject({
+    kind: z.literal('ids'),
+    entryIds: z
+      .array(Uuid)
+      .min(1, 'Name at least one entry.')
+      .max(
+        BULK_IDS_MAX * 2,
+        `Select at most ${BULK_IDS_MAX.toLocaleString('en')} entries one by one, or select all matching.`,
+      ),
+  }),
+  z.strictObject({
+    kind: z.literal('matching'),
+    filter: FilterGroup.optional(),
+    except: z
+      .array(Uuid)
+      .max(
+        BULK_EXCEPT_MAX * 2,
+        `You can leave out at most ${BULK_EXCEPT_MAX.toLocaleString('en')} entries from all matching.`,
+      ),
+    asOf: z.iso.datetime({ offset: true }),
+    now: z.iso.datetime({ offset: true }).optional(),
+    timeZone: z.string().min(1).max(64).optional(),
+  }),
+]);
+/** What a bulk removal works on. */
+export type EntryTarget = z.infer<typeof EntryTarget>;
+
+/** Takes many entries out of a list as a background job (AC-4817), counted and confirmed first. */
+export const RemoveMatchingInput = WorkspaceScoped.extend({
+  id: uuidV7('The job id must be a UUID v7.'),
+  listId: Uuid,
+  target: EntryTarget,
+  mutationId: Uuid,
+});
+/** A bulk removal to start. */
+export type RemoveMatchingInput = z.infer<typeof RemoveMatchingInput>;
+
+/**
+ * Undoes a finished bulk add or removal of the caller's (AC-4818, AC-4825):
+ * a job of its own (`id`, the browser's UUID v7), run with no confirm, that
+ * removes exactly the entries the add made, or brings back exactly the ones
+ * the removal took out.
+ */
+export const UndoEntriesJobInput = WorkspaceScoped.extend({
+  id: uuidV7('The job id must be a UUID v7.'),
+  jobId: Uuid,
+  mutationId: Uuid,
+});
+/** A bulk add or removal to undo. */
+export type UndoEntriesJobInput = z.infer<typeof UndoEntriesJobInput>;
+
+/**
  * A list's entries (spec 0048). Every call follows the list's object
  * (decision 2): a list the caller can't read answers `NOT_FOUND` with the
  * words an unknown list gets, and a write needs write on the object (403
@@ -285,7 +362,11 @@ export type EntryGroups = z.infer<typeof EntryGroups>;
  * `forRecord` answers at most 100 live entries of one record in lists the
  * caller may read, by list name then when added (a list they can't read leaves
  * no gap); a record they can't see is `NOT_FOUND`. Every write stores an
- * `entries` event and answers `echoes`.
+ * `entries` event and answers `echoes`. `addMatching` and `removeMatching`
+ * start counted jobs (spec 0022's rules: 409 `LIMIT_REACHED` at 20 unfinished,
+ * `FILTER_INVALID`, `CONFIG_INVALID` for a target of another object), and
+ * `undoJob` starts the job that takes one of them back (`NOT_FOUND` for a job
+ * that isn't the caller's bulk add or removal).
  */
 export const entriesContract = {
   query: oc.input(QueryEntriesInput).output(EntryPage),
@@ -299,4 +380,7 @@ export const entriesContract = {
   setValues: oc.input(SetEntryValuesInput).output(WrittenEntry),
   remove: oc.input(EntryIdsInput).output(EntryResults),
   restore: oc.input(EntryIdsInput).output(EntryResults),
+  addMatching: oc.input(AddMatchingInput).output(JobView),
+  removeMatching: oc.input(RemoveMatchingInput).output(JobView),
+  undoJob: oc.input(UndoEntriesJobInput).output(JobView),
 };

@@ -1557,6 +1557,30 @@ const DATA_CASES: Readonly<Record<string, DataCase>> = {
   addListEntries: refused('FORBIDDEN', (scope, world) =>
     core.addListEntries(scope, { listId: world.listId, recordIds: [world.recordId] }),
   ),
+  // A list's bulk jobs (AC-4817, AC-4825): a read only list refuses the start; an undo of no job of theirs is absent.
+  startAddMatching: refused('FORBIDDEN', (scope, world) =>
+    core.startAddMatching(scope, core.jobKinds({ environment: 'local' }), {
+      id: core.newId(),
+      listId: world.listId,
+      target: { kind: 'ids', objectId: world.people, recordIds: [world.recordId] },
+    }),
+  ),
+  startRemoveMatching: refused('FORBIDDEN', (scope, world) =>
+    core.startRemoveMatching(scope, core.jobKinds({ environment: 'local' }), {
+      id: core.newId(),
+      listId: world.listId,
+      target: { kind: 'ids', entryIds: [world.entryId] },
+    }),
+  ),
+  undoEntriesJob: refused('NOT_FOUND', async (scope, world) => {
+    const registry = core.jobKinds({ environment: 'local' });
+    const started = await core.startRemoveMatching(world.owner, registry, {
+      id: core.newId(),
+      listId: world.listId,
+      target: { kind: 'ids', entryIds: [world.entryId] },
+    });
+    return core.undoEntriesJob(scope, registry, { id: core.newId(), jobId: started.id });
+  }),
   editEntry: refused('FORBIDDEN', (scope, world) => core.editEntry(scope, { entryId: world.entryId, values: {} })),
   // A batch answers per entry (AC-4818): each refused, the call itself answered.
   removeEntries: refused('FORBIDDEN', async (scope, world) =>

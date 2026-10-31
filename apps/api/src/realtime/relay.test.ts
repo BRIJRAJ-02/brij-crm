@@ -15,7 +15,7 @@ import { testQuery } from '@crm/db/testing';
 import { createCentrifugoPublisher } from './centrifugo.ts';
 import { createRelay, type Relay, type RelayDeps } from './relay.ts';
 
-const { appUrl, ownerUrl, adminUrl, workerUrl } = inject('testDatabase');
+const { appUrl, ownerUrl, adminUrl, workerUrl } = inject('relayDatabase');
 const API_KEY = 'test-centrifugo-key';
 
 interface Publication {

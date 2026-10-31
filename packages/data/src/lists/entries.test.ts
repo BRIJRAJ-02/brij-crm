@@ -233,4 +233,32 @@ describe('adding many and a record’s entries (AC-4822, AC-4825)', () => {
     expect(state.rows.map((row) => row.id)).toEqual(['e1']);
     stop();
   });
+
+  it('shows a card added from the record page at once, and takes it away on a refusal (AC-4823)', async () => {
+    let answer: (value: WrittenEntry) => void = () => undefined;
+    let refuse: (error: Error) => void = () => undefined;
+    let call = 0;
+    const { layer } = setup({
+      add: () =>
+        new Promise((resolve, reject) => {
+          call += 1;
+          if (call === 1) answer = resolve;
+          else refuse = reject;
+        }),
+    });
+    const section = layer.forRecord('acme', 'r1');
+    const stop = section.retain();
+    await settle();
+    const added = layer.add('acme', { ...LIST, id: 'list-2' }, 'r1', {}, 'e-new');
+    expect(section.getSnapshot().rows.map((row) => row.id)).toEqual(['e1', 'e-new']);
+    answer(written({ ...entry('e-new', 'r1'), listId: 'list-2' }));
+    expect((await added).kind).toBe('added');
+    expect(section.getSnapshot().rows.map((row) => row.id)).toEqual(['e1', 'e-new']);
+    const refused = layer.add('acme', { ...LIST, id: 'list-3' }, 'r1', {}, 'e-out');
+    expect(section.getSnapshot().rows.map((row) => row.id)).toContain('e-out');
+    refuse(dataError('ENTRY_EXISTS', 'That record is already in this list.'));
+    expect((await refused).kind).toBe('refused');
+    expect(section.getSnapshot().rows.map((row) => row.id)).not.toContain('e-out');
+    stop();
+  });
 });

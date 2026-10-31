@@ -94,10 +94,13 @@ function GeneralTab({
     );
   };
 
-  // "Each record once" applies at once, like every switch; a refusal (a record in twice) says why in a Toast.
+  // "Each record once" applies at once, like every switch; a refusal (records in twice, AC-4830) stays under the
+  // switch, saying how many and what to do, until the next change.
+  const [onceProblem, setOnceProblem] = useState<string | undefined>(undefined);
   const setOnce = (isOnce: boolean) => {
+    setOnceProblem(undefined);
     data.lists.update(slug, list.id, { allowsDuplicates: !isOnce }).catch((error: unknown) => {
-      toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : listStrings.saveFailed });
+      setOnceProblem(isDataError(error) ? error.message : listStrings.saveFailed);
     });
   };
 
@@ -126,11 +129,15 @@ function GeneralTab({
       <Card>
         <Switch
           label={listStrings.eachRecordOnce}
-          description={listStrings.eachRecordOnceHint}
           isSelected={!list.allowsDuplicates}
           isDisabled={!canManage}
           onChange={setOnce}
         />
+        {onceProblem !== undefined && (
+          <Callout tone="danger" isAnnounced>
+            {onceProblem}
+          </Callout>
+        )}
         {!canManage && <LockReason reason={lockSentence(list, members)} />}
       </Card>
       {canManage && (

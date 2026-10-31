@@ -445,6 +445,41 @@ describe('a list’s views and board (AC-4808, AC-4820)', () => {
       [1, [globex]],
     ]);
   });
+
+  it('adds many to a Pipeline set based, each new entry starting at Lead with its own version and sort key', async () => {
+    const world = await workspace();
+    const list = await createList(world.owner, {
+      id: newId(),
+      objectId: world.companies,
+      name: 'Batch deals',
+      template: 'pipeline',
+    });
+    const stage = (await listListAttributes(world.owner, list.id)).find((field) => field.title === 'Stage');
+    const [lead] = stage?.options ?? [];
+    const made = [];
+    for (const name of ['A', 'B', 'C', 'D']) made.push(await world.company(name));
+    const answer = await addListEntries(world.owner, { listId: list.id, recordIds: made });
+    expect(answer.added).toHaveLength(4);
+    const read = await readEntryPage(
+      world.owner,
+      answer.added.map((each) => each.entryId),
+    );
+    expect(read.entries.map((entry) => entry.values[stage?.id ?? ''])).toEqual([
+      lead?.id,
+      lead?.id,
+      lead?.id,
+      lead?.id,
+    ]);
+    const versions = new Set(read.entries.map((entry) => entry.versions[stage?.id ?? '']));
+    expect(versions.size).toBe(4);
+    const board = await queryGroups(world.owner, {
+      listId: list.id,
+      groupBy: stage?.id ?? '',
+      groupIds: [lead?.id ?? null],
+    });
+    expect(board.groups[0]?.count).toBe(4);
+    expect((await countEntries(world.owner, { listId: list.id })).count).toBe(4);
+  });
 });
 
 describe('list settings, archive and restore (AC-4829 to AC-4832)', () => {
@@ -479,6 +514,22 @@ describe('list settings, archive and restore (AC-4829 to AC-4832)', () => {
     });
     // An admin changes any list (AC-4834).
     expect((await updateList(world.owner, { listId: list.id, name: 'Talent' })).name).toBe('Talent');
+    await archiveList(world.owner, { listId: list.id });
+    await restoreList(world.owner, { listId: list.id });
+    // Each change has its audit row, for Settings › History (spec 0046); a rename keeps both names.
+    const rows = await db.withWorkspace(world.workspaceId, (tx) =>
+      tx.execute<{ action: string; before: unknown; after: unknown }>(
+        sql`select action, before, after from audit_events where target_id = ${list.id} order by at, id`,
+      ),
+    );
+    expect(rows.rows.map((row) => row.action)).toEqual([
+      'list.created',
+      'list.updated',
+      'list.updated',
+      'list.archived',
+      'list.restored',
+    ]);
+    expect(rows.rows[2]).toMatchObject({ before: { name: 'Recruiting' }, after: { name: 'Talent' } });
   });
 
   it('refuses turning Each record once on while a record is in twice, naming the count to an open reader', async () => {
@@ -514,8 +565,20 @@ describe('list settings, archive and restore (AC-4829 to AC-4832)', () => {
     const ada = await world.person('Ada');
     await addListEntry(world.bea.scope, { id: newId(), listId: list.id, recordId: ada });
     expect(await refusalOf(archiveList(world.cy.scope, { listId: list.id }))).toMatchObject({ code: 'FORBIDDEN' });
+    const [entry] = (await queryEntries(world.bea.scope, { listId: list.id })).entries;
+    const note = await createAttribute(world.owner, {
+      objectId: world.people,
+      listId: list.id,
+      id: newId(),
+      title: 'Note',
+      type: 'text',
+    });
     const archived = await archiveList(world.bea.scope, { listId: list.id });
     expect(archived.isArchived).toBe(true);
+    // Its entries' fields can't change while it is archived, as entries can't be added.
+    expect(
+      await refusalOf(editEntry(world.bea.scope, { entryId: entry?.id ?? '', values: { [note.id]: { value: 'x' } } })),
+    ).toEqual({ code: 'NOT_FOUND', message: 'That list is archived. Restore it first.' });
     expect((await listLists(world.cy.scope)).some((each) => each.id === list.id)).toBe(false);
     expect(
       (await listLists(world.bea.scope, { includeArchived: true })).find((each) => each.id === list.id)?.isArchived,
@@ -737,6 +800,59 @@ describe('record rules and other workspaces (AC-4836, AC-4838)', () => {
     expect((await listLists(ruled)).find((each) => each.id === list.id)?.entryCount).toBeUndefined();
     const added = await addListEntries(ruled, { listId: list.id, recordIds: [theirs] });
     expect(added.refused[0]?.code).toBe('NOT_FOUND');
+  });
+
+  it('never tells a non reader a hidden record is already in an Each record once list', async () => {
+    const world = await workspace();
+    const ownerField = await createAttribute(world.owner, {
+      objectId: world.people,
+      id: newId(),
+      title: 'Account owner',
+      type: 'actor_reference',
+    });
+    const list = await createList(world.owner, {
+      id: newId(),
+      objectId: world.people,
+      name: 'Once',
+      template: 'blank',
+    });
+    const theirs = (
+      await createRecord(world.owner, {
+        objectId: world.people,
+        values: {
+          [world.attribute('name', world.people)]: { firstName: 'Theirs' },
+          [ownerField.id]: { type: 'member', id: world.bea.id },
+        },
+      })
+    ).recordId;
+    await addListEntry(world.owner, { id: newId(), listId: list.id, recordId: theirs });
+    const ruled = testScope({
+      db,
+      workspaceId: world.workspaceId,
+      actor: { type: 'member', id: world.cy.id },
+      role: 'member',
+      rules: {
+        levels: [],
+        records: [
+          {
+            subject: { type: 'role', role: 'member' },
+            objectId: world.people,
+            kind: 'own',
+            attributeId: ownerField.id,
+          },
+        ],
+      },
+    });
+    // The hidden record already in the list answers exactly as a record that was never there.
+    const unknown = await refusalOf(addListEntry(ruled, { id: newId(), listId: list.id, recordId: newId() }));
+    expect(await refusalOf(addListEntry(ruled, { id: newId(), listId: list.id, recordId: theirs }))).toEqual(unknown);
+    const batch = await addListEntries(ruled, { listId: list.id, recordIds: [theirs, newId()] });
+    expect(batch.alreadyIn).toEqual([]);
+    expect(batch.refused.map((each) => [each.code, each.message])).toEqual([
+      ['NOT_FOUND', 'That record does not exist.'],
+      ['NOT_FOUND', 'That record does not exist.'],
+    ]);
+    expect(await entryMembership(ruled, { listId: list.id, recordIds: [theirs] })).toEqual([]);
   });
 
   it('answers a list from another workspace as unknown, for every new procedure', async () => {

@@ -47,6 +47,8 @@ const READS: ReadonlySet<string> = new Set([
   'attributes.list',
   // What an attribute's change would touch, read before the change (the flow pass).
   'attributes.impact',
+  // What changing an attribute's type would do, read before the change (the field types lane).
+  'attributes.checkTypeChange',
   'members.list',
   // Teams (spec 0031, slice 8): the list every member reads.
   'teams.list',
@@ -101,6 +103,7 @@ const READS: ReadonlySet<string> = new Set([
   'entries.groups',
   'entries.get',
   'entries.membership',
+  'entries.forRecord',
   'records.objectCounts',
   'records.groups',
   // A column's calculation (the CRM flow pass): a read.
@@ -253,6 +256,7 @@ function paths(tree: unknown, prefix: readonly string[] = []): string[] {
 interface OutboxRow {
   readonly kind: string;
   readonly object_id: string;
+  readonly list_id: string | null;
   readonly record_ids: string[];
   readonly attribute_ids: string[];
   readonly item_ids: string[];
@@ -262,7 +266,7 @@ interface OutboxRow {
 async function outboxOf(workspaceId: string): Promise<OutboxRow[]> {
   return testQuery<OutboxRow & Record<string, unknown>>(
     ownerUrl,
-    'select kind, object_id, record_ids, attribute_ids, item_ids, mutation_id from outbox where workspace_id = $1 order by seq',
+    'select kind, object_id, list_id, record_ids, attribute_ids, item_ids, mutation_id from outbox where workspace_id = $1 order by seq',
     [workspaceId],
   );
 }
@@ -892,6 +896,91 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
       { kind: 'entries', list_id: made.listId, item_ids: [made.entryId], mutation_id: mutationId },
     ];
   },
+  'lists.update': async (m, mutationId) => {
+    const made = await listWithEntry(m);
+    await m.client.lists.update({ workspace: m.slug, listId: made.listId, name: 'Talent', mutationId });
+    return [...listRows(m, made), { kind: 'definitions', list_id: made.listId, mutation_id: mutationId }];
+  },
+  'lists.archive': async (m, mutationId) => {
+    const made = await listWithEntry(m);
+    await m.client.lists.archive({ workspace: m.slug, listId: made.listId, mutationId });
+    return [...listRows(m, made), { kind: 'definitions', list_id: made.listId, mutation_id: mutationId }];
+  },
+  'lists.restore': async (m, mutationId) => {
+    const made = await listWithEntry(m);
+    await m.client.lists.archive({ workspace: m.slug, listId: made.listId, mutationId: newId() });
+    await m.client.lists.restore({ workspace: m.slug, listId: made.listId, mutationId });
+    return [
+      ...listRows(m, made),
+      { kind: 'definitions', list_id: made.listId },
+      { kind: 'definitions', list_id: made.listId, mutation_id: mutationId },
+    ];
+  },
+  'entries.addMany': async (m, mutationId) => {
+    const made = await listWithEntry(m);
+    const recordId = newId();
+    await m.client.records.create({
+      workspace: m.slug,
+      objectId: m.people.id,
+      id: recordId,
+      values: { [m.attribute('name')]: { firstName: 'Bo' } },
+      mutationId: newId(),
+    });
+    const id = newId();
+    await m.client.entries.addMany({
+      workspace: m.slug,
+      listId: made.listId,
+      recordIds: [recordId],
+      ids: [id],
+      mutationId,
+    });
+    return [
+      ...listRows(m, made),
+      { kind: 'records', object_id: m.people.id, record_ids: [recordId] },
+      { kind: 'entries', list_id: made.listId, item_ids: [id], record_ids: [recordId], mutation_id: mutationId },
+    ];
+  },
+  // A list's bulk jobs (AC-4817, AC-4825): each start stores one jobs row.
+  'entries.addMatching': async (m, mutationId) => {
+    const made = await listWithEntry(m);
+    const job = await m.client.entries.addMatching({
+      workspace: m.slug,
+      id: newId(),
+      listId: made.listId,
+      target: { kind: 'ids', objectId: m.people.id, recordIds: [made.recordId] },
+      mutationId,
+    });
+    return [...listRows(m, made), { kind: 'jobs', item_ids: [job.id], mutation_id: mutationId }];
+  },
+  'entries.removeMatching': async (m, mutationId) => {
+    const made = await listWithEntry(m);
+    const job = await m.client.entries.removeMatching({
+      workspace: m.slug,
+      id: newId(),
+      listId: made.listId,
+      target: { kind: 'ids', entryIds: [made.entryId] },
+      mutationId,
+    });
+    return [...listRows(m, made), { kind: 'jobs', item_ids: [job.id], mutation_id: mutationId }];
+  },
+  'entries.undoJob': async (m, mutationId) => {
+    const made = await listWithEntry(m);
+    const started = await m.client.entries.removeMatching({
+      workspace: m.slug,
+      id: newId(),
+      listId: made.listId,
+      target: { kind: 'ids', entryIds: [made.entryId] },
+      mutationId: newId(),
+    });
+    // Only a finished change is undone: this one is ended by hand, as its run would.
+    await testQuery(ownerUrl, `update jobs set status = 'succeeded', finished_at = now() where id = $1`, [started.id]);
+    const job = await m.client.entries.undoJob({ workspace: m.slug, id: newId(), jobId: started.id, mutationId });
+    return [
+      ...listRows(m, made),
+      { kind: 'jobs', item_ids: [started.id] },
+      { kind: 'jobs', item_ids: [job.id], mutation_id: mutationId },
+    ];
+  },
   'records.create': async (m, mutationId) => {
     const id = newId();
     await m.client.records.create({
@@ -1078,6 +1167,15 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
         mutation_id: mutationId,
       }))
       .sort((a, b) => a.object_id.localeCompare(b.object_id));
+  },
+  // A type change: the column's values change shape, so the object's records read again (coarse), and its definition.
+  'attributes.changeType': async (m, mutationId) => {
+    const attributeId = m.attribute('job_title');
+    await m.client.attributes.changeType({ workspace: m.slug, attributeId, to: 'long_text', mutationId });
+    return [
+      { kind: 'records', object_id: m.people.id, mutation_id: mutationId },
+      { kind: 'definitions', object_id: m.people.id, attribute_ids: [attributeId], mutation_id: mutationId },
+    ];
   },
   'attributes.restore': async (m, mutationId) => {
     const attributeId = m.attribute('job_title');
@@ -2516,6 +2614,13 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'teams.rename': 2,
   'teams.delete': 2,
   'teams.changeMembers': 2,
+  'lists.update': 4,
+  'lists.archive': 4,
+  'lists.restore': 5,
+  'entries.addMany': 5,
+  'entries.addMatching': 4,
+  'entries.removeMatching': 4,
+  'entries.undoJob': 5,
   // Imports (spec 0040): the import made (and its rows staged) first, then the write.
   'automations.update': 2,
   'automations.setEnabled': 2,

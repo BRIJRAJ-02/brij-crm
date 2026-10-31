@@ -113,6 +113,9 @@ export const bulkStrings = {
     edit: (done: string, total: string) => `Updating ${done} of ${total}`,
     restore: (done: string, total: string) => `Restoring ${done} of ${total}`,
     purge: (done: string, total: string) => `Deleting ${done} of ${total} forever`,
+    listAdd: (done: string, total: string) => `Adding ${done} of ${total}`,
+    listRemove: (done: string, total: string) => `Removing ${done} of ${total}`,
+    listRestore: (done: string, total: string) => `Bringing back ${done} of ${total}`,
   },
   starting: 'Starting…',
   confirmEditTitle: (records: string) => `Update ${records}?`,
@@ -151,7 +154,14 @@ export const bulkStrings = {
     restore: (done: string, total: string, plural: string) => `Stopped restoring after ${done} of ${total} ${plural}.`,
     purge: (done: string, total: string, plural: string) =>
       `Stopped deleting forever after ${done} of ${total} ${plural}.`,
+    listAdd: (done: string, total: string, plural: string) => `Stopped adding after ${done} of ${total} ${plural}.`,
+    listRemove: (done: string, total: string) => `Stopped removing after ${done} of ${total} entries.`,
+    listRestore: (done: string, total: string) => `Stopped bringing back after ${done} of ${total} entries.`,
   },
+  /** A list's bulk change that finished (spec 0048). */
+  addedToList: (records: string) => `Added ${records} to the list.`,
+  removedFromList: (entries: string) => `Removed ${entries} from the list.`,
+  backInList: (entries: string) => `Brought back ${entries}.`,
   /** What a stopped delete moved: still in the trash, and Undo brings it back. */
   inTheTrash: 'They’re in the trash.',
   /** What a failed change finished stays finished. */
@@ -373,7 +383,9 @@ export function bulkJobToast(
   const handled = job.done + job.refused + job.skipped;
   // A delete that moved any records to the trash brings them back from the toast, however it ended.
   const undo =
-    action === 'delete' && job.done > 0 && actions.onUndo !== undefined
+    (action === 'delete' || action === 'listAdd' || action === 'listRemove') &&
+    job.done > 0 &&
+    actions.onUndo !== undefined
       ? { label: bulkStrings.undo, onAction: actions.onUndo }
       : undefined;
   const stayed = left.map((each) => bulkStrings.leftInTrash(each.count, each.names));
@@ -392,6 +404,7 @@ export function bulkJobToast(
   // A count of zero: the bar that started it says "Nothing left to change." (no second announcement).
   if ((job.total ?? 0) === 0) return undefined;
   const records = recordsWord(job.done, names);
+  const entriesWord = job.done === 1 ? '1 entry' : `${count(job.done)} entries`;
   const what =
     action === 'delete'
       ? bulkStrings.deleted(records)
@@ -399,7 +412,13 @@ export function bulkJobToast(
         ? bulkStrings.updated(records)
         : action === 'restore'
           ? bulkStrings.restored(records)
-          : bulkStrings.deletedForever(records);
+          : action === 'listAdd'
+            ? bulkStrings.addedToList(records)
+            : action === 'listRemove'
+              ? bulkStrings.removedFromList(entriesWord)
+              : action === 'listRestore'
+                ? bulkStrings.backInList(entriesWord)
+                : bulkStrings.deletedForever(records);
   if (job.refused > 0)
     return { tone: 'danger', message: said(what, bulkStrings.refusedSeeDetails(job.refused)), action: view };
   // Records left in the trash need the person's eye, as rows left behind do.

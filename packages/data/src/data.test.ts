@@ -426,6 +426,9 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       setValues: os.entries.setValues.handler(notServed),
       remove: os.entries.remove.handler(notServed),
       restore: os.entries.restore.handler(notServed),
+      addMatching: os.entries.addMatching.handler(notServed),
+      removeMatching: os.entries.removeMatching.handler(notServed),
+      undoJob: os.entries.undoJob.handler(notServed),
     },
     records: {
       query: os.records.query.handler(({ input }) => ({
@@ -1860,7 +1863,7 @@ describe('live updates', () => {
     expect(lists()).toBe(before + 1);
   });
 
-  it('reads the objects again when an object itself changed, and only the lists for a list (spec 0007, AC-81)', async () => {
+  it('reads the objects again when an object itself changed, and only the list itself for a list (spec 0007, AC-81)', async () => {
     let reads = 0;
     const { api, client, data, definitionChanges } = await liveLayer({
       objects: () => {
@@ -1870,8 +1873,7 @@ describe('live updates', () => {
     });
     await data.objects.list('acme');
     const before = count(api.calls, '/api/rpc/objects/list');
-    // A list's own definitions (spec 0048): the lists and their views settle and the pages reload once, but the
-    // objects aren't read.
+    // A list's own definitions (spec 0048): its fields and the lists go and the pages reload, the objects are not read.
     client.channel().onPublication({ seq: 1, at: AT, kind: 'definitions', listId: TITLE.id, objectId: PEOPLE.id });
     await settled();
     expect(count(api.calls, '/api/rpc/objects/list')).toBe(before);

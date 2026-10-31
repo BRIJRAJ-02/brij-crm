@@ -42,6 +42,8 @@ export const ListView = z.object({
   hue: Hue,
   allowsDuplicates: z.boolean(),
   isArchived: z.boolean(),
+  /** Archived because its object is (AC-4832): it comes back with the object, not on its own. */
+  isObjectArchived: z.boolean().optional(),
   defaultViewId: Uuid.optional(),
   createdByMemberId: Uuid.optional(),
   canWrite: z.boolean(),

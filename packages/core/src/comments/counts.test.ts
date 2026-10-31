@@ -4,6 +4,7 @@
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDatabase, type Database } from '@crm/db';
+import { testQuery } from '@crm/db/testing';
 import type { AccessRules } from '../access/policy.ts';
 import { newId } from '../engine/ids.ts';
 import { outboxHook } from '../engine/outbox.ts';
@@ -14,7 +15,7 @@ import { rescope, testScope } from '../testing.ts';
 import { createComment, deleteComment, setThreadResolved } from './comments.ts';
 import { openThreadCounts, openThreadCountsStatement } from './counts.ts';
 
-const { appUrl } = inject('testDatabase');
+const { appUrl, adminUrl } = inject('testDatabase');
 let db: Database;
 
 beforeAll(() => {
@@ -104,6 +105,17 @@ describe('open comment threads on a read of records', () => {
     const counted = await db.withWorkspace(w.scope.workspaceId, (tx) => openThreadCounts(tx, ids));
     expect(counted.get(ids[0] ?? '')).toBe(1);
     expect(counted.has(ids[1] ?? '')).toBe(false);
+    // A workspace busy with threads on another record, analyzed: in the shared test database every file makes its own
+    // workspaces, so a near empty one made the workspace alone as selective as workspace and record, and the planner
+    // could pick either index. With this one's threads counted, only the record index answers the question cheaply.
+    const busy = await w.company('Busy');
+    await testQuery(
+      adminUrl,
+      `insert into comments (workspace_id, id, record_id, thread_id, body, created_by_type, updated_by_type)
+       select $1, g.id, $2, g.id, 'x', 'system', 'system' from (select gen_random_uuid() as id from generate_series(1, 2000)) g`,
+      [w.scope.workspaceId, busy],
+    );
+    await testQuery(adminUrl, 'analyze comments');
     const plan = await db.withWorkspace(w.scope.workspaceId, async (tx) => {
       // A handful of rows would make a sequential scan the cheapest plan; switched off, the planner shows whether
       // the index can answer the question at all.

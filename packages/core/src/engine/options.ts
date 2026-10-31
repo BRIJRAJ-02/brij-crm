@@ -294,8 +294,8 @@ export async function updateOption(
   input: OptionUpdate,
   hooks: readonly AfterWrite[] = [],
 ): Promise<OptionRef> {
+  await requireOptionManager(scope, input.optionId);
   const optionId = checkId(input.optionId, 'That option does not exist.');
-  await requireOptionManager(scope, optionId);
   if (input.position !== undefined && (!Number.isInteger(input.position) || input.position < 0)) {
     throw refuseOn('CONFIG_INVALID', 'Give the position as a whole number from 0.', 'position');
   }

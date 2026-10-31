@@ -321,8 +321,12 @@ interface OpenBoard {
 /** One open record section, as the layer keeps it. */
 interface OpenRecordEntries {
   readonly workspace: string;
+  readonly recordId: string;
   readonly view: RecordEntries;
   readonly refresh: () => void;
+  /** Shows an entry this tab is adding at once, after the held ones, until a read answers it or `hide`. */
+  readonly show: (entryId: string) => void;
+  readonly hide: (entryId: string) => void;
 }
 
 /** The lists layer: entries' views, boards and writes. */
@@ -835,11 +839,38 @@ export function createEntriesLayer({
     values: Readonly<Record<string, unknown>> = {},
     id: string = mintId(),
   ): Promise<AddOutcome> {
+    // The record's open Lists sections show the card at once (AC-4823), from a draft that the answer replaces or a
+    // refusal takes away.
+    const sections = [...recordViews.values()].filter(
+      (open) => open.workspace === workspace && open.recordId === recordId,
+    );
+    const now = new Date().toISOString();
+    const draft: EntryView = {
+      id,
+      listId: list.id,
+      recordId,
+      createdAt: now,
+      createdBy: { type: 'system', id: null },
+      updatedAt: now,
+      updatedBy: { type: 'system', id: null },
+      values,
+      versions: {},
+    };
+    const shown =
+      sections.length === 0
+        ? undefined
+        : (() => {
+            remember(draft);
+            const layer = entries.create(draft, mintId());
+            for (const open of sections) open.show(id);
+            return layer;
+          })();
     try {
       const written = await sent((mutationId) =>
         api.add({ workspace, id, listId: list.id, recordId, values, timeZone: timeZone(workspace), mutationId }),
       );
       const entry = entryOf(written);
+      shown?.confirm(entry);
       // Held while the views pin it (each pin holds it too), then this hold lets go.
       take({ entries: [entry], records: written.record === undefined ? [] : [written.record] }, true);
       for (const open of views.values()) {
@@ -859,8 +890,16 @@ export function createEntriesLayer({
             : { tone: 'danger', message: outcome.reason ?? LIST_WORDS.couldNotUndo };
         },
       });
+      refreshRecordEntries(workspace);
       return written.record === undefined ? { kind: 'added', entry } : { kind: 'added', entry, record: written.record };
     } catch (failed) {
+      shown?.refuse();
+      if (shown !== undefined) {
+        // The draft's reverse index goes with it.
+        recordOf.delete(id);
+        rowsOfRecord.get(recordId)?.delete(id);
+      }
+      for (const open of sections) open.hide(id);
       const refusal = toDataError(failed);
       return { kind: 'refused', code: refusal.code, message: refusalSummary(refusal) };
     }
@@ -1095,6 +1134,8 @@ export function createEntriesLayer({
     let status: EntriesStatus = 'loading';
     let ids: readonly string[] = [];
     let held: readonly string[] = [];
+    // Entries this tab is adding, shown after the read ones until a read answers them.
+    let adding: readonly string[] = [];
     let shown = 0;
     let stopWatch: (() => void) | undefined;
     let stopStore: (() => void) | undefined;
@@ -1103,7 +1144,7 @@ export function createEntriesLayer({
     let version = 0;
     let state: RecordEntriesState = { status, rows: [] };
     const snapshot = () => {
-      const rows = ids.flatMap((id) => {
+      const rows = [...ids, ...adding.filter((id) => !ids.includes(id))].flatMap((id) => {
         const row = rowOf(id);
         return row === undefined ? [] : [row];
       });
@@ -1115,6 +1156,9 @@ export function createEntriesLayer({
     const read = async () => {
       version += 1;
       const mine = version;
+      // The adds the server had answered before this read began: it answers for them, in or not (a section past 100,
+      // or removed since). A draft still on its way (no base yet) waits for a later read.
+      const answeredFor = adding.filter((id) => entries.base(id) !== undefined);
       try {
         const answer = await api.forRecord({ workspace, recordId });
         if (mine !== version) return;
@@ -1127,6 +1171,7 @@ export function createEntriesLayer({
           entries.release(previous);
         }
         ids = next;
+        adding = adding.filter((id) => !next.includes(id) && !answeredFor.includes(id));
         status = 'ready';
       } catch {
         if (mine !== version) return;
@@ -1143,6 +1188,15 @@ export function createEntriesLayer({
         isRefreshing = false;
         void read();
       }, ENTRIES_SETTLE_MS);
+    };
+    const show = (entryId: string) => {
+      if (adding.includes(entryId)) return;
+      adding = [...adding, entryId];
+      snapshot();
+    };
+    const hide = (entryId: string) => {
+      adding = adding.filter((id) => id !== entryId);
+      snapshot();
     };
     const view: RecordEntries = {
       subscribe: (listener) => {
@@ -1162,10 +1216,10 @@ export function createEntriesLayer({
         cancelDrop?.();
         cancelDrop = undefined;
         // Let go after its 30 seconds and shown again: the layer holds it once more, so live changes find it.
-        recordViews.set(key, { workspace, view, refresh });
+        recordViews.set(key, open);
         stopWatch ??= watch(workspace);
         stopStore ??= entries.subscribe((changedIds) => {
-          if (ids.some((id) => changedIds.has(id))) snapshot();
+          if (ids.some((id) => changedIds.has(id)) || adding.some((id) => changedIds.has(id))) snapshot();
         });
         if (shown === 1) void read();
         return () => {
@@ -1186,7 +1240,8 @@ export function createEntriesLayer({
         };
       },
     };
-    recordViews.set(key, { workspace, view, refresh });
+    const open: OpenRecordEntries = { workspace, recordId, view, refresh, show, hide };
+    recordViews.set(key, open);
     return view;
   }
 

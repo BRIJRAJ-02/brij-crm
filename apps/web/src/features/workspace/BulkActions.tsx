@@ -1,8 +1,7 @@
 // Brief
 // Purpose: act on the rows ticked in an object's table, a few or every one the view matches (spec 0022, milestones 1 to 3).
 // Main task: tick rows (or "Select all N matching"), press Edit or Delete; up to 500 go at once, more are counted, reviewed and run in the background.
-// Leaves out: Add to list for "all matching" (ticked rows only), board cards (#21), several fields in one edit, and
-// relationships (owner decision 3).
+// Leaves out: board cards (#21), several fields in one edit, and relationships (owner decision 3).
 import {
   refusalSummary,
   toFieldAttribute,
@@ -12,6 +11,7 @@ import {
   type DataError,
   type BulkEdit,
   type BulkTarget,
+  type ListView,
   type ObjectSummary,
   type RecordsView,
   type ViewQuery,
@@ -28,6 +28,7 @@ import { BulkEditDialog, type BulkApplied, type BulkEditChoice } from './BulkEdi
 import {
   BULK_EXCEPT_MAX,
   BULK_IDS_MAX,
+  BULK_INLINE_MAX,
   bulkPath,
   bulkStrings,
   deleteToast,
@@ -260,6 +261,8 @@ export function useBulkActions({
   });
   // The counted change's confirm, opened by Review: never by itself.
   const [isReviewing, setReviewing] = useState(false);
+  // The list a counted add goes into (spec 0048, AC-4825), named in its confirm.
+  const [jobList, setJobList] = useState<ListView | undefined>(undefined);
   if (isReviewing && !bulkJob.isCounted) setReviewing(false);
 
   const target = (): BulkTarget | undefined => {
@@ -430,10 +433,12 @@ export function useBulkActions({
       </Button>
     ) : undefined;
 
-  // Add to list (spec 0048, AC-4825): the ticked rows, up to 10,000, in calls of 500, with Undo. Not for "all matching".
+  // Add to list (spec 0048, AC-4825): up to 500 ticked rows in one request with Undo; more, or all matching, a
+  // counted job confirmed here, whose finish toast has Undo.
   const writableLists = listsToAddTo(lists ?? [], object.id);
+  const isManyToAdd = selection.kind === 'all-matching' || ids.length > BULK_INLINE_MAX;
   const addToList =
-    selection.kind === 'some' && ids.length > 0 && writableLists.length > 0 ? (
+    (selection.kind === 'all-matching' || ids.length > 0) && writableLists.length > 0 ? (
       <AddToListMenu
         data={data}
         toasts={toasts}
@@ -442,6 +447,22 @@ export function useBulkActions({
         lists={writableLists}
         recordIds={ids}
         onAdded={ticked.clear}
+        {...(isManyToAdd
+          ? {
+              onChooseMany: (list: ListView) => {
+                const on = target();
+                if (on === undefined) return;
+                setJobList(list);
+                void bulkJob
+                  .startWith(`add:${list.id}:${JSON.stringify(on)}`, (id) =>
+                    data.lists.startJob(slug, { kind: 'add', id, listId: list.id, target: on }),
+                  )
+                  .then((failure) => {
+                    if (failure !== undefined) bulkJob.say(refusalSummary(failure), 'danger');
+                  });
+              },
+            }
+          : {})}
       >
         <Button icon="list">{listStrings.addToListMenu}</Button>
       </AddToListMenu>
@@ -539,6 +560,8 @@ export function useBulkActions({
   if (bulkJob.isCounted && counted !== lastCounted) setLastCounted(counted);
   const jobWords = recordsWord(lastCounted, object);
   const isEditJob = bulkJob.action === 'edit';
+  // Adding to a list is undone from its finish toast, so its confirm is a plain one, not a danger one.
+  const isAddJob = bulkJob.action === 'listAdd';
   const changed = jobChange === undefined ? undefined : definitionOf(jobChange.attributeId);
   const editShown = editing ?? lastEdited;
   const isInlineEdit = editShown.ids.length > 0 && editShown.ids.length === editShown.count && path === 'inline';
@@ -567,9 +590,15 @@ export function useBulkActions({
         it writes. Declining cancels it (nothing was changed); either way focus goes on to the bar, which keeps it.
       */}
       <Modal
-        title={isEditJob ? bulkStrings.confirmEditTitle(jobWords) : bulkStrings.confirmTitle(jobWords)}
+        title={
+          isAddJob
+            ? listStrings.confirmAddTitle(jobWords, jobList?.name ?? '')
+            : isEditJob
+              ? bulkStrings.confirmEditTitle(jobWords)
+              : bulkStrings.confirmTitle(jobWords)
+        }
         variant="confirm"
-        tone="danger"
+        {...(isAddJob ? {} : { tone: 'danger' as const })}
         isOpen={isReviewing && bulkJob.isCounted}
         onOpenChange={(isOpen) => {
           if (isOpen) return;
@@ -580,8 +609,8 @@ export function useBulkActions({
           <>
             <Button slot="close">{bulkStrings.cancel}</Button>
             <Button
-              variant="danger-solid"
-              icon={isEditJob ? 'pencil' : 'trash'}
+              variant={isAddJob ? 'primary' : 'danger-solid'}
+              icon={isAddJob ? 'list' : isEditJob ? 'pencil' : 'trash'}
               onPress={() => {
                 setReviewing(false);
                 // The selection clears once the job runs on its snapshot; the bar stays with its progress.
@@ -589,12 +618,18 @@ export function useBulkActions({
                 bulkJob.confirm();
               }}
             >
-              {isEditJob ? bulkStrings.confirmEditAction(jobWords) : bulkStrings.confirmAction(jobWords)}
+              {isAddJob
+                ? listStrings.confirmAddAction
+                : isEditJob
+                  ? bulkStrings.confirmEditAction(jobWords)
+                  : bulkStrings.confirmAction(jobWords)}
             </Button>
           </>
         }
       >
-        {isEditJob ? (
+        {isAddJob ? (
+          listStrings.confirmAddText
+        ) : isEditJob ? (
           <>
             {jobChange !== undefined && changed !== undefined && (
               <EditChange definition={changed} change={jobChange} members={memberPicker.displays} />
