@@ -9,6 +9,7 @@ import {
   toFieldAttribute,
   type AttributeDefinition,
   type BoardStore,
+  type FiledNotice,
   type MemberSummary,
   type NameState,
   type ObjectSummary,
@@ -45,7 +46,8 @@ import { useBoardTotals } from '../workspace/calcs.ts';
 import { AttributeDialog } from '../settings/AttributeDialog.tsx';
 import { NewRecordDialog } from '../workspace/NewRecordDialog.tsx';
 import { createEditors } from '../workspace/create-editors.ts';
-import { CREATED_TOAST_MS, createdToast } from '../workspace/created.ts';
+import { createdToastFor } from '../workspace/created.ts';
+import { unlinkFiled } from '../workspace/filed.ts';
 import { strings as workspaceStrings } from '../workspace/strings.ts';
 import { useCan, WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { useCollapsedColumns } from './collapsed.ts';
@@ -202,6 +204,8 @@ export function BoardScreen(props: BoardScreenProps) {
     }
   }
   const takeRequest = useRef(onCreateRequestTaken);
+  // A create dialog's filing (spec 0059), held from the create's answer until its one toast says both.
+  const filings = useRef(new Map<string, FiledNotice>());
   useEffect(() => {
     takeRequest.current = onCreateRequestTaken;
   });
@@ -336,7 +340,11 @@ export function BoardScreen(props: BoardScreenProps) {
               first={firstEditors}
               more={moreEditors}
               newId={data.records.newId}
-              onCreate={(id, values) => data.records.create(slug, object.id, id, values)}
+              onCreate={(id, values) =>
+                data.records.create(slug, object.id, id, values, {
+                  onFiled: (notice) => filings.current.set(id, notice),
+                })
+              }
               singularName={object.singularName}
               objectKey={object.standardKey ?? object.apiSlug}
               objectId={object.id}
@@ -346,8 +354,13 @@ export function BoardScreen(props: BoardScreenProps) {
               onCreated={(record, keepOpen) => {
                 if (!keepOpen) setCreating(false);
                 // Its column may be scrolled off or hidden while empty: say it was made, with a way to it.
-                toasts.toast(
-                  createdToast(record, object.singularName, () => {
+                // One toast: the create, and the company her email linked her to when it did (spec 0059).
+                const notice = filings.current.get(record.id);
+                filings.current.delete(record.id);
+                const { content, timeout } = createdToastFor(
+                  record,
+                  object.singularName,
+                  () => {
                     if (props.peek !== undefined) {
                       props.peek.open(record.id);
                       return;
@@ -356,9 +369,12 @@ export function BoardScreen(props: BoardScreenProps) {
                       to: '/w/$slug/objects/$object/$recordId/$tab',
                       params: { slug, object: object.apiSlug, recordId: record.id, tab: 'overview' },
                     });
-                  }),
-                  { timeout: CREATED_TOAST_MS },
+                  },
+                  notice === undefined
+                    ? undefined
+                    : { notice, onUnlink: () => unlinkFiled(notice, (toast) => toasts.toast(toast)) },
                 );
+                toasts.toast(content, { timeout });
               }}
             />
           </>

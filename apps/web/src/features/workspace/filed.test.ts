@@ -2,7 +2,7 @@
 // with Undo, and what the Undo then says it did.
 import { describe, expect, it, vi } from 'vitest';
 import type { FiledNotice, UnfileOutcome } from '@crm/data';
-import { filedStrings, filedToast, unfiledToast } from './filed.ts';
+import { createdFiledToast, filedStrings, filedToast, unfiledToast, unlinkFiled } from './filed.ts';
 
 const notice = (companies: FiledNotice['companies']): FiledNotice => ({
   workspace: 'acme',
@@ -19,6 +19,52 @@ const unfiled = (outcome: Partial<Extract<UnfileOutcome, { kind: 'unfiled' }>>):
   inUse: 0,
   failed: 0,
   ...outcome,
+});
+
+describe('createdFiledToast', () => {
+  it('says the create and the link in one toast, with Unlink', () => {
+    const onUndo = vi.fn();
+    const linked = createdFiledToast('Jane', notice([{ name: 'Acme', made: false }]), onUndo);
+    expect(linked).toMatchObject({
+      tone: 'success',
+      message: 'Jane created and linked to Acme',
+      action: { label: 'Unlink' },
+    });
+    linked.action?.onAction();
+    expect(onUndo).toHaveBeenCalledOnce();
+    expect(createdFiledToast('Jane', notice([{ name: 'Acme', made: true }]), onUndo).message).toBe(
+      'Jane created, Acme added and linked',
+    );
+  });
+
+  it('never names a company the writer can’t read', () => {
+    const onUndo = vi.fn();
+    expect(createdFiledToast('Jane', notice([{ name: '', made: false }]), onUndo).message).toBe(
+      'Jane created and linked to their company',
+    );
+    expect(createdFiledToast('Jane', notice([{ name: '', made: true }]), onUndo).message).toBe(
+      'Jane created, their company added and linked',
+    );
+  });
+});
+
+describe('unlinkFiled', () => {
+  it('says what the Unlink did', async () => {
+    const say = vi.fn();
+    unlinkFiled(
+      { ...notice([{ name: 'Acme', made: true }]), undo: () => Promise.resolve(unfiled({ trashed: 1 })) },
+      say,
+    );
+    await vi.waitFor(() => expect(say).toHaveBeenCalledOnce());
+    expect(say).toHaveBeenCalledWith({ tone: 'success', message: 'Deleted Acme and removed the link.' });
+  });
+
+  it('says it failed when the Unlink never answered', async () => {
+    const say = vi.fn();
+    unlinkFiled({ ...notice([{ name: 'Acme', made: false }]), undo: () => Promise.reject(new Error('offline')) }, say);
+    await vi.waitFor(() => expect(say).toHaveBeenCalledOnce());
+    expect(say).toHaveBeenCalledWith({ tone: 'danger', message: filedStrings.undoFailed });
+  });
 });
 
 describe('filedToast', () => {

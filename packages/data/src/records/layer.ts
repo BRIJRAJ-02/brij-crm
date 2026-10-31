@@ -429,8 +429,18 @@ export type UndoOutcome =
    * job started over its batch; its progress and end come through `data.jobs`.
    */
   | { readonly kind: 'restoring'; readonly objectId: string; readonly job: JobView }
-  /** A create undone (spec 0022, AC-541): the record went to the trash, or (`deleted` false) couldn't. */
-  | { readonly kind: 'uncreated'; readonly objectId: string; readonly recordName: string; readonly deleted: boolean }
+  /**
+   * A create undone (spec 0022, AC-541): the record went to the trash, or (`deleted` false) couldn't. With
+   * `companyName`, the company its filing made went to the trash with it (spec 0059; '' when the reader can't read
+   * its name), so the toast names both.
+   */
+  | {
+      readonly kind: 'uncreated';
+      readonly objectId: string;
+      readonly recordName: string;
+      readonly deleted: boolean;
+      readonly companyName?: string;
+    }
   /** A toast's Undo whose action is no longer the newest (a later change, or already undone): nothing was done. */
   | { readonly kind: 'stale' }
   /** Another store's action undone (spec 0048: a list's entries): its own sentence for the toast. */
@@ -3019,10 +3029,18 @@ export function createRecordsLayer({
     );
   }
 
-  /** Says a write filed people under companies (spec 0059, AC-5920), with an Undo that takes back just that. */
-  function tellFiled(workspace: string, entryId: string, filed: readonly FiledLink[]): void {
+  /**
+   * Says a write filed people under companies (spec 0059, AC-5920), with an Undo that takes back just that: to the
+   * app's `onFiled`, or to `to` (a create dialog that says it in its own toast).
+   */
+  function tellFiled(
+    workspace: string,
+    entryId: string,
+    filed: readonly FiledLink[],
+    to: (notice: FiledNotice) => void = onFiled,
+  ): void {
     if (filed.length === 0) return;
-    onFiled({
+    to({
       workspace,
       companies: filed.map((each) => ({ name: each.company.name, made: each.made })),
       // A filing taken back clears cells and may trash companies: every calculation of the workspace reads again.
@@ -3483,14 +3501,17 @@ export function createRecordsLayer({
         // Refused whole for a passing reason: the create stays on the stack, to undo again.
         if (outcome.kind === 'failed') undo.push(workspace, entry);
         // The company its filing made goes too, while nothing else links to it (spec 0059, AC-5920).
-        if (entry.filed !== undefined && outcome.kind === 'done' && outcome.deleted > 0) {
-          await trashFiled(workspace, [entry.filed]);
-        }
+        const companyTrashed =
+          entry.filed !== undefined && outcome.kind === 'done' && outcome.deleted > 0
+            ? (await trashFiled(workspace, [entry.filed])).trashed > 0
+            : false;
         return {
           kind: 'uncreated',
           objectId: entry.objectId,
           recordName: entry.recordName,
           deleted: outcome.kind === 'done' && outcome.deleted > 0,
+          // Said in the toast, so ⌘Z never takes a company away unannounced (spec 0059 follow up).
+          ...(companyTrashed && entry.filed !== undefined ? { companyName: entry.filed.company.name } : {}),
         };
       }
       if (entry.kind === 'links') return undoLink(workspace, entry);
@@ -3931,12 +3952,16 @@ export function createRecordsLayer({
      * server is sent again with the same id, which the server answers with the
      * record it already made. A form that may send again (Create pressed after
      * a lost answer) mints `id` once (`newId`) and passes it each time.
+     * `onFiled`, when given, takes the filing notice in place of the app's, so
+     * a create dialog says both in one toast (spec 0059); it is told before
+     * the create settles.
      */
     create: async (
       workspace: string,
       objectId: string,
       values: Readonly<Record<string, unknown>>,
       id: string = mintId(),
+      told?: (notice: FiledNotice) => void,
     ): Promise<RecordView> => {
       // Known as being made from the first moment, before any wait: a link to it asked for at once (a picker's
       // "Create …") waits for it rather than reaching the server first.
@@ -4027,7 +4052,7 @@ export function createRecordsLayer({
           recordName: row.display.name,
           ...(filed === undefined ? {} : { filed }),
         });
-        if (filed !== undefined) tellFiled(workspace, mutationId, [filed]);
+        if (filed !== undefined) tellFiled(workspace, mutationId, [filed], told);
         return row;
       } catch (error) {
         mutations.forget(mutationId);

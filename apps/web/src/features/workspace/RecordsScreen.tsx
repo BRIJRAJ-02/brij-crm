@@ -9,6 +9,7 @@ import {
   withPendingOptions,
   type AttributeDefinition,
   type CellChange,
+  type FiledNotice,
   type MemberSummary,
   type NameState,
   type ObjectSummary,
@@ -56,7 +57,8 @@ import type { ShownColumn, ShownLayout } from '../views/layout.ts';
 import { avatarAttribute } from './columns.ts';
 import { groupingGap, groupPlan, useGroupedRows } from './grouped.ts';
 import { useColumnCalcs } from './calcs.ts';
-import { CREATED_TOAST_MS, createdToast } from './created.ts';
+import { createdToastFor } from './created.ts';
+import { unlinkFiled } from './filed.ts';
 import { createEditors } from './create-editors.ts';
 import { namePreset } from './name-preset.ts';
 import { NewRecordDialog } from './NewRecordDialog.tsx';
@@ -574,6 +576,8 @@ export function RecordsScreen({
   }
   // The callback is read through a ref, so a new one each render never hands the request back twice.
   const takeRequest = useRef(onCreateRequestTaken);
+  // A create dialog's filing (spec 0059), held from the create's answer until its one toast says both.
+  const filings = useRef(new Map<string, FiledNotice>());
   useEffect(() => {
     takeRequest.current = onCreateRequestTaken;
   });
@@ -900,7 +904,11 @@ export function RecordsScreen({
               first={firstEditors}
               more={moreEditors}
               newId={data.records.newId}
-              onCreate={(id, values) => data.records.create(slug, object.id, id, values)}
+              onCreate={(id, values) =>
+                data.records.create(slug, object.id, id, values, {
+                  onFiled: (notice) => filings.current.set(id, notice),
+                })
+              }
               singularName={object.singularName}
               objectKey={objectKey}
               objectId={object.id}
@@ -908,8 +916,13 @@ export function RecordsScreen({
               memberPicker={memberPicker}
               {...(createPreset === undefined ? {} : { preset: createPreset })}
               onCreated={(record, keepOpen) => {
-                toasts.toast(
-                  createdToast(record, object.singularName, () => {
+                // One toast: the create, and the company her email linked her to when it did (spec 0059).
+                const notice = filings.current.get(record.id);
+                filings.current.delete(record.id);
+                const { content, timeout } = createdToastFor(
+                  record,
+                  object.singularName,
+                  () => {
                     // Beside the table, as a row's name opens it; the full page is one press on from there.
                     if (peek !== undefined) {
                       peek.open(record.id);
@@ -919,9 +932,12 @@ export function RecordsScreen({
                       to: '/w/$slug/objects/$object/$recordId/$tab',
                       params: { slug, object: object.apiSlug, recordId: record.id, tab: 'overview' },
                     });
-                  }),
-                  { timeout: CREATED_TOAST_MS },
+                  },
+                  notice === undefined
+                    ? undefined
+                    : { notice, onUnlink: () => unlinkFiled(notice, (toast) => toasts.toast(toast)) },
                 );
+                toasts.toast(content, { timeout });
                 // "Create more" keeps the dialog, and focus in it, for the next record.
                 if (keepOpen) return;
                 setCreating(false);
