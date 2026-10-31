@@ -188,7 +188,8 @@ export {
   type SegmentSize,
   type ThemeSwitchProps,
 } from './molecules/SegmentedControl/SegmentedControl.tsx';
-export { Select, type SelectItem, type SelectOptionStyle, type SelectProps } from './molecules/Select/Select.tsx';
+export { type SelectItem, type SelectOptionStyle, type SelectProps } from './molecules/Select/Select.tsx';
+export { Select } from './molecules/Select/SelectWithFaces.tsx';
 export {
   DeferredSelect,
   type DeferredSelectItem,
@@ -196,12 +197,12 @@ export {
 } from './molecules/Select/DeferredSelect.tsx';
 export { ChoiceChips, type ChoiceChip, type ChoiceChipsProps } from './molecules/ChoiceChips/ChoiceChips.tsx';
 export { ConditionRow, type ConditionRowProps } from './molecules/ConditionRow/ConditionRow.tsx';
+export { Sentence, type SentenceProps } from './molecules/Sentence/Sentence.tsx';
 export {
   SpotIllustration,
   type SpotIllustrationKind,
   type SpotIllustrationProps,
 } from './molecules/SpotIllustration/SpotIllustration.tsx';
-export { Sentence, type SentenceProps } from './molecules/Sentence/Sentence.tsx';
 export { Steps, type Step, type StepsProps, type StepsVariant } from './molecules/Steps/Steps.tsx';
 /** The rows to pick from under a field being typed in, focus staying in the field (Field's `combobox` names it). */
 export {
@@ -394,6 +395,8 @@ export {
   type TeamWeekTone,
   type TeamWeekTotal,
 } from './modules/TeamWeek/TeamWeek.tsx';
+export { PersonLine, type PersonLineProps, type PersonLineTone } from './molecules/PersonLine/PersonLine.tsx';
+export { TeamDay, type TeamDayPerson, type TeamDayProps, type TeamDayTone } from './modules/TeamDay/TeamDay.tsx';
 export {
   SetupChecklist,
   type SetupChecklistProps,

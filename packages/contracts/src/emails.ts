@@ -365,6 +365,40 @@ export const CalendarReconnectAskedEmail = z.strictObject({
 /** The asked to reconnect email's params. */
 export type CalendarReconnectAskedEmail = z.infer<typeof CalendarReconnectAskedEmail>;
 
+/**
+ * Scheduling access given (spec 0037, AC-1257): to the delegate ("You can now manage Ada's scheduling", or
+ * everyone's) on a grant or a level change, and to the member when someone else granted it ("Priya can now manage
+ * your scheduling"). Names and the level only; the path is where the reader sees it.
+ */
+export const SchedulingAccessGivenEmail = z.strictObject({
+  /** Who reads it: the one who can now see or manage (`delegate`), or the one whose scheduling it is (`member`). */
+  to: z.enum(['delegate', 'member']),
+  level: z.enum(['view', 'manage']),
+  /** The other person, by name: whose scheduling (to the delegate) or who can now (to the member). */
+  otherName: Name,
+  /** Over everyone's scheduling (to the delegate): `otherName` is then unused. */
+  everyone: z.boolean(),
+  /** Who gave it, when not the member themself (to the delegate only). */
+  byName: Name.optional(),
+  path: AppPath,
+});
+/** The scheduling access given email's params. */
+export type SchedulingAccessGivenEmail = z.infer<typeof SchedulingAccessGivenEmail>;
+
+/**
+ * Scheduling access removed (spec 0037, the index's Emails table): to the delegate when someone else took it back.
+ * "You can no longer see Ada's scheduling."
+ */
+export const SchedulingAccessRemovedEmail = z.strictObject({
+  level: z.enum(['view', 'manage']),
+  /** Whose scheduling it was over; absent for everyone's. */
+  memberName: Name.optional(),
+  /** Who took it back. */
+  byName: Name,
+});
+/** The scheduling access removed email's params. */
+export type SchedulingAccessRemovedEmail = z.infer<typeof SchedulingAccessRemovedEmail>;
+
 /** Every email with a template, and its params' schema. The sign in code is drawn on its own (`renderSignInCode`). */
 export const EMAIL_PARAMS = {
   form_submission: FormSubmissionEmail,
@@ -379,6 +413,8 @@ export const EMAIL_PARAMS = {
   workspace_welcome: WorkspaceWelcomeEmail,
   scheduling_changed: SchedulingChangedEmail,
   standin_covering: StandinCoveringEmail,
+  scheduling_access_given: SchedulingAccessGivenEmail,
+  scheduling_access_removed: SchedulingAccessRemovedEmail,
 } as const;
 
 /** A kind of email with a template. */
@@ -407,6 +443,8 @@ export const QUEUED_EMAIL_KINDS = [
   'workspace_welcome',
   'scheduling_changed',
   'standin_covering',
+  'scheduling_access_given',
+  'scheduling_access_removed',
 ] as const satisfies readonly EmailKind[];
 /** A kind that goes through the workspace email queue. */
 export const QueuedEmailKind = z.enum(QUEUED_EMAIL_KINDS);

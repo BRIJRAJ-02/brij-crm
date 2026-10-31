@@ -18,7 +18,8 @@ import { FieldGroup } from '../../molecules/FieldGroup/FieldGroup.tsx';
 import { Form, type FormRefusal } from '../../molecules/Form/Form.tsx';
 import { InfoTip } from '../../molecules/InfoTip/InfoTip.tsx';
 import { Modal } from '../../molecules/Modal/Modal.tsx';
-import { Select, type SelectItem } from '../../molecules/Select/Select.tsx';
+import { Select } from '../../molecules/Select/SelectWithFaces.tsx';
+import type { SelectItem } from '../../molecules/Select/Select.tsx';
 import styles from './RelationshipSettings.module.css';
 import { strings } from './strings.ts';
 

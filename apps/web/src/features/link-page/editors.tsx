@@ -40,8 +40,27 @@ import { ICON_WORDS, strings } from './strings.ts';
 interface EditorFrame {
   /** Beside Cancel, where this editor's submit goes. */
   readonly action: HTMLElement | null;
+  /**
+   * Whether the editor's form takes focus as it mounts: only for the kind the modal opened on. Once the person is in
+   * the picker, an arrow that swaps the kind must leave focus on the tiles (spec 0058, AC-4 and AC-9), and the frame
+   * moves focus to the fields itself when a kind is picked with Enter, Space or a click.
+   */
+  readonly focusesFields: boolean;
 }
 const EditorFrameContext = createContext<EditorFrame | undefined>(undefined);
+
+/** Whether a block editor's form focuses its first field as it mounts: always alone, only on opening in the frame. */
+export function useFocusesFirstField(): boolean {
+  return useContext(EditorFrameContext)?.focusesFields ?? true;
+}
+
+/** The first field of the chosen kind: the first one in the dialog that isn't in the picker. */
+function firstFieldOutside(picker: HTMLElement): HTMLElement | undefined {
+  const dialog = picker.closest('[role="dialog"]');
+  if (dialog === null) return undefined;
+  const fields = dialog.querySelectorAll<HTMLElement>('input:not([type="hidden"]), textarea, select');
+  return [...fields].find((field) => !picker.contains(field));
+}
 
 /**
  * The Add modal: the dialog itself, its title and hint, the kind picker and Cancel, all of which outlive the kind
@@ -62,7 +81,17 @@ export function BlockEditorFrame({
   readonly children: ReactNode;
 }) {
   const [action, setAction] = useState<HTMLElement | null>(null);
-  const frame = useMemo(() => ({ action }), [action]);
+  const [focusesFields, setFocusesFields] = useState(true);
+  const frame = useMemo(() => ({ action, focusesFields }), [action, focusesFields]);
+  const pickerRef = useRef<HTMLDivElement>(null);
+  // Picking a kind (Enter, Space or a click) moves on to its fields, once the swapped editor has drawn them. An arrow
+  // only moves along the tiles and swaps the fields under them, so a keyboard can cross the whole grid.
+  const toFields = () => {
+    requestAnimationFrame(() => {
+      const picker = pickerRef.current;
+      if (picker !== null) firstFieldOutside(picker)?.focus();
+    });
+  };
   return (
     <Modal
       title={title}
@@ -80,7 +109,27 @@ export function BlockEditorFrame({
         </>
       }
     >
-      {leading}
+      {leading !== undefined && (
+        // Not a control of its own: it only listens to the picker's tiles, which keep their own keys and names.
+        <div
+          ref={pickerRef}
+          // Capture: React Aria's radio group handles the arrows and stops them from bubbling.
+          onPointerDownCapture={() => setFocusesFields(false)}
+          onKeyDownCapture={(event) => {
+            setFocusesFields(false);
+            if (event.key === 'Enter') toFields();
+          }}
+          onKeyUpCapture={(event) => {
+            if (event.key === ' ') toFields();
+          }}
+          onClickCapture={(event) => {
+            // A pointer's click (detail 1 or more), not the one a key makes, which onKeyUp has handled.
+            if (event.detail > 0) toFields();
+          }}
+        >
+          {leading}
+        </div>
+      )}
       <EditorFrameContext value={frame}>{children}</EditorFrameContext>
     </Modal>
   );
@@ -109,7 +158,9 @@ function EditorModal({
 }) {
   const frame = useContext(EditorFrameContext);
   const submit = canSubmit ? (
-    <Button variant="primary" type="submit" form={formId}>
+    // Inside the Add modal it travels into a slot of the footer: full width of that slot, so on a phone, where the
+    // footer stacks its buttons the dialog's width, it is as wide as Cancel; beside Cancel it keeps its own width.
+    <Button variant="primary" type="submit" form={formId} {...(frame === undefined ? {} : { isFullWidth: 'center' })}>
       {chrome?.submitLabel ?? submitLabel}
     </Button>
   ) : undefined;
@@ -180,6 +231,7 @@ export function LinkEditor({
   onSubmit,
   onClose,
 }: BlockEditorProps) {
+  const focusFirst = useFocusesFirstField();
   const formId = useId();
   const editing = item?.kind === 'link' ? item : undefined;
   // A title that was only the address's site starts empty, so it keeps following the address when that changes.
@@ -246,7 +298,7 @@ export function LinkEditor({
         id={formId}
         onSubmit={submit}
         label={editing === undefined ? strings.newLink : strings.editLink}
-        focusesFirstField
+        focusesFirstField={focusFirst}
       >
         <Field
           label={strings.linkUrl}
@@ -314,6 +366,7 @@ export function LinkEditor({
 
 /** Add or rename a heading: its text, with the heading drawn as typed under it. */
 export function HeadingEditor({ item, items, linkPage, chrome, onSubmit, onClose }: BlockEditorProps) {
+  const focusFirst = useFocusesFirstField();
   const formId = useId();
   const editing = item?.kind === 'heading' ? item : undefined;
   const [title, setTitle] = useState(editing?.title ?? '');
@@ -358,7 +411,7 @@ export function HeadingEditor({ item, items, linkPage, chrome, onSubmit, onClose
         id={formId}
         onSubmit={submit}
         label={editing === undefined ? strings.newHeading : strings.editHeading}
-        focusesFirstField
+        focusesFirstField={focusFirst}
       >
         <Field
           label={strings.headingTitle}
@@ -399,6 +452,7 @@ export function HeadingEditor({ item, items, linkPage, chrome, onSubmit, onClose
  * notifications and export work on them unchanged. The modal says where they will go before it makes anything.
  */
 export function SignupEditor({ slug, items, linkPage, chrome, onSubmit, onClose }: BlockEditorProps) {
+  const focusFirst = useFocusesFirstField();
   const formId = useId();
   const [workspaces, setWorkspaces] = useState<readonly { id: string; slug: string; name: string }[]>([]);
   const [where, setWhere] = useState<string | null>(slug);
@@ -466,7 +520,7 @@ export function SignupEditor({ slug, items, linkPage, chrome, onSubmit, onClose 
         />
       }
     >
-      <Form id={formId} onSubmit={submit} label={strings.newSignup} focusesFirstField>
+      <Form id={formId} onSubmit={submit} label={strings.newSignup} focusesFirstField={focusFirst}>
         {failed !== undefined && <Callout tone="danger">{failed}</Callout>}
         <Field
           label={strings.signupLabel}
@@ -519,6 +573,7 @@ export function SignupEditor({ slug, items, linkPage, chrome, onSubmit, onClose 
 
 /** Add or edit something a customer said: the words, who said them, and what they do. No photo: the page loads none. */
 export function TestimonialEditor({ item, items, linkPage, chrome, onSubmit, onClose }: BlockEditorProps) {
+  const focusFirst = useFocusesFirstField();
   const formId = useId();
   const editing = item?.kind === 'testimonial' ? item : undefined;
   const [quote, setQuote] = useState(editing?.quote ?? '');
@@ -564,7 +619,7 @@ export function TestimonialEditor({ item, items, linkPage, chrome, onSubmit, onC
         id={formId}
         onSubmit={submit}
         label={editing === undefined ? strings.newTestimonial : strings.editTestimonial}
-        focusesFirstField
+        focusesFirstField={focusFirst}
       >
         <Field
           label={strings.quote}
@@ -617,6 +672,7 @@ export function TestimonialEditor({ item, items, linkPage, chrome, onSubmit, onC
 
 /** Add or edit a piece of writing: a title nobody has to give, and the words, with the page drawn as typed. */
 export function TextEditor({ item, items, linkPage, chrome, onSubmit, onClose }: BlockEditorProps) {
+  const focusFirst = useFocusesFirstField();
   const formId = useId();
   const editing = item?.kind === 'text' ? item : undefined;
   const [title, setTitle] = useState(editing?.title ?? '');
@@ -660,7 +716,7 @@ export function TextEditor({ item, items, linkPage, chrome, onSubmit, onClose }:
         id={formId}
         onSubmit={submit}
         label={editing === undefined ? strings.newText : strings.editText}
-        focusesFirstField
+        focusesFirstField={focusFirst}
       >
         <Field
           label={strings.textTitle}
@@ -715,6 +771,7 @@ interface FaqTyped {
  * it, and removed from the card it opens. The page is drawn beside them as a visitor will read it.
  */
 export function FaqEditor({ item, items, linkPage, chrome, onSubmit, onClose }: BlockEditorProps) {
+  const focusFirst = useFocusesFirstField();
   const formId = useId();
   const editing = item?.kind === 'faq' ? item : undefined;
   const [title, setTitle] = useState(editing?.title ?? '');
@@ -793,7 +850,7 @@ export function FaqEditor({ item, items, linkPage, chrome, onSubmit, onClose }: 
         id={formId}
         onSubmit={submit}
         label={editing === undefined ? strings.newFaq : strings.editFaq}
-        focusesFirstField
+        focusesFirstField={focusFirst}
       >
         <Field
           label={strings.faqTitle}
@@ -991,6 +1048,7 @@ export function ContactEditor({
   onSubmit,
   onClose,
 }: BlockEditorProps) {
+  const focusFirst = useFocusesFirstField();
   const formId = useId();
   const editing = item?.kind === 'contact' ? item : undefined;
   const [guess] = useState(guessCountry);
@@ -1074,7 +1132,7 @@ export function ContactEditor({
         id={formId}
         onSubmit={submit}
         label={editing === undefined ? strings.newContact : strings.editContact}
-        focusesFirstField
+        focusesFirstField={focusFirst}
       >
         <p>{strings.contactHint}</p>
         <Field {...field('fullName')} label={strings.contactName} isRequired maxLength={80} />
@@ -1162,6 +1220,7 @@ type Choices =
  * each (AC-5117), read fresh each time it opens.
  */
 export function PageChooser({ slug, items, linkPage, chrome, onSubmit, onClose }: BlockEditorProps) {
+  const focusFirst = useFocusesFirstField();
   const formId = useId();
   const [choices, setChoices] = useState<Choices>({ status: 'loading' });
   const [picked, setPicked] = useState<string | null>(null);
@@ -1229,7 +1288,7 @@ export function PageChooser({ slug, items, linkPage, chrome, onSubmit, onClose }
     );
   } else {
     body = (
-      <Form id={formId} onSubmit={submit} label={strings.newPage} focusesFirstField>
+      <Form id={formId} onSubmit={submit} label={strings.newPage} focusesFirstField={focusFirst}>
         <Select
           label={strings.page}
           searchLabel={strings.pageSearch}
@@ -1277,6 +1336,7 @@ type FormChoices =
  * which the owner may replace; the name itself never leaves the editor, so a visitor reads only what was typed.
  */
 export function FormChooser({ slug, item, items, linkPage, chrome, onSubmit, onClose }: BlockEditorProps) {
+  const focusFirst = useFocusesFirstField();
   const formId = useId();
   const editing = item?.kind === 'form' ? item : undefined;
   const [choices, setChoices] = useState<FormChoices>(
@@ -1366,7 +1426,7 @@ export function FormChooser({ slug, item, items, linkPage, chrome, onSubmit, onC
         id={formId}
         onSubmit={submit}
         label={editing === undefined ? strings.newForm : strings.editForm}
-        focusesFirstField
+        focusesFirstField={focusFirst}
       >
         {editing === undefined && (
           <Select

@@ -141,6 +141,27 @@
     letter-spacing: var(--tracking-label);
   }
 
+  /* One date (isSingleDay): Working on its own line, then each window on a line of its own. Not a size container, so
+     it takes its content's width wherever it opens (a popover has no width to give it). */
+  .single {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-12);
+  }
+
+  .singleRanges {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .single .error {
+    inline-size: auto;
+  }
+
   /* A narrow card: the day and Copy on one line, the windows under them at the card's start, so two times,
      "to" and + still fit a phone. A day off keeps one line, Unavailable in the times' column right after the
      day, where it sits on a wide card, never pushed to the line's end. */

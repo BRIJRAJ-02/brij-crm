@@ -126,14 +126,16 @@
   /* A change for this date only: the blue tag's surface, and the dot, with room for it so it never sits on a range. */
   .cell[data-tone='override'] {
     padding-inline-end: var(--space-16);
+    border-color: var(--tag-blue-border);
     background: var(--tag-blue-bg);
     color: var(--tag-blue-text);
   }
 
-  /* A day off: an empty slot drawn by a dashed edge, the word quiet. */
+  /* A day off: an empty slot drawn by a dashed edge in the control outline colour (3:1 and more in both themes, so it
+     reads in dark too), the word quiet. */
   .cell[data-tone='off'] {
     border-style: dashed;
-    border-color: var(--border);
+    border-color: var(--control-border);
     background: transparent;
     color: var(--text-secondary);
   }
@@ -177,7 +179,13 @@
   }
 
   .cell[data-editable][data-tone='off'] {
-    border-color: var(--border);
+    border-color: var(--control-border);
+  }
+
+  /* A change for this date: an edge of its own hue, so the block keeps its shape in dark, where its surface sits
+     close to the page's. */
+  .cell[data-editable][data-tone='override'] {
+    border-color: var(--tag-blue-border);
   }
 
   .cell[data-editable][data-tone='away'] {
@@ -187,6 +195,14 @@
   .cell[data-editable][data-focus-visible] {
     z-index: var(--z-raised);
     outline: none;
+    box-shadow: var(--shadow-focus);
+  }
+
+  /* Its editor open: the cell keeps the accent's edge, so it is plain which day the Popover changes. */
+  .cell[data-editable][data-open] {
+    z-index: var(--z-raised);
+    border-style: solid;
+    border-color: var(--accent);
     box-shadow: var(--shadow-focus);
   }
 
@@ -265,7 +281,8 @@
     color: var(--text-secondary);
   }
 
-  /* The legend: a swatch per tone and its meaning, then the hint, one quiet line that wraps on a phone. */
+  /* The legend: a key per tone, its look with its meaning inside it, then any hint, one quiet line that wraps on a
+     phone. */
   .legend {
     display: flex;
     flex-wrap: wrap;
@@ -285,54 +302,61 @@
     list-style: none;
   }
 
+  /* A key: a small cell of the look it explains, its meaning written inside it, so it reads in both themes without
+     a swatch to match by eye (the owner, 31 October 2026: the swatches all but vanished in dark). */
   .key {
+    position: relative;
     display: inline-flex;
     align-items: center;
-    gap: var(--space-6);
-  }
-
-  .swatch {
-    position: relative;
-    inline-size: var(--size-icon);
-    block-size: var(--size-icon-xs);
+    min-block-size: var(--size-chip);
+    padding-inline: var(--space-6);
     border: var(--border-width-hairline) solid var(--border-subtle);
     border-radius: var(--radius-xs);
     background: var(--tag-gray-bg);
+    color: var(--tag-gray-text);
   }
 
-  .swatch[data-tone='override'] {
+  .key[data-tone='override'] {
+    padding-inline-end: var(--space-16);
+    border-color: var(--tag-blue-border);
     background: var(--tag-blue-bg);
+    color: var(--tag-blue-text);
   }
 
-  .swatch[data-tone='override']::after {
-    position: absolute;
-    inset-block-start: calc(-1 * var(--space-2));
-    inset-inline-end: calc(-1 * var(--space-2));
-    inline-size: var(--space-6);
-    block-size: var(--space-6);
-    border-radius: var(--radius-full);
-    background: var(--accent);
-    content: '';
-  }
-
-  .swatch[data-tone='off'] {
+  .key[data-tone='off'] {
     border-style: dashed;
-    border-color: var(--border);
+    border-color: var(--control-border);
     background: transparent;
+    color: var(--text-secondary);
   }
 
-  .swatch[data-tone='away'] {
+  .key[data-tone='away'] {
     border-color: transparent;
     background: var(--tag-yellow-bg);
+    color: var(--tag-yellow-text);
+  }
+
+  .key > .dot {
+    inset-block-start: 50%;
+    inset-inline-end: var(--space-6);
+    translate: 0 -50%;
   }
 
   .hint {
     margin: 0;
   }
 
+  /* The day's editor in its Popover: whose day it is over the editor, with a little more room than a menu. */
+  .editor {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-12);
+    padding: calc(var(--popover-text-inset) - var(--popover-panel-inset));
+  }
+
   @media (forced-colors: active) {
     .cell,
-    .swatch {
+    .key {
       border-color: CanvasText;
     }
   }

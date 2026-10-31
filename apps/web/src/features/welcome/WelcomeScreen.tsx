@@ -6,7 +6,14 @@
 // and Invite your team, into the workspace. Your link and Your booking page can't be skipped (the owner, 27
 // October 2026): a link page and something to book are the product, so first run makes both.
 // Leaves out: a photo (file storage), templates, and a questionnaire (taken out 22 October 2026).
-import { isDataError, type DataLayer, type RoleOption, type SignedInUser, type WorkspaceSummary } from '@crm/data';
+import {
+  isDataError,
+  type CalendarProvider,
+  type DataLayer,
+  type RoleOption,
+  type SignedInUser,
+  type WorkspaceSummary,
+} from '@crm/data';
 import { AuthLayout, Button, ButtonLink, Steps, WorkspacePreview, type WorkspacePreviewFocus } from '@crm/ui';
 import { useNavigate, useRouter } from '@tanstack/react-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -158,7 +165,7 @@ export function WelcomeScreen({
   const slug = address.slug;
   const [isCreating, setCreating] = useState(false);
   const [refusals, setRefusals] = useState<readonly WelcomeRefusal[]>([]);
-  const [isConnecting, setConnecting] = useState(false);
+  const [connecting, setConnecting] = useState<CalendarProvider | undefined>(undefined);
   // Their photo: the account's (me.get answers it before any workspace exists), then whatever they upload here.
   const [photo, setPhoto] = useState<string | undefined>(user.image ?? image);
   const [isUploading, setUploading] = useState(false);
@@ -210,7 +217,7 @@ export function WelcomeScreen({
   // left: "Opening Google". Start over.
   useEffect(() => {
     const onPageShow = (event: PageTransitionEvent) => {
-      if (event.persisted) setConnecting(false);
+      if (event.persisted) setConnecting(undefined);
     };
     window.addEventListener('pageshow', onPageShow);
     return () => {
@@ -405,11 +412,11 @@ export function WelcomeScreen({
       );
   };
 
-  const connect = () => {
+  const connect = (provider: CalendarProvider) => {
     if (workspace === undefined) return;
-    setConnecting(true);
-    // The browser goes to the API, which sends it on to Google's consent and back to this step.
-    window.location.assign(data.calendar.connectUrl(workspace.slug, 'welcome'));
+    setConnecting(provider);
+    // The browser goes to the API, which sends it on to the provider's consent and back to this step.
+    window.location.assign(data.calendar.connectUrl(workspace.slug, 'welcome', provider));
   };
 
   const signOut = () => {
@@ -473,7 +480,9 @@ export function WelcomeScreen({
                 title: titleFromUrl(url),
                 url,
               }))}
-              ghosts={PREVIEW_GHOSTS}
+              // Places for blocks only while the page is still being made (Your link). Once the links are saved the
+              // page is known, so Invite and Done show the real rows alone, never bars that read as loading.
+              ghosts={step === 'handle' ? PREVIEW_GHOSTS : 0}
             />
           ) : (
             <WorkspacePreview
@@ -554,11 +563,12 @@ export function WelcomeScreen({
             onCreate={createPage}
           />
         )}
-        {step === 'calendar' && (
+        {step === 'calendar' && workspace !== undefined && (
           <CalendarStep
             result={calendarResult}
+            view={data.calendar.view(workspace.slug)}
             onConnect={connect}
-            isConnecting={isConnecting}
+            connecting={connecting}
             onFinish={() => {
               after('calendar');
             }}

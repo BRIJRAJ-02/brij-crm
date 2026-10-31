@@ -2,6 +2,8 @@
 export const strings = {
   to: 'to',
   unavailable: 'Unavailable',
+  /** A single day's switch: whether they work that day at all. */
+  working: 'Working',
   allDay: 'All day',
   setHours: 'Set hours',
   setHoursFor: (day: string) => `Set hours for ${day}`,

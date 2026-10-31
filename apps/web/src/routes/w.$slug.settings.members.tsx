@@ -25,11 +25,14 @@ export const Route = createFileRoute('/w/$slug/settings/members')({
   loaderDeps: ({ search }) => ({ q: search.q ?? '' }),
   loader: async ({ context, params, deps }) => {
     try {
-      const [access, page, roles] = await Promise.all([
+      const [access, page, roles, , teams] = await Promise.all([
         context.data.access.mine(params.slug),
         context.data.members.page(params.slug, { search: deps.q }),
         context.data.roles.list(params.slug),
         context.data.members.list(params.slug),
+        // Team delegations name their team in the Scheduling access column (spec 0037, AC-1267); a failed read
+        // leaves them named "A team".
+        context.data.teams.list(params.slug).catch(() => undefined),
       ]);
       const invites = access.permissions.includes('members.invite');
       const [invitations, link, requests, domains] = await Promise.all([
@@ -38,7 +41,7 @@ export const Route = createFileRoute('/w/$slug/settings/members')({
         invites ? context.data.joinRequests.list(params.slug) : undefined,
         access.permissions.includes('workspace.manage') ? context.data.joinRequests.domains(params.slug) : undefined,
       ]);
-      return { screen: { access, page, roles, invitations, link, requests, domains } };
+      return { screen: { access, page, roles, teams, invitations, link, requests, domains } };
     } catch (error) {
       // The frame above shows "workspace not found" for this one.
       if (isDataError(error) && error.code === 'NOT_FOUND') return { screen: undefined };
@@ -83,6 +86,7 @@ function MembersRoute() {
       domains={screen.domains}
       access={screen.access}
       roles={screen.roles}
+      teams={screen.teams}
     />
   );
 }

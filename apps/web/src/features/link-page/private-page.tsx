@@ -5,7 +5,7 @@
 import type { DataLayer } from '@crm/data';
 import { Switch } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type RefObject } from 'react';
 import { strings } from './strings.ts';
 
 /**
@@ -42,6 +42,13 @@ export interface LinkPageLive {
   readonly isLive: boolean;
   /** The switch: shown at once, saved behind it, put back with a toast if the save is refused. */
   readonly setLive: (live: boolean) => void;
+  /**
+   * Turns it Live from somewhere other than the switch (the overview's Turn on Live), then moves focus to the switch,
+   * since the button pressed goes away with the Private state and focus would otherwise fall to the page.
+   */
+  readonly goLive: () => void;
+  /** The switch's input, which `goLive` focuses; LiveSwitch takes it. */
+  readonly switchRef: RefObject<HTMLInputElement | null>;
 }
 
 /**
@@ -61,6 +68,7 @@ export function useLinkPageLive(
   // Only the newest switch's answer lands: a quick on, off, on never ends on an older answer.
   const latest = useRef(0);
   const opened = useRef(false);
+  const switchRef = useRef<HTMLInputElement | null>(null);
   const send = (live: boolean | undefined) => data.linkPage.load().then((store) => store.show(slug, live));
   const setLive = (live: boolean) => {
     // The switch only ever flips, so what to put back is the other state: never a value an older render held
@@ -101,7 +109,11 @@ export function useLinkPageLive(
     // The first render's profile is the one the screen opened on; a later read must not open it again.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once per screen, by design
   }, []);
-  return { isLive, setLive };
+  const goLive = () => {
+    setLive(true);
+    switchRef.current?.focus();
+  };
+  return { isLive, setLive, goLive, switchRef };
 }
 
 /** Props for LiveSwitch. */
@@ -110,9 +122,18 @@ export interface LiveSwitchProps {
 }
 
 /**
- * The one Live or Private switch (spec 0058, AC-23). Its label stays "Live" in both states, so it reads as on or off,
- * never as a double negative; the line under the address says what Private means.
+ * The one Live or Private switch (spec 0058, AC-23). Its label and name are "Live" in both states, so voice control
+ * says "click Live" (WCAG 2.5.3); while off a small "Private" sits beside it as its description, heard as "Live,
+ * switch, off, Private". The line under the address says what Private means.
  */
 export function LiveSwitch({ live }: LiveSwitchProps) {
-  return <Switch label={strings.live} isSelected={live.isLive} onChange={live.setLive} />;
+  return (
+    <Switch
+      label={strings.live}
+      offStatus={strings.private}
+      isSelected={live.isLive}
+      onChange={live.setLive}
+      inputRef={live.switchRef}
+    />
+  );
 }

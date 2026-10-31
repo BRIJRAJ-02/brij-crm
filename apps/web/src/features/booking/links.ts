@@ -63,8 +63,27 @@ export function memberSearch(search: Record<string, unknown>): { readonly member
 }
 
 /**
+ * Whether the Roster shows (spec 0037, AC-1447): to an admin (`booking.admin`) and to anyone whose scheduling reach
+ * sees a colleague (`seesOthers`); a roster of one is Availability, so everyone else has no such tab, and its address
+ * falls back to Availability.
+ */
+export const rosterIsShown = (access: {
+  readonly permissions: readonly string[];
+  readonly scheduling?: { readonly seesOthers: boolean } | undefined;
+}): boolean => access.permissions.includes('booking.admin') || access.scheduling?.seesOthers === true;
+
+/** The Roster tab's search (spec 0037, the Team week): `?week=` (a Monday) and `?q=` (a name). */
+export function rosterSearch(search: Record<string, unknown>): { readonly week?: string; readonly q?: string } {
+  return {
+    ...(typeof search.week === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(search.week) ? { week: search.week } : {}),
+    ...(typeof search.q === 'string' && search.q.trim() !== '' ? { q: search.q.slice(0, 100) } : {}),
+  };
+}
+
+/**
  * The Availability tab's search: `?member=` as `memberSearch`, and `?schedule=`, the schedule open (else the default);
- * or `?view=team`, the Team week (the Roster, spec 0037), with `?week=` (a Monday) and `?q=` (a name).
+ * or `?view=team`, an old link to the Team week from before the Roster had a tab of its own, which the route sends
+ * on to Bookings › Roster with its `?week=` and `?q=`.
  */
 export function availabilitySearch(search: Record<string, unknown>): {
   readonly member?: string;
@@ -73,13 +92,7 @@ export function availabilitySearch(search: Record<string, unknown>): {
   readonly week?: string;
   readonly q?: string;
 } {
-  if (search.view === 'team') {
-    return {
-      view: 'team',
-      ...(typeof search.week === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(search.week) ? { week: search.week } : {}),
-      ...(typeof search.q === 'string' && search.q.trim() !== '' ? { q: search.q.slice(0, 100) } : {}),
-    };
-  }
+  if (search.view === 'team') return { view: 'team', ...rosterSearch(search) };
   return {
     ...memberSearch(search),
     ...(typeof search.schedule === 'string' && UUID.test(search.schedule)

@@ -86,6 +86,8 @@ export interface BlockKind {
   readonly label: string;
   readonly description: string;
   readonly icon: IconName;
+  /** Its tile's tint in the Add modal's grid, so the kinds read apart at a glance (spec 0058, AC-9). */
+  readonly hue: Hue;
   /** Its editor Modal, for an add and an edit. */
   readonly Editor: ComponentType<BlockEditorProps>;
   /** Whether Edit is offered (a booking page block has nothing of its own to edit). */
@@ -121,6 +123,7 @@ export const BLOCK_KINDS: Readonly<Record<AddableKind, BlockKind>> = {
     label: strings.addPage,
     description: strings.addPageText,
     icon: 'calendar-clock',
+    hue: 'green',
     Editor: PageChooser,
     isEditable: false,
   },
@@ -128,6 +131,7 @@ export const BLOCK_KINDS: Readonly<Record<AddableKind, BlockKind>> = {
     label: strings.addLink,
     description: strings.addLinkText,
     icon: 'link',
+    hue: 'blue',
     Editor: LinkEditor,
     isEditable: true,
   },
@@ -135,6 +139,7 @@ export const BLOCK_KINDS: Readonly<Record<AddableKind, BlockKind>> = {
     label: strings.addContact,
     description: strings.addContactText,
     icon: 'id-card',
+    hue: 'sky',
     Editor: ContactEditor,
     isEditable: true,
   },
@@ -142,6 +147,7 @@ export const BLOCK_KINDS: Readonly<Record<AddableKind, BlockKind>> = {
     label: strings.addText,
     description: strings.addTextText,
     icon: 'file-text',
+    hue: 'gray',
     Editor: TextEditor,
     isEditable: true,
   },
@@ -149,6 +155,7 @@ export const BLOCK_KINDS: Readonly<Record<AddableKind, BlockKind>> = {
     label: strings.addForm,
     description: strings.addFormText,
     icon: 'clipboard-list',
+    hue: 'lime',
     Editor: FormChooser,
     // The label is the only thing an edit could change, and the chooser is where it is typed.
     isEditable: true,
@@ -157,6 +164,7 @@ export const BLOCK_KINDS: Readonly<Record<AddableKind, BlockKind>> = {
     label: strings.addFaq,
     description: strings.addFaqText,
     icon: 'circle-question-mark',
+    hue: 'yellow',
     Editor: FaqEditor,
     isEditable: true,
   },
@@ -164,6 +172,7 @@ export const BLOCK_KINDS: Readonly<Record<AddableKind, BlockKind>> = {
     label: strings.addSignup,
     description: strings.addSignupText,
     icon: 'mail',
+    hue: 'orange',
     Editor: SignupEditor,
     isEditable: false,
   },
@@ -171,6 +180,7 @@ export const BLOCK_KINDS: Readonly<Record<AddableKind, BlockKind>> = {
     label: strings.addTestimonial,
     description: strings.addTestimonialText,
     icon: 'message-square',
+    hue: 'red',
     Editor: TestimonialEditor,
     isEditable: true,
   },
@@ -178,6 +188,7 @@ export const BLOCK_KINDS: Readonly<Record<AddableKind, BlockKind>> = {
     label: strings.addHeading,
     description: strings.addHeadingText,
     icon: 'type',
+    hue: 'gray',
     Editor: HeadingEditor,
     isEditable: true,
   },

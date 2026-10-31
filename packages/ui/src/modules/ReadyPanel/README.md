@@ -31,10 +31,10 @@ New. Nothing in the library showed a finished thing with its link: LinkCard show
 - One column on one left and right edge, blocks `space-16` apart. The link row, Copy and Share are `size-input` tall.
 - `link` is shown, copied (Copy swaps to a tick and "Copied" for two seconds, announced as "Link copied"), shared, and drawn as the QR code.
 - Share uses `onShare` when given, otherwise the browser's share sheet, and is left out where the browser has none. A closed sheet is not an error.
-- `preview` is a framed slot at the QR's height beside it (below it in a narrow slot), named by `previewLabel`. It is at most `size-column` tall: a taller picture (a whole phone) is cut there, its top kept in view.
+- `preview` is a framed slot at the QR's height beside it (below it in a narrow slot), named by `previewLabel`. It is at most `size-column` tall: a taller picture (a whole phone) is cut there, its top kept in view. Without one, a quiet line beside the QR says to point a phone's camera at it, so the code never stands alone in an empty row.
 - Copy is primary by default. In a Modal whose footer has its own primary (Done), pass `copyVariant="secondary"` so the dialog keeps one primary.
 - `children` come below (embed tiles: `TileGrid variant="choice"`); `actions` sit at the end.
-- Motion: the panel eases in on opacity and a `space-8` rise, and the mark pops on opacity and scale, from the modal's duration and curve. Under reduced motion both are a fade.
+- Motion: the panel eases in on opacity and a `space-8` rise, and the mark pops on opacity and scale, from the modal's duration and curve. Under reduced motion both appear at once, with no fade (spec 0058, AC-2).
 - The caller passes the address it already has; the panel makes no request.
 
 ## States

@@ -1,5 +1,5 @@
 import { Button } from '../../atoms/Button/Button.tsx';
-import { Select } from '../Select/Select.tsx';
+import { Select } from '../Select/SelectWithFaces.tsx';
 import styles from './Pagination.module.css';
 import { strings } from './strings.ts';
 

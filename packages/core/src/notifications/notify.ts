@@ -18,8 +18,11 @@ import type { WorkspaceTx } from '@crm/db';
 import { uuidList } from '../engine/ids.ts';
 import type { WriteContext } from '../engine/write.ts';
 
-/** The kinds a member's switches email after a notification (a form's submission and a join request each have their own email; an automation's notice is in app only). */
-type SwitchedKind = Exclude<NotificationKind, 'form_submission' | 'join_request' | 'automation'>;
+/**
+ * The kinds a member's switches email after a notification (a form's submission, a join request and a scheduling
+ * change each have their own email; an automation's notice is in app only).
+ */
+type SwitchedKind = Exclude<NotificationKind, 'form_submission' | 'join_request' | 'automation' | 'scheduling_changed'>;
 
 /** The settings column that says whether a kind is emailed. */
 // A join request has its own email (`requestToJoin`'s notice), so it never queues this one.
@@ -336,4 +339,30 @@ export async function withdrawSubmissionNotices(context: WriteContext, which: SQ
   `);
   const members = [...new Set(gone.rows.map((row) => row.member_id))];
   if (members.length > 0) context.record({ notifications: members });
+}
+
+/**
+ * Someone changed a member's scheduling (spec 0037, AC-1264): one `scheduling_changed` notification in the member's
+ * inbox naming only the actor, written by the scheduling notice in the transaction that queued its email, once per
+ * email (the caller calls it only for an email it newly queued). An active member only, never the actor themself. A
+ * member who takes the daily digest gets it there (not yet emailed); anyone else had the email already, so the row is
+ * marked emailed now and no notifications email repeats it. Answers whether a row was written, so the caller names
+ * the member in its `notifications` outbox row and their open inbox shows it.
+ */
+export async function notifySchedulingChanged(
+  tx: WorkspaceTx,
+  input: { readonly workspaceId: string; readonly memberId: string; readonly actorMemberId: string },
+): Promise<boolean> {
+  if (input.memberId === input.actorMemberId) return false;
+  const made = await tx.execute<{ id: string }>(sql`
+    insert into notifications (workspace_id, member_id, kind, actor_type, actor_id, actor_member_id, emailed_at)
+    select ${input.workspaceId}::uuid, m.id, 'scheduling_changed', 'member', ${input.actorMemberId}::uuid,
+      ${input.actorMemberId}::uuid,
+      case when coalesce((select s.digest from notification_settings s where s.member_id = m.id), false)
+        then null else now() end
+    from members m
+    where m.workspace_id = ${input.workspaceId}::uuid and m.id = ${input.memberId}::uuid and m.status = 'active'
+    returning id::text as id
+  `);
+  return made.rows.length > 0;
 }

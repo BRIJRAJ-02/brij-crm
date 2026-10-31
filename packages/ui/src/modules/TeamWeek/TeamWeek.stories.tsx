@@ -1,8 +1,11 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, userEvent, waitFor, within } from 'storybook/test';
+import { useState } from 'react';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
+import { SectionBar } from '../../molecules/SectionBar/SectionBar.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
+import { HoursEditor, type HoursRange } from '../HoursEditor/HoursEditor.tsx';
 import { settleAnimations } from '../../workbench/animations.ts';
 import { TeamWeek, type TeamWeekCell, type TeamWeekPerson } from './TeamWeek.tsx';
 
@@ -18,18 +21,17 @@ const DAYS = [
 
 const legend = {
   items: [
-    { tone: 'usual' as const, label: 'Usual hours' },
-    { tone: 'override' as const, label: 'Changed for this date' },
+    { tone: 'usual' as const, label: 'Usual' },
+    { tone: 'override' as const, label: 'This date only' },
     { tone: 'off' as const, label: 'Off' },
     { tone: 'away' as const, label: 'Away' },
   ],
-  hint: 'Select a day to change that date only. Usual hours repeat every week.',
 };
 
 const NINE = '9:00 AM – 5:00 PM';
 
 function cell(name: string, day: number, tone: TeamWeekCell['tone'], lines: readonly string[]): TeamWeekCell {
-  const words = tone === 'override' ? `${lines.join(', ')}, this week only` : lines.join(', ');
+  const words = tone === 'override' ? `${lines.join(', ')}, this date only` : lines.join(', ');
   return { tone, lines, label: `${DAYS[day]?.long ?? ''}, ${name}: ${words}` };
 }
 
@@ -115,7 +117,7 @@ export const Default: Story = {
     await expect(grid).toBeInTheDocument();
     // An editable cell is a button named in full; a read only one is text.
     const tuesday = canvas.getByRole('button', {
-      name: 'Tuesday 3 November, Grace Hopper: 10:00 AM – 2:00 PM, this week only',
+      name: 'Tuesday 3 November, Grace Hopper: 10:00 AM – 2:00 PM, this date only',
     });
     await expect(tuesday).toBeInTheDocument();
     await expect(canvas.queryByRole('button', { name: /Linus Pauling/ })).not.toBeInTheDocument();
@@ -173,7 +175,7 @@ export const LinkCoverage: Story = {
           ...footer,
           totals: footer.totals.map((total, index) => ({
             ...total,
-            extra: `Link: ${index < 5 ? String(2) : String(0)}`,
+            extra: `${index < 5 ? String(2) : String(0)} bookable`,
             label: `${total.label}, the workspace link can book ${index < 5 ? '2' : 'nobody'}`,
           })),
         }}
@@ -181,7 +183,7 @@ export const LinkCoverage: Story = {
     </Stage>
   ),
   play: async ({ canvas }) => {
-    await expect(canvas.getAllByText('Link: 2')).toHaveLength(5);
+    await expect(canvas.getAllByText('2 bookable')).toHaveLength(5);
   },
 };
 
@@ -211,4 +213,71 @@ export const Phone: Story = {
       <TeamWeek {...args} people={people()} footer={footer} legend={legend} />
     </Stage>
   ),
+};
+
+/** A day's editor as the Roster draws it: the day's hours, the way back to usual, Cancel and Save. */
+function DayEditor({ close }: { readonly close: () => void }) {
+  const [ranges, setRanges] = useState<readonly HoursRange[]>([['10:00', '14:00']]);
+  return (
+    <>
+      <HoursEditor
+        label="Hours on Sun 8"
+        rows={[{ id: 'sun', label: 'Sun 8', ranges }]}
+        stepMinutes={15}
+        isSingleDay
+        onChange={(_, next) => setRanges(next)}
+      />
+      <SectionBar
+        start={
+          <Button variant="ghost" size="sm" icon="undo-2">
+            Usual: Off
+          </Button>
+        }
+        end={
+          <>
+            <Button size="sm" onPress={close}>
+              Cancel
+            </Button>
+            <Button variant="primary" size="sm" onPress={close}>
+              Save
+            </Button>
+          </>
+        }
+      />
+    </>
+  );
+}
+
+/**
+ * A day's editor opened on the week's last day, at the window's end edge: it opens whole (its content's width, never
+ * the narrow cell's), shifted back into view, headed by whose day it is, and the cell keeps a ring while it is open.
+ */
+export const EditorAtEdge: Story = {
+  render: (args) => (
+    <Stage width="fill">
+      <TeamWeek
+        {...args}
+        people={people()}
+        footer={footer}
+        legend={legend}
+        editorLabel={(_, day) => `Grace Hopper, ${DAYS[day]?.long ?? ''}`}
+        editorTitle={(_, day) => `${DAYS[day]?.label ?? ''} · Grace Hopper`}
+        renderEditor={(_, __, close) => <DayEditor close={close} />}
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const sunday = canvas.getByRole('button', { name: 'Sunday 8 November, Grace Hopper: Off' });
+    await userEvent.click(sunday);
+    await settleAnimations();
+    const editor = within(document.body).getByRole('dialog', { name: 'Grace Hopper, Sunday 8 November' });
+    await expect(within(editor).getByText('Sun 8 · Grace Hopper')).toBeVisible();
+    const box = editor.getBoundingClientRect();
+    await expect(box.right).toBeLessThanOrEqual(document.documentElement.clientWidth);
+    const until = within(editor)
+      .getByRole('button', { name: /Sun 8 until/ })
+      .getBoundingClientRect();
+    await expect(until.right).toBeLessThanOrEqual(box.right);
+    await expect(sunday).toHaveAttribute('data-open');
+  },
 };

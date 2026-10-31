@@ -1,7 +1,8 @@
 import { useRef, useState } from 'react';
 import { formatClockOf, momentOf, momentParts } from '../../lib/moment.ts';
 import { DatePicker } from '../../molecules/DatePicker/DatePicker.tsx';
-import { Select, type SelectItem } from '../../molecules/Select/Select.tsx';
+import { Select } from '../../molecules/Select/SelectWithFaces.tsx';
+import type { SelectItem } from '../../molecules/Select/Select.tsx';
 import { useFormatSettings, useNow } from '../../provider/context.ts';
 import type { EditorProps } from '../types.ts';
 import { isCompactSurface, toCommittable } from '../values.ts';

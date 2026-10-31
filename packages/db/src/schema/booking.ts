@@ -448,6 +448,11 @@ export const bookings = pgTable(
     index('bookings_by_host')
       .on(t.workspaceId, t.hostMemberId, t.startsAt)
       .where(sql`${t.status} = 'confirmed'`),
+    // The bookings with no host in a range (the Team day's Needs a host lane, spec 0037, AC-1435): a host who left
+    // isn't a column, so the lane finds them by their flag, and few bookings ever carry it.
+    index('bookings_needs_host')
+      .on(t.workspaceId, t.startsAt)
+      .where(sql`${t.needsHostAt} is not null`),
     // The booking a calendar meeting is for (spec 0024): the sync cancels it, or lets go of a meeting that is gone.
     index('bookings_by_meeting')
       .on(t.workspaceId, t.meetingId)

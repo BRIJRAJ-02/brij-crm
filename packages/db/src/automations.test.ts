@@ -130,7 +130,16 @@ describe('automations and their runs', () => {
     const def = check.rows[0]?.def ?? '';
     // Every kind the type holds has a branch (task_assigned and task_due share one), so none is refused outright.
     expect(kinds.rows.map((row) => row.label).sort()).toEqual(
-      ['automation', 'form_submission', 'join_request', 'mention', 'reply', 'task_assigned', 'task_due'].sort(),
+      [
+        'automation',
+        'form_submission',
+        'join_request',
+        'mention',
+        'reply',
+        'scheduling_changed',
+        'task_assigned',
+        'task_due',
+      ].sort(),
     );
     for (const { label } of kinds.rows) expect(def).toContain(`'${label}'`);
   });

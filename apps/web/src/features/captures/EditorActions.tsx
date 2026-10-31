@@ -47,7 +47,8 @@ export interface EditorActionsProps {
     readonly status?: 'live' | 'paused';
     readonly onPause: () => void;
     readonly onResume: () => void;
-    readonly onDuplicate: () => void;
+    /** Absent leaves Duplicate out (a colleague's booking page: a copy would be the reader's own). */
+    readonly onDuplicate?: () => void;
     /** Opens the editor's delete confirm. */
     readonly onDelete: () => void;
     /** "Delete booking page", "Delete form". */
@@ -94,7 +95,7 @@ export function EditorActions({ link, linkOffReason, viewHref, preview, publish,
             onAction={(key) => {
               if (key === 'pause') menu.onPause();
               if (key === 'resume') menu.onResume();
-              if (key === 'duplicate') menu.onDuplicate();
+              if (key === 'duplicate') menu.onDuplicate?.();
               if (key === 'delete') menu.onDelete();
               menu.extra?.find((each) => each.id === key)?.onAction();
             }}
@@ -109,9 +110,11 @@ export function EditorActions({ link, linkOffReason, viewHref, preview, publish,
                 {strings.resume}
               </MenuItem>
             )}
-            <MenuItem id="duplicate" icon="layers">
-              {strings.duplicate}
-            </MenuItem>
+            {menu.onDuplicate !== undefined && (
+              <MenuItem id="duplicate" icon="layers">
+                {strings.duplicate}
+              </MenuItem>
+            )}
             {(menu.extra ?? []).map((each) => (
               <MenuItem
                 key={each.id}

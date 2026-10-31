@@ -12,7 +12,7 @@ The one way the app draws an icon. It comes from the design system artifact's Ic
 ```
 
 - `name`: the icon as lucide.dev names it. Only names in `icons.ts` type check.
-- `size`: `md` (16, the default) for nav, menus and attribute rows; `sm` (14) in buttons, chips, table headers and card rows; `xs` (12) in card footers and variables.
+- `size`: `lg` (one and a half `size-icon`, 24) only where the mark is the picture, a choice tile's (TileGrid `choice`, spec 0058): at 16 a tile's picture slot read as an empty grey box. `md` (16, the default) for nav, menus and attribute rows; `sm` (14) in buttons, chips, table headers and card rows; `xs` (12) in card footers and variables.
 - `tone`: `inherit` (the default), `muted` (`text-secondary`, for attribute and column header icons) `ai` (the sparkle only) `success` (something checked and found right, such as PhoneField's check on a valid number; why a tone: the check needs the success colour, and a component module colouring an icon would be new CSS for what Icon owns) or `danger` (something checked and found wrong, such as an import preview's row that can't go in, beside its reason; QA, 22 October 2026).
 - `label`: only when the icon is the whole content of a control. It then reads as an image with that name; without it, the icon is hidden from screen readers.
 - `tile`: a hue (`gray`, `red`, `orange`, `yellow`, `lime`, `green`, `sky`, `blue`, `purple`) to set the icon on its tile. A tile always holds an `sm` icon in the hue's text colour, so `size` and `tone` can't be combined with it. Objects take their hue (the sidebar, the top bar); an attribute's name in a record's details takes `gray` (AttributeList).
@@ -23,9 +23,13 @@ Each attribute type has one icon, used everywhere that type appears: `globe` dom
 
 Add one import and one line to `icons.ts`, under its lucide.dev name. With the scoped sets beside it, it is the only file allowed to import `lucide-react` (ESLint enforces it), so every icon the app ships is listed there, and nothing else ships.
 
+## The base set
+
+`base-icons.ts` holds the few icons Icon draws with no scope around it: the hosted form's (its controls' checks, chevrons and alerts, and its upload). UiProvider puts the whole registry in scope (`<IconScope icons={icons}>`), so every page under it draws every icon at once. The hosted form mounts `UiProviderBase` instead, which brings no registry, so its first load carries only the base set (about 20 kB gzipped less, 31 October 2026). There a registry icon outside the base set draws nothing; `icons.test.ts` fails if a file the form draws with names one. Every base name is in the registry too.
+
 ## Scoped sets
 
-Every page loads the registry, so an icon that only a lazy part of the library draws goes in that part's scoped set instead, and loads with its chunk. `editor-icons.ts` holds the note editor's own icons: the format toolbar's (bold, italic, strikethrough, highlighter) and the slash menu's (the three headings, the ordered list, the quote and the code block). The part wraps itself in `IconScope`, and the Icons inside draw from the registry and the set:
+Every page loads the registry, so an icon that only a lazy part of the library draws goes in that part's scoped set instead, and loads with its chunk. `editor-icons.ts` holds the note editor's own icons: the format toolbar's (bold, italic, strikethrough, highlighter) and the slash menu's (the three headings, the ordered list, the quote and the code block). The part wraps itself in `IconScope`, which adds to the scope around it (UiProvider's registry), and the Icons inside draw from both:
 
 ```tsx
 <IconScope icons={editorIcons}>

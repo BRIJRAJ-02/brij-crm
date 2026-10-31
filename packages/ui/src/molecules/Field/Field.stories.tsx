@@ -4,7 +4,7 @@ import { expect, fn, waitFor } from 'storybook/test';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { InfoTip } from '../InfoTip/InfoTip.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
-import { Select } from '../Select/Select.tsx';
+import { Select } from '../Select/SelectWithFaces.tsx';
 import { Field } from './Field.tsx';
 
 const meta = {

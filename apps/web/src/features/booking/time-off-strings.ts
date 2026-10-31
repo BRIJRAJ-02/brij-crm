@@ -31,9 +31,11 @@ export const timeOffStrings = {
   // The dialog.
   days: 'Days',
   // Fresha's line: what time off does, said where the days are picked.
-  daysHint: 'Whole days, in your time zone. Online bookings can’t be placed during time off.',
-  daysHintFor: (first: string) =>
-    `Whole days, in ${first}’s time zone. Online bookings can’t be placed with them during time off.`,
+  daysHint: 'Whole days, in your time zone.',
+  daysHintFor: (first: string) => `Whole days, in ${first}’s time zone.`,
+  /** Whose time off, for someone who Manages others (spec 0037, AC-1272): Me first, then them by name. */
+  forLabel: 'For',
+  forMe: 'Me',
   // Workable's plain count, once the days are picked.
   dayCount: (count: number) => (count === 1 ? '1 day off.' : `${String(count)} days off.`),
   // Remote's banner when someone with Manage acts for a colleague.
@@ -43,12 +45,8 @@ export const timeOffStrings = {
   pickDays: 'Pick the days.',
   reason: 'Reason',
   standin: 'Who covers',
-  standinHint: 'Optional. People who usually meet you go to them, and they get an email.',
-  standinHintFor: (first: string) => `Optional. People who usually meet ${first} go to them, and they get an email.`,
   nobody: 'Nobody',
   note: 'Note',
-  noteHint: 'Optional. Only you and people who manage your scheduling see it.',
-  noteHintFor: (first: string) => `Optional. Only ${first} and people who manage their scheduling see it.`,
   save: 'Save',
   saving: 'Saving…',
   cancel: 'Cancel',

@@ -11,7 +11,14 @@ import type { ActivityFeed, ActivityState } from './activity/feed.ts';
 import type { LinkSection, LinkSectionState } from './links/sections.ts';
 import type { AccountSecurityState, AccountSecurityView } from './account/security.ts';
 import type { AccountSessionsState, AccountSessionsView } from './account/sessions.ts';
-import type { BookingsCalendarHeld, BookingsCalendarState, BookingsState, BookingsView } from './bookings/store.ts';
+import type {
+  BookingsCalendarHeld,
+  BookingsCalendarState,
+  BookingsState,
+  BookingsView,
+  TeamDayHeld,
+  TeamDayState,
+} from './bookings/store.ts';
 import type { MeetingsHeld, MeetingsState } from './bookings/meetings.ts';
 import type { CalendarSettingsHeld, CalendarSettingsState, CalendarState, CalendarView } from './calendar/store.ts';
 import type { CalendarListState, CalendarsHeld, PageDestinationState } from './calendar/calendars.ts';
@@ -365,6 +372,14 @@ export function useBookings(view: BookingsView): BookingsState {
  * minute while the page shows and live updates are paused or off.
  */
 export function useBookingsCalendar(view: BookingsCalendarHeld): BookingsCalendarState {
+  return useRetained(view);
+}
+
+/**
+ * The Team day (spec 0030): one day of the reader's See reach, a column each, re-rendering when it changes. Held while
+ * the screen is mounted, so it is kept current as the week is.
+ */
+export function useTeamDay(view: TeamDayHeld): TeamDayState {
   return useRetained(view);
 }
 

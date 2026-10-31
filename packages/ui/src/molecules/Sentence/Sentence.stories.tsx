@@ -3,7 +3,7 @@ import { fn } from 'storybook/test';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Field } from '../Field/Field.tsx';
-import { Select } from '../Select/Select.tsx';
+import { Select } from '../Select/SelectWithFaces.tsx';
 import { Sentence } from './Sentence.tsx';
 
 const objects = [

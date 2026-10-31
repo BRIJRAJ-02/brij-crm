@@ -1,7 +1,7 @@
 // Brief
-// Purpose: the Roster (spec 0037, job J6): Availability's Team view, the team's bookable hours for one dated week, people down the side and the days across, with a footer counting who works.
+// Purpose: Bookings › Roster (spec 0037, job J6), a tab of its own: the team's bookable hours for one dated week, people down the side and the days across, with a footer counting who works.
 // Main task: read who works when, and (with Manage) change one person's day for that date only, copy a week to the next, or set usual hours for several people.
-// Leaves out: shifts with roles or places, publishing, labour cost, painting cells by drag, and a team filter (no teams yet). The workspace link's coverage is one quiet line under each day's total ("Link: 3"), only while the workspace has a link.
+// Leaves out: shifts with roles or places, publishing, labour cost and painting cells by drag. The workspace link's coverage is one quiet line under each day's total ("3 bookable"), only while the workspace has a link.
 import {
   clockLabel,
   isDataError,
@@ -11,6 +11,7 @@ import {
   type TeamWeek as Week,
   type TeamWeekDay,
   type TeamWeekRow,
+  type TeamView,
   type VisibleMember,
   type WeeklyHours,
 } from '@crm/data';
@@ -31,8 +32,8 @@ import {
   Modal,
   PageColumn,
   SectionBar,
-  SegmentedControl,
   Select,
+  Tooltip,
   TeamWeek,
   TopBar,
   useFormatSettings,
@@ -44,7 +45,7 @@ import {
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { useBookingsToolbarSlot } from '../bookings/toolbarSlot.ts';
+import { useBookingsActionSlot } from '../bookings/toolbarSlot.ts';
 import { useMyAccess, WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import {
   askReconnect,
@@ -54,9 +55,10 @@ import {
   useCalendarHealth,
   useSchedulingStore,
 } from './CalendarHealth.tsx';
-import { todayIn } from './hours.ts';
+import { rangesProblem, todayIn } from './hours.ts';
 import { availabilityHref } from './links.ts';
 import { teamWeekHref } from './team-week-links.ts';
+import { TeamWeekTeamFilter } from './TeamWeekTeamFilter.tsx';
 import { teamWeekStrings as words } from './team-week-strings.ts';
 import { timeOffStrings } from './time-off-strings.ts';
 
@@ -73,31 +75,10 @@ export interface TeamWeekScreenProps {
   readonly search: string;
   /** The reader's zone: an offset shows only where a person's differs. */
   readonly zone: string;
-  /** The members in the reader's See reach, with what the reader may change: the "Set usual hours for…" choices. */
+  /** The members in the reader's See reach, with what the reader may change: the people Set usual hours offers. */
   readonly members: readonly VisibleMember[];
-}
-
-/** Mine | Team: Availability's two views (spec 0037, AC-1289). */
-export function AvailabilityViewSwitch({
-  value,
-  onChange,
-}: {
-  readonly value: 'mine' | 'team';
-  readonly onChange: (value: 'mine' | 'team') => void;
-}) {
-  return (
-    <SegmentedControl
-      label={words.view}
-      size="compact"
-      isFitted
-      segments={[
-        { value: 'mine', label: words.mine },
-        { value: 'team', label: words.team },
-      ]}
-      value={value}
-      onChange={(next) => onChange(next === 'team' ? 'team' : 'mine')}
-    />
-  );
+  /** The workspace's teams, for the team filter (AC-1289); the route reads them again on a live change. */
+  readonly teams?: readonly TeamView[];
 }
 
 /** A date's weekday and day of the month apart ("Mon", "2"), in the reader's language. */
@@ -249,21 +230,27 @@ const awayReason = (reason: keyof typeof timeOffStrings.reasons): string => time
 const weekdayName = (index: number, locale: string): string =>
   new Intl.DateTimeFormat(locale, { weekday: 'long', timeZone: 'UTC' }).format(new Date(Date.UTC(2026, 10, 2 + index)));
 
-/** The Team week: Mine | Team on the strip, one toolbar (the week, search, Copy week, Set usual hours), the grid with its legend, its editor, menus and confirms. */
-export function TeamWeekScreen({ data, slug, week, search, zone, members }: TeamWeekScreenProps) {
+/**
+ * The Team week: one toolbar (the team filter, the week, search, Copy week), Set usual hours in the TopBar's end as
+ * the tab's one primary, the grid with its legend, its editor, menus and confirms.
+ */
+export function TeamWeekScreen({ data, slug, week, search, zone, members, teams = [] }: TeamWeekScreenProps) {
   const { toasts } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
   const { locale } = useFormatSettings();
   const scheduling = data.scheduling.loaded();
-  const slot = useBookingsToolbarSlot();
+  const actionSlot = useBookingsActionSlot();
   // Whose week "Copy this week to next week" asks about: one row's (its menu) or everyone the reader may change (the
   // toolbar's Copy week); undefined when closed.
   const [copying, setCopying] = useState<readonly TeamWeekRow[] | undefined>(undefined);
   // Each opening of the usual hours Modal starts afresh (its key), while a close still plays its exit.
   const [usualKey, setUsualKey] = useState(0);
-  // "Set usual hours" for one person (from their row) or several ("Set usual hours for…"); undefined when closed.
+  // "Set usual hours" for one person (from their row) or several (the TopBar's Set usual hours); undefined when closed.
   const [usualFor, setUsualFor] = useState<readonly string[] | undefined>(undefined);
   const [query, setQuery] = useState(search);
+  // The team filter (AC-1289): the screen's own choice, kept while the week changes; a team since deleted is none.
+  const [chosenTeam, setTeam] = useState('');
+  const teamId = teams.some((team) => team.id === chosenTeam) ? chosenTeam : '';
   // The search reaches the address a moment after typing stops, so each key doesn't read the week again.
   useEffect(() => {
     if (query.trim() === search) return undefined;
@@ -271,7 +258,7 @@ export function TeamWeekScreen({ data, slug, week, search, zone, members }: Team
     return () => clearTimeout(timer);
   }, [query, search, navigate, slug, week]);
   if (scheduling === undefined) return <TeamWeekPending week={week} />;
-  const held = scheduling.teamWeek.held(slug, week, search);
+  const held = scheduling.teamWeek.held(slug, week, search, teamId);
   return (
     <Loaded
       held={held}
@@ -283,7 +270,9 @@ export function TeamWeekScreen({ data, slug, week, search, zone, members }: Team
       members={members}
       query={query}
       onQuery={setQuery}
-      slot={slot}
+      actionSlot={actionSlot}
+      teamFilter={<TeamWeekTeamFilter teams={teams} value={teamId} onChange={setTeam} />}
+      isTeamChosen={teamId !== ''}
       copying={copying}
       onCopy={setCopying}
       usualFor={usualFor}
@@ -308,7 +297,9 @@ function Loaded({
   members,
   query,
   onQuery,
-  slot,
+  actionSlot,
+  teamFilter,
+  isTeamChosen,
   copying,
   onCopy,
   usualFor,
@@ -325,7 +316,10 @@ function Loaded({
   readonly members: readonly VisibleMember[];
   readonly query: string;
   readonly onQuery: (query: string) => void;
-  readonly slot: HTMLElement | null;
+  readonly actionSlot: HTMLElement | null;
+  /** The team filter's Select (absent while the workspace has no teams). */
+  readonly teamFilter: ReactNode;
+  readonly isTeamChosen: boolean;
   readonly copying: readonly TeamWeekRow[] | undefined;
   readonly onCopy: (rows: readonly TeamWeekRow[] | undefined) => void;
   readonly usualFor: readonly string[] | undefined;
@@ -417,20 +411,21 @@ function Loaded({
   const copyRows = (shown?.rows ?? []).filter((row) => row.canChange);
   // Who the copy leaves out: people not loaded yet, or filtered out by the search.
   const copyIsPartial = query !== '' || (state.status === 'ready' && state.week.nextCursor !== undefined);
-  const legend: { readonly items: readonly TeamWeekLegendItem[]; readonly hint?: string } = {
+  // The keys say what each look means in a word each; the cells' own hover edge says they open (no hint line). A
+  // grid with nothing to change draws its days as words, with no blocks, so it keys only the dot and Away.
+  const legend: { readonly items: readonly TeamWeekLegendItem[] } = {
     items: [
-      { tone: 'usual', label: words.legendUsual },
+      ...(anyEditable ? [{ tone: 'usual' as const, label: words.legendUsual }] : []),
       { tone: 'override', label: words.legendChanged },
-      { tone: 'off', label: words.off },
+      ...(anyEditable ? [{ tone: 'off' as const, label: words.off }] : []),
       { tone: 'away', label: words.away },
     ],
-    ...(anyEditable ? { hint: words.explain } : {}),
   };
   const footer =
     shown === undefined
       ? undefined
       : {
-          label: shown.link === undefined ? words.working : words.workingWithLink(shown.link.title),
+          label: words.working,
           // The workspace link's coverage (the brief's decision 3): how many of those working it can book, a quiet
           // line under each day someone works, only while the workspace has a link.
           totals: shown.footer.map((total) => {
@@ -449,50 +444,55 @@ function Loaded({
         };
   const range = rangeWords(week, locale);
   const thisWeek = shown?.thisWeek;
-  const viewSwitch = (
-    <AvailabilityViewSwitch
-      value="team"
-      onChange={(next) => {
-        if (next === 'mine') void navigate({ href: availabilityHref(slug) });
-      }}
-    />
-  );
+  // Set usual hours, the tab's one primary: in the TopBar's end in Bookings, as Availability's New schedule is.
+  const usualAction =
+    changeable.length > 0 ? (
+      <Button variant="primary" icon="clock" onPress={() => onUsualFor([])}>
+        {words.setUsual}
+      </Button>
+    ) : null;
   // One toolbar over the grid (Square's and Workable's): the week on the left (This week, the stepper, its dates),
-  // then the search and the actions on the right. In Bookings, Mine | Team stays on the tab strip's end, where the
-  // Mine side has it, so the switch never moves; on its own page it leads this bar.
+  // then the search and Copy week on the right.
   const tools = (
     <SectionBar
       variant="bar"
       start={
         <>
-          {slot === null && viewSwitch}
+          {/* Never off, as the Calendar's Today, and one label at one width, so the arrows after it never move under
+              the pointer; the week's dates beside them say where you are. */}
           <Button
             variant="secondary"
-            isDisabled={thisWeek === undefined || thisWeek === week}
-            onPress={() => thisWeek !== undefined && go(thisWeek)}
+            onPress={() => {
+              if (thisWeek !== undefined && thisWeek !== week) go(thisWeek);
+            }}
           >
             {words.thisWeek}
           </Button>
-          <Button
-            variant="ghost"
-            icon="chevron-left"
-            label={words.previousWeek}
-            isDisabled={shown === undefined || week <= shown.earliest}
-            onPress={() => go(plusDays(week, -7))}
-          />
-          <Button
-            variant="ghost"
-            icon="chevron-right"
-            label={words.nextWeek}
-            isDisabled={shown === undefined || week >= shown.latest}
-            onPress={() => go(plusDays(week, 7))}
-          />
+          <Tooltip content={words.previousWeek}>
+            <Button
+              variant="ghost"
+              icon="chevron-left"
+              label={words.previousWeek}
+              isDisabled={shown === undefined || week <= shown.earliest}
+              onPress={() => go(plusDays(week, -7))}
+            />
+          </Tooltip>
+          <Tooltip content={words.nextWeek}>
+            <Button
+              variant="ghost"
+              icon="chevron-right"
+              label={words.nextWeek}
+              isDisabled={shown === undefined || week >= shown.latest}
+              onPress={() => go(plusDays(week, 7))}
+            />
+          </Tooltip>
         </>
       }
       title={range}
       isTitleQuiet
       end={
         <>
+          {teamFilter}
           <Field
             label={words.search}
             isLabelHidden
@@ -503,16 +503,16 @@ function Loaded({
             value={query}
             onChange={onQuery}
           />
-          {copyRows.length > 0 && (
-            <Button variant="secondary" icon="copy" isDisabled={isPast || isLatest} onPress={() => onCopy(copyRows)}>
-              {words.copyAll}
-            </Button>
+          {/* Only where there is a next week to copy to, as the row menu offers it: a past week says why above the
+              grid, and the furthest week has nowhere to copy. */}
+          {copyRows.length > 0 && !isPast && !isLatest && (
+            <Tooltip content={words.copyAllHint}>
+              <Button variant="secondary" icon="copy" onPress={() => onCopy(copyRows)}>
+                {words.copyAll}
+              </Button>
+            </Tooltip>
           )}
-          {changeable.length > 0 && (
-            <Button variant="primary" icon="clock" onPress={() => onUsualFor([])}>
-              {words.setUsualFor}
-            </Button>
-          )}
+          {actionSlot === null && usualAction}
         </>
       }
     />
@@ -527,18 +527,39 @@ function Loaded({
     ) : (
       // The page's gutter, as every full width page has it (Members, Bookings' list).
       <PageColumn>
-        {isPast && <Callout tone="info">{words.readOnlyWeek}</Callout>}
+        {isPast && <Callout tone="info">{words.pastWeek}</Callout>}
         <TeamWeek
           label={words.grid(range)}
           personLabel={words.person}
           days={days}
           people={people}
           isLoading={state.status === 'loading'}
-          emptyState={<EmptyState title={words.noMatch}>{words.noMatchBody}</EmptyState>}
+          emptyState={
+            // A search or a team empties the grid (the reader's own row always shows outside a team): a search
+            // clears in one press.
+            <EmptyState
+              title={words.noMatch}
+              icon="search"
+              {...(query === ''
+                ? {}
+                : {
+                    actions: (
+                      <Button variant="secondary" onPress={() => onQuery('')}>
+                        {words.clearSearch}
+                      </Button>
+                    ),
+                  })}
+            >
+              {!isTeamChosen ? words.noMatchBody : query.trim() === '' ? words.noMatchTeam : words.noMatchInTeam}
+            </EmptyState>
+          }
           {...(footer === undefined ? {} : { footer })}
           legend={legend}
           editorLabel={(memberId, index) =>
             words.editorLabel(rowOf(memberId)?.name ?? '', dayWords(dates[index] ?? week, locale, 'long'))
+          }
+          editorTitle={(memberId, index) =>
+            words.editorTitle(dayWords(dates[index] ?? week, locale, 'short'), rowOf(memberId)?.name ?? '')
           }
           renderEditor={(memberId, index, close) => {
             const row = rowOf(memberId);
@@ -571,18 +592,17 @@ function Loaded({
     );
   return (
     <WorkspacePage
-      currentPage="roster"
+      currentPage="bookings"
       page={{
         topBar: <TopBar title={words.title} icon="users" />,
         body: (
           <>
-            {slot !== null && createPortal(<SectionBar start={viewSwitch} />, slot)}
+            {actionSlot !== null && usualAction !== null && createPortal(usualAction, actionSlot)}
             {tools}
             {body}
             <CopyWeekModal
               rows={copying}
               isPartial={copyIsPartial}
-              range={rangeWords(plusDays(week, 7), locale)}
               onClose={() => onCopy(undefined)}
               onCopy={async (rows) => {
                 if (store === undefined) return;
@@ -651,6 +671,8 @@ function DayEditor({
     JSON.stringify(a) === JSON.stringify(b);
   const isUnchanged = same(ranges, day.ranges);
   const isUsual = same(ranges, day.usual);
+  // Overlapping windows are refused by the server: said under them, and Save waits, so no edit is thrown away.
+  const problem = rangesProblem(ranges);
   const usualWords =
     day.usual.length === 0
       ? words.off
@@ -659,19 +681,28 @@ function DayEditor({
     <>
       <HoursEditor
         label={words.dayHours(label)}
-        rows={[{ id: day.date, label, ranges }]}
+        rows={[{ id: day.date, label, ranges, ...(problem === undefined ? {} : { error: problem }) }]}
         stepMinutes={15}
         isSingleDay
         onChange={(_, next) => setRanges(next.slice(0, TEAM_WEEK.rangesMax))}
       />
+      {/* Time off comes first: the cell stays Away whatever hours the date has. */}
+      {day.away !== undefined && <Callout tone="info">{words.awayFirst}</Callout>}
       <SectionBar
         start={
-          // A change for this date only can go back to the usual week; Save sends it.
-          day.source === 'override' &&
-          !isUsual && (
-            <Button variant="ghost" size="sm" icon="undo-2" onPress={() => setRanges(day.usual)}>
-              {words.backToUsual(usualWords)}
-            </Button>
+          // A change for this date only goes back to the usual week in one press, which saves and closes.
+          day.source === 'override' && (
+            <Tooltip content={words.usualIs(usualWords)}>
+              <Button
+                variant="ghost"
+                size="sm"
+                icon="undo-2"
+                label={words.backToUsualAt(usualWords)}
+                onPress={() => onSave('usual')}
+              >
+                {words.backToUsual}
+              </Button>
+            </Tooltip>
           )
         }
         end={
@@ -682,7 +713,7 @@ function DayEditor({
             <Button
               variant="primary"
               size="sm"
-              isDisabled={isUnchanged}
+              isDisabled={isUnchanged || problem !== undefined}
               onPress={() => {
                 // The usual week's own hours are usual hours, not a change for this date.
                 if (isUsual) onSave('usual');
@@ -705,14 +736,12 @@ function DayEditor({
 function CopyWeekModal({
   rows,
   isPartial,
-  range,
   onClose,
   onCopy,
 }: {
   readonly rows: readonly TeamWeekRow[] | undefined;
   /** Some people aren't on the page (not loaded, or searched out), so the copy says it leaves them alone. */
   readonly isPartial: boolean;
-  readonly range: string;
   readonly onClose: () => void;
   readonly onCopy: (rows: readonly TeamWeekRow[]) => Promise<void>;
 }) {
@@ -749,7 +778,7 @@ function CopyWeekModal({
         </>
       }
     >
-      {words.copyBody(asked, range, isPartial && asked.length > 1)}
+      {words.copyBody(asked, isPartial && asked.length > 1)}
     </Modal>
   );
 }
@@ -759,7 +788,7 @@ const NINE: readonly (readonly [string, string])[] = [['09:00', '17:00']];
 type Week7 = Readonly<Record<(typeof WEEKDAYS)[number], readonly (readonly [string, string])[]>>;
 
 /**
- * "Set usual hours" (one person, from their row) and "Set usual hours for…" (several): the people, one week of hours,
+ * "Set usual hours" for one person (from their row) or several (the TopBar's): the people, one week of hours,
  * and what it replaces said before the button (AC-1292, AC-1445). One audited write per person. The screen keys it
  * per opening, so each starts afresh while a close still plays the Modal's exit.
  */
@@ -792,10 +821,15 @@ function UsualHoursModal({
       ) as unknown as Week7,
   );
   const empty = WEEKDAYS.every((key) => week[key].length === 0);
+  // A day's overlapping or inside out windows, said under it; Save waits until there are none.
+  const problems = Object.fromEntries(WEEKDAYS.map((key) => [key, rangesProblem(week[key])])) as Readonly<
+    Record<(typeof WEEKDAYS)[number], string | undefined>
+  >;
+  const hasProblem = WEEKDAYS.some((key) => problems[key] !== undefined);
   return (
     <Modal
       title={words.usualTitle(single?.name)}
-      variant="window"
+      variant="form"
       isOpen={isOpen}
       isBusy={isBusy}
       onOpenChange={(open) => {
@@ -810,7 +844,7 @@ function UsualHoursModal({
             variant="primary"
             icon="clock"
             isPending={isBusy}
-            isDisabled={ids.length === 0 || empty}
+            isDisabled={ids.length === 0 || empty || hasProblem}
             onPress={() => {
               setBusy(true);
               const weekly = Object.fromEntries(
@@ -837,29 +871,65 @@ function UsualHoursModal({
       )}
       <HoursEditor
         label={words.usualWeek}
-        rows={WEEKDAYS.map((key, index) => ({ id: key, label: weekdayName(index, locale), ranges: week[key] }))}
+        rows={WEEKDAYS.map((key, index) => {
+          const problem = problems[key];
+          return {
+            id: key,
+            label: weekdayName(index, locale),
+            ranges: week[key],
+            ...(problem === undefined ? {} : { error: problem }),
+          };
+        })}
         stepMinutes={15}
         onChange={(key, ranges) => setWeek((current) => ({ ...current, [key]: ranges.slice(0, TEAM_WEEK.rangesMax) }))}
       />
-      <Callout tone={ids.length === 0 ? 'info' : 'warning'}>{words.usualBody(ids.length)}</Callout>
+      {ids.length > 0 && <Callout tone="warning">{words.usualBody(ids.length)}</Callout>}
     </Modal>
   );
 }
 
-/** The Team week while the store loads: the strip's place and the grid's skeleton. */
+/** The Team week while the store loads: its toolbar's place (the week and the search, waiting) and the grid's skeleton. */
 export function TeamWeekPending({ week }: { readonly week?: string | undefined }) {
   const { locale } = useFormatSettings();
   const monday = mondayOf(week ?? new Date().toISOString().slice(0, 10));
   const days = weekDays(monday, locale, '');
+  const range = rangeWords(monday, locale);
   return (
     <WorkspacePage
-      currentPage="roster"
+      currentPage="bookings"
       page={{
         topBar: <TopBar title={words.title} icon="users" isLoading />,
         body: (
-          <PageColumn>
-            <TeamWeek label={words.grid(rangeWords(monday, locale))} days={days} people={[]} isLoading />
-          </PageColumn>
+          <>
+            <SectionBar
+              variant="bar"
+              start={
+                <>
+                  <Button variant="secondary" isDisabled>
+                    {words.thisWeek}
+                  </Button>
+                  <Button variant="ghost" icon="chevron-left" label={words.previousWeek} isDisabled />
+                  <Button variant="ghost" icon="chevron-right" label={words.nextWeek} isDisabled />
+                </>
+              }
+              title={range}
+              isTitleQuiet
+              end={
+                <Field
+                  label={words.search}
+                  isLabelHidden
+                  type="search"
+                  size="sm"
+                  icon="search"
+                  placeholder={words.search}
+                  isDisabled
+                />
+              }
+            />
+            <PageColumn>
+              <TeamWeek label={words.grid(range)} days={days} people={[]} isLoading />
+            </PageColumn>
+          </>
         ),
       }}
     />

@@ -1,26 +1,12 @@
-// The one file that touches React Aria's toast, still UNSTABLE_ in 1.21, so its
-// rename changes this file only. The queue is made by createToasts() and handed
-// to UiProvider and the data layer; nothing here lives at module level.
+// With ToastRegion.tsx, the only files that touch React Aria's toast, still
+// UNSTABLE_ in 1.21, so its rename changes these two only. The queue is made by
+// createToasts() and handed to UiProvider and the data layer; ToastRegion draws
+// it. Nothing here lives at module level.
 import { flushSync } from 'react-dom';
-import {
-  UNSTABLE_Toast as AriaToast,
-  UNSTABLE_ToastContent as AriaToastContent,
-  UNSTABLE_ToastQueue as ToastQueue,
-  UNSTABLE_ToastRegion as AriaToastRegion,
-  Text,
-} from 'react-aria-components';
-import { Button } from '../atoms/Button/Button.tsx';
-import { Icon } from '../atoms/Icon/Icon.tsx';
-import { Spinner } from '../atoms/Spinner/Spinner.tsx';
-import '../lib/custom-properties.ts';
-import { strings } from './strings.ts';
-import styles from './Toast.module.css';
+import { UNSTABLE_ToastQueue as ToastQueue } from 'react-aria-components';
 
 /** How long a confirmation stays. Toasts with an action stay until dismissed. */
 export const TOAST_TIMEOUT_MS = 5_000;
-
-/** Each tone's icon. */
-const TONE_ICONS = { success: 'circle-check', danger: 'circle-alert', info: 'info' } as const;
 
 /** How long an error with no action stays: longer than a confirmation, since it asks to be read. */
 export const ERROR_TOAST_TIMEOUT_MS = 8_000;
@@ -117,49 +103,4 @@ export function createToasts(): Toasts {
     },
     queue,
   };
-}
-
-/** Draws the toasts at the bottom right. UiProvider renders it once; screens never do. */
-export function ToastRegion({ toasts }: { readonly toasts: Toasts }) {
-  return (
-    <AriaToastRegion
-      queue={toasts.queue}
-      className={styles.region}
-      aria-label={strings.notifications}
-      // A screen's own shortcuts tell the region apart from a modal dialog (each toast is an alertdialog).
-      data-toast-region=""
-    >
-      {({ toast }) => (
-        <AriaToast
-          toast={toast}
-          className={styles.toast}
-          data-tone={toast.content.tone}
-          style={{ '--toast-name': `toast-${toast.key.replaceAll(/[^\w-]/g, '')}` }}
-        >
-          <span className={styles.icon} data-tone={toast.content.tone}>
-            {toast.content.isBusy === true ? (
-              <Spinner label={toast.content.message} />
-            ) : (
-              <Icon name={TONE_ICONS[toast.content.tone]} size="sm" />
-            )}
-          </span>
-          <AriaToastContent className={styles.content}>
-            <Text slot="title">{toast.content.message}</Text>
-          </AriaToastContent>
-          {toast.content.action !== undefined && (
-            <Button
-              variant="ghost"
-              onPress={() => {
-                toast.content.action?.onAction();
-                toasts.dismiss(toast.key);
-              }}
-            >
-              {toast.content.action.label}
-            </Button>
-          )}
-          <Button slot="close" variant="ghost" icon="x" label={strings.dismiss} />
-        </AriaToast>
-      )}
-    </AriaToastRegion>
-  );
 }

@@ -25,6 +25,15 @@ import { WelcomeScreen, type WelcomeScreenProps } from './WelcomeScreen.tsx';
 const USER: SignedInUser = { id: '0199a6f2-0000-7000-8000-000000000001', name: '', email: 'ada.lovelace@acme.com' };
 const WORKSPACE_ID = '0199a6f2-0000-7000-8000-00000000000a';
 const PAGE_ID = '0199a6f2-0000-7000-8000-00000000000b';
+/** The member's calendar list where Outlook isn't on: Google only. */
+const CALENDAR_SNAPSHOT = { status: 'ready', enabled: true, providers: ['google'], connections: [], max: 5 } as const;
+const CALENDAR_VIEW = {
+  subscribe: () => () => undefined,
+  getSnapshot: () => CALENDAR_SNAPSHOT,
+  retain: () => () => undefined,
+  ready: () => Promise.resolve(),
+  reload: () => undefined,
+};
 
 /** A stand in data layer: what first run calls, counted. */
 function fakeData(taken: readonly string[] = ['taken-one']) {
@@ -82,6 +91,8 @@ function fakeData(taken: readonly string[] = ['taken-one']) {
     },
     calendar: {
       connectUrl: (slug: string, then?: string) => `/api/calendar/google/start?workspace=${slug}&then=${String(then)}`,
+      // Google only: this deployment hasn't turned Outlook on. One view, one snapshot, as the store keeps them.
+      view: () => CALENDAR_VIEW,
     },
     preferences: {
       of: () => ({ getSnapshot: () => ({ status: 'ready', preferences: { timeZone: 'Europe/London' } }) }),
@@ -332,6 +343,8 @@ describe('first run’s steps', () => {
 
     await expect.element(page.getByRole('heading', { level: 1, name: 'Connect your calendar' })).toBeVisible();
     await expect.element(page.getByText('Step 5 of 6')).toBeVisible();
+    // Outlook isn't on here: its button is off, and its words say why.
+    await expect.element(page.getByRole('button', { name: 'Outlook coming soon' })).toBeDisabled();
     // Skip for now, the step's clear secondary action (spec 0058, AC-25).
     await page.getByRole('button', { name: 'Skip for now' }).click();
 
@@ -427,7 +440,7 @@ describe('first run’s steps', () => {
   it('says a connected calendar came back, and Continue goes on to the last step', async () => {
     const fake = fakeData();
     const router = await renderWelcome(fake.data, '/welcome?step=calendar&workspace=acme&calendar=connected');
-    await expect.element(page.getByText('Google Calendar is connected.')).toBeVisible();
+    await expect.element(page.getByText('Your calendar is connected.')).toBeVisible();
     // Connected, there is nothing left to skip: Continue is the one way on.
     expect(page.getByRole('button', { name: 'Skip for now' }).query()).toBeNull();
     await page.getByRole('button', { name: 'Continue' }).click();

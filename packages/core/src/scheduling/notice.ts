@@ -11,19 +11,22 @@
 // for the pair (the previous email's key ends with the last row it told, so a
 // retried run makes the same email once), folds them into each item's first
 // before and last after, drops what ends as it began, and queues one
-// `scheduling_changed` email through the workspace email queue. Nothing is
-// sent when the changes cancel out. Today the rows are a schedule's
-// (`schedule.changed`), time off's (`time_off.*`) and meeting limits'
-// (`limits.changed`); personal pages and rotations add their actions to
-// `NOTICE_ACTIONS` as their jobs land.
+// `scheduling_changed` email through the workspace email queue, and the same
+// notice in the member's inbox (spec 0038). Nothing is sent when the changes
+// cancel out. The rows are a schedule's (`schedule.changed`), time off's
+// (`time_off.*`), meeting limits' (`limits.changed`), a personal booking
+// page's (`booking_page.changed_for`), all aimed at the member, and a
+// rotation's (`rotation.changed`, aimed at the rotation) that added or
+// removed them.
 import { sql } from 'drizzle-orm';
 import { clockLabel } from '@crm/contracts/hours';
 import type { SchedulingChangedEmail } from '@crm/contracts/emails';
 import type { WorkspaceTx } from '@crm/db';
-import { inWorkspace } from '../access/run.ts';
 import { queueEmail } from '../emails/queue.ts';
 import { isUuid } from '../engine/ids.ts';
 import type { EngineScope } from '../engine/scope.ts';
+import { runWrite, type AfterWrite } from '../engine/write.ts';
+import { notifySchedulingChanged } from '../notifications/notify.ts';
 
 /** A schedule as an audit row keeps it (`schedule.changed`): its fields, a day off's note never. */
 export interface ScheduleAudited {
@@ -50,6 +53,7 @@ export const NOTICE_ACTIONS = [
   'time_off.changed',
   'time_off.deleted',
   'limits.changed',
+  'booking_page.changed_for',
 ] as const;
 
 /** How long a notice gathers changes, from the first (AC-1264); the queue function holds the same. */
@@ -298,6 +302,194 @@ export function limitsLines(rows: readonly { readonly before: unknown; readonly 
   return lines.map(fitted);
 }
 
+const LOCATION_WORDS: Readonly<Record<string, string>> = {
+  video: 'Video call',
+  phone: 'Phone',
+  address: 'In person',
+  custom: 'Custom place',
+};
+
+const VIEW_WORDS: Readonly<Record<string, string>> = { month: 'Month', list: 'List', chat: 'Chat' };
+
+/** Minutes as a page's settings show them: "45 min", "1 h 30 min", "none" for 0. */
+function minutesWords(value: unknown): string {
+  if (typeof value !== 'number' || value === 0) return 'none';
+  const hours = Math.floor(value / 60);
+  const minutes = value % 60;
+  if (hours === 0) return `${String(minutes)} min`;
+  return minutes === 0 ? `${String(hours)} h` : `${String(hours)} h ${String(minutes)} min`;
+}
+
+/** The lengths a page offers: "30 min", "30 or 60 min". */
+function lengthsWords(value: unknown): string {
+  if (!Array.isArray(value) || value.length === 0) return 'none';
+  const numbers = value.filter((each): each is number => typeof each === 'number');
+  if (numbers.length <= 1) return `${String(numbers[0] ?? 0)} min`;
+  return `${numbers.slice(0, -1).join(', ')} or ${String(numbers.at(-1) ?? 0)} min`;
+}
+
+/** One field's change on a page, as a notice line's end, or undefined for a change it doesn't word. */
+function pageChange(field: string, from: unknown, to: unknown, scheduleName: string | undefined): string | undefined {
+  const fromTo = (words: (value: unknown) => string, label: string) =>
+    `${label} changed from ${words(from)} to ${words(to)}`;
+  switch (field) {
+    case 'status':
+      return to === 'paused' ? 'turned off' : 'turned on';
+    case 'durations':
+      return fromTo(lengthsWords, 'length');
+    case 'location':
+      return fromTo((value) => LOCATION_WORDS[String(value)] ?? 'somewhere else', 'location');
+    case 'scheduleId':
+      return to === null ? 'now books by the default schedule' : `now books by ${scheduleName ?? 'another schedule'}`;
+    case 'bufferBefore':
+      return fromTo(minutesWords, 'buffer before');
+    case 'bufferAfter':
+      return fromTo(minutesWords, 'buffer after');
+    case 'minNoticeMinutes':
+      return fromTo(minutesWords, 'minimum notice');
+    case 'windowDays':
+      return fromTo((value) => `${String(value)} days`, 'booking window');
+    case 'dailyLimit':
+      return fromTo((value) => (typeof value === 'number' ? String(value) : 'no limit'), 'max per day');
+    case 'slotStep':
+      return fromTo(
+        (value) => (typeof value === 'number' ? `every ${String(value)} min` : 'the length'),
+        'start times',
+      );
+    case 'isPrivate':
+      return to === true ? 'now Link only' : 'now Public';
+    case 'description':
+      return 'description changed';
+    case 'questions':
+      return 'questions changed';
+    case 'rescheduleHost':
+      return to === 'rotation' ? 'a reschedule may go to someone else' : 'a reschedule keeps the same host';
+    case 'defaultView':
+      return fromTo((value) => VIEW_WORDS[String(value)] ?? 'Month', 'opens in');
+    case 'fileToCrm':
+      return to === true ? 'bookers now added to People' : 'bookers no longer added to People';
+    case 'answersObjectId':
+      return 'where answers are filed changed';
+    default:
+      return undefined;
+  }
+}
+
+/** One side of a `booking_page.changed_for` row, read defensively. */
+interface PageSide {
+  readonly pageId: string;
+  readonly title: string;
+  readonly scheduleName?: string;
+  readonly deleted: boolean;
+  readonly fields: Readonly<Record<string, unknown>>;
+}
+
+function pageSideOf(side: unknown): PageSide | undefined {
+  if (typeof side !== 'object' || side === null) return undefined;
+  const { pageId, title, scheduleName, deleted, fields } = side as Record<string, unknown>;
+  if (typeof pageId !== 'string' || typeof title !== 'string') return undefined;
+  return {
+    pageId,
+    title,
+    ...(typeof scheduleName === 'string' ? { scheduleName } : {}),
+    deleted: deleted === true,
+    fields: typeof fields === 'object' && fields !== null ? (fields as Record<string, unknown>) : {},
+  };
+}
+
+/** One page folded over a notice's window. */
+interface FoldedPage {
+  title: string;
+  readonly firstTitle: string;
+  scheduleName: string | undefined;
+  deleted: boolean;
+  readonly from: Map<string, unknown>;
+  readonly to: Map<string, unknown>;
+}
+
+/**
+ * The lines a notice lists for a run of `booking_page.changed_for` rows, oldest first (pure, AC-1264): each page's
+ * fields, first before against last after, so a change undone in the window says nothing. "Intro call: location
+ * changed from Video call to Phone"; "Page renamed: Intro call to First chat"; "Intro call: page deleted".
+ */
+export function pageLines(rows: readonly { readonly before: unknown; readonly after: unknown }[]): string[] {
+  const folded = new Map<string, FoldedPage>();
+  for (const row of rows) {
+    const before = pageSideOf(row.before);
+    const after = pageSideOf(row.after);
+    if (before === undefined || after === undefined) continue;
+    let item = folded.get(after.pageId);
+    if (item === undefined) {
+      item = {
+        title: after.title,
+        firstTitle: before.title,
+        scheduleName: undefined,
+        deleted: false,
+        from: new Map(),
+        to: new Map(),
+      };
+      folded.set(after.pageId, item);
+    }
+    item.title = after.title;
+    if (after.scheduleName !== undefined) item.scheduleName = after.scheduleName;
+    if (after.deleted) item.deleted = true;
+    for (const [field, value] of Object.entries(before.fields)) if (!item.from.has(field)) item.from.set(field, value);
+    for (const [field, value] of Object.entries(after.fields)) item.to.set(field, value);
+  }
+  const lines: string[] = [];
+  for (const item of folded.values()) {
+    if (item.deleted) {
+      lines.push(`${item.firstTitle}: page deleted`);
+      continue;
+    }
+    for (const [field, to] of item.to) {
+      const from = item.from.get(field);
+      if (JSON.stringify(from) === JSON.stringify(to)) continue;
+      if (field === 'title') {
+        lines.push(`Page renamed: ${String(from)} to ${String(to)}`);
+        continue;
+      }
+      const words = pageChange(field, from, to, item.scheduleName);
+      if (words !== undefined) lines.push(`${item.title}: ${words}`);
+    }
+  }
+  return lines.map(fitted);
+}
+
+/**
+ * The lines a notice lists for a run of `rotation.changed` rows that added or removed `memberId`, oldest first
+ * (pure, AC-1264): where each rotation leaves them against where it found them, so added then removed in one window
+ * says nothing. "Added to the Sales rotation"; "Removed from the Sales rotation".
+ */
+export function rotationLines(
+  memberId: string,
+  rows: readonly { readonly targetId: string | null; readonly after: unknown }[],
+): string[] {
+  const folded = new Map<string, { name: string; readonly first: boolean; last: boolean }>();
+  for (const row of rows) {
+    if (row.targetId === null || typeof row.after !== 'object' || row.after === null) continue;
+    const { name, added, removed } = row.after as Record<string, unknown>;
+    const joined = Array.isArray(added) && added.includes(memberId);
+    const left = Array.isArray(removed) && removed.includes(memberId);
+    if (joined === left) continue;
+    const item = folded.get(row.targetId);
+    // In it before the first change exactly when that change took them out.
+    if (item === undefined) {
+      folded.set(row.targetId, { name: typeof name === 'string' ? name : '', first: left, last: joined });
+    } else {
+      item.last = joined;
+      if (typeof name === 'string') item.name = name;
+    }
+  }
+  const lines: string[] = [];
+  for (const item of folded.values()) {
+    if (item.first === item.last) continue;
+    const rotation = item.name === '' ? 'a rotation' : `the ${item.name} rotation`;
+    lines.push(item.last ? `Added to ${rotation}` : `Removed from ${rotation}`);
+  }
+  return lines.map(fitted);
+}
+
 /** What one notice run did: queued the email, found it queued already, had nothing to tell, or the member left. */
 export type SchedulingNoticeOutcome = 'queued' | 'exists' | 'nothing' | 'gone' | 'refused';
 
@@ -309,72 +501,104 @@ export type SchedulingNoticeOutcome = 'queued' | 'exists' | 'nothing' | 'gone' |
 export async function runSchedulingNotice(
   scope: EngineScope,
   input: { readonly actorMemberId: string; readonly memberId: string },
+  hooks: readonly AfterWrite[] = [],
 ): Promise<SchedulingNoticeOutcome> {
   if (scope.access.principal.kind !== 'system') {
     throw new Error('Only the system tells a member of a change to their scheduling (the worker’s task).');
   }
   const { actorMemberId: actor, memberId: member } = input;
   if (!isUuid(actor) || !isUuid(member) || actor === member) return 'nothing';
-  return inWorkspace(scope, async (tx) => {
-    const people = await tx.execute<{ id: string; name: string; active: boolean; slug: string }>(sql`
+  const { result } = await runWrite(
+    scope,
+    async (context): Promise<SchedulingNoticeOutcome> => {
+      const { tx } = context;
+      const people = await tx.execute<{ id: string; name: string; active: boolean; slug: string }>(sql`
       select m.id::text as id, m.name, m.status = 'active' as active, w.slug
       from members m join workspaces w on w.id = m.workspace_id
       where m.id in (${actor}::uuid, ${member}::uuid)
     `);
-    const told = people.rows.find((row) => row.id === member);
-    if (told === undefined || !told.active) return 'gone';
-    const actorName = people.rows.find((row) => row.id === actor)?.name ?? 'Someone';
-    const prefix = `scheduling_changed:${actor}:${member}:`;
-    // The last row the pair's previous notice told: the end of its key.
-    const previous = await tx.execute<{ key: string }>(sql`
+      const told = people.rows.find((row) => row.id === member);
+      if (told === undefined || !told.active) return 'gone';
+      const actorName = people.rows.find((row) => row.id === actor)?.name ?? 'Someone';
+      const prefix = `scheduling_changed:${actor}:${member}:`;
+      // The last row the pair's previous notice told: the end of its key.
+      const previous = await tx.execute<{ key: string }>(sql`
       select key from emails
       where to_member_id = ${member}::uuid and kind = 'scheduling_changed' and starts_with(key, ${prefix})
       order by created_at desc, id desc
       limit 1
     `);
-    const lastTold = previous.rows[0]?.key.slice(prefix.length);
-    // From the last row told on; when that row is gone, the day's bound alone.
-    const after =
-      lastTold !== undefined && isUuid(lastTold)
-        ? sql`and (
+      const lastTold = previous.rows[0]?.key.slice(prefix.length);
+      // From the last row told on; when that row is gone, the day's bound alone.
+      const after =
+        lastTold !== undefined && isUuid(lastTold)
+          ? sql`and (
             not exists (select 1 from audit_events p where p.id = ${lastTold}::uuid)
             or (a.at, a.id) > (select p.at, p.id from audit_events p where p.id = ${lastTold}::uuid)
           )`
-        : sql``;
-    const rows = await tx.execute<{ id: string; action: string; before: unknown; after: unknown }>(sql`
-      select a.id::text as id, a.action, a.before, a.after
+          : sql``;
+      // The member's own rows, and a rotation's that added or removed them.
+      const rows = await tx.execute<{
+        id: string;
+        action: string;
+        target_id: string | null;
+        before: unknown;
+        after: unknown;
+      }>(sql`
+      select a.id::text as id, a.action, a.target_id, a.before, a.after
       from audit_events a
-      where a.target_type = 'member' and a.target_id = ${member} and a.actor_member_id = ${actor}::uuid
-        and a.action in (${sql.join(
-          NOTICE_ACTIONS.map((action) => sql`${action}`),
-          sql`, `,
-        )})
+      where a.actor_member_id = ${actor}::uuid
+        and (
+          (a.target_type = 'member' and a.target_id = ${member} and a.action in (${sql.join(
+            NOTICE_ACTIONS.map((action) => sql`${action}`),
+            sql`, `,
+          )}))
+          or (a.action = 'rotation.changed' and a.target_type = 'rotation'
+            and (a.after -> 'added' @> to_jsonb(${member}::text) or a.after -> 'removed' @> to_jsonb(${member}::text)))
+        )
         and a.at > now() - interval '1 day' ${after}
       order by a.at, a.id
       limit ${ROWS_MAX}
     `);
-    const last = rows.rows.at(-1);
-    if (last === undefined) return 'nothing';
-    // More than one run holds: the next one, queued now, tells the rest.
-    if (rows.rows.length === ROWS_MAX) await queueSchedulingNotice(tx, actor, member);
-    const lines = [
-      ...noticeLines(rows.rows.filter((row) => row.action === 'schedule.changed')),
-      ...timeOffLines(rows.rows.filter((row) => row.action.startsWith('time_off.'))),
-      ...limitsLines(rows.rows.filter((row) => row.action === 'limits.changed')),
-    ];
-    if (lines.length === 0) return 'nothing';
-    const params: SchedulingChangedEmail = {
-      actorName,
-      lines: lines.slice(0, NOTICE_LINES_MAX),
-      more: Math.max(0, lines.length - NOTICE_LINES_MAX),
-      availabilityPath: `/w/${told.slug}/bookings/availability`,
-    };
-    const queued = await queueEmail(tx, {
-      kind: 'scheduling_changed',
-      ids: [actor, member, last.id],
-      to: { memberId: member },
-      params,
-    });
-    return queued.outcome;
-  });
+      const last = rows.rows.at(-1);
+      if (last === undefined) return 'nothing';
+      // More than one run holds: the next one, queued now, tells the rest.
+      if (rows.rows.length === ROWS_MAX) await queueSchedulingNotice(tx, actor, member);
+      const lines = [
+        ...noticeLines(rows.rows.filter((row) => row.action === 'schedule.changed')),
+        ...timeOffLines(rows.rows.filter((row) => row.action.startsWith('time_off.'))),
+        ...limitsLines(rows.rows.filter((row) => row.action === 'limits.changed')),
+        ...pageLines(rows.rows.filter((row) => row.action === 'booking_page.changed_for')),
+        ...rotationLines(
+          member,
+          rows.rows
+            .filter((row) => row.action === 'rotation.changed')
+            .map((row) => ({ targetId: row.target_id, after: row.after })),
+        ),
+      ];
+      if (lines.length === 0) return 'nothing';
+      const params: SchedulingChangedEmail = {
+        actorName,
+        lines: lines.slice(0, NOTICE_LINES_MAX),
+        more: Math.max(0, lines.length - NOTICE_LINES_MAX),
+        availabilityPath: `/w/${told.slug}/bookings/availability`,
+      };
+      const queued = await queueEmail(tx, {
+        kind: 'scheduling_changed',
+        ids: [actor, member, last.id],
+        to: { memberId: member },
+        params,
+      });
+      // The same notice in their inbox (spec 0038): once, with the email that was newly queued.
+      if (
+        queued.outcome === 'queued' &&
+        (await notifySchedulingChanged(tx, { workspaceId: scope.workspaceId, memberId: member, actorMemberId: actor }))
+      ) {
+        context.record({ notifications: [member] });
+      }
+      return queued.outcome;
+    },
+    hooks,
+  );
+  return result;
 }

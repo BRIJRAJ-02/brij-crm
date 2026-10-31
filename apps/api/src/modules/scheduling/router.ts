@@ -103,7 +103,11 @@ export const timeOffRouter = member.timeOff.router({
 // write path, so its audit row, its `schedules` outbox row and the member's notice come from there.
 export const availabilityRouter = member.availability.router({
   teamWeek: member.availability.teamWeek.handler(({ context, input }) =>
-    readTeamWeek(context.scope, { now }, { weekStart: input.weekStart, search: input.search, cursor: input.cursor }),
+    readTeamWeek(
+      context.scope,
+      { now },
+      { weekStart: input.weekStart, search: input.search, teamId: input.teamId, cursor: input.cursor },
+    ),
   ),
   setDay: member.availability.setDay.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
