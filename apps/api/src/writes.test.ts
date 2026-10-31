@@ -47,6 +47,8 @@ const READS: ReadonlySet<string> = new Set([
   'attributes.list',
   // What an attribute's change would touch, read before the change (the flow pass).
   'attributes.impact',
+  // What changing an attribute's type would do, read before the change (the field types lane).
+  'attributes.checkTypeChange',
   'members.list',
   // Teams (spec 0031, slice 8): the list every member reads.
   'teams.list',
@@ -254,6 +256,7 @@ function paths(tree: unknown, prefix: readonly string[] = []): string[] {
 interface OutboxRow {
   readonly kind: string;
   readonly object_id: string;
+  readonly list_id: string | null;
   readonly record_ids: string[];
   readonly attribute_ids: string[];
   readonly item_ids: string[];
@@ -263,7 +266,7 @@ interface OutboxRow {
 async function outboxOf(workspaceId: string): Promise<OutboxRow[]> {
   return testQuery<OutboxRow & Record<string, unknown>>(
     ownerUrl,
-    'select kind, object_id, record_ids, attribute_ids, item_ids, mutation_id from outbox where workspace_id = $1 order by seq',
+    'select kind, object_id, list_id, record_ids, attribute_ids, item_ids, mutation_id from outbox where workspace_id = $1 order by seq',
     [workspaceId],
   );
 }
@@ -1164,6 +1167,15 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
         mutation_id: mutationId,
       }))
       .sort((a, b) => a.object_id.localeCompare(b.object_id));
+  },
+  // A type change: the column's values change shape, so the object's records read again (coarse), and its definition.
+  'attributes.changeType': async (m, mutationId) => {
+    const attributeId = m.attribute('job_title');
+    await m.client.attributes.changeType({ workspace: m.slug, attributeId, to: 'long_text', mutationId });
+    return [
+      { kind: 'records', object_id: m.people.id, mutation_id: mutationId },
+      { kind: 'definitions', object_id: m.people.id, attribute_ids: [attributeId], mutation_id: mutationId },
+    ];
   },
   'attributes.restore': async (m, mutationId) => {
     const attributeId = m.attribute('job_title');
