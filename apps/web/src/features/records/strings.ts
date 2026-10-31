@@ -67,7 +67,7 @@ export const strings = {
   call: 'Call',
   callNumber: (number: string) => `Call ${number}`,
   logActivity: 'Log activity',
-  addTask: 'Add task',
+  addTask: 'Add a task',
   /** The More menu's Rename: the name is the header, so it is no longer a row in Details (owner, 31 Oct). */
   rename: 'Rename',
   cancel: 'Cancel',

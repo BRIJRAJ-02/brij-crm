@@ -6,6 +6,7 @@ import type { IconName } from '../../atoms/Icon/icons.ts';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import styles from './RecordFacts.module.css';
+import { strings } from './strings.ts';
 
 /** One fact: what it is (said to screen readers) and its value, drawn by the screen. */
 export interface RecordFact {
@@ -42,6 +43,7 @@ export function RecordFacts({ label, facts, isLoading = false }: RecordFactsProp
         <span className={styles.fact}>
           <Skeleton width="medium" />
         </span>
+        <VisuallyHidden>{strings.loading}</VisuallyHidden>
       </div>
     );
   }

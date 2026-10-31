@@ -71,11 +71,14 @@
     font: var(--text-heading);
   }
 
+  /* The actions wrap among themselves rather than running out of a narrow main column. */
   .end {
     display: flex;
     flex: none;
+    flex-wrap: wrap;
     gap: var(--space-8);
     align-items: center;
+    max-inline-size: 100%;
   }
 
   .viewers {

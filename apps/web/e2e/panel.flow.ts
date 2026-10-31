@@ -91,7 +91,7 @@ test.describe('the record panel', () => {
     await openInPanel(page, /Grace Hopper/);
     const panel = page.getByRole('dialog', { name: 'Grace Hopper' });
     await panel.getByRole('tab', { name: /Tasks/ }).click();
-    await panel.getByRole('button', { name: 'Add with a due date and assignee' }).click();
+    await panel.getByRole('button', { name: 'Add with details' }).click();
     const task = page.getByRole('dialog', { name: /task/iu }).last();
     await expect(task).toBeVisible();
     await page.keyboard.press('Escape');

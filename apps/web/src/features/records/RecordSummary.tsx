@@ -108,17 +108,18 @@ export function factsOf(
   });
 }
 
-/** Props for the record's summary line. */
-export interface RecordSummaryFactsProps {
-  readonly name: string;
-  readonly attributes: readonly AttributeDefinition[];
-  readonly record: RecordView;
-  readonly referenceDisplays?: (refs: readonly RecordRef[]) => readonly NameState[];
-}
-
-/** The record's key facts on one quiet line; nothing when it has none. */
-export function RecordSummaryFacts({ name, attributes, record, referenceDisplays }: RecordSummaryFactsProps) {
-  return <RecordFacts label={strings.facts(name)} facts={factsOf(attributes, record, referenceDisplays)} />;
+/**
+ * The record's key facts on one quiet line, or undefined when it has none, so the caller passes nothing and the
+ * header keeps its object's name (and the panel no empty row).
+ */
+export function summaryFacts(
+  name: string,
+  attributes: readonly AttributeDefinition[],
+  record: RecordView,
+  referenceDisplays?: (refs: readonly RecordRef[]) => readonly NameState[],
+) {
+  const facts = factsOf(attributes, record, referenceDisplays);
+  return facts.length === 0 ? undefined : <RecordFacts label={strings.facts(name)} facts={facts} />;
 }
 
 /** Props for the record's quick actions. */
@@ -131,26 +132,28 @@ export interface RecordQuickActionsProps {
   readonly onTask?: () => void;
 }
 
+/** Whether the quick actions have anything to show. */
+export const hasQuickActions = ({ email, phone, onLog, onTask }: RecordQuickActionsProps): boolean =>
+  email !== undefined || phone !== undefined || onLog !== undefined || onTask !== undefined;
+
 /**
- * The record's quick actions, each a quiet button: Email and Call when it has an address or a number (they open the
- * mail app and the phone), then Log activity and Add task when the person may add to it. Nothing when none applies.
+ * The record's quick actions: Email and Call as quiet icon buttons when it has an address or a number (they open
+ * the mail app and the phone, the address in their tooltip), then Log activity and Add a task, the record's two
+ * things to do, when the person may add to it. The one place each lives on the panel and the page.
  */
-export function RecordQuickActions({ email, phone, onLog, onTask }: RecordQuickActionsProps) {
-  if (email === undefined && phone === undefined && onLog === undefined && onTask === undefined) return null;
+export function RecordQuickActions(props: RecordQuickActionsProps) {
+  const { email, phone, onLog, onTask } = props;
+  if (!hasQuickActions(props)) return null;
   return (
     <>
       {email !== undefined && (
-        <Tooltip content={email}>
-          <ButtonLink variant="secondary" icon="mail" href={`mailto:${email}`} label={strings.emailTo(email)}>
-            {strings.email}
-          </ButtonLink>
+        <Tooltip content={strings.emailTo(email)}>
+          <ButtonLink variant="ghost" icon="mail" href={`mailto:${email}`} label={strings.emailTo(email)} />
         </Tooltip>
       )}
       {phone !== undefined && (
-        <Tooltip content={phone}>
-          <ButtonLink variant="secondary" icon="phone" href={`tel:${phone}`} label={strings.callNumber(phone)}>
-            {strings.call}
-          </ButtonLink>
+        <Tooltip content={strings.callNumber(phone)}>
+          <ButtonLink variant="ghost" icon="phone" href={`tel:${phone}`} label={strings.callNumber(phone)} />
         </Tooltip>
       )}
       {onLog !== undefined && (
@@ -159,7 +162,7 @@ export function RecordQuickActions({ email, phone, onLog, onTask }: RecordQuickA
         </Button>
       )}
       {onTask !== undefined && (
-        <Button variant="secondary" icon="list-plus" onPress={onTask}>
+        <Button variant="secondary" icon="plus" onPress={onTask}>
           {strings.addTask}
         </Button>
       )}

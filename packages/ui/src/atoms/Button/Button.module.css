@@ -358,6 +358,11 @@
     border-inline-start-color: var(--on-accent-kbd);
   }
 
+  /* Off, the end half's edge follows the neutral off look rather than the accent's light line. */
+  .root[data-split='end'][data-variant='primary'][data-disabled] {
+    border-inline-start-color: var(--border-subtle);
+  }
+
   .root[data-split][data-focus-visible] {
     position: relative;
     z-index: var(--z-raised);

@@ -23,10 +23,10 @@
     max-inline-size: 100%;
   }
 
+  /* No clip here: a chip inside cuts itself with an ellipsis, and a clip would cut its focus ring. */
   .value {
     display: inline-flex;
     min-inline-size: 0;
-    overflow: hidden;
     color: var(--text);
     white-space: nowrap;
   }

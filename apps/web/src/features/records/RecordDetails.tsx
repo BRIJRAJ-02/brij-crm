@@ -118,6 +118,16 @@ export function RecordDetails({
   // it and sets it on this record, its label shown at once.
   // Keyed on the record's id, not the record: a live edit to it must not hand every editor a new context value.
   const recordId = record?.id;
+  // Whether the name was filled when this record first showed: decided once per record, so naming an unnamed
+  // record in its row never pulls the row (and its focus) away under the editor.
+  const primaryId = attributes.find((each) => each.isPrimary)?.id;
+  const [namedAtOpen, setNamedAtOpen] = useState<{ readonly id: string; readonly isNamed: boolean } | undefined>(
+    undefined,
+  );
+  if (record !== undefined && namedAtOpen?.id !== record.id) {
+    setNamedAtOpen({ id: record.id, isNamed: primaryId !== undefined && isFilled(record.values[primaryId]) });
+  }
+  const hidesName = namedAtOpen?.id === record?.id && namedAtOpen?.isNamed === true;
   const canCommit = onCommit !== undefined;
   const actions = useMemo<FieldActions | undefined>(
     () =>
@@ -136,11 +146,12 @@ export function RecordDetails({
     [schemaObject, recordId, canCommit, data, slug],
   );
   if (record === undefined) return <AttributeList label={strings.details} sections={[]} isLoading />;
-  // The name is the header's, never a row too (owner, 31 Oct: shown three times, cut short in the row). An unnamed
-  // record keeps the row, so it can be named in place; the page's More menu renames a named one.
+  // The name is the header's, never a row too (owner, 31 Oct: shown three times, cut short in the row). A record
+  // opened unnamed keeps the row, so it can be named in place; Rename (the page's More menu, the panel's header)
+  // renames a named one.
   const items = fields.flatMap(({ definition, attribute }) => {
     const value = record.values[definition.id] ?? null;
-    if (definition.isPrimary && isFilled(value)) return [];
+    if (definition.isPrimary && hidesName) return [];
     const refs = definition.type === 'record_reference' ? refsOf(value) : [];
     const names = refs.length === 0 ? [] : (referenceDisplays?.(refs) ?? []);
     const display =

@@ -84,7 +84,7 @@ import { strings as listStrings } from '../lists/strings.ts';
 import { RecordActions } from './RecordActions.tsx';
 import { RecordDetails } from './RecordDetails.tsx';
 import { RelatedSections, type RelatedSource } from './RelatedSections.tsx';
-import { RecordQuickActions, RecordSummaryFacts, contactOf } from './RecordSummary.tsx';
+import { RecordQuickActions, contactOf, summaryFacts } from './RecordSummary.tsx';
 import { RenameDialog } from './RenameDialog.tsx';
 import { strings } from './strings.ts';
 import { recordLinks } from './timeline.ts';
@@ -228,14 +228,9 @@ function PendingTab({ tab }: { readonly tab: RecordTab }) {
         status="loading"
         onAction={() => undefined}
         toolbar={
-          <>
-            <Button isFullWidth icon="pencil" isDisabled>
-              {noteStrings.writeNote}
-            </Button>
-            <Button variant="ghost" icon="phone" isDisabled>
-              {noteStrings.logActivity}
-            </Button>
-          </>
+          <Button isFullWidth icon="pencil" isDisabled>
+            {noteStrings.writeNote}
+          </Button>
         }
       />
     );
@@ -635,22 +630,7 @@ function RecordScreen({
   }, [commandMenu, commandName, slug, object.apiSlug, recordId]);
   let tabContent: ReactNode;
   if (tab === 'activity') {
-    tabContent = (
-      <ActivityTab
-        feed={feed}
-        feedFor={feedFor}
-        link={link}
-        taskHref={taskHref}
-        onAddPerson={addPerson}
-        {...(canAddTasks
-          ? {
-              onLog: () => {
-                openLog('new');
-              },
-            }
-          : {})}
-      />
-    );
+    tabContent = <ActivityTab feed={feed} feedFor={feedFor} link={link} taskHref={taskHref} onAddPerson={addPerson} />;
   } else if (tab === 'comments') {
     tabContent = (
       <CommentsTab
@@ -892,6 +872,8 @@ function RecordScreen({
 
   // Email and Call in the header's quick actions: the record's first address and number.
   const contact = contactOf(attributes, shown);
+  // The record at a glance under its name; with none, the header keeps the object's name.
+  const summary = summaryFacts(name, attributes, shown, state.referenceDisplays);
   const nameAttribute = attributes.find((each) => each.isPrimary);
   const pageLink = new URL(recordHref(slug, object.apiSlug, recordId, tab), window.location.origin).href;
 
@@ -962,14 +944,7 @@ function RecordScreen({
                   record={display}
                   objectName={object.singularName}
                   stats={stats}
-                  facts={
-                    <RecordSummaryFacts
-                      name={name}
-                      attributes={attributes}
-                      record={shown}
-                      referenceDisplays={state.referenceDisplays}
-                    />
-                  }
+                  {...(summary === undefined ? {} : { facts: summary })}
                   // An object the person may only read says so, with why on its lock, rather than dropping editors.
                   {...(isViewOnly
                     ? {

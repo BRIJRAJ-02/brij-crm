@@ -4,7 +4,7 @@
 // Leaves out: Overview, the stat strip and the record's menu (rename, delete, copy link), all on its full page one press away.
 import type { AttributeDefinition, MemberSummary, ObjectSummary, RecordState, RecordView } from '@crm/data';
 import { useCommentCount, useNoteTotal, useRecord, useRecordFileCount, useTaskTotal } from '@crm/data/react';
-import { Callout, EmptyState, RecordPanel, type RecordPanelTab } from '@crm/ui';
+import { Button, Callout, EmptyState, RecordPanel, Tooltip, type RecordPanelTab } from '@crm/ui';
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CommentsTab } from '../comments/CommentsTab.tsx';
@@ -24,7 +24,8 @@ import { recordHref, recordName } from './details.ts';
 import type { PeekLoadStep, PeekSteps, PeekTab } from './params.ts';
 import { openPeek, type PeekSources } from './peek.ts';
 import { RecordDetails } from './RecordDetails.tsx';
-import { RecordQuickActions, RecordSummaryFacts, contactOf } from './RecordSummary.tsx';
+import { RecordQuickActions, contactOf, hasQuickActions, summaryFacts } from './RecordSummary.tsx';
+import { RenameDialog } from './RenameDialog.tsx';
 import { RelatedSections } from './RelatedSections.tsx';
 import { strings } from './strings.ts';
 import { recordLinks } from './timeline.ts';
@@ -253,6 +254,7 @@ function LoadedPeek(
   const [task, setTask] = useState<string | undefined>(undefined);
   const [note, setNote] = useState<string | undefined>(undefined);
   const [log, setLog] = useState<string | undefined>(undefined);
+  const [isRenaming, setRenaming] = useState(false);
   // Stepping to another record closes what was open on the last one.
   const [shownFor, setShownFor] = useState(recordId);
   if (shownFor !== recordId) {
@@ -260,6 +262,7 @@ function LoadedPeek(
     setTask(undefined);
     setNote(undefined);
     setLog(undefined);
+    setRenaming(false);
   }
   const shown = shownOf(state);
   const isLost = state.status === 'deleted' && state.isLost;
@@ -333,20 +336,7 @@ function LoadedPeek(
     {
       id: 'activity',
       label: strings.activity,
-      content: (
-        <ActivityTab
-          feed={sources.feed}
-          feedFor={feedFor}
-          link={link}
-          {...(canEdit
-            ? {
-                onLog: () => {
-                  setLog('new');
-                },
-              }
-            : {})}
-        />
-      ),
+      content: <ActivityTab feed={sources.feed} feedFor={feedFor} link={link} />,
     },
     {
       id: 'notes',
@@ -395,35 +385,45 @@ function LoadedPeek(
       content: <FilesTab slug={slug} recordId={recordId} files={sources.files} members={members} isReadOnly={isLost} />,
     },
   ];
+  const facts = summaryFacts(display.name, sources.attributes, shown, state.referenceDisplays);
+  const quick = {
+    ...contactOf(sources.attributes, shown),
+    ...(canEdit
+      ? {
+          onLog: () => {
+            setLog('new');
+          },
+          onTask: () => {
+            setTask('new');
+          },
+        }
+      : {}),
+  };
+  const nameAttribute = sources.attributes.find((each) => each.isPrimary);
   return (
     <>
       <RecordPanel
         {...common}
         record={display}
-        // The record at a glance under its name, and its quick actions (owner, 31 Oct).
-        facts={
-          <RecordSummaryFacts
-            name={display.name}
-            attributes={sources.attributes}
-            record={shown}
-            referenceDisplays={state.referenceDisplays}
-          />
-        }
-        quickActions={
-          <RecordQuickActions
-            {...contactOf(sources.attributes, shown)}
-            {...(canEdit
-              ? {
-                  onLog: () => {
-                    setLog('new');
-                  },
-                  onTask: () => {
-                    setTask('new');
-                  },
-                }
-              : {})}
-          />
-        }
+        // The record at a glance under its name, and its quick actions (owner, 31 Oct); each only when it has some.
+        {...(facts === undefined ? {} : { facts })}
+        {...(hasQuickActions(quick) ? { quickActions: <RecordQuickActions {...quick} /> } : {})}
+        {...(canEdit && nameAttribute !== undefined
+          ? {
+              actions: (
+                <Tooltip content={strings.rename}>
+                  <Button
+                    variant="ghost"
+                    icon="pencil"
+                    label={strings.renameTitle(object.singularName)}
+                    onPress={() => {
+                      setRenaming(true);
+                    }}
+                  />
+                </Tooltip>
+              ),
+            }
+          : {})}
         selectedTab={tab}
         onTabChange={(next) => {
           const found = tabs.find((each) => each.id === next);
@@ -469,6 +469,20 @@ function LoadedPeek(
           onStored={setNote}
           onClose={() => {
             setNote(undefined);
+          }}
+        />
+      )}
+      {isRenaming && nameAttribute !== undefined && (
+        <RenameDialog
+          attribute={nameAttribute}
+          value={shown.values[nameAttribute.id] ?? null}
+          singularName={object.singularName}
+          isOpen
+          onClose={() => {
+            setRenaming(false);
+          }}
+          onSave={(value) => {
+            data.records.setValue(slug, { rowId: recordId, columnId: nameAttribute.id, value });
           }}
         />
       )}

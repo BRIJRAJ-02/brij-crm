@@ -80,8 +80,8 @@ test.describe('the record journey’s edges', () => {
     await page.getByRole('tab', { name: /Tasks/ }).click();
     await expect(page.getByText('No open tasks', { exact: true })).toBeVisible();
     await expect(page.getByText('Add one above')).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Add with a due date and assignee' })).toHaveCount(1);
-    await page.getByRole('button', { name: 'Add with a due date and assignee' }).click();
+    await expect(page.getByRole('button', { name: 'Add with details' })).toHaveCount(1);
+    await page.getByRole('button', { name: 'Add with details' }).click();
     await expect(page).toHaveURL(/\/tasks\?task=new$/);
     await page.keyboard.press('Escape');
     await expect(page).toHaveURL(/\/tasks$/);

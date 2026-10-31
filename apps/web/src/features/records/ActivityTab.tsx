@@ -10,14 +10,7 @@ import type {
   EntrySource,
 } from '@crm/data';
 import { useActivity } from '@crm/data/react';
-import {
-  ActivityFeed,
-  Button,
-  Select,
-  type ActivityFeedLayout,
-  type MeetingAttendee,
-  type MeetingEntry,
-} from '@crm/ui';
+import { ActivityFeed, Select, type ActivityFeedLayout, type MeetingAttendee, type MeetingEntry } from '@crm/ui';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { strings } from './strings.ts';
 import { linkedSource, type RecordLink, type TaskLink } from './timeline.ts';
@@ -43,8 +36,6 @@ export interface ActivityTabProps {
   readonly onAddPerson?: (meetingId: string, attendee: MeetingAttendee) => Promise<void>;
   /** The timeline cut to some kinds: given, the tab shows its filter (All, Changes, Notes, Calls, Tasks, Comments, Meetings). */
   readonly feedFor?: (kinds: readonly ActivityKind[]) => Promise<ActivityFeedSource>;
-  /** Opens Log activity on the record, beside the filter; left out where the person can't add to it. */
-  readonly onLog?: () => void;
 }
 
 /** The filter's choices and the kinds each reads; All reads the whole feed. */
@@ -64,7 +55,7 @@ const FILTERS: readonly { readonly id: string; readonly label: string; readonly 
  * which shows loading in place until it arrives.
  */
 export function ActivityTab(props: ActivityTabProps) {
-  const { feed, feedFor, onLog } = props;
+  const { feed, feedFor } = props;
   const [filter, setFilter] = useState('all');
   const [filtered, setFiltered] = useState<{ readonly id: string; readonly feed: ActivityFeedSource } | undefined>(
     undefined,
@@ -91,24 +82,16 @@ export function ActivityTab(props: ActivityTabProps) {
       feed={shown ?? feed}
       isSwitching={shown === undefined}
       toolbar={
-        <>
-          <Select
-            label={strings.activityFilter}
-            isLabelHidden
-            size="sm"
-            items={FILTERS.map(({ id, label }) => ({ id, label }))}
-            value={filter}
-            onChange={(next) => {
-              if (typeof next === 'string') setFilter(next);
-            }}
-          />
-          {/* The filter never stands alone: the tab's one action, logging what happened, sits beside it (owner, 31 Oct). */}
-          {onLog !== undefined && (
-            <Button variant="secondary" icon="pen" onPress={onLog}>
-              {strings.logActivity}
-            </Button>
-          )}
-        </>
+        <Select
+          label={strings.activityFilter}
+          isLabelHidden
+          size="sm"
+          items={FILTERS.map(({ id, label }) => ({ id, label }))}
+          value={filter}
+          onChange={(next) => {
+            if (typeof next === 'string') setFilter(next);
+          }}
+        />
       }
     />
   );

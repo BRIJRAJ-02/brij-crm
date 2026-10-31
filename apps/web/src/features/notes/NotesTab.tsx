@@ -1,6 +1,6 @@
 // Brief
 // Purpose: what the team learned about this record, on its page's Notes tab.
-// Main task: write a note ("Write a note…") or log a call or meeting ("Log activity"), and find one again to open it.
+// Main task: write a note ("Write a note…"), and find a note or a logged call or meeting again to open it.
 // Leaves out: writing together in real time (#27), comments (#29), search inside notes (⌘K finds them by title).
 import type { MemberSummary, NoteList as NoteListSource } from '@crm/data';
 import { useNoteList } from '@crm/data/react';
@@ -31,29 +31,19 @@ export function NotesTab({ list, members, canAdd, onOpenNote, onOpenLog }: Notes
   useEffect(() => {
     preloadNoteEditor();
   }, []);
-  // The tab opens on the note to write (owner, 31 Oct): "Write a note…" fills the row and opens a new note ready to
-  // type into; Log activity is the quiet second choice. Empty, the list is one line under them.
+  // The tab opens on the note to write (owner, 31 Oct): "Write a note…" fills the row and opens a new note with
+  // the cursor in it. Log activity lives once, in the record's quick actions over every tab. Empty, the list is one
+  // line under it.
   const compose = (
-    <>
-      <Button
-        isFullWidth
-        icon="pencil"
-        onPress={() => {
-          onOpenNote('new');
-        }}
-      >
-        {strings.writeNote}
-      </Button>
-      <Button
-        variant="ghost"
-        icon="phone"
-        onPress={() => {
-          onOpenLog('new');
-        }}
-      >
-        {strings.logActivity}
-      </Button>
-    </>
+    <Button
+      isFullWidth
+      icon="pencil"
+      onPress={() => {
+        onOpenNote('new');
+      }}
+    >
+      {strings.writeNote}
+    </Button>
   );
   return (
     <NoteList

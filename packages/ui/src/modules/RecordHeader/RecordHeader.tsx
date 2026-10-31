@@ -92,11 +92,11 @@ export function RecordHeader({
       />
       <span className={styles.text}>
         <h2 className={styles.name}>{record.name}</h2>
-        <span className={styles.meta}>
+        <div className={styles.meta}>
           {facts === undefined ? <span>{objectName}</span> : <VisuallyHidden>{objectName}</VisuallyHidden>}
           {facts}
           {meta}
-        </span>
+        </div>
       </span>
       {(viewers.length > 0 || children !== undefined) && (
         <span className={styles.end}>

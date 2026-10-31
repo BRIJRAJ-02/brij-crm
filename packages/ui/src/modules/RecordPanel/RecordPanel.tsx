@@ -51,7 +51,7 @@ export interface RecordPanelProps {
    * drawn through their one field design) as a quiet wrapping line. Leave it out for none.
    */
   readonly facts?: ReactNode;
-  /** The record's quick actions beside its facts: Email, Call, Log activity, Add task. One row of quiet buttons. */
+  /** The record's quick actions under its facts: Email and Call (icons), Log activity, Add a task. One row of buttons. */
   readonly quickActions?: ReactNode;
   /** One line over the tabs, such as a danger Callout saying the record is no longer available. */
   readonly notice?: ReactNode;

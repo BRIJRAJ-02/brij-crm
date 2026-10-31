@@ -51,7 +51,6 @@ Props: `children` (the label, a string) or `icon` with `label` (icon only), or `
 
 A disabled primary drops its accent for a neutral fill (`surface-sunken`, `text-tertiary`, a `border-subtle` edge) at full opacity, so it reads as not yet rather than as a faded, broken blue (owner, 31 October 2026); other variants dim with `opacity-disabled`.
 
-
 - **Hover**: `surface-hover` (the primary darkens to `accent-hover`), only on devices that can hover.
 - **Pressed**: no shrink (the owner, 20 October 2026); a press reads through the hover and active colours. `scale-press` is 1, so nothing in the library scales on press.
 - **Focus**: from the keyboard only, a 1px `accent-line` border (3:1 on every surface) plus the faint `shadow-focus` halo. Primary and danger keep their edge (blue, red), so their 1px `accent-line` ring sits just outside, past a 1px gap. In forced colours, a 2px `Highlight` outline.

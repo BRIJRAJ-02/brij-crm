@@ -4,7 +4,7 @@ A record's few key facts on one quiet line under its name: a person's job title,
 
 ## Why it exists
 
-New (owner, 31 October 2026: the record panel and page showed only a name, with no summary). Neither neighbour fit: `RecordStats` is a boxed strip of counts and times, each a label over its value, and `DescriptionList` pairs a label with plain text down a column. A summary line needs values drawn through their one field design (an email's LinkChip, a company's RecordChip), side by side and wrapping, with the attribute's name heard but not drawn. It sits in `molecules`, shared by `RecordHeader` (its `meta`) and `RecordPanel` (its `facts`).
+New (owner, 31 October 2026: the record panel and page showed only a name, with no summary). Neither neighbour fit: `RecordStats` is a boxed strip of counts and times, each a label over its value, and `DescriptionList` pairs a label with plain text down a column. A summary line needs values drawn through their one field design (an email's LinkChip, a company's RecordChip), side by side and wrapping, with the attribute's name heard but not drawn. It sits in `molecules`, shared by `RecordHeader` and `RecordPanel` (each through its `facts`).
 
 ## Use
 
@@ -25,7 +25,7 @@ New (owner, 31 October 2026: the record panel and page showed only a name, with 
 
 ## States
 
-Default, loading (two skeletons), empty (nothing), narrow (wraps).
+Default, loading (two skeletons, said as "Loading facts"), empty (nothing), narrow (wraps). Disabled, read only and error don't apply: it only shows values, and each value brings its own display.
 
 ## Keyboard
 
