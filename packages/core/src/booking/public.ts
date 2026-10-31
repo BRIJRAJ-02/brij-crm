@@ -37,6 +37,9 @@ import {
   ProfileTestimonialBlock,
   ProfileTextBlock,
   PublicProfileItem,
+  MEDIA_PROVIDERS,
+  PROFILE_ALT_MAX,
+  profileImagePath,
   type ProfileContactCard,
   type PublicAddress,
   type PublicProfile,
@@ -58,6 +61,7 @@ import type { BookingEntry, HandleOwner, LinkPageRow, OwnedFormEntry, OwnedPageE
 import { pagePath } from './handles.ts';
 import { personPicture, type AccountPictureReader, type PersonPicture } from './picture.ts';
 import { faviconSources, faviconVersion } from './favicon.ts';
+import { isMediaRef, mediaFrameSrc } from '../profile/embeds.ts';
 import { isPictureHidden } from './picture-choice.ts';
 import { publicSocialsOf } from './socials.ts';
 import { checkScope } from '../access/mint.ts';
@@ -371,19 +375,64 @@ interface PageRow {
 function matches(item: PublicProfileItem, words: string): boolean {
   // Titles and the short lines under them only (AC-5228). A piece of writing matches on its title alone: a row
   // that matched on words a visitor cannot see in it is a result that makes no sense.
-  const said =
-    item.kind === 'contact'
-      ? [item.fullName, item.jobTitle ?? '', item.company ?? '']
-      : item.kind === 'testimonial'
-        ? [item.author, item.role ?? '']
-        : item.kind === 'form'
-          ? [item.title]
-          : item.kind === 'text'
-            ? [item.title ?? '']
-            : item.kind === 'faq'
-              ? [item.title ?? '', ...item.items.map((asked) => asked.question)]
-              : [item.title, item.kind === 'link' ? (item.note ?? '') : item.kind === 'page' ? item.description : ''];
+  const said = ((): readonly string[] => {
+    switch (item.kind) {
+      case 'contact':
+        return [item.fullName, item.jobTitle ?? '', item.company ?? ''];
+      case 'testimonial':
+        return [item.author, item.role ?? ''];
+      case 'form':
+      case 'heading':
+      case 'media':
+      case 'times':
+        return [item.title];
+      case 'text':
+        return [item.title ?? ''];
+      case 'faq':
+        return [item.title ?? '', ...item.items.map((asked) => asked.question)];
+      case 'link':
+        return [item.title, item.note ?? ''];
+      case 'page':
+        return [item.title, item.description];
+      case 'image':
+        return [item.caption ?? ''];
+      case 'banner':
+        return [item.text];
+      case 'gallery':
+      case 'socials':
+        return [];
+    }
+  })();
   return said.some((text) => text.toLowerCase().includes(words));
+}
+
+/** What a picture a block names draws as: our origin's path and its size, or undefined while no live block may use it. */
+type PictureSizes = ReadonlyMap<string, { readonly width: number; readonly height: number }>;
+
+/** A picture by its id, as the public answer carries it, or undefined. */
+function pictureOf(handle: string, sizes: PictureSizes, id: unknown) {
+  if (typeof id !== 'string') return undefined;
+  const size = sizes.get(id);
+  return size === undefined ? undefined : { src: profileImagePath(handle, id), ...size };
+}
+
+/** A tile's size, when it is one other than the default. */
+function sizeOf(data: Readonly<Record<string, unknown>>): { readonly size?: string } {
+  return data.size === 'wide' || data.size === 'large' ? { size: data.size } : {};
+}
+
+/** A short stored line, or undefined: a string that is still one line and in its length. */
+function lineOf(value: unknown, max: number): string | undefined {
+  return typeof value === 'string' && value.trim() !== '' && value.length <= max && !/[\r\n]/.test(value)
+    ? value
+    : undefined;
+}
+
+/** A stored address that still passes the link rule, else undefined. */
+function addressOf(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const checked = checkProfileLink(value);
+  return checked.ok && checked.url === value ? value : undefined;
 }
 
 /** A stored block as a visitor reads it, or undefined: a kind this build doesn't draw, or a page they can't see. */
@@ -392,6 +441,10 @@ function publicItemOf(
   pages: ReadonlyMap<string, PageRow>,
   forms: ReadonlyMap<string, string>,
   handle: string,
+  extras: { readonly pictures: PictureSizes; readonly hasSocials: boolean } = {
+    pictures: new Map(),
+    hasSocials: false,
+  },
 ): PublicProfileItem | undefined {
   const data: Readonly<Record<string, unknown>> =
     typeof row.data === 'object' && row.data !== null ? (row.data as Readonly<Record<string, unknown>>) : {};
@@ -417,6 +470,13 @@ function publicItemOf(
       ...(network === undefined ? {} : { mark: network }),
       ...(picked === undefined ? {} : { icon: picked }),
       ...(site === undefined ? {} : { siteIcon: linkIconPath(handle, row.id, faviconVersion(row.id, url)) }),
+      // Spec 0061: its picture while it is one of the page's own (AC-6101), the featured card, the notice, a size.
+      ...(pictureOf(handle, extras.pictures, data.thumb) === undefined
+        ? {}
+        : { thumb: pictureOf(handle, extras.pictures, data.thumb) }),
+      ...(data.style === 'featured' ? { style: 'featured' } : {}),
+      ...(typeof data.notice === 'string' ? { notice: data.notice } : {}),
+      ...sizeOf(data),
     };
   } else if (row.kind === 'heading') {
     candidate = {
@@ -469,7 +529,67 @@ function publicItemOf(
   } else if (row.kind === 'page') {
     const page = row.page_id === null ? undefined : pages.get(row.page_id);
     if (page === undefined) return undefined;
-    candidate = { kind: 'page', id: row.id, ...page };
+    candidate = { kind: 'page', id: row.id, ...page, ...sizeOf(data) };
+  } else if (row.kind === 'times') {
+    // A booking page's next open times (AC-6110): shown exactly while a page block of the same page would be.
+    const page = row.page_id === null ? undefined : pages.get(row.page_id);
+    const duration = page?.durations[0];
+    if (page === undefined || duration === undefined) return undefined;
+    candidate = { kind: 'times', id: row.id, slug: page.slug, title: page.title, duration };
+  } else if (row.kind === 'socials') {
+    // The person's own links (AC-6104): a row with nothing in it is no row.
+    if (!extras.hasSocials) return undefined;
+    candidate = { kind: 'socials', id: row.id };
+  } else if (row.kind === 'media') {
+    // The frame's address from the parsed provider and id alone (AC-6106), each read again on the way out.
+    const provider = MEDIA_PROVIDERS.find((each) => each === data.provider);
+    const ref = typeof data.ref === 'string' ? data.ref : '';
+    if (provider === undefined || !isMediaRef(provider, ref)) return undefined;
+    const poster = pictureOf(handle, extras.pictures, data.poster);
+    candidate = {
+      kind: 'media',
+      id: row.id,
+      provider,
+      title: lineOf(data.title, 100) ?? provider,
+      frame: mediaFrameSrc(provider, ref),
+      ...(poster === undefined ? {} : { poster }),
+      ...sizeOf(data),
+    };
+  } else if (row.kind === 'image') {
+    const image = pictureOf(handle, extras.pictures, data.image);
+    const alt = lineOf(data.alt, PROFILE_ALT_MAX);
+    if (image === undefined || alt === undefined) return undefined;
+    const caption = lineOf(data.caption, 120);
+    const url = addressOf(data.url);
+    candidate = {
+      kind: 'image',
+      id: row.id,
+      image,
+      alt,
+      ...(caption === undefined ? {} : { caption }),
+      ...(url === undefined ? {} : { url }),
+      ...sizeOf(data),
+    };
+  } else if (row.kind === 'gallery') {
+    const images = (Array.isArray(data.images) ? (data.images as readonly unknown[]) : []).flatMap((each) => {
+      if (typeof each !== 'object' || each === null) return [];
+      const picture = pictureOf(handle, extras.pictures, 'image' in each ? each.image : undefined);
+      const alt = lineOf('alt' in each ? each.alt : undefined, PROFILE_ALT_MAX);
+      return picture === undefined || alt === undefined ? [] : [{ ...picture, alt }];
+    });
+    if (images.length === 0) return undefined;
+    candidate = {
+      kind: 'gallery',
+      id: row.id,
+      images,
+      display: data.display === 'grid' ? 'grid' : 'row',
+      ...sizeOf(data),
+    };
+  } else if (row.kind === 'banner') {
+    const text = lineOf(data.text, 80);
+    if (text === undefined) return undefined;
+    const url = addressOf(data.url);
+    candidate = { kind: 'banner', id: row.id, text, ...(url === undefined ? {} : { url }) };
   } else if (row.kind === 'contact') {
     // The card's whole rule first, as its vCard reads it, so the page never offers a card that answers 404. Then its
     // name and the line under it only: the email, phone and the rest are in the vCard (AC-5114).
@@ -528,6 +648,8 @@ export async function readLinkPage(
     readonly forms: readonly OwnedFormEntry[];
     /** Blocks read but never shown (spec 0056): another workspace's, or a link that has left this one. */
     readonly skipped?: ReadonlySet<string>;
+    /** The pictures the blocks name that a visitor may load, with their sizes (spec 0061, `linkImageSizes`). */
+    readonly pictures?: PictureSizes;
   },
   query: { readonly search?: string } = {},
 ): Promise<PublicProfile> {
@@ -535,7 +657,11 @@ export async function readLinkPage(
   for (const entry of found.forms) checkFormEntry(entry);
   const words = query.search?.trim().toLowerCase().slice(0, 120) ?? '';
   const listed = words === '' ? found.rows.slice(0, PROFILE_PAGE_SIZE) : found.rows;
-  const wanted = new Set(listed.flatMap((row) => (row.kind === 'page' && row.page_id !== null ? [row.page_id] : [])));
+  const wanted = new Set(
+    listed.flatMap((row) =>
+      (row.kind === 'page' || row.kind === 'times') && row.page_id !== null ? [row.page_id] : [],
+    ),
+  );
   const byWorkspace = new Map<string, OwnedPageEntry[]>();
   for (const entry of found.pages) {
     if (!wanted.has(entry.pageId)) continue;
@@ -589,11 +715,19 @@ export async function readLinkPage(
   const formKeys = new Map(found.forms.map((entry) => [entry.formId, entry.key]));
   const items = listed.flatMap((row) => {
     if (found.skipped?.has(row.id) === true) return [];
-    if (row.kind === 'page' && (row.page_id === null || where.get(row.page_id) !== row.workspace_id)) return [];
+    if (
+      (row.kind === 'page' || row.kind === 'times') &&
+      (row.page_id === null || where.get(row.page_id) !== row.workspace_id)
+    ) {
+      return [];
+    }
     if (row.kind === 'form' && (row.form_id === null || formWorkspaces.get(row.form_id) !== row.workspace_id)) {
       return [];
     }
-    const item = publicItemOf(row, pages, formKeys, found.owner.handle);
+    const item = publicItemOf(row, pages, formKeys, found.owner.handle, {
+      pictures: found.pictures ?? new Map(),
+      hasSocials: found.owner.socials.length > 0,
+    });
     if (item === undefined) return [];
     if (words !== '' && (item.kind === 'heading' || !matches(item, words))) return [];
     return [item];

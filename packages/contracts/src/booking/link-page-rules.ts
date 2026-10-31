@@ -13,35 +13,268 @@ export const PROFILE_BLOCK_KINDS = [
   'faq',
   'form',
   'testimonial',
+  // Spec 0061: the socials row, media you tap to play, a picture, a gallery, next open times and a banner.
+  'socials',
+  'media',
+  'image',
+  'gallery',
+  'times',
+  'banner',
 ] as const;
 /** One of the kinds this build draws. */
 export type ProfileBlockKind = (typeof PROFILE_BLOCK_KINDS)[number];
 
-/** How many blocks of each kind one link page holds, and in all (AC-5102). */
+/**
+ * How many blocks of each kind one link page holds, and in all (AC-5102, spec 0061 AC-6115). `featured` is not a
+ * kind: it is how many links may be drawn as the larger card. A banner's 1 counts live banners only, as every cap
+ * here counts live blocks.
+ */
 export const PROFILE_LIMITS = {
   items: 60,
   link: 40,
   heading: 12,
   page: 60,
-  contact: 1,
+  contact: 3,
   text: 5,
   faq: 2,
   form: 3,
   testimonial: 6,
+  socials: 1,
+  media: 10,
+  image: 10,
+  gallery: 3,
+  times: 3,
+  banner: 1,
+  featured: 3,
 } as const;
 
-/** The sentence a full kind is refused and disabled with (AC-5102), the server's and the editor's alike. */
-export function profileLimitSentence(kind: ProfileBlockKind | 'items'): string {
-  if (kind === 'items') return `A link page holds up to ${String(PROFILE_LIMITS.items)} blocks.`;
-  if (kind === 'link') return `A link page holds up to ${String(PROFILE_LIMITS.link)} links.`;
-  if (kind === 'heading') return `A link page holds up to ${String(PROFILE_LIMITS.heading)} headings.`;
-  if (kind === 'contact') return 'A link page holds one contact card.';
-  if (kind === 'text') return `A link page holds up to ${String(PROFILE_LIMITS.text)} pieces of writing.`;
-  if (kind === 'faq') return `A link page holds up to ${String(PROFILE_LIMITS.faq)} sets of questions.`;
-  if (kind === 'form') return `A link page holds up to ${String(PROFILE_LIMITS.form)} forms.`;
-  if (kind === 'testimonial') return `A link page holds up to ${String(PROFILE_LIMITS.testimonial)} testimonials.`;
-  return `A link page holds up to ${String(PROFILE_LIMITS.page)} booking pages.`;
+/** The sentence a full kind is refused and disabled with (AC-5102, AC-6115), the server's and the editor's alike. */
+export function profileLimitSentence(kind: ProfileBlockKind | 'items' | 'featured'): string {
+  const most = (count: number, words: string) => `A link page holds up to ${String(count)} ${words}.`;
+  switch (kind) {
+    case 'items':
+      return most(PROFILE_LIMITS.items, 'blocks');
+    case 'link':
+      return most(PROFILE_LIMITS.link, 'links');
+    case 'heading':
+      return most(PROFILE_LIMITS.heading, 'headings');
+    case 'contact':
+      return most(PROFILE_LIMITS.contact, 'contact cards');
+    case 'text':
+      return most(PROFILE_LIMITS.text, 'pieces of writing');
+    case 'faq':
+      return most(PROFILE_LIMITS.faq, 'sets of questions');
+    case 'form':
+      return most(PROFILE_LIMITS.form, 'forms');
+    case 'testimonial':
+      return most(PROFILE_LIMITS.testimonial, 'testimonials');
+    case 'socials':
+      return 'A link page holds one row of social links.';
+    case 'media':
+      return most(PROFILE_LIMITS.media, 'videos and songs');
+    case 'image':
+      return most(PROFILE_LIMITS.image, 'pictures');
+    case 'gallery':
+      return most(PROFILE_LIMITS.gallery, 'galleries');
+    case 'times':
+      return most(PROFILE_LIMITS.times, 'next times blocks');
+    case 'banner':
+      return 'A link page shows one banner at a time.';
+    case 'featured':
+      return most(PROFILE_LIMITS.featured, 'featured links');
+    case 'page':
+      return most(PROFILE_LIMITS.page, 'booking pages');
+  }
 }
+
+/** The kinds a "Show from" and "Hide after" window may sit on (AC-6111): every kind but a heading. */
+export const PROFILE_WINDOWED_KINDS: readonly ProfileBlockKind[] = PROFILE_BLOCK_KINDS.filter(
+  (kind) => kind !== 'heading',
+);
+
+/** A block's window as stored: ISO 8601 UTC instants, either or both absent. */
+export interface ProfileWindow {
+  readonly showFrom?: string;
+  readonly hideAfter?: string;
+}
+
+/** The sentence a window whose end does not come after its start is refused with (AC-6111). */
+export const PROFILE_WINDOW_REFUSAL = '“Hide after” has to come after “Show from”.';
+
+/** Why a window can't be kept, or undefined when it can: an end at or before its start. */
+export function profileWindowProblem(window: ProfileWindow): string | undefined {
+  if (window.showFrom === undefined || window.hideAfter === undefined) return undefined;
+  return Date.parse(window.hideAfter) > Date.parse(window.showFrom) ? undefined : PROFILE_WINDOW_REFUSAL;
+}
+
+/**
+ * Whether a block with this window is on the public page at `now` (AC-6111): from its start, inclusive, until its
+ * end, exclusive. The database's own read (`crm_profile_items_public`) applies the same rule with its own clock;
+ * this copy is for the editor's chip and the tests.
+ */
+export function isInProfileWindow(window: ProfileWindow, now: Date): boolean {
+  const at = now.getTime();
+  if (window.showFrom !== undefined && Date.parse(window.showFrom) > at) return false;
+  return !(window.hideAfter !== undefined && Date.parse(window.hideAfter) <= at);
+}
+
+/** Where a window stands at `now`, for the editor's chip ("Starts 3 Nov, 09:00", "Ends 10 Nov", "Ended"). */
+export type ProfileWindowState =
+  | { readonly state: 'always' }
+  | { readonly state: 'starts'; readonly at: string }
+  | { readonly state: 'ends'; readonly at: string }
+  | { readonly state: 'ended'; readonly at: string };
+
+/** The chip a window shows at `now`: not started yet, running until an end, ended, or always on. */
+export function profileWindowState(window: ProfileWindow, now: Date): ProfileWindowState {
+  const at = now.getTime();
+  if (window.hideAfter !== undefined && Date.parse(window.hideAfter) <= at) {
+    return { state: 'ended', at: window.hideAfter };
+  }
+  if (window.showFrom !== undefined && Date.parse(window.showFrom) > at)
+    return { state: 'starts', at: window.showFrom };
+  if (window.hideAfter !== undefined) return { state: 'ends', at: window.hideAfter };
+  return { state: 'always' };
+}
+
+/** How a link draws (AC-6102): the plain row, or the larger card with its picture across the top. */
+export const PROFILE_LINK_STYLES = ['row', 'featured'] as const;
+/** How a link draws. */
+export type ProfileLinkStyle = (typeof PROFILE_LINK_STYLES)[number];
+
+/** A tile's size on a grid page (AC-6103): 1 by 1, 2 by 1, or 2 by 2. Absent is `small`. */
+export const PROFILE_TILE_SIZES = ['small', 'wide', 'large'] as const;
+/** A tile's size on a grid page. */
+export type ProfileTileSize = (typeof PROFILE_TILE_SIZES)[number];
+
+/** The kinds that may take a tile size; every other kind always spans the full row (AC-6103). */
+export const PROFILE_SIZED_KINDS = [
+  'link',
+  'page',
+  'media',
+  'image',
+  'gallery',
+] as const satisfies readonly ProfileBlockKind[];
+
+/** Whether a kind always spans the full row of a grid page (AC-6103). */
+export function spansFullRow(kind: ProfileBlockKind): boolean {
+  return !PROFILE_SIZED_KINDS.some((sized) => sized === kind);
+}
+
+/** The notices a link may carry (AC-6113): self declared, as on Linktree, with no identity check. */
+export const PROFILE_NOTICES = ['sensitive', '18', '21'] as const;
+/** A notice a link may carry. */
+export type ProfileNotice = (typeof PROFILE_NOTICES)[number];
+
+/** What the notice sheet says for each notice (AC-6113). */
+export function profileNoticeSentence(notice: ProfileNotice): string {
+  if (notice === 'sensitive') return 'This link may show sensitive content.';
+  return `You need to be ${notice} or older to open this.`;
+}
+
+/** The services a media block plays from (AC-6105), in the order the editor names them. */
+export const MEDIA_PROVIDERS = ['youtube', 'vimeo', 'spotify', 'soundcloud', 'applemusic'] as const;
+/** A service a media block plays from. */
+export type MediaProvider = (typeof MEDIA_PROVIDERS)[number];
+
+/** Each service's own name, for "Plays from YouTube" (AC-6106). */
+export const MEDIA_PROVIDER_NAMES: Readonly<Record<MediaProvider, string>> = {
+  youtube: 'YouTube',
+  vimeo: 'Vimeo',
+  spotify: 'Spotify',
+  soundcloud: 'SoundCloud',
+  applemusic: 'Apple Music',
+};
+
+/** The sentence a link from anywhere else is refused with (AC-6105). */
+export const MEDIA_LINK_REFUSAL = 'Paste a link from YouTube, Vimeo, Spotify, SoundCloud or Apple Music.';
+
+/**
+ * A media block's `ref` as stored: the parsed id or canonical path, built by core's `parseMediaLink` and nothing
+ * else. Letters, digits and `_ . : % / -` only, never `..`, so a frame address built from it can never leave the
+ * provider's path.
+ */
+export const MEDIA_REF = /^(?!.*\.\.)[A-Za-z0-9_.:%/-]{1,240}$/;
+
+/** The longest a media block's title may be. */
+export const PROFILE_MEDIA_TITLE_MAX = 100;
+/** The longest a banner's line may be (AC-6112). */
+export const PROFILE_BANNER_MAX = 80;
+/** The longest a picture's caption may be (AC-6108). */
+export const PROFILE_CAPTION_MAX = 120;
+/** The longest a picture's alt text may be. */
+export const PROFILE_ALT_MAX = 200;
+/** The sentence a picture with no alt text is refused with (AC-6108). */
+export const PROFILE_ALT_REFUSAL = 'Describe the picture for people who can’t see it.';
+/** How many pictures a gallery holds (AC-6109). */
+export const PROFILE_GALLERY_MIN = 2;
+/** The most pictures a gallery holds. */
+export const PROFILE_GALLERY_MAX = 12;
+/** How a gallery draws (AC-6109): a swipe row or a grid. */
+export const PROFILE_GALLERY_DISPLAYS = ['row', 'grid'] as const;
+/** How a gallery draws. */
+export type ProfileGalleryDisplay = (typeof PROFILE_GALLERY_DISPLAYS)[number];
+
+/** The picture types a link page stores (AC-6108, AC-6128): never SVG, never GIF. */
+export const PROFILE_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const;
+/** A picture type a link page stores. */
+export type ProfileImageType = (typeof PROFILE_IMAGE_TYPES)[number];
+/** What a link page stores a picture as: an upload, a link's thumbnail, or a media block's poster. */
+export const PROFILE_IMAGE_KINDS = ['upload', 'thumb', 'poster'] as const;
+/** What a link page stores a picture as. */
+export type ProfileImageKind = (typeof PROFILE_IMAGE_KINDS)[number];
+/** The largest picture a person may pick, before the browser makes it smaller (AC-6108). */
+export const PROFILE_IMAGE_PICK_MAX_BYTES = 10 * 1024 * 1024;
+/** The largest picture stored (AC-6108): the database's own check alike. */
+export const PROFILE_IMAGE_MAX_BYTES = 1_572_864;
+/** The longest side the browser makes a picture before upload (AC-6108). */
+export const PROFILE_IMAGE_EDGE = 1600;
+
+/** Where a link page's picture is served from: our own origin, under its handle (AC-6101). The id never changes. */
+export function profileImagePath(handle: string, imageId: string): string {
+  return `/api/public/profiles/${encodeURIComponent(handle)}/images/${imageId}`;
+}
+
+/** How many next open times a times block shows (AC-6110), over how many days ahead. */
+export const PROFILE_TIMES_SHOWN = 6;
+/** How many days ahead a times block looks. */
+export const PROFILE_TIMES_DAYS = 14;
+
+/** The periods Insights shows (AC-6118). */
+export const PROFILE_INSIGHT_DAYS = [7, 30, 90] as const;
+/** A period Insights shows. */
+export type ProfileInsightDays = (typeof PROFILE_INSIGHT_DAYS)[number];
+/** The longest range the CSV download covers (AC-6120). */
+export const PROFILE_CSV_MAX_DAYS = 365;
+
+/** The four facts a counted view carries (AC-6116), and nothing else. */
+export const PROFILE_VIEW_FACTS = ['referrer', 'source', 'country', 'device'] as const;
+/** One of the four facts a counted view carries. */
+export type ProfileViewFact = (typeof PROFILE_VIEW_FACTS)[number];
+/** A device class (AC-6116). */
+export const PROFILE_DEVICES = ['mobile', 'tablet', 'desktop'] as const;
+/** The value every visit with no referring site, or from our own origin, is filed under (AC-6116). */
+export const PROFILE_DIRECT = 'Direct';
+/** The value past the top 50 of a fact in a day folds into (AC-6117). */
+export const PROFILE_OTHER = 'Other';
+/** How many values of one fact a day keeps before the rest fold into `PROFILE_OTHER` (AC-6117). */
+export const PROFILE_FACT_VALUES_PER_DAY = 50;
+/** The longest referring host kept (AC-6116). */
+export const PROFILE_REFERRER_MAX = 120;
+/** The longest `utm_source` kept (AC-6116). */
+export const PROFILE_SOURCE_MAX = 60;
+
+/**
+ * A share QR's style (AC-6124): a module colour against the fixed light background, an optional centre picture,
+ * and an optional frame label. The background never changes, because not every scanner reads an inverted code.
+ */
+export const QR_BACKGROUND = '#ffffff';
+/** The least contrast a module colour must keep against `QR_BACKGROUND` (AC-6124). */
+export const QR_CONTRAST_MIN = 4.5;
+/** The longest a QR frame's label may be (AC-6124). */
+export const QR_LABEL_MAX = 20;
+/** The sentence a module colour too light to scan is refused with (AC-6124). */
+export const QR_CONTRAST_REFUSAL = 'Pick a darker colour, so every phone can read the code.';
 
 /**
  * What a heading does with the blocks under it (spec 0054, AC-5415): `open` is the small heading the page draws

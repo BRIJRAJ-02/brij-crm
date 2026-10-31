@@ -1164,6 +1164,8 @@ export async function enterLinkPage(
    * page's cursor and whether there is more are worked out over what was read, never cut short by a skipped block.
    */
   readonly skipped: ReadonlySet<string>;
+  /** The pictures the shown blocks name that a visitor may load, with their sizes (spec 0061, AC-6126). */
+  readonly pictures: ReadonlyMap<string, { readonly width: number; readonly height: number }>;
 }> {
   // The person's social links come with them: the row of icons under the bio (booking socials, 25 Oct 2026).
   const owner = await shownOwner(deps.db, handle, {
@@ -1180,12 +1182,23 @@ export async function enterLinkPage(
   const rows = await withinWorkspace(deps, owner, found.rows, query.publicOrigins ?? []);
   const shown = new Set(rows.map((row) => row.id));
   const skipped = new Set(found.rows.flatMap((row) => (shown.has(row.id) ? [] : [row.id])));
-  const pageIds = rows.flatMap((row) => (row.kind === 'page' && row.page_id !== null ? [row.page_id] : []));
+  const pageIds = [
+    ...new Set(
+      rows.flatMap((row) =>
+        (row.kind === 'page' || row.kind === 'times') && row.page_id !== null ? [row.page_id] : [],
+      ),
+    ),
+  ];
   const pages = (await enterOwnedPages(deps, owner.userId, owner.workspaceId, pageIds)).filter((entry) => entry.isLive);
   // A form block's form, the same way and under the same rule: only one a visitor may open now (AC-5214).
   const formIds = rows.flatMap((row) => (row.kind === 'form' && row.form_id !== null ? [row.form_id] : []));
   const forms = (await enterOwnedForms(deps, owner.userId, owner.workspaceId, formIds)).filter((entry) => entry.isLive);
-  return { owner, rows: found.rows, pages, forms, skipped };
+  const pictures = await linkImageSizes(
+    deps,
+    owner,
+    rows.flatMap((row) => imageIdsOf(row.data)),
+  );
+  return { owner, rows: found.rows, pages, forms, skipped, pictures };
 }
 
 /**
@@ -1218,6 +1231,21 @@ async function withinWorkspace(
   return own.filter((row) => kept.get(row.id) !== false);
 }
 
+/** Every picture id a block's stored data names (spec 0061): a thumbnail, a picture, a poster, a gallery's. */
+function imageIdsOf(data: unknown): readonly string[] {
+  if (typeof data !== 'object' || data === null) return [];
+  const record = data as Readonly<Record<string, unknown>>;
+  const one = [record.thumb, record.image, record.poster].filter((id): id is string => typeof id === 'string');
+  const gallery = Array.isArray(record.images)
+    ? (record.images as readonly unknown[]).flatMap((each) =>
+        typeof each === 'object' && each !== null && 'image' in each && typeof each.image === 'string'
+          ? [each.image]
+          : [],
+      )
+    : [];
+  return [...one, ...gallery];
+}
+
 /** A visitor as spec 0047 mints it: the day's HMAC, 32 lowercase hex digits. */
 const PROFILE_VISITOR = /^[0-9a-f]{32}$/;
 
@@ -1231,11 +1259,127 @@ export async function countProfileView(
   ownerUserId: string,
   workspaceId: string,
   visitor: string,
+  /**
+   * The view's four facts (spec 0061, AC-6116), each already checked by `viewFacts`; one absent is not counted.
+   * The definer checks each value's shape again and leaves out one outside it.
+   */
+  facts: Readonly<Partial<Record<'referrer' | 'source' | 'country' | 'device', string>>> = {},
 ): Promise<void> {
   if (!isUuid(ownerUserId) || !isUuid(workspaceId) || !PROFILE_VISITOR.test(visitor)) return;
   await deps.db.withWorkspace(NO_WORKSPACE, (tx) =>
-    tx.execute(sql`select crm_count_profile_view(${ownerUserId}::uuid, ${workspaceId}::uuid, ${visitor})`),
+    tx.execute(
+      sql`select crm_count_profile_view(${ownerUserId}::uuid, ${workspaceId}::uuid, ${visitor}, ${facts.referrer ?? null}, ${facts.source ?? null}, ${facts.country ?? null}, ${facts.device ?? null})`,
+    ),
   );
+}
+
+/**
+ * Counts one booking made from a link page (spec 0061, AC-6119): `handle` is what the booking request's `via` named,
+ * and `crm_count_profile_booking` adds one only when that booking page is a live block on that handle's page now.
+ * Answers whether it counted; a bad `via` counts nothing and is never an error. Exported only from `@crm/core/public`.
+ */
+export async function countProfileBooking(
+  deps: { readonly db: Database },
+  handle: string,
+  pageId: string,
+): Promise<boolean> {
+  if (!HANDLE_PATTERN.test(handle) || isReservedHandle(handle) || !isUuid(pageId)) return false;
+  const found = await deps.db.withWorkspace(NO_WORKSPACE, (tx) =>
+    tx.execute<{ counted: boolean }>(sql`select crm_count_profile_booking(${handle}, ${pageId}::uuid) as counted`),
+  );
+  return found.rows[0]?.counted === true;
+}
+
+/**
+ * A picture a visitor's page loads (spec 0061, AC-6101, AC-6129): the handle's person, as their page shows them, and
+ * one of their pictures that a live block of that page uses now (`crm_profile_image_public`). An id from another
+ * person's page, one no live block uses, and a handle no one holds are the same NOT_FOUND. Exported only from
+ * `@crm/core/public`.
+ */
+export async function enterLinkImage(
+  deps: { readonly db: Database },
+  handle: string,
+  imageId: string,
+  options: LinkPageViewer = {},
+): Promise<{ readonly owner: HandleOwner; readonly path: string; readonly type: string }> {
+  const missing = () => refuse('NOT_FOUND', 'There’s no picture here.');
+  if (!isUuid(imageId)) throw missing();
+  const owner = await shownOwner(deps.db, handle, options);
+  if (owner === undefined) throw missing();
+  const found = await deps.db.withWorkspace(NO_WORKSPACE, (tx) =>
+    tx.execute<{ path: string; content_type: string }>(
+      sql`select path, content_type from crm_profile_image_public(${owner.userId}::uuid, ${owner.workspaceId}::uuid, ${imageId}::uuid)`,
+    ),
+  );
+  const row = found.rows[0];
+  if (row === undefined) throw missing();
+  return { owner, path: row.path, type: row.content_type };
+}
+
+/** The pictures a page's blocks name, with their sizes, for the public answer (spec 0061, AC-6126). */
+export async function linkImageSizes(
+  deps: { readonly db: Database },
+  owner: HandleOwner,
+  imageIds: readonly string[],
+): Promise<ReadonlyMap<string, { readonly width: number; readonly height: number }>> {
+  const ids = [...new Set(imageIds.filter((id) => isUuid(id)))];
+  if (ids.length === 0) return new Map();
+  // One statement however many: each id through the same live check its own route makes.
+  const found = await deps.db.withWorkspace(NO_WORKSPACE, (tx) =>
+    tx.execute<{ id: string; width: number; height: number }>(
+      sql`select w.id::text as id, x.width, x.height from pg_catalog.unnest(${`{${ids.join(',')}}`}::uuid[]) w(id) cross join lateral crm_profile_image_public(${owner.userId}::uuid, ${owner.workspaceId}::uuid, w.id) x`,
+    ),
+  );
+  return new Map(found.rows.map((row) => [row.id, { width: row.width, height: row.height }]));
+}
+
+/**
+ * A next times block's booking page (spec 0061, AC-6110): the handle's person, one of their live times blocks inside
+ * its window, and its page as the read only `booking` entry the slots read takes, only while the door lists the page
+ * as one a visitor may book now (Public, live, its owner still an active member of this workspace). Anything else is
+ * NOT_FOUND. Exported only from `@crm/core/public`.
+ */
+export async function enterTimesBlock(
+  deps: { readonly db: Database },
+  handle: string,
+  itemId: string,
+): Promise<{ readonly owner: HandleOwner; readonly entry: OwnedPageEntry }> {
+  const missing = () => refuse('NOT_FOUND', 'There are no times here.');
+  if (!isUuid(itemId)) throw missing();
+  const owner = await shownOwner(deps.db, handle);
+  if (owner === undefined) throw missing();
+  const found = await deps.db.withWorkspace(NO_WORKSPACE, (tx) =>
+    tx.execute<LinkPageRow>(
+      sql`select id::text as id, kind, position, data, workspace_id::text as workspace_id, page_id::text as page_id, form_id::text as form_id from crm_profile_items_public(${owner.userId}::uuid, ${owner.workspaceId}::uuid, 0::smallint, null::uuid, ${PROFILE_LIMITS.items}::integer) where id = ${itemId}::uuid and kind = 'times'`,
+    ),
+  );
+  const row = found.rows[0];
+  if (row?.page_id === null || row?.page_id === undefined || row.workspace_id !== owner.workspaceId) throw missing();
+  const [entry] = (await enterOwnedPages(deps, owner.userId, owner.workspaceId, [row.page_id])).filter(
+    (each) => each.isLive && each.scope.workspaceId === owner.workspaceId,
+  );
+  if (entry === undefined) throw missing();
+  return { owner, entry };
+}
+
+/**
+ * The handles search engines may list (spec 0061, AC-6123): public, indexable pages of active members with a live
+ * block, each with its last change, by handle after `after`. Exported only from `@crm/core/public`.
+ */
+export async function listSitemapHandles(
+  deps: { readonly db: Database },
+  query: { readonly after?: string; readonly max: number },
+): Promise<readonly { readonly handle: string; readonly changedAt: string }[]> {
+  const after = query.after !== undefined && HANDLE_PATTERN.test(query.after) ? query.after : null;
+  const found = await deps.db.withWorkspace(NO_WORKSPACE, (tx) =>
+    tx.execute<{ handle: string; changed_at: string | Date }>(
+      sql`select handle, changed_at from crm_sitemap_handles(${after}, ${Math.max(1, Math.min(query.max, 50_000))}::integer)`,
+    ),
+  );
+  return found.rows.map((row) => ({
+    handle: row.handle,
+    changedAt: (row.changed_at instanceof Date ? row.changed_at : new Date(row.changed_at)).toISOString(),
+  }));
 }
 
 /**
@@ -1273,14 +1417,22 @@ export async function countItemPress(
 export async function enterContactCard(
   deps: { readonly db: Database },
   handle: string,
-  options: LinkPageViewer = {},
+  options: LinkPageViewer & {
+    /**
+     * Which of the page's cards (spec 0061, AC-6114): absent, the first live one in the page's order, so every link
+     * shared before several cards keeps working.
+     */
+    readonly card?: string;
+  } = {},
 ): Promise<{ readonly owner: HandleOwner; readonly data: unknown }> {
-  const owner = await shownOwner(deps.db, handle, options);
+  const owner = await shownOwner(deps.db, handle, options.viewer === undefined ? {} : { viewer: options.viewer });
   const missing = () => refuse('NOT_FOUND', 'There’s no contact card here.');
   if (owner === undefined) throw missing();
+  if (options.card !== undefined && !isUuid(options.card)) throw missing();
+  const card = options.card ?? null;
   const found = await deps.db.withWorkspace(NO_WORKSPACE, (tx) =>
     tx.execute<{ readonly data: unknown } & Record<string, unknown>>(
-      sql`select data from crm_profile_items_public(${owner.userId}::uuid, ${owner.workspaceId}::uuid, 0::smallint, null::uuid, ${PROFILE_LIMITS.items}::integer) where kind = 'contact' limit 1`,
+      sql`select data from crm_profile_items_public(${owner.userId}::uuid, ${owner.workspaceId}::uuid, 0::smallint, null::uuid, ${PROFILE_LIMITS.items}::integer) where kind = 'contact' and (${card}::uuid is null or id = ${card}::uuid) order by position, id limit 1`,
     ),
   );
   const [row] = found.rows;

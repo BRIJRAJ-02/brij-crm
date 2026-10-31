@@ -147,7 +147,27 @@ export {
   readProfileItems,
   importProfileLinks,
   saveProfileItem,
+  addProfileImage,
+  profileInsightsCsv,
+  readOwnLinkAddress,
+  readOwnProfileImage,
+  readQrStyle,
+  saveQrStyle,
+  type ResolvedMedia,
 } from './profile/items.ts';
+// Link page blocks and reach (spec 0061): media links, picture checks, view facts and scheduled blocks, for the api's
+// signed in routes (the public ones take them from `@crm/core/public`).
+export {
+  parseMediaLink,
+  mediaInfoSource,
+  isMediaInfoHost,
+  isMediaPosterHost,
+  readOembed,
+  cleanTitle,
+} from './profile/embeds.ts';
+export { checkProfileImage, readPageMeta, profileImageStorePath, type CheckedImage } from './profile/images.ts';
+export { deviceFact, viewFacts } from './profile/sources.ts';
+export { zonedToUtc, windowOf } from './profile/schedule.ts';
 // A workspace's brand kit and the caller's own link page accent and photos (spec 0060).
 export {
   brandLogoFolder,

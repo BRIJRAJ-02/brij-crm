@@ -9,10 +9,14 @@ export {
   enterBookingByToken,
   enterBookingPage,
   countItemPress,
+  countProfileBooking,
   countProfileView,
   enterContactCard,
   enterLinkBlocks,
+  enterLinkImage,
   enterLinkPage,
+  enterTimesBlock,
+  listSitemapHandles,
   enterShareImage,
   findHandleOwner,
   readHandleOffer,
@@ -97,3 +101,17 @@ export {
   type PageBrand,
   type PageLook,
 } from './brand/public.ts';
+
+// Link page blocks and reach (spec 0061): media links read into a provider and id and every address built back from
+// them; a view's four facts; a picture's checks and its metadata taken out; a page's own `og:` picture and title.
+export {
+  isMediaInfoHost,
+  isMediaPosterHost,
+  mediaInfoSource,
+  readOembed,
+  cleanTitle,
+  MEDIA_FRAME_ORIGINS,
+} from './profile/embeds.ts';
+export { viewFacts, type ViewFacts } from './profile/sources.ts';
+export { checkProfileImage, readPageMeta, profileImageStorePath, type CheckedImage } from './profile/images.ts';
+export { isShownAt } from './profile/schedule.ts';

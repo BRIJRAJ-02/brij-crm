@@ -536,7 +536,7 @@ describe('a link page', () => {
     });
   });
 
-  it('keeps one contact card, its empty fields left out, and shows a visitor its name and line only', async () => {
+  it('keeps up to three contact cards, their empty fields left out, and shows a visitor the name and line only', async () => {
     const ada = await person('Ada');
     const handle = fresh('card');
     await updateMyMemberProfile(ada.scope, { handle });
@@ -551,16 +551,23 @@ describe('a link page', () => {
     });
     expect(card).toMatchObject({ kind: 'contact', fullName: 'Ada Lovelace', website: 'https://acme.dev' });
     expect(card).not.toHaveProperty('note');
-    const second = await refusalOf(add(ada.scope, { kind: 'contact', fullName: 'Ada at home' }));
-    expect(second).toEqual({ code: 'LIMIT_REACHED', message: 'A link page holds one contact card.' });
+    // Spec 0061 (AC-6114): a work card, a personal one and a third, and no fourth.
+    const home = await add(ada.scope, { kind: 'contact', fullName: 'Ada at home' });
+    const club = await add(ada.scope, { kind: 'contact', fullName: 'Ada at the club' });
+    const fourth = await refusalOf(add(ada.scope, { kind: 'contact', fullName: 'Ada elsewhere' }));
+    expect(fourth).toEqual({ code: 'LIMIT_REACHED', message: 'A link page holds up to 3 contact cards.' });
+    await deleteProfileItem(ada.scope, club.id);
+    await deleteProfileItem(ada.scope, home.id);
     const seen = await visitorRead(handle);
     expect(seen.items).toEqual([
       { kind: 'contact', id: card.id, fullName: 'Ada Lovelace', jobTitle: 'Founder', company: 'Acme' },
     ]);
     expect((await visitorRead(handle, { search: 'acme' })).items.map(titleOf)).toEqual(['Ada Lovelace']);
-    // Archived, another may be made; the first then can't come back beside it.
+    // Archived, others may be made; the first then can't come back beside three.
     await archiveProfileItem(ada.scope, { id: card.id, archived: true });
-    await add(ada.scope, { kind: 'contact', fullName: 'Ada at home' });
+    for (const name of ['Ada at home', 'Ada at the club', 'Ada elsewhere']) {
+      await add(ada.scope, { kind: 'contact', fullName: name });
+    }
     const restore = await refusalOf(archiveProfileItem(ada.scope, { id: card.id, archived: false }));
     expect(restore?.code).toEqual('LIMIT_REACHED');
   });

@@ -390,6 +390,11 @@ export const publicProfiles = auth.table(
     groundPath: text('ground_path'),
     groundType: text('ground_type'),
     groundVersion: text('ground_version'),
+    /**
+     * The share QR's style (spec 0061, AC-6124): a module colour, a centre picture and a frame label, at most 1,024
+     * bytes, null for the plain code. Written only by `crm_save_profile_qr_style`.
+     */
+    qrStyle: jsonb('qr_style'),
     updatedAt: updatedAt(),
   },
   (t) => [
@@ -434,6 +439,10 @@ export const publicProfiles = auth.table(
           and ${t.groundType} in ('image/png', 'image/jpeg', 'image/webp')
           and ${t.groundVersion} ~ '^[0-9a-f]{12}$')`,
     ),
+    check(
+      'public_profiles_qr_style',
+      sql`${t.qrStyle} is null or (jsonb_typeof(${t.qrStyle}) = 'object' and pg_column_size(${t.qrStyle}) <= 1024)`,
+    ),
     foreignKey({ name: 'public_profiles_user_fk', columns: [t.userId], foreignColumns: [user.id] }).onDelete('cascade'),
     // The handle is one this same membership holds (migration 0113).
     foreignKey({
@@ -477,17 +486,18 @@ export const profileItems = auth.table(
     foreignKey({ name: 'profile_items_user_fk', columns: [t.userId], foreignColumns: [user.id] }).onDelete('cascade'),
     check(
       'profile_items_kind',
-      sql`${t.kind} in ('link', 'page', 'heading', 'contact', 'text', 'faq', 'form', 'testimonial')`,
+      sql`${t.kind} in ('link', 'page', 'heading', 'contact', 'text', 'faq', 'form', 'testimonial', 'socials', 'media', 'image', 'gallery', 'times', 'banner')`,
     ),
     check('profile_items_position', sql`${t.position} between 0 and 999`),
     check('profile_items_placed', sql`(${t.archivedAt} is null) = (${t.position} is not null)`),
     check('profile_items_data', sql`jsonb_typeof(${t.data}) = 'object' and pg_column_size(${t.data}) <= 16384`),
-    check('profile_items_target', sql`(${t.kind} = 'page') = (${t.pageId} is not null)`),
+    // A next times block names a booking page as a page block does (spec 0061, migration 0137).
+    check('profile_items_target', sql`(${t.kind} in ('page', 'times')) = (${t.pageId} is not null)`),
     check('profile_items_form', sql`(${t.kind} = 'form') = (${t.formId} is not null)`),
-    check('profile_items_page', sql`${t.kind} <> 'page' or ${t.pageId} is not null`),
+    check('profile_items_page', sql`${t.kind} not in ('page', 'times') or ${t.pageId} is not null`),
     check(
       'profile_items_plain',
-      sql`${t.kind} not in ('link', 'heading', 'contact', 'text', 'faq', 'testimonial') or (${t.pageId} is null and ${t.formId} is null)`,
+      sql`${t.kind} not in ('link', 'heading', 'contact', 'text', 'faq', 'testimonial', 'socials', 'media', 'image', 'gallery', 'banner') or (${t.pageId} is null and ${t.formId} is null)`,
     ),
     uniqueIndex('profile_items_page_once')
       .on(t.userId, t.workspaceId, t.pageId)
@@ -495,9 +505,7 @@ export const profileItems = auth.table(
     uniqueIndex('profile_items_form_once')
       .on(t.userId, t.workspaceId, t.formId)
       .where(sql`${t.kind} = 'form' and ${t.archivedAt} is null`),
-    uniqueIndex('profile_items_contact_once')
-      .on(t.userId, t.workspaceId)
-      .where(sql`${t.kind} = 'contact' and ${t.archivedAt} is null`),
+    // Up to three contact cards since spec 0061 (AC-6114): the cap is crm_save_profile_item's, as every kind's is.
     uniqueIndex('profile_items_heading_once')
       .on(t.userId, t.workspaceId, sql`lower(btrim(${t.data} ->> 'title'))`)
       .where(sql`${t.kind} = 'heading' and ${t.archivedAt} is null`),
@@ -640,6 +648,113 @@ export const profileItemPressDays = auth.table(
     }).onDelete('cascade'),
     index('profile_item_press_days_day').on(t.day),
     check('profile_item_press_days_count', sql`${t.presses} >= 0`),
+  ],
+);
+
+/**
+ * The pictures of a person's link page in one workspace (spec 0061, AC-6101, AC-6108, AC-6128): an upload, a link's
+ * thumbnail, or a media block's poster, each a private object in the file store under `link-page/` with its metadata
+ * removed. A block names one by `id` in its `data`; the bytes are served only while a live block on that page uses
+ * it (`crm_profile_image_public`), and one no block uses is swept after a day. Goes with its page
+ * (`public_profiles`, so a purged workspace's go too) and with its person.
+ *
+ * Forced row level security with one policy, for crm_handle, whose definers are the only way in (migration 0137);
+ * crm_app holds no grant, and the identity login's default grant reads nothing through the policy.
+ */
+export const profileImages = auth.table(
+  'profile_images',
+  {
+    id: uuid('id').notNull().primaryKey(),
+    userId: uuid('user_id').notNull(),
+    workspaceId: uuid('workspace_id').notNull(),
+    /** `upload`, `thumb` or `poster`: what made it, never who may see it. */
+    kind: text('kind').notNull(),
+    /** Its store path, made by the server: `link-page/<user>/<workspace>/<id>.<jpg|png|webp>`. */
+    path: text('path').notNull(),
+    contentType: text('content_type').notNull(),
+    bytes: integer('bytes').notNull(),
+    width: integer('width').notNull(),
+    height: integer('height').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex('profile_images_path').on(t.path),
+    index('profile_images_page').on(t.userId, t.workspaceId),
+    index('profile_images_created').on(t.createdAt),
+    check('profile_images_kind', sql`${t.kind} in ('upload', 'thumb', 'poster')`),
+    check(
+      'profile_images_shape',
+      sql`${t.path} ~ ('^link-page/' || ${t.userId}::text || '/' || ${t.workspaceId}::text || '/' || ${t.id}::text || '[.](png|jpg|webp)$')
+        and ${t.contentType} in ('image/jpeg', 'image/png', 'image/webp')
+        and ${t.bytes} between 1 and 1572864
+        and ${t.width} between 1 and 4096 and ${t.height} between 1 and 4096`,
+    ),
+    foreignKey({ name: 'profile_images_user_fk', columns: [t.userId], foreignColumns: [user.id] }).onDelete('cascade'),
+    foreignKey({
+      name: 'profile_images_page_fk',
+      columns: [t.userId, t.workspaceId],
+      foreignColumns: [publicProfiles.userId, publicProfiles.workspaceId],
+    }).onDelete('cascade'),
+  ],
+);
+
+/**
+ * A link page's views by day and by fact (spec 0061, AC-6116, AC-6117): the referring host, the `utm_source`, the
+ * country and the device class, each a value, rolled up per day in the statement that counts the view. A visitor
+ * counts once per day per value, their first view of the day deciding. Past the day's top 50 values of a fact the
+ * rest fold into `Other`. No address, no user agent and no visitor id is in it. Swept after a year with the views.
+ * Forced row level security for crm_handle alone, as `profile_images`.
+ */
+export const profileViewSourceDays = auth.table(
+  'profile_view_source_days',
+  {
+    userId: uuid('user_id').notNull(),
+    workspaceId: uuid('workspace_id').notNull(),
+    day: date('day', { mode: 'string' }).notNull(),
+    fact: text('fact').notNull(),
+    value: text('value').notNull(),
+    views: integer('views').notNull().default(0),
+    visitors: integer('visitors').notNull().default(0),
+  },
+  (t) => [
+    primaryKey({ name: 'profile_view_source_days_pkey', columns: [t.userId, t.workspaceId, t.day, t.fact, t.value] }),
+    index('profile_view_source_days_day').on(t.day),
+    check('profile_view_source_days_fact', sql`${t.fact} in ('referrer', 'source', 'country', 'device')`),
+    check(
+      'profile_view_source_days_value',
+      sql`char_length(${t.value}) between 1 and 120 and ${t.value} !~ '[[:cntrl:][:space:]]'`,
+    ),
+    check('profile_view_source_days_count', sql`${t.views} >= 0 and ${t.visitors} >= 0`),
+    foreignKey({
+      name: 'profile_view_source_days_page_fk',
+      columns: [t.userId, t.workspaceId],
+      foreignColumns: [publicProfiles.userId, publicProfiles.workspaceId],
+    }).onDelete('cascade'),
+  ],
+);
+
+/**
+ * Bookings made from a link page, by day (spec 0061, AC-6119): one more when a booking request carries
+ * `via: { handle }` and that page is a live block on that handle's page. Nothing about it is stored on the booking.
+ * Swept after a year with the views. Forced row level security for crm_handle alone, as `profile_images`.
+ */
+export const profileBookingDays = auth.table(
+  'profile_booking_days',
+  {
+    userId: uuid('user_id').notNull(),
+    workspaceId: uuid('workspace_id').notNull(),
+    day: date('day', { mode: 'string' }).notNull(),
+    bookings: integer('bookings').notNull().default(0),
+  },
+  (t) => [
+    primaryKey({ name: 'profile_booking_days_pkey', columns: [t.userId, t.workspaceId, t.day] }),
+    index('profile_booking_days_day').on(t.day),
+    check('profile_booking_days_count', sql`${t.bookings} >= 0`),
+    foreignKey({
+      name: 'profile_booking_days_page_fk',
+      columns: [t.userId, t.workspaceId],
+      foreignColumns: [publicProfiles.userId, publicProfiles.workspaceId],
+    }).onDelete('cascade'),
   ],
 );
 
