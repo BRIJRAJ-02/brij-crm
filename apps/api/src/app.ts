@@ -612,7 +612,7 @@ export function createApp({
   });
   // What booking pages, forms and link pages wear of a brand (spec 0060): stylesheets, logos and photos from our own
   // origin. Before the booking routes, so `/handles/<handle>/look.css` is never read as a page's slug.
-  mountBrandCss(app, { db, files: pictureFiles, limiter: createMemoryLimiter() });
+  mountBrandCss(app, { db, files: pictureFiles, limiter: createMemoryLimiter(), edgeCache });
   mountLook(app, { db, files: pictureFiles, limiter: createMemoryLimiter(), auth, edgeCache });
   mountPublicBooking(app, {
     db,
@@ -696,7 +696,7 @@ export function createApp({
     limiter: createMemoryLimiter(),
     errorResponse,
   };
-  mountBrandLogo(app, imageRoutes);
+  mountBrandLogo(app, { ...imageRoutes, edgeCache });
   mountLinkPageImages(app, imageRoutes);
 
   // The caller's own link page as an Apple Wallet pass (26 Oct 2026). It lives under `public/` because it reads a

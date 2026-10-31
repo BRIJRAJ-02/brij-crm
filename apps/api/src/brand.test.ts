@@ -38,9 +38,26 @@ const store: FileStore = {
   },
 };
 
+/** What the app filed under the edge cache's tags, and what it asked the edge to delete (AC-21). */
+const tagged: string[][] = [];
+const forgotten: string[][] = [];
+
 beforeAll(() => {
   ({ db, identity } = testConnections());
-  ({ app } = signInApp({ db, identity }, {}, { files: store }));
+  ({ app } = signInApp(
+    { db, identity },
+    {},
+    {
+      files: store,
+      edgeCache: {
+        tag: (tags) => void tagged.push([...tags]),
+        forget: (tags) => {
+          forgotten.push([...tags]);
+          return Promise.resolve();
+        },
+      },
+    },
+  ));
 });
 afterAll(async () => {
   await identity.close();
@@ -184,6 +201,78 @@ describe('the brand kit', () => {
     const removed = await send('/api/brand/logo', { method: 'DELETE', cookie: owner.cookie, workspace: owner.slug });
     expect(await removed.json()).toEqual({ removed: true });
     expect((await send(`/api/public/booking/${page.publicKey}/logo?v=${logo}`)).status).toBe(404);
+  });
+
+  it('dresses a hosted form, named by its address, in the same accent and logo (AC-4)', async () => {
+    const owner = await memberWithWorkspace(app);
+    const form = await owner.client.forms.create({
+      workspace: owner.slug,
+      id: newId(),
+      name: 'Project enquiry',
+      mainObjectId: owner.people.id,
+      mutationId: newId(),
+    });
+    const live = await owner.client.forms.publish({
+      workspace: owner.slug,
+      formId: form.id,
+      expectedRevision: form.revision,
+      mutationId: newId(),
+    });
+    // A form's key is its address, a slug, not a booking page's 16 characters.
+    expect(live.publicKey).toMatch(/^[a-z0-9][a-z0-9-]*[a-z0-9]$/);
+    await owner.client.brand.save({ workspace: owner.slug, accent: '#e11d48', accentDark: null, mutationId: newId() });
+    const uploaded = await send('/api/brand/logo', {
+      method: 'POST',
+      cookie: owner.cookie,
+      workspace: owner.slug,
+      type: 'image/jpeg',
+      body: JPEG,
+    });
+    const { version: logo } = (await uploaded.json()) as { version: string };
+    const read = (await (await send(`/api/public/forms/${live.publicKey}`)).json()) as {
+      brand?: { version?: string; logo?: string };
+    };
+    expect(read.brand?.logo).toBe(logo);
+    const css = await send(`/api/public/forms/${live.publicKey}/brand.css?v=${read.brand?.version ?? ''}`);
+    expect(css.status).toBe(200);
+    expect(await css.text()).toMatch(/^:root\{--brand-accent:#[0-9a-f]{6};/);
+    const image = await send(`/api/public/forms/${live.publicKey}/logo?v=${logo}`);
+    expect(image.status).toBe(200);
+    expect(image.headers.get('content-type')).toBe('image/jpeg');
+    // A key no form could have never reaches the door.
+    expect((await send(`/api/public/forms/Not_A_Slug/brand.css?v=${read.brand?.version ?? ''}`)).status).toBe(404);
+  });
+
+  it('keeps brand.css and the logo an hour under the workspace’s tag, and a save purges it (AC-21)', async () => {
+    const owner = await memberWithWorkspace(app);
+    const page = await owner.client.bookingPages.create({
+      workspace: owner.slug,
+      id: newId(),
+      title: 'Intro call',
+      timeZone: 'UTC',
+      mutationId: newId(),
+    });
+    const tag = `brand:${owner.workspace.id}`;
+    const purges = forgotten.length;
+    await owner.client.brand.save({ workspace: owner.slug, accent: '#e11d48', accentDark: null, mutationId: newId() });
+    expect(forgotten.slice(purges)).toContainEqual([tag]);
+    const facts = (await (await send(`/api/public/booking/${page.publicKey}`)).json()) as {
+      brand?: { version?: string };
+    };
+    const css = await send(`/api/public/booking/${page.publicKey}/brand.css?v=${facts.brand?.version ?? ''}`);
+    expect(css.headers.get('cache-control')).toBe('public, max-age=3600, s-maxage=3600');
+    expect(tagged.at(-1)).toEqual([tag]);
+    // A new logo, and its removal, purge it too.
+    const before = forgotten.length;
+    await send('/api/brand/logo', {
+      method: 'POST',
+      cookie: owner.cookie,
+      workspace: owner.slug,
+      type: 'image/jpeg',
+      body: JPEG,
+    });
+    await send('/api/brand/logo', { method: 'DELETE', cookie: owner.cookie, workspace: owner.slug });
+    expect(forgotten.slice(before)).toEqual([[tag], [tag]]);
   });
 });
 

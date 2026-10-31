@@ -1,4 +1,5 @@
 import {
+  FORM_SLUG,
   HONEYPOT_IGNORE_ATTRIBUTES,
   HONEYPOT_INPUT_NAME,
   type FormStrings,
@@ -98,8 +99,7 @@ export function FormGround({
   );
 }
 
-/** A form's public key and an image version, as the brand routes take them. */
-const FORM_KEY = /^[A-Za-z0-9_-]{16}$/;
+/** An image version, as the brand routes take it; the form's key is its address (`FORM_SLUG`), as its door takes it. */
 const IMAGE_VERSION = /^[0-9a-f]{12}$/;
 
 /**
@@ -109,7 +109,7 @@ const IMAGE_VERSION = /^[0-9a-f]{12}$/;
  */
 export function formBrand(form: PublicForm): PageBrand | undefined {
   const version = form.brand?.logo;
-  if (version === undefined || !FORM_KEY.test(form.key) || !IMAGE_VERSION.test(version)) return undefined;
+  if (version === undefined || !FORM_SLUG.test(form.key) || !IMAGE_VERSION.test(version)) return undefined;
   return { logo: { src: `/api/public/forms/${form.key}/logo?v=${version}`, alt: '' } };
 }
 

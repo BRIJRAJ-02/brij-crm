@@ -6,6 +6,7 @@
 import { oc } from '@orpc/contract';
 import * as z from 'zod';
 import { BRAND_HEX_PATTERN } from './brand-colour.ts';
+import { FORM_SLUG } from './forms/answer-types.ts';
 import { Uuid } from './values/ids.ts';
 import { WorkspaceScoped } from './workspaces.ts';
 
@@ -75,22 +76,38 @@ export const PublicBrand = z.object({
 /** What a public page is told of its brand. */
 export type PublicBrand = z.infer<typeof PublicBrand>;
 
-/** A public key (booking page or form) as a path segment takes it. */
-const PUBLIC_KEY = /^[A-Za-z0-9_-]{16}$/;
+/** A booking page's public key, as `PublicKey` in `booking/public.ts` and the booking door take it. */
+const BOOKING_KEY = /^[A-Za-z0-9_-]{16}$/;
 const VERSION = /^[0-9a-f]{12}$/;
 
 /** Which kind of public page a brand path is for. */
 export type BrandedPage = 'booking' | 'forms';
 
+/**
+ * Whether `key` can name a page of this kind, by the same pattern its own door takes: a booking page's 16 character
+ * key, or a form's address (`FORM_SLUG`, `project-enquiry`). Anything else never reaches a path or a limiter's keys.
+ */
+export function isBrandedPageKey(kind: BrandedPage, key: string): boolean {
+  return kind === 'forms' ? FORM_SLUG.test(key) : BOOKING_KEY.test(key);
+}
+
+/**
+ * The edge cache tag a workspace's brand answers are filed under (every booking page's and form's `brand.css` and
+ * logo), so a save of the kit, its logo or a member's own accent purges every copy at once (AC-21).
+ */
+export function brandCacheTags(workspaceId: string): readonly string[] {
+  return [`brand:${workspaceId}`];
+}
+
 /** The brand stylesheet of a booking page or form: `/api/public/<kind>/<key>/brand.css?v=<version>`. */
 export function brandStylesheetPath(kind: BrandedPage, publicKey: string, version: string): string | undefined {
-  if (!PUBLIC_KEY.test(publicKey) || !VERSION.test(version)) return undefined;
+  if (!isBrandedPageKey(kind, publicKey) || !VERSION.test(version)) return undefined;
   return `/api/public/${kind}/${publicKey}/brand.css?v=${version}`;
 }
 
 /** The workspace logo on a booking page or form: `/api/public/<kind>/<key>/logo?v=<version>`. */
 export function brandLogoPath(kind: BrandedPage, publicKey: string, version: string): string | undefined {
-  if (!PUBLIC_KEY.test(publicKey) || !VERSION.test(version)) return undefined;
+  if (!isBrandedPageKey(kind, publicKey) || !VERSION.test(version)) return undefined;
   return `/api/public/${kind}/${publicKey}/logo?v=${version}`;
 }
 

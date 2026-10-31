@@ -7,15 +7,24 @@
 //   GET /api/public/forms/:publicKey/logo?v=
 // Each enters through the page's or form's own door, so only that one workspace's kit is ever read. Only the current
 // version answers (anything else is 404 `no-store`), so a cached copy is never one the page no longer wears, and
-// the answer is kept an hour in the browser and at the edge. 60 a minute per address and 600 per page, as the
+// the answer is kept an hour in the browser and at the edge, filed under the workspace's brand cache tag so a save
+// purges it (`brandCacheTags`). 60 a minute per address and 600 per page, as the
 // pictures. The stylesheet holds only hexes `brandVariables()` computed from a checked hex.
 import { createHash } from 'node:crypto';
-import { errorStatus, type ErrorCode, type PublicBrand } from '@crm/contracts';
+import {
+  brandCacheTags,
+  errorStatus,
+  isBrandedPageKey,
+  type BrandedPage,
+  type ErrorCode,
+  type PublicBrand,
+} from '@crm/contracts';
 import { enterPublicForm } from '@crm/core';
 import { brandStylesheet, enterBookingPage, readBookingBrand, readFormBrand, type PageBrand } from '@crm/core/public';
 import type { Database } from '@crm/db';
 import type { Context, Hono } from 'hono';
 import { loadStoredImage } from '../brand-logo.ts';
+import type { EdgeCache } from '../edge-cache.ts';
 import { toApiError } from '../errors.ts';
 import { errorFields, log } from '../log.ts';
 import type { FileStore } from '../storage/blob.ts';
@@ -23,21 +32,18 @@ import { BOOKING_LIMITS, type PublicLimiter } from './limits.ts';
 import { pictureResponse } from './picture.ts';
 
 /**
- * How long a booking page's or form's brand stylesheet or logo is kept: five minutes, in the browser and at the edge,
- * as a public picture is. The path is versioned, so a new kit is a new path at once; the five minutes bound how long
- * a removed logo, or one on a deleted page, can still be served from a copy, since these answers carry no cache tag
- * a change could purge.
+ * How long a booking page's or form's brand stylesheet or logo is kept: an hour, in the browser and at the edge, as a
+ * link page's `look.css` is. The path is versioned, so a new kit is a new path at once, and the edge's copies are
+ * filed under the workspace's brand cache tag, which a save of the kit, its logo or an own accent purges.
  */
-export const BRAND_CACHE_CONTROL = 'public, max-age=300, s-maxage=300';
+export const BRAND_CACHE_CONTROL = 'public, max-age=3600, s-maxage=3600';
 
-/** A public key (a booking page's or a form's) as the doors take it. */
-const PUBLIC_KEY = /^[A-Za-z0-9_-]{16}$/;
-
-/** What the routes need: the database, the private store and a limiter. */
+/** What the routes need: the database, the private store, a limiter and the edge cache its answers are filed in. */
 export interface BrandCssDeps {
   readonly db: Database;
   readonly files: FileStore | undefined;
   readonly limiter: PublicLimiter;
+  readonly edgeCache?: EdgeCache;
 }
 
 interface Variables {
@@ -105,19 +111,31 @@ export async function formBrandAnswer(entry: Parameters<typeof readFormBrand>[0]
 /** Mounts the booking pages' and forms' brand routes. */
 export function mountBrandCss(app: Hono<{ Variables: Variables }>, deps: BrandCssDeps): void {
   const kinds = [
-    { kind: 'booking', read: async (key: string) => readBookingBrand(await enterBookingPage({ db: deps.db }, key)) },
-    { kind: 'forms', read: async (key: string) => readFormBrand(await enterPublicForm({ db: deps.db }, key)) },
+    {
+      kind: 'booking',
+      read: async (key: string) => {
+        const entry = await enterBookingPage({ db: deps.db }, key);
+        return { brand: await readBookingBrand(entry), workspaceId: entry.scope.workspaceId };
+      },
+    },
+    {
+      kind: 'forms',
+      read: async (key: string) => {
+        const entry = await enterPublicForm({ db: deps.db }, key);
+        return { brand: await readFormBrand(entry), workspaceId: entry.scope.workspaceId };
+      },
+    },
   ] as const;
 
   /** The page's brand, or the answer to send instead: a bad key, a spent limit, or no such page. */
   const brandOf = async (
     c: Context<{ Variables: Variables }>,
-    kind: string,
-    read: (key: string) => Promise<PageBrand>,
-  ) => {
+    kind: BrandedPage,
+    read: (key: string) => Promise<{ readonly brand: PageBrand; readonly workspaceId: string }>,
+  ): Promise<PageBrand | Response> => {
     const key = c.req.param('publicKey') ?? '';
-    // A key that can't be one never reaches the limiter's keys.
-    if (!PUBLIC_KEY.test(key)) return nothingHere();
+    // A key that can't be one never reaches the limiter's keys: a booking page's 16 characters, a form's address.
+    if (!isBrandedPageKey(kind, key)) return nothingHere();
     for (const [name, rule] of [
       [`brand:${addressKey(c.get('clientIp'))}`, BOOKING_LIMITS.picturesPerAddress],
       [`brand-page:${kind}:${key}`, BOOKING_LIMITS.picturesPerTarget],
@@ -126,7 +144,10 @@ export function mountBrandCss(app: Hono<{ Variables: Variables }>, deps: BrandCs
       if (!decision.allowed) return uncached('RATE_LIMITED', 'Too many requests. Wait a moment and try again.');
     }
     try {
-      return await read(key);
+      const { brand, workspaceId } = await read(key);
+      // Filed under the workspace's tag, so a save purges this copy at once; an answer refused below is `no-store`.
+      deps.edgeCache?.tag(brandCacheTags(workspaceId));
+      return brand;
     } catch (error) {
       if (toApiError(error).expected) return nothingHere();
       throw error;

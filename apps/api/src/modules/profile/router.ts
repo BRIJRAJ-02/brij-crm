@@ -1,4 +1,4 @@
-import { linkPageCacheTags, myPicturePath } from '@crm/contracts';
+import { brandCacheTags, linkPageCacheTags, myPicturePath } from '@crm/contracts';
 import {
   archiveProfileItem,
   importProfileLinks,
@@ -131,11 +131,14 @@ export const profileRouter = member.profile.router({
   // The page's own accent and photos (spec 0060, AC-14): read for the Design panel, the accent saved whole. The
   // photos go up as bytes through `/api/me/link-page/{cover,ground}` (`link-page-images.ts`).
   look: member.profile.look.handler(({ context }) => readProfileLook(context.scope)),
-  saveAccent: member.profile.saveAccent.handler(({ context, input }) =>
-    commitWrite(context, { mutationId: input.mutationId }, () =>
+  saveAccent: member.profile.saveAccent.handler(async ({ context, input }) => {
+    const saved = await commitWrite(context, { mutationId: input.mutationId }, () =>
       saveProfileAccent(context.scope, { accent: input.accent, accentDark: input.accentDark }),
-    ),
-  ),
+    );
+    // A personal booking page wears its owner's own accent, so its `brand.css` copies go too (AC-14, AC-21).
+    await context.edgeCache.forget(brandCacheTags(context.scope.workspaceId));
+    return saved;
+  }),
   setIndexable: member.profile.setIndexable.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, () => setProfileIndexable(context.scope, input.indexable)),
   ),

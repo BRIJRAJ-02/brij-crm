@@ -92,8 +92,8 @@ export function mountLook(app: Hono<{ Variables: Variables }>, deps: LookDeps): 
     if (found instanceof Response) return found;
     if (!asksFor(c, found.look.answer?.version)) return nothingHere();
     const answer = stylesheetResponse(lookStylesheet(found.look, found.owner.handle));
-    // An hour, as its photos: unlike a booking page's brand stylesheet (five minutes, no tag), this answer is filed
-    // under the page's cache tag, so its Private switch purges it at once. A private page's look is its owner's
+    // An hour, as its photos and a booking page's brand stylesheet, filed under the page's cache tag, so its Private
+    // switch purges it at once. A private page's look is its owner's
     // alone: their browser keeps it, never the edge.
     answer.headers.set('cache-control', found.owner.isShown ? LOOK_CACHE_CONTROL : PRIVATE_PICTURE_CACHE_CONTROL);
     return answer;

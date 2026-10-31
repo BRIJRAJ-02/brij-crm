@@ -384,7 +384,7 @@ export const BrandedDark: Story = {
 /** A live form's read names its logo by version, and the form draws it from its own key's route (AC-4). */
 export const BrandFromRead: Story = {
   parameters: { crm: { screenshot: false } },
-  args: { form: { ...LEAD, key: 'AbCdEfGhIjKlMnOp', brand: { logo: '0123456789ab' } } },
+  args: { form: { ...LEAD, key: 'project-enquiry', brand: { logo: '0123456789ab' } } },
   // Storybook serves no logo, so the picture fails and leaves the form; WebKit can get there before `play` starts.
   // So every logo the form draws is noted as it lands, before the story renders, and read back below.
   loaders: [
@@ -413,7 +413,7 @@ export const BrandFromRead: Story = {
     };
     await waitFor(() => expect(drawn.length).toBeGreaterThan(0));
     watch.disconnect();
-    await expect(drawn[0]).toEqual({ src: '/api/public/forms/AbCdEfGhIjKlMnOp/logo?v=0123456789ab', alt: '' });
+    await expect(drawn[0]).toEqual({ src: '/api/public/forms/project-enquiry/logo?v=0123456789ab', alt: '' });
     // A logo that fails leaves rather than drawing a broken picture.
     await waitFor(() => expect(canvasElement.querySelector('img[src^="/api/public/forms/"]')).toBeNull());
   },

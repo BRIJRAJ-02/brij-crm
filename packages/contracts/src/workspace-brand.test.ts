@@ -43,9 +43,15 @@ describe('the paths a page links to', () => {
     expect(brandStylesheetPath('booking', 'AbCdEfGhIjKlMnOp', 'abcdef012345')).toBe(
       '/api/public/booking/AbCdEfGhIjKlMnOp/brand.css?v=abcdef012345',
     );
-    expect(brandLogoPath('forms', 'AbCdEfGhIjKlMnOp', 'abcdef012345')).toBe(
-      '/api/public/forms/AbCdEfGhIjKlMnOp/logo?v=abcdef012345',
+    // A form is named by its address, the slug its own door takes (AC-4).
+    expect(brandLogoPath('forms', 'project-enquiry', 'abcdef012345')).toBe(
+      '/api/public/forms/project-enquiry/logo?v=abcdef012345',
     );
+    expect(brandStylesheetPath('forms', 'form-jz4v5t', 'abcdef012345')).toBe(
+      '/api/public/forms/form-jz4v5t/brand.css?v=abcdef012345',
+    );
+    expect(brandStylesheetPath('forms', 'Project_Enquiry', 'abcdef012345')).toBeUndefined();
+    expect(brandStylesheetPath('booking', 'project-enquiry', 'abcdef012345')).toBeUndefined();
     expect(lookStylesheetPath('ada', 'abcdef012345')).toBe('/api/public/handles/ada/look.css?v=abcdef012345');
     expect(lookImagePath('ada', 'cover', 'abcdef012345')).toBe('/api/public/profiles/ada/cover?v=abcdef012345');
     expect(brandStylesheetPath('booking', '../../x', 'abcdef012345')).toBeUndefined();
