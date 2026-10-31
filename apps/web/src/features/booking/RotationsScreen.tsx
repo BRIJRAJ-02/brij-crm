@@ -1,10 +1,11 @@
 // Brief
 // Purpose: Settings › Scheduling › Round robin (spec 0029, AC-728, AC-752, AC-758): the groups of people round robin pages share meetings across (rotations in code), with a How round robin works help beside the title.
-// Main task: an admin makes a group and changes or deletes one; a member sees the groups they are in and their own share.
+// Main task: an admin makes a group and changes or deletes one, and shares it with editors (spec 0037, AC-1331); an editor changes it; a member sees the groups they are in and their own share.
 // Leaves out: editing in place, the share bars and the reassign offer (milestone 2), and a rotation's history (spec 0037).
 import type { CalendarHealthState, DataLayer, MemberSummary, RotationView } from '@crm/data';
 import { useCaptureList } from '@crm/data/react';
 import {
+  Badge,
   Button,
   ButtonLink,
   InfoTip,
@@ -37,6 +38,8 @@ import { useCan } from '../workspace/WorkspacePage.tsx';
 import { DistributionPanel } from './DistributionPanel.tsx';
 import { RotationDialog } from './RotationDialog.tsx';
 import { strings } from './rotation-strings.ts';
+import { SharingPanel } from './SharingPanel.tsx';
+import { sharingStrings } from './sharing-strings.ts';
 
 /** Props for the screen: what its route loaded through the data layer. */
 export interface RotationsScreenProps {
@@ -320,29 +323,34 @@ export function RotationsScreen({ data, slug, people, canManage, inFrame = false
               {...(rotation.canChange
                 ? {
                     actions: (
-                      <MenuTrigger>
-                        <Button variant="ghost" icon="ellipsis" label={strings.rowActions(rotation.name)} />
-                        <Menu
-                          label={strings.rowActions(rotation.name)}
-                          onAction={(key) => {
-                            if (key === 'edit') open(rotation);
-                            if (key === 'delete') {
-                              setDeleteError(undefined);
-                              setDeleting(rotation);
-                            }
-                          }}
-                        >
-                          <MenuItem id="edit" icon="pencil">
-                            {strings.edit}
-                          </MenuItem>
-                          {/* Everyone on the roster follows the workspace: its link keeps it, so it isn't deleted here. */}
-                          {rotation.follows !== 'everyone' && (
-                            <MenuItem id="delete" icon="trash" isDanger>
-                              {strings.delete}
+                      <>
+                        {/* What the reader edits without being an admin (spec 0037, AC-1332). */}
+                        {rotation.isEditor === true && <Badge text={sharingStrings.editorBadge} isWhole />}
+                        <MenuTrigger>
+                          <Button variant="ghost" icon="ellipsis" label={strings.rowActions(rotation.name)} />
+                          <Menu
+                            label={strings.rowActions(rotation.name)}
+                            onAction={(key) => {
+                              if (key === 'edit') open(rotation);
+                              if (key === 'delete') {
+                                setDeleteError(undefined);
+                                setDeleting(rotation);
+                              }
+                            }}
+                          >
+                            <MenuItem id="edit" icon="pencil">
+                              {strings.edit}
                             </MenuItem>
-                          )}
-                        </Menu>
-                      </MenuTrigger>
+                            {/* Everyone on the roster follows the workspace: its link keeps it, so it isn't deleted here.
+                              An editor changes a group but never deletes it (AC-1331). */}
+                            {rotation.follows !== 'everyone' && rotation.canManage !== false && (
+                              <MenuItem id="delete" icon="trash" isDanger>
+                                {strings.delete}
+                              </MenuItem>
+                            )}
+                          </Menu>
+                        </MenuTrigger>
+                      </>
                     ),
                   }
                 : {})}
@@ -352,6 +360,8 @@ export function RotationsScreen({ data, slug, people, canManage, inFrame = false
                 tabs={[
                   { id: 'members', label: strings.membersTab },
                   { id: 'distribution', label: strings.distributionTab },
+                  // Sharing (AC-1433): for whoever may change the group; only an admin changes its editors.
+                  ...(rotation.canChange ? [{ id: 'sharing', label: sharingStrings.title }] : []),
                 ]}
               >
                 <TabPanel id="members">
@@ -372,6 +382,20 @@ export function RotationsScreen({ data, slug, people, canManage, inFrame = false
                     onNotice={(message) => toasts.toast({ tone: 'success', message })}
                   />
                 </TabPanel>
+                {rotation.canChange && (
+                  <TabPanel id="sharing">
+                    <SharingPanel
+                      data={data}
+                      slug={slug}
+                      resourceType="rotation"
+                      resourceId={rotation.id}
+                      resourceName={rotation.name}
+                      canChange={rotation.canManage !== false && canManage}
+                      people={people}
+                      toasts={toasts}
+                    />
+                  </TabPanel>
+                )}
               </Tabs>
             </Card>
           ))}

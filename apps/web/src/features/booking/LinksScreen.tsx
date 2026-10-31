@@ -1,5 +1,5 @@
 // Brief
-// Purpose: Captures › Links (spec 0025, 0025-experience.md, AC-645): the member's booking pages as cards, the same cards as Forms; the workspace's own links (30 Oct 2026) in a Workspace group first, then the reader's own, then each colleague whose scheduling they Manage (an admin: everyone) under their name (spec 0037, AC-1273).
+// Purpose: Captures › Links (spec 0025, 0025-experience.md, AC-645): the member's booking pages as cards, the same cards as Forms; the workspace's own links (30 Oct 2026) in a Workspace group first, then the reader's own, then each colleague whose scheduling they Manage (an admin: everyone) under their name (spec 0037, AC-1273), pages they edit with an Editor badge (AC-1332).
 // Main task: open a page, copy its link, or make a new one in the dialog and land in its editor.
 // Leaves out: editing a page (its editor), forms (their own tab) and the bookings list (Bookings).
 import { isDataError, type BookingPageView, type DataLayer } from '@crm/data';
@@ -13,6 +13,7 @@ import { useCapturesCreate } from '../captures/create.tsx';
 import { pageHeading } from '../navigation/focus.ts';
 import { DeletePageDialog } from './DeletePageDialog.tsx';
 import { pageEditorHref, publicBookingPath, publicBookingUrl, type PageTab } from './links.ts';
+import { sharingStrings } from './sharing-strings.ts';
 import { strings } from './strings.ts';
 
 /** The groups' ids: the workspace's own links, the reader's own pages, and one per colleague (`member:<id>`). */
@@ -138,9 +139,11 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
           ? { badge: strings.viewOnly }
           : page.pausedReason === 'host_removed'
             ? { badge: strings.hostRemoved }
-            : page.isPrivate
-              ? { badge: strings.linkOnly }
-              : {}),
+            : page.isEditor === true
+              ? { badge: sharingStrings.editorBadge }
+              : page.isPrivate
+                ? { badge: strings.linkOnly }
+                : {}),
       isOff,
       isPending,
       ...(isViewOnly
@@ -192,8 +195,9 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
                   if (key === 'delete') setDeleting(page);
                 }}
               >
-                {/* A copy is the reader's own page: offered on their own and the workspace's, not a colleague's. */}
-                {page.ownerName === undefined && (
+                {/* A copy is the reader's own page: offered on their own and the workspace's, not a colleague's,
+                    nor one they only edit (spec 0037, AC-1331). */}
+                {page.ownerName === undefined && page.isEditor !== true && (
                   <MenuItem id="duplicate" icon="copy">
                     {strings.duplicate}
                   </MenuItem>
@@ -201,10 +205,13 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
                 <MenuItem id="hours" icon="clock">
                   {strings.hours}
                 </MenuItem>
-                <MenuSeparator />
-                <MenuItem id="delete" icon="trash" isDanger>
-                  {strings.delete}
-                </MenuItem>
+                {/* An editor changes a page but never deletes it (AC-1331). */}
+                {page.isEditor !== true && <MenuSeparator />}
+                {page.isEditor !== true && (
+                  <MenuItem id="delete" icon="trash" isDanger>
+                    {strings.delete}
+                  </MenuItem>
+                )}
               </Menu>
             </MenuTrigger>
           )}
