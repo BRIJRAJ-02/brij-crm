@@ -629,11 +629,13 @@ export function NavSection({
       </div>
     ) : null;
   } else if (!hasItems && add !== undefined) {
-    // Empty, the make action shows in the body too: the label row's "+" appears only on hover or focus.
+    // Empty, the make action shows in the body too: the label row's "+" appears only on hover or focus. It is a
+    // NavItem, a full 32px row like the items it stands in for, so its target is never a small button pressed
+    // against the label row above it.
     body = (
-      <Button variant="ghost" size="sm" icon="plus" onPress={add.onAdd}>
+      <NavItem icon="plus" onPress={add.onAdd}>
         {add.label}
-      </Button>
+      </NavItem>
     );
   } else if (!hasItems && emptyLabel !== undefined) {
     body = <p className={styles.empty}>{emptyLabel}</p>;
