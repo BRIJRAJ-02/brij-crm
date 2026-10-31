@@ -298,6 +298,9 @@ export const ACCESS_TABLE = {
   addListEntry: { data: 'write' },
   addListEntries: { data: 'write' },
   editEntry: { data: 'write' },
+  // A list field of many entries (AC-4826) and its undo: the list at write, then each entry through lockEntry.
+  editEntries: { data: 'write' },
+  setEntriesValues: { data: 'write' },
   removeEntries: { data: 'write' },
   restoreEntries: { data: 'write' },
   // Background jobs (spec 0008): the starter or jobs.manage; the test job needs jobs.manage.

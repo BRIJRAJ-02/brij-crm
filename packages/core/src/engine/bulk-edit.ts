@@ -102,13 +102,32 @@ export async function checkBulkEdit(
   const level = attribute === undefined || isOpen(scope.access) ? 'write' : attributeLevel(scope.access, attribute);
   if (attribute === undefined || level === 'hidden') throw refuse('NOT_FOUND', UNKNOWN_ATTRIBUTE);
   if (level === 'read') throw refuse('ATTRIBUTE_READ_ONLY', fieldReadOnlyReason(attribute.title), attribute.id);
+  return {
+    attribute,
+    value: checkBulkChange(attribute, attribute.id === (await primaryOf(tx, objectId)), change, count),
+  };
+}
+
+/**
+ * The attribute's own checks of a bulk edit (AC-529), shared by records and a
+ * list's entries: not excluded, an operation its type takes, Set on a unique
+ * attribute for at most one owner, Clear never on a required one (each 422
+ * `CONFIG_INVALID`), and the value by its type's schema
+ * (`ATTRIBUTE_VALUE_INVALID`). Answers the value, parsed.
+ */
+export function checkBulkChange(
+  attribute: AttributeDef,
+  isPrimary: boolean,
+  change: BulkEditChange,
+  count: number,
+): unknown {
   const rules = {
     type: attribute.type,
     isMulti: attribute.isMulti,
     isRequired: attribute.isRequired,
     isUnique: attribute.isUnique,
     isSystem: attribute.isSystem,
-    isPrimary: attribute.id === (await primaryOf(tx, objectId)),
+    isPrimary,
     isArchived: isArchivedNow(attribute),
   };
   if (bulkExclusion(rules) !== undefined) throw refuse('CONFIG_INVALID', BULK_EDIT_WORDS.excluded(attribute.title));
@@ -124,7 +143,7 @@ export async function checkBulkEdit(
   if (attribute.isUnique && change.op === 'set' && count > 1) {
     throw refuse('CONFIG_INVALID', BULK_EDIT_WORDS.unique(attribute.title), attribute.id);
   }
-  if (!opTakesValue(change.op)) return { attribute, value: null };
+  if (!opTakesValue(change.op)) return null;
   if (change.value === undefined || change.value === null) {
     // A checkbox's Set says checked or unchecked; anything else needs a value (Clear empties it).
     if (attribute.type !== 'checkbox')
@@ -135,7 +154,7 @@ export async function checkBulkEdit(
     holdsList(attribute) && !Array.isArray(change.value) && change.value !== undefined && change.value !== null
       ? [change.value]
       : change.value;
-  return { attribute, value: parseFor(attribute, given ?? (attribute.type === 'checkbox' ? false : null)) };
+  return parseFor(attribute, given ?? (attribute.type === 'checkbox' ? false : null));
 }
 
 /**

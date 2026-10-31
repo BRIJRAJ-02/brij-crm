@@ -6,7 +6,13 @@
 // access door made, and the engine's own checks.
 import { and, asc, eq, inArray, isNull, like, or, sql } from 'drizzle-orm';
 import type { ListTemplate, ListView } from '@crm/contracts';
-import { freeApiSlug, toApiSlug, type FilterGroup, type SortRules } from '@crm/contracts/values';
+import {
+  freeApiSlug,
+  toApiSlug,
+  type EngineRefusal,
+  type FilterGroup,
+  type SortRules,
+} from '@crm/contracts/values';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { canonicalId, checkId, isUuid } from '../engine/ids.ts';
 import {
@@ -23,6 +29,8 @@ import {
   type EntryView,
   type ListUpdate,
 } from '../engine/lists.ts';
+import { setEntryValuesBatch, updateEntries, type EntryValuesItem } from '../engine/entry-bulk.ts';
+import type { BulkEditChange } from '../engine/bulk-edit.ts';
 import { countMatches, queryPage, type MatchCount } from '../engine/query/page.ts';
 import { readRecords, setValues, type AttributeResult, type RecordView, type ValueInput } from '../engine/records.ts';
 import { refuse } from '../engine/refusals.ts';
@@ -458,6 +466,101 @@ export async function editEntry(
   const entryId = checkId(input.entryId, 'That entry does not exist.');
   const results = await setValues(scope, { entryId, values: input.values }, hooks);
   return { ...(await freshEntry(scope, entryId)), written: writtenOf(results) };
+}
+
+/**
+ * One entry's outcome in a bulk write of its list fields: fresh when it
+ * landed, with `written` and `before` only when this call changed it (a retry
+ * after a lost answer carries neither); or its refusals.
+ */
+export interface EntryEditResult {
+  readonly entryId: string;
+  readonly entry?: EntryView;
+  readonly written?: Readonly<Record<string, string>>;
+  readonly before?: unknown;
+  readonly refusals?: readonly EngineRefusal[];
+}
+
+/** A bulk write's outcomes, and the records of the entries that landed, read once. */
+export interface EntryEditResults {
+  readonly results: readonly EntryEditResult[];
+  readonly records: readonly RecordView[];
+}
+
+/** What an entry gone between the write and its read back answers. */
+const GONE_SINCE: EngineRefusal = { code: 'RECORD_DELETED', message: 'That entry was removed from its list.' };
+
+/** The landed entries and their records, read back in one read after the write committed. */
+async function readBack(
+  scope: EngineScope,
+  landed: readonly string[],
+): Promise<{ readonly byId: ReadonlyMap<string, EntryView>; readonly records: readonly RecordView[] }> {
+  if (landed.length === 0) return { byId: new Map(), records: [] };
+  const page = await readEntryPage(scope, landed);
+  return { byId: new Map(page.entries.map((entry) => [entry.id, entry])), records: page.records };
+}
+
+/** An engine refusal as a result names it. */
+const refusalOf = (refusal: EngineRefusal): EngineRefusal => ({
+  code: refusal.code,
+  message: refusal.message,
+  ...(refusal.attributeId === undefined ? {} : { attributeId: refusal.attributeId }),
+});
+
+/**
+ * Changes one list field of up to 500 entries of one list (AC-4826): each
+ * entry's value from its current one under its lock, each on its own, through
+ * the access door's entry check (`updateEntries` in the engine), then the
+ * landed entries read back once with their records.
+ */
+export async function editEntries(
+  scope: EngineScope,
+  input: {
+    readonly listId: string;
+    readonly entryIds: readonly string[];
+    readonly edit: BulkEditChange;
+    readonly timeZone?: string | undefined;
+  },
+  hooks: readonly AfterWrite[] = [],
+): Promise<EntryEditResults> {
+  const outcomes = await updateEntries(scope, input, hooks);
+  const landed = outcomes.flatMap((outcome) => (outcome.state === 'refused' ? [] : [outcome.entryId]));
+  const { byId, records: read } = await readBack(scope, landed);
+  const attributeId = canonicalId(input.edit.attributeId);
+  const results = outcomes.map((outcome): EntryEditResult => {
+    if (outcome.state === 'refused') return { entryId: outcome.entryId, refusals: outcome.refusals.map(refusalOf) };
+    const entry = byId.get(outcome.entryId);
+    if (entry === undefined) return { entryId: outcome.entryId, refusals: [GONE_SINCE] };
+    return outcome.state === 'changed'
+      ? { entryId: outcome.entryId, entry, written: { [attributeId]: outcome.versionId }, before: outcome.before }
+      : { entryId: outcome.entryId, entry };
+  });
+  return { results, records: read };
+}
+
+/**
+ * Puts values back on up to 500 entries of one list, each on its own (a bulk
+ * edit's undo): a cell whose `ifVersionId` moved on keeps that entry as it is
+ * (`VERSION_CHANGED`); the landed entries are read back once.
+ */
+export async function setEntriesValues(
+  scope: EngineScope,
+  input: { readonly listId: string; readonly items: readonly EntryValuesItem[] },
+  hooks: readonly AfterWrite[] = [],
+): Promise<EntryEditResults> {
+  const outcomes = await setEntryValuesBatch(scope, input, hooks);
+  const { byId, records: read } = await readBack(
+    scope,
+    outcomes.flatMap((outcome) => (outcome.ok ? [outcome.entryId] : [])),
+  );
+  const results = outcomes.map((outcome): EntryEditResult => {
+    if (!outcome.ok) return { entryId: outcome.entryId, refusals: outcome.refusals.map(refusalOf) };
+    const entry = byId.get(outcome.entryId);
+    return entry === undefined
+      ? { entryId: outcome.entryId, refusals: [GONE_SINCE] }
+      : { entryId: outcome.entryId, entry, written: outcome.written };
+  });
+  return { results, records: read };
 }
 
 /**

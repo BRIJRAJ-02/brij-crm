@@ -424,6 +424,8 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       addMany: os.entries.addMany.handler(notServed),
       forRecord: os.entries.forRecord.handler(notServed),
       setValues: os.entries.setValues.handler(notServed),
+      updateMany: os.entries.updateMany.handler(notServed),
+      setValuesBatch: os.entries.setValuesBatch.handler(notServed),
       remove: os.entries.remove.handler(notServed),
       restore: os.entries.restore.handler(notServed),
       addMatching: os.entries.addMatching.handler(notServed),

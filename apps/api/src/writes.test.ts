@@ -878,6 +878,55 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
       { kind: 'entries', list_id: made.listId, item_ids: [made.entryId], mutation_id: mutationId },
     ];
   },
+  'entries.updateMany': async (m, mutationId) => {
+    const made = await listWithEntry(m);
+    const attributeId = newId();
+    await m.client.attributes.create({
+      workspace: m.slug,
+      objectId: m.people.id,
+      listId: made.listId,
+      id: attributeId,
+      title: 'Note',
+      type: 'text',
+      mutationId: newId(),
+    });
+    await m.client.entries.updateMany({
+      workspace: m.slug,
+      listId: made.listId,
+      entryIds: [made.entryId],
+      edit: { attributeId, op: 'set', value: 'Call back' },
+      mutationId,
+    });
+    return [
+      ...listRows(m, made),
+      { kind: 'definitions', list_id: made.listId, attribute_ids: [attributeId] },
+      { kind: 'entries', list_id: made.listId, item_ids: [made.entryId], mutation_id: mutationId },
+    ];
+  },
+  'entries.setValuesBatch': async (m, mutationId) => {
+    const made = await listWithEntry(m);
+    const attributeId = newId();
+    await m.client.attributes.create({
+      workspace: m.slug,
+      objectId: m.people.id,
+      listId: made.listId,
+      id: attributeId,
+      title: 'Note',
+      type: 'text',
+      mutationId: newId(),
+    });
+    await m.client.entries.setValuesBatch({
+      workspace: m.slug,
+      listId: made.listId,
+      items: [{ entryId: made.entryId, values: { [attributeId]: { value: 'Call back' } } }],
+      mutationId,
+    });
+    return [
+      ...listRows(m, made),
+      { kind: 'definitions', list_id: made.listId, attribute_ids: [attributeId] },
+      { kind: 'entries', list_id: made.listId, item_ids: [made.entryId], mutation_id: mutationId },
+    ];
+  },
   'entries.remove': async (m, mutationId) => {
     const made = await listWithEntry(m);
     await m.client.entries.remove({ workspace: m.slug, entryIds: [made.entryId], mutationId });
@@ -2606,6 +2655,8 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   // Lists (spec 0048): the list, its person and their entry first, then the case's own writes.
   'entries.add': 5,
   'entries.setValues': 5,
+  'entries.updateMany': 5,
+  'entries.setValuesBatch': 5,
   'entries.remove': 4,
   'entries.restore': 5,
   // A team made first, then the write (spec 0031, slice 8).

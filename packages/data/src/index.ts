@@ -3519,6 +3519,16 @@ export function createDataLayer({
                 input.workspace,
                 call((options) => api.entries.setValues(input, options)),
               ),
+            updateMany: (input) =>
+              landed(
+                input.workspace,
+                call((options) => api.entries.updateMany({ ...input, entryIds: [...input.entryIds] }, options)),
+              ),
+            setValuesBatch: (input) =>
+              landed(
+                input.workspace,
+                call((options) => api.entries.setValuesBatch({ ...input, items: [...input.items] }, options)),
+              ),
             remove: (input) =>
               call((options) => api.entries.remove({ ...input, entryIds: [...input.entryIds] }, options)),
             restore: (input) =>
