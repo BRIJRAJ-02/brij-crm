@@ -274,6 +274,8 @@ export function PageEditor({
   // Sharing (spec 0037, AC-1331): whoever may change the page sees its editors; only an admin changes them.
   const canShare = useCan('booking.admin');
   const [isSharing, setSharing] = useState(false);
+  // Mounted from its first opening on, so the dialog keeps its rows while it plays its exit.
+  const [hasShared, setShared] = useState(false);
   const { toasts } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
   // A page the reader can't change shows as it is, every control read only, with no Save.
@@ -783,7 +785,10 @@ export function PageEditor({
                           id: 'sharing',
                           label: sharingStrings.menuItem,
                           icon: 'users' as const,
-                          onAction: () => setSharing(true),
+                          onAction: () => {
+                            setShared(true);
+                            setSharing(true);
+                          },
                         },
                       ],
                     },
@@ -794,12 +799,12 @@ export function PageEditor({
         body: (
           <>
             <Modal
-              title={sharingStrings.dialogTitle(page.title)}
+              title={sharingStrings.title}
               isOpen={isSharing}
               onOpenChange={setSharing}
               actions={<Button slot="close">{sharingStrings.close}</Button>}
             >
-              {isSharing && (
+              {hasShared && (
                 <SharingPanel
                   data={data}
                   slug={slug}

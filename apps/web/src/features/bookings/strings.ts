@@ -9,6 +9,7 @@ export const strings = {
     calendar: 'Calendar',
     list: 'List',
     availability: 'Availability',
+    roster: 'Roster',
     // "Round robin" is what the feature is called everywhere else in the product, so the tab says it too.
     'round-robin': 'Round robin',
     calendars: 'Calendars',
@@ -150,8 +151,7 @@ export const strings = {
   fromCalendar: 'From your calendar. Timefix keeps the time blocked but doesn’t manage this event.',
   // The member's own calendar time with nobody else invited (spec 0024, the owner's call on 20 October 2026).
   busy: 'Busy',
-  busyNote:
-    'Something on your calendar with nobody else invited. Its details stay in your calendar, and nobody can book this time.',
+  busyNote: 'Busy for you, closed to booking.',
   // Time the member closed (spec 0027).
   blocked: 'Blocked',
   held: 'Reserved time',
@@ -228,7 +228,7 @@ export const strings = {
     ];
     if (parts.length === 0) return '';
     const who = name === undefined ? 'You’re' : `${name} is`;
-    return `${who} ${parts.join(' and ')}. Booking anyway goes over ${parts.length === 1 ? 'it' : 'both'}.`;
+    return `${who} ${parts.join(' and ')}.`;
   },
   bookSomeoneIn: 'Book someone in',
   newMeeting: 'New meeting',
@@ -322,7 +322,7 @@ export const strings = {
   moving: 'Moving',
   moveTo: (time: string, day: string) => `Move to ${time} on ${day}`,
   findingTimes: 'Finding free times…',
-  noMoveTimes: 'No free times on this page in the next two weeks. Free some up on Availability, or cancel instead.',
+  noMoveTimes: 'No free times in the next two weeks. Free some on Availability, or cancel.',
   slotName: (time: string, day: string, minutes: number) => `${time}, ${day}, ${String(minutes)} minutes`,
   timeGone: 'That time has just gone. Pick another.',
   changeFailed: 'That didn’t go through. Try again in a moment.',
@@ -368,23 +368,22 @@ export const strings = {
   reassignNamesFailed: 'Couldn’t load the group’s members, so only Next in the group is offered.',
   reassign: 'Reassign',
   reassigning: 'Reassigning',
-  reassigned: 'Reassigned. The guest and both hosts are emailed.',
+  reassigned: 'Reassigned. Guest and hosts are emailed.',
   /** Reassign from Host away (spec 0037, AC-1284): to the time off's stand in, else the next in the group. */
   awayReassignTitle: (page: string, visitor: string) => `Reassign ${page} with ${visitor}?`,
   awayToStandin: (standin: string, host: string) =>
-    `${standin} takes it, as ${host}’s stand in while they’re away. The guest, ${standin} and ${host} are emailed.`,
+    `${standin} takes it, as ${host}’s stand in while they’re away. Guest and hosts are emailed.`,
   awayStandinOutside: (host: string, rotation: string) =>
-    `${host}’s stand in can’t take ${rotation}’s bookings now, so whoever is free then and next in it takes it. The guest and both hosts are emailed.`,
+    `${host}’s stand in can’t take ${rotation}’s bookings now, so whoever is free then and next in it takes it. Guest and hosts are emailed.`,
   awayMembersFailed: (rotation: string) =>
     `Couldn’t load who is in ${rotation}, so the server checks the stand in is free and in it.`,
   awayNotChanged: (host: string, rotation: string) =>
     `Nobody else in ${rotation} is free then, so it stays with ${host}.`,
   awayToNext: (rotation: string) =>
-    `Whoever is free then and next in ${rotation} takes it. The guest and both hosts are emailed.`,
-  awayStandinUnknown: (host: string) =>
-    `${host}’s stand in takes it while they’re away. The guest and both hosts are emailed.`,
+    `Whoever is free then and next in ${rotation} takes it. Guest and hosts are emailed.`,
+  awayStandinUnknown: (host: string) => `${host}’s stand in takes it while they’re away. Guest and hosts are emailed.`,
   theGroup: 'its round robin group',
-  reassignedTo: (member: string) => `Reassigned to ${member}. The guest and both hosts are emailed.`,
+  reassignedTo: (member: string) => `Reassigned to ${member}. Guest and hosts are emailed.`,
   assignedIn: (rotation: string) => `Assigned in ${rotation}`,
   assignedLine: (member: string, why: string) => `${member} ${why}`,
   noLongerCounts: (line: string) => `${line} (no longer counts)`,

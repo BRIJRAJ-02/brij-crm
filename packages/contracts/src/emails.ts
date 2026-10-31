@@ -400,11 +400,13 @@ export const SchedulingAccessRemovedEmail = z.strictObject({
 export type SchedulingAccessRemovedEmail = z.infer<typeof SchedulingAccessRemovedEmail>;
 
 /**
- * Editor added (spec 0037, AC-1331): to a member made an editor of a booking page or a rotation by someone else. "You
- * can now edit Intro call". The resource's name and kind, who added them, and where it is edited.
+ * Editor added or removed (spec 0037, AC-1331): to a member someone else made an editor of a booking page or a rotation
+ * ("You can now edit Intro call"), or took off its editors (`removed`: "You can no longer edit Intro call"). The
+ * resource's name and kind, who changed it, and where it is edited.
  */
 export const EditorAddedEmail = z.strictObject({
   resourceType: z.enum(['booking_page', 'rotation']),
+  removed: z.boolean().optional(),
   /** The page's title or the rotation's name. */
   resourceName: z.string().trim().min(1).max(200),
   byName: Name,

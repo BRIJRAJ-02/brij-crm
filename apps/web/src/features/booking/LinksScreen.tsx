@@ -139,10 +139,10 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
           ? { badge: strings.viewOnly }
           : page.pausedReason === 'host_removed'
             ? { badge: strings.hostRemoved }
-            : page.isEditor === true
-              ? { badge: sharingStrings.editorBadge }
-              : page.isPrivate
-                ? { badge: strings.linkOnly }
+            : page.isPrivate
+              ? { badge: strings.linkOnly }
+              : page.isEditor === true
+                ? { badge: sharingStrings.editorBadge }
                 : {}),
       isOff,
       isPending,

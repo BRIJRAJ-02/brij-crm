@@ -193,11 +193,18 @@ export const schedulingAccessRemoved: Template<SchedulingAccessRemovedEmail> = (
   };
 };
 
-/** Editor added (spec 0037, AC-1331): "You can now edit Intro call", to the member someone else made an editor. */
+/**
+ * Editor added or removed (spec 0037, AC-1331): "You can now edit Intro call" to the member someone else made an
+ * editor, and "You can no longer edit Intro call" to one they took off.
+ */
 export const editorAdded: Template<EditorAddedEmail> = (params, context) => {
   const isRotation = params.resourceType === 'rotation';
-  const subject = `You can now edit ${params.resourceName}`;
-  const what = `${params.byName} made you an editor of the ${params.resourceName} ${isRotation ? 'round robin group' : 'booking page'}.`;
+  const kind = isRotation ? 'round robin group' : 'booking page';
+  const removed = params.removed === true;
+  const subject = removed ? `You can no longer edit ${params.resourceName}` : `You can now edit ${params.resourceName}`;
+  const what = removed
+    ? `${params.byName} took you off the editors of the ${params.resourceName} ${kind}.`
+    : `${params.byName} made you an editor of the ${params.resourceName} ${kind}.`;
   return {
     subject,
     preheader: what,
@@ -205,8 +212,16 @@ export const editorAdded: Template<EditorAddedEmail> = (params, context) => {
     heading: subject,
     blocks: [
       { type: 'paragraph', text: what },
-      { type: 'button', label: isRotation ? 'Open Round robin' : 'Open the page', url: context.link(params.path) },
+      ...(removed
+        ? []
+        : [
+            {
+              type: 'button' as const,
+              label: isRotation ? 'Open Round robin' : 'Open the page',
+              url: context.link(params.path),
+            },
+          ]),
     ],
-    why: `You got this email because someone shared a ${isRotation ? 'round robin group' : 'booking page'} with you in ${workspaceOf(context)}.`,
+    why: `You got this email because who edits a ${kind} changed in ${workspaceOf(context)}.`,
   };
 };

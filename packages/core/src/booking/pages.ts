@@ -189,15 +189,9 @@ async function pageToChange(tx: WorkspaceTx, scope: EngineScope, pageId: string,
   if (!mayChange(scope, row, reach, edits)) throw refuse('NOT_FOUND', NOT_FOUND_MESSAGE);
   const [page] = await pagesOf(tx, [row]);
   if (page === undefined) throw refuse('NOT_FOUND', NOT_FOUND_MESSAGE);
-  // An editor's page by someone gone keeps its owner's name, so the editor still reads whose it is.
-  const named =
-    ownerName ??
-    (others && edits.has(row.id)
-      ? (await managedOwners(tx, [row.ownerMemberId], false)).get(row.ownerMemberId)
-      : undefined);
   return {
     ...page,
-    ...(named === undefined ? {} : { ownerName: named }),
+    ...(ownerName === undefined ? {} : { ownerName }),
     ...(reach === undefined ? {} : { reach }),
     edits,
   };
@@ -394,17 +388,9 @@ export async function listBookingPages(
       listed.filter((row) => isSomeoneElses(scope, row)).map((row) => row.ownerMemberId),
       reach !== undefined,
     );
-    // A page the reader edits is listed whoever owns it, under its owner's name even once they have left.
-    const editedOwners = await managedOwners(
-      tx,
-      listed
-        .filter((row) => isSomeoneElses(scope, row) && edits.has(row.id) && !names.has(row.ownerMemberId))
-        .map((row) => row.ownerMemberId),
-      false,
-    );
-    const nameOf = (ownerId: string) => names.get(ownerId) ?? editedOwners.get(ownerId);
+    const nameOf = (ownerId: string) => names.get(ownerId);
     const rows = listed.filter(
-      (row) => !isSomeoneElses(scope, row) || mine === undefined || edits.has(row.id) || names.has(row.ownerMemberId),
+      (row) => !isSomeoneElses(scope, row) || mine === undefined || names.has(row.ownerMemberId),
     );
     const pages = (await pagesOf(tx, rows)).map((page) => {
       const ownerName = isSomeoneElses(scope, page) ? nameOf(page.ownerMemberId) : undefined;

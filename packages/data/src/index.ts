@@ -1415,6 +1415,9 @@ export function createDataLayer({
     pageRules.clear();
     formLists.clear();
     reportLists.clear();
+    // Who edits what (spec 0037, AC-1331), and the rotations: the next person reads their own.
+    rotationLists.clear();
+    editorLists.clear();
     schedules.clear();
     preferences.clear();
     accessLoaded?.clear();

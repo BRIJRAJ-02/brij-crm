@@ -2,8 +2,8 @@
 // answers whoever may change the resource (`booking.admin`, its editors, and for a page its owner and Manage over
 // them); `setEditors` replaces them and is `booking.admin`'s alone, since an editor changes everything on a resource
 // except its editors. At most 20 per resource (409 `EDITOR_LIMIT`), each an active member who isn't a guest. Each
-// change writes one `editors.changed` audit row, and each person added by someone else gets "You can now edit
-// <name>". Editors are settings, as pages and rotations are: no outbox row; screens read them again.
+// change writes one `editors.changed` audit row, and each person added or removed by someone else is emailed.
+// Editors are settings, as pages and rotations are: no outbox row; screens read them again.
 import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import {
   EDITORS_MAX,
@@ -171,22 +171,28 @@ export async function setEditors(
         before: { name: resource.name },
         after: { name: resource.name, added, removed },
       });
-      await tellAdded(tx, scope, input.resourceType, resource, actor, added);
+      await tellChanged(tx, scope, input.resourceType, resource, actor, { added, removed });
     }
     return editorsOf(tx, scope, input.resourceType, resource.id);
   });
 }
 
-/** "You can now edit <name>" to each person added, but the one who added them (AC-1331). Ids only in the key. */
-async function tellAdded(
+/**
+ * "You can now edit <name>" to each person added, and "You can no longer edit <name>" to each person removed, but the
+ * one who changed it (AC-1331). Ids only in the key.
+ */
+async function tellChanged(
   tx: WorkspaceTx,
   scope: EngineScope,
   resourceType: EditorResource,
   resource: { readonly id: string; readonly name: string },
   actor: string,
-  added: readonly string[],
+  changed: { readonly added: readonly string[]; readonly removed: readonly string[] },
 ): Promise<void> {
-  const told = added.filter((memberId) => memberId !== actor);
+  const told = [
+    ...changed.added.map((memberId) => ({ memberId, removed: false })),
+    ...changed.removed.map((memberId) => ({ memberId, removed: true })),
+  ].filter((each) => each.memberId !== actor);
   if (told.length === 0) return;
   const [place] = await tx
     .select({ slug: workspaces.slug })
@@ -198,12 +204,18 @@ async function tellAdded(
     resourceType === 'rotation'
       ? `/w/${place.slug}/bookings/round-robin`
       : `/w/${place.slug}/captures/links/${resource.id}`;
-  for (const memberId of told) {
+  for (const each of told) {
     await queueEmail(tx, {
       kind: 'editor_added',
-      ids: [resource.id, memberId, newId()],
-      to: { memberId },
-      params: { resourceType, resourceName: resource.name, byName: by.name, path },
+      ids: [resource.id, each.memberId, newId()],
+      to: { memberId: each.memberId },
+      params: {
+        resourceType,
+        resourceName: resource.name,
+        byName: by.name,
+        path,
+        ...(each.removed ? { removed: true } : {}),
+      },
     });
   }
 }
