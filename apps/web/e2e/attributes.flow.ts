@@ -87,8 +87,13 @@ test('an owner adds, edits, moves, archives and restores attributes without setu
   await dialog.getByRole('button', { name: 'Create attribute' }).click();
   await expect(dialog.getByText('Name taken here. Pick another.')).toBeVisible();
   await checkScreen(page, 'attribute-refused');
-  // On a phone the last create's toast sits over the dialog's footer until it times out: wait it out first.
-  await expect(page.locator('[data-tone="success"][role="alertdialog"]')).toHaveCount(0, { timeout: 30_000 });
+  // On a phone the last create's toast sits over the dialog's footer, its timer held while the dialog is open:
+  // dismiss it first, as a person would.
+  const toast = page.locator('[data-tone="success"][role="alertdialog"]');
+  for (let left = await toast.count(); left > 0; left -= 1) {
+    await toast.first().getByRole('button', { name: 'Dismiss' }).click();
+    await expect(toast).toHaveCount(left - 1);
+  }
   await dialog.getByRole('button', { name: 'Cancel' }).click();
   await expect(dialog).toBeHidden();
 
