@@ -146,13 +146,17 @@ export function MonthTiles({
         }}
       >
         {cells.map((key, index) => {
-          // Outside the month: the neighbour's date, quiet and out of reach, so the six weeks that hold every month at
-          // one height never leave an empty row over the times (spec 0058).
+          // Outside the month: the neighbour's date, drawn by CSS from data-date (decoration, not text), quiet and out
+          // of reach, so the six weeks that hold every month at one height never leave an empty row over the times
+          // (spec 0058).
           if (key === undefined)
             return (
-              <span key={`outside-${String(index)}`} className={styles.outside} aria-hidden="true">
-                {dayLabels(addDays(first, index - lead), locale).day}
-              </span>
+              <span
+                key={`outside-${String(index)}`}
+                className={styles.outside}
+                data-date={dayLabels(addDays(first, index - lead), locale).day}
+                aria-hidden="true"
+              />
             );
           const labels = dayLabels(key, locale);
           const isOpen = openDays.has(key);
