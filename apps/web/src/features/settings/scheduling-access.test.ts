@@ -83,10 +83,10 @@ describe('a team target (spec 0037, AC-1254, AC-1267)', () => {
     target: { type: 'team', teamId },
   });
 
-  it('names the team with its possessive, and one since deleted plainly', () => {
+  it('names the team with its possessive, and one whose name isn’t known plainly', () => {
     expect(whoseOf({ type: 'team', teamId: 'sales' }, nameOf, teamOf)).toBe('Sales’');
     expect(whoseOf({ type: 'team', teamId: 'care' }, nameOf, teamOf)).toBe('Care’s');
-    expect(whoseOf({ type: 'team', teamId: 'gone' }, nameOf, teamOf)).toBe('a deleted team’s');
+    expect(whoseOf({ type: 'team', teamId: 'gone' }, nameOf, teamOf)).toBe('a team’s');
   });
 
   it('reads a team among the names a member reaches', () => {

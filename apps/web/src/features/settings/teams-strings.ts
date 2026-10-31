@@ -1,4 +1,5 @@
 import type { ObjectAccessLevel, RecordScope, RuleRole } from '@crm/data';
+import { strings as accessStrings } from './scheduling-access-strings.ts';
 
 /** Settings › Workspace › Teams' copy (spec 0031, slice 8) and an object's Access tab (spec 0032). */
 export const strings = {
@@ -39,7 +40,9 @@ export const strings = {
   loseScheduling: (people: number, level: 'view' | 'manage' | 'both', team: string) =>
     `${String(people)} ${people === 1 ? 'person loses' : 'people lose'} access to ${
       level === 'manage' ? 'manage' : level === 'view' ? 'see' : 'see or manage'
-    } ${team.endsWith('s') ? `${team}’` : `${team}’s`} scheduling.`,
+    } ${accessStrings.teamPossessive(team)} scheduling.`,
+  /** The same confirm when who loses access couldn't be read: the delete still takes it. */
+  loseSchedulingUnknown: (team: string) => `Scheduling access over ${team} goes with it.`,
   /** An object's Access tab. */
   accessTab: 'Access',
   accessLoading: 'Loading access',

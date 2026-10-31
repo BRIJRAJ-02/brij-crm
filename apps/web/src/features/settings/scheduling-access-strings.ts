@@ -66,8 +66,9 @@ export const strings = {
   possessive: (name: string) => `${name}’s`,
   /** A team's, as English writes it: "Sales’", "Support’s". */
   teamPossessive: (name: string) => (name.endsWith('s') ? `${name}’` : `${name}’s`),
-  formerTeam: 'Deleted team',
-  formerTeamPossessive: 'a deleted team’s',
+  /** A team whose name isn't known here (deleted, or the teams didn't load). */
+  formerTeam: 'A team',
+  formerTeamPossessive: 'a team’s',
 
   // The Members page's column (AC-1267).
   column: 'Scheduling access',

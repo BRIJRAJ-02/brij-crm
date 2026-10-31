@@ -11,6 +11,7 @@ import {
   type TeamWeek as Week,
   type TeamWeekDay,
   type TeamWeekRow,
+  type TeamView,
   type VisibleMember,
   type WeeklyHours,
 } from '@crm/data';
@@ -57,7 +58,7 @@ import {
 import { todayIn } from './hours.ts';
 import { availabilityHref } from './links.ts';
 import { teamWeekHref } from './team-week-links.ts';
-import { TeamWeekTeamFilter, useWorkspaceTeams } from './TeamWeekTeamFilter.tsx';
+import { TeamWeekTeamFilter } from './TeamWeekTeamFilter.tsx';
 import { teamWeekStrings as words } from './team-week-strings.ts';
 import { timeOffStrings } from './time-off-strings.ts';
 
@@ -76,6 +77,8 @@ export interface TeamWeekScreenProps {
   readonly zone: string;
   /** The members in the reader's See reach, with what the reader may change: the "Set usual hours for…" choices. */
   readonly members: readonly VisibleMember[];
+  /** The workspace's teams, for the team filter (AC-1289); the route reads them again on a live change. */
+  readonly teams?: readonly TeamView[];
 }
 
 /** Mine | Team: Availability's two views (spec 0037, AC-1289). */
@@ -251,7 +254,7 @@ const weekdayName = (index: number, locale: string): string =>
   new Intl.DateTimeFormat(locale, { weekday: 'long', timeZone: 'UTC' }).format(new Date(Date.UTC(2026, 10, 2 + index)));
 
 /** The Team week: Mine | Team on the strip, one toolbar (the week, search, Copy week, Set usual hours), the grid with its legend, its editor, menus and confirms. */
-export function TeamWeekScreen({ data, slug, week, search, zone, members }: TeamWeekScreenProps) {
+export function TeamWeekScreen({ data, slug, week, search, zone, members, teams = [] }: TeamWeekScreenProps) {
   const { toasts } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
   const { locale } = useFormatSettings();
@@ -266,7 +269,6 @@ export function TeamWeekScreen({ data, slug, week, search, zone, members }: Team
   const [usualFor, setUsualFor] = useState<readonly string[] | undefined>(undefined);
   const [query, setQuery] = useState(search);
   // The team filter (AC-1289): the screen's own choice, kept while the week changes; a team since deleted is none.
-  const teams = useWorkspaceTeams(data, slug);
   const [chosenTeam, setTeam] = useState('');
   const teamId = teams.some((team) => team.id === chosenTeam) ? chosenTeam : '';
   // The search reaches the address a moment after typing stops, so each key doesn't read the week again.
@@ -548,7 +550,9 @@ function Loaded({
           people={people}
           isLoading={state.status === 'loading'}
           emptyState={
-            <EmptyState title={words.noMatch}>{isTeamChosen ? words.noMatchInTeam : words.noMatchBody}</EmptyState>
+            <EmptyState title={words.noMatch}>
+              {!isTeamChosen ? words.noMatchBody : query.trim() === '' ? words.noMatchTeam : words.noMatchInTeam}
+            </EmptyState>
           }
           {...(footer === undefined ? {} : { footer })}
           legend={legend}

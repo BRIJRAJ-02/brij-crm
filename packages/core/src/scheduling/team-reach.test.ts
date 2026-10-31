@@ -121,7 +121,7 @@ describe('a team delegation (AC-1254)', () => {
     expect((await listDelegations(w.owner, { everyone: true })).delegations).toHaveLength(1);
   });
 
-  it('is a manager’s to give: an unknown team is NOT_FOUND, another workspace’s too', async () => {
+  it('is a manager’s to give: a member is FORBIDDEN, an unknown team NOT_FOUND, another workspace’s too', async () => {
     const w = await world(['member']);
     const [priya = ''] = w.ids;
     const other = await world([]);
@@ -133,7 +133,19 @@ describe('a team delegation (AC-1254)', () => {
         ),
       ).toEqual({ code: 'NOT_FOUND', message: 'That team doesn’t exist.' });
     }
+    // A plain member gives no team delegation, even over a team they're in: it's a manager's.
+    const mine = await createTeam(w.owner, { name: 'Mine', memberIds: [priya] });
+    expect(
+      await refusalOf(
+        grantDelegation(w.as(priya, 'member'), {
+          delegateMemberId: w.memberId,
+          target: { type: 'team', teamId: mine.id },
+          level: 'view',
+        }),
+      ),
+    ).toMatchObject({ code: 'FORBIDDEN' });
     expect(await w.auditRows()).toEqual([]);
+    expect((await listDelegations(w.owner, { everyone: true })).delegations).toEqual([]);
   });
 
   it('follows the team: a joiner is reached at once and a leaver no more, each change naming the delegate', async () => {

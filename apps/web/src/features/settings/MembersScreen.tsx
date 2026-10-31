@@ -20,6 +20,7 @@ import {
   type MyAccess,
   type Role,
   type RolesList,
+  type TeamView,
 } from '@crm/data';
 import {
   Avatar,
@@ -96,6 +97,8 @@ export interface MembersScreenProps {
   readonly access: MyAccess;
   /** The roles every role picker offers (`roles.list`, spec 0037, AC-1439), most power first. */
   readonly roles: RolesList;
+  /** The workspace's teams, for team delegations in the Scheduling access column (undefined: not read). */
+  readonly teams?: readonly TeamView[] | undefined;
 }
 
 const MEMBER_COLUMNS: readonly TableColumn[] = [
@@ -160,6 +163,7 @@ export function MembersScreen({
   domains,
   access,
   roles,
+  teams,
 }: MembersScreenProps) {
   const router = useRouter();
   // Owners and admins see who has two factor sign in (spec 0033, AC-895): decided by access, so it never slides in.
@@ -390,7 +394,16 @@ export function MembersScreen({
       case 'twoFactor':
         return member.twoFactor === true ? strings.twoFactorOn : strings.twoFactorOff;
       case 'scheduling':
-        return <SchedulingAccessCell data={data} toasts={toasts} slug={slug} me={access.memberId} member={member} />;
+        return (
+          <SchedulingAccessCell
+            data={data}
+            toasts={toasts}
+            slug={slug}
+            me={access.memberId}
+            member={member}
+            teams={teams}
+          />
+        );
       case 'calendar':
         return <CalendarHealthChip state={health.get(member.id)} name={member.name} />;
       case 'joined':

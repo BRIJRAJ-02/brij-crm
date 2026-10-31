@@ -24,8 +24,12 @@ export const Route = createFileRoute('/w/$slug/bookings/availability')({
     if (deps.view === 'team') {
       const zone = memberZone(context.data, params.slug);
       const q = deps.q ?? '';
-      const team = await (await context.data.scheduling.open()).openTeamWeek(params.slug, deps.week, q, zone);
-      return { view: 'team' as const, q, zone, ...team };
+      const [team, teams] = await Promise.all([
+        context.data.scheduling.open().then((store) => store.openTeamWeek(params.slug, deps.week, q, zone)),
+        // The team filter (AC-1289): the cached list, read again on a live team change; none when it fails.
+        context.data.teams.list(params.slug).catch(() => []),
+      ]);
+      return { view: 'team' as const, q, zone, teams, ...team };
     }
     // Whose schedules the reader may see comes from the server's reach (`members.visible`, spec 0037, AC-1268): a
     // colleague outside it opens the reader's own. The workspace's members name whoever changed a schedule last.
@@ -87,6 +91,7 @@ function AvailabilityRoute() {
         search={loaded.q}
         zone={loaded.zone}
         members={loaded.members}
+        teams={loaded.teams}
       />
     );
   }
