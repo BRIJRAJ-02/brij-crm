@@ -14,10 +14,23 @@ import { guessCountry } from './country.ts';
 import { contextFromFrame, contextOfPage, hiddenOf } from './context.ts';
 import { closeOnEscape, embedOf, framedUrl, isOwnBookingPath, reportHeight, type PostToHost } from './frame.ts';
 import { brandHref, brandLogoHref, preloadImage, wearStylesheet } from './stylesheet.ts';
+import { guardPreloadErrors, hasFilledField, sessionStore } from '../preload-guard.ts';
 
 const found = document.querySelector<HTMLElement>('[data-app-root]');
 if (found === null) throw new Error('The page has no root.');
 const root: HTMLElement = found;
+
+// A tab left open across a deploy asks for a chunk the new one no longer has: reload once onto it, never over a
+// half filled form. The form draws no toasts, so with answers typed the error takes its own way instead.
+guardPreloadErrors({
+  target: window,
+  storage: () => sessionStore(window),
+  now: Date.now,
+  reload: () => {
+    window.location.reload();
+  },
+  isDirty: () => hasFilledField(root),
+});
 
 const params = new URLSearchParams(window.location.search);
 const embed = embedOf({
