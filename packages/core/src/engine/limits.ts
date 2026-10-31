@@ -29,6 +29,8 @@ export const LIMITS = {
   sharedViewsPerObject: 100,
   /** One member's private views on one object (spec 0020, AC-472). */
   privateViewsPerObject: 50,
+  /** Saved reports in one workspace (the reports lane, spec 0050 reserved). */
+  reportsPerWorkspace: 200,
   /** Seats: active non guest members plus open non guest email invitations (spec 0031, AC-809). Unlimited until #38. */
   seats: SEAT_LIMIT,
   /** Open invitations at once (spec 0031, AC-808). */
@@ -72,6 +74,23 @@ export async function takeRecordSlots(tx: WorkspaceTx, scope: EngineScope, amoun
     .update(workspaceCounters)
     .set({ liveRecords: sql`${workspaceCounters.liveRecords} + ${amount}` })
     .where(eq(workspaceCounters.workspaceId, scope.workspaceId));
+}
+
+/**
+ * Refuses `LIMIT_REACHED` unless `amount` more records fit beside the live count, read without the counter row's
+ * lock (spec 0059): a write that defers its slots to its end (`WriteContext.deferSlots`) checks here as it makes
+ * each record, so a record past the limit is refused on its own, and the end's `takeRecordSlots` stays the
+ * guarantee under a race at the exact limit.
+ */
+export async function checkRecordRoom(tx: WorkspaceTx, scope: EngineScope, amount: number): Promise<void> {
+  const [row] = await tx
+    .select({ liveRecords: workspaceCounters.liveRecords })
+    .from(workspaceCounters)
+    .where(eq(workspaceCounters.workspaceId, scope.workspaceId));
+  const limit = limitsOf(scope).liveRecords;
+  if ((row?.liveRecords ?? 0) + amount > limit) {
+    throw refuse('LIMIT_REACHED', `This workspace holds at most ${limit.toLocaleString('en')} records.`);
+  }
 }
 
 /** Takes one custom object slot. */
@@ -155,7 +174,12 @@ export async function takeList(tx: WorkspaceTx, scope: EngineScope): Promise<voi
     .for('update');
   if (row === undefined) throw new Error('The workspace has no counters row.');
   const limit = limitsOf(scope).lists;
-  if (row.lists + 1 > limit) throw refuse('LIMIT_REACHED', `This workspace holds at most ${String(limit)} lists.`);
+  if (row.lists + 1 > limit) {
+    throw refuse(
+      'LIMIT_REACHED',
+      `This workspace has ${String(limit)} lists, archived ones included, the most it can have.`,
+    );
+  }
   await tx
     .update(workspaceCounters)
     .set({ lists: sql`${workspaceCounters.lists} + 1` })
@@ -174,7 +198,11 @@ export async function takeEntrySlots(
   listId: string,
   amount: number,
 ): Promise<void> {
-  const [row] = await tx.select({ entryCount: lists.entryCount }).from(lists).where(eq(lists.id, listId)).for('update');
+  const [row] = await tx
+    .select({ entryCount: lists.entryCount })
+    .from(lists)
+    .where(eq(lists.id, listId))
+    .for('no key update');
   if (row === undefined) throw refuse('NOT_FOUND', 'That list does not exist.');
   const limit = limitsOf(scope).entriesPerList;
   if (amount > 0 && row.entryCount + amount > limit) {

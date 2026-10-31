@@ -5,14 +5,17 @@
 // (in the first load) imports a small module of its own instead, as the object
 // settings route does with object-tabs.ts.
 import type { ObjectSummary, Permission } from '@crm/data';
+import { strings as listStrings } from '../lists/strings.ts';
 import { jobsHref, settingsHomeHref, trashHref } from '../workspace/objects.ts';
 import { historyHref } from './history-href.ts';
+import { strings as automations } from '../automations/strings.ts';
 import { strings as history } from './history-nav-strings.ts';
 import { strings as jobs } from './jobs-strings.ts';
 import { strings as members } from './members-strings.ts';
 import { strings as notifications } from './notifications-strings.ts';
 import { strings as schedulingAccess } from './scheduling-access-nav-strings.ts';
 import { strings as brand } from './brand-strings.ts';
+import { strings as teams } from './teams-nav-strings.ts';
 import { strings as security } from './security-strings.ts';
 import { strings as workspaceSecurity } from './workspace-security-strings.ts';
 import { strings } from './strings.ts';
@@ -25,6 +28,16 @@ export { HISTORY_TABS, historyHref, isHistoryTab, type HistoryTab } from './hist
 
 /** Settings, Objects. */
 export const objectsSettingsHref = (slug: string) => `/w/${slug}/settings/objects`;
+
+/** Settings › Workspace › Lists (spec 0048, AC-4828). */
+export const listsSettingsHref = (slug: string) => `/w/${slug}/settings/lists`;
+
+/** One list's settings tab (General by default), by the list's API name, so links survive renames (AC-4829). */
+export const listSettingsHref = (
+  slug: string,
+  list: { readonly apiSlug: string },
+  tab: 'general' | 'fields' = 'general',
+) => `/w/${slug}/settings/lists/${list.apiSlug}/${tab}`;
 
 /** One object's settings tab (its Attributes tab by default), by the object's API name, so links survive renames. */
 export const objectSettingsHref = (
@@ -44,9 +57,14 @@ export const generalSettingsHref = (slug: string) => `/w/${slug}/settings/genera
 
 /** Settings › Workspace › Brand (spec 0060, AC-1): the logo and colour its booking pages and forms wear. */
 export const brandSettingsHref = (slug: string) => `/w/${slug}/settings/brand`;
+/** Settings › Workspace › Automations (parity #53): what the workspace does for itself. */
+export const automationsHref = (slug: string) => `/w/${slug}/settings/automations`;
 
 /** Settings › Workspace › Members (spec 0031): who is in the workspace, roles and invitations. */
 export const membersSettingsHref = (slug: string) => `/w/${slug}/settings/members`;
+
+/** Settings › Workspace › Teams (spec 0031, slice 8): the groups of people that access rules name. */
+export const teamsSettingsHref = (slug: string) => `/w/${slug}/settings/teams`;
 
 /** Settings › Account › Notifications (spec 0038): the member's email for this workspace. */
 export const notificationSettingsHref = (slug: string) => `/w/${slug}/settings/account/notifications`;
@@ -67,9 +85,12 @@ export type SettingsPageId =
   | 'general'
   | 'brand'
   | 'members'
+  | 'teams'
   | 'workspace-security'
   | 'objects'
+  | 'lists'
   | 'jobs'
+  | 'automations'
   | 'history'
   | 'trash'
   | 'admin-overview'
@@ -102,7 +123,9 @@ export interface SettingsNavEntry {
     | 'users'
     | 'lock'
     | 'box'
+    | 'list'
     | 'list-checks'
+    | 'zap'
     | 'clock'
     | 'users-round'
     | 'trash'
@@ -169,6 +192,8 @@ export function settingsNav(slug: string): readonly SettingsNavGroup[] {
         // Brand (spec 0060): every member reads it; owners and admins change it.
         { id: 'brand', label: brand.navLabel, href: brandSettingsHref(slug), icon: 'palette' },
         { id: 'members', label: members.title, href: membersSettingsHref(slug), icon: 'users' },
+        // Teams (spec 0031, slice 8, AC-832): every member reads them; changing them is for `teams.manage`.
+        { id: 'teams', label: teams.title, href: teamsSettingsHref(slug), icon: 'users-round' },
         // The workspace's sign in rules (spec 0033): owners only, so nobody else sees the entry at all.
         {
           id: 'workspace-security',
@@ -178,6 +203,16 @@ export function settingsNav(slug: string): readonly SettingsNavGroup[] {
           requires: 'security.manage',
         },
         { id: 'objects', label: strings.objects, href: objectsSettingsHref(slug), icon: 'box' },
+        // Lists (spec 0048, AC-4828): every member may open it; they see the lists they may read.
+        { id: 'lists', label: listStrings.settingsTitle, href: listsSettingsHref(slug), icon: 'list' },
+        // Automations (parity #53): for `automations.manage` alone, so nobody else sees the entry at all.
+        {
+          id: 'automations',
+          label: automations.navLabel,
+          href: automationsHref(slug),
+          icon: 'zap',
+          requires: 'automations.manage',
+        },
         { id: 'jobs', label: jobs.title, href: jobsHref(slug), icon: 'list-checks' },
         // History (spec 0046): every member opens it; Workspace changes inside it is for `audit.read` alone.
         { id: 'history', label: history.title, href: historyHref(slug), icon: 'clock' },
@@ -251,9 +286,12 @@ export function settingsPageOf(pathname: string): SettingsPageId | undefined {
   if (rest === 'account/scheduling') return 'scheduling-access';
   if (rest === 'account/sign-in' || rest === 'account/security') return 'security';
   if (rest === 'objects' || rest.startsWith('objects/')) return 'objects';
+  if (rest === 'lists' || rest.startsWith('lists/')) return 'lists';
   if (rest === 'jobs') return 'jobs';
+  if (rest === 'automations') return 'automations';
   if (rest === 'history' || rest === 'history/changes' || rest === 'history/sign-ins') return 'history';
   if (rest === 'members') return 'members';
+  if (rest === 'teams') return 'teams';
   if (rest === 'security') return 'workspace-security';
   if (rest === 'trash') return 'trash';
   if (rest === 'admin') return 'admin-overview';

@@ -125,13 +125,14 @@ async function expected(query: GroupsQuery, as: EngineScope = scope) {
   return Promise.all(
     query.groupIds.map(async (groupId) => {
       const filter = columnFilter(query.filter, query.groupBy, groupId);
+      const source = 'listId' in query ? { listId: query.listId } : { objectId: query.objectId };
       const page = await queryPage(as, {
-        objectId: query.objectId,
+        ...source,
         filter,
         ...(query.sorts === undefined ? {} : { sorts: query.sorts }),
         limit: query.limit ?? 25,
       });
-      const count = await countMatches(as, { objectId: query.objectId, filter });
+      const count = await countMatches(as, { ...source, filter });
       return {
         id: groupId,
         ids: page.records.map((record) => record.id),

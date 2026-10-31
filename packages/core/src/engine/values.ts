@@ -225,6 +225,14 @@ export async function lockEntry(
     .where(eq(listEntries.id, entryId));
   if (parents === undefined) throw refuse('NOT_FOUND', 'That entry does not exist.');
   await checkEntryAccess(tx, access, parents, 'write');
+  // An archived list, or one whose object is archived (spec 0048, AC-4831, AC-4832), refuses its field edits as it
+  // refuses adds. Read without a lock: an edit never waits on the list's row, and an archive racing it lands after.
+  const archived = await tx.execute<{ archived: boolean }>(
+    sql`select (l.archived_at is not null or o.archived_at is not null) as archived
+        from lists l join objects o on o.workspace_id = l.workspace_id and o.id = l.object_id
+        where l.id = ${parents.listId}`,
+  );
+  if (archived.rows[0]?.archived === true) throw refuse('NOT_FOUND', 'That list is archived. Restore it first.');
   const [record] = await tx
     .select({ deletedAt: records.deletedAt, objectId: records.objectId })
     .from(records)

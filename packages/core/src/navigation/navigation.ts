@@ -40,7 +40,7 @@ import { inWorkspace } from '../access/run.ts';
 import { memberOf, seesView } from '../views/views.ts';
 import type { RemovalEffect } from '../members/removal-effect.ts';
 
-const { memberNavPrefs, members, objects, records, views } = schema;
+const { lists, memberNavPrefs, members, objects, records, views } = schema;
 
 /** The one answer for starring something that doesn't exist or that the caller can't read (AC-934). */
 export const NAV_ITEM_NOT_FOUND = 'That view or record doesn’t exist, or you can’t see it.';
@@ -135,6 +135,23 @@ async function readableObjects(tx: WorkspaceTx, scope: EngineScope): Promise<rea
     if (objectLevel(scope.access, row.id) === 'none' || !isIcon(icon) || !isHue(hue)) return [];
     return [{ ...row, icon, hue }];
   });
+}
+
+/** The live lists the caller may read (spec 0048, AC-4804), oldest first: a list follows its object. */
+async function readableLists(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  readable: readonly NavObject[],
+): Promise<readonly string[]> {
+  const shown = new Set(readable.map((object) => object.id));
+  const rows = await tx
+    .select({ id: lists.id, objectId: lists.objectId })
+    .from(lists)
+    .where(and(eq(lists.workspaceId, scope.workspaceId), isNull(lists.archivedAt)))
+    .orderBy(asc(lists.id));
+  return rows.flatMap((row) =>
+    shown.has(row.objectId) && objectLevel(scope.access, row.id) !== 'none' ? [row.id] : [],
+  );
 }
 
 /**
@@ -244,8 +261,8 @@ async function universeOf(
     universe: {
       top: topFor(scope),
       records: readable.map((object) => object.id),
-      // Lists (#51) join once they exist (AC-927).
-      lists: [],
+      // Lists (spec 0048, AC-4804): the live ones over objects the caller reads.
+      lists: [...(await readableLists(tx, scope, readable))],
       scheduling: schedulingFor(scope),
       favourites: new Set(favourites.map(navKey)),
     },

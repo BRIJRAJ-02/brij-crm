@@ -2,7 +2,6 @@
 export const strings = {
   loading: 'Loading tasks',
   empty: 'No tasks',
-  emptyBody: 'Tasks you add show here, with who has them and when they’re due.',
   failed: 'Tasks didn’t load',
   failedBody: 'Check your connection and try again.',
   noAccess: 'You can’t see these tasks',

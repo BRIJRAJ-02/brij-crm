@@ -54,7 +54,7 @@ export const DiscardAsksFirst: Story = {
     discard.focus();
     await userEvent.keyboard('{Enter}');
     const confirm = await discardConfirm();
-    await expect(confirm).toHaveTextContent('This can’t be undone.');
+    await expect(confirm).toHaveTextContent('Discard your unsaved changes?');
     // The safe answer comes first, and focus starts inside.
     const [keep, commit] = within(confirm).getAllByRole('button');
     await expect(keep).toHaveAccessibleName(/^Keep editing/);

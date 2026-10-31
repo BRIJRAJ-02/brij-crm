@@ -9,7 +9,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { useEffect, useMemo } from 'react';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { preloadNoteEditor } from './editor.ts';
-import { findLoaded, noteHref } from './entries.ts';
+import { findLoaded, logHref, noteHref } from './entries.ts';
 import { useNoteItems } from './useNoteItems.ts';
 import { strings } from './strings.ts';
 
@@ -36,10 +36,13 @@ export function NotesScreen({ slug, list, objects, members }: NotesScreenProps) 
     preloadNoteEditor();
   }, []);
   const open = (noteId: string) => {
-    const record = findLoaded(state.source, noteId)?.record;
+    const found = findLoaded(state.source, noteId);
+    const record = found?.record;
     const objectSlug = record === undefined ? undefined : slugs.get(record.objectId);
-    if (record === undefined || objectSlug === undefined) return;
-    void navigate({ href: noteHref(slug, objectSlug, record.recordId, noteId) });
+    if (found === undefined || record === undefined || objectSlug === undefined) return;
+    // A logged call or meeting opens in its own dialog, a note in its window.
+    const href = found.kind === 'note' ? noteHref : logHref;
+    void navigate({ href: href(slug, objectSlug, record.recordId, noteId) });
   };
   return (
     <WorkspacePage

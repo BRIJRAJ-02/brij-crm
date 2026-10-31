@@ -48,6 +48,7 @@ export const EVENT_KINDS = [
   'notifications',
   'calendars',
   'time_off',
+  'automations',
 ] as const satisfies readonly EventRow['kind'][];
 
 /** One member of an audience: who, and what they may do. */
@@ -391,6 +392,12 @@ export function filterEvent(audience: Audience, row: EventRow, facts: EventFacts
     // Time off (spec 0037) names nothing: every audience hears that it changed, and reads what it may.
     case 'time_off':
       return row;
+    // Automations (parity #53) name nothing, but only people who manage them have a screen for them: an audience with
+    // anyone else in it gets the stub, so the stream stays gap free and no one else learns when runs finish.
+    case 'automations':
+      return audience.members.length > 0 && audience.members.every((m) => m.permissions.includes('automations.manage'))
+        ? row
+        : undefined;
     // A member's own sidebar (spec 0034) names one member id and nothing else. Only the audience that member is in
     // receives it (their own clients act on it); any other gets the stub, so a sidebar click is no feed of when a
     // colleague is about. A member's own calendar connections and calendars (`calendars`) follow the same rule.

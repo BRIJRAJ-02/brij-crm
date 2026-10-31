@@ -1,5 +1,5 @@
 import { isDataError } from '@crm/data';
-import { LoadingNow } from '@crm/ui';
+import { LoadingNow, sharedStrings } from '@crm/ui';
 import { createFileRoute, useNavigate, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { GeneralPending, GeneralScreen } from '../features/settings/GeneralScreen.tsx';
 import { SettingsFailed, SettingsMissing } from '../features/settings/SettingsPage.tsx';
@@ -70,7 +70,7 @@ function GeneralRoute() {
                 (error: unknown) => {
                   toasts.toast({
                     tone: 'danger',
-                    message: isDataError(error) ? error.message : strings.somethingWrong,
+                    message: isDataError(error) ? error.message : sharedStrings.couldntDoThat,
                   });
                 },
               );

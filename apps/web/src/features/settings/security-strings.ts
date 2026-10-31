@@ -6,11 +6,10 @@ export const strings = {
   /** Not "Security": that is the workspace's page, and the sidebar showed it twice (the owner, 22 October 2026). */
   title: 'Sign in and devices',
   devices: 'Signed in devices',
-  devicesDescription: 'Each browser and app signed in to your account.',
   /** Recent activity (AC-898): the last 90 days of the account's security events. */
   activity: {
     section: 'Recent activity',
-    description: 'Sign ins and changes to how you sign in, from the last 90 days.',
+    description: 'Last 90 days.',
     kinds: {
       sign_in: 'Signed in',
       sign_out: 'Signed out',
@@ -48,9 +47,9 @@ export const strings = {
   /** The confirms. */
   signOutTitle: (device: string) => `Sign out ${device}?`,
   signOutText: (place: string | undefined) =>
-    `${place === undefined ? '' : `Signed in from ${place}. `}That device has to sign in again. Anything unsaved there is lost.`,
+    `${place === undefined ? '' : `From ${place}. `}That device signs in again.`,
   signOutOthersTitle: 'Sign out of all other devices?',
-  signOutOthersText: 'Every other device has to sign in again. You stay signed in here.',
+  signOutOthersText: 'Other devices sign in again.',
   signingOut: 'Signing out',
   cancel: 'Cancel',
   signedOut: (device: string) => `Signed out ${device}.`,
@@ -64,9 +63,9 @@ export const strings = {
   stepUp: {
     title: 'Confirm it’s you',
     withApp: 'Enter the 6 digit code from your authenticator app.',
-    withBackup: 'Enter one of your backup codes. It works once.',
-    withEmail: 'First we’ll email you a 6 digit code.',
-    secondFactorOnly: 'This needs your authenticator app or a backup code.',
+    withBackup: 'Enter a backup code. It works once.',
+    withEmail: 'We’ll email you a 6 digit code.',
+    secondFactorOnly: 'Needs your authenticator app or a backup code.',
     appLabel: 'Code from your authenticator app',
     backupLabel: 'Backup code',
     emailLabel: 'Code from the email',
@@ -80,28 +79,23 @@ export const strings = {
   /** Two factor sign in (AC-881, AC-883, AC-885). */
   twoFactor: {
     section: 'Two factor sign in',
-    description: 'Ask for a code from an app when you sign in.',
     app: 'Authenticator app',
     /** The Authenticator app row's InfoTip: why it is worth it (SettingsSection has no slot beside its heading). */
-    appInfo: 'Even if someone gets into your email, they can’t sign in without your phone.',
+    appInfo: 'Needs your phone, even with your email.',
     appOff: 'Off',
     appOn: 'On',
     /** On, and a workspace requires it (AC-885). */
     appRequired: (names: readonly string[]) =>
-      `On. ${names.length === 1 ? (names[0] ?? '') : `${names.slice(0, -1).join(', ')} and ${names.at(-1) ?? ''}`} ${names.length === 1 ? 'requires' : 'require'} two factor sign in, so it stays on.`,
+      `On. Required by ${names.length === 1 ? (names[0] ?? '') : `${names.slice(0, -1).join(', ')} and ${names.at(-1) ?? ''}`}.`,
     setUp: 'Set up',
     turnOff: 'Turn off',
     backupCodes: 'Backup codes',
-    codesLeft: (left: number) => (left === 1 ? '1 left. Each works once.' : `${String(left)} left. Each works once.`),
+    codesLeft: (left: number) => `${String(left)} left`,
     newCodes: 'Make new codes',
     failedTitle: 'Couldn’t load two factor sign in',
     setupTitle: 'Set up two factor sign in',
     /** Beside the QR code, in order, with the setup key after the second; the code’s boxes sit under all of it. */
-    steps: [
-      '1. Open an authenticator app, like Google Authenticator, 1Password or Authy.',
-      '2. Scan the code, or type the key.',
-      '3. Enter the 6 digit code it shows.',
-    ],
+    steps: ['1. Open an authenticator app.', '2. Scan the code, or type the key.', '3. Enter the 6 digit code.'],
     qrLabel: 'QR code for your authenticator app',
     key: 'Setup key',
     copyKey: 'Copy the setup key',
@@ -109,7 +103,7 @@ export const strings = {
     turnOn: 'Turn on',
     turningOn: 'Turning on',
     codesTitle: 'Save your backup codes',
-    codesText: 'Each code signs you in once if you lose your phone. They won’t be shown again.',
+    codesText: 'Each works once. Shown only now.',
     copyCodes: 'Copy the backup codes',
     firstCodeMissing: 'Enter the 6 digit code from your app.',
     download: 'Download',
@@ -118,7 +112,7 @@ export const strings = {
     continue: 'Continue',
     cancel: 'Cancel',
     turnOffTitle: 'Turn off two factor sign in?',
-    turnOffText: 'Signing in will need only your email code or Google. Remembered devices are forgotten.',
+    turnOffText: 'Sign in will need only an email code or Google.',
     turningOff: 'Turning off',
     turnedOff: 'Two factor sign in is off.',
     turnedOn: 'Two factor sign in is on.',
@@ -134,22 +128,21 @@ export const strings = {
     row: 'Delete account',
     /** On the page of a deleted workspace that was the person's last, where Settings can't open. */
     pageAction: 'Delete your account',
-    rowText: 'You leave every workspace. Records you made stay, credited to Deleted user.',
+    rowText: 'Records you made stay.',
     action: 'Delete account',
     title: 'Delete your account?',
     blockedTitleOne: 'Can’t delete your account yet',
     checking: 'Checking your workspaces',
     blockedText: (names: readonly string[]) =>
       names.length === 1
-        ? `You’re the last owner of ${names[0] ?? ''}. Make someone else an owner, or delete the workspace.`
-        : `You’re the last owner of ${names.join(', ')}. Make someone else an owner of each, or delete them.`,
+        ? `Last owner of ${names[0] ?? ''}. Add another owner or delete it.`
+        : `Last owner of ${names.join(', ')}. Add another owner to each, or delete them.`,
     openMembers: (name: string) => `Open ${name} members`,
     /** Its General settings, where Delete workspace is. */
     openGeneral: (name: string) => `Open ${name} settings`,
     /** Deleting the account from a deleted workspace's page: nobody it leaves behind can bring the person back. */
-    lostWorkspace: (name: string) =>
-      `You won’t be able to restore ${name} after this. To keep anything in it, restore it first.`,
-    text: 'You’ll leave every workspace, and your sign in, devices and details are deleted. Your link page addresses stay reserved for 90 days, tied to nobody, so no one else is given them. This can’t be undone. Export anything you need from each workspace first.',
+    lostWorkspace: (name: string) => `${name} can’t be restored after this.`,
+    text: 'Removes you from every workspace and deletes your account. It can’t be undone.',
     emailLabel: (email: string) => `Type ${email} to confirm`,
     deleting: 'Deleting',
     close: 'Close',

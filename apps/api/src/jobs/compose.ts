@@ -16,11 +16,13 @@ import { createMicrosoftCalendar } from '../calendar/microsoft.ts';
 import { GOOGLE_NOTIFY_PATH, MICROSOFT_NOTIFY_PATH } from '../calendar/services.ts';
 import { emailLinkKey } from '../email-link.ts';
 import type { CalendarSettings } from '../env.ts';
+import { outboxHook } from '@crm/core';
 import { backgroundHooks } from '../hooks.ts';
 import { log } from '../log.ts';
 import { createMailer, pacedMailer } from '../mail/mailer.ts';
 import { parseSender } from '../mail/mailpit.ts';
 import { APP_RULES } from '../rules.ts';
+import { runAutomationTask } from './automation.ts';
 import { runBookingMail } from './booking-mail.ts';
 import { runEmail, type EmailRun, type EmailTry } from './email.ts';
 import { runnerTasks } from './graphile.ts';
@@ -72,6 +74,8 @@ export interface JobTasks {
   readonly notificationEmail: (payload: unknown) => Promise<void>;
   /** One member's scheduling notice (spec 0037), as the system: it queues a `scheduling_changed` email. */
   readonly schedulingNotice: (payload: unknown) => Promise<void>;
+  /** One workspace's queued automation runs (parity #53), each as the member its automation runs as; told how to queue its next call. */
+  readonly automation: (payload: unknown, again: (workspaceId: string) => Promise<void>) => Promise<void>;
   /**
    * Calendar health (spec 0037, AC-1310, AC-1311): one episode's email as the system, and the held sweep's one
    * Sentry warning (`CALENDAR_OUTAGE`, counts only).
@@ -227,6 +231,21 @@ export function composeJobTasks(options: JobTasksOptions): JobTasks {
   const schedulingNotice = (payload: unknown) =>
     runSchedulingNoticeTask({ systemScope: (workspaceId) => systemScope(db, workspaceId), log }, payload);
 
+  // Automations (parity #53): each queued run enters as the member its automation runs as (the same rules the
+  // requests use), writes with the outbox hook only, and tells `onStored` when a run stored an event.
+  const automation = (payload: unknown, again: (workspaceId: string) => Promise<void>) =>
+    runAutomationTask(
+      {
+        door: { db, rules: APP_RULES },
+        systemScope: (workspaceId) => systemScope(db, workspaceId),
+        hooks: () => [outboxHook()],
+        onStored,
+        log,
+        again,
+      },
+      payload,
+    );
+
   // Calendar health (spec 0037, AC-1310): the system queues an episode's email for `crm_email` to send; a sweep held
   // for a mass outage (AC-1311) raises one warning with its counts.
   const calendarHealth = {
@@ -245,6 +264,7 @@ export function composeJobTasks(options: JobTasksOptions): JobTasks {
     email,
     notificationEmail,
     schedulingNotice,
+    automation,
     calendarHealth,
     // The daily cleanup (milestone 3): the outbox, the dead queue rows, then one maintenance job a workspace.
     daily: (sweep) => (input) =>

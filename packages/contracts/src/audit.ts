@@ -69,8 +69,8 @@ export const AuditPerson = z.discriminatedUnion('kind', [
 /** A person as the log names them now. */
 export type AuditPerson = z.infer<typeof AuditPerson>;
 
-/** A round robin, form or booking page, by its name now; `isGone` once deleted, and no name once purged. */
-const NamedTarget = <T extends 'rotation' | 'form' | 'booking_page'>(type: T) =>
+/** A round robin, form, booking page or list, by its name now; `isGone` once deleted, and no name once purged. */
+const NamedTarget = <T extends 'rotation' | 'form' | 'booking_page' | 'list'>(type: T) =>
   z.strictObject({ type: z.literal(type), id: Uuid, name: z.string().optional(), isGone: z.boolean() });
 
 /**
@@ -93,6 +93,7 @@ export const AuditTarget = z.discriminatedUnion('type', [
     startsAt: At.optional(),
     isGone: z.boolean(),
   }),
+  NamedTarget('list'),
 ]);
 /** What an entry was done to. */
 export type AuditTarget = z.infer<typeof AuditTarget>;
@@ -179,6 +180,7 @@ const workspace = AuditTarget.options[3];
 const rotation = AuditTarget.options[4];
 const form = AuditTarget.options[5];
 const bookingPage = AuditTarget.options[6];
+const list = AuditTarget.options[8];
 const booking = AuditTarget.options[7];
 
 /**
@@ -303,12 +305,41 @@ export const AuditEntryView = z.discriminatedUnion('action', [
   entry(['limits.changed'], member, NoParams),
   /** Someone asked a member to reconnect their calendar (spec 0037, AC-1309): the target is that member. */
   entry(['calendar.reconnect_asked'], member, NoParams),
+  /** A team made, renamed, filled or deleted (spec 0031): its name then, and how many people joined and left. */
+  entry(
+    ['team.changed'],
+    workspace,
+    z.strictObject({
+      change: z.enum(['created', 'renamed', 'deleted', 'members']),
+      team: z.string(),
+      joined: z.number().int().min(0),
+      left: z.number().int().min(0),
+    }),
+  ),
+  /**
+   * One subject's access to an object set (spec 0032, AC-852): the object's name and who it was for then ("Members",
+   * a team's name), what they may do, which records, and how many field rules they have.
+   */
+  entry(
+    ['access.rule_set'],
+    workspace,
+    z.strictObject({
+      object: z.string(),
+      who: z.string(),
+      level: z.enum(['none', 'read', 'write']),
+      records: z.enum(['all', 'own', 'team']),
+      fields: z.number().int().min(0),
+      isDefault: z.boolean(),
+    }),
+  ),
   /** A booking made, moved or cancelled by someone other than its host (spec 0037, AC-1263). */
   entry(
     ['booking.changed_for'],
     booking,
     z.strictObject({ host: AuditPerson, change: z.enum(['made', 'moved', 'cancelled']) }),
   ),
+  /** A list made, changed, archived or restored (spec 0048); a rename shows as the name's change. */
+  entry(['list.created', 'list.updated', 'list.archived', 'list.restored'], list, NoParams),
 ]);
 /** One row of Workspace changes. */
 export type AuditEntryView = z.infer<typeof AuditEntryView>;

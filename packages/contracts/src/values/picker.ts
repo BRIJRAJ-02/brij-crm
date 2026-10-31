@@ -16,6 +16,7 @@ export interface PickerType {
     | 'number'
     | 'currency'
     | 'date'
+    | 'timestamp'
     | 'checkbox'
     | 'select'
     | 'status'
@@ -35,11 +36,12 @@ export interface PickerType {
 }
 
 /**
- * The sixteen types the picker offers, in this order (AC-228, widened from
- * fifteen when record files arrived, 27 Oct 2026). Multi select is a select
- * with `isMulti`; Member is `actor_reference`; Link is `url`. Domain,
- * personal name, timestamp, interaction and record reference are not offered
- * (#15 adds Relationship through its own entry).
+ * The seventeen types the picker offers, in this order (AC-228, widened from
+ * fifteen when record files arrived, 27 Oct 2026, and to seventeen with Date
+ * and time, the field types pass, 31 Oct 2026). Multi select is a select
+ * with `isMulti`; Member is `actor_reference`; Link is `url`; Date and time
+ * is `timestamp`. Domain, personal name, interaction and record reference are
+ * not offered (#15 adds Relationship through its own entry).
  */
 export const PICKER_TYPES: readonly PickerType[] = [
   { key: 'text', type: 'text', isMulti: false, allowsMultiple: false, allowsUnique: true },
@@ -47,6 +49,7 @@ export const PICKER_TYPES: readonly PickerType[] = [
   { key: 'number', type: 'number', isMulti: false, allowsMultiple: false, allowsUnique: true },
   { key: 'currency', type: 'currency', isMulti: false, allowsMultiple: false, allowsUnique: false },
   { key: 'date', type: 'date', isMulti: false, allowsMultiple: false, allowsUnique: false },
+  { key: 'timestamp', type: 'timestamp', isMulti: false, allowsMultiple: false, allowsUnique: false },
   { key: 'checkbox', type: 'checkbox', isMulti: false, allowsMultiple: false, allowsUnique: false },
   { key: 'select', type: 'select', isMulti: false, allowsMultiple: false, allowsUnique: false },
   { key: 'multi_select', type: 'select', isMulti: true, allowsMultiple: false, allowsUnique: false },
@@ -124,6 +127,8 @@ const TYPE_WORDS: readonly (readonly [RegExp, GuessedType])[] = [
   [/^(owner|assignee|assigned to|account owner|manager|rep|lead owner)$/, 'actor_reference'],
   [/\b(amount|price|cost|fee|revenue|budget|salary|value|total|balance|spend|mrr|arr)\b/, 'currency'],
   [/\b(quantity|qty|count|number|age|hours|score|units|size|weight|seats|year|bedrooms|capacity)\b/, 'number'],
+  // A time of day in the name is a date and time (the field types pass): Start time, Meeting at, Last contacted at.
+  [/\b(time|timestamp|datetime)\b|\bat$/, 'timestamp'],
   [/\b(date|deadline|due|birthday|birth|start|end|created|renewal|expires|expiry|closed)\b/, 'date'],
   [/\b(address|city|country|location|region|state)\b/, 'location'],
   [/\b(rating|stars)\b/, 'rating'],

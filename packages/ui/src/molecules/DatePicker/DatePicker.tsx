@@ -37,6 +37,7 @@ import { Button } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { memoIntl } from '../../lib/intl-memo.ts';
+import { formatClock } from '../../lib/moment.ts';
 import { firstDayOfWeek, monthStep, weekStartDay, type WeekStart } from '../../lib/month.ts';
 import { parseDateText } from '../../lib/parse-date-text.ts';
 import { parseDateInput } from '../../lib/parse-input.ts';
@@ -415,19 +416,33 @@ function TypeDate({ today, startText = '' }: { readonly today: CalendarDate; rea
 /** The key of the last quick pick, No date. Never a pick's label. */
 const NO_DATE = 'no-date';
 
+/** The key of Now, the first quick pick of a date and time. Never a pick's label. */
+const NOW = 'now';
+
 /**
  * Quick picks as an inline menu, one tab stop with the arrows, each with the day it means at the end ("Tomorrow ·
  * Sat 31 Oct"), and No date last.
  */
-function QuickPicks({ isClearable, today }: { readonly isClearable: boolean; readonly today: CalendarDate }) {
+function QuickPicks({
+  isClearable,
+  today,
+  onNow,
+}: {
+  readonly isClearable: boolean;
+  readonly today: CalendarDate;
+  readonly onNow: (() => void) | undefined;
+}) {
   const state = useContext(DatePickerStateContext);
-  const { locale, weekStart } = useFormatSettings();
+  const { locale, weekStart, timeZone } = useFormatSettings();
+  const now = useNow();
   const dayLabel = useDayLabel();
   if (state === null) return null;
   const picks = quickPicks(today, locale, weekStart);
   const choose = (key: MenuKey) => {
     const pick = picks.find((each) => each.label === key);
-    if (key === NO_DATE) state.setValue(null);
+    // Now sets the day and the time together: the caller, which holds the time, writes both.
+    if (key === NOW && onNow !== undefined) onNow();
+    else if (key === NO_DATE) state.setValue(null);
     else if (pick !== undefined) state.setValue(pick.date);
     else return;
     state.close();
@@ -435,6 +450,11 @@ function QuickPicks({ isClearable, today }: { readonly isClearable: boolean; rea
   return (
     <div className={styles.picks}>
       <Menu label={strings.quickPicks} isInline onAction={choose}>
+        {onNow !== undefined && (
+          <MenuItem id={NOW} meta={formatClock(new Date(now).toISOString(), locale, timeZone)}>
+            {strings.now}
+          </MenuItem>
+        )}
         {picks.map((pick) => (
           <MenuItem key={pick.label} id={pick.label} meta={dayLabel(pick.date)}>
             {pick.label}
@@ -520,6 +540,11 @@ export interface DatePickerProps extends DateFieldLook {
   readonly showQuickPicks?: boolean;
   /** What "Type a date" starts with: the key that opened a grid cell's editor, so "t" then "omorrow" reads on. */
   readonly startText?: string;
+  /**
+   * Adds Now first to the quick picks, with the time it means (the Date and time field: the field types pass).
+   * Choosing it calls this and closes the calendar; the caller sets the day and the time together.
+   */
+  readonly onNow?: () => void;
 }
 
 function FieldParts({ look }: { readonly look: DateFieldLook }) {
@@ -610,6 +635,7 @@ export function DatePicker({
   onChange,
   showQuickPicks = true,
   startText,
+  onNow,
   ...look
 }: DatePickerProps) {
   const isInPopover = use(InPopover);
@@ -640,7 +666,7 @@ export function DatePicker({
         >
           <CalendarBody today={today} hasTodayPick={showQuickPicks} />
         </Calendar>
-        {showQuickPicks && <QuickPicks isClearable={look.isRequired !== true} today={today} />}
+        {showQuickPicks && <QuickPicks isClearable={look.isRequired !== true} today={today} onNow={onNow} />}
       </Popover>
     </AriaDatePicker>
   );

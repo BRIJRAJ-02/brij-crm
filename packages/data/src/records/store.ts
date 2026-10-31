@@ -21,6 +21,11 @@ export interface RecordBody {
   readonly versions?: Readonly<Record<string, string>>;
   /** A multi reference cell's full link count, when its list was cut short; it travels with the cell. */
   readonly linkTotals?: Readonly<Record<string, number>>;
+  /**
+   * The record's open comment threads, when a read asked for them (a table row's and a board card's count). A read
+   * that didn't carries none, and the store keeps the count it holds.
+   */
+  readonly openThreads?: number;
 }
 
 /** Values by attribute id: what one edit changes. */
@@ -111,6 +116,13 @@ export interface RecordStore<Row extends RecordBody> {
  * links and its total always come from the same read.
  */
 export function newerBase<Row extends RecordBody>(current: Row | undefined, incoming: Row): Row {
+  const merged = mergedBase(current, incoming);
+  // A read that didn't ask for the comment count (a write's answer, a partial read) keeps the one the store holds.
+  if (merged.openThreads !== undefined || current?.openThreads === undefined) return merged;
+  return { ...merged, openThreads: current.openThreads };
+}
+
+function mergedBase<Row extends RecordBody>(current: Row | undefined, incoming: Row): Row {
   if (current === undefined || current === incoming) return incoming;
   if ((incoming.revision ?? 0) < (current.revision ?? 0)) {
     // Older: only attributes the store never held come from it (a column just shown, read before a write), and

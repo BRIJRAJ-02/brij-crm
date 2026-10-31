@@ -38,6 +38,7 @@ export const recordsRouter = member.records.router({
           ...(input.filter === undefined ? {} : { filter: input.filter }),
           ...(input.sorts === undefined ? {} : { sorts: input.sorts }),
           ...(input.attributeIds === undefined ? {} : { attributeIds: input.attributeIds }),
+          ...(input.threadCounts === true ? { threadCounts: true } : {}),
           ...(input.now === undefined ? {} : { now: input.now }),
           ...(input.timeZone === undefined ? {} : { timeZone: input.timeZone }),
         },
@@ -137,6 +138,7 @@ export const recordsRouter = member.records.router({
           ...(input.filter === undefined ? {} : { filter: input.filter }),
           ...(input.sorts === undefined ? {} : { sorts: input.sorts }),
           ...(input.attributeIds === undefined ? {} : { attributeIds: input.attributeIds }),
+          ...(input.threadCounts === true ? { threadCounts: true } : {}),
           ...(input.limit === undefined ? {} : { limit: input.limit }),
           ...(input.probeArchived === undefined ? {} : { probeArchived: input.probeArchived }),
           ...(input.now === undefined ? {} : { now: input.now }),
@@ -151,7 +153,9 @@ export const recordsRouter = member.records.router({
     }),
   ),
   get: member.records.get.handler(({ context, input }) =>
-    readRecordsById(context.scope, input.ids, input.attributeIds),
+    readRecordsById(context.scope, input.ids, input.attributeIds, {
+      ...(input.threadCounts === true ? { threadCounts: true } : {}),
+    }),
   ),
   // The record page (spec 0017): a page of its timeline, and a record in the trash, which opens read only.
   activity: member.records.activity.handler(async ({ context, input }) => {
@@ -187,7 +191,12 @@ export const recordsRouter = member.records.router({
           hooks,
         ),
       );
-      return { ...result.record, written: result.written, echoes };
+      return {
+        ...result.record,
+        written: result.written,
+        ...(result.filedCompany === undefined ? {} : { filedCompany: result.filedCompany }),
+        echoes,
+      };
     } catch (error) {
       throw withInputFields(error, { ID_TAKEN: 'id' });
     }
@@ -200,18 +209,28 @@ export const recordsRouter = member.records.router({
           recordId: input.recordId,
           values: input.values,
           ...(input.timeZone === undefined ? {} : { timeZone: input.timeZone }),
+          ...(input.noFiling === true ? { noFiling: true } : {}),
         },
         hooks,
       ),
     );
-    return { ...result.record, written: result.written, echoes };
+    return {
+      ...result.record,
+      written: result.written,
+      ...(result.filedCompany === undefined ? {} : { filedCompany: result.filedCompany }),
+      echoes,
+    };
   }),
   // One write for up to 500 records (spec 0006, AC-50): 200 with each record's outcome.
   setValuesBatch: member.records.setValuesBatch.handler(async ({ context, input }) => {
     const { result, echoes } = await commitCounted(context, { mutationId: input.mutationId }, (hooks) =>
       editRecords(
         context.scope,
-        { items: input.items, ...(input.timeZone === undefined ? {} : { timeZone: input.timeZone }) },
+        {
+          items: input.items,
+          ...(input.timeZone === undefined ? {} : { timeZone: input.timeZone }),
+          ...(input.noFiling === true ? { noFiling: true } : {}),
+        },
         hooks,
       ),
     );
@@ -222,7 +241,12 @@ export const recordsRouter = member.records.router({
     const { result, echoes } = await commitCounted(context, { mutationId: input.mutationId }, (hooks) =>
       deleteRecords(
         context.scope,
-        { objectId: input.objectId, recordIds: input.recordIds, batchId: input.batchId },
+        {
+          objectId: input.objectId,
+          recordIds: input.recordIds,
+          batchId: input.batchId,
+          ...(input.unlinkedOnly === true ? { unlinkedOnly: true } : {}),
+        },
         hooks,
       ),
     );

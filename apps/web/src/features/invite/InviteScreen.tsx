@@ -5,7 +5,7 @@
 // Leaves out: the invite link and domain joins (slice 6), and making an account here (sign in does that).
 // Look: first run's split card (spec 0036), lean: one line, one action, and the workspace sketched beside it.
 import { isDataError, ROLE_LABELS, type DataLayer, type InvitePeek, type SignedInUser } from '@crm/data';
-import { AuthLayout, Button, ButtonLink, Callout, Field, Form, WorkspacePreview } from '@crm/ui';
+import { AuthLayout, Button, ButtonLink, Callout, Field, Form, sharedStrings, WorkspacePreview } from '@crm/ui';
 import { useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 import { PRODUCT_LOGO } from '../../brand.ts';
@@ -86,7 +86,7 @@ export function InviteScreen({ data, token, invitation, user }: InviteScreenProp
           setStanding({ kind: 'mismatch', message: failure.message });
           return;
         }
-        setStanding({ kind: 'refused', message: isDataError(failure) ? failure.message : strings.somethingWrong });
+        setStanding({ kind: 'refused', message: isDataError(failure) ? failure.message : sharedStrings.couldntDoThat });
       },
     );
   };

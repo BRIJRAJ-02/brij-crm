@@ -38,6 +38,11 @@ export const DeleteManyInput = WorkspaceScoped.extend({
     .max(BULK_INLINE_MAX * 2, BULK_TOO_MANY_MESSAGE),
   batchId: uuidV7('The batch id must be a UUID v7.'),
   mutationId: Uuid,
+  /**
+   * Only records nothing live links to (spec 0059, a filed company taken
+   * back): one that something links to stays, refused `IN_USE`.
+   */
+  unlinkedOnly: z.boolean().optional(),
 });
 /** Records to move to the trash. */
 export type DeleteManyInput = z.infer<typeof DeleteManyInput>;
@@ -45,7 +50,8 @@ export type DeleteManyInput = z.infer<typeof DeleteManyInput>;
 /**
  * One record's outcome in a bulk delete: `deleted` (by this call, or an
  * earlier try of it), `already-deleted` by another delete (`RECORD_DELETED`),
- * or `refused` (`NOT_FOUND`: unknown, of another object, or hidden).
+ * or `refused` (`NOT_FOUND`: unknown, of another object, or hidden; `IN_USE`:
+ * linked, with `unlinkedOnly`).
  */
 export const DeleteOutcome = z.object({
   recordId: Uuid,

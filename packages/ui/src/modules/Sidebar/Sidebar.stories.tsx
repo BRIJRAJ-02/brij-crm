@@ -91,7 +91,12 @@ function SampleSidebar({
             Deals
           </NavItem>
         </NavSection>
-        <NavSection title="Lists" isLoading={isLoading} emptyLabel="Lists you make show here.">
+        <NavSection
+          title="Lists"
+          isLoading={isLoading}
+          emptyLabel="Lists you make show here."
+          add={{ label: 'New list', onAdd: () => undefined }}
+        >
           {hasLists && (
             <NavItem icon="pin" hue="purple" href="/lists/sales">
               Sales pipeline
@@ -312,11 +317,13 @@ export const CollapsedLoading: Story = {
   },
 };
 
-/** No lists yet: the section says what goes there. */
+/** No lists yet: the section offers New list where it shows (its empty label gives way to the action). */
 export const Empty: Story = {
   args: { hasLists: false },
   play: async ({ canvas }) => {
-    await expect(canvas.getByText('Lists you make show here.')).toBeInTheDocument();
+    await expect(canvas.queryByText('Lists you make show here.')).toBeNull();
+    // Lists' "+" (spec 0048): after the label, and, with no lists, in the section's body where it shows.
+    await expect(canvas.getAllByRole('button', { name: 'New list' })).toHaveLength(2);
   },
 };
 

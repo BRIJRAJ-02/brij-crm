@@ -491,7 +491,7 @@ export const profileItems = auth.table(
     check('profile_items_position', sql`${t.position} between 0 and 999`),
     check('profile_items_placed', sql`(${t.archivedAt} is null) = (${t.position} is not null)`),
     check('profile_items_data', sql`jsonb_typeof(${t.data}) = 'object' and pg_column_size(${t.data}) <= 16384`),
-    // A next times block names a booking page as a page block does (spec 0061, migration 0137).
+    // A next times block names a booking page as a page block does (spec 0061, migration 0144).
     check('profile_items_target', sql`(${t.kind} in ('page', 'times')) = (${t.pageId} is not null)`),
     check('profile_items_form', sql`(${t.kind} = 'form') = (${t.formId} is not null)`),
     check('profile_items_page', sql`${t.kind} not in ('page', 'times') or ${t.pageId} is not null`),
@@ -658,7 +658,7 @@ export const profileItemPressDays = auth.table(
  * it (`crm_profile_image_public`), and one no block uses is swept after a day. Goes with its page
  * (`public_profiles`, so a purged workspace's go too) and with its person.
  *
- * Forced row level security with one policy, for crm_handle, whose definers are the only way in (migration 0137);
+ * Forced row level security with one policy, for crm_handle, whose definers are the only way in (migration 0144);
  * crm_app holds no grant, and the identity login's default grant reads nothing through the policy.
  */
 export const profileImages = auth.table(

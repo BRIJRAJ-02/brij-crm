@@ -347,7 +347,7 @@ export const NewFormat: Story = {
     await userEvent.click(canvas.getByRole('button', { name: 'Add rule' }));
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Format' }));
     await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
-    await expect(canvas.getByText('Not set up yet. Fill in its settings, or delete it.')).toBeInTheDocument();
+    await expect(canvas.getByText('Not set up yet.')).toBeInTheDocument();
     await waitFor(() => expect(document.activeElement?.getAttribute('aria-haspopup')).toBe('listbox'));
   },
 };

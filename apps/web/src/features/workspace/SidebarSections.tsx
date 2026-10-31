@@ -1,12 +1,24 @@
 // Brief
 // Purpose: the main sidebar's sections in the member's order (spec 0034): Records, Lists and Scheduling.
-// Main task: go to an object or a Scheduling page; fold, reorder and hide (with Undo), each kept for the member on every device.
+// Main task: go to an object, a list or a Scheduling page, or make a list from Lists' "+" (spec 0048); fold, reorder and hide (with Undo), each kept for the member on every device.
 // Leaves out: the workspace menu and the pages above the sections (the frame's), the foot (Trash, Settings, Help), and
 // Favourites (no longer drawn, owner 30 October 2026).
-import type { DataLayer, NavEntry, NavOperation, NavSectionKey, NavState, NavUniverse, ObjectSummary } from '@crm/data';
+import type {
+  DataLayer,
+  ListView,
+  NavEntry,
+  NavOperation,
+  NavSectionKey,
+  NavState,
+  NavUniverse,
+  ObjectSummary,
+} from '@crm/data';
 import { moveIndexFor, navKey, sectionOrder } from '@crm/data/navigation';
 import { Menu, MenuItem, NavGroup, NavItem, NavSection, type Toasts } from '@crm/ui';
+import { useLocation } from '@tanstack/react-router';
 import { objectHref } from './objects.ts';
+import { listHref } from '../lists/paths.ts';
+import { strings as listStrings } from '../lists/strings.ts';
 import { drawnSections, PAGE_LINKS, prefsOf, sectionMoveIndex, type SidebarPage } from './sidebar.ts';
 import { strings } from './strings.ts';
 
@@ -19,6 +31,10 @@ export interface SidebarSectionsProps {
   readonly universe: NavUniverse;
   /** The workspace's objects; undefined while they load (Records shows skeleton rows). */
   readonly objects: readonly ObjectSummary[] | undefined;
+  /** The lists the member may read (spec 0048): the Lists section's items. */
+  readonly lists?: readonly ListView[];
+  /** New list, for whoever may make one: the "+" on the Lists label (AC-4801). */
+  readonly onNewList?: () => void;
   /** The `apiSlug` of the object whose page is open. */
   readonly currentObject?: string;
   readonly currentPage?: SidebarPage;
@@ -39,6 +55,8 @@ export function SidebarSections({
   nav,
   universe,
   objects,
+  lists = [],
+  onNewList,
   currentObject,
   currentPage,
   toasts,
@@ -62,8 +80,39 @@ export function SidebarSections({
     });
   };
   const objectOf = new Map((objects ?? []).map((object) => [object.id, object]));
-  const context: ItemContext = { slug, objectOf, currentObject, currentPage, change, hideObject };
-  const sections = drawnSections(nav, universe);
+  const listOf = new Map(lists.map((list) => [list.id, list]));
+  // Hiding a list says where it went, with Undo, as an object's does.
+  const hideList = (list: ListView) => {
+    change({ op: 'hide', kind: 'list', id: list.id });
+    toasts.toast({
+      tone: 'success',
+      message: listStrings.hidden(list.name),
+      action: {
+        label: listStrings.undo,
+        onAction: () => {
+          change({ op: 'show', kind: 'list', id: list.id });
+        },
+      },
+    });
+  };
+  // The open list (spec 0048): its address names it, as an object's page names its object.
+  const path = useLocation({ select: (location) => location.pathname });
+  const currentList = lists.find((list) => {
+    const href = listHref(slug, list);
+    return path === href || path.startsWith(`${href}/`);
+  })?.id;
+  const context: ItemContext = {
+    slug,
+    objectOf,
+    listOf,
+    currentObject,
+    currentList,
+    currentPage,
+    change,
+    hideObject,
+    hideList,
+  };
+  const sections = drawnSections(nav, universe, onNewList !== undefined);
   const order = sectionOrder(prefsOf(nav));
   const drawn = sections.map((section) => section.key);
   const moveSection = (key: NavSectionKey, visibleIndex: number) => {
@@ -84,6 +133,10 @@ export function SidebarSections({
             title={section.title}
             isLoading={section.key === 'records' && objects === undefined}
             {...(section.key === 'records' ? { emptyLabel: strings.noObjects } : {})}
+            {...(section.key === 'lists' ? { emptyLabel: listStrings.noLists } : {})}
+            {...(section.key === 'lists' && onNewList !== undefined
+              ? { add: { label: listStrings.newList, onAdd: onNewList } }
+              : {})}
             isFolded={section.isFolded}
             onFoldChange={(isFolded) => {
               change({ op: 'fold', section: section.key, folded: isFolded });
@@ -149,14 +202,20 @@ export function itemMenu(name: string, label: string, onAction: () => void) {
 interface ItemContext {
   readonly slug: string;
   readonly objectOf: ReadonlyMap<string, ObjectSummary>;
+  readonly listOf: ReadonlyMap<string, ListView>;
   readonly currentObject: string | undefined;
+  readonly currentList: string | undefined;
   readonly currentPage: SidebarPage | undefined;
   readonly change: (op: NavOperation) => void;
   readonly hideObject: (object: ObjectSummary) => void;
+  readonly hideList: (list: ListView) => void;
 }
 
 /** One entry as its NavItem: an object or a Scheduling page; nothing it can't draw. */
-function itemOf(entry: NavEntry, { slug, objectOf, currentObject, currentPage, change, hideObject }: ItemContext) {
+function itemOf(
+  entry: NavEntry,
+  { slug, objectOf, listOf, currentObject, currentList, currentPage, change, hideObject, hideList }: ItemContext,
+) {
   const key = navKey(entry);
   const hide = () => {
     change({ op: 'hide', kind: entry.kind, id: entry.id });
@@ -196,6 +255,25 @@ function itemOf(entry: NavEntry, { slug, objectOf, currentObject, currentPage, c
       </NavItem>,
     ];
   }
-  // Views and records (the favourites, which `drawnSections` leaves out) and lists (#51) aren't drawn.
+  if (entry.kind === 'list') {
+    const list = listOf.get(entry.id);
+    if (list === undefined) return [];
+    return [
+      <NavItem
+        key={key}
+        id={key}
+        icon={list.icon}
+        hue={list.hue}
+        href={listHref(slug, list)}
+        isCurrent={list.id === currentList}
+        menu={itemMenu(list.name, strings.hideFromSidebar, () => {
+          hideList(list);
+        })}
+      >
+        {list.name}
+      </NavItem>,
+    ];
+  }
+  // Views and records (the favourites, which `drawnSections` leaves out) aren't drawn.
   return [];
 }

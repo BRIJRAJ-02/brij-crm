@@ -156,9 +156,11 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       order by 1
     `);
     expect(definers.rows).toEqual([
-      // A link page's picture kept (spec 0061, migration 0137).
+      // A link page's picture kept (spec 0061, migration 0144).
       { name: 'crm_add_profile_image', owner: 'crm_handle' },
       { name: 'crm_archive_profile_item', owner: 'crm_handle' },
+      // The workspaces holding an enabled task due automation, ids only (parity #53, migration 0140).
+      { name: 'crm_automation_due_workspaces', owner: 'crm_sweep' },
       { name: 'crm_booking_by_token', owner: 'crm_booking_lookup' },
       { name: 'crm_booking_owner_pages', owner: 'crm_booking_lookup' },
       { name: 'crm_booking_owner_slugs', owner: 'crm_booking_lookup' },
@@ -176,6 +178,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_delete_profile_item', owner: 'crm_handle' },
       // Pictures no block uses, dropped by the daily cleanup (spec 0061).
       { name: 'crm_drop_profile_images', owner: 'crm_handle' },
+      // The workspace's automation task (parity #53, migration 0140).
+      { name: 'crm_enqueue_automation', owner: 'crm_queue' },
       { name: 'crm_enqueue_booking_mail', owner: 'crm_queue' },
       { name: 'crm_enqueue_calendar_sync', owner: 'crm_queue' },
       { name: 'crm_enqueue_email', owner: 'crm_queue' },
@@ -239,7 +243,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_save_social_links', owner: 'crm_handle' },
       { name: 'crm_search_similar', owner: 'crm_search' },
       { name: 'crm_search_text', owner: 'crm_search' },
-      // The link page's Live or Private switch (spec 0058, AC-23, migration 0135).
+      // The link page's Live or Private switch (spec 0058, AC-23, migration 0142).
       { name: 'crm_set_public_profile_live', owner: 'crm_handle' },
       // Private until its owner acts (27 Oct 2026, migration 0116).
       { name: 'crm_show_public_profile', owner: 'crm_handle' },
@@ -269,6 +273,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_add_profile_image', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       // A plpgsql body: it raises PROFILE_ITEM_LIMIT and the one heading, one page rules on a restore.
       { name: 'crm_archive_profile_item', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
+      { name: 'crm_automation_due_workspaces', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_booking_by_token', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_booking_owner_pages', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_booking_owner_slugs', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
@@ -288,6 +293,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_delete_profile_item', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       // A plpgsql body: it answers how many unused pictures' rows it removed.
       { name: 'crm_drop_profile_images', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
+      { name: 'crm_enqueue_automation', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_enqueue_booking_mail', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_enqueue_calendar_sync', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_enqueue_email', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
@@ -422,6 +428,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_enqueue_email',
         'crm_enqueue_notification_email',
         'crm_enqueue_scheduling_notice',
+        'crm_enqueue_automation',
       ],
       [
         'crm_enqueue_job(uuid, timestamp with time zone)',
@@ -430,18 +437,25 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_enqueue_email(uuid)',
         'crm_enqueue_notification_email(uuid)',
         'crm_enqueue_scheduling_notice(uuid, uuid)',
+        'crm_enqueue_automation()',
       ],
-      ['app', 'app', 'app', 'app', 'app', 'app'],
+      ['app', 'app', 'app', 'app', 'app', 'app', 'app'],
     ],
     [
       'crm_sweep',
-      ['crm_workspace_ids', 'crm_notification_digests_due', 'crm_calendar_health_candidates'],
+      [
+        'crm_workspace_ids',
+        'crm_notification_digests_due',
+        'crm_calendar_health_candidates',
+        'crm_automation_due_workspaces',
+      ],
       [
         'crm_workspace_ids(uuid, integer)',
         'crm_notification_digests_due(uuid, uuid, integer)',
         'crm_calendar_health_candidates(integer)',
+        'crm_automation_due_workspaces(uuid, integer)',
       ],
-      ['worker', 'worker', 'worker'],
+      ['worker', 'worker', 'worker', 'worker'],
     ],
     [
       'crm_purge',
@@ -553,11 +567,11 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         // A link page made for every membership (26 Oct 2026, migration 0116).
         'crm_ensure_public_profile',
         'crm_show_public_profile',
-        // The link page's Live or Private switch (spec 0058, AC-23, migration 0135).
+        // The link page's Live or Private switch (spec 0058, AC-23, migration 0142).
         'crm_set_public_profile_live',
         // A deleted account's handles freed after their 90 days (migration 0126).
         'crm_sweep_released_handles',
-        // The link page's own accent and photos (spec 0060, migration 0136): read for its look stylesheet and its
+        // The link page's own accent and photos (spec 0060, migration 0143): read for its look stylesheet and its
         // image routes, and set from its owner's Design panel.
         'crm_profile_look',
         'crm_save_profile_accent',
@@ -565,7 +579,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         // An old handle let go to make room at the cap (late trap #76, migration 0124): called only by the two
         // above that take a handle, as crm_pack_profile_items is, so it has no signature below.
         'crm_make_handle_room',
-        // Spec 0061 (migration 0137). The kind cap and the picture ids a block names run only inside the others,
+        // Spec 0061 (migration 0144). The kind cap and the picture ids a block names run only inside the others,
         // as the pack does, so they have no signature below.
         'crm_profile_kind_cap',
         'crm_profile_item_images',
@@ -1036,7 +1050,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
   });
 
   describe('crm_workspace_ids (spec 0008, milestone 3, AC-112, AC-115)', () => {
-    it('gives crm_sweep select on workspaces.id and deleted_at, the digest’s columns and the calendar health sweep’s, and nothing else', async () => {
+    it('gives crm_sweep select on workspaces.id and deleted_at, the digest’s columns, the calendar health sweep’s and the automations sweep’s, and nothing else', async () => {
       // From the catalog, by every route, as for crm_relay: no table privilege, two column grants, no role.
       const tables = await owner.query<{ table: string }>(`
         select n.nspname || '.' || c.relname as table
@@ -1053,6 +1067,11 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         where a.grantee = 'crm_sweep'::regrole order by 1
       `);
       expect(columns.rows).toEqual([
+        // The automations sweep's (parity #53, migration 0140).
+        { column: 'automations.deleted_at', privilege: 'SELECT' },
+        { column: 'automations.enabled', privilege: 'SELECT' },
+        { column: 'automations.trigger_kind', privilege: 'SELECT' },
+        { column: 'automations.workspace_id', privilege: 'SELECT' },
         // The calendar health sweep's (spec 0037, migration 0134).
         { column: 'calendar_connections.health_broken_at', privilege: 'SELECT' },
         { column: 'calendar_connections.health_notified_at', privilege: 'SELECT' },
@@ -1486,6 +1505,54 @@ describe('isolation', () => {
     await expect(
       db.withWorkspace(a.workspaceId, (tx) => tx.execute(sql`delete from records where id = ${inA.recordId}`)),
     ).rejects.toMatchObject({ cause: { code: '23503', constraint: 'notes_record' } });
+    // A note's links (migration 0135): its own workspace's only, and never to another workspace's record.
+    await db.withWorkspace(a.workspaceId, (tx) =>
+      tx.execute(
+        sql`insert into note_records (workspace_id, note_id, record_id, position, created_by_type) values (${a.workspaceId}, ${inA.noteId}, ${inA.recordId}, 0, 'system')`,
+      ),
+    );
+    const linksFromB = await db.withWorkspace(b.workspaceId, (tx) =>
+      tx.execute<{ note_id: string }>(sql`select note_id from note_records`),
+    );
+    expect(linksFromB.rows).toEqual([]);
+    await expect(
+      db.withWorkspace(a.workspaceId, (tx) =>
+        tx.execute(
+          sql`insert into note_records (workspace_id, note_id, record_id, position, created_by_type) values (${a.workspaceId}, ${inA.noteId}, ${inB.recordId}, 1, 'system')`,
+        ),
+      ),
+    ).rejects.toMatchObject({ cause: { code: '23503', constraint: 'note_records_record' } });
+    // A call or meeting logged on a record (migration 0137): its kind, duration and outcome are held by the database.
+    const logged = (columns: string) =>
+      db.withWorkspace(a.workspaceId, (tx) =>
+        tx.execute(
+          sql.raw(`update notes set ${columns} where workspace_id = '${a.workspaceId}' and id = '${inA.noteId}'`),
+        ),
+      );
+    await expect(logged(`kind = 'webinar'`)).rejects.toMatchObject({
+      cause: { code: '23514', constraint: 'notes_kind' },
+    });
+    await expect(logged(`duration_minutes = 30`)).rejects.toMatchObject({
+      cause: { code: '23514', constraint: 'notes_duration' },
+    });
+    await expect(logged(`outcome = 'connected'`)).rejects.toMatchObject({
+      cause: { code: '23514', constraint: 'notes_outcome' },
+    });
+    await expect(logged(`kind = 'call', duration_minutes = 1441`)).rejects.toMatchObject({
+      cause: { code: '23514', constraint: 'notes_duration' },
+    });
+    await expect(logged(`kind = 'call', outcome = 'held'`)).rejects.toMatchObject({
+      cause: { code: '23514', constraint: 'notes_outcome' },
+    });
+    await expect(logged(`kind = 'meeting', outcome = 'connected'`)).rejects.toMatchObject({
+      cause: { code: '23514', constraint: 'notes_outcome' },
+    });
+    await logged(`kind = 'meeting', duration_minutes = 60, outcome = 'no_show'`);
+    // Another workspace reads none of it.
+    const seenFromB = await db.withWorkspace(b.workspaceId, (tx) =>
+      tx.execute<{ kind: string }>(sql`select kind from notes where kind <> 'note'`),
+    );
+    expect(seenFromB.rows).toEqual([]);
   });
 
   it("reads none of another workspace's comments or notifications, and refuses either on its record (spec 0038, AC-1182)", async () => {
@@ -2048,7 +2115,7 @@ describe('the auth schema: global identity, outside row level security (spec 000
     // And a link page's block, which may name a booking page by its workspace and id (migration 0098): never read
     // for access, since whether a visitor sees the page is still the booking lookup's call.
     expect(tables.rows.filter((row) => row.workspace).map((row) => row.table)).toEqual([
-      // A link page's bookings, pictures and views by fact (spec 0061, migration 0137).
+      // A link page's bookings, pictures and views by fact (spec 0061, migration 0144).
       'profile_booking_days',
       'profile_images',
       'profile_items',
@@ -2062,7 +2129,7 @@ describe('the auth schema: global identity, outside row level security (spec 000
       'workspace_directory',
       'workspace_membership',
     ]);
-    // The grants below are the fence. Spec 0061's three tables (migration 0137) also force row level security, with
+    // The grants below are the fence. Spec 0061's three tables (migration 0144) also force row level security, with
     // one policy each, for crm_handle alone, so the identity login's default grant reads nothing there.
     expect(tables.rows.filter((row) => row.enabled).map((row) => row.table)).toEqual([
       'profile_booking_days',
@@ -2189,7 +2256,7 @@ describe('the auth schema: global identity, outside row level security (spec 000
       // already made, and insert to make one. Never update or delete, so an import once made is what it was.
       'link_imports INSERT',
       'link_imports SELECT',
-      // A link page's bookings by day (spec 0061, migration 0137), through crm_handle's functions only.
+      // A link page's bookings by day (spec 0061, migration 0144), through crm_handle's functions only.
       'profile_booking_days DELETE',
       'profile_booking_days INSERT',
       'profile_booking_days SELECT',
@@ -2219,7 +2286,7 @@ describe('the auth schema: global identity, outside row level security (spec 000
       'profile_view_days INSERT',
       'profile_view_days SELECT',
       'profile_view_days UPDATE',
-      // Its views by fact (spec 0061, migration 0137).
+      // Its views by fact (spec 0061, migration 0144).
       'profile_view_source_days DELETE',
       'profile_view_source_days INSERT',
       'profile_view_source_days SELECT',
@@ -2293,12 +2360,12 @@ describe('the auth schema: global identity, outside row level security (spec 000
       // Letting an old handle go into the hold to make room at the cap (late trap #76, migration 0124): the person
       // cleared, and only through crm_make_handle_room.
       'auth.public_handles.user_id UPDATE',
-      // The page's own accent pair and photos (spec 0060, migration 0136): eight columns, and only through
+      // The page's own accent pair and photos (spec 0060, migration 0143): eight columns, and only through
       // crm_save_profile_accent and crm_save_profile_image. These lines are the whole of what that spec widened.
       'auth.public_profiles.accent UPDATE',
       'auth.public_profiles.accent_dark UPDATE',
       'auth.public_profiles.bio UPDATE',
-      // When the page became its owner's choice (spec 0058, AC-23, migration 0135): only through
+      // When the page became its owner's choice (spec 0058, AC-23, migration 0142): only through
       // crm_show_public_profile and crm_set_public_profile_live.
       'auth.public_profiles.claimed_at UPDATE',
       'auth.public_profiles.cover_path UPDATE',
@@ -2311,7 +2378,7 @@ describe('the auth schema: global identity, outside row level security (spec 000
       // Whether search engines may show their page (spec 0055, migration 0108): one more column, and only
       // through crm_save_profile_indexable. This line is the whole of what that spec widened.
       'auth.public_profiles.indexable UPDATE',
-      // The share QR's style (spec 0061, migration 0137), only through crm_save_profile_qr_style.
+      // The share QR's style (spec 0061, migration 0144), only through crm_save_profile_qr_style.
       'auth.public_profiles.qr_style UPDATE',
       // The picture a pasted link shows instead of the drawn card (spec 0055, migration 0112): three more
       // columns, and only through crm_save_profile_share_image. The bytes are read back by

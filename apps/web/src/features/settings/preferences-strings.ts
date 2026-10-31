@@ -12,7 +12,6 @@ export const strings = {
   /** Dates (the member's own, in this workspace, on every device). */
   dates: 'Dates and time',
   timeZone: 'Time zone',
-  timeZoneDescription: 'Dates and times across the app show in this zone.',
   dateFormat: 'Date format',
   weekStart: 'Week starts on',
   automatic: (example: string) => `Automatic (${example})`,
@@ -22,7 +21,6 @@ export const strings = {
   /** Where the workspace opens. */
   startPage: 'Start page',
   landing: 'Open on',
-  landingDescription: 'Where this workspace opens.',
   home: 'Home',
   tasks: 'Tasks',
   /** The save toast and its Undo. */
@@ -35,7 +33,6 @@ export const strings = {
   /** The sidebar (spec 0034): what it shows, kept for the person on every device. */
   sidebar: 'Sidebar',
   customise: 'Items in your sidebar',
-  customiseDescription: 'Show, hide or reorder what’s in your sidebar.',
   /** The row's button; its name for screen readers stays "Customise sidebar", the dialog it opens. */
   customiseAction: 'Customise',
 } as const;

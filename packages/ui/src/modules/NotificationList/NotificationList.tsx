@@ -30,7 +30,8 @@ import styles from './NotificationList.module.css';
 import { strings } from './strings.ts';
 
 /** Why a member was notified. */
-export type NotificationItemKind = 'mention' | 'reply' | 'task_assigned' | 'form_submission' | 'join_request';
+export type NotificationItemKind =
+  'mention' | 'reply' | 'task_assigned' | 'task_due' | 'form_submission' | 'join_request' | 'automation';
 
 /** One notification, as the inbox shows it. */
 export interface NotificationItem {
@@ -76,8 +77,6 @@ export interface NotificationListProps {
   /** What an empty list says, in place of "You’re all caught up.". */
   readonly emptyTitle?: string;
   readonly emptyIcon?: 'inbox' | 'check' | 'list-filter';
-  /** A line under the empty title saying what will land here, so an empty inbox teaches what it is for. */
-  readonly emptyBody?: string;
   /** Under the empty title: Clear filters. */
   readonly emptyActions?: ReactNode;
 }
@@ -110,7 +109,6 @@ export function NotificationList({
   status = 'ready',
   onRetry,
   emptyTitle,
-  emptyBody,
   emptyIcon = 'inbox',
   emptyActions,
 }: NotificationListProps) {
@@ -146,9 +144,7 @@ export function NotificationList({
         icon={emptyIcon}
         title={emptyTitle ?? strings.empty}
         {...(emptyActions === undefined ? {} : { actions: emptyActions })}
-      >
-        {emptyBody}
-      </EmptyState>
+      />
     );
   }
 

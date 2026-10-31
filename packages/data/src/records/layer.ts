@@ -18,6 +18,7 @@ import type {
   CreateRecordInput,
   DeleteManyInput,
   DeleteManyResults,
+  FiledCompany,
   AddLinksInput,
   LinksWritten,
   RemoveLinksInput,
@@ -47,7 +48,12 @@ import type { Notice } from '../notice.ts';
 import {
   createOwnVersions,
   createUndoStack,
+  filedOf,
+  isCellsEntry,
+  withoutFiled,
   type DeleteEntry,
+  type ExternalEntry,
+  type FiledLink,
   type LinksEntry,
   type LinkStep,
   type UndoCell,
@@ -221,6 +227,8 @@ export interface RecordsApi {
     readonly workspace: string;
     readonly ids: readonly string[];
     readonly attributeIds?: readonly string[];
+    /** Add each record's open comment threads (`openThreads`): what a table row and a board card show. */
+    readonly threadCounts?: boolean;
   }) => Promise<RecordView[]>;
   readonly create: (input: CreateRecordInput) => Promise<WrittenRecord>;
   readonly setValues: (input: SetValuesInput) => Promise<WrittenRecord>;
@@ -263,6 +271,8 @@ interface WriteOptions {
   readonly mutationId?: string;
   /** Refusals that roll back with no cell mark (an undo's `VERSION_CHANGED`, which its own toast counts). */
   readonly quiet?: ReadonlySet<string>;
+  /** An undo putting old values back: the server files no company for it (spec 0059). */
+  readonly noFiling?: boolean;
 }
 
 /** How one record's part of a write ended: landed (`row`), refused (`failure`), or gone on the server. */
@@ -274,6 +284,8 @@ interface RecordOutcome {
   readonly written?: Readonly<Record<string, string>>;
   /** With `row`: each cell's version in the base when the write went out, which it replaced. */
   readonly sentFrom?: ReadonlyMap<string, string>;
+  /** With `row`: the company the write filed the person under by their email (spec 0059). */
+  readonly filed?: FiledCompany;
   readonly failure?: DataError;
   readonly gone?: boolean;
 }
@@ -314,6 +326,8 @@ export type DeleteResult =
       readonly reason?: string;
       readonly recordName?: string;
       readonly undoId?: string;
+      /** With `unlinkedOnly` (spec 0059): how many of the refused stayed because something links to them. */
+      readonly inUse?: number;
     };
 
 /**
@@ -327,6 +341,11 @@ export interface BulkEditRequest {
   readonly isMulti: boolean;
   readonly op: BulkOp;
   readonly value?: unknown;
+  /**
+   * The edits of one Apply, one request per field, share a group: Cmd+Z takes them all back as one step, as the
+   * toast's Undo does (the CRM flow pass, 31 October 2026).
+   */
+  readonly group?: string;
 }
 
 /**
@@ -389,6 +408,8 @@ export type UndoOutcome =
   | { readonly kind: 'uncreated'; readonly objectId: string; readonly recordName: string; readonly deleted: boolean }
   /** A toast's Undo whose action is no longer the newest (a later change, or already undone): nothing was done. */
   | { readonly kind: 'stale' }
+  /** Another store's action undone (spec 0048: a list's entries): its own sentence for the toast. */
+  | { readonly kind: 'external'; readonly message: string; readonly tone: 'success' | 'danger' }
   | {
       readonly kind: 'undone';
       readonly action: UndoKind;
@@ -399,6 +420,42 @@ export type UndoOutcome =
       readonly failed: number;
       /** The action's first cell, which a one cell undo names ("Undid Email on Jane Doe"). */
       readonly first: { readonly recordId: string; readonly attributeId: string; readonly recordName: string };
+    };
+
+/**
+ * A write of this tab filed people under their companies by their emails
+ * (spec 0059, AC-5920): the companies, each with its name ('' when the
+ * writer can't read it) and whether the write made it, and `undo`, which
+ * takes back just the filing (the write itself stays): each person's
+ * Company is cleared while it still holds that link, and a company the write
+ * made goes to the trash while nothing else links to it. The screen words it.
+ */
+export interface FiledNotice {
+  readonly workspace: string;
+  readonly companies: readonly { readonly name: string; readonly made: boolean }[];
+  readonly undo: () => Promise<UnfileOutcome>;
+}
+
+/**
+ * What taking back a filing did (spec 0059, AC-5920): `gone` when its action
+ * is no longer on this tab's stack (undone with it, or past the stack's
+ * depth), else how many links it cleared (`unlinked`), how many it kept
+ * because Company changed since (`kept`), how many made companies went to
+ * the trash (`trashed`) or stayed because something links to them now
+ * (`inUse`), and the first company's name, for the toast. A link refused for
+ * another reason raised its own toast with Retry.
+ */
+export type UnfileOutcome =
+  | { readonly kind: 'gone' }
+  | {
+      readonly kind: 'unfiled';
+      readonly name: string;
+      readonly unlinked: number;
+      readonly kept: number;
+      readonly trashed: number;
+      readonly inUse: number;
+      /** Made companies that stayed for another reason (no delete rights, the network): never said to be in use. */
+      readonly failed: number;
     };
 
 /**
@@ -575,6 +632,8 @@ export interface RecordsLayerOptions {
   readonly memberOf?: (workspace: string) => Promise<string | undefined>;
   /** A value this tab wrote was replaced by someone else's later save (spec 0006, AC-46): the screen words it. */
   readonly onReplaced?: (notice: ReplacedNotice) => void;
+  /** A write of this tab filed people under their companies (spec 0059, AC-5920): the screen words it, with Undo. */
+  readonly onFiled?: (notice: FiledNotice) => void;
   /** The object's primary attribute and its attributes' kinds (spec 0005's `attributes.list` cache until milestone 3). */
   readonly describe?: (workspace: string, objectId: string) => Promise<ObjectShape>;
   /** The member's time zone in a workspace (their Preferences, else the browser's), which relative date filters resolve in (AC-51). */
@@ -807,6 +866,7 @@ export function createRecordsLayer({
   mutations = { sent: () => undefined, answered: () => undefined, forget: () => undefined },
   memberOf = () => Promise.resolve(undefined),
   onReplaced = () => undefined,
+  onFiled = () => undefined,
   describe = () => Promise.resolve({ attributes: [] }),
   timeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone,
   definitionsOf,
@@ -1061,6 +1121,8 @@ export function createRecordsLayer({
   };
   const store = createPlainStore<RecordView>({ now, later });
   // The names of linked records, read by id with the primary attribute only; arriving names redraw that workspace's views.
+  // Other stores' screens showing linked names (spec 0048: a list's rows), told when names arrive.
+  const nameListeners = new Set<(workspace: string) => void>();
   const names = createReferenceNames({
     read: async (workspace, ids) => {
       const rows = await whenFree(() => api.get({ workspace, ids, attributeIds: [] }));
@@ -1070,6 +1132,7 @@ export function createRecordsLayer({
     onNames: (workspace) => {
       for (const entry of viewsOf(workspace)) entry.invalidate();
       subscriptions.renamed(workspace);
+      for (const listener of nameListeners) listener(workspace);
     },
     held: (recordId) => store.get(recordId)?.display,
     later: (run, ms) => {
@@ -2052,8 +2115,16 @@ export function createRecordsLayer({
     void mine.then((outcomes) => {
       const landedIds = outcomes.flatMap((outcome) => (outcome.row === undefined ? [] : [outcome.recordId]));
       if (landedIds.length === 0) return;
+      // A filing's Company link moves rows too (a view filtered or sorted by Company, spec 0059).
       const written = new Set(
-        outcomes.flatMap((outcome) => (outcome.row === undefined ? [] : outcome.cells.map((cell) => cell.attributeId))),
+        outcomes.flatMap((outcome) =>
+          outcome.row === undefined
+            ? []
+            : [
+                ...outcome.cells.map((cell) => cell.attributeId),
+                ...(outcome.filed === undefined ? [] : [outcome.filed.attributeId]),
+              ],
+        ),
       );
       for (const entry of viewsOf(workspace)) {
         if (!landedIds.some((id) => entry.shows(id))) continue;
@@ -2069,7 +2140,17 @@ export function createRecordsLayer({
     if (options.undo !== undefined && objectId !== undefined) {
       const kind = options.undo;
       const entry = mine.then((outcomes) => {
-        undo.push(workspace, { id: mutationId, kind, objectId, cells: undoCells(prepared, outcomes) });
+        const filed = outcomes.flatMap((outcome) =>
+          outcome.filed === undefined ? [] : [filedLink(outcome.recordId, outcome.filed)],
+        );
+        undo.push(workspace, {
+          id: mutationId,
+          kind,
+          objectId,
+          cells: undoCells(prepared, outcomes),
+          ...(filed.length === 0 ? {} : { filed }),
+        });
+        tellFiled(workspace, mutationId, filed);
       });
       // An undo pressed meanwhile waits for this write's answer first (spec 0006).
       const waiting = inflight.get(workspace) ?? new Set<Promise<void>>();
@@ -2176,27 +2257,43 @@ export function createRecordsLayer({
         ),
       };
     };
-    const landedAs = (each: Prepared, row: RecordView, written: Readonly<Record<string, string>>) =>
-      landed(workspace, each, row, written, sentFrom.get(each.recordId));
+    const landedAs = (
+      each: Prepared,
+      row: RecordView,
+      written: Readonly<Record<string, string>>,
+      filed: FiledCompany | undefined,
+    ) => landed(workspace, each, row, written, sentFrom.get(each.recordId), filed);
     try {
       const [only] = live;
       if (live.length === 1 && only !== undefined) {
         const answer = await delivered(() =>
-          api.setValues({ workspace, mutationId, timeZone: timeZone(workspace), ...itemOf(only) }),
+          api.setValues({
+            workspace,
+            mutationId,
+            timeZone: timeZone(workspace),
+            ...itemOf(only),
+            ...(options.noFiling === true ? { noFiling: true } : {}),
+          }),
         );
-        const { echoes, written, ...row } = answer;
+        const { echoes, written, filedCompany, ...row } = answer;
         mutations.answered(mutationId, echoes);
-        return [...outcomes, landedAs(only, row, written)];
+        return [...outcomes, landedAs(only, row, written, filedCompany)];
       }
       const answer = await delivered(() =>
-        api.setValuesBatch({ workspace, mutationId, timeZone: timeZone(workspace), items: live.map(itemOf) }),
+        api.setValuesBatch({
+          workspace,
+          mutationId,
+          timeZone: timeZone(workspace),
+          items: live.map(itemOf),
+          ...(options.noFiling === true ? { noFiling: true } : {}),
+        }),
       );
       mutations.answered(mutationId, answer.echoes);
       const results = new Map(answer.results.map((result) => [result.recordId, result]));
       for (const each of live) {
         const result = results.get(each.recordId);
         if (result?.record !== undefined) {
-          outcomes.push(landedAs(each, result.record, result.written ?? {}));
+          outcomes.push(landedAs(each, result.record, result.written ?? {}, result.filedCompany));
           continue;
         }
         const [first] = result?.refusals ?? [];
@@ -2225,8 +2322,10 @@ export function createRecordsLayer({
     row: RecordView,
     written: Readonly<Record<string, string>>,
     sentFrom: ReadonlyMap<string, string> | undefined,
+    filed?: FiledCompany,
   ): RecordOutcome {
     each.layer.confirm(row);
+    if (filed !== undefined) companyFiled(workspace, filed);
     settleOptions(workspace, row.objectId, each.cells, row);
     for (const cell of each.cells) {
       const versionId = written[cell.attributeId];
@@ -2247,6 +2346,7 @@ export function createRecordsLayer({
       row,
       written,
       ...(sentFrom === undefined ? {} : { sentFrom }),
+      ...(filed === undefined ? {} : { filed }),
     };
   }
 
@@ -2257,7 +2357,7 @@ export function createRecordsLayer({
     const outcome = { recordId: each.recordId, cells: each.cells, failure };
     // Signed out: the layer already said so, and sign in comes next.
     if (failure.code === 'UNAUTHENTICATED') return { recordId: each.recordId, cells: each.cells };
-    if (failure.code === 'RECORD_DELETED' || failure.code === 'NOT_FOUND') {
+    if (failure.code === 'RECORD_DELETED' || failure.code === 'NOT_FOUND' || failure.code === 'RECORD_OUT_OF_SCOPE') {
       dropRecords(workspace, [each.recordId]);
       return { ...outcome, gone: true };
     }
@@ -2296,7 +2396,12 @@ export function createRecordsLayer({
     outcomes: readonly RecordOutcome[],
     retry: (refused: readonly RecordOutcome[]) => void,
   ) {
-    if (outcomes.some((outcome) => outcome.gone === true)) notify({ tone: 'danger', message: RECORD_WORDS.recordGone });
+    // A record the writer's own rule now hides (spec 0032, AC-848): it saved, so it is news, not a failure.
+    const hidden = outcomes.find((outcome) => outcome.failure?.code === 'RECORD_OUT_OF_SCOPE');
+    if (hidden?.failure !== undefined) notify({ tone: 'success', message: hidden.failure.message });
+    if (outcomes.some((outcome) => outcome.gone === true && outcome.failure?.code !== 'RECORD_OUT_OF_SCOPE')) {
+      notify({ tone: 'danger', message: RECORD_WORDS.recordGone });
+    }
     const refusedOnes = outcomes.filter((outcome) => outcome.failure !== undefined && outcome.gone !== true);
     const passing = refusedOnes.filter((outcome) => TEMPORARY_CODES.has(outcome.failure?.code ?? ''));
     const lasting = refusedOnes.filter((outcome) => !TEMPORARY_CODES.has(outcome.failure?.code ?? ''));
@@ -2768,7 +2873,13 @@ export function createRecordsLayer({
     workspace: string,
     objectId: string,
     cells: readonly UndoCell[],
-  ): Promise<{ readonly landed: number; readonly kept: number; readonly failed: readonly RecordOutcome[] }> {
+  ): Promise<{
+    readonly landed: number;
+    readonly kept: number;
+    readonly failed: readonly RecordOutcome[];
+    /** The cells put back, as `${recordId}:${attributeId}`. */
+    readonly landedKeys: ReadonlySet<string>;
+  }> {
     const byRecord = new Map<string, CellWrite[]>();
     for (const cell of cells) {
       byRecord.set(cell.recordId, [
@@ -2781,7 +2892,8 @@ export function createRecordsLayer({
       workspace,
       objectId,
       [...byRecord].map(([recordId, writes]) => ({ recordId, cells: writes })),
-      { quiet },
+      // Putting an old email back never files the person again (spec 0059).
+      { quiet, noFiling: true },
     );
     let kept = 0;
     const retry: RecordWrite[] = [];
@@ -2800,7 +2912,7 @@ export function createRecordsLayer({
       kept += outcome.cells.length - rest.length;
       if (rest.length > 0) retry.push({ recordId: outcome.recordId, cells: rest });
     }
-    const second = retry.length === 0 ? [] : await writeInRuns(workspace, objectId, retry, { quiet });
+    const second = retry.length === 0 ? [] : await writeInRuns(workspace, objectId, retry, { quiet, noFiling: true });
     for (const outcome of second) {
       if (outcome.failure?.code === 'VERSION_CHANGED') kept += outcome.cells.length;
       else settled.push(outcome);
@@ -2827,6 +2939,11 @@ export function createRecordsLayer({
       (sum, outcome) => sum + (outcome.row === undefined ? 0 : outcome.cells.length),
       0,
     );
+    const landedKeys = new Set(
+      settled.flatMap((outcome) =>
+        outcome.row === undefined ? [] : outcome.cells.map((cell) => `${outcome.recordId}:${cell.attributeId}`),
+      ),
+    );
     const failed = settled.filter((outcome) => outcome.failure !== undefined);
     // Retry sends the same undo again, after any undo still running, still checked by the versions its action wrote.
     tellRefusals({ workspace, objectId, cellsShow: false }, failed, (refusedOnes) => {
@@ -2844,7 +2961,116 @@ export function createRecordsLayer({
         if (again.kept > 0) notify({ tone: 'success', message: RECORD_WORDS.kept(again.kept) });
       });
     });
-    return { landed: landedCells, kept, failed };
+    return { landed: landedCells, kept, failed, landedKeys };
+  }
+
+  /** A write's answer about a filing, as its undo entry keeps it (spec 0059). */
+  function filedLink(recordId: string, filed: FiledCompany): FiledLink {
+    return {
+      recordId,
+      attributeId: filed.attributeId,
+      linkVersionId: filed.linkVersionId,
+      company: { objectId: filed.objectId, recordId: filed.recordId, name: filed.name },
+      made: filed.made,
+    };
+  }
+
+  /**
+   * A company this tab's own write filed a person under (spec 0059): the write's echo is this tab's and skipped,
+   * so the company is read again here as another tab reads it from the event, and one the write made joins its
+   * object's views.
+   */
+  function companyFiled(workspace: string, filed: FiledCompany): void {
+    records.changed(
+      workspace,
+      filed.objectId,
+      [filed.recordId],
+      undefined,
+      filed.made ? { createdIds: [filed.recordId] } : {},
+      // Filing never renames a company: chips keep its name while it is read again.
+      true,
+    );
+  }
+
+  /** Says a write filed people under companies (spec 0059, AC-5920), with an Undo that takes back just that. */
+  function tellFiled(workspace: string, entryId: string, filed: readonly FiledLink[]): void {
+    if (filed.length === 0) return;
+    onFiled({
+      workspace,
+      companies: filed.map((each) => ({ name: each.company.name, made: each.made })),
+      // A filing taken back clears cells and may trash companies: every calculation of the workspace reads again.
+      undo: () => ownWrite(workspace, undefined, undefined, true, () => unfile(workspace, entryId)),
+    });
+  }
+
+  /** The cells that take filed links back: each person's Company, emptied while it holds the filed link's version. */
+  const filedCells = (filed: readonly FiledLink[]): UndoCell[] =>
+    filed.map((each) => ({
+      recordId: each.recordId,
+      attributeId: each.attributeId,
+      before: null,
+      writtenVersionId: each.linkVersionId,
+    }));
+
+  /**
+   * Moves the companies filings made to the trash, each only while nothing links to it any more (spec 0059,
+   * AC-5920; `unlinkedOnly`, which the server checks under the record's lock): answers how many went and how
+   * many stayed.
+   */
+  async function trashFiled(
+    workspace: string,
+    filed: readonly FiledLink[],
+  ): Promise<{ readonly trashed: number; readonly inUse: number; readonly failed: number }> {
+    const byObject = new Map<string, string[]>();
+    for (const each of filed) {
+      if (!each.made) continue;
+      byObject.set(each.company.objectId, [...(byObject.get(each.company.objectId) ?? []), each.company.recordId]);
+    }
+    let trashed = 0;
+    let inUse = 0;
+    let failed = 0;
+    for (const [objectId, ids] of byObject) {
+      const outcome = await trashRecords(workspace, objectId, ids, { undoable: false, unlinkedOnly: true });
+      if (outcome.kind === 'done') {
+        trashed += outcome.deleted;
+        inUse += outcome.inUse ?? 0;
+        // Refused for another reason (no delete rights, gone already): never said to be in use.
+        failed += outcome.refused - (outcome.inUse ?? 0);
+      } else {
+        failed += ids.length;
+      }
+    }
+    return { trashed, inUse, failed };
+  }
+
+  /**
+   * Takes back the filings of the action `id` (spec 0059, AC-5920), a toast's Undo, wherever the action sits on
+   * the stack (each link is checked by its own version, so nothing newer is undone): the links are cleared, the
+   * companies the action made go to the trash while nothing else links to them, and the action stays on the
+   * stack without its filings, so Cmd+Z later undoes just the rest. In turn with undo.
+   */
+  function unfile(workspace: string, id: string): Promise<UnfileOutcome> {
+    return inTurn(workspace, async (): Promise<UnfileOutcome> => {
+      const entry = undo.find(workspace, id);
+      const filed = entry === undefined ? [] : filedOf(entry);
+      if (entry === undefined || filed.length === 0) return { kind: 'gone' };
+      const rest = withoutFiled(entry);
+      // An edit that was only its filings leaves nothing to undo: it leaves the stack, so Cmd+Z skips nothing.
+      if (isCellsEntry(rest) && rest.cells.length === 0) undo.drop(workspace, id);
+      else undo.replace(workspace, rest);
+      const { kept, landedKeys } = await undoCellsBack(workspace, entry.objectId, filedCells(filed));
+      const cleared = filed.filter((each) => landedKeys.has(`${each.recordId}:${each.attributeId}`));
+      const { trashed, inUse, failed } = await trashFiled(workspace, cleared);
+      return {
+        kind: 'unfiled',
+        name: filed[0]?.company.name ?? '',
+        unlinked: cleared.length,
+        kept,
+        trashed,
+        inUse,
+        failed,
+      };
+    });
   }
 
   /** Waits for `work` before an undo pressed meanwhile runs (an undoable write still out, spec 0006). */
@@ -2879,13 +3105,16 @@ export function createRecordsLayer({
    * a refused record comes back with its reason on its name cell; a refusal
    * of the whole call (a read only object, the network) brings every row
    * back. With `undoable`, what was deleted goes on the undo stack as one
-   * entry, so Cmd+Z or the toast's Undo restores exactly that batch.
+   * entry, so Cmd+Z or the toast's Undo restores exactly that batch. With
+   * `unlinkedOnly` (a filing's company taken back, spec 0059), a record that
+   * something links to stays, refused `IN_USE` with no mark, and no row
+   * leaves before the answer, since the server decides.
    */
   async function trashRecords(
     workspace: string,
     objectId: string,
     recordIds: readonly string[],
-    { undoable }: { readonly undoable: boolean },
+    { undoable, unlinkedOnly = false }: { readonly undoable: boolean; readonly unlinkedOnly?: boolean },
   ): Promise<DeleteResult> {
     const ids = [...new Set(recordIds)];
     if (ids.length > MAX_DELETE_RECORDS) return { kind: 'too-many', limit: MAX_DELETE_RECORDS };
@@ -2894,9 +3123,18 @@ export function createRecordsLayer({
     const recordName = only === undefined ? undefined : (store.get(only) ?? store.base(only))?.display.name;
     const mutationId = mintId();
     const batchId = mintId();
-    setLeaving(ids, true);
+    if (!unlinkedOnly) setLeaving(ids, true);
     mutations.sent(mutationId);
-    const answer = delivered(() => api.deleteMany({ workspace, objectId, recordIds: ids, batchId, mutationId }));
+    const answer = delivered(() =>
+      api.deleteMany({
+        workspace,
+        objectId,
+        recordIds: ids,
+        batchId,
+        mutationId,
+        ...(unlinkedOnly ? { unlinkedOnly: true } : {}),
+      }),
+    );
     // An undo pressed meanwhile waits for this answer, so it undoes the delete rather than the edit before it.
     holdUndo(workspace, answer);
     let results: DeleteManyResults['results'];
@@ -2906,7 +3144,7 @@ export function createRecordsLayer({
       results = answered;
     } catch (error) {
       mutations.forget(mutationId);
-      setLeaving(ids, false);
+      if (!unlinkedOnly) setLeaving(ids, false);
       return { kind: 'failed', error: toDataError(error) };
     }
     const deleted = results.filter((result) => result.state === 'deleted').map((result) => result.recordId);
@@ -2914,14 +3152,17 @@ export function createRecordsLayer({
     const gone = results.filter((result) => result.state !== 'refused').map((result) => result.recordId);
     const refused = results.filter((result) => result.state === 'refused');
     dropRecords(workspace, gone);
-    setLeaving(ids, false);
+    if (!unlinkedOnly) setLeaving(ids, false);
     subscriptions.changed(workspace, new Set(gone), 'all', new Set(gone));
     for (const entry of viewsOf(workspace)) if (entry.objectId === objectId) entry.markDirty();
+    // A record kept because something links to it is no refusal of the person's: its row stays, unmarked.
     await markNames(
       workspace,
       objectId,
       refused.flatMap((result) =>
-        result.refusal === undefined ? [] : [[result.recordId, result.refusal.message] as const],
+        result.refusal === undefined || result.refusal.code === 'IN_USE'
+          ? []
+          : [[result.recordId, result.refusal.message] as const],
       ),
     );
     const pushed = undoable && deleted.length > 0;
@@ -2944,6 +3185,7 @@ export function createRecordsLayer({
       ...(firstRefused?.refusal === undefined ? {} : { reason: firstRefused.refusal.message }),
       ...(recordName === undefined || deleted.length === 0 ? {} : { recordName }),
       ...(pushed ? { undoId: mutationId } : {}),
+      ...(unlinkedOnly ? { inUse: refused.filter((result) => result.refusal?.code === 'IN_USE').length } : {}),
     };
   }
 
@@ -3057,7 +3299,15 @@ export function createRecordsLayer({
       if (order.any || order.ids.has(attributeId)) entry.markDirty();
     }
     const pushed = cells.length > 0;
-    if (pushed) undo.push(workspace, { id: mutationId, kind: 'bulk', objectId, cells });
+    if (pushed) {
+      undo.push(workspace, {
+        id: mutationId,
+        kind: 'bulk',
+        objectId,
+        cells,
+        ...(request.group === undefined ? {} : { group: request.group }),
+      });
+    }
     const refused = marks.length + gone.length;
     return {
       kind: 'done',
@@ -3197,6 +3447,10 @@ export function createRecordsLayer({
         const outcome = await trashRecords(workspace, entry.objectId, [entry.recordId], { undoable: false });
         // Refused whole for a passing reason: the create stays on the stack, to undo again.
         if (outcome.kind === 'failed') undo.push(workspace, entry);
+        // The company its filing made goes too, while nothing else links to it (spec 0059, AC-5920).
+        if (entry.filed !== undefined && outcome.kind === 'done' && outcome.deleted > 0) {
+          await trashFiled(workspace, [entry.filed]);
+        }
         return {
           kind: 'uncreated',
           objectId: entry.objectId,
@@ -3205,18 +3459,51 @@ export function createRecordsLayer({
         };
       }
       if (entry.kind === 'links') return undoLink(workspace, entry);
+      if (entry.kind === 'external') return { kind: 'external', ...(await entry.run()) };
       const [firstCell] = entry.cells;
-      if (firstCell === undefined) return { kind: 'nothing' };
-      const { landed: undone, kept, failed } = await undoCellsBack(workspace, entry.objectId, entry.cells);
+      if (firstCell === undefined) {
+        // An edit whose cells were never read held only its filings (spec 0059): they go back on their own.
+        const filed = entry.filed ?? [];
+        if (filed.length === 0) return { kind: 'nothing' };
+        const { landedKeys } = await undoCellsBack(workspace, entry.objectId, filedCells(filed));
+        await trashFiled(
+          workspace,
+          filed.filter((each) => landedKeys.has(`${each.recordId}:${each.attributeId}`)),
+        );
+        return { kind: 'nothing' };
+      }
+      // The other fields of the same Apply (a bulk edit of several fields) go back with it, newest first, as one step.
+      const parts = [entry, ...(entry.group === undefined ? [] : undo.popGroup(workspace, entry.group))];
+      let undone = 0;
+      let kept = 0;
+      let failed = 0;
+      for (const part of parts) {
+        // Each part's filings go back with it (spec 0059): each Company link in the same write as its record's cells.
+        const filed = part.filed ?? [];
+        const own = new Set(part.cells.map((cell) => `${cell.recordId}:${cell.attributeId}`));
+        const back = await undoCellsBack(workspace, part.objectId, [...part.cells, ...filedCells(filed)]);
+        await trashFiled(
+          workspace,
+          filed.filter((each) => back.landedKeys.has(`${each.recordId}:${each.attributeId}`)),
+        );
+        undone += [...back.landedKeys].filter((key) => own.has(key)).length;
+        kept += back.kept;
+        failed += back.failed.reduce(
+          (sum, outcome) =>
+            sum + outcome.cells.filter((cell) => own.has(`${outcome.recordId}:${cell.attributeId}`)).length,
+          0,
+        );
+      }
       const shown = store.get(firstCell.recordId) ?? store.base(firstCell.recordId);
       return {
         kind: 'undone',
         action: entry.kind,
         objectId: entry.objectId,
-        cells: entry.cells.length,
+        // The records the Apply touched: the most any one field changed.
+        cells: Math.max(...parts.map((part) => part.cells.length)),
         undone,
         kept,
-        failed: failed.reduce((sum, outcome) => sum + outcome.cells.length, 0),
+        failed,
         first: {
           recordId: firstCell.recordId,
           attributeId: firstCell.attributeId,
@@ -3284,7 +3571,13 @@ export function createRecordsLayer({
     await Promise.all(
       chunks(held, GET_LIMIT).map(async (part) => {
         const rows = await whenFree(() =>
-          api.get({ workspace, ids: part, ...(attributeIds === undefined ? {} : { attributeIds }) }),
+          api.get({
+            workspace,
+            ids: part,
+            ...(attributeIds === undefined ? {} : { attributeIds }),
+            // A held record shows in a view: its row and card carry the open comment count, read with it.
+            threadCounts: true,
+          }),
         );
         // Only rows this workspace's views still show: the store is keyed by record id alone.
         store.receive(rows.filter((row) => isHeldIn(workspace, row.id)));
@@ -3680,6 +3973,7 @@ export function createRecordsLayer({
         const {
           echoes,
           written: _written,
+          filedCompany,
           ...row
         } = await delivered(() =>
           api.create({ workspace, objectId, id, values, timeZone: timeZone(workspace), mutationId }),
@@ -3687,8 +3981,18 @@ export function createRecordsLayer({
         mutations.answered(mutationId, echoes);
         layer.confirm(row);
         settle(true);
-        // Undo moves it to the trash (spec 0022, AC-541).
-        undo.push(workspace, { id: mutationId, kind: 'create', objectId, recordId: id, recordName: row.display.name });
+        const filed = filedCompany === undefined ? undefined : filedLink(id, filedCompany);
+        if (filedCompany !== undefined) companyFiled(workspace, filedCompany);
+        // Undo moves it to the trash (spec 0022, AC-541), and the company its email filed it under too (spec 0059).
+        undo.push(workspace, {
+          id: mutationId,
+          kind: 'create',
+          objectId,
+          recordId: id,
+          recordName: row.display.name,
+          ...(filed === undefined ? {} : { filed }),
+        });
+        if (filed !== undefined) tellFiled(workspace, mutationId, [filed]);
         return row;
       } catch (error) {
         mutations.forget(mutationId);
@@ -3823,6 +4127,10 @@ export function createRecordsLayer({
        * with `only`, that action alone, and only while it is the newest.
        */
       run: (workspace: string, only?: string): Promise<UndoOutcome> => runUndo(workspace, only),
+      /** Puts another store's action on this tab's stack (spec 0048), so Cmd+Z and a toast's Undo reach it. */
+      push: (workspace: string, entry: ExternalEntry): void => {
+        undo.push(workspace, entry);
+      },
       /** How many actions this tab can undo in the workspace (for tests). */
       depth: (workspace: string): number => undo.size(workspace),
     },
@@ -3834,6 +4142,31 @@ export function createRecordsLayer({
 
     /** Reads records again by id (a change event's ids); ids the server leaves out are gone and leave every window. */
     refetch,
+
+    /**
+     * Comments changed on these records (a `comments` event, or this tab's own count moving): the held ones read
+     * their open thread count again, and nothing else of them (the primary attribute rides along). A coarse event
+     * reads the object's views again.
+     */
+    commentsChanged: (workspace: string, objectId: string | undefined, ids: readonly string[], isCoarse: boolean) => {
+      if (isCoarse) {
+        for (const entry of viewsOf(workspace))
+          if (objectId === undefined || entry.objectId === objectId) entry.reread();
+        return Promise.resolve();
+      }
+      return refetch(workspace, ids, []);
+    },
+
+    /**
+     * Puts a record's open comment thread count in place from what the comments store knows (this tab's own
+     * comment, a thread resolved or deleted): the row and card show it at once. A record the store doesn't hold
+     * is left alone.
+     */
+    setOpenThreads: (recordId: string, count: number): void => {
+      const base = store.base(recordId);
+      if (base === undefined || base.openThreads === count) return;
+      store.receive([{ ...base, openThreads: count }]);
+    },
 
     /**
      * Another tab or person changed these records of an object (a change
@@ -3986,6 +4319,26 @@ export function createRecordsLayer({
      */
     aggregates: (workspace: string, question: AggregateQuestion): AggregateSource =>
       aggregates.source(workspace, question),
+    /**
+     * The record store's one copy, for the lists' entry rows (spec 0048, AC-4840): a list row holds its record here
+     * while it shows it, so a record edited anywhere shows everywhere at once.
+     */
+    shared: {
+      receive: store.receive,
+      hold: store.hold,
+      release: store.release,
+      get: store.get,
+      subscribe: store.subscribe,
+      /** The names of records a list cell links to, as a records view's `referenceDisplays` reads them. */
+      displaysOf: (workspace: string, refs: readonly RecordRef[]) => names.displaysOf(workspace, refs),
+      /** Hears names arriving in a workspace, so a list's rows draw them; the answer stops listening. */
+      onNames: (listener: (workspace: string) => void) => {
+        nameListeners.add(listener);
+        return () => {
+          nameListeners.delete(listener);
+        };
+      },
+    },
   };
 }
 

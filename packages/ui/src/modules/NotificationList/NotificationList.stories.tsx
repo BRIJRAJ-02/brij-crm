@@ -43,6 +43,15 @@ function sampleItems(): readonly NotificationItem[] {
       excerpt: 'Call Globex about the security review',
     },
     {
+      id: 'n3b',
+      kind: 'task_due',
+      actor: { type: 'system', id: null, name: 'System' },
+      createdAt: '2026-10-07T08:45:00.000Z',
+      isRead: false,
+      isDone: false,
+      excerpt: 'Send Globex the renewal quote',
+    },
+    {
       id: 'n4',
       kind: 'form_submission',
       actor: { type: 'form', id: null, name: 'Contact us' },
@@ -106,9 +115,7 @@ function SampleInbox({
               emptyIcon: 'list-filter' as const,
               emptyActions: <Button>Clear filters</Button>,
             }
-          : {
-              emptyBody: 'Mentions, replies to your threads, tasks assigned to you and new form submissions show here.',
-            })}
+          : {})}
       />
     </Stage>
   );
@@ -174,7 +181,6 @@ export const Empty: Story = {
   args: { isEmpty: true },
   play: async ({ canvas }) => {
     await expect(canvas.getByText('You’re all caught up.')).toBeInTheDocument();
-    await expect(canvas.getByText(/new form submissions show here/)).toBeInTheDocument();
   },
 };
 

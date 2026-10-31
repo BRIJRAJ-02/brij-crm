@@ -6,6 +6,7 @@ import type { ActorDisplay, MemberSummary, NoteSummary } from '@crm/data';
 import type { NoteListItem } from '@crm/ui';
 import { recordHref } from '../records/details.ts';
 import { strings as taskStrings } from '../tasks/strings.ts';
+import { activityFace } from './activity.ts';
 import { strings } from './strings.ts';
 
 /** Who an actor is, as a display: a member by name ("Former member" when no longer here), else what acted. */
@@ -27,6 +28,7 @@ export function actorDisplay(
 
 /** A note as NoteList's row: its title (empty shows "Untitled note" in the list), excerpt, author and last edit. */
 export function toNoteItem(note: NoteSummary, members: readonly MemberSummary[]): NoteListItem {
+  const face = activityFace(note);
   return {
     id: note.id,
     title: note.title,
@@ -34,12 +36,27 @@ export function toNoteItem(note: NoteSummary, members: readonly MemberSummary[])
     author: actorDisplay(members, note.createdBy),
     updatedAt: note.updatedAt,
     ...(note.record === undefined ? {} : { record: note.record }),
+    ...(face === undefined
+      ? {}
+      : {
+          activity: {
+            kind: face.kind,
+            occurredAt: note.occurredAt,
+            ...(face.duration === undefined ? {} : { duration: face.duration }),
+            ...(face.outcome === undefined ? {} : { outcome: face.outcome }),
+          },
+        }),
   };
 }
 
 /** A note's window over its record's Notes tab (the workspace's Notes page and ⌘K open it there). */
 export function noteHref(slug: string, objectSlug: string, recordId: string, noteId: string): string {
   return `${recordHref(slug, objectSlug, recordId, 'notes')}?note=${noteId}`;
+}
+
+/** A logged call or meeting's dialog over its record's Notes tab (the workspace's Notes page opens it there). */
+export function logHref(slug: string, objectSlug: string, recordId: string, noteId: string): string {
+  return `${recordHref(slug, objectSlug, recordId, 'notes')}?log=${noteId}`;
 }
 
 /** A loaded note of a list, by id; undefined when it isn't loaded. */

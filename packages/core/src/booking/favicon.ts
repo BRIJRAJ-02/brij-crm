@@ -53,8 +53,28 @@ export function faviconSources(link: string): { readonly guess: URL; readonly pa
 /** How much of a page is read looking for its icon: a head that hasn't declared one by here never will. */
 const HEAD_MAX = 64 * 1024;
 
-/** A `<link>` tag, as far as its closing bracket; a quoted value may hold a bracket, so quotes are matched first. */
-const LINK_TAG = /<link\b((?:[^>"']|"[^"]*"|'[^']*')*)>/gi;
+/** Where each `<link>` tag starts. */
+const LINK_START = /<link\b/gi;
+
+/**
+ * A `<link>` tag from its start, as far as its closing bracket; a quoted value may hold a bracket, so quotes are
+ * matched first. Read within `TAG_MAX` of its start only, so a head of unclosed tags costs a page's length, never its
+ * square: since spec 0059 any signed in person can have a page read (a company's logo).
+ */
+const LINK_TAG = /^<link\b((?:[^>"']|"[^"]*"|'[^']*')*)>/i;
+
+/** The longest `<link>` tag read: an icon's is a few hundred characters at most. */
+const TAG_MAX = 1024;
+
+/** The inside of each `<link>` tag in `head`, in order. */
+function linkTags(head: string): string[] {
+  const found: string[] = [];
+  for (const start of head.matchAll(LINK_START)) {
+    const tag = LINK_TAG.exec(head.slice(start.index, start.index + TAG_MAX));
+    if (tag !== null) found.push(tag[1] ?? '');
+  }
+  return found;
+}
 
 /** One attribute of a tag: `name="value"`, `name='value'` or `name=value`. */
 const ATTRIBUTE = /([a-z-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/gi;
@@ -90,24 +110,77 @@ function attributesOf(tag: string): Record<string, string> {
 }
 
 /**
- * The icon a page's head declares, resolved against the page's own address, or undefined. The best `rel` wins
- * (a plain `icon` over an `apple-touch-icon`), and ties go to the one declared first, which is what a browser
- * with no size to go on does. The result is checked by `isFaviconSite` again, so a page cannot point the fetch
- * at a bare address, another scheme or a host with credentials in it.
+ * How `declaredIcon` chooses among a head's icons. `rel`, a link block's: the best `rel`, as a browser with no size
+ * to go on does. `logo`, a company's logo (spec 0059, AC-5904): by `sizes`, the icon that best fills a logo tile
+ * (`LOGO_ENOUGH`), since a 16 pixel favicon is what it falls back to anyway.
  */
-export function declaredIcon(html: string, page: URL): URL | undefined {
-  let best: { readonly rank: number; readonly url: URL } | undefined;
-  for (const tag of html.slice(0, HEAD_MAX).matchAll(LINK_TAG)) {
-    const attributes = attributesOf(tag[1] ?? '');
+export type IconPick = 'rel' | 'logo';
+
+/**
+ * The size a logo needs: the largest tile it is drawn in (48 pixels, a record's heading) at twice the density. A
+ * larger icon looks no better there and costs every browser more to load and decode, so the smallest icon of at
+ * least this size wins, and below it the largest.
+ */
+const LOGO_ENOUGH = 96;
+
+/** What a touch icon declared without `sizes` is taken as: Apple asks for 180 by 180. */
+const TOUCH_ICON_SIZE = 180;
+
+/** One `sizes` entry: `32x32`, `180X180`. */
+const SIZE = /(\d{1,5})x(\d{1,5})/gi;
+
+/**
+ * How large a declared icon is, by the largest square its `sizes` names (`16x16 32x32` is 32). With none readable
+ * (absent, or `any`), a touch icon counts as the size Apple asks for and anything else as 0, below every icon that
+ * says its size.
+ */
+function declaredSize(sizes: string | undefined, rel: string): number {
+  let largest = -1;
+  for (const match of (sizes ?? '').matchAll(SIZE)) {
+    largest = Math.max(largest, Math.min(Number(match[1]), Number(match[2])));
+  }
+  if (largest >= 0) return largest;
+  return rel.startsWith('apple-touch-icon') ? TOUCH_ICON_SIZE : 0;
+}
+
+/** Whether an icon of `size` fills a logo better than one of `held`: enough beats too small, then the closer to enough. */
+function fillsBetter(size: number, held: number): boolean {
+  const enough = size >= LOGO_ENOUGH;
+  if (enough !== held >= LOGO_ENOUGH) return enough;
+  return enough ? size < held : size > held;
+}
+
+/** An icon drawn as SVG, by its declared type or its file name: never answered (`imageTypeOf`), so never worth a fetch. */
+function isVectorIcon(type: string | undefined, url: URL): boolean {
+  return type?.trim().toLowerCase() === 'image/svg+xml' || url.pathname.toLowerCase().endsWith('.svg');
+}
+
+/**
+ * The icon a page's head declares, resolved against the page's own address, or undefined. By `rel` (the default),
+ * the best `rel` wins (a plain `icon` over an `apple-touch-icon`) and ties go to the one declared first, which is
+ * what a browser with no size to go on does. By `logo`, the declared size decides (the smallest of at least
+ * `LOGO_ENOUGH`, else the largest), an SVG is passed over, and ties go to the better `rel`, then the first declared.
+ * The result is checked by `isFaviconSite` again, so a page cannot point the fetch at a bare address, another scheme
+ * or a host with credentials in it.
+ */
+export function declaredIcon(html: string, page: URL, pick: IconPick = 'rel'): URL | undefined {
+  let best: { readonly rank: number; readonly size: number; readonly url: URL } | undefined;
+  for (const tag of linkTags(html.slice(0, HEAD_MAX))) {
+    const attributes = attributesOf(tag);
     const rel = attributes['rel']?.trim().toLowerCase().replace(/\s+/g, ' ');
     const href = attributes['href'];
     if (rel === undefined || href === undefined || href === '') continue;
     const rank = ICON_RELS.indexOf(rel);
-    if (rank === -1 || (best !== undefined && rank >= best.rank)) continue;
+    if (rank === -1) continue;
+    // By `rel`, every size reads as the same, so only a better rel replaces the one held.
+    const size = pick === 'logo' ? declaredSize(attributes['sizes'], rel) : 0;
+    const better = best === undefined || (size === best.size ? rank < best.rank : fillsBetter(size, best.size));
+    if (!better) continue;
     if (!URL.canParse(href, page.href)) continue;
     const url = new URL(href, page.href);
     url.hash = '';
-    if (isFaviconSite(url)) best = { rank, url };
+    if (pick === 'logo' && isVectorIcon(attributes['type'], url)) continue;
+    if (isFaviconSite(url)) best = { rank, size, url };
   }
   return best?.url;
 }

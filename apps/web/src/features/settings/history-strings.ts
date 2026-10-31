@@ -23,9 +23,9 @@ export interface SentenceWords {
   readonly invitation: (target: Extract<AuditEntryView['target'], { type: 'invitation' }>) => string;
   /** A booking as "Intro call on 24 Oct, 3:30 pm" in the reader's zone, or "a deleted booking". */
   readonly booking: (target: Extract<AuditEntryView['target'], { type: 'booking' }>) => string;
-  /** A round robin, form or booking page by its name, or "a deleted round robin". */
+  /** A round robin, form, booking page or list by its name, or "a deleted round robin". */
   readonly thing: (target: {
-    readonly type: 'rotation' | 'form' | 'booking_page';
+    readonly type: 'rotation' | 'form' | 'booking_page' | 'list';
     readonly name?: string;
     readonly isGone: boolean;
   }) => string;
@@ -186,6 +186,11 @@ const SENTENCES: SentenceTemplates = {
     ),
   'form.owner_changed': (entry, w) => actor(`changed who gets ${w.thing(entry.target)}’s leads`),
   'form.notify_changed': (entry, w) => actor(`changed who is emailed ${w.thing(entry.target)}’s new submissions`),
+  // Lists (spec 0048): "Ada made the list Sales pipeline".
+  'list.created': (entry, w) => actor(`made the list ${w.thing(entry.target)}`),
+  'list.updated': (entry, w) => actor(`changed the list ${w.thing(entry.target)}`),
+  'list.archived': (entry, w) => actor(`archived the list ${w.thing(entry.target)}`),
+  'list.restored': (entry, w) => actor(`restored the list ${w.thing(entry.target)}`),
   'booking.no_show': (entry, w) => actor(`marked ${w.booking(entry.target)} as a no show`),
   'booking.no_show_undone': (entry, w) => actor(`took back the no show on ${w.booking(entry.target)}`),
   'booking.record_linked': (entry, w) => actor(`linked ${w.booking(entry.target)} to a record`),
@@ -197,7 +202,7 @@ const SENTENCES: SentenceTemplates = {
     ),
   'delegation.changed': (entry, w) =>
     actor(
-      `changed what ${w.person(entry.target.person)} can do with ${whoseScheduling(entry.params.over, w)} to ${verbOf(entry.params.level)} it`,
+      `now lets ${w.person(entry.target.person)} ${verbOf(entry.params.level)} ${whoseScheduling(entry.params.over, w)}`,
     ),
   'delegation.revoked': (entry, w) =>
     actor(
@@ -230,6 +235,32 @@ const SENTENCES: SentenceTemplates = {
   'time_off.deleted': (entry, w) => actor(`removed ${w.persons(entry.target.person)} time off`),
   'limits.changed': (entry, w) => actor(`changed ${w.persons(entry.target.person)} meeting limits`),
   'calendar.reconnect_asked': (entry, w) => actor(`asked ${w.person(entry.target.person)} to reconnect their calendar`),
+  'team.changed': (entry) => {
+    const { team, joined, left } = entry.params;
+    switch (entry.params.change) {
+      case 'created':
+        return actor(`made the ${team} team`);
+      case 'renamed':
+        return actor(
+          `renamed the ${team} team to ${entry.changes[0]?.after?.kind === 'text' ? entry.changes[0].after.text : 'a new name'}`,
+        );
+      case 'deleted':
+        return actor(`deleted the ${team} team`);
+      case 'members': {
+        if (joined > 0 && left > 0) return actor(`changed who is in the ${team} team`);
+        if (left > 0) return actor(`took ${String(left)} ${left === 1 ? 'person' : 'people'} out of the ${team} team`);
+        return actor(`added ${String(joined)} ${joined === 1 ? 'person' : 'people'} to the ${team} team`);
+      }
+    }
+  },
+  'access.rule_set': (entry) => {
+    const { object, who, level, records, fields, isDefault } = entry.params;
+    if (isDefault) return actor(`set ${who} back to the default access to ${object}`);
+    const what = { none: 'can’t see', read: 'can view', write: 'can edit' }[level];
+    const which = records === 'all' ? '' : records === 'own' ? ', their own only' : ', their team’s only';
+    const more = fields === 0 ? '' : `, ${String(fields)} ${fields === 1 ? 'field' : 'fields'} limited`;
+    return actor(`changed access to ${object}: ${who} ${what}${level === 'none' ? '' : which}${more}`);
+  },
   'booking.changed_for': (entry, w) => {
     const verb = { made: 'booked', moved: 'moved', cancelled: 'cancelled' }[entry.params.change];
     return actor(`${verb} ${w.booking(entry.target)} for ${w.person(entry.params.host)}`);
@@ -275,6 +306,8 @@ export const strings = {
     /** A deleted account, inside a sentence ("removed a deleted user from the workspace"). */
     deletedTarget: 'a deleted user',
   },
+  /** A list the reader can't read (spec 0048): it is there, but never named. */
+  someList: 'a list',
   /** What the log can't name any more (AC-4607). */
   gone: {
     /** An invitation whose address is gone: purged, or the member it made deleted their account. */
@@ -283,20 +316,20 @@ export const strings = {
     booking: 'a deleted booking',
     rotation: 'a deleted round robin',
     form: 'a deleted form',
+    list: 'a deleted list',
     booking_page: 'a deleted booking page',
   },
   /** "Intro call on 24 Oct, 3:30 pm". */
   bookingOn: (page: string, when: string) => `${page} on ${when}`,
   /** The states (AC-4615 to AC-4618). */
   emptyTitle: 'No changes yet',
-  emptyText: 'Invitations, role changes, removals and changes to settings and scheduling show here.',
   failedTitle: 'Couldn’t load workspace changes',
   failedMore: 'Couldn’t load more changes.',
   /** When the page itself failed and the data layer had no words for why. */
-  failedText: 'Something went wrong. Try again in a moment.',
+  failedText: 'Try again in a moment.',
   forbidden: 'Only workspace owners and admins can see workspace changes.',
   /** Your sign ins (AC-4619). */
   signInsTitle: 'Your sign ins',
-  signInsText: 'In every workspace, for the last 90 days.',
+  signInsText: 'Every workspace, last 90 days.',
   sentences: SENTENCES,
 } as const;

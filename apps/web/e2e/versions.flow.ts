@@ -220,9 +220,7 @@ test.describe('versions, the replaced notice and undo between two members', () =
     // Ada's undo puts back the four cells nobody touched and keeps Bea's two.
     await (await cellAt(ada, 2, 'Name')).click();
     await pressUndo(ada);
-    await expect(
-      ada.getByText('Undid the paste into 6 cells. 2 cells were changed since, so they were kept.'),
-    ).toBeVisible();
+    await expect(ada.getByText('Undid the paste into 6 cells. Kept 2 newer edits.')).toBeVisible();
     await expect(await cellAt(ada, 0, 'Job title')).toContainText('Rear admiral');
     await expect(await cellAt(ada, 1, 'Job title')).toContainText('Codebreaker');
     await expect(await cellAt(ada, 2, 'Job title')).not.toContainText('Scientist');

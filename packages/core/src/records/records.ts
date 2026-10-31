@@ -3,7 +3,14 @@
 // it), and setting values, each write answering the fresh record. Every read
 // and write goes through the scope the access door made.
 import { and, eq, isNotNull } from 'drizzle-orm';
-import type { BatchRecordResult, RecordPage, RecordView, TrashedRecord, UpdateOutcome } from '@crm/contracts';
+import type {
+  BatchRecordResult,
+  FiledCompany,
+  RecordPage,
+  RecordView,
+  TrashedRecord,
+  UpdateOutcome,
+} from '@crm/contracts';
 import type { FilterGroup, SortRules } from '@crm/contracts/values';
 import { schema } from '@crm/db';
 import { updateMany, type BulkEditInput } from '../engine/bulk-edit.ts';
@@ -23,6 +30,7 @@ import type { EngineScope } from '../engine/scope.ts';
 import type { AttributeDef } from '../engine/values.ts';
 import type { AfterWrite } from '../engine/write.ts';
 import { inWorkspace } from '../access/run.ts';
+import { outOfScopeMessage } from '../access/rule-guard.ts';
 import { checkObject, UNKNOWN_RECORD } from '../access/visibility.ts';
 
 const { objects, records } = schema;
@@ -37,6 +45,8 @@ export interface RecordWindow {
   readonly sorts?: SortRules;
   /** Only these attributes' values, plus the primary (spec 0006, AC-55). */
   readonly attributeIds?: readonly string[];
+  /** Add each record's open comment threads (`openThreads`): one more statement for the window. */
+  readonly threadCounts?: boolean;
   /** The window's clock (spec 0006, AC-51): relative dates resolve against it. */
   readonly now?: string;
   readonly timeZone?: string;
@@ -64,6 +74,7 @@ export async function queryRecords(
       ...(window.filter === undefined ? {} : { filter: window.filter }),
       ...(window.sorts === undefined ? {} : { sorts: window.sorts }),
       ...(window.attributeIds === undefined ? {} : { attributeIds: window.attributeIds }),
+      ...(window.threadCounts === true ? { threadCounts: true } : {}),
       ...(window.now === undefined ? {} : { now: window.now }),
       ...(window.timeZone === undefined ? {} : { timeZone: window.timeZone }),
     },
@@ -82,8 +93,15 @@ export async function readRecordsById(
   scope: EngineScope,
   ids: readonly string[],
   attributeIds?: readonly string[],
+  options: { readonly threadCounts?: boolean } = {},
 ): Promise<RecordView[]> {
-  return [...(await getRecords(scope, { ids, ...(attributeIds === undefined ? {} : { attributeIds }) }))];
+  return [
+    ...(await getRecords(scope, {
+      ids,
+      ...(attributeIds === undefined ? {} : { attributeIds }),
+      ...(options.threadCounts === true ? { threadCounts: true } : {}),
+    })),
+  ];
 }
 
 /**
@@ -137,6 +155,8 @@ export async function readTrashedRecord(scope: EngineScope, recordId: string): P
 export interface WrittenView {
   readonly record: RecordView;
   readonly written: Readonly<Record<string, string>>;
+  /** The company the person's email filed them under in this write (spec 0059); absent when nothing was filed. */
+  readonly filedCompany?: FiledCompany;
 }
 
 /** The versions a write made, by attribute id; an unchanged attribute is left out. */
@@ -206,7 +226,7 @@ export async function addRecord(
     throw inputInvalid('id', CLOCK_SKEW_MESSAGE);
   }
   try {
-    const { recordId, objectId, attributes, versions } = await createRecord(
+    const { recordId, objectId, attributes, versions, filedCompany } = await createRecord(
       scope,
       {
         objectId: input.objectId,
@@ -216,10 +236,20 @@ export async function addRecord(
       },
       hooks,
     );
-    return {
-      record: await freshRecord(scope, recordId, new Map([[objectId, attributes]])),
-      written: writtenOf(versions),
-    };
+    try {
+      return {
+        record: await freshRecord(scope, recordId, new Map([[objectId, attributes]])),
+        written: writtenOf(versions),
+        ...(filedCompany === undefined ? {} : { filedCompany }),
+      };
+    } catch (error) {
+      // Made with an owner outside the maker's scope (spec 0032, AC-848): it exists, and its maker can't see it.
+      if (isRefusal(error) && error.refusal.code === 'RECORD_DELETED') {
+        const message = await outOfScopeMessage(scope, recordId, attributeIdsOf(input.values ?? {}));
+        if (message !== undefined) throw refuse('RECORD_OUT_OF_SCOPE', message);
+      }
+      throw error;
+    }
   } catch (error) {
     if (!isRefusal(error) || error.refusal.code !== 'ID_TAKEN') throw error;
     const replayed = await replayCreate(scope, input);
@@ -265,6 +295,8 @@ export interface EditRecordInput {
   readonly values: Readonly<Record<string, ValueInput>>;
   /** The writer's time zone, for a rule's relative dates (spec 0013); UTC when absent. */
   readonly timeZone?: string | undefined;
+  /** An undo putting old values back: it files no company (spec 0059). */
+  readonly noFiling?: boolean | undefined;
 }
 
 /**
@@ -280,7 +312,7 @@ export async function editRecord(
   input: EditRecordInput,
   hooks: readonly AfterWrite[] = [],
 ): Promise<WrittenView> {
-  const { attributesByObject, results } = await setRecordValues(
+  const { attributesByObject, results, filedCompany } = await setRecordValues(
     scope,
     {
       recordId: input.recordId,
@@ -288,19 +320,36 @@ export async function editRecord(
       ...(input.timeZone === undefined ? {} : { timeZone: input.timeZone }),
     },
     hooks,
-    { deltasOnly: true },
+    { deltasOnly: true, ...(input.noFiling === true ? { noFiling: true } : {}) },
   );
-  return {
-    record: await freshRecord(scope, canonicalId(input.recordId), attributesByObject),
-    written: writtenOf(results),
-  };
+  const recordId = canonicalId(input.recordId);
+  try {
+    return {
+      record: await freshRecord(scope, recordId, attributesByObject),
+      written: writtenOf(results),
+      ...(filedCompany === undefined ? {} : { filedCompany }),
+    };
+  } catch (error) {
+    // The write committed, but a record rule now hides the record from its writer (spec 0032, AC-848): say so, once.
+    if (isRefusal(error) && error.refusal.code === 'RECORD_DELETED') {
+      const message = await outOfScopeMessage(scope, recordId, attributeIdsOf(input.values));
+      if (message !== undefined) throw refuse('RECORD_OUT_OF_SCOPE', message);
+    }
+    throw error;
+  }
 }
+
+/** The attribute ids a write names, in the form the engine keys them by. */
+const attributeIdsOf = (values: Readonly<Record<string, unknown>>): ReadonlySet<string> =>
+  new Set(Object.keys(values).map((key) => key.toLowerCase()));
 
 /** New values for many records (spec 0006, AC-50): each record's by attribute id. */
 export interface EditRecordsInput {
   readonly items: readonly EditRecordInput[];
   /** The writer's time zone, for every record's rules (spec 0013); UTC when absent. */
   readonly timeZone?: string | undefined;
+  /** An undo putting old values back: it files no company (spec 0059). */
+  readonly noFiling?: boolean | undefined;
 }
 
 /** What a record that landed and then went to the trash before its read back answers. */
@@ -322,29 +371,51 @@ export async function editRecords(
 ): Promise<BatchRecordResult[]> {
   const { outcomes, attributesByObject } = await setRecordValuesBatch(
     scope,
-    { items: input.items, ...(input.timeZone === undefined ? {} : { timeZone: input.timeZone }) },
+    {
+      items: input.items,
+      ...(input.timeZone === undefined ? {} : { timeZone: input.timeZone }),
+      ...(input.noFiling === true ? { noFiling: true } : {}),
+    },
     hooks,
   );
   const landed = [...new Set(outcomes.flatMap((outcome) => (outcome.ok ? [outcome.recordId] : [])))];
   const views = landed.length === 0 ? [] : await getRecords(scope, { ids: landed, attributes: attributesByObject });
   const byId = new Map(views.map((view) => [view.id, view]));
-  return outcomes.map((outcome): BatchRecordResult => {
-    if (!outcome.ok) {
+  return Promise.all(
+    outcomes.map(async (outcome): Promise<BatchRecordResult> => {
+      if (!outcome.ok) {
+        return {
+          recordId: outcome.recordId,
+          refusals: outcome.refusals.map((refusal) => ({
+            code: refusal.code,
+            message: refusal.message,
+            ...(refusal.attributeId === undefined ? {} : { attributeId: refusal.attributeId }),
+            ...(refusal.ruleId === undefined ? {} : { ruleId: refusal.ruleId }),
+          })),
+        };
+      }
+      const record = byId.get(outcome.recordId);
+      if (record !== undefined) {
+        return {
+          recordId: outcome.recordId,
+          record,
+          written: writtenOf(outcome.results),
+          ...(outcome.filedCompany === undefined ? {} : { filedCompany: outcome.filedCompany }),
+        };
+      }
+      // Landed, then out of the writer's sight by their own record rule (spec 0032, AC-848), or in the trash.
+      const sent = input.items.find((item) => canonicalId(item.recordId) === outcome.recordId);
+      const message = await outOfScopeMessage(scope, outcome.recordId, attributeIdsOf(sent?.values ?? {}));
       return {
         recordId: outcome.recordId,
-        refusals: outcome.refusals.map((refusal) => ({
-          code: refusal.code,
-          message: refusal.message,
-          ...(refusal.attributeId === undefined ? {} : { attributeId: refusal.attributeId }),
-          ...(refusal.ruleId === undefined ? {} : { ruleId: refusal.ruleId }),
-        })),
+        refusals: [
+          message === undefined
+            ? { code: 'RECORD_DELETED', message: TRASHED_SINCE }
+            : { code: 'RECORD_OUT_OF_SCOPE', message },
+        ],
       };
-    }
-    const record = byId.get(outcome.recordId);
-    return record === undefined
-      ? { recordId: outcome.recordId, refusals: [{ code: 'RECORD_DELETED', message: TRASHED_SINCE }] }
-      : { recordId: outcome.recordId, record, written: writtenOf(outcome.results) };
-  });
+    }),
+  );
 }
 
 /**

@@ -94,6 +94,8 @@ export interface ActivitySourceInput {
   readonly attributes: readonly AttributeDef[];
   readonly after?: ActivityBound;
   readonly limit: number;
+  /** The kinds the page was asked for, when it was filtered: a source answering several reads only those. */
+  readonly kinds?: readonly ActivityKind[];
 }
 
 /**
@@ -185,7 +187,7 @@ const SOURCE_KINDS: ReadonlyMap<ActivitySource, readonly ActivityKind[]> = new M
   [valueSource, ['change']],
   [linkSource, ['change', 'links']],
   [commentSource, ['comment']],
-  [noteSource, ['note']],
+  [noteSource, ['note', 'call', 'logged_meeting']],
   [taskSource, ['task']],
   [meetingSource, ['meeting']],
   [submissionSource, ['submission']],
@@ -310,8 +312,16 @@ export async function getActivity(scope: EngineScope, input: ActivityQuery): Pro
     let stop: string | undefined;
     // One after another: the sources share the read's one transaction.
     for (const source of sourcesFor(input.kinds)) {
-      const input = { tx, scope, record, attributes, ...(after === undefined ? {} : { after }), limit };
-      const answer = await source(input);
+      const sourceInput: ActivitySourceInput = {
+        tx,
+        scope,
+        record,
+        attributes,
+        ...(after === undefined ? {} : { after }),
+        limit,
+        ...(input.kinds === undefined ? {} : { kinds: input.kinds }),
+      };
+      const answer = await source(sourceInput);
       answered.push(...answer.entries);
       const stopped = answer.stoppedAt === undefined ? undefined : activityKey(answer.stoppedAt);
       if (stopped !== undefined && (stop === undefined || compareActivityKeys(stopped, stop) < 0)) stop = stopped;

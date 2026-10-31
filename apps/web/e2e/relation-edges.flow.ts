@@ -3,7 +3,7 @@
 // reference (a deal's company) and sends it with the create, so the record lands linked.
 import { randomUUID } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
-import { addPerson, newWorkspace } from './people.ts';
+import { addPerson, newWorkspace, openFullPage } from './people.ts';
 
 const RECORD_URL = /\/w\/[^/]+\/objects\/people\/([0-9a-f-]{36})\/overview$/;
 
@@ -29,6 +29,7 @@ test.describe('relations’ edges', () => {
       .getByRole('rowheader', { name: /Grace Hopper/ })
       .getByText('Grace Hopper')
       .click();
+    await openFullPage(page);
     await expect(page).toHaveURL(RECORD_URL);
 
     const details = page.getByRole('region', { name: 'Details' });

@@ -43,3 +43,26 @@ export async function removedUserIds(scope: EngineScope, memberIds: readonly str
   );
   return [...new Set(rows.flatMap((row) => (row.userId === null ? [] : [row.userId])))];
 }
+
+/**
+ * The user ids behind the members in `memberIds`, whatever their status (spec
+ * 0007 AC-84, spec 0009 AC-146): the people the relay disconnects with 4500
+ * ("access changed") once an `access` row naming them went out, so each of
+ * their browsers fetches a token for its new audience channel (or, removed,
+ * is refused one). Only the system reads it.
+ */
+export async function memberUserIds(scope: EngineScope, memberIds: readonly string[]): Promise<readonly string[]> {
+  if (scope.access.principal.kind !== 'system') {
+    throw new Error('Only the system reads member users (the relay, with its system scope).');
+  }
+  const ids = [...new Set(memberIds.filter(isUuid))].slice(0, MAX_IDS);
+  if (ids.length === 0) return [];
+  const rows = await inWorkspace(scope, (tx) =>
+    tx
+      .select({ userId: members.userId })
+      .from(members)
+      // Row level security keeps the read to this workspace; the filter says so too (house style).
+      .where(and(eq(members.workspaceId, scope.workspaceId), inArray(members.id, ids), isNotNull(members.userId))),
+  );
+  return [...new Set(rows.flatMap((row) => (row.userId === null ? [] : [row.userId])))];
+}

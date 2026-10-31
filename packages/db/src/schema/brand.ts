@@ -1,6 +1,6 @@
 // A workspace's brand kit (spec 0060, AC-1 to AC-4): the accent its booking pages and hosted forms wear, and its
 // logo. One row per workspace, made the first time an owner or admin saves it; no row means the product's own look.
-// A tenant table under forced row level security with the plain workspace policy (migration 0136_brand_kit).
+// A tenant table under forced row level security with the plain workspace policy (migration 0143_brand_kit).
 //
 // The accent is the one free value: a hex checked here as in the contract, so nothing typed ever reaches CSS. The
 // logo is a path in the private store the server made (`logos/<workspace id>/<random id>.<ext>`), its type and a

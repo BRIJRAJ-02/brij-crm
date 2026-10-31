@@ -1,5 +1,6 @@
 // Brief
-// Purpose: bring a spreadsheet of records into one object, seeing what each row will do before anything changes.
+// Purpose: bring a spreadsheet of records into one object, or one of its lists (spec 0048, AC-4833), seeing what each
+// row will do before anything changes.
 // Main task: choose a CSV, check where its columns go, settle any value that won't read, read the preview, start.
 // Leaves out: making far records of more than one object for a relation column, and file types other than CSV.
 import {
@@ -7,6 +8,7 @@ import {
   toActorDisplays,
   toFieldAttribute,
   type AttributeDefinition,
+  type ListView,
   type DataLayer,
   type ImportOnMatch,
   type ImportOnNoMatch,
@@ -24,28 +26,29 @@ import {
   createPhoneParser,
   Disclosure,
   EmptyState,
-  Icon,
+  type FieldAttribute,
   FileDrop,
-  InfoTip,
+  Icon,
   loadPhoneLibrary,
   Modal,
   PageColumn,
   Pagination,
+  type PhoneParser,
   ProgressBar,
   Radio,
   RadioGroup,
+  SampleTable,
   SectionBar,
   SegmentedControl,
   Select,
+  type SelectItem,
+  sharedStrings,
   Steps,
   Table,
-  Tooltip,
-  TopBar,
-  type FieldAttribute,
-  type PhoneParser,
-  type SelectItem,
   type TableColumn,
   type TextContext,
+  Tooltip,
+  TopBar,
 } from '@crm/ui';
 import { useBlocker, useNavigate } from '@tanstack/react-router';
 import { useMemo, useRef, useState } from 'react';
@@ -66,6 +69,7 @@ import {
 import { defaultDateOrder, longDay, numericDates, orderLocale, type DateOrder } from './date-order.ts';
 import { columnNames, missingOptions, suggestAttribute } from './missing.ts';
 import { importSummaryHref } from './paths.ts';
+import { listHref } from '../lists/paths.ts';
 import { RecentImports } from './RecentImports.tsx';
 import {
   applyLabels,
@@ -101,6 +105,11 @@ export interface ImportScreenProps {
   readonly objects: readonly ObjectSummary[];
   /** Whether the object holds records already (undefined when the count didn't load): no match key then warns. */
   readonly hasRecords?: boolean | undefined;
+  /**
+   * Into a list (spec 0048, AC-4833): its writable fields take columns beside the object's, named "<List>: <Field>"
+   * and listed first; each row then adds its record to the list, or updates its entry in an "Each record once" list.
+   */
+  readonly list?: { readonly list: ListView; readonly fields: readonly AttributeDefinition[] } | undefined;
 }
 
 /** What looking up a relation column's names found (decision 7), by column. */
@@ -216,11 +225,25 @@ export function ImportScreen({
   members,
   objects,
   hasRecords,
+  list: into,
 }: ImportScreenProps) {
   const navigate = useNavigate();
   const canManage = useCan('schema.manage');
+  // A list's fields first, each named for its list, so a column says where it goes (AC-4833).
+  const listFields = useMemo(
+    () =>
+      (into?.fields ?? [])
+        .filter((field) => !field.isSystem && !field.isArchived && field.readOnly === undefined)
+        .map((field) => ({
+          ...field,
+          title: strings.listField(into?.list.name ?? '', field.title),
+          position: field.position - 100_000,
+        })),
+    [into],
+  );
   // Read again after the page makes an attribute or options, so the columns and the preview use them.
-  const [attributes, setAttributes] = useState(given);
+  const [objectAttributes, setAttributes] = useState(given);
+  const attributes = useMemo(() => [...listFields, ...objectAttributes], [listFields, objectAttributes]);
   const [links, setLinks] = useState<ReadonlyMap<number, LinkCheck>>(new Map());
   const [columnsError, setColumnsError] = useState<string | undefined>(undefined);
   const linkRuns = useRef(new Map<number, number>());
@@ -470,7 +493,7 @@ export function ImportScreen({
   const reread = async () => {
     const next = await data.attributes.list(slug, object.id);
     setAttributes(next);
-    return next;
+    return [...listFields, ...next];
   };
 
   /** Points a column at a target, forgetting what the rows read as before. */
@@ -482,7 +505,8 @@ export function ImportScreen({
     checkLinks(loaded.table.rows, next, links);
   };
 
-  const candidates = matchAttributes(attributes, targets);
+  // Records are found by one of their own fields, never a list's.
+  const candidates = matchAttributes(objectAttributes, targets);
   const matchAttributeId =
     matchId === undefined
       ? (defaultMatch(object, candidates) ?? candidates[0]?.id)
@@ -613,7 +637,7 @@ export function ImportScreen({
         }
         current = await reread();
       } catch (error) {
-        setReviewError(isDataError(error) ? error.message : strings.somethingWrong);
+        setReviewError(isDataError(error) ? error.message : sharedStrings.couldntDoThat);
         await reread().catch(() => undefined);
         return;
       } finally {
@@ -645,6 +669,7 @@ export function ImportScreen({
       await data.imports.create(slug, {
         id,
         objectId: object.id,
+        ...(into === undefined ? {} : { listId: into.list.id }),
         fileName: loaded.name,
         rowCount: loaded.table.rows.length,
         errorRows: result.errors.length,
@@ -674,16 +699,20 @@ export function ImportScreen({
         setNotice({ tone: 'info', message: strings.stopped });
         return;
       }
-      setNotice({ tone: 'danger', message: isDataError(error) ? error.message : strings.somethingWrong });
+      setNotice({ tone: 'danger', message: isDataError(error) ? error.message : sharedStrings.couldntDoThat });
     }
   };
 
   const topBar = (
     <TopBar
-      title={strings.title(object.pluralName)}
-      icon={object.icon}
-      hue={object.hue}
-      crumbs={[{ id: 'object', label: object.pluralName, href: objectHref(slug, object) }]}
+      title={strings.title(into?.list.name ?? object.pluralName)}
+      icon={into?.list.icon ?? object.icon}
+      hue={into?.list.hue ?? object.hue}
+      crumbs={[
+        into === undefined
+          ? { id: 'object', label: object.pluralName, href: objectHref(slug, object) }
+          : { id: 'list', label: into.list.name, href: listHref(slug, into.list) },
+      ]}
     />
   );
 
@@ -718,7 +747,7 @@ export function ImportScreen({
       />
       {step === 'upload' && (
         <>
-          <Card description={strings.uploadText}>
+          <Card>
             <FileDrop
               label={strings.dropLabel}
               acceptedTypes={FILE_TYPES}
@@ -728,6 +757,8 @@ export function ImportScreen({
               wrongTypeText={excelRefusal}
             />
             {isReading && <ProgressBar label={strings.reading} isIndeterminate />}
+            {/* The file's shape as a picture: row 1 is the column names. */}
+            <SampleTable label={strings.sampleLabel} rows={strings.sampleRows} caption={strings.sampleCaption} />
             {/* A file's first row, as this object takes it: written here, nothing asked of the server. */}
             <Button
               variant="link"
@@ -830,7 +861,6 @@ export function ImportScreen({
         <Card
           title={strings.fileSummary(loaded.name, loaded.table.rows.length)}
           description={strings.totals(readyCount, errors)}
-          actions={<InfoTip label={strings.rowColumn}>{strings.rowInfo}</InfoTip>}
           footerNote={
             readyCount === 0
               ? undefined
@@ -883,7 +913,6 @@ export function ImportScreen({
               // The lookup follows the key: a new one asks again, always add drops it.
               lookUpMatches(result, candidates.some((attribute) => attribute.id === next) ? next : undefined);
             }}
-            {...(candidates.length === 0 ? { hint: strings.noKeyHint } : {})}
           />
           {matchAttributeId === undefined && hasRecords === true && (
             <Callout tone="warning">{strings.duplicates}</Callout>
@@ -1003,7 +1032,7 @@ export function ImportScreen({
             () => {
               if (column !== undefined) setTarget(column, { attributeId: made.id });
             },
-            () => setColumnsError(strings.somethingWrong),
+            () => setColumnsError(sharedStrings.couldntDoThat),
           );
         }}
       />
@@ -1031,7 +1060,7 @@ export function ImportScreen({
           </>
         }
       >
-        {strings.stopText}
+        {strings.nothingImported}
       </Modal>
       <Modal
         title={strings.leaveTitle}
@@ -1057,7 +1086,7 @@ export function ImportScreen({
           </>
         }
       >
-        {sending === undefined ? strings.leaveText : strings.leaveSendingText}
+        {strings.nothingImported}
       </Modal>
     </PageColumn>
   );
@@ -1184,7 +1213,6 @@ function ColumnsStep({
         </>
       }
     >
-      {matched === 0 && <Callout tone="info">{strings.needOneColumn}</Callout>}
       {error !== undefined && (
         <Callout tone="danger" isAnnounced>
           {error}
@@ -1197,7 +1225,6 @@ function ColumnsStep({
             key={`required-${attribute.id}`}
             tone="danger"
             isPolite
-            title={strings.requiredMissing(attribute.title)}
             {...(choices.some((choice) => choice.attribute.id === attribute.id) && freeColumns.length > 0
               ? {
                   actions: (
@@ -1216,17 +1243,10 @@ function ColumnsStep({
                 }
               : {})}
           >
-            {strings.requiredMissingText}
+            {strings.requiredMissing(attribute.title)}
           </Callout>
         ))}
-      {required.length > 0 && (
-        <Checkbox
-          label={strings.updateOnly}
-          description={strings.updateOnlyHint}
-          isSelected={!isCreating}
-          onChange={onUpdateOnly}
-        />
-      )}
+      {required.length > 0 && <Checkbox label={strings.updateOnly} isSelected={!isCreating} onChange={onUpdateOnly} />}
       {checked !== undefined && (
         <ProgressBar label={strings.checking} value={checked} maxValue={Math.max(loaded.table.rows.length, 1)} />
       )}
@@ -1326,12 +1346,17 @@ function ColumnsStep({
             }
             {...(canMake && check.missing.length > 0
               ? {
+                  // One choice per column, made already: Leave empty, or make them (31 October 2026).
                   actions: (
-                    <Checkbox
-                      label={strings.createMissing(check.missing.length, far.pluralName)}
-                      description={strings.createMissingHint}
-                      isSelected={making}
-                      onChange={(isSelected) => onCreateMissing(note.column, isSelected)}
+                    <SegmentedControl
+                      label={strings.linksChoice(header)}
+                      size="compact"
+                      segments={[
+                        { value: 'create', label: strings.createThem },
+                        { value: 'leave', label: strings.leaveEmpty },
+                      ]}
+                      value={making ? 'create' : 'leave'}
+                      onChange={(value) => onCreateMissing(note.column, value === 'create')}
                     />
                   ),
                 }
@@ -1342,7 +1367,6 @@ function ColumnsStep({
               check.ambiguous.length === 0 || check.missing.length === 0
                 ? ''
                 : strings.linksAmbiguous(check.ambiguous.length),
-              making ? '' : strings.linksLeftOut,
               canMake || check.missing.length === 0 || far === undefined ? '' : strings.linksCantMake(far.pluralName),
             ]
               .filter((part) => part !== '')
@@ -1419,7 +1443,7 @@ function PreviewTable({
       columns={columns}
       rows={shown}
       getRowId={(row) => `row-${String(row.rowNumber)}`}
-      emptyState={<EmptyState title={strings.noRows}>{strings.noRowsText}</EmptyState>}
+      emptyState={<EmptyState title={strings.noRows} />}
       renderCell={(row, columnId) => {
         if (columnId === 'row') return n(row.rowNumber);
         // A ready row says so, so the column never reads as missing values beside the errors.

@@ -1,22 +1,19 @@
-// Delivery planning (spec 0007, milestone 2): what the relay publishes for one
-// outbox row to each audience of its workspace. Each audience (members with
-// equal data policies, spec 0009's `audiences`) receives the row through spec
+// Delivery planning (spec 0007, milestones 2 and 4): what the relay publishes
+// for one outbox row to each audience of its workspace. Each audience (members
+// with equal data policies, spec 0009's `audiences`) has its own channel
+// (`audienceChannel` in `@crm/contracts`) and receives the row through spec
 // 0009's `filterEvent`, in its wire shape, or the stub when nothing of it is
 // left for them, so every channel carries every `seq` exactly once. Pure: the
 // relay loads the audiences (cached per workspace while it is awake) and the
-// facts, and publishes what this answers.
-//
-// Until milestone 4 gives each audience its own channel, a workspace has one
-// channel, `workspace:<id>`, and so one audience: with no access rules (#24)
-// every active member shares `open`. `workspaceEvent` refuses more than one,
-// failing loudly rather than sending one audience's copy to everyone.
+// facts, and publishes what this answers. With no access rules (#24) every
+// active member shares `open`, so a workspace has one channel and one copy.
 import type { ChangeEvent } from '@crm/contracts';
 import type { OutboxRow } from '@crm/db';
 import { filterEvent, type Audience, type EventFacts } from '../access/events.ts';
 import { SYSTEM_ACCESS } from '../access/policy.ts';
 import { outboxEvent, stubEvent, wireEvent } from './events.ts';
 
-/** One audience's copy of a row: the audience's key (its channel's suffix from milestone 4) and the event. */
+/** One audience's copy of a row: the audience's key (which names its channel) and the event. */
 export interface Delivery {
   readonly audience: string;
   readonly event: ChangeEvent;
@@ -52,30 +49,4 @@ export function planDelivery(
     const kept = event === undefined ? undefined : filterEvent(audience, event, facts);
     return { audience: audience.key, event: kept === undefined ? stubEvent(row.seq, row.at) : wireEvent(kept) };
   });
-}
-
-/** The code `workspaceEvent` throws with for a workspace of several audiences before milestone 4. */
-export const AUDIENCES_NEED_CHANNELS = 'AUDIENCES_NEED_CHANNELS';
-
-/** Whether `error` is `workspaceEvent`'s refusal of a workspace with several audiences. */
-export function isAudiencesNeedChannels(error: unknown): boolean {
-  return error instanceof Error && (error as Error & { code?: unknown }).code === AUDIENCES_NEED_CHANNELS;
-}
-
-/**
- * What `workspace:<id>` carries for `row` until milestone 4: the one
- * audience's copy. Throws (code `AUDIENCES_NEED_CHANNELS`) when the workspace
- * has more than one audience, which needs milestone 4's channel per audience
- * (no copy fits everyone).
- */
-export function workspaceEvent(row: OutboxRow, audiences: readonly Audience[], facts: EventFacts = {}): ChangeEvent {
-  if (audiences.length > 1) {
-    throw Object.assign(
-      new Error('A workspace with more than one audience needs a channel per audience (spec 0007, milestone 4).'),
-      { code: AUDIENCES_NEED_CHANNELS },
-    );
-  }
-  const [delivery] = planDelivery(row, audiences, facts);
-  if (delivery === undefined) throw new Error('A plan has one delivery per audience.');
-  return delivery.event;
 }

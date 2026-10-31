@@ -1,3 +1,5 @@
+import { strings as shared } from '../../lib/strings.ts';
+
 /** DataGrid's built in copy. */
 export const strings = {
   selectRow: (name: string) => `Select ${name}`,
@@ -7,6 +9,8 @@ export const strings = {
   /** The "+" menu's last item, under the hidden columns. */
   newColumnItem: 'New attribute…',
   untitled: 'Untitled',
+  /** What a row's comment count counts, read after the number. */
+  openThreads: (count: number) => (count === 1 ? 'open comment thread' : 'open comment threads'),
   columnOptions: (name: string) => `${name} options`,
   moveLeft: 'Move left',
   moveRight: 'Move right',
@@ -54,9 +58,8 @@ export const strings = {
   noteSeparator: ', ',
   rowNoLongerMatches: 'Doesn’t match this view',
   empty: 'No records yet',
-  emptyText: 'Records you add or import show here.',
   failed: 'Couldn’t load these records',
-  failedText: 'Something went wrong. Try again in a moment.',
+  failedText: shared.couldntDoThat,
   noAccess: 'You don’t have access to this view',
   noAccessText: 'Ask a workspace admin to share it with you.',
   notLoaded: 'Scroll to load these rows first.',

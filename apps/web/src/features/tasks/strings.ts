@@ -1,3 +1,5 @@
+import { sharedStrings } from '@crm/ui';
+
 /** The tasks screens' copy (spec 0019). */
 export const strings = {
   tasks: 'Tasks',
@@ -16,11 +18,12 @@ export const strings = {
   /** A task linked to a removed member keeps them, by this name (owner decision 6). */
   formerMember: 'Former member',
   /** Why a task's checkbox and fields can't be changed (AC-447). */
-  readOnly: 'You can view this task but not change it.',
+  readOnly: 'You can only view this task.',
   // The task dialog.
   task: 'Task',
   loading: 'Loading the task',
   title: 'Title',
+  description: 'Description',
   done: 'Done',
   dueDate: 'Due date',
   assignee: 'Assignee',
@@ -40,19 +43,19 @@ export const strings = {
   notDeleted: 'The task wasn’t deleted.',
   notRestored: 'Couldn’t restore the task.',
   linkCopied: 'Link copied',
-  copyFailed: 'Couldn’t copy the link. Copy it from the address bar.',
+  copyFailed: sharedStrings.couldntCopy,
   /** The footer line's term: who made it and when. */
   created: 'Created by',
   /** A link to a record of an object the person may only read (AC-447). */
-  linkForbidden: 'You can’t link a task to a record you can’t change.',
+  linkForbidden: 'You can’t link a record you can’t change.',
   /** The record picker's search didn't answer. */
-  searchFailed: 'The search didn’t answer. Type again to try again.',
+  searchFailed: 'Search failed. Type again.',
   /** A task that doesn't exist, was deleted, or the reader can't see. */
-  missing: 'This task doesn’t exist or you can’t see it.',
+  missing: 'This task isn’t available.',
   loadFailed: 'This task didn’t load.',
   titleRequired: 'Give the task a title.',
   /** The cap on linked records, said under the field. */
-  recordsFull: (max: number) => `A task links at most ${String(max)} records.`,
+  recordsFull: (max: number) => `Up to ${String(max)} records.`,
   unknownActor: 'Someone',
   apiKey: 'An API key',
   automation: 'An automation',
@@ -73,7 +76,6 @@ export const strings = {
   upcoming: 'Upcoming',
   noDate: 'No date',
   emptyAssigned: 'Nothing assigned to you',
-  emptyAssignedBody: 'Tasks someone gives you show here.',
   emptyCreated: 'No open tasks you created',
   emptyAll: 'No open tasks',
   failedTitle: 'Tasks didn’t load',

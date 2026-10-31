@@ -140,6 +140,7 @@ export async function importView(tx: WorkspaceTx, scope: EngineScope, row: Impor
   return {
     id: row.id,
     objectId: row.objectId,
+    ...(row.listId === null ? {} : { listId: row.listId }),
     fileName: row.fileName,
     rowCount: row.rowCount,
     errorRows: row.errorRows,
@@ -211,7 +212,14 @@ export function checkSettings(
   if (settings.onNoMatch === 'create') checkRequiredColumns(scope, attributes, mapped);
   if (settings.matchAttributeId !== undefined) {
     const match = attributes.get(settings.matchAttributeId);
-    if (match === undefined || !match.isUnique || !UNIQUE_TYPES.includes(match.type) || !whole.has(match.id)) {
+    // Records are found by one of their own attributes, never a list's field (spec 0048, AC-4833).
+    if (
+      match === undefined ||
+      match.listId !== null ||
+      !match.isUnique ||
+      !UNIQUE_TYPES.includes(match.type) ||
+      !whole.has(match.id)
+    ) {
       throw refuse('CONFIG_INVALID', 'Find records by a unique attribute that a column is matched to.');
     }
   }

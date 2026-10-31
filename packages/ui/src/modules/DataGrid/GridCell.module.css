@@ -172,6 +172,20 @@
     pointer-events: none;
   }
 
+  /* A record's open comment threads (a Badge with a comment mark) after the name, before any note: it keeps its
+     width, the name gives way, and it never takes the click meant for the name. */
+  .comments {
+    display: inline-flex;
+    flex: none;
+    margin-inline-start: auto;
+    padding-inline-start: var(--space-8);
+    pointer-events: none;
+  }
+
+  .comments + .note {
+    margin-inline-start: 0;
+  }
+
   /* "New" is one short word: it keeps its width and the name gives way, rather than reading "N…". */
   .note[data-note='new'] {
     flex: none;

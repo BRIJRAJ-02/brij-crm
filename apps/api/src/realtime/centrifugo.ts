@@ -54,11 +54,12 @@ function publishFailed(message: string, cause?: unknown): PublishError {
 }
 
 /**
- * Ends users' subscriptions to one channel (spec 0031, AC-817: a removed
- * person's live connection to the workspace is cut). Throws a
- * `PUBLISH_FAILED` error when Centrifugo can't be reached or refuses.
+ * Ends users' subscriptions to each of some channels, in one call (spec 0031,
+ * AC-817: a removed person's live connection to the workspace is cut, on
+ * every audience channel it may hold). Throws a `PUBLISH_FAILED` error when
+ * Centrifugo can't be reached or refuses.
  */
-export type Unsubscribe = (channel: string, userIds: readonly string[]) => Promise<void>;
+export type Unsubscribe = (channels: readonly string[], userIds: readonly string[]) => Promise<void>;
 
 /** The relay's publisher: `POST {apiUrl}/api/batch`, sequential; and its unsubscribe, through the same endpoint. */
 export function createCentrifugoPublisher(options: CentrifugoOptions): {
@@ -68,15 +69,15 @@ export function createCentrifugoPublisher(options: CentrifugoOptions): {
   const endpoint = `${options.apiUrl.replace(/\/+$/, '')}/api/batch`;
   const timeoutMs = options.timeoutMs ?? 5_000;
   return {
-    async unsubscribe(channel, userIds) {
-      if (userIds.length === 0) return;
+    async unsubscribe(channels, userIds) {
+      if (userIds.length === 0 || channels.length === 0) return;
       let response: Response;
       try {
         response = await fetch(endpoint, {
           method: 'POST',
           headers: { 'content-type': 'application/json', 'x-api-key': options.apiKey },
           body: JSON.stringify({
-            commands: userIds.map((user) => ({ unsubscribe: { channel, user } })),
+            commands: channels.flatMap((channel) => userIds.map((user) => ({ unsubscribe: { channel, user } }))),
             parallel: false,
           }),
           signal: AbortSignal.timeout(timeoutMs),
@@ -161,11 +162,56 @@ export interface DisconnectReason {
  */
 export type DisconnectUser = (userId: string, why: DisconnectReason) => Promise<boolean>;
 
-/** Centrifugo's server `disconnect`, by user. */
-export function createCentrifugoDisconnect(options: CentrifugoOptions): { readonly disconnectUser: DisconnectUser } {
-  const endpoint = `${options.apiUrl.replace(/\/+$/, '')}/api/disconnect`;
+/**
+ * Closes every live connection of each of some users in one call (`POST
+ * {apiUrl}/api/batch`), with the same terminal code for all: spec 0007's 4500
+ * when their access changed. Throws a `PUBLISH_FAILED` error when Centrifugo
+ * can't be reached or refuses any of them (closing again is harmless).
+ */
+export type DisconnectUsers = (userIds: readonly string[], why: DisconnectReason) => Promise<void>;
+
+/** Centrifugo's server `disconnect`, by user, one at a time or many in one batch. */
+export function createCentrifugoDisconnect(options: CentrifugoOptions): {
+  readonly disconnectUser: DisconnectUser;
+  readonly disconnectUsers: DisconnectUsers;
+} {
+  const base = options.apiUrl.replace(/\/+$/, '');
+  const endpoint = `${base}/api/disconnect`;
   const timeoutMs = options.timeoutMs ?? 5_000;
   return {
+    async disconnectUsers(userIds, why) {
+      if (userIds.length === 0) return;
+      let response: Response;
+      try {
+        response = await fetch(`${base}/api/batch`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'x-api-key': options.apiKey },
+          body: JSON.stringify({
+            commands: userIds.map((user) => ({
+              disconnect: { user, disconnect: { code: why.code, reason: why.reason } },
+            })),
+            // Each close stands alone: no order to keep, so Centrifugo may run them at once.
+            parallel: true,
+          }),
+          signal: AbortSignal.timeout(timeoutMs),
+        });
+      } catch (error) {
+        throw publishFailed('Centrifugo could not be reached.', error);
+      }
+      if (!response.ok) {
+        await response.body?.cancel();
+        throw publishFailed(`Centrifugo answered ${String(response.status)}.`);
+      }
+      const reply = BatchReply.safeParse(await response.json().catch(() => undefined));
+      const refused = reply.success
+        ? (reply.data.error ?? reply.data.replies?.find((item) => item.error)?.error)
+        : undefined;
+      if (!reply.success || refused !== undefined) {
+        throw publishFailed(
+          `Centrifugo refused the disconnect${refused === undefined ? '' : ` (${String(refused.code)})`}.`,
+        );
+      }
+    },
     async disconnectUser(userId, why) {
       try {
         const response = await fetch(endpoint, {

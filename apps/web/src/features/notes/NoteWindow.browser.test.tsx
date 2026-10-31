@@ -36,6 +36,7 @@ const READY: NoteSessionState = {
   status: 'ready',
   noteId: NOTE,
   recordId: RECORD.recordId,
+  links: [],
   isNew: false,
   title: 'Kickoff call',
   docKey: 0,
@@ -55,6 +56,7 @@ const session: NoteSession = {
   flush: () => undefined,
   retry: () => undefined,
   dismissNotice: () => undefined,
+  setLinks: () => Promise.resolve(undefined),
 };
 
 beforeAll(async () => {
@@ -94,6 +96,7 @@ async function renderWindow(answer: () => Promise<DataError | undefined> = () =>
       note={NOTE}
       record={RECORD}
       members={[]}
+      objects={[]}
       canChange
       onStored={() => undefined}
       onClose={onClose}

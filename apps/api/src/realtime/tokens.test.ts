@@ -30,9 +30,19 @@ describe("Centrifugo's tokens", () => {
   });
 
   it("signs a subscription token for the workspace's channel only, with the same user", () => {
-    const { channel, token } = tokens.subscription(USER, WORKSPACE);
+    const { channel, token } = tokens.subscription(USER, WORKSPACE, 'open');
     expect(channel).toBe(`workspace:${WORKSPACE}`);
     expect(read(token).claims).toEqual({ sub: USER, channel, exp: NOW / 1000 + REALTIME_TOKEN_SECONDS });
+  });
+
+  it("signs a restricted audience's own channel (spec 0007, milestone 4), and refuses a key that isn't one", () => {
+    const { channel, token } = tokens.subscription(USER, WORKSPACE, '0123456789abcdef');
+    expect(channel).toBe(`workspace:${WORKSPACE}.0123456789abcdef`);
+    expect(read(token).claims).toEqual({ sub: USER, channel, exp: NOW / 1000 + REALTIME_TOKEN_SECONDS });
+    // Nothing else becomes part of a channel name: no other namespace, no wildcard, no second suffix.
+    for (const key of ['', 'OPEN', '0123456789abcde', 'open.x', '*', `x:${WORKSPACE}`]) {
+      expect(() => tokens.subscription(USER, WORKSPACE, key)).toThrow();
+    }
   });
 
   it('signs with its own secret, so another secret never verifies', () => {

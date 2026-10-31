@@ -36,9 +36,7 @@ export const strings = {
   signUpClosed: 'There’s no account for this email, and sign up isn’t open yet. Check the address.',
   /** A wrong code while a new one can't be sent yet: no point offering one. */
   codeWrongWaiting: 'That code isn’t right. Try again.',
-  googleSignUpClosed:
-    'There’s no account for that Google email, and sign up isn’t open yet. Try another account, or use your email.',
-  somethingWrong: 'Something went wrong. Try again in a moment.',
+  googleSignUpClosed: 'No account for that Google email, and sign up isn’t open yet.',
   googleCancelled: 'Google sign in was cancelled. Try again, or use your email.',
   /** The session ended under the person (a 401 mid use), from `?signedOut=ended`. */
   signedOutEnded: 'You were signed out. Sign in again to carry on.',
@@ -46,7 +44,7 @@ export const strings = {
   /** The person deleted their account (spec 0033), from `?signedOut=deleted`. */
   signedOutDeleted: 'Your account was deleted.',
   signedOutUnsaved: 'You were signed out, so your last change wasn’t saved. Sign in again to carry on.',
-  googleUnverified: 'Google hasn’t verified that account’s email, so it can’t sign you in. Use your email instead.',
+  googleUnverified: 'Google hasn’t verified that email. Use your email instead.',
   googleFailed: 'Couldn’t sign in with Google. Try again, or use your email.',
   /** Sign out's confirm (the owner, 21 October 2026: anything that ends something asks first). */
   signOutTitle: 'Sign out?',

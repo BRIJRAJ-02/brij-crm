@@ -142,4 +142,37 @@ describe('createOutsideFetch', () => {
     const read = createOutsideFetch({ fetch: send, lookup: lookupOf({}) });
     expect(await read(new URL('https://linktr.ee/ada'), { allow: anyHost })).toEqual({ ok: false, reason: 'network' });
   });
+
+  it('stops at a deadline the caller shares, and makes no lookup or connection once it has passed', async () => {
+    const { send, calls } = answers({ type: 'text/html' });
+    const looked: string[] = [];
+    const read = createOutsideFetch({
+      fetch: send,
+      lookup: (host) => {
+        looked.push(host);
+        return Promise.resolve(PUBLIC);
+      },
+    });
+    const spent = AbortSignal.abort();
+    expect(await read(new URL('https://linktr.ee/ada'), { allow: anyHost, signal: spent })).toEqual({
+      ok: false,
+      reason: 'timeout',
+    });
+    expect(looked).toEqual([]);
+    expect(calls).toEqual([]);
+  });
+
+  it('gives up on a lookup that hangs at its timeout, and connects to nothing', async () => {
+    const { send, calls } = answers({ type: 'text/html' });
+    const read = createOutsideFetch({
+      fetch: send,
+      lookup: () =>
+        new Promise<readonly string[]>(() => {
+          // A name server that never answers.
+        }),
+      timeoutMs: 20,
+    });
+    expect(await read(new URL('https://linktr.ee/ada'), { allow: anyHost })).toEqual({ ok: false, reason: 'timeout' });
+    expect(calls).toEqual([]);
+  });
 });

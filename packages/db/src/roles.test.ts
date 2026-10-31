@@ -323,7 +323,7 @@ describe("migration 0018's closing check", () => {
     'revoke all on auth.profile_view_days, auth.profile_item_press_days from crm_handle',
     // And migration 0109's link imports, with its own closing check.
     'revoke all on auth.link_imports from crm_handle',
-    // And migration 0137's pictures, views by fact and bookings (spec 0061), with its own closing check.
+    // And migration 0144's pictures, views by fact and bookings (spec 0061), with its own closing check.
     'revoke all on auth.profile_images, auth.profile_view_source_days, auth.profile_booking_days from crm_handle',
     'revoke all (qr_style) on auth.public_profiles from crm_handle',
   ];
@@ -471,13 +471,15 @@ describe("migration 0020's closing check: who can reach crm_relay", () => {
 
   /**
    * Migration 0061 widened crm_sweep by the daily digest's columns (spec 0038; guards.test.ts holds it to exactly
-   * those). 0034's check ran before then, so each run first takes them back, as the database stood at 0034.
+   * those), as 0134 and 0140 did by their sweeps'. 0034's check ran before then, so each run first takes them back, as the database stood at 0034.
    */
   const AT_0034 = [
     'revoke select (workspace_id, member_id, digest, time_zone, digest_sent_on) on notification_settings from crm_sweep',
     'revoke select (workspace_id, id, status) on members from crm_sweep',
     // Migration 0134 widened it by the calendar health sweep's columns (spec 0037, J8).
     'revoke select (workspace_id, id, member_id, status, health_broken_at, health_notified_at, health_reminded_at) on calendar_connections from crm_sweep',
+    // Migration 0140 widened it by the automations due sweep's columns (parity #53).
+    'revoke select (workspace_id, trigger_kind, enabled, deleted_at) on automations from crm_sweep',
   ];
 
   /** Runs the check after `setup`, in a transaction that is rolled back, so nothing outlives the test. */
@@ -538,13 +540,15 @@ describe("migration 0034's closing check: crm_workspace_ids and crm_sweep (spec 
 
   /**
    * Migration 0061 widened crm_sweep by the daily digest's columns (spec 0038; guards.test.ts holds it to exactly
-   * those). 0034's check ran before then, so each run first takes them back, as the database stood at 0034.
+   * those), as 0134 and 0140 did by their sweeps'. 0034's check ran before then, so each run first takes them back, as the database stood at 0034.
    */
   const AT_0034 = [
     'revoke select (workspace_id, member_id, digest, time_zone, digest_sent_on) on notification_settings from crm_sweep',
     'revoke select (workspace_id, id, status) on members from crm_sweep',
     // Migration 0134 widened it by the calendar health sweep's columns (spec 0037, J8).
     'revoke select (workspace_id, id, member_id, status, health_broken_at, health_notified_at, health_reminded_at) on calendar_connections from crm_sweep',
+    // Migration 0140 widened it by the automations due sweep's columns (parity #53).
+    'revoke select (workspace_id, trigger_kind, enabled, deleted_at) on automations from crm_sweep',
   ];
 
   /** Runs the check after `setup`, in a transaction that is rolled back, so nothing outlives the test. */

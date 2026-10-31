@@ -49,6 +49,21 @@ describe('the plain record store', () => {
     expect(store.size()).toBe(1);
   });
 
+  it('keeps the open comment count through a read that carries none, and takes a new one', () => {
+    const counted = { ...revised('r1', { name: 'Ada' }, 1, {}), openThreads: 2 };
+    const store = holding([counted]);
+    // A write's answer or a partial read says nothing of comments: the count stays.
+    store.receive([revised('r1', { name: 'Ada B' }, 2, {})]);
+    expect(store.get('r1')?.openThreads).toBe(2);
+    expect(seen(store, 'r1')?.values).toEqual({ name: 'Ada B' });
+    // A read that asked says the new count, and listeners hear of the record.
+    const heard: string[][] = [];
+    store.subscribe((ids) => heard.push([...ids]));
+    store.receive([{ ...revised('r1', { name: 'Ada B' }, 2, {}), openThreads: 0 }]);
+    expect(store.get('r1')?.openThreads).toBe(0);
+    expect(heard).toEqual([['r1']]);
+  });
+
   it('shows an edit at once and tells listeners which record changed', () => {
     const store = withAda();
     const heard: string[][] = [];

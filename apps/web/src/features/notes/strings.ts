@@ -1,3 +1,5 @@
+import { sharedStrings } from '@crm/ui';
+
 /** The notes screens' copy (spec 0019, milestone 3). */
 export const strings = {
   notes: 'Notes',
@@ -5,8 +7,8 @@ export const strings = {
   untitled: 'Untitled note',
   /** The Notes tab with none yet. */
   noNotes: 'No notes yet',
-  /** The workspace's Notes page with none: where notes come from. */
-  noNotesBody: 'Notes written on a record show here.',
+  /** The workspace's Notes page can't make one: where notes are written. */
+  noNotesBody: 'Write notes on a record.',
   /** The Notes page's list didn't load. */
   loadFailedList: 'Notes didn’t load',
   listLabel: 'Notes',
@@ -21,8 +23,14 @@ export const strings = {
   more: 'More actions',
   copyLink: 'Copy link',
   linkCopied: 'Link copied',
-  copyFailed: 'Couldn’t copy the link. Copy it from the address bar.',
+  copyFailed: sharedStrings.couldntCopy,
   deleteNote: 'Delete note',
+  /** The More menu's way to link the note to other records (migration 0135), and the field that holds them. */
+  linkRecord: 'Link record',
+  linkedRecords: 'Linked records',
+  linkForbidden: 'You can’t link a record you can’t change.',
+  linksFull: (max: number) => `Up to ${String(max)} records.`,
+  searchFailed: 'Search failed. Type again.',
   noteDeleted: 'Note deleted',
   undo: 'Undo',
   notDeleted: 'The note wasn’t deleted.',
@@ -34,14 +42,62 @@ export const strings = {
   retry: 'Retry',
   loading: 'Loading the note',
   loadFailed: 'This note didn’t load.',
-  editorFailed: 'The editor didn’t load. Check your connection and try again.',
+  editorFailed: 'The editor didn’t load.',
   tryAgain: 'Try again',
-  unavailable: 'This note isn’t available. Its record may have been deleted, or you may not have access to it.',
-  readOnly: 'You can view this note but not change it.',
+  unavailable: 'This note isn’t available.',
+  readOnly: 'You can only view this note.',
   /** AC-443's notices. */
-  theirVersion: (name: string) => `${name} edited this note, so it now shows their version.`,
-  savedOverTheirs: (name: string) => `${name} edited this note at the same time. Your version was saved over theirs.`,
+  theirVersion: (name: string) => `${name} edited this note. Showing theirs.`,
+  savedOverTheirs: (name: string) => `${name} edited this too. Yours was saved over theirs.`,
   dismiss: 'Dismiss',
   formerMember: 'Former member',
   someone: 'Someone',
+  // Log activity: a call or a meeting logged on a record (migration 0137).
+  logActivity: 'Log activity',
+  logCall: 'Log a call',
+  logMeeting: 'Log a meeting',
+  call: 'Call',
+  meeting: 'Meeting',
+  /** The kind choice's name for screen readers. */
+  kindLabel: 'Type',
+  when: 'When',
+  date: 'Date',
+  time: 'Time',
+  duration: 'Duration',
+  durationCustom: 'Custom',
+  customMinutes: 'Minutes',
+  customMinutesHint: 'From 1 to 1,440 minutes.',
+  customMinutesInvalid: 'Type 1 to 1,440 minutes.',
+  addLength: 'Add a length',
+  add: 'Add',
+  outcome: 'Outcome',
+  outcomes: {
+    connected: 'Connected',
+    no_answer: 'No answer',
+    left_message: 'Left message',
+    held: 'Held',
+    cancelled: 'Cancelled',
+    no_show: 'No show',
+  },
+  addNotes: 'Notes',
+  addRecords: 'Records',
+  notesLabel: 'Notes',
+  cancel: 'Cancel',
+  logCallAction: 'Log call',
+  logMeetingAction: 'Log meeting',
+  logging: 'Logging',
+  save: 'Save',
+  /** The When row's error for a time more than a day ahead. */
+  tooFar: 'Log only what already happened.',
+  logFailed: 'This wasn’t logged.',
+  saveFailed: 'This wasn’t saved.',
+  linksNotSaved: 'Logged, but the links didn’t save. Open it to link them.',
+  theirsOver: (name: string) => `${name} edited this too. Yours was saved over theirs.`,
+  callDeleted: 'Call deleted',
+  meetingDeleted: 'Meeting deleted',
+  deleteActivity: 'Delete',
+  /** A duration: 15 min, 1 h, 1 h 30 min. */
+  minutes: (count: number) => `${String(count)} min`,
+  hours: (count: number) => `${String(count)} h`,
+  hoursMinutes: (hours: number, minutes: number) => `${String(hours)} h ${String(minutes)} min`,
 } as const;
