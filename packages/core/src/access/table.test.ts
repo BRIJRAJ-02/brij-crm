@@ -735,6 +735,46 @@ describe('the walk: a principal without the access is refused', () => {
     },
   );
 
+  // Spec 0037, AC-1331, AC-1337: a rotation's changes are booking.admin's and its editors'; a member in it who doesn't
+  // edit it is refused, and a principal without booking.manage first.
+  it.each(entries.filter(([, entry]) => 'editor' in entry).map(([name]) => name))(
+    '%s refuses a principal without booking.manage, and a member who doesn’t edit the rotation',
+    async (name) => {
+      const { scope, workspaceId, ownerId, memberId } = await memberOf('member');
+      const key = testScope({ db, workspaceId, actor: { type: 'api_key', id: core.newId() }, scopes: [] });
+      expect(await refusalOf(Promise.resolve().then(() => service(name)(key, {})))).toEqual({
+        code: 'FORBIDDEN',
+        message: PERMISSIONS['booking.manage'].message,
+      });
+      const owner = testScope({ db, workspaceId, actor: { type: 'member', id: ownerId } });
+      // The workspace link books "Everyone on the roster", which the member is in (and so sees) but doesn't edit.
+      const link = await core.createBookingPage(owner, {
+        id: core.newId(),
+        title: 'Talk to us',
+        timeZone: 'UTC',
+        scope: 'workspace',
+      });
+      const rotationId = link.hosts?.rotations[0] ?? '';
+      const input = {
+        rotationId,
+        resourceType: 'rotation',
+        resourceId: rotationId,
+        settings: { name: 'Mine now' },
+        memberId,
+        units: 1,
+        note: 'Mine',
+        adjustmentId: core.newId(),
+      };
+      expect((await refusalOf(service(name)(scope, input))).code).toBe('FORBIDDEN');
+      // The link itself is the owner's to change: its editors answer as absent.
+      if (name === 'listEditors') {
+        expect(
+          (await refusalOf(core.listEditors(scope, { resourceType: 'booking_page', resourceId: link.id }))).code,
+        ).toBe('NOT_FOUND');
+      }
+    },
+  );
+
   // The workspace's every delegation (the Members page's column, AC-1267): `members.manage` alone.
   it('listDelegations refuses a member asking for every delegation in the workspace', async () => {
     const { scope } = await memberOf('member');

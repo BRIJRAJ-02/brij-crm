@@ -1,10 +1,13 @@
 // Rotations for members (spec 0029, AC-728 to AC-730, AC-751, AC-752,
 // AC-757, AC-758): list, make, change and delete the pools round robin pages
-// book from. Making, changing and deleting need `booking.admin`; anyone with
-// `booking.manage` lists the rotations they are in, with everyone's names but
-// only their own count (everyone's with `booking.admin`). Rotations are
-// settings, not CRM data: their writes store no outbox row.
-import { and, asc, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
+// book from. Making and deleting need `booking.admin`; changing needs it or
+// being one of the rotation's editors (spec 0037, AC-1331, AC-1337), and
+// adding someone or changing their settings Manage over them (AC-1340).
+// Anyone with `booking.manage` lists the rotations they are in or edit, with
+// everyone's names but only their own count (everyone's for `booking.admin`
+// and editors). Rotations are settings, not CRM data: their writes store no
+// outbox row.
+import { and, asc, eq, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 import {
   PERMISSIONS,
   ROTATION_MEMBERS,
@@ -16,6 +19,7 @@ import {
 import { schema, type WorkspaceTx } from '@crm/db';
 import { requirePermission } from '../access/check.ts';
 import type { EngineScope } from '../access/mint.ts';
+import { canActFor, schedulingReach } from '../access/scheduling.ts';
 import { can } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
 import { refuse, refuseOn } from '../engine/refusals.ts';
@@ -23,6 +27,7 @@ import { uuidArray } from '../engine/ids.ts';
 import { actorRow } from '../engine/scope.ts';
 import { writeAudit } from '../members/audit.ts';
 import { queueSchedulingNotice } from '../scheduling/notice.ts';
+import { deleteEditorsOf, editedBy } from '../scheduling/editor-rows.ts';
 import { lockRotation, windowCounts, windowStart } from './ledger.ts';
 import { keepRosterRows, rosterCalibration } from './roster.ts';
 import { eligibleMembers, ROTATION_ROLES, rulesOf } from './team.ts';
@@ -54,10 +59,13 @@ async function viewsOf(
   scope: EngineScope,
   rows: readonly RotationRow[],
   now: Date,
+  edits?: ReadonlySet<string>,
 ): Promise<readonly RotationView[]> {
   if (rows.length === 0) return [];
   const ids = rows.map((row) => row.id);
   const everyone = can(scope.access, 'booking.admin');
+  // The rotations the reader edits (AC-1331): they see everyone's counts there, as an admin does (AC-1330).
+  const edited = edits ?? (await editedBy(tx, scope, 'rotation'));
   const me = memberOf(scope);
   // Through `rotation_roster`: "Everyone on the roster" lists every active member who isn't a guest.
   const held = await tx
@@ -123,6 +131,8 @@ async function viewsOf(
     .groupBy(bookingPageRotations.rotationId);
   const pageCounts = new Map(pages.map((row) => [row.rotationId, row.count]));
   return rows.map((row) => {
+    const isEditor = edited.has(row.id);
+    const manages = everyone || isEditor;
     const listed = held.filter((member) => member.rotationId === row.id);
     // Someone in "Everyone on the roster" with no row yet counts from the pool's average (`rosterCalibration`).
     const calibrated = rosterCalibration(
@@ -153,7 +163,7 @@ async function viewsOf(
         isOn: member.isOn,
         // Spec 0037, AC-1315: nothing about a colleague's calendar unless the reader is an admin.
         ...(everyone || member.memberId === me ? { hasCalendar: member.hasCalendar } : {}),
-        ...(everyone || member.memberId === me
+        ...(manages || member.memberId === me
           ? {
               count: (counts.get(`${row.id}:${member.memberId}`) ?? 0) + (calibrated[index] ?? member.calibration),
               upcoming: upcoming.get(`${row.id}:${member.memberId}`) ?? 0,
@@ -161,20 +171,26 @@ async function viewsOf(
           : {}),
       })),
       pages: pageCounts.get(row.id) ?? 0,
-      canChange: everyone,
+      canChange: manages,
+      ...(isEditor ? { isEditor: true } : {}),
+      canManage: everyone,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };
   });
 }
 
-/** The rotations the reader may see (AC-752): every live one with `booking.admin`, else the ones they're in. */
+/**
+ * The rotations the reader may see (AC-752, AC-1332): every live one with `booking.admin`, else the ones they're in
+ * and the ones they edit.
+ */
 export async function listRotations(scope: EngineScope, now: Date = new Date()): Promise<readonly RotationView[]> {
   requirePermission(scope, 'booking.manage');
   const me = memberOf(scope);
   const everyone = can(scope.access, 'booking.admin');
   if (!everyone && me === undefined) return [];
   return inWorkspace(scope, async (tx) => {
+    const edits = await editedBy(tx, scope, 'rotation');
     const rows = await tx
       .select()
       .from(rotations)
@@ -183,13 +199,16 @@ export async function listRotations(scope: EngineScope, now: Date = new Date()):
           isNull(rotations.deletedAt),
           everyone
             ? undefined
-            : sql`exists (select 1 from ${rotationRoster} m where m.workspace_id = "rotations"."workspace_id"
-                and m.rotation_id = "rotations"."id" and m.member_id = ${me ?? null}::uuid)`,
+            : or(
+                sql`exists (select 1 from ${rotationRoster} m where m.workspace_id = "rotations"."workspace_id"
+                  and m.rotation_id = "rotations"."id" and m.member_id = ${me ?? null}::uuid)`,
+                edits.size === 0 ? undefined : inArray(rotations.id, [...edits]),
+              ),
         ),
       )
       .orderBy(asc(rotations.name), asc(rotations.id))
       .limit(200);
-    return viewsOf(tx, scope, rows, now);
+    return viewsOf(tx, scope, rows, now, edits);
   });
 }
 
@@ -235,6 +254,80 @@ async function checkMembers(tx: WorkspaceTx, list: readonly RotationMemberInput[
       );
     }
   }
+}
+
+/** Changing a rotation, for anyone but `booking.admin` and its editors (AC-1337). */
+const CHANGE_FORBIDDEN = 'Only an admin or one of this group’s editors can change it.';
+
+/** The refusal for adding someone, or changing their settings, without Manage over them (spec 0037, AC-1340). */
+export const ADD_MEMBER_FORBIDDEN = 'You can only add people whose scheduling you manage.';
+
+/**
+ * Whether the reader may change the rotation (AC-1331, AC-1337): `booking.admin`, or one of its editors. A member who
+ * is in it (and so sees it) is refused 403 FORBIDDEN; anyone else meets it as absent, NOT_FOUND.
+ */
+export async function mayChangeRotation(tx: WorkspaceTx, scope: EngineScope, rotationId: string): Promise<void> {
+  if (can(scope.access, 'booking.admin')) return;
+  if ((await editedBy(tx, scope, 'rotation')).has(rotationId)) return;
+  const me = memberOf(scope);
+  const [inIt] =
+    me === undefined
+      ? []
+      : await tx
+          .select({ memberId: rotationRoster.memberId })
+          .from(rotationRoster)
+          .where(and(eq(rotationRoster.rotationId, rotationId), eq(rotationRoster.memberId, me)));
+  if (inIt === undefined) throw refuse('NOT_FOUND', NOT_FOUND_MESSAGE);
+  throw refuse('FORBIDDEN', CHANGE_FORBIDDEN);
+}
+
+/**
+ * Who takes bookings is guarded (AC-1340): beyond `booking.admin`, adding a member, or changing a member's weight,
+ * priority, caps or on and off, needs Manage over that member; removing one doesn't. Read against the stored rows,
+ * so a member sent unchanged passes. One reach read, only when something about someone changes.
+ */
+async function checkMembersReach(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  rotationId: string,
+  list: readonly RotationMemberInput[],
+): Promise<void> {
+  if (can(scope.access, 'booking.admin')) return;
+  const before = await tx
+    .select({
+      memberId: rotationRoster.memberId,
+      weight: rotationRoster.weight,
+      priority: rotationRoster.priority,
+      dailyCap: rotationRoster.dailyCap,
+      weeklyCap: rotationRoster.weeklyCap,
+      isOn: rotationRoster.isOn,
+    })
+    .from(rotationRoster)
+    .where(
+      and(
+        eq(rotationRoster.rotationId, rotationId),
+        inArray(
+          rotationRoster.memberId,
+          list.map((member) => member.memberId),
+        ),
+      ),
+    );
+  const held = new Map(before.map((row) => [row.memberId, row]));
+  const touched = list.filter((member) => {
+    const was = held.get(member.memberId);
+    return (
+      was === undefined ||
+      was.weight !== member.weight ||
+      was.priority !== member.priority ||
+      was.dailyCap !== member.dailyCap ||
+      was.weeklyCap !== member.weeklyCap ||
+      was.isOn !== member.isOn
+    );
+  });
+  if (touched.length === 0) return;
+  const reach = await schedulingReach(tx, scope);
+  const index = list.findIndex((member) => touched.includes(member) && !canActFor(reach, member.memberId, 'manage'));
+  if (index >= 0) throw refuseOn('FORBIDDEN', ADD_MEMBER_FORBIDDEN, `members.${String(index)}`);
 }
 
 /** The rotation's row, live, locked for the change; NOT_FOUND otherwise. */
@@ -360,12 +453,14 @@ export async function updateRotation(
   input: Pick<UpdateRotationInput, 'rotationId' | 'settings' | 'members'>,
   now: Date = new Date(),
 ): Promise<RotationView> {
-  requirePermission(scope, 'booking.admin');
+  requirePermission(scope, 'booking.manage');
   const by = actorRow(scope.actor);
   return inWorkspace(scope, async (tx) => {
     const current = await rotationToChange(tx, input.rotationId);
+    await mayChangeRotation(tx, scope, current.id);
     // Under the rotation's lock, so a booking's pick never sees half a change, and the joiners' calibration is exact.
     await lockRotation(tx, scope.workspaceId, current.id);
+    if (input.members !== undefined) await checkMembersReach(tx, scope, current.id, input.members);
     const { settings } = input;
     const [row] = await tx
       .update(rotations)
@@ -619,6 +714,7 @@ export async function deleteRotation(
         updatedByMemberId: by.memberId,
       })
       .where(eq(rotations.id, current.id));
+    await deleteEditorsOf(tx, 'rotation', [current.id]);
     return { rotationId: current.id };
   });
 }

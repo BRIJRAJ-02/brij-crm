@@ -710,6 +710,19 @@ export function toEntryView(row: AuditRow, names: AuditNames): AuditEntryView | 
         changes: [],
       };
     }
+    case 'editors.changed': {
+      const many = (value: unknown) => (Array.isArray(value) ? value.length : 0);
+      return {
+        ...base,
+        action,
+        target:
+          row.targetType === 'rotation'
+            ? thing('rotation', names.rotations)
+            : thing('booking_page', names.bookingPages),
+        params: { added: many(after.added), removed: many(after.removed) },
+        changes: [],
+      };
+    }
     case 'rotation.changed': {
       const many = (value: unknown) => (Array.isArray(value) ? value.length : 0);
       return {

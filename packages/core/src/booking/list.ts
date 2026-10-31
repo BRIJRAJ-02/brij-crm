@@ -144,6 +144,7 @@ async function seeOnlyOf(
         ({ booking, pageOwner }) =>
           bookingAccess(reader, {
             hostMemberId: booking.hostMemberId,
+            pageId: booking.pageId,
             ownerMemberId: pageOwner,
             coHostIds: coHosts.get(booking.id) ?? [],
           }) === 'see',

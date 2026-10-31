@@ -271,6 +271,7 @@ const SENTENCES: SentenceTemplates = {
       `${entry.params.deleted ? 'deleted' : 'changed'} ${w.persons(entry.target.person)} “${entry.params.page}” page`,
     ),
   'rotation.changed': (entry, w) => actor(`changed who is in ${w.thing(entry.target)}`),
+  'editors.changed': (entry, w) => actor(`changed who can edit ${w.thing(entry.target)}`),
 };
 
 /** A delegation's level as its verb: See or Manage. */

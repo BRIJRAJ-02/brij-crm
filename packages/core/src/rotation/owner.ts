@@ -14,7 +14,10 @@
 // still gets an owner), and not on time off now (spec 0037, AC-1283). A record that already has an owner keeps them
 // (AC-567): the rotation counts it to them (`owner`) when it sends returning
 // people to their owner and the owner may take a lead now, and otherwise
-// takes no turn. One lead never has two live assignments in one rotation:
+// takes no turn; an owner away now (spec 0037, AC-1284) gives way to their
+// stand in, when the stand in may take a lead now, whether or not they are in
+// the rotation (reason `standin`; the record keeps its owner, and the lead and
+// its notice go to the stand in). One lead never has two live assignments in one rotation:
 // one already there answers again, and a submission filed a second time (its
 // record went to the trash, Add to CRM) keeps the member it was given. The
 // rotation gone, or nobody able to take the lead, is a typed answer, never a
@@ -152,6 +155,16 @@ async function openCandidates(tx: WorkspaceTx, rules: RotationRules, now: Date):
   });
 }
 
+/**
+ * Whether a stand in outside the rotation may take a lead now (AC-1284): active and not a guest (`awayAt` names only
+ * such a stand in), not away now themself, and not on a day off today in their own zone.
+ */
+async function mayTakeLeadNow(tx: WorkspaceTx, memberId: string, now: Date): Promise<boolean> {
+  if ((await awayAt(tx, [memberId], now)).has(memberId)) return false;
+  const day = (await todayOf(tx, [memberId], now)).get(memberId);
+  return day !== undefined && !day.isDayOff;
+}
+
 /** The lead's live row in the rotation, if it has one (one per lead and rotation: the unique index). */
 async function liveRow(
   tx: WorkspaceTx,
@@ -199,8 +212,22 @@ export async function pickLeadOwner(tx: WorkspaceTx, input: LeadOwnerInput): Pro
     // the rotation sends returning people to their owner, the owner may take a lead now, and it isn't counted yet.
     const ownerId = input.current.memberId;
     if (live !== undefined || input.again === true || rules.returning !== 'owner' || ownerId === undefined) return kept;
-    const pick = pickMember(await openCandidates(tx, rules, now), rules, { ownerId });
-    return pick?.reason === 'owner' ? picked(rules, pick) : kept;
+    const open = await openCandidates(tx, rules, now);
+    // Away now with a stand in (AC-1284): the stand in takes the lead in the owner's place.
+    const standinId = (await awayAt(tx, [ownerId], now)).get(ownerId);
+    const pick = pickMember(open, rules, { ownerId, ...(standinId === undefined ? {} : { standinId }) });
+    if (pick?.reason === 'owner' || pick?.reason === 'standin') return picked(rules, pick);
+    if (standinId !== undefined && !open.some((each) => each.memberId === standinId)) {
+      // Outside the rotation: they take it when free of time off and a day off today; it counts toward no share.
+      if (await mayTakeLeadNow(tx, standinId, now)) {
+        return picked(rules, {
+          memberId: standinId,
+          reason: 'standin',
+          detail: { strategy: rules.strategy, compared: [] },
+        });
+      }
+    }
+    return kept;
   }
 
   // Given before (its live row, or this submission's earlier pick): theirs again while they are still here.
