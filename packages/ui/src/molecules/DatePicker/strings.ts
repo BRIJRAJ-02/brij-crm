@@ -24,5 +24,9 @@ export const strings = {
   thisMonth: 'This month',
   lastMonth: 'Last month',
   thisQuarter: 'This quarter',
+  /** The future presets: today to the week's last day. */
+  restOfWeek: 'Rest of this week',
+  /** The future presets: the whole of next month (nextMonth is the calendar's arrow). */
+  nextMonthRange: 'Next month',
   readOnly: 'Read only',
 } as const;
