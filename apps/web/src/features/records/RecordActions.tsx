@@ -113,7 +113,7 @@ export function RecordActions({
             {strings.copyLink}
           </MenuItem>
           {canDelete ? (
-            <MenuItem id="merge" icon="merge">
+            <MenuItem id="merge" icon="layers">
               {mergeStrings.mergeWith}
             </MenuItem>
           ) : null}

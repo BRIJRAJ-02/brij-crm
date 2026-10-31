@@ -26,30 +26,27 @@ export interface RadioProps {
 
 /** One choice in a RadioGroup. */
 export function Radio({ value, children, description, icon, preview, isDisabled = false }: RadioProps) {
+  // What sits under the label, read as its description: a card's value, else the line of words.
+  const under = preview ?? description;
   return (
     <RadioField className={styles.field} value={value} isDisabled={isDisabled}>
       <RadioButton className={styles.radio}>
         <span className={styles.circle} aria-hidden="true">
           <span className={styles.dot} />
         </span>
-        <span
-          className={styles.label}
-          data-described={description === undefined && preview === undefined ? undefined : ''}
-        >
+        <span className={styles.label} data-described={under === undefined ? undefined : ''}>
           {icon !== undefined && <Icon name={icon} size="sm" />}
           {children}
         </span>
       </RadioButton>
-      {preview !== undefined ? (
-        <Text slot="description" elementType="div" className={styles.preview}>
-          {preview}
+      {under !== undefined && (
+        <Text
+          slot="description"
+          elementType={preview === undefined ? 'span' : 'div'}
+          className={preview === undefined ? styles.description : styles.preview}
+        >
+          {under}
         </Text>
-      ) : (
-        description !== undefined && (
-          <Text slot="description" className={styles.description}>
-            {description}
-          </Text>
-        )
       )}
     </RadioField>
   );

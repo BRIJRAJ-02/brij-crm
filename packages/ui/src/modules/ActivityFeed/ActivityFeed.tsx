@@ -203,7 +203,7 @@ const KIND_ICONS: Readonly<Record<Exclude<ActivityEntry['kind'], 'change' | 'lin
   created: 'plus',
   changes: 'pencil',
   deleted: 'trash',
-  merged: 'merge',
+  merged: 'layers',
   note: 'notebook',
   task: 'square-check',
   comment: 'message-square',

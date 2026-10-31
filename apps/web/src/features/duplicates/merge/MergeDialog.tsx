@@ -344,7 +344,7 @@ export function MergeDialog({
     <Modal
       title={strings.title(object.pluralName)}
       variant="window"
-      icon="merge"
+      icon="layers"
       isOpen={recordIds !== undefined}
       isBusy={pending}
       isDismissable={false}
@@ -380,7 +380,7 @@ export function MergeDialog({
           </Button>
           <Button
             variant="primary"
-            icon="merge"
+            icon="layers"
             isPending={pending}
             isDisabled={pair === undefined || shown?.status === 'failed' || (ready?.tooLarge ?? false)}
             onPress={merge}

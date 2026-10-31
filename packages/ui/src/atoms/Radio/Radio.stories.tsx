@@ -184,7 +184,11 @@ export const CardsWithValues: Story = {
   play: async ({ canvas, userEvent }) => {
     const merged = canvas.getByRole('radio', { name: 'Jane D.' });
     await expect(merged).toHaveAccessibleDescription('CTO');
-    await userEvent.click(canvas.getByText('CTO'));
+    // The whole card picks it, the value under the label included: asked of the browser, as Cards does.
+    const value = canvas.getByText('CTO').getBoundingClientRect();
+    const under = document.elementFromPoint(value.left + value.width / 2, value.top + value.height / 2);
+    await expect(under?.closest('label')).toBe(merged.closest('label'));
+    await userEvent.click(merged);
     await expect(merged).toBeChecked();
   },
 };
