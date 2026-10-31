@@ -292,9 +292,11 @@
   }
 
   /* A quiet column (a weekend): the whole column a step down into the page, sunken in both themes (surface-subtle
-     sat a hair under the page in dark and didn't show, 31 October 2026). */
+     sat a hair under the page in dark and didn't show, 31 October 2026). A row of sums takes no hover, so the band
+     stays down it under the pointer too, and the column reads as one band to the grid's foot. */
   .column[data-tone='quiet'],
-  .row:not([data-selected], [data-hovered]) > .cell[data-tone='quiet'] {
+  .row:not([data-selected], [data-hovered]) > .cell[data-tone='quiet'],
+  .row[data-tone='total'] > .cell[data-tone='quiet'] {
     background: var(--surface-sunken);
   }
 

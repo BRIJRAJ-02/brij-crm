@@ -215,6 +215,24 @@ export const Phone: Story = {
   ),
 };
 
+/** Only the reader so far: the legend's quiet line ends with a plain hint, no box. */
+export const OnlyYou: Story = {
+  render: (args) => (
+    <Stage width="fill">
+      <TeamWeek
+        {...args}
+        people={people().slice(0, 1)}
+        footer={footer}
+        legend={{ ...legend, hint: 'Teammates show here once they share their hours with you.' }}
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Teammates show here once they share their hours with you.')).toBeVisible();
+    await expect(canvas.getByRole('list', { name: 'Key' })).toBeInTheDocument();
+  },
+};
+
 /** A day's editor as the Roster draws it: the day's hours, the way back to usual, Cancel and Save. */
 function DayEditor({ close }: { readonly close: () => void }) {
   const [ranges, setRanges] = useState<readonly HoursRange[]>([['10:00', '14:00']]);

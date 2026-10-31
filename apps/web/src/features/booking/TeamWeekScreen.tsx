@@ -413,7 +413,10 @@ function Loaded({
   const copyIsPartial = query !== '' || (state.status === 'ready' && state.week.nextCursor !== undefined);
   // The keys say what each look means in a word each; the cells' own hover edge says they open (no hint line). A
   // grid with nothing to change draws its days as words, with no blocks, so it keys only the dot and Away.
-  const legend: { readonly items: readonly TeamWeekLegendItem[] } = {
+  // Only the reader on the roster: one plain line after the keys says why, not a box of its own (polish, 31 Oct).
+  const isOnlyYou = shown !== undefined && shown.rows.length === 1 && query === '';
+  const legend: { readonly items: readonly TeamWeekLegendItem[]; readonly hint?: string } = {
+    ...(isOnlyYou ? { hint: words.seesOnlyYou } : {}),
     items: [
       ...(anyEditable ? [{ tone: 'usual' as const, label: words.legendUsual }] : []),
       { tone: 'override', label: words.legendChanged },
@@ -579,9 +582,6 @@ function Loaded({
             );
           }}
         />
-        {shown !== undefined && shown.rows.length === 1 && query === '' && (
-          <Callout tone="info">{words.seesOnlyYou}</Callout>
-        )}
         {state.status === 'ready' && state.more === 'failed' && <Callout tone="danger">{words.moreFailed}</Callout>}
         {state.status === 'ready' && state.week.nextCursor !== undefined && (
           <Button variant="secondary" isPending={state.more === 'loading'} onPress={() => held.more()}>

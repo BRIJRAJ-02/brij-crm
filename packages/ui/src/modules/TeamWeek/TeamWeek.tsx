@@ -201,13 +201,14 @@ export function TeamWeek({
       />
       {legend !== undefined && people.length > 0 && !isLoading && (
         <div className={styles.legend}>
-          {/* Each key is a small cell of its own look, its meaning written inside it, so it reads in both themes
-              without a swatch to match by eye. */}
+          {/* Each key is a small mark of its tone's look, edged so it holds in dark, with its word beside it. */}
           <ul className={styles.keys} aria-label={strings.legend}>
             {legend.items.map((item) => (
-              <li key={item.tone} className={styles.key} data-tone={item.tone}>
+              <li key={item.tone} className={styles.key}>
+                <span aria-hidden="true" className={styles.swatch} data-tone={item.tone}>
+                  {item.tone === 'override' && <span className={styles.dot} />}
+                </span>
                 {item.label}
-                {item.tone === 'override' && <span aria-hidden="true" className={styles.dot} />}
               </li>
             ))}
           </ul>
