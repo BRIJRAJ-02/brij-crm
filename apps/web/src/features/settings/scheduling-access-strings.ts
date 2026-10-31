@@ -89,7 +89,7 @@ export const strings = {
   everyoneOption: 'Everyone',
   everyoneOptionText: 'Every member but owners and admins',
   /** A team in the Give access picker: its people now; joiners are reached as they join. */
-  teamOptionText: (count: number) => `Team · ${String(count)} ${count === 1 ? 'person' : 'people'}`,
+  teamOptionText: (count: number) => (count === 1 ? '1 person' : `${String(count)} people`),
   give: 'Give access',
   given: (delegate: string, level: 'view' | 'manage', whose: string) =>
     `${delegate} can now ${levelWord(level)} ${whose} scheduling.`,
