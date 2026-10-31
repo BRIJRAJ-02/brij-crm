@@ -40,6 +40,7 @@ import { writeAudit } from '../members/audit.ts';
 import { changedRuleIds, checkPageRoutes, rulesChanged } from '../routing/check.ts';
 import { NONE_UNSEEN, rulesSeen, unseenRules, withUnseenRules, type UnseenRule } from '../routing/seen.ts';
 import { actorRow } from '../engine/scope.ts';
+import type { WriteContext } from '../engine/write.ts';
 import type { RemovalEffect } from '../members/removal-effect.ts';
 import { ownerSlugs, publicProfilesOf } from './handles.ts';
 import { placeNewPage } from '../profile/items.ts';
@@ -808,6 +809,17 @@ export async function updateBookingPage(
     ) {
       await checkRotationsBook(tx, scope.workspaceId, page.id);
     }
+    // A personal or collective page turned back on needs a host who isn't a guest (spec 0037, AC-1432): a page paused
+    // when its owner became a guest stays paused until they are a member again.
+    if (page.kind !== 'round_robin' && settings.status === 'live' && page.status !== 'live') {
+      const hosts = await tx.execute<{ n: number }>(sql`
+        select count(*)::int as n from booking_page_members m
+        join members h on h.workspace_id = m.workspace_id and h.id = m.member_id
+          and h.status = 'active' and h.role::text <> 'guest'
+        where m.workspace_id = ${scope.workspaceId}::uuid and m.page_id = ${page.id}::uuid
+      `);
+      if ((hosts.rows[0]?.n ?? 0) === 0) throw refuseOn('MEMBER_INVALID', GUESTS_CANT_HOST, 'status');
+    }
     // Routing rules (spec 0043, AC-1608): only a round robin page's, each naming members of its rotations; audited.
     // The writer sends the rules they see; those over a field hidden from them are put back as they were, in place.
     let routing: { readonly rules: readonly RoutingRule[] } | undefined;
@@ -1139,3 +1151,33 @@ export const bookingPagesRemoval: RemovalEffect = {
     `);
   },
 };
+
+/**
+ * The booking pages' part of a member becoming a guest (spec 0037, AC-1432): as a removal does, the pages nobody else
+ * can host pause and they leave other people's pools, but they stay in their own pages' pools, so a page of theirs
+ * waits, paused, for them to be a member again (it can't be turned on while they are a guest).
+ */
+export async function pauseGuestPages(context: WriteContext, memberId: string): Promise<void> {
+  const { tx, scope } = context;
+  const by = actorRow(scope.actor);
+  const theirs = await tx.execute<{ id: string }>(
+    sql`select rotation_id::text as id from rotation_members where member_id = ${memberId}::uuid
+      union select id::text from rotations where follows = 'everyone' and deleted_at is null`,
+  );
+  await lockRotations(
+    tx,
+    scope.workspaceId,
+    theirs.rows.map((row) => row.id),
+  );
+  await tx.execute(sql`
+    update booking_pages p
+    set status = 'paused', paused_reason = 'host_removed', updated_at = now(),
+      updated_by_type = ${by.type}, updated_by_id = ${by.id}::uuid, updated_by_member_id = ${by.memberId}::uuid
+    where p.workspace_id = ${scope.workspaceId}::uuid and ${hostlessPages(memberId)}
+  `);
+  await tx.execute(sql`
+    delete from booking_page_members m using booking_pages p
+    where m.workspace_id = ${scope.workspaceId}::uuid and m.member_id = ${memberId}::uuid
+      and p.workspace_id = m.workspace_id and p.id = m.page_id and p.owner_member_id is distinct from ${memberId}::uuid
+  `);
+}

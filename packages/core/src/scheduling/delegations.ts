@@ -44,6 +44,8 @@ const NO_PERSON = 'That person isn’t in this workspace.';
 const NO_DELEGATION = 'That access doesn’t exist, or isn’t yours to change.';
 const NOT_A_MEMBER = "That workspace doesn't exist, or you're not a member of it.";
 const DELEGATE_INVALID = 'Pick another active teammate who isn’t a guest.';
+/** A delegation over a guest (spec 0031, slice 9): guests take no bookings, so there is nothing to share. */
+const NO_GUEST_SCHEDULING = 'Guests have no scheduling to share.';
 const NO_TEAMS = 'Teams aren’t set up in this workspace yet.';
 const OVER_OWNER = 'Only an owner can let someone see or manage their own scheduling.';
 const OVER_ADMIN = 'Only an owner can let someone see or manage an admin’s scheduling.';
@@ -224,13 +226,16 @@ export async function grantDelegation(
       const over = targetMember === undefined ? undefined : await activeMember(tx, scope.workspaceId, targetMember);
       if (targetMember !== undefined && over === undefined) throw refuse('NOT_FOUND', NO_PERSON);
       if (!overSelf && over !== undefined) {
+        // A guest has no scheduling to share (spec 0031, slice 9).
+        if (over.role === 'guest') throw refuse('DELEGATE_INVALID', NO_GUEST_SCHEDULING);
         // Decision 7: an owner's scheduling is theirs to share; an admin's an owner's too.
         if (over.role !== 'member' && over.role !== 'admin') throw refuse('FORBIDDEN', OVER_OWNER);
         if (over.role === 'admin' && actor.role !== 'owner') throw refuse('FORBIDDEN', OVER_ADMIN);
       }
       if (delegate === targetMember) throw refuse('DELEGATE_INVALID', DELEGATE_INVALID);
       const holder = await activeMember(tx, scope.workspaceId, delegate);
-      if (holder === undefined) throw refuse('DELEGATE_INVALID', DELEGATE_INVALID);
+      // A guest is never a delegate (AC-1255): they have no scheduling reach over anyone.
+      if (holder === undefined || holder.role === 'guest') throw refuse('DELEGATE_INVALID', DELEGATE_INVALID);
       await lockBoth(tx, scope.workspaceId, delegate, targetMember);
       const sameTarget =
         targetMember === undefined

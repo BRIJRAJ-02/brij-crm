@@ -1,23 +1,24 @@
 // A member becoming a guest (spec 0031, slice 9; spec 0037, AC-1432): a guest can't host, so the role change takes
 // them off everything that books them, inside the role change's own transaction, reusing the removal's own effects
 // for those features (`REMOVAL_EFFECTS`), so a guest and a removed member leave scheduling the same way:
-// - booking pages they alone host pause, and they leave every collective pool;
+// - booking pages they alone host pause, and they leave other people's pools (their own pages keep them, paused);
 // - they leave every stored rotation (and drop out of the everyone rotation by `rotation_roster`'s role filter), and
 //   each of their upcoming bookings is flagged "Needs a host", a round robin one queued to be reseated (AC-749);
 // - their scheduling delegations go, both ways (a guest is never a delegate, AC-1255), with `access` rows.
-// What stays: their calendars, records, tasks, teams and link page; access rules decide what they see from now.
+// - their calendars stay connected but stop filing meetings into the CRM (sync off), since a guest writes no records.
+// What stays: their records, tasks, teams and link page; access rules decide what they see from now.
 import { sql } from 'drizzle-orm';
 import type { GuestPreview } from '@crm/contracts';
 import type { WorkspaceTx } from '@crm/db';
-import { bookingPagesRemoval } from '../booking/pages.ts';
+import { bookingPagesRemoval, pauseGuestPages } from '../booking/pages.ts';
 import type { WriteContext } from '../engine/write.ts';
 import { rotationsRemoval } from '../rotation/removal.ts';
 import { delegationsRemoval } from '../scheduling/delegations.ts';
 import type { AuditSource } from './audit.ts';
 import type { RemovalEffect } from './removal-effect.ts';
 
-/** The removal effects a member becoming a guest runs too, in the removal's order. */
-export const GUEST_EFFECTS: readonly RemovalEffect[] = [bookingPagesRemoval, rotationsRemoval, delegationsRemoval];
+/** The removal effects a member becoming a guest runs too, after their pages pause, in the removal's order. */
+export const GUEST_EFFECTS: readonly RemovalEffect[] = [rotationsRemoval, delegationsRemoval];
 
 /** Runs every guest effect on `memberId`, in the role change's transaction, before their role is written. */
 export async function leaveSchedulingAsGuest(
@@ -25,7 +26,13 @@ export async function leaveSchedulingAsGuest(
   memberId: string,
   source?: AuditSource,
 ): Promise<void> {
+  await pauseGuestPages(context, memberId);
   for (const effect of GUEST_EFFECTS) await effect.run?.(context, memberId, source);
+  // Their calendars stay connected, but file nothing more into the CRM: a guest writes no records.
+  await context.tx.execute(sql`
+    update calendar_calendars set sync = false
+    where workspace_id = ${context.scope.workspaceId}::uuid and member_id = ${memberId}::uuid and sync
+  `);
 }
 
 /**

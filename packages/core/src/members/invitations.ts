@@ -276,11 +276,16 @@ export async function seatsUsed(tx: WorkspaceTx, workspaceId: string): Promise<n
   return (active?.n ?? 0) + (invited?.n ?? 0);
 }
 
-/** Refuses 409 `SEAT_LIMIT` when `adding` more seats would pass the plan's (unlimited until #38). */
+/**
+ * Refuses 409 `SEAT_LIMIT` when `adding` more seats would pass the plan's (unlimited until #38). Counted under the
+ * invitations lock (taken again here, which a caller holding it already passes through), so two seat takers at once
+ * (a guest made a member beside an invite) take turns and never both fit the last seat.
+ */
 export async function checkSeats(tx: WorkspaceTx, scope: EngineScope, adding: number): Promise<void> {
   if (adding <= 0) return;
   const limit = limitsOf(scope).seats;
   if (!Number.isFinite(limit)) return;
+  await lockInvitations(tx, scope.workspaceId);
   if ((await seatsUsed(tx, scope.workspaceId)) + adding > limit) throw refuse('SEAT_LIMIT', SEAT_LIMIT_MESSAGE);
 }
 
@@ -1008,7 +1013,8 @@ function linkView(row: Awaited<ReturnType<typeof openLink>>): InviteLinkView {
   return {
     enabled: true,
     token: row.linkToken,
-    role: row.role === 'member' ? row.role : 'member',
+    // Member or guest (AC-818, spec 0031 slice 9); anything else a link can't hold reads as the safer guest.
+    role: row.role === 'member' || row.role === 'guest' ? row.role : 'guest',
     ...(row.expiresAt === null ? {} : { expiresAt: new Date(row.expiresAt).toISOString() }),
     ...(row.maxUses === null ? {} : { maxUses: row.maxUses }),
     uses: row.uses,
@@ -1094,7 +1100,9 @@ export async function setInviteLink(
             ? null
             : LINK_EXPIRY(days);
       const maxUses = uses === undefined ? (open?.maxUses ?? null) : uses;
-      const role = input.role ?? 'member';
+      // The role it gives stays as it is unless named: changing only the expiry never turns a guest link into a
+      // member one.
+      const role = input.role ?? (open?.role === 'guest' ? 'guest' : 'member');
       const changes = {
         ...(input.role === undefined ? {} : { role }),
         ...(days === undefined ? {} : { expiresInDays: days }),

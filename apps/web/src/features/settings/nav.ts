@@ -190,7 +190,7 @@ export function settingsNav(slug: string): readonly SettingsNavGroup[] {
         { id: 'general', label: workspace.generalTitle, href: generalSettingsHref(slug), icon: 'building' },
         { id: 'members', label: members.title, href: membersSettingsHref(slug), icon: 'users' },
         // Teams (spec 0031, slice 8, AC-832): every member reads them; changing them is for `teams.manage`.
-        { id: 'teams', label: teams.title, href: teamsSettingsHref(slug), icon: 'users-round' },
+        { id: 'teams', label: teams.title, href: teamsSettingsHref(slug), icon: 'users-round', notForGuests: true },
         // The workspace's sign in rules (spec 0033): owners only, so nobody else sees the entry at all.
         {
           id: 'workspace-security',
@@ -199,9 +199,15 @@ export function settingsNav(slug: string): readonly SettingsNavGroup[] {
           icon: 'lock',
           requires: 'security.manage',
         },
-        { id: 'objects', label: strings.objects, href: objectsSettingsHref(slug), icon: 'box' },
+        { id: 'objects', label: strings.objects, href: objectsSettingsHref(slug), icon: 'box', notForGuests: true },
         // Lists (spec 0048, AC-4828): every member may open it; they see the lists they may read.
-        { id: 'lists', label: listStrings.settingsTitle, href: listsSettingsHref(slug), icon: 'list' },
+        {
+          id: 'lists',
+          label: listStrings.settingsTitle,
+          href: listsSettingsHref(slug),
+          icon: 'list',
+          notForGuests: true,
+        },
         // Automations (parity #53): for `automations.manage` alone, so nobody else sees the entry at all.
         {
           id: 'automations',
@@ -210,7 +216,7 @@ export function settingsNav(slug: string): readonly SettingsNavGroup[] {
           icon: 'zap',
           requires: 'automations.manage',
         },
-        { id: 'jobs', label: jobs.title, href: jobsHref(slug), icon: 'list-checks' },
+        { id: 'jobs', label: jobs.title, href: jobsHref(slug), icon: 'list-checks', notForGuests: true },
         // History (spec 0046): every member opens it; Workspace changes inside it is for `audit.read` alone.
         { id: 'history', label: history.title, href: historyHref(slug), icon: 'clock' },
         // The trash left the sidebar for here (the owner, 22 October 2026), and opens inside Settings, its sidebar

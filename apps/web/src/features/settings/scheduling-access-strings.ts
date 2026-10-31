@@ -69,6 +69,8 @@ export const strings = {
   column: 'Scheduling access',
   cellFor: (name: string) => `Scheduling access for ${name}`,
   everyoneByRole: 'Everyone',
+  /** A guest's row: guests have no scheduling (spec 0031, slice 9). */
+  noneForGuest: '—',
   theirs: 'Only their own',
   andOthers: (count: number) => `and ${String(count)} more`,
   and: ' and ',

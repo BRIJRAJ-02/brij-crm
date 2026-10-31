@@ -3,8 +3,9 @@
 // do, and who is invited.
 // Main task: find someone by name or email; owners and admins change roles, remove people and invite, answer
 // requests to join, resend or cancel invitations, and set the invite link and company email (the Joining tab); an
-// owner hands the workspace on; everyone reads who is in.
-// Leaves out: leaving (the workspace menu's), teams and guests (later slices of spec 0031).
+// owner hands the workspace on; a step down (to Guest above all) asks first; everyone reads who is in, a guest
+// without anyone's email.
+// Leaves out: leaving (the workspace menu's), teams (their own page), and a role for the invite link.
 import {
   isDataError,
   ROLE_DESCRIPTIONS,
@@ -49,7 +50,7 @@ import {
   TruncatedText,
 } from '@crm/ui';
 import { useRouter } from '@tanstack/react-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { focusTitle } from '../navigation/focus-title.ts';
 import { useCan } from '../workspace/WorkspacePage.tsx';
 import { InviteDialog } from './InviteDialog.tsx';
@@ -179,12 +180,14 @@ export function MembersScreen({
   // The change the page is asking about, if any, what to say once it is done, and whether its row goes with it (focus
   // then moves to the title, since the control that asked went away).
   const [question, setQuestion] = useState<
-    (MemberQuestion & { readonly done: string; readonly removesRow?: boolean }) | undefined
+    (MemberQuestion & { readonly done?: string; readonly removesRow?: boolean }) | undefined
   >(undefined);
   // The member the remove dialog asks about, if any (it reads what their removal does, AC-816).
   const [removing, setRemoving] = useState<MemberView | undefined>(undefined);
   // A role shown at once while its change is sent, put back if the server refuses (by member id).
   const [pendingRoles, setPendingRoles] = useState<ReadonlyMap<string, Role>>(new Map());
+  // The pick whose guest count is out: a later pick's answer wins, an earlier one is dropped.
+  const counting = useRef<symbol | undefined>(undefined);
   // The search as typed; the route searches once typing pauses.
   const [typed, setTyped] = useState(search);
   // Pages after the first, as Show more read them, kept with the first page they follow: a new first page (another
@@ -247,6 +250,21 @@ export function MembersScreen({
     });
   };
 
+  /** One toast for a role change, with the invitations it cancelled and Invite people to send them again. */
+  const sayRoleChanged = (member: MemberView, role: Role, cancelled: number | undefined) => {
+    const message = strings.roleChanged(member.name, labelOf(role));
+    // Cancelled invitations are sent again from Invite people, which stays on the toast until dismissed.
+    toasts.toast(
+      cancelled === undefined
+        ? { tone: 'success', message }
+        : {
+            tone: 'success',
+            message: `${message} ${strings.roleInvitationsCancelled(cancelled)}`,
+            action: { label: strings.invite, onAction: () => setInviting(true) },
+          },
+    );
+  };
+
   // Someone else's role changes at once and goes back, with the server's reason, if it refuses.
   const changeRole = (member: MemberView, role: Role) => {
     setPendingRoles((pending) => new Map(pending).set(member.id, role));
@@ -254,18 +272,7 @@ export function MembersScreen({
       async (changed) => {
         await reload();
         settleRole(member.id);
-        const cancelled = changed.cancelledInvitations;
-        const message = strings.roleChanged(member.name, labelOf(role));
-        // Cancelled invitations are sent again from Invite people, which stays on the toast until dismissed.
-        toasts.toast(
-          cancelled === undefined
-            ? { tone: 'success', message }
-            : {
-                tone: 'success',
-                message: `${message} ${strings.roleInvitationsCancelled(cancelled)}`,
-                action: { label: strings.invite, onAction: () => setInviting(true) },
-              },
-        );
+        sayRoleChanged(member, role, changed.cancelledInvitations);
       },
       (error: unknown) => {
         settleRole(member.id);
@@ -285,34 +292,32 @@ export function MembersScreen({
     const ask = (chips: readonly string[]) => {
       setQuestion({
         title: strings.roleDownTitle(member.name, labelOf(role)),
-        text:
-          role === 'guest'
-            ? strings.roleGuestText(member.name)
-            : strings.roleDownText(member.name, labelOf(member.role)),
+        text: role === 'guest' ? strings.roleGuestText(member.name) : strings.roleDownText(member.name, member.role),
         chips,
         action: strings.roleDownAction(labelOf(role)),
+        // The same one toast as a change made at once says it, so the confirm adds none of its own.
         run: async () => {
           const changed = await data.members.setRole(slug, member.id, role);
-          const cancelled = changed.cancelledInvitations;
-          // Cancelled invitations are sent again from Invite people, on a toast of their own beside the confirm's.
-          if (cancelled !== undefined) {
-            toasts.toast({
-              tone: 'success',
-              message: strings.roleInvitationsCancelled(cancelled),
-              action: { label: strings.invite, onAction: () => setInviting(true) },
-            });
-          }
+          sayRoleChanged(member, role, changed.cancelledInvitations);
         },
-        done: strings.roleChanged(member.name, labelOf(role)),
       });
     };
     if (role !== 'guest') {
       ask([]);
       return;
     }
-    // What becoming a guest stops, counted first; a failed count still asks, with the sentence alone.
+    // What becoming a guest stops, counted first, the row's Select waiting meanwhile; a failed count still asks, and
+    // says it couldn't count. Only the latest pick's answer opens the confirm.
+    const pick = Symbol(member.id);
+    counting.current = pick;
+    setPendingRoles((pending) => new Map(pending).set(member.id, member.role));
+    const settle = () => {
+      settleRole(member.id);
+      return counting.current === pick;
+    };
     data.members.guestPreview(slug, member.id).then(
       (preview) => {
+        if (!settle()) return;
         ask([
           ...(preview.pausedPages > 0 ? [strings.guestPages(preview.pausedPages)] : []),
           ...(preview.rotations > 0 ? [strings.guestRotations(preview.rotations)] : []),
@@ -321,7 +326,7 @@ export function MembersScreen({
         ]);
       },
       () => {
-        ask([]);
+        if (settle()) ask([strings.guestUncounted]);
       },
     );
   };
@@ -442,7 +447,8 @@ export function MembersScreen({
       case 'scheduling':
         return <SchedulingAccessCell data={data} toasts={toasts} slug={slug} me={access.memberId} member={member} />;
       case 'calendar':
-        return <CalendarHealthChip state={health.get(member.id)} name={member.name} />;
+        // A guest connects no calendar (spec 0031, slice 9).
+        return member.role === 'guest' ? null : <CalendarHealthChip state={health.get(member.id)} name={member.name} />;
       case 'joined':
         return <RelativeTime value={member.joinedAt} />;
       default: {
@@ -748,7 +754,8 @@ export function MembersScreen({
         </Tabs>
       ) : (
         <>
-          <Callout>{sharedStrings.ownersAndAdminsOnly}</Callout>
+          {/* A guest changes nothing here, and the read only table says so already. */}
+          {!isGuest && <Callout>{sharedStrings.ownersAndAdminsOnly}</Callout>}
           {searchField}
           {membersList}
         </>

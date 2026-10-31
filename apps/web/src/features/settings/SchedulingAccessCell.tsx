@@ -92,6 +92,8 @@ function useMemberList(data: DataLayer, slug: string): readonly MemberView[] {
 export const SchedulingAccessCell = memo(function SchedulingAccessCell(props: SchedulingAccessCellProps) {
   const store = useStore(props.data);
   if (roleManagesEveryone(props.member.role)) return strings.everyoneByRole;
+  // A guest has no scheduling (spec 0031, slice 9): nothing to give or take, so no control.
+  if (props.member.role === 'guest') return strings.noneForGuest;
   // Its place until the store is here: it loads in its own chunk with the first cell, never in the first load.
   if (store === undefined) return <Skeleton width="short" />;
   return <Reach {...props} store={store} />;

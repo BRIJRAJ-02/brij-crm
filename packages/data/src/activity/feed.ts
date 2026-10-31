@@ -404,7 +404,8 @@ export function toActivityEntry(item: ActivityItem, context: EntryContext): Acti
             ? undefined
             : actorDisplay({ type: 'member', id: attendee.memberId }, context.members));
         return {
-          email: attendee.email,
+          // A colleague's address isn't told to a guest (spec 0031, AC-829): they show by name, from `display`.
+          email: attendee.email ?? '',
           ...(attendee.name === undefined ? {} : { name: attendee.name }),
           ...(display === undefined ? {} : { display }),
           response: attendee.response,

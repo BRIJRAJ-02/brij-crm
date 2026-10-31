@@ -103,12 +103,12 @@ describe('visibleSettingsNav', () => {
     ]);
   });
 
-  it('leaves Scheduling access out for a guest, who has no scheduling (spec 0031, slice 9)', () => {
+  it('leaves out for a guest the pages they can’t use: Scheduling access, Teams, Objects, Lists, jobs (spec 0031)', () => {
     expect(
       visibleSettingsNav(settingsNav('acme'), [], false, true).map((group) => group.entries.map((entry) => entry.id)),
     ).toEqual([
       ['profile', 'preferences', 'security', 'notifications'],
-      ['general', 'members', 'teams', 'objects', 'lists', 'jobs', 'history', 'trash'],
+      ['general', 'members', 'history', 'trash'],
     ]);
   });
 

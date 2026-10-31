@@ -527,7 +527,12 @@ export async function decideJoinRequest(
           action: 'join_request.approved',
           targetType: 'member',
           targetId: memberId,
-          after: { role: 'member', requestId: request.id, ...(mine === undefined ? {} : { alreadyMember: true }) },
+          after: {
+            // One already in keeps their role (a guest stays a guest).
+            role: mine?.role ?? 'member',
+            requestId: request.id,
+            ...(mine === undefined ? {} : { alreadyMember: true }),
+          },
         },
         options.source,
       );
