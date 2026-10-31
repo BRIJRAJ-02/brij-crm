@@ -12,6 +12,7 @@ describe('@crm/ui', () => {
 
   it('exports exactly the components, the provider, the toast factory and the shared helpers', () => {
     expect(Object.keys(ui).sort()).toEqual([
+      'AccentPicker',
       'ActivityFeed',
       'AppShell',
       'AppShellContext',
@@ -60,6 +61,7 @@ describe('@crm/ui', () => {
       'CopyButton',
       'CountryPicker',
       'Currency',
+      'CurrencyPicker',
       'CustomiseSidebar',
       'DatePicker',
       'DateRangePicker',
@@ -85,6 +87,7 @@ describe('@crm/ui', () => {
       'Form',
       'FormLayoutThumbnail',
       'FormatScope',
+      'FormulaEditor',
       'GRID_SHORTCUTS',
       'HUES',
       'HostedFormPreview',
@@ -105,6 +108,7 @@ describe('@crm/ui', () => {
       'LinkListRowOrder',
       'LinkListToolbar',
       'LinkPage',
+      'LinkPageHold',
       'LinkPageThumbnail',
       'LinkPageTile',
       'LoadingNow',

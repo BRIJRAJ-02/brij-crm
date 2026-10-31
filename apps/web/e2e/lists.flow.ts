@@ -326,7 +326,7 @@ test.describe('lists: the view menu, import, bulk Edit and settings (the lists3 
     await expect(page.getByRole('link', { name: 'Inbound' })).toBeVisible();
   });
 
-  test('the bulk bar edits the ticked rows’ records, and selects all matching', async ({ page }) => {
+  test('the bulk bar edits the ticked rows, and selects all matching', async ({ page }) => {
     test.setTimeout(240_000);
     const tag = randomUUID().slice(0, 8);
     const slug = `listbulk-${tag}`;
@@ -350,6 +350,35 @@ test.describe('lists: the view menu, import, bulk Edit and settings (the lists3 
     const confirm = page.getByRole('dialog', { name: 'Remove 2 entries from Quarter?' });
     await expect(confirm).toContainText('Undo brings them back with their values.');
     await confirm.getByRole('button', { name: 'Cancel' }).click();
+  });
+
+  test('bulk Edit sets a list field on the ticked entries, and Undo puts them back', async ({ page }) => {
+    test.setTimeout(240_000);
+    const tag = randomUUID().slice(0, 8);
+    const slug = `listfield-${tag}`;
+    await newWorkspace(page, `listfield-${tag}@example.com`, slug);
+    await newDeal(page, slug, 'Apollo');
+    await newDeal(page, slug, 'Borealis');
+    await newList(page, 'Deals board', 'Deals', 'Pipeline');
+    await page.getByRole('radio', { name: 'Table' }).click();
+    await addEntry(page, 'Add deal', 'Apollo');
+    await addEntry(page, 'Add deal', 'Borealis');
+    const grid = page.getByRole('grid', { name: 'Deals board' });
+    await grid.getByRole('row').filter({ hasText: 'Apollo' }).getByRole('checkbox').click();
+    await grid.getByRole('row').filter({ hasText: 'Borealis' }).getByRole('checkbox').click();
+    await page.getByRole('button', { name: 'Edit', exact: true }).click();
+    const edit = page.getByRole('dialog', { name: /^Edit 2 deals/ });
+    // The list's own Stage is offered beside the deals' fields.
+    await edit.getByRole('button', { name: /Field/ }).first().click();
+    await page.getByRole('option', { name: 'Stage' }).click();
+    await edit.getByRole('button', { name: /Value/ }).click();
+    await page.getByRole('option', { name: 'Won' }).click();
+    await edit.getByRole('button', { name: 'Apply' }).click();
+    await expect(page.getByText('Updated 2 deals.')).toBeVisible();
+    await expect(grid.getByRole('gridcell', { name: /Won/ })).toHaveCount(2);
+    await page.getByRole('button', { name: 'Undo' }).click();
+    await expect(page.getByText('Undid Stage on 2 entries')).toBeVisible();
+    await expect(grid.getByRole('gridcell', { name: /Won/ })).toHaveCount(0);
   });
 
   test('Each record once says why it can’t turn on, under its switch', async ({ page }) => {

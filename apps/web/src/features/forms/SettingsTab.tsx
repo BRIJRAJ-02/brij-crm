@@ -725,7 +725,6 @@ export function SettingsTab({
             <>
               <Field
                 label={strings.name}
-                hint={strings.nameHint}
                 value={settings.values.name}
                 maxLength={80}
                 isRequired

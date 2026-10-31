@@ -2,6 +2,7 @@ import type { PublicForm } from '@crm/contracts/forms';
 import { HostedForm } from '../../public-form/HostedForm.tsx';
 import { HostedFormSteps } from '../../public-form/HostedFormSteps.tsx';
 import type { ProductLogo } from '../AuthLayout/AuthLayout.tsx';
+import type { PageBrand } from '../BookingFrame/BookingFrame.tsx';
 import styles from './HostedFormPreview.module.css';
 
 /** Props for HostedFormPreview. */
@@ -22,6 +23,8 @@ export interface HostedFormPreviewProps {
    * it (spec 0063). The inert preview can't be stepped through, so the builder points it.
    */
   readonly step?: number;
+  /** A brand kit to wear in place of the one the form's read names (Settings › Brand's preview, spec 0060). */
+  readonly brand?: PageBrand;
 }
 
 /**
@@ -30,23 +33,22 @@ export interface HostedFormPreviewProps {
  * in the form's own layout (Classic, Steps or One at a time, spec 0063). It
  * sits on the form's own ground, which fills whatever height it is given.
  */
-export function HostedFormPreview({ form, mode = 'preview', logo, step }: HostedFormPreviewProps) {
+export function HostedFormPreview({ form, mode = 'preview', logo, step, brand }: HostedFormPreviewProps) {
   const layout = form.layout ?? 'classic';
-  const logoProps = logo === undefined ? {} : { logo };
+  const shared = {
+    form,
+    mode,
+    ...(logo === undefined ? {} : { logo }),
+    ...(brand === undefined ? {} : { brand }),
+  };
   // The ground in the form's own look, so a short form's colour fills the phone to its foot (spec 0058). A change
   // of layout starts the preview again, from its first step.
   return (
     <div className={styles.ground} data-theme={form.look.colour}>
       {layout === 'classic' ? (
-        <HostedForm key={`${mode}-${layout}`} form={form} mode={mode} {...logoProps} />
+        <HostedForm key={`${mode}-${layout}`} {...shared} />
       ) : (
-        <HostedFormSteps
-          key={`${mode}-${layout}`}
-          form={form}
-          mode={mode}
-          {...logoProps}
-          {...(step === undefined ? {} : { previewStep: step })}
-        />
+        <HostedFormSteps key={`${mode}-${layout}`} {...shared} {...(step === undefined ? {} : { previewStep: step })} />
       )}
     </div>
   );

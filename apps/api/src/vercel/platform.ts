@@ -23,7 +23,13 @@ export const attachPool: (pool: Parameters<typeof attachDatabasePool>[0]) => voi
 export const edgeCache: EdgeCache = {
   tag: (tags) => {
     if (tags.length === 0) return;
-    addCacheTag([...tags]).catch((error: unknown) => log.warn('edge.cache.tag_failed', errorFields(error)));
+    // The runtime's addCacheTag may answer no promise at all, or throw, so its answer is wrapped, never chained on.
+    const failed = (error: unknown) => log.warn('edge.cache.tag_failed', errorFields(error));
+    try {
+      Promise.resolve(addCacheTag([...tags])).catch(failed);
+    } catch (error) {
+      failed(error);
+    }
   },
   forget: async (tags) => {
     if (tags.length === 0) return;

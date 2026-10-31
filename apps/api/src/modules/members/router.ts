@@ -2,6 +2,7 @@ import {
   leaveWorkspace,
   listMembers,
   listVisibleMembers,
+  previewGuest,
   previewRemoval,
   removeMember,
   setMemberRole,
@@ -58,6 +59,9 @@ export const membersRouter = member.members.router({
   ),
   removalPreview: member.members.removalPreview.handler(({ context, input }) =>
     previewRemoval(context.scope, { memberId: input.memberId }),
+  ),
+  guestPreview: member.members.guestPreview.handler(({ context, input }) =>
+    previewGuest(context.scope, { memberId: input.memberId }),
   ),
   remove: member.members.remove.handler(async ({ context, input }) => {
     const removed = await commitWrite(context, { mutationId: input.mutationId }, (hooks) =>

@@ -20,7 +20,7 @@ import { workspaces } from './workspaces.ts';
  * What an outbox row names (spec 0007, `ChangeEvent` in `@crm/contracts`):
  * `records`, `definitions`, `entries`, `views`, `notes`, `tasks`, `members`,
  * `access`, `jobs`, (spec 0024) `meetings`, (spec 0035) `schedules`, (spec 0034) `nav`, a member's own sidebar, and
- * (spec 0038) `comments` and `notifications`, and `calendars`, a member's own calendar connections, (spec 0037) `time_off`, naming nothing, and `automations`, naming nothing. Postgres can't drop an enum value, so a kind is only ever added.
+ * (spec 0038) `comments` and `notifications`, and `calendars`, a member's own calendar connections, (spec 0037) `time_off`, naming nothing, and `automations`, naming nothing, and (#32) `files`, a record's attachments. Postgres can't drop an enum value, so a kind is only ever added.
  */
 export const outboxKind = pgEnum('outbox_kind', [
   'records',
@@ -40,6 +40,7 @@ export const outboxKind = pgEnum('outbox_kind', [
   'calendars',
   'time_off',
   'automations',
+  'files',
 ]);
 
 /**

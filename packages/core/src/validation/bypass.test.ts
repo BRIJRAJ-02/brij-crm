@@ -17,7 +17,8 @@ import { testScope } from '../testing.ts';
 const RUN_RULES = ['createRecord', 'setValues', 'setRecordValues', 'setValuesBatch', 'updateMany'] as const;
 
 /** The writes allowed to skip rules (AC-259). Type change jobs (milestone 3) and computed writes (spec 0015) join later. */
-const SKIP_RULES = ['restoreRecord', 'restoreRecords', 'restoreBatch'] as const;
+// A merge (spec 0049) writes only values already stored, valid where they stood, as a restore does.
+const SKIP_RULES = ['restoreRecord', 'restoreRecords', 'restoreBatch', 'mergeRecords'] as const;
 
 /** Writes of definitions, lifecycles, lists' entries (rules for lists come with #51) and workspaces: no record value. */
 const NO_RECORD_VALUES = [
@@ -34,6 +35,8 @@ const NO_RECORD_VALUES = [
   'defineRelationship',
   'deleteRecord',
   'deleteRecords',
+  // "Not a duplicate" and its Undo (spec 0049): a dismissal row and an audit row, no record value.
+  'dismissPair',
   'eraseRecord',
   'purgeDeleted',
   'removeEntry',
@@ -41,6 +44,7 @@ const NO_RECORD_VALUES = [
   'reorderObject',
   'restoreAttribute',
   'restoreEntry',
+  'restorePair',
   'setObjectArchived',
   'updateAttribute',
   'updateObject',
@@ -54,6 +58,7 @@ const NOT_WRITES = [
   'aggregateMatches',
   'capChange',
   'cappedHook',
+  'checkDuplicates',
   'countMatches',
   'countTrash',
   'cursorBinding',
@@ -72,11 +77,13 @@ const NOT_WRITES = [
   'isRefusal',
   'isUuidV7',
   'listAttributes',
+  'listDuplicates',
   'listOptions',
   'newId',
   'outboxEvents',
   'outboxHook',
   'pageLinks',
+  'previewMerge',
   'queryGroups',
   'queryPage',
   'queryTrash',

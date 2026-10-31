@@ -117,6 +117,9 @@ describe('the public booking host', () => {
     '/favicon.ico',
     '/layers.css',
     '/api/public/handles/ada',
+    // The crawl files, answered by the api (spec 0061, AC-6123).
+    '/robots.txt',
+    '/sitemap-handles.xml',
   ])('serves %s', (pathname) => {
     expect(servedOnPublicHost(pathname)).toBe(true);
   });
@@ -129,7 +132,8 @@ describe('the public booking host', () => {
     '/index.html',
     '/book.html',
     '/x.js',
-    '/robots.txt',
+    '/robots.txt.bak',
+    '/sitemap.xml',
     '/api',
     '/api/rpc/system/status',
     '/api/publication',

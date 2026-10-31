@@ -121,6 +121,24 @@ export const AUDIT_ACTIONS = [
   'booking_page.changed_for',
   // Who is in a rotation changed (spec 0037, AC-1264): the target is the rotation; `after` lists who joined and left.
   'rotation.changed',
+  // Automations (parity #53): made, changed, switched on or off, deleted or brought back. The target is the
+  // automation; `after` holds `change` and the name its trigger's object had then (`tasks` for a task due one).
+  'automation.changed',
+  // Settings › Developer (parity #34): an API key made, revoked or brought back in its Undo window. The target is the
+  // workspace; `after` holds the key's name, id and access (`read` or `write`).
+  'api_key.created',
+  'api_key.revoked',
+  'api_key.restored',
+  // Likely duplicates (spec 0049, AC-4908): a pair marked "Not a duplicate", and that undone. The target is the
+  // newer record; `after` holds both record ids, never a value.
+  'record.duplicate_dismissed',
+  'record.duplicate_restored',
+  // Two records merged (spec 0049, AC-4915): the target is the kept record; `before` names the merged one, `after`
+  // what moved (others' notes and comments included, accepted on purpose).
+  'record.merged',
+  // Who may edit a booking page or a rotation changed (spec 0037, AC-1331): the target is the page or the rotation;
+  // `after` lists the members added and removed as editors.
+  'editors.changed',
 ] as const;
 /** One action the audit log records. */
 export const AuditAction = z.enum(AUDIT_ACTIONS);
@@ -200,7 +218,7 @@ export type InvitePeek = z.infer<typeof InvitePeek>;
 
 export { INVITE_LINK_DAYS, INVITE_LINK_USES_MAX, type InviteLinkDays } from './team-limits.ts';
 
-/** The roles an invite link may give (AC-818): never owner or admin (guest joins with slice 9). */
+/** The roles an invite link may give (AC-818): member or guest, never owner or admin. */
 export const InviteLinkRole = Role.exclude(['owner', 'admin']);
 /** A role an invite link may give. */
 export type InviteLinkRole = z.infer<typeof InviteLinkRole>;

@@ -655,10 +655,10 @@ export function createRelay(deps: RelayDeps): Relay {
       // first run is a wall clock time, so `Date.now()`, not the relay's clock. A queue that keeps refusing for
       // `QUEUE_GIVE_UP_FAILURES` turns in a row would hold the whole workspace's live updates behind one cut off:
       // then the row is marked and the cut off kept in memory, as with the jobs off.
+      // An access row naming nobody (a rule covering no member, spec 0032) cuts nobody off.
+      const names = row?.kind === 'access' && row.itemIds.length > 0;
       let task =
-        row?.kind === 'access' && durableCutOff
-          ? cutOffTask(workspaceId, row.seq, row.itemIds, row.at, Date.now(), keys)
-          : undefined;
+        names && durableCutOff ? cutOffTask(workspaceId, row.seq, row.itemIds, row.at, Date.now(), keys) : undefined;
       if (task !== undefined) {
         try {
           await reader.queueTask(task);
@@ -672,7 +672,7 @@ export function createRelay(deps: RelayDeps): Relay {
         }
       }
       const queued = task !== undefined;
-      if (row?.kind === 'access' && deps.cutOff !== undefined) {
+      if (names && deps.cutOff !== undefined) {
         const tried = deps.cutOff(workspaceId, row.itemIds, keys).catch((error: unknown) => {
           log.warn('Cutting removed members off the live channel failed; it is tried again', {
             workspaceId,

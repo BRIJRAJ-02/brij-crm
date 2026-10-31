@@ -234,15 +234,21 @@ const SCHEDULING_PAGES_BUILT: readonly NavPage[] = NAV_SCHEDULING_PAGES.filter((
  * member. An API key has no sidebar, so none.
  */
 function topFor(scope: EngineScope): readonly NavPage[] {
-  return scope.actor.type === 'member' ? TOP_PAGES_BUILT : [];
+  if (scope.actor.type !== 'member') return [];
+  // A guest has no link page (spec 0031 slice 9, late trap #77), so no way to it.
+  return isGuest(scope) ? TOP_PAGES_BUILT.filter((page) => page !== 'linkPage') : TOP_PAGES_BUILT;
 }
+
+/** Whether the caller is a guest (spec 0031, slice 9): they see what is shared with them, and no scheduling. */
+const isGuest = (scope: EngineScope): boolean =>
+  scope.access.principal.kind === 'member' && scope.access.principal.role === 'guest';
 
 /**
  * The Scheduling pages the caller's role may open (AC-928): every role but a
- * guest (spec 0031; no guest role exists yet), and nothing for an API key.
+ * guest (spec 0031, slice 9: guests can't take bookings), and nothing for an API key.
  */
 function schedulingFor(scope: EngineScope): readonly NavPage[] {
-  return scope.actor.type === 'member' ? SCHEDULING_PAGES_BUILT : [];
+  return scope.actor.type === 'member' && !isGuest(scope) ? SCHEDULING_PAGES_BUILT : [];
 }
 
 /** The changes `applyNavOp` reads the universe for. */

@@ -7,6 +7,7 @@
 import {
   DEFAULT_PAGE_THEME,
   type BlockDraft,
+  type BrandStore,
   type DataError,
   type DataLayer,
   type LinkPageStore,
@@ -40,11 +41,13 @@ import {
   type LinkPageBlock,
   type LinkRow,
 } from '@crm/ui';
-import { useLinkPage } from '@crm/data/react';
+import { useBrand, useLinkPage } from '@crm/data/react';
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { pageEditorHref, publicBookingOrigin, publicProfileUrl } from '../booking/links.ts';
-import { AppearanceCard } from './AppearanceCard.tsx';
+import { AppearanceCard, type PhotoSlot } from './AppearanceCard.tsx';
+import { DraftLook } from './draft-look.tsx';
+import { preparePhoto } from './photo-prep.ts';
 import { ClaimLink } from './ClaimLink.tsx';
 import { BlockEditorFrame } from './editors.tsx';
 import { SharingCard } from './SharingCard.tsx';
@@ -59,6 +62,7 @@ import {
   pressesChip,
   previewBlock,
   rowWords,
+  isNewKind,
   type AddableKind,
   type ChosenFacts,
 } from './registry.tsx';
@@ -75,6 +79,8 @@ export interface LinkPageScreenProps {
   readonly data: DataLayer;
   /** The link page's store (`data.linkPage.load()`, loaded with the route). */
   readonly linkPage: LinkPageStore;
+  /** The page's colour and photos (`data.brand.load()`, loaded beside it, spec 0060). */
+  readonly brand: BrandStore;
   readonly slug: string;
   readonly profile: MyProfile;
   /** The editor is open; without it the page opens on the overview, which shares it (27 Oct 2026). */
@@ -145,11 +151,16 @@ function shownItem(id: string, block: ProfileBlock, was: ProfileItem | undefined
   if (block.kind === 'text' || block.kind === 'faq' || block.kind === 'testimonial') {
     return { ...block, id, updatedAt };
   }
+  // Spec 0061's kinds: the server's answer is what the list shows (their editors arrive with lane R4).
+  if (block.kind !== 'link') {
+    if (was !== undefined) return was;
+    throw new Error('This editor adds no block of this kind yet.');
+  }
   return { ...block, id, hue: block.hue ?? (was?.kind === 'link' ? was.hue : 'blue'), updatedAt };
 }
 
 /** The link page editor: the blocks beside the phone. */
-export function LinkPageScreen({ data, linkPage, slug, profile, isEditing, onEditing }: LinkPageScreenProps) {
+export function LinkPageScreen({ data, linkPage, brand, slug, profile, isEditing, onEditing }: LinkPageScreenProps) {
   const handle = profile.handle;
   // Live or Private (spec 0058, AC-23): opening the screen is what puts a page made for its owner live, once.
   const live = useLinkPageLive(data, slug, profile.isPublic, { opens: handle !== undefined });
@@ -183,10 +194,12 @@ export function LinkPageScreen({ data, linkPage, slug, profile, isEditing, onEdi
             <Blocks
               data={data}
               linkPage={linkPage}
+              brand={brand}
               slug={slug}
               profile={profile}
               handle={handle}
               isLive={live.isLive}
+              onGoLive={live.goLive}
               isEditing={isEditing}
               onEditing={onEditing}
             />
@@ -202,7 +215,7 @@ export function LinkPageScreen({ data, linkPage, slug, profile, isEditing, onEdi
  * address and the two ways to go on; Home's card opens the same one). Sharing never changes whether the page is live: the switch is
  * the one place that does, and the modal says when the page is private.
  */
-function HeaderActions({
+export function HeaderActions({
   live,
   handle,
   workspaceName,
@@ -225,9 +238,12 @@ function HeaderActions({
           the address and Share wait for Live (an unpublished page offers no link, as Notion's and Webflow's do). */}
       {live.isLive && (
         <>
+          {/* On a phone's narrow bar the address and Share drop their words for their icons (the overview's card
+              shows the address in full), so the bar never runs past the screen (spec 0058, AC-1). */}
           <ButtonLink
             variant="secondary"
             isRound
+            isLabelCollapsible
             iconRight="external-link"
             href={address}
             isExternal
@@ -235,14 +251,21 @@ function HeaderActions({
           >
             {shown}
           </ButtonLink>
-          <Button icon="share" onPress={() => setSharing(true)}>
+          <Button icon="share" isLabelCollapsible label={strings.share} onPress={() => setSharing(true)}>
             {strings.share}
           </Button>
         </>
       )}
       {/* Edit page lives on the page's own card; the bar carries only the way back out of the builder. */}
       {isEditing && (
-        <Button variant="primary" icon="check" onPress={() => onEditing(false)}>
+        // Secondary: the builder's one primary is Add item, the thing it is opened for; Done only steps back out.
+        <Button
+          variant="secondary"
+          icon="check"
+          isLabelCollapsible
+          label={strings.doneEditing}
+          onPress={() => onEditing(false)}
+        >
           {strings.doneEditing}
         </Button>
       )}
@@ -263,20 +286,25 @@ function HeaderActions({
 function Blocks({
   data,
   linkPage,
+  brand,
   slug,
   profile,
   handle,
   isLive,
+  onGoLive,
   isEditing,
   onEditing,
 }: {
   readonly data: DataLayer;
   readonly linkPage: LinkPageStore;
+  readonly brand: BrandStore;
   readonly slug: string;
   readonly profile: MyProfile;
   readonly handle: string;
   /** Whether the page is Live, as the switch in the bar holds it (spec 0058, AC-23). */
   readonly isLive: boolean;
+  /** Turns it Live, as the bar's switch does: the overview's Turn on Live while it is Private. */
+  readonly onGoLive: () => void;
   readonly isEditing: boolean;
   readonly onEditing: (isEditing: boolean) => void;
 }) {
@@ -357,6 +385,66 @@ function Blocks({
     setThemeRefusal(undefined);
     if (timer.current !== undefined) clearTimeout(timer.current);
     timer.current = setTimeout(sendTheme, THEME_SAVE_DELAY);
+  };
+  // The page's own colour and photos (spec 0060, AC-14, AC-10, AC-13), the workspace's accent it follows, and the
+  // colour under the system picker's pointer while it is dragged, so the phone follows the drag before it settles.
+  const lookState = useBrand(brand.look(slug));
+  const extrasRead = lookState.status === 'ready' ? lookState.value : undefined;
+  const [dragged, setDragged] = useState<string | undefined>(undefined);
+  const [lookRefusal, setLookRefusal] = useState<DataError | undefined>(undefined);
+  const [sending, setSending] = useState<PhotoSlot | undefined>(undefined);
+  const ownAccent = dragged ?? extrasRead?.accent;
+  // Worked out once per colour, not per render: the guard is a search, and the tiles and phone all read it.
+  const accentDark = extrasRead?.accentDark;
+  const workspaceAccent = extrasRead?.workspaceAccent;
+  const workspaceAccentDark = extrasRead?.workspaceAccentDark;
+  const colours = useMemo(
+    () =>
+      ownAccent === undefined
+        ? brand.colours(workspaceAccent, workspaceAccentDark)
+        : brand.colours(ownAccent, accentDark),
+    [brand, ownAccent, accentDark, workspaceAccent, workspaceAccentDark],
+  );
+  const photoSrc = (slot: PhotoSlot, version: string) => brand.photoSrc(handle, slot, version);
+  const lookVariables = useMemo(() => {
+    const photoPairs = (['cover', 'ground'] as const).flatMap((slot) => {
+      const version = extrasRead?.[slot];
+      const src = version === undefined ? undefined : brand.photoSrc(handle, slot, version);
+      return src === undefined ? [] : [[`--page-${slot}-image`, `url("${src}")`] as const];
+    });
+    return [...(colours?.variables ?? []), ...photoPairs];
+  }, [colours, extrasRead, brand, handle]);
+  const lookPhotos = { cover: extrasRead?.cover !== undefined, ground: extrasRead?.ground !== undefined };
+  const chooseAccent = (accent: string | undefined, accentDark: string | undefined) => {
+    setDragged(undefined);
+    setLookRefusal(undefined);
+    void brand.saveAccent(slug, accent, accentDark).then((refused) => {
+      if (refused !== undefined) setLookRefusal(refused);
+    });
+  };
+  const choosePhoto = (slot: PhotoSlot, file: File) => {
+    setLookRefusal(undefined);
+    setSending(slot);
+    void preparePhoto(file, slot)
+      .then(
+        (image) => brand.uploadPhoto(slug, slot, image),
+        () => {
+          toasts.toast({ tone: 'danger', message: strings.photoUnreadable });
+          return undefined;
+        },
+      )
+      .then((refused) => {
+        if (refused !== undefined) setLookRefusal(refused);
+      })
+      .finally(() => {
+        setSending(undefined);
+      });
+  };
+  const removePhoto = (slot: PhotoSlot) => {
+    setLookRefusal(undefined);
+    void brand.removePhoto(slug, slot).then((refused) => {
+      if (refused !== undefined) setLookRefusal(refused);
+    });
   };
   // Whether search engines may show the page (spec 0055, AC-5506), the same shape as the look above: shown the
   // moment it is pressed, put back with its reason on the card if the save is refused.
@@ -493,13 +581,21 @@ function Blocks({
   const rowMenu = (item: ProfileItem, index: number) => {
     const words = rowWords(item);
     const href = copyHrefOf(item);
-    const kind = BLOCK_KINDS[item.kind];
+    // Spec 0061's kinds have no editor here yet (lane R4): their rows offer what every row does, and no Edit.
+    const kind = isNewKind(item) ? { isEditable: false } : BLOCK_KINDS[item.kind];
+    const editKind = isNewKind(item) ? undefined : item.kind;
     return (
       <MenuTrigger>
         <Button variant="ghost" icon="ellipsis" label={strings.moreFor(words.title)} />
         <Menu label={strings.moreFor(words.title)}>
           {kind.isEditable && (
-            <MenuItem id="edit" icon="pencil" onAction={() => setEditing({ kind: item.kind, item, id: item.id })}>
+            <MenuItem
+              id="edit"
+              icon="pencil"
+              onAction={() => {
+                if (editKind !== undefined) setEditing({ kind: editKind, item, id: item.id });
+              }}
+            >
               {strings.edit}
             </MenuItem>
           )}
@@ -647,7 +743,10 @@ function Blocks({
       // out here: it is for a visitor without a page, not for the person whose page this is, and `claimPageHref`
       // lives on the public pages' own entry, which the app's bundle has no reason to pull in.
       // The phone beside the editor shows the look being picked, so its mark follows that, not the app's theme.
-      foot={<BookingFoot page="booking_profile" scheme={theme.mode} />}
+      foot={<BookingFoot page="booking_profile" {...(theme.mode === 'system' ? {} : { scheme: theme.mode })} />}
+      // A new ground remounts the phone, which fades the page in on it (spec 0060, AC-18).
+      // Only a new ground, mode or header: a font or a button shape changes in place, keeping the phone's scroll.
+      key={[theme.ground, theme.gradient, theme.pattern, theme.mode, theme.header].join(' ')}
       person={{
         name: profile.name.trim() || handle,
         id: handle,
@@ -656,6 +755,8 @@ function Blocks({
       }}
       {...(state.status === 'ready' ? { blocks: previewBlocks } : {})}
       theme={theme}
+      photos={lookPhotos}
+      variables={lookVariables}
       // Their own set of networks (the Social links card below), under the bio as visitors see it.
       {...(shownSocials.length === 0 ? {} : { socials: <SocialLinks links={shownSocials} /> })}
       empty={
@@ -734,6 +835,7 @@ function Blocks({
         onOpen={(id) => {
           const item = items.find((each) => each.id === id);
           if (item === undefined) return;
+          if (isNewKind(item)) return;
           if (BLOCK_KINDS[item.kind].isEditable) setEditing({ kind: item.kind, item, id: item.id });
           // A booking page block opens the booking page's own editor, in its workspace.
           else if (item.kind === 'page' && item.page !== undefined) {
@@ -764,6 +866,7 @@ function Blocks({
             onEditing(true);
             openAdd('link');
           }}
+          onGoLive={onGoLive}
         />
       </PreviewLayout>
     );
@@ -830,7 +933,23 @@ function Blocks({
       <AppearanceCard
         theme={theme}
         onChange={chooseTheme}
-        {...(themeRefusal === undefined ? {} : { refusal: themeRefusal })}
+        {...(themeRefusal === undefined
+          ? lookRefusal === undefined
+            ? {}
+            : { refusal: lookRefusal }
+          : { refusal: themeRefusal })}
+        extras={{
+          look: extrasRead,
+          colours: brand.colours,
+          variables: lookVariables,
+          quickPicks: brand.quickPicks,
+          photoSrc,
+          onAccent: chooseAccent,
+          onPreviewAccent: setDragged,
+          onPhoto: choosePhoto,
+          onRemovePhoto: removePhoto,
+          ...(sending === undefined ? {} : { sending }),
+        }}
       />
       <SharingCard
         indexable={indexable}
@@ -840,25 +959,28 @@ function Blocks({
         {...(indexableRefusal === undefined ? {} : { refusal: indexableRefusal })}
       />
       {Editor !== undefined && editing !== undefined && (
-        <EditorOrFrame
-          // Adding keeps one dialog across the kinds (the frame owns it); editing opens the kind's own, as before.
-          {...(kindPicker === undefined ? {} : { frame: { leading: kindPicker, hint: addHint } })}
-          onClose={() => setEditing(undefined)}
-        >
-          <Editor
-            {...(editing.item === undefined ? {} : { item: editing.item })}
-            {...(kindPicker === undefined ? {} : { chrome: { submitLabel: strings.addItem } })}
-            items={items}
-            slug={slug}
-            handle={handle}
-            newHue={nextHue(items)}
-            linkPage={linkPage}
-            socialNetworks={socialNetworks}
-            ownerName={profile.name}
-            onSubmit={submit}
+        // The draft wears the page's own look (spec 0060, AC-16), as the phone does.
+        <DraftLook look={{ theme, photos: lookPhotos, variables: lookVariables }}>
+          <EditorOrFrame
+            // Adding keeps one dialog across the kinds (the frame owns it); editing opens the kind's own, as before.
+            {...(kindPicker === undefined ? {} : { frame: { leading: kindPicker, hint: addHint } })}
             onClose={() => setEditing(undefined)}
-          />
-        </EditorOrFrame>
+          >
+            <Editor
+              {...(editing.item === undefined ? {} : { item: editing.item })}
+              {...(kindPicker === undefined ? {} : { chrome: { submitLabel: strings.addItem } })}
+              items={items}
+              slug={slug}
+              handle={handle}
+              newHue={nextHue(items)}
+              linkPage={linkPage}
+              socialNetworks={socialNetworks}
+              ownerName={profile.name}
+              onSubmit={submit}
+              onClose={() => setEditing(undefined)}
+            />
+          </EditorOrFrame>
+        </DraftLook>
       )}
       {deleting !== undefined && (
         <DeleteBlockDialog

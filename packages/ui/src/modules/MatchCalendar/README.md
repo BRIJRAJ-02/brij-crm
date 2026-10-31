@@ -30,8 +30,8 @@ New. The small link in VisitorBar sends the visitor straight to Google with only
 - `host` and `visitor` are the two faces, each with their picture when the page has one and their initials when it hasn't. Before Google says who the visitor is, their side is a held circle.
 - `result.when` is the best time in words ("9:30 AM on Tue 20 Oct"), so the dialog can ask about it in a sentence; `result.count` is how many matched, which keeps the answer from reading as a lucky guess; `result.days` are the rest, revealed by See the other times and bookable where they stand.
 - `onBook` takes a time's id, the slot start the page keys times by, the same id SlotList gives.
-- `MatchCalendarCta` is the call to action: the row's width, a primary `xl` button (Button's size for a page's own call to action outside the app) with one quiet line under it. VisitorBar draws it in place of the small link for a visitor we don't know; a visitor we know reaches the same dialog from their own tag's menu, since taking their standing tag away would undo AC-720 to AC-726.
-- `isLoading` on the call to action holds exactly the same box, so the card under the row never moves when it fills. VisitorBar's `holdsMatch` draws that while the page is still asking who the visitor is.
+- `MatchCalendarCta` is the call to action: the row's width, a primary `xl` button (Button's size for a page's own call to action outside the app) with one quiet line under it. The booking page no longer draws it (spec 0058, AC-24, 31 October 2026: Connect your calendar became a small secondary link that opens this dialog); it stays in the library for a page that wants the large ask. In VisitorBar, a visitor we don't know reaches the dialog from the small link, and a visitor we know reaches the same dialog from their own tag's menu, since taking their standing tag away would undo AC-720 to AC-726.
+- `isLoading` on the call to action holds exactly the same box, so the card under the row never moves when it fills.
 
 ## States
 

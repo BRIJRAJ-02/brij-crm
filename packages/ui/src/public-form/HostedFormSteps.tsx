@@ -18,6 +18,7 @@ import {
 import type { HostedFormProps } from './HostedForm.tsx';
 import styles from './HostedFormSteps.module.css';
 import { asideOf, labelOf, Question } from './Question.tsx';
+import { SentAnswers } from './SentAnswers.tsx';
 import { useHostedForm } from './use-hosted-form.ts';
 
 /** Props for HostedFormSteps: Classic's; the layout and the steps come with the form. */
@@ -75,6 +76,7 @@ export function HostedFormSteps({
   now = Date.now,
   logo = TIMEFIX_LOGO,
   previewStep = 0,
+  brand,
 }: HostedFormStepsProps) {
   const [shownIndex, setIndex] = useState(0);
   // How the visitor last moved: a pointer's move eases the next question in, a key's shows it at once.
@@ -183,6 +185,7 @@ export function HostedFormSteps({
         url={state.view.url}
         seconds={state.view.seconds}
         text={state.view.text}
+        summary={<SentAnswers form={form} state={state} />}
       />
     );
   } else if (state.view.kind === 'thanks')
@@ -324,6 +327,7 @@ export function HostedFormSteps({
       form={form}
       mode={mode}
       kind={isOpen ? 'open' : 'card'}
+      {...(brand === undefined ? {} : { brand })}
       container={refs.container}
       {...(preview ? { previewNote: words.previewNote } : {})}
       foot={<FormFoot form={form} mode={mode} logo={logo} state={state} />}

@@ -1,7 +1,7 @@
 // A change the size of a record with hundreds of thousands of links (spec
 // 0004, AC-17): collecting it and capping it must not overflow the stack. No
 // database: the write runs against a stand in that hands over a transaction
-// the work never touches.
+// whose every query answers no rows (the computed attributes' lookup finds none).
 import { describe, expect, it } from 'vitest';
 import type { Database, WorkspaceTx } from '@crm/db';
 import { newId } from './ids.ts';
@@ -9,9 +9,9 @@ import { isRefusal, writeConflict } from './refusals.ts';
 import { testScope } from '../testing.ts';
 import { CHANGE_CAP, capChange, cappedHook, runWrite, type CappedChange, type ReferenceChange } from './write.ts';
 
-/** A database whose transaction is never used: the work only records a change. */
+/** A database whose transaction answers every query with no rows: the work only records a change. */
 function standIn(): Database {
-  const tx = {} as WorkspaceTx;
+  const tx = { execute: () => Promise.resolve({ rows: [] }) } as unknown as WorkspaceTx;
   return {
     withWorkspace: (_workspaceId, work) => work(tx),
     checkHealth: () => Promise.reject(new Error('Not in this test.')),

@@ -64,6 +64,15 @@
     min-inline-size: 0;
   }
 
+  /* An address on its own line, whole where it fits: a break at its edge only, never at its hyphen ("vera-" over
+     "1c8a…"), and never hyphenated. */
+  .address {
+    display: block;
+    color: var(--text-secondary);
+    hyphens: none;
+    line-break: anywhere;
+  }
+
   .copy {
     display: inline-flex;
     flex: none;

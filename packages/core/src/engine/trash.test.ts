@@ -621,7 +621,7 @@ describe('the trash by index (spec 0022, the three partial indexes)', () => {
     // The count needs no order: either partial index of trashed rows will do.
     expect(
       (await indexes(trashCountQuery(openTrashScope()))).some((name) =>
-        ['records_trashed_at', 'records_trashed'].includes(name),
+        ['records_trashed_at', 'records_trashed', 'records_trash_listed'].includes(name),
       ),
     ).toBe(true);
     expect(await indexes(restoreLockQuery(inBatch(batchId), 501))).toContain('records_trash_batch');
@@ -630,7 +630,7 @@ describe('the trash by index (spec 0022, the three partial indexes)', () => {
     // the planner takes for those two depends on the whole table's statistics (other files' rows share it), so
     // only the absence of a scan is pinned there.
     expect(await indexes(snapshotRowsQuery(inBatch(batchId), undefined, 5000))).toContain('records_trash_batch');
-    const trashIndexes = ['records_trashed', 'records_trashed_at', 'records_trash_object'];
+    const trashIndexes = ['records_trashed', 'records_trashed_at', 'records_trash_object', 'records_trash_listed'];
     for (const scope of [openTrashScope(), openTrashScope(w.people)]) {
       expect(
         (await indexes(snapshotRowsQuery(scope, undefined, 5000))).some((name) => trashIndexes.includes(name)),

@@ -44,6 +44,8 @@ export const ActivityKind = z.enum([
   'meeting',
   'submission',
   'deleted',
+  // Another record merged into this one (spec 0049, AC-4915): `refs` names it, `actor` who merged.
+  'merged',
 ]);
 /** A kind of timeline entry. */
 export type ActivityKind = z.infer<typeof ActivityKind>;

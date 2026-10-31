@@ -9,6 +9,7 @@ import type { ObjectSummary, RecordsView, WindowCount } from '@crm/data';
 import { Button, Menu, MenuItem, MenuTrigger } from '@crm/ui';
 import { isOverExportLimit } from '../imports/export-run.ts';
 import { importHref } from '../imports/paths.ts';
+import { useCan } from '../workspace/WorkspacePage.tsx';
 import { strings as importStrings } from '../imports/strings.ts';
 
 /** Props for the view bar's Import / Export menu. */
@@ -24,8 +25,14 @@ export interface TransferMenuProps {
   readonly onExport: (withHidden: boolean) => void;
 }
 
-/** A menu button at the view bar's end: Import <plural> (where the member may write), then the exports. */
+/**
+ * A menu button at the view bar's end: Import <plural> (where the member may write), then the exports (for holders
+ * of `records.export`). Nothing at all for someone who may do neither (a guest).
+ */
 export function TransferMenu(props: TransferMenuProps) {
+  const canExport = useCan('records.export');
+  const canImport = props.object.access === 'write' && !props.object.isArchived;
+  if (!canExport && !canImport) return null;
   return props.records === undefined ? <Transfer {...props} /> : <CountedTransfer {...props} records={props.records} />;
 }
 
@@ -44,6 +51,7 @@ function Transfer({
   count,
 }: TransferMenuProps & { readonly count?: WindowCount }) {
   const canImport = object.access === 'write' && !object.isArchived;
+  const canExport = useCan('records.export');
   const isTooMany = isOverExportLimit(count);
   const tooMany = isTooMany ? { isDisabled: true, description: importStrings.exportTooMany } : {};
   return (
@@ -63,10 +71,12 @@ function Transfer({
             {importStrings.importPlural(object.pluralName)}
           </MenuItem>
         )}
-        <MenuItem id="export" icon="download" {...tooMany}>
-          {importStrings.exportShown(shownColumns)}
-        </MenuItem>
-        {allColumns > shownColumns && (
+        {canExport && (
+          <MenuItem id="export" icon="download" {...tooMany}>
+            {importStrings.exportShown(shownColumns)}
+          </MenuItem>
+        )}
+        {canExport && allColumns > shownColumns && (
           <MenuItem id="export-all" icon="eye" {...(isTooMany ? tooMany : {})}>
             {importStrings.exportAll(allColumns)}
           </MenuItem>

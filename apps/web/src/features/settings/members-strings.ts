@@ -2,6 +2,9 @@ import type { RemovalPreview } from '@crm/data';
 import { sharedStrings } from '@crm/ui';
 
 /** Settings › Workspace › Members' copy (spec 0031). */
+/** "an Admin", "an Owner", "a Member", "a Guest". */
+const article = (role: string): string => (/^[AEIOU]/.test(role) ? 'an' : 'a');
+
 export const strings = {
   title: 'Members',
   membersTab: 'Members',
@@ -34,6 +37,8 @@ export const strings = {
   you: 'You',
   search: 'Search members',
   searchPlaceholder: 'Name or email',
+  /** A guest searches by name alone (spec 0031, AC-829). */
+  searchNamePlaceholder: 'Name',
   noMatches: 'No members match',
   showMore: 'Show more members',
   // A lone member: the one quiet nudge toward inviting.
@@ -44,8 +49,24 @@ export const strings = {
   remove: 'Remove from workspace',
   transfer: 'Transfer ownership',
   transferred: (name: string) => `${name} is now an owner. You’re an admin.`,
-  roleChanged: (name: string, role: string) =>
-    `${name} is now ${role === 'Admin' || role === 'Owner' ? 'an' : 'a'} ${role}.`,
+  roleChanged: (name: string, role: string) => `${name} is now ${article(role)} ${role}.`,
+  /** A role change that takes access away asks first (the owner, 21 October 2026). */
+  roleDownTitle: (name: string, role: string) => `Make ${name} ${article(role)} ${role}?`,
+  /** What a step down takes, by the role left: an owner's billing and owners, an admin's members and settings. */
+  roleDownText: (name: string, from: string) =>
+    from === 'owner'
+      ? `${name} can no longer manage billing or owners.`
+      : `${name} can no longer manage members or settings.`,
+  roleGuestText: (name: string) => `${name} will see only what’s shared with guests.`,
+  roleDownAction: (role: string) => `Make ${role}`,
+  whatChanges: 'What changes',
+  /** What becoming a guest will do, as chips in that confirm (spec 0031, slice 9). */
+  guestPages: (count: number) => `${String(count)} ${count === 1 ? 'page' : 'pages'} paused`,
+  guestRotations: (count: number) => `Leaves ${String(count)} round ${count === 1 ? 'robin' : 'robins'}`,
+  guestBookings: (count: number) => `${String(count)} ${count === 1 ? 'booking needs' : 'bookings need'} a host`,
+  guestUncounted: 'Couldn’t count what changes',
+  guestLinkPage: 'Link page hidden',
+  guestDelegations: (count: number) => `${String(count)} scheduling ${count === 1 ? 'share' : 'shares'} removed`,
   removed: (name: string) => `${name} was removed from the workspace.`,
   /** Invite pressed with no role this person may invite as: the server lets only owners and admins invite. */
   inviteForbidden: 'Only workspace owners and admins can invite people or change roles.',

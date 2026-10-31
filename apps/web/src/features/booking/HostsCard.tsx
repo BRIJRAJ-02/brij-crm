@@ -148,11 +148,9 @@ export function HostsCard({
         {isWorkspace && roster !== undefined && (
           <Switch
             label={strings.everyoneSwitch}
-            description={
-              isEveryone
-                ? strings.everyoneSwitchOn(roster.members.filter((each) => each.isOn).length)
-                : strings.everyoneSwitchOff
-            }
+            {...(isEveryone
+              ? { description: strings.everyoneSwitchOn(roster.members.filter((each) => each.isOn).length) }
+              : {})}
             isSelected={isEveryone}
             isReadOnly={isLocked}
             isDisabled={isSaving}

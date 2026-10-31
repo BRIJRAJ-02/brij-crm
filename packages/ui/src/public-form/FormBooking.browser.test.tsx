@@ -1,6 +1,6 @@
 // The hosted form's countdown to a booking page (spec 0023 AC-1059), in a real
 // browser through the page's own entry: the sentence said once, the number
-// counting down, going on at nought, Book now, Stay here, and a countdown of
+// counting down, going on at nought, Book a time, Stay here, and a countdown of
 // nought going at once.
 import type { PublicForm } from '@crm/contracts/forms';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -69,9 +69,16 @@ describe('the countdown to book (AC-1059)', () => {
     expect(onRedirect).toHaveBeenCalledWith(URL_TO);
   });
 
-  it('goes at once with Book now, and only once', async () => {
+  it('reads back what was sent above the one way on (spec 0058, AC-19)', async () => {
+    await sendWith(30);
+    await expect.element(page.getByText('ada@example.com')).toBeVisible();
+    await expect.element(page.getByRole('button', { name: 'Book a time' })).toBeVisible();
+    expect(page.getByRole('button').all()).toHaveLength(2);
+  });
+
+  it('goes at once with Book a time, and only once', async () => {
     const onRedirect = await sendWith(1);
-    await userEvent.click(page.getByRole('button', { name: 'Book now' }));
+    await userEvent.click(page.getByRole('button', { name: 'Book a time' }));
     expect(onRedirect).toHaveBeenCalledWith(URL_TO);
     await new Promise((resolve) => setTimeout(resolve, 1500));
     expect(onRedirect).toHaveBeenCalledTimes(1);
@@ -80,7 +87,7 @@ describe('the countdown to book (AC-1059)', () => {
   it('holds while focus is on the buttons', async () => {
     const onRedirect = await sendWith(1);
     await userEvent.tab();
-    await expect.element(page.getByRole('button', { name: 'Book now' })).toHaveFocus();
+    await expect.element(page.getByRole('button', { name: 'Book a time' })).toHaveFocus();
     await new Promise((resolve) => setTimeout(resolve, 1800));
     expect(onRedirect).not.toHaveBeenCalled();
   });

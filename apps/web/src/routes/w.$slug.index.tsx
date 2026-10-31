@@ -13,17 +13,21 @@ import { useWorkspaceName, WorkspacePage } from '../features/workspace/Workspace
 // frame's own page).
 export const Route = createFileRoute('/w/$slug/')({
   loader: async ({ context, params }) => {
-    const [objects, preferences] = await Promise.all([
+    const [objects, preferences, access] = await Promise.all([
       context.data.objects.list(params.slug).catch((error: unknown) => {
         if (isDataError(error) && error.code === 'NOT_FOUND') return undefined;
         throw error;
       }),
       // Read by the frame already; a failed read opens as before.
       context.data.preferences.load(params.slug).catch(() => undefined),
+      context.data.access.mine(params.slug).catch(() => undefined),
     ]);
     // The frame shows "Workspace not found" for an unknown one.
-    if (objects === undefined) return;
-    const target = landingTarget(preferences?.landing, objects);
+    if (objects === undefined) return { isGuest: false };
+    const isGuest = access?.role === 'guest';
+    const target = landingTarget(preferences?.landing, objects, isGuest);
+    // A guest with nothing shared stays here, on the page that says so.
+    if (target.kind === 'nothing') return { isGuest };
     if (target.kind === 'tasks') throw redirect({ to: '/w/$slug/tasks', params: { slug: params.slug }, replace: true });
     if (target.kind === 'object') {
       throw redirect({
@@ -44,7 +48,8 @@ export const Route = createFileRoute('/w/$slug/')({
 });
 
 function NoObjects() {
-  return <WorkspacePage page={noObjectsPage(useWorkspaceName() ?? strings.product)} />;
+  const loaded = Route.useLoaderData();
+  return <WorkspacePage page={noObjectsPage(useWorkspaceName() ?? strings.product, loaded.isGuest)} />;
 }
 
 function IndexError({ error }: ErrorComponentProps) {

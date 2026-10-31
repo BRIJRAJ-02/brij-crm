@@ -76,6 +76,8 @@ interface SampleGridProps {
   readonly stageWidth?: 'auto' | 'narrow';
   /** Every column read only, as the trash's are, with the headers' locks left out. */
   readonly isAllReadOnly?: boolean;
+  /** False: no ticks and no select all, for a reader who can act on no row (a guest). */
+  readonly isSelectable?: boolean;
 }
 
 /** A grid over sample companies that keeps its own edits, columns and selection, as a screen would. */
@@ -110,6 +112,7 @@ function SampleGrid({
   barFor,
   stageWidth = 'auto',
   isAllReadOnly = false,
+  isSelectable = true,
 }: SampleGridProps) {
   const [data, setData] = useState(() =>
     sampleRows(count).map((row) =>
@@ -178,6 +181,7 @@ function SampleGrid({
         hideColumnLocks={isAllReadOnly}
         selection={selection}
         onSelectionChange={setSelection}
+        isSelectable={isSelectable}
         onColumnsChange={(columns, pinnedCount) => {
           setLayout({ columns, pinnedCount });
         }}
@@ -414,6 +418,19 @@ export const HideColumnLocks: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('grid', { name: 'Companies' })).toBeInTheDocument();
     await expect(canvas.queryByLabelText('Read only')).not.toBeInTheDocument();
+  },
+};
+
+/** A reader who can act on no row (a guest on a shared object): no row ticks and no select all, Space ticks nothing. */
+export const NotSelectable: Story = {
+  args: { isAllReadOnly: true, isSelectable: false, count: 12 },
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas, canvasElement, userEvent }) => {
+    await expect(canvas.queryByRole('checkbox')).not.toBeInTheDocument();
+    await userEvent.tab();
+    await userEvent.keyboard('{Home} ');
+    await waitFor(() => expect(canvas.queryAllByRole('row', { selected: true })).toHaveLength(0));
+    await expect(canvasElement.querySelector('[role="row"][data-selected]')).toBeNull();
   },
 };
 

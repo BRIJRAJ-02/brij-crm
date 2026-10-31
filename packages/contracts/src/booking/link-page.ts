@@ -21,13 +21,35 @@ import {
   PROFILE_AUTHOR_MAX,
   PROFILE_HEADING_GROUPS,
   PROFILE_HEADING_GROUP_REFUSAL,
+  PROFILE_LINK_MAX,
   PROFILE_QUOTE_BREAKS,
   PROFILE_QUOTE_MAX,
   PROFILE_TEXT_BREAKS,
   PROFILE_TEXT_MAX,
   sameQuestion,
   PUBLIC_LINK_MARKS,
+  MEDIA_PROVIDERS,
+  MEDIA_REF,
+  PROFILE_ALT_MAX,
+  PROFILE_ALT_REFUSAL,
+  PROFILE_BANNER_MAX,
+  PROFILE_CAPTION_MAX,
+  PROFILE_DEVICES,
+  PROFILE_GALLERY_DISPLAYS,
+  PROFILE_GALLERY_MAX,
+  PROFILE_GALLERY_MIN,
+  PROFILE_LINK_STYLES,
+  PROFILE_MEDIA_TITLE_MAX,
+  PROFILE_NOTICES,
+  PROFILE_TILE_SIZES,
+  PROFILE_VIEW_FACTS,
+  profileWindowProblem,
+  QR_BACKGROUND,
+  QR_CONTRAST_MIN,
+  QR_CONTRAST_REFUSAL,
+  QR_LABEL_MAX,
 } from './link-page-rules.ts';
+import { contrastRatio } from '../brand-colour.ts';
 
 import { Uuid } from '../values/ids.ts';
 import { BookingDuration } from './settings.ts';
@@ -67,6 +89,32 @@ const manyLines = (max: number, breaks: number, empty: string, long: string, too
       error: 'Take out the special characters.',
     });
 
+/**
+ * An instant a block shows from or hides after (spec 0061, AC-6111): typed in the owner's zone by the editor and
+ * sent as ISO 8601 UTC, kept to the millisecond in one spelling (`2026-11-03T09:00:00.000Z`), the database's check
+ * alike.
+ */
+export const ProfileInstant = z.iso
+  .datetime({ error: 'Pick a date and time.' })
+  .transform((typed) => new Date(typed).toISOString());
+/** An instant a block shows from or hides after. */
+export type ProfileInstant = z.infer<typeof ProfileInstant>;
+
+/** The window every kind but a heading may carry (AC-6111): either end optional, the end after the start. */
+const windowFields = {
+  showFrom: ProfileInstant.optional(),
+  hideAfter: ProfileInstant.optional(),
+};
+
+/** A tile's size on a grid page (AC-6103), on the kinds that take one. Absent is `small`. */
+const sizeField = { size: z.enum(PROFILE_TILE_SIZES, { error: 'Pick one of the three sizes.' }).optional() };
+
+/** A stored picture of the person's, by its id (AC-6101, AC-6108): never a picture's address. */
+export const ProfileImageId = Uuid;
+
+/** One line, or nothing: a field the owner may leave empty, stored only when it says something. */
+const optionalLine = (max: number, long: string) => oneLine(0, max, '', long).optional();
+
 /** A link: a title, an address, an optional one line note and an optional icon (AC-5101, AC-5103). */
 export const ProfileLinkBlock = z.object({
   kind: z.literal('link'),
@@ -76,6 +124,14 @@ export const ProfileLinkBlock = z.object({
   icon: z.enum(PROFILE_LINK_ICONS, { error: 'Pick one of the icons.' }).optional(),
   /** The letter's colour when there is no mark and no icon; the server picks one when none is given. */
   hue: z.enum(HUES).optional(),
+  /** Its picture (spec 0061, AC-6101): one the owner uploaded or the site's own, stored and served by us. */
+  thumb: ProfileImageId.optional(),
+  /** The plain row, or the larger card (AC-6102); at most 3 featured. Absent is `row`. */
+  style: z.enum(PROFILE_LINK_STYLES, { error: 'Pick a row or a featured card.' }).optional(),
+  /** A self declared notice a visitor confirms before the link opens (AC-6113). */
+  notice: z.enum(PROFILE_NOTICES, { error: 'Pick one of the notices.' }).optional(),
+  ...sizeField,
+  ...windowFields,
 });
 /** A link block. */
 export type ProfileLinkBlock = z.infer<typeof ProfileLinkBlock>;
@@ -98,6 +154,8 @@ export const ProfilePageBlock = z.object({
   kind: z.literal('page'),
   workspaceId: Uuid,
   pageId: Uuid,
+  ...sizeField,
+  ...windowFields,
 });
 /** A booking page block. */
 export type ProfilePageBlock = z.infer<typeof ProfilePageBlock>;
@@ -136,6 +194,7 @@ export const ProfileContactBlock = z
     website2: contactField('website2').optional(),
     website3: contactField('website3').optional(),
     note: contactField('note').optional(),
+    ...windowFields,
   })
   .superRefine((card, ctx) => {
     // Each field above is checked on its own, so the one rule that reads the whole card is here: the same address
@@ -163,6 +222,7 @@ export const ProfileTextBlock = z.object({
     'Keep it to 1,000 characters.',
     'Keep it to 20 line breaks. A longer piece reads better somewhere it can be a page.',
   ),
+  ...windowFields,
 });
 /** A text block. */
 export type ProfileTextBlock = z.infer<typeof ProfileTextBlock>;
@@ -184,6 +244,7 @@ export const ProfileTestimonialBlock = z.object({
   author: oneLine(1, PROFILE_AUTHOR_MAX, 'Say who said it.', 'Keep the name to 80 characters.'),
   /** What they do, under their name: absent where it adds nothing. */
   role: oneLine(0, PROFILE_AUTHOR_MAX, '', 'Keep the role to 80 characters.').optional(),
+  ...windowFields,
 });
 /** Something a customer said. */
 export type ProfileTestimonialBlock = z.infer<typeof ProfileTestimonialBlock>;
@@ -219,6 +280,7 @@ export const ProfileFaqBlock = z.object({
         !items.some((item, at) => items.slice(0, at).some((before) => sameQuestion(before.question, item.question))),
       { error: 'You already asked that one.' },
     ),
+  ...windowFields,
 });
 /** A FAQ block. */
 export type ProfileFaqBlock = z.infer<typeof ProfileFaqBlock>;
@@ -234,21 +296,119 @@ export const ProfileFormBlock = z.object({
   workspaceId: Uuid,
   formId: Uuid,
   label: oneLine(1, PROFILE_TITLE_MAX.form, 'Give the form a label.', 'Keep the label to 60 characters.'),
+  ...windowFields,
 });
 /** A form block. */
 export type ProfileFormBlock = z.infer<typeof ProfileFormBlock>;
 
+/**
+ * The person's social links as one row of marks (spec 0061, AC-6104): no fields of its own, since the links are the
+ * person's (`auth.social_links`) and drawn from there. At most one per page, wherever the owner puts it.
+ */
+export const ProfileSocialsBlock = z.object({ kind: z.literal('socials'), ...windowFields });
+/** A socials row block. */
+export type ProfileSocialsBlock = z.infer<typeof ProfileSocialsBlock>;
+
+/**
+ * A video or a song a visitor taps to play (AC-6105): the share link as pasted, which the server reads into a
+ * provider and an id with strict patterns (core's `parseMediaLink`) and never keeps; anything else is refused with
+ * `MEDIA_LINK_REFUSAL`. The title defaults to the provider's own, read once on save, and the owner may change it.
+ */
+export const ProfileMediaBlock = z.object({
+  kind: z.literal('media'),
+  url: z.string().trim().min(1, 'Paste the link.').max(PROFILE_LINK_MAX, 'That link is too long.'),
+  title: optionalLine(PROFILE_MEDIA_TITLE_MAX, 'Keep the title to 100 characters.'),
+  ...sizeField,
+  ...windowFields,
+});
+/** A media block as written. */
+export type ProfileMediaBlock = z.infer<typeof ProfileMediaBlock>;
+
+/** A picture with its alt text, required (AC-6108). */
+const altText = oneLine(1, PROFILE_ALT_MAX, PROFILE_ALT_REFUSAL, 'Keep the description to 200 characters.');
+
+/** One picture, its alt text required, an optional caption and an optional link (AC-6108). */
+export const ProfileImageBlock = z.object({
+  kind: z.literal('image'),
+  image: ProfileImageId,
+  alt: altText,
+  caption: optionalLine(PROFILE_CAPTION_MAX, 'Keep the caption to 120 characters.'),
+  url: ProfileLinkUrl.optional(),
+  ...sizeField,
+  ...windowFields,
+});
+/** An image block. */
+export type ProfileImageBlock = z.infer<typeof ProfileImageBlock>;
+
+/** One picture of a gallery, with its own alt text (AC-6109). */
+export const ProfileGalleryImage = z.object({ image: ProfileImageId, alt: altText });
+/** One picture of a gallery. */
+export type ProfileGalleryImage = z.infer<typeof ProfileGalleryImage>;
+
+/** Two to twelve pictures, drawn as a swipe row or a grid (AC-6109). The same picture twice is refused. */
+export const ProfileGalleryBlock = z.object({
+  kind: z.literal('gallery'),
+  images: z
+    .array(ProfileGalleryImage)
+    .min(PROFILE_GALLERY_MIN, 'Add at least two pictures.')
+    .max(PROFILE_GALLERY_MAX, 'Keep it to 12 pictures.')
+    .refine((images) => new Set(images.map((each) => each.image)).size === images.length, {
+      error: 'That picture is in the gallery already.',
+    }),
+  display: z.enum(PROFILE_GALLERY_DISPLAYS, { error: 'Pick a row or a grid.' }).optional(),
+  ...sizeField,
+  ...windowFields,
+});
+/** A gallery block. */
+export type ProfileGalleryBlock = z.infer<typeof ProfileGalleryBlock>;
+
+/**
+ * The next open times of one of the person's booking pages (AC-6110), by its workspace and id as a booking page block
+ * names one. Its page's own rules (Public, live) decide whether it shows, exactly as a booking page block's do.
+ */
+export const ProfileTimesBlock = z.object({
+  kind: z.literal('times'),
+  workspaceId: Uuid,
+  pageId: Uuid,
+  ...windowFields,
+});
+/** A next times block. */
+export type ProfileTimesBlock = z.infer<typeof ProfileTimesBlock>;
+
+/** One line at the very top of the page, with an optional link (AC-6112). At most one live. */
+export const ProfileBannerBlock = z.object({
+  kind: z.literal('banner'),
+  text: oneLine(1, PROFILE_BANNER_MAX, 'Write the banner’s line.', 'Keep the banner to 80 characters.'),
+  url: ProfileLinkUrl.optional(),
+  ...windowFields,
+});
+/** A banner block. */
+export type ProfileBannerBlock = z.infer<typeof ProfileBannerBlock>;
+
 /** One block's fields, by kind: what every write is checked against before it is stored. */
-export const ProfileBlock = z.discriminatedUnion('kind', [
-  ProfileLinkBlock,
-  ProfileHeadingBlock,
-  ProfilePageBlock,
-  ProfileContactBlock,
-  ProfileTextBlock,
-  ProfileFaqBlock,
-  ProfileFormBlock,
-  ProfileTestimonialBlock,
-]);
+export const ProfileBlock = z
+  .discriminatedUnion('kind', [
+    ProfileLinkBlock,
+    ProfileHeadingBlock,
+    ProfilePageBlock,
+    ProfileContactBlock,
+    ProfileTextBlock,
+    ProfileFaqBlock,
+    ProfileFormBlock,
+    ProfileTestimonialBlock,
+    ProfileSocialsBlock,
+    ProfileMediaBlock,
+    ProfileImageBlock,
+    ProfileGalleryBlock,
+    ProfileTimesBlock,
+    ProfileBannerBlock,
+  ])
+  .superRefine((block, ctx) => {
+    // The one rule that reads both ends of a window (AC-6111): the end after the start.
+    if (block.kind === 'heading') return;
+    const problem = profileWindowProblem(block);
+    if (problem !== undefined) ctx.addIssue({ code: 'custom', path: ['hideAfter'], message: problem });
+  });
 /** One block's fields. */
 export type ProfileBlock = z.infer<typeof ProfileBlock>;
 
@@ -317,6 +477,26 @@ export const ProfileItem = z.discriminatedUnion('kind', [
   ProfileFaqBlock.extend(Stored),
   ProfileFormBlock.extend({ ...Stored, form: ProfileFormFacts.optional() }),
   ProfileTestimonialBlock.extend(Stored),
+  ProfileSocialsBlock.extend(Stored),
+  /**
+   * A media block as stored (AC-6105): the provider and the id the server parsed, the share link rebuilt from them
+   * (never the text that was pasted), its title and its poster's id when it has one.
+   */
+  z.object({
+    kind: z.literal('media'),
+    provider: z.enum(MEDIA_PROVIDERS),
+    ref: z.string().regex(MEDIA_REF),
+    url: z.string(),
+    title: z.string().optional(),
+    poster: ProfileImageId.optional(),
+    ...sizeField,
+    ...windowFields,
+    ...Stored,
+  }),
+  ProfileImageBlock.extend({ ...Stored, url: z.string().optional() }),
+  ProfileGalleryBlock.extend(Stored),
+  ProfileTimesBlock.extend({ ...Stored, page: ProfilePageFacts.optional() }),
+  ProfileBannerBlock.extend({ ...Stored, url: z.string().optional() }),
 ]);
 /** One block as the editor reads it. */
 export type ProfileItem = z.infer<typeof ProfileItem>;
@@ -396,6 +576,21 @@ export type ProfilePageChoice = z.infer<typeof ProfilePageChoice>;
  * member id and no email. A link's `mark` is the social network its address is on (matched by the server, so the
  * public bundle never parses addresses), else its picked `icon`, else its title's first letter in `hue`.
  */
+/**
+ * A picture as a visitor's page draws it (spec 0061, AC-6101, AC-6126): always our own origin's path
+ * (`profileImagePath`), with its size so the page reserves its box before it loads.
+ */
+export const PublicPicture = z.object({
+  src: z.string(),
+  width: z.number().int().min(1),
+  height: z.number().int().min(1),
+});
+/** A picture as a visitor's page draws it. */
+export type PublicPicture = z.infer<typeof PublicPicture>;
+
+/** A tile's size as the public answer carries it: absent is `small`, and a size this build doesn't know is too. */
+const publicSize = { size: z.enum(PROFILE_TILE_SIZES).optional().catch(undefined) };
+
 export const PublicProfileItem = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('link'),
@@ -411,6 +606,13 @@ export const PublicProfileItem = z.discriminatedUnion('kind', [
      */
     siteIcon: z.string().optional(),
     hue: z.enum(HUES),
+    /** Its picture (AC-6101), drawn left of the title in a row and as the tile in a grid. Absent: the order above. */
+    thumb: PublicPicture.optional(),
+    /** `featured` draws the larger card (AC-6102); absent is the row. */
+    style: z.enum(PROFILE_LINK_STYLES).optional().catch(undefined),
+    /** The notice a visitor confirms first (AC-6113). Such a link is `rel="nofollow"`. */
+    notice: z.enum(PROFILE_NOTICES).optional(),
+    ...publicSize,
   }),
   /**
    * A heading, and what it does with the blocks under it. `catch` draws an unfamiliar group open, so a bundle built
@@ -431,6 +633,7 @@ export const PublicProfileItem = z.discriminatedUnion('kind', [
     durations: z.array(BookingDuration),
     /** A team page books one of several people. */
     isTeam: z.boolean(),
+    ...publicSize,
   }),
   /** The contact card: its name and the line under it; the rest is in the vCard its Save contact downloads. */
   z.object({
@@ -462,9 +665,69 @@ export const PublicProfileItem = z.discriminatedUnion('kind', [
     author: z.string().min(1),
     role: z.string().optional(),
   }),
+  /** The person's social links as one row of marks (AC-6104): the links are the profile's own `socials`. */
+  z.object({ kind: z.literal('socials'), id: Uuid }),
+  /**
+   * A video or a song behind its facade (AC-6106): the poster from our origin, the title, the provider, and the
+   * frame's address, built on the server from the parsed provider and id alone. Nothing loads from it until Play.
+   */
+  z.object({
+    kind: z.literal('media'),
+    id: Uuid,
+    provider: z.enum(MEDIA_PROVIDERS),
+    title: z.string(),
+    frame: z.string(),
+    poster: PublicPicture.optional(),
+    ...publicSize,
+  }),
+  /** One picture (AC-6108), with its alt text, an optional caption and link. */
+  z.object({
+    kind: z.literal('image'),
+    id: Uuid,
+    image: PublicPicture,
+    alt: z.string().min(1),
+    caption: z.string().optional(),
+    url: z.string().optional(),
+    ...publicSize,
+  }),
+  /** Two to twelve pictures (AC-6109), each with its alt text. */
+  z.object({
+    kind: z.literal('gallery'),
+    id: Uuid,
+    images: z.array(PublicPicture.extend({ alt: z.string().min(1) })).min(1),
+    display: z.enum(PROFILE_GALLERY_DISPLAYS).catch('row'),
+    ...publicSize,
+  }),
+  /**
+   * A booking page's next open times (AC-6110): its title and address, and the length the chips are for. The times
+   * themselves load when the block nears the screen, from `profileTimesPath`.
+   */
+  z.object({
+    kind: z.literal('times'),
+    id: Uuid,
+    slug: z.string(),
+    title: z.string(),
+    duration: BookingDuration,
+  }),
+  /** One line at the very top of the page (AC-6112), with an optional link. */
+  z.object({ kind: z.literal('banner'), id: Uuid, text: z.string().min(1), url: z.string().optional() }),
 ]);
 /** One block as a visitor reads it. */
 export type PublicProfileItem = z.infer<typeof PublicProfileItem>;
+
+/** Where a times block's next open times are read from (AC-6110), on our own origin. */
+export function profileTimesPath(handle: string, itemId: string): string {
+  return `/api/public/profiles/${encodeURIComponent(handle)}/items/${itemId}/times`;
+}
+
+/** A times block's next open times (AC-6110): up to 6 starts, the length they are for, and the page's slug. */
+export const PublicProfileTimes = z.object({
+  slug: z.string(),
+  duration: BookingDuration,
+  starts: z.array(z.iso.datetime()).max(6),
+});
+/** A times block's next open times. */
+export type PublicProfileTimes = z.infer<typeof PublicProfileTimes>;
 
 /** A link page's views and visitors over one period. */
 const ProfileTraffic = z.object({
@@ -477,10 +740,72 @@ const ProfileTraffic = z.object({
  * The editor's figures (AC-5127): over the last `days` UTC days (today included), the page's views and visitors,
  * the same for the period before as the comparison, and each live block's presses. A block with none is absent.
  */
+/** One value of one fact over a period (AC-6118): `Other` holds what fell past a day's top 50. */
+export const ProfileFactValue = ProfileTraffic.extend({ value: z.string() });
+/** One value of one fact over a period. */
+export type ProfileFactValue = z.infer<typeof ProfileFactValue>;
+
+/** One UTC day's views and visitors (AC-6118). */
+export const ProfileDay = ProfileTraffic.extend({ day: z.iso.date() });
+/** One UTC day's views and visitors. */
+export type ProfileDay = z.infer<typeof ProfileDay>;
+
+/**
+ * The editor's figures (AC-5127, extended by spec 0061 AC-6118 and AC-6119): over the last `days` UTC days (today
+ * included), the page's views and visitors, the same for the period before as the comparison, and each live block's
+ * presses (a block with none is absent). Then, from spec 0061: the views and visitors of each day of the period
+ * (`series`, every day present, oldest first, and `seriesBefore` for the period before), the top 5 values of each
+ * fact with the rest summed as `Other`, and the funnel: views, presses and bookings made from the page.
+ */
 export const ProfileCounts = ProfileTraffic.extend({
   days: z.number().int().min(1),
   before: ProfileTraffic,
   presses: z.array(z.object({ id: Uuid, presses: z.number().int().min(1) })),
+  series: z.array(ProfileDay).optional(),
+  seriesBefore: z.array(ProfileDay).optional(),
+  facts: z.record(z.enum(PROFILE_VIEW_FACTS), z.array(ProfileFactValue)).optional(),
+  funnel: z
+    .object({
+      views: z.number().int().min(0),
+      presses: z.number().int().min(0),
+      bookings: z.number().int().min(0),
+    })
+    .optional(),
 });
 /** The editor's figures. */
 export type ProfileCounts = z.infer<typeof ProfileCounts>;
+
+/** A device class as the figures name it. */
+export const ProfileDevice = z.enum(PROFILE_DEVICES);
+
+/** A hex colour as a QR's modules take it: six lowercase digits. */
+const QrHex = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .regex(/^#[0-9a-f]{6}$/, { error: 'Use a colour like #1f2937.' });
+
+/**
+ * A share QR's style (AC-6124), saved per page: the module colour (refused under 4.5 to 1 against the fixed light
+ * background, with a hint), an optional centre picture (the person's own picture, or one uploaded), and an optional
+ * frame label of up to 20 characters. Every key optional: none is the plain black code.
+ */
+export const ProfileQrStyle = z.object({
+  colour: QrHex.refine((hex) => contrastRatio(hex, QR_BACKGROUND) >= QR_CONTRAST_MIN, {
+    error: QR_CONTRAST_REFUSAL,
+  }).optional(),
+  picture: z
+    .discriminatedUnion('from', [
+      z.object({ from: z.literal('person') }),
+      z.object({ from: z.literal('upload'), image: ProfileImageId }),
+    ])
+    .optional(),
+  label: oneLine(
+    1,
+    QR_LABEL_MAX,
+    'Write the label, or leave the frame off.',
+    'Keep the label to 20 characters.',
+  ).optional(),
+});
+/** A share QR's style. */
+export type ProfileQrStyle = z.infer<typeof ProfileQrStyle>;

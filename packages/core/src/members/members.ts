@@ -16,6 +16,7 @@ import {
   ROLES,
   type MembersPage,
   type MemberView,
+  type GuestPreview,
   type MyAccess,
   type RemovalPreview,
   type Role,
@@ -38,9 +39,16 @@ import type { JobRegistry } from '../jobs/registry.ts';
 import { REASSIGN_KIND } from './reassign.ts';
 import { countRemoval, runRemovalEffects } from './removal.ts';
 import { writeAudit, type AuditSource } from './audit.ts';
-import { revokeUnvouched } from './invitations.ts';
+import { ensureLinkPage } from '../booking/handles.ts';
+import { checkSeats, revokeUnvouched } from './invitations.ts';
+import { countBecomingGuest, leaveSchedulingAsGuest } from './guest.ts';
+import { workspaceLogoVersion } from '../brand/brand.ts';
 
 const { members, workspaces } = schema;
+
+/** Whether the caller is a guest (spec 0031, slice 9): they read names, never addresses. */
+const isGuest = (scope: EngineScope): boolean =>
+  scope.access.principal.kind === 'member' && scope.access.principal.role === 'guest';
 
 /** The columns a member is answered with, everywhere in this file. */
 const VIEW_COLUMNS = {
@@ -53,20 +61,23 @@ const VIEW_COLUMNS = {
   timeZone: members.timeZone,
 } as const;
 
-/** A member row as `VIEW_COLUMNS` reads it, in the contract's shape. */
-function toView(row: {
-  readonly id: string;
-  readonly name: string;
-  readonly email: string;
-  readonly role: string;
-  readonly joinedAt: string | Date;
-  readonly avatarUrl: string | null;
-  readonly timeZone: string | null;
-}): MemberView {
+/** A member row as `VIEW_COLUMNS` reads it, in the contract's shape; `withEmail` false leaves the address out. */
+function toView(
+  row: {
+    readonly id: string;
+    readonly name: string;
+    readonly email: string;
+    readonly role: string;
+    readonly joinedAt: string | Date;
+    readonly avatarUrl: string | null;
+    readonly timeZone: string | null;
+  },
+  withEmail = true,
+): MemberView {
   return {
     id: row.id,
     name: row.name,
-    email: row.email,
+    ...(withEmail ? { email: row.email } : {}),
     role: storedRole(row.role),
     joinedAt: new Date(row.joinedAt).toISOString(),
     ...(row.avatarUrl === null ? {} : { avatarUrl: row.avatarUrl }),
@@ -103,7 +114,9 @@ const likeLiteral = (text: string): string => text.replace(/[\\%_]/g, (char) => 
  * `search` keeps those whose name or email holds it, in any case; `cursor`
  * starts after the last page's end. Removed members are left out. Every
  * member may read it. With `secondFactorUsers`, owners and admins also learn
- * who has a second factor (spec 0033, AC-895); nobody else does.
+ * who has a second factor (spec 0033, AC-895); nobody else does. A guest
+ * (spec 0031, AC-829) gets names, roles and pictures but no one's email, and
+ * searches by name only, so no address can be guessed a letter at a time.
  */
 export async function listMembers(
   scope: EngineScope,
@@ -114,13 +127,16 @@ export async function listMembers(
   const search = input.search?.trim() ?? '';
   const after = input.cursor === undefined ? undefined : decodeMemberCursor(input.cursor);
   const sortName = sql<string>`lower(${members.name})`;
+  const seesEmails = !isGuest(scope);
   const matching = and(
     // Row level security keeps the read to this workspace; the filter says so too (house style).
     eq(members.workspaceId, scope.workspaceId),
     eq(members.status, 'active'),
     ...(search === ''
       ? []
-      : [or(ilike(members.name, `%${likeLiteral(search)}%`), ilike(members.email, `%${likeLiteral(search)}%`))]),
+      : seesEmails
+        ? [or(ilike(members.name, `%${likeLiteral(search)}%`), ilike(members.email, `%${likeLiteral(search)}%`))]
+        : [ilike(members.name, `%${likeLiteral(search)}%`)]),
   );
   const { rows, total } = await inWorkspace(scope, async (tx) => {
     const read = await tx
@@ -148,7 +164,7 @@ export async function listMembers(
       : undefined;
   return {
     members: page.map((row) => ({
-      ...toView(row),
+      ...toView(row, seesEmails),
       ...(factors === undefined ? {} : { twoFactor: row.userId !== null && factors.has(row.userId) }),
     })),
     total,
@@ -185,7 +201,8 @@ export async function getMyAccess(scope: EngineScope): Promise<MyAccess> {
   checkScope(scope);
   const { principal, permissions } = scope.access;
   if (principal.kind !== 'member') throw new Error('Only a member has a role to show.');
-  const scheduling = await mySchedulingReach(scope);
+  // The workspace's logo version rides along (spec 0060): the sidebar and the tab's icon need no read of their own.
+  const [scheduling, workspaceLogo] = await Promise.all([mySchedulingReach(scope), workspaceLogoVersion(scope)]);
   return {
     memberId: principal.memberId,
     role: principal.role,
@@ -193,6 +210,7 @@ export async function getMyAccess(scope: EngineScope): Promise<MyAccess> {
     permissions: [...permissions],
     teamIds: [...principal.teamIds],
     ...(scheduling === undefined ? {} : { scheduling }),
+    ...(workspaceLogo === undefined ? {} : { workspaceLogo }),
   };
 }
 
@@ -352,7 +370,7 @@ export async function setMemberRole(
 ): Promise<SetRoleResult> {
   checkScope(scope);
   const memberId = checkId(input.memberId, MEMBER_NOT_FOUND);
-  if (!isRole(input.role)) throw refuse('CONFIG_INVALID', 'Pick owner, admin or member.');
+  if (!isRole(input.role)) throw refuse('CONFIG_INVALID', 'Pick a role.');
   const role = input.role;
   checkChangesRoles(scope, actingRole(scope));
   const { result } = await runWrite(
@@ -364,6 +382,11 @@ export async function setMemberRole(
       checkOwnerRules(scope, acting, target, role);
       if (target.role === role) return toView({ ...target, role });
       if (target.role === 'owner') await keepAnOwner(tx, scope, target.id);
+      // A guest takes no seat (spec 0031, AC-809), so leaving the role takes one; becoming one leaves scheduling,
+      // before the role is written, while the rotations still read them as a host (AC-1432).
+      if (target.role === 'guest') await checkSeats(tx, scope, 1);
+      const leavesGuest = target.role === 'guest';
+      if (role === 'guest') await leaveSchedulingAsGuest(context, target.id, options.source);
       await tx
         .update(members)
         .set({ role, ...touched(scope) })
@@ -381,6 +404,15 @@ export async function setMemberRole(
         },
         options.source,
       );
+      // A guest made a member gets the link page every member has (a kept one comes back as it was; late trap #77).
+      if (leavesGuest && target.userId !== null) {
+        await ensureLinkPage(tx, {
+          userId: target.userId,
+          workspaceId: scope.workspaceId,
+          name: target.name,
+          email: target.email,
+        });
+      }
       // What they sent and can't send now opens nothing: revoked, and said (late trap: invitations died untold).
       const cancelled = await revokeUnvouched(tx, scope, target.id, role, options.source);
       // Everyone's member list reads them again, and the relay drops the workspace's audiences (spec 0007, AC-82).
@@ -522,6 +554,26 @@ export async function previewRemoval(
 }
 
 /**
+ * What making a member a guest will do (spec 0031, slice 9; spec 0037, AC-1432), for the confirm dialog: pages that
+ * pause, rotations they leave, upcoming bookings that will need a host and delegations that go. Only a holder of
+ * `members.manage` may ask (FORBIDDEN otherwise, checked before any read); a member who isn't active here is
+ * NOT_FOUND. Counted with no lock.
+ */
+export async function previewGuest(scope: EngineScope, input: { readonly memberId: string }): Promise<GuestPreview> {
+  checkScope(scope);
+  checkChangesRoles(scope, actingRole(scope));
+  const memberId = checkId(input.memberId, MEMBER_NOT_FOUND);
+  return inWorkspace(scope, async (tx) => {
+    const [target] = await tx
+      .select({ id: members.id })
+      .from(members)
+      .where(and(eq(members.workspaceId, scope.workspaceId), eq(members.id, memberId), eq(members.status, 'active')));
+    if (target === undefined) throw refuse('NOT_FOUND', MEMBER_NOT_FOUND);
+    return countBecomingGuest(tx, scope.workspaceId, memberId);
+  });
+}
+
+/**
  * The caller leaves the workspace (spec 0031, AC-812): the removal on
  * themself, so their views and calendars go with them, and the only active
  * owner can't leave (409 `LAST_OWNER`). Only a member can leave.
@@ -562,6 +614,8 @@ export async function transferOwnership(
       const { tx } = context;
       const { target, acting } = await lockTarget(tx, scope, memberId);
       if (acting.role !== 'owner') throw refuse('FORBIDDEN', OWNER_RULES_MESSAGE);
+      // A guest made owner takes a seat (spec 0031, AC-809).
+      if (target.role === 'guest') await checkSeats(tx, scope, 1);
       await tx
         .update(members)
         .set({ role: 'owner', ...touched(scope) })

@@ -165,6 +165,9 @@ const SENTENCES: SentenceTemplates = {
     return actor('changed the sign in rules');
   },
   'workspace_security.signed_out_everyone': () => actor('signed everyone out of the workspace'),
+  'api_key.created': (entry) => actor(`made the API key ${entry.params.name}`),
+  'api_key.revoked': (entry) => actor(`revoked the API key ${entry.params.name}`),
+  'api_key.restored': (entry) => actor(`brought back the API key ${entry.params.name}`),
   'rotation.adjusted': (entry, w) =>
     actor(
       `adjusted ${w.persons(entry.params.person)} count in ${w.thing(entry.target)} by ${units(entry.params.units)}`,
@@ -254,6 +257,19 @@ const SENTENCES: SentenceTemplates = {
       }
     }
   },
+  // Automations (parity #53): "Ada switched off an automation for Deals".
+  'automation.changed': (entry) => {
+    const { change, object } = entry.params;
+    const verb = {
+      created: 'made',
+      updated: 'changed',
+      enabled: 'switched on',
+      disabled: 'switched off',
+      deleted: 'deleted',
+      restored: 'restored',
+    }[change];
+    return actor(`${verb} an automation for ${object}`);
+  },
   'access.rule_set': (entry) => {
     const { object, who, level, records, fields, isDefault } = entry.params;
     if (isDefault) return actor(`set ${who} back to the default access to ${object}`);
@@ -271,6 +287,7 @@ const SENTENCES: SentenceTemplates = {
       `${entry.params.deleted ? 'deleted' : 'changed'} ${w.persons(entry.target.person)} “${entry.params.page}” page`,
     ),
   'rotation.changed': (entry, w) => actor(`changed who is in ${w.thing(entry.target)}`),
+  'editors.changed': (entry, w) => actor(`changed who can edit ${w.thing(entry.target)}`),
 };
 
 /** A delegation's level as its verb: See or Manage. */

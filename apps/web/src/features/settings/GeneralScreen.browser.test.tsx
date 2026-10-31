@@ -53,6 +53,7 @@ function layer(answer?: Answer) {
   const data = {
     workspace: { get, update, delete: vi.fn(() => new Promise(() => undefined)) },
     workspaces: { slugAvailable: (slug: string) => Promise.resolve(slug !== TAKEN) },
+    workspaceLogo: { subscribe: () => () => undefined, src: () => undefined },
   } as unknown as DataLayer;
   return {
     data,

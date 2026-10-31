@@ -493,6 +493,93 @@ export const FooterShortcut: Story = {
   },
 };
 
+/** A workspace's square mark, as Settings › Brand would hold it: a blue tile with a white ring. */
+const SQUARE_LOGO = `data:image/svg+xml,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#2f6bff"/><circle cx="32" cy="32" r="14" fill="none" stroke="#fff" stroke-width="7"/></svg>',
+)}`;
+
+/** A wide wordmark, four times as wide as it is tall: the case a square crop would cut letters from. */
+const WORDMARK_LOGO = `data:image/svg+xml,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 60"><circle cx="30" cy="30" r="22" fill="#e5484d"/><rect x="62" y="16" width="168" height="28" rx="6" fill="#e5484d"/></svg>',
+)}`;
+
+/** The app's head with the workspace's own logo, in place of the product's mark it is also given. */
+function LogoSidebar({ logo, isCollapsed = false }: { readonly logo: string; readonly isCollapsed?: boolean }) {
+  return (
+    <Stage height="page">
+      <Sidebar
+        workspace="Northwind"
+        mark={<ProviderMark provider="timefix" size="lg" />}
+        logo={logo}
+        isCollapsed={isCollapsed}
+        workspaceMenu={
+          <Menu label="Workspaces">
+            <MenuItem id="northwind">Northwind</MenuItem>
+          </Menu>
+        }
+      >
+        <NavItem icon="house" href="/home" isCurrent>
+          Home
+        </NavItem>
+        <NavItem icon="bell" href="/notifications">
+          Notifications
+        </NavItem>
+      </Sidebar>
+    </Stage>
+  );
+}
+
+/** The workspace's square logo heads the switcher (spec 0060), filling the mark's square; the name stays the button's. */
+export const WorkspaceLogo: Story = {
+  render: () => <LogoSidebar logo={SQUARE_LOGO} />,
+  play: async ({ canvas }) => {
+    const switcher = canvas.getByRole('button', { name: 'Northwind, workspace menu' });
+    const picture = switcher.querySelector('img');
+    await expect(picture).not.toBeNull();
+    // The logo wins over the product's mark the frame also passes.
+    await expect(picture?.getAttribute('src')).toBe(SQUARE_LOGO);
+    await waitFor(() => expect(picture?.naturalWidth).toBeGreaterThan(0));
+  },
+};
+
+/**
+ * A wide wordmark, letterboxed whole inside the square rather than cropped (spec 0060): smaller, but every letter
+ * kept, on a light plate in both themes so dark ink still reads on the dark sidebar.
+ */
+export const WorkspaceWordmark: Story = {
+  render: () => <LogoSidebar logo={WORDMARK_LOGO} />,
+  play: async ({ canvas }) => {
+    const picture = canvas.getByRole('button', { name: 'Northwind, workspace menu' }).querySelector('img');
+    await expect(picture).not.toBeNull();
+    if (picture === null) return;
+    await expect(getComputedStyle(picture).objectFit).toBe('contain');
+    await waitFor(() => expect(picture.naturalWidth).toBeGreaterThan(0));
+    // Loaded, it sits on the light plate with its hairline, so dark ink reads on the dark sidebar too.
+    const tile = picture.parentElement;
+    await waitFor(() => expect(tile === null ? '' : getComputedStyle(tile).outlineStyle).toBe('solid'));
+  },
+};
+
+/** Folded to the rail, the logo alone heads it, named in a tooltip as the mark is. */
+export const CollapsedWorkspaceLogo: Story = {
+  render: () => <LogoSidebar logo={WORDMARK_LOGO} isCollapsed />,
+  play: async ({ canvas }) => {
+    const switcher = canvas.getByRole('button', { name: 'Northwind, workspace menu' });
+    await expect(switcher.querySelector('img')).not.toBeNull();
+  },
+};
+
+/** A logo that won't load keeps the workspace's letter in the square, never an empty tile or a broken picture. */
+export const WorkspaceLogoFailed: Story = {
+  render: () => <LogoSidebar logo="/no-such-logo.png" />,
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas }) => {
+    const switcher = canvas.getByRole('button', { name: 'Northwind, workspace menu' });
+    await waitFor(() => expect(switcher.querySelector('img')).toBeNull());
+    await expect(switcher).toHaveTextContent('N');
+  },
+};
+
 /** A section whose fold the screen keeps (spec 0034: stored for each member): only `onFoldChange` changes it. */
 function KeptFoldSidebar() {
   const [isFolded, setFolded] = useState(true);

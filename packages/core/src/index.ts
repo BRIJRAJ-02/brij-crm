@@ -2,12 +2,16 @@
 // One folder per feature; the access door (spec 0005, thin #9) is `access/`.
 export { getSystemStatus, type SystemDeps } from './system/status.ts';
 export * from './engine/index.ts';
+// "Last contacted" on a record's page (the CRM flow pass): calls and meetings, logged or on the calendar.
+export { getLastContacted } from './records/last-contacted.ts';
 // A company's logo from our own origin (spec 0059): the address a record's picture names, and which domains may have one.
 export { companyLogoPath, isLogoDomain, LOGO_PATH } from './engine/logos.ts';
 export {
   enterDeletedWorkspace,
   enterPublicForm,
   enterWithKey,
+  noteKeyUse,
+  type KeyEntry,
   enterWorkspace,
   type DeletedEntry,
   NO_RULE_SOURCE,
@@ -140,6 +144,10 @@ export {
   setAutomationEnabled,
   updateAutomation,
 } from './automations/service.ts';
+// API keys (parity #34): Settings › Developer's list, make, revoke and Undo; the door's part is `enterWithKey`.
+export { createApiKey, listApiKeys, restoreApiKey, revokeApiKey } from './developer/keys.ts';
+// A key's shape (pure): the api's tests make one to prove an unknown or misplaced key opens nothing.
+export { keyToken, parseKeyToken } from './developer/tokens.ts';
 export { type AuditSource } from './members/audit.ts';
 // Settings › Workspace › General, the owner's delete and restore, and Account › Profile (spec 0031, slice 7).
 export {
@@ -166,7 +174,45 @@ export {
   readProfileItems,
   importProfileLinks,
   saveProfileItem,
+  addProfileImage,
+  profileInsightsCsv,
+  readOwnLinkAddress,
+  readOwnProfileImage,
+  readQrStyle,
+  saveQrStyle,
+  type ResolvedMedia,
 } from './profile/items.ts';
+// Link page blocks and reach (spec 0061): media links, picture checks, view facts and scheduled blocks, for the api's
+// signed in routes (the public ones take them from `@crm/core/public`).
+export {
+  parseMediaLink,
+  mediaInfoSource,
+  isMediaInfoHost,
+  isMediaPosterHost,
+  readOembed,
+  cleanTitle,
+} from './profile/embeds.ts';
+export { checkProfileImage, readPageMeta, profileImageStorePath, type CheckedImage } from './profile/images.ts';
+export { deviceFact } from './profile/sources.ts';
+export { zonedToUtc, windowOf } from './profile/schedule.ts';
+// A workspace's brand kit and the caller's own link page accent and photos (spec 0060).
+export {
+  brandLogoFolder,
+  clearBrandLogo,
+  getWorkspaceBrand,
+  readBrandLogo,
+  requireBrandEditor,
+  saveBrandLogo,
+  saveWorkspaceBrand,
+  type StoredLogo,
+} from './brand/brand.ts';
+export {
+  pageImageFolder,
+  readProfileLook,
+  saveProfileAccent,
+  saveProfileImage,
+  type StoredPageImage,
+} from './brand/look.ts';
 // A person's own account picture from our origin (23 Oct 2026): only Google's account pictures, with their version.
 export {
   personPicture,
@@ -227,6 +273,8 @@ export {
   type EditAttributeInput,
   type NewAttributeOption,
 } from './attributes/attributes.ts';
+// Computed attributes (spec 0015): the dialog's preview and the refill after a failed fill.
+export { previewComputed, refillComputed } from './computed/define.ts';
 // Lists and their entries (spec 0048).
 export {
   addListEntries,
@@ -234,6 +282,7 @@ export {
   archiveList,
   countEntries,
   createList,
+  editEntries,
   editEntry,
   entriesForRecord,
   entryMembership,
@@ -244,8 +293,11 @@ export {
   removeEntries,
   restoreEntries,
   restoreList,
+  setEntriesValues,
   updateList,
   type AddedEntries,
+  type EntryEditResult,
+  type EntryEditResults,
   type AddListEntryInput,
   type CreateListInput,
   type EditEntryInput,
@@ -282,6 +334,9 @@ export {
   queryRecords,
   readRecordsById,
   readTrashedRecord,
+  mergeAndRead,
+  readMergePreview,
+  type MergedView,
   type AddRecordInput,
   type EditRecordInput,
   type RecordWindow,
@@ -318,6 +373,18 @@ export {
   type RecordFileStore,
   type RegisterRecordFile,
 } from './records/files.ts';
+export {
+  ATTACHMENT_REFUSALS,
+  deleteAttachment,
+  FILES_MEMBERS_ONLY,
+  FILES_NOT_WRITABLE,
+  listAttachments,
+  prepareAttachment,
+  registerAttachment,
+  restoreAttachment,
+  type AttachmentRefusal,
+  type RegisterAttachment,
+} from './records/attachments.ts';
 export {
   getView,
   listViews,
@@ -558,6 +625,7 @@ export {
   leaveWorkspace,
   listMembers,
   listRoles,
+  previewGuest,
   previewRemoval,
   removeMember,
   setMemberRole,
@@ -735,12 +803,15 @@ export { createRotation, deleteRotation, listRotations, updateRotation } from '.
 export { bookingAssignments } from './rotation/assignments.ts';
 export { reassignBooking, reassignUpcoming, type Reseated } from './rotation/reassign.ts';
 export { adjustCount, rotationDistribution, undoAdjustment } from './rotation/distribution.ts';
+// Page and rotation editors (spec 0037, AC-1331): Sharing.
+export { listEditors, setEditors } from './scheduling/editors.ts';
 // Lead routing (spec 0043): deciding a route, a surface's report.
 export { decideRoute, recordFactKeys, type RouteDecision } from './routing/decide.ts';
 export { routingReport } from './routing/report.ts';
 export { searchWorkspace, type GlobalSearchInput } from './search/search.ts';
 export { listRecents, visitRecent, RECENTS_KEPT, type RecentVisit } from './search/recents.ts';
 export {
+  checkImportDuplicates,
   checkImportLinks,
   checkImportMatches,
   createImport,

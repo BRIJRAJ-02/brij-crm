@@ -81,7 +81,14 @@ export type AccessEntry =
    * anyone else who can read it gets 403 `FORBIDDEN` naming who may ("Only <maker>, owners and admins can change
    * this list.").
    */
-  | { readonly listMaker: true };
+  | { readonly listMaker: true }
+  /**
+   * A page or rotation by its editors (spec 0037, AC-1331, AC-1340): `booking.manage` first (403 `FORBIDDEN`), then
+   * `booking.admin` or an editor of that rotation or page (`resource`: the one the input's `resourceType` names); a
+   * member who is in the rotation but doesn't edit it is 403 `FORBIDDEN`, anyone else meets it as absent. Adding a
+   * person also needs Manage over them (`ADD_MEMBER_FORBIDDEN`).
+   */
+  | { readonly editor: 'booking_page' | 'rotation' | 'resource' };
 
 /** Every exported service that takes a scope, and what it checks. */
 export const ACCESS_TABLE = {
@@ -112,6 +119,9 @@ export const ACCESS_TABLE = {
   moveAttribute: { permission: 'schema.manage' },
   archiveAttributes: { permission: 'schema.manage' },
   restoreAttributes: { permission: 'schema.manage' },
+  // Computed attributes (spec 0015, AC-330): the preview and the refill.
+  previewComputed: { permission: 'schema.manage' },
+  refillComputed: { permission: 'schema.manage' },
   defineOption: { permission: 'schema.manage' },
   updateOption: { permission: 'schema.manage' },
   // Settings' option writes (spec 0012, milestone 3).
@@ -139,6 +149,8 @@ export const ACCESS_TABLE = {
   removeMember: { ownerRules: true },
   // Spec 0031, AC-816: the remove dialog's counts, for `members.manage` or about oneself.
   previewRemoval: { ownerRules: true },
+  // Spec 0031, slice 9: the guest dialog's counts, for holders of `members.manage` only (they alone change roles).
+  previewGuest: { permission: 'members.manage' },
   // Spec 0031: leaving is the removal on oneself, open to any member; the only owner is refused LAST_OWNER.
   leaveWorkspace: { anyMember: true },
   // Spec 0031, AC-813: an owner hands the workspace on; anyone else is refused.
@@ -186,6 +198,10 @@ export const ACCESS_TABLE = {
   // The forms they may place (spec 0052) and the look of the page (spec 0054): their own account, as the rest.
   listProfileFormChoices: { ownLinkPage: true },
   saveProfileTheme: { ownLinkPage: true },
+  // The link page's own accent and photos (spec 0060, AC-23): their own page only, as the look is.
+  readProfileLook: { ownLinkPage: true },
+  saveProfileAccent: { ownLinkPage: true },
+  saveProfileImage: { ownLinkPage: true },
   // The picture their page shares with (spec 0055): their own account, like every other page setting.
   saveProfileShareImage: { ownLinkPage: true },
   setProfileIndexable: { ownLinkPage: true },
@@ -194,9 +210,24 @@ export const ACCESS_TABLE = {
   orderProfileItems: { ownLinkPage: true },
   archiveProfileItem: { ownLinkPage: true },
   deleteProfileItem: { ownLinkPage: true },
+  // Spec 0061: the page's pictures, its share QR's style, its Insights download, and a link's own saved address for
+  // its site's picture. Their own page only, as everything above.
+  addProfileImage: { ownLinkPage: true },
+  readOwnProfileImage: { ownLinkPage: true },
+  readOwnLinkAddress: { ownLinkPage: true },
+  readQrStyle: { ownLinkPage: true },
+  saveQrStyle: { ownLinkPage: true },
+  profileInsightsCsv: { ownLinkPage: true },
   // Workspace › General (spec 0031, slice 7): every member reads it; changing it and deleting it are permissions.
   getWorkspaceSettings: { anyMember: true },
   updateWorkspace: { permission: 'workspace.manage' },
+  // The brand kit (spec 0060, AC-1, AC-23): every member reads it; owners and admins change it and its logo.
+  getWorkspaceBrand: { anyMember: true },
+  readBrandLogo: { anyMember: true },
+  saveWorkspaceBrand: { permission: 'workspace.manage' },
+  requireBrandEditor: { permission: 'workspace.manage' },
+  saveBrandLogo: { permission: 'workspace.manage' },
+  clearBrandLogo: { permission: 'workspace.manage' },
   deleteWorkspace: { permission: 'workspace.delete' },
   restoreWorkspace: { permission: 'workspace.delete' },
   setWorkspaceDomains: { permission: 'workspace.manage' },
@@ -248,6 +279,8 @@ export const ACCESS_TABLE = {
   getActivity: { data: 'read' },
   // 13 Oct reference batch 4: a record's stage age, read as its timeline is.
   getStageSince: { data: 'read' },
+  // A record's last contact (the CRM flow pass): read on the record, as its timeline.
+  getLastContacted: { data: 'read' },
   readTrashedRecord: { data: 'read' },
   // A record's own files (27 Oct 2026): keyed on the record, never on the submission a file came from, so a filed
   // file outlives its submission. The read refuses a record the member can't see and a field hidden from them; the
@@ -255,8 +288,20 @@ export const ACCESS_TABLE = {
   readRecordFile: { data: 'read' },
   prepareRecordFile: { data: 'write' },
   registerRecordFile: { data: 'write' },
+  // A record's Files tab (#32): listed by whoever may read the record; added, deleted and restored by whoever may
+  // change its object, on a live record.
+  listAttachments: { data: 'read' },
+  prepareAttachment: { data: 'write' },
+  registerAttachment: { data: 'write' },
+  deleteAttachment: { data: 'write' },
+  restoreAttachment: { data: 'write' },
   // The record picker's search (spec 0014): only records the reader may see.
   searchRecords: { data: 'read' },
+  // Likely duplicates (spec 0049): read on the object to check and list; write to dismiss and restore a pair.
+  checkDuplicates: { data: 'read' },
+  listDuplicates: { data: 'read' },
+  dismissPair: { data: 'write' },
+  restorePair: { data: 'write' },
   // A record page's related sections (spec 0014, milestone 3): only linked records the reader may see, on a side they may see.
   pageLinks: { data: 'read' },
   // The command menu (spec 0039): it searches, lists and keeps only what the reader may read; the rest is absent.
@@ -280,6 +325,11 @@ export const ACCESS_TABLE = {
   deleteRecords: { data: 'write' },
   restoreRecords: { data: 'write' },
   restoreBatch: { data: 'write' },
+  // Record merge (spec 0049, AC-4919): object write before any record is read, the preview too.
+  mergeRecords: { data: 'write' },
+  previewMerge: { data: 'write' },
+  mergeAndRead: { data: 'write' },
+  readMergePreview: { data: 'write' },
   // Bulk edits (spec 0022, milestone 2): object and field write, checked once for the call.
   updateMany: { data: 'write' },
   bulkEditRecords: { data: 'write' },
@@ -298,6 +348,9 @@ export const ACCESS_TABLE = {
   addListEntry: { data: 'write' },
   addListEntries: { data: 'write' },
   editEntry: { data: 'write' },
+  // A list field of many entries (AC-4826) and its undo: the list at write, then each entry through lockEntry.
+  editEntries: { data: 'write' },
+  setEntriesValues: { data: 'write' },
   removeEntries: { data: 'write' },
   restoreEntries: { data: 'write' },
   // Background jobs (spec 0008): the starter or jobs.manage; the test job needs jobs.manage.
@@ -409,6 +462,11 @@ export const ACCESS_TABLE = {
   deleteAutomation: { permission: 'automations.manage' },
   restoreAutomation: { permission: 'automations.manage' },
   listAutomationRuns: { permission: 'automations.manage' },
+  // API keys (parity #34): all of it needs api_keys.manage; a key's own requests go through `enterWithKey`.
+  listApiKeys: { permission: 'api_keys.manage' },
+  createApiKey: { permission: 'api_keys.manage' },
+  revokeApiKey: { permission: 'api_keys.manage' },
+  restoreApiKey: { permission: 'api_keys.manage' },
   // Forms (spec 0023): any member reads the forms on objects they can see; changing one, or acting on a
   // submission, needs forms.manage. A submission reads through its main record. The public form and submit take
   // only the scope the form's own public key made.
@@ -455,6 +513,8 @@ export const ACCESS_TABLE = {
   checkImportLinks: { data: 'write' },
   // The preview's new and update counts: the same, finding only readable records.
   checkImportMatches: { data: 'write' },
+  // The preview's likely duplicates (spec 0049, AC-4918): the same, naming only readable records.
+  checkImportDuplicates: { data: 'write' },
   // Records exports (spec 0040): read on the object (and the view) to start; only the starter reads one back.
   startRecordsExport: { data: 'read' },
   getRecordsExport: { data: 'read' },
@@ -532,7 +592,8 @@ export const ACCESS_TABLE = {
   // making, changing and deleting them is booking.admin's (AC-751). A booking's assignments: its host or an admin.
   listRotations: { bookingPages: true },
   createRotation: { permission: 'booking.admin' },
-  updateRotation: { permission: 'booking.admin' },
+  // Changing a rotation (AC-1337): booking.admin or its editors; adding someone needs Manage over them (AC-1340).
+  updateRotation: { editor: 'rotation' },
   deleteRotation: { permission: 'booking.admin' },
   bookingAssignments: { bookingPages: true },
   // Reassigning a seat (AC-748, AC-1337): booking.manage, then Manage over the current and the new host.
@@ -541,9 +602,12 @@ export const ACCESS_TABLE = {
   rotationDistribution: { bookingPages: true },
   // A member's upcoming bookings in a rotation handed on (AC-750): Manage over them and every member it could hand to.
   reassignUpcoming: { scheduling: 'manage' },
-  // Count adjustments (AC-1329): booking.admin's until rotation editors arrive (J14).
-  adjustCount: { permission: 'booking.admin' },
-  undoAdjustment: { permission: 'booking.admin' },
+  // Count adjustments (AC-1329): booking.admin and the rotation's editors.
+  adjustCount: { editor: 'rotation' },
+  undoAdjustment: { editor: 'rotation' },
+  // Sharing (spec 0037, AC-1331): whoever may change the page or rotation lists its editors; only booking.admin sets them.
+  listEditors: { editor: 'resource' },
+  setEditors: { permission: 'booking.admin' },
   // Scheduling access (spec 0037, J1): delegations, and the members in See reach (`members.visible`, AC-1261).
   listDelegations: { delegation: true },
   grantDelegation: { delegation: true },

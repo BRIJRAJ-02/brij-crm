@@ -4,7 +4,16 @@
 // that lead with workspace_id (spec 0004).
 export { actorType, attributeType, systemColumn } from './common.ts';
 export { memberOnboarding, memberRole, memberStatus, members, workspaceCounters, workspaces } from './workspaces.ts';
-export { attributes, lists, objects, relationshipCardinality, relationships } from './definitions.ts';
+export {
+  attributes,
+  computedInputRole,
+  computedInputs,
+  computedState,
+  lists,
+  objects,
+  relationshipCardinality,
+  relationships,
+} from './definitions.ts';
 export { attributeOptions, optionOutcome } from './options.ts';
 export { outbox, outboxKind } from './outbox.ts';
 export { listEntries, recordFiles, recordLinks, records, sortKeys, values } from './records.ts';
@@ -17,9 +26,11 @@ export { REPORT_CONFIG_MAX_BYTES, reports } from './reports.ts';
 export { memberNavPrefs, NAV_ITEMS_MAX } from './navigation.ts';
 export { taskRecords, tasks } from './tasks.ts';
 export { memberRecents } from './search.ts';
+export { recordDuplicateDismissals } from './duplicates.ts';
 export { commentReactions, comments, commentVersions } from './comments.ts';
 export { notificationKind, notifications, notificationSettings } from './notifications.ts';
 export { memberPreferences } from './preferences.ts';
+export { workspaceBrands } from './brand.ts';
 export {
   attendeeMatch,
   attendeeResponse,
@@ -54,8 +65,9 @@ export { exportChunks, exports } from './exports.ts';
 export { auditEvents, invitations, joinRequests, workspaceDomains, workspaceSecurity } from './team.ts';
 export { emailPreferences, emails, emailStatus } from './emails.ts';
 export { bookingPageRotations, rotationAssignments, rotationMembers, rotationRoster, rotations } from './rotation.ts';
-export { memberBookingLimits, scheduleDelegations } from './scheduling.ts';
+export { memberBookingLimits, scheduleDelegations, schedulingEditors } from './scheduling.ts';
 export { accessRules, recordRules, teamMembers, teams } from './teams.ts';
 export { routingDecisions } from './routing.ts';
 export { automationRuns, automations } from './automations.ts';
+export { apiKeys } from './developer.ts';
 export { importRowOutcome, importRows, imports, importStatus } from './imports.ts';

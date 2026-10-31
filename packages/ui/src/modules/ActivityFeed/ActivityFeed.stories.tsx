@@ -631,3 +631,30 @@ export const LoggedActivities: Story = {
     await expect(canvas.getByText('30 min')).toBeInTheDocument();
   },
 };
+
+/** Another record merged into this one (spec 0049): its name as a flat chip, or "a record" when it can't be named. */
+export const Merged: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => {
+    const entries: ActivityEntry[] = [
+      {
+        id: 'merged',
+        at: '2026-10-08T13:15:00.000Z',
+        actor: GRACE,
+        kind: 'merged',
+        merged: { objectId: 'people', recordId: 'jane-d', name: 'Jane D.', kind: 'person' },
+      },
+      { id: 'merged-hidden', at: '2026-10-08T12:15:00.000Z', actor: GRACE, kind: 'merged' },
+    ];
+    return (
+      <Stage height="grid">
+        <ActivityFeed label="Activity" entries={arraySource(entries, (entry) => entry.id)} />
+      </Stage>
+    );
+  },
+  play: async ({ canvas }) => {
+    const [named, unnamed] = canvas.getAllByRole('article');
+    await expect(named).toHaveAccessibleName(/Grace Hopper merged Jane D\. into this record/);
+    await expect(unnamed).toHaveAccessibleName(/Grace Hopper merged a record into this record/);
+  },
+};

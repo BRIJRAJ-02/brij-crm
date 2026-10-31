@@ -379,6 +379,11 @@ export function pageSlots(
      * offered. None when absent.
      */
     readonly underLimit?: LimitCheck | undefined;
+    /**
+     * A finer step than the page's slot step (a booking given a new length from the week, which may start at any free
+     * five minutes). The page's own when absent.
+     */
+    readonly stepMinutes?: number;
   },
 ): readonly Span[] {
   if (input.busy.blocked) return [];
@@ -400,7 +405,11 @@ export function pageSlots(
     minNoticeMinutes: page.isPrivate ? 0 : page.minNoticeMinutes,
     windowDays: page.windowDays,
     ...(page.dailyLimit === null ? {} : { dailyLimit: page.dailyLimit }),
-    ...(page.slotStep === null ? {} : { slotStepMinutes: page.slotStep }),
+    ...(input.stepMinutes !== undefined
+      ? { slotStepMinutes: input.stepMinutes }
+      : page.slotStep === null
+        ? {}
+        : { slotStepMinutes: page.slotStep }),
   });
   const { underLimit } = input;
   return underLimit === undefined ? slots : slots.filter((slot) => underLimit(slot.start));

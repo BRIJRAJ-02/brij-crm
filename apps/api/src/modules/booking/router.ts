@@ -1,5 +1,7 @@
 import {
   bookAsHost,
+  listEditors,
+  setEditors,
   bookingAssignments,
   reassignBooking,
   reassignUpcoming,
@@ -195,7 +197,7 @@ export const bookingsRouter = member.bookings.router({
       moveBooking(
         hostTarget(context.scope, input.bookingId),
         { calendar: context.bookingCalendar, log },
-        { start: new Date(input.start) },
+        { start: new Date(input.start), ...(input.minutes === undefined ? {} : { minutes: input.minutes }) },
       ),
     ),
   ),
@@ -203,7 +205,11 @@ export const bookingsRouter = member.bookings.router({
     readMoveSlots(
       hostTarget(context.scope, input.bookingId),
       { calendar: context.bookingCalendar, log },
-      { from: new Date(input.from), to: new Date(input.to) },
+      {
+        from: new Date(input.from),
+        to: new Date(input.to),
+        ...(input.minutes === undefined ? {} : { minutes: input.minutes }),
+      },
     ),
   ),
   // Why a round robin booking went to its host (spec 0029, AC-742): its host and admins only.
@@ -356,6 +362,23 @@ export const rotationsRouter = member.rotations.router({
   delete: member.rotations.delete.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, () =>
       deleteRotation(context.scope, { rotationId: input.rotationId }),
+    ),
+  ),
+});
+
+// Page and rotation editors (spec 0037, AC-1331): Sharing. Settings, not CRM data: no outbox row, but the write goes
+// through `commitWrite`.
+export const editorsRouter = member.editors.router({
+  list: member.editors.list.handler(({ context, input }) =>
+    listEditors(context.scope, { resourceType: input.resourceType, resourceId: input.resourceId }),
+  ),
+  set: member.editors.set.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, () =>
+      setEditors(context.scope, {
+        resourceType: input.resourceType,
+        resourceId: input.resourceId,
+        memberIds: input.memberIds,
+      }),
     ),
   ),
 });

@@ -935,7 +935,7 @@ function DraftName({ name, onRename }: { readonly name: string; readonly onRenam
   const [value, setValue] = useState(name);
   const [error, setError] = useState<string | undefined>(undefined);
   return (
-    <Card title={strings.name} description={strings.draftNameText}>
+    <Card title={strings.name}>
       <Field
         label={strings.name}
         isLabelHidden

@@ -1,6 +1,8 @@
 /** BookingReceipt's built in copy. */
 export const strings = {
   welcome: 'You’re booked',
+  /** Under "You're booked", right after booking: warm, short, and true whatever the meeting is (AC-21). */
+  welcomeLine: (host: string) => `${host} will see you then.`,
   confirmed: 'Your booking',
   cancelled: 'This booking was cancelled',
   past: 'This booking has passed',

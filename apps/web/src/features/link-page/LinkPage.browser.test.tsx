@@ -4,6 +4,8 @@
 // and the list of what came across (AC-16), the delete confirm as one line and two buttons (AC-18), and the Live or
 // Private switch (AC-23): a page made for its owner goes live as they open it, said once with Undo, and the switch
 // sends their own choice.
+// The tokens, so the phone bar's widths below are the real ones.
+import '@crm/ui/styles.css';
 import {
   dataError,
   PAGE_THEME_PRESETS,
@@ -12,7 +14,7 @@ import {
   type ProfileItem,
   type ProfileLinkImport,
 } from '@crm/data';
-import { Field, Form } from '@crm/ui';
+import { Field, Form, TopBar } from '@crm/ui';
 import { useState, type ReactNode } from 'react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
@@ -24,6 +26,7 @@ import { BlockEditorFrame, useFocusesFirstField } from './editors.tsx';
 import { DeleteBlockDialog, KindPicker } from './KindPicker.tsx';
 import type { AddableKind } from './registry.tsx';
 import { LinkPageOverview } from './LinkPageOverview.tsx';
+import { HeaderActions } from './LinkPageScreen.tsx';
 import { LiveSwitch, useLinkPageLive } from './private-page.tsx';
 
 let shown: InApp | undefined;
@@ -103,16 +106,78 @@ describe('the overview’s first empty moment (AC-8) and a private page’s line
         isEmpty
         onEdit={onEdit}
         onAdd={onAdd}
+        onGoLive={() => undefined}
       />
     ));
     await expect.element(page.getByText('Nothing on your page yet')).toBeVisible();
-    await expect.element(page.getByText('Private. Only you can open it.')).toBeVisible();
+    await expect.element(page.getByText('Private. Turn on Live to share it.')).toBeVisible();
     // The old "goes public the first time you edit or share" panel is gone.
     expect(document.body.textContent).not.toContain('goes public');
     expect(page.getByRole('button', { name: 'Make it public' }).query()).toBeNull();
     await page.getByRole('button', { name: 'Add to your page' }).click();
     expect(onAdd).toHaveBeenCalledTimes(1);
     expect(onEdit).not.toHaveBeenCalled();
+  });
+});
+
+describe('a Private page’s overview (AC-23)', () => {
+  it('offers nothing to share, only Turn on Live, and every way to share comes back once Live', async () => {
+    const onGoLive = vi.fn();
+    const data = { linkPage: { load: () => new Promise(() => undefined) } } as unknown as DataLayer;
+    const overview = (isPublic: boolean) => (
+      <LinkPageOverview
+        data={data}
+        slug="acme"
+        handle="ada"
+        address="https://timefix.com/ada"
+        isPublic={isPublic}
+        isEmpty={false}
+        onEdit={() => undefined}
+        onAdd={() => undefined}
+        onGoLive={onGoLive}
+      />
+    );
+    await render(data, () => overview(false));
+    await expect.element(page.getByText('Private. Turn on Live to share it.')).toBeVisible();
+    expect(page.getByText('Share online').query()).toBeNull();
+    expect(page.getByText('Share in person').query()).toBeNull();
+    expect(page.getByRole('link', { name: /Open/ }).query()).toBeNull();
+    expect(page.getByRole('button', { name: 'Download' }).query()).toBeNull();
+    await expect.element(page.getByRole('button', { name: 'Edit page' })).toBeVisible();
+    await page.getByRole('button', { name: 'Turn on Live' }).click();
+    expect(onGoLive).toHaveBeenCalledTimes(1);
+    shown?.unmount();
+    await render(data, () => overview(true));
+    await expect.element(page.getByText('Share online')).toBeVisible();
+    await expect.element(page.getByText('Share in person')).toBeVisible();
+    expect(page.getByRole('button', { name: 'Turn on Live' }).query()).toBeNull();
+  });
+});
+
+describe('the bar on a phone (AC-1)', () => {
+  it.each([390, 320])('fits a %i px screen while Live and editing, with Share and Done in reach', async (width) => {
+    await page.viewport(width, 844);
+    try {
+      await render({}, () => (
+        <TopBar title="Link page" icon="id-card">
+          <HeaderActions
+            live={{ isLive: true, setLive: () => undefined, goLive: () => undefined, switchRef: { current: null } }}
+            handle="ada-lovelace-2"
+            isEditing
+            onEditing={() => undefined}
+          />
+        </TopBar>
+      ));
+      const share = page.getByRole('button', { name: 'Share' });
+      const done = page.getByRole('button', { name: 'Done' });
+      await expect.element(share).toBeVisible();
+      await expect.element(page.getByRole('link', { name: /open your page/ })).toBeVisible();
+      // Nothing scrolls sideways, and the last control ends inside the screen.
+      expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
+      expect(done.element().getBoundingClientRect().right).toBeLessThanOrEqual(width);
+    } finally {
+      await page.viewport(1280, 800);
+    }
   });
 });
 
@@ -193,19 +258,20 @@ describe('the Add modal’s keyboard (AC-4, AC-9)', () => {
   });
 });
 
-describe('Appearance’s starting looks (AC-10)', () => {
-  it('shows each as a thumbnail with its name, ticks the one on the page, and picks by its picture', async () => {
+describe('Design’s gallery of looks (spec 0058, AC-10; spec 0060, AC-8)', () => {
+  it('shows all fourteen as thumbnails with their names, ticks the one on the page, and picks by its picture', async () => {
     const onChange = vi.fn();
     const ink = PAGE_THEME_PRESETS.find((preset) => preset.id === 'ink');
     if (ink === undefined) throw new Error('No Ink look.');
     await render({}, () => <AppearanceCard theme={DEFAULT_PAGE_THEME} onChange={onChange} />);
-    const looks = page.getByRole('radiogroup', { name: 'Start from' });
-    for (const name of ['Plain', 'Paper', 'Bold', 'Ink', 'Quiet']) {
+    const looks = page.getByRole('radiogroup', { name: 'Looks' });
+    for (const name of ['Plain', 'Paper', 'Bold', 'Ink', 'Quiet', 'Dawn', 'Studio', 'Editorial', 'Gallery']) {
       await expect.element(looks.getByRole('radio', { name })).toBeInTheDocument();
     }
     const tiles = [...looks.element().querySelectorAll('[data-tile]')];
-    expect(tiles).toHaveLength(5);
-    // Each tile draws the real look in its picture slot, with the page's own look attributes (Ink's dark ground).
+    expect(tiles).toHaveLength(14);
+    // Each tile draws the real look in its picture slot, with the page's own look attributes (Ink's dark ground, and
+    // Gallery's photo, standing in until there is one).
     const grounds = tiles.map((tile) => tile.querySelector('[data-thumbnail]')?.getAttribute('data-page-ground'));
     expect(grounds).toEqual(PAGE_THEME_PRESETS.map((preset) => preset.theme.ground));
     // The page stands on Plain (the default look), so Plain is the one ticked.
@@ -214,6 +280,43 @@ describe('Appearance’s starting looks (AC-10)', () => {
     (looks.getByRole('radio', { name: 'Plain' }).element() as HTMLElement).focus();
     await userEvent.keyboard('{ArrowDown}{ArrowDown}{ArrowDown}');
     expect(onChange).toHaveBeenLastCalledWith(ink.theme);
+  });
+});
+
+describe('Design’s Customise rows (spec 0060, AC-6, AC-9)', () => {
+  it('shows each row as pictures, picks from the keyboard, and says when the colour was adjusted', async () => {
+    const onChange = vi.fn();
+    const onAccent = vi.fn();
+    const extras = {
+      look: { accent: '#ffd400', workspaceAccent: '#1f5fd6' },
+      colours: () => ({ variables: [], adjusted: true, light: '#7a6700', dark: '#ffd400' }),
+      variables: [],
+      quickPicks: [{ hue: 'orange', value: '#fb8f3c' }],
+      photoSrc: () => undefined,
+      onAccent,
+      onPreviewAccent: () => undefined,
+      onPhoto: () => undefined,
+      onRemovePhoto: () => undefined,
+    } as const;
+    await render({}, () => <AppearanceCard theme={DEFAULT_PAGE_THEME} onChange={onChange} extras={extras} />);
+    await userEvent.click(page.getByRole('button', { name: 'Customise' }));
+    // Six rows of choices (Buttons and Header each with their second row: corners and the face).
+    for (const name of ['Colour', 'Background', 'Font', 'Buttons', 'Corners', 'Header', 'Face', 'Mode']) {
+      await expect.element(page.getByRole('radiogroup', { name })).toBeInTheDocument();
+    }
+    // Every choice is a picture of the page: one thumbnail a tile.
+    const background = page.getByRole('radiogroup', { name: 'Background' }).element();
+    expect(background.querySelectorAll('[data-thumbnail]')).toHaveLength(17);
+    await expect.element(page.getByRole('status')).toHaveTextContent('Adjusted so text stays readable.');
+    // Mode by keyboard: Light, then Dark.
+    (page.getByRole('radio', { name: 'Light' }).element() as HTMLElement).focus();
+    await userEvent.keyboard('{ArrowRight}');
+    expect(onChange).toHaveBeenLastCalledWith({ ...DEFAULT_PAGE_THEME, mode: 'dark' });
+    // A quick pick saves the colour, keeping no dark one the page didn't have.
+    // From the keyboard too: the default, then the arrow to the next swatch.
+    (page.getByRole('radio', { name: 'Workspace' }).element() as HTMLElement).focus();
+    await userEvent.keyboard('{ArrowRight}');
+    expect(onAccent).toHaveBeenLastCalledWith('#fb8f3c', undefined);
   });
 });
 
@@ -290,7 +393,41 @@ function Live({ data, isPublic }: { readonly data: DataLayer; readonly isPublic:
   return <LiveSwitch live={live} />;
 }
 
+/** The bar's switch beside the overview, as the screen holds them, the overview's Turn on Live through `goLive`. */
+function LiveOverview({ data }: { readonly data: DataLayer }) {
+  const live = useLinkPageLive(data, 'acme', false);
+  return (
+    <>
+      <LiveSwitch live={live} />
+      <LinkPageOverview
+        data={data}
+        slug="acme"
+        handle="ada"
+        address="https://timefix.com/ada"
+        isPublic={live.isLive}
+        isEmpty={false}
+        onEdit={() => undefined}
+        onAdd={() => undefined}
+        onGoLive={live.goLive}
+      />
+    </>
+  );
+}
+
 describe('the Live or Private switch (AC-23)', () => {
+  it('moves focus to the switch when the overview’s Turn on Live goes away with the Private state', async () => {
+    const show = vi.fn((_slug: string, live?: boolean) => Promise.resolve({ isPublic: live ?? true }));
+    const walletLink = () => Promise.resolve({});
+    const data = { linkPage: { load: () => Promise.resolve({ show, walletLink }) } } as unknown as DataLayer;
+    await render(data, () => <LiveOverview data={data} />);
+    await userEvent.click(page.getByRole('button', { name: 'Turn on Live' }));
+    const live = page.getByRole('switch', { name: 'Live' });
+    await expect.element(live).toBeChecked();
+    await expect.element(live).toHaveFocus();
+    expect(page.getByRole('button', { name: 'Turn on Live' }).query()).toBeNull();
+    expect(show).toHaveBeenLastCalledWith('acme', true);
+  });
+
   it('puts a page made for its owner live as they open it, says so once with Undo, and Undo makes it private', async () => {
     const show = vi.fn((_slug: string, live?: boolean) => Promise.resolve({ isPublic: live ?? true }));
     const data = { linkPage: { load: () => Promise.resolve({ show }) } } as unknown as DataLayer;

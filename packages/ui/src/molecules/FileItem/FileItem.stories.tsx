@@ -42,3 +42,19 @@ export const States: Story = {
     remove.blur();
   },
 };
+
+/** A record's Files tab: who added it and when after the size, and an image that opens in a new tab. */
+export const WithDetail: Story = {
+  // The row is States' own; only its second line differs, so no screenshot of its own.
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage direction="column" width="narrow">
+      <FileItem {...args} href="/files/f1" detail="Ada Lovelace, 2 days ago" />
+      <FileItem name="Site visit.jpg" size={640_000} contentType="image/jpeg" href="/files/f2" />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('2.4 MB · Ada Lovelace, 2 days ago')).toBeInTheDocument();
+    await expect(canvas.getByRole('link', { name: /Site visit\.jpg/u })).toHaveAttribute('target', '_blank');
+  },
+};

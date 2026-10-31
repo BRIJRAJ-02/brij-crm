@@ -305,8 +305,9 @@ describe('checkBlock', () => {
     const many = Array.from({ length: 12 }, (_, n) => heading(`h${String(n)}`, `H ${String(n)}`));
     expect(blockLimit(many, 'heading')).toBe('A link page holds up to 12 headings.');
     expect(blockLimit(many, 'link')).toBeUndefined();
-    const card = { kind: 'contact', id: 'c', fullName: 'Ada', updatedAt: '' } as const;
-    expect(blockLimit([card], 'contact')).toBe('A link page holds one contact card.');
+    const card = (id: string) => ({ kind: 'contact', id, fullName: 'Ada', updatedAt: '' }) as const;
+    expect(blockLimit([card('a'), card('b')], 'contact')).toBeUndefined();
+    expect(blockLimit([card('a'), card('b'), card('c')], 'contact')).toBe('A link page holds up to 3 contact cards.');
   });
 
   it('checks a contact card field by field, keeping only what was given', () => {

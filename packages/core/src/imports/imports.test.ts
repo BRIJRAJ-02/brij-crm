@@ -983,7 +983,7 @@ describe('importing into a list (spec 0048, AC-4833)', () => {
       type: 'text',
     });
     const ada = await w.person('Ada', 'ada@example.com');
-    await addListEntry(w.owner, { id: newId(), listId: list.id, recordId: ada });
+    await addListEntry(w.owner, { id: newId(), listId: list.id, recordId: ada, values: { [note.id]: 'First' } });
     const settings = w.settings({
       columns: [
         { header: 'Name', target: { attributeId: w.attribute('name') } },
@@ -1018,11 +1018,13 @@ describe('importing into a list (spec 0048, AC-4833)', () => {
     expect(noteOf(ada)).toBe('Again');
     const bo = page.records.find((record) => record.id !== ada)?.id;
     expect(noteOf(bo)).toBe('Later');
-    // Undo takes the entry it added out (and Bo, whom it made), and leaves Ada's entry, which was there before.
+    // Undo takes the entry it added out (and Bo, whom it made), and leaves Ada's entry, which was there before, with
+    // the note it held before the import.
     const undoing = await undoImport(w.owner, registry, id, [outboxHook()]);
     expect((await drive(runnerFor(registry), w.workspaceId, undoing.undoJobId ?? '')).at(-1)).toBe('succeeded');
     const after = await queryEntries(w.owner, { listId: list.id });
     expect(after.entries.map((entry) => entry.recordId)).toEqual([ada]);
+    expect(after.entries[0]?.values[note.id]).toBe('First');
   });
 
   it('refuses a list of another object', async () => {
