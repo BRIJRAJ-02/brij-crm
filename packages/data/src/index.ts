@@ -273,6 +273,7 @@ import {
   type CaptureListView,
 } from './captures/list.ts';
 import type { Report as ReportView, ReportConfig } from '@crm/contracts';
+import type { RecordFileView } from '@crm/contracts';
 import type { ReportPlan } from '@crm/contracts/reports';
 import { lazyFiguresSource, type ReportFiguresSource } from './reports/figures-source.ts';
 import type { NavOperation, NavUniverse } from '@crm/contracts/navigation';
@@ -292,6 +293,7 @@ import type { ActivityDraft, ActivityResult, NoteList, NoteSession, NotesStore }
 import type { Note as NoteWithBody } from '@crm/contracts';
 import type { CommentEmoji, CommentVersion, NotificationKind, NotificationStatus } from '@crm/contracts';
 import type { CommentsStore, NewComment, RecordComments } from './comments/store.ts';
+import type { FilesStore, RecordFilesSource } from './files/store.ts';
 import type {
   InboxFilter,
   InboxList,
@@ -562,6 +564,8 @@ export type {
 export type { LinkSection, LinkSectionState, LinkSectionStatus, SectionKey } from './links/sections.ts';
 /** How many related records an Overview card shows per side (spec 0017, AC-383). */
 export { RELATED_PREVIEW } from '@crm/contracts/activity-keys';
+// A record's files (#32): what the Files tab's picker takes, and whether a file opens in the tab.
+export { opensInline, RECORD_FILE_ACCEPT, RECORD_FILE_MAX_BYTES } from '@crm/contracts/file-limits';
 // The link page's look (spec 0054): the default and the named starting points are values the editor presses, not
 // only types, so they come through the one data layer like every other shape a screen uses.
 export { DEFAULT_PAGE_THEME, PAGE_THEME_PRESETS, sameTheme } from '@crm/contracts';
@@ -785,6 +789,8 @@ export type {
   NoteSessionState,
 } from './notes/store.ts';
 export type { CommentsState, NewComment, RecordComments, ShownComment, ShownThread } from './comments/store.ts';
+export type { FilesState, RecordFilesSource, SendingFile } from './files/store.ts';
+export type { RecordFileView } from '@crm/contracts';
 export {
   bodySegments,
   COMMENT_EMOJI,
@@ -1268,6 +1274,8 @@ export function createDataLayer({
   let notes: Promise<NotesStore> | undefined;
   // Comments (spec 0038), loaded with the first Comments tab.
   let comments: Promise<CommentsStore> | undefined;
+  // A record's files (#32), loaded with the first Files tab.
+  let files: Promise<FilesStore> | undefined;
   // The inbox's lists and settings (spec 0038), loaded with the inbox or the notification settings.
   let inbox: Promise<InboxStore> | undefined;
   // The operator console's reads (spec 0047), held per question for the app load.
@@ -1380,6 +1388,9 @@ export function createDataLayer({
       store.clear();
     });
     void comments?.then((store) => {
+      store.clear();
+    });
+    void files?.then((store) => {
       store.clear();
     });
     void inbox?.then((store) => {
@@ -1848,6 +1859,10 @@ export function createDataLayer({
       void comments?.then((store) => {
         store.records(workspace, moved);
       });
+      // A trashed record's Files tab turns read only, and back.
+      void files?.then((store) => {
+        store.records(workspace, moved);
+      });
       spread(`inbox ${workspace}`, () => {
         unreadCounts.refresh(workspace);
         void inbox?.then((store) => {
@@ -2047,6 +2062,12 @@ export function createDataLayer({
       void layer.commentsChanged(workspace, event.objectId, event.recordIds, event.coarse === true);
     });
   });
+  // A record's files (#32): the held records named read their files again.
+  router.on('files', (workspace, event) => {
+    void files?.then((store) => {
+      store.changed(workspace, event);
+    });
+  });
   // A member's notifications or settings changed (spec 0038, AC-1172, AC-1174, AC-1180): only the person's own
   // count, lists and settings read again; every other member's tab drops the event.
   router.on('notifications', (workspace, event) => {
@@ -2105,6 +2126,9 @@ export function createDataLayer({
       store.resync(workspace);
     });
     void comments?.then((store) => {
+      store.resync(workspace);
+    });
+    void files?.then((store) => {
       store.resync(workspace);
     });
     void inbox?.then((store) => {
@@ -3405,6 +3429,25 @@ export function createDataLayer({
       }),
     );
     return notes;
+  };
+
+  const filesStore = (): Promise<FilesStore> => {
+    files ??= import('./files/store.ts').then(({ createFilesStore, createRecordFileSender }) =>
+      createFilesStore({
+        api: {
+          list: (input) =>
+            beforeRead(input.workspace).then(() => call((options) => api.files.list({ ...input }, options))),
+          delete: (input) => call((options) => api.files.delete({ ...input }, options)),
+          restore: (input) => call((options) => api.files.restore({ ...input }, options)),
+          send: createRecordFileSender(origin),
+        },
+        mintId,
+        mutations,
+        notify,
+        watch,
+      }),
+    );
+    return files;
   };
 
   const commentsStore = (): Promise<CommentsStore> => {
@@ -6709,9 +6752,31 @@ export function createDataLayer({
       newId: () => mintId(),
     },
     files: {
-      /** Where a stored file (a form's file answer) downloads from: the api checks the member and the file on each. */
-      downloadPath: (workspace: string, fileId: string): string =>
-        `/api/files/${encodeURIComponent(fileId)}?workspace=${encodeURIComponent(workspace)}`,
+      /**
+       * Where a stored file (a form's file answer, a cell's file, a Files tab file) downloads from: the api checks the
+       * member and the file on each. `inline` shows an image in the tab rather than saving it (`opensInline`).
+       */
+      downloadPath: (workspace: string, fileId: string, inline = false): string =>
+        `/api/files/${encodeURIComponent(fileId)}?workspace=${encodeURIComponent(workspace)}${inline ? '&inline=1' : ''}`,
+      /**
+       * A record's Files tab (#32): its files newest first, the ones this tab is sending, and whether the reader may
+       * add or delete, the same for every screen that asks; live while held. Read it through `useRecordFiles`.
+       */
+      forRecord: async (workspace: string, recordId: string): Promise<RecordFilesSource> =>
+        (await filesStore()).forRecord(workspace, recordId),
+      /** Sends files to a record, one after another, each shown at once with its progress or its refusal. */
+      upload: async (workspace: string, recordId: string, picked: readonly File[]): Promise<void> =>
+        (await filesStore()).upload(workspace, recordId, picked),
+      /** Takes a refused file's row away. */
+      dismiss: async (workspace: string, recordId: string, key: string): Promise<void> => {
+        (await filesStore()).dismiss(workspace, recordId, key);
+      },
+      /** Deletes a file at once (Undo is `restore`); a refusal puts it back with a toast. Answers whether it landed. */
+      remove: async (workspace: string, recordId: string, fileId: string): Promise<boolean> =>
+        (await filesStore()).remove(workspace, recordId, fileId),
+      /** Brings a deleted file back, shown at once: the delete toast's Undo. Answers whether it landed. */
+      restore: async (workspace: string, recordId: string, file: RecordFileView): Promise<boolean> =>
+        (await filesStore()).restore(workspace, recordId, file),
     },
     jobs: {
       /**

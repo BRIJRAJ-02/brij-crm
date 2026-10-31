@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import type { BoardStatus, BoardStore } from './records/board.ts';
 import type { DataError } from './errors.ts';
+import type { FilesState, RecordFilesSource } from './files/store.ts';
 import type { OperatorHeld } from './operator/store.ts';
 import type { RecordFacts, RecordFactsState } from './records/facts.ts';
 import type { ActivityFeed, ActivityState } from './activity/feed.ts';
@@ -544,6 +545,25 @@ export function useNav(source: NavSource): NavSnapshot {
  */
 export function useDueTasks(source: DueTasksSource): DueTasksSnapshot {
   return useRetained(source);
+}
+
+/**
+ * A record's Files tab (#32), from `data.files.forRecord`: its files, the ones this tab is sending and whether the
+ * reader may change them, re-rendering when they change. Held while mounted, so it is live.
+ */
+export function useRecordFiles(files: RecordFilesSource): FilesState {
+  return useRetained(files);
+}
+
+/**
+ * Only a record's file count (the Files tab's label), re-rendering only when it moves. Holds the files while mounted.
+ */
+export function useRecordFileCount(files: RecordFilesSource): number | undefined {
+  useEffect(() => files.retain(), [files]);
+  return useSyncExternalStore(files.subscribe, () => {
+    const state = files.getSnapshot();
+    return state.status === 'ready' ? state.files.length : undefined;
+  });
 }
 
 /**

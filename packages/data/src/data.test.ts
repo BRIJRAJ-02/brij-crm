@@ -657,6 +657,12 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       react: os.comments.react.handler(notServed),
       versions: os.comments.versions.handler(notServed),
     },
+    // A record's files (#32) are driven against their own fake in `files/store.test.ts`.
+    files: {
+      list: os.files.list.handler(notServed),
+      delete: os.files.delete.handler(notServed),
+      restore: os.files.restore.handler(notServed),
+    },
     notifications: {
       list: os.notifications.list.handler(notServed),
       count: os.notifications.count.handler(notServed),
