@@ -48,10 +48,10 @@ describe('destinationHint', () => {
   it('says bookings go on no calendar when the default can’t take them either', () => {
     const stopped = [calendar(WORK, 'Work', { canBeDestination: false, isDestination: true })];
     expect(destinationHint({ status: 'unusable', calendarId: WORK, isOwner: true }, stopped)).toBe(
-      'Your calendar Work stopped taking bookings, so new bookings on this page aren’t added to any calendar until you pick one.',
+      'Your calendar Work stopped taking bookings. Pick another.',
     );
     expect(destinationHint({ status: 'unusable', isOwner: true }, [])).toBe(
-      'Your calendar stopped taking bookings, so new bookings on this page aren’t added to any calendar until you pick one.',
+      'Your calendar stopped taking bookings. Pick another.',
     );
   });
 });
