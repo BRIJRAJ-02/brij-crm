@@ -30,7 +30,8 @@ import {
   hidesActors,
   UNKNOWN_RECORD,
 } from '../access/visibility.ts';
-import { linkSource, toMillis, valueSource } from './activity-sources.ts';
+import { boundSql, linkSource, toMillis, valueSource } from './activity-sources.ts';
+import { readRecords } from './records.ts';
 import { isArchivedNow, loadAttributes, type AttributeDef } from './values.ts';
 import { meetingSource } from '../calendar/activity.ts';
 import { noteSource } from '../notes/activity.ts';
@@ -166,6 +167,48 @@ const deletionSource: ActivitySource = ({ record, after }) => {
   });
 };
 
+/**
+ * The merge entries (`merged`, rank 0, spec 0049, AC-4915): each record merged
+ * into this one, at the moment of the merge (its `deleted_at`), with who
+ * merged (unless a field rule hides actors) and the merged record's name when
+ * the reader may see it. Read newest first through `records_merged_into`,
+ * at most `limit + 1` past the bound.
+ */
+const mergeSource: ActivitySource = async ({ tx, scope, record, after, limit }) => {
+  const at = sql`r.deleted_at`;
+  const result = await tx.execute<{ id: string; at: string; by_type: Actor['type'] | null; by_id: string | null }>(sql`
+    select r.id::text, to_char(r.deleted_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as at,
+      r.deleted_by_type as by_type, r.deleted_by_id::text as by_id
+    from records r
+    where r.merged_into_record_id = ${record.id}::uuid and r.deleted_at is not null
+      and ${boundSql(at, sql`'merged:' || r.id::text`, ACTIVITY_RANKS.merged, after)}
+    order by r.deleted_at desc, r.id
+    limit ${limit + 1}
+  `);
+  if (result.rows.length === 0) return { entries: [] };
+  const views = await readRecords(
+    tx,
+    scope.access,
+    result.rows.map((row) => row.id),
+    { attributeIds: [], trashed: true },
+  );
+  const names = new Map(views.map((view) => [view.id, view.display]));
+  return {
+    entries: result.rows.map((row) => {
+      const id = `merged:${row.id}`;
+      const display = names.get(row.id);
+      return {
+        id,
+        key: activityKey({ at: row.at, rank: ACTIVITY_RANKS.merged, id }),
+        at: toMillis(row.at),
+        ...(record.hidesActors || row.by_type === null ? {} : { actor: { type: row.by_type, id: row.by_id } }),
+        kind: 'merged' as const,
+        ...(display === undefined ? {} : { fromRefs: [display] }),
+      };
+    }),
+  };
+};
+
 /** The timeline's sources, read in this order and merged by key. #19, #29, spec 0024 and spec 0023 add theirs here. */
 export const ACTIVITY_SOURCES: readonly ActivitySource[] = [
   creationSource,
@@ -177,6 +220,7 @@ export const ACTIVITY_SOURCES: readonly ActivitySource[] = [
   meetingSource,
   submissionSource,
   deletionSource,
+  mergeSource,
 ];
 
 /** The kinds each source answers, so a filter reads only the sources it shows. */
@@ -190,6 +234,7 @@ const SOURCE_KINDS: ReadonlyMap<ActivitySource, readonly ActivityKind[]> = new M
   [meetingSource, ['meeting']],
   [submissionSource, ['submission']],
   [deletionSource, ['deleted']],
+  [mergeSource, ['merged']],
 ]);
 
 /** The sources a filter reads: every one without one, else those answering a kind it names. */

@@ -75,6 +75,8 @@ export const AUDIT_KINDS = {
 export const AUDIT_NOT_LISTED = [
   'member.preferences_changed',
   'booking_page.profile_reordered',
+  // A merge is a record change, not a workspace one (spec 0049): it reads on the kept record's timeline instead.
+  'record.merged',
 ] as const satisfies readonly AuditAction[];
 
 /** An action Workspace changes lists: every catalog action outside `AUDIT_NOT_LISTED`. */

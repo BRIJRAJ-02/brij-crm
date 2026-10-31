@@ -545,9 +545,94 @@ export const TrashedRecord = z.object({
   record: RecordView,
   deletedAt: Timestamp,
   deletedBy: ActorReferenceValue,
+  /**
+   * A merged record (spec 0049, AC-4914): the live record it went into, at
+   * the end of the chain, when the reader may see it. The page redirects
+   * there with "Jane D. was merged into Jane Doe" (`record.display` is the
+   * merged record's own name). Absent for a record trashed by a delete.
+   */
+  mergedInto: z.object({ recordId: Uuid, display: RecordRefDisplay }).optional(),
 });
 /** A record in the trash. */
 export type TrashedRecord = z.infer<typeof TrashedRecord>;
+
+/** The most links, list entries and attached items a merge moves in one go (spec 0049, AC-4917). */
+export const MERGE_MAX_ITEMS = 10_000;
+
+/** Which side wins an attribute both records hold differently (spec 0049, AC-4910). */
+export const MergeSide = z.enum(['keep', 'merge']);
+/** Which side wins an attribute. */
+export type MergeSide = z.infer<typeof MergeSide>;
+
+/** Two records of one object to merge: the one kept, and the one merged into it and trashed. */
+export const MergePreviewInput = WorkspaceScoped.extend({
+  objectId: Uuid,
+  keepId: Uuid,
+  mergeId: Uuid,
+});
+/** Two records of one object to merge. */
+export type MergePreviewInput = z.infer<typeof MergePreviewInput>;
+
+/** How much moves from the merged record onto the kept one (spec 0049, AC-4916). */
+export const MergeMoved = z.object({
+  /** Its current links, the one between the two records and doubles included (they are dropped). */
+  links: z.number().int().min(0),
+  /** Its entries in lists. */
+  entries: z.number().int().min(0),
+  /** Notes, comments, tasks, meetings, files, submissions, bookings, notifications and routing assignments. */
+  items: z.number().int().min(0),
+  /** Of `items`, the notes: the dialog names them on their own. */
+  notes: z.number().int().min(0),
+});
+/** How much moves from the merged record. */
+export type MergeMoved = z.infer<typeof MergeMoved>;
+
+/**
+ * What a merge would do, read only (spec 0049, `records.mergePreview`): both
+ * records as a read gives them (field rules applied), the attributes where
+ * both hold a different value the reader may see and change (the dialog's
+ * rows, in the object's order), the side preselected for each (the kept
+ * record's, unless it is empty), and the counts that move.
+ */
+export const MergePreview = z.object({
+  keep: RecordView,
+  merge: RecordView,
+  rows: z.array(z.object({ attributeId: Uuid, preselected: MergeSide })),
+  moved: MergeMoved,
+  /** More is attached than one merge moves (past `MERGE_MAX_ITEMS`): the merge would be refused `MERGE_TOO_LARGE`. */
+  tooLarge: z.boolean(),
+});
+/** What a merge would do. */
+export type MergePreview = z.infer<typeof MergePreview>;
+
+/**
+ * A merge (spec 0049, AC-4910 to AC-4917): `picks` names the winning side of
+ * each attribute the dialog showed (any other keeps the filled side, else
+ * the kept record's), `revisions` the two records' revisions when the dialog
+ * read them: either moved since answers 409 `CONFLICT`. The retry key is the
+ * pair itself: a retry after a lost answer finds the merged record already
+ * merged into the kept one by the same member and answers that merge again.
+ */
+export const MergeRecordsInput = MergePreviewInput.extend({
+  picks: z.record(z.uuid(), MergeSide).default({}),
+  revisions: z.object({ keep: z.number().int().min(0), merge: z.number().int().min(0) }),
+  mutationId: Uuid,
+}).refine((input) => input.keepId.toLowerCase() !== input.mergeId.toLowerCase(), {
+  error: 'Pick two different records.',
+  path: ['mergeId'],
+});
+/** A merge. */
+export type MergeRecordsInput = z.infer<typeof MergeRecordsInput>;
+
+/** A merge's answer: the kept record, read after the merge, and what moved onto it. */
+export const MergedRecord = z.object({
+  record: RecordView,
+  mergedId: Uuid,
+  moved: MergeMoved,
+  echoes: z.number().int().min(0),
+});
+/** A merge's answer. */
+export type MergedRecord = z.infer<typeof MergedRecord>;
 
 /**
  * An object's records. `query` refuses a bad cursor or filter with
@@ -606,4 +691,7 @@ export const recordsContract = {
   stageSince: oc.input(StageSinceInput).output(StageSince),
   getTrashed: oc.input(GetTrashedInput).output(TrashedRecord),
   search: oc.input(SearchRecordsInput).output(SearchResults),
+  // Merging two records (spec 0049): a read only preview for the dialog, then the merge itself.
+  mergePreview: oc.input(MergePreviewInput).output(MergePreview),
+  merge: oc.input(MergeRecordsInput).output(MergedRecord),
 };

@@ -98,6 +98,11 @@ export const ENGINE_REFUSAL_CODES = [
   'SIGN_IN_AGAIN',
   'OWNER_NEEDS_TWO_FACTOR',
   'WORKSPACE_REQUIRES_TWO_FACTOR',
+  // Record merge (spec 0049, AC-4917): a record changed while the dialog was open; two records that can't be merged
+  // (the same one, or of different objects); more attached than one merge moves.
+  'CONFLICT',
+  'INVALID',
+  'MERGE_TOO_LARGE',
 ] as const;
 
 /** One of the engine's refusal codes. */

@@ -10,8 +10,10 @@ import {
   editRecords,
   getActivity,
   getStageSince,
+  mergeAndRead,
   queryGroups,
   queryRecords,
+  readMergePreview,
   readRecordsById,
   readTrashedRecord,
   searchRecords,
@@ -298,5 +300,25 @@ export const recordsRouter = member.records.router({
       ),
     );
     return { results: result, echoes };
+  }),
+  // Merging two records (spec 0049): the dialog's read only preview, then the merge, which answers the kept record.
+  mergePreview: member.records.mergePreview.handler(({ context, input }) =>
+    readMergePreview(context.scope, { objectId: input.objectId, keepId: input.keepId, mergeId: input.mergeId }),
+  ),
+  merge: member.records.merge.handler(async ({ context, input }) => {
+    const { result, echoes } = await commitCounted(context, { mutationId: input.mutationId }, (hooks) =>
+      mergeAndRead(
+        context.scope,
+        {
+          objectId: input.objectId,
+          keepId: input.keepId,
+          mergeId: input.mergeId,
+          picks: input.picks,
+          revisions: input.revisions,
+        },
+        hooks,
+      ),
+    );
+    return { record: result.record, mergedId: result.mergedId, moved: result.moved, echoes };
   }),
 });
