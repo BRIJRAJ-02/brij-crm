@@ -116,6 +116,11 @@ export const AUDIT_ACTIONS = [
   'list.updated',
   'list.archived',
   'list.restored',
+  // A personal booking page changed or deleted by anyone but its owner (spec 0037, AC-1263): the target is the owner;
+  // `before` and `after` hold the page's id and title and the fields that changed.
+  'booking_page.changed_for',
+  // Who is in a rotation changed (spec 0037, AC-1264): the target is the rotation; `after` lists who joined and left.
+  'rotation.changed',
   // Likely duplicates (spec 0049, AC-4908): a pair marked "Not a duplicate", and that undone. The target is the
   // newer record; `after` holds both record ids, never a value.
   'record.duplicate_dismissed',

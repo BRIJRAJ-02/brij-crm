@@ -145,7 +145,7 @@ test.describe('the booking journey’s edges', () => {
 
     await page.getByRole('button', { name: 'More actions' }).click();
     await page.getByRole('menuitem', { name: /^Pause/ }).click();
-    await expect(page.getByText(/This page is off, so visitors see it closed\./)).toBeVisible();
+    await expect(page.getByText(/Paused\. Visitors see it closed\./)).toBeVisible();
 
     // Not a blank page or a bare error: it says why.
     const visitor = await visitorAt(browser);
@@ -155,7 +155,7 @@ test.describe('the booking journey’s edges', () => {
 
     await page.getByRole('button', { name: 'More actions' }).click();
     await page.getByRole('menuitem', { name: /^Resume/ }).click();
-    await expect(page.getByText(/This page is off/)).toBeHidden();
+    await expect(page.getByText(/Visitors see it closed/)).toBeHidden();
     await visitor.reload();
     await expect(visitor.getByRole('list', { name: /^Times on / })).toBeVisible();
     await visitor.context().close();
@@ -231,7 +231,7 @@ test.describe('the booking journey’s edges', () => {
     const before = await publicAddress(page, slug, pageId);
     await page.getByRole('radio', { name: 'Link only' }).click({ force: true });
     // Said before Save: the address people already have stops working.
-    await expect(page.getByText(/Its old address stops working once you save/)).toBeVisible();
+    await expect(page.getByText(/Old address stops working on save/)).toBeVisible();
     await page.getByRole('button', { name: /^Save/ }).click();
     await expect(page.getByText('Unsaved changes')).toBeHidden({ timeout: 10_000 });
     const after = await page.getByRole('link', { name: 'View page' }).getAttribute('href');

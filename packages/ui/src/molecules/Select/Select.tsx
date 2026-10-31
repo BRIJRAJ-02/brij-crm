@@ -1,4 +1,13 @@
-import { use, useLayoutEffect, useRef, useState, type ComponentProps, type ReactNode, type Ref } from 'react';
+import {
+  createContext,
+  use,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ComponentProps,
+  type ReactNode,
+  type Ref,
+} from 'react';
 import {
   Autocomplete,
   Button as AriaButton,
@@ -13,10 +22,8 @@ import {
   Text,
 } from 'react-aria-components';
 import { FocusScope, useFilter } from 'react-aria';
-import { Badge } from '../../atoms/Badge/Badge.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
-import { StatusDot } from '../../atoms/StatusDot/StatusDot.tsx';
 import type { Hue } from '../../hue.ts';
 import { Field } from '../Field/Field.tsx';
 import { InPopover, Popover, type PopoverPlacement } from '../Popover/Popover.tsx';
@@ -219,20 +226,24 @@ const reachableWhileDisabled: Partial<ListBoxItemProps<SelectItem>> = {
   },
 };
 
+/** The faces a Select draws its options with beyond plain text and tags: status dots and a badge. */
+export interface SelectFaces {
+  readonly dot: (item: SelectItem) => ReactNode;
+  readonly badge: (text: string) => ReactNode;
+}
+
+/** The faces Select (`SelectWithFaces.tsx`) gives the SelectBase inside it; none under SelectBase alone. */
+export const SelectFacesContext = createContext<SelectFaces | undefined>(undefined);
+
 function Face({ item, optionStyle }: { readonly item: SelectItem; readonly optionStyle: SelectOptionStyle }) {
+  const faces = use(SelectFacesContext);
   if (optionStyle === 'tag' && item.face !== undefined) return item.face;
-  if (optionStyle === 'dot') {
-    return (
-      <StatusDot hue={item.hue ?? 'gray'} isArchived={item.isArchived ?? false}>
-        {item.label}
-      </StatusDot>
-    );
-  }
+  if (optionStyle === 'dot' && faces !== undefined) return faces.dot(item);
   return (
     <>
       {item.leading ?? (item.icon !== undefined && <Icon name={item.icon} size="sm" tone="muted" />)}
       <span className={styles.plain}>{item.label}</span>
-      {item.badge !== undefined && <Badge text={item.badge} />}
+      {item.badge !== undefined && faces?.badge(item.badge)}
     </>
   );
 }
@@ -268,12 +279,12 @@ function Faces({
 }
 
 /**
- * Choose one of a short list (up to about 15): a stage, a status, an owner.
- * Its options show as tags, status dots or people, the same as the value
- * everywhere else. Built on React Aria's Select, so it opens with the arrow
- * keys, types to jump, and puts focus back when it closes.
+ * Select's own body, for plain and tag options: a `dot` option reads as its label and a `badge` isn't drawn unless
+ * a Select (`SelectWithFaces.tsx`) is around it, which brings StatusDot and Badge. Use Select everywhere; only the
+ * hosted form's questions and CountryPicker use this directly, so neither StatusDot nor Badge (nor their CSS) is
+ * in the form's first load (its budget, `apps/web/.size-limit.js`).
  */
-export function Select({
+export function SelectBase({
   label,
   isLabelHidden = false,
   labelAside,

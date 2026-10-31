@@ -156,6 +156,8 @@ const FIXTURES: Record<ListedAuditAction, readonly AuditRow[]> = {
       before: { socials: ['https://x.com/ada'] },
       after: { socials: ['https://x.com/ada', 'https://ada.dev'] },
     }),
+    // A job title (spec 0037, AC-1441), set and then cleared.
+    row('member.profile_updated', 'member', ada, { before: { jobTitle: null }, after: { jobTitle: 'Head of sales' } }),
   ],
   'workspace.updated': [
     row('workspace.updated', 'workspace', newId(), { before: { name: 'Acme' }, after: { name: 'Acme Ltd' } }),
@@ -314,6 +316,15 @@ const FIXTURES: Record<ListedAuditAction, readonly AuditRow[]> = {
       },
     }),
   ],
+  'booking_page.changed_for': [
+    row('booking_page.changed_for', 'member', bea, {
+      before: { memberId: bea, pageId: newId(), title: 'Intro call', fields: { location: 'video' } },
+      after: { memberId: bea, pageId: newId(), title: 'Intro call', fields: { location: 'phone' } },
+    }),
+  ],
+  'rotation.changed': [
+    row('rotation.changed', 'rotation', rotation, { after: { name: 'Sales', added: [bea], removed: [] } }),
+  ],
 };
 
 const view = (each: AuditRow): AuditEntryView => {
@@ -432,6 +443,12 @@ describe('toEntryView, per action', () => {
     ]);
   });
 
+  it('names a job title change, its title before and after', () => {
+    const entry = only('member.profile_updated', 4);
+    expect(entry.params).toEqual({ isOwn: true, fields: ['jobTitle'] });
+    expect(entry.changes).toEqual([{ field: 'jobTitle', after: { kind: 'text', text: 'Head of sales' } }]);
+  });
+
   it('drops unknown keys: a profile change with no known field left names no field', () => {
     const entry = only('member.profile_updated', 2);
     expect(entry.params).toEqual({ isOwn: true, fields: [] });
@@ -496,6 +513,8 @@ describe('toEntryView, per action', () => {
       host: { kind: 'member', memberId: bea, name: 'Bea Rao', state: 'former' },
       change: 'moved',
     });
+    expect(only('booking_page.changed_for').params).toEqual({ page: 'Intro call', deleted: false });
+    expect(only('rotation.changed').params).toEqual({ added: 1, removed: 0 });
     const unknown = row('schedule.changed', 'member', bea, { after: { memberId: bea, kind: 'rebuilt' } });
     expect(toEntryView(unknown, names)).toBeUndefined();
   });

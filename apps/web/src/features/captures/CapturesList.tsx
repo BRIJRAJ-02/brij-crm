@@ -28,7 +28,7 @@ export interface CapturesListProps {
   /** With no cards: the empty state's New booking page or New form; left out without the permission to make one. */
   readonly newAction?: ReactNode;
   /** With no cards: the empty state's words and icon. */
-  readonly empty: { readonly title: string; readonly text: string; readonly icon: IconName };
+  readonly empty: { readonly title: string; readonly text?: string; readonly icon: IconName };
   /** A list that didn't load: its title, and Try again. */
   readonly errorTitle: string;
   readonly onRetry: () => void;

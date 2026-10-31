@@ -10,7 +10,7 @@ import { Link } from '../../atoms/Link/Link.tsx';
 import { fieldTypeOf } from '../../fields/registry.ts';
 import { formatNumber } from '../../lib/format.ts';
 import { Callout } from '../../molecules/Callout/Callout.tsx';
-import { Select } from '../../molecules/Select/Select.tsx';
+import { Select } from '../../molecules/Select/SelectWithFaces.tsx';
 import { useFormatSettings } from '../../provider/context.ts';
 import { useRegionDefaults } from '../../provider/region.ts';
 import type { DialogStep } from '../RelationshipSettings/RelationshipSettings.tsx';

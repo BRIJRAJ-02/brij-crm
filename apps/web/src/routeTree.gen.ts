@@ -37,6 +37,7 @@ import { Route as WSlugBookingsAvailabilityRouteImport } from './routes/w.$slug.
 import { Route as WSlugBookingsCalendarRouteImport } from './routes/w.$slug.bookings.calendar.tsx'
 import { Route as WSlugBookingsCalendarsRouteImport } from './routes/w.$slug.bookings.calendars.tsx'
 import { Route as WSlugBookingsListRouteImport } from './routes/w.$slug.bookings.list.tsx'
+import { Route as WSlugBookingsRosterRouteImport } from './routes/w.$slug.bookings.roster.tsx'
 import { Route as WSlugBookingsRoundRobinRouteImport } from './routes/w.$slug.bookings.round-robin.tsx'
 import { Route as WSlugCapturesIndexRouteImport } from './routes/w.$slug.captures.index.tsx'
 import { Route as WSlugFormsSplatRouteImport } from './routes/w.$slug.forms.$.tsx'
@@ -235,6 +236,11 @@ const WSlugBookingsCalendarsRoute = WSlugBookingsCalendarsRouteImport.update({
 const WSlugBookingsListRoute = WSlugBookingsListRouteImport.update({
   id: '/list',
   path: '/list',
+  getParentRoute: () => WSlugBookingsRoute,
+} as any)
+const WSlugBookingsRosterRoute = WSlugBookingsRosterRouteImport.update({
+  id: '/roster',
+  path: '/roster',
   getParentRoute: () => WSlugBookingsRoute,
 } as any)
 const WSlugBookingsRoundRobinRoute = WSlugBookingsRoundRobinRouteImport.update({
@@ -595,6 +601,7 @@ export interface FileRoutesByFullPath {
   '/w/$slug/bookings/calendar': typeof WSlugBookingsCalendarRoute
   '/w/$slug/bookings/calendars': typeof WSlugBookingsCalendarsRoute
   '/w/$slug/bookings/list': typeof WSlugBookingsListRoute
+  '/w/$slug/bookings/roster': typeof WSlugBookingsRosterRoute
   '/w/$slug/bookings/round-robin': typeof WSlugBookingsRoundRobinRoute
   '/w/$slug/forms/$': typeof WSlugFormsSplatRoute
   '/w/$slug/lists/$list': typeof WSlugListsListRoute
@@ -679,6 +686,7 @@ export interface FileRoutesByTo {
   '/w/$slug/bookings/calendar': typeof WSlugBookingsCalendarRoute
   '/w/$slug/bookings/calendars': typeof WSlugBookingsCalendarsRoute
   '/w/$slug/bookings/list': typeof WSlugBookingsListRoute
+  '/w/$slug/bookings/roster': typeof WSlugBookingsRosterRoute
   '/w/$slug/bookings/round-robin': typeof WSlugBookingsRoundRobinRoute
   '/w/$slug/forms/$': typeof WSlugFormsSplatRoute
   '/w/$slug/lists/$list': typeof WSlugListsListRoute
@@ -768,6 +776,7 @@ export interface FileRoutesById {
   '/w/$slug/bookings/calendar': typeof WSlugBookingsCalendarRoute
   '/w/$slug/bookings/calendars': typeof WSlugBookingsCalendarsRoute
   '/w/$slug/bookings/list': typeof WSlugBookingsListRoute
+  '/w/$slug/bookings/roster': typeof WSlugBookingsRosterRoute
   '/w/$slug/bookings/round-robin': typeof WSlugBookingsRoundRobinRoute
   '/w/$slug/forms/$': typeof WSlugFormsSplatRoute
   '/w/$slug/lists/$list': typeof WSlugListsListRoute
@@ -858,6 +867,7 @@ export interface FileRouteTypes {
     | '/w/$slug/bookings/calendar'
     | '/w/$slug/bookings/calendars'
     | '/w/$slug/bookings/list'
+    | '/w/$slug/bookings/roster'
     | '/w/$slug/bookings/round-robin'
     | '/w/$slug/forms/$'
     | '/w/$slug/lists/$list'
@@ -942,6 +952,7 @@ export interface FileRouteTypes {
     | '/w/$slug/bookings/calendar'
     | '/w/$slug/bookings/calendars'
     | '/w/$slug/bookings/list'
+    | '/w/$slug/bookings/roster'
     | '/w/$slug/bookings/round-robin'
     | '/w/$slug/forms/$'
     | '/w/$slug/lists/$list'
@@ -1030,6 +1041,7 @@ export interface FileRouteTypes {
     | '/w/$slug/bookings/calendar'
     | '/w/$slug/bookings/calendars'
     | '/w/$slug/bookings/list'
+    | '/w/$slug/bookings/roster'
     | '/w/$slug/bookings/round-robin'
     | '/w/$slug/forms/$'
     | '/w/$slug/lists/$list'
@@ -1300,6 +1312,13 @@ declare module '@tanstack/react-router' {
       path: '/list'
       fullPath: '/w/$slug/bookings/list'
       preLoaderRoute: typeof WSlugBookingsListRouteImport
+      parentRoute: typeof WSlugBookingsRoute
+    }
+    '/w/$slug/bookings/roster': {
+      id: '/w/$slug/bookings/roster'
+      path: '/roster'
+      fullPath: '/w/$slug/bookings/roster'
+      preLoaderRoute: typeof WSlugBookingsRosterRouteImport
       parentRoute: typeof WSlugBookingsRoute
     }
     '/w/$slug/bookings/round-robin': {
@@ -1716,6 +1735,7 @@ interface WSlugBookingsRouteChildren {
   WSlugBookingsCalendarRoute: typeof WSlugBookingsCalendarRoute
   WSlugBookingsCalendarsRoute: typeof WSlugBookingsCalendarsRoute
   WSlugBookingsListRoute: typeof WSlugBookingsListRoute
+  WSlugBookingsRosterRoute: typeof WSlugBookingsRosterRoute
   WSlugBookingsRoundRobinRoute: typeof WSlugBookingsRoundRobinRoute
   WSlugBookingsIndexRoute: typeof WSlugBookingsIndexRoute
 }
@@ -1725,6 +1745,7 @@ const WSlugBookingsRouteChildren: WSlugBookingsRouteChildren = {
   WSlugBookingsCalendarRoute: WSlugBookingsCalendarRoute,
   WSlugBookingsCalendarsRoute: WSlugBookingsCalendarsRoute,
   WSlugBookingsListRoute: WSlugBookingsListRoute,
+  WSlugBookingsRosterRoute: WSlugBookingsRosterRoute,
   WSlugBookingsRoundRobinRoute: WSlugBookingsRoundRobinRoute,
   WSlugBookingsIndexRoute: WSlugBookingsIndexRoute,
 }

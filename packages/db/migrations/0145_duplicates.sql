@@ -1,4 +1,4 @@
--- Likely duplicates (spec 0049, AC-4901 to AC-4903, AC-4908), after main's 0141; the train renumbers it if it lands
+-- Likely duplicates (spec 0049, AC-4901 to AC-4903, AC-4908), after main's 0144; the train renumbers it if it lands
 -- after wip/merge-core's migration (`records.merged_into_record_id`), which this migration never touches.
 --
 -- crm_match_key(kind, value) is AC-4902's one normalisation, the only place it is written: names fold case, drop

@@ -32,7 +32,25 @@ export function scopedClassName(local: string, filename: string): string {
  */
 export const LIBRARY_DEFINES: Readonly<Record<string, string>> = { 'process.env.VIRT_ON': 'undefined' };
 
-/** The library's Vite plugin: CSS module class names as `ws-<component>-<local>`, and the defines React Aria needs. */
+/** One Lucide icon module, as `lucide-react` ships it. */
+const LUCIDE_ICON = /[\\/]lucide-react[\\/]dist[\\/]esm[\\/]icons[\\/][^\\/]+\.mjs$/;
+
+/**
+ * A Lucide icon module with each shape's React key numbered in order (`"0"`, `"1"`, …) instead of the six character
+ * hash Lucide gives it. A key only has to be unique among one icon's shapes, which never reorder, so nothing renders
+ * differently; but the hashes are random, so gzip can't shrink them, and every page carries the icon registry: they
+ * cost about 3 kB gzipped of each first load (31 October 2026). Answers `undefined` for any other module.
+ */
+export function numberLucideKeys(code: string, id: string): string | undefined {
+  if (!LUCIDE_ICON.test(id.split('?')[0] ?? '')) return undefined;
+  let next = 0;
+  return code.replace(/\bkey: "[^"]*"/g, () => `key: "${String(next++)}"`);
+}
+
+/**
+ * The library's Vite plugin: CSS module class names as `ws-<component>-<local>`, the defines React Aria needs, and
+ * Lucide's shape keys numbered (`numberLucideKeys`).
+ */
 export function uiVite(): Plugin {
   return {
     name: 'crm-ui',
@@ -41,6 +59,11 @@ export function uiVite(): Plugin {
       css: { modules: { generateScopedName: scopedClassName } },
       define: { ...LIBRARY_DEFINES, ...user.define },
     }),
+    // Lines and shapes stay where they were, so the module's own source map still holds (`map: null`).
+    transform(code, id) {
+      const numbered = numberLucideKeys(code, id);
+      return numbered === undefined ? undefined : { code: numbered, map: null };
+    },
   };
 }
 

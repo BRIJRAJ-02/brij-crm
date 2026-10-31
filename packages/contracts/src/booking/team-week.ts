@@ -105,10 +105,14 @@ export const TeamWeek = z.object({
 /** A week of the roster. */
 export type TeamWeek = z.infer<typeof TeamWeek>;
 
-/** `availability.teamWeek`: one week, by its Monday, searched by name, a page at a time. */
+/**
+ * `availability.teamWeek`: one week, by its Monday, searched by name, narrowed to one team's members (AC-1289; still
+ * within the reader's reach), a page at a time.
+ */
 export const TeamWeekInput = WorkspaceScoped.extend({
   weekStart: MondayDate,
   search: z.string().trim().max(100, { error: 'Keep the search to 100 characters.' }).optional(),
+  teamId: Uuid.optional(),
   cursor: z.string().max(400).optional(),
 });
 /** `availability.teamWeek`'s input. */

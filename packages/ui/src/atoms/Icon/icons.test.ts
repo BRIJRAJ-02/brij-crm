@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { HUES } from '../../hue.ts';
+import { baseIcons } from './base-icons.ts';
 import { editorIcons } from './editor-icons.ts';
 import { icons } from './icons.ts';
 
@@ -44,6 +45,49 @@ describe('the icon registry', () => {
     );
     expect(outside.filter((file) => asIcon.test(readFileSync(file, 'utf8')))).toEqual([]);
     expect(readFileSync(path.join(editor, 'FormatToolbar.tsx'), 'utf8')).toContain('<IconScope icons={editorIcons}>');
+  });
+
+  it('holds the base set too, named as Lucide does', () => {
+    for (const [name, glyph] of Object.entries(baseIcons)) {
+      expect(Object.keys(icons), name).toContain(name);
+      expect(glyph, name).toBe(icons[name as keyof typeof icons]);
+    }
+  });
+
+  it('gives the hosted form only base icons, since it mounts UiProviderBase, which brings no registry', () => {
+    // The files the hosted page draws with (HostedFormSteps is stories only, so it is left out).
+    const drawn = [
+      'public-form/HostedForm.tsx',
+      'public-form/FormParts.tsx',
+      'public-form/FormBooking.tsx',
+      'public-form/Question.tsx',
+      'public-form/FileQuestion.tsx',
+      'atoms/Button/Button.tsx',
+      'atoms/Button/CopyButton.tsx',
+      'atoms/Checkbox/Checkbox.tsx',
+      'atoms/Radio/Radio.tsx',
+      'atoms/Switch/Switch.tsx',
+      'atoms/Link/Link.tsx',
+      'atoms/Skeleton/Skeleton.tsx',
+      'molecules/Field/Field.tsx',
+      'molecules/FieldGroup/FieldGroup.tsx',
+      'molecules/Select/Select.tsx',
+      'molecules/CountryPicker/CountryPicker.tsx',
+      'molecules/PhoneField/PhoneField.tsx',
+      'molecules/Callout/Callout.tsx',
+      'molecules/FileDrop/FileDrop.tsx',
+      'molecules/FileItem/FileItem.tsx',
+      'molecules/Popover/Popover.tsx',
+    ];
+    const named = /(?:<Icon name|icon|iconRight)(?:=|: |=\{)['"]([a-z0-9-]+)['"]/g;
+    const toneIcons = /TONE_ICONS[^=]*=\s*\{([^}]*)\}/;
+    const base = Object.keys(baseIcons);
+    for (const file of drawn) {
+      const source = readFileSync(path.join(SRC, file), 'utf8');
+      const names = [...source.matchAll(named)].map((match) => match[1]);
+      const tones = [...(toneIcons.exec(source)?.[1] ?? '').matchAll(/'([a-z0-9-]+)'/g)].map((match) => match[1]);
+      for (const name of [...names, ...tones]) expect(base, `${file} draws ${String(name)}`).toContain(name);
+    }
   });
 
   it('holds every curated object icon, so IconPicker can draw each one', () => {

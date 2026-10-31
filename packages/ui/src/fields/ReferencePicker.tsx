@@ -12,7 +12,7 @@ import { arraySource, type ListSource } from '../lib/list-source.ts';
 import type { IconName } from '../atoms/Icon/icons.ts';
 import { Menu, MenuTrigger } from '../molecules/Menu/Menu.tsx';
 import { InPopover } from '../molecules/Popover/Popover.tsx';
-import { Select } from '../molecules/Select/Select.tsx';
+import { Select } from '../molecules/Select/SelectWithFaces.tsx';
 import { focusLater } from '../lib/focus-later.ts';
 import {
   CREATE_ROW_KEY,

@@ -22,25 +22,27 @@ The references (Mobbin, read again for the owner's "better UI" pass, 30 October 
   days={[{ id: '2026-11-02', label: 'Mon 2', weekday: 'Mon', date: '2', isToday: false }, …, { id: '2026-11-08', label: 'Sun 8', weekday: 'Sun', date: '8', isQuiet: true }]}
   people={[{ id, name: 'Sam Lee', meta: '38 h', badge: 'UTC+5:30', cells: [{ tone: 'usual', lines: ['9 am – 5 pm'], label: 'Monday 2 November, Sam Lee: 9:00 am to 5:00 pm' }, …], isEditable: true, actions: <MenuTrigger>…</MenuTrigger> }]}
   footer={{ label: 'Working', totals: [{ value: '4 people', detail: '32 h', label: 'Monday 2 November: 4 people, 32 hours' }, …] }}
-  legend={{ items: [{ tone: 'usual', label: 'Usual hours' }, …], hint: 'Select a day to change that date only.' }}
+  legend={{ items: [{ tone: 'usual', label: 'Usual' }, { tone: 'override', label: 'This date only' }, …] }}
   editorLabel={(personId, day) => 'Sam Lee, Monday 2 November'}
+  editorTitle={(personId, day) => 'Mon 2 · Sam Lee'}
   renderEditor={(personId, day, close) => <DayEditor … onDone={close} />}
 />
 ```
 
-- Every cell has a whole `label` ("Monday 2 November, Sam Lee: 9:00 am to 5:00 pm, this week only"), which is what a screen reader hears; the drawn lines are hidden from it.
+- Every cell has a whole `label` ("Monday 2 November, Sam Lee: 9:00 am to 5:00 pm, this date only"), which is what a screen reader hears; the drawn lines are hidden from it.
 - A day with `weekday` and `date` heads its column with the two apart, the date in a small circle that is the accent on `isToday` (as WeekCalendar marks today), its header in the link colour over an accent line; a screen reader hears the `label`, with ", today" on today. `isQuiet` tints the whole column a step off the page (the weekend).
 - `isEditable` with `renderEditor` makes a person's cells buttons; otherwise they are text. The screen decides (a past week, See only).
 - `badge` follows the week's hours on the line under the name, after a middle dot ("36 h · UTC+5:30"), only when given: the screen passes the zone's offset only when it differs from the reader's.
 - `extra` sits under the name (a Link to the person's schedules); `actions` at the cell's end (the row's menu), so it stays beside the name.
 - Days away in a row join into one band across the cells' gaps; the band says "Away" (and its reason) once, on its first day, while each day's label still says it in full.
-- The footer row follows the people, set apart by Table's `total` tone, and is left out with no people. Each total draws the same lines every day, a day nobody works too ("Nobody", "0 h"). A total's `extra` is one more quiet line under its detail (the workspace link's coverage, "Link: 3").
-- `legend` draws one quiet line under the grid: a swatch per tone and its meaning, then the `hint`. It shows only with people.
+- The footer row follows the people, set apart by Table's `total` tone, and is left out with no people. Each total draws the same lines every day, a day nobody works too ("Nobody", "0 h"). A total's `extra` is one more quiet line under its detail (the workspace link's coverage, "3 bookable").
+- `legend` draws one quiet line under the grid: each key a small cell of its tone's look with its meaning written inside it ("Usual", "This date only" with the dot, "Off" in its dashed edge, "Away"), then an optional `hint`. Keys rather than swatches since 31 October 2026: a 16 by 12 swatch of a tag surface all but vanished in dark, and a key that is the look itself needs no matching by eye. It shows only with people. Pass only the keys the grid draws: a grid with nothing to change draws its days as words, so the Roster keys only the dot and Away there.
+- The editor opens in a Popover under the cell, at its content's width (an HoursEditor `isSingleDay` sizes itself, so both times show whole), shifted or flipped by React Aria to stay in the window, the last day's included. `editorTitle` heads it ("Mon 2 · Sam Lee"); `editorLabel` names the dialog. The cell keeps the accent's edge and ring while its editor is open (`data-open`).
 - `isLoading` shows Table's skeleton rows; `emptyState` shows with no people.
 
 ## States
 
-Editable: usual (the grey tag's surface with a `border-subtle` hairline), this week only (the blue tag's surface and the dot), off (a dashed control edge, secondary text), away (the yellow tag's surface and text, joined across days through Table's `--table-cell-inline` padding). Read only (a past week, a See only row): the same words with no block, so a filled block always means "select to change" (Away keeps its band), and the screen says "View only" after that person's hours. today, the weekend, hover (pointer only: a control's edge appears), focus (the focus ring, above a joined neighbour), no change on press (rule 8), read only (text), loading, empty. Every text colour is a token that meets 4.5:1 in both themes (the tag tokens carry their own pairs). Below 480px of its container (a phone) the picture gives its room to the name, Table narrows the name column and the week scrolls sideways.
+Editable: usual (the grey tag's surface with a `border-subtle` hairline), this date only (the blue tag's surface and the dot), off (a dashed edge in `control-border`, 3:1 and more against the page in both themes, secondary text), open (the accent's edge and the focus ring while its editor shows), away (the yellow tag's surface and text, joined across days through Table's `--table-cell-inline` padding). Read only (a past week, a See only row): the same words with no block, so a filled block always means "select to change" (Away keeps its band), and the screen says "View only" after that person's hours. today, the weekend, hover (pointer only: a control's edge appears), focus (the focus ring, above a joined neighbour), no change on press (rule 8), read only (text), loading, empty. Every text colour is a token that meets 4.5:1 in both themes (the tag tokens carry their own pairs). Below 480px of its container (a phone) the picture gives its room to the name, Table narrows the name column and the week scrolls sideways.
 
 Rows are taller than Table's 34px (a 24px picture over two lines, the blocks `size-input` high with `space-6` above and below), on purpose: the owner found 34px rows cramped here.
 
