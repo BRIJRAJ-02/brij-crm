@@ -1,4 +1,4 @@
-/* Card: a raised surface with a hairline and radius-lg; a header with the
+/* Card: a raised surface with the surface border and radius-lg; a header with the
    title and its actions, the body, and a footer on surface-subtle. */
 @layer components {
   .root {
@@ -6,7 +6,8 @@
     flex-direction: column;
     min-inline-size: 0;
     overflow: hidden;
-    border: var(--border-width-hairline) solid var(--border-subtle);
+    /* The surface role's border, as Popover and Modal: border-subtle all but vanished against the page in dark. */
+    border: var(--border-width-hairline) solid var(--border);
     border-radius: var(--radius-lg);
     background: var(--surface-raised);
     box-shadow: var(--shadow-xs);
@@ -108,6 +109,14 @@
     padding: var(--space-16);
     font: var(--text-body);
     letter-spacing: var(--tracking-body);
+  }
+
+  /* A body that is one filling empty state (EmptyState's fill layout) takes the card's free height, so the state
+     sits centred in a card stretched beside a taller one rather than a line over an empty box (Home's Today). */
+  .body:has(> [data-layout='fill']:only-child) {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
   }
 
   /* What a card holds stacks with a form's rhythm: a field, its hint, then air before the next. */

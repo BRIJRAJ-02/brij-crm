@@ -50,15 +50,20 @@ export function TodaySection({ context }: HomeSectionProps) {
     [timeZone],
   );
   const agenda = useMemo(() => (state.status === 'ready' ? agendaOf(state, meId) : []), [state, meId]);
-  const frame = (body: ReactNode, extra: { readonly isBusy?: boolean; readonly title?: string } = {}) => (
+  const bookings = (
+    <ButtonLink variant="secondary" icon="calendar" href={`/w/${slug}/bookings`}>
+      {strings.bookings}
+    </ButtonLink>
+  );
+  const frame = (
+    body: ReactNode,
+    extra: { readonly isBusy?: boolean; readonly title?: string; readonly isEmpty?: boolean } = {},
+  ) => (
+    // Empty, the way to Bookings moves from the header into the empty state: one action, where the eye lands.
     <Card
       title={extra.title ?? strings.today}
       isBusy={extra.isBusy ?? false}
-      actions={
-        <ButtonLink variant="secondary" icon="calendar" href={`/w/${slug}/bookings`}>
-          {strings.bookings}
-        </ButtonLink>
-      }
+      {...(extra.isEmpty === true ? {} : { actions: bookings })}
     >
       {body}
     </Card>
@@ -80,7 +85,12 @@ export function TodaySection({ context }: HomeSectionProps) {
   // Nothing today: the card is about what comes next, and says so in its title (owner, 31 October 2026, item 4).
   const title = todays.length === 0 ? strings.nextUp : strings.today;
   if (todays.length === 0 && ahead.length === 0) {
-    return frame(<EmptyState icon="calendar" title={strings.noMeetingsWeek} layout="row" />, { title });
+    // Centred in the card's height (it stands beside the link page card), so the card reads as a calm state with its
+    // one next step rather than a line over an empty box (owner, 31 October 2026, Home item 14).
+    return frame(<EmptyState icon="calendar" title={strings.noMeetingsWeek} layout="fill" actions={bookings} />, {
+      title,
+      isEmpty: true,
+    });
   }
   const { earlier, next } = splitAgenda(todays, now);
   const people = objects.find((object) => object.standardKey === 'people');
