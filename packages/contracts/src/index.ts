@@ -1,4 +1,5 @@
 import { accessContract, rolesContract } from './access.ts';
+import { accessRulesContract } from './access-rules.ts';
 import { accountContract } from './account.ts';
 import { auditContract } from './audit.ts';
 import { attributesContract } from './attributes.ts';
@@ -16,6 +17,9 @@ import { commentsContract } from './comments.ts';
 import { formsContract, submissionsContract } from './forms/forms.ts';
 import { routingContract } from './forms/routing.ts';
 import { exportsContract, importsContract } from './imports.ts';
+import { entriesContract } from './entries.ts';
+import { listsContract } from './lists.ts';
+import { automationsContract } from './automations.ts';
 import { jobsContract } from './jobs.ts';
 import { meContract } from './me.ts';
 import { navContract } from './navigation.ts';
@@ -31,10 +35,12 @@ import { linksContract, relationshipsContract } from './relations.ts';
 import { recentsContract, searchContract } from './search.ts';
 import { systemContract } from './system.ts';
 import { invitationsContract, joinContract, joinRequestsContract } from './team.ts';
+import { teamsContract } from './teams.ts';
 import { trashContract } from './trash.ts';
 import { notesContract } from './notes.ts';
 import { tasksContract } from './tasks.ts';
 import { usageContract } from './usage.ts';
+import { reportsContract } from './reports.ts';
 import { viewsContract } from './views.ts';
 import { workspacesContract } from './workspaces.ts';
 import { deletedWorkspaceContract, workspaceContract } from './workspace-settings.ts';
@@ -42,6 +48,7 @@ import { profileContract } from './profile.ts';
 import { schedulingContract } from './scheduling.ts';
 
 export * from './access.ts';
+export * from './access-rules.ts';
 export * from './account.ts';
 export * from './activity.ts';
 export * from './attributes.ts';
@@ -62,10 +69,13 @@ export * from './calendar.ts';
 export * from './home.ts';
 export * from './change-event.ts';
 export * from './comments.ts';
+export * from './entries.ts';
 export * from './errors.ts';
 export * from './forms/index.ts';
 export * from './imports.ts';
+export * from './automations.ts';
 export * from './jobs.ts';
+export * from './lists.ts';
 export * from './scheduling.ts';
 export * from './csv.ts';
 export * from './me.ts';
@@ -90,8 +100,10 @@ export * from './notes.ts';
 export * from './tasks.ts';
 export * from './preferences.ts';
 export * from './team.ts';
+export * from './teams.ts';
 export * from './usage.ts';
 export * from './view-model.ts';
+export * from './reports.ts';
 export * from './views.ts';
 export * from './values/index.ts';
 export * from './workspaces.ts';
@@ -125,6 +137,9 @@ export const contract = {
   options: optionsContract,
   // Bulk actions (spec 0022) join the records namespace from their own file.
   records: { ...recordsContract, ...bulkRecordsContract },
+  // Lists and their entries (spec 0048).
+  lists: listsContract,
+  entries: entriesContract,
   relationships: relationshipsContract,
   links: linksContract,
   members: membersContract,
@@ -133,13 +148,19 @@ export const contract = {
   join: joinContract,
   joinRequests: joinRequestsContract,
   access: accessContract,
+  // Access rules by role and team (spec 0032), and teams (spec 0031, slice 8).
+  accessRules: accessRulesContract,
+  teams: teamsContract,
   roles: rolesContract,
   // Scheduling access (spec 0037): delegations of See or Manage over someone's scheduling.
   scheduling: schedulingContract,
   realtime: realtimeContract,
+  automations: automationsContract,
   jobs: jobsContract,
   usage: usageContract,
   views: viewsContract,
+  // Saved reports (the reports lane, spec 0050 reserved): a chart's definition, shared with the workspace.
+  reports: reportsContract,
   trash: trashContract,
   tasks: tasksContract,
   notes: notesContract,

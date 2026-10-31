@@ -8,10 +8,10 @@ import { EVENT_KINDS, type AudienceEvent } from '../access/events.ts';
 import { CHANGE_CAP } from '../engine/write.ts';
 import { createCollapse } from './catch-up.ts';
 import { outboxEvent, stubEvent, wireEvent } from './events.ts';
-import { workspaceEvent } from './plan.ts';
+import { planDelivery } from './plan.ts';
 
 /** What `workspace:<id>` carries for a row of a workspace with no member: the most closed copy. */
-const liveEvent = (stored: OutboxRow) => workspaceEvent(stored, []);
+const liveEvent = (stored: OutboxRow) => planDelivery(stored, [])[0]?.event;
 
 const id = (n: number) => `00000000-0000-7000-8000-${n.toString(16).padStart(12, '0')}`;
 const OBJECT = id(0xa);
@@ -216,7 +216,7 @@ describe('the collapse', () => {
   });
 });
 
-describe('workspaceEvent, what the relay publishes on workspace:<id> when nobody is in it', () => {
+describe('planDelivery, what the relay publishes on workspace:<id> when nobody is in it', () => {
   it('passes a records or definitions row whole, with its mutation id', () => {
     const records = row({ objectId: OBJECT, recordIds: [id(3)], attributeIds: [id(4)], mutationId: id(9) });
     expect(liveEvent(records)).toEqual(outboxEvent(records));

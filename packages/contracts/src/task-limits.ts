@@ -5,6 +5,9 @@
 /** The longest task title, in characters, after trimming its ends. */
 export const TASK_TITLE_MAX = 2_000;
 
+/** The longest task description, in characters (migration 0135); '' for none. */
+export const TASK_DESCRIPTION_MAX = 5_000;
+
 /** The most records one task links, hidden ones included. */
 export const TASK_RECORDS_MAX = 20;
 

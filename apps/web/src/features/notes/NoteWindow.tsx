@@ -1,13 +1,15 @@
 // Brief
 // Purpose: one note, on `?note=<id>` (or `?note=new`) over the record page, written as a page (Notion's centre peek).
-// Main task: write what was learned (a title and the body), and trust that it's saved.
-// Leaves out: writing together in real time and versions (#27), comments on a passage (#29), moving a note, templates.
+// Main task: write what was learned (a title and the body), and trust that it's saved; link the other records it is about.
+// Leaves out: writing together in real time and versions (#27), comments on a passage (#29), moving a note to another
+// record (its own record stays), templates.
 import {
   NOTE_TITLE_MAX,
   type ActorDisplay,
   type MemberSummary,
   type NoteSession,
   type NoteSessionState,
+  type ObjectSummary,
   type RecordRefDisplay,
   type RichTextDoc,
 } from '@crm/data';
@@ -30,6 +32,7 @@ import { Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from '
 import { deleteWithUndo } from '../tasks/undo-delete.ts';
 import { NoteEditor } from './editor.ts';
 import { actorDisplay } from './entries.ts';
+import { LinksField } from './LinksField.tsx';
 import { strings } from './strings.ts';
 
 /** Props for the note window. */
@@ -40,7 +43,11 @@ export interface NoteWindowProps {
   /** The page's record: every note here is on it. */
   readonly record: RecordRefDisplay;
   readonly recordHref?: string;
+  /** Another record's page, for the note's own record when the window opened from a record it links. */
+  readonly hrefOf?: (display: RecordRefDisplay) => string | undefined;
   readonly members: readonly MemberSummary[];
+  /** The workspace's objects: the linked records picker offers those the person may change. */
+  readonly objects: readonly ObjectSummary[];
   /** The person may change the record's object. */
   readonly canChange: boolean;
   /** A new note's first save stored it: the address names it from now on (replacing `new`). */
@@ -54,6 +61,7 @@ const LOADING_STATE: NoteSessionState = {
   status: 'loading',
   noteId: '',
   recordId: '',
+  links: [],
   isNew: false,
   title: '',
   docKey: 0,
@@ -71,7 +79,11 @@ const LOADING_SESSION: NoteSession = {
   flush: () => undefined,
   retry: () => undefined,
   dismissNotice: () => undefined,
+  setLinks: () => Promise.resolve(undefined),
 };
+
+/** A chip's href, when there is one. */
+const hrefProps = (href: string | undefined) => (href === undefined ? {} : { href });
 
 /**
  * The bar's word on the note: its save state while it saves ("Saving…",
@@ -114,7 +126,9 @@ function statusOf(state: NoteSessionState): ReactNode | undefined {
  */
 export function NoteWindow(props: NoteWindowProps) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
-  const { slug, note, record, members, canChange, onStored, onClose } = props;
+  const { slug, note, record, members, objects, canChange, onStored, onClose } = props;
+  // Link record (the More menu) shows the linked records field, its picker open, on a note that links none yet.
+  const [isLinking, setLinking] = useState(false);
   // A new note's id, minted once when the window opens on it.
   const [newId] = useState(() => data.notes.newId());
   const noteId = note === 'new' ? newId : note;
@@ -254,6 +268,17 @@ export function NoteWindow(props: NoteWindowProps) {
           </Callout>
         )}
         {!state.canChange && <Callout tone="info">{strings.readOnly}</Callout>}
+        {!state.isNew && (state.links.length > 0 || isLinking) && (
+          <LinksField
+            slug={slug}
+            links={state.links}
+            objects={objects}
+            startObjectId={record.objectId}
+            isEditable={isEditable}
+            autoOpen={isLinking && state.links.length === 0}
+            onChange={session.setLinks}
+          />
+        )}
         {state.notice !== undefined && (
           <Callout
             tone={state.notice.kind === 'theirs' ? 'info' : 'warning'}
@@ -309,7 +334,12 @@ export function NoteWindow(props: NoteWindowProps) {
       variant="peek"
       title={title}
       context={
-        <RecordChip display={record} isFlat {...(props.recordHref === undefined ? {} : { href: props.recordHref })} />
+        // The note's own record, once read (a note opened from a record it links names where it was written).
+        state.record !== undefined && state.record.recordId !== record.recordId ? (
+          <RecordChip display={state.record} isFlat {...hrefProps(props.hrefOf?.(state.record))} />
+        ) : (
+          <RecordChip display={record} isFlat {...(props.recordHref === undefined ? {} : { href: props.recordHref })} />
+        )
       }
       isOpen
       onOpenChange={(open) => {
@@ -331,10 +361,16 @@ export function NoteWindow(props: NoteWindowProps) {
               <Menu
                 label={strings.more}
                 onAction={(key) => {
+                  if (key === 'link') setLinking(true);
                   if (key === 'copy') copyLink();
                   if (key === 'delete') remove();
                 }}
               >
+                {state.canChange && state.links.length === 0 && !isLinking ? (
+                  <MenuItem id="link" icon="plus">
+                    {strings.linkRecord}
+                  </MenuItem>
+                ) : null}
                 <MenuItem id="copy" icon="link">
                   {strings.copyLink}
                 </MenuItem>

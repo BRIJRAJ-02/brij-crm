@@ -87,7 +87,7 @@ test('an owner adds, edits, moves, archives and restores attributes without setu
   const dialog = page.getByRole('dialog', { name: 'New attribute' });
   await dialog.getByLabel('Name', { exact: true }).fill('Code');
   await dialog.getByRole('button', { name: 'Create attribute' }).click();
-  await expect(dialog.getByText('Another attribute here has this name. Pick another.')).toBeVisible();
+  await expect(dialog.getByText('Name taken here. Pick another.')).toBeVisible();
   await checkScreen(page, 'attribute-refused');
   await dialog.getByRole('button', { name: 'Cancel' }).click();
   await expect(dialog).toBeHidden();

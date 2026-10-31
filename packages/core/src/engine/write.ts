@@ -93,6 +93,11 @@ export interface NoteChange {
   readonly recordId: string;
   /** The record's object: the row names it, so the event reaches only those who may see the object. */
   readonly objectId: string;
+  /**
+   * A record the note links besides its own (migration 0135): its row names the record, never the note, since only
+   * the note's own record decides who may know of it.
+   */
+  readonly linked?: boolean;
 }
 
 /**
@@ -184,6 +189,8 @@ export interface Change {
    * Team week, Availability and Bookings' Host away flags read again in every tab. Never published by id.
    */
   readonly timeOff: readonly string[];
+  /** Automations whose definition or run outcomes the write changed (parity #53): one `automations` outbox row. */
+  readonly automations: readonly string[];
   /**
    * The background job whose batch made this write (spec 0022, milestone 3):
    * the outbox stores it in `outbox.job_id`, never published, and its
@@ -345,6 +352,7 @@ const LIST_KEYS = [
   'meetings',
   'schedules',
   'timeOff',
+  'automations',
   'nav',
   'comments',
   'notifications',
@@ -478,6 +486,7 @@ export async function runWrite<T>(
           meetings: [] as MeetingChange[],
           schedules: [] as string[],
           timeOff: [] as string[],
+          automations: [] as string[],
           nav: [] as string[],
           comments: [] as CommentChange[],
           notifications: [] as string[],
@@ -521,6 +530,7 @@ export async function runWrite<T>(
             append(collected.meetings, part.meetings);
             append(collected.schedules, part.schedules);
             append(collected.timeOff, part.timeOff);
+            append(collected.automations, part.automations);
             append(collected.nav, part.nav);
             append(collected.comments, part.comments);
             append(collected.notifications, part.notifications);
@@ -576,6 +586,7 @@ export async function runWrite<T>(
           meetings: [...collected.meetings],
           schedules: [...new Set(collected.schedules)],
           timeOff: [...new Set(collected.timeOff)],
+          automations: [...new Set(collected.automations)],
           ...(options.jobId === undefined ? {} : { jobId: options.jobId }),
           nav: [...new Set(collected.nav)],
           comments: [...collected.comments],

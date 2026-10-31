@@ -76,7 +76,7 @@ export interface RulesEditorProps {
   readonly limit?: number;
   /** Shows the rules with nothing to change (a member, a read only dialog). */
   readonly isReadOnly?: boolean;
-  /** A line under the group's label: how changes are kept ("Rules save when you press Save."). */
+  /** A line under the group's label: how changes are kept ("Rules wait for Save."). */
   readonly hint?: string;
 }
 

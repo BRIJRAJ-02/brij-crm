@@ -598,7 +598,7 @@ describe('actor values', () => {
     expect(other.map((refusal) => refusal.code)).toEqual(['ATTRIBUTE_VALUE_INVALID']);
   });
 
-  it('lets only the system write an interaction or a timestamp, checking its by like an actor value (AC-13)', async () => {
+  it('lets only the system write an interaction, checking its by like an actor value (AC-13), and anyone a timestamp', async () => {
     const { scope, objects, memberId } = await workspace();
     const elsewhere = await workspace();
     const asSystem: EngineScope = rescope(scope, { actor: SYSTEM_ACTOR });
@@ -624,7 +624,7 @@ describe('actor values', () => {
       [touch]: { value: { kind: 'email', at: '2026-10-01T09:30:00.000Z', by: actor } },
     });
 
-    // A member never writes either type, whoever the interaction names, on a create or a save.
+    // A member never writes an interaction, whoever it names, on a create or a save.
     for (const actor of [
       { type: 'member', id: memberId },
       { type: 'system', id: null },
@@ -632,17 +632,15 @@ describe('actor values', () => {
       const refused = await refusals(setValues(scope, { recordId, values: by(actor) }));
       expect(refused.map((refusal) => [refusal.code, refusal.attributeId])).toEqual([['ATTRIBUTE_READ_ONLY', touch]]);
     }
+    // A timestamp is a date and time people set (the field types pass, 31 October 2026): a member writes it.
     const stamp = { [seen]: { value: '2026-10-01T09:30:00.000Z' } };
-    expect((await refusals(setValues(scope, { recordId, values: stamp }))).map((refusal) => refusal.code)).toEqual([
-      'ATTRIBUTE_READ_ONLY',
-    ]);
-    const created = await refusals(
-      createRecord(scope, {
-        objectId: companiesObject,
-        values: { [id(companies.name)]: 'B', [seen]: '2026-10-01T09:30:00.000Z' },
-      }),
-    );
-    expect(created.map((refusal) => [refusal.code, refusal.attributeId])).toEqual([['ATTRIBUTE_READ_ONLY', seen]]);
+    await setValues(scope, { recordId, values: stamp });
+    expect((await getRecords(scope, { ids: [recordId] }))[0]?.values[seen]).toBe('2026-10-01T09:30:00.000Z');
+    const created = await createRecord(scope, {
+      objectId: companiesObject,
+      values: { [id(companies.name)]: 'B', [seen]: '2026-10-02T09:30:00.000Z' },
+    });
+    expect((await getRecords(scope, { ids: [created.recordId] }))[0]?.values[seen]).toBe('2026-10-02T09:30:00.000Z');
 
     // The system does, and its by is checked: an active member of this workspace, or the system itself.
     for (const actor of [

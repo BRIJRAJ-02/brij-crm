@@ -21,12 +21,13 @@ export const strings = {
   /** The Import / Export menu's export items: the shown columns, then every column, hidden ones too. */
   exportShown: (columns: number) => `Export view (${n(columns)} ${columns === 1 ? 'column' : 'columns'})`,
   exportAll: (columns: number) => `Export all columns (${n(columns)})`,
-  exportAllText: 'Hidden columns included',
   /** Why the export items are off on a view past the limit. */
   exportTooMany: 'Narrow the filter to 100,000 or fewer',
   /** The bulk bar's export of the ticked rows, and what its toast calls them. */
   exportSelected: (count: number) => `Export ${n(count)} selected`,
   title: (pluralName: string) => `Import ${pluralName.toLowerCase()}`,
+  /** A list's field in the column picker (spec 0048, AC-4833): where the value goes, by its list. */
+  listField: (list: string, field: string) => `${list}: ${field}`,
   stepsLabel: 'Import steps',
   steps: {
     upload: 'Upload',
@@ -39,7 +40,14 @@ export const strings = {
   /** Why Continue is off on the columns step. */
   matchOneFirst: 'Choose a field for at least one column to go on.',
   // Upload (AC-1112)
-  uploadText: 'The first row holds the column names. Nothing changes until you start the import.',
+  /** The upload card's picture of a file: a header row over two rows (not this object's own columns). */
+  sampleLabel: 'The first row holds the column names',
+  sampleCaption: 'Row 1: column names',
+  sampleRows: [
+    ['Name', 'Email', 'Company'],
+    ['Ada Lovelace', 'ada@example.com', 'Analytical Engines'],
+    ['Grace Hopper', 'grace@example.com', 'US Navy'],
+  ],
   dropLabel: 'Upload a CSV file',
   reading: 'Reading the file',
   refusals: {
@@ -65,15 +73,12 @@ export const strings = {
   matchedTo: (header: string) => `Matched to ${header}`,
   targetLabel: (header: string) => `Where ${header} goes`,
   noSample: 'No values',
-  needOneColumn: 'Match at least one column to continue.',
   /** A required field no column fills (guarded here, not at Start). */
   matchRequiredFirst: 'Match a column to each required field to go on.',
   requiredMissing: (title: string) => `${title} is required`,
-  requiredMissingText: 'No column fills it, so no new record could be made.',
   matchAColumn: (title: string) => `Match a column to ${title}`,
   matchAColumnShort: 'Match a column',
   updateOnly: 'Only update records I have',
-  updateOnlyHint: 'Rows that match no record are skipped, so nothing new is made.',
   /** A date column whose values read either way round (03/04/2025). */
   datesTitle: (header: string) => `Dates in ${header}`,
   dateOrderLabel: (header: string) => `How ${header} writes dates`,
@@ -93,15 +98,17 @@ export const strings = {
     `Couldn’t look up the names in ${header}. They are still linked when the import runs.`,
   linksAllFound: (header: string, far: string) => `Every name in ${header} matches a ${far.toLowerCase()}.`,
   linksCantMake: (far: string) => `You can’t add ${far.toLowerCase()}, so these links are left out.`,
+  /** "Company: 3 of 40 not found": the column, then how many of its names match no record. */
   linksMissing: (missing: number, total: number, attribute: string) =>
-    `${n(missing)} of ${n(total)} ${total === 1 ? 'name' : 'names'} in ${attribute} match no record`,
+    `${attribute}: ${n(missing)} of ${n(total)} not found`,
   linksMissingText: (names: readonly string[]) =>
     `${names.slice(0, 5).join(', ')}${names.length > 5 ? ` and ${n(names.length - 5)} more` : ''}.`,
-  linksLeftOut: 'Those links are left out, and each row says so in the summary.',
   linksAmbiguous: (count: number) =>
     `${n(count)} ${count === 1 ? 'name matches' : 'names match'} several records, so ${count === 1 ? 'it is' : 'they are'} left out.`,
-  createMissing: (count: number, far: string) => `Create the ${n(count)} missing ${far.toLowerCase()}`,
-  createMissingHint: 'Each is made once, named as in the file, and goes to the trash if you undo the import.',
+  /** The choice for a relation column's names that match no record. */
+  linksChoice: (header: string) => `What happens to the names in ${header} that match no record`,
+  createThem: 'Create them',
+  leaveEmpty: 'Leave empty',
   // Review values (owner walk 30 Oct 2026): only when a value won't read as it is, each with a choice made already.
   review: {
     missingLabels: (count: number, attribute: string) =>
@@ -121,9 +128,8 @@ export const strings = {
   // Match records (AC-1117, AC-1118), on the preview since 30 Oct 2026
   findBy: 'Match existing records by',
   alwaysCreate: 'Don’t match, always add',
-  noKeyHint: 'Match a column to a unique attribute, such as Email addresses, to update records you have.',
   /** No match attribute on an object that already has records. */
-  duplicates: 'Rows are always added; importing this file again creates duplicates.',
+  duplicates: 'Rows are added as new. Importing again makes duplicates.',
   moreSettings: 'More settings',
   onMatch: 'When a row matches a record',
   onMatchChoices: {
@@ -151,17 +157,15 @@ export const strings = {
   looksLikeColumn: 'Looks like',
   rowsLabel: 'Rows to import',
   rowColumn: 'Row',
-  rowInfo: 'Row numbers match your file. The column names are row 1.',
   reasonColumn: 'Reason',
   /** The preview's status column: "Ready", or what is wrong with the row. */
   statusColumn: 'Status',
   readyRow: 'Ready',
   noRows: 'No rows here',
-  noRowsText: 'Choose another filter to see the rest.',
   downloadErrors: 'Download rows with errors',
   errorHeader: 'Error',
   errorsFile: (fileName: string) => `${fileName.replace(/\.[^.]+$/u, '')} errors.csv`,
-  nothingReady: 'No row is ready. Download the rows with errors, fix them and choose the file again.',
+  nothingReady: 'No rows are ready. Fix the file and choose it again.',
   start: 'Start import',
   /** Beside Start: what the rows will do (one lookup of the match column), and the undo window. */
   plan: (created: number, updated: number, skipped: number) =>
@@ -173,19 +177,17 @@ export const strings = {
       .filter((part) => part !== '')
       .join(' · '),
   planChecking: 'Checking which rows match records…',
-  undoNote: 'You can undo it for 7 days.',
+  undoNote: 'Undo for 7 days.',
   sent: (sent: number, total: number) => `Sending rows: ${n(sent)} of ${n(total)}`,
   stopSending: 'Stop',
   stopTitle: 'Stop this import?',
-  stopText: 'Nothing has been imported yet. The rows sent so far are dropped.',
+  /** The body of Stop and Leave: both end with nothing imported. */
+  nothingImported: 'Nothing is imported.',
   keepGoing: 'Keep going',
   stopped: 'The import was stopped before it started.',
   leaveTitle: 'Leave the import?',
-  leaveText: 'Your file and choices are dropped, and nothing is imported.',
-  leaveSendingText: 'The import stops, and nothing is imported.',
   stay: 'Stay',
   leave: 'Leave',
-  somethingWrong: 'Something went wrong. Try again.',
   // Summary (AC-1125, AC-1127)
   summaryTitle: (fileName: string) => `Import of ${fileName}`,
   progress: (done: number, total: number) => `${n(done)} of ${n(total)} rows`,
@@ -193,7 +195,7 @@ export const strings = {
   queued: 'Waiting to start',
   cancel: 'Cancel import',
   cancelTitle: 'Cancel this import?',
-  cancelText: 'Rows already imported stay. You can undo them afterwards.',
+  cancelText: 'Imported rows stay.',
   dontCancel: 'Keep importing',
   counts: {
     created: 'Created',
@@ -217,14 +219,11 @@ export const strings = {
   viewRecords: (pluralName: string) => `View ${pluralName.toLowerCase()}`,
   undo: 'Undo import',
   undoTitle: 'Undo this import?',
-  undoText: (created: number, updated: number, plural: string, singular: string) =>
+  /** What Undo import does, in two short lines: "12 to the trash. 3 reverted, unless edited since." */
+  undoText: (created: number, updated: number) =>
     [
-      created > 0
-        ? `${n(created)} created ${created === 1 ? singular.toLowerCase() : plural.toLowerCase()} move to the trash.`
-        : '',
-      updated > 0
-        ? `${n(updated)} changed ${updated === 1 ? 'record goes' : 'records go'} back, unless edited since.`
-        : '',
+      created > 0 ? `${n(created)} to the trash.` : '',
+      updated > 0 ? `${n(updated)} reverted, unless edited since.` : '',
     ]
       .filter((line) => line !== '')
       .join(' '),

@@ -18,7 +18,7 @@ export interface NoViewsScreenProps {
   readonly attributes: readonly AttributeDefinition[];
 }
 
-/** "No views are available to you", with Create view (the create dialog, starting from the default config). */
+/** "No views yet", with Create view (the create dialog, starting from the default config). */
 export function NoViewsScreen({ slug, object, attributes }: NoViewsScreenProps) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
@@ -45,9 +45,7 @@ export function NoViewsScreen({ slug, object, attributes }: NoViewsScreenProps) 
                   {strings.createView}
                 </Button>
               }
-            >
-              {strings.noViewsText}
-            </EmptyState>
+            />
             <CreateViewDialog
               mode={isCreating ? 'create' : undefined}
               onClose={() => {

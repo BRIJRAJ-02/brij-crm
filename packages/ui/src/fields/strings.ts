@@ -52,7 +52,7 @@ export const strings = {
     number: 'Number',
     currency: 'Currency',
     date: 'Date',
-    timestamp: 'Timestamp',
+    timestamp: 'Date and time',
     checkbox: 'Checkbox',
     select: 'Select',
     status: 'Status',

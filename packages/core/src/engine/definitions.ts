@@ -43,6 +43,8 @@ import {
 } from '../forms/dependencies.ts';
 import { inWorkspace } from '../access/run.ts';
 import { requirePermission } from '../access/check.ts';
+import { requireFieldManager } from '../lists/manager.ts';
+import { joinNames, objectsRuledBy } from '../access/rule-guard.ts';
 import { attributeVisible } from '../access/visibility.ts';
 import { objectLevel, type Access } from '../access/policy.ts';
 
@@ -179,7 +181,8 @@ export function checkDescription(description: string | null | undefined): void {
   }
 }
 
-function checkLook(icon: string | undefined, hue: string | undefined): void {
+/** Refuses an icon outside the object icon set and an unknown hue, each on its field (objects and lists). */
+export function checkLook(icon: string | undefined, hue: string | undefined): void {
   if (icon !== undefined && !(OBJECT_ICONS as readonly string[]).includes(icon)) {
     throw refuseOn('CONFIG_INVALID', 'Pick an icon from the object icon set.', 'icon');
   }
@@ -898,7 +901,7 @@ export async function updateAttribute(
   input: AttributeUpdate,
   hooks: readonly AfterWrite[] = [],
 ): Promise<AttributeRef> {
-  requirePermission(scope, 'schema.manage');
+  await requireFieldManager(scope, input.attributeId);
   const { result } = await runWrite(
     scope,
     async (context) => {
@@ -1017,7 +1020,7 @@ export async function archiveAttribute(
   attributeId: string,
   hooks: readonly AfterWrite[] = [],
 ): Promise<readonly AttributeRef[]> {
-  requirePermission(scope, 'schema.manage');
+  await requireFieldManager(scope, attributeId);
   const { result } = await runWrite(
     scope,
     async (context) => {
@@ -1030,6 +1033,15 @@ export async function archiveAttribute(
         .where(eq(objects.primaryAttributeId, attribute.id));
       if (primary !== undefined)
         throw refuse('CONFIG_INVALID', "A record's name attribute can't be archived.", attribute.id);
+      // An Owner field an access rule limits records by stays while it does (spec 0032, AC-849).
+      const ruled = await objectsRuledBy(tx, attribute.id);
+      if (ruled.length > 0) {
+        throw refuse(
+          'IN_USE',
+          `${attribute.title} decides who sees ${joinNames(ruled)}. Change that access first.`,
+          attribute.id,
+        );
+      }
       const far = await farEnd(tx, attribute);
       const ends = far === undefined ? [attribute] : [attribute, far];
       await checkNotAMatch(tx, context.scope.access, ends);
@@ -1071,7 +1083,7 @@ const A_FORM = 'A live form';
  * unsaved. Refused here, which is the moment someone can still choose
  * otherwise. A form the caller may not see is counted, never named.
  */
-async function checkNotAMatch(
+export async function checkNotAMatch(
   tx: WorkspaceTx,
   access: Access,
   ends: readonly AttributeDef[],
@@ -1213,7 +1225,7 @@ export async function restoreAttribute(
   attributeId: string,
   hooks: readonly AfterWrite[] = [],
 ): Promise<readonly AttributeRef[]> {
-  requirePermission(scope, 'schema.manage');
+  await requireFieldManager(scope, attributeId);
   const { result } = await runWrite(
     scope,
     async (context) => {
@@ -1278,7 +1290,7 @@ export async function reorderAttribute(
   input: { readonly attributeId: string; readonly position: number },
   hooks: readonly AfterWrite[] = [],
 ): Promise<AttributeRef> {
-  requirePermission(scope, 'schema.manage');
+  await requireFieldManager(scope, input.attributeId);
   if (!Number.isInteger(input.position) || input.position < 0) {
     throw refuseOn('CONFIG_INVALID', 'Give the position as a whole number from 0.', 'position');
   }

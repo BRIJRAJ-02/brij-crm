@@ -7,10 +7,13 @@ import type {
   ActivityKind,
   ActivityFeed as ActivityFeedSource,
   AttributeDefinition,
+  EntriesLayer,
+  ListView,
   MemberSummary,
   NoteList as NoteListSource,
   ObjectSummary,
   RecordComments,
+  RecordEntries,
   RecordState,
   RecordSubscription,
   RecordView,
@@ -26,11 +29,13 @@ import {
   useLiveStatus,
   useNoteTotal,
   useRecord,
+  useRecordEntries,
   useTaskTotal,
   useTrashed,
 } from '@crm/data/react';
 import {
   ActivityFeed,
+  AttributeDisplay,
   Badge,
   Button,
   Callout,
@@ -39,14 +44,15 @@ import {
   EmptyState,
   Link,
   LockReason,
-  RecordHeader,
   NoteList,
+  RecordHeader,
   RecordLayout,
-  TaskList,
-  TopBar,
-  AttributeDisplay,
+  Tooltip,
   type RecordStat,
   type RelatedRecordsHandle,
+  sharedStrings,
+  TaskList,
+  TopBar,
 } from '@crm/ui';
 import { useNavigate, useParams, useRouteContext, useRouter } from '@tanstack/react-router';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -55,6 +61,7 @@ import { CommentsTab, LoadingThreads } from '../comments/CommentsTab.tsx';
 import { strings as commentStrings } from '../comments/strings.ts';
 import { NotesTab } from '../notes/NotesTab.tsx';
 import { strings as noteStrings } from '../notes/strings.ts';
+import { LogActivityDialog } from '../notes/LogActivityDialog.tsx';
 import { NoteWindow } from '../notes/NoteWindow.tsx';
 import { tabCount } from '../tasks/entries.ts';
 import { OpenTasksCard } from '../tasks/OpenTasksCard.tsx';
@@ -68,6 +75,9 @@ import { ActivityTab } from './ActivityTab.tsx';
 import { recordHref, recordName } from './details.ts';
 import { isRecordTab, type RecordTab } from './params.ts';
 import { OverviewTab } from './OverviewTab.tsx';
+import { AddToListMenu, listsToAddTo } from '../lists/AddToListMenu.tsx';
+import { RecordLists } from '../lists/RecordLists.tsx';
+import { strings as listStrings } from '../lists/strings.ts';
 import { RecordActions } from './RecordActions.tsx';
 import { RecordDetails } from './RecordDetails.tsx';
 import { RecordDuplicateBanner } from '../duplicates/RecordDuplicateBanner.tsx';
@@ -102,10 +112,21 @@ export interface RecordPageProps {
   readonly notes: NoteListSource | undefined;
   /** `?note=`: the note window's note, or `new`. */
   readonly note?: string;
+  /** `?log=`: the Log activity dialog's entry, or `new`, `call` or `meeting` for a new one. */
+  readonly log?: string;
   /** The record's comment threads (spec 0038): the Comments tab and its count. */
   readonly comments: RecordComments | undefined;
   /** `?thread=`: the thread a link to a comment names (AC-1161). */
   readonly thread?: string;
+  /** The Lists section (spec 0048, AC-4822): the lists over this object and this record's entries; none when no list is readable. */
+  readonly listSection?: ListSectionSource | undefined;
+}
+
+/** What the Lists section reads: loaded by the route, shown by the page. */
+export interface ListSectionSource {
+  readonly lists: readonly ListView[];
+  readonly layer: EntriesLayer;
+  readonly source: RecordEntries;
 }
 
 /** The page's tabs, in order. */
@@ -356,9 +377,11 @@ function RecordScreen({
   open,
   notes,
   comments,
+  listSection,
   meId,
   task,
   note,
+  log,
   thread,
   state,
   timelineStatus,
@@ -476,7 +499,7 @@ function RecordScreen({
   };
   // Kept while the page's address stays, so the timeline's links and the task rows don't draw again with each render.
   const taskHref = useCallback(
-    (itemId: string, kind: 'task' | 'note' | 'thread' = 'task') =>
+    (itemId: string, kind: 'task' | 'note' | 'thread' | 'log' = 'task') =>
       // A thread opens where it lives, on the Comments tab.
       `${recordHref(slug, object.apiSlug, recordId, kind === 'thread' ? 'comments' : tab)}?${kind}=${itemId}`,
     [slug, object.apiSlug, recordId, tab],
@@ -499,6 +522,29 @@ function RecordScreen({
   const closeNote = () => {
     if (noteOpenedHere.current) {
       noteOpenedHere.current = false;
+      router.history.back();
+      return;
+    }
+    void navigate({
+      to: '/w/$slug/objects/$object/$recordId/$tab',
+      params: { slug, object: object.apiSlug, recordId, tab },
+      search: {},
+      replace: true,
+    });
+  };
+  // The Log activity dialog (a call or meeting logged on the record), opened and closed as the note window is.
+  const logOpenedHere = useRef(false);
+  const openLog = (entry: string) => {
+    logOpenedHere.current = true;
+    void navigate({
+      to: '/w/$slug/objects/$object/$recordId/$tab',
+      params: { slug, object: object.apiSlug, recordId, tab },
+      search: { log: entry },
+    });
+  };
+  const closeLog = () => {
+    if (logOpenedHere.current) {
+      logOpenedHere.current = false;
       router.history.back();
       return;
     }
@@ -587,7 +633,9 @@ function RecordScreen({
       />
     );
   } else if (tab === 'notes') {
-    tabContent = <NotesTab list={notes} members={members} canAdd={canAddTasks} onOpenNote={openNote} />;
+    tabContent = (
+      <NotesTab list={notes} members={members} canAdd={canAddTasks} onOpenNote={openNote} onOpenLog={openLog} />
+    );
   } else if (tab === 'tasks' && pageRecord !== undefined) {
     tabContent = (
       <TasksTab
@@ -661,9 +709,24 @@ function RecordScreen({
         record={pageRecord}
         {...(pageHref === undefined ? {} : { recordHref: pageHref })}
         members={members}
+        objects={objects}
+        hrefOf={chipHref}
         canChange={canAddTasks}
         onStored={noteStored}
         onClose={closeNote}
+      />
+    );
+
+  const logDialog =
+    log === undefined || pageRecord === undefined ? undefined : (
+      <LogActivityDialog
+        slug={slug}
+        log={log}
+        record={pageRecord}
+        members={members}
+        objects={objects}
+        canChange={canAddTasks}
+        onClose={closeLog}
       />
     );
 
@@ -872,8 +935,17 @@ function RecordScreen({
                     value={pageLink}
                     label={strings.copyLink}
                     announcement={strings.linkCopied}
-                    failureMessage={strings.copyFailed}
+                    failureMessage={sharedStrings.couldntCopy}
                   />
+                  {listSection !== undefined && canEdit && (
+                    <HeaderAddToList
+                      slug={slug}
+                      object={object}
+                      recordId={recordId}
+                      shown={shown}
+                      section={listSection}
+                    />
+                  )}
                   <RecordActions
                     slug={slug}
                     object={object}
@@ -909,6 +981,18 @@ function RecordScreen({
                       : {})}
                   />
                   {/* Left out for a record in the trash (its links come back with a restore) or one no longer there. */}
+                  {listSection !== undefined && !isTrashed && !isLost && (
+                    <RecordLists
+                      data={data}
+                      toasts={toasts}
+                      slug={slug}
+                      object={object}
+                      recordId={recordId}
+                      record={shown.display}
+                      members={members}
+                      {...listSection}
+                    />
+                  )}
                   {related !== undefined && !isTrashed && !isLost && (
                     <RelatedSections
                       slug={slug}
@@ -929,6 +1013,44 @@ function RecordScreen({
       />
       {dialog}
       {noteWindow}
+      {logDialog}
     </>
+  );
+}
+
+/** The header's Add to list (spec 0048, AC-4823): nothing when the member may write no list over the object. */
+function HeaderAddToList({
+  slug,
+  object,
+  recordId,
+  shown,
+  section,
+}: {
+  readonly slug: string;
+  readonly object: ObjectSummary;
+  readonly recordId: string;
+  readonly shown: RecordView;
+  readonly section: ListSectionSource;
+}) {
+  const { data, toasts } = useRouteContext({ from: '__root__' });
+  const writable = listsToAddTo(section.lists, object.id);
+  const rows = useRecordEntries(section.source).rows;
+  const inLists = useMemo(() => new Set(rows.map((row) => row.entry.listId)), [rows]);
+  if (writable.length === 0) return null;
+  return (
+    <AddToListMenu
+      data={data}
+      toasts={toasts}
+      slug={slug}
+      object={object}
+      lists={writable}
+      recordIds={[recordId]}
+      record={shown.display}
+      inLists={inLists}
+    >
+      <Tooltip content={listStrings.addToListMenu}>
+        <Button variant="ghost" icon="list" label={listStrings.addToListMenu} />
+      </Tooltip>
+    </AddToListMenu>
   );
 }

@@ -7,7 +7,7 @@
 // they were asked; `centrifugo.test.ts` proves them on the real server.
 import { randomUUID } from 'node:crypto';
 import { createRunner, jobKinds, NO_RULE_SOURCE } from '@crm/core';
-import { enterAsActor, removedUserIds, systemScope } from '@crm/core/system';
+import { enterAsActor, memberUserIds, removedUserIds, systemScope } from '@crm/core/system';
 import {
   createDatabase,
   createOutboxReader,
@@ -28,6 +28,7 @@ import {
   CUTOFF_MAX_WAIT_MS,
   CUTOFF_TASK,
   CUTOFF_WINDOW_MS,
+  cutOffChannels,
   cutOffTask,
   nextTryAt,
   REMOVED,
@@ -101,8 +102,8 @@ function deps(
   return {
     ...recorded,
     removedUserIds: (workspaceId, memberIds) => removedUserIds(systemScope(db, workspaceId), memberIds),
-    unsubscribe: (channel, userIds) => {
-      recorded.unsubscribed.push({ channel, userIds });
+    unsubscribe: (channels, userIds) => {
+      for (const channel of channels) recorded.unsubscribed.push({ channel, userIds });
       return options.unsubscribe === false
         ? Promise.reject(new Error('Centrifugo could not be reached.'))
         : Promise.resolve();
@@ -175,6 +176,41 @@ describe('the durable cut off (late trap #41)', () => {
     expect(none.unsubscribed).toEqual([]);
     // The log names the workspace and counts, never a user.
     expect(JSON.stringify(run.lines)).not.toContain(gone.userId);
+  });
+
+  it('names the users an access row disconnects with 4500, active or removed, in its own workspace only (AC-84)', async () => {
+    const workspaceId = await workspace();
+    const staying = await member(workspaceId, false);
+    const gone = await member(workspaceId, true);
+    const elsewhere = await member(await workspace(), false);
+    const users = await memberUserIds(systemScope(db, workspaceId), [
+      staying.memberId,
+      gone.memberId,
+      elsewhere.memberId,
+      'not-a-member',
+    ]);
+    expect([...users].sort()).toEqual([staying.userId, gone.userId].sort());
+  });
+
+  it('unsubscribes from every audience channel the row was planned for, and carries only audience keys (milestone 4)', async () => {
+    const workspaceId = await workspace();
+    const gone = await member(workspaceId, true);
+    const at = new Date().toISOString();
+    const key = '0123456789abcdef';
+    const task = cutOffTask(workspaceId, 9, [gone.memberId], at, 1_000, ['open', key, key, 'workspace:*', 'ABC']);
+    // Only audience keys reach the payload, once each, the open one implied: nothing else becomes part of a channel.
+    expect(task?.payload).toEqual({ workspaceId, memberIds: [gone.memberId], at, audiences: [key] });
+    const run = deps();
+    expect(await runCutOff(run, task?.payload, FIRST)).toEqual({ outcome: 'unsubscribed' });
+    expect(run.unsubscribed).toEqual([
+      { channel: `workspace:${workspaceId}`, userIds: [gone.userId] },
+      { channel: `workspace:${workspaceId}.${key}`, userIds: [gone.userId] },
+    ]);
+    // A payload naming something other than a key is not ours: nothing is cut, nothing retried.
+    expect(await runCutOff(deps(), { workspaceId, memberIds: [gone.memberId], at, audiences: ['*'] }, FIRST)).toEqual({
+      outcome: 'invalid',
+    });
+    expect(cutOffChannels(workspaceId, [])).toEqual([`workspace:${workspaceId}`]);
   });
 
   it('closes their connections once Centrifugo keeps refusing the unsubscribe, and queues a retry when that fails too', async () => {

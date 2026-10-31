@@ -3,7 +3,7 @@
 // `CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY`), each good for an hour. The
 // one place the API signs them, with node:crypto and no JWT library.
 import { createHmac } from 'node:crypto';
-import { workspaceChannel } from '@crm/contracts';
+import { audienceChannel } from '@crm/contracts';
 
 /**
  * How long a connection or subscription token lasts: an hour (spec 0008,
@@ -18,8 +18,16 @@ export const REALTIME_TOKEN_SECONDS = 60 * 60;
 export interface RealtimeTokens {
   /** A connection token: `sub` is the user id. */
   readonly connection: (userId: string) => string;
-  /** A token for one workspace's channel (`workspace:<id>`), for the same user id the connection carries. */
-  readonly subscription: (userId: string, workspaceId: string) => { readonly channel: string; readonly token: string };
+  /**
+   * A token for one audience's channel of a workspace (`audienceChannel`: `workspace:<id>` for the open audience,
+   * `workspace:<id>.<key>` for any other, spec 0007 milestone 4), for the same user id the connection carries.
+   * `audience` is the caller's own policy key, from the scope the door built, never from the browser.
+   */
+  readonly subscription: (
+    userId: string,
+    workspaceId: string,
+    audience: string,
+  ) => { readonly channel: string; readonly token: string };
 }
 
 const part = (value: unknown) => Buffer.from(JSON.stringify(value)).toString('base64url');
@@ -41,8 +49,8 @@ export function createRealtimeTokens({
   const expiry = () => Math.floor(now() / 1000) + REALTIME_TOKEN_SECONDS;
   return {
     connection: (userId) => sign({ sub: userId, exp: expiry() }, secret),
-    subscription: (userId, workspaceId) => {
-      const channel = workspaceChannel(workspaceId);
+    subscription: (userId, workspaceId, audience) => {
+      const channel = audienceChannel(workspaceId, audience);
       return { channel, token: sign({ sub: userId, channel, exp: expiry() }, secret) };
     },
   };

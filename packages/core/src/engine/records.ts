@@ -15,6 +15,7 @@ import {
 import { fileCompany, type FilingSlots, type FilingWrites } from './filing.ts';
 import { checkRecordRoom } from './limits.ts';
 import { decodeValue, encodeValue, sameItems } from './columns.ts';
+import { openThreadCounts } from '../comments/counts.ts';
 import { canonicalId, canonicalKeys, checkId, isUuid, isUuidV7 } from './ids.ts';
 import { companyLogoPath } from './logos.ts';
 import { isRefusal, postgresError, refuse, refuseAll, versionChangedMessage } from './refusals.ts';
@@ -40,7 +41,7 @@ import {
 import { append, runWrite, type AfterWrite, type EntryRef, type ValueChange, type WriteContext } from './write.ts';
 import { inWorkspace } from '../access/run.ts';
 import { checkRecordRules, ruledAttributes } from '../validation/rules.ts';
-import { fieldReadOnlyReason, filterRecordView, isOpen, type Access } from '../access/policy.ts';
+import { fieldReadOnlyReason, filterRecordView, isOpen, recordRule, type Access } from '../access/policy.ts';
 import {
   attributeLevel,
   attributeVisible,
@@ -223,6 +224,8 @@ export interface RecordView {
    * A cell that wasn't cut has no entry, so this is empty for most records.
    */
   readonly linkTotals: Readonly<Record<string, number>>;
+  /** The record's open comment threads; present only on a read that asked for them (`threadCounts`), 0 when none. */
+  readonly openThreads?: number;
 }
 
 /**
@@ -428,6 +431,29 @@ export async function initialValues(
 }
 
 /**
+ * The values a new record starts from: under a record rule (spec 0032, AC-848) the member who makes it owns it
+ * unless they chose an owner themselves, so a record made by someone limited to their own records never vanishes
+ * from them the moment it is made. The rule's field must be a live Member field of the object; any other rule is left
+ * as it is. Anyone who isn't a member (a form, a key, the system) gets the values as given.
+ */
+function creatorOwns(
+  scope: EngineScope,
+  objectId: string,
+  attributes: ReadonlyMap<string, AttributeDef>,
+  values: Readonly<Record<string, unknown>>,
+): Readonly<Record<string, unknown>> {
+  const rule = recordRule(scope.access, objectId);
+  const { principal } = scope.access;
+  if (rule === undefined || principal.kind !== 'member') return values;
+  const attribute = attributes.get(rule.attributeId);
+  if (attribute === undefined || attribute.type !== 'actor_reference' || isArchivedNow(attribute)) return values;
+  // A system field (Created by) is stamped by the write itself: it already names the creator, and can't be given.
+  if (attribute.systemColumn !== null) return values;
+  if (Object.keys(values).some((key) => key.toLowerCase() === attribute.id)) return values;
+  return { ...values, [attribute.id]: { type: 'member', id: principal.memberId } };
+}
+
+/**
  * Creates one record inside a write (shared by single creates and batches).
  * Its record slot is counted with the write's (`deferSlots`) and taken at
  * the write's end, as every write takes the workspace counter row last: the
@@ -444,7 +470,13 @@ export async function insertRecord(context: WriteContext, input: RecordInput, kn
     await liveObject(tx, objectId);
   }
   const attributes = known?.attributes ?? (await loadAttributes(tx, objectId));
-  const parsed = await initialValues(tx, scope, attributes, input.values ?? {}, input.timeZone ?? 'UTC');
+  const parsed = await initialValues(
+    tx,
+    scope,
+    attributes,
+    creatorOwns(scope, objectId, attributes, input.values ?? {}),
+    input.timeZone ?? 'UTC',
+  );
   // Every rule of the object runs on a create (spec 0013, AC-255): its definitions are held still, then checked.
   const hold = holdDefinitions(
     tx,
@@ -1022,6 +1054,11 @@ export interface ReadOptions {
    * statement of its own to check.
    */
   readonly liveObjectsOnly?: true;
+  /**
+   * Add each record's open comment threads (`openThreads`, the count a table row and a board card show): one more
+   * statement for the whole read, over the records it returns, so only ones the reader may see are counted.
+   */
+  readonly threadCounts?: true;
 }
 
 /**
@@ -1035,6 +1072,7 @@ export async function getRecords(
     readonly ids: readonly string[];
     readonly attributeIds?: readonly string[];
     readonly attributes?: ReadOptions['attributes'];
+    readonly threadCounts?: boolean;
   },
 ): Promise<readonly RecordView[]> {
   if (input.ids.length > 500) throw refuse('CONFIG_INVALID', 'Read at most 500 records at once.');
@@ -1046,6 +1084,7 @@ export async function getRecords(
     readRecords(tx, scope.access, ids, {
       ...(attributeIds === undefined ? {} : { attributeIds }),
       ...(input.attributes === undefined ? {} : { attributes: input.attributes }),
+      ...(input.threadCounts === true ? { threadCounts: true as const } : {}),
     }),
   );
 }
@@ -1147,6 +1186,14 @@ export async function readRecords(
             .map((reference) => reference.recordId),
         ),
       );
+  // One statement for the page's open comment threads, over the records this read returns (those the reader may see).
+  const threads =
+    options.threadCounts === true
+      ? await openThreadCounts(
+          tx,
+          rows.map((row) => row.id),
+        )
+      : undefined;
   return rows
     .map((row): RecordView => {
       const object = objectById.get(row.objectId);
@@ -1219,6 +1266,7 @@ export async function readRecords(
         values,
         versions,
         linkTotals,
+        ...(threads === undefined ? {} : { openThreads: threads.get(row.id) ?? 0 }),
       };
       return farSeen === undefined ? view : filterRecordView(access, view, farSeen);
     })

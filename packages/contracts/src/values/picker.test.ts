@@ -11,6 +11,12 @@ describe('typeFor', () => {
     expect(typeFor('Nickname')).toBe('text');
   });
 
+  it('types a name with a time of day as a date and time', () => {
+    expect(typeFor('Start time')).toBe('timestamp');
+    expect(typeFor('Last contacted at')).toBe('timestamp');
+    expect(typeFor('Format')).toBe('text');
+  });
+
   it('types a stage as status, an owner as member and a priority as select', () => {
     expect(typeFor('Stage')).toBe('status');
     expect(typeFor('Status')).toBe('status');

@@ -16,12 +16,18 @@ import type {
 import { Avatar, CommandPalette, type PaletteItem, type PaletteSection } from '@crm/ui';
 import type { ThemeChoice } from '@crm/ui/theme';
 import { useLocation, useMatch, useNavigate, useParams, useRouteContext } from '@tanstack/react-router';
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { noteHref } from '../notes/entries.ts';
 import { recordHref } from '../records/details.ts';
+import { addRecordToList } from '../lists/addRecord.ts';
+import { listsToAddTo } from '../lists/AddToListMenu.tsx';
+import { LazyNewListModal } from '../lists/LazyNewListModal.tsx';
+import { listHref } from '../lists/paths.ts';
+import { strings as listStrings } from '../lists/strings.ts';
 import { InviteTeamDialog } from '../settings/InviteTeamDialog.tsx';
 import {
   actionCommands,
+  addToListCommands,
   createNamedCommand,
   createTaskCommand,
   matchCommands,
@@ -62,6 +68,7 @@ export function CommandMenu({ slug, mode, isOpen, onOpenChange, record }: Comman
   const loaded = useMatch({ from: '/w/$slug', shouldThrow: false, select: (match) => match.loaderData });
   const objects = useMemo(() => loaded?.objects ?? [], [loaded?.objects]);
   const permissions = loaded?.access?.permissions;
+  const lists = useMemo(() => loaded?.lists ?? [], [loaded?.lists]);
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
   const { search, hasFailed, reopen } = useMenuSearch(data, slug, isOpen, query);
@@ -72,12 +79,13 @@ export function CommandMenu({ slug, mode, isOpen, onOpenChange, record }: Comman
   );
 
   const byObject = useMemo(() => new Map(objects.map((object) => [object.id, object])), [objects]);
-  const pages = useMemo(() => pageCommands(slug, objects, permissions), [slug, objects, permissions]);
+  const pages = useMemo(() => pageCommands(slug, objects, permissions, lists), [slug, objects, permissions, lists]);
   const settings = useMemo(() => settingsCommands(slug, permissions), [slug, permissions]);
   // The page the menu opened over: its object and view get their own actions (Import, Export this view).
   const params: { readonly object?: string; readonly viewId?: string } = useParams({ strict: false });
   const here = objects.find((object) => object.apiSlug === params.object);
   const canInvite = permissions?.includes('members.invite') === true;
+  const canMakeLists = permissions?.includes('lists.manage') === true;
   const viewId = params.viewId;
   const pathname = useLocation({ select: (location) => location.pathname });
   const actions = useMemo(
@@ -85,19 +93,24 @@ export function CommandMenu({ slug, mode, isOpen, onOpenChange, record }: Comman
       mode === 'commands'
         ? [
             ...recordCommands(record),
+            ...addToListCommands(record, here === undefined ? [] : listsToAddTo(lists, here.id)),
             // A record page's own New task links the record; elsewhere one Create a task.
             ...(record === undefined ? [createTaskCommand(slug, pathname)] : []),
             ...actionCommands(slug, objects, {
               ...(here === undefined ? {} : { object: here }),
               ...(viewId === undefined ? {} : { viewId }),
               canInvite,
+              canMakeLists,
             }),
           ]
         : [],
-    [mode, slug, objects, here, viewId, canInvite, record, pathname],
+    [mode, slug, objects, here, viewId, canInvite, canMakeLists, record, pathname, lists],
   );
   // Invite members opens the one Invite dialog over the page, as Home's setup step does.
   const [isInviting, setInviting] = useState(false);
+  // Create list opens the one New list dialog over the page (spec 0048, AC-4827), loaded when first asked for.
+  const [isMakingList, setMakingList] = useState(false);
+  const [hasMadeList, setHasMadeList] = useState(false);
   const text = query.trim();
   // Nothing matched: one row makes it, named as typed (the page's object, else People).
   const createNamed = useMemo(() => createNamedCommand(slug, objects, here, text), [slug, objects, here, text]);
@@ -189,6 +202,17 @@ export function CommandMenu({ slug, mode, isOpen, onOpenChange, record }: Comman
         setInviting(true);
         return;
       }
+      if (command.run.kind === 'new-list') {
+        setHasMadeList(true);
+        setMakingList(true);
+        return;
+      }
+      if (command.run.kind === 'add-to-list') {
+        const { listId, recordId } = command.run;
+        const list = lists.find((each) => each.id === listId);
+        if (list !== undefined) void addRecordToList(data, toasts, slug, list, { recordId, name: record?.name ?? '' });
+        return;
+      }
       void navigate({ href: command.run.href });
       return;
     }
@@ -229,6 +253,25 @@ export function CommandMenu({ slug, mode, isOpen, onOpenChange, record }: Comman
           setInviting(false);
         }}
       />
+      {hasMadeList && (
+        <Suspense fallback={null}>
+          <LazyNewListModal
+            data={data}
+            slug={slug}
+            isOpen={isMakingList}
+            objects={objects.filter((object) => !object.isArchived && object.access === 'write')}
+            objectId={here?.id}
+            onClose={() => {
+              setMakingList(false);
+            }}
+            onMade={(list) => {
+              setMakingList(false);
+              toasts.toast({ tone: 'success', message: listStrings.listMade(list.name) });
+              void navigate({ href: listHref(slug, list) });
+            }}
+          />
+        </Suspense>
+      )}
     </>
   );
 }
@@ -313,6 +356,7 @@ function commandRow(command: Command, themeChoice: ThemeChoice): PaletteItem {
     id: command.id,
     name: command.name,
     icon: command.icon,
+    ...(command.kind === undefined ? {} : { kind: command.kind }),
     ...(command.kbd === undefined ? {} : { kbd: command.kbd }),
     ...(command.run.kind === 'theme' ? { choice: strings.theme, isChecked: command.run.choice === themeChoice } : {}),
   };

@@ -26,7 +26,8 @@ New (spec 0019). No list in the library shows a document summary (a title, a two
 ```
 
 - A note is `{ id, title, excerpt, author: ActorDisplay, updatedAt }`. An empty title reads "Untitled note" in the secondary colour; an empty excerpt draws no line.
-- The order is the screen's (last edited first).
+- The order is the screen's (last edited first; a logged call or meeting where it happened).
+- A note may carry an `activity` (a call or meeting logged on the record, migration 0137): the phone or people icon leads its title ("Call" or "Meeting" when it has none), its outcome is a coloured Tag after it, and its line tells when it happened and how long ("2 days ago · 30 min") in place of "Edited …". Why a prop on the row, not a second list: a logged call is a note with a kind, so it opens, sorts and filters with its neighbours, and only its face differs (story `WithActivities`).
 - A note may carry its `record` (a `RecordRefDisplay`): a flat RecordChip leads its line, before the author, for a list that mixes notes of many records (the workspace's Notes page; story `WithRecords`). Why a variant: the row is the same, and only the record it is on is new; a record's own tab leaves it out.
 - `toolbar` draws above the list in every state, so "New note" is there when the list is empty or failed.
 - `emptyTitle` and `emptyBody` say what an empty list means in the screen's own words.

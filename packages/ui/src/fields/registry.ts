@@ -108,7 +108,11 @@ export function clearedValueOf(attribute: FieldAttribute): unknown {
 
 /** Why people can't edit this attribute's values, or `undefined` when they can: its own reason, else the field set's. */
 export function readOnlyReasonOf(attribute: FieldAttribute): string | undefined {
-  const isSystem = isSystemOnly(attribute.type);
+  // A date and time people set is editable now (the field types pass); one read only with no reason of its own is
+  // the system's Created at or Updated at, which still says the system sets it.
+  const isSystem =
+    isSystemOnly(attribute.type) ||
+    (attribute.type === 'timestamp' && attribute.isReadOnly && attribute.readOnlyReason === undefined);
   if (!attribute.isReadOnly && attribute.computed === undefined && !isSystem) return undefined;
   if (attribute.readOnlyReason !== undefined) return attribute.readOnlyReason;
   if (attribute.computed !== undefined) return strings.computed;

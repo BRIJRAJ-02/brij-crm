@@ -1,8 +1,8 @@
 // Brief
 // Purpose: the Customise sidebar dialog for the open workspace (spec 0034, AC-933), from a section's menu or Settings › Preferences.
-// Main task: show or hide each page and object, or reset the sidebar to its default after a confirm.
+// Main task: show or hide each page, object and list, or reset the sidebar to its default after a confirm.
 // Leaves out: the order (the sidebar's grips); it loads lazily, outside the first load.
-import type { DataLayer, NavEntry, NavState, ObjectSummary } from '@crm/data';
+import type { DataLayer, ListView, NavEntry, NavState, ObjectSummary } from '@crm/data';
 import { navKey } from '@crm/data/navigation';
 import { CustomiseSidebar, type CustomiseSidebarItem, type CustomiseSidebarSection } from '@crm/ui';
 import { drawnSections, PAGE_LINKS, topEntries, universeOf } from './sidebar.ts';
@@ -14,6 +14,8 @@ export interface CustomiseSidebarDialogProps {
   readonly slug: string;
   readonly nav: NavState;
   readonly objects: readonly ObjectSummary[] | undefined;
+  /** The lists the member may read (spec 0048): Lists' rows. */
+  readonly lists?: readonly ListView[] | undefined;
   readonly isOpen: boolean;
   readonly onOpenChange: (isOpen: boolean) => void;
 }
@@ -24,17 +26,25 @@ export function CustomiseSidebarDialog({
   slug,
   nav,
   objects,
+  lists = [],
   isOpen,
   onOpenChange,
 }: CustomiseSidebarDialogProps) {
-  const universe = universeOf(objects, nav);
+  const universe = universeOf(objects, nav, lists);
   const objectOf = new Map((objects ?? []).map((object) => [object.id, object]));
+  const listOf = new Map(lists.map((list) => [list.id, list]));
   const rowOf = (entry: NavEntry): CustomiseSidebarItem[] => {
     if (entry.kind === 'object') {
       const object = objectOf.get(entry.id);
       return object === undefined
         ? []
         : [{ id: navKey(entry), name: object.pluralName, icon: object.icon, hue: object.hue, isShown: !entry.hidden }];
+    }
+    if (entry.kind === 'list') {
+      const list = listOf.get(entry.id);
+      return list === undefined
+        ? []
+        : [{ id: navKey(entry), name: list.name, icon: list.icon, hue: list.hue, isShown: !entry.hidden }];
     }
     if (entry.kind === 'page') {
       const page = PAGE_LINKS[entry.id as keyof typeof PAGE_LINKS];

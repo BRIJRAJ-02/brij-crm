@@ -21,14 +21,15 @@ import type { RecordRefDisplay } from '@crm/contracts/values';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { checkScope } from '../access/mint.ts';
 import { inWorkspace } from '../access/run.ts';
-import { checkObject, visibleRecords } from '../access/visibility.ts';
+import { checkObject, UNKNOWN_LIST, visibleRecords } from '../access/visibility.ts';
 import { encodeValue } from '../engine/columns.ts';
 import { canonicalId, checkId } from '../engine/ids.ts';
 import { limitsOf } from '../engine/limits.ts';
 import { isRefusal, refuse } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import { uniqueKeyOf } from '../engine/unique.ts';
-import { loadAttributes, type AttributeDef } from '../engine/values.ts';
+import { loadAttributes, loadListAttributes, type AttributeDef } from '../engine/values.ts';
+import { checkWritableList } from '../engine/lists.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
 import type { JobRegistry } from '../jobs/registry.ts';
 import { startJob } from '../jobs/service.ts';
@@ -249,7 +250,8 @@ export async function createImport(
   const id = checkId(input.id, IMPORT_NOT_FOUND);
   const { result } = await runWrite(
     scope,
-    async ({ tx }) => {
+    async (context) => {
+      const { tx } = context;
       const [existing] = await tx
         .select()
         .from(imports)
@@ -260,7 +262,18 @@ export async function createImport(
       }
       const objectId = await liveObject(tx, scope, input.objectId);
       const attributes = await loadAttributes(tx, objectId);
-      checkSettings(scope, settings, attributes);
+      // Into a list (spec 0048, AC-4833): the list checked as an add checks it (hidden is unknown, read only 403,
+      // archived NOT_FOUND), over this object; its fields take columns beside the object's.
+      const listId = input.listId === undefined ? undefined : checkId(input.listId, UNKNOWN_LIST);
+      const listAttributes =
+        listId === undefined ? new Map<string, AttributeDef>() : await loadListAttributes(tx, listId);
+      if (listId !== undefined) {
+        const list = await checkWritableList(context, listId);
+        if (list.objectId !== objectId) {
+          throw refuse('CONFIG_INVALID', "That list holds another object's records.");
+        }
+      }
+      checkSettings(scope, settings, new Map([...attributes, ...listAttributes]));
       await checkMakes(tx, scope, settings, attributes);
       const limit = limitsOf(scope).unfinishedImports;
       // One create at a time per workspace, so two at once can't both pass the cap.
@@ -283,6 +296,7 @@ export async function createImport(
           workspaceId: scope.workspaceId,
           id,
           objectId,
+          ...(listId === undefined ? {} : { listId }),
           fileName: input.fileName.trim(),
           rowCount: input.rowCount,
           errorRows: input.errorRows,
@@ -432,7 +446,11 @@ export async function startImport(
       await liveObject(tx, scope, row.objectId);
       const settings = ImportSettings.parse(row.settings);
       const attributes = await loadAttributes(tx, row.objectId);
-      checkSettings(scope, settings, attributes);
+      // Into a list: still writable and live, its fields as the member stands now (spec 0048, AC-4833).
+      if (row.listId !== null) await checkWritableList(context, row.listId);
+      const listAttributes =
+        row.listId === null ? new Map<string, AttributeDef>() : await loadListAttributes(tx, row.listId);
+      checkSettings(scope, settings, new Map([...attributes, ...listAttributes]));
       await checkMakes(tx, scope, settings, attributes);
       const ids = await tx.execute<{ id: string }>(sql`
         select id::text from import_rows where workspace_id = ${scope.workspaceId} and import_id = ${row.id}

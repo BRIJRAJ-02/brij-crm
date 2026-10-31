@@ -105,6 +105,11 @@
     background: var(--accent-soft);
   }
 
+  /* The row whose record is open in the panel beside the grid; a ticked row keeps its blue. */
+  .row[data-open]:not([data-selected]) {
+    background: var(--surface-selected);
+  }
+
   /* An open editor's error floats over the rows below, so this row doesn't clip it. */
   .row[data-editing] {
     z-index: var(--z-raised);
@@ -112,7 +117,7 @@
   }
 
   @media (hover: hover) and (pointer: fine) {
-    .row:not([data-selected]):hover {
+    .row:not([data-selected], [data-open]):hover {
       background: var(--surface-hover);
     }
   }
@@ -246,7 +251,8 @@
       outline-offset: calc(-1 * var(--border-width-thick));
     }
 
-    .row[data-selected] {
+    .row[data-selected],
+    .row[data-open] {
       outline: var(--border-width-hairline) solid Highlight;
       outline-offset: calc(-1 * var(--border-width-hairline));
     }

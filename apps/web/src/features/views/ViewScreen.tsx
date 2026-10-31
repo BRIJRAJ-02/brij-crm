@@ -29,11 +29,12 @@ import {
   focusLater,
   Popover,
   Select,
+  sharedStrings,
   ToolbarSearch,
-  ViewSettings,
   type ViewChoice,
   type ViewField,
   type ViewLayoutSwitch,
+  ViewSettings,
   type ViewSettingsTrigger,
 } from '@crm/ui';
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
@@ -42,6 +43,7 @@ import { BoardScreen } from '../board/BoardScreen.tsx';
 import { planBoard } from '../board/plan.ts';
 import { strings as boardStrings } from '../board/strings.ts';
 import type { ViewRequest } from '../command/commands.ts';
+import type { PeekControl } from '../records/params.ts';
 import { RecordsScreen } from '../workspace/RecordsScreen.tsx';
 import { strings as tableStrings } from '../workspace/strings.ts';
 import { objectPendingPage } from '../workspace/ObjectScreen.tsx';
@@ -109,6 +111,8 @@ export interface ViewScreenProps {
   readonly request?: ViewRequest;
   /** That request was run: drop it from the address. */
   readonly onRequestTaken?: () => void;
+  /** The record panel over the table or board (`?record=`, spec 0017 AC-384). */
+  readonly peek?: PeekControl;
 }
 
 /** The attributes of the objects a through filter leads to, read through the data layer as they are asked for. */
@@ -409,7 +413,6 @@ export function ViewScreen(props: ViewScreenProps) {
           draft.settle();
           setShowDropped(false);
           setFocusRequest({});
-          toasts.toast({ tone: 'success', message: strings.saved(next.name) });
         },
         (error: unknown) => {
           setSaving(false);
@@ -582,7 +585,7 @@ export function ViewScreen(props: ViewScreenProps) {
         },
         (error: unknown) => {
           setDuplicating(false);
-          toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : strings.actionFailed });
+          toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : sharedStrings.couldntDoThat });
         },
       );
   };
@@ -648,7 +651,7 @@ export function ViewScreen(props: ViewScreenProps) {
         if (isCurrent) setLateTable({ records: opened, query: asked });
       },
       () => {
-        if (isCurrent) toasts.toast({ tone: 'danger', message: strings.actionFailed });
+        if (isCurrent) toasts.toast({ tone: 'danger', message: sharedStrings.couldntDoThat });
       },
     );
     return () => {
@@ -755,7 +758,7 @@ export function ViewScreen(props: ViewScreenProps) {
                   (error: unknown) => {
                     toasts.toast({
                       tone: 'danger',
-                      message: isDataError(error) ? error.message : strings.actionFailed,
+                      message: isDataError(error) ? error.message : sharedStrings.couldntDoThat,
                     });
                   },
                 );
@@ -1041,6 +1044,7 @@ export function ViewScreen(props: ViewScreenProps) {
           object={object}
           attributes={attributes}
           members={members}
+          {...(props.peek === undefined ? {} : { peek: props.peek })}
           outcome={boardOutcome}
           query={query}
           views={choices}
@@ -1079,6 +1083,7 @@ export function ViewScreen(props: ViewScreenProps) {
         object={object}
         attributes={attributes}
         members={members}
+        {...(props.peek === undefined ? {} : { peek: props.peek })}
         view={table.records}
         viewQuery={table.query}
         {...(view?.config.groupBy === undefined ? {} : { groupBy: view.config.groupBy })}
@@ -1169,9 +1174,7 @@ export function ViewScreen(props: ViewScreenProps) {
                         {strings.editFilters}
                       </Button>
                     }
-                  >
-                    {strings.noMatchesText}
-                  </EmptyState>
+                  />
                 ),
               }
             : {})}

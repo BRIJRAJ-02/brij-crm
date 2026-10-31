@@ -30,6 +30,7 @@ import type { EngineScope } from '../engine/scope.ts';
 import type { AttributeDef } from '../engine/values.ts';
 import type { AfterWrite } from '../engine/write.ts';
 import { inWorkspace } from '../access/run.ts';
+import { outOfScopeMessage } from '../access/rule-guard.ts';
 import { checkObject, UNKNOWN_RECORD } from '../access/visibility.ts';
 
 const { objects, records } = schema;
@@ -44,6 +45,8 @@ export interface RecordWindow {
   readonly sorts?: SortRules;
   /** Only these attributes' values, plus the primary (spec 0006, AC-55). */
   readonly attributeIds?: readonly string[];
+  /** Add each record's open comment threads (`openThreads`): one more statement for the window. */
+  readonly threadCounts?: boolean;
   /** The window's clock (spec 0006, AC-51): relative dates resolve against it. */
   readonly now?: string;
   readonly timeZone?: string;
@@ -71,6 +74,7 @@ export async function queryRecords(
       ...(window.filter === undefined ? {} : { filter: window.filter }),
       ...(window.sorts === undefined ? {} : { sorts: window.sorts }),
       ...(window.attributeIds === undefined ? {} : { attributeIds: window.attributeIds }),
+      ...(window.threadCounts === true ? { threadCounts: true } : {}),
       ...(window.now === undefined ? {} : { now: window.now }),
       ...(window.timeZone === undefined ? {} : { timeZone: window.timeZone }),
     },
@@ -89,8 +93,15 @@ export async function readRecordsById(
   scope: EngineScope,
   ids: readonly string[],
   attributeIds?: readonly string[],
+  options: { readonly threadCounts?: boolean } = {},
 ): Promise<RecordView[]> {
-  return [...(await getRecords(scope, { ids, ...(attributeIds === undefined ? {} : { attributeIds }) }))];
+  return [
+    ...(await getRecords(scope, {
+      ids,
+      ...(attributeIds === undefined ? {} : { attributeIds }),
+      ...(options.threadCounts === true ? { threadCounts: true } : {}),
+    })),
+  ];
 }
 
 /**
@@ -225,11 +236,20 @@ export async function addRecord(
       },
       hooks,
     );
-    return {
-      record: await freshRecord(scope, recordId, new Map([[objectId, attributes]])),
-      written: writtenOf(versions),
-      ...(filedCompany === undefined ? {} : { filedCompany }),
-    };
+    try {
+      return {
+        record: await freshRecord(scope, recordId, new Map([[objectId, attributes]])),
+        written: writtenOf(versions),
+        ...(filedCompany === undefined ? {} : { filedCompany }),
+      };
+    } catch (error) {
+      // Made with an owner outside the maker's scope (spec 0032, AC-848): it exists, and its maker can't see it.
+      if (isRefusal(error) && error.refusal.code === 'RECORD_DELETED') {
+        const message = await outOfScopeMessage(scope, recordId, attributeIdsOf(input.values ?? {}));
+        if (message !== undefined) throw refuse('RECORD_OUT_OF_SCOPE', message);
+      }
+      throw error;
+    }
   } catch (error) {
     if (!isRefusal(error) || error.refusal.code !== 'ID_TAKEN') throw error;
     const replayed = await replayCreate(scope, input);
@@ -302,12 +322,26 @@ export async function editRecord(
     hooks,
     { deltasOnly: true, ...(input.noFiling === true ? { noFiling: true } : {}) },
   );
-  return {
-    record: await freshRecord(scope, canonicalId(input.recordId), attributesByObject),
-    written: writtenOf(results),
-    ...(filedCompany === undefined ? {} : { filedCompany }),
-  };
+  const recordId = canonicalId(input.recordId);
+  try {
+    return {
+      record: await freshRecord(scope, recordId, attributesByObject),
+      written: writtenOf(results),
+      ...(filedCompany === undefined ? {} : { filedCompany }),
+    };
+  } catch (error) {
+    // The write committed, but a record rule now hides the record from its writer (spec 0032, AC-848): say so, once.
+    if (isRefusal(error) && error.refusal.code === 'RECORD_DELETED') {
+      const message = await outOfScopeMessage(scope, recordId, attributeIdsOf(input.values));
+      if (message !== undefined) throw refuse('RECORD_OUT_OF_SCOPE', message);
+    }
+    throw error;
+  }
 }
+
+/** The attribute ids a write names, in the form the engine keys them by. */
+const attributeIdsOf = (values: Readonly<Record<string, unknown>>): ReadonlySet<string> =>
+  new Set(Object.keys(values).map((key) => key.toLowerCase()));
 
 /** New values for many records (spec 0006, AC-50): each record's by attribute id. */
 export interface EditRecordsInput {
@@ -347,28 +381,41 @@ export async function editRecords(
   const landed = [...new Set(outcomes.flatMap((outcome) => (outcome.ok ? [outcome.recordId] : [])))];
   const views = landed.length === 0 ? [] : await getRecords(scope, { ids: landed, attributes: attributesByObject });
   const byId = new Map(views.map((view) => [view.id, view]));
-  return outcomes.map((outcome): BatchRecordResult => {
-    if (!outcome.ok) {
-      return {
-        recordId: outcome.recordId,
-        refusals: outcome.refusals.map((refusal) => ({
-          code: refusal.code,
-          message: refusal.message,
-          ...(refusal.attributeId === undefined ? {} : { attributeId: refusal.attributeId }),
-          ...(refusal.ruleId === undefined ? {} : { ruleId: refusal.ruleId }),
-        })),
-      };
-    }
-    const record = byId.get(outcome.recordId);
-    return record === undefined
-      ? { recordId: outcome.recordId, refusals: [{ code: 'RECORD_DELETED', message: TRASHED_SINCE }] }
-      : {
+  return Promise.all(
+    outcomes.map(async (outcome): Promise<BatchRecordResult> => {
+      if (!outcome.ok) {
+        return {
+          recordId: outcome.recordId,
+          refusals: outcome.refusals.map((refusal) => ({
+            code: refusal.code,
+            message: refusal.message,
+            ...(refusal.attributeId === undefined ? {} : { attributeId: refusal.attributeId }),
+            ...(refusal.ruleId === undefined ? {} : { ruleId: refusal.ruleId }),
+          })),
+        };
+      }
+      const record = byId.get(outcome.recordId);
+      if (record !== undefined) {
+        return {
           recordId: outcome.recordId,
           record,
           written: writtenOf(outcome.results),
           ...(outcome.filedCompany === undefined ? {} : { filedCompany: outcome.filedCompany }),
         };
-  });
+      }
+      // Landed, then out of the writer's sight by their own record rule (spec 0032, AC-848), or in the trash.
+      const sent = input.items.find((item) => canonicalId(item.recordId) === outcome.recordId);
+      const message = await outOfScopeMessage(scope, outcome.recordId, attributeIdsOf(sent?.values ?? {}));
+      return {
+        recordId: outcome.recordId,
+        refusals: [
+          message === undefined
+            ? { code: 'RECORD_DELETED', message: TRASHED_SINCE }
+            : { code: 'RECORD_OUT_OF_SCOPE', message },
+        ],
+      };
+    }),
+  );
 }
 
 /**

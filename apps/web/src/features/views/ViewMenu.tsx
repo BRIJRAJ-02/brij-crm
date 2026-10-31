@@ -14,7 +14,16 @@ import {
   type ViewRuleReason,
   type ViewsListSnapshot,
 } from '@crm/data';
-import { Button, Callout, Field, Form, Modal, type FormRefusal, type ViewAction as ViewMenuAction } from '@crm/ui';
+import {
+  Button,
+  Callout,
+  Field,
+  Form,
+  Modal,
+  sharedStrings,
+  type FormRefusal,
+  type ViewAction as ViewMenuAction,
+} from '@crm/ui';
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { duplicatesHref } from '../duplicates/paths.ts';
 import { strings as duplicateStrings } from '../duplicates/strings.ts';
@@ -41,6 +50,11 @@ export interface ViewMenuProps {
   readonly onDeleting: (isDeleting: boolean) => void;
   /** The view was deleted here: the screen goes to the default view, offering Undo with the view as it was. */
   readonly onDeleted: (deleted: View) => void;
+  /**
+   * The list whose view this is (spec 0048, AC-4808): its views are held by the list's id, and a list has no
+   * trash of its own, so Open trash is left out.
+   */
+  readonly listId?: string | undefined;
 }
 
 /** A member's name, "A removed member" when they left, "the workspace" for a view nobody made. */
@@ -87,7 +101,10 @@ export function useViewMenu({
   onDuplicate,
   onDeleting,
   onDeleted,
+  listId,
 }: ViewMenuProps): ViewMenu {
+  // A view's parent as the views store holds it: its list, or its object.
+  const parentId = listId ?? object.id;
   const { data, toasts } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
   const [isRenaming, setRenaming] = useState(false);
@@ -171,7 +188,7 @@ export function useViewMenu({
     // Already first or last: nothing to do.
     if (direction === 'up' ? at <= 0 : at >= group.length - 1) return;
     run(
-      data.views.move(slug, object.id, viewId, direction),
+      data.views.move(slug, parentId, viewId, direction),
       direction === 'up' ? strings.movedUp(summary.name) : strings.movedDown(summary.name),
     );
   };
@@ -182,7 +199,7 @@ export function useViewMenu({
         if (done !== undefined) toasts.toast({ tone: 'success', message: done });
       },
       (error: unknown) => {
-        toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : strings.actionFailed });
+        toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : sharedStrings.couldntDoThat });
       },
     );
   };
@@ -249,7 +266,6 @@ export function useViewMenu({
       (share ?? Promise.resolve()).then(() =>
         lockTo || shown === 'locked' ? data.views.setLocked(slug, view.id, lockTo) : undefined,
       ),
-      lockTo ? strings.locked(view.name) : shown === 'locked' ? strings.unlocked(view.name) : strings.shared(view.name),
     );
   };
   const entries: readonly Entry[] = [
@@ -265,7 +281,7 @@ export function useViewMenu({
             toasts.toast({ tone: 'success', message: strings.linkCopied });
           },
           () => {
-            toasts.toast({ tone: 'danger', message: strings.copyFailed });
+            toasts.toast({ tone: 'danger', message: sharedStrings.couldntCopy });
           },
         );
       },
@@ -284,30 +300,38 @@ export function useViewMenu({
                 icon: 'star',
                 ...(sharing.length === 0 ? { startsGroup: true } : {}),
                 run: () => {
-                  run(data.views.setDefault(slug, object.id, view.id), strings.isDefaultNow(view.name));
+                  run(data.views.setDefault(slug, parentId, view.id));
                 },
               })),
         ]
       : []),
     // Deleted records wait in the trash (spec 0022); a delete's toast has room for Undo only, so the way there is here.
-    {
-      id: 'open-trash',
-      label: strings.openTrash,
-      icon: 'trash',
-      startsGroup: true,
-      run: () => {
-        void navigate({ href: `${trashHref(slug)}?object=${encodeURIComponent(object.id)}` });
-      },
-    },
+    ...(listId === undefined
+      ? [
+          {
+            id: 'open-trash',
+            label: strings.openTrash,
+            icon: 'trash' as const,
+            startsGroup: true,
+            run: () => {
+              void navigate({ href: `${trashHref(slug)}?object=${encodeURIComponent(object.id)}` });
+            },
+          },
+        ]
+      : []),
     // Likely duplicates of this object (spec 0049, AC-4907): a page of pairs to merge or dismiss.
-    {
-      id: 'find-duplicates',
-      label: duplicateStrings.findDuplicates,
-      icon: 'copy',
-      run: () => {
-        void navigate({ href: duplicatesHref(slug, object.apiSlug) });
-      },
-    },
+    ...(listId === undefined
+      ? [
+          {
+            id: 'find-duplicates',
+            label: duplicateStrings.findDuplicates,
+            icon: 'copy' as const,
+            run: () => {
+              void navigate({ href: duplicatesHref(slug, object.apiSlug) });
+            },
+          },
+        ]
+      : []),
     ...entry(reasonFor('delete'), {
       id: 'delete',
       label: strings.deleteView,
@@ -326,7 +350,7 @@ export function useViewMenu({
     const gone = view;
     setBusy(true);
     onDeleting(true);
-    data.views.remove(slug, object.id, gone.id).then(
+    data.views.remove(slug, parentId, gone.id).then(
       () => {
         setBusy(false);
         onDeleted(gone);
@@ -334,7 +358,7 @@ export function useViewMenu({
       (error: unknown) => {
         setBusy(false);
         onDeleting(false);
-        toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : strings.actionFailed });
+        toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : sharedStrings.couldntDoThat });
       },
     );
   }
@@ -355,7 +379,7 @@ export function useViewMenu({
         (error: unknown) => {
           // The confirm stays open with what went wrong, so the person can try again or cancel.
           setPrivateBusy(false);
-          setPrivateFailure(isDataError(error) ? error.message : strings.actionFailed);
+          setPrivateFailure(isDataError(error) ? error.message : sharedStrings.couldntDoThat);
         },
       );
   };
@@ -494,7 +518,7 @@ function RenameForm({
           (error: unknown) => {
             onBusyChange(false);
             if (!isDataError(error)) {
-              setRefusals([{ code: 'INTERNAL', message: strings.actionFailed }]);
+              setRefusals([{ code: 'INTERNAL', message: sharedStrings.couldntDoThat }]);
               return;
             }
             const [first] = error.data?.refusals ?? [];

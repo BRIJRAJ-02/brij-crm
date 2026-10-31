@@ -107,7 +107,7 @@ test('turns on two factor, then signs in with an app code and with a backup code
   await saveCodes.getByRole('button', { name: 'Done' }).click();
   await expect(saveCodes).toBeHidden();
   await expect(page.getByRole('button', { name: 'Turn off' })).toBeVisible();
-  await expect(page.getByText(`${String(backupCodes.length)} left. Each works once.`)).toBeVisible();
+  await expect(page.getByText(`${String(backupCodes.length)} left`)).toBeVisible();
 
   // Signed out, an email code alone no longer signs in: the second step asks for the app's code.
   await signOut(page, slug);
@@ -136,5 +136,5 @@ test('turns on two factor, then signs in with an app code and with a backup code
 
   // The code used is spent: Settings counts one fewer.
   await page.goto(`/w/${slug}/settings/account/sign-in`);
-  await expect(page.getByText(`${String(backupCodes.length - 1)} left. Each works once.`)).toBeVisible();
+  await expect(page.getByText(`${String(backupCodes.length - 1)} left`)).toBeVisible();
 });

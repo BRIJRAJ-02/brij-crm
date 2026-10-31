@@ -24,6 +24,7 @@ export const LIVE_KINDS = [
   'notifications',
   'calendars',
   'time_off',
+  'automations',
 ] as const satisfies readonly ChangeEvent['kind'][];
 
 /** A kind a store can register for. */

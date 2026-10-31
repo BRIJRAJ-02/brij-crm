@@ -4,7 +4,7 @@
 // Main task: read what will happen, then the verb (or the way out); it closes once the server agrees.
 // Leaves out: the change's own rules (the server's) and what the page says afterwards (the caller's toast).
 import { isDataError } from '@crm/data';
-import { Button, Callout, Modal } from '@crm/ui';
+import { Button, Callout, Modal, sharedStrings } from '@crm/ui';
 import { useState } from 'react';
 import { strings } from './members-strings.ts';
 
@@ -69,7 +69,7 @@ function Asked({
       },
       (error: unknown) => {
         setBusy(false);
-        setFailure(isDataError(error) ? error.message : strings.somethingWrong);
+        setFailure(isDataError(error) ? error.message : sharedStrings.couldntDoThat);
       },
     );
   };

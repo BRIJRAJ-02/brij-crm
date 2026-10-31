@@ -20,6 +20,8 @@ test.describe('the People table', () => {
     await expect(grid).toBeVisible();
     await expect(grid.getByRole('columnheader', { name: /Email addresses/ })).toBeVisible();
     await expect(page.getByText('No people yet')).toBeVisible();
+    // The title and the buttons say it all: no line under the title (31 October 2026).
+    await expect(page.getByText('People you add show here.')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'New person' })).toHaveCount(2);
     await checkScreen(page, '1-people-empty');
 
@@ -44,7 +46,7 @@ test.describe('the People table', () => {
     await addDialog.getByRole('button', { name: /Type$/ }).click();
     await page.getByRole('option', { name: 'Rating' }).click();
     await addDialog.getByRole('button', { name: 'Create attribute' }).click();
-    await expect(addDialog.getByText('Another attribute here has this name. Pick another.')).toBeVisible();
+    await expect(addDialog.getByText('Name taken here. Pick another.')).toBeVisible();
     await checkScreen(page, '3-add-attribute-taken');
     await addDialog.getByRole('button', { name: 'Cancel' }).click();
     await expect(addDialog).toBeHidden();

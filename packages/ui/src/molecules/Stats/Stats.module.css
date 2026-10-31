@@ -32,6 +32,12 @@
     white-space: nowrap;
   }
 
+  /* One headline figure on its own: the page's biggest type. */
+  .root[data-size='large'] .value {
+    font: var(--text-note-title);
+    letter-spacing: var(--tracking-note-title);
+  }
+
   .comparison {
     display: flex;
     align-items: center;

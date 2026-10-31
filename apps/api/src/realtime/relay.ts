@@ -3,8 +3,8 @@
 // takes one batch from every workspace with something waiting, up to 4
 // workspaces at a time and each workspace strictly in turn, so one busy
 // workspace can't hold up the rest. A workspace's batch is its unpublished
-// rows in `seq` order, published to `workspace:<id>` in one Centrifugo call
-// (each with the idempotency key `<workspace>:<seq>`), then marked up to the
+// rows in `seq` order, published to each of its audience channels in one
+// Centrifugo call (see Audiences below), then marked up to the
 // first failure, so nothing is skipped; a full batch gets another turn next
 // round. A workspace whose publish failed waits before its next turn, 1
 // second doubling to 60, whatever polls or notifications name it meanwhile,
@@ -82,32 +82,34 @@
 // daily cleanup calls the same `pruneOutbox`. Only a relay on the worker's
 // login (`crm_worker`) may prune: on any other the worker turns it off.
 //
-// Audiences (spec 0007, milestone 2, AC-85): each row is planned through spec
-// 0009's `filterEvent` for its workspace's audience (`workspaceEvent` in
-// `@crm/core`). The relay reads a workspace's audiences at its first turn and
-// keeps them until it goes dormant; a batch stops after a `members` or
-// `access` row, which drops them, so the rows after it are planned with them
-// read again. One channel per workspace until milestone 4: a workspace with
-// more than one audience fails its turn rather than share one copy. A batch
+// Audiences (spec 0007, milestones 2 and 4, AC-85, AC-86): members with equal
+// data policies share an audience, and each audience has its own channel
+// (`audienceChannel`: `workspace:<id>` for `open`, `workspace:<id>.<key>` for
+// any other). Each row goes, in one ordered call, to every audience channel
+// of its workspace as spec 0009's `filterEvent` for that audience or the stub
+// (`planDelivery` in `@crm/core`, `publishesFor` here), so every channel
+// carries every `seq` exactly once and a hidden id never reaches a channel
+// whose audience may not read it. A workspace with no rules has one audience,
+// `open`, and publishes exactly what it did before audiences existed. The
+// relay reads a workspace's audiences at its first turn and keeps them until
+// it goes dormant; a batch stops after a `members` or `access` row, which
+// drops them, so the rows after it are planned with them read again. A batch
 // holding a `views` row reads its views' facts first (the `facts` dep, spec
 // 0020), so a shared view's id goes out and a private one's goes coarse.
 //
-// Cut off (spec 0031, AC-817; late trap #41): once an `access` row went out,
-// the members it names who are removed lose the channel. With the jobs on,
-// the relay queues `crm_realtime_cutoff` (`cutoff.ts`) on its own connection
-// before marking the row, the durable guarantee, then tries the cut at once;
-// with them off, only the try at once, kept in memory and tried again.
-import { type ChangeEvent, workspaceChannel } from '@crm/contracts';
-import {
-  AUDIENCES_NEED_CHANNELS,
-  isAudiencesNeedChannels,
-  workspaceEvent,
-  type Audience,
-  type EventFacts,
-} from '@crm/core';
+// Access changes (spec 0007, AC-84): once an `access` row went out, the users
+// of the members it names are disconnected with 4500 (`accessChanged`), so
+// their browsers ask the door for their audience channel again, then catch up.
+// Cut off (spec 0031, AC-817; late trap #41): the members it names who are
+// removed also lose every audience channel the row was planned for. With the
+// jobs on, the relay queues `crm_realtime_cutoff` (`cutoff.ts`) on its own
+// connection before marking the row, the durable guarantee, then tries the cut
+// at once; with them off, only the try at once, kept in memory and tried again.
+import { audienceChannel, OPEN_AUDIENCE } from '@crm/contracts';
+import { planDelivery, type Audience, type EventFacts } from '@crm/core';
 import { PRUNE_BATCH, type OutboxReader, type OutboxRow } from '@crm/db';
 import { errorFields } from '../log.ts';
-import type { PublishBatch } from './centrifugo.ts';
+import type { PublishBatch, PublishInput } from './centrifugo.ts';
 import { cutOffTask } from './cutoff.ts';
 import { createRelayStats, type RelayStats, type RelayStatsSnapshot } from './stats.ts';
 import { REALTIME_TOKEN_SECONDS } from './tokens.ts';
@@ -145,9 +147,18 @@ export interface RelayDeps {
    * stop hearing it: the fast path. With `durableCutOff`, a failure is left to
    * the queued task; without it, it is tried again after later passes while
    * this relay publishes (late trap #41), and their subscription token runs
-   * out within the hour anyway.
+   * out within the hour anyway. `audiences` are the audience keys the row was
+   * planned for: the channels (`audienceChannel`) the removed may still hold.
    */
-  readonly cutOff?: (workspaceId: string, memberIds: readonly string[]) => Promise<void>;
+  readonly cutOff?: (workspaceId: string, memberIds: readonly string[], audiences: readonly string[]) => Promise<void>;
+  /**
+   * Disconnects the users of the members an `access` row names with 4500,
+   * "access changed" (spec 0007, AC-84), once that row went out and before
+   * any later row of the workspace: their browsers ask for their audience
+   * channel again. Rejects when Centrifugo didn't take it (logged; the
+   * browser also moves on the `access` event itself).
+   */
+  readonly accessChanged?: (workspaceId: string, memberIds: readonly string[]) => Promise<void>;
   /**
    * Whether the worker's runners run `crm_realtime_cutoff` (`cutoff.ts`): the
    * relay then queues it on its own connection for every `access` row it
@@ -278,6 +289,11 @@ const PRUNE_SLOW_MS = 250;
 
 /** The first wait before a failed cut off is tried again, and the longest (late trap #41). */
 const CUT_RETRY_FIRST_MS = 2_000;
+/**
+ * The most publishes one Centrifugo call carries: a batch of 100 rows to one audience stays 100, while a workspace
+ * of several audiences sends fewer rows a call (one at least), so a call stays well inside its 5 second timeout.
+ */
+const MAX_PUBLISHES = 500;
 const CUT_RETRY_MAX_MS = 5 * 60_000;
 /**
  * Failed turns in a row (about 30 seconds of backoff at the defaults) after which a durable cut off that can't be
@@ -288,16 +304,67 @@ const QUEUE_GIVE_UP_FAILURES = 5;
 const CUT_RETRY_GIVE_UP_MS = REALTIME_TOKEN_SECONDS * 1_000;
 
 /**
- * The event for one outbox row on `workspace:<id>` (spec 0007's
- * `ChangeEvent`, by kind): ids only, with its commit time `at`, `mutationId`
- * and `coarse` only when set, planned through spec 0009's `filterEvent` for
- * the workspace's audience (so a job's or a private view's id goes only to an
- * audience whose every member may read it), and never the job starter. A
- * malformed row, or one that leaves nothing, goes out as the stub, so the
- * channel's `seq`s stay gap free (`workspaceEvent` in `@crm/core`).
+ * What one workspace's rows put on Centrifugo (spec 0007, milestone 4): for
+ * each row in order, one publish per audience channel (`audienceChannel`),
+ * carrying spec 0009's `filterEvent` for that audience or the stub
+ * (`planDelivery` in `@crm/core`), so every channel carries every `seq`
+ * exactly once and a member never receives an id their policy hides. The open
+ * audience keeps `workspace:<id>` and the idempotency key `<workspace>:<seq>`,
+ * so a workspace with no rules publishes exactly what it always did; any other
+ * audience's key adds its policy key. `perRow` is how many publishes each row
+ * takes (the same for every row of a batch): the rows that landed are the
+ * landed publishes over it, rounded down.
  */
-export function changeEvent(row: OutboxRow, audiences: readonly Audience[], facts: EventFacts = {}): ChangeEvent {
-  return workspaceEvent(row, audiences, facts);
+export function publishesFor(
+  workspaceId: string,
+  rows: readonly OutboxRow[],
+  audiences: readonly Audience[],
+  facts: EventFacts = {},
+): { readonly items: readonly PublishInput[]; readonly perRow: number } {
+  const items = rows.flatMap((row) =>
+    planDelivery(row, audiences, facts).map((delivery) => ({
+      channel: audienceChannel(workspaceId, delivery.audience),
+      data: delivery.event,
+      idempotencyKey:
+        delivery.audience === OPEN_AUDIENCE
+          ? `${workspaceId}:${String(row.seq)}`
+          : `${workspaceId}:${String(row.seq)}:${delivery.audience}`,
+    })),
+  );
+  return { items, perRow: Math.max(1, audiences.length) };
+}
+
+/**
+ * How far a read of audiences must start before a row's commit to count as showing who was where before it:
+ * room for the clocks of the worker and the database to differ, and for the read itself.
+ */
+const BEFORE_MARGIN_MS = 2_000;
+
+/**
+ * Whom an `access` row disconnects with 4500 (AC-84): the members it names
+ * whose audience it moved (another key, or none: removed). Only a read of the
+ * audiences that started before the row committed (`readAt`, wall clock)
+ * shows where they were; without one, or without the audiences after, every
+ * member it names, since their browsers may sit on a channel that no longer
+ * exists and would hear nothing more. So a role or team change in a workspace
+ * whose audiences it didn't change costs no reconnect at all.
+ */
+export function movedMembers(
+  row: OutboxRow,
+  readAt: number | undefined,
+  before: readonly Audience[],
+  after: readonly Audience[] | undefined,
+): readonly string[] {
+  const named = [...new Set(row.itemIds)];
+  if (after === undefined || readAt === undefined || readAt + BEFORE_MARGIN_MS >= Date.parse(row.at)) return named;
+  const keyIn = (audiences: readonly Audience[]) => {
+    const keys = new Map<string, string>();
+    for (const audience of audiences) for (const member of audience.members) keys.set(member.memberId, audience.key);
+    return keys;
+  };
+  const was = keyIn(before);
+  const now = keyIn(after);
+  return named.filter((memberId) => was.get(memberId) !== now.get(memberId));
 }
 
 /** Whether any of a batch's rows needs facts loaded before it is planned (`views` rows, spec 0020). */
@@ -423,10 +490,14 @@ export function createRelay(deps: RelayDeps): Relay {
   // #41: they kept hearing the workspace's live events until their token ran out, up to an hour).
   const pendingCuts = new Map<
     string,
-    { readonly memberIds: Set<string>; firstAt: number; dueAt: number; waitMs: number }
+    {
+      readonly memberIds: Set<string>;
+      readonly keys: Set<string>;
+      firstAt: number;
+      dueAt: number;
+      waitMs: number;
+    }
   >();
-  // Workspaces already reported as needing a channel per audience in this awake period.
-  const splitWarned = new Set<string>();
   // The prune's rounds in this awake period (AC-89): when the next may start (the awake period's start, then
   // `pruneEveryMs` after the last ended), and the round still open after a full batch, with what it has deleted.
   let pruneRound: {
@@ -436,6 +507,9 @@ export function createRelay(deps: RelayDeps): Relay {
   // When each workspace last took a turn: one quiet for a whole quiet spell lets go of its audiences, so a busy
   // worker that never goes dormant holds only the workspaces that write.
   const audienceUsed = new Map<string, number>();
+  // When each cached read of audiences started (wall clock): one that started before an `access` row committed
+  // shows who was where before it, so the relay can tell whose audience the row moved (AC-84).
+  const audienceReadAt = new WeakMap<Promise<readonly Audience[]>, number>();
   function audiencesOf(workspaceId: string): Promise<readonly Audience[]> {
     const now = clock();
     for (const [id, at] of audienceUsed) {
@@ -446,7 +520,10 @@ export function createRelay(deps: RelayDeps): Relay {
     audienceUsed.set(workspaceId, now);
     const held = audienceCache.get(workspaceId);
     if (held !== undefined) return held;
+    // The wall clock, as commit times are (`row.at`): whether this read can predate a row is judged against it.
+    const startedAt = Date.now();
     const loading = deps.audiences(workspaceId);
+    audienceReadAt.set(loading, startedAt);
     audienceCache.set(workspaceId, loading);
     loading.catch(() => {
       if (audienceCache.get(workspaceId) === loading) audienceCache.delete(workspaceId);
@@ -531,11 +608,7 @@ export function createRelay(deps: RelayDeps): Relay {
     held: readonly OutboxRow[] | undefined,
   ): Promise<readonly OutboxRow[] | undefined> {
     const read = held ?? (await reader.pending(workspaceId, batch));
-    // Up to and including the first row that may change who is in which audience: the rows after it are planned
-    // with the audiences loaded again (AC-85), from the next batch the mark reads.
-    const cut = read.findIndex(changesAudiences);
-    const rows = cut === -1 ? read : read.slice(0, cut + 1);
-    if (rows.length === 0) {
+    if (read.length === 0) {
       retries.delete(workspaceId);
       stats.pending(workspaceId, 0);
       return undefined;
@@ -543,11 +616,18 @@ export function createRelay(deps: RelayDeps): Relay {
     // A failing workspace's rows aren't work until they go out.
     // Read and not yet published, until the publish below says otherwise: a turn that throws from here on
     // (audiences, planning, the mark) leaves its rows counted as waiting.
-    stats.pending(workspaceId, rows.length, rows[0]?.at);
+    stats.pending(workspaceId, read.length, read[0]?.at);
     const retrying = retries.has(workspaceId);
     if (!retrying) sawWork();
-    const channel = workspaceChannel(workspaceId);
-    const audiences = await audiencesOf(workspaceId);
+    const audiencesRead = audiencesOf(workspaceId);
+    const audiences = await audiencesRead;
+    // Each row is one publish per audience: a workspace of several audiences sends fewer rows a call, so one call
+    // never carries more than `MAX_PUBLISHES` (one row at least). The rest go in the next batch, which the mark reads.
+    const fits = read.slice(0, Math.max(1, Math.floor(MAX_PUBLISHES / Math.max(1, audiences.length))));
+    // Up to and including the first row that may change who is in which audience: the rows after it are planned
+    // with the audiences loaded again (AC-85), from the next batch the mark reads.
+    const cut = fits.findIndex(changesAudiences);
+    const rows = cut === -1 ? fits : fits.slice(0, cut + 1);
     // Facts that fail to load leave the rows that need them coarse (fail closed), and never hold the others back.
     const facts =
       deps.facts !== undefined && needsFacts(rows)
@@ -559,17 +639,17 @@ export function createRelay(deps: RelayDeps): Relay {
             return {};
           })
         : {};
-    const outcome = await deps.publishBatch(
-      rows.map((row) => ({
-        channel,
-        data: changeEvent(row, audiences, facts),
-        idempotencyKey: `${workspaceId}:${String(row.seq)}`,
-      })),
-    );
+    const { items, perRow } = publishesFor(workspaceId, rows, audiences, facts);
+    const sent = await deps.publishBatch(items);
+    // Rows, not publishes: a row landed once its publish on every audience channel did.
+    const outcome = { published: Math.floor(sent.published / perRow), error: sent.error };
     // The row that may change the audiences went out: the next one is planned with them read again.
     if (cut !== -1 && outcome.published > cut) {
       audienceCache.delete(workspaceId);
       const row = rows[cut];
+      // The channels the removed may still hold: every audience this batch was planned for (the cut off unsubscribes
+      // their users from each; a channel they never held costs nothing).
+      const keys = audiences.map((audience) => audience.key);
       // The durable cut off is queued before the row is marked: a throw here fails the turn, and the row goes out
       // again (its idempotency key drops the repeat) and is queued again under the same key (late trap #41). Its
       // first run is a wall clock time, so `Date.now()`, not the relay's clock. A queue that keeps refusing for
@@ -577,7 +657,7 @@ export function createRelay(deps: RelayDeps): Relay {
       // then the row is marked and the cut off kept in memory, as with the jobs off.
       let task =
         row?.kind === 'access' && durableCutOff
-          ? cutOffTask(workspaceId, row.seq, row.itemIds, row.at, Date.now())
+          ? cutOffTask(workspaceId, row.seq, row.itemIds, row.at, Date.now(), keys)
           : undefined;
       if (task !== undefined) {
         try {
@@ -593,7 +673,7 @@ export function createRelay(deps: RelayDeps): Relay {
       }
       const queued = task !== undefined;
       if (row?.kind === 'access' && deps.cutOff !== undefined) {
-        const tried = deps.cutOff(workspaceId, row.itemIds).catch((error: unknown) => {
+        const tried = deps.cutOff(workspaceId, row.itemIds, keys).catch((error: unknown) => {
           log.warn('Cutting removed members off the live channel failed; it is tried again', {
             workspaceId,
             ...(queued ? { queued: true } : {}),
@@ -605,6 +685,7 @@ export function createRelay(deps: RelayDeps): Relay {
           if (pending === undefined) {
             pendingCuts.set(workspaceId, {
               memberIds: new Set(row.itemIds),
+              keys: new Set(keys),
               firstAt: clock(),
               dueAt: clock() + CUT_RETRY_FIRST_MS,
               waitMs: CUT_RETRY_FIRST_MS,
@@ -612,6 +693,7 @@ export function createRelay(deps: RelayDeps): Relay {
           } else {
             // Someone newly cut off holds a newer token: the entry waits their hour, from the first try again.
             for (const memberId of row.itemIds) pending.memberIds.add(memberId);
+            for (const key of keys) pending.keys.add(key);
             pending.firstAt = clock();
             pending.waitMs = CUT_RETRY_FIRST_MS;
             pending.dueAt = clock() + CUT_RETRY_FIRST_MS;
@@ -619,6 +701,24 @@ export function createRelay(deps: RelayDeps): Relay {
         });
         // With the task queued, a slow Centrifugo never holds this lane or the round: the try runs on its own.
         if (!queued) await tried;
+      }
+      // AC-84: everyone the row names is disconnected with 4500 ("access changed"), after the row went out and
+      // before any later row, so each browser asks the door for its audience channel again (it may have moved; a
+      // removed member is refused one) and catches up there. Best effort: a browser also switches on hearing the
+      // `access` event that names its member, and its token runs out within the hour.
+      if (row?.kind === 'access' && deps.accessChanged !== undefined) {
+        const readAt = audienceReadAt.get(audiencesRead);
+        // The audiences after the row: the next turn plans with them, so reading them here costs nothing more.
+        const after = await audiencesOf(workspaceId).catch(() => undefined);
+        const moved = movedMembers(row, readAt, audiences, after);
+        if (moved.length > 0) {
+          await deps.accessChanged(workspaceId, moved).catch((error: unknown) => {
+            log.warn('Disconnecting members whose access changed failed; their browsers move on the access event', {
+              workspaceId,
+              ...errorFields(error),
+            });
+          });
+        }
       }
     }
     const landed = rows[outcome.published - 1];
@@ -672,14 +772,6 @@ export function createRelay(deps: RelayDeps): Relay {
           const rows = await turn(reader, workspaceId, held);
           if (rows !== undefined) more.set(workspaceId, rows);
         } catch (error) {
-          // Access rules split the workspace before it has a channel per audience: say so, once per awake period.
-          if (isAudiencesNeedChannels(error) && !splitWarned.has(workspaceId)) {
-            splitWarned.add(workspaceId);
-            log.error('A workspace has more than one audience; live updates wait for a channel per audience', {
-              workspaceId,
-              code: AUDIENCES_NEED_CHANNELS,
-            });
-          }
           failed(workspaceId, held?.[0]?.seq, error, 'database');
         }
       }
@@ -710,7 +802,7 @@ export function createRelay(deps: RelayDeps): Relay {
       }
       if (now < pending.dueAt) continue;
       try {
-        await cutOff(workspaceId, [...pending.memberIds]);
+        await cutOff(workspaceId, [...pending.memberIds], [...pending.keys]);
         pendingCuts.delete(workspaceId);
       } catch (error) {
         pending.waitMs = Math.min(pending.waitMs * 2, CUT_RETRY_MAX_MS);
@@ -875,7 +967,6 @@ export function createRelay(deps: RelayDeps): Relay {
     // The awake period is over: the audiences are read again at the next wake (AC-85).
     audienceCache.clear();
     audienceUsed.clear();
-    splitWarned.clear();
     // A round left open waits for the next awake period, which starts one of its own.
     if (pruneRound.open !== undefined) log.info('relay.prune', { ...pruneRound.open, unfinished: true });
     pruneRound = { dueAt: Number.POSITIVE_INFINITY, open: undefined };

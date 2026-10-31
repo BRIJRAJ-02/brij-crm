@@ -5,7 +5,7 @@ export const strings = {
   title: 'Notifications',
   email: 'Email',
   /** Under the Email heading: the inbox is always on (AC-1179), said where it's seen. */
-  emailDescription: 'Everything shows in your Inbox. Pick what also comes by email.',
+  emailDescription: 'Always in your Inbox. Choose what is also emailed.',
   mentions: 'Mentions',
   replies: 'Replies',
   assignments: 'Task assignments',

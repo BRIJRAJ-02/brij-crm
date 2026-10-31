@@ -15,6 +15,7 @@ import { exportsRouter } from './modules/exports/router.ts';
 import { importsRouter } from './modules/imports/router.ts';
 import { jobsRouter } from './modules/jobs/router.ts';
 import { linksRouter } from './modules/links/router.ts';
+import { entriesRouter, listsRouter } from './modules/lists/router.ts';
 import { invitationsRouter } from './modules/invitations/router.ts';
 import { meRouter } from './modules/me/router.ts';
 import { operatorRouter } from './modules/operator/router.ts';
@@ -41,10 +42,14 @@ import { commentsRouter } from './modules/comments/router.ts';
 import { notesRouter } from './modules/notes/router.ts';
 import { notificationsRouter } from './modules/notifications/router.ts';
 import { tasksRouter } from './modules/tasks/router.ts';
+import { accessRulesRouter } from './modules/access/rules-router.ts';
+import { teamsRouter } from './modules/teams/router.ts';
 import { usageRouter } from './modules/usage/router.ts';
+import { reportsRouter } from './modules/reports/router.ts';
 import { viewsRouter } from './modules/views/router.ts';
 import { workspacesRouter } from './modules/workspaces/router.ts';
 import { accountRouter } from './modules/account/router.ts';
+import { automationsRouter } from './modules/automations/router.ts';
 import { base } from './orpc.ts';
 
 // One module per feature under ./modules, each implementing its contract namespace.
@@ -58,6 +63,8 @@ export const router = base.router({
   attributes: attributesRouter,
   options: optionsRouter,
   records: recordsRouter,
+  lists: listsRouter,
+  entries: entriesRouter,
   relationships: relationshipsRouter,
   links: linksRouter,
   members: membersRouter,
@@ -69,12 +76,16 @@ export const router = base.router({
   deletedWorkspace: deletedWorkspaceRouter,
   profile: profileRouter,
   access: accessRouter,
+  accessRules: accessRulesRouter,
+  teams: teamsRouter,
   roles: rolesRouter,
   scheduling: schedulingRouter,
   realtime: realtimeRouter,
   jobs: jobsRouter,
+  automations: automationsRouter,
   usage: usageRouter,
   views: viewsRouter,
+  reports: reportsRouter,
   trash: trashRouter,
   tasks: tasksRouter,
   notes: notesRouter,

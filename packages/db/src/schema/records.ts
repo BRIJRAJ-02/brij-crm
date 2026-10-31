@@ -146,6 +146,10 @@ export const listEntries = pgTable(
       .on(t.workspaceId, t.listId, t.id)
       .where(sql`${t.deletedAt} is null`),
     index('list_entries_record').on(t.workspaceId, t.recordId, t.listId),
+    // A list's default sort, Added newest first, and its cursor (spec 0048), as `records_created` serves an object.
+    index('list_entries_created')
+      .on(t.workspaceId, t.listId, t.createdAt, t.id)
+      .where(sql`${t.deletedAt} is null`),
     // The daily purge's removed entries (spec 0008, milestone 3), oldest first, without reading the live ones.
     index('list_entries_trashed_at')
       .on(t.workspaceId, t.deletedAt, t.id)

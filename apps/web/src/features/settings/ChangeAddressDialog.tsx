@@ -1,9 +1,9 @@
 // Brief
 // Purpose: change the workspace's web address (Settings › Workspace › General, SS-G3): the one place it is typed, since it is rare and moves everyone.
-// Main task: type the part after "/w/" (checked as typed, free ones offered when it's taken), read what happens to old links, then Change address.
+// Main task: type the part after "/w/" (checked as typed, free ones offered when it's taken), see the move as a from/to line and that old links work, then Change address.
 // Leaves out: the name and time zone (they save on the page), and a typed confirm: nothing is lost, old links keep working.
 import { isDataError, type DataLayer } from '@crm/data';
-import { Button, Callout, Field, focusLater, Icon, Modal, Spinner, VisuallyHidden } from '@crm/ui';
+import { Button, Callout, Code, Field, focusLater, Icon, Modal, sharedStrings, Spinner, VisuallyHidden } from '@crm/ui';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { addressAsTyped, addressCandidates, SLUG_MAX } from '../address/address.ts';
 import { useAddress } from '../address/useAddress.ts';
@@ -24,7 +24,7 @@ export interface ChangeAddressDialogProps {
 
 /**
  * A Modal with the address Field after a quiet "/w/", checked as typed the way first run checks it (a spinner while
- * it asks, a tick and "Free", "Taken" with free ones to pick under it), the sentence on what happens to old links,
+ * it asks, a tick and "Free", "Taken" with free ones to pick under it), the move as a from/to line and "Old links still work.",
  * then Cancel (ESC) and Change address, which waits until a new address is free (or couldn't be checked: the server
  * checks it again). The field takes focus on opening, and once a new address is typed a click outside no longer
  * closes it. It stays open while the change is sent; a refusal shows on the field, anything else above it. If the
@@ -79,7 +79,7 @@ export function ChangeAddressDialog({ data, slug, from, isOpen, onClose, onMoved
       },
       (error: unknown) => {
         setBusy(false);
-        const message = isDataError(error) ? error.message : strings.somethingWrong;
+        const message = isDataError(error) ? error.message : sharedStrings.couldntDoThat;
         const field = isDataError(error) ? error.data?.refusals?.[0]?.field : undefined;
         if (isDataError(error) && (error.code === 'SLUG_TAKEN' || field === 'slug')) setRefusal(message);
         else setFailure(message);
@@ -170,8 +170,9 @@ export function ChangeAddressDialog({ data, slug, from, isOpen, onClose, onMoved
               : ''}
         </span>
       </VisuallyHidden>
-      {/* "Moves from /w/a to /w/b" unless the address can't be moved to; otherwise, what happens to the old one. */}
-      <span>{saysWhere ? strings.moveText(from, draft) : strings.moveTextAny(from)}</span>
+      {/* The move as a from/to line, unless the address can't be moved to; under it, what the old one does. */}
+      {saysWhere && <Code variant="block">{strings.moveFromTo(from, draft)}</Code>}
+      <span>{strings.oldLinksWork}</span>
     </Modal>
   );
 }

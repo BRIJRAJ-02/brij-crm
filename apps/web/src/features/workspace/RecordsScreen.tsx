@@ -27,21 +27,25 @@ import {
   ButtonLink,
   Callout,
   EmptyState,
+  sharedStrings,
   Spinner,
   TopBar,
   useDelayedLoading,
-  ViewBar,
   type ViewAction,
+  ViewBar,
   type ViewChoice,
   type ViewLayoutSwitch,
   type ViewSettingsTrigger,
 } from '@crm/ui';
 import { columnWidthFor, DataGrid, type ColumnCalc, type GridColumn } from '@crm/ui/grid';
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ArchiveAttributeDialog } from '../settings/ArchiveAttributeDialog.tsx';
 import { AttributeDialog } from '../settings/AttributeDialog.tsx';
+import { isAtLimit, type LimitCount } from '../settings/AtLimit.tsx';
 import { useLinkEditing } from '../records/links.ts';
+import { loadRowId, stepsAround, type PeekControl } from '../records/params.ts';
+import { RecordPeek } from '../records/RecordPeek.tsx';
 import { useRecordForm } from '../records/RecordForm.tsx';
 import { useMemberPicker } from '../records/members.ts';
 import { importHref } from '../imports/paths.ts';
@@ -56,6 +60,7 @@ import { CREATED_TOAST_MS, createdToast } from './created.ts';
 import { createEditors } from './create-editors.ts';
 import { namePreset } from './name-preset.ts';
 import { NewRecordDialog } from './NewRecordDialog.tsx';
+import { objectHref } from './objects.ts';
 import { strings } from './strings.ts';
 import { editToast, isClear } from './undo.ts';
 import { runUndo } from './useUndoShortcut.ts';
@@ -138,6 +143,8 @@ export interface RecordsScreenProps {
    * attribute's id, and the rows run under a header per option.
    */
   readonly groupBy?: string;
+  /** The record panel (spec 0017, AC-384): a row's name opens its record beside the table, ↑ and ↓ step the rows. */
+  readonly peek?: PeekControl;
 }
 
 /** What a column's editor gets when it needs nothing beyond its value (not a relation cell). */
@@ -226,6 +233,7 @@ export function RecordsScreen({
   createName,
   onCreateRequestTaken,
   groupBy,
+  peek,
 }: RecordsScreenProps) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
@@ -297,7 +305,7 @@ export function RecordsScreen({
         // The records layer itself didn't load (offline): the rows on screen stay; Retry asks again.
         toasts.toast({
           tone: 'danger',
-          message: strings.somethingWrong,
+          message: sharedStrings.couldntDoThat,
           action: {
             label: strings.retry,
             onAction: () => {
@@ -409,6 +417,27 @@ export function RecordsScreen({
   const [focusColumn, setFocusColumn] = useState<{ readonly id: string } | undefined>(undefined);
   // Only owners and admins change the schema (spec 0009, AC-136); the server refuses anyone else on its own.
   const canChangeSchema = useCan('schema.manage');
+  // The object's attributes against its plan limit (the field types pass): the "+" header's New attribute turns off
+  // at the limit with the reason, as Settings' New attribute does. Read for schema managers only, again whenever the
+  // attributes change; an unread count leaves it on (the server still refuses past it).
+  const [attributeCount, setAttributeCount] = useState<LimitCount | undefined>(undefined);
+  useEffect(() => {
+    if (!canChangeSchema) return;
+    let isCurrent = true;
+    data.usage.get(slug).then(
+      (usage) => {
+        if (isCurrent) setAttributeCount(usage.attributes[object.id]);
+      },
+      () => undefined,
+    );
+    return () => {
+      isCurrent = false;
+    };
+  }, [data, slug, object.id, canChangeSchema, attributes]);
+  const addColumnLock =
+    attributeCount !== undefined && isAtLimit(attributeCount)
+      ? attributeStrings.atLimit(attributeCount.limit)
+      : undefined;
   const [focusRow, setFocusRow] = useState<{ readonly index: number } | undefined>(undefined);
   // The create dialog (spec 0012, AC-240): the primary attribute, then every required one, then the rest by position.
   const { first: firstEditors, more: moreEditors } = useMemo(
@@ -493,6 +522,34 @@ export function RecordsScreen({
       }),
     );
   }, [attributes, shownColumns, calcValues, rowHeader, layout, onLayoutChange]);
+
+  // The panel's Previous and Next: the rows either side of its record in the table's order. A row the table has
+  // but hasn't loaded keeps its step on (the panel loads it and moves on), so Next is off only at the real end.
+  const peekRecordId = peek?.recordId;
+  const peekIndex = peekRecordId === undefined ? undefined : view.indexOf(peekRecordId);
+  const peekSteps =
+    peekIndex === undefined || grouped !== undefined
+      ? undefined
+      : stepsAround(peekIndex, state.source.count, (index) => state.source.getItem(index)?.id);
+  const loadPeekStep = useCallback(
+    (direction: 'previous' | 'next', signal: AbortSignal) => {
+      const at = peekRecordId === undefined ? undefined : view.indexOf(peekRecordId);
+      if (at === undefined) return Promise.resolve(undefined);
+      return loadRowId(
+        {
+          // The table's own range change loads the row's block; the id arrives with the view's next frame.
+          reach: (index) => {
+            view.getSnapshot().source.onRangeChange({ start: index, end: index + 1 });
+          },
+          idAt: (index) => view.getSnapshot().source.getItem(index)?.id,
+          subscribe: view.subscribe,
+        },
+        direction === 'next' ? at + 1 : at - 1,
+        signal,
+      );
+    },
+    [view, peekRecordId],
+  );
 
   // The name the menu's Create <object> named … typed, for the dialog it opened; New starts empty.
   const [createPreset, setCreatePreset] = useState<Readonly<Record<string, unknown>> | undefined>(undefined);
@@ -645,8 +702,16 @@ export function RecordsScreen({
                 return refs.map((ref, index) => displayOf(ref, names[index] ?? 'loading'));
               }}
               rowHeader={rowHeader}
-              // A record's name opens its page (spec 0017); milestone 4 opens the side panel here instead.
+              // The open record's row is marked and kept in view as the panel steps (a grouped table's rows run under headers).
+              {...(peekRecordId === undefined ? {} : { activeId: peekRecordId })}
+              {...(peekIndex === undefined || grouped !== undefined ? {} : { activeIndex: peekIndex })}
+              commentCount={(row) => row.openThreads}
+              // A record's name opens it in the panel beside the table (spec 0017, AC-384), its page one press on.
               onRowOpen={(recordId) => {
+                if (peek !== undefined) {
+                  peek.open(recordId);
+                  return;
+                }
                 void navigate({
                   to: '/w/$slug/objects/$object/$recordId/$tab',
                   params: { slug, object: object.apiSlug, recordId, tab: 'overview' },
@@ -701,7 +766,7 @@ export function RecordsScreen({
                   },
                   // The records layer failed to load; the edit never showed.
                   () => {
-                    toasts.toast({ tone: 'danger', message: strings.somethingWrong });
+                    toasts.toast({ tone: 'danger', message: sharedStrings.couldntDoThat });
                   },
                 );
               }}
@@ -744,9 +809,7 @@ export function RecordsScreen({
                           ),
                         }
                       : {})}
-                  >
-                    {strings.emptyText(object.pluralName)}
-                  </EmptyState>
+                  />
                 )
               }
               {...(focusRow === undefined ? {} : { focusRow })}
@@ -763,6 +826,7 @@ export function RecordsScreen({
                       setAdding(true);
                     },
                     addColumnLabel: attributeStrings.addAttribute,
+                    ...(addColumnLock === undefined ? {} : { addColumnLock }),
                     // "+" offers the view's hidden columns first (flow pass, 30 October 2026): a blank create was
                     // the only way, so hidden ones came back as duplicates. One press shows one, focused.
                     addColumnItems: columns
@@ -807,6 +871,21 @@ export function RecordsScreen({
                   }
                 : {})}
             />
+            {peek?.recordId !== undefined && (
+              <RecordPeek
+                slug={slug}
+                object={object}
+                attributes={attributes}
+                members={members}
+                recordId={peek.recordId}
+                tab={peek.tab}
+                onTabChange={peek.setTab}
+                onOpen={peek.open}
+                onClose={peek.close}
+                // The rows either side in the table's order; a grouped table's rows run under headers, so it has none.
+                {...(peekSteps === undefined ? {} : { steps: peekSteps, onLoadStep: loadPeekStep })}
+              />
+            )}
             {bulk.dialog}
             {recordForm.dialog}
             <NewRecordDialog
@@ -826,6 +905,11 @@ export function RecordsScreen({
               onCreated={(record, keepOpen) => {
                 toasts.toast(
                   createdToast(record, object.singularName, () => {
+                    // Beside the table, as a row's name opens it; the full page is one press on from there.
+                    if (peek !== undefined) {
+                      peek.open(record.id);
+                      return;
+                    }
                     void navigate({
                       to: '/w/$slug/objects/$object/$recordId/$tab',
                       params: { slug, object: object.apiSlug, recordId: record.id, tab: 'overview' },
@@ -850,6 +934,7 @@ export function RecordsScreen({
               members={members}
               canManage={canChangeSchema}
               objectAttributes={attributes}
+              tableHref={objectHref(slug, object)}
               onClose={() => {
                 setAdding(false);
                 setEditing(undefined);

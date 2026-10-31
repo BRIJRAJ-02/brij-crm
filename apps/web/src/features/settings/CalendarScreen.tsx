@@ -280,7 +280,6 @@ function AccountCard({
         {canReconnect && <Button onPress={onReconnect}>{strings.reconnect}</Button>}
         {/* Read with the choice: "Teammates see Full details" (the Select's own name says it to screen readers). */}
         <span aria-hidden="true">{strings.sharingLabel}</span>
-        <InfoTip label={strings.sharingLabel}>{strings.sharingInfo}</InfoTip>
         <Select
           savesOnPick
           label={strings.sharingLabel}
@@ -363,19 +362,14 @@ function useCalendarActions(data: DataLayer, slug: string, toasts: Toasts, desti
         const saved = strings.saved[name](calendar.name, isOn);
         // Its last use switched off: it keeps its row for now, and the toast says it won't be listed next time.
         const isLeaving = !isCalendarInUse({ ...calendar, [name]: isOn });
-        change(
-          calendar,
-          { [name]: isOn },
-          { [name]: !isOn },
-          isLeaving ? strings.noLongerListed(saved, calendar.name) : saved,
-        );
+        change(calendar, { [name]: isOn }, { [name]: !isOn }, isLeaving ? strings.noLongerListed(saved) : saved);
       },
       onColour: (calendar, hue) =>
         change(
           calendar,
           { colourOverride: hue },
           { colourOverride: calendar.colourOverride ?? null },
-          strings.colourSaved(calendar.name),
+          strings.colourSaved,
         ),
       onMakeDefault: (calendar) => {
         const was = destination;
@@ -386,7 +380,7 @@ function useCalendarActions(data: DataLayer, slug: string, toasts: Toasts, desti
           if (!isDone) return;
           say({
             tone: 'success',
-            message: leaving === undefined ? saved : strings.noLongerListed(saved, leaving.name),
+            message: leaving === undefined ? saved : strings.noLongerListed(saved),
             ...(was === undefined
               ? {}
               : { action: { label: strings.undo, onAction: () => void data.calendar.setDestination(slug, was.id) } }),
@@ -503,6 +497,22 @@ export function CalendarScreen({ data, slug, view, result, onResultSeen, inFrame
       </MenuTrigger>
     );
 
+  // The empty state's choice: one button per provider that is on, each with its mark (the first takes focus after a disconnect).
+  const providerButtons = canConnect ? (
+    <>
+      {providers.map((provider, index) => (
+        <Button
+          key={provider}
+          {...(index === 0 ? { ref: connectRef } : {})}
+          provider={PROVIDER[provider].mark}
+          onPress={() => connect(provider)}
+        >
+          {provider === 'google' ? strings.connectGoogle : strings.connectOutlook}
+        </Button>
+      ))}
+    </>
+  ) : undefined;
+
   let body;
   if (state.status === 'loading') {
     // The connections' section, busy, so the cards arrive in its column.
@@ -521,9 +531,8 @@ export function CalendarScreen({ data, slug, view, result, onResultSeen, inFrame
     );
   } else if (state.connections.length === 0) {
     body = (
-      <EmptyState icon="calendar" title={strings.emptyTitle} actions={connectButton}>
-        {strings.emptyText}
-      </EmptyState>
+      // Nothing connected: each provider its own button, so the choice is the picture and no sentence says why.
+      <EmptyState icon="calendar" title={strings.emptyTitle} actions={providerButtons} />
     );
   } else {
     const calendarsOf = (connectionId: string): readonly CalendarItem[] | 'loading' | 'error' =>
@@ -534,18 +543,11 @@ export function CalendarScreen({ data, slug, view, result, onResultSeen, inFrame
         <Card>
           <SettingsRow
             title={strings.addBookingsTo}
-            description={
-              list.status === 'error'
-                ? strings.calendarsFailedAll
-                : list.status === 'ready' && writableOptions.length === 0
-                  ? strings.noWritable
-                  : strings.addBookingsHelp
-            }
-            meta={
-              <InfoTip label={strings.defaultHelpLabel} example={strings.defaultHelpExample}>
-                {strings.defaultHelp}
-              </InfoTip>
-            }
+            {...(list.status === 'error'
+              ? { description: strings.calendarsFailedAll }
+              : list.status === 'ready' && writableOptions.length === 0
+                ? { description: strings.noWritable }
+                : {})}
           >
             <Select
               savesOnPick
@@ -575,7 +577,7 @@ export function CalendarScreen({ data, slug, view, result, onResultSeen, inFrame
                 if (!isDone) return;
                 toasts.toast({
                   tone: 'success',
-                  message: strings.sharingSaved(connection.accountEmail),
+                  message: strings.sharingSaved(sharing),
                   action: {
                     label: strings.undo,
                     onAction: () => void data.calendar.setSharing(slug, connection.id, was),
@@ -644,12 +646,7 @@ export function CalendarScreen({ data, slug, view, result, onResultSeen, inFrame
           <Card>
             <SettingsRow
               title={strings.createPeople}
-              description={strings.createPeopleHelp}
-              meta={
-                <InfoTip label={strings.createPeople} example={strings.createPeopleExample}>
-                  {strings.createPeopleInfo}
-                </InfoTip>
-              }
+              meta={<InfoTip label={strings.createPeople}>{strings.createPeopleExample}</InfoTip>}
             >
               <Switch
                 label={strings.createPeople}

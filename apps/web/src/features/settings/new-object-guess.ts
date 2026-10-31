@@ -134,6 +134,7 @@ export const INLINE_TYPES = [
   'number',
   'currency',
   'date',
+  'timestamp',
   'checkbox',
   'select',
   'status',

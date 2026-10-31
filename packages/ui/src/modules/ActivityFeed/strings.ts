@@ -2,7 +2,6 @@
 export const strings = {
   loading: 'Loading activity',
   empty: 'No activity yet',
-  emptyBody: 'Changes, notes, tasks, comments and meetings show here as they happen.',
   /** A run of changes at one moment: open each, and fold them again. */
   showAll: 'Show all',
   showLess: 'Show less',
@@ -31,6 +30,9 @@ export const strings = {
     /** One actor's changes at one moment, counted. */
     changedMany: (count: number) => `changed ${String(count)} attributes`,
     note: 'added a note',
+    /** A call or meeting a person logged on the record (migration 0137). */
+    call: 'logged a call',
+    logged_meeting: 'logged a meeting',
     task: 'added a task',
     taskDone: 'completed a task',
     comment: 'commented',

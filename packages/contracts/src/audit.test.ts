@@ -23,6 +23,8 @@ describe('the kinds of change', () => {
     expect(AUDIT_NOT_LISTED).toEqual([
       'member.preferences_changed',
       'booking_page.profile_reordered',
+      // A preview (spec 0032, AC-858) is stored and never listed.
+      'access.previewed',
       'record.duplicate_dismissed',
       'record.duplicate_restored',
     ]);
