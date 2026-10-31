@@ -178,8 +178,6 @@ export const strings = {
   viewPage: 'View page',
   /** The header's pill: the address itself, so its name says what pressing it does. */
   openAddress: (address: string) => `${address}, open your page`,
-  /** The same pill while the page is private: the lock's meaning in its name too. */
-  openPrivateAddress: (address: string) => `${address}, private, open your page`,
   /** The header's Share: it opens the QR and the address to hand on. */
   share: 'Share',
   /**
