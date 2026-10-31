@@ -15,7 +15,7 @@ New. The builder must show exactly what goes live (spec 0023, `0023-experience.m
 
 - `preview` (the default) is inert: nothing in it takes focus or submits, assistive tech skips it, and a visually hidden note says it is a preview.
 - `page` checks the answers as the server would and shows the thank you, but sends nothing.
-- The look is the form's own (`look.colour`, `look.corners`), whatever the app's theme.
+- The look is the form's own (`look.colour`, `look.corners`), whatever the app's theme. It sits on the form's own ground (`surface` in that look), which fills whatever height its container gives it: in PreviewLayout's phone, a short form's colour runs to the frame's foot, a light form in dark mode included (spec 0058).
 
 ## States and keyboard
 
