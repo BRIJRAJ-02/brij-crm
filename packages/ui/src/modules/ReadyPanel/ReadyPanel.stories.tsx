@@ -91,6 +91,44 @@ export const WithEmbedTiles: Story = {
   ),
 };
 
+/**
+ * Inside a Modal that already titles it: no heading of its own (the dialog keeps one), a long link cut in the middle
+ * so its host and its end both show, and a tall page drawn at half size from its top.
+ */
+export const Untitled: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: {
+    title: undefined,
+    message: 'Anyone with the link can book.',
+    link: 'https://timefix.com/ada-lovelace-and-partners/a-rather-long-intro-call-name',
+    copyVariant: 'secondary',
+    previewScale: 'shrunk',
+    preview: <Skeleton lines={24} isStill />,
+  },
+  play: async ({ canvas }) => {
+    await settleAnimations();
+    await expect(canvas.queryByRole('heading')).toBeNull();
+    const end = canvas.getByText('a-rather-long-intro-call-name', { exact: true });
+    const field = canvas.getByRole('group', { name: 'Link' });
+    // The end shows whole inside the address box, and the start gives way.
+    const box = end.parentElement;
+    if (box === null) throw new Error('no address box');
+    await expect(end.getBoundingClientRect().right).toBeLessThanOrEqual(box.getBoundingClientRect().right);
+    const start = end.previousElementSibling;
+    if (start === null) throw new Error('no start');
+    await expect(start.scrollWidth).toBeGreaterThan(start.clientWidth);
+    await expect(field).toHaveTextContent(
+      'https://timefix.com/ada-lovelace-and-partners/a-rather-long-intro-call-name',
+    );
+    // The picture starts at the slot's top, half size, and takes no tab stop.
+    const preview = canvas.getByRole('group', { name: 'Preview' });
+    const glimpse = preview.firstElementChild;
+    if (glimpse === null) throw new Error('no glimpse');
+    await expect(Math.abs(glimpse.getBoundingClientRect().top - preview.getBoundingClientRect().top)).toBeLessThan(2);
+    await expect(glimpse).toHaveAttribute('inert');
+  },
+};
+
 /** No preview and no Share: the link and its QR alone. */
 export const Minimal: Story = {
   parameters: { crm: { screenshot: false } },
@@ -113,7 +151,8 @@ export const InDialog: Story = {
     const cap = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--size-column'));
     const preview = canvas.getByRole('group', { name: 'Preview' });
     await expect(preview.getBoundingClientRect().height).toBeLessThanOrEqual(cap + 1);
-    const top = preview.firstElementChild?.getBoundingClientRect().top ?? 0;
+    // The picture itself: its inert wrapper draws no box of its own at the actual size.
+    const top = preview.firstElementChild?.firstElementChild?.getBoundingClientRect().top ?? 0;
     await expect(top).toBeGreaterThanOrEqual(preview.getBoundingClientRect().top);
   },
 };
