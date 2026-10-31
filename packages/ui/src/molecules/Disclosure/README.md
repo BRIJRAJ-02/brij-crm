@@ -25,6 +25,7 @@ New. Attribute groups on the record panel (#18), advanced settings and import op
 
 - `headingLevel` sets the title's heading level where the default h3 would sit beside its container's own h3: 4 inside a Card (Home's setup checklist, spec 0041). Why a prop: the level depends on where the fold sits, which only the caller knows.
 - `actions` (spec 0034): quiet controls after the title, outside its toggle (a sidebar section's grip and menu). In the `label` variant they show while the row is hovered or holds focus. Why: a section's menu can't sit inside the toggle button, and every sidebar section would otherwise draw its own heading row.
+- `isRuled` draws a hairline over the section with `space-8` of air under it: a record's sidebar sections (each related object, and Lists) one after another under its details. Why a prop: RelatedRecords drew that rule on a wrapper of its own, and the Lists section needed the same one; one rule in the section itself keeps both alike.
 - Directly in a settings page's body (SettingsLayout sets the library's page edge) the default variant's title row runs out through the page's gutter like a Table's rows, a row's height, its chevron on the content edge and its count at the far one; its panel does too, so a Table inside it lines up with the one above it (Objects' Archived, 22 October 2026).
 
 ## States

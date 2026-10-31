@@ -1,28 +1,39 @@
-/* RecordHeader: a 48px avatar (size-toolbar), then the name in text-heading over a label
-   line (the object, then any detail, space-8 apart in text-secondary), and at
-   the end who else is viewing and the actions. Below 480px wide the end wraps
-   under the name. The stat strip, when there is one, takes the line below. */
+/* RecordHeader: a 48px avatar (size-toolbar), then the name in text-heading with
+   who else is viewing and the actions at the end of its line, and under both a
+   label line (the object or the facts, then any detail, in text-secondary)
+   across the header's width. Below 480px wide the end takes its own line under
+   the facts. The stat strip, when there is one, takes the line below. */
 @layer components {
+  /* A grid: the avatar beside the name, with the actions on the name's line, and the facts line under both, so the
+     facts run the header's full width rather than wrapping in the narrow column the actions leave (browser check,
+     31 October 2026: job title, company, email and phone stacked three lines deep beside the buttons). */
   .root {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-12);
+    display: grid;
+    grid-template-areas:
+      'avatar name end'
+      'avatar meta meta'
+      'stats stats stats';
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: var(--space-2) var(--space-12);
     align-items: center;
     inline-size: 100%;
     padding-block: var(--space-16);
     container-type: inline-size;
   }
 
-  /* At least a column wide: past that the actions wrap under the name rather than cutting it to a few letters. */
-  .text {
+  .avatar {
     display: flex;
-    flex: 1;
-    flex-direction: column;
-    gap: var(--space-2);
-    min-inline-size: min(100%, var(--size-column));
+    grid-area: avatar;
+    align-self: start;
+  }
+
+  /* Its two lines take their own places in the grid. */
+  .text {
+    display: contents;
   }
 
   .name {
+    grid-area: name;
     margin: 0;
     overflow: hidden;
     color: var(--text);
@@ -34,6 +45,7 @@
 
   .meta {
     display: flex;
+    grid-area: meta;
     flex-wrap: wrap;
     gap: var(--space-8);
     min-inline-size: 0;
@@ -46,6 +58,7 @@
   /* Loading: the avatar's and each line's own height, so the page under the header lands where it will stay. */
   .avatarSlot {
     display: grid;
+    grid-area: avatar;
     flex: none;
     place-items: stretch;
     inline-size: var(--size-toolbar);
@@ -54,11 +67,11 @@
     border-radius: var(--radius-md);
   }
 
-  /* The stat strip takes its own line under the name and actions. */
+  /* The stat strip takes its own line under the name, the facts and the actions. */
   .stats {
-    flex-basis: 100%;
+    grid-area: stats;
     min-inline-size: 0;
-    margin-block-start: var(--space-4);
+    margin-block-start: var(--space-12);
   }
 
   .lineSlot {
@@ -69,13 +82,19 @@
   }
 
   .lineSlot[data-line='name'] {
+    grid-area: name;
     font: var(--text-heading);
+  }
+
+  .lineSlot[data-line='meta'] {
+    grid-area: meta;
   }
 
   /* The actions wrap among themselves rather than running out of a narrow main column. */
   .end {
     display: flex;
-    flex: none;
+    grid-area: end;
+    justify-content: flex-end;
     flex-wrap: wrap;
     gap: var(--space-8);
     align-items: center;
@@ -88,9 +107,20 @@
     padding-inline-end: var(--space-4);
   }
 
+  /* Narrow: the actions take their own line under the facts. */
   @container (width < 480px) {
+    .root {
+      grid-template-areas:
+        'avatar name'
+        'avatar meta'
+        'end end'
+        'stats stats';
+      grid-template-columns: auto minmax(0, 1fr);
+    }
+
     .end {
-      flex-basis: 100%;
+      justify-content: flex-start;
+      margin-block-start: var(--space-8);
     }
   }
 }

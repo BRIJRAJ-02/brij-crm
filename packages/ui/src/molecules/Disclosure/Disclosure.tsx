@@ -57,6 +57,11 @@ export interface DisclosureProps {
    * Card whose title is an h3 (Home's setup checklist's done steps).
    */
   readonly headingLevel?: 2 | 3 | 4 | 5;
+  /**
+   * A hairline over the section and a little air under it, setting it apart from what sits above: a record's
+   * sidebar sections (Lists, each related object), one after another under the record's details.
+   */
+  readonly isRuled?: boolean;
 }
 
 /** A section that opens and closes under its title: attribute groups, advanced settings, sidebar sections. */
@@ -74,6 +79,7 @@ export function Disclosure({
   variant = 'default',
   actions,
   headingLevel,
+  isRuled = false,
 }: DisclosureProps) {
   // Directly in a settings page's body, the title row runs to the page's edges, its chevron on the content edge.
   const atPageEdge = useContext(PageEdge) && variant === 'default';
@@ -111,6 +117,7 @@ export function Disclosure({
       data-variant={variant}
       data-edge={atPageEdge ? 'page' : undefined}
       data-inset={atRowInset ? 'row' : undefined}
+      data-ruled={isRuled || undefined}
       {...(id === undefined ? {} : { id })}
       {...(isExpanded === undefined ? {} : { isExpanded })}
       {...(defaultExpanded === undefined ? {} : { defaultExpanded })}

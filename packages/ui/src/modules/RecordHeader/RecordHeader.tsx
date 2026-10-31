@@ -81,15 +81,17 @@ export function RecordHeader({
   }
   return (
     <header className={styles.root}>
-      <Avatar
-        name={record.name}
-        id={record.recordId}
-        size="title"
-        shape={record.kind === 'person' ? 'circle' : 'square'}
-        isDecorative
-        {...(record.imageSrc === undefined ? {} : { src: record.imageSrc })}
-        {...(record.hue === undefined ? {} : { hue: record.hue })}
-      />
+      <span className={styles.avatar}>
+        <Avatar
+          name={record.name}
+          id={record.recordId}
+          size="title"
+          shape={record.kind === 'person' ? 'circle' : 'square'}
+          isDecorative
+          {...(record.imageSrc === undefined ? {} : { src: record.imageSrc })}
+          {...(record.hue === undefined ? {} : { hue: record.hue })}
+        />
+      </span>
       <span className={styles.text}>
         <h2 className={styles.name}>{record.name}</h2>
         <div className={styles.meta}>

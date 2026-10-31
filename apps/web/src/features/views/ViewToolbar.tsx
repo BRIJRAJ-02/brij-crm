@@ -341,7 +341,9 @@ export function ViewToolbar({
           setFilterOpen(open);
         }}
         label={strings.filters}
-        width="builder"
+        // With nothing in it, a menu's width for its one line and Add filter, rather than a builder's 640px of air
+        // (owner item 46); the builder's width once a row arrives.
+        width={building.conditions.length === 0 ? 'menu' : 'builder'}
       >
         <FilterBuilder
           attributes={builderFields}

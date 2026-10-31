@@ -25,7 +25,8 @@ New. Every record page (#17) and the people and company pages (#26) open with th
 - `meta` follows the object name on the label line: a badge, a lock.
 - `facts` puts the record at a glance under its name in place of the object's name (heard, not drawn, since the crumbs say it): its key facts as `RecordFacts`, a person's job title, company, email and phone (owner, 31 October 2026: the header held only the avatar, the name and "Person"). Quick actions (Email, Call, Log activity, Add task) go in `children` with the record's menu.
 - `viewers` are the others with the record open (presence, #26), read as "Also viewing Grace Hopper and Alan Turing".
-- `isLoading` shows skeletons after the loading delay. Below 480px wide the actions wrap under the name.
+- The actions (and who else is viewing) sit at the end of the name's line, and the facts line runs under both, across the header's whole width, so a person's job title, company, email and phone read as one line rather than stacking beside the buttons (browser check, 31 October 2026).
+- `isLoading` shows skeletons after the loading delay. Below 480px wide the actions take their own line under the facts.
 - The avatar is 48px (`Avatar` size `title`), so the record reads at a glance (13 Oct reference batch 4).
 - `stats` draws the stat strip (`RecordStats`) on its own line under the header: counts and the last activity, each opening where it comes from (its tab).
 

@@ -79,6 +79,24 @@ export const WholeCount: Story = {
   },
 };
 
+/** Ruled sections one after another, as a record's sidebar stacks Lists and each related object under its details. */
+export const Ruled: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage width="narrow">
+      <Disclosure title="Lists" count={1} isRuled defaultExpanded>
+        Q4 outreach.
+      </Disclosure>
+      <Disclosure title="Associated deals" count={2} countLabel="deals" isRuled defaultExpanded>
+        Two deals.
+      </Disclosure>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('button', { name: /Lists/ })).toHaveAttribute('aria-expanded', 'true');
+  },
+};
+
 /**
  * The quiet variant, as Home's setup checklist folds its done steps: a control sized to its words, its chevron
  * centred in a 16px icon's column on the content edge and its words `space-12` after it; the panel flush.

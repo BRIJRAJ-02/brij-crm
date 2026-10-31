@@ -15,6 +15,12 @@
     flex-direction: column;
   }
 
+  /* Ruled: a hairline over it sets a sidebar section apart from what sits above (a record's Lists, its related). */
+  .root[data-ruled] {
+    padding-block-start: var(--space-8);
+    border-block-start: var(--border-width-hairline) solid var(--border-subtle);
+  }
+
   .heading {
     margin: 0;
   }
