@@ -382,11 +382,23 @@ function RecordScreen({
   // A merged record's address (spec 0049, AC-4914): on to the record it went into, saying so once.
   const mergedInto = trashed?.status === 'trashed' ? trashed.mergedInto : undefined;
   const mergedName = trashed?.status === 'trashed' ? trashed.record.display.name : '';
+  const keptId = mergedInto?.recordId;
+  const keptName = mergedInto?.display.name ?? '';
+  // Once per merged address, however often the lookup is read again (a live re-read, StrictMode).
+  const redirected = useRef<string | undefined>(undefined);
   useEffect(() => {
-    if (mergedInto === undefined) return;
-    toasts.toast({ tone: 'info', message: mergeStrings.wasMerged(mergedName, mergedInto.display.name) });
-    void navigate({ href: recordHref(slug, object.apiSlug, mergedInto.recordId, tab), replace: true });
-  }, [mergedInto, mergedName, navigate, object.apiSlug, slug, tab, toasts]);
+    if (keptId === undefined || redirected.current === recordId) return;
+    redirected.current = recordId;
+    const unnamedOne = strings.unnamed(object.singularName);
+    toasts.toast({
+      tone: 'info',
+      message: mergeStrings.wasMerged(
+        mergedName === '' ? unnamedOne : mergedName,
+        keptName === '' ? unnamedOne : keptName,
+      ),
+    });
+    void navigate({ href: recordHref(slug, object.apiSlug, keptId, tab), replace: true });
+  }, [keptId, keptName, mergedName, navigate, object.apiSlug, object.singularName, recordId, slug, tab, toasts]);
   const unnamed = strings.unnamed(object.singularName);
   const link = useMemo(() => recordLinks(slug, objects), [slug, objects]);
   // Add as person on a meeting (spec 0024, AC-609): one function while the page stays, so timeline entries keep

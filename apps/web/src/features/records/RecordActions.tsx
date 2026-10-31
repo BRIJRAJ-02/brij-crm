@@ -5,8 +5,9 @@
 // Undo toast; a refusal stays on the page, said in a danger toast. Merge with… (spec 0049) asks for the other record
 // and opens the merge dialog, which is its own confirmation; a merge that took this record away goes on to the kept.
 import type { AttributeDefinition, MemberSummary, ObjectSummary } from '@crm/data';
-import { Button, Menu, MenuItem, MenuSeparator, MenuTrigger, Tooltip } from '@crm/ui';
+import { Button, focusLater, Menu, MenuItem, MenuSeparator, MenuTrigger, Tooltip } from '@crm/ui';
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
+import { useRef } from 'react';
 import { mergeStrings, useMergeDialog } from '../duplicates/merge/index.ts';
 import { bulkStrings, deleteToast } from '../workspace/bulk.ts';
 import { objectHref } from '../workspace/objects.ts';
@@ -40,14 +41,22 @@ export function RecordActions({
 }: RecordActionsProps) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
+  const moreRef = useRef<HTMLButtonElement>(null);
   const merging = useMergeDialog({
     slug,
     object,
     attributes,
     members,
     onMerged: ({ keptId, mergedId }) => {
-      // This record was the one merged away: on to the one it went into.
-      if (mergedId === recordId) void navigate({ href: recordHref(slug, object.apiSlug, keptId), replace: true });
+      // This record was the one merged away: on to the one it went into, focus on its title (the trigger is gone).
+      if (mergedId === recordId) {
+        void navigate({ href: recordHref(slug, object.apiSlug, keptId), replace: true }).then(() => {
+          focusLater(() => document.querySelector('h1'));
+        });
+        return;
+      }
+      // This record was kept: focus back on More, which opened the dialog through a menu item now gone.
+      focusLater(() => moreRef.current);
     },
   });
 
@@ -87,7 +96,7 @@ export function RecordActions({
     <>
       <MenuTrigger>
         <Tooltip content={strings.more}>
-          <Button variant="ghost" icon="ellipsis" label={strings.more} />
+          <Button ref={moreRef} variant="ghost" icon="ellipsis" label={strings.more} />
         </Tooltip>
         <Menu
           label={strings.more}
