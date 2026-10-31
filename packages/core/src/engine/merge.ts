@@ -68,7 +68,7 @@ import {
   type WriteContext,
 } from './write.ts';
 import { inWorkspace } from '../access/run.ts';
-import { isOpen, type Access } from '../access/policy.ts';
+import { isOpen, objectLevel, type Access } from '../access/policy.ts';
 import { attributeLevel, checkObject, UNKNOWN_OBJECT, UNKNOWN_RECORD, visibleRecords } from '../access/visibility.ts';
 import { writeAudit } from '../members/audit.ts';
 
@@ -82,7 +82,7 @@ export interface MergePair {
 /** A merge: the pair, the side picked per attribute, and the revisions the dialog read. */
 export interface MergeInput extends MergePair {
   readonly picks?: Readonly<Record<string, MergeSide>>;
-  readonly revisions?: { readonly keep: number; readonly merge: number };
+  readonly revisions: { readonly keep: number; readonly merge: number };
 }
 
 /** What a merge did: the kept record, its revision after, the merged record and what moved. */
@@ -195,11 +195,21 @@ async function readPair(
  * through its record index and stopped one past the cap, so a record with a
  * million links costs a bounded read before anything is written.
  */
-async function countAttached(tx: WorkspaceTx, recordId: string): Promise<MergeMoved & { readonly total: number }> {
+async function countAttached(
+  tx: WorkspaceTx,
+  recordId: string,
+): Promise<Omit<MergeMoved, 'links'> & { readonly total: number }> {
   const cap = MERGE_MAX_ITEMS + 1;
   const bounded = (from: SQL) => sql`(select count(*)::int from (select 1 ${from} limit ${cap}) t)`;
   const id = sql`${recordId}::uuid`;
-  const result = await tx.execute<{ links: number; entries: number; notes: number; others: number }>(sql`
+  const result = await tx.execute<{
+    links: number;
+    entries: number;
+    notes: number;
+    others: number;
+    private: number;
+    past: number;
+  }>(sql`
     select
       ${bounded(sql`from record_links where from_record_id = ${id} and active_until is null`)}
         + ${bounded(sql`from record_links where to_record_id = ${id} and active_until is null`)} as links,
@@ -214,13 +224,23 @@ async function countAttached(tx: WorkspaceTx, recordId: string): Promise<MergeMo
         + ${bounded(sql`from bookings where person_record_id = ${id}`)}
         + ${bounded(sql`from bookings where company_record_id = ${id}`)}
         + ${bounded(sql`from bookings where deal_record_id = ${id}`)}
-        + ${bounded(sql`from notifications where record_id = ${id}`)}
         + ${bounded(sql`from rotation_assignments where record_id = ${id} and voided_at is null`)}
-        + ${bounded(sql`from record_files where record_id = ${id}`)} as others
+        + ${bounded(sql`from record_files where record_id = ${id}`)} as others,
+      -- Other members' notifications move too, but are theirs: counted for the cap, never shown.
+      ${bounded(sql`from notifications where record_id = ${id}`)} as private,
+      -- The past (value history and ended links) moves too, so it counts toward the cap (AC-4917).
+      ${bounded(sql`from "values" where owner_id = ${id} and active_until is not null`)}
+        + ${bounded(sql`from record_links where from_record_id = ${id} and active_until is not null`)}
+        + ${bounded(sql`from record_links where to_record_id = ${id} and active_until is not null`)} as past
   `);
-  const row = result.rows[0] ?? { links: 0, entries: 0, notes: 0, others: 0 };
+  const row = result.rows[0] ?? { links: 0, entries: 0, notes: 0, others: 0, private: 0, past: 0 };
   const items = row.notes + row.others;
-  return { links: row.links, entries: row.entries, items, notes: row.notes, total: row.links + row.entries + items };
+  return {
+    entries: row.entries,
+    items,
+    notes: row.notes,
+    total: row.links + row.entries + items + row.private + row.past,
+  };
 }
 
 /** The value rows of one attribute on one record, by position, as item columns. */
@@ -382,29 +402,67 @@ interface LinkRow {
   readonly toObjectId: string;
 }
 
-/** Both records' current links, each once (the one between them shows from both). */
-async function currentLinks(tx: WorkspaceTx, ids: readonly string[]): Promise<readonly LinkRow[]> {
-  const result = await tx.execute<{
-    id: string;
-    relationship_id: string;
-    from_id: string;
-    to_id: string;
-    from_single: boolean;
-    to_single: boolean;
-    from_object_id: string;
-    to_object_id: string;
-  }>(sql`
+/** Link rows as the database answers them. */
+type LinkRowText = {
+  id: string;
+  relationship_id: string;
+  from_id: string;
+  to_id: string;
+  from_single: boolean;
+  to_single: boolean;
+  from_object_id: string;
+  to_object_id: string;
+};
+
+/**
+ * The links the plan reads (each once): every current link of the merged
+ * record (at most `MERGE_MAX_ITEMS + 1`; past that the merge is refused
+ * anyway), and of the kept record only those on the same relationships that
+ * matter to them: a link to one of the same far records (a double), or a side
+ * that holds one record. A kept company with 200,000 people costs nothing.
+ */
+async function currentLinks(tx: WorkspaceTx, pair: { readonly keepId: string; readonly mergeId: string }) {
+  const select = (where: SQL) => sql`
     select l.id::text, l.relationship_id::text, l.from_record_id::text as from_id, l.to_record_id::text as to_id,
       l.from_single, l.to_single, f.object_id::text as from_object_id, t.object_id::text as to_object_id
-    from (
-      select * from record_links where from_record_id = any(${uuidList(ids)}) and active_until is null
-      union
-      select * from record_links where to_record_id = any(${uuidList(ids)}) and active_until is null
-    ) l
+    from (${where}) l
     join records f on f.workspace_id = l.workspace_id and f.id = l.from_record_id
     join records t on t.workspace_id = l.workspace_id and t.id = l.to_record_id
-  `);
-  return result.rows.map((row) => ({
+  `;
+  const merge = sql`${pair.mergeId}::uuid`;
+  const merged = await tx.execute<LinkRowText>(
+    select(sql`
+      (select * from record_links where from_record_id = ${merge} and active_until is null limit ${MERGE_MAX_ITEMS + 1})
+      union all
+      (select * from record_links where to_record_id = ${merge} and active_until is null and from_record_id <> ${merge}
+        limit ${MERGE_MAX_ITEMS + 1})
+    `),
+  );
+  const own = merged.rows.map(toLinkRow);
+  const relationships = uuidList([...new Set(own.map((link) => link.relationshipId))]);
+  const fars = uuidList([...new Set(own.map((link) => (link.fromId === pair.mergeId ? link.toId : link.fromId)))]);
+  const keep = sql`${pair.keepId}::uuid`;
+  const kept =
+    own.length === 0
+      ? { rows: [] as LinkRowText[] }
+      : await tx.execute<LinkRowText>(
+          select(sql`
+            select * from record_links
+            where relationship_id = any(${relationships}) and from_record_id = ${keep} and active_until is null
+              and (to_record_id = any(${fars}) or from_single)
+            union all
+            select * from record_links
+            where relationship_id = any(${relationships}) and to_record_id = ${keep} and active_until is null
+              and from_record_id <> ${merge} and (from_record_id = any(${fars}) or to_single)
+          `),
+        );
+  const seen = new Set(own.map((link) => link.id));
+  return [...own, ...kept.rows.map(toLinkRow).filter((link) => !seen.has(link.id))];
+}
+
+/** One link row as the plan reads it. */
+function toLinkRow(row: LinkRowText): LinkRow {
+  return {
     id: row.id,
     relationshipId: row.relationship_id,
     fromId: row.from_id,
@@ -413,7 +471,7 @@ async function currentLinks(tx: WorkspaceTx, ids: readonly string[]): Promise<re
     toSingle: row.to_single,
     fromObjectId: row.from_object_id,
     toObjectId: row.to_object_id,
-  }));
+  };
 }
 
 /** A relationship's two attributes, as the link plan needs them. */
@@ -446,6 +504,8 @@ export function planLinks(
   ends: ReadonlyMap<string, Ends>,
   pickable: (attributeId: string) => boolean,
   picks: Readonly<Record<string, MergeSide>>,
+  /** Whether the reader may see a far record: a side holding one they can't see is never offered (hidden is absent). */
+  farVisible: (recordId: string) => boolean = () => true,
 ): LinkPlan {
   const { keepId, mergeId } = pair;
   const end = new Set<string>();
@@ -476,7 +536,11 @@ export function planLinks(
       const relationship = ends.get(link.relationshipId);
       const attributeId =
         relationship === undefined ? null : isFrom ? relationship.fromAttributeId : relationship.toAttributeId;
-      const shown = attributeId !== null && pickable(attributeId);
+      const shown =
+        attributeId !== null &&
+        pickable(attributeId) &&
+        farVisible(far) &&
+        kept.every((held) => farVisible(isFrom ? held.toId : held.fromId));
       if (shown) rows.set(attributeId, { attributeId, preselected: 'keep' });
       if (!shown || picks[attributeId] !== 'merge') {
         end.add(link.id);
@@ -490,10 +554,22 @@ export function planLinks(
 }
 
 /** The attributes and links both records hold, read once for the plan. */
-async function readPlanInputs(tx: WorkspaceTx, pair: MergePair) {
+async function readPlanInputs(tx: WorkspaceTx, access: Access, pair: MergePair) {
   const attributes = await loadAttributes(tx, pair.objectId);
   const items = await itemsByOwner(tx, [pair.keepId, pair.mergeId]);
-  const links = await currentLinks(tx, [pair.keepId, pair.mergeId]);
+  const links = await currentLinks(tx, pair);
+  const fars = links.flatMap((link) => [
+    { recordId: link.fromId, objectId: link.fromObjectId },
+    { recordId: link.toId, objectId: link.toObjectId },
+  ]);
+  const visible = await visibleRecords(tx, access, fars);
+  const farVisible = (recordId: string) => visible.has(recordId);
+  // The links the dialog counts (AC-4916): the merged record's, to far records the reader may see.
+  const shownLinks = links.filter(
+    (link) =>
+      (link.fromId === pair.mergeId && farVisible(link.toId)) ||
+      (link.toId === pair.mergeId && farVisible(link.fromId)),
+  ).length;
   const relationships = await loadRelationships(tx, [...new Set(links.map((link) => link.relationshipId))]);
   const ends = new Map(
     [...relationships].map(([id, rel]): [string, Ends] => [
@@ -501,7 +577,7 @@ async function readPlanInputs(tx: WorkspaceTx, pair: MergePair) {
       { fromAttributeId: rel.fromAttributeId, toAttributeId: rel.toAttributeId },
     ]),
   );
-  return { attributes, items, links, ends };
+  return { attributes, items, links, ends, farVisible, shownLinks };
 }
 
 /** The dialog's rows in the object's attribute order. */
@@ -521,7 +597,7 @@ export async function previewMerge(scope: EngineScope, input: MergePair): Promis
   return inWorkspace(scope, async (tx) => {
     const { keep, merge } = await readPair(tx, scope.access, pair, false);
     if (keep.deleted || merge.deleted) throw refuse('NOT_FOUND', UNKNOWN_RECORD);
-    const { attributes, items, links, ends } = await readPlanInputs(tx, pair);
+    const { attributes, items, links, ends, farVisible, shownLinks } = await readPlanInputs(tx, scope.access, pair);
     const byId = new Map([...attributes.values()].map((attribute) => [attribute.id, attribute]));
     const pickable = (attribute: AttributeDef) => isPickable(scope.access, attribute);
     const values = planValues(
@@ -540,18 +616,19 @@ export async function previewMerge(scope: EngineScope, input: MergePair): Promis
         return attribute !== undefined && pickable(attribute);
       },
       {},
+      farVisible,
     );
     const counted = await countAttached(tx, pair.mergeId);
     const [keepView, mergeView] = await readRecords(tx, scope.access, [pair.keepId, pair.mergeId], {
       visibleAlready: true,
     });
     if (keepView === undefined || mergeView === undefined) throw refuse('NOT_FOUND', UNKNOWN_RECORD);
-    const { total, ...moved } = counted;
+    const { total, ...rest } = counted;
     return {
       keep: keepView,
       merge: mergeView,
       rows: orderedRows(attributes, [...values.rows, ...linkPlan.rows]),
-      moved,
+      moved: { ...rest, links: shownLinks },
       tooLarge: total > MERGE_MAX_ITEMS,
     };
   });
@@ -577,20 +654,28 @@ export async function mergeRecords(
   return result;
 }
 
-/** The lists either record has live entries in, locked in id order (the order erasure and the purge take). */
-async function lockLists(tx: WorkspaceTx, ids: readonly string[]): Promise<void> {
-  await tx.execute(sql`
-    select 1 from lists
+/**
+ * The lists either record has live entries in, locked in id order and in the
+ * mode erasure and the purge take (`for no key update`, so entry inserts'
+ * foreign key checks never wait on it). Answers their ids.
+ */
+async function lockLists(tx: WorkspaceTx, ids: readonly string[]): Promise<ReadonlySet<string>> {
+  const locked = await tx.execute<{ id: string }>(sql`
+    select id::text from lists
     where id in (select list_id from list_entries where record_id = any(${uuidList(ids)}) and deleted_at is null)
-    order by id for update
+    order by id for no key update
   `);
+  return new Set(locked.rows.map((row) => row.id));
 }
 
 /** A merge inside a write: locks, checks, counts, then moves everything and trashes the merged record. */
 async function mergeIn(context: WriteContext, input: MergeInput & MergePair): Promise<MergeResult> {
   const { tx, scope } = context;
   const { objectId, keepId, mergeId } = input;
-  await lockLists(tx, [keepId, mergeId]);
+  // The object's door first, which takes no lock: a member who can't merge here never holds a list.
+  await checkObject(tx, scope.access, objectId, 'read');
+  await checkObject(tx, scope.access, objectId, 'write');
+  const lockedLists = await lockLists(tx, [keepId, mergeId]);
   const { keep, merge } = await readPair(tx, scope.access, input, true);
   const none: MergeMoved = { links: 0, entries: 0, items: 0, notes: 0 };
   if (keep.deleted) throw refuse('NOT_FOUND', UNKNOWN_RECORD);
@@ -602,7 +687,7 @@ async function mergeIn(context: WriteContext, input: MergeInput & MergePair): Pr
     }
     throw refuse('NOT_FOUND', UNKNOWN_RECORD);
   }
-  if (input.revisions !== undefined) {
+  {
     const moved = [
       keep.revision !== input.revisions.keep ? keep : undefined,
       merge.revision !== input.revisions.merge ? merge : undefined,
@@ -615,15 +700,10 @@ async function mergeIn(context: WriteContext, input: MergeInput & MergePair): Pr
   }
   const counted = await countAttached(tx, mergeId);
   if (counted.total > MERGE_MAX_ITEMS) throw refuse('MERGE_TOO_LARGE', MERGE_TOO_LARGE_MESSAGE);
-  const moved: MergeMoved = {
-    links: counted.links,
-    entries: counted.entries,
-    items: counted.items,
-    notes: counted.notes,
-  };
 
   const picks = input.picks ?? {};
-  const { attributes, items, links, ends } = await readPlanInputs(tx, input);
+  const { attributes, items, links, ends, farVisible, shownLinks } = await readPlanInputs(tx, scope.access, input);
+  const moved: MergeMoved = { links: shownLinks, entries: counted.entries, items: counted.items, notes: counted.notes };
   const byId = new Map([...attributes.values()].map((attribute) => [attribute.id, attribute]));
   const pickable = (attribute: AttributeDef) => isPickable(scope.access, attribute);
   const valuePlan = planValues(
@@ -642,6 +722,7 @@ async function mergeIn(context: WriteContext, input: MergeInput & MergePair): Pr
       return attribute !== undefined && pickable(attribute);
     },
     picks,
+    farVisible,
   );
   const by = actorRow(scope.actor);
   const mergedRef = { recordId: mergeId, objectId };
@@ -674,7 +755,7 @@ async function mergeIn(context: WriteContext, input: MergeInput & MergePair): Pr
   const linkChanges = await moveLinks(context, { keepId, mergeId, objectId }, links, linkPlan, ends);
 
   // List entries, then everything else that hangs off the record.
-  const entries = await moveEntries(context, { keepId, mergeId, objectId });
+  const entries = await moveEntries(context, { keepId, mergeId, objectId }, lockedLists);
   const attached = await moveAttached(context, { keepId, mergeId, objectId });
 
   // The merged record leaves every read: its sort keys hidden, its slot given back with the counter row last.
@@ -692,10 +773,18 @@ async function mergeIn(context: WriteContext, input: MergeInput & MergePair): Pr
     // Others' notes and comments move too: accepted on purpose, and named here (spec 0049, security model).
     after: { keptRecordId: keepId, moved, movesOthersItems: moved.items > 0 },
   });
+  // The kept record is always named (AC-4915), even when only notes or history moved: its primary cell stands in.
+  const primary = await tx.execute<{ id: string | null }>(
+    sql`select primary_attribute_id::text as id from objects where id = ${objectId}::uuid`,
+  );
+  const primaryId = primary.rows[0]?.id ?? null;
   context.record({
     deletedRecords: [mergedRef],
     values: [...valueChanges, ...linkChanges.values],
-    references: linkChanges.references,
+    references: [
+      ...linkChanges.references,
+      ...(primaryId === null ? [] : [{ recordId: keepId, objectId, attributeId: primaryId }]),
+    ],
     ...entries,
     ...attached,
   });
@@ -834,17 +923,20 @@ async function moveLinks(
 async function moveEntries(
   context: WriteContext,
   ids: { readonly keepId: string; readonly mergeId: string; readonly objectId: string },
+  lockedLists: ReadonlySet<string>,
 ): Promise<{ readonly changedEntries: readonly EntryRef[]; readonly removedEntries: readonly EntryRef[] }> {
   const { tx, scope } = context;
   const { keepId, mergeId, objectId } = ids;
-  // Lists added since `lockLists` read them are locked here (rare: an entry made between the two reads).
-  await lockLists(tx, [mergeId]);
   const found = await tx.execute<{ id: string; list_id: string; record_id: string; once: boolean }>(sql`
     select e.id::text, e.list_id::text, e.record_id::text, not l.allows_duplicates as once
     from list_entries e join lists l on l.workspace_id = e.workspace_id and l.id = e.list_id
     where e.record_id = any(${uuidList([keepId, mergeId])}) and e.deleted_at is null
     order by e.id
   `);
+  // An entry made in a list after the lists were locked (between two reads): refused, never locked out of order.
+  if (found.rows.some((row) => !lockedLists.has(row.list_id))) {
+    throw refuse('CONFLICT', 'A list entry changed while you were merging. Try again.');
+  }
   const keptIn = new Map<string, string>();
   for (const row of found.rows)
     if (row.record_id === keepId && !keptIn.has(row.list_id)) keptIn.set(row.list_id, row.id);
@@ -868,9 +960,16 @@ async function moveEntries(
     const held = await itemsByOwner(tx, [kept, row.id]);
     const keptItems = held.get(kept) ?? new Map<string, readonly ItemColumns[]>();
     const mergedItems = held.get(row.id) ?? new Map<string, readonly ItemColumns[]>();
+    // Only values the member may write on this list (spec 0009): an entry in a list they can't change still moves
+    // or leaves, but its values are never written in their name.
+    const writable = (attribute: AttributeDef) =>
+      isOpen(scope.access) ||
+      (objectLevel(scope.access, row.list_id) === 'write' && attributeLevel(scope.access, attribute) === 'write');
     const fills = attributes.filter(
       (attribute) =>
-        (keptItems.get(attribute.id) ?? []).length === 0 && (mergedItems.get(attribute.id) ?? []).length > 0,
+        writable(attribute) &&
+        (keptItems.get(attribute.id) ?? []).length === 0 &&
+        (mergedItems.get(attribute.id) ?? []).length > 0,
     );
     await tx.execute(sql`
       update list_entries set deleted_at = clock_timestamp(), deleted_by_type = ${by.type}::actor_type,
@@ -946,7 +1045,10 @@ async function moveAttached(
     sql`update notifications set record_id = ${keep} where record_id = ${merge} returning member_id::text`,
   );
   // Rows keyed with their record: moved where the kept record lacks one, the rest dropped.
-  const moveKeyed = async (table: string, key: string): Promise<readonly string[]> => {
+  const moveKeyed = async (
+    table: 'task_records' | 'meeting_records',
+    key: 'task_id' | 'meeting_id',
+  ): Promise<readonly string[]> => {
     const name = sql.raw(table);
     const column = sql.raw(key);
     const movedRows = await tx.execute<{ key: string }>(sql`

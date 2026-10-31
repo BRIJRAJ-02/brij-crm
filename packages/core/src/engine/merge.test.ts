@@ -245,10 +245,17 @@ describe('mergeRecords', () => {
       message: 'Jane Doe changed while you were merging. Review it again.',
     });
     expect(await getRecords(w.scope, { ids: [janeD] })).toHaveLength(1);
-    expect(await refusalOf(mergeRecords(w.scope, { ...pair, mergeId: jane }))).toMatchObject({ code: 'INVALID' });
+    const any = { keep: 0, merge: 0 };
+    expect(await refusalOf(mergeRecords(w.scope, { ...pair, mergeId: jane, revisions: any }))).toMatchObject({
+      code: 'INVALID',
+    });
     const acme = await company(w, 'Acme');
-    expect(await refusalOf(mergeRecords(w.scope, { ...pair, mergeId: acme }))).toMatchObject({ code: 'INVALID' });
-    expect(await refusalOf(mergeRecords(w.scope, { ...pair, mergeId: newId() }))).toMatchObject({ code: 'NOT_FOUND' });
+    expect(await refusalOf(mergeRecords(w.scope, { ...pair, mergeId: acme, revisions: any }))).toMatchObject({
+      code: 'INVALID',
+    });
+    expect(await refusalOf(mergeRecords(w.scope, { ...pair, mergeId: newId(), revisions: any }))).toMatchObject({
+      code: 'NOT_FOUND',
+    });
 
     // 10,001 notifications on the merged record: refused before any write.
     await owner.withWorkspace(w.workspaceId, (tx) =>
@@ -324,7 +331,7 @@ describe('mergeRecords', () => {
     const w = await world();
     const jane = await person(w, 'Jane');
     const janeD = await person(w, 'Jane D.');
-    const pair = { objectId: w.people, keepId: jane, mergeId: janeD };
+    const pair = { objectId: w.people, keepId: jane, mergeId: janeD, revisions: await revisions(w, jane, janeD) };
     const readOnly = rescope(w.scope, {
       role: 'member',
       rules: {
@@ -356,5 +363,70 @@ describe('mergeRecords', () => {
       await refusalOf(mergeRecords(ruled, { ...pair, mergeId: newId() })),
     );
     expect(await getRecords(w.scope, { ids: [janeD] })).toHaveLength(1);
+  });
+
+  it('never offers or moves a single link whose far record the reader cannot see, and keeps the kept one (AC-4920)', async () => {
+    const w = await world();
+    const acme = await company(w, 'Acme');
+    const globex = await company(w, 'Globex');
+    const jane = await person(w, 'Jane', { [w.person('company')]: { objectId: w.companies, recordId: acme } });
+    const janeD = await person(w, 'Jane D.', { [w.person('company')]: { objectId: w.companies, recordId: globex } });
+    // Bob may write People but sees no company at all.
+    const bob = rescope(w.scope, {
+      role: 'member',
+      rules: {
+        levels: [
+          {
+            subject: { type: 'role', role: 'member' },
+            target: { type: 'object', objectId: w.companies },
+            level: 'none',
+          },
+        ],
+        records: [],
+      },
+    });
+    const preview = await previewMerge(bob, { objectId: w.people, keepId: jane, mergeId: janeD });
+    expect(preview.rows.map((row) => row.attributeId)).not.toContain(w.person('company'));
+    expect(preview.moved.links).toBe(0);
+    await mergeRecords(bob, {
+      objectId: w.people,
+      keepId: jane,
+      mergeId: janeD,
+      picks: { [w.person('company')]: 'merge' },
+      revisions: await revisions(w, jane, janeD),
+    });
+    const [kept] = await getRecords(w.scope, { ids: [jane] });
+    expect(kept?.values[w.person('company')]).toEqual({ objectId: w.companies, recordId: acme });
+  });
+
+  it('answers a record of another workspace as missing, changing nothing (AC-4919)', async () => {
+    const a = await world();
+    const b = await world();
+    const jane = await person(a, 'Jane');
+    const other = await person(b, 'Jane D.');
+    const input = { objectId: a.people, keepId: jane, mergeId: other, revisions: { keep: 0, merge: 0 } };
+    expect(await refusalOf(mergeRecords(a.scope, input))).toMatchObject({ code: 'NOT_FOUND' });
+    expect(await refusalOf(previewMerge(a.scope, input))).toMatchObject({ code: 'NOT_FOUND' });
+    expect(await getRecords(b.scope, { ids: [other] })).toHaveLength(1);
+  });
+
+  it('names the kept record in the change when only a note moves, and hides a merge entry on the timeline (AC-4915)', async () => {
+    const w = await world();
+    const jane = await person(w, 'Jane');
+    const janeD = await person(w, 'Jane D.');
+    await saveNote(w.scope, { id: newId(), recordId: janeD, title: 'Only a note' });
+    const changes: Change[] = [];
+    const capture: AfterWrite = (change) => {
+      changes.push(change);
+      return Promise.resolve();
+    };
+    await mergeRecords(
+      w.scope,
+      { objectId: w.people, keepId: jane, mergeId: janeD, revisions: await revisions(w, jane, janeD) },
+      [capture],
+    );
+    expect(changes[0]?.references.map((each) => each.recordId)).toContain(jane);
+    const entries = (await getActivity(w.scope, { recordId: jane })).entries.filter((each) => each.kind === 'merged');
+    expect(entries).toHaveLength(1);
   });
 });

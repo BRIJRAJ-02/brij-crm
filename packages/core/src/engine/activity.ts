@@ -193,19 +193,22 @@ const mergeSource: ActivitySource = async ({ tx, scope, record, after, limit }) 
     { attributeIds: [], trashed: true },
   );
   const names = new Map(views.map((view) => [view.id, view.display]));
+  // Hidden is absent: a merged record the reader can't see leaves no entry, never an unnamed one.
   return {
-    entries: result.rows.map((row) => {
-      const id = `merged:${row.id}`;
-      const display = names.get(row.id);
-      return {
-        id,
-        key: activityKey({ at: row.at, rank: ACTIVITY_RANKS.merged, id }),
-        at: toMillis(row.at),
-        ...(record.hidesActors || row.by_type === null ? {} : { actor: { type: row.by_type, id: row.by_id } }),
-        kind: 'merged' as const,
-        ...(display === undefined ? {} : { fromRefs: [display] }),
-      };
-    }),
+    entries: result.rows
+      .filter((row) => names.has(row.id))
+      .map((row) => {
+        const id = `merged:${row.id}`;
+        const display = names.get(row.id);
+        return {
+          id,
+          key: activityKey({ at: row.at, rank: ACTIVITY_RANKS.merged, id }),
+          at: toMillis(row.at),
+          ...(record.hidesActors || row.by_type === null ? {} : { actor: { type: row.by_type, id: row.by_id } }),
+          kind: 'merged' as const,
+          ...(display === undefined ? {} : { fromRefs: [display] }),
+        };
+      }),
   };
 };
 

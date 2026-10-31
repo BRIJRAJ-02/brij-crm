@@ -614,7 +614,12 @@ export type MergePreview = z.infer<typeof MergePreview>;
  * merged into the kept one by the same member and answers that merge again.
  */
 export const MergeRecordsInput = MergePreviewInput.extend({
-  picks: z.record(z.uuid(), MergeSide).default({}),
+  picks: z
+    .record(z.uuid(), MergeSide)
+    .refine((picks) => Object.keys(picks).length <= MAX_READ_ATTRIBUTES, {
+      error: `Pick at most ${String(MAX_READ_ATTRIBUTES)} attributes.`,
+    })
+    .default({}),
   revisions: z.object({ keep: z.number().int().min(0), merge: z.number().int().min(0) }),
   mutationId: Uuid,
 }).refine((input) => input.keepId.toLowerCase() !== input.mergeId.toLowerCase(), {
