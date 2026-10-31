@@ -1,5 +1,6 @@
-/* KanbanColumn: a size-board-column column on surface-column with radius-lg:
-   its option's dot, title and count (and an optional "+"), then its cards space-8 apart. A card is
+/* KanbanColumn: a size-board-column column on surface-column with radius-lg, as tall as its cards (up to the
+   board's height, then its cards scroll): its option's dot, title, count pill and "+", then its cards space-8 apart;
+   an empty column is a short dashed drop zone. A card is
    surface-raised with a hairline border and shadow-xs; it fades where it was
    while it moves (its lifted copy rides above, shadow-lg) and takes the inset
    ring on focus. The column takes the inset ring on accent-soft while a card
@@ -13,6 +14,7 @@
     box-sizing: border-box;
     inline-size: var(--size-board-column);
     min-block-size: 0;
+    max-block-size: 100%;
     padding: var(--space-8);
     border-radius: var(--radius-lg);
     background: var(--surface-column);
@@ -30,10 +32,10 @@
     letter-spacing: var(--tracking-body-strong);
   }
 
-  /* The title and count; the head's "+" sits at the far end. */
+  /* The title and count, then the head's "+" right after them; the collapse button sits at the far end. */
   .heading {
     display: flex;
-    flex: 1;
+    flex: 0 1 auto;
     gap: var(--space-8);
     align-items: center;
     min-inline-size: 0;
@@ -53,6 +55,12 @@
   .collapse {
     display: flex;
     flex: none;
+    margin-inline-start: auto;
+  }
+
+  .add {
+    display: flex;
+    flex: none;
   }
 
   @media (hover: hover) and (pointer: fine) {
@@ -65,12 +73,6 @@
     .head:hover .collapse {
       opacity: 1;
     }
-  }
-
-  .count {
-    color: var(--text-tertiary);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
   }
 
   /* The total sits at the heading's end, after the count, in the same quiet label type. */
@@ -121,13 +123,29 @@
     box-shadow: var(--shadow-focus-inset);
   }
 
+  /* An empty column: a short dashed drop zone a card's height, so the column is no taller than what it holds. */
   .empty {
     display: flex;
+    align-items: center;
     justify-content: center;
-    padding-block: var(--space-16);
+    box-sizing: border-box;
+    min-block-size: calc(2 * var(--size-row));
+    border: var(--border-width-hairline) dashed var(--control-border);
+    border-radius: var(--radius-md);
     color: var(--text-tertiary);
     font: var(--text-label);
     letter-spacing: var(--tracking-label);
+  }
+
+  /* The loading column's cards, space-8 apart, as the list lays them out. */
+  .skeletonCards {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+  }
+
+  .card[data-loading] {
+    min-block-size: calc(2 * var(--size-row));
   }
 
   .card {

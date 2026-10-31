@@ -173,64 +173,67 @@ export function GridHeaderCell({
       {!hideLock && readOnlyReasonOf(attribute) !== undefined && (
         <Icon name="lock" size="xs" tone="muted" label={strings.readOnlyColumn} />
       )}
-      <MenuTrigger isOpen={isMenuOpen} onOpenChange={onMenuOpenChange}>
-        <Button variant="ghost" icon="chevron-down" label={strings.columnOptions(attribute.name)} />
-        <Menu<object>
-          label={strings.columnOptions(attribute.name)}
-          // Its end on the chevron's, so the menu sits under this column, not over the next.
-          placement="bottom end"
-          onAction={(key) => {
-            onAction(String(key));
-          }}
-          disabledKeys={[
-            ...(canMoveLeft ? [] : ['left']),
-            ...(canMoveRight ? [] : ['right']),
-            ...(isRowHeader ? ['unpin', 'hide'] : []),
-          ]}
-        >
-          <MenuItem id="left" icon="arrow-left">
-            {strings.moveLeft}
-          </MenuItem>
-          <MenuItem id="right" icon="arrow-right">
-            {strings.moveRight}
-          </MenuItem>
-          {/* Keyed, so pinning swaps the item rather than changing its id while the menu closes. */}
-          {isPinned ? (
-            <MenuItem key="unpin" id="unpin" icon="pin-off">
-              {strings.unpin}
+      {/* Over the header's end, shown on hover, focus or while open, so a narrow column's name keeps the room. */}
+      <span className={styles.menu} data-open={isMenuOpen || undefined}>
+        <MenuTrigger isOpen={isMenuOpen} onOpenChange={onMenuOpenChange}>
+          <Button variant="ghost" icon="chevron-down" label={strings.columnOptions(attribute.name)} />
+          <Menu<object>
+            label={strings.columnOptions(attribute.name)}
+            // Its end on the chevron's, so the menu sits under this column, not over the next.
+            placement="bottom end"
+            onAction={(key) => {
+              onAction(String(key));
+            }}
+            disabledKeys={[
+              ...(canMoveLeft ? [] : ['left']),
+              ...(canMoveRight ? [] : ['right']),
+              ...(isRowHeader ? ['unpin', 'hide'] : []),
+            ]}
+          >
+            <MenuItem id="left" icon="arrow-left">
+              {strings.moveLeft}
             </MenuItem>
-          ) : (
-            <MenuItem key="pin" id="pin" icon="pin">
-              {strings.pin}
+            <MenuItem id="right" icon="arrow-right">
+              {strings.moveRight}
             </MenuItem>
-          )}
-          <MenuItem id="hide" icon="eye-off">
-            {strings.hide}
-          </MenuItem>
-          {(actions.onSort !== undefined || actions.onFilter !== undefined) && <MenuSeparator />}
-          {actions.onSort !== undefined && (
-            <MenuItem id="ascending" icon="arrow-up-narrow-wide" isChecked={sorted === 'ascending'}>
-              {strings.sortAscending}
+            {/* Keyed, so pinning swaps the item rather than changing its id while the menu closes. */}
+            {isPinned ? (
+              <MenuItem key="unpin" id="unpin" icon="pin-off">
+                {strings.unpin}
+              </MenuItem>
+            ) : (
+              <MenuItem key="pin" id="pin" icon="pin">
+                {strings.pin}
+              </MenuItem>
+            )}
+            <MenuItem id="hide" icon="eye-off">
+              {strings.hide}
             </MenuItem>
-          )}
-          {actions.onSort !== undefined && (
-            <MenuItem id="descending" icon="arrow-down-wide-narrow" isChecked={sorted === 'descending'}>
-              {strings.sortDescending}
-            </MenuItem>
-          )}
-          {actions.onFilter !== undefined && (
-            <MenuItem id="filter" icon="list-filter">
-              {strings.filter}
-            </MenuItem>
-          )}
-          {actions.extra !== undefined && actions.extra.length > 0 && <MenuSeparator />}
-          {actions.extra?.map((item) => (
-            <MenuItem key={item.id} id={`extra:${item.id}`} icon={item.icon} isDanger={item.isDanger === true}>
-              {item.label}
-            </MenuItem>
-          ))}
-        </Menu>
-      </MenuTrigger>
+            {(actions.onSort !== undefined || actions.onFilter !== undefined) && <MenuSeparator />}
+            {actions.onSort !== undefined && (
+              <MenuItem id="ascending" icon="arrow-up-narrow-wide" isChecked={sorted === 'ascending'}>
+                {strings.sortAscending}
+              </MenuItem>
+            )}
+            {actions.onSort !== undefined && (
+              <MenuItem id="descending" icon="arrow-down-wide-narrow" isChecked={sorted === 'descending'}>
+                {strings.sortDescending}
+              </MenuItem>
+            )}
+            {actions.onFilter !== undefined && (
+              <MenuItem id="filter" icon="list-filter">
+                {strings.filter}
+              </MenuItem>
+            )}
+            {actions.extra !== undefined && actions.extra.length > 0 && <MenuSeparator />}
+            {actions.extra?.map((item) => (
+              <MenuItem key={item.id} id={`extra:${item.id}`} icon={item.icon} isDanger={item.isDanger === true}>
+                {item.label}
+              </MenuItem>
+            ))}
+          </Menu>
+        </MenuTrigger>
+      </span>
       <span className={styles.resize} aria-hidden="true" onPointerDown={startResize} />
     </div>
   );

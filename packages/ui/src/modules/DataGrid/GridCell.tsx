@@ -2,10 +2,11 @@
 // open (in the cell, as an open list, or in a popover anchored to it), a
 // skeleton while its row loads, and the reason when it can't be edited or was
 // refused, which the grid's one shared tooltip shows.
-import { useRef, type MouseEvent, type ReactNode } from 'react';
+import { useRef, type MouseEvent, type PointerEvent, type ReactNode } from 'react';
 import { FocusScope } from 'react-aria';
 import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
 import { Badge } from '../../atoms/Badge/Badge.tsx';
+import { Button } from '../../atoms/Button/Button.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { SharedTooltipContext } from '../../atoms/TruncatedText/TruncatedText.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
@@ -89,8 +90,13 @@ export interface GridCellProps {
   readonly onPopoverClose: () => void;
   /** A double click opens the editor. */
   readonly onDoubleClick: () => void;
-  /** On the row header: a click on the name opens the record. */
+  /** On the row header: a click on the name opens the record (its page, where the grid has `onRowOpenPage`). */
   readonly onOpen?: () => void;
+  /**
+   * On the row header, beside a name that opens the page: an "Open in panel" button at the cell's end, shown on row
+   * hover (owner, 31 October 2026), that opens the record beside the grid.
+   */
+  readonly onOpenPanel?: () => void;
   /** A checkbox value: a click on the mark toggles it. */
   readonly onToggle?: () => void;
   /** On the row header: the row's note (spec 0006, AC-56), drawn after the value and read with it. */
@@ -100,7 +106,12 @@ export interface GridCellProps {
   /** On a row header with no name: what to call it ("Unnamed person"), drawn muted in place of the empty value. */
   readonly placeholder?: string;
   /** On the row header: the row's picture, before its name (initials from `name` while `src` is absent). */
-  readonly avatar?: { readonly name: string; readonly id: string; readonly src: string | undefined };
+  readonly avatar?: {
+    readonly name: string;
+    readonly id: string;
+    readonly src: string | undefined;
+    readonly shape?: 'circle' | 'square';
+  };
 }
 
 /**
@@ -132,6 +143,7 @@ export function GridCell({
   onPopoverClose,
   onDoubleClick,
   onOpen,
+  onOpenPanel,
   onToggle,
   note,
   comments,
@@ -196,6 +208,18 @@ export function GridCell({
   const onClick = (event: MouseEvent<HTMLDivElement>) => {
     if (action !== undefined && (event.target as HTMLElement).closest('[data-hit]') !== null) action();
   };
+  // Open in panel is heard in the capture phase, before its Button (which stops its own events): pressing a row's cell
+  // focuses it and gives the row an element of its own, so the press and its release meet different elements and
+  // the Button's own press never fires. It opens as the pointer lifts on it, or on a click with no pointer behind it
+  // (a screen reader's, `detail` 0).
+  const isOnPeek = (target: EventTarget) => target instanceof Element && target.closest('[data-peek]') !== null;
+  const onPointerUpCapture = (event: PointerEvent<HTMLDivElement>) => {
+    if (event.button === 0 && isOnPeek(event.target)) onOpenPanel?.();
+  };
+  const onClickCapture = (event: MouseEvent<HTMLDivElement>) => {
+    if (event.detail === 0 && isOnPeek(event.target)) onOpenPanel?.();
+  };
+  const canPeek = onOpenPanel !== undefined && isLoaded && mode === undefined;
 
   return (
     <div
@@ -218,7 +242,9 @@ export function GridCell({
       data-last-pinned={place.isLastPinned === true ? '' : undefined}
       tabIndex={isFocused ? 0 : -1}
       onDoubleClick={onDoubleClick}
+      data-row-header={isRowHeader || undefined}
       {...(action === undefined ? {} : { onClick })}
+      {...(canPeek ? { onPointerUpCapture, onClickCapture } : {})}
       style={{ '--col-width': `${String(place.width)}px`, '--col-offset': `${String(place.stickyOffset ?? 0)}px` }}
     >
       {avatar !== undefined && isLoaded && mode !== 'cell' && (
@@ -226,7 +252,8 @@ export function GridCell({
           <Avatar
             name={avatar.name}
             id={avatar.id}
-            size="xs"
+            size="md"
+            shape={avatar.shape ?? 'circle'}
             isDecorative
             {...(avatar.src === undefined ? {} : { src: avatar.src })}
           />
@@ -238,6 +265,12 @@ export function GridCell({
           {/* Read apart from the name before it. */}
           <VisuallyHidden>{strings.noteSeparator}</VisuallyHidden>
           <Badge count={comments} icon="message-square" label={strings.openThreads(comments)} />
+        </span>
+      )}
+      {canPeek && (
+        // Shown on row hover; the grid's shared tooltip says it (`data-tip-label`), and Space is the keyboard's way.
+        <span className={styles.peek} data-peek="" data-tip-label={strings.openInPanel}>
+          <Button variant="ghost" icon="panel-right-open" label={strings.openInPanel} />
         </span>
       )}
       {note !== undefined && isLoaded && mode === undefined && (

@@ -77,6 +77,8 @@ export const strings = {
   groupBy: 'Group by',
   /** A board's View settings: the currency field each column header totals (the CRM flow pass). */
   showTotalOf: 'Show total of',
+  /** A board's View settings: whether columns with no cards show (AC-497). */
+  showEmptyColumns: 'Show empty columns',
   noTotal: 'Nothing',
   noGrouping: 'None',
   /** A board's View settings: what its cards show. */

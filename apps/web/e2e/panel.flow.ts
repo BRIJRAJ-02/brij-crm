@@ -9,7 +9,7 @@
 // board sits before Won and Lost.
 import { randomUUID } from 'node:crypto';
 import { expect, test } from '@playwright/test';
-import { addPerson, checkScreen, newWorkspace } from './people.ts';
+import { addPerson, checkScreen, newWorkspace, openInPanel } from './people.ts';
 
 test.describe('the record panel', () => {
   test.skip(({ viewport }) => (viewport?.width ?? 0) < 1000, 'The panel sits beside the table at desktop width.');
@@ -24,10 +24,7 @@ test.describe('the record panel', () => {
     await addPerson(page, 'Cy', 'Lane', `cy-${tag}@example.com`);
 
     const table = page.getByRole('grid', { name: 'People' });
-    await table
-      .getByRole('rowheader', { name: /Bea Stone/ })
-      .getByText('Bea Stone')
-      .click();
+    await openInPanel(page, /Bea Stone/);
     const panel = page.getByRole('dialog', { name: 'Bea Stone' });
     await expect(panel).toBeVisible();
     await expect(page).toHaveURL(/[?&]record=[0-9a-f-]{36}/u);
@@ -66,10 +63,7 @@ test.describe('the record panel', () => {
     await expect(page).not.toHaveURL(/record=/u);
 
     // Open full page goes on to the record's page, on the tab the panel showed.
-    await table
-      .getByRole('rowheader', { name: /Bea Stone/ })
-      .getByText('Bea Stone')
-      .click();
+    await openInPanel(page, /Bea Stone/);
     await page.getByRole('dialog', { name: 'Bea Stone' }).getByRole('button', { name: 'Open full page' }).click();
     await expect(page).toHaveURL(/\/objects\/people\/[0-9a-f-]{36}\/overview$/u);
     await expect(page.getByRole('heading', { level: 2, name: 'Bea Stone' })).toBeVisible();
@@ -94,10 +88,7 @@ test.describe('the record panel', () => {
     const slug = `paneltask-${tag}`;
     await newWorkspace(page, `paneltask-${tag}@example.com`, slug);
     await addPerson(page, 'Grace', 'Hopper', `grace-${tag}@example.com`);
-    await page
-      .getByRole('rowheader', { name: /Grace Hopper/ })
-      .getByText('Grace Hopper')
-      .click();
+    await openInPanel(page, /Grace Hopper/);
     const panel = page.getByRole('dialog', { name: 'Grace Hopper' });
     await panel.getByRole('tab', { name: /Tasks/ }).click();
     await panel.getByRole('button', { name: 'New task' }).first().click();
@@ -137,10 +128,7 @@ test.describe('the record panel', () => {
     const table = page.getByRole('grid', { name: 'People' });
     const row = (name: string) => table.getByRole('row').filter({ hasText: name });
 
-    await table
-      .getByRole('rowheader', { name: /Ada Byron/ })
-      .getByText('Ada Byron')
-      .click();
+    await openInPanel(page, /Ada Byron/);
     const panel = page.getByRole('dialog', { name: 'Ada Byron' });
     await expect(panel).toBeVisible();
     await expect(row('Ada Byron')).toHaveAttribute('aria-current', 'true');
@@ -192,11 +180,7 @@ test.describe('the record panel', () => {
 
     const table = page.getByRole('grid', { name: 'People' });
     await expect(table.getByRole('rowheader').first()).toBeVisible({ timeout: 30_000 });
-    await table
-      .getByRole('rowheader')
-      .first()
-      .getByText(/Person\d+ Stepper/u)
-      .click();
+    await openInPanel(page, /Person\d+ Stepper/u);
     const named = page.getByRole('dialog', { name: /Person\d+ Stepper/u });
     await expect(named).toBeVisible();
     // Down through the first block and past its end: the 101st record opens though its block was not loaded when the

@@ -1,6 +1,6 @@
 /* KanbanCard: the card's content, space-6 apart: a head of the record's
-   avatar, its name in body strong (cut with an ellipsis), and its handle or
-   lock at the end; then its card fields, space-4 apart. The card's surface,
+   20px avatar, its name in body strong (cut with an ellipsis), and its handle or
+   lock at the end (the grip quiet until hovered or focused); then its card fields, space-4 apart. The card's surface,
    border and states belong to its row in KanbanColumn. */
 @layer components {
   .root {
@@ -34,6 +34,25 @@
     flex-direction: column;
     gap: var(--space-4);
     min-inline-size: 0;
+  }
+
+  /* The grip: always there for touch, quiet for a pointer that can hover until the card is hovered or the grip
+     focused, so a column of cards isn't a column of grips. */
+  .grip {
+    display: flex;
+    flex: none;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .grip {
+      opacity: 0;
+      transition: opacity var(--duration-hover) var(--ease-hover);
+    }
+
+    .grip:focus-within,
+    .root:hover .grip {
+      opacity: 1;
+    }
   }
 
   .field {

@@ -29,6 +29,7 @@ import {
   focusLater,
   Popover,
   Select,
+  Switch,
   sharedStrings,
   ToolbarSearch,
   type ViewChoice,
@@ -952,23 +953,34 @@ export function ViewScreen(props: ViewScreenProps) {
           {...(boardPlan === undefined
             ? { label: strings.columns, fields }
             : { label: strings.cardFields, fields: cardFields, maxShown: BOARD_MAX_CARD_FIELDS })}
-          {...(boardPlan !== undefined && totalChoices.length > 1
+          {...(boardPlan !== undefined
             ? {
-                // A board's column total (the CRM flow pass): the sum of one currency field in each column header.
                 header: (
-                  <Select
-                    savesOnPick
-                    label={strings.showTotalOf}
-                    size="sm"
-                    items={totalChoices}
-                    value={boardPlan.total?.id ?? 'none'}
-                    onChange={(id) => {
-                      const { totalAttributeId: _old, ...rest } = boardPlan.settings;
-                      changeBoardLayout({
-                        board: id === null || id === 'none' ? rest : { ...rest, totalAttributeId: id },
-                      });
-                    }}
-                  />
+                  <>
+                    {/* A board's column total (the CRM flow pass): the sum of one currency field in each column header. */}
+                    {totalChoices.length > 1 && (
+                      <Select
+                        savesOnPick
+                        label={strings.showTotalOf}
+                        size="sm"
+                        items={totalChoices}
+                        value={boardPlan.total?.id ?? 'none'}
+                        onChange={(id) => {
+                          const { totalAttributeId: _old, ...rest } = boardPlan.settings;
+                          changeBoardLayout({
+                            board: id === null || id === 'none' ? rest : { ...rest, totalAttributeId: id },
+                          });
+                        }}
+                      />
+                    )}
+                    {/* Show empty columns (AC-497) is the view's choice, made here with its other settings rather
+                        than by a button floating at the board's end (owner, 31 October 2026). */}
+                    <Switch
+                      label={strings.showEmptyColumns}
+                      isSelected={boardPlan.settings.showEmptyColumns}
+                      onChange={showEmptyColumns}
+                    />
+                  </>
                 ),
               }
             : {})}

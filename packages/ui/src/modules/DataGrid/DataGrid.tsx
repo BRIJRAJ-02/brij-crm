@@ -121,6 +121,8 @@ export interface DataGridProps<Row> {
    * undefined for initials. No picture at all when absent.
    */
   readonly rowAvatar?: (row: Row) => string | undefined;
+  /** The row avatar's shape: `circle` for people (the default), `square` for companies and other records. */
+  readonly rowAvatarShape?: 'circle' | 'square';
   readonly selection?: GridSelection;
   readonly onSelectionChange?: (selection: GridSelection) => void;
   /** Column order, widths, pins and hiding, on release or key press, never mid drag. */
@@ -168,7 +170,17 @@ export interface DataGridProps<Row> {
    */
   readonly errorText?: string;
   readonly emptyState?: ReactNode;
+  /**
+   * Opens a row's record beside the grid (the record panel). Alone, a click on the row header's name and Space on
+   * it call it. With `onRowOpenPage`, it moves to the row header's "Open in panel" button, shown on row hover, and
+   * Space keeps it.
+   */
   readonly onRowOpen?: (rowId: string) => void;
+  /**
+   * Opens a row's record on its full page (owner, 31 October 2026): a click on the row header's name, and Enter on
+   * it (F2 or typing edits the name). The panel keeps its own way in, the hover button and Space.
+   */
+  readonly onRowOpenPage?: (rowId: string) => void;
   /** Adds Sort to the column menu. */
   readonly onSort?: (columnId: string, direction: 'ascending' | 'descending') => void;
   /** The order the rows are in, by one column: its header says so (`aria-sort`, and the direction's arrow). */
@@ -321,6 +333,10 @@ const keyOf = (row: number, col: number) => `${String(row)}:${String(col)}`;
 
 /** A cell's tip: its reason (read only, or refused), else the full text of the first cut text in it. */
 function tipIn(cell: HTMLElement): { readonly anchor: HTMLElement; readonly text: string } | undefined {
+  // A control in the cell that names itself for the tooltip (the row header's Open in panel), while it is hovered.
+  const labelled = cell.querySelector<HTMLElement>('[data-tip-label]:hover');
+  const label = labelled?.dataset.tipLabel;
+  if (labelled !== null && label !== undefined) return { anchor: labelled, text: label };
   const reason = cell.querySelector('[data-tip]')?.textContent ?? '';
   if (reason !== '') return { anchor: cell, text: reason };
   for (const text of cell.querySelectorAll<HTMLElement>('[data-truncated]')) {
@@ -358,6 +374,7 @@ export function DataGrid<Row>({
   hideColumnLocks = false,
   untitled = strings.untitled,
   rowAvatar,
+  rowAvatarShape = 'circle',
   selection,
   onSelectionChange,
   onColumnsChange,
@@ -374,6 +391,7 @@ export function DataGrid<Row>({
   errorText,
   emptyState,
   onRowOpen,
+  onRowOpenPage,
   onSort,
   sort,
   onFilter,
@@ -505,8 +523,6 @@ export function DataGrid<Row>({
     scrollMargin: HEADER,
     scrollPaddingStart: HEADER,
     scrollPaddingEnd: (hasFooter ? ROW : 0) + (hasFloatingBar ? FLOATING_INSET : 0),
-    // Below the last row, room for the floating bar (the body draws the virtualizer's total, `rowsHeight`).
-    paddingEnd: hasFloatingBar ? FLOATING_INSET : 0,
     rangeExtractor: (visible) => {
       const drawn = defaultRangeExtractor(visible);
       const extra = kept.filter((row) => !drawn.includes(row));
@@ -524,11 +540,12 @@ export function DataGrid<Row>({
     },
   });
   // The body as drawn, and the scale between the rows' range and the scroller's (1 while the rows fit).
-  // The total leaves out the scroll margin (the header) already: the rows and the inset below them, no more, so a
-  // footer after the body starts under the last row rather than over it.
+  // The total leaves out the scroll margin (the header) already: the rows, no more, so a footer after the body starts
+  // right under the last row. The floating bar's room is the scroller's padding, after the footer.
   const rowsHeight = virtualizer.getTotalSize();
   const bodyHeight = Math.min(rowsHeight, MAX_BODY);
-  const outside = HEADER + (hasFooter ? ROW : 0) - (virtualizer.scrollRect?.height ?? 0);
+  const outside =
+    HEADER + (hasFooter ? ROW : 0) + (hasFloatingBar ? FLOATING_INSET : 0) - (virtualizer.scrollRect?.height ?? 0);
   const scale = rowsHeight <= MAX_BODY ? 1 : Math.max(1, (rowsHeight + outside) / Math.max(1, bodyHeight + outside));
   useLayoutEffect(() => {
     scrollScale.current = scale;
@@ -863,8 +880,10 @@ export function DataGrid<Row>({
     if (!event.currentTarget.contains(event.target)) return;
     const cell = event.target.closest<HTMLElement>('[data-cell]');
     const key = cell?.dataset.cell;
-    if (key === hoveredCell.current) return;
-    hoveredCell.current = key;
+    // Onto or off a control that names itself (Open in panel) counts as a new place, so its tip shows there.
+    const place = key === undefined || event.target.closest('[data-tip-label]') === null ? key : `${key}:label`;
+    if (place === hoveredCell.current) return;
+    hoveredCell.current = place;
     clearTimeout(hoverTimer.current);
     if (cell === null) {
       if (tip?.via === 'hover') setTip(undefined);
@@ -875,7 +894,7 @@ export function DataGrid<Row>({
       return;
     }
     hoverTimer.current = setTimeout(() => {
-      if (hoveredCell.current !== key) return;
+      if (hoveredCell.current !== place) return;
       // By its place, not the element hovered: a click meanwhile may have given that element another row.
       const current = scrollRef.current?.querySelector<HTMLElement>(`[data-cell="${key ?? ''}"]`);
       if (current !== null && current !== undefined) showTip(current, 'hover');
@@ -1244,6 +1263,13 @@ export function DataGrid<Row>({
       event.preventDefault();
       const id = rowIdAt(focus.row);
       if (id !== undefined) onRowOpen?.(id);
+      return;
+    }
+    // Enter on the name opens the record's page, where the grid has one to open; F2 or typing still edits it.
+    if (event.key === 'Enter' && column.id === rowHeader && onRowOpenPage !== undefined) {
+      event.preventDefault();
+      const id = rowIdAt(focus.row);
+      if (id !== undefined) onRowOpenPage(id);
       return;
     }
     if (fieldTypeOf(column.attribute.type).togglesInPlace === true && (event.key === ' ' || event.key === 'Enter')) {
@@ -1696,7 +1722,7 @@ export function DataGrid<Row>({
               isRowHeader={each.column.id === rowHeader}
               {...(each.column.id === rowHeader && isUnnamed ? { placeholder: untitled } : {})}
               {...(each.column.id === rowHeader && rowAvatar !== undefined && rowData !== undefined
-                ? { avatar: { name: named ?? '', id: id ?? '', src: rowAvatar(rowData) } }
+                ? { avatar: { name: named ?? '', id: id ?? '', src: rowAvatar(rowData), shape: rowAvatarShape } }
                 : {})}
               {...(each.column.id === rowHeader && id !== undefined && rowNotes?.get(id) !== undefined
                 ? { note: rowNotes.get(id) }
@@ -1731,9 +1757,19 @@ export function DataGrid<Row>({
                     },
                   }
                 : {})}
-              {...(each.column.id === rowHeader && id !== undefined && onRowOpen !== undefined
+              {...(each.column.id === rowHeader && id !== undefined && (onRowOpenPage ?? onRowOpen) !== undefined
                 ? {
                     onOpen: () => {
+                      (onRowOpenPage ?? onRowOpen)?.(id);
+                    },
+                  }
+                : {})}
+              {...(each.column.id === rowHeader &&
+              id !== undefined &&
+              onRowOpenPage !== undefined &&
+              onRowOpen !== undefined
+                ? {
+                    onOpenPanel: () => {
                       onRowOpen(id);
                     },
                   }
@@ -1868,6 +1904,9 @@ export function DataGrid<Row>({
           aria-busy={status === 'loading' || undefined}
           className={styles.root}
           data-empty={isEmpty || undefined}
+          // Room for the floating bar after the footer, in the scroller's own padding: the footer stays right under
+          // the last row, and scrolled to the end the last row and the footer clear the bar (owner, 31 October 2026).
+          data-floating-bar={hasFloatingBar || undefined}
           tabIndex={isCellFocusable && status === 'ready' ? -1 : 0}
           onKeyDownCapture={onKeyDownCapture}
           onKeyDown={onKeyDown}

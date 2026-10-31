@@ -40,6 +40,7 @@ interface SampleGridProps {
   readonly isLoading?: (index: number) => boolean;
   readonly cellErrors?: ReadonlyMap<string, string>;
   readonly onRowOpen?: (rowId: string) => void;
+  readonly onRowOpenPage?: (rowId: string) => void;
   readonly confirmsPaste?: boolean;
   /** Notes on rows by id: a record made here, a row that left the view. */
   readonly rowNotes?: ReadonlyMap<string, RowNote>;
@@ -90,6 +91,7 @@ function SampleGrid({
   isLoading,
   cellErrors,
   onRowOpen,
+  onRowOpenPage,
   confirmsPaste,
   rowNotes,
   activeId,
@@ -194,6 +196,7 @@ function SampleGrid({
         {...(addRow === undefined ? {} : { addRow })}
         {...(cellErrors === undefined ? {} : { cellErrors })}
         {...(onRowOpen === undefined ? {} : { onRowOpen })}
+        {...(onRowOpenPage === undefined ? {} : { onRowOpenPage })}
         {...(confirmsPaste === undefined ? {} : { confirmsPaste })}
         {...(rowNotes === undefined ? {} : { rowNotes })}
         {...(activeId === undefined ? {} : { activeId })}
@@ -883,6 +886,58 @@ export const RowPicturesAndUnnamed: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByText('Unnamed company')).toBeVisible();
     await expect(canvas.getByRole('row', { name: /Unnamed company/ })).toBeInTheDocument();
+  },
+};
+
+/**
+ * The name opens the record's page and the row's hover "Open in panel" opens the panel (owner, 31 October 2026):
+ * a click on each, then Enter on the name for the page and Space for the panel. Square pictures, as companies are.
+ */
+export const OpenPageOrPanel: Story = {
+  args: { withAvatars: true, onRowOpen: fn(), onRowOpenPage: fn() },
+  play: async ({ args, canvas, canvasElement, userEvent }) => {
+    const press = presser((keys) => userEvent.keyboard(keys));
+    await userEvent.click(within(canvas.getAllByRole('rowheader')[0] ?? canvasElement).getByText('Northwind Traders'));
+    await expect(args.onRowOpenPage).toHaveBeenCalledWith('company-0');
+    await expect(args.onRowOpen).not.toHaveBeenCalled();
+    const second = cell(canvasElement, 1, 1);
+    await expect(second).not.toBeNull();
+    if (second === null) return;
+    await userEvent.hover(second);
+    await userEvent.click(within(second).getByRole('button', { name: 'Open in panel' }));
+    await expect(args.onRowOpen).toHaveBeenCalledWith('company-1');
+    await press(['{Enter}'], '1:1');
+    await expect(args.onRowOpenPage).toHaveBeenCalledWith('company-1');
+    await press([' ']);
+    await expect(args.onRowOpen).toHaveBeenCalledTimes(2);
+  },
+};
+
+/**
+ * Ticked rows and the floating bar over a short list: the footer stays right under the last row, and the bar's
+ * room is the scroller's padding after it, never a band inside the rows (owner, 31 October 2026).
+ */
+export const FloatingBarShortList: Story = {
+  args: {
+    count: 4,
+    selected: ['company-1'],
+    addRow: { label: 'New company', onAdd: () => undefined },
+    floatingBar: (
+      <BulkActionBar placement="floating" count={1} total={4} onClear={() => undefined}>
+        <Button variant="danger" icon="trash">
+          Delete
+        </Button>
+      </BulkActionBar>
+    ),
+  },
+  play: async ({ canvas, canvasElement }) => {
+    await expect(canvas.getByRole('toolbar', { name: 'Selected records' })).toBeVisible();
+    const last = cell(canvasElement, 3, 1);
+    const footer = canvasElement.querySelector('[role="row"][aria-rowindex="6"]');
+    await expect(last).not.toBeNull();
+    await expect(footer).not.toBeNull();
+    if (last === null || footer === null) return;
+    await expect(Math.abs(footer.getBoundingClientRect().top - last.getBoundingClientRect().bottom)).toBeLessThan(2);
   },
 };
 

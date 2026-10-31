@@ -1,6 +1,6 @@
-// What a board card shows: the record's avatar and name, its handle (or a
-// lock that says why it can't move), then the view's card fields through
-// their one display on the card surface.
+// What a board card shows: the record's avatar and name in bold, its handle
+// (shown on hover or focus; the whole card drags) or a lock that says why it
+// can't move, then the view's card fields through their one display.
 import { memo } from 'react';
 import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
 import { Badge } from '../../atoms/Badge/Badge.tsx';
@@ -38,7 +38,7 @@ export const KanbanCard = memo(function KanbanCard({ card, fields, grip }: Kanba
         <Avatar
           name={record.name}
           id={record.recordId}
-          size="xs"
+          size="sm"
           shape={record.kind === 'person' ? 'circle' : 'square'}
           isDecorative
           {...(record.imageSrc === undefined ? {} : { src: record.imageSrc })}
@@ -49,7 +49,12 @@ export const KanbanCard = memo(function KanbanCard({ card, fields, grip }: Kanba
           <Badge count={card.openThreads} icon="message-square" label={strings.openThreads(card.openThreads)} />
         )}
         {card.readOnlyReason !== undefined && <LockReason reason={card.readOnlyReason} />}
-        {grip !== undefined && <DragHandle label={strings.move(record.name)} drag={grip} />}
+        {/* The whole card drags by pointer; the grip is the keyboard's way, shown on hover or focus only. */}
+        {grip !== undefined && (
+          <span className={styles.grip}>
+            <DragHandle label={strings.move(record.name)} drag={grip} />
+          </span>
+        )}
       </span>
       {shown.length > 0 && (
         <span className={styles.fields}>

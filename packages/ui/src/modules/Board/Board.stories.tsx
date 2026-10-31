@@ -240,13 +240,18 @@ export const ReadOnly: Story = {
   },
 };
 
-/** Showing empty columns brings back Lost, with nothing in it. */
+/**
+ * Showing empty columns brings back Lost, with nothing in it: a short dashed drop zone, its column no taller than
+ * its head and the zone. Hiding them again is View settings' choice, so the board shows no button for it.
+ */
 export const EmptyColumns: Story = {
   args: { startShowingEmpty: true },
   play: async ({ canvas }) => {
     const lost = canvas.getByRole('grid', { name: /Lost/ });
     await expect(within(lost).getByText('No cards')).toBeInTheDocument();
-    await expect(canvas.getByRole('button', { name: 'Hide empty columns' })).toBeInTheDocument();
+    const column = canvas.getByRole('region', { name: /Lost/ });
+    await expect(column.getBoundingClientRect().height).toBeLessThan(160);
+    await expect(canvas.queryByRole('button', { name: 'Hide empty columns' })).not.toBeInTheDocument();
   },
 };
 
@@ -257,7 +262,7 @@ export const CollapsedNoValue: Story = {
     const strip = canvas.getByRole('region', { name: /No Stage/ });
     await expect(within(strip).queryByRole('grid')).not.toBeInTheDocument();
     await expect(strip.getBoundingClientRect().width).toBeLessThan(80);
-    await expect(within(strip).getByText('0')).toBeInTheDocument();
+    await expect(within(strip).getByText(/^0 cards$/)).toBeInTheDocument();
   },
 };
 
@@ -397,7 +402,8 @@ export const CountAtLeast: Story = {
   ),
   play: async ({ canvas }) => {
     await expect(canvas.getByText('10,000+')).toBeInTheDocument();
-    await expect(canvas.getByLabelText('10,000 or more cards')).toBeInTheDocument();
+    // The count pill reads its noun after the number: "10,000+ cards".
+    await expect(canvas.getByText(/^10,000\+ cards$/)).toBeInTheDocument();
   },
 };
 

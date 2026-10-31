@@ -237,6 +237,12 @@ export function RecordsScreen({
 }: RecordsScreenProps) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
+  const openPage = (recordId: string) => {
+    void navigate({
+      to: '/w/$slug/objects/$object/$recordId/$tab',
+      params: { slug, object: object.apiSlug, recordId, tab: 'overview' },
+    });
+  };
   // The question asked now, and the records shown: the warmed ones until another question's first rows are in,
   // so the table never blanks while a filter or sort changes.
   const keyOf = (asked: ViewQuery) => queryKey({ ...asked, sorts: asked.sorts ?? [] });
@@ -706,17 +712,24 @@ export function RecordsScreen({
               {...(peekRecordId === undefined ? {} : { activeId: peekRecordId })}
               {...(peekIndex === undefined || grouped !== undefined ? {} : { activeIndex: peekIndex })}
               commentCount={(row) => row.openThreads}
-              // A record's name opens it in the panel beside the table (spec 0017, AC-384), its page one press on.
-              onRowOpen={(recordId) => {
-                if (peek !== undefined) {
-                  peek.open(recordId);
-                  return;
-                }
-                void navigate({
-                  to: '/w/$slug/objects/$object/$recordId/$tab',
-                  params: { slug, object: object.apiSlug, recordId, tab: 'overview' },
-                });
-              }}
+              // A record's name opens its page (and Enter on it); the hover "Open in panel" and Space open it in the
+              // panel beside the table (spec 0017, AC-384; owner, 31 October 2026).
+              {...(peek === undefined
+                ? {
+                    onRowOpen: (recordId: string) => {
+                      openPage(recordId);
+                    },
+                  }
+                : {
+                    onRowOpen: (recordId: string) => {
+                      peek.open(recordId);
+                    },
+                    onRowOpenPage: (recordId: string) => {
+                      openPage(recordId);
+                    },
+                  })}
+              // A person is a circle; a company or any other record a square, as on its page.
+              rowAvatarShape={object.standardKey === 'people' ? 'circle' : 'square'}
               untitled={strings.unnamed(object.singularName)}
               {...(avatar === undefined
                 ? {}

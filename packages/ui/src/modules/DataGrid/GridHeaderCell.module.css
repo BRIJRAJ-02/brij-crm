@@ -1,6 +1,6 @@
 /* GridHeaderCell: a size-table-header tall header in text-secondary and
-   body-strong (13px medium), with the type icon, the name, the menu button and a resize
-   edge. Pinned headers stick to the start edge like their cells. */
+   body-strong (13px medium), with the type icon, the name, the menu button (over the end, on hover or focus, for
+   a pointer) and a resize edge. Pinned headers stick to the start edge like their cells. */
 @layer components {
   .root {
     /* Set inline per cell; these are the defaults. */
@@ -105,6 +105,34 @@
   .name {
     flex: 0 1 auto;
     min-inline-size: 0;
+  }
+
+  /* The column menu's chevron. For a pointer that can hover it sits over the header's end on the header's own
+     background, shown on hover, keyboard focus or while its menu is open, so the name takes the whole width at rest
+     ("Company", not "Com"); touch always shows it in the row. */
+  .menu {
+    display: flex;
+    flex: none;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .menu {
+      position: absolute;
+      inset-block: 0;
+      inset-inline-end: var(--space-4);
+      align-items: center;
+      padding-inline-start: var(--space-4);
+      background: inherit;
+      opacity: 0;
+      transition: opacity var(--duration-hover) var(--ease-hover);
+    }
+
+    .menu:focus-within,
+    .menu[data-open],
+    .root:hover .menu,
+    .root[data-focused]:focus-visible .menu {
+      opacity: 1;
+    }
   }
 
   /* Centred on the column's end edge, above the next header, so all of it takes the pointer. */

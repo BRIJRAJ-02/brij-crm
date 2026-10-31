@@ -2,7 +2,6 @@
 // grouping attribute, whose cards move between columns by drag and drop.
 import { useRef, useState } from 'react';
 import { Button } from '../../atoms/Button/Button.tsx';
-import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import type { FieldAttribute } from '../../fields/types.ts';
 import { DragArea, type DragDrop, type DragWords } from '../../lib/drag/drag.tsx';
@@ -12,7 +11,7 @@ import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
 import { useFormatSettings } from '../../provider/context.ts';
 import { useDelayedLoading } from '../../provider/useDelayedLoading.ts';
 import styles from './Board.module.css';
-import { KanbanCardOverlay, KanbanColumn, refusalOf } from './KanbanColumn.tsx';
+import { KanbanCardOverlay, KanbanColumn, KanbanColumnSkeleton, refusalOf } from './KanbanColumn.tsx';
 import { strings } from './strings.ts';
 import { Field } from '../../molecules/Field/Field.tsx';
 import { Spinner } from '../../atoms/Spinner/Spinner.tsx';
@@ -51,7 +50,7 @@ export interface BoardProps {
   readonly collapsedIds?: ReadonlySet<string>;
   /** A column folded or opened: each column's head gets a collapse button, and a folded strip an expand one. */
   readonly onCollapsedChange?: (columnId: string, isCollapsed: boolean) => void;
-  /** "+ Add stage" at the board's end, for someone who may add options to the grouping field. */
+  /** "+ Add stage" after the last column, in the heads' row, for someone who may add options to the grouping field. */
   readonly addColumn?: BoardAddColumn;
   /** `loading` (skeleton columns after the loading delay), `error`, or `no-access`. */
   readonly status?: LoadStatus;
@@ -89,8 +88,10 @@ function cardAfter(column: BoardColumn, id: string): string | undefined {
  * and, on a reorderable board, between cards, Space or Enter drops it, Escape
  * puts it back), each step said to screen readers, and focus comes back to
  * the card where it landed. Archived columns show only while they hold cards and never
- * take one. Empty columns hide behind "N hidden columns", and come back as
- * drop targets while a card is moving.
+ * take one. An empty column is a short dashed drop zone under its head. With
+ * empty columns hidden (a View settings choice), "N hidden columns" after the
+ * last one brings them back, and they come back as drop targets while a card
+ * is moving.
  */
 export function Board({
   label,
@@ -139,14 +140,12 @@ export function Board({
   }
   if (status === 'loading') {
     return (
+      // The board's own shape from the first frame (its inset, its columns' width, each a head over three cards), so
+      // the loaded board lands in place; the bars wait for the loading delay.
       <div className={styles.root} aria-busy="true">
-        {showSkeleton &&
-          [0, 1, 2].map((column) => (
-            <div key={column} className={styles.column}>
-              <Skeleton width="short" />
-              <Skeleton shape="block" />
-            </div>
-          ))}
+        {[0, 1, 2].map((column) => (
+          <KanbanColumnSkeleton key={column} cards={3 - (column % 2)} isShown={showSkeleton} />
+        ))}
         <VisuallyHidden>{strings.loading}</VisuallyHidden>
       </div>
     );
@@ -287,29 +286,19 @@ export function Board({
             }}
           />
         )}
-        {onShowEmptyColumnsChange !== undefined && hiddenEmpty > 0 && !isMoving && (
+        {/* Hide or show empty columns is a View settings choice; while some are hidden, one quiet way back sits after
+            the last column, in the head row, for whoever looks for a missing stage. */}
+        {onShowEmptyColumnsChange !== undefined && !showEmptyColumns && hiddenEmpty > 0 && !isMoving && (
           <span className={styles.hidden}>
-            {showEmptyColumns ? (
-              <Button
-                variant="ghost"
-                icon="eye-off"
-                onPress={() => {
-                  onShowEmptyColumnsChange(false);
-                }}
-              >
-                {strings.hideEmpty}
-              </Button>
-            ) : (
-              <Button
-                variant="dashed"
-                icon="eye"
-                onPress={() => {
-                  onShowEmptyColumnsChange(true);
-                }}
-              >
-                {strings.hiddenColumns(number, plural)}
-              </Button>
-            )}
+            <Button
+              variant="ghost"
+              icon="eye"
+              onPress={() => {
+                onShowEmptyColumnsChange(true);
+              }}
+            >
+              {strings.hiddenColumns(number, plural)}
+            </Button>
           </span>
         )}
       </div>
@@ -318,7 +307,8 @@ export function Board({
 }
 
 /**
- * "+ Add stage" at the board's end: a dashed button that turns into a name field in place. Enter makes the column
+ * "+ Add stage" at the board's end, in the column heads' row: a quiet ghost button that turns into a name field in
+ * place. Enter makes the column
  * and clears the field for the next one; Esc, or leaving it empty, puts the button back. A refused name stays in the
  * field, and the screen says why.
  */
@@ -356,7 +346,7 @@ function AddColumn({
     );
   };
   return (
-    <div className={styles.add}>
+    <div className={styles.add} data-typing={isTyping || undefined}>
       {isTyping ? (
         <Field
           label={strings.newColumnName(add.label)}
@@ -388,9 +378,8 @@ function AddColumn({
         />
       ) : (
         <Button
-          variant="dashed"
+          variant="ghost"
           icon="plus"
-          isFullWidth
           // eslint-disable-next-line jsx-a11y-x/no-autofocus
           autoFocus={wasPutAway}
           onPress={() => {
