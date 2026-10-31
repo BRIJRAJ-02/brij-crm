@@ -191,7 +191,7 @@ test.describe('relations', () => {
     const shape = edit.getByRole('group', { name: 'How records link' });
     await expect(shape).toContainText('Each company has many people');
     await expect(shape).toContainText('Each person has many companies');
-    await expect(edit).toContainText('The objects and how records link can’t change once the relationship exists.');
+    await expect(edit).toContainText('Fixed once created.');
     await edit.getByLabel('Name on Companies', { exact: true }).fill('Backers');
     await edit.getByLabel('Name on People', { exact: true }).fill('Holdings');
     await checkScreen(page, 'relations-edit');

@@ -14,11 +14,10 @@ export const strings = {
   object: 'Object',
   relatedObject: 'Related object',
   chooseObject: 'Choose an object',
-  objectMissing: 'Choose an object for this side.',
+  objectMissing: 'Choose an object.',
   /** Under the related object in edit mode: the objects and the cardinality are fixed (#14 widens it). */
-  shapeFixed: 'The objects and how records link can’t change once the relationship exists.',
+  shapeFixed: 'Fixed once created.',
   cardinality: 'How records link',
-  /** The ⓘ beside the first side's question: what one and many mean. */
   /** Each side's question, one per object: "Each person has" One company or Many companies. */
   eachHas: (singular: string) => `Each ${singular} has`,
   one: (singular: string) => `One ${singular}`,
@@ -30,15 +29,13 @@ export const strings = {
   thisSideHolds: 'This side holds',
   reverseSideHolds: 'The reverse side holds',
   /** The ⓘ beside Related object. */
-  aboutRelated:
-    'The object on the other side. Records of the two objects can then link to each other. It can be the same object, such as a person’s manager.',
-  aboutRelatedExample: 'Companies and People: link each person to the company they work at.',
+  aboutRelated: 'The object on the other side. It can be the same one, like a person’s manager.',
+  aboutRelatedExample: 'Link each person to their company.',
 
   /** A side's name field: "Name on People". */
   nameOn: (plural: string) => `Name on ${plural}`,
   /** The second name field of a relationship from an object to itself. */
   reverseNameOn: (plural: string) => `Reverse name on ${plural}`,
-  nameHint: 'Each name shows as a column on its object.',
   nameMissing: 'Name this side.',
   namesEqual: 'Give each side its own name.',
   /** Said in place of an object the viewer can't see or the dialog doesn't hold. */

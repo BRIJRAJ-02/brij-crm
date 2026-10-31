@@ -230,11 +230,14 @@ export const BothEndsChoosable: Story = {
     });
     await userEvent.keyboard('{Meta>}{Enter}{/Meta}');
     // The refusal is on the Object picker, which takes focus back so its refusal is read.
-    await waitFor(() => expect(dialog).toHaveTextContent('Choose an object for this side.'));
+    await waitFor(() => expect(dialog).toHaveTextContent('Choose an object.'));
     await waitFor(() => expect(objectPicker).toHaveFocus());
     await expect(args.onSubmit).not.toHaveBeenCalled();
     await choose(dialog, userEvent, 'Object', 'Deals');
     await choose(dialog, userEvent, 'Related object', 'Companies');
+    // Each refusal goes once its picker has an object (it stayed under both before, 31 October 2026).
+    await expect(dialog).not.toHaveTextContent('Choose an object.');
+    await expect(dialog.querySelectorAll('[aria-invalid="true"]')).toHaveLength(0);
     await expect(within(question(dialog, 'Each deal has')).getByRole('radio', { name: 'One company' })).toBeChecked();
     await expect(within(question(dialog, 'Each company has')).getByRole('radio', { name: 'Many deals' })).toBeChecked();
     await expect(inDialog(dialog, 'Name on Deals')).toHaveValue('Company');
@@ -270,9 +273,7 @@ export const Edit: Story = {
   play: async ({ args, userEvent }) => {
     const dialog = await openDialog();
     await expect(dialog).toHaveAccessibleName('Edit relationship');
-    await expect(dialog).toHaveTextContent(
-      'The objects and how records link can’t change once the relationship exists.',
-    );
+    await expect(dialog).toHaveTextContent('Fixed once created.');
     // The relationship's own choice alone, read only: no radio that looks pickable.
     await expect(within(dialog).queryAllByRole('radio')).toEqual([]);
     // The two cards say how many each holds, in words.

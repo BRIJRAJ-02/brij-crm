@@ -260,8 +260,14 @@ function RelationshipForm({
   const near = nounsOf(fromObject);
   const far = nounsOf(toObject);
 
-  // A refusal typed locally wins until the next answer; each lands on its setting, the rest above them.
-  const shown = local.length > 0 ? local : refusals;
+  // A refusal typed locally wins until the next answer; each lands on its setting, the rest above them. An
+  // object's refusal goes as soon as that side has an object.
+  const liveLocal = local.filter(
+    (refusal) =>
+      !(refusal.attributeId === 'from.objectId' && fromId !== null) &&
+      !(refusal.attributeId === 'to.objectId' && toId !== null),
+  );
+  const shown = local.length > 0 ? liveLocal : refusals;
   const errorOf = (field: RelationshipSettingsField) => shown.find((refusal) => refusal.attributeId === field)?.message;
 
   const submit = () => {
@@ -373,7 +379,6 @@ function RelationshipForm({
         autoComplete="off"
         isRequired
         maxLength={100}
-        {...(side === 'from' ? { hint: strings.nameHint } : {})}
         autoFocus={side === (isEditing ? focusSide : 'from') && choosable === undefined && !isReadOnly}
         value={side === 'from' ? fromName : toName}
         onChange={(next) => {
