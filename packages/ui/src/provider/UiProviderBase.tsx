@@ -3,7 +3,11 @@ import { I18nProvider, RouterProvider } from 'react-aria-components';
 import type { KeyboardPlatform } from '../atoms/Kbd/shortcuts.ts';
 import { createClock, type Clock } from './clock.ts';
 import { ClockContext, FormatContext, PlatformContext, ToastsContext, type FormatSettings } from './context.ts';
+<<<<<<< HEAD
 import type { Toasts } from './toasts.tsx';
+=======
+import { ToastRegion, type Toasts } from './toasts.tsx';
+>>>>>>> 26186211b (perf(ui): the hosted form mounts UiProviderBase, without the icon registry or brand art)
 import { LOADING_TIMING, LoadingTimingContext, type LoadingTiming } from './useDelayedLoading.ts';
 
 export { useFormatSettings, useKeyboardPlatform, useNow, useToasts, type FormatSettings } from './context.ts';
@@ -33,6 +37,7 @@ export interface UiProviderProps extends FormatSettings {
   readonly children: ReactNode;
 }
 
+<<<<<<< HEAD
 /** Props for UiProviderBase: UiProvider's, and what draws the toasts. */
 export interface UiProviderBaseProps extends UiProviderProps {
   /** UiProvider's ToastRegion. The hosted form raises no toasts, so it gives none and loads no toast region. */
@@ -43,6 +48,12 @@ export interface UiProviderBaseProps extends UiProviderProps {
  * UiProvider without the icon registry, the brand marks' artwork or the toast region: React Aria's language and
  * router, the shared clock and the toast queue. Only the hosted form mounts it directly, so its first load carries
  * the base icons alone (`atoms/Icon/base-icons.ts`) and no toast region; everything else wraps itself in UiProvider.
+=======
+/**
+ * UiProvider without the icon registry or the brand marks' artwork: React Aria's language and router, the shared
+ * clock and the toasts. Only the hosted form mounts it directly, so its first load carries the base icons alone
+ * (`atoms/Icon/base-icons.ts`); everything else wraps itself in UiProvider.
+>>>>>>> 26186211b (perf(ui): the hosted form mounts UiProviderBase, without the icon registry or brand art)
  */
 export function UiProviderBase({
   locale,
@@ -54,8 +65,12 @@ export function UiProviderBase({
   loadingTiming = LOADING_TIMING,
   platform,
   children,
+<<<<<<< HEAD
   toastRegion,
 }: UiProviderBaseProps) {
+=======
+}: UiProviderProps) {
+>>>>>>> 26186211b (perf(ui): the hosted form mounts UiProviderBase, without the icon registry or brand art)
   const [ownClock] = useState(() => clock ?? createClock({ visibility: document }));
   const [ownPlatform] = useState(() => platform ?? detectKeyboardPlatform(navigator));
   const settings = useMemo<FormatSettings>(() => ({ locale, timeZone }), [locale, timeZone]);
@@ -69,7 +84,11 @@ export function UiProviderBase({
               <LoadingTimingContext value={loadingTiming}>
                 <PlatformContext value={platform ?? ownPlatform}>
                   {children}
+<<<<<<< HEAD
                   {toastRegion}
+=======
+                  <ToastRegion toasts={toasts} />
+>>>>>>> 26186211b (perf(ui): the hosted form mounts UiProviderBase, without the icon registry or brand art)
                 </PlatformContext>
               </LoadingTimingContext>
             </ToastsContext>

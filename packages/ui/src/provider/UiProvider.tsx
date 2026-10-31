@@ -2,7 +2,10 @@ import { IconScope } from '../atoms/Icon/Icon.tsx';
 import { icons } from '../atoms/Icon/icons.ts';
 import { providerArt } from '../atoms/ProviderMark/art.ts';
 import { ProviderArtContext } from '../atoms/ProviderMark/art-context.ts';
+<<<<<<< HEAD
 import { ToastRegion } from './ToastRegion.tsx';
+=======
+>>>>>>> 26186211b (perf(ui): the hosted form mounts UiProviderBase, without the icon registry or brand art)
 import { UiProviderBase, type UiProviderProps } from './UiProviderBase.tsx';
 
 export { useFormatSettings, useKeyboardPlatform, useNow, useToasts, type FormatSettings } from './context.ts';
@@ -19,7 +22,11 @@ export function UiProvider(props: UiProviderProps) {
   return (
     <IconScope icons={icons}>
       <ProviderArtContext value={providerArt}>
+<<<<<<< HEAD
         <UiProviderBase {...props} toastRegion={<ToastRegion toasts={props.toasts} />} />
+=======
+        <UiProviderBase {...props} />
+>>>>>>> 26186211b (perf(ui): the hosted form mounts UiProviderBase, without the icon registry or brand art)
       </ProviderArtContext>
     </IconScope>
   );
