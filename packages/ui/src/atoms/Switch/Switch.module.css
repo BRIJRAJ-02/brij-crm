@@ -71,6 +71,28 @@
     opacity: var(--opacity-disabled);
   }
 
+  /* offLabel: the label and the off word share one cell, so the switch keeps one width either way. While off the
+     label is clear and the word shows. The word is generated content, so Switch names the input with the label
+     outright and the word never joins its accessible name. */
+  .label[data-off] {
+    display: inline-grid;
+  }
+
+  .label[data-off]::after {
+    grid-area: 1 / 1;
+    visibility: hidden;
+    content: attr(data-off);
+  }
+
+  .root:not([data-selected]) .label[data-off] {
+    color: transparent;
+  }
+
+  .root:not([data-selected]) .label[data-off]::after {
+    color: var(--text);
+    visibility: visible;
+  }
+
   .label[data-described] {
     font: var(--text-body-strong);
     letter-spacing: var(--tracking-body-strong);
