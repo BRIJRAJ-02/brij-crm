@@ -1,5 +1,5 @@
-// What a visitor sent, read back on the thank you (spec 0058, AC-19). Its own chunk, loaded after the form draws:
-// the hosted page's first load has no room for it, and nobody needs it before they send.
+// What a visitor sent, read back on the thank you (spec 0058, AC-19). It is in the hosted page's first load
+// (FormParts imports it), so it stays small and leans on no other library module.
 import type { PublicForm } from '@crm/contracts/forms';
 import { Fragment } from 'react';
 import styles from './SentAnswers.module.css';

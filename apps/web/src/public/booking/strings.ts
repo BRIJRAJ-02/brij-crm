@@ -93,7 +93,7 @@ export const strings = {
   allBusy: (host: string) => `Every time ${host} has open clashes with your calendar.`,
   connectResults: {
     denied: 'Your calendar wasn’t connected. Every time still shows.',
-    scope: 'Allow busy times to compare calendars.',
+    scope: 'Connect again and leave the busy times box ticked.',
     failed: 'Couldn’t connect your calendar. Try again in a moment.',
     off: 'Connecting a calendar isn’t available on this page yet.',
   },
