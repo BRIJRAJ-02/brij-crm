@@ -21,7 +21,7 @@ New. DatePicker's calendar picks any date in a small popover; a booking page's m
 />
 ```
 
-Every month holds six weeks, so paging, or the page jumping to the month of its first time, never moves what stands beside or under it. The days before and after the month fill those weeks with the neighbouring months' dates, at label size in `text-tertiary`, hidden from screen readers and never controls, so a five week month never leaves an empty row over the times on a phone (spec 0058; hiding the row instead moved the card as it loaded).
+Every month holds six weeks, so paging, or the page jumping to the month of its first time, never moves what stands beside or under it. The days before and after the month fill those weeks with the neighbouring months' dates, at a closed day's size but in `border-strong`'s grey, plainly fainter than a closed day's `text-tertiary` so a run of them never reads as closed days (drawn as generated content from `data-date`, so they are decoration rather than text: no contrast floor, nothing for a screen reader), never controls, so a five week month never leaves an empty row over the times on a phone (spec 0058; hiding the row instead moved the card as it loaded).
 
 Weekday names, the first day of the week and every label come from the provider's language. `focusesValue` focuses the chosen day once drawn, for Back from the details step.
 
