@@ -18,6 +18,8 @@
     box-sizing: border-box;
     inline-size: 100%;
     block-size: var(--size-input);
+    /* Not the button's UA 1px: the height comes from block-size, the words centred in it. */
+    padding-block: 0;
     padding-inline: var(--space-8);
     border: var(--border-width-hairline) solid var(--field-border);
     border-radius: var(--radius-md);
