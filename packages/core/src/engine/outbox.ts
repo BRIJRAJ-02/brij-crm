@@ -68,7 +68,8 @@ export interface OutboxEvent {
     | 'notifications'
     | 'calendars'
     | 'time_off'
-    | 'automations';
+    | 'automations'
+    | 'files';
   /** The object: a `records` row's, an `entries` row's list's parent, a `definitions` row's when it names one. */
   readonly objectId?: string;
   /** The list: an `entries` row's, a `definitions` row's when it names one. */
@@ -405,6 +406,15 @@ function kindRows(change: CappedChange): OutboxEvent[] {
       itemIds: coarse ? [] : [...held.threadIds].sort(byId),
       coarse,
     });
+  }
+  // A record's attachments (#32): one row per object, its records; coarse with no ids past `CHANGE_CAP` records.
+  const filesByObject = new Map<string, Set<string>>();
+  for (const file of change.files) {
+    filesByObject.set(file.objectId, (filesByObject.get(file.objectId) ?? new Set<string>()).add(file.recordId));
+  }
+  for (const [objectId, recordIds] of [...filesByObject].sort(([a], [b]) => byId(a, b))) {
+    const coarse = recordIds.size > CHANGE_CAP;
+    rows.push({ kind: 'files', ...NO_IDS, objectId, recordIds: coarse ? [] : [...recordIds].sort(byId), coarse });
   }
   // A member's notifications or their settings (spec 0038): one row naming the members, nothing else.
   if (change.notifications.length > 0) {

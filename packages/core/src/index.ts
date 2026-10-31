@@ -319,6 +319,18 @@ export {
   type RegisterRecordFile,
 } from './records/files.ts';
 export {
+  ATTACHMENT_REFUSALS,
+  deleteAttachment,
+  FILES_MEMBERS_ONLY,
+  FILES_NOT_WRITABLE,
+  listAttachments,
+  prepareAttachment,
+  registerAttachment,
+  restoreAttachment,
+  type AttachmentRefusal,
+  type RegisterAttachment,
+} from './records/attachments.ts';
+export {
   getView,
   listViews,
   saveViewQuery,

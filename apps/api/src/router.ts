@@ -39,6 +39,7 @@ import { submissionsRouter } from './modules/submissions/router.ts';
 import { systemRouter } from './modules/system/router.ts';
 import { trashRouter } from './modules/trash/router.ts';
 import { commentsRouter } from './modules/comments/router.ts';
+import { filesRouter } from './modules/files/router.ts';
 import { notesRouter } from './modules/notes/router.ts';
 import { notificationsRouter } from './modules/notifications/router.ts';
 import { tasksRouter } from './modules/tasks/router.ts';
@@ -90,6 +91,7 @@ export const router = base.router({
   tasks: tasksRouter,
   notes: notesRouter,
   comments: commentsRouter,
+  files: filesRouter,
   notifications: notificationsRouter,
   calendar: calendarRouter,
   home: homeRouter,

@@ -121,6 +121,15 @@ export interface CommentChange {
 }
 
 /**
+ * A record whose attachments a write added, deleted or restored (#32, its
+ * Files tab), with its object, so the outbox stores one `files` row per object.
+ */
+export interface FileChange {
+  readonly recordId: string;
+  readonly objectId: string;
+}
+
+/**
  * Everything one write landed or made visible or invisible, as the hooks see
  * it. Records and entries that only appear or disappear (a record's entries
  * on its delete, the reference values pointing at it) are listed too, so a
@@ -205,6 +214,8 @@ export interface Change {
   readonly notifications: readonly string[];
   /** Members whose own calendar connections or calendars the write changed: one `calendars` row names them. */
   readonly calendars: readonly string[];
+  /** Records whose attachments the write added, deleted or restored (#32): one `files` row per object. */
+  readonly files: readonly FileChange[];
 }
 
 /**
@@ -357,6 +368,7 @@ const LIST_KEYS = [
   'comments',
   'notifications',
   'calendars',
+  'files',
 ] as const satisfies readonly (keyof ChangeLists)[];
 
 /**
@@ -491,6 +503,7 @@ export async function runWrite<T>(
           comments: [] as CommentChange[],
           notifications: [] as string[],
           calendars: [] as string[],
+          files: [] as FileChange[],
         };
         // Record slots the write takes at its end; local to this attempt.
         let slots = 0;
@@ -535,6 +548,7 @@ export async function runWrite<T>(
             append(collected.comments, part.comments);
             append(collected.notifications, part.notifications);
             append(collected.calendars, part.calendars);
+            append(collected.files, part.files);
           },
           async perRecord(step) {
             const marks = LIST_KEYS.map((key) => collected[key].length);
@@ -592,6 +606,7 @@ export async function runWrite<T>(
           comments: [...collected.comments],
           notifications: [...new Set(collected.notifications)],
           calendars: [...new Set(collected.calendars)],
+          files: [...collected.files],
         };
         for (const hook of hooks) await hook(change, tx);
         return { result, change };
