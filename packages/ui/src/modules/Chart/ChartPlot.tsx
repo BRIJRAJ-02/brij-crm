@@ -13,7 +13,7 @@ import {
 } from './chart-math.ts';
 import type { ChartPoint } from './Chart.tsx';
 import { strings } from './strings.ts';
-import styles from './Chart.module.css';
+import styles from './ChartPlot.module.css';
 
 /** The drawing's height: the plot's slot is the same height, `size-menu`. */
 export const PLOT_HEIGHT = 240;

@@ -1,8 +1,7 @@
-/* Chart: one series in the first data colour on a hairline grid, thin marks
-   (a bar at most 24px, a line 2px), recessive axes in secondary text, and a
-   tooltip under the pointer. The drawing is 240px tall (`size-menu`), the same
-   as the frame, so loading, empty and error states hold the chart's place.
-   Text is never the data colour; the mark beside it carries identity. */
+/* Chart: its head (the table switch) and the frame the drawing, the figure or
+   a state stands in. The frame is 240px tall (`size-menu`) for bars and a
+   line, the drawing's height, so loading, empty and error states hold the
+   chart's place. The drawing's own styles are ChartPlot.module.css. */
 @layer components {
   .root {
     display: flex;
@@ -32,139 +31,9 @@
     opacity: var(--opacity-disabled);
   }
 
-  .plot {
-    position: relative;
-    block-size: var(--size-menu);
-  }
-
-  .svg {
-    display: block;
-    overflow: visible;
-    touch-action: pan-y;
-  }
-
-  .grid {
-    stroke: var(--border-subtle);
-    stroke-width: var(--border-width-hairline);
-  }
-
-  .grid[data-base] {
-    stroke: var(--border);
-  }
-
-  .tick,
-  .xlabel {
-    fill: var(--text-secondary);
-    font: var(--text-label);
-    font-variant-numeric: tabular-nums;
-  }
-
-  .value {
-    fill: var(--text);
-    font: var(--text-label-strong);
-    font-variant-numeric: tabular-nums;
-  }
-
-  /* The slot under the pointer: a wash the width of the bar's slot, so the target is bigger than the mark. */
-  .band {
-    fill: transparent;
-  }
-
-  .band[data-hovered] {
-    fill: var(--surface-hover);
-  }
-
-  .bar {
-    fill: var(--dot-blue);
-  }
-
-  .line {
-    fill: none;
-    stroke: var(--dot-blue);
-    stroke-width: var(--border-width-thick);
-    stroke-linecap: round;
-    stroke-linejoin: round;
-  }
-
-  /* The area is a wash, never a saturated block. */
-  .area {
-    fill: var(--tag-blue-bg);
-  }
-
-  /* An end dot carries a ring in the surface colour, so it stays whole where it crosses the line. */
-  .dot {
-    fill: var(--dot-blue);
-    stroke: var(--surface);
-    stroke-width: var(--border-width-thick);
-  }
-
-  .crosshair {
-    stroke: var(--border);
-    stroke-width: var(--border-width-hairline);
-  }
-
-  .tip {
-    --x: 0;
-    --y: 0;
-
-    position: absolute;
-    inset-inline-start: var(--x);
-    inset-block-start: var(--y);
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
-    padding: var(--space-6) var(--space-8);
-    border-radius: var(--radius-md);
-    background: var(--surface-raised);
-    box-shadow: var(--shadow-md);
-    transform: translate(-50%, calc(-100% - var(--space-8)));
-    white-space: nowrap;
-    pointer-events: none;
-  }
-
-  /* Values lead, labels follow. */
-  .tipValue {
-    color: var(--text);
-    font: var(--text-body-strong);
-    letter-spacing: var(--tracking-body-strong);
-    font-variant-numeric: tabular-nums;
-  }
-
-  .tipLabel {
-    color: var(--text-secondary);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
-  }
-
   @media (prefers-reduced-motion: reduce) {
     .frame {
       transition: none;
-    }
-  }
-
-  @media (forced-colors: active) {
-    .bar,
-    .dot {
-      fill: Highlight;
-    }
-
-    .line {
-      stroke: Highlight;
-    }
-
-    .area {
-      fill: none;
-    }
-
-    .grid,
-    .crosshair {
-      stroke: GrayText;
-    }
-
-    .tick,
-    .xlabel,
-    .value {
-      fill: CanvasText;
     }
   }
 }
