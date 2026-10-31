@@ -124,14 +124,13 @@ export function HostedForm({
   const { words, preview } = state;
   const [LoadedBooking, setLoadedBooking] = useState<typeof EagerFormBooking>();
   useEffect(() => {
-    void loadBooking()
-      .then(
-        (module) => module.FormBooking,
-        () => BookingFallback,
-      )
-      .then((loaded) => {
-        setLoadedBooking(() => loaded);
-      });
+    // A chunk that can't be fetched leaves BookingFallback in its place.
+    void loadBooking().then(
+      (module) => {
+        setLoadedBooking(() => module.FormBooking);
+      },
+      () => undefined,
+    );
   }, []);
   const Booking = LoadedBooking ?? BookingFallback;
   let body;
