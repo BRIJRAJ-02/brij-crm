@@ -20,6 +20,13 @@ export interface EmptyStateProps {
   readonly tone?: EmptyStateTone;
   /** The icon in its tile. Defaults to one for the tone. */
   readonly icon?: IconName;
+  /**
+   * A picture in place of the icon tile, for a screen's first empty moment (Links, Forms, Link page): a drawing or
+   * a mini preview of what will be here, centred over the title. It is decoration, hidden from screen readers (the
+   * title says what is missing), so it never carries the only copy of anything. It takes `size-column` and no more;
+   * the block, the title, the line and the action stay on one centre line. Ignored by `row` and while loading.
+   */
+  readonly illustration?: ReactNode;
   /** Buttons for the next step ("Add deal", "Import"). */
   readonly actions?: ReactNode;
   /** For `error`: shows "Try again", which calls it. */
@@ -59,6 +66,7 @@ export function EmptyState({
   children,
   tone = 'empty',
   icon,
+  illustration,
   actions,
   onRetry,
   isLoading = false,
@@ -95,9 +103,15 @@ export function EmptyState({
   }
   return (
     <div className={styles.root} data-tone={tone} data-layout={layout} role={tone === 'error' ? 'alert' : 'status'}>
-      <span className={styles.icon}>
-        <Icon name={icon ?? TONE_ICONS[tone]} size={layout === 'row' ? 'sm' : 'md'} />
-      </span>
+      {illustration !== undefined && layout !== 'row' ? (
+        <span className={styles.illustration} aria-hidden="true">
+          {illustration}
+        </span>
+      ) : (
+        <span className={styles.icon}>
+          <Icon name={icon ?? TONE_ICONS[tone]} size={layout === 'row' ? 'sm' : 'md'} />
+        </span>
+      )}
       <span className={styles.title}>{title}</span>
       {children !== undefined && <span className={styles.text}>{children}</span>}
       {(actions !== undefined || (tone === 'error' && onRetry !== undefined)) && (

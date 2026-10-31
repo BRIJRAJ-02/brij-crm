@@ -177,7 +177,7 @@ export const ACCESS_TABLE = {
   // A member's own profile (spec 0031, slice 7): themself only, so any member.
   getMyProfile: { anyMember: true },
   updateMyMemberProfile: { anyMember: true },
-  // Sharing their own link page makes it public (27 Oct 2026): themself only, and nothing for a member with no page.
+  // Their own link page, opened or switched Live or Private (spec 0058, AC-23): themself only, nothing with no page.
   showMyLinkPage: { anyMember: true },
   // The person's own link page (spec 0051): their account's blocks only.
   readProfileItems: { ownLinkPage: true },

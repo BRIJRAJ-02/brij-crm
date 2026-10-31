@@ -29,7 +29,8 @@
   .scrim[data-holds-input],
   .scrim[data-variant='peek'],
   .scrim[data-variant='sheet'],
-  .scrim[data-variant='palette'] {
+  .scrim[data-variant='palette'],
+  .scrim[data-variant='drawer'] {
     background: var(--scrim);
   }
 
@@ -84,8 +85,8 @@
     gap: var(--space-8);
     min-block-size: calc(var(--size-control) + 2 * var(--space-8));
     padding-block: var(--space-8);
-    /* The close button's glyph, not its box, ends at the inset: the box is size-control wide around a size-icon. */
-    padding-inline: var(--overlay-inset) calc(var(--overlay-inset) - (var(--size-control) - var(--size-icon)) / 2);
+    /* The same inset both sides, on the spacing scale; the close button's glyph, not its box, ends at it (.close). */
+    padding-inline: var(--overlay-inset);
     border-block-end: var(--border-width-hairline) solid var(--border-subtle);
   }
 
@@ -127,7 +128,7 @@
     display: inline-flex;
     gap: var(--space-2);
     align-items: center;
-    margin-inline-start: auto;
+    margin-inline: auto calc((var(--size-icon) - var(--size-control)) / 2);
   }
 
   /* A note's "Saved": quiet, beside the actions it explains. */
@@ -285,6 +286,27 @@
     padding-block-start: 0;
   }
 
+  /* The drawer (a long list or detail beside the page, as Attio's side panels): the window's full height at the
+     end edge, size-dialog wide (the window's width on a phone), square on the edge it sits against. It keeps the
+     standard title bar and footer, so a drawer's padding and buttons line up with a dialog's. It slides in from the
+     end edge over the drawer curve and out faster. */
+  .scrim:has(> .root[data-variant='drawer']) {
+    place-items: stretch end;
+    padding: 0;
+  }
+
+  .root[data-variant='drawer'] {
+    inline-size: min(100%, var(--size-dialog));
+    block-size: 100dvh;
+    max-block-size: none;
+    border-start-end-radius: 0;
+    border-end-end-radius: 0;
+  }
+
+  .root[data-variant='drawer'] .dialog {
+    block-size: 100%;
+  }
+
   .root[data-variant='peek'] .dialog {
     block-size: 100%;
   }
@@ -293,6 +315,11 @@
     min-block-size: var(--size-bar);
     padding-inline: var(--space-12) var(--space-8);
     border-block-end-color: transparent;
+  }
+
+  /* The peek's bar sets its own inset for the box, not the glyph, so its close keeps no optical offset. */
+  .root[data-variant='peek'] .close {
+    margin-inline-end: 0;
   }
 
   .root[data-variant='peek'] .body {
@@ -324,6 +351,14 @@
 
   .root[data-variant='sheet'][data-exiting] {
     animation: sink var(--duration-exit) var(--ease-out) forwards;
+  }
+
+  .root[data-variant='drawer'][data-entering] {
+    animation: slide-in var(--duration-modal) var(--ease-drawer);
+  }
+
+  .root[data-variant='drawer'][data-exiting] {
+    animation: slide-out var(--duration-exit) var(--ease-out) forwards;
   }
 
   /* Opened from the keyboard (the palette's ⌘K), it appears at once. */
@@ -358,6 +393,38 @@
     }
   }
 
+  @keyframes slide-in {
+    from {
+      translate: 100% 0;
+    }
+  }
+
+  @keyframes slide-out {
+    to {
+      translate: 100% 0;
+    }
+  }
+
+  :dir(rtl) .root[data-variant='drawer'][data-entering] {
+    animation-name: slide-in-rtl;
+  }
+
+  :dir(rtl) .root[data-variant='drawer'][data-exiting] {
+    animation-name: slide-out-rtl;
+  }
+
+  @keyframes slide-in-rtl {
+    from {
+      translate: -100% 0;
+    }
+  }
+
+  @keyframes slide-out-rtl {
+    to {
+      translate: -100% 0;
+    }
+  }
+
   @keyframes fade-in {
     from {
       opacity: 0;
@@ -370,15 +437,20 @@
     }
   }
 
+  /* Reduced motion: the dialog and its scrim appear and leave at once (spec 0058, AC-2), with no fade. RAC waits
+     for an exit animation only while one runs, so none means it unmounts on the spot. */
   @media (prefers-reduced-motion: reduce) {
+    .scrim[data-entering],
+    .scrim[data-exiting],
     .root[data-entering],
-    .root[data-variant='sheet'][data-entering] {
-      animation-name: fade-in;
-    }
-
     .root[data-exiting],
-    .root[data-variant='sheet'][data-exiting] {
-      animation-name: fade-out;
+    .root[data-variant='sheet'][data-entering],
+    .root[data-variant='sheet'][data-exiting],
+    .root[data-variant='drawer'][data-entering],
+    .root[data-variant='drawer'][data-exiting],
+    :dir(rtl) .root[data-variant='drawer'][data-entering],
+    :dir(rtl) .root[data-variant='drawer'][data-exiting] {
+      animation: none;
     }
   }
 

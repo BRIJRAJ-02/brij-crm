@@ -10,6 +10,7 @@ export const fn = () => () => undefined;
 export const expect = notInPreviews;
 export const waitFor = notInPreviews;
 export const within = notInPreviews;
+export const spyOn = notInPreviews;
 export const userEvent = { setup: notInPreviews };
 /** Testing Library's screen queries, which only plays call. */
 export const screen = new Proxy({}, { get: notInPreviews });

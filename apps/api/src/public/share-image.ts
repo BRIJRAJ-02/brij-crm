@@ -2,13 +2,16 @@
 // pasted link previews with it instead of the card we draw. Nothing is fetched here — the bytes are ours, kept in
 // one column and read through `crm_profile_share_image` — so this file is only the answer's shape.
 //
-// The headers are the same ones every image we serve gets (`pictureResponse`), with a day of cache: the path is
-// versioned by the bytes, so a new picture is a new path and the day only bounds how long one outlives its owner's
-// change of mind.
+// The headers are the same ones every image we serve gets (`pictureResponse`), with five minutes of cache: the path
+// is versioned by the bytes, so a new picture is a new path, and the five minutes bound how long one outlives its
+// owner's change of mind where the Private switch's purge of the edge (spec 0058, AC-23) can't reach.
 import { pictureResponse } from './picture.ts';
 
-/** How long a share image is kept, in the browser, at the edge and in whatever cache a chat app keeps. */
-export const SHARE_IMAGE_CACHE_CONTROL = 'public, max-age=86400, s-maxage=86400';
+/**
+ * How long a share image is kept, in the browser, at the edge and in whatever cache a chat app keeps: five minutes,
+ * as a public picture is, since a page made Private must stop showing it promptly.
+ */
+export const SHARE_IMAGE_CACHE_CONTROL = 'public, max-age=300, s-maxage=300';
 
 /**
  * A share image as our answer. The type is the one the column holds, which the write checked against the bytes'

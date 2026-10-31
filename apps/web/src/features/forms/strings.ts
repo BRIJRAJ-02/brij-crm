@@ -12,7 +12,7 @@ export const strings = {
   newForm: 'New form',
   newButton: 'New',
   noForms: 'No forms yet',
-  noFormsText: 'A form collects submissions from a link or your site, and can add each one to your CRM.',
+  noFormsText: 'Share a form by link or on your site.',
   failedTitle: 'Forms didn’t load',
   failedText: 'Something went wrong. Try again.',
   formFailedTitle: 'This form didn’t load',
@@ -51,10 +51,11 @@ export const strings = {
   deleteForm: 'Delete form',
   /** A destructive confirm names the thing in its question (the owner's rule, 21 October 2026). */
   deleteTitle: (name: string) => `Delete “${name}”?`,
+  /** One line under the question (spec 0058, AC-18): what goes, and what stays. */
   deleteText: (submissions: number) =>
     submissions === 0
-      ? 'The form and its link are gone for good; nothing was sent to it yet.'
-      : `The form, its link and its ${count(submissions, 'submission', 'submissions')} are gone for good; the people and records they made stay.`,
+      ? 'The form and its link are gone for good.'
+      : `Its ${count(submissions, 'submission is', 'submissions are')} gone for good; records stay.`,
   /** The confirm's commit: the verb last, never OK. */
   deleteFormAction: 'Delete form',
   deleted: (name: string) => `Deleted “${name}”.`,
@@ -82,8 +83,9 @@ export const strings = {
   published: (version: number) => `Published version ${String(version)}.`,
   madeUnique: (field: string, objectName: string) => `${field} is now unique on ${objectName}: one record per email.`,
   viewField: 'View field',
+  /** The first publish's one line on the match (spec 0058, AC-13), said before Publish makes it so. */
   willMakeUnique: (field: string, objectName: string) =>
-    `Publishing makes ${field} unique on ${objectName}: one record per email. Submissions, imports and other forms then update that record instead of adding another.`,
+    `${field} becomes unique on ${objectName}: one record per email.`,
   changedBy: (name: string) => `${name} changed this form.`,
   someoneChanged: 'Someone else changed this form.',
   loadTheirs: 'Load their version',
@@ -103,34 +105,30 @@ export const strings = {
 
   // Questions: the shared editor's words (`features/questions/strings.ts`), and the form's own
   ...questionStrings,
-  emailStays: 'The email question stays while the form files onto People: it is how a submission becomes a person.',
+  emailStays: 'The form matches records by this email.',
   /** Publish couldn't make the email the match: two records on the object already share one (27 October 2026). */
-  matchHasDuplicates: (objectName: string) =>
-    `Some ${objectName} share an email already, so email can’t tell them apart yet. Give each its own, then publish.`,
+  matchHasDuplicates: (objectName: string) => `Duplicate emails on ${objectName}. Fix them, then publish.`,
 
-  // First publish
-  setUpTitle: 'Set up your form',
-  answersTitle: 'Where the answers go',
+  // First publish (spec 0058, AC-13): one step, then the Ready panel (AC-6)
+  publishTitle: 'Publish your form',
   liveTitle: 'Your form is live',
-  stepOf: (step: number, of: number) => `Step ${String(step)} of ${String(of)}`,
+  liveText: 'Share the link, or put it on your site.',
   name: 'Name',
   address: 'Link',
-  addressHint: 'Lowercase letters, numbers and hyphens',
-  addressTaken: 'That address is taken',
-  addressInvalid: 'The address needs 2 to 40 lowercase letters, numbers or hyphens.',
-  next: 'Next',
-  back: 'Back',
-  close: 'Close',
-  fileOnto: 'Where submissions go',
-  fileOntoHint: 'Each submission adds or updates one of these, matched by email.',
+  addressTaken: 'That link is taken',
+  addressInvalid: 'The link needs 2 to 40 lowercase letters, numbers or hyphens.',
+  done: 'Done',
   noCrm: 'Don’t add to the CRM',
-  keptOnlyHint: 'Submissions stay in the form’s Submissions tab. You can add them to the CRM later, from Settings.',
-  buildObject: 'Build one out of this form',
-  buildObjectButton: (name: string, attributes: number) =>
-    `Make an object named “${name}” with ${count(attributes, 'attribute', 'attributes')}`,
-  building: 'Making the object…',
-  liveText: 'Share the link, or put it on your site.',
-  ownFormLater: 'To use your own design, take the form HTML from Install.',
+  /** The Save to list's way to make an object out of the form, one field per question, made as Publish starts. */
+  buildObjectItem: (name: string) => `New object “${name}”`,
+  buildObjectText: (fields: number) => `${count(fields, 'field', 'fields')} from its questions`,
+  /** Each mapping row's Select, named by its question for screen readers. */
+  savedAsOf: (question: string) => `${question}, saved as`,
+  /** A field Publish will make for the question. */
+  newField: 'New',
+  /** A question kept off the CRM, with the submission only. */
+  submissionOnly: 'Submission only',
+  embedTiles: 'Put it on your site',
   ownFormThanks: 'Thank you. That is with us.',
 
   // Settings tab
@@ -193,10 +191,9 @@ export const strings = {
   retargetFailed: 'That didn’t change where submissions go.',
   retargetTitle: 'Change which object submissions are saved to?',
   retargetOffTitle: 'Stop saving submissions to the CRM?',
-  retargetText: (filed: number, from: string, to: string) =>
-    `${count(filed, 'question is', 'questions are')} saved to ${from} fields. On ${to}, only questions whose label matches a field stay saved; the rest are kept with the submission only.`,
-  retargetOffText: (filed: number, from: string) =>
-    `${count(filed, 'question is', 'questions are')} saved to ${from} fields. Submissions will make no record, and every answer is kept with the submission only.`,
+  /** One line each (spec 0058, AC-18): what the change loses. */
+  retargetText: (to: string) => `Only questions matching a field on ${to} stay saved.`,
+  retargetOffText: 'New submissions make no record. Answers stay with them.',
   thisObject: 'this object',
   savingWaits: (objectName: string) =>
     `Changes here go live when you publish. Until then, submissions are still saved to ${objectName}.`,
@@ -247,8 +244,7 @@ export const strings = {
   readOnlyTitle: 'You can view this form',
   readOnlyText: 'Only people who manage forms can change it.',
   shareTitle: 'Share',
-  shareTip:
-    'Use the link in an email, a chat or a post: it opens the form on a page of its own. To keep people on your site, put the form there with the snippet below.',
+  shareTip: 'Opens the form on its own page.',
   link: 'Link',
   copy: 'Copy',
   copyLink: 'Copy link',
@@ -257,24 +253,25 @@ export const strings = {
   copyFormHtml: 'Copy form HTML',
   copySecret: 'Copy signing secret',
   websiteTitle: 'Put it on your site',
-  websiteTip:
-    'Paste the snippet where the form should show. One script tag serves every form and booking page on your site, so add it once.',
+  websiteTip: 'Paste it where the form should show. One script tag serves every form.',
   embedMode: 'How it shows',
   embedInline: 'In the page',
   embedPopup: 'Popup',
   embedFloating: 'Corner button',
-  embedInlineHint: 'Fills its space and grows with the form.',
+  /** Each embed tile's tooltip (spec 0058, AC-11): what the visitor sees. */
+  embedInlineHint: 'Sits in your page and grows with the form.',
   embedPopupHint: 'Your own button opens it in a dialog.',
-  embedFloatingHint: 'A corner button on every page opens it. Change its words in data-timefix-text.',
+  embedFloatingHint: 'A button in the corner of every page opens it.',
+  /** Under the corner button's snippet: the one thing a site may want to change. */
+  embedFloatingWords: 'Change its words in data-timefix-text.',
   /** The words on the popup's and the corner's button, until the site changes them. */
   embedButtonText: 'Contact us',
   embedSnippet: 'Embed snippet',
-  embedText: 'Put the form on a page of your own site.',
   advancedTitle: 'For developers',
   ownFormTitle: 'Your own HTML',
   ownFormSnippet: 'Form HTML',
   taggingText:
-    'The form names your workspace, this form and its version. Each field’s name is its question’s key, so renaming a question never breaks your page. With each post the script sends the page, its title, the visit’s first page and referrer, and the UTM tags, shown on the submission as Came from.',
+    'Each field’s name is its question’s key, so a rename never breaks your page. Each post adds the page, referrer and UTM tags.',
   /** The consent line, with its code names drawn by `code` so they read and copy exactly. */
   taggingConsent: <T>(code: (text: string) => T): readonly (string | T)[] => [
     'No cookie is set until your site allows it: add ',
@@ -298,8 +295,7 @@ export const strings = {
   siteAdd: 'Add site',
   siteRemove: (origin: string) => `Remove ${origin}`,
   siteRemoveTitle: (origin: string) => `Remove ${origin}?`,
-  siteRemoveText:
-    'Your own HTML on that site stops posting to the form at once. Embeds and the hosted page keep working.',
+  siteRemoveText: 'Your own HTML there stops posting at once. Embeds keep working.',
   siteRemoveAction: 'Remove site',
   siteNotHttps: 'Use the site’s https address, such as https://acme.com.',
   siteTaken: 'That site is in the list already.',
@@ -309,8 +305,7 @@ export const strings = {
   unsignedAllowed: 'Unsigned posts are taken again.',
   refuseUnsigned: 'Refuse unsigned posts',
   signedTitle: 'Signed posts',
-  refuseUnsignedHint:
-    'Turn on Refuse unsigned posts when only your server posts to the form. Each post must then carry a signature made with the secret, so your own HTML in a browser is refused. The hosted page and embeds keep working.',
+  refuseUnsignedHint: 'For forms only your server posts to. The hosted page and embeds keep working.',
   /** How to sign, with its code names drawn by `code`. */
   signHowText: <T>(code: (text: string) => T): readonly (string | T)[] => [
     'On your server, take the exact body you send, make its HMAC with SHA 256 and the signing secret, and send it in the ',
@@ -320,13 +315,12 @@ export const strings = {
     ' and the hex digest.',
   ],
   secret: 'Signing secret',
-  secretReason: 'Keep it on your server only. Anyone who has it can post as your site.',
+  secretReason: 'Keep it on your server. Anyone with it can post as you.',
   secretReveal: 'Reveal',
   secretHide: 'Hide',
   secretRotate: 'Rotate secret',
   secretRotateTitle: 'Rotate the signing secret?',
-  secretRotateText:
-    'A new secret takes over at once and posts signed with the old one are refused. This can’t be undone, so update your server right after.',
+  secretRotateText: 'The old secret stops working at once.',
   secretRotateAction: 'Rotate secret',
   secretRotated: 'New signing secret made. Update your server.',
   pausedTitle: 'This form is paused',
@@ -395,25 +389,25 @@ export const strings = {
   exportFilter: 'What this filter shows, every answer as a column',
   exportShown: 'What the table shows for this search, every answer as a column',
   exportPicked: (n: number) => `The ${count(n, 'picked submission', 'picked submissions')}, every answer as a column`,
-  exportStarted: 'Preparing your CSV. A Download button shows here when it is ready.',
+  exportStarted: 'Preparing your CSV…',
   exportReady: (file: string) => `${file} is ready.`,
   download: 'Download',
   addToCrm: 'Add to CRM',
   addQueued: (queued: number, skipped: number) =>
     skipped === 0
       ? `Adding ${count(queued, 'submission', 'submissions')} to the CRM.`
-      : `Adding ${count(queued, 'submission', 'submissions')} to the CRM. ${String(skipped)} skipped: already in it or held.`,
+      : `Adding ${count(queued, 'submission', 'submissions')} to the CRM. ${String(skipped)} skipped.`,
   nothingToAdd: 'Nothing to add: these are already in the CRM or held.',
   /** Asks before many submissions go to the CRM at once: "Add 12 submissions to the CRM?". */
   addManyTitle: (n: number, max: number) => `Add ${count(Math.min(n, max), 'submission', 'submissions')} to the CRM?`,
   addManyText: (n: number, max: number) =>
     n > max
-      ? `Each is filed the way the form files now, making new records or updating the ones it matches. The first ${String(max)} go now; add the rest after.`
-      : 'Each is filed the way the form files now, making new records or updating the ones it matches.',
+      ? `Adds ${String(max)} now, the way the form files. Run it again for the rest.`
+      : 'Each is added the way the form files now.',
   addDone: (done: number, refused: number) =>
     refused === 0
       ? `${count(done, 'submission', 'submissions')} added to the CRM.`
-      : `${count(done, 'submission', 'submissions')} added to the CRM; ${String(refused)} couldn’t be.`,
+      : `${count(done, 'submission', 'submissions')} added, ${String(refused)} failed.`,
   jobFailed: (label: string) => `${label} didn’t finish. Background jobs in Settings says why.`,
   syncOld: 'Sync earlier submissions',
   syncOldText: 'File earlier submissions the way the form files now',
@@ -422,25 +416,46 @@ export const strings = {
     refused === 0
       ? `${count(done, 'submission', 'submissions')} synced.`
       : `${count(done, 'submission', 'submissions')} synced; ${String(refused)} couldn’t be.`,
+  // Sync earlier submissions (spec 0058, AC-14): one line, the scope, the counts, one button
   syncTitle: 'Sync earlier submissions?',
-  syncTextPublished: 'The form now files its answers differently. Earlier submissions can be filed the same way.',
-  syncTextMenu: 'File earlier submissions the way the form files its answers now.',
-  syncTextConnected: 'The form now adds each submission to the CRM. Earlier submissions can be added the same way.',
-  syncInScope: (total: number) => `${count(total, 'earlier submission', 'earlier submissions')} in scope.`,
-  syncNothing: 'Every earlier submission here already follows the form.',
-  syncFailuresText: 'Some can’t be filed, such as when the CRM needs a field the form doesn’t ask.',
+  syncTextPublished: 'File earlier submissions the new way too.',
+  syncTextMenu: 'File earlier submissions the way the form files now.',
+  syncTextConnected: 'Add earlier submissions to the CRM too.',
+  syncNothing: 'Nothing to sync',
+  syncNothingText: 'Every earlier submission already follows the form.',
+  syncFailuresText: 'Any that can’t be synced stay as they are.',
   syncScope: 'Which submissions',
   syncUnfiled: 'Only unfiled',
-  syncUnfiledText: 'The ones not in the CRM yet',
   syncAll: 'All',
-  syncAllText: 'Every submission except spam and ones waiting for review',
-  syncCreates: 'New records',
-  syncUpdates: 'Records updated',
-  syncUnchanged: 'Nothing to change',
-  syncFailures: 'Can’t be synced',
-  syncCapped: (checked: number) =>
-    `These counts cover the newest ${new Intl.NumberFormat().format(checked)} submissions.`,
-  syncStart: 'Sync',
+  /** The count preview's name for screen readers. */
+  syncPreview: 'What syncing would do',
+  /**
+   * The one count line (spec 0058, AC-14): what the sync would do, each part only when it isn't none, so a count
+   * never sits beside the button's own number as a puzzle ("Unchanged 2" by "Sync 2 submissions").
+   */
+  syncSummary: (counts: {
+    readonly creates: number;
+    readonly updates: number;
+    readonly unchanged: number;
+    readonly failures: number;
+  }) => {
+    const parts = [
+      counts.creates > 0 ? count(counts.creates, 'new record', 'new records') : undefined,
+      counts.updates > 0 ? count(counts.updates, 'record updated', 'records updated') : undefined,
+      counts.unchanged > 0 ? count(counts.unchanged, 'already matches', 'already match') : undefined,
+      counts.failures > 0 ? `${new Intl.NumberFormat().format(counts.failures)} can’t be synced` : undefined,
+    ].filter((part) => part !== undefined);
+    const line = new Intl.ListFormat('en', { type: 'conjunction' }).format(parts);
+    return `${line.charAt(0).toUpperCase()}${line.slice(1)}.`;
+  },
+  /** Every submission in scope already matches: said once, with no Sync beside it ("All 2 already match."). */
+  syncAllMatch: (n: number) =>
+    n === 1 ? 'It already matches.' : `All ${new Intl.NumberFormat().format(n)} already match.`,
+  syncCapped: (checked: number) => `Counts cover the newest ${new Intl.NumberFormat().format(checked)}.`,
+  /** The one button, with the count it starts on: "Sync 42 submissions". */
+  syncStart: (total: number) => `Sync ${count(total, 'submission', 'submissions')}`,
+  /** The button before the count is known (loading, or the preview failed). */
+  syncStartPlain: 'Sync',
   syncStarting: 'Starting',
   notNow: 'Not now',
   tryAgain: 'Try again',
@@ -465,8 +480,7 @@ export const strings = {
   notSavedMark: 'Not saved',
   /** Above the answers of a submission our spam check caught, when it carries a file: kept for a release. */
   spamFilesTitle: 'Our spam check caught this',
-  spamFiles: (day: string) =>
-    `Open its files only if you trust the sender. They’re removed on ${day}. Choose Not spam to keep them.`,
+  spamFiles: (day: string) => `Open files only if you trust the sender. Removed on ${day} unless marked Not spam.`,
   /** Over the answers filing left off the record, each with why (late trap #50). */
   notSavedTitle: (count: number) =>
     count === 1 ? 'One answer wasn’t saved on the record' : `${String(count)} answers weren’t saved on the record`,
@@ -474,8 +488,7 @@ export const strings = {
   questionList: (labels: readonly string[]) =>
     new Intl.ListFormat('en', { style: 'long', type: 'conjunction' }).format(labels),
   /** The way forward under them: put the field back or file the question elsewhere, then file again. */
-  notSavedNext:
-    'To save them, restore the field or save the question to another one, then sync earlier submissions. Or copy the answer onto the record.',
+  notSavedNext: 'Restore the field or pick another, then sync earlier submissions.',
   /** After Answers, once for the section: what went to the CRM. */
   answersKeptOnly: 'Not added to the CRM',
   answersNotInCrm: 'Not in the CRM',

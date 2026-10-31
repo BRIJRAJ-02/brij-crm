@@ -34,6 +34,7 @@ import {
 } from './calendar/services.ts';
 import { backgroundHooks } from './hooks.ts';
 import { createEdgeGuard, type Geo } from './edge.ts';
+import { NO_EDGE_CACHE, type EdgeCache } from './edge-cache.ts';
 import { mountExports } from './forms/exports.ts';
 import { handoffKey } from './forms/handoff.ts';
 import { hashAddress, mountPublicForms } from './forms/public.ts';
@@ -164,6 +165,11 @@ export interface AppServices {
    */
   readonly keepAlive?: (work: Promise<unknown>) => void;
   /**
+   * The edge cache in front of the public answers (spec 0058, AC-23): Vercel's cache tags on a function, nothing
+   * (`NO_EDGE_CACHE`) on a long running server, where each answer's short `s-maxage` alone bounds a copy.
+   */
+  readonly edgeCache?: EdgeCache;
+  /**
    * Where the door reads object, field and record rules (spec 0009), always
    * named: the server passes `APP_RULES` (rules.ts, none until #24), the same
    * source its worker re-enters members with; tests and the local test server
@@ -272,6 +278,7 @@ export function createApp({
   const wakeOnUse = services.wakeOnUse ?? (wakesOnUse(env) ? throttleWake(wakeRelay) : NO_WAKE);
   const wakeOverdue = services.wakeOverdue ?? throttleWake(wakeRelay, OVERDUE_WAKE_MS);
   const keepAlive = services.keepAlive ?? RUNS_ON;
+  const edgeCache = services.edgeCache ?? NO_EDGE_CACHE;
   // The operator console (spec 0047): its super admins, the days people use the app, and the visitor id key.
   const operators = operatorList(env.OPERATOR_EMAILS);
   const noteActivity = createActivityNoter({
@@ -459,6 +466,7 @@ export function createApp({
         wakeOnUse,
         wakeOverdue,
         keepAlive,
+        edgeCache,
         analytics,
         environment: env.APP_ENV,
         requestId: c.get('requestId'),
@@ -655,6 +663,7 @@ export function createApp({
     },
     // Page views for the console (spec 0047, AC-1625), counted after the answer.
     views: { visitorKey: visitors, keepAlive },
+    edgeCache,
   });
 
   // The marketing site's beacon (spec 0047, AC-1627): only from SITE_ORIGINS, 60 a minute per address.

@@ -29,6 +29,7 @@ import type { Auth, SessionUser } from './auth/auth.ts';
 import { doorSession } from './auth/door-session.ts';
 import type { CalendarServices } from './calendar/services.ts';
 import type { Mailer } from './mail/mailer.ts';
+import type { EdgeCache } from './edge-cache.ts';
 import { apiError, inputProblems } from './errors.ts';
 import { log } from './log.ts';
 import type { OutsideFetch } from './public/outside.ts';
@@ -69,6 +70,11 @@ export interface RequestContext extends ResponseHeadersPluginContext {
    * Anything a procedure doesn't await, such as an email, goes through it.
    */
   keepAlive: (work: Promise<unknown>) => void;
+  /**
+   * The edge cache in front of the public answers (spec 0058, AC-23): a write that takes something off the public
+   * pages deletes its cached copies here once it commits.
+   */
+  edgeCache: EdgeCache;
   /** Product events (spec 0010): a write sends the milestones it reached once it commits (`hooks.ts`). */
   analytics: Analytics;
   environment: AppEnvironment;

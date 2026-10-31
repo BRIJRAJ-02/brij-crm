@@ -363,10 +363,16 @@ export const publicProfiles = auth.table(
     shareImageType: text('share_image_type'),
     shareImageVersion: text('share_image_version'),
     /**
-     * When the link page first went public, or null while it hasn't (27 Oct 2026). A page made with a membership
-     * starts private, and its owner editing it or sharing its link shows it (`crm_show_public_profile`).
+     * Since when the link page is public, or null while it is private (27 Oct 2026; spec 0058, AC-23). A page made
+     * with a membership starts private, and goes live when its owner claims it or opens it
+     * (`crm_show_public_profile`); the owner's Live or Private switch sets it (`crm_set_public_profile_live`).
      */
     shownAt: timestamptz('shown_at'),
+    /**
+     * When the page became its owner's own choice: claimed, opened or switched (spec 0058, AC-23). Null for a page
+     * made for them they haven't touched; once set, nothing but the switch changes whether the page is public.
+     */
+    claimedAt: timestamptz('claimed_at'),
     updatedAt: updatedAt(),
   },
   (t) => [

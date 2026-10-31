@@ -1,0 +1,240 @@
+/* ChoiceTiles (TileGrid variant="choice", spec 0058): equal size tiles to pick from by sight. Each track is at least
+   size-column-narrow and the tracks share the width, so every tile has one width; the rows share one height. A tile is
+   a picture slot (size-column-min tall, a mark or a thumbnail centred in it) over a one line name, both on one left
+   edge, space-12 in from the tile's edge. The chosen tile takes the accent line as its border and soft fill with a
+   tick in its top end corner. Press scales to scale-press; the tick eases in on opacity and scale (at once under
+   reduced motion). */
+@layer components {
+  .root {
+    display: grid;
+    /* auto-fit, not auto-fill: a short run (three embed tiles in a wide card) shares the whole row, so the tiles end
+       on the container's right edge like everything above them, and never leave empty tracks after them. */
+    grid-template-columns: repeat(auto-fit, minmax(min(var(--size-column-narrow), 100%), 1fr));
+    grid-auto-rows: 1fr;
+    gap: var(--space-8);
+    min-inline-size: 0;
+  }
+
+  /* The tooltip's trigger wraps a tile: the trigger is the grid cell, this wrapper fills it, and the tile fills
+     the wrapper, so a tile with a description is the same size as one without. */
+  .cell {
+    display: flex;
+    flex: 1;
+    min-inline-size: 0;
+  }
+
+  .cell > * {
+    flex: 1;
+  }
+
+  .tile {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    box-sizing: border-box;
+    min-inline-size: 0;
+    padding: var(--space-12);
+    border: var(--border-width-hairline) solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface-raised);
+    color: var(--text);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    text-align: start;
+    outline: none;
+    transition:
+      background-color var(--duration-hover) var(--ease-hover),
+      border-color var(--duration-hover) var(--ease-hover),
+      scale var(--duration-press) var(--ease-out);
+  }
+
+  /* A select tile is the radio's label; the radio lies unseen over the tick's corner, where nothing else is, so a
+     click on the radio reaches it and a click anywhere else on the tile reaches its label. */
+  .input {
+    position: absolute;
+    inset-block-start: var(--space-8);
+    inset-inline-end: var(--space-8);
+    inline-size: var(--size-icon);
+    block-size: var(--size-icon);
+    margin: 0;
+    opacity: 0;
+  }
+
+  .picture {
+    display: grid;
+    place-content: center;
+    box-sizing: border-box;
+    block-size: var(--size-column-min);
+    overflow: hidden;
+    border-radius: var(--radius-sm);
+    background: var(--surface-subtle);
+    color: var(--text-secondary);
+  }
+
+  /* A tinted slot: the kind's data hue, its mark in the hue's text colour, so the grid reads at a glance. */
+  .picture[data-hue] {
+    border: var(--border-width-hairline) solid var(--picture-edge);
+    background: var(--picture-bg);
+    color: var(--picture-fg);
+  }
+
+  .picture[data-hue='gray'] {
+    --picture-bg: var(--tag-gray-bg);
+    --picture-fg: var(--tag-gray-text);
+    --picture-edge: var(--tag-gray-border);
+  }
+
+  .picture[data-hue='red'] {
+    --picture-bg: var(--tag-red-bg);
+    --picture-fg: var(--tag-red-text);
+    --picture-edge: var(--tag-red-border);
+  }
+
+  .picture[data-hue='orange'] {
+    --picture-bg: var(--tag-orange-bg);
+    --picture-fg: var(--tag-orange-text);
+    --picture-edge: var(--tag-orange-border);
+  }
+
+  .picture[data-hue='yellow'] {
+    --picture-bg: var(--tag-yellow-bg);
+    --picture-fg: var(--tag-yellow-text);
+    --picture-edge: var(--tag-yellow-border);
+  }
+
+  .picture[data-hue='lime'] {
+    --picture-bg: var(--tag-lime-bg);
+    --picture-fg: var(--tag-lime-text);
+    --picture-edge: var(--tag-lime-border);
+  }
+
+  .picture[data-hue='green'] {
+    --picture-bg: var(--tag-green-bg);
+    --picture-fg: var(--tag-green-text);
+    --picture-edge: var(--tag-green-border);
+  }
+
+  .picture[data-hue='sky'] {
+    --picture-bg: var(--tag-sky-bg);
+    --picture-fg: var(--tag-sky-text);
+    --picture-edge: var(--tag-sky-border);
+  }
+
+  .picture[data-hue='blue'] {
+    --picture-bg: var(--tag-blue-bg);
+    --picture-fg: var(--tag-blue-text);
+    --picture-edge: var(--tag-blue-border);
+  }
+
+  .picture[data-hue='purple'] {
+    --picture-bg: var(--tag-purple-bg);
+    --picture-fg: var(--tag-purple-text);
+    --picture-edge: var(--tag-purple-border);
+  }
+
+  /* A thumbnail fills the slot; a mark sits centred in it. */
+  .picture[data-kind='thumbnail'] {
+    display: block;
+    border: var(--border-width-hairline) solid var(--border-subtle);
+  }
+
+  .name {
+    min-inline-size: 0;
+    overflow: hidden;
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* A disabled tile's reason ("At the limit"), a quiet line under the name, so it never needs a tooltip. */
+  .reason {
+    min-inline-size: 0;
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .tick {
+    position: absolute;
+    inset-block-start: var(--space-8);
+    inset-inline-end: var(--space-8);
+    display: grid;
+    place-content: center;
+    inline-size: var(--size-icon);
+    block-size: var(--size-icon);
+    border-radius: var(--radius-full);
+    background: var(--accent);
+    color: var(--on-accent);
+    opacity: 0;
+    scale: var(--scale-shrunk);
+    transition:
+      opacity var(--duration-press) var(--ease-out),
+      scale var(--duration-press) var(--ease-out);
+    pointer-events: none;
+  }
+
+  .tile[data-selected] {
+    border-color: var(--accent-line);
+    background: var(--accent-soft);
+  }
+
+  .tile[data-selected] .tick {
+    opacity: 1;
+    scale: 1;
+  }
+
+  .tile[data-selected] .picture:not([data-hue]) {
+    background: var(--surface-raised);
+  }
+
+  /* Focus is the library's ring, as on a primary Button: the accent line just outside the tile past a hairline gap,
+     with the soft halo. A chosen tile already has the accent line as its border, so the halo alone (under 3:1 and
+     unseen in dark) left a focused chosen tile looking like any chosen tile. */
+  .tile[data-focus-visible] {
+    border-color: var(--accent-line);
+    outline: var(--border-width-thick) solid var(--accent-line);
+    outline-offset: var(--border-width-hairline);
+    box-shadow: var(--shadow-focus);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .tile[data-hovered]:not([data-selected], [data-disabled]) {
+      background: var(--surface-hover);
+    }
+  }
+
+  .tile[data-pressed] {
+    scale: var(--scale-press);
+  }
+
+  /* A disabled tile fades its picture and name, never its reason: that is the one line the person has to read. */
+  .tile[data-disabled] :is(.picture, .name) {
+    opacity: var(--opacity-disabled);
+  }
+
+  /* Reduced motion: the tick is there at once (spec 0058, AC-2), with no fade or scale; colours still ease. */
+  @media (prefers-reduced-motion: reduce) {
+    .tick {
+      scale: 1;
+      transition: none;
+    }
+
+    .tile {
+      transition:
+        background-color var(--duration-hover) var(--ease-hover),
+        border-color var(--duration-hover) var(--ease-hover);
+    }
+  }
+
+  @media (forced-colors: active) {
+    .tile[data-selected] {
+      border-color: Highlight;
+    }
+
+    .tile[data-focus-visible] {
+      outline: var(--border-width-thick) solid Highlight;
+    }
+  }
+}

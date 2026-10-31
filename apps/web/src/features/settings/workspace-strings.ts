@@ -85,8 +85,11 @@ export const strings = {
   bioText: 'One line under your name on your page.',
   bioNeedsHandle: 'Claim a handle first: the bio shows on its page.',
   yourPage: 'Your page',
-  /** Under Your page (27 Oct 2026): live from the moment the membership exists, and not listed by search engines. */
-  yourPagePrivate: 'Live. Not in search engines.',
+  /**
+   * Under Your page while it is private (spec 0058, AC-23): the link page's own words for it (`homeStrings.privateLine`),
+   * written out rather than imported, since this module rides in the first load and the link page's copy doesn't.
+   */
+  yourPagePrivate: 'Private. Only you can open it.',
   copyLink: 'Copy link',
   /** Under their name beside the picture, when the picture is the one their Google account gave. */
   fromGoogle: 'From Google',

@@ -5,20 +5,20 @@ const count = (made: number, one: string, many: string) => (made === 1 ? one : m
 
 export const importStrings = {
   title: 'Bring a page across',
-  lead: 'Paste the address of your link in bio page. We’ll read it once and bring its links over.',
-  address: 'The page to bring across',
+  address: 'Your page’s address',
   example: 'linktr.ee/yourname',
-  services: 'From Linktree, Bio.link, Lnk.Bio, Linktw.in, Liinks, Solo.to or Beacons.',
+  /** The seven services in one hint line (spec 0058, AC-16). */
+  services: 'Linktree, Beacons, Bio.link, Lnk.Bio, Linktw.in, Liinks or Solo.to.',
   cancel: 'Cancel',
   bring: 'Bring links across',
   done: 'Done',
   doneTitle: 'What came across',
-  madeLine: (made: number) => count(made, 'One link came across.', '{n} links came across.'),
-  hiddenNote: 'They’re off until you turn them on, so nothing has changed on your page yet.',
+  madeLine: (made: number) => count(made, 'One link came across', '{n} links came across'),
+  /** Under the count: the rows landed archived, so the page is unchanged until they are turned on. */
+  hiddenNote: 'They wait in Archived until you restore them.',
   alreadyDone: 'You’ve brought this page across already, so nothing was added again.',
   nothingTitle: 'No links on that page',
-  nothingText:
-    'We read the page and found nothing we could bring over. Check the address, and that the page is public.',
+  nothingText: 'Nothing found. Is the page public?',
   skippedLine: (skipped: number) => count(skipped, 'One row didn’t come across:', '{n} rows didn’t come across:'),
   unnamed: 'A row with no title',
   /** Why a row stayed behind, in the person's words rather than the parser's. */
