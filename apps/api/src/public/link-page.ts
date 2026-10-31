@@ -35,8 +35,11 @@ import type { EdgeCache } from '../edge-cache.ts';
 import type { FileStore } from '../storage/blob.ts';
 import type { LimitRule } from './limits.ts';
 
-/** A picture's cache: a day, at the edge too, since an id never changes what it names (AC-6101). */
-export const LINK_IMAGE_CACHE_CONTROL = 'public, max-age=86400, s-maxage=86400';
+/**
+ * A picture's cache: a day at the edge, since an id never changes what it names (AC-6101), and an hour in a browser.
+ * A block that stops using it purges the page's tag (the profile router), so the edge stops answering it at once.
+ */
+export const LINK_IMAGE_CACHE_CONTROL = 'public, max-age=3600, s-maxage=86400';
 /** A private page's picture is its owner's alone: kept by their browser, never the edge. */
 const PRIVATE_IMAGE_CACHE_CONTROL = 'private, max-age=300';
 /** A times read: a minute, so a burst of visitors costs one slots read (AC-6110). */

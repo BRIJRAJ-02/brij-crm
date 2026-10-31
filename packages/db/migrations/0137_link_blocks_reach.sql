@@ -659,6 +659,9 @@ begin
     or not exists (select 1 from auth.public_profiles p where p.user_id = owner and p.workspace_id = workspace) then
     return;
   end if;
+  -- One page's facts are folded one view at a time, so a day never passes its 50 values under a burst.
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended('crm_profile_facts:' || owner::text || ':' || workspace::text, 0));
   insert into auth.profile_views as v (user_id, workspace_id, day, visitor)
   values (owner, workspace, today, crm_count_profile_view.visitor)
   on conflict (user_id, workspace_id, day, visitor)
@@ -824,7 +827,7 @@ begin atomic
 end;
 --> statement-breakpoint
 -- A picture a visitor may load (AC-6129): only while a live block of that page, inside its window, names it; or the
--- page's share QR names it as its centre. Anything else, an id from another person's page included, is no row.
+-- page's share QR names it as its centre (the QR is drawn from the page's own address, so its picture is public too). Anything else, an id from another person's page included, is no row.
 create function crm_profile_image_public(owner uuid, workspace uuid, image uuid)
   returns table (path text, content_type text, width integer, height integer)
   language sql
@@ -967,6 +970,10 @@ begin atomic
   select p.handle, greatest(p.updated_at, max(i.updated_at))
   from auth.public_profiles p
   join auth.profile_items i on i.user_id = p.user_id and i.workspace_id = p.workspace_id and i.archived_at is null
+    and ((i.data ->> 'showFrom') is null or (i.data ->> 'showFrom') collate "C"
+      <= pg_catalog.to_char(pg_catalog.now() at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') collate "C")
+    and ((i.data ->> 'hideAfter') is null or (i.data ->> 'hideAfter') collate "C"
+      > pg_catalog.to_char(pg_catalog.now() at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') collate "C")
   where p.shown_at is not null and p.indexable
     and (crm_sitemap_handles.after is null or p.handle collate "C" > crm_sitemap_handles.after collate "C")
     and public.crm_workspace_member(p.user_id, p.workspace_id)

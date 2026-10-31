@@ -26,6 +26,7 @@ import {
   type ProfileExtras,
 } from '@crm/core';
 import { createMediaReader, readSitePicture, storeLinkPicture } from '../../link-page-pictures.ts';
+import type { EdgeCache } from '../../edge-cache.ts';
 import { apiError } from '../../errors.ts';
 import { commitWrite } from '../../hooks.ts';
 import { member, type RequestContext, type SessionContext } from '../../orpc.ts';
@@ -62,6 +63,21 @@ const HALF_HOUR = 1800;
 const IMPORT_SOURCE_MAX = 400;
 /** A page of links is a few hundred kilobytes at most (AC-5525). */
 const IMPORT_MAX_BYTES = 1024 * 1024;
+/** The kinds whose blocks name pictures (spec 0061): an edit of one may let a picture go. */
+const PICTURE_KINDS: ReadonlySet<string> = new Set(['link', 'image', 'gallery', 'media']);
+
+/**
+ * Deletes the edge's copies of the caller's own page (its pictures among them, spec 0061, AC-6129) once a change
+ * that may have let a picture go has committed. A page with no handle has nothing cached.
+ */
+async function forgetPictures(context: {
+  readonly scope: Parameters<typeof getMyProfile>[0];
+  readonly edgeCache: EdgeCache;
+}): Promise<void> {
+  const { handle } = await getMyProfile(context.scope);
+  if (handle !== undefined) await context.edgeCache.forget(linkPageCacheTags(handle));
+}
+
 /** Outside reads for a link page's pictures and media, per person (spec 0061, AC-6128): 30 a minute. */
 const OUTSIDE_READS = { window: 60, max: 30 } as const;
 /** The same site read for anyone's thumbnail: 60 a minute, so a page of links can't point us at one site's door. */
@@ -140,16 +156,24 @@ export const profileRouter = member.profile.router({
     const site = await context.limiter.consumeRateLimit(`link-page-site:${new URL(address).hostname}`, SITE_READS);
     if (!mine.allowed || !site.allowed) throw apiError('LIMIT_REACHED', 'Try the site’s picture again in a minute.');
     return commitWrite(context, { mutationId: input.mutationId }, async () => {
-      const bytes = await readSitePicture(context.linkPageFetch, address);
+      const bytes = await readSitePicture(context.linkPageFetch, address, async (host) => {
+        const picture = await context.limiter.consumeRateLimit(`link-page-site:${host}`, SITE_READS);
+        return picture.allowed;
+      });
       if (bytes === undefined) return { none: true as const };
       const stored = await storeLinkPicture(context.files, context.scope, context.user.id, bytes, 'thumb');
       return stored.ok ? { image: stored.image, width: stored.width, height: stored.height } : { none: true as const };
     });
   }),
   qrStyle: member.profile.qrStyle.handler(({ context }) => readQrStyle(context.scope)),
-  saveQrStyle: member.profile.saveQrStyle.handler(({ context, input }) =>
-    commitWrite(context, { mutationId: input.mutationId }, () => saveQrStyle(context.scope, input.style)),
-  ),
+  saveQrStyle: member.profile.saveQrStyle.handler(async ({ context, input }) => {
+    const saved = await commitWrite(context, { mutationId: input.mutationId }, () =>
+      saveQrStyle(context.scope, input.style),
+    );
+    // A centre picture no longer named stops being served from the edge (AC-6129).
+    await forgetPictures(context);
+    return saved;
+  }),
   pageChoices: member.profile.pageChoices.handler(async ({ context }) => [
     ...(await listProfilePageChoices(context.scope)),
   ]),
@@ -238,7 +262,7 @@ export const profileRouter = member.profile.router({
             userId: context.user.id,
           })
         : undefined;
-    return commitWrite(context, { mutationId: input.mutationId }, () =>
+    const saved = await commitWrite(context, { mutationId: input.mutationId }, () =>
       saveProfileItem(
         context.scope,
         {
@@ -249,22 +273,32 @@ export const profileRouter = member.profile.router({
         { publicOrigins: context.publicOrigins, ...(readMedia === undefined ? {} : { readMedia }) },
       ),
     );
+    // An edit that may have let a picture go (a link's thumbnail, a picture, a gallery, a poster): the edge's copies
+    // of the page's pictures go with it, so one no live block uses answers 404 at once (AC-6129).
+    if (input.isEdit === true && PICTURE_KINDS.has(input.block.kind)) await forgetPictures(context);
+    return saved;
   }),
   orderItems: member.profile.orderItems.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, () =>
       orderProfileItems(context.scope, input.ids, { publicOrigins: context.publicOrigins }),
     ),
   ),
-  archiveItem: member.profile.archiveItem.handler(({ context, input }) =>
-    commitWrite(context, { mutationId: input.mutationId }, () =>
+  archiveItem: member.profile.archiveItem.handler(async ({ context, input }) => {
+    const items = await commitWrite(context, { mutationId: input.mutationId }, () =>
       archiveProfileItem(
         context.scope,
         { id: input.id, archived: input.archived },
         { publicOrigins: context.publicOrigins },
       ),
-    ),
-  ),
-  deleteItem: member.profile.deleteItem.handler(({ context, input }) =>
-    commitWrite(context, { mutationId: input.mutationId }, () => deleteProfileItem(context.scope, input.id)),
-  ),
+    );
+    if (input.archived) await forgetPictures(context);
+    return items;
+  }),
+  deleteItem: member.profile.deleteItem.handler(async ({ context, input }) => {
+    const gone = await commitWrite(context, { mutationId: input.mutationId }, () =>
+      deleteProfileItem(context.scope, input.id),
+    );
+    await forgetPictures(context);
+    return gone;
+  }),
 });

@@ -83,8 +83,25 @@ function stripJpeg(bytes: Uint8Array): Stripped | undefined {
       width = u16be(bytes, at + 7);
     }
     if (marker === 0xda) {
-      kept.push(bytes.subarray(at));
-      return width > 0 && height > 0 ? { bytes: Buffer.concat(kept), width, height } : undefined;
+      // The scan header, then its entropy coded data up to the next marker: a stuffed `FF 00`, a restart marker and
+      // fill bytes are part of the scan. Past it is either the end of the picture, after which nothing is kept (a
+      // phone may append a second picture with its own EXIF there), or the next segment of a progressive JPEG,
+      // which goes through the same rule as any other.
+      kept.push(segment);
+      let end = at + 2 + length;
+      while (end + 1 < bytes.length) {
+        const next = bytes[end + 1] ?? 0;
+        if (bytes[end] === 0xff && next !== 0x00 && next !== 0xff && !(next >= 0xd0 && next <= 0xd7)) break;
+        end += 1;
+      }
+      if (end + 1 >= bytes.length) return undefined;
+      kept.push(bytes.subarray(at + 2 + length, end));
+      if (bytes[end + 1] === 0xd9) {
+        kept.push(bytes.subarray(end, end + 2));
+        return width > 0 && height > 0 ? { bytes: Buffer.concat(kept), width, height } : undefined;
+      }
+      at = end;
+      continue;
     }
     const isMetadata = (marker >= 0xe1 && marker <= 0xef) || marker === 0xfe;
     if (!isMetadata) kept.push(segment);
@@ -93,8 +110,26 @@ function stripJpeg(bytes: Uint8Array): Stripped | undefined {
   return undefined;
 }
 
-/** The PNG chunks that carry words or a camera's data, never pixels: all of them go. */
-const PNG_METADATA = new Set(['tEXt', 'zTXt', 'iTXt', 'eXIf', 'tIME']);
+/**
+ * The PNG chunks a picture needs to draw, and nothing else: text, `eXIf`, time and every private or unknown chunk
+ * go, whatever they carry.
+ */
+const PNG_KEPT = new Set([
+  'IHDR',
+  'PLTE',
+  'IDAT',
+  'IEND',
+  'tRNS',
+  'gAMA',
+  'cHRM',
+  'sRGB',
+  'iCCP',
+  'pHYs',
+  'sBIT',
+  'acTL',
+  'fcTL',
+  'fdAT',
+]);
 
 /** A PNG without its text, `eXIf` and time chunks, every chunk's length checked. */
 function stripPng(bytes: Uint8Array): Stripped | undefined {
@@ -112,7 +147,7 @@ function stripPng(bytes: Uint8Array): Stripped | undefined {
       width = u32be(bytes, at + 8);
       height = u32be(bytes, at + 12);
     }
-    if (!PNG_METADATA.has(type)) kept.push(bytes.subarray(at, end));
+    if (PNG_KEPT.has(type)) kept.push(bytes.subarray(at, end));
     at = end;
     if (type === 'IEND') {
       ended = true;
@@ -121,6 +156,9 @@ function stripPng(bytes: Uint8Array): Stripped | undefined {
   }
   return ended && width > 0 && height > 0 ? { bytes: Buffer.concat(kept), width, height } : undefined;
 }
+
+/** The WebP chunks a picture needs to draw; EXIF, XMP and anything else go. */
+const WEBP_KEPT = new Set(['VP8 ', 'VP8L', 'VP8X', 'ALPH', 'ANIM', 'ANMF', 'ICCP']);
 
 /** A WebP without its `EXIF` and `XMP ` chunks, the extended header's flags for them cleared and the size made again. */
 function stripWebp(bytes: Uint8Array): Stripped | undefined {
@@ -144,8 +182,8 @@ function stripWebp(bytes: Uint8Array): Stripped | undefined {
       // Bit 3 is EXIF and bit 2 XMP: neither is here any more.
       header[8] = (header[8] ?? 0) & ~0x0c;
       kept.push(header);
-    } else if (fourcc === 'EXIF' || fourcc === 'XMP ') {
-      // Taken out.
+    } else if (!WEBP_KEPT.has(fourcc)) {
+      // EXIF, XMP and anything unknown: taken out.
     } else {
       if (fourcc === 'VP8 ' && width === 0 && size >= 10) {
         if (data[3] !== 0x9d || data[4] !== 0x01 || data[5] !== 0x2a) return undefined;

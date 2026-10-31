@@ -113,7 +113,12 @@ async function readPicture(
  * kB), then that picture (at most 1 MB, JPEG, PNG or WebP by its first bytes). Undefined when the site names none, or
  * none we can use; never throws for the site's sake.
  */
-export async function readSitePicture(fetch: OutsideFetch, address: string): Promise<Uint8Array | undefined> {
+export async function readSitePicture(
+  fetch: OutsideFetch,
+  address: string,
+  /** Whether the picture's own host may be read now: its own per site budget, beside the page's. */
+  mayRead: (host: string) => Promise<boolean> = () => Promise.resolve(true),
+): Promise<Uint8Array | undefined> {
   if (!URL.canParse(address)) return undefined;
   const page = new URL(address);
   const read = await fetch(page, {
@@ -123,7 +128,8 @@ export async function readSitePicture(fetch: OutsideFetch, address: string): Pro
   });
   if (!read.ok) return undefined;
   const meta = readPageMeta(new TextDecoder().decode(read.bytes), page);
-  return meta.image === undefined ? undefined : readPicture(fetch, meta.image, anyPublicHost);
+  if (meta.image === undefined || !(await mayRead(meta.image.hostname))) return undefined;
+  return readPicture(fetch, meta.image, anyPublicHost);
 }
 
 /**

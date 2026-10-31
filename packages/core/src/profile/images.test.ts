@@ -42,6 +42,7 @@ function pngWithText(): Buffer {
     chunk('IHDR', [...be32(300), ...be32(200), 8, 6, 0, 0, 0]),
     chunk('tEXt', bytes('Comment\0GPS 51.5 N')),
     chunk('eXIf', bytes('MM\0*GPS')),
+    chunk('prVt', bytes('GPS private')),
     chunk('IDAT', [1, 2, 3]),
     chunk('IEND', []),
   );
@@ -77,6 +78,32 @@ describe('a picture for a link page', () => {
     expect(text).not.toContain('Shot at home');
     expect(text).toContain('JFIF');
     expect(Buffer.from(checked.bytes).subarray(-2)).toEqual(Buffer.from([0xff, 0xd9]));
+  });
+
+  it('keeps nothing after the end of a JPEG, where a phone puts a second picture with its own EXIF', () => {
+    const tail = bytes([0xff, 0xd8, 0xff, 0xe1, 0x00, 0x10], 'Exif\0\0GPS 51.5 N', [0xff, 0xd9]);
+    const checked = checkProfileImage(Buffer.concat([jpegWithGps(), tail]));
+    expect(checked).toMatchObject({ ok: true, width: 640, height: 480 });
+    if (!checked.ok) return;
+    expect(Buffer.from(checked.bytes).toString('latin1')).not.toContain('GPS');
+    expect(Buffer.from(checked.bytes).subarray(-2)).toEqual(Buffer.from([0xff, 0xd9]));
+  });
+
+  it('keeps a progressive JPEG’s later scans, and strips what sits between them', () => {
+    const base = jpegWithGps();
+    const end = base.length - 2;
+    const between = bytes(
+      [0xff, 0xe1, 0x00, 0x08],
+      'GPS!!!',
+      [0xff, 0xda, 0x00, 0x08, 3, 1, 0, 2, 0x11, 3],
+      [9, 8, 0xff, 0x00, 7],
+    );
+    const checked = checkProfileImage(Buffer.concat([base.subarray(0, end), between, base.subarray(end)]));
+    expect(checked.ok).toBe(true);
+    if (!checked.ok) return;
+    const text = Buffer.from(checked.bytes).toString('latin1');
+    expect(text).not.toContain('GPS');
+    expect(Buffer.from(checked.bytes).includes(Buffer.from([9, 8, 0xff, 0x00, 7]))).toBe(true);
   });
 
   it('takes the text and eXIf chunks out of a PNG', () => {

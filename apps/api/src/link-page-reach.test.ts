@@ -143,7 +143,7 @@ describe('a link page’s pictures (AC-6101, AC-6129)', () => {
     const served = await edge(path);
     expect(served.status).toBe(200);
     expect(served.headers.get('content-type')).toBe('image/png');
-    expect(served.headers.get('cache-control')).toBe('public, max-age=86400, s-maxage=86400');
+    expect(served.headers.get('cache-control')).toBe('public, max-age=3600, s-maxage=86400');
     expect(served.headers.get('set-cookie')).toBeNull();
     // Ada's picture through Bob's handle, or with a query on it, is no picture.
     expect((await edge(`/api/public/profiles/${bob.handle}/images/${image}`)).status).toBe(404);
