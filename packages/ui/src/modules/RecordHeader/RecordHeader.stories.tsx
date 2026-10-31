@@ -6,12 +6,15 @@ import { LinkChip } from '../../atoms/LinkChip/LinkChip.tsx';
 import { SAMPLE_COMPANIES, SAMPLE_MEMBERS } from '../../workbench/field-samples.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { AttributeDisplay } from '../../fields/AttributeDisplay.tsx';
+import { RecordFacts } from '../../molecules/RecordFacts/RecordFacts.tsx';
 import type { RecordStat } from '../../molecules/RecordStats/RecordStats.tsx';
 import { attributeOf } from '../../workbench/attributes.ts';
 import { RecordHeader } from './RecordHeader.tsx';
 
 const NORTHWIND = SAMPLE_COMPANIES[0] as RecordRefDisplay;
 const VALUE = attributeOf('currency', 'Value');
+const JOB = attributeOf('text', 'Job title');
+const EMAIL = attributeOf('email', 'Email addresses');
 const PERSON: RecordRefDisplay = {
   objectId: 'people',
   recordId: 'p1',
@@ -31,6 +34,8 @@ interface SampleProps {
   readonly width?: 'auto' | 'narrow';
   /** The stat strip under the header (on by default), or its values still coming. */
   readonly stats?: 'shown' | 'loading' | 'none';
+  /** The record at a glance under its name, with quick actions (the record page, owner 31 Oct). */
+  readonly withFacts?: boolean;
 }
 
 /** A deal's stats, what its tabs don't say: its value, how long in its stage, its next meeting and last activity. */
@@ -59,23 +64,55 @@ function sampleStats(isLoading: boolean): readonly RecordStat[] {
 }
 
 /** A record page's header, as the record page draws it under the top bar. */
-function SampleHeader({ isPerson = false, isLoading = false, width = 'auto', stats = 'shown' }: SampleProps) {
+function SampleHeader({
+  isPerson = false,
+  isLoading = false,
+  width = 'auto',
+  stats = 'shown',
+  withFacts = false,
+}: SampleProps) {
+  const facts = (
+    <RecordFacts
+      label="About Margaret Hamilton"
+      facts={[
+        {
+          id: 'job',
+          label: 'Job title',
+          icon: 'briefcase',
+          content: <AttributeDisplay attribute={JOB} value={'Director of engineering'} surface="panel" />,
+        },
+        {
+          id: 'email',
+          label: 'Email addresses',
+          content: <AttributeDisplay attribute={EMAIL} value={['margaret@example.com'] as never} surface="panel" />,
+        },
+      ]}
+    />
+  );
   return (
     <Stage width={width}>
       <RecordHeader
         record={isPerson ? PERSON : NORTHWIND}
         objectName={isPerson ? 'Person' : 'Company'}
-        meta={
-          isPerson ? (
-            'Director of engineering'
-          ) : (
-            <LinkChip href="https://northwindtraders.com">northwindtraders.com</LinkChip>
-          )
-        }
+        {...(withFacts
+          ? { facts }
+          : {
+              meta: isPerson ? (
+                'Director of engineering'
+              ) : (
+                <LinkChip href="https://northwindtraders.com">northwindtraders.com</LinkChip>
+              ),
+            })}
         viewers={VIEWERS}
         isLoading={isLoading}
         stats={stats === 'none' ? [] : sampleStats(stats === 'loading')}
       >
+        {withFacts && (
+          <>
+            <Button icon="mail">Email</Button>
+            <Button icon="pen">Log activity</Button>
+          </>
+        )}
         <Button icon="star" label="Add to favorites" variant="ghost" />
         <Button icon="ellipsis" label="Record actions" variant="ghost" />
       </RecordHeader>
@@ -103,6 +140,15 @@ export const Default: Story = {
 /** A person has a round avatar. */
 export const Person: Story = {
   args: { isPerson: true },
+};
+
+/** A person at a glance: job title and email under the name in place of "Person", with quick actions. */
+export const WithFacts: Story = {
+  args: { isPerson: true, withFacts: true },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('list', { name: 'About Margaret Hamilton' })).toBeInTheDocument();
+    await expect(canvas.getByRole('button', { name: 'Email' })).toBeInTheDocument();
+  },
 };
 
 /** The record is still coming. */

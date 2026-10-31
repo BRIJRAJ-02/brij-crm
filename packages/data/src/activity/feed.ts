@@ -27,7 +27,8 @@ export const ACTOR_WORDS = {
   formerMember: 'Former member',
   apiKey: 'An API key',
   automation: 'An automation',
-  bookingPage: 'A booking page',
+  // Named as a source, as a form is by its name: "Booking page changed 2 attributes" (owner, 31 Oct).
+  bookingPage: 'Booking page',
   system: 'System',
   /** A form whose name this page of the timeline doesn't carry (spec 0023). */
   form: 'A form',

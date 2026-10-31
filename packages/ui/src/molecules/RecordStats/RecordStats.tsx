@@ -5,6 +5,7 @@ import { Icon } from '../../atoms/Icon/Icon.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
 import { RelativeTime } from '../../atoms/RelativeTime/RelativeTime.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
+import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { memoIntl } from '../../lib/intl-memo.ts';
 import { useFormatSettings } from '../../provider/context.ts';
 import { useId, type ReactNode } from 'react';
@@ -52,7 +53,7 @@ export function RecordStats({ label, stats }: RecordStatsProps) {
   const number = (value: number) => memoIntl(`plain:${locale}`, () => new Intl.NumberFormat(locale)).format(value);
   return (
     <div className={styles.frame} role="group" aria-label={label}>
-      <dl className={styles.root} data-many={stats.length >= 4 || undefined}>
+      <dl className={styles.root}>
         {stats.map((stat) => {
           let value;
           if (stat.isLoading === true) value = <Skeleton width="short" />;
@@ -60,7 +61,15 @@ export function RecordStats({ label, stats }: RecordStatsProps) {
             value = stat.isCountAtLeast === true ? strings.atLeast(number(stat.count)) : number(stat.count);
           else if (stat.time !== undefined) value = <RelativeTime value={stat.time} />;
           else if (stat.value !== undefined && stat.value !== null) value = stat.value;
-          else value = <span className={styles.none}>{strings.none}</span>;
+          else
+            value = (
+              // Nothing yet: a quiet dash in the value's own type, so every stat keeps one rhythm (owner, 31 Oct);
+              // screen readers hear "None".
+              <span className={styles.none}>
+                <span aria-hidden="true">{strings.dash}</span>
+                <VisuallyHidden>{strings.none}</VisuallyHidden>
+              </span>
+            );
           const head = (
             <>
               {stat.icon !== undefined && <Icon name={stat.icon} size="sm" tone="muted" />}

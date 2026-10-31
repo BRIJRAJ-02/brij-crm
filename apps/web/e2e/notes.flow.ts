@@ -50,7 +50,7 @@ test('notes on a record: write, list, timeline, a second browser, delete and und
   page.on('request', (request) => {
     if (request.url().includes('/api/rpc/notes/save')) saves.push(request.url());
   });
-  await page.getByRole('button', { name: 'New note' }).click();
+  await page.getByRole('button', { name: 'Write a note…' }).click();
   await expect(page).toHaveURL(/\?note=new$/);
   // The note's own window, told apart by the editor inside it: a menu's popover is a dialog too, and one still
   // fading out makes a bare `getByRole('dialog')` match two (26 October 2026).

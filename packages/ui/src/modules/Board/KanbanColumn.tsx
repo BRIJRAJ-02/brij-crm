@@ -4,6 +4,7 @@
 // pointer from anywhere on the card, or by keyboard from its grip.
 import { useEffect, useId, useMemo, useRef } from 'react';
 import { GridList, GridListItem, ListLayout, Virtualizer, type Key } from 'react-aria-components';
+import { Badge } from '../../atoms/Badge/Badge.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { focusLater } from '../../lib/focus-later.ts';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
@@ -113,7 +114,6 @@ export function KanbanColumn({
   const onShown = useRangeReporter(column.cards);
   const rows = useMemo(() => keyedRows(column.cards), [column.cards]);
   const fontsSettled = useFontsSettled();
-  const number = memoIntl(`plain:${locale}`, () => new Intl.NumberFormat(locale)).format(column.count);
   const plural = memoIntl(`plural:${locale}`, () => new Intl.PluralRules(locale)).select(column.count);
   const isArchived = column.isArchived === true;
   const refusal = refusalOf(column);
@@ -149,6 +149,7 @@ export function KanbanColumn({
       ref={bindZone}
       className={styles.root}
       aria-labelledby={titleId}
+      data-empty={column.cards.count === 0 || undefined}
       data-archived={isArchived || undefined}
       data-refusing={(refusal !== undefined && draggingFrom !== undefined) || undefined}
       data-over={(isOver && refusal === undefined) || undefined}
@@ -176,18 +177,22 @@ export function KanbanColumn({
               {column.title}
             </StatusDot>
           )}
-          <span
-            className={styles.count}
-            aria-label={column.isCountAtLeast === true ? strings.cardsAtLeast(number) : strings.cards(number, plural)}
-          >
-            {column.isCountAtLeast === true ? strings.atLeast(number) : number}
-          </span>
+          {/* The library's count pill, as a tab or the page title shows a count: read as "3 cards". */}
+          <Badge
+            count={column.count}
+            max={Infinity}
+            label={strings.cardNoun(plural)}
+            {...(column.isCountAtLeast === true ? { isAtLeast: true } : {})}
+          />
           {/* The column's total: a strip is too narrow for it. */}
           {column.total !== undefined && !isCollapsed && <span className={styles.total}>{column.total}</span>}
         </h3>
-        {/* A strip is too narrow for it, and a column that refuses cards (archived, required) takes no new one. */}
+        {/* Beside the count, where the eye already is. A strip is too narrow for it, and a column that refuses cards
+            (archived, required) takes no new one. */}
         {onAddCard !== undefined && !isCollapsed && refusal === undefined && (
-          <Button variant="ghost" icon="plus" label={strings.addCard(column.title)} onPress={onAddCard} />
+          <span className={styles.add}>
+            <Button variant="ghost" icon="plus" label={strings.addCard(column.title)} onPress={onAddCard} />
+          </span>
         )}
         {/* Quiet until the head is hovered or focused (a pointer that can hover), so the "+" stays the head's action. */}
         {onCollapse !== undefined && !isCollapsed && (
@@ -223,6 +228,7 @@ export function KanbanColumn({
               items={rows}
               // Fonts in: each card built, and so measured, again (a card measured in the fallback face is too short).
               dependencies={[column.cards, fields, canMove, fontsSettled, refusal]}
+              // A short dashed drop zone, not a full height slab: the column is as tall as what it holds.
               renderEmptyState={() => <span className={styles.empty}>{strings.noCards}</span>}
               {...(onOpen === undefined
                 ? {}
@@ -287,6 +293,26 @@ export function KanbanCardOverlay({
   return (
     <div className={styles.overlay}>
       <KanbanCard card={card} fields={fields} />
+    </div>
+  );
+}
+
+/**
+ * A column while the board loads: the real column's surface, width and head, with a bar in place of its title and
+ * `cards` skeleton cards, so the loaded board lands where its loading shape stood. `isShown` false keeps the space
+ * with nothing drawn in it (before the loading delay), so a fast load never flashes empty grey columns.
+ */
+export function KanbanColumnSkeleton({ cards, isShown }: { readonly cards: number; readonly isShown: boolean }) {
+  return (
+    <div className={styles.root} aria-hidden="true" data-skeleton="" data-waiting={isShown ? undefined : ''}>
+      <div className={styles.head}>{isShown && <Skeleton width="short" />}</div>
+      <div className={styles.skeletonCards}>
+        {Array.from({ length: cards }, (_, index) => (
+          <div key={index} className={styles.card} data-loading="">
+            <span className={styles.skeleton}>{isShown && <Skeleton lines={2} />}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

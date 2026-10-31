@@ -69,6 +69,12 @@ export interface NoteListProps {
   readonly emptyActions?: ReactNode;
   /** Drawn above the list in every state ("New note"). */
   readonly toolbar?: ReactNode;
+  /**
+   * `block` (the default): the empty state centred with its icon. `row`: one quiet line, for a list whose toolbar
+   * already holds the way to start (a record's "Write a note…"), so an empty tab is not a sea of white under a big
+   * icon (owner, 31 Oct).
+   */
+  readonly emptyLayout?: 'block' | 'row';
 }
 
 /** A row's estimated height before it is measured: a title, two lines of excerpt and the author, about three rows. */
@@ -112,6 +118,7 @@ function NoteListContent({
   emptyTitle,
   emptyBody,
   emptyActions,
+  emptyLayout = 'block',
 }: Omit<NoteListProps, 'toolbar'>) {
   const showSkeleton = useDelayedLoading(status === 'loading');
   const onShown = useRangeReporter(notes);
@@ -147,6 +154,7 @@ function NoteListContent({
     return (
       <EmptyState
         icon="notebook"
+        layout={emptyLayout}
         title={emptyTitle ?? strings.empty}
         {...(emptyActions === undefined ? {} : { actions: emptyActions })}
       >

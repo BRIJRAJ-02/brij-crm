@@ -35,9 +35,11 @@ New (spec 0019). No list in the library shows a document summary (a title, a two
 - `status`: `loading` (skeleton rows after the loading delay), `error` (with Try again from `onRetry`), or `no-access`.
 - Give it a slot with a height: it scrolls inside it. Rows not loaded yet draw as skeletons, and `onRangeChange` hears which range is on screen.
 
+- `emptyLayout="row"` draws the empty list as one quiet line, for a list whose toolbar already holds the way to start: a record's Notes tab opens on "Write a note…" (Log activity lives in the record's quick actions), so the empty tab no longer centres a big icon and two buttons in a sea of white (owner, 31 October 2026).
+
 ## States
 
-Default (rows), with records, untitled, rows still loading, a long list, loading, empty (the library's words or the screen's own), with a toolbar, failed (with Try again), no access. Hover on a row (pointer only), focus (the inset ring).
+Default (rows), with records, untitled, rows still loading, a long list, loading, empty (the library's words or the screen's own; centred, or one row under a toolbar), with a toolbar, failed (with Try again), no access. Hover on a row (pointer only), focus (the inset ring).
 
 ## Keyboard
 

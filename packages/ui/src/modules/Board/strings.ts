@@ -1,10 +1,7 @@
 /** Board's built in copy. Counts take the number already formatted, and its plural category. */
 export const strings = {
-  /** A column's count, read after its title. */
-  cards: (count: string, plural: Intl.LDMLPluralRule) => (plural === 'one' ? `${count} card` : `${count} cards`),
-  /** A count that is a floor (a filtered count past its cap), read after the column's title, and as it shows. */
-  cardsAtLeast: (count: string) => `${count} or more cards`,
-  atLeast: (count: string) => `${count}+`,
+  /** What a column's count pill counts, read after its number ("3 cards"). */
+  cardNoun: (plural: Intl.LDMLPluralRule) => (plural === 'one' ? 'card' : 'cards'),
   noCards: 'No cards',
   /** What a card's comment count counts, read after the number. */
   openThreads: (count: number) => (count === 1 ? 'open comment thread' : 'open comment threads'),
@@ -22,7 +19,6 @@ export const strings = {
   archivedRefuses: 'Archived. Cards can’t move here.',
   hiddenColumns: (count: string, plural: Intl.LDMLPluralRule) =>
     plural === 'one' ? `${count} hidden column` : `${count} hidden columns`,
-  hideEmpty: 'Hide empty columns',
   /** The drag handle's name. */
   move: (name: string) => `Move ${name}`,
   /** What a screen reader hears as a card moves. */

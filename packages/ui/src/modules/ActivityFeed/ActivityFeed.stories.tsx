@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
-import { expect, fn, waitFor } from 'storybook/test';
+import { expect, fn, waitFor, within } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { arraySource, type ListSource } from '../../lib/list-source.ts';
 import { Card } from '../../molecules/Card/Card.tsx';
@@ -582,13 +582,44 @@ export const GroupedChanges: Story = {
       </Stage>
     );
   },
-  play: async ({ canvas, userEvent }) => {
+  play: async ({ canvas }) => {
     const [deleted, comment, changes] = canvas.getAllByRole('article');
     await expect(deleted).toHaveAccessibleName(/Grace Hopper moved this record to the trash/);
     await expect(comment).toHaveAccessibleName(/Grace Hopper commented/);
     await expect(changes).toHaveAccessibleName(/Ada Lovelace changed 2 attributes/);
+    // A few changes show their old and new values at once, with no Show all.
+    await expect(within(changes as HTMLElement).getByText('CTO')).toBeInTheDocument();
+    await expect(canvas.queryByRole('button', { name: 'Show all' })).not.toBeInTheDocument();
+  },
+};
+
+/** A long run of changes keeps to the names, with a quiet Show all on the names' line that lays each one out. */
+export const ManyChanges: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => {
+    const at = '2026-10-08T12:00:00.000Z';
+    const names = ['Job title', 'Department', 'Seniority', 'Nickname'];
+    const changes = names.map((name, index) => ({
+      id: `c${String(index)}`,
+      at,
+      actor: ADA,
+      kind: 'change' as const,
+      attribute: attributeOf('text', name),
+      from: null,
+      to: `Value ${String(index + 1)}`,
+    }));
+    const entries: ActivityEntry[] = [{ id: 'changes', at, actor: ADA, kind: 'changes', changes }];
+    return (
+      <Stage height="grid">
+        <ActivityFeed label="Activity" entries={arraySource(entries, (entry) => entry.id)} />
+      </Stage>
+    );
+  },
+  play: async ({ canvas, userEvent }) => {
+    await expect(canvas.queryByText('Value 1')).not.toBeInTheDocument();
     await userEvent.click(canvas.getByRole('button', { name: 'Show all' }));
     await expect(canvas.getByRole('button', { name: 'Show less' })).toHaveAttribute('aria-expanded', 'true');
+    await expect(canvas.getByText('Value 1')).toBeInTheDocument();
   },
 };
 

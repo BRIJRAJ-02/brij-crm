@@ -207,11 +207,8 @@ export function CommentsTab({ slug, recordId, comments, members, meId, isReadOnl
           {strings.earlierThreads}
         </Button>
       )}
-      {isEmpty && (
-        <EmptyState icon="message-square" title={strings.noComments}>
-          {canWrite ? strings.noCommentsText : undefined}
-        </EmptyState>
-      )}
+      {/* Someone who may write sees the composer alone: it is the way to start (owner, 31 Oct). */}
+      {isEmpty && !canWrite && <EmptyState icon="message-square" title={strings.noComments} />}
       {state.open.map((shown) => (
         <CommentThread key={shown.id} {...threadProps(shown)} />
       ))}

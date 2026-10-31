@@ -54,6 +54,8 @@ export const strings = {
   someone: 'Someone',
   // Log activity: a call or a meeting logged on a record (migration 0137).
   logActivity: 'Log activity',
+  /** The Notes tab's way in: a new note, ready to type into. */
+  writeNote: 'Write a note…',
   logCall: 'Log a call',
   logMeeting: 'Log a meeting',
   call: 'Call',

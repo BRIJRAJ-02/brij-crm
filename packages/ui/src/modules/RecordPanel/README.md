@@ -25,6 +25,8 @@ New. Clicking a record in a view (#17) opens it beside the table instead of leav
 ```
 
 - `record` is the record's display shape: its name, kind (a person's avatar is a circle, others square), and picture or hue.
+- The header (owner, 31 October 2026): Previous and Next sit together as one pair, then a gap, then Open full page and Close; each is an icon button with a tooltip, the steps' tooltips showing their ↑ and ↓ keys (keycaps no longer sit inside the buttons, where they read as a third arrow).
+- `facts` and `quickActions` put the record at a glance under the header: its key facts as `RecordFacts` (a person's job title, company, email, phone) and one row of quick actions (Email, Call, Log activity, Add task). Why props: the panel had only the name, so you opened the full page to see who someone was (owner, 31 October 2026).
 - Leave out `onPrevious` or `onNext` at either end of the view; the button stays, disabled, so the header doesn't shift. Leave out both to hide them.
 - `selectedTab` with `onTabChange` keeps the tab when the person steps to another record.
 - `actions` go before the close button, such as the record's menu.
@@ -36,7 +38,7 @@ New. Clicking a record in a view (#17) opens it beside the table instead of leav
 
 ## States
 
-Open (with its stat strip, its stats loading, or none; with a notice), unavailable (`empty`), closed (with the panel's exit animation), loading, failed, no access. Each tab's content brings its own loading, empty and error states.
+Open (with its facts and quick actions; with its stat strip, its stats loading, or none; with a notice), unavailable (`empty`), closed (with the panel's exit animation), loading, failed, no access. Each tab's content brings its own loading, empty and error states.
 
 ## Keyboard
 

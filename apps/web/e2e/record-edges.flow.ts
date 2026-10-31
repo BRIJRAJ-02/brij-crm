@@ -76,12 +76,12 @@ test.describe('the record journey’s edges', () => {
     // The Notes and Tasks tabs start from their empty states, the way to begin inside them, once each.
     await page.getByRole('tab', { name: /Notes/ }).click();
     await expect(page.getByText('No notes yet', { exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'New note' })).toHaveCount(1);
+    await expect(page.getByRole('button', { name: 'Write a note…' })).toHaveCount(1);
     await page.getByRole('tab', { name: /Tasks/ }).click();
     await expect(page.getByText('No open tasks', { exact: true })).toBeVisible();
     await expect(page.getByText('Add one above')).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'New task' })).toHaveCount(1);
-    await page.getByRole('button', { name: 'New task' }).click();
+    await expect(page.getByRole('button', { name: 'Add with details' })).toHaveCount(1);
+    await page.getByRole('button', { name: 'Add with details' }).click();
     await expect(page).toHaveURL(/\/tasks\?task=new$/);
     await page.keyboard.press('Escape');
     await expect(page).toHaveURL(/\/tasks$/);

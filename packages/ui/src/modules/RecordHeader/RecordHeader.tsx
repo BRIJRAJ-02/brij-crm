@@ -16,8 +16,13 @@ export interface RecordHeaderProps {
   readonly record?: RecordRefDisplay;
   /** Its object, singular ("Company"). */
   readonly objectName: string;
-  /** After the object name: the domain, the job title. */
+  /** After the object name (or the facts): a badge, a lock. */
   readonly meta?: ReactNode;
+  /**
+   * The record at a glance under its name, in place of the object's name (the crumbs already say it): its key
+   * facts as `RecordFacts` (owner, 31 Oct). Leave it out to show the object's name.
+   */
+  readonly facts?: ReactNode;
   /** Who else has the record open now. */
   readonly viewers?: readonly AvatarStackPerson[];
   /** The end of the header: the record's buttons and menu. */
@@ -39,6 +44,7 @@ export function RecordHeader({
   record,
   objectName,
   meta,
+  facts,
   viewers = [],
   children,
   isLoading = false,
@@ -86,10 +92,11 @@ export function RecordHeader({
       />
       <span className={styles.text}>
         <h2 className={styles.name}>{record.name}</h2>
-        <span className={styles.meta}>
-          <span>{objectName}</span>
+        <div className={styles.meta}>
+          {facts === undefined ? <span>{objectName}</span> : <VisuallyHidden>{objectName}</VisuallyHidden>}
+          {facts}
           {meta}
-        </span>
+        </div>
       </span>
       {(viewers.length > 0 || children !== undefined) && (
         <span className={styles.end}>

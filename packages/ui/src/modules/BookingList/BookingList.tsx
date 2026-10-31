@@ -67,9 +67,10 @@ export interface BookingListProps {
   readonly emptyState?: ReactNode;
   /**
    * `page` (the default) draws the list in its own bordered box (Bookings' list). `card` leaves the box to the
-   * Card around it (Home's Today): rows inset, bands kept, a narrower date column for a time alone.
+   * Card around it (Team day's lane): rows inset, bands kept, a narrower date column for a time alone. `agenda` is
+   * `card` for Home's Today: each day's band a heading in label strong, and the time level with the title.
    */
-  readonly placement?: 'page' | 'card';
+  readonly placement?: 'page' | 'card' | 'agenda';
 }
 
 /** Whether a row has anything for its second line. */
@@ -106,7 +107,12 @@ export function BookingList({ label, groups, onOpen, openId, emptyState, placeme
   const id = useId();
   if (groups.every((group) => group.rows.length === 0)) return <>{emptyState}</>;
   return (
-    <section className={styles.root} aria-label={label} data-placement={placement === 'card' ? placement : undefined}>
+    <section
+      className={styles.root}
+      aria-label={label}
+      data-placement={placement === 'page' ? undefined : 'card'}
+      data-agenda={placement === 'agenda' || undefined}
+    >
       {groups.map((group, groupIndex) => (
         <div key={group.id} className={styles.group}>
           <h3 className={styles.band}>{group.label}</h3>

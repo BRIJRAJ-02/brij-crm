@@ -263,18 +263,20 @@ export function BoardScreen(props: BoardScreenProps) {
             ) : outcome.kind === 'nothing-to-group' ? (
               <EmptyState
                 icon="kanban"
-                title={strings.nothingToGroupTitle(object.pluralName)}
+                title={strings.nothingToGroupTitle}
                 // Only owners and admins change the schema (spec 0009, AC-136); others see the title alone.
                 {...(canChangeSchema
                   ? {
                       actions: (
-                        <Button icon="plus" onPress={() => setAdding(true)}>
-                          {strings.addAttribute}
+                        <Button variant="primary" icon="plus" onPress={() => setAdding(true)}>
+                          {strings.addGroupField}
                         </Button>
                       ),
                     }
                   : {})}
-              />
+              >
+                {canChangeSchema ? strings.nothingToGroupText : strings.nothingToGroupTextReader}
+              </EmptyState>
             ) : outcome.kind === 'group-archived' ? (
               <EmptyState
                 icon="archive"
@@ -379,8 +381,11 @@ function useBoardStore(
   plan: BoardPlan,
   query: ViewQuery,
   attributeIds: readonly string[],
-): BoardStore<RecordsView> | undefined {
+): { readonly store?: BoardStore<RecordsView>; readonly failed?: { readonly retry: () => void } } {
   const { data } = useRouteContext({ from: '__root__' });
+  // A board that couldn't open says so with Try again, never an endless skeleton (owner, 31 October 2026).
+  const [attempt, setAttempt] = useState(0);
+  const [failedKey, setFailedKey] = useState<string | undefined>(undefined);
   const asked = useMemo(
     () => ({
       groupBy: plan.groupBy.id,
@@ -396,16 +401,34 @@ function useBoardStore(
   const [held, setHeld] = useState<{ readonly key: string; readonly store: BoardStore<RecordsView> }>();
   useEffect(() => {
     let isCurrent = true;
-    void data.records.board(slug, objectId, asked, attributeIds).then((store) => {
-      if (isCurrent) setHeld({ key, store });
-    });
+    data.records.board(slug, objectId, asked, attributeIds).then(
+      (store) => {
+        if (!isCurrent) return;
+        setHeld({ key, store });
+        setFailedKey(undefined);
+      },
+      () => {
+        if (isCurrent) setFailedKey(key);
+      },
+    );
     return () => {
       isCurrent = false;
     };
-    // The question is `key`; the card fields reach the columns through useBoard.
+    // The question is `key` (and a retry's attempt); the card fields reach the columns through useBoard.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, slug, key]);
-  return held?.store;
+  }, [data, slug, key, attempt]);
+  if (failedKey === key && held?.key !== key) {
+    return {
+      failed: {
+        retry: () => {
+          // Back to loading while the new attempt runs, so a second failure draws the error again.
+          setFailedKey(undefined);
+          setAttempt((count) => count + 1);
+        },
+      },
+    };
+  }
+  return held === undefined ? {} : { store: held.store };
 }
 
 /** A reference value's links, as a list: one link, several, or none. */
@@ -451,7 +474,7 @@ function BoardBody({
     () => [...plan.cardFields.map((field) => field.id), plan.groupBy.id],
     [plan.cardFields, plan.groupBy.id],
   );
-  const store = useBoardStore(slug, object.id, plan, query, attributeIds);
+  const { store, failed } = useBoardStore(slug, object.id, plan, query, attributeIds);
   const peekRecordId = peek?.recordId;
   const { data } = useRouteContext({ from: '__root__' });
   const canChangeSchema = useCan('schema.manage');
@@ -493,7 +516,9 @@ function BoardBody({
         onMove={() => undefined}
         isReadOnly
         showEmptyColumns={showEmpty}
-        status="loading"
+        {...(failed === undefined
+          ? { status: 'loading' as const }
+          : { status: 'error' as const, onRetry: failed.retry })}
       />
     );
   }

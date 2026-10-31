@@ -50,7 +50,7 @@ export interface ViewSettingsProps {
    * here. It stays in view while the lists scroll.
    */
   readonly footer?: ReactNode;
-  /** Above the lists, apart from them after a hairline: a table's Group by (a `Select`). */
+  /** Above the lists, apart from them after a hairline: a table's Group by, a board's total and Show empty columns. */
   readonly header?: ReactNode;
 }
 

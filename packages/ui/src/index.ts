@@ -279,6 +279,8 @@ export {
   type CalendarListProps,
 } from './modules/CalendarList/CalendarList.tsx';
 export { Pagination, type PaginationProps } from './molecules/Pagination/Pagination.tsx';
+/** A record's key facts on one quiet line under its name (the record panel and page header). */
+export { RecordFacts, type RecordFact, type RecordFactsProps } from './molecules/RecordFacts/RecordFacts.tsx';
 export { RecordStats, type RecordStat, type RecordStatsProps } from './molecules/RecordStats/RecordStats.tsx';
 export { SpanCard, type SpanCardChoice, type SpanCardProps } from './modules/SpanCard/SpanCard.tsx';
 export {

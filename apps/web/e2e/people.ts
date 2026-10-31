@@ -226,10 +226,20 @@ export async function openTrash(page: Page): Promise<void> {
  * A row's name or a card opens its record in the panel beside the list (spec 0017, AC-384; the CRM flow pass, 31
  * October 2026): this waits for the panel, then takes its Open full page to the record's page.
  */
+/**
+ * Gets to a record's full page after its name was clicked: a name in the table opens the page itself (owner, 31
+ * October 2026), and one elsewhere (a board card, the panel) opens the panel, whose Open full page goes on.
+ */
 export async function openFullPage(page: Page): Promise<void> {
   const open = page.getByRole('button', { name: 'Open full page' });
-  await expect(open).toBeVisible({ timeout: 30_000 });
-  await open.click();
+  const onPage = /\/objects\/[^/?]+\/[0-9a-f-]{36}\/[a-z]+/u;
+  await expect.poll(async () => onPage.test(page.url()) || (await open.isVisible()), { timeout: 30_000 }).toBe(true);
+  if (!onPage.test(page.url())) await open.click();
+}
+
+/** Opens a table row's record in the panel: the row header's "Open in panel" (the name itself opens the page). */
+export async function openInPanel(page: Page, name: string | RegExp): Promise<void> {
+  await page.getByRole('rowheader', { name }).first().getByRole('button', { name: 'Open in panel' }).click();
 }
 
 export async function chooseNewAttribute(page: Page): Promise<void> {

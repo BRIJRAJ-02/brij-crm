@@ -9,6 +9,8 @@ export const strings = {
   /** The "+" menu's last item, under the hidden columns. */
   newColumnItem: 'New attribute…',
   untitled: 'Untitled',
+  /** The row header's hover button that opens the record beside the grid; Space does the same. */
+  openInPanel: 'Open in panel',
   /** What a row's comment count counts, read after the number. */
   openThreads: (count: number) => (count === 1 ? 'open comment thread' : 'open comment threads'),
   columnOptions: (name: string) => `${name} options`,

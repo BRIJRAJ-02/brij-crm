@@ -4,7 +4,7 @@
 // Leaves out: reminders (#28), tasks of related records, a task's description.
 import { TASK_TITLE_MAX, type MemberSummary, type RecordRefDisplay, type TaskList as TaskListSource } from '@crm/data';
 import { useTaskList } from '@crm/data/react';
-import { Button, Disclosure, Field, TaskList } from '@crm/ui';
+import { Button, Disclosure, Field, TaskList, Tooltip } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { strings } from './strings.ts';
@@ -21,7 +21,7 @@ export interface TasksTabProps {
   readonly members: readonly MemberSummary[];
   /** The person's member id: a new task is theirs (owner decision 1). */
   readonly meId: string | undefined;
-  /** The person may change the record's object: the quick add and New task show. */
+  /** The person may change the record's object: the quick add shows. */
   readonly canAdd: boolean;
   /** A linked record's page, for its chip. */
   readonly recordHref: (record: RecordRefDisplay) => string | undefined;
@@ -200,24 +200,14 @@ function CompletedList({
 }
 
 /**
- * A record's Tasks tab (AC-432, AC-433, AC-435): the quick add and "New
- * task" over its open tasks by due date, ticked in place (a ticked task stays
+ * A record's Tasks tab (AC-432, AC-433, AC-435): the quick add, with a due date
+ * and assignee one press away, over its open tasks by due date, ticked in place (a ticked task stays
  * struck through until the list settles), and Completed under them.
  */
 export function TasksTab({ slug, record, open, members, meId, canAdd, recordHref, onOpenTask }: TasksTabProps) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
   const state = useTaskList(open);
   const entries = useTaskEntries(state.source, members, record.recordId);
-  const isEmpty = state.status === 'ready' && entries.count === 0;
-  const newTask = (
-    <Button
-      onPress={() => {
-        onOpenTask('new');
-      }}
-    >
-      {strings.newTask}
-    </Button>
-  );
   return (
     <TaskList
       label={strings.openTasks}
@@ -225,9 +215,9 @@ export function TasksTab({ slug, record, open, members, meId, canAdd, recordHref
       status={state.status === 'unavailable' ? 'no-access' : state.status}
       onRetry={open.retry}
       newIds={state.newIds}
+      // One way to add (owner, 31 Oct: an input, a New task button and an empty state said the same thing three
+      // times): the quick add, with its due date and assignee one press away; empty, the list is one quiet line.
       emptyTitle={strings.noOpenTasksShort}
-      // Empty, New task sits in the empty row, under its words (as Attio and Twenty do); with tasks, by the quick add.
-      {...(canAdd ? { emptyActions: newTask } : {})}
       recordHref={recordHref}
       onToggle={(task, isDone) => {
         tickTask(toasts, (next) => data.tasks.setDone(slug, task.id, next), isDone);
@@ -240,17 +230,17 @@ export function TasksTab({ slug, record, open, members, meId, canAdd, recordHref
             toolbar: (
               <>
                 <QuickAdd slug={slug} record={record} meId={meId} />
-                {isEmpty ? null : (
+                <Tooltip content={strings.newTaskWithDetails}>
                   <Button
                     // The composer's height: beside the 30px field.
                     size="lg"
+                    icon="calendar-plus"
+                    label={strings.newTaskWithDetails}
                     onPress={() => {
                       onOpenTask('new');
                     }}
-                  >
-                    {strings.newTask}
-                  </Button>
-                )}
+                  />
+                </Tooltip>
               </>
             ),
           }

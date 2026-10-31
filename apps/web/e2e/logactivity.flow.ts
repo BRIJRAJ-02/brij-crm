@@ -36,7 +36,7 @@ test('a call is logged in two clicks and ⌘↵, and shows on the Notes tab and 
   const graceId = await openPerson(page, 'Grace Hopper');
   const notesPath = `/w/${slug}/objects/people/${graceId}/notes`;
 
-  // The Notes tab offers Log activity beside New note.
+  // The record's quick actions offer Log activity over every tab.
   await page.goto(notesPath);
   await page.getByRole('button', { name: 'Log activity' }).first().click();
   const dialog = logDialog(page);

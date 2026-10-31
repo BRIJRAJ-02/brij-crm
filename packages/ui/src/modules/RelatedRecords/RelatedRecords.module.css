@@ -2,12 +2,19 @@
    row tall, its Remove at the end, shown under a pointer or with focus in the
    row and always on touch. "Show more" and "View all" sit under the rows,
    their words lined up with the chips', as AttributeList's "Show empty
-   values" is. */
+   values" is. A full section sits under a hairline, titled in the body's
+   strong type (Disclosure's default variant). */
 @layer components {
   .root {
     display: flex;
     flex-direction: column;
     min-inline-size: 0;
+  }
+
+  /* A full section (not Overview's short form): a hairline over it sets it apart from the details above. */
+  .root[data-section] {
+    padding-block-start: var(--space-8);
+    border-block-start: var(--border-width-hairline) solid var(--border-subtle);
   }
 
   .list,

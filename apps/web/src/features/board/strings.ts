@@ -14,8 +14,10 @@ export const strings = {
   table: 'Table',
   board: 'Board',
   /** An object with nothing to group by (AC-493). */
-  nothingToGroupTitle: (plural: string) => `${plural} have no field to group by`,
-  addAttribute: 'Add attribute',
+  nothingToGroupTitle: 'Add a field to group by',
+  nothingToGroupText: 'Boards group by a status or select field.',
+  nothingToGroupTextReader: 'Boards group by a status or select field. Ask an admin to add one.',
+  addGroupField: 'Add status or select',
   /** Past 50 options (AC-494). */
   tooManyTitle: 'Boards show up to 50 columns',
   tooManyText: (title: string, count: string) => `${title} has ${count} options.`,

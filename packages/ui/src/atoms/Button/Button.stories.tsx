@@ -267,7 +267,7 @@ export const FullWidth: Story = {
   },
 };
 
-/** Disabled: at half opacity, skipped by Tab, and never pressed. */
+/** Disabled: dimmed (a primary in the neutral off look instead), skipped by Tab, and never pressed. */
 export const Disabled: Story = {
   parameters: { crm: { preview: true } },
   render: (args) => (

@@ -60,6 +60,19 @@ export const strings = {
   viewOnly: 'View only',
   viewOnlyReason: (pluralName: string) => `${pluralName} are view only. Ask an admin.`,
   copyLink: 'Copy link',
+  /** The record at a glance (owner, 31 Oct): its facts' name, and its quick actions. */
+  facts: (name: string) => `About ${name}`,
+  email: 'Email',
+  emailTo: (address: string) => `Email ${address}`,
+  call: 'Call',
+  callNumber: (number: string) => `Call ${number}`,
+  logActivity: 'Log activity',
+  addTask: 'Add a task',
+  /** The More menu's Rename: the name is the header, so it is no longer a row in Details (owner, 31 Oct). */
+  rename: 'Rename',
+  cancel: 'Cancel',
+  nameRequired: 'Give it a name.',
+  renameTitle: (singularName: string) => `Rename ${singularName.toLowerCase()}`,
   linkCopied: 'Link copied',
   unnamed: (singularName: string) => `Unnamed ${singularName.toLowerCase()}`,
   /** A meeting's attendee added as a person (spec 0024, AC-609). */

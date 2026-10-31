@@ -117,11 +117,52 @@
     user-select: text;
   }
 
-  /* The row's picture before its name on the row header: decorative, the name says who. */
+  /* The row's picture before its name on the row header (24px, two initials on its hue): decorative, the name says
+     who. */
   .avatar {
     display: inline-flex;
     flex: none;
-    margin-inline-end: var(--space-6);
+    margin-inline-end: var(--space-8);
+  }
+
+  /* The row header's name reads first in the row: the body's medium weight, in the text colour. */
+  .root[data-row-header] {
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+  }
+
+  /* "Open in panel" at the row header's end, over the name's tail on the cell's own background, so it takes no room
+     until it shows: under the row's hover (the grid sets --row-hover on a hovered row), or on the cell holding focus.
+     A screen with no hover always shows it. */
+  .peek {
+    position: absolute;
+    inset-block: 0;
+    inset-inline-end: var(--space-4);
+    display: flex;
+    align-items: center;
+    padding-inline-start: var(--space-4);
+    background: inherit;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .peek {
+      opacity: var(--row-hover, 0);
+      transition: opacity var(--duration-hover) var(--ease-hover);
+    }
+
+    .root[data-active] .peek {
+      opacity: 1;
+    }
+  }
+
+  /* With no hover the button always shows, so it takes its own room at the cell's end and the name ellipsises
+     before it rather than running under it. */
+  @media (hover: none) {
+    .peek {
+      position: static;
+      flex: none;
+      margin-inline-start: auto;
+    }
   }
 
   /* A row header with no name: what the row is called, in the placeholder's colour. */

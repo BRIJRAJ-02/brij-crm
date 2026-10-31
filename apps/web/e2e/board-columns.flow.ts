@@ -57,7 +57,7 @@ test.describe('a board’s columns', () => {
     if (await hidden.isVisible()) await hidden.click();
 
     const first = board.getByRole('region').nth(1);
-    const title = ((await first.getByRole('heading').textContent()) ?? '').replace(/\d+$/u, '').trim();
+    const title = ((await first.getByRole('heading').textContent()) ?? '').replace(/[\d,]+\+?\s*cards?$/u, '').trim();
     await first.getByRole('button', { name: `Collapse ${title}` }).click();
     await expect(board.getByRole('button', { name: `Expand ${title}` })).toBeVisible();
     await page.reload();

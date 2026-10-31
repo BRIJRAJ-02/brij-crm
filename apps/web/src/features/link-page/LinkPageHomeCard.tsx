@@ -105,7 +105,7 @@ export function LinkPageHomeCard({ slug }: LinkPageHomeCardProps) {
         actions={
           <>
             <Badge text={strings.private} dot="gray" />
-            <ButtonLink variant="ghost" href={linkPageHref(slug)}>
+            <ButtonLink variant="secondary" icon="pencil" href={linkPageHref(slug)}>
               {strings.edit}
             </ButtonLink>
           </>
@@ -122,7 +122,7 @@ export function LinkPageHomeCard({ slug }: LinkPageHomeCardProps) {
       actions={
         <>
           <Badge text={strings.live} dot="green" />
-          <ButtonLink variant="ghost" href={linkPageHref(slug)}>
+          <ButtonLink variant="secondary" icon="pencil" href={linkPageHref(slug)}>
             {strings.edit}
           </ButtonLink>
         </>

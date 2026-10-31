@@ -8,7 +8,7 @@ import { randomBytes } from 'node:crypto';
 import { writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { expect, test, type Browser, type Locator, type Page, type Route } from '@playwright/test';
-import { addPerson, newWorkspace } from './people.ts';
+import { addPerson, newWorkspace, openInPanel } from './people.ts';
 import { loadingAndLoaded, shapeDifferences, switchingWorkspace, type SwitchingWorkspace } from './switching.ts';
 
 const SHOTS = process.env.FLOW_SCREENSHOTS;
@@ -40,11 +40,8 @@ const ALL_SCREENS: readonly Screen[] = [
     name: 'record overview',
     start: at('objects/people'),
     prepare: async (page) => {
-      await page
-        .getByRole('rowheader', { name: /Grace Hopper/ })
-        .first()
-        .getByText('Grace Hopper')
-        .click();
+      // The name opens the page; Open in panel opens the panel, whose Open full page is the target.
+      await openInPanel(page, /Grace Hopper/);
     },
     target: (page) => page.getByRole('button', { name: 'Open full page' }),
   },

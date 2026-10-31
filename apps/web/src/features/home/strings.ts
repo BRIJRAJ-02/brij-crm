@@ -25,7 +25,9 @@ export const strings = {
   hours: (hours: number, minutes: number) =>
     minutes === 0 ? `${String(hours)} hr` : `${String(hours)} hr ${String(minutes)} min`,
   todayFailed: 'Today’s meetings didn’t load',
-  noMeetings: 'No meetings today',
+  /** Today's title when the day holds no meetings and the card shows the week's next ones. */
+  nextUp: 'Next up',
+  noMeetingsWeek: 'No meetings this week',
 
   // The page
   myTasks: 'My tasks',

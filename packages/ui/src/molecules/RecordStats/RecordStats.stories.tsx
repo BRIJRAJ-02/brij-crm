@@ -90,11 +90,12 @@ export const Loading: Story = {
   },
 };
 
-/** No values yet: "None", muted. */
+/** No values yet: a quiet dash in the values' own type, heard as "None". */
 export const None: Story = {
   args: { state: 'none' },
   play: async ({ canvas }) => {
     await expect(canvas.getAllByText('None')).toHaveLength(3);
+    await expect(canvas.getAllByText('—')).toHaveLength(3);
   },
 };
 

@@ -65,6 +65,8 @@ interface SampleProps {
   readonly emptyTitle?: string;
   readonly withToolbar?: boolean;
   readonly withEmptyAction?: boolean;
+  /** The empty list as one quiet line under a "Write a note…" toolbar (a record's Notes tab). */
+  readonly isEmptyRow?: boolean;
   /** Each note carries its record, as the workspace's Notes page shows them. */
   readonly withRecords?: boolean;
   /** The first two are a logged call and meeting. */
@@ -84,6 +86,7 @@ function SampleNotes({
   withEmptyAction = false,
   withRecords = false,
   withActivities = false,
+  isEmptyRow = false,
 }: SampleProps) {
   const sample = withActivities
     ? sampleNotes().map((note, index): NoteListItem => {
@@ -132,6 +135,16 @@ function SampleNotes({
         {...(onRetry === undefined ? {} : { onRetry })}
         {...(emptyTitle === undefined ? {} : { emptyTitle })}
         {...(withToolbar ? { toolbar: <Button variant="primary">New note</Button> } : {})}
+        {...(isEmptyRow
+          ? {
+              emptyLayout: 'row' as const,
+              toolbar: (
+                <Button isFullWidth icon="pencil">
+                  Write a note…
+                </Button>
+              ),
+            }
+          : {})}
         {...(withEmptyAction ? { emptyActions: <Button variant="primary">New note</Button> } : {})}
       />
     </Stage>
@@ -234,6 +247,15 @@ export const EmptyWithAction: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByText('No notes yet')).toBeInTheDocument();
     await expect(canvas.getAllByRole('button', { name: 'New note' })).toHaveLength(1);
+  },
+};
+
+/** Empty under the way to start (a record's Notes tab): "Write a note…" over one quiet line, no centred icon. */
+export const EmptyRow: Story = {
+  args: { isEmpty: true, emptyTitle: 'No notes yet', isEmptyRow: true },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('No notes yet')).toBeInTheDocument();
+    await expect(canvas.getByRole('button', { name: 'Write a note…' })).toBeInTheDocument();
   },
 };
 

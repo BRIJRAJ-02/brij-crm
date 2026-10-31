@@ -7,6 +7,8 @@ import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { ProgressBar } from '../../atoms/ProgressBar/ProgressBar.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
+import { ShortcutTooltip } from '../../atoms/Tooltip/ShortcutTooltip.tsx';
+import { Tooltip } from '../../atoms/Tooltip/Tooltip.tsx';
 import type { LoadStatus } from '../../lib/load-status.ts';
 import { useDelayedLoading } from '../../provider/useDelayedLoading.ts';
 import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
@@ -44,6 +46,13 @@ export interface RecordPanelProps {
   readonly width?: PanelWidth;
   /** The stat strip over the tabs: counts (tasks, notes) and the last activity, as the record page shows them. */
   readonly stats?: readonly RecordStat[];
+  /**
+   * The record at a glance, under the header: its key facts (a person's job title and company, email and phone,
+   * drawn through their one field design) as a quiet wrapping line. Leave it out for none.
+   */
+  readonly facts?: ReactNode;
+  /** The record's quick actions under its facts: Email and Call (icons), Log activity, Add a task. One row of buttons. */
+  readonly quickActions?: ReactNode;
   /** One line over the tabs, such as a danger Callout saying the record is no longer available. */
   readonly notice?: ReactNode;
   /**
@@ -84,6 +93,8 @@ export function RecordPanel({
   notice,
   empty,
   isStepping = false,
+  facts,
+  quickActions,
 }: RecordPanelProps) {
   const showStepping = useDelayedLoading(isStepping);
   const hasSteps = onPrevious !== undefined || onNext !== undefined;
@@ -152,31 +163,35 @@ export function RecordPanel({
       }
       actions={
         <>
+          {/* Previous and Next as one pair, then a gap, then Open full page; Close ends the bar (owner, 31 Oct). */}
           {hasSteps && (
-            <>
-              <Button
-                ref={previousRef}
-                variant="ghost"
-                icon="chevron-up"
-                label={strings.previous}
-                // ↑ steps too, where nothing in the panel owns the arrows: shown in the button's tooltip.
-                kbd="↑"
-                isDisabled={onPrevious === undefined}
-                {...(onPrevious === undefined ? {} : { onPress: onPrevious })}
-              />
-              <Button
-                ref={nextRef}
-                variant="ghost"
-                icon="chevron-down"
-                label={strings.next}
-                kbd="↓"
-                isDisabled={onNext === undefined}
-                {...(onNext === undefined ? {} : { onPress: onNext })}
-              />
-            </>
+            <span className={styles.steps}>
+              <ShortcutTooltip content={strings.previous} kbd="↑">
+                <Button
+                  ref={previousRef}
+                  variant="ghost"
+                  icon="chevron-up"
+                  label={strings.previous}
+                  isDisabled={onPrevious === undefined}
+                  {...(onPrevious === undefined ? {} : { onPress: onPrevious })}
+                />
+              </ShortcutTooltip>
+              <ShortcutTooltip content={strings.next} kbd="↓">
+                <Button
+                  ref={nextRef}
+                  variant="ghost"
+                  icon="chevron-down"
+                  label={strings.next}
+                  isDisabled={onNext === undefined}
+                  {...(onNext === undefined ? {} : { onPress: onNext })}
+                />
+              </ShortcutTooltip>
+            </span>
           )}
           {onOpenPage !== undefined && (
-            <Button variant="ghost" icon="maximize-2" label={strings.openPage} onPress={onOpenPage} />
+            <Tooltip content={strings.openPage}>
+              <Button variant="ghost" icon="maximize-2" label={strings.openPage} onPress={onOpenPage} />
+            </Tooltip>
           )}
           {actions}
         </>
@@ -190,6 +205,12 @@ export function RecordPanel({
             </div>
           )}
           {notice !== undefined && <div className={styles.notice}>{notice}</div>}
+          {(facts !== undefined || quickActions !== undefined) && (
+            <div className={styles.summary}>
+              {facts !== undefined && <div className={styles.facts}>{facts}</div>}
+              {quickActions !== undefined && <div className={styles.quick}>{quickActions}</div>}
+            </div>
+          )}
           {stats.length > 0 && record !== undefined && (
             <div className={styles.stats}>
               <RecordStats label={strings.about(record.name)} stats={stats} />

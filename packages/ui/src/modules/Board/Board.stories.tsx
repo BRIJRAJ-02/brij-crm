@@ -5,9 +5,11 @@ import { arraySource } from '../../lib/list-source.ts';
 import { SAMPLE_STAGES } from '../../workbench/field-samples.ts';
 import { SAMPLE_IDS } from '../../workbench/sample-ids.ts';
 import { sampleColumns, sampleRowAt } from '../../workbench/grid-samples.ts';
+import { settleAnimations } from '../../workbench/animations.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { Board } from './Board.tsx';
 import type { LoadStatus } from '../../lib/load-status.ts';
+import { LoadingTimingContext } from '../../provider/useDelayedLoading.ts';
 import type { BoardCard, BoardColumn, BoardMove } from './types.ts';
 
 const CARD_FIELDS = sampleColumns(9)
@@ -195,6 +197,27 @@ export const MoveByKeyboard: Story = {
   },
 };
 
+/** A card holding keyboard focus shows its grip, the keyboard's way to move it; the card beside it keeps its grip quiet. */
+export const GripOnKeyboardFocus: Story = {
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas, userEvent }) => {
+    const lead = canvas.getByRole('grid', { name: /Lead/ });
+    await userEvent.tab();
+    const [focused, other] = within(lead).getAllByRole('row');
+    await expect(focused).toHaveFocus();
+    const gripOf = (row: HTMLElement | undefined) =>
+      within(row ?? document.body).getByRole('button', { name: /^Move / }).parentElement ?? row;
+    const opacity = (element: Element | null | undefined) =>
+      element === null || element === undefined ? '' : getComputedStyle(element).opacity;
+    // Only where a pointer can hover is the grip quiet at rest; a touch screen always shows it.
+    if (matchMedia('(hover: hover) and (pointer: fine)').matches) {
+      await settleAnimations();
+      await waitFor(() => expect(opacity(gripOf(focused))).toBe('1'));
+      await expect(opacity(gripOf(other))).toBe('0');
+    }
+  },
+};
+
 /** Each column's head has a "+" naming its column; the archived column has none. */
 export const AddCard: Story = {
   args: { onAddCard: fn() },
@@ -240,13 +263,18 @@ export const ReadOnly: Story = {
   },
 };
 
-/** Showing empty columns brings back Lost, with nothing in it. */
+/**
+ * Showing empty columns brings back Lost, with nothing in it: a short dashed drop zone, its column no taller than
+ * its head and the zone. Hiding them again is View settings' choice, so the board shows no button for it.
+ */
 export const EmptyColumns: Story = {
   args: { startShowingEmpty: true },
   play: async ({ canvas }) => {
     const lost = canvas.getByRole('grid', { name: /Lost/ });
     await expect(within(lost).getByText('No cards')).toBeInTheDocument();
-    await expect(canvas.getByRole('button', { name: 'Hide empty columns' })).toBeInTheDocument();
+    const column = canvas.getByRole('region', { name: /Lost/ });
+    await expect(column.getBoundingClientRect().height).toBeLessThan(160);
+    await expect(canvas.queryByRole('button', { name: 'Hide empty columns' })).not.toBeInTheDocument();
   },
 };
 
@@ -257,15 +285,53 @@ export const CollapsedNoValue: Story = {
     const strip = canvas.getByRole('region', { name: /No Stage/ });
     await expect(within(strip).queryByRole('grid')).not.toBeInTheDocument();
     await expect(strip.getBoundingClientRect().width).toBeLessThan(80);
-    await expect(within(strip).getByText('0')).toBeInTheDocument();
+    await expect(within(strip).getByText(/^0 cards$/)).toBeInTheDocument();
   },
 };
 
-/** The board is still coming. */
+/** The width every column takes, read from its token, so a skeleton column can be held to a real one. */
+function columnWidth(element: Element): number {
+  const probe = document.createElement('div');
+  probe.style.inlineSize = 'var(--size-board-column)';
+  element.append(probe);
+  const width = probe.getBoundingClientRect().width;
+  probe.remove();
+  return width;
+}
+
+/** The board is still coming: three columns at a real column's width, each a head and its cards, with their bars. */
 export const Loading: Story = {
   args: { status: 'loading' },
-  play: async ({ canvas }) => {
+  play: async ({ canvas, canvasElement }) => {
     await expect(canvas.getByText('Loading the board')).toBeInTheDocument();
+    const columns = canvasElement.querySelectorAll('[data-skeleton]');
+    await expect(columns).toHaveLength(3);
+    const width = columnWidth(canvasElement);
+    for (const column of columns) await expect(column.getBoundingClientRect().width).toBeCloseTo(width, 0);
+    await expect(columns[0]?.querySelector('[data-width]')).not.toBeNull();
+  },
+};
+
+/** Before the loading delay: the columns' space is held, with no surface, card boxes or bars, so a fast load flashes nothing. */
+export const LoadingBeforeDelay: Story = {
+  args: { status: 'loading' },
+  parameters: { crm: { screenshot: false } },
+  decorators: [
+    (Story) => (
+      <LoadingTimingContext value={{ delayMs: 60_000, minimumMs: 0 }}>
+        <Story />
+      </LoadingTimingContext>
+    ),
+  ],
+  play: async ({ canvasElement }) => {
+    const columns = canvasElement.querySelectorAll('[data-skeleton]');
+    await expect(columns).toHaveLength(3);
+    const width = columnWidth(canvasElement);
+    for (const column of columns) {
+      await expect(column.getBoundingClientRect().width).toBeCloseTo(width, 0);
+      await expect(column).toHaveAttribute('data-waiting');
+      await expect(column.querySelector('[data-width]')).toBeNull();
+    }
   },
 };
 
@@ -397,7 +463,8 @@ export const CountAtLeast: Story = {
   ),
   play: async ({ canvas }) => {
     await expect(canvas.getByText('10,000+')).toBeInTheDocument();
-    await expect(canvas.getByLabelText('10,000 or more cards')).toBeInTheDocument();
+    // The count pill reads its noun after the number: "10,000+ cards".
+    await expect(canvas.getByText(/^10,000\+ cards$/)).toBeInTheDocument();
   },
 };
 

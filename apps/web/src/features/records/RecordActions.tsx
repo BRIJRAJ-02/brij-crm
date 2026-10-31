@@ -1,4 +1,4 @@
-// The record header's More menu: Copy link, and Delete. Delete is one click
+// The record header's More menu: Rename, Copy link, and Delete. Delete is one click
 // with Undo, as a single row's delete in the table (owner rule, 21 October
 // 2026: an Undo delete never asks first). It goes through the table's bulk
 // path (one `records.deleteMany`), then back to the object's table with the
@@ -27,9 +27,11 @@ export interface RecordActionsProps {
   /** The object's attributes and the members, for the merge dialog's values. */
   readonly attributes: readonly AttributeDefinition[];
   readonly members: readonly MemberSummary[];
+  /** Opens Rename, for someone who may change it: the name is the header, no longer a row in Details. */
+  readonly onRename?: () => void;
 }
 
-/** "⋮" beside Copy link: Copy link, then Delete (with Undo) for someone who may. */
+/** "⋯" at the header's end: Rename and Copy link, Merge with…, then Delete (with Undo) for someone who may. */
 export function RecordActions({
   slug,
   object,
@@ -38,6 +40,7 @@ export function RecordActions({
   canDelete,
   attributes,
   members,
+  onRename,
 }: RecordActionsProps) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
@@ -104,11 +107,17 @@ export function RecordActions({
         <Menu
           label={strings.more}
           onAction={(key) => {
+            if (key === 'rename') onRename?.();
             if (key === 'copy') copyLink();
             if (key === 'delete') remove();
             if (key === 'merge') merging.open([recordId]);
           }}
         >
+          {onRename === undefined ? null : (
+            <MenuItem id="rename" icon="pencil">
+              {strings.rename}
+            </MenuItem>
+          )}
           <MenuItem id="copy" icon="link">
             {strings.copyLink}
           </MenuItem>

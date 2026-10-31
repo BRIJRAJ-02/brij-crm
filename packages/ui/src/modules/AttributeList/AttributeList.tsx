@@ -67,9 +67,6 @@ export interface AttributeListProps {
   readonly actions?: ReactNode;
 }
 
-/** At most this many rows with something in them and a folded list opens shown: a new record, still to fill in. */
-const SPARSE_ROWS = 3;
-
 /** Whether a row is folded away with the empty values: nothing in it, and nothing that must be seen. */
 function isFoldable(item: AttributeItem): boolean {
   return (
@@ -98,10 +95,9 @@ export function AttributeList({
   actions,
 }: AttributeListProps) {
   const showSkeleton = useDelayedLoading(isLoading);
-  // A record with almost nothing filled in (one just made) opens with every row shown: filling it in is the task.
-  const [isShowingEmpty, setShowingEmpty] = useState(
-    () => sections.flatMap((section) => section.items.filter((item) => !isFoldable(item))).length <= SPARSE_ROWS,
-  );
+  // Folded from the start, however sparse the record (owner, 31 Oct: a sparse record opened as a wall of empty
+  // labels). The foot's quiet line shows them, each then reading "Set Name…" so it says what to do.
+  const [isShowingEmpty, setShowingEmpty] = useState(false);
   const listId = useId();
   // Folded: empty rows wait behind the foot's button. A row that has shown with a value stays for good (until the
   // list is given a new key), so clearing it, or emptying a list mid edit, never pulls the row out from under the
@@ -141,7 +137,8 @@ export function AttributeList({
             item={item}
             onCommit={onCommit}
             editorProps={editorProps}
-            isQuietEmpty={emptyValues === 'fold'}
+            // Shown on purpose (Show N empty values), an empty row says "Set Name…" at rest: a clear cue to add.
+            isQuietEmpty={emptyValues === 'fold' && !isShowingEmpty}
           />
         ))}
     </dl>
@@ -164,8 +161,9 @@ export function AttributeList({
         <div className={styles.foot}>
           {folded > 0 && (
             <span className={styles.more}>
+              {/* A quiet text control, never a held-down pill: it reads as a toggle, not a state (owner, 31 Oct). */}
               <Button
-                variant="ghost"
+                variant="link"
                 icon={isShowingEmpty ? 'chevron-up' : 'chevron-down'}
                 isExpanded={isShowingEmpty}
                 controls={listId}
@@ -336,7 +334,8 @@ function Row({ item, onCommit, editorProps, isQuietEmpty }: RowProps) {
   return (
     <div className={styles.row} data-editing={isEditing || undefined}>
       <dt id={nameId} className={styles.label}>
-        <Icon name={iconOf(attribute)} tile="gray" />
+        {/* A plain glyph, quieter than the name: the type at a glance without a box around every label. */}
+        <Icon name={iconOf(attribute)} tone="muted" />
         <span className={styles.name}>{attribute.name}</span>
         {/* Why it can't change sits with its name: a small lock, the reason in its tooltip. */}
         {!canEdit && reason !== undefined && <LockReason reason={reason} size="sm" />}

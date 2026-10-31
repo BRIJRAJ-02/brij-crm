@@ -3,7 +3,10 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
 import { expect, fn, waitFor, within } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
+import { AttributeDisplay } from '../../fields/AttributeDisplay.tsx';
 import { Callout } from '../../molecules/Callout/Callout.tsx';
+import { RecordFacts } from '../../molecules/RecordFacts/RecordFacts.tsx';
+import { attributeOf } from '../../workbench/attributes.ts';
 import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
 import { arraySource } from '../../lib/list-source.ts';
 import { SAMPLE_COMPANIES } from '../../workbench/field-samples.ts';
@@ -31,7 +34,11 @@ interface SampleProps {
   readonly gone?: 'lost' | 'unavailable';
   /** The next record is on its way (a held ↓): a thin progress line along the body's top edge. */
   readonly isStepping?: boolean;
+  /** The record at a glance under the header, with its quick actions (owner, 31 Oct). */
+  readonly withSummary?: boolean;
 }
+
+const DOMAIN = attributeOf('domain', 'Domains');
 
 /** A company opened from the table: details, activity and tasks, stepping through three companies. */
 function SamplePanel({
@@ -41,6 +48,7 @@ function SamplePanel({
   stats = 'shown',
   gone,
   isStepping = false,
+  withSummary = false,
 }: SampleProps) {
   const [isOpen, setOpen] = useState(startOpen);
   const [tab, setTab] = useState('details');
@@ -98,6 +106,30 @@ function SamplePanel({
                 <EmptyState icon="search" title="This record isn’t available.">
                   It may have been deleted, or you can’t see it.
                 </EmptyState>
+              ),
+            }
+          : {})}
+        {...(withSummary
+          ? {
+              facts: (
+                <RecordFacts
+                  label={`About ${record.name}`}
+                  facts={[
+                    {
+                      id: 'domain',
+                      label: 'Domains',
+                      content: (
+                        <AttributeDisplay attribute={DOMAIN} value={['northwind.com'] as never} surface="panel" />
+                      ),
+                    },
+                  ]}
+                />
+              ),
+              quickActions: (
+                <>
+                  <Button icon="pen">Log activity</Button>
+                  <Button icon="list-plus">Add task</Button>
+                </>
               ),
             }
           : {})}
@@ -177,6 +209,17 @@ export const Default: Story = {
     await expect(within(panel).getByRole('button', { name: 'Previous record' })).toBeDisabled();
     await expect(within(panel).getByRole('tab', { name: 'Details' })).toHaveAttribute('aria-selected', 'true');
     await expect(within(panel).getByRole('region', { name: 'Details' })).toBeInTheDocument();
+  },
+};
+
+/** The record at a glance: its facts and quick actions under the header; Previous and Next sit apart from Open and Close. */
+export const WithSummary: Story = {
+  args: { onOpenPage: fn(), withSummary: true },
+  play: async ({ canvas }) => {
+    const panel = canvas.getByRole('dialog', { name: 'Northwind Traders' });
+    await expect(within(panel).getByRole('list', { name: 'About Northwind Traders' })).toBeInTheDocument();
+    await expect(within(panel).getByRole('button', { name: 'Log activity' })).toBeInTheDocument();
+    await expect(within(panel).getByRole('button', { name: 'Close' })).toBeInTheDocument();
   },
 };
 

@@ -2,17 +2,9 @@
 // Purpose: who and what is linked to this record on each side that holds many (a company's people and deals).
 // Main task: scan a side's records and open one, add one (or create it when the search finds none), or remove one.
 // Leaves out: editing the related records' own values, sorting or filtering a side, removing several at once.
-import {
-  RELATED_PREVIEW,
-  type LinkChange,
-  type LinkSection,
-  type LinkSectionState,
-  type RecordRefDisplay,
-} from '@crm/data';
+import { type LinkChange, type LinkSection, type LinkSectionState, type RecordRefDisplay } from '@crm/data';
 import { useLinkSection } from '@crm/data/react';
 import {
-  Button,
-  Card,
   type RelatedRecord,
   RelatedRecords,
   type RelatedRecordsHandle,
@@ -47,9 +39,6 @@ const statusOf = (status: LinkSectionState['status']) => (status === 'unavailabl
 /** A related record's name in a toast: "Unnamed person" for one with none. */
 const nameOf = (side: RelatedSide, record: RelatedRecord) =>
   record.display.name === '' ? strings.unnamed(side.farObject.singularName) : record.display.name;
-
-/** A count in the browser's language ("1,500"), as the other screens write theirs. */
-const count = (value: number): string => new Intl.NumberFormat().format(value);
 
 /** Props for the sidebar's related sections. */
 export interface RelatedSectionsProps {
@@ -221,95 +210,5 @@ function RelatedSection({
       {...(onRemove === undefined ? {} : { onRemove })}
       {...(reason === undefined ? {} : { readOnlyReason: reason })}
     />
-  );
-}
-
-/** Props for Overview's Related cards. */
-export interface RelatedCardsProps {
-  readonly related: readonly RelatedSource[];
-  readonly link: RecordLink;
-  /** "View all <N>": moves focus to that side's section in the sidebar. */
-  readonly onViewAll: (attributeId: string) => void;
-}
-
-/** No rows: the pending card holds none. */
-const NO_RECORDS: readonly RelatedRecord[] = [];
-
-/** Overview's Related card while the page loads, so the first loaded one takes the place it held. */
-export function PendingRelatedCard() {
-  return (
-    <Card isBusy>
-      <RelatedRecords
-        title={strings.relatedPending}
-        noun=""
-        records={NO_RECORDS}
-        status="loading"
-        limit={RELATED_PREVIEW}
-      />
-    </Card>
-  );
-}
-
-/**
- * Overview's Related cards (spec 0017, AC-383): one Card per side that holds
- * many, its first five records and, in the card's actions as Overview's
- * other cards have it, "View all <N>", sharing the sidebar section's source
- * (one read). Each has its own loading and failed state.
- */
-export function RelatedCards({ related, link, onViewAll }: RelatedCardsProps) {
-  return related.map((side) => (
-    <RelatedCard
-      key={side.attribute.id}
-      side={side}
-      link={link}
-      onViewAll={() => {
-        onViewAll(side.attribute.id);
-      }}
-    />
-  ));
-}
-
-function RelatedCard({
-  side,
-  link,
-  onViewAll,
-}: {
-  readonly side: RelatedSource;
-  readonly link: RecordLink;
-  readonly onViewAll: () => void;
-}) {
-  const state = useLinkSection(side.section);
-  const records = useMemo(() => rowsOf(state.items, link), [state.items, link]);
-  if (state.status === 'unavailable') return null;
-  const noun = strings.relatedNoun(side.farObject.pluralName);
-  const total = state.total ?? state.items.length;
-  return (
-    <Card
-      title={side.attribute.title}
-      isBusy={state.status === 'loading'}
-      {...(state.status === 'ready' && total > 0
-        ? {
-            actions: (
-              <Button
-                variant="ghost"
-                label={strings.viewAllRelatedLabel(count(total), noun, side.attribute.title)}
-                onPress={onViewAll}
-              >
-                {strings.viewAllRelated(count(total))}
-              </Button>
-            ),
-          }
-        : {})}
-    >
-      <RelatedRecords
-        title={side.attribute.title}
-        noun={noun}
-        records={records}
-        {...(state.total === undefined ? {} : { total: state.total })}
-        status={statusOf(state.status)}
-        onRetry={side.section.retry}
-        limit={RELATED_PREVIEW}
-      />
-    </Card>
   );
 }

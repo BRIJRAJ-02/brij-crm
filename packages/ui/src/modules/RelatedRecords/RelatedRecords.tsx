@@ -385,10 +385,11 @@ export function RelatedRecords({
       <AddPicker title={title} noun={noun} picker={picker} isLabelled={false} />
     );
   return (
-    <div ref={sectionRef} id={id} className={styles.root}>
+    // A real section: a hairline over it and its title in the body's strong type, its Add always in reach (owner,
+    // 31 Oct: an 11px label with a count read as a footnote).
+    <div ref={sectionRef} id={id} className={styles.root} data-section="">
       <Disclosure
         title={title}
-        variant="label"
         isExpanded={isExpanded}
         onExpandedChange={setExpanded}
         {...(total === undefined || status !== 'ready' ? {} : { count: total, countLabel: noun })}

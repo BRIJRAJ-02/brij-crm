@@ -46,6 +46,13 @@
     box-shadow: var(--shadow-focus-inset);
   }
 
+  /* A floating bar over the foot (rows ticked): its room (its height and space-16 either side) after the footer, in
+     the scroller's padding, never inside the rows, so the footer stays under the last row. */
+  .root[data-floating-bar] {
+    box-sizing: border-box;
+    padding-block-end: calc(var(--size-toolbar) + 2 * var(--space-16));
+  }
+
   /* Read by the last pinned header and cells (an inherited custom property): an edge over what scrolls under them. */
   .root[data-scrolled-x] {
     --pinned-edge: var(--shadow-pinned-edge);
@@ -117,6 +124,11 @@
   }
 
   @media (hover: hover) and (pointer: fine) {
+    /* Read by the row header's "Open in panel" (GridCell), which shows while its row is hovered. */
+    .row:hover {
+      --row-hover: 1;
+    }
+
     .row:not([data-selected], [data-open]):hover {
       background: var(--surface-hover);
     }

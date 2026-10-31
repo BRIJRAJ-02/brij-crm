@@ -28,7 +28,7 @@ export interface OpenTasksCardProps {
   readonly onViewAll: () => void;
 }
 
-/** "Open tasks": the first five drawn in place, with "Add a task" and "View all". */
+/** "Open tasks": the first five drawn in place, with "Add a task" and "View all"; one line when there are none. */
 export function OpenTasksCard({
   slug,
   recordId,
@@ -42,23 +42,29 @@ export function OpenTasksCard({
   const { data } = useRouteContext({ from: '__root__' });
   const state = useTaskList(open);
   const entries = useTaskEntries(state.source, members, recordId);
+  const add = canAdd && (
+    <Button
+      variant="ghost"
+      icon="plus"
+      onPress={() => {
+        onOpenTask('new');
+      }}
+    >
+      {strings.addTask}
+    </Button>
+  );
+  // Nothing open: one line, the card's title with "No open tasks" under it and Add beside it, no empty body and no
+  // View all (owner, 31 Oct: three cards of empty states).
+  if (state.status === 'ready' && entries.count === 0) {
+    return <Card title={strings.openTasks} description={strings.noOpenTasksShort} actions={add} />;
+  }
   return (
     <Card
       title={strings.openTasks}
       isBusy={state.status === 'loading'}
       actions={
         <>
-          {canAdd && (
-            <Button
-              variant="ghost"
-              icon="plus"
-              onPress={() => {
-                onOpenTask('new');
-              }}
-            >
-              {strings.addTask}
-            </Button>
-          )}
+          {add}
           <Button variant="ghost" label={strings.viewAllTasks} onPress={onViewAll}>
             {strings.viewAll}
           </Button>

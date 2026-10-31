@@ -84,6 +84,26 @@ export function aheadRange(today: string): { readonly from: string; readonly to:
   return { from: dayStart(today).toISOString(), to: dayStart(addDays(today, AHEAD_DAYS + 1)).toISOString() };
 }
 
+/** At most this many meetings fill Today: the day's, then the week's next ones, so the card reads the days ahead. */
+export const AGENDA_ROWS = 5;
+
+/**
+ * The meetings after today that Today shows under the day's own: the first ones by start, enough to bring the card
+ * to `rows` (always at least one), so a quiet day still shows what is next rather than an empty card.
+ */
+export function upcomingAfter(
+  items: readonly AgendaItem[],
+  today: string,
+  todayCount: number,
+  rows: number = AGENDA_ROWS,
+): readonly AgendaItem[] {
+  const end = dayStart(addDays(today, 1)).getTime();
+  return items
+    .filter((item) => Date.parse(item.startsAt) >= end)
+    .toSorted((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt))
+    .slice(0, Math.max(1, rows - todayCount));
+}
+
 /** The agenda split at the day's end: today's meetings, and the first one after today. */
 export function todayAndNext(
   items: readonly AgendaItem[],

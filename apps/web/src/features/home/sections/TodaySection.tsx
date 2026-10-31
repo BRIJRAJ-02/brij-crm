@@ -1,6 +1,7 @@
-// Home's Today (spec 0041): the meetings the member hosts and their own
-// calendar's events today, those that ended under Earlier and the rest under
-// Coming up, then the next one after today, with a link to Bookings.
+// Brief
+// Purpose: Home's Today (spec 0041): the meetings the member hosts and their own calendar's events, today's split
+// into Earlier and Coming up, then the week's next ones by day, so the card always says what is next.
+// Main task: see what's next and open its day in Bookings. Leaves out: booking or editing a meeting (Bookings).
 import { useBookingsCalendar } from '@crm/data/react';
 import { BookingList, ButtonLink, Card, EmptyState, Skeleton, useFormatSettings, type BookingListGroup } from '@crm/ui';
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
@@ -9,7 +10,15 @@ import { providerOf } from '../../bookings/provider.ts';
 import { useNow } from '../../bookings/useNow.ts';
 import { recordLinks } from '../../records/timeline.ts';
 import { useToday } from '../../tasks/day.ts';
-import { agendaOf, aheadRange, minutesOf, splitAgenda, todayAndNext, type AgendaItem } from '../agenda.ts';
+import {
+  agendaOf,
+  aheadRange,
+  minutesOf,
+  splitAgenda,
+  todayAndNext,
+  upcomingAfter,
+  type AgendaItem,
+} from '../agenda.ts';
 import type { HomeSectionProps } from '../registry.ts';
 import { strings } from '../strings.ts';
 import { Failed, locale } from './shared.tsx';
@@ -19,7 +28,7 @@ function lengthOf(minutes: number): string {
   return minutes < 60 ? strings.minutes(minutes) : strings.hours(Math.floor(minutes / 60), minutes % 60);
 }
 
-/** Today: today's meetings and the next one after today. */
+/** Today: today's meetings and the week's next ones; titled Next up when today holds none. */
 export function TodaySection({ context }: HomeSectionProps) {
   const { slug, objects, meId } = context;
   const { data } = useRouteContext({ from: '__root__' });
@@ -41,13 +50,12 @@ export function TodaySection({ context }: HomeSectionProps) {
     [timeZone],
   );
   const agenda = useMemo(() => (state.status === 'ready' ? agendaOf(state, meId) : []), [state, meId]);
-  const frame = (body: ReactNode, extra: { readonly isBusy?: boolean; readonly description?: string } = {}) => (
+  const frame = (body: ReactNode, extra: { readonly isBusy?: boolean; readonly title?: string } = {}) => (
     <Card
-      title={strings.today}
+      title={extra.title ?? strings.today}
       isBusy={extra.isBusy ?? false}
-      {...(extra.description === undefined ? {} : { description: extra.description })}
       actions={
-        <ButtonLink variant="ghost" href={`/w/${slug}/bookings`}>
+        <ButtonLink variant="secondary" icon="calendar" href={`/w/${slug}/bookings`}>
           {strings.bookings}
         </ButtonLink>
       }
@@ -67,9 +75,12 @@ export function TodaySection({ context }: HomeSectionProps) {
       />,
     );
   }
-  const { today: todays, next: after } = todayAndNext(agenda, today);
-  if (todays.length === 0 && after === undefined) {
-    return frame(<EmptyState icon="calendar" title={strings.noMeetings} layout="row" />);
+  const { today: todays } = todayAndNext(agenda, today);
+  const ahead = upcomingAfter(agenda, today, todays.length);
+  // Nothing today: the card is about what comes next, and says so in its title (owner, 31 October 2026, item 4).
+  const title = todays.length === 0 ? strings.nextUp : strings.today;
+  if (todays.length === 0 && ahead.length === 0) {
+    return frame(<EmptyState icon="calendar" title={strings.noMeetingsWeek} layout="row" />, { title });
   }
   const { earlier, next } = splitAgenda(todays, now);
   const people = objects.find((object) => object.standardKey === 'people');
@@ -94,9 +105,11 @@ export function TodaySection({ context }: HomeSectionProps) {
       ? []
       : [{ id: 'earlier', label: strings.earlier, rows: earlier.map((item) => rowOf(item)) }]),
     ...(next.length === 0 ? [] : [{ id: 'next', label: strings.comingUp, rows: next.map((item) => rowOf(item)) }]),
-    ...(after === undefined
-      ? []
-      : [{ id: 'later', label: dayName.format(new Date(after.startsAt)), rows: [rowOf(after, true)] }]),
+    ...laterDays(ahead, (item) => dayName.format(new Date(item.startsAt))).map((day) => ({
+      id: `later-${day.label}`,
+      label: day.label,
+      rows: day.items.map((item) => rowOf(item, true)),
+    })),
   ];
   const openDay = (id: string) => {
     const item = agenda.find((each) => each.id === id);
@@ -104,7 +117,19 @@ export function TodaySection({ context }: HomeSectionProps) {
       item === undefined ? today : new Intl.DateTimeFormat('en-CA', { timeZone }).format(new Date(item.startsAt));
     void navigate({ to: '/w/$slug/bookings/calendar', params: { slug }, search: { d: day } });
   };
-  return frame(<BookingList label={strings.today} placement="card" groups={groups} onOpen={openDay} />, {
-    ...(todays.length === 0 ? { description: strings.noMeetings } : {}),
-  });
+  return frame(<BookingList label={title} placement="agenda" groups={groups} onOpen={openDay} />, { title });
+}
+
+/** The meetings after today in runs by day, keeping their order: one band per day. */
+function laterDays(
+  items: readonly AgendaItem[],
+  labelOf: (item: AgendaItem) => string,
+): readonly { readonly label: string; readonly items: readonly AgendaItem[] }[] {
+  return items.reduce<readonly { readonly label: string; readonly items: readonly AgendaItem[] }[]>((days, item) => {
+    const label = labelOf(item);
+    const last = days.at(-1);
+    return last?.label === label
+      ? [...days.slice(0, -1), { label, items: [...last.items, item] }]
+      : [...days, { label, items: [item] }];
+  }, []);
 }
