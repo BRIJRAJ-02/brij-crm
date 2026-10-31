@@ -17,6 +17,7 @@ import {
 } from './FormParts.tsx';
 import type { HostedFormProps } from './HostedForm.tsx';
 import styles from './HostedFormSteps.module.css';
+import { BookingView, useLoadedBooking } from './BookingView.tsx';
 import { asideOf, labelOf, Question } from './Question.tsx';
 import { SentAnswers } from './SentAnswers.tsx';
 import { useHostedForm } from './use-hosted-form.ts';
@@ -87,6 +88,7 @@ export function HostedFormSteps({
   const [round, setRound] = useState(0);
   // One at a time, the pointer picks on the question showing (each restarts the pause before going on).
   const [picks, setPicks] = useState(0);
+  const loadedBooking = useLoadedBooking();
   const { state, refs } = useHostedForm({
     form,
     mode,
@@ -175,10 +177,10 @@ export function HostedFormSteps({
 
   let body;
   if (state.isClosed) body = <FormClosed state={state} mode={mode} heading={refs.heading} />;
-  else if (state.view.kind === 'booking' && state.bookingView !== undefined) {
-    const FormBooking = state.bookingView;
+  else if (state.view.kind === 'booking') {
     body = (
-      <FormBooking
+      <BookingView
+        loaded={loadedBooking}
         state={state}
         mode={mode}
         heading={refs.heading}

@@ -17,8 +17,7 @@ import {
   type PublicQuestion,
   type SubmitNext,
 } from '@crm/contracts/forms';
-import { useEffect, useMemo, useRef, useState, type ComponentType, type FocusEvent, type RefObject } from 'react';
-import type { FormBookingProps } from './FormBooking.tsx';
+import { useEffect, useMemo, useRef, useState, type FocusEvent, type RefObject } from 'react';
 import { countriesIn } from '../lib/countries.ts';
 import type { HostedFileHandlers, HostedRemoveUpload, HostedUpload } from './files.ts';
 import { answerOf, focusQuestion } from './Question.tsx';
@@ -100,11 +99,6 @@ export interface HostedFormState {
   readonly files: HostedFileHandlers | undefined;
   readonly isClosed: boolean;
   readonly view: HostedFormView;
-  /**
-   * The countdown on to book, once its own chunk has loaded (spec 0063, AC-6331): only a form that sends visitors on
-   * to book draws it, so the hosted page's first load never carries it. The view turns to `booking` only after.
-   */
-  readonly bookingView: ComponentType<FormBookingProps> | undefined;
   readonly round: number;
   readonly trap: string;
   readonly setTrap: (value: string) => void;
@@ -267,7 +261,6 @@ export function useHostedForm({
   const [busy, setBusy] = useState<ReadonlySet<string>>(new Set());
   const [trap, setTrap] = useState('');
   const [view, setView] = useState<HostedFormView>({ kind: 'form' });
-  const [bookingView, setBookingView] = useState<ComponentType<FormBookingProps> | undefined>(undefined);
   const [round, setRound] = useState(0);
   const [startedAt, setStartedAt] = useState(now);
   const [focusTarget, setFocusTarget] = useState<'heading' | undefined>(undefined);
@@ -410,24 +403,9 @@ export function useHostedForm({
           if (outcome.next.kind === 'redirect') onRedirect?.(outcome.next.url);
           else if (outcome.next.kind === 'booking') {
             const { url, countdownSeconds, text } = outcome.next;
-            // A countdown of 0 goes at once, and the page says so while it goes (AC-1059).
+            setView({ kind: 'booking', url, seconds: countdownSeconds, text });
+            setFocusTarget('heading');
             if (countdownSeconds === 0) onRedirect?.(url);
-            // Still sending to the visitor while the countdown's chunk arrives; if it can't, they go on at once (once),
-            // and with nowhere to go they get the thank you.
-            setSending(true);
-            import('./FormBooking.tsx').then(
-              (module) => {
-                setSending(false);
-                setBookingView(() => module.FormBooking);
-                setView({ kind: 'booking', url, seconds: countdownSeconds, text });
-                setFocusTarget('heading');
-              },
-              () => {
-                setSending(false);
-                if (onRedirect === undefined) thank(text);
-                else if (countdownSeconds > 0) onRedirect(url);
-              },
-            );
           } else thank(outcome.next.text);
           return;
         case 'invalid':
@@ -519,7 +497,6 @@ export function useHostedForm({
           },
     isClosed,
     view,
-    bookingView,
     round,
     trap,
     setTrap,

@@ -1,14 +1,12 @@
-import { useEffect, useState } from 'react';
+import { Button } from '../atoms/Button/Button.tsx';
 import { VisuallyHidden } from '../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import type { PublicForm } from '@crm/contracts/forms';
-import { Button } from '../atoms/Button/Button.tsx';
 import type { ProductLogo } from '../modules/AuthLayout/AuthLayout.tsx';
 import type { PageBrand } from '../modules/BookingFrame/BookingFrame.tsx';
 import {
   ErrorSummary,
   FormAlert,
   FormClosed,
-  FormConfirmation,
   FormFoot,
   FormFrame,
   FormHeader,
@@ -18,7 +16,7 @@ import {
   TIMEFIX_LOGO,
 } from './FormParts.tsx';
 import styles from './HostedForm.module.css';
-import type { FormBooking as EagerFormBooking, FormBookingProps } from './FormBooking.tsx';
+import { BookingView, useLoadedBooking } from './BookingView.tsx';
 import type { HostedRemoveUpload, HostedUpload } from './files.ts';
 import { Question } from './Question.tsx';
 import { SentAnswers } from './SentAnswers.tsx';
@@ -31,35 +29,6 @@ import {
 } from './use-hosted-form.ts';
 
 export { FormLoading, FormMessage } from './FormParts.tsx';
-
-/**
- * Sent, and on to book (FormBooking), in a chunk of its own: nobody sees it before they send, and the hosted page's
- * first load has no room to spare (apps/web/.size-limit.js). It starts loading once the form is drawn and is kept
- * once here, so by the time anyone presses Send it draws at once, and its heading can take focus in the same render;
- * BookingFallback stands in until it arrives, or for good if it can't.
- */
-const loadBooking = () => import('./FormBooking.tsx');
-
-/**
- * Sent, while the countdown's chunk is still arriving or when it can't be fetched (a flaky network, or a deploy
- * between load and Send): the answers are saved, so the thank you shows with Book a time as its one way on, never a
- * blank page. What was sent reads back above it, as on the countdown.
- */
-function BookingFallback({ state, mode, heading, url, text, summary }: FormBookingProps) {
-  return (
-    <FormConfirmation mode={mode} heading={heading} title={state.words.thanksTitle} text={text} summary={summary}>
-      <Button
-        variant="primary"
-        size="lg"
-        onPress={() => {
-          state.goTo(url);
-        }}
-      >
-        {state.words.bookATime}
-      </Button>
-    </FormConfirmation>
-  );
-}
 
 export type { HostedFormMode, HostedSubmission, HostedSubmitOutcome } from './use-hosted-form.ts';
 
@@ -132,23 +101,13 @@ export function HostedForm({
     now,
   });
   const { words, preview } = state;
-  const [LoadedBooking, setLoadedBooking] = useState<typeof EagerFormBooking>();
-  useEffect(() => {
-    // A chunk that can't be fetched leaves BookingFallback in its place.
-    void loadBooking().then(
-      (module) => {
-        setLoadedBooking(() => module.FormBooking);
-      },
-      () => undefined,
-    );
-  }, []);
-  const Booking = LoadedBooking ?? BookingFallback;
+  const loadedBooking = useLoadedBooking();
   let body;
   if (state.isClosed) body = <FormClosed state={state} mode={mode} heading={refs.heading} />;
-  else if (state.view.kind === 'booking' && state.bookingView !== undefined) {
-    const FormBooking = state.bookingView;
+  else if (state.view.kind === 'booking') {
     body = (
-      <Booking
+      <BookingView
+        loaded={loadedBooking}
         state={state}
         mode={mode}
         heading={refs.heading}
