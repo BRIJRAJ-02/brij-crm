@@ -2,6 +2,7 @@ import { IconScope } from '../atoms/Icon/Icon.tsx';
 import { icons } from '../atoms/Icon/icons.ts';
 import { providerArt } from '../atoms/ProviderMark/art.ts';
 import { ProviderArtContext } from '../atoms/ProviderMark/art-context.ts';
+import { ToastRegion } from './ToastRegion.tsx';
 import { UiProviderBase, type UiProviderProps } from './UiProviderBase.tsx';
 
 export { useFormatSettings, useKeyboardPlatform, useNow, useToasts, type FormatSettings } from './context.ts';
@@ -18,7 +19,7 @@ export function UiProvider(props: UiProviderProps) {
   return (
     <IconScope icons={icons}>
       <ProviderArtContext value={providerArt}>
-        <UiProviderBase {...props} />
+        <UiProviderBase {...props} toastRegion={<ToastRegion toasts={props.toasts} />} />
       </ProviderArtContext>
     </IconScope>
   );

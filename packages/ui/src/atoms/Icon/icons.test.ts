@@ -78,7 +78,6 @@ describe('the icon registry', () => {
       'molecules/FileDrop/FileDrop.tsx',
       'molecules/FileItem/FileItem.tsx',
       'molecules/Popover/Popover.tsx',
-      'provider/toasts.tsx',
     ];
     const named = /(?:<Icon name|icon|iconRight)(?:=|: |=\{)['"]([a-z0-9-]+)['"]/g;
     const toneIcons = /TONE_ICONS[^=]*=\s*\{([^}]*)\}/;
