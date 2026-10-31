@@ -6,11 +6,13 @@ export async function setup(project: TestProject): Promise<() => Promise<void>> 
   const shared = await prepareTestDatabase('crm_test_api');
   const sleep = await prepareTestDatabase('crm_test_api_sleep');
   const drain = await prepareTestDatabase('crm_test_api_drain');
+  const relay = await prepareTestDatabase('crm_test_api_relay');
   project.provide('testDatabase', shared);
   project.provide('sleepDatabase', sleep);
   project.provide('drainDatabase', drain);
+  project.provide('relayDatabase', relay);
   return async () => {
-    await Promise.all([dropTestDatabase(shared), dropTestDatabase(sleep), dropTestDatabase(drain)]);
+    await Promise.all([dropTestDatabase(shared), dropTestDatabase(sleep), dropTestDatabase(drain), dropTestDatabase(relay)]);
   };
 }
 
@@ -28,5 +30,12 @@ declare module 'vitest' {
      * due row of its tasks, so it must not meet what other files left queued.
      */
     drainDatabase: TestDatabase;
+    /**
+     * A database for the relay test alone: the relay reads every workspace's outbox, and other files leave
+     * workspaces whose stored access rules (spec 0032) split them into more than one audience. Until the relay
+     * publishes a channel per audience (spec 0007, milestone 4) it holds such a workspace's rows back, so in the
+     * shared database those rows kept it awake, named them stuck and doubled its one warning.
+     */
+    relayDatabase: TestDatabase;
   }
 }
