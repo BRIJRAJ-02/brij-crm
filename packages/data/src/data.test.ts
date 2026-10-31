@@ -422,6 +422,12 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       activity: os.records.activity.handler(({ input }) => behaviour.activity(input.recordId, input.cursor)),
       getTrashed: os.records.getTrashed.handler(({ input }) => behaviour.trashed(input.recordId)),
       stageSince: os.records.stageSince.handler(() => ({})),
+      duplicates: {
+        check: os.records.duplicates.check.handler(notServed),
+        list: os.records.duplicates.list.handler(notServed),
+        dismiss: os.records.duplicates.dismiss.handler(notServed),
+        restore: os.records.duplicates.restore.handler(notServed),
+      },
       search: os.records.search.handler(({ input }) => {
         sent.push(input);
         return { results: behaviour.search(input.query) };
@@ -705,6 +711,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       getExport: os.submissions.getExport.handler(notServed),
     },
     imports: {
+      duplicates: os.imports.duplicates.handler(notServed),
       create: os.imports.create.handler(notServed),
       stage: os.imports.stage.handler(notServed),
       start: os.imports.start.handler(notServed),

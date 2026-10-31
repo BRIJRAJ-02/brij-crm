@@ -52,6 +52,7 @@ import { Route as WSlugCapturesFormsIndexRouteImport } from './routes/w.$slug.ca
 import { Route as WSlugCapturesLinksIndexRouteImport } from './routes/w.$slug.captures.links.index.tsx'
 import { Route as WSlugCapturesFormsFormIdRouteImport } from './routes/w.$slug.captures_.forms.$formId.tsx'
 import { Route as WSlugCapturesLinksPageIdRouteImport } from './routes/w.$slug.captures_.links.$pageId.tsx'
+import { Route as WSlugObjectsObjectDuplicatesRouteImport } from './routes/w.$slug.objects.$object_.duplicates.tsx'
 import { Route as WSlugObjectsObjectImportRouteImport } from './routes/w.$slug.objects.$object_.import.tsx'
 import { Route as WSlugSettingsAccountIndexRouteImport } from './routes/w.$slug.settings.account.index.tsx'
 import { Route as WSlugSettingsAccountCalendarsRouteImport } from './routes/w.$slug.settings.account.calendars.tsx'
@@ -305,6 +306,12 @@ const WSlugCapturesLinksPageIdRoute =
     path: '/captures/links/$pageId',
     getParentRoute: () => WSlugRoute,
   } as any)
+const WSlugObjectsObjectDuplicatesRoute =
+  WSlugObjectsObjectDuplicatesRouteImport.update({
+    id: '/objects/$object_/duplicates',
+    path: '/objects/$object/duplicates',
+    getParentRoute: () => WSlugRoute,
+  } as any)
 const WSlugObjectsObjectImportRoute =
   WSlugObjectsObjectImportRouteImport.update({
     id: '/objects/$object_/import',
@@ -544,6 +551,7 @@ export interface FileRoutesByFullPath {
   '/w/$slug/bookings/availability/$scheduleId': typeof WSlugBookingsAvailabilityScheduleIdRoute
   '/w/$slug/captures/forms/$formId': typeof WSlugCapturesFormsFormIdRoute
   '/w/$slug/captures/links/$pageId': typeof WSlugCapturesLinksPageIdRoute
+  '/w/$slug/objects/$object/duplicates': typeof WSlugObjectsObjectDuplicatesRoute
   '/w/$slug/objects/$object/import': typeof WSlugObjectsObjectImportRoute
   '/w/$slug/settings/account/calendars': typeof WSlugSettingsAccountCalendarsRoute
   '/w/$slug/settings/account/notifications': typeof WSlugSettingsAccountNotificationsRoute
@@ -618,6 +626,7 @@ export interface FileRoutesByTo {
   '/w/$slug/bookings/availability/$scheduleId': typeof WSlugBookingsAvailabilityScheduleIdRoute
   '/w/$slug/captures/forms/$formId': typeof WSlugCapturesFormsFormIdRoute
   '/w/$slug/captures/links/$pageId': typeof WSlugCapturesLinksPageIdRoute
+  '/w/$slug/objects/$object/duplicates': typeof WSlugObjectsObjectDuplicatesRoute
   '/w/$slug/objects/$object/import': typeof WSlugObjectsObjectImportRoute
   '/w/$slug/settings/account/calendars': typeof WSlugSettingsAccountCalendarsRoute
   '/w/$slug/settings/account/notifications': typeof WSlugSettingsAccountNotificationsRoute
@@ -697,6 +706,7 @@ export interface FileRoutesById {
   '/w/$slug/bookings_/availability/$scheduleId': typeof WSlugBookingsAvailabilityScheduleIdRoute
   '/w/$slug/captures_/forms/$formId': typeof WSlugCapturesFormsFormIdRoute
   '/w/$slug/captures_/links/$pageId': typeof WSlugCapturesLinksPageIdRoute
+  '/w/$slug/objects/$object_/duplicates': typeof WSlugObjectsObjectDuplicatesRoute
   '/w/$slug/objects/$object_/import': typeof WSlugObjectsObjectImportRoute
   '/w/$slug/settings/account/calendars': typeof WSlugSettingsAccountCalendarsRoute
   '/w/$slug/settings/account/notifications': typeof WSlugSettingsAccountNotificationsRoute
@@ -777,6 +787,7 @@ export interface FileRouteTypes {
     | '/w/$slug/bookings/availability/$scheduleId'
     | '/w/$slug/captures/forms/$formId'
     | '/w/$slug/captures/links/$pageId'
+    | '/w/$slug/objects/$object/duplicates'
     | '/w/$slug/objects/$object/import'
     | '/w/$slug/settings/account/calendars'
     | '/w/$slug/settings/account/notifications'
@@ -851,6 +862,7 @@ export interface FileRouteTypes {
     | '/w/$slug/bookings/availability/$scheduleId'
     | '/w/$slug/captures/forms/$formId'
     | '/w/$slug/captures/links/$pageId'
+    | '/w/$slug/objects/$object/duplicates'
     | '/w/$slug/objects/$object/import'
     | '/w/$slug/settings/account/calendars'
     | '/w/$slug/settings/account/notifications'
@@ -929,6 +941,7 @@ export interface FileRouteTypes {
     | '/w/$slug/bookings_/availability/$scheduleId'
     | '/w/$slug/captures_/forms/$formId'
     | '/w/$slug/captures_/links/$pageId'
+    | '/w/$slug/objects/$object_/duplicates'
     | '/w/$slug/objects/$object_/import'
     | '/w/$slug/settings/account/calendars'
     | '/w/$slug/settings/account/notifications'
@@ -1280,6 +1293,13 @@ declare module '@tanstack/react-router' {
       path: '/captures/links/$pageId'
       fullPath: '/w/$slug/captures/links/$pageId'
       preLoaderRoute: typeof WSlugCapturesLinksPageIdRouteImport
+      parentRoute: typeof WSlugRoute
+    }
+    '/w/$slug/objects/$object_/duplicates': {
+      id: '/w/$slug/objects/$object_/duplicates'
+      path: '/objects/$object/duplicates'
+      fullPath: '/w/$slug/objects/$object/duplicates'
+      preLoaderRoute: typeof WSlugObjectsObjectDuplicatesRouteImport
       parentRoute: typeof WSlugRoute
     }
     '/w/$slug/objects/$object_/import': {
@@ -1654,6 +1674,7 @@ interface WSlugRouteChildren {
   WSlugBookingsAvailabilityScheduleIdRoute: typeof WSlugBookingsAvailabilityScheduleIdRoute
   WSlugCapturesFormsFormIdRoute: typeof WSlugCapturesFormsFormIdRoute
   WSlugCapturesLinksPageIdRoute: typeof WSlugCapturesLinksPageIdRoute
+  WSlugObjectsObjectDuplicatesRoute: typeof WSlugObjectsObjectDuplicatesRoute
   WSlugObjectsObjectImportRoute: typeof WSlugObjectsObjectImportRoute
   WSlugCapturesFormsFormIdPreviewRoute: typeof WSlugCapturesFormsFormIdPreviewRoute
   WSlugObjectsObjectRecordIdTabRoute: typeof WSlugObjectsObjectRecordIdTabRoute
@@ -1681,6 +1702,7 @@ const WSlugRouteChildren: WSlugRouteChildren = {
     WSlugBookingsAvailabilityScheduleIdRoute,
   WSlugCapturesFormsFormIdRoute: WSlugCapturesFormsFormIdRoute,
   WSlugCapturesLinksPageIdRoute: WSlugCapturesLinksPageIdRoute,
+  WSlugObjectsObjectDuplicatesRoute: WSlugObjectsObjectDuplicatesRoute,
   WSlugObjectsObjectImportRoute: WSlugObjectsObjectImportRoute,
   WSlugCapturesFormsFormIdPreviewRoute: WSlugCapturesFormsFormIdPreviewRoute,
   WSlugObjectsObjectRecordIdTabRoute: WSlugObjectsObjectRecordIdTabRoute,

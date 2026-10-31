@@ -142,7 +142,13 @@ export const strings = {
     all: 'All',
     ready: (count: number) => `Ready ${n(count)}`,
     errors: (count: number) => `With errors ${n(count)}`,
+    duplicates: (count: number) => `Likely duplicates ${n(count)}`,
   },
+  /** Spec 0049, AC-4918: create rows that look like records already there. Nothing is merged or skipped. */
+  likelyDuplicates: (count: number) =>
+    count === 1 ? '1 new row looks like an existing record' : `${n(count)} new rows look like existing records`,
+  likelyDuplicatesText: 'They’re still added. Fix them in the file, or merge them after.',
+  looksLikeColumn: 'Looks like',
   rowsLabel: 'Rows to import',
   rowColumn: 'Row',
   rowInfo: 'Row numbers match your file. The column names are row 1.',

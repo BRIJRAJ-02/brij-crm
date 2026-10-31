@@ -12,6 +12,7 @@ import {
   type ImportOnNoMatch,
   type ImportTarget,
   type MemberSummary,
+  type DuplicatePair,
   type ObjectSummary,
 } from '@crm/data';
 import { CSV_BOM, csvLine, readCsvFile, TRANSFER_LIMITS, type CsvResult, type CsvTable } from '@crm/data/imports';
@@ -34,6 +35,7 @@ import {
   ProgressBar,
   Radio,
   RadioGroup,
+  RecordChip,
   SectionBar,
   SegmentedControl,
   Select,
@@ -48,7 +50,7 @@ import {
   type TextContext,
 } from '@crm/ui';
 import { useBlocker, useNavigate } from '@tanstack/react-router';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { focusTitle } from '../navigation/focus-title.ts';
 import { AttributeDialog } from '../settings/AttributeDialog.tsx';
 import { objectHref } from '../workspace/objects.ts';
@@ -71,6 +73,8 @@ import {
   applyLabels,
   cellGroups,
   labelKey,
+  createdRows,
+  firstName,
   rowPlan,
   type CellGroup,
   type LabelChoice,
@@ -116,7 +120,10 @@ type LinkCheck =
     };
 
 type Step = 'upload' | 'columns' | 'review' | 'preview';
-type Filter = 'all' | 'ready' | 'errors';
+type Filter = 'all' | 'ready' | 'errors' | 'duplicates';
+
+/** No likely duplicates (spec 0049): one empty map, so a preview without them never renders anew. */
+const NO_LIKELY: ReadonlyMap<number, DuplicatePair['a']> = new Map<number, DuplicatePair['a']>();
 
 /** What the match column's lookup found for the ready rows, for the preview's new, update and skip. */
 type MatchCheck =
@@ -252,6 +259,11 @@ export function ImportScreen({
   const [reviewError, setReviewError] = useState<string | undefined>(undefined);
   const [isCreatingOptions, setCreatingOptions] = useState(false);
   const [matches, setMatches] = useState<MatchCheck | undefined>(undefined);
+  // Likely duplicates (spec 0049, AC-4918): the record each create row looks like, by row number. Nothing is skipped.
+  const [likelyFound, setLikely] = useState<{
+    readonly asks: unknown;
+    readonly byRow: ReadonlyMap<number, DuplicatePair['a']>;
+  }>({ asks: undefined, byRow: NO_LIKELY });
   // New attribute from a column: the attribute dialog, prefilled from the column.
   const [newFor, setNewFor] = useState<number | undefined>(undefined);
   const [now] = useState(() => Date.now());
@@ -698,6 +710,56 @@ export function ImportScreen({
           onMatch,
           matchAttributeId === undefined ? 'create' : onNoMatch,
         );
+  // Which create rows look like a record already there, asked once the plan is known (spec 0049, AC-4918).
+  const nameAttribute = attributes.find((attribute) => attribute.isPrimary && !attribute.isArchived);
+  const companyAttribute =
+    object.standardKey === 'people'
+      ? attributes.find((attribute) => attribute.apiSlug === 'company' && attribute.type === 'record_reference')
+      : undefined;
+  const planReady = step === 'preview' && plan !== undefined;
+  const answersNow = matchAttributeId === undefined || matches?.status !== 'done' ? undefined : matches.answers;
+  const noMatchNow = matchAttributeId === undefined ? 'create' : onNoMatch;
+  // The create rows to ask about, one list per plan: its identity says which answer belongs to the preview now.
+  const likelyAsks = useMemo(() => {
+    if (!planReady || result === undefined || nameAttribute === undefined) return undefined;
+    return createdRows(result.ready, answersNow, noMatchNow).flatMap((index) => {
+      const row = result.ready[index];
+      const name = row?.values[nameAttribute.id];
+      if (row === undefined || name === undefined || name === null) return [];
+      const company = companyAttribute === undefined ? undefined : firstName(row.values[companyAttribute.id]);
+      return [{ rowNumber: row.rowNumber, ask: { name, ...(company === undefined ? {} : { company }) } }];
+    });
+  }, [planReady, result, answersNow, noMatchNow, nameAttribute, companyAttribute]);
+  useEffect(() => {
+    if (likelyAsks === undefined || likelyAsks.length === 0) return undefined;
+    let isCurrent = true;
+    data.imports
+      .duplicates(
+        slug,
+        object.id,
+        likelyAsks.map((each) => each.ask),
+      )
+      .then(
+        (found) => {
+          if (!isCurrent) return;
+          const byRow = new Map(
+            likelyAsks.flatMap((each, at) => {
+              const match = found[at];
+              return match === undefined ? [] : [[each.rowNumber, match] as const];
+            }),
+          );
+          setLikely({ asks: likelyAsks, byRow });
+        },
+        // A preview's hint only: a failed check shows no duplicates and holds nothing up.
+        () => undefined,
+      );
+    return () => {
+      isCurrent = false;
+    };
+  }, [likelyAsks, data, slug, object.id]);
+  const likely = likelyFound.asks === likelyAsks ? likelyFound.byRow : NO_LIKELY;
+  const likelyCount = likely.size;
+
   const newColumn = newFor === undefined || loaded === undefined ? undefined : newFor;
   const suggested =
     newColumn === undefined || loaded === undefined
@@ -915,6 +977,11 @@ export function ImportScreen({
               </RadioGroup>
             </Disclosure>
           )}
+          {likelyCount > 0 && (
+            <Callout tone="warning" title={strings.likelyDuplicates(likelyCount)}>
+              {strings.likelyDuplicatesText}
+            </Callout>
+          )}
           {/* The filter leads, the download of the rows to fix sits at the end of the same row. */}
           <SectionBar
             start={
@@ -924,6 +991,7 @@ export function ImportScreen({
                   { value: 'all', label: strings.filters.all },
                   { value: 'ready', label: strings.filters.ready(readyCount) },
                   { value: 'errors', label: strings.filters.errors(errors) },
+                  ...(likelyCount > 0 ? [{ value: 'duplicates', label: strings.filters.duplicates(likelyCount) }] : []),
                 ]}
                 value={filter}
                 onChange={(value) => {
@@ -958,7 +1026,8 @@ export function ImportScreen({
             context={context}
             choices={readChoices(byId)}
             errors={result.errors}
-            filter={filter}
+            filter={filter === 'duplicates' && likelyCount === 0 ? 'all' : filter}
+            likely={likely}
             page={page}
             pageSize={pageSize}
           />
@@ -966,7 +1035,15 @@ export function ImportScreen({
             label={strings.rowsLabel}
             page={page}
             pageSize={pageSize}
-            total={filter === 'errors' ? errors : filter === 'ready' ? readyCount : loaded.table.rows.length}
+            total={
+              filter === 'errors'
+                ? errors
+                : filter === 'ready'
+                  ? readyCount
+                  : filter === 'duplicates' && likelyCount > 0
+                    ? likelyCount
+                    : loaded.table.rows.length
+            }
             pageSizes={PAGE_SIZES}
             onPage={setPage}
             onPageSize={(size) => {
@@ -1364,6 +1441,8 @@ interface PreviewTableProps {
   readonly choices: ReadChoices;
   readonly errors: readonly ErrorRow[];
   readonly filter: Filter;
+  /** The record each likely duplicate create row looks like, by row number (spec 0049, AC-4918). */
+  readonly likely: ReadonlyMap<number, DuplicatePair['a']>;
   readonly page: number;
   readonly pageSize: number;
 }
@@ -1381,6 +1460,7 @@ function PreviewTable({
   choices,
   errors,
   filter,
+  likely,
   page,
   pageSize,
 }: PreviewTableProps) {
@@ -1399,6 +1479,7 @@ function PreviewTable({
       const rowNumber = index + 2;
       const error = byRow.get(rowNumber);
       if (filter === 'ready' && error !== undefined) continue;
+      if (filter === 'duplicates' && !likely.has(rowNumber)) continue;
       if (skipped < start) {
         skipped += 1;
         continue;
@@ -1406,11 +1487,12 @@ function PreviewTable({
       picked.push({ rowNumber, cells: all[index] ?? [], ...(error === undefined ? {} : { error }) });
     }
     return picked;
-  }, [all, byRow, errors, filter, page, pageSize]);
+  }, [all, byRow, errors, filter, likely, page, pageSize]);
   const matchedColumns = targets.flatMap((target, column) => (target === undefined ? [] : [column]));
   const columns: readonly TableColumn[] = [
     { id: 'row', label: strings.rowColumn, isRowHeader: true, align: 'end' },
     ...(errors.length > 0 ? [{ id: 'problems', label: strings.statusColumn }] : []),
+    ...(filter === 'duplicates' ? [{ id: 'likely', label: strings.looksLikeColumn }] : []),
     ...matchedColumns.map((column) => ({ id: `cell-${String(column)}`, label: headers[column] ?? '' })),
   ];
   return (
@@ -1422,6 +1504,10 @@ function PreviewTable({
       emptyState={<EmptyState title={strings.noRows}>{strings.noRowsText}</EmptyState>}
       renderCell={(row, columnId) => {
         if (columnId === 'row') return n(row.rowNumber);
+        if (columnId === 'likely') {
+          const match = likely.get(row.rowNumber);
+          return match === undefined ? '' : <RecordChip display={match} />;
+        }
         // A ready row says so, so the column never reads as missing values beside the errors.
         if (columnId === 'problems') {
           if (row.error === undefined) return strings.readyRow;

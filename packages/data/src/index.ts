@@ -10,6 +10,7 @@ import type {
   RecordsExportView,
   StartExportInput,
   ImportLinks,
+  DuplicatePair,
   ImportMatches,
   ImportRows,
   ImportSettings,
@@ -112,6 +113,7 @@ import { createRecordFactsStore, type RecordFacts } from './records/facts.ts';
 import {
   type DataError,
   type DataFault,
+  isDataError as isFailure,
   isUnseenFault,
   parseRetryAfter,
   toDataError,
@@ -154,6 +156,20 @@ import {
 } from './calendar/store.ts';
 import { lazySchedules } from './schedules/lazy.ts';
 import type { SchedulingAccessStore } from './scheduling/access.ts';
+import {
+  createDuplicateCheck,
+  createDuplicatePairs,
+  type DuplicateCheck,
+  type DuplicatePairsList,
+} from './duplicates/store.ts';
+export {
+  pairKey,
+  type DuplicateCheck,
+  type DuplicateCheckState,
+  type DuplicatePairsList,
+  type DuplicatePairsState,
+} from './duplicates/store.ts';
+export type { DuplicateMatch, DuplicatePair, DuplicateReason } from '@crm/contracts';
 export type {
   DelegationGrant,
   DelegationsHeld,
@@ -4931,6 +4947,59 @@ export function createDataLayer({
               ),
             ),
         }),
+      /**
+       * Likely duplicates (spec 0049). `check` is one form's check of its draft values (a create dialog's, a record
+       * page's), 300 ms after the last change, the request before aborted; a failure or the per minute limit shows
+       * no matches and blocks nothing. `pairs` reads an object's likely pairs (the Duplicates page) or one record's
+       * (its banner), 50 a page, reading on by itself while a page comes back short; its `dismiss` ("Not a
+       * duplicate") and `restore` (Undo) show at once and put the pair back on a refusal. Matches and pairs are
+       * displays, never record bodies, and never live: a screen asks again (`retry`) when it wants them fresh.
+       */
+      duplicates: {
+        check: (workspace: string, objectId: string, excludeRecordId?: string): DuplicateCheck =>
+          createDuplicateCheck({
+            run: (values, signal) =>
+              beforeRead(workspace).then(() =>
+                call(
+                  (options) =>
+                    api.records.duplicates.check(
+                      { workspace, objectId, values, ...(excludeRecordId === undefined ? {} : { excludeRecordId }) },
+                      options,
+                    ),
+                  signal,
+                ).then((answer) => answer.matches),
+              ),
+          }),
+        pairs: (workspace: string, objectId: string, recordId?: string): DuplicatePairsList => {
+          const pairInput = (pair: DuplicatePair) => ({
+            workspace,
+            objectId,
+            recordIds: [pair.a.recordId, pair.b.recordId] as [string, string],
+            mutationId: mintId(),
+          });
+          return createDuplicatePairs({
+            load: (cursor, signal) =>
+              beforeRead(workspace).then(() =>
+                call(
+                  (options) =>
+                    api.records.duplicates.list(
+                      {
+                        workspace,
+                        objectId,
+                        ...(recordId === undefined ? {} : { recordId }),
+                        ...(cursor === undefined ? {} : { cursor }),
+                      },
+                      options,
+                    ),
+                  signal,
+                ),
+              ),
+            dismiss: (pair) => call((options) => api.records.duplicates.dismiss(pairInput(pair), options)),
+            restore: (pair) => call((options) => api.records.duplicates.restore(pairInput(pair), options)),
+            isForbidden: (error) => isFailure(error) && (error.code === 'FORBIDDEN' || error.code === 'NOT_FOUND'),
+          });
+        },
+      },
       /** Edits one cell at once; a refusal rolls it back with a cell message and a toast with Retry. */
       setValue: (workspace: string, change: CellChange): void => {
         void recordsLayer().then((layer) => layer.setValues(workspace, [change], 'cell'));
@@ -5880,6 +5949,24 @@ export function createDataLayer({
           rows.push(...answer.rows);
         }
         return rows;
+      },
+      /**
+       * Each create row of a file, in order: the live record it looks like by the name rules (spec 0049, AC-4918),
+       * as a chip shows it, or undefined. Asks 1,000 a call, in turn; a read, so a lost answer is asked again by the
+       * caller. Nothing is merged or skipped.
+       */
+      duplicates: async (
+        workspace: string,
+        objectId: string,
+        rows: readonly { readonly name: unknown; readonly company?: string }[],
+      ): Promise<readonly (DuplicatePair['a'] | undefined)[]> => {
+        const found: (DuplicatePair['a'] | undefined)[] = [];
+        for (let start = 0; start < rows.length; start += 1_000) {
+          const part = rows.slice(start, start + 1_000);
+          const answer = await call((options) => api.imports.duplicates({ workspace, objectId, rows: part }, options));
+          found.push(...answer.rows.map((row) => row.match));
+        }
+        return found;
       },
       /** The import a job this tab started belongs to (its import or its undo job), for the finish toast. */
       forJob: (jobId: string): string | undefined => importJobs.get(jobId),

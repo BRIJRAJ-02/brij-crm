@@ -16,6 +16,8 @@ import {
 } from '@crm/data';
 import { Button, Callout, Field, Form, Modal, type FormRefusal, type ViewAction as ViewMenuAction } from '@crm/ui';
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
+import { duplicatesHref } from '../duplicates/paths.ts';
+import { strings as duplicateStrings } from '../duplicates/strings.ts';
 import { trashHref } from '../workspace/objects.ts';
 import { useId, useState, type ReactNode } from 'react';
 import { strings } from './strings.ts';
@@ -295,6 +297,15 @@ export function useViewMenu({
       startsGroup: true,
       run: () => {
         void navigate({ href: `${trashHref(slug)}?object=${encodeURIComponent(object.id)}` });
+      },
+    },
+    // Likely duplicates of this object (spec 0049, AC-4907): a page of pairs to merge or dismiss.
+    {
+      id: 'find-duplicates',
+      label: duplicateStrings.findDuplicates,
+      icon: 'copy',
+      run: () => {
+        void navigate({ href: duplicatesHref(slug, object.apiSlug) });
       },
     },
     ...entry(reasonFor('delete'), {
