@@ -288,13 +288,8 @@ export function WorkspaceFrame({
           workspace={workspaceName ?? strings.product}
           // The workspace's own logo heads the sidebar when it has one (spec 0060), else Timefix's mark, as in
           // timefix (F29); the workspace's name stays the switcher's.
-          mark={
-            logo === undefined ? (
-              <ProviderMark provider="timefix" size="lg" />
-            ) : (
-              <Avatar name={workspaceName ?? strings.product} src={logo} shape="square" size="sm" isDecorative />
-            )
-          }
+          mark={<ProviderMark provider="timefix" size="lg" />}
+          {...(logo === undefined ? {} : { logo })}
           // Not known yet: skeletons, never the product's name as a stand in that then changes.
           isWorkspaceLoading={workspaceName === undefined && !isMissing}
           onQuickActions={() => {

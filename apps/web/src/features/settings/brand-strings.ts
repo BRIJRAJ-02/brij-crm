@@ -7,7 +7,7 @@ export const strings = {
   /** Said once to a member who may read the kit but not change it. */
   readOnly: 'Only owners and admins change the brand.',
   logo: 'Logo',
-  logoText: 'On every booking page and form.',
+  logoText: 'On every booking page and form, the sidebar and the browser tab. A square mark reads best at small sizes.',
   logoDrop: 'Add your logo',
   logoReplace: 'Replace logo',
   logoAlt: 'Your logo',
@@ -17,7 +17,7 @@ export const strings = {
   noLogo: 'No logo',
   logoRemove: 'Remove logo',
   logoRemoving: 'Remove the logo?',
-  logoRemoveText: 'Booking pages and forms show no logo.',
+  logoRemoveText: 'Booking pages and forms show no logo, and the sidebar and tab go back to Timefix’s mark.',
   logoUnreadable: 'That picture couldn’t be read. Try a PNG, JPEG or WebP.',
   colour: 'Colour',
   colourText: 'Buttons, the chosen day, links and focus rings.',

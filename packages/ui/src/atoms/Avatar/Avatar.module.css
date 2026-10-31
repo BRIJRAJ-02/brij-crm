@@ -135,6 +135,23 @@
     object-fit: cover;
   }
 
+  /* A workspace's logo (spec 0060): the whole picture inside the tile, a hair (space-2) in from its edge, so a wide wordmark
+     is letterboxed rather than cut. Until it has loaded its initials hold the tile on its hue, as any picture's do. */
+  .root[data-fit='contain'] > .image {
+    box-sizing: border-box;
+    padding: var(--space-2);
+    object-fit: contain;
+  }
+
+  /* Loaded, it sits on a light plate in both themes, a hairline round it: logos are mostly dark ink on nothing,
+     which would vanish on the dark sidebar, and a plate that changes with the theme would change the logo's
+     colours with it. on-accent is the product's near white, the same in light and dark. */
+  .root[data-fit='contain']:has(> .image:not([data-fade='waiting'])) {
+    outline: var(--border-width-hairline) solid var(--border);
+    outline-offset: calc(-1 * var(--border-width-hairline));
+    background: var(--on-accent);
+  }
+
   /* Waiting, at every size, the initials show and the picture is held back; a picture already in the browser's
      cache skips straight to shown. The big sizes' picture then fades in over its initials (Avatar.tsx's FADES_IN);
      the small ones show it at once. A fade, never a move, so reduced motion keeps it as it is. */

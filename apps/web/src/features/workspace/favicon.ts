@@ -1,6 +1,11 @@
 // The tab's icon inside a workspace (spec 0060): the workspace's logo when it has one, from its member route
 // (`/api/brand/logo?workspace=&v=`, our own origin, its type checked again on the way out), as Slack and Linear wear
 // a workspace's icon. Leaving the workspace, or a logo removed, puts the product's icons back exactly as they were.
+//
+// A tab's icon is square, and a logo may be a wide wordmark. Browsers differ on a picture that isn't square (some
+// squash it), so a logo that isn't square is drawn again whole inside a square on a light rounded plate, the way the
+// sidebar's head holds it: every letter kept, smaller, rather than the middle cropped out, and dark ink still
+// readable on a dark tab strip.
 import { useEffect } from 'react';
 
 /** What the page's icon links held before a workspace's logo replaced them. */
@@ -11,31 +16,104 @@ interface Kept {
   readonly sizes: string | null;
 }
 
-/** Points every icon link at `src`, and answers how to put them back. */
-export function wearFavicon(document: Pick<Document, 'querySelectorAll'>, src: string): () => void {
+/** The icon links pointed at a logo: `point` moves them to another address for it, `restore` puts them back. */
+export interface WornFavicon {
+  readonly point: (href: string) => void;
+  readonly restore: () => void;
+}
+
+/** Points every icon link at `src`, and answers how to point them elsewhere and how to put them back. */
+export function wearFavicon(document: Pick<Document, 'querySelectorAll'>, src: string): WornFavicon {
   const kept: Kept[] = [...document.querySelectorAll<HTMLLinkElement>('link[rel~="icon"]')].map((link) => ({
     link,
     href: link.getAttribute('href') ?? '',
     type: link.getAttribute('type'),
     sizes: link.getAttribute('sizes'),
   }));
-  for (const { link } of kept) {
-    link.removeAttribute('type');
-    link.setAttribute('sizes', 'any');
-    link.setAttribute('href', src);
-  }
-  return () => {
-    for (const { link, href, type, sizes } of kept) {
+  const point = (href: string) => {
+    for (const { link } of kept) {
+      link.removeAttribute('type');
+      link.setAttribute('sizes', 'any');
       link.setAttribute('href', href);
-      if (type === null) link.removeAttribute('type');
-      else link.setAttribute('type', type);
-      if (sizes === null) link.removeAttribute('sizes');
-      else link.setAttribute('sizes', sizes);
     }
   };
+  point(src);
+  return {
+    point,
+    restore: () => {
+      for (const { link, href, type, sizes } of kept) {
+        link.setAttribute('href', href);
+        if (type === null) link.removeAttribute('type');
+        else link.setAttribute('type', type);
+        if (sizes === null) link.removeAttribute('sizes');
+        else link.setAttribute('sizes', sizes);
+      }
+    },
+  };
+}
+
+/** Where a `width` by `height` picture sits, whole and centred, inside a `side` square. */
+export function containBox(
+  width: number,
+  height: number,
+  side: number,
+): { readonly x: number; readonly y: number; readonly width: number; readonly height: number } {
+  const scale = side / Math.max(width, height, 1);
+  const [w, h] = [Math.max(1, Math.round(width * scale)), Math.max(1, Math.round(height * scale))];
+  return { x: Math.round((side - w) / 2), y: Math.round((side - h) / 2), width: w, height: h };
+}
+
+/** The square a tab's icon is drawn in: sharp on a 2x screen's 32px tab icon, with room to spare. */
+const ICON_SIDE = 64;
+
+/** The plate's margin round the logo and its corner, in the icon's own pixels. */
+const ICON_PAD = 4;
+const ICON_CORNER = 12;
+
+/** The plate: the product's near white (`on-accent`), as the sidebar's head draws a logo's. A canvas takes no token. */
+const PLATE = '#fcfdff';
+
+/**
+ * The logo at `src` drawn whole inside a square, as a PNG data address, or undefined when it is square already (the
+ * route's own address serves) or can't be drawn (the route's address serves too).
+ */
+async function squareIcon(src: string): Promise<string | undefined> {
+  try {
+    const image = new Image();
+    image.src = src;
+    await image.decode();
+    const { naturalWidth: width, naturalHeight: height } = image;
+    if (width === 0 || height === 0 || width === height) return undefined;
+    const canvas = document.createElement('canvas');
+    canvas.width = ICON_SIDE;
+    canvas.height = ICON_SIDE;
+    const context = canvas.getContext('2d');
+    if (context === null) return undefined;
+    context.fillStyle = PLATE;
+    context.beginPath();
+    context.roundRect(0, 0, ICON_SIDE, ICON_SIDE, ICON_CORNER);
+    context.fill();
+    const box = containBox(width, height, ICON_SIDE - 2 * ICON_PAD);
+    context.drawImage(image, box.x + ICON_PAD, box.y + ICON_PAD, box.width, box.height);
+    return canvas.toDataURL('image/png');
+  } catch {
+    // Not decodable here (gone, or the browser refused it): the route's own address stays the icon.
+    return undefined;
+  }
 }
 
 /** The workspace's logo as the tab's icon while `src` is set; the product's icons otherwise. */
 export function useWorkspaceFavicon(src: string | undefined): void {
-  useEffect(() => (src === undefined ? undefined : wearFavicon(document, src)), [src]);
+  useEffect(() => {
+    if (src === undefined) return undefined;
+    const worn = wearFavicon(document, src);
+    let isCurrent = true;
+    void squareIcon(src).then((square) => {
+      if (isCurrent && square !== undefined) worn.point(square);
+    });
+    return () => {
+      isCurrent = false;
+      worn.restore();
+    };
+  }, [src]);
 }

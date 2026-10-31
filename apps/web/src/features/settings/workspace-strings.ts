@@ -7,6 +7,10 @@ export const strings = {
   generalTitle: 'General',
   workspaceSection: 'Details',
   name: 'Workspace name',
+  /** The logo row: the logo itself is set in Brand, beside the colour (spec 0060); one upload, never a second. */
+  logo: 'Logo',
+  logoText: 'Heads the sidebar, the browser tab, booking pages and forms. Set it in Brand, with your colour.',
+  openBrand: 'Open Brand',
   timeZone: 'Time zone',
   timeZoneInfo: 'Default for new pages and members.',
   currency: 'Currency',
