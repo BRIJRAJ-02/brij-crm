@@ -1,7 +1,7 @@
 // Who may see a booking (the owner's ask of 29 October 2026: "don't show
 // someone else's booking if they're in the same workspace"; spec 0037's
 // Booking actions table, AC-1262): its host, any co-host (`booking_hosts`),
-// its page's owner, a holder of `booking.admin`, and anyone whose scheduling
+// its page's owner and editors (AC-1331), a holder of `booking.admin`, and anyone whose scheduling
 // reach covers its host or a co-host (See shows it with the guest's name,
 // page title, time and status only; Manage acts on it as the host does).
 // Everyone else in the workspace meets it as absent on Bookings, and as Busy
@@ -16,6 +16,7 @@ import type { Access } from '../access/policy.ts';
 import { can } from '../access/policy.ts';
 import { canActFor, schedulingReach, type SchedulingLevel, type SchedulingReach } from '../access/scheduling.ts';
 import { uuidList } from '../engine/ids.ts';
+import { editedBy } from '../scheduling/editor-rows.ts';
 
 /**
  * Who reads bookings: the member they are, when a member, whether they see everyone's (`booking.admin`), and the
@@ -31,6 +32,8 @@ export interface BookingReader {
   readonly manages?: readonly string[];
   /** The reach over every member, when there is one. */
   readonly everyone?: SchedulingLevel;
+  /** The pages the reader edits (spec 0037, AC-1331): they manage those pages' bookings as the page's owner does. */
+  readonly edits?: readonly string[];
 }
 
 /** The reader a principal is, without scheduling reach: the system and `booking.admin` see every booking. */
@@ -61,7 +64,11 @@ export function bookingReaderWith(access: Access, reach: SchedulingReach): Booki
 export async function bookingReaderIn(tx: WorkspaceTx, scope: EngineScope): Promise<BookingReader> {
   const base = bookingReaderOf(scope.access);
   if (base.admin || base.member === undefined) return base;
-  return bookingReaderWith(scope.access, await schedulingReach(tx, scope));
+  const edits = [...(await editedBy(tx, scope, 'booking_page'))];
+  return {
+    ...bookingReaderWith(scope.access, await schedulingReach(tx, scope)),
+    ...(edits.length === 0 ? {} : { edits }),
+  };
 }
 
 /**
@@ -130,8 +137,12 @@ export function seesBookingSql(
       : sql`${booking.pageOwnerMemberId} = ${me}::uuid`;
   const reached = all ? ((act ? reader.manages : reader.sees) ?? []) : [];
   const hosts = reached.length === 0 ? sql`${me}::uuid` : sql`any(${uuidList([me, ...reached])})`;
+  // A page the reader edits is theirs to manage, as its owner's is (AC-1331).
+  const edits = all ? (reader.edits ?? []) : [];
+  const edited = edits.length === 0 ? sql`false` : sql`${booking.pageId} = any(${uuidList(edits)})`;
   return sql`(
     ${booking.hostMemberId} = ${hosts}
+    or ${edited}
     or ${owns}
     or exists (
       select 1 from booking_hosts sh
@@ -161,6 +172,8 @@ export function hiddenBookingSql(reader: BookingReader): SQL {
 /** A booking already read, as the row checks take it: its host, its page's owner and its co-hosts. */
 export interface BookingHeld {
   readonly hostMemberId: string;
+  /** Its page, when the caller has it: a page the reader edits makes them its manager (AC-1331). */
+  readonly pageId?: string;
   /** Its page's owner; null or undefined on a workspace link, which nobody owns (`pageManagerOf`). */
   readonly ownerMemberId: string | null | undefined;
   readonly coHostIds: readonly string[];
@@ -178,6 +191,7 @@ export function bookingAccess(reader: BookingReader, booking: BookingHeld): 'act
   if (me === undefined) return undefined;
   const hosts = [booking.hostMemberId, ...booking.coHostIds];
   if (hosts.includes(me) || booking.ownerMemberId === me) return 'act';
+  if (booking.pageId !== undefined && reader.edits?.includes(booking.pageId) === true) return 'act';
   if (reader.everyone === 'manage' || hosts.some((id) => reader.manages?.includes(id) === true)) return 'act';
   if (reader.everyone !== undefined || hosts.some((id) => reader.sees?.includes(id) === true)) return 'see';
   return undefined;

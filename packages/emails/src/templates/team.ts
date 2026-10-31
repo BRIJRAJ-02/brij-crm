@@ -2,6 +2,7 @@
 // any other job of theirs that failed (late trap #20). A mention has no email of its own: it goes in the
 // notifications email (spec 0038), the one email a mention sends.
 import type {
+  EditorAddedEmail,
   ImportFinishedEmail,
   JobFailedEmail,
   SchedulingAccessGivenEmail,
@@ -189,5 +190,38 @@ export const schedulingAccessRemoved: Template<SchedulingAccessRemovedEmail> = (
     heading: subject,
     blocks: [{ type: 'paragraph', text: `${params.byName} took this access back in ${workspaceOf(context)}.` }],
     why: `You got this email because your access to scheduling in ${workspaceOf(context)} changed.`,
+  };
+};
+
+/**
+ * Editor added or removed (spec 0037, AC-1331): "You can now edit Intro call" to the member someone else made an
+ * editor, and "You can no longer edit Intro call" to one they took off.
+ */
+export const editorAdded: Template<EditorAddedEmail> = (params, context) => {
+  const isRotation = params.resourceType === 'rotation';
+  const kind = isRotation ? 'round robin group' : 'booking page';
+  const removed = params.removed === true;
+  const subject = removed ? `You can no longer edit ${params.resourceName}` : `You can now edit ${params.resourceName}`;
+  const what = removed
+    ? `${params.byName} took you off the editors of the ${params.resourceName} ${kind}.`
+    : `${params.byName} made you an editor of the ${params.resourceName} ${kind}.`;
+  return {
+    subject,
+    preheader: what,
+    eyebrow: workspaceOf(context),
+    heading: subject,
+    blocks: [
+      { type: 'paragraph', text: what },
+      ...(removed
+        ? []
+        : [
+            {
+              type: 'button' as const,
+              label: isRotation ? 'Open Round robin' : 'Open the page',
+              url: context.link(params.path),
+            },
+          ]),
+    ],
+    why: `You got this email because who edits a ${kind} changed in ${workspaceOf(context)}.`,
   };
 };

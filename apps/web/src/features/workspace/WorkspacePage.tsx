@@ -272,7 +272,11 @@ function FrameWithData({
       isOperator={me?.isOperator === true}
       {...(workspace?.access === undefined
         ? {}
-        : { roleLabel: workspace.access.roleLabel, isOwner: workspace.access.role === 'owner' })}
+        : {
+            roleLabel: workspace.access.roleLabel,
+            isOwner: workspace.access.role === 'owner',
+            isGuest: workspace.access.role === 'guest',
+          })}
       {...(workspace?.objects === undefined ? {} : { objects: workspace.objects })}
       {...(workspace?.lists === undefined ? {} : { lists: workspace.lists })}
       // Loaded without objects (the door refused this workspace), or failed to load: no Records section.

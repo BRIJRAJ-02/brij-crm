@@ -47,6 +47,12 @@ import type { LiveStatus } from './live/live.ts';
 import type { NavSnapshot, NavSource } from './navigation/store.ts';
 import type { DueTasksSnapshot, DueTasksSource } from './tasks/due.ts';
 import type { PendingOptions } from './options.ts';
+import type {
+  DuplicateCheck,
+  DuplicateCheckState,
+  DuplicatePairsList,
+  DuplicatePairsState,
+} from './duplicates/store.ts';
 import type { RecordsView, ViewReader, ViewState } from './records/layer.ts';
 import type {
   EntriesState,
@@ -334,6 +340,19 @@ export function useTask(task: TaskSubscription): TaskSubscriptionState {
  */
 export function useRecordSearch(search: RecordSearch): RecordSearchState {
   return useSyncExternalStore(search.subscribe, search.getSnapshot);
+}
+
+/**
+ * A form's likely duplicates (spec 0049, AC-4904), re-rendering as checks land. The screen asks (`check.ask`) as its
+ * fields change and disposes the check when the form closes.
+ */
+export function useDuplicateCheck(check: DuplicateCheck): DuplicateCheckState {
+  return useSyncExternalStore(check.subscribe, check.getSnapshot);
+}
+
+/** An object's likely pairs, or one record's (spec 0049, AC-4906, AC-4907), re-rendering as pages and dismissals land. */
+export function useDuplicatePairs(list: DuplicatePairsList): DuplicatePairsState {
+  return useSyncExternalStore(list.subscribe, list.getSnapshot);
 }
 
 /** A missing record looked up in the trash (spec 0017), asked when first read. */

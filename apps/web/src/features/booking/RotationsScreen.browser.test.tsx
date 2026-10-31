@@ -21,6 +21,7 @@ import { SettingsTopBarSlot } from '../settings/topBarSlot.ts';
 import { RotationDialog } from './RotationDialog.tsx';
 import { RotationsScreen } from './RotationsScreen.tsx';
 import { strings } from './rotation-strings.ts';
+import { sharingStrings } from './sharing-strings.ts';
 
 const ADA: MemberSummary = { id: '0199a6f2-0000-7000-8000-000000000001', name: 'Ada Lovelace', email: 'ada@acme.dev' };
 const MAYA: MemberSummary = { id: '0199a6f2-0000-7000-8000-000000000002', name: 'Maya Patel', email: 'maya@acme.dev' };
@@ -72,6 +73,22 @@ function groups(items: readonly RotationView[]) {
   };
 }
 
+/** The editors the fake holds: Maya edits Sales until a test changes it. */
+let editorsHeld: readonly { readonly id: string; readonly name: string }[] = [];
+const NONE: ReadonlySet<string> = new Set();
+let snapshot = { status: 'ready' as const, items: editorsHeld, pendingIds: NONE };
+const editorsView = {
+  subscribe: () => () => undefined,
+  // One snapshot per list held, as useSyncExternalStore needs.
+  getSnapshot: () => {
+    if (snapshot.items !== editorsHeld) snapshot = { status: 'ready' as const, items: editorsHeld, pendingIds: NONE };
+    return snapshot;
+  },
+  retain: () => () => undefined,
+  ready: () => Promise.resolve(),
+  reload: () => undefined,
+};
+
 /** A data layer holding `items` as the groups, whose create and update answer `answer`. */
 function layerWith(items: readonly RotationView[], answer: () => Promise<RotationView> = () => Promise.resolve(SALES)) {
   const view = groups(items);
@@ -84,6 +101,14 @@ function layerWith(items: readonly RotationView[], answer: () => Promise<Rotatio
       update: vi.fn(answer),
       // The Distribution tab reads only when opened.
       distribution: () => new Promise(() => undefined),
+    },
+    // Sharing (spec 0037, AC-1331): the group's editors, held, and set at once.
+    editors: {
+      view: () => editorsView,
+      set: vi.fn((_workspace: string, _type: string, _id: string, next: readonly { id: string; name: string }[]) => {
+        editorsHeld = next;
+        return Promise.resolve(next);
+      }),
     },
   } as unknown as DataLayer;
 }
@@ -162,6 +187,50 @@ describe('New group, once', () => {
   it('says a group on no booking page in the same small letters', async () => {
     await renderRoundRobin([{ ...SALES, pages: 0 }]);
     await expect.element(page.getByText('Fair · last 30 days · not on a booking page yet')).toBeVisible();
+  });
+});
+
+describe('Sharing (spec 0037, AC-1331, AC-1433)', () => {
+  it('lets an admin add an editor and asks before removing one', async () => {
+    editorsHeld = [];
+    const data = await renderRoundRobin([SALES]);
+    await userEvent.click(page.getByRole('tab', { name: sharingStrings.title }));
+    await expect.element(page.getByText(sharingStrings.none)).toBeVisible();
+    await userEvent.click(page.getByRole('button', { name: new RegExp(sharingStrings.add) }));
+    await userEvent.click(page.getByRole('option', { name: /Maya Patel/ }));
+    expect(data.editors.set).toHaveBeenLastCalledWith('acme', 'rotation', SALES.id, [{ id: MAYA.id, name: MAYA.name }]);
+    shown?.unmount();
+    const again = await renderRoundRobin([SALES]);
+    await userEvent.click(page.getByRole('tab', { name: sharingStrings.title }));
+    await userEvent.click(page.getByRole('button', { name: sharingStrings.remove(MAYA.name) }));
+    // Removing ends their access: it asks first.
+    const dialog = page.getByRole('alertdialog');
+    await expect.element(dialog.getByText(sharingStrings.removeText(MAYA.name, 'Sales'))).toBeVisible();
+    await userEvent.click(dialog.getByRole('button', { name: sharingStrings.removeAction }));
+    expect(again.editors.set).toHaveBeenLastCalledWith('acme', 'rotation', SALES.id, []);
+    // The row went with its button: focus is on the picker, not lost to the page.
+    await expect.element(page.getByRole('button', { name: new RegExp(sharingStrings.add) })).toHaveFocus();
+  });
+
+  it('shows an editor the badge and who else edits, with nothing to change and no Delete', async () => {
+    editorsHeld = [{ id: MAYA.id, name: MAYA.name }];
+    const data = layerWith([{ ...SALES, isEditor: true, canManage: false }]);
+    shown = await renderInApp(
+      () => withBar(<RotationsScreen data={data} slug="acme" people={[ADA, MAYA]} canManage={false} />),
+      {
+        data,
+        pattern: '/w/$slug/settings/scheduling/round-robin',
+        at: '/w/acme/settings/scheduling/round-robin',
+        permissions: ['booking.manage'],
+      },
+    );
+    await expect.element(page.getByText(sharingStrings.editorBadge, { exact: true })).toBeVisible();
+    await userEvent.click(page.getByRole('tab', { name: sharingStrings.title }));
+    await expect.element(page.getByText(MAYA.name)).toBeVisible();
+    expect(page.getByRole('button', { name: sharingStrings.remove(MAYA.name) }).elements()).toEqual([]);
+    await userEvent.click(page.getByRole('button', { name: strings.rowActions('Sales') }));
+    await expect.element(page.getByRole('menuitem', { name: strings.edit })).toBeVisible();
+    expect(page.getByRole('menuitem', { name: strings.delete }).elements()).toEqual([]);
   });
 });
 

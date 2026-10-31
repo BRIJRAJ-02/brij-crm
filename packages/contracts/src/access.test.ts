@@ -171,9 +171,14 @@ describe('the role table', () => {
     ]);
   });
 
-  it('names the three roles as the screens show them', () => {
-    expect(ROLES).toEqual(['owner', 'admin', 'member']);
-    expect(ROLE_LABELS).toEqual({ owner: 'Owner', admin: 'Admin', member: 'Member' });
+  it('names the four roles as the screens show them', () => {
+    expect(ROLES).toEqual(['owner', 'admin', 'member', 'guest']);
+    expect(ROLE_LABELS).toEqual({ owner: 'Owner', admin: 'Admin', member: 'Member', guest: 'Guest' });
+  });
+
+  // Spec 0031, AC-828: a guest holds nothing, so no row above names them, and no permission reaches them.
+  it('gives a guest no permission at all', () => {
+    expect(ROLE_PERMISSIONS.guest).toEqual([]);
   });
 });
 
@@ -216,6 +221,12 @@ describe('access.mine', () => {
       roleLabel: 'Member',
       permissions: ['records.export'],
     });
-    expect(MyAccess.safeParse({ role: 'guest', roleLabel: 'Guest', permissions: [] }).success).toBe(false);
+    // A guest (spec 0031, slice 9) holds a role with no permissions; a role the code doesn't know never parses.
+    expect(MyAccess.safeParse({ memberId: MEMBER, role: 'guest', roleLabel: 'Guest', permissions: [] }).success).toBe(
+      true,
+    );
+    expect(MyAccess.safeParse({ memberId: MEMBER, role: 'viewer', roleLabel: 'Viewer', permissions: [] }).success).toBe(
+      false,
+    );
   });
 });

@@ -84,6 +84,7 @@ export const AUDIT_KINDS = {
     'booking.changed_for',
     'booking_page.changed_for',
     'rotation.changed',
+    'editors.changed',
   ],
 } as const satisfies Record<AuditKindName, readonly AuditAction[]>;
 
@@ -99,6 +100,11 @@ export const AUDIT_NOT_LISTED = [
   'booking_page.profile_reordered',
   // An admin looked at an object as someone else would see it (spec 0032, AC-858): stored, a look changes nothing.
   'access.previewed',
+  // Spec 0049: kept for the record of who dismissed a pair; its sentence in History is owed (not in this slice).
+  'record.duplicate_dismissed',
+  'record.duplicate_restored',
+  // A merge is a record change, not a workspace one (spec 0049): it reads on the kept record's timeline instead.
+  'record.merged',
 ] as const satisfies readonly AuditAction[];
 
 /** An action Workspace changes lists: every catalog action outside `AUDIT_NOT_LISTED`. */

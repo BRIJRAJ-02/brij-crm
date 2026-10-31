@@ -9,6 +9,7 @@ import {
   bookingPagesRouter,
   bookingsRouter,
   rotationsRouter,
+  editorsRouter,
   routingRouter,
   schedulesRouter,
 } from './modules/booking/router.ts';
@@ -108,6 +109,7 @@ export const router = base.router({
   limits: limitsRouter,
   availability: availabilityRouter,
   rotations: rotationsRouter,
+  editors: editorsRouter,
   routing: routingRouter,
   audit: auditRouter,
   search: searchRouter,

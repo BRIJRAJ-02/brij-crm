@@ -12,6 +12,7 @@ import { availabilityContract } from './booking/team-week.ts';
 import { teamDayProcedure } from './booking/team-day.ts';
 import { preferencesContract } from './preferences.ts';
 import { rotationsContract } from './booking/rotations.ts';
+import { editorsContract } from './booking/editors.ts';
 import { bulkRecordsContract } from './bulk.ts';
 import { calendarContract } from './calendar.ts';
 import { homeContract } from './home.ts';
@@ -59,6 +60,7 @@ export * from './attributes.ts';
 export * from './computed.ts';
 export * from './audit.ts';
 export * from './board-model.ts';
+export * from './duplicates.ts';
 export * from './booking/index.ts';
 export * from './booking/blocks.ts';
 export * from './booking/pages.ts';
@@ -68,6 +70,7 @@ export * from './booking/limits.ts';
 export * from './booking/team-week.ts';
 export * from './booking/team-day.ts';
 export * from './booking/rotations.ts';
+export * from './booking/editors.ts';
 export * from './bulk.ts';
 export * from './bulk-ops.ts';
 export * from './calendar.ts';
@@ -195,6 +198,8 @@ export const contract = {
   // The Team week (spec 0037, AC-1289 to AC-1296): the roster over everyone's default schedules.
   availability: availabilityContract,
   rotations: rotationsContract,
+  // Page and rotation editors (spec 0037, AC-1331): Sharing on pages and rotations.
+  editors: editorsContract,
   search: searchContract,
   recents: recentsContract,
   // The sidebar (spec 0034): each member's own order, folds, hidden items, favourites and rail.

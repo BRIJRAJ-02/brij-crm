@@ -31,9 +31,13 @@ export const RuleRole = Role.exclude(['owner', 'admin']);
 /** A role a rule can be about. */
 export type RuleRole = z.infer<typeof RuleRole>;
 
-/** What each rule role may do with an object it has no rule for (spec 0032, AC-844): members edit. */
+/**
+ * What each rule role may do with an object it has no rule for (spec 0032, AC-844): members edit; a guest sees
+ * nothing until a rule shares an object with them (spec 0031, AC-828).
+ */
 export const ROLE_DEFAULT_LEVEL = {
   member: 'write',
+  guest: 'none',
 } as const satisfies Record<RuleRole, ObjectAccessLevel>;
 
 /** Who a rule is about: everyone with a role, or everyone in one team. Never one named person. */

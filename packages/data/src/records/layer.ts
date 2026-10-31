@@ -8,6 +8,11 @@
 // and an undo stack. createDataLayer loads this module when a screen first
 // asks for records, so it stays out of the first load.
 import type {
+  MergedRecord,
+  MergePreview,
+  MergePreviewInput,
+  MergeRecordsInput,
+  MergeSide,
   AggregateGroupsInput,
   AggregateRecordsInput,
   AttributeDefinition,
@@ -235,6 +240,10 @@ export interface RecordsApi {
   readonly setValuesBatch: (input: SetValuesBatchInput) => Promise<BatchResults>;
   /** Moves up to 500 records of one object to the trash (spec 0022). */
   readonly deleteMany: (input: DeleteManyInput) => Promise<DeleteManyResults>;
+  /** What a merge would do (spec 0049): both records, the dialog's rows and the counts. */
+  readonly mergePreview: (input: MergePreviewInput) => Promise<MergePreview>;
+  /** Merges one record into another (spec 0049). */
+  readonly merge: (input: MergeRecordsInput) => Promise<MergedRecord>;
   /** Undoes a delete by its batch (spec 0022). */
   readonly restoreBatch: (input: RestoreBatchInput) => Promise<RestoreBatchResults>;
   /** Edits one attribute of up to 500 records of one object (spec 0022, milestone 2). */
@@ -308,6 +317,22 @@ const GONE_KEPT = 10_000;
 
 /** The most records one inline delete moves to the trash (spec 0022): more waits for background jobs. */
 export const MAX_DELETE_RECORDS = 500;
+
+/** Two records to merge (spec 0049): the one kept, and the one merged into it and trashed. */
+export interface MergeRequest {
+  readonly objectId: string;
+  readonly keepId: string;
+  readonly mergeId: string;
+  /** The side the member picked for each row the dialog showed. */
+  readonly picks: Readonly<Record<string, MergeSide>>;
+  /** Both records' revisions when the dialog read them (the preview's): either moved since is a `CONFLICT`. */
+  readonly revisions: { readonly keep: number; readonly merge: number };
+}
+
+/** How a merge went: merged (the kept record's name and what moved), or failed with the refusal. */
+export type MergeOutcome =
+  | { readonly kind: 'merged'; readonly keptName: string; readonly moved: MergedRecord['moved'] }
+  | { readonly kind: 'failed'; readonly error: DataError };
 
 /**
  * What a bulk delete came to (spec 0022), for the screen's toast: refused
@@ -1312,6 +1337,8 @@ export function createRecordsLayer({
     if (held > 0 && !told.atLeast) entry.windows.setCount({ count: Math.max(0, told.count - held), atLeast: false });
   };
 
+  // Merges on their way (spec 0049), by workspace and pair: pressing Merge again joins the one out.
+  const merging = new Map<string, Promise<MergeOutcome>>();
   /** Records gone on the server: out of the store and out of every window of the workspace, whose later rows reload. */
   const dropRecords = (workspace: string, ids: readonly string[]) => {
     if (ids.length === 0) return;
@@ -4092,6 +4119,61 @@ export function createRecordsLayer({
       trashRecords(workspace, objectId, recordIds, { undoable: true }),
 
     /**
+     * What a merge would do (spec 0049, `records.mergePreview`): both records
+     * as read now, the dialog's rows and the counts. A plain read, never held
+     * in the store: the dialog shows it, and the merge reads afresh.
+     */
+    mergePreview: (workspace: string, pair: Omit<MergeRequest, 'picks' | 'revisions'>): Promise<MergePreview> =>
+      api.mergePreview({ workspace, ...pair }),
+
+    /**
+     * Merges one record into another (spec 0049, AC-4913 to AC-4916). Not
+     * optimistic, by the spec's choice (0049 AC-4916: "While the merge runs,
+     * the dialog shows a pending state"): a merge moves links, entries and
+     * attached items the tab can't know, and can't be undone, so nothing
+     * shows before the server answers. The same pair asked again while one
+     * is out gets that answer (one merge, however often Merge is pressed). On
+     * success the kept record's answer becomes its base everywhere, the
+     * merged record leaves every window and record page, and the object's
+     * windows read again; a refusal changes nothing on screen. The tab's own
+     * echoes are not skipped (its mutation id is never marked sent): the
+     * events name the far records, lists, notes, tasks and timeline the merge
+     * moved, which this tab can't patch itself.
+     */
+    merge: (workspace: string, request: MergeRequest): Promise<MergeOutcome> => {
+      const key = `${workspace}\u0000${request.keepId}\u0000${request.mergeId}`;
+      const running = merging.get(key);
+      if (running !== undefined) return running;
+      const work = (async (): Promise<MergeOutcome> => {
+        const mutationId = mintId();
+        let answer: MergedRecord;
+        try {
+          answer = await delivered(() =>
+            api.merge({
+              workspace,
+              objectId: request.objectId,
+              keepId: request.keepId,
+              mergeId: request.mergeId,
+              picks: { ...request.picks },
+              revisions: request.revisions,
+              mutationId,
+            }),
+          );
+        } catch (error) {
+          return { kind: 'failed', error: toDataError(error) };
+        }
+        store.receive([answer.record]);
+        dropRecords(workspace, [answer.mergedId]);
+        subscriptions.changed(workspace, new Set([answer.mergedId]), 'all', new Set([answer.mergedId]));
+        for (const entry of viewsOf(workspace)) if (entry.objectId === request.objectId) entry.markDirty();
+        return { kind: 'merged', keptName: answer.record.display.name, moved: answer.moved };
+      })();
+      merging.set(key, work);
+      void work.finally(() => merging.delete(key)).catch(() => undefined);
+      return work;
+    },
+
+    /**
      * A delete job this tab started has ended (spec 0022, AC-526): its batch
      * (the job's id) goes on the undo stack as one delete, so Cmd+Z restores
      * it as the finish toast's Undo does. Its id is the job's, which the toast
@@ -4273,6 +4355,7 @@ export function createRecordsLayer({
       cellErrors = new Map();
       goneIds = new Set();
       trashing.clear();
+      merging.clear();
       leaving = new Set();
       own.clear();
       undo.clear();
@@ -4303,6 +4386,8 @@ export function createRecordsLayer({
       ),
     deleteMany: (workspace: string, objectId: string, recordIds: readonly string[]) =>
       ownWrite(workspace, objectId, undefined, true, () => records.deleteMany(workspace, objectId, recordIds)),
+    merge: (workspace: string, request: MergeRequest) =>
+      ownWrite(workspace, request.objectId, undefined, true, () => records.merge(workspace, request)),
     restoreDeleted: (workspace: string, objectId: string, batchId: string, count: number) =>
       ownWrite(workspace, objectId, undefined, true, () => records.restoreDeleted(workspace, objectId, batchId, count)),
     bulkEdit: (workspace: string, objectId: string, recordIds: readonly string[], request: BulkEditRequest) =>

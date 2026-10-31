@@ -9,6 +9,8 @@ import {
   type RecordAggregateGroups,
   type RecordAggregates,
   type AttributeDefinition,
+  type MergedRecord,
+  type MergeRecordsInput,
   type BatchResults,
   type LinksWritten,
   type RemoveLinksInput,
@@ -123,6 +125,8 @@ function fakeApi() {
   const deletes: Pending<DeleteManyInput, DeleteManyResults['results']>[] = [];
   const restores: Pending<RestoreBatchInput, Extract<RestoreBatchResults, { mode: 'inline' }>['results']>[] = [];
   const bulkEdits: Pending<UpdateManyInput, UpdateManyResults['results']>[] = [];
+  // Merges (spec 0049): each answered with the kept record and what moved, one echo.
+  const merges: Pending<MergeRecordsInput, Omit<MergedRecord, 'echoes'>>[] = [];
   // Link deltas (spec 0014): each answered with its record, the version it wrote and the records it changed.
   const linkAdds: Pending<AddLinksInput, Omit<LinksWritten, 'echoes'>>[] = [];
   const linkRemoves: Pending<RemoveLinksInput, Omit<LinksWritten, 'echoes'>>[] = [];
@@ -180,6 +184,8 @@ function fakeApi() {
     deleteMany: async (input) => ({ results: await queue(deletes)(input), echoes: 1 }),
     restoreBatch: async (input) => ({ mode: 'inline' as const, results: await queue(restores)(input), echoes: 1 }),
     updateMany: async (input) => ({ results: await queue(bulkEdits)(input), echoes: 1 }),
+    mergePreview: () => Promise.reject(new Error('No preview in these tests.')),
+    merge: async (input) => ({ ...(await queue(merges)(input)), echoes: 1 }),
     linksAdd: async (input) => ({ ...(await queue(linkAdds)(input)), echoes: 2 }),
     linksRemove: async (input) => ({ ...(await queue(linkRemoves)(input)), echoes: 2 }),
     // Spec 0021: a board's first cards and counts.
@@ -189,6 +195,7 @@ function fakeApi() {
   };
   return {
     api,
+    merges,
     aggregates,
     aggregateGroups,
     queries,
@@ -3435,5 +3442,53 @@ describe('a company a write filed the person under (spec 0059, AC-5920)', () => 
       failed: 0,
     });
     expect(deletes).toHaveLength(0);
+  });
+});
+
+describe('merging records (spec 0049, AC-4914, AC-4916)', () => {
+  const request = {
+    objectId: PEOPLE,
+    keepId: idAt(0),
+    mergeId: idAt(1),
+    picks: { [NAME]: 'merge' as const },
+    revisions: { keep: 0, merge: 0 },
+  };
+  const moved = { links: 2, entries: 1, items: 3, notes: 1 };
+
+  it('shows nothing before the answer, joins a second press, then patches the kept record and drops the merged one', async () => {
+    const { layer, view, merges, frame, mutationLog } = await readyView();
+    const merging = layer.merge(WS, request);
+    const again = layer.merge(WS, request);
+    await settle();
+    frame();
+    // Not optimistic (spec 0049, AC-4916): both rows still show while the merge runs, and one call went out.
+    expect(merges).toHaveLength(1);
+    expect(view.getSnapshot().source.getItem(1)?.id).toBe(idAt(1));
+    expect(merges[0]?.input).toMatchObject({
+      workspace: WS,
+      keepId: idAt(0),
+      mergeId: idAt(1),
+      picks: { [NAME]: 'merge' },
+    });
+    const kept = { ...rowOf(idAt(0), { [NAME]: 'P1', [CITY]: 'London' }), revision: 3 };
+    merges[0]?.answer({ record: kept, mergedId: idAt(1), moved });
+    expect(await merging).toEqual({ kind: 'merged', keptName: 'P1', moved });
+    expect(await again).toEqual({ kind: 'merged', keptName: 'P1', moved });
+    frame();
+    expect([...view.getSnapshot().gone]).toContain(idAt(1));
+    expect(view.getSnapshot().source.getItem(0)?.values[NAME]).toBe('P1');
+    // Its own echoes apply: the events name far records and lists this tab can't patch, so none is skipped.
+    expect(mutationLog).toEqual([]);
+  });
+
+  it('changes nothing on a refusal, and answers it', async () => {
+    const { layer, view, merges, frame } = await readyView();
+    const merging = layer.merge(WS, request);
+    await settle();
+    merges[0]?.fail(dataError('CONFLICT', 'P0 changed while you were merging. Review it again.'));
+    expect(await merging).toMatchObject({ kind: 'failed', error: { code: 'CONFLICT' } });
+    frame();
+    expect(view.getSnapshot().source.count).toBe(3);
+    expect(view.getSnapshot().gone.size).toBe(0);
   });
 });

@@ -363,6 +363,12 @@ export const AuditEntryView = z.discriminatedUnion('action', [
     rotation,
     z.strictObject({ added: z.number().int().min(0), removed: z.number().int().min(0) }),
   ),
+  /** Who may edit a page or a rotation changed (spec 0037, AC-1331): how many were added and how many removed. */
+  entry(
+    ['editors.changed'],
+    z.union([rotation, bookingPage]),
+    z.strictObject({ added: z.number().int().min(0), removed: z.number().int().min(0) }),
+  ),
 ]);
 /** One row of Workspace changes. */
 export type AuditEntryView = z.infer<typeof AuditEntryView>;

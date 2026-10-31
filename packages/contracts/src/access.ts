@@ -286,13 +286,15 @@ const OWNER_ONLY: readonly Permission[] = PERMISSION_NAMES.filter((name) => PERM
 /**
  * Each role's permissions: the whole table, pinned by a test, so a change is
  * a reviewed change. The owner holds everything; an admin everything but the
- * owner only ones; a member exports what they can see, makes their own
+ * owner only ones; a guest nothing; a member exports what they can see, makes their own
  * booking pages and changes their own hours (spec 0037, AC-1227).
  */
 export const ROLE_PERMISSIONS = {
   owner: PERMISSION_NAMES,
   admin: PERMISSION_NAMES.filter((permission) => !OWNER_ONLY.includes(permission)),
   member: ['lists.manage', 'records.export', 'booking.manage', 'availability.own'],
+  // A guest holds nothing (spec 0031, AC-828): they read what the access rules share with them, and no more.
+  guest: [],
 } as const satisfies Record<Role, readonly Permission[]>;
 
 /**

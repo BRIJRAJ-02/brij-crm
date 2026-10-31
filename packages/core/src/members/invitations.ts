@@ -276,11 +276,16 @@ export async function seatsUsed(tx: WorkspaceTx, workspaceId: string): Promise<n
   return (active?.n ?? 0) + (invited?.n ?? 0);
 }
 
-/** Refuses 409 `SEAT_LIMIT` when `adding` more seats would pass the plan's (unlimited until #38). */
+/**
+ * Refuses 409 `SEAT_LIMIT` when `adding` more seats would pass the plan's (unlimited until #38). Counted under the
+ * invitations lock (taken again here, which a caller holding it already passes through), so two seat takers at once
+ * (a guest made a member beside an invite) take turns and never both fit the last seat.
+ */
 export async function checkSeats(tx: WorkspaceTx, scope: EngineScope, adding: number): Promise<void> {
   if (adding <= 0) return;
   const limit = limitsOf(scope).seats;
   if (!Number.isFinite(limit)) return;
+  await lockInvitations(tx, scope.workspaceId);
   if ((await seatsUsed(tx, scope.workspaceId)) + adding > limit) throw refuse('SEAT_LIMIT', SEAT_LIMIT_MESSAGE);
 }
 
@@ -350,7 +355,7 @@ export async function inviteMembers(
   options: InviteWriteOptions = {},
 ): Promise<InviteOutcome> {
   checkInvites(scope);
-  if (!isRole(input.role)) throw refuse('CONFIG_INVALID', 'Pick owner, admin or member.');
+  if (!isRole(input.role)) throw refuse('CONFIG_INVALID', 'Pick a role.');
   const role = input.role;
   if (role === 'owner' && actingRole(scope) !== 'owner') throw refuse('FORBIDDEN', OWNER_RULES_MESSAGE);
   const wanted = addresses(input.emails);
@@ -407,8 +412,10 @@ export async function inviteMembers(
       if ((openCount?.n ?? 0) + fresh.length > cap) {
         throw refuse('INVITES_LIMIT', `A workspace holds at most ${String(cap)} open invitations. Revoke some first.`);
       }
-      // A resent invitation already holds its seat; each new one takes one (a guest, from slice 9, none).
-      await checkSeats(tx, scope, fresh.length);
+      // A resent invitation already holds its seat, unless it was a guest's and now isn't; each new one takes one. A
+      // guest takes none (spec 0031, AC-809).
+      const seated = role === 'guest' ? 0 : fresh.length + open.filter((row) => row.role === 'guest').length;
+      await checkSeats(tx, scope, seated);
       const sent: { id: string; token: string; sendCount: number; resent: boolean; was?: Role }[] = [];
       const by = touched(scope);
       for (const email of toInvite) {
@@ -888,6 +895,7 @@ export async function acceptInvite(
         slug: held.slug,
         name,
         email,
+        isGuest: held.role === 'guest',
       });
       // Everyone's member list reads them in (spec 0007, AC-82), and an everyone delegation reaches them (AC-1274).
       context.record({ members: [memberId] });
@@ -942,7 +950,8 @@ async function joinByLink(
     )
     .limit(1);
   if (taken !== undefined) throw inviteInvalid();
-  await checkSeats(tx, scope, 1);
+  // A guest takes no seat (spec 0031, AC-809).
+  await checkSeats(tx, scope, held.role === 'guest' ? 0 : 1);
   const memberId = await addJoiner(
     tx,
     scope.workspaceId,
@@ -956,6 +965,7 @@ async function joinByLink(
     slug: held.slug,
     name: joinerName(user.typedName, user.name, email),
     email,
+    isGuest: held.role === 'guest',
   });
   // The link stays open for the next person; its uses count up to its most.
   await tx
@@ -1003,7 +1013,8 @@ function linkView(row: Awaited<ReturnType<typeof openLink>>): InviteLinkView {
   return {
     enabled: true,
     token: row.linkToken,
-    role: row.role === 'member' ? row.role : 'member',
+    // Member or guest (AC-818, spec 0031 slice 9); anything else a link can't hold reads as the safer guest.
+    role: row.role === 'member' || row.role === 'guest' ? row.role : 'guest',
     ...(row.expiresAt === null ? {} : { expiresAt: new Date(row.expiresAt).toISOString() }),
     ...(row.maxUses === null ? {} : { maxUses: row.maxUses }),
     uses: row.uses,
@@ -1089,7 +1100,9 @@ export async function setInviteLink(
             ? null
             : LINK_EXPIRY(days);
       const maxUses = uses === undefined ? (open?.maxUses ?? null) : uses;
-      const role = input.role ?? 'member';
+      // The role it gives stays as it is unless named: changing only the expiry never turns a guest link into a
+      // member one.
+      const role = input.role ?? (open?.role === 'guest' ? 'guest' : 'member');
       const changes = {
         ...(input.role === undefined ? {} : { role }),
         ...(days === undefined ? {} : { expiresInDays: days }),

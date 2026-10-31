@@ -15,25 +15,37 @@ export interface RadioProps {
   readonly description?: string;
   /** A glyph before the label, for a group drawn as cards (`variant="cards"`): what the choice adds. */
   readonly icon?: IconName;
+  /**
+   * What the choice holds, drawn under the label in a card (`variant="cards"`): a value through its field
+   * display, as a merge's side shows it (spec 0049). Read as the choice's description, so it takes the place of
+   * `description`. Draw it read only (a `preview` surface): the whole card picks the choice.
+   */
+  readonly preview?: ReactNode;
   readonly isDisabled?: boolean;
 }
 
 /** One choice in a RadioGroup. */
-export function Radio({ value, children, description, icon, isDisabled = false }: RadioProps) {
+export function Radio({ value, children, description, icon, preview, isDisabled = false }: RadioProps) {
+  // What sits under the label, read as its description: a card's value, else the line of words.
+  const under = preview ?? description;
   return (
     <RadioField className={styles.field} value={value} isDisabled={isDisabled}>
       <RadioButton className={styles.radio}>
         <span className={styles.circle} aria-hidden="true">
           <span className={styles.dot} />
         </span>
-        <span className={styles.label} data-described={description === undefined ? undefined : ''}>
+        <span className={styles.label} data-described={under === undefined ? undefined : ''}>
           {icon !== undefined && <Icon name={icon} size="sm" />}
           {children}
         </span>
       </RadioButton>
-      {description !== undefined && (
-        <Text slot="description" className={styles.description}>
-          {description}
+      {under !== undefined && (
+        <Text
+          slot="description"
+          elementType={preview === undefined ? 'span' : 'div'}
+          className={preview === undefined ? styles.description : styles.preview}
+        >
+          {under}
         </Text>
       )}
     </RadioField>

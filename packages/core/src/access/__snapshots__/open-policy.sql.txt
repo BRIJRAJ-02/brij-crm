@@ -74,7 +74,7 @@ end), "title", "type", "is_multi", "is_required", "is_unique", "is_system", "sys
   
   ["<id 2>",5000,"<id 5>",47]
 
-select "workspace_id", "id", "object_id", "deleted_at", "deleted_by_type", "deleted_by_id", "deleted_by_member_id", "deleted_batch_id", "revision", "created_at", "created_by_type", "created_by_id", "created_by_member_id", "updated_at", "updated_by_type", "updated_by_id", "updated_by_member_id" from "records" where ("records"."id" in ($1, $2, $3, $4) and "records"."deleted_at" is null)
+select "workspace_id", "id", "object_id", "deleted_at", "deleted_by_type", "deleted_by_id", "deleted_by_member_id", "deleted_batch_id", "revision", "merged_into_record_id", "created_at", "created_by_type", "created_by_id", "created_by_member_id", "updated_at", "updated_by_type", "updated_by_id", "updated_by_member_id" from "records" where ("records"."id" in ($1, $2, $3, $4) and "records"."deleted_at" is null)
   ["<id 6>","<id 7>","<id 8>","<id 9>"]
 
 select "workspace_id", "id", "api_slug", "singular_name", "plural_name", "icon", "hue", "is_standard", "standard_key", "template_version", "primary_attribute_id", "position", "archived_at", "default_view_id", "created_at", "created_by_type", "created_by_id", "created_by_member_id", "updated_at", "updated_by_type", "updated_by_id", "updated_by_member_id" from "objects" where "objects"."id" in ($1)
@@ -221,7 +221,7 @@ end), "title", "type", "is_multi", "is_required", "is_unique", "is_system", "sys
   
   ["<id 2>",5000,"<id 5>",49]
 
-select "workspace_id", "id", "object_id", "deleted_at", "deleted_by_type", "deleted_by_id", "deleted_by_member_id", "deleted_batch_id", "revision", "created_at", "created_by_type", "created_by_id", "created_by_member_id", "updated_at", "updated_by_type", "updated_by_id", "updated_by_member_id" from "records" where ("records"."id" in ($1, $2) and "records"."deleted_at" is null)
+select "workspace_id", "id", "object_id", "deleted_at", "deleted_by_type", "deleted_by_id", "deleted_by_member_id", "deleted_batch_id", "revision", "merged_into_record_id", "created_at", "created_by_type", "created_by_id", "created_by_member_id", "updated_at", "updated_by_type", "updated_by_id", "updated_by_member_id" from "records" where ("records"."id" in ($1, $2) and "records"."deleted_at" is null)
   ["<id 6>","<id 7>"]
 
 select "workspace_id", "id", "api_slug", "singular_name", "plural_name", "icon", "hue", "is_standard", "standard_key", "template_version", "primary_attribute_id", "position", "archived_at", "default_view_id", "created_at", "created_by_type", "created_by_id", "created_by_member_id", "updated_at", "updated_by_type", "updated_by_id", "updated_by_member_id" from "objects" where "objects"."id" in ($1)
@@ -508,7 +508,7 @@ end), "title", "type", "is_multi", "is_required", "is_unique", "is_system", "sys
   
   ["<id 2>",5000,"<id 4>","<id 3>","<id 7>","<id 6>",50]
 
-select "workspace_id", "id", "object_id", "deleted_at", "deleted_by_type", "deleted_by_id", "deleted_by_member_id", "deleted_batch_id", "revision", "created_at", "created_by_type", "created_by_id", "created_by_member_id", "updated_at", "updated_by_type", "updated_by_id", "updated_by_member_id" from "records" where ("records"."id" in ($1) and "records"."deleted_at" is null)
+select "workspace_id", "id", "object_id", "deleted_at", "deleted_by_type", "deleted_by_id", "deleted_by_member_id", "deleted_batch_id", "revision", "merged_into_record_id", "created_at", "created_by_type", "created_by_id", "created_by_member_id", "updated_at", "updated_by_type", "updated_by_id", "updated_by_member_id" from "records" where ("records"."id" in ($1) and "records"."deleted_at" is null)
   ["<id 8>"]
 
 select "workspace_id", "id", "api_slug", "singular_name", "plural_name", "icon", "hue", "is_standard", "standard_key", "template_version", "primary_attribute_id", "position", "archived_at", "default_view_id", "created_at", "created_by_type", "created_by_id", "created_by_member_id", "updated_at", "updated_by_type", "updated_by_id", "updated_by_member_id" from "objects" where "objects"."id" in ($1)
@@ -721,7 +721,7 @@ select "id" from "attribute_options" where "attribute_options"."attribute_id" = 
   
   ["<id 2>",5000,"<id 7>","<id 5>",48]
 
-select "workspace_id", "id", "object_id", "deleted_at", "deleted_by_type", "deleted_by_id", "deleted_by_member_id", "deleted_batch_id", "revision", "created_at", "created_by_type", "created_by_id", "created_by_member_id", "updated_at", "updated_by_type", "updated_by_id", "updated_by_member_id" from "records" where ("records"."id" in ($1, $2, $3) and "records"."deleted_at" is null)
+select "workspace_id", "id", "object_id", "deleted_at", "deleted_by_type", "deleted_by_id", "deleted_by_member_id", "deleted_batch_id", "revision", "merged_into_record_id", "created_at", "created_by_type", "created_by_id", "created_by_member_id", "updated_at", "updated_by_type", "updated_by_id", "updated_by_member_id" from "records" where ("records"."id" in ($1, $2, $3) and "records"."deleted_at" is null)
   ["<id 11>","<id 12>","<id 13>"]
 
 select "workspace_id", "id", "api_slug", "singular_name", "plural_name", "icon", "hue", "is_standard", "standard_key", "template_version", "primary_attribute_id", "position", "archived_at", "default_view_id", "created_at", "created_by_type", "created_by_id", "created_by_member_id", "updated_at", "updated_by_type", "updated_by_id", "updated_by_member_id" from "objects" where "objects"."id" in ($1)
@@ -883,7 +883,7 @@ end), "title", "type", "is_multi", "is_required", "is_unique", "is_system", "sys
   
   ["<id 2>",5000,"<id 7>","<id 8>","<id 6>",50]
 
-select "workspace_id", "id", "object_id", "deleted_at", "deleted_by_type", "deleted_by_id", "deleted_by_member_id", "deleted_batch_id", "revision", "created_at", "created_by_type", "created_by_id", "created_by_member_id", "updated_at", "updated_by_type", "updated_by_id", "updated_by_member_id" from "records" where ("records"."id" in ($1) and "records"."deleted_at" is null)
+select "workspace_id", "id", "object_id", "deleted_at", "deleted_by_type", "deleted_by_id", "deleted_by_member_id", "deleted_batch_id", "revision", "merged_into_record_id", "created_at", "created_by_type", "created_by_id", "created_by_member_id", "updated_at", "updated_by_type", "updated_by_id", "updated_by_member_id" from "records" where ("records"."id" in ($1) and "records"."deleted_at" is null)
   ["<id 9>"]
 
 select "workspace_id", "id", "api_slug", "singular_name", "plural_name", "icon", "hue", "is_standard", "standard_key", "template_version", "primary_attribute_id", "position", "archived_at", "default_view_id", "created_at", "created_by_type", "created_by_id", "created_by_member_id", "updated_at", "updated_by_type", "updated_by_id", "updated_by_member_id" from "objects" where "objects"."id" in ($1)
@@ -1036,7 +1036,7 @@ end), "title", "type", "is_multi", "is_required", "is_unique", "is_system", "sys
   
   ["<id 5>",4,"<id 2>",2]
 
-select "workspace_id", "id", "object_id", "deleted_at", "deleted_by_type", "deleted_by_id", "deleted_by_member_id", "deleted_batch_id", "revision", "created_at", "created_by_type", "created_by_id", "created_by_member_id", "updated_at", "updated_by_type", "updated_by_id", "updated_by_member_id" from "records" where ("records"."id" in ($1) and "records"."deleted_at" is null)
+select "workspace_id", "id", "object_id", "deleted_at", "deleted_by_type", "deleted_by_id", "deleted_by_member_id", "deleted_batch_id", "revision", "merged_into_record_id", "created_at", "created_by_type", "created_by_id", "created_by_member_id", "updated_at", "updated_by_type", "updated_by_id", "updated_by_member_id" from "records" where ("records"."id" in ($1) and "records"."deleted_at" is null)
   ["<id 6>"]
 
 select "workspace_id", "id", "api_slug", "singular_name", "plural_name", "icon", "hue", "is_standard", "standard_key", "template_version", "primary_attribute_id", "position", "archived_at", "default_view_id", "created_at", "created_by_type", "created_by_id", "created_by_member_id", "updated_at", "updated_by_type", "updated_by_id", "updated_by_member_id" from "objects" where "objects"."id" in ($1)
@@ -1166,7 +1166,7 @@ end), "title", "type", "is_multi", "is_required", "is_unique", "is_system", "sys
   
   ["<id 5>","apollo renewal","apollo renewal","<id 6>",4,"<id 2>","apollo renewal","apollo renewal","<id 6>",2]
 
-select "workspace_id", "id", "object_id", "deleted_at", "deleted_by_type", "deleted_by_id", "deleted_by_member_id", "deleted_batch_id", "revision", "created_at", "created_by_type", "created_by_id", "created_by_member_id", "updated_at", "updated_by_type", "updated_by_id", "updated_by_member_id" from "records" where ("records"."id" in ($1) and "records"."deleted_at" is null)
+select "workspace_id", "id", "object_id", "deleted_at", "deleted_by_type", "deleted_by_id", "deleted_by_member_id", "deleted_batch_id", "revision", "merged_into_record_id", "created_at", "created_by_type", "created_by_id", "created_by_member_id", "updated_at", "updated_by_type", "updated_by_id", "updated_by_member_id" from "records" where ("records"."id" in ($1) and "records"."deleted_at" is null)
   ["<id 7>"]
 
 select "workspace_id", "id", "api_slug", "singular_name", "plural_name", "icon", "hue", "is_standard", "standard_key", "template_version", "primary_attribute_id", "position", "archived_at", "default_view_id", "created_at", "created_by_type", "created_by_id", "created_by_member_id", "updated_at", "updated_by_type", "updated_by_id", "updated_by_member_id" from "objects" where "objects"."id" in ($1)
@@ -1341,7 +1341,7 @@ select count(*)::int as n from (select 1 from sort_keys d where d.attribute_id =
     
   ["<id 7>","<id 2>","<id 5>",47]
 
-select "workspace_id", "id", "object_id", "deleted_at", "deleted_by_type", "deleted_by_id", "deleted_by_member_id", "deleted_batch_id", "revision", "created_at", "created_by_type", "created_by_id", "created_by_member_id", "updated_at", "updated_by_type", "updated_by_id", "updated_by_member_id" from "records" where ("records"."id" in ($1, $2, $3, $4) and "records"."deleted_at" is null)
+select "workspace_id", "id", "object_id", "deleted_at", "deleted_by_type", "deleted_by_id", "deleted_by_member_id", "deleted_batch_id", "revision", "merged_into_record_id", "created_at", "created_by_type", "created_by_id", "created_by_member_id", "updated_at", "updated_by_type", "updated_by_id", "updated_by_member_id" from "records" where ("records"."id" in ($1, $2, $3, $4) and "records"."deleted_at" is null)
   ["<id 11>","<id 12>","<id 13>","<id 14>"]
 
 select "workspace_id", "id", "api_slug", "singular_name", "plural_name", "icon", "hue", "is_standard", "standard_key", "template_version", "primary_attribute_id", "position", "archived_at", "default_view_id", "created_at", "created_by_type", "created_by_id", "created_by_member_id", "updated_at", "updated_by_type", "updated_by_id", "updated_by_member_id" from "objects" where "objects"."id" in ($1)
@@ -1482,7 +1482,7 @@ select set_config('statement_timeout', $1, true)
     
   ["<id 5>","<id 2>","{<id 6>}",51]
 
-select "workspace_id", "id", "object_id", "deleted_at", "deleted_by_type", "deleted_by_id", "deleted_by_member_id", "deleted_batch_id", "revision", "created_at", "created_by_type", "created_by_id", "created_by_member_id", "updated_at", "updated_by_type", "updated_by_id", "updated_by_member_id" from "records" where ("records"."id" in ($1) and "records"."deleted_at" is null)
+select "workspace_id", "id", "object_id", "deleted_at", "deleted_by_type", "deleted_by_id", "deleted_by_member_id", "deleted_batch_id", "revision", "merged_into_record_id", "created_at", "created_by_type", "created_by_id", "created_by_member_id", "updated_at", "updated_by_type", "updated_by_id", "updated_by_member_id" from "records" where ("records"."id" in ($1) and "records"."deleted_at" is null)
   ["<id 6>"]
 
 select "workspace_id", "id", "api_slug", "singular_name", "plural_name", "icon", "hue", "is_standard", "standard_key", "template_version", "primary_attribute_id", "position", "archived_at", "default_view_id", "created_at", "created_by_type", "created_by_id", "created_by_member_id", "updated_at", "updated_by_type", "updated_by_id", "updated_by_member_id" from "objects" where "objects"."id" in ($1)
@@ -1602,7 +1602,7 @@ end), "title", "type", "is_multi", "is_required", "is_unique", "is_system", "sys
     
   ["<id 3>","<id 2>",51]
 
-select "workspace_id", "id", "object_id", "deleted_at", "deleted_by_type", "deleted_by_id", "deleted_by_member_id", "deleted_batch_id", "revision", "created_at", "created_by_type", "created_by_id", "created_by_member_id", "updated_at", "updated_by_type", "updated_by_id", "updated_by_member_id" from "records" where ("records"."id" in ($1, $2, $3, $4) and "records"."deleted_at" is null)
+select "workspace_id", "id", "object_id", "deleted_at", "deleted_by_type", "deleted_by_id", "deleted_by_member_id", "deleted_batch_id", "revision", "merged_into_record_id", "created_at", "created_by_type", "created_by_id", "created_by_member_id", "updated_at", "updated_by_type", "updated_by_id", "updated_by_member_id" from "records" where ("records"."id" in ($1, $2, $3, $4) and "records"."deleted_at" is null)
   ["<id 5>","<id 6>","<id 7>","<id 8>"]
 
 select "workspace_id", "id", "api_slug", "singular_name", "plural_name", "icon", "hue", "is_standard", "standard_key", "template_version", "primary_attribute_id", "position", "archived_at", "default_view_id", "created_at", "created_by_type", "created_by_id", "created_by_member_id", "updated_at", "updated_by_type", "updated_by_id", "updated_by_member_id" from "objects" where "objects"."id" in ($1)
@@ -2156,6 +2156,17 @@ end), "title", "type", "is_multi", "is_required", "is_unique", "is_system", "sys
   
   ["<id 2>",51]
 
+
+    select r.id::text, to_char(r.deleted_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as at,
+      r.deleted_by_type as by_type, r.deleted_by_id::text as by_id
+    from records r
+    where r.merged_into_record_id = $1::uuid and r.deleted_at is not null
+      and true
+    order by r.deleted_at desc, r.id
+    limit $2
+  
+  ["<id 2>",51]
+
 commit
   []
 
@@ -2208,7 +2219,7 @@ end), "title", "type", "is_multi", "is_required", "is_unique", "is_system", "sys
     
   ["<id 2>",51]
 
-select "workspace_id", "id", "object_id", "deleted_at", "deleted_by_type", "deleted_by_id", "deleted_by_member_id", "deleted_batch_id", "revision", "created_at", "created_by_type", "created_by_id", "created_by_member_id", "updated_at", "updated_by_type", "updated_by_id", "updated_by_member_id" from "records" where ("records"."id" in ($1, $2, $3, $4) and "records"."deleted_at" is null)
+select "workspace_id", "id", "object_id", "deleted_at", "deleted_by_type", "deleted_by_id", "deleted_by_member_id", "deleted_batch_id", "revision", "merged_into_record_id", "created_at", "created_by_type", "created_by_id", "created_by_member_id", "updated_at", "updated_by_type", "updated_by_id", "updated_by_member_id" from "records" where ("records"."id" in ($1, $2, $3, $4) and "records"."deleted_at" is null)
   ["<id 5>","<id 6>","<id 7>","<id 8>"]
 
 select "workspace_id", "id", "api_slug", "singular_name", "plural_name", "icon", "hue", "is_standard", "standard_key", "template_version", "primary_attribute_id", "position", "archived_at", "default_view_id", "created_at", "created_by_type", "created_by_id", "created_by_member_id", "updated_at", "updated_by_type", "updated_by_id", "updated_by_member_id" from "objects" where "objects"."id" in ($1)
@@ -2285,7 +2296,7 @@ begin
 select set_config('app.workspace_id', $1, true)
   ["<id 1>"]
 
-select "workspace_id", "id", "object_id", "deleted_at", "deleted_by_type", "deleted_by_id", "deleted_by_member_id", "deleted_batch_id", "revision", "created_at", "created_by_type", "created_by_id", "created_by_member_id", "updated_at", "updated_by_type", "updated_by_id", "updated_by_member_id" from "records" where ("records"."id" in ($1, $2, $3, $4) and "records"."deleted_at" is null)
+select "workspace_id", "id", "object_id", "deleted_at", "deleted_by_type", "deleted_by_id", "deleted_by_member_id", "deleted_batch_id", "revision", "merged_into_record_id", "created_at", "created_by_type", "created_by_id", "created_by_member_id", "updated_at", "updated_by_type", "updated_by_id", "updated_by_member_id" from "records" where ("records"."id" in ($1, $2, $3, $4) and "records"."deleted_at" is null)
   ["<id 5>","<id 6>","<id 7>","<id 8>"]
 
 select "workspace_id", "id", "api_slug", "singular_name", "plural_name", "icon", "hue", "is_standard", "standard_key", "template_version", "primary_attribute_id", "position", "archived_at", "default_view_id", "created_at", "created_by_type", "created_by_id", "created_by_member_id", "updated_at", "updated_by_type", "updated_by_id", "updated_by_member_id" from "objects" where "objects"."id" in ($1)

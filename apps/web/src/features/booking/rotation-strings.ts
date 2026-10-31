@@ -145,17 +145,15 @@ export const strings = {
   handOnAction: (count: number) => (count === 1 ? 'Reassign 1 upcoming' : `Reassign ${String(count)} upcoming`),
   handOnTitle: (name: string, count: number) =>
     count === 1 ? `Reassign ${name}’s upcoming booking?` : `Reassign ${name}’s ${String(count)} upcoming bookings?`,
+  // Copy handoff (31 Oct 2026): one short line.
   handOnText: (rotation: string, count: number) =>
     count === 1
-      ? `It goes to the next free member of ${rotation}, who is emailed with the guest. If nobody is free then, Bookings marks it Needs a host and the admins are emailed.`
-      : `Each goes to the next free member of ${rotation}, who is emailed with the guest. Any nobody can take shows Needs a host on Bookings, and the admins are emailed.`,
+      ? `The next free member of ${rotation} takes it. If none, it shows Needs a host.`
+      : `The next free member of ${rotation} takes each. If none, it shows Needs a host.`,
   handOnConfirm: (count: number) => (count === 1 ? 'Reassign it' : `Reassign ${String(count)}`),
   keepThem: 'Keep them',
   keptNote: 'Kept. Each booking can still be reassigned from Bookings.',
-  handedOn: (count: number) =>
-    count === 1
-      ? 'Handing it on. Bookings shows it as Needs a host until someone takes it.'
-      : `Handing ${String(count)} on. Bookings shows each as Needs a host until someone takes it.`,
+  handedOn: (count: number) => (count === 1 ? 'Handing it on.' : `Handing ${String(count)} on.`),
   removeFixedTitle: (name: string) => `Remove ${name} as a fixed host?`,
   removeFixedText: 'They stop joining new meetings from this page. Meetings already booked keep them.',
   removeFixedAction: 'Remove host',
@@ -185,12 +183,10 @@ export const strings = {
   bookEveryoneLine: 'Books whoever in the workspace is free, in turn. It’s on nobody’s profile.',
   bookMeLine: 'One on one: guests book you, by your hours.',
   bookRotationLine: 'One host from a group you pick, in turn.',
-  rosterNote: (on: number, all: number) =>
-    `${String(on)} of ${String(all)} on. Everyone in the workspace except guests is in this group, and new members join by themselves. Switch someone off to keep them out.`,
+  // Copy handoff (31 Oct 2026): the switches are the explanation.
+  rosterNote: (on: number, all: number) => `${String(on)} of ${String(all)} on.`,
   everyoneSwitch: 'Everyone in the workspace, including people who join later',
-  everyoneSwitchOn: (on: number) =>
-    `${String(on)} ${on === 1 ? 'person takes' : 'people take'} turns. Leave someone out in Manage round robin.`,
-  everyoneSwitchOff: 'Pick the group and fixed hosts this link books instead.',
+  everyoneSwitchOn: (on: number) => `${String(on)} ${on === 1 ? 'person takes' : 'people take'} turns.`,
   switchOffRefused: (name: string) => `Switch ${name} off`,
   rosterSummary: (on: number, pages: number) =>
     `Everyone in the workspace, ${String(on)} on · used by ${String(pages)} ${pages === 1 ? 'link' : 'links'}`,

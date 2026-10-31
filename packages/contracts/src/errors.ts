@@ -87,9 +87,12 @@ export const ERROR_MAP = {
   HOSTS_INVALID: UNPROCESSABLE,
   // Scheduling access (spec 0037, AC-1255, AC-1256).
   DELEGATE_INVALID: UNPROCESSABLE,
+  MEMBER_INVALID: UNPROCESSABLE,
   DELEGATION_LIMIT: CONFLICT,
   // Time off (spec 0037, AC-1288): "Someone can have at most 50 upcoming time off entries."
   TIME_OFF_LIMIT: CONFLICT,
+  // Page and rotation editors (spec 0037, AC-1331): "A page or rotation can have at most 20 editors."
+  EDITOR_LIMIT: CONFLICT,
   // The sidebar (spec 0034, AC-934): "You have 50 favourites. Remove one first."
   NAV_LIMIT: CONFLICT,
   // Domain join (spec 0031, AC-819).
@@ -117,6 +120,11 @@ export const ERROR_MAP = {
   SIGN_IN_AGAIN: { status: 403 },
   OWNER_NEEDS_TWO_FACTOR: CONFLICT,
   WORKSPACE_REQUIRES_TWO_FACTOR: CONFLICT,
+  // Record merge (spec 0049, AC-4917): "Jane Doe changed while you were merging", two records that can't merge, and
+  // "Too much is attached to merge in one go".
+  CONFLICT: CONFLICT,
+  INVALID: UNPROCESSABLE,
+  MERGE_TOO_LARGE: UNPROCESSABLE,
   PAYLOAD_TOO_LARGE: { status: 413 },
   ATTRIBUTE_VALUE_INVALID: UNPROCESSABLE,
   VALUE_REQUIRED: UNPROCESSABLE,
@@ -153,6 +161,8 @@ export const ApiRefusal = z.object({
   ruleId: z.string().optional(),
   /** A formula refusal's character, counted from 0 (spec 0015, AC-317). */
   position: z.number().int().min(0).optional(),
+  /** The record a `UNIQUE_CONFLICT` value belongs to, when the writer may see it (spec 0049, AC-4905). */
+  holder: z.object({ recordId: z.string(), objectId: z.string(), name: z.string() }).optional(),
 });
 /** One engine refusal inside an error's data. */
 export type ApiRefusal = z.infer<typeof ApiRefusal>;

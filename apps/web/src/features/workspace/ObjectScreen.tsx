@@ -9,11 +9,20 @@ import { strings as viewStrings } from '../views/strings.ts';
 import { strings } from './strings.ts';
 import { WorkspacePage } from './WorkspacePage.tsx';
 
-/** A workspace with no objects to list: its name, and a plain empty state (no way out to loop through). */
-export function noObjectsPage(workspaceName: string) {
+/**
+ * A workspace with no objects to list: its name, and a plain empty state (no way out to loop through). A guest's
+ * says nothing is shared with them yet, and whom to ask (spec 0031, AC-828).
+ */
+export function noObjectsPage(workspaceName: string, isGuest = false) {
   return {
     topBar: <TopBar title={workspaceName} />,
-    body: <EmptyState title={strings.noObjects} />,
+    body: isGuest ? (
+      <EmptyState icon="lock" title={strings.nothingSharedTitle}>
+        {strings.nothingSharedText}
+      </EmptyState>
+    ) : (
+      <EmptyState title={strings.noObjects} />
+    ),
   };
 }
 

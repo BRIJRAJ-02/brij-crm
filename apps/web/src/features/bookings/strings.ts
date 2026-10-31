@@ -106,7 +106,6 @@ export const strings = {
   /** New meeting's day: the drawn span's, or the next free one, and changed in place. */
   day: 'Day',
   /** Under Their time zone: it doesn't move From and To, which are on the member's clock. */
-  theirTimeZoneHint: 'Only changes how their invitation shows the time.',
   who: 'Who',
   page: 'Booking page',
   guests: 'Also invited',
@@ -275,9 +274,8 @@ export const strings = {
   notInCrmToastMs: 12_000,
   /** Booked, but the guest's records couldn't be made: the reason, so it can be fixed (late trap #71). */
   bookedNotInCrm: (name: string, reason: string) => `Booked with ${name}, but they weren’t added to the CRM. ${reason}`,
-  /** New meeting without a calendar: the guest is still emailed, with the invitation attached (Q57). What's missing
-   * is the event on the member's own calendar, and a video call's link. */
-  noCalendar: 'No calendar connected, so no video link. They’re still emailed.',
+  /** New meeting without a calendar (Q57; one line, copy handoff 31 Oct 2026): the guest is still emailed. */
+  noCalendar: 'Guest emailed only. No calendar event or video link.',
   holdThisTime: 'Reserve for link only pages',
   holdFor: 'For',
   anyPrivatePage: 'Any link only page',

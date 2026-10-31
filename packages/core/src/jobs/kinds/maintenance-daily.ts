@@ -400,7 +400,7 @@ async function releasedHandles(context: WriteContext, at: Checkpoint, limit: num
 const LINK_PAGE_BATCH = 25;
 
 /**
- * Phase 1h (26 Oct 2026): the active members with a sign in, `LINK_PAGE_BATCH` at a time by id, and a link page
+ * Phase 1h (26 Oct 2026): the active members with a sign in, guests aside, `LINK_PAGE_BATCH` at a time by id, and a link page
  * made for each one who has none here (`ensureLinkPage`, which never throws and answers nothing for one it can't
  * make, such as a person with 20 live pages). Tried again tomorrow for any still without one.
  */
@@ -409,6 +409,8 @@ async function missingLinkPages(context: WriteContext, at: Checkpoint): Promise<
   const found = await tx.execute<{ id: string; user_id: string; name: string; email: string }>(sql`
     select id::text, user_id::text, name, email from members
     where workspace_id = ${scope.workspaceId} and status = 'active' and user_id is not null
+      -- A guest gets no link page (spec 0031 slice 9, late trap #77).
+      and role::text <> 'guest'
       ${at.after === undefined ? sql`` : sql`and id > ${at.after}::uuid`}
     order by id limit ${LINK_PAGE_BATCH}
   `);

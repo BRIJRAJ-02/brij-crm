@@ -73,8 +73,12 @@ export const ENGINE_REFUSAL_CODES = [
   // team before teams exist); a delegate holding 50 or a member with 20 delegates.
   'DELEGATE_INVALID',
   'DELEGATION_LIMIT',
+  // A guest named as a host or in a rotation (spec 0037, AC-1432): guests can't take bookings.
+  'MEMBER_INVALID',
   // Time off (spec 0037, AC-1288): a member with 50 upcoming time off entries.
   'TIME_OFF_LIMIT',
+  // Page and rotation editors (spec 0037, AC-1331): a page or rotation with 20 editors.
+  'EDITOR_LIMIT',
   // The sidebar (spec 0034, AC-934): 50 favourites, or 400 stored items.
   'NAV_LIMIT',
   // Domain join (spec 0031, AC-819): a domain the admin's own verified email isn't at, or a public mail domain.
@@ -103,6 +107,11 @@ export const ENGINE_REFUSAL_CODES = [
   'SIGN_IN_AGAIN',
   'OWNER_NEEDS_TWO_FACTOR',
   'WORKSPACE_REQUIRES_TWO_FACTOR',
+  // Record merge (spec 0049, AC-4917): a record changed while the dialog was open; two records that can't be merged
+  // (the same one, or of different objects); more attached than one merge moves.
+  'CONFLICT',
+  'INVALID',
+  'MERGE_TOO_LARGE',
 ] as const;
 
 /** One of the engine's refusal codes. */
@@ -122,4 +131,9 @@ export interface EngineRefusal {
   readonly ruleId?: string;
   /** A formula refusal's character, counted from 0 (spec 0015, AC-317). */
   readonly position?: number;
+  /**
+   * The record holding a `UNIQUE_CONFLICT` value, only when the writer may see it (spec 0049, AC-4905), with its
+   * name as they may read it (empty when its name is hidden from them).
+   */
+  readonly holder?: { readonly recordId: string; readonly objectId: string; readonly name: string };
 }

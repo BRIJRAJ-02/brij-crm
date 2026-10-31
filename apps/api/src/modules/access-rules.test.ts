@@ -83,6 +83,16 @@ describe('access rules (AC-843, AC-844, AC-851, AC-854)', () => {
         fields: {},
         people: 1,
       },
+      // Guests (spec 0031, slice 9) see nothing until a rule shares the object with them.
+      {
+        subject: { type: 'role', role: 'guest' },
+        level: 'none',
+        records: 'all',
+        defaultLevel: 'none',
+        isDefault: true,
+        fields: {},
+        people: 0,
+      },
     ]);
 
     // Members lose People: it is absent from the member's objects, not shown locked.
@@ -110,6 +120,7 @@ describe('access rules (AC-843, AC-844, AC-851, AC-854)', () => {
       mutationId: newId(),
     });
     expect(answer.access.subjects.map((each) => [each.level, each.records])).toEqual([
+      ['none', 'all'],
       ['none', 'all'],
       ['write', 'own'],
     ]);

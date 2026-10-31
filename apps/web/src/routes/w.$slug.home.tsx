@@ -1,6 +1,6 @@
 import { isDataError, type MemberView } from '@crm/data';
 import { Card, LoadingNow, PageColumn, Skeleton, TileGrid, TopBar } from '@crm/ui';
-import { createFileRoute, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
+import { createFileRoute, redirect, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { dayAt } from '../features/tasks/today.ts';
 import { aheadRange, dayRange } from '../features/home/agenda.ts';
 import { weekStartOf } from '../features/home/metrics.ts';
@@ -24,6 +24,10 @@ export const Route = createFileRoute('/w/$slug/home')({
   loader: async ({ context, params }) => {
     const { data } = context;
     const slug = params.slug;
+    // A guest has no Home of meetings and a link page (spec 0031, slice 9): they open on what is shared with them.
+    if ((await data.access.mine(slug).catch(() => undefined))?.role === 'guest') {
+      throw redirect({ to: '/w/$slug', params: { slug }, replace: true });
+    }
     try {
       const [objects, members, access, tasks, preferences] = await Promise.all([
         data.objects.list(slug),

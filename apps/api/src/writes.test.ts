@@ -52,6 +52,8 @@ const READS: ReadonlySet<string> = new Set([
   'attributes.list',
   // What an attribute's change would touch, read before the change (the flow pass).
   'attributes.impact',
+  // What a merge would do, for the merge dialog (spec 0049).
+  'records.mergePreview',
   // What changing an attribute's type would do, read before the change (the field types lane).
   'attributes.checkTypeChange',
   // A computed attribute's values for a few records, worked out before it is made (spec 0015): writes nothing.
@@ -70,6 +72,8 @@ const READS: ReadonlySet<string> = new Set([
   'invitations.link',
   // What a removal will do, for the remove dialog (slice 5, AC-816).
   'members.removalPreview',
+  // What making a member a guest will do, for the confirm dialog (slice 9, AC-1432).
+  'members.guestPreview',
   // Domain join (slice 6): the workspaces to ask, a workspace's domains, and its open requests.
   'join.list',
   'joinRequests.domains',
@@ -123,6 +127,9 @@ const READS: ReadonlySet<string> = new Set([
   'records.lastContacted',
   'records.getTrashed',
   'records.search',
+  'records.duplicates.check',
+  'records.duplicates.list',
+  'imports.duplicates',
   // A record page's related section (spec 0014, milestone 3): one side's linked records, a page at a time.
   'links.page',
   'realtime.connectionToken',
@@ -215,6 +222,8 @@ const READS: ReadonlySet<string> = new Set([
   // Round robin (spec 0029): the rotations a member may see, and why a booking went to its host.
   'rotations.list',
   'rotations.distribution',
+  // Page and rotation editors (spec 0037, AC-1331): Sharing's list.
+  'editors.list',
   'bookings.assignments',
   // The sidebar (spec 0034).
   'nav.get',
@@ -1052,6 +1061,37 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     });
     return [{ kind: 'records', object_id: m.people.id, record_ids: [id], mutation_id: mutationId }];
   },
+  // "Not a duplicate" and its Undo (spec 0049): a dismissal row and an audit row, no outbox row of their own.
+  'records.duplicates.dismiss': async (m, mutationId) => {
+    const ids: [string, string] = [newId(), newId()];
+    for (const id of ids) {
+      await m.client.records.create({
+        workspace: m.slug,
+        objectId: m.people.id,
+        id,
+        values: { [m.attribute('name')]: { firstName: 'Ada' } },
+        mutationId: newId(),
+      });
+    }
+    await m.client.records.duplicates.dismiss({ workspace: m.slug, objectId: m.people.id, recordIds: ids, mutationId });
+    return ids.map((id) => ({ kind: 'records', object_id: m.people.id, record_ids: [id] }));
+  },
+  'records.duplicates.restore': async (m, mutationId) => {
+    const ids: [string, string] = [newId(), newId()];
+    for (const id of ids) {
+      await m.client.records.create({
+        workspace: m.slug,
+        objectId: m.people.id,
+        id,
+        values: { [m.attribute('name')]: { firstName: 'Ada' } },
+        mutationId: newId(),
+      });
+    }
+    const pair = { workspace: m.slug, objectId: m.people.id, recordIds: ids };
+    await m.client.records.duplicates.dismiss({ ...pair, mutationId: newId() });
+    await m.client.records.duplicates.restore({ ...pair, mutationId });
+    return ids.map((id) => ({ kind: 'records', object_id: m.people.id, record_ids: [id] }));
+  },
   'records.setValues': async (m, mutationId) => {
     const id = newId();
     await m.client.records.create({
@@ -1096,6 +1136,30 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
       { kind: 'records', object_id: m.people.id, record_ids: [ids[0] ?? ''] },
       { kind: 'records', object_id: m.people.id, record_ids: [ids[1] ?? ''] },
       { kind: 'records', object_id: m.people.id, record_ids: ids, mutation_id: mutationId },
+    ];
+  },
+  // A merge (spec 0049): one records row for the object, naming the merged record (deleted) and the kept one.
+  'records.merge': async (m, mutationId) => {
+    const keep = await personFor(m);
+    const merge = await personFor(m);
+    const preview = await m.client.records.mergePreview({
+      workspace: m.slug,
+      objectId: m.people.id,
+      keepId: keep,
+      mergeId: merge,
+    });
+    await m.client.records.merge({
+      workspace: m.slug,
+      objectId: m.people.id,
+      keepId: keep,
+      mergeId: merge,
+      revisions: { keep: preview.keep.revision, merge: preview.merge.revision },
+      mutationId,
+    });
+    return [
+      { kind: 'records', object_id: m.people.id, record_ids: [keep] },
+      { kind: 'records', object_id: m.people.id, record_ids: [merge] },
+      { kind: 'records', object_id: m.people.id, mutation_id: mutationId },
     ];
   },
   // Bulk actions and the trash (spec 0022): one records row for the object, naming the records.
@@ -2496,6 +2560,19 @@ Object.assign(WRITES, {
     await m.client.rotations.delete({ workspace: m.slug, rotationId: rotation.id, mutationId });
     return [];
   },
+  // Sharing (spec 0037, AC-1331): the rotation's second member made its editor; settings, so no outbox row.
+  'editors.set': async (m: Member, mutationId: string) => {
+    const rotation = await rotationOn(m);
+    const other = rotation.members.find((member) => member.name === 'Kim Park');
+    await m.client.editors.set({
+      workspace: m.slug,
+      resourceType: 'rotation',
+      resourceId: rotation.id,
+      memberIds: [other?.memberId ?? ''],
+      mutationId,
+    });
+    return [];
+  },
 });
 
 /** A comment by the member on a new person of theirs, made in its own write: its record and thread. */
@@ -2775,9 +2852,12 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'views.setLocked': 2,
   'views.setDefault': 2,
   'views.delete': 2,
+  'records.duplicates.dismiss': 3,
+  'records.duplicates.restore': 4,
   'records.setValues': 2,
   'records.setValuesBatch': 3,
   'records.deleteMany': 2,
+  'records.merge': 3,
   'records.restoreBatch': 3,
   'records.updateMany': 2,
   'records.startBulk': 2,
@@ -2819,6 +2899,7 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'rotations.undoAdjustment': 3,
   'rotations.update': 2,
   'rotations.delete': 2,
+  'editors.set': 2,
   'bookingPages.delete': 2,
   'bookingPages.reorderProfile': 2,
   'profile.saveTheme': 2,

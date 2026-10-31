@@ -508,6 +508,20 @@ export async function setObjectAccess(
   if (rule !== null && (!isLevel(rule.level) || !isScope(rule.records))) {
     throw inputInvalid('rule', 'Pick no access, view or edit, and which records.');
   }
+  // A guest views at most (spec 0031, AC-828); the policy caps them too, so a stored edit could never reach them.
+  if (subject.type === 'role' && subject.role === 'guest' && rule?.level === 'write') {
+    throw refuse('CONFIG_INVALID', 'Guests can view, never edit.');
+  }
+  // Nor by whose records: a guest owns none, so a guest rule is all of the object's records or none.
+  if (
+    subject.type === 'role' &&
+    subject.role === 'guest' &&
+    rule !== null &&
+    rule.level !== 'none' &&
+    rule.records !== 'all'
+  ) {
+    throw refuse('CONFIG_INVALID', 'Guests see all of an object’s records or none.');
+  }
   // Field rules by canonical id, each a level the code knows.
   const givenFields: FieldRules | undefined =
     rule?.fields === undefined

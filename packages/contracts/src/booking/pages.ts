@@ -87,9 +87,14 @@ export const BookingPageView = BookingPageSettings.extend({
   bookingsThisMonth: z.number().int().min(0),
   /**
    * The reader may change it: their own page with `booking.manage`, a personal page of someone whose scheduling they
-   * Manage (spec 0037, decision 13), anyone's with `booking.admin`.
+   * Manage (spec 0037, decision 13), a page they edit (AC-1331), anyone's with `booking.admin`.
    */
   canChange: z.boolean(),
+  /**
+   * The reader is one of the page's editors (spec 0037, AC-1331, AC-1332): Captures › Links shows an Editor badge, and
+   * the page's deletion, editors and owner stay out of their reach.
+   */
+  isEditor: z.boolean().optional(),
   createdAt: Timestamp,
   updatedAt: Timestamp,
 });

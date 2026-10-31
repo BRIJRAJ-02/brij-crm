@@ -181,6 +181,8 @@ export async function schedulingReach(tx: WorkspaceTx, scope: EngineScope): Prom
   const all = roleReach(access);
   const self = selfOf(principal);
   if (principal.kind !== 'member') return { ...NOBODY, all };
+  // A guest reaches nobody, whatever a delegation says (spec 0031, slice 9): guests are never delegates.
+  if (principal.role === 'guest') return { ...NOBODY, self };
   if (all === 'manage') return { ...NOBODY, self, all };
   const me = principal.memberId;
   const teamLevel = teamRoleReach(access);
@@ -276,8 +278,8 @@ export function isHostOf(
 
 /**
  * Whether the principal manages a booking's page (decision 12): its owner, or `booking.admin`, which manages every
- * page (its editors join with job J14). The system manages every page. A workspace link has no owner here (null).
- *
+ * page (its editors are read where the page is: `editedBy`, spec 0037, AC-1331). The system manages every page. A
+ * workspace link has no owner here (null).
  */
 export function managesPageOf(booking: { readonly ownerMemberId: string | null }, access: Access): boolean {
   const { principal } = access;

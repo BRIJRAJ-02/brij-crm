@@ -308,7 +308,11 @@ export function Form<R extends FormRefusal = FormRefusal>({
   useEffect(() => {
     if (!shouldFocusFirst.current) return;
     shouldFocusFirst.current = false;
-    const first = formRef.current?.querySelector<HTMLElement>('input:not([type="hidden"]), textarea, select');
+    // Never a Select's hidden native <select> (React Aria's, `tabindex="-1"` for autofill): focus there is lost, so a
+    // form led by a Select (New meeting's For) opens in its first field one can type in.
+    const first = formRef.current?.querySelector<HTMLElement>(
+      'input:not([type="hidden"]):not([tabindex="-1"]), textarea:not([tabindex="-1"]), select:not([tabindex="-1"])',
+    );
     first?.focus();
     if (focusesFirstField === 'select' && (first instanceof HTMLInputElement || first instanceof HTMLTextAreaElement)) {
       first.select();

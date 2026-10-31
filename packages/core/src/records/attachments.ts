@@ -1,6 +1,6 @@
 // A record's own files (#32): the Files tab on every record, beside the files a
 // `file` cell holds. Both are `record_files` rows; an attachment is one with no
-// attribute (migration 0148), so the two share one download route, one per
+// attribute (migration 0152), so the two share one download route, one per
 // record cap, the workspace's storage total and the daily cleanup.
 //
 // Access follows the record, as comments do: whoever may read it (a trashed one
