@@ -719,13 +719,13 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
   // The link page's blocks (spec 0051) live in schema auth: no tenant change, so no outbox row.
   // The share QR's style (spec 0061, AC-6124): one column in schema auth, no outbox row of its own.
   'profile.saveQrStyle': async (m, mutationId) => {
-    await m.client.profile.update({ workspace: m.slug, handle: freeHandle(), mutationId: newId() });
+    const me = await m.client.profile.update({ workspace: m.slug, handle: freeHandle(), mutationId: newId() });
     await m.client.profile.saveQrStyle({ workspace: m.slug, style: { colour: '#1f2937' }, mutationId });
-    return [];
+    return [{ kind: 'members', item_ids: [me.memberId] }];
   },
   // "Use the site's picture" (spec 0061, AC-6101): the test page names none, so nothing is kept and nothing changes.
   'profile.fetchThumbnail': async (m, mutationId) => {
-    await m.client.profile.update({ workspace: m.slug, handle: freeHandle(), mutationId: newId() });
+    const me = await m.client.profile.update({ workspace: m.slug, handle: freeHandle(), mutationId: newId() });
     const link = await m.client.profile.saveItem({
       workspace: m.slug,
       id: newId(),
@@ -735,7 +735,7 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     expect(await m.client.profile.fetchThumbnail({ workspace: m.slug, id: link.id, mutationId })).toEqual({
       none: true,
     });
-    return [];
+    return [{ kind: 'members', item_ids: [me.memberId] }];
   },
   'profile.saveItem': async (m, mutationId) => {
     await m.client.profile.saveItem({

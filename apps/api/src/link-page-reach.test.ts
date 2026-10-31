@@ -8,7 +8,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from './app.ts';
 import { EDGE_HEADER, ORIGIN_HEADER } from './edge.ts';
 import { APP_URL, TEST_EDGE_SECRET, testEnv, testServices } from './testing.ts';
-import { newIp, testConnections } from '../test/sign-in.ts';
+import { createMailpitMailer } from './mail/mailpit.ts';
+import { MAILPIT_URL, newIp, testConnections } from '../test/sign-in.ts';
 import { memberWithWorkspace } from '../test/workspace.ts';
 import type { FileStore } from './storage/blob.ts';
 
@@ -45,7 +46,12 @@ beforeAll(() => {
   const env = testEnv();
   app = createApp({
     services: {
-      ...testServices(env, { db, identity, files }),
+      ...testServices(env, {
+        db,
+        identity,
+        files,
+        mailer: createMailpitMailer({ url: MAILPIT_URL, from: env.MAIL_FROM }),
+      }),
       keepAlive: (work: Promise<unknown>) => {
         pending.push(work);
       },

@@ -627,7 +627,7 @@ describe('page views for the operator console (spec 0047, AC-1625)', () => {
     expect(nobody.status).toBe(204);
     await settle();
     const counts = await m.client.profile.counts({ workspace: m.slug });
-    expect(counts).toEqual({
+    expect(counts).toMatchObject({
       days: 30,
       views: 2,
       visitors: 1,

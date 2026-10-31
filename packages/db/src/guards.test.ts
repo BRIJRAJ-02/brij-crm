@@ -2182,7 +2182,7 @@ describe('the auth schema: global identity, outside row level security (spec 000
         and grantee not in (
           'crm_app', 'crm_identity', (select pg_get_userbyid(nspowner) from pg_namespace where nspname = 'auth')
         )
-      order by 1 collate "C"
+      order by (table_name || ' ' || privilege_type) collate "C"
     `);
     expect(tables.rows.map((row) => row.grant)).toEqual([
       // A link in bio page brought across (spec 0055, migration 0109): read to see whether this import was
@@ -2281,7 +2281,7 @@ describe('the auth schema: global identity, outside row level security (spec 000
       select att.attrelid::regclass || '.' || att.attname || ' ' || a.privilege_type as grant
       from pg_attribute att cross join lateral aclexplode(att.attacl) a
       where a.grantee = 'crm_handle'::regrole
-      order by 1 collate "C"
+      order by (att.attrelid::regclass || '.' || att.attname || ' ' || a.privilege_type) collate "C"
     `);
     // The handles read a person's name and picture for their profile, and change only the handle, the bio and
     // (migration 0105) the look of the page; and (migration 0094) read and set whether the picture stays off

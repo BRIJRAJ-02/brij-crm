@@ -119,6 +119,10 @@ begin
   set local row_security = off;
   alter table auth.public_handles alter column workspace_id drop not null;
   alter table auth.public_profiles drop constraint public_profiles_membership_fk;
+  -- Spec 0061's tables hang off the page's key (migration 0137), which a database before 0114 didn't have.
+  alter table auth.profile_images drop constraint profile_images_page_fk;
+  alter table auth.profile_view_source_days drop constraint profile_view_source_days_page_fk;
+  alter table auth.profile_booking_days drop constraint profile_booking_days_page_fk;
   alter table auth.public_profiles drop constraint public_profiles_pkey;
   alter table auth.public_profiles alter column workspace_id drop not null;
   alter table auth.profile_items alter column workspace_id drop not null;

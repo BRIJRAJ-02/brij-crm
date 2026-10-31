@@ -638,13 +638,17 @@ describe('a link page', () => {
     // The owner's own press, signed in, counts nothing.
     await countItemPress({ db }, handle, site.id, visitor(9), { signedInAs: ada.userId });
     await archiveProfileItem(ada.scope, { id: gone.id, archived: true });
-    expect(await readProfileCounts(ada.scope)).toEqual({
+    const counts = await readProfileCounts(ada.scope);
+    expect(counts).toMatchObject({
       days: 30,
       views: 5,
       visitors: 3,
       before: { views: 3, visitors: 2 },
       presses: [{ id: site.id, presses: 2 }],
+      // Spec 0061: every day of the period, and the funnel from views to presses.
+      funnel: { views: 5, presses: 2, bookings: 0 },
     });
+    expect(counts.series).toHaveLength(30);
     const swept = await testQuery<{ gone: number }>(appUrl, 'select crm_sweep_profile_counts(500) as gone');
     expect(Number(swept[0]?.gone)).toBeGreaterThanOrEqual(1);
     const left = await testQuery<{ day: string }>(

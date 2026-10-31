@@ -168,6 +168,14 @@ export const ACCESS_TABLE = {
   orderProfileItems: { ownLinkPage: true },
   archiveProfileItem: { ownLinkPage: true },
   deleteProfileItem: { ownLinkPage: true },
+  // Spec 0061: the page's pictures, its share QR's style, its Insights download, and a link's own saved address for
+  // its site's picture. Their own page only, as everything above.
+  addProfileImage: { ownLinkPage: true },
+  readOwnProfileImage: { ownLinkPage: true },
+  readOwnLinkAddress: { ownLinkPage: true },
+  readQrStyle: { ownLinkPage: true },
+  saveQrStyle: { ownLinkPage: true },
+  profileInsightsCsv: { ownLinkPage: true },
   // Workspace › General (spec 0031, slice 7): every member reads it; changing it and deleting it are permissions.
   getWorkspaceSettings: { anyMember: true },
   updateWorkspace: { permission: 'workspace.manage' },
