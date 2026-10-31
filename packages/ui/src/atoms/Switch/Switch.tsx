@@ -13,11 +13,11 @@ export interface SwitchProps {
    */
   readonly labelContext?: string;
   /**
-   * The word shown in place of `label` while the switch is off, where the word is the state itself (a page Live or
-   * Private). Only the eye gets it: the accessible name stays `label`, so a screen reader hears "Live, switch, off",
-   * never "Private, switch, off". Drawn by CSS from a data attribute, so it costs Switch's first load next to nothing.
+   * A small status word beside the switch while it is off ("Private"), where off has a name of its own. The label
+   * stays the one name, so voice control says "click Live"; the word is the switch's description, so a screen reader
+   * hears "Live, switch, off, Private". Drawn by CSS from a data attribute, so Switch's first load barely grows.
    */
-  readonly offLabel?: string;
+  readonly offStatus?: string;
   /** A line under the label that says more. */
   readonly description?: string;
   readonly isSelected?: boolean;
@@ -33,7 +33,7 @@ export function Switch({
   label,
   isLabelHidden = false,
   labelContext,
-  offLabel,
+  offStatus,
   description,
   isSelected,
   defaultSelected,
@@ -47,8 +47,6 @@ export function Switch({
       className={styles.field}
       isDisabled={isDisabled}
       isReadOnly={isReadOnly}
-      // With an off word showing, the name is set outright, so the generated word never joins it.
-      aria-label={offLabel && label}
       {...(isSelected === undefined ? {} : { isSelected })}
       {...(defaultSelected === undefined ? {} : { defaultSelected })}
       {...(onChange === undefined ? {} : { onChange })}
@@ -61,16 +59,13 @@ export function Switch({
         {isLabelHidden ? (
           <VisuallyHidden>{label}</VisuallyHidden>
         ) : (
-          <span
-            className={styles.label}
-            data-described={description === undefined ? undefined : ''}
-            data-off={offLabel}
-          >
+          <span className={styles.label} data-described={description === undefined ? undefined : ''}>
             {label}
           </span>
         )}
         {labelContext !== undefined && <VisuallyHidden> {labelContext}</VisuallyHidden>}
       </SwitchButton>
+      {offStatus !== undefined && <Text slot="description" className={styles.status} data-status={offStatus} />}
       {description !== undefined && (
         <Text slot="description" className={styles.description}>
           {description}
