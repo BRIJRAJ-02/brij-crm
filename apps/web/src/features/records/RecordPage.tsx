@@ -57,6 +57,7 @@ import {
 import { useNavigate, useParams, useRouteContext, useRouter } from '@tanstack/react-router';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useCommandMenu } from '../command/CommandMenuProvider.tsx';
+import { mergeStrings } from '../duplicates/merge/index.ts';
 import { CommentsTab, LoadingThreads } from '../comments/CommentsTab.tsx';
 import { strings as commentStrings } from '../comments/strings.ts';
 import { NotesTab } from '../notes/NotesTab.tsx';
@@ -401,6 +402,26 @@ function RecordScreen({
   const canChangeSchema = useCan('schema.manage');
   const navigate = useNavigate();
   const live = useLiveStatus(data.live);
+  // A merged record's address (spec 0049, AC-4914): on to the record it went into, saying so once.
+  const mergedInto = trashed?.status === 'trashed' ? trashed.mergedInto : undefined;
+  const mergedName = trashed?.status === 'trashed' ? trashed.record.display.name : '';
+  const keptId = mergedInto?.recordId;
+  const keptName = mergedInto?.display.name ?? '';
+  // Once per merged address, however often the lookup is read again (a live re-read, StrictMode).
+  const redirected = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (keptId === undefined || redirected.current === recordId) return;
+    redirected.current = recordId;
+    const unnamedOne = strings.unnamed(object.singularName);
+    toasts.toast({
+      tone: 'info',
+      message: mergeStrings.wasMerged(
+        mergedName === '' ? unnamedOne : mergedName,
+        keptName === '' ? unnamedOne : keptName,
+      ),
+    });
+    void navigate({ href: recordHref(slug, object.apiSlug, keptId, tab), replace: true });
+  }, [keptId, keptName, mergedName, navigate, object.apiSlug, object.singularName, recordId, slug, tab, toasts]);
   const unnamed = strings.unnamed(object.singularName);
   const link = useMemo(() => recordLinks(slug, objects), [slug, objects]);
   // Add as person on a meeting (spec 0024, AC-609): one function while the page stays, so timeline entries keep
@@ -948,6 +969,8 @@ function RecordScreen({
                     recordId={recordId}
                     pageLink={pageLink}
                     canDelete={canEdit}
+                    attributes={attributes}
+                    members={members}
                   />
                 </RecordHeader>
               }

@@ -47,6 +47,8 @@ const READS: ReadonlySet<string> = new Set([
   'attributes.list',
   // What an attribute's change would touch, read before the change (the flow pass).
   'attributes.impact',
+  // What a merge would do, for the merge dialog (spec 0049).
+  'records.mergePreview',
   // What changing an attribute's type would do, read before the change (the field types lane).
   'attributes.checkTypeChange',
   'members.list',
@@ -1037,6 +1039,30 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
       { kind: 'records', object_id: m.people.id, record_ids: [ids[0] ?? ''] },
       { kind: 'records', object_id: m.people.id, record_ids: [ids[1] ?? ''] },
       { kind: 'records', object_id: m.people.id, record_ids: ids, mutation_id: mutationId },
+    ];
+  },
+  // A merge (spec 0049): one records row for the object, naming the merged record (deleted) and the kept one.
+  'records.merge': async (m, mutationId) => {
+    const keep = await personFor(m);
+    const merge = await personFor(m);
+    const preview = await m.client.records.mergePreview({
+      workspace: m.slug,
+      objectId: m.people.id,
+      keepId: keep,
+      mergeId: merge,
+    });
+    await m.client.records.merge({
+      workspace: m.slug,
+      objectId: m.people.id,
+      keepId: keep,
+      mergeId: merge,
+      revisions: { keep: preview.keep.revision, merge: preview.merge.revision },
+      mutationId,
+    });
+    return [
+      { kind: 'records', object_id: m.people.id, record_ids: [keep] },
+      { kind: 'records', object_id: m.people.id, record_ids: [merge] },
+      { kind: 'records', object_id: m.people.id, mutation_id: mutationId },
     ];
   },
   // Bulk actions and the trash (spec 0022): one records row for the object, naming the records.
@@ -2652,6 +2678,7 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'records.setValues': 2,
   'records.setValuesBatch': 3,
   'records.deleteMany': 2,
+  'records.merge': 3,
   'records.restoreBatch': 3,
   'records.updateMany': 2,
   'records.startBulk': 2,

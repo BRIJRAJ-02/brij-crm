@@ -344,6 +344,8 @@ type LockedTrash = {
   readonly object_id: string;
   readonly deleted: boolean;
   readonly expired: boolean;
+  /** Merged into another record (spec 0049, AC-4914): never restored, answered as gone. */
+  readonly merged: boolean;
 };
 
 /** An object's plural name, for the read only refusal. */
@@ -397,7 +399,7 @@ async function restoreLocked(
   const candidates: LockedTrash[] = [];
   for (const id of [...ids].sort()) {
     const row = rows.get(id);
-    if (row === undefined || (row.deleted && row.expired)) {
+    if (row === undefined || (row.deleted && (row.expired || row.merged))) {
       refused(id, { code: 'NOT_FOUND', message: EXPIRED });
     } else if (readOnly.has(row.object_id)) {
       const message = `You can view ${names.get(row.object_id) ?? 'these records'} but not change them.`;
@@ -511,7 +513,8 @@ function lockForRestore(tx: WorkspaceTx, where: SQL, limit?: number) {
 export function restoreLockQuery(where: SQL, limit?: number): SQL {
   return sql`
     select id::text, object_id::text, deleted_at is not null as deleted,
-      coalesce(deleted_at < now() - ${RESTORE_WINDOW}::interval, false) as expired
+      coalesce(deleted_at < now() - ${RESTORE_WINDOW}::interval, false) as expired,
+      merged_into_record_id is not null as merged
     from records where ${where}
     order by id ${limit === undefined ? sql`` : sql`limit ${limit}`} for no key update
   `;
@@ -662,7 +665,8 @@ export async function trashScope(
 ): Promise<SQL> {
   // Canonical (lower case): the record rule is looked up by the id as stored, never the caller's spelling.
   const objectId = named === undefined ? undefined : checkId(named, UNKNOWN_OBJECT);
-  const parts: SQL[] = [sql`r.deleted_at is not null`];
+  // A merged record is in no trash list (spec 0049, AC-4914): the purge still removes it.
+  const parts: SQL[] = [sql`r.deleted_at is not null`, sql`r.merged_into_record_id is null`];
   if (need === 'write') {
     const writable = await writableObjects(tx, access);
     if (writable !== undefined) parts.push(sql`r.object_id = any(${uuidArray(writable)})`);
@@ -719,8 +723,8 @@ export function trashCountQuery(where: SQL): SQL {
  */
 export function openTrashScope(objectId?: string): SQL {
   return objectId === undefined
-    ? sql`r.deleted_at is not null`
-    : sql`r.deleted_at is not null and r.object_id = ${objectId}::uuid`;
+    ? sql`r.deleted_at is not null and r.merged_into_record_id is null`
+    : sql`r.deleted_at is not null and r.merged_into_record_id is null and r.object_id = ${objectId}::uuid`;
 }
 
 /**

@@ -890,6 +890,19 @@ describe('the walk: a principal without the access is refused', () => {
   });
 });
 
+/** A second live person, made by the owner, to merge into the pilot (spec 0049). */
+async function another(world: Awaited<ReturnType<typeof dataWorld>>): Promise<string> {
+  return (
+    await core.createRecord(world.owner, { objectId: world.people, values: { [world.name]: { firstName: 'Twin' } } })
+  ).recordId;
+}
+
+/** The pilot's revision now, and a fresh record's (0): what a merge dialog would have read. */
+async function revisionsOf(world: Awaited<ReturnType<typeof dataWorld>>): Promise<{ keep: number; merge: number }> {
+  const [pilot] = await core.getRecords(world.owner, { ids: [world.recordId] });
+  return { keep: pilot?.revision ?? 0, merge: 0 };
+}
+
 /** A workspace whose People object a member can't see, and one where they may only read it (and its list). */
 async function dataWorld() {
   const { scope: memberScope, workspaceId, objects, ownerId } = await memberOf('member');
@@ -1506,6 +1519,30 @@ const DATA_CASES: Readonly<Record<string, DataCase>> = {
   ),
   restoreBatch: refused('FORBIDDEN', async (scope, world) =>
     core.restoreBatch(scope, { batchId: await batchOf(world) }).then(refusedOutcome),
+  ),
+  // Record merge (spec 0049): refused on a read only object before either record is looked up. The owner merges a
+  // second person made for the call into the pilot.
+  mergeRecords: refused('FORBIDDEN', async (scope, world) =>
+    core.mergeRecords(scope, {
+      objectId: world.people,
+      keepId: world.recordId,
+      mergeId: await another(world),
+      revisions: await revisionsOf(world),
+    }),
+  ),
+  mergeAndRead: refused('FORBIDDEN', async (scope, world) =>
+    core.mergeAndRead(scope, {
+      objectId: world.people,
+      keepId: world.recordId,
+      mergeId: await another(world),
+      revisions: await revisionsOf(world),
+    }),
+  ),
+  previewMerge: refused('FORBIDDEN', async (scope, world) =>
+    core.previewMerge(scope, { objectId: world.people, keepId: world.recordId, mergeId: await another(world) }),
+  ),
+  readMergePreview: refused('FORBIDDEN', async (scope, world) =>
+    core.readMergePreview(scope, { objectId: world.people, keepId: world.recordId, mergeId: await another(world) }),
   ),
   updateMany: refused('FORBIDDEN', (scope, world) =>
     core.updateMany(scope, {

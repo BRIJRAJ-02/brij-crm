@@ -54,10 +54,36 @@ export const records = pgTable(
      * replace a newer one. Far side link changes don't move it (spec 0004, AC-7).
      */
     revision: bigint('revision', { mode: 'number' }).notNull().default(0),
+    /**
+     * The record this one was merged into (spec 0049, AC-4914): set only by a
+     * merge, together with `deleted_at`, never to itself. A merged record is
+     * listed nowhere, never restored, and purged with the normal 30 days; its
+     * address redirects to the end of the chain. Removing the kept record for
+     * good clears it (the migration's `on delete set null` names only this
+     * column, so the workspace id stays).
+     */
+    mergedIntoRecordId: uuid('merged_into_record_id'),
     ...auditColumns(),
   },
   (t) => [
     primaryKey({ name: 'records_pkey', columns: [t.workspaceId, t.id] }),
+    foreignKey({
+      name: 'records_merged_into',
+      columns: [t.workspaceId, t.mergedIntoRecordId],
+      foreignColumns: [t.workspaceId, t.id],
+    }).onDelete('set null'),
+    // The records merged into one (its timeline's merge entries, a redirect's chain): the few merged rows only.
+    // The trash as it is listed and counted (spec 0049): trashed records that weren't merged, index only.
+    index('records_trash_listed')
+      .on(t.workspaceId, t.id)
+      .where(sql`${t.deletedAt} is not null and ${t.mergedIntoRecordId} is null`),
+    index('records_merged_into')
+      .on(t.workspaceId, t.mergedIntoRecordId)
+      .where(sql`${t.mergedIntoRecordId} is not null`),
+    check(
+      'records_merged',
+      sql`${t.mergedIntoRecordId} is null or (${t.deletedAt} is not null and ${t.mergedIntoRecordId} <> ${t.id})`,
+    ),
     foreignKey({
       name: 'records_object',
       columns: [t.workspaceId, t.objectId],

@@ -280,6 +280,11 @@ export const ACCESS_TABLE = {
   deleteRecords: { data: 'write' },
   restoreRecords: { data: 'write' },
   restoreBatch: { data: 'write' },
+  // Record merge (spec 0049, AC-4919): object write before any record is read, the preview too.
+  mergeRecords: { data: 'write' },
+  previewMerge: { data: 'write' },
+  mergeAndRead: { data: 'write' },
+  readMergePreview: { data: 'write' },
   // Bulk edits (spec 0022, milestone 2): object and field write, checked once for the call.
   updateMany: { data: 'write' },
   bulkEditRecords: { data: 'write' },
