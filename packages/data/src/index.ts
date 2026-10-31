@@ -42,6 +42,7 @@ import type {
   RoutingTestInput,
   RoutingTestResult,
   SkillGroup,
+  SkillsView,
   TeamHosts,
   WonStage,
   TaskMine,
@@ -3927,6 +3928,9 @@ export function createDataLayer({
        */
       skills: {
         view: (workspace: string): RoutingHeld<RoutingSkillsState> => routingSkills.view(workspace),
+        /** One read of them, for a route's loader (a team page's Known offers Customer only once Won means is set). */
+        list: (workspace: string): Promise<SkillsView> =>
+          beforeRead(workspace).then(() => call((options) => api.routing.skills.list({ workspace }, options))),
         /** A new skill at the end of its group; answers its id. */
         create: (workspace: string, group: SkillGroup, name: string): Promise<string> =>
           routingSkills.create(workspace, group, name),

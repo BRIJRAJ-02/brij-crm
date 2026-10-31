@@ -8,6 +8,8 @@ import type { AttributeDefinition, FormQuestion } from '@crm/data';
 import {
   HIDDEN_FIELDS,
   hiddenFactKey,
+  KNOWN_FACT,
+  KNOWN_VALUES,
   summarizeShowWhen,
   VALUELESS_OPS,
   type Condition,
@@ -106,12 +108,16 @@ function yesNo() {
   ];
 }
 
-/** The facts a team page's rules read: the person's and their company's live fields of a comparable type. */
+/**
+ * The facts a team page's rules read: the person's, their company's and (spec 0037, AC-1393) their latest open
+ * deal's live fields of a comparable type.
+ */
 export function recordFacts(
   person: readonly AttributeDefinition[],
   company: readonly AttributeDefinition[],
+  deal: readonly AttributeDefinition[] = [],
 ): readonly Fact[] {
-  const of = (side: 'person' | 'company', attributes: readonly AttributeDefinition[]) =>
+  const of = (side: 'person' | 'company' | 'deal', attributes: readonly AttributeDefinition[]) =>
     attributes.flatMap((attribute): Fact[] => {
       if (attribute.isArchived) return [];
       const key = `${side}.${attribute.id}`;
@@ -141,7 +147,20 @@ export function recordFacts(
           return [];
       }
     });
-  return [...of('person', person), ...of('company', company)];
+  return [...of('person', person), ...of('company', company), ...of('deal', deal)];
+}
+
+/** Known (spec 0037, AC-1393): New, Known person, Known company, and Customer once Won means is set. */
+export function knownFact(wonMeansSet: boolean): Fact {
+  return {
+    key: KNOWN_FACT,
+    label: strings.known,
+    kind: 'choice',
+    options: KNOWN_VALUES.filter((value) => wonMeansSet || value !== 'customer').map((value) => ({
+      id: value,
+      label: strings.knownValue[value],
+    })),
+  };
 }
 
 /**
@@ -196,12 +215,23 @@ export function storedShowWhen(showWhen: ShowWhen): {
 
 /**
  * What a team page's rules read (spec 0037, AC-1352): the page's own questions first (by key, as a form's), then
- * the person's and company's fields once read.
+ * Known and the person's, company's and deal's fields once read (spec 0037, AC-1393).
  */
 export function pageFacts(
   questions: readonly FormQuestion[],
   fields:
-    { readonly person: readonly AttributeDefinition[]; readonly company: readonly AttributeDefinition[] } | undefined,
+    | {
+        readonly person: readonly AttributeDefinition[];
+        readonly company: readonly AttributeDefinition[];
+        readonly deal?: readonly AttributeDefinition[];
+        readonly wonMeansSet?: boolean;
+      }
+    | undefined,
 ): readonly Fact[] {
-  return [...questionFacts(questions), ...(fields === undefined ? [] : recordFacts(fields.person, fields.company))];
+  return [
+    ...questionFacts(questions),
+    ...(fields === undefined
+      ? []
+      : [knownFact(fields.wonMeansSet === true), ...recordFacts(fields.person, fields.company, fields.deal)]),
+  ];
 }

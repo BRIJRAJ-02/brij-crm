@@ -46,7 +46,11 @@ export const strings = {
   yes: 'Yes',
   no: 'No',
   removedQuestion: 'A removed question',
-  fieldOf: (side: 'person' | 'company', title: string) => `${side === 'person' ? 'Person' : 'Company'} · ${title}`,
+  fieldOf: (side: 'person' | 'company' | 'deal', title: string) =>
+    `${side === 'person' ? 'Person' : side === 'company' ? 'Company' : 'Deal'} · ${title}`,
+  // Known (spec 0037, AC-1393): what the CRM knows of the guest.
+  known: 'Known in CRM',
+  knownValue: { new: 'New', person: 'Known person', company: 'Known company', customer: 'Customer' } as const,
   hiddenField: (field: HiddenField) => HIDDEN[field],
   // On a team page a hidden field is the one the sending form's visit brought.
   fromForm: (name: string) => `Form · ${name}`,
@@ -144,6 +148,18 @@ export const strings = {
   toMessage: 'Show a message',
   toRedirect: (url: string) => `Go to ${url}`,
   toHosts: (hosts: readonly string[]) => `Only ${hosts.join(' or ')}`,
+  // Members with skills (spec 0037, AC-1356).
+  toSkills: (skills: readonly string[]) => `Members with ${skills.join(' and ')}`,
+  toPageSkills: (title: string, skills: readonly string[]) => `Book ${title} with members with ${skills.join(' and ')}`,
+  hostsBy: 'Pick by',
+  byPeople: 'People',
+  bySkills: 'Skills',
+  skills: 'Required skills',
+  skillsNeeded: 'Pick at least one skill.',
+  noSkills: 'Add skills in Routing first.',
+  heldBy: (names: readonly string[]) =>
+    names.length === 0 ? 'Nobody holds these: the whole rotation picks.' : `Held by ${names.join(', ')}`,
+  removedSkill: 'a removed skill',
   missingPage: 'a removed page',
 
   // The report

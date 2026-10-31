@@ -3,7 +3,7 @@
 // Main task: an admin makes a group and changes or deletes one, and shares it with editors (spec 0037, AC-1331); an editor changes it; a member sees the groups they are in and their own share.
 // Leaves out: editing in place, the share bars and the reassign offer (milestone 2), and a rotation's history (spec 0037).
 import type { CalendarHealthState, DataLayer, MemberSummary, RotationView } from '@crm/data';
-import { useCaptureList } from '@crm/data/react';
+import { useCaptureList, useRoutingSkills } from '@crm/data/react';
 import {
   Badge,
   Button,
@@ -26,7 +26,7 @@ import {
   RecordChip,
 } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useBookingsActionSlot } from '../bookings/toolbarSlot.ts';
 import { linksHref } from '../captures/tabs.ts';
@@ -40,6 +40,8 @@ import { RotationDialog } from './RotationDialog.tsx';
 import { strings } from './rotation-strings.ts';
 import { SharingPanel } from './SharingPanel.tsx';
 import { sharingStrings } from './sharing-strings.ts';
+import { MemberSkillsPicker } from '../routing/MemberSkillsPicker.tsx';
+import { skillStrings } from '../routing/skills-strings.ts';
 
 /** Props for the screen: what its route loaded through the data layer. */
 export interface RotationsScreenProps {
@@ -167,6 +169,15 @@ export function RotationsScreen({ data, slug, people, canManage, inFrame = false
   // Invite teammates opens the one Invite dialog in place for someone who may invite; anyone else is sent to
   // Settings › Members, which says who can.
   const canInvite = useCan('members.invite');
+  // Each member's skills (spec 0037, AC-1382): a column once the workspace has skills, changed by routing.manage.
+  const canEditSkills = useCan('routing.manage');
+  const skillsHeld = useMemo(() => data.routing.skills.view(slug), [data, slug]);
+  const skillsState = useRoutingSkills(skillsHeld);
+  const skills = skillsState.status === 'ready' && skillsState.value.skills.length > 0 ? skillsState.value : undefined;
+  const withSkills = (columns: readonly TableColumn[]): readonly TableColumn[] =>
+    skills === undefined
+      ? columns
+      : [...columns.slice(0, 1), { id: 'skills', label: skillStrings.skills }, ...columns.slice(1)];
   // Each member's calendar health, through the reader's See reach (spec 0037, AC-1314, AC-1315).
   const healthStore = useSchedulingStore(data);
   const health = useCalendarHealth(healthStore, slug, [
@@ -206,7 +217,17 @@ export function RotationsScreen({ data, slug, people, canManage, inFrame = false
     );
   };
   const rowCell = (rotation: RotationView) => (member: Member, column: string) =>
-    column !== 'actions' ? (
+    column === 'skills' && skills !== undefined ? (
+      <MemberSkillsPicker
+        data={data}
+        slug={slug}
+        memberId={member.memberId}
+        memberName={member.name}
+        view={skills}
+        isReadOnly={!canEditSkills}
+        toasts={toasts}
+      />
+    ) : column !== 'actions' ? (
       cell(member, column, health)
     ) : member.isOn || (member.upcoming ?? 0) === 0 ? null : (
       <Button
@@ -368,7 +389,7 @@ export function RotationsScreen({ data, slug, people, canManage, inFrame = false
                   <Table
                     label={strings.members(rotation.name)}
                     isScrollable
-                    columns={rotation.canChange ? ADMIN_COLUMNS : COLUMNS}
+                    columns={withSkills(rotation.canChange ? ADMIN_COLUMNS : COLUMNS)}
                     rows={rotation.members}
                     getRowId={(member) => member.memberId}
                     renderCell={rowCell(rotation)}

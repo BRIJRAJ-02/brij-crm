@@ -1,4 +1,4 @@
-import { isDataError, type MemberSummary } from '@crm/data';
+import { isDataError, type AttributeDefinition, type DataLayer, type MemberSummary } from '@crm/data';
 import { EmptyState, LoadingNow, PageColumn } from '@crm/ui';
 import { createFileRoute, useNavigate, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { RoutingPending, RoutingScreen, type RoutingSearch } from '../features/routing/RoutingScreen.tsx';
@@ -20,7 +20,7 @@ export const Route = createFileRoute('/w/$slug/bookings/routing')({
     const host = text(raw.host);
     const decision = text(raw.decision);
     return {
-      view: raw.view === 'decisions' ? 'decisions' : 'overview',
+      view: raw.view === 'decisions' || raw.view === 'skills' || raw.view === 'test' ? raw.view : 'overview',
       ...(surface === undefined ? {} : { surface }),
       ...(rule === undefined ? {} : { rule }),
       ...(host === undefined ? {} : { host }),
@@ -29,11 +29,18 @@ export const Route = createFileRoute('/w/$slug/bookings/routing')({
       ...(decision === undefined ? {} : { decision }),
     };
   },
-  loader: async ({ context, params }): Promise<{ readonly members?: readonly MemberSummary[] }> => {
+  loader: async ({
+    context,
+    params,
+  }): Promise<{ readonly members?: readonly MemberSummary[]; readonly stage?: AttributeDefinition }> => {
     try {
       const access = await context.data.access.mine(params.slug);
       if (!access.permissions.includes('routing.manage')) return {};
-      return { members: await context.data.members.list(params.slug) };
+      const [members, stage] = await Promise.all([
+        context.data.members.list(params.slug),
+        dealsStage(context.data, params.slug),
+      ]);
+      return { members, ...(stage === undefined ? {} : { stage }) };
     } catch (error) {
       // The frame above shows "workspace not found" for this one.
       if (isDataError(error) && error.code === 'NOT_FOUND') return {};
@@ -49,11 +56,20 @@ export const Route = createFileRoute('/w/$slug/bookings/routing')({
   component: RoutingRoute,
 });
 
+/** Deals' Stage field (api slug `stage`), for Won means (spec 0037, AC-1385); none when Deals or the field is hidden. */
+async function dealsStage(data: DataLayer, slug: string): Promise<AttributeDefinition | undefined> {
+  const objects = await data.objects.list(slug);
+  const deals = objects.find((each) => each.standardKey === 'deals');
+  if (deals === undefined) return undefined;
+  const attributes = await data.attributes.list(slug, deals.id);
+  return attributes.find((each) => each.apiSlug === 'stage' && !each.isArchived);
+}
+
 function RoutingRoute() {
-  const { members } = Route.useLoaderData();
+  const { members, stage } = Route.useLoaderData();
   const { slug } = Route.useParams();
   const search = Route.useSearch();
-  const { data } = Route.useRouteContext();
+  const { data, toasts } = Route.useRouteContext();
   const navigate = useNavigate({ from: Route.fullPath });
   if (members === undefined) return <SettingsMissing backTo="home" />;
   return (
@@ -62,6 +78,8 @@ function RoutingRoute() {
       slug={slug}
       search={search}
       members={members}
+      {...(stage === undefined ? {} : { stage })}
+      toasts={toasts}
       onSearch={(next) => void navigate({ search: (current) => ({ ...current, ...next }), replace: true })}
     />
   );

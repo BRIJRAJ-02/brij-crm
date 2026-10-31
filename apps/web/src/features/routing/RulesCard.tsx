@@ -3,7 +3,8 @@
 // Main task: read the rules in order, add or change one in its dialog, reorder or remove one, and check each rule's report to tune it.
 // Leaves out: the fallback itself (a form's After sending, a page's rotation, each set in its own card).
 import type { DataLayer, RoutingRule } from '@crm/data';
-import { usePageRules, useRoutingReport } from '@crm/data/react';
+import { usePageRules, useRoutingReport, useRoutingSkills } from '@crm/data/react';
+import { namedHosts, requiredSkills } from '@crm/data/forms';
 import {
   Button,
   Callout,
@@ -126,20 +127,32 @@ function RulesCardBody({
   // So the picker's name says so on a form; a team page's "Question or field" already does.
   const pickerLabel = surface.kind === 'form' ? strings.questionOrHidden : factLabel;
 
+  // Members with skills (spec 0037, AC-1356): the workspace's skills, which any member may read, held while shown.
+  const skillsHeld = useMemo(() => data.routing.skills.view(slug), [data, slug]);
+  const skillsState = useRoutingSkills(skillsHeld);
+  const skills = skillsState.status === 'ready' ? skillsState.value : undefined;
+  const skillName = (id: string) => skills?.skills.find((skill) => skill.id === id)?.name ?? strings.removedSkill;
+
   const pageTitle = (pageId: string) =>
     surface.kind === 'form' ? surface.pages.find((page) => page.id === pageId)?.title : undefined;
   const routeLine = (rule: RoutingRule) => {
     const { then } = rule;
     const tag =
       rule.qualified === undefined ? undefined : rule.qualified ? strings.tagQualified : strings.tagNotQualified;
+    const required = then.kind === 'book' || then.kind === 'hosts' ? requiredSkills(then.hosts) : undefined;
+    const named = then.kind === 'book' || then.kind === 'hosts' ? (namedHosts(then.hosts) ?? []) : [];
     const route =
       then.kind === 'book'
-        ? strings.toPage(pageTitle(then.bookingPageId) ?? strings.missingPage, (then.hosts ?? []).map(nameOf))
+        ? required === undefined
+          ? strings.toPage(pageTitle(then.bookingPageId) ?? strings.missingPage, named.map(nameOf))
+          : strings.toPageSkills(pageTitle(then.bookingPageId) ?? strings.missingPage, required.map(skillName))
         : then.kind === 'message'
           ? strings.toMessage
           : then.kind === 'redirect'
             ? strings.toRedirect(then.url)
-            : strings.toHosts(then.hosts.map(nameOf));
+            : required === undefined
+              ? strings.toHosts(named.map(nameOf))
+              : strings.toSkills(required.map(skillName));
     return strings.routeLine(route, tag);
   };
 
@@ -253,6 +266,7 @@ function RulesCardBody({
         factLabel={pickerLabel}
         isBusy={busy}
         {...(failure === undefined ? {} : { failure })}
+        {...(skills === undefined ? {} : { skills })}
         onClose={() => {
           setEditing(undefined);
           setFailure(undefined);

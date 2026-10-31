@@ -5,6 +5,7 @@ import {
   conditionsLine,
   hiddenFieldFacts,
   isComplete,
+  knownFact,
   opsFor,
   questionFacts,
   storedShowWhen,
@@ -84,5 +85,18 @@ describe('is any of and hidden fields', () => {
     expect(hiddenFieldFacts('page')[0]?.label).toBe('Form · UTM source');
     const when = { join: 'all' as const, rules: [{ key: 'hidden.utm_campaign', op: 'is' as const, value: 'spring' }] };
     expect(conditionsLine(when, onForm)).toBe('UTM campaign is spring');
+  });
+});
+
+describe('Known (spec 0037, AC-1393)', () => {
+  it('offers Customer only once Won means is set, under its own dotted key', () => {
+    expect(knownFact(false)).toMatchObject({ key: 'crm.known', kind: 'choice' });
+    expect(knownFact(false).options?.map((option) => option.id)).toEqual(['new', 'person', 'company']);
+    expect(knownFact(true).options?.map((option) => option.label)).toEqual([
+      'New',
+      'Known person',
+      'Known company',
+      'Customer',
+    ]);
   });
 });
