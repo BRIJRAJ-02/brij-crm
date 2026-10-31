@@ -4,18 +4,12 @@
 import { oc } from '@orpc/contract';
 import * as z from 'zod';
 import { QUESTION_KEY } from './answer-types.ts';
+import { SKILL_GROUPS, SKILL_NAME_MAX, SKILLS_MAX } from './routing-limits.ts';
 import { RoutingFallback, routingLogContract } from './routing.ts';
 import { isHiddenFact, KNOWN_VALUES } from './show-when.ts';
 import { Uuid } from '../values/ids.ts';
 import { WorkspaceScoped } from '../workspaces.ts';
 
-/** At most this many skills in one workspace (spec 0037's Numbers): past it, 409 `SKILL_LIMIT`. */
-export const SKILLS_MAX = 100;
-/** A skill's name, 1 to 40 characters. */
-export const SKILL_NAME_MAX = 40;
-
-/** The groups skills sit in, in the order Skills shows them. */
-export const SKILL_GROUPS = ['language', 'region', 'segment', 'product', 'other'] as const;
 /** A skill's group. */
 export const SkillGroup = z.enum(SKILL_GROUPS);
 /** A skill's group. */
