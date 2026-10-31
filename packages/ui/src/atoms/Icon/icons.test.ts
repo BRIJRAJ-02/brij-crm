@@ -55,9 +55,16 @@ describe('the icon registry', () => {
   });
 
   it('gives the hosted form only base icons, since it mounts UiProviderBase, which brings no registry', () => {
-    // The files the hosted page draws with (HostedFormSteps is stories only, so it is left out).
+    // The files the hosted page draws with, in every layout and every answer type (spec 0063).
     const drawn = [
       'public-form/HostedForm.tsx',
+      'public-form/HostedFormSteps.tsx',
+      'public-form/BookingView.tsx',
+      'public-form/SentAnswers.tsx',
+      'public-form/AddressQuestion.tsx',
+      'atoms/Rating/Rating.tsx',
+      'atoms/FieldLabel/FieldLabel.tsx',
+      'molecules/ChoiceChips/ChoiceChips.tsx',
       'public-form/FormParts.tsx',
       'public-form/FormBooking.tsx',
       'public-form/Question.tsx',

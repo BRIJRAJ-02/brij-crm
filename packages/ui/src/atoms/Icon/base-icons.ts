@@ -15,12 +15,13 @@ import {
   Minus,
   Plus,
   Search,
+  Star,
   TriangleAlert,
   Upload,
   X,
 } from 'lucide-react';
 
-/** The icons drawn with no registry around them: the hosted form's controls, its alerts, its toasts and its upload. */
+/** The icons drawn with no registry around them: the hosted form's controls (Rating's star among them), its alerts, its toasts and its upload. */
 export const baseIcons = {
   'arrow-left': ArrowLeft,
   check: Check,
@@ -33,6 +34,7 @@ export const baseIcons = {
   minus: Minus,
   plus: Plus,
   search: Search,
+  star: Star,
   'triangle-alert': TriangleAlert,
   upload: Upload,
   x: X,

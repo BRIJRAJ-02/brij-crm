@@ -66,7 +66,11 @@ export function ChoiceChips({
   const hasEnds = ends !== undefined && (ends.start !== undefined || ends.end !== undefined);
   const describedBy = [...(hasEnds ? [endsId] : []), ...(error === undefined ? [] : [errorId])].join(' ');
   return (
-    <div className={styles.root} data-disabled={isDisabled || undefined}>
+    <div
+      className={styles.root}
+      data-disabled={isDisabled || undefined}
+      data-scale={ends === undefined ? undefined : choices.length > 7 ? 'long' : 'short'}
+    >
       {isLabelHidden ? (
         <VisuallyHidden>
           <span id={labelId}>{labelAside === undefined ? label : `${label} ${labelAside}`}</span>
