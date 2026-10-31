@@ -402,7 +402,8 @@ export function FormLoading({
   // One at a time form never loses one (spec 0063, AC-6306). Its colours follow the visitor's own light or dark
   // setting until the form's look arrives.
   const isOpen = layout === 'conversational' || layout === 'unknown';
-  const questions = layout === 'classic' || layout === 'unknown' ? LOADING_QUESTIONS : isOpen ? 1 : LOADING_QUESTIONS - 1;
+  const questions =
+    layout === 'classic' || layout === 'unknown' ? LOADING_QUESTIONS : isOpen ? 1 : LOADING_QUESTIONS - 1;
   return (
     <FormGround mode={mode} kind={isOpen ? 'open' : 'card'} isLoading>
       <VisuallyHidden>

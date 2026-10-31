@@ -239,7 +239,9 @@ export function FormEditor(props: FormEditorProps) {
     const steps = preview.steps ?? [];
     const target =
       preview.layout === 'steps'
-        ? steps.find((step) => (stepId === undefined ? key !== undefined && step.keys.includes(key) : step.id === stepId))
+        ? steps.find((step) =>
+            stepId === undefined ? key !== undefined && step.keys.includes(key) : step.id === stepId,
+          )
         : undefined;
     const lifted = new Set(target?.keys ?? (key === undefined ? [] : [key]));
     const form = {
@@ -261,7 +263,9 @@ export function FormEditor(props: FormEditorProps) {
     };
     const path = pathOf(form, {}).steps;
     const at = path.findIndex((step) =>
-      target !== undefined ? step.keys.some((each) => target.keys.includes(each)) : key !== undefined && step.keys.includes(key),
+      target !== undefined
+        ? step.keys.some((each) => target.keys.includes(each))
+        : key !== undefined && step.keys.includes(key),
     );
     return { form, step: at === -1 ? undefined : at };
   }, [previewRow, preview, draft.questions]);

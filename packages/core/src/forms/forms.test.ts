@@ -1136,7 +1136,9 @@ describe('a visitor mid fill when the form is published again (spec 0063, AC-630
         question({ id: 'size', key: 'size', label: 'Team size', answerType: 'choice', choices: ['Small', 'Big'] }),
         question({ id: 'seats', key: 'seats', label: 'Seats', answerType: 'number', required: true }),
       ],
-      steps: [{ id: 'big', startsAt: 'seats', showWhen: { join: 'all', rules: [{ key: 'size', op: 'is', value: 'Big' }] } }],
+      steps: [
+        { id: 'big', startsAt: 'seats', showWhen: { join: 'all', rules: [{ key: 'size', op: 'is', value: 'Big' }] } },
+      ],
     }));
     // v2: Classic, so the step's Show when no longer counts and Seats is asked of everyone.
     const draft = await getForm(w.scope, { formId: v1.id });
@@ -1160,6 +1162,9 @@ describe('a visitor mid fill when the form is published again (spec 0063, AC-630
     const kept = view.answers.map((answer) => answer.key);
     expect(kept).toContain('size');
     expect(kept).not.toContain('seats');
+  });
+});
+
 describe('a submission files its person under their company (spec 0059, AC-5916)', () => {
   it('links the person a form makes to the company of their work email, made by the form, and never on free mail', async () => {
     const w = await workspace();
