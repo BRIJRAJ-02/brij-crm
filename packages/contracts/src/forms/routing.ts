@@ -183,7 +183,140 @@ export const RoutingReport = z.object({
 /** A surface's report. */
 export type RoutingReport = z.infer<typeof RoutingReport>;
 
-/** Lead routing's procedures (spec 0043): the per rule report; rules are saved with their form or page. */
+/**
+ * One thing that happened beyond the rule (spec 0037, AC-1358), in order: a page with no free time in the next 14
+ * days, the form's After someone sends it used instead, the visitor told someone will contact them, or the free time
+ * not checked (it took past 2.5 seconds, or a calendar couldn't be read).
+ */
+export const RoutingStep = z.object({
+  kind: z.enum(['no_free_time', 'fallback', 'contact', 'unchecked']),
+  pageId: Uuid.optional(),
+  reason: z.enum(['timeout', 'calendar']).optional(),
+});
+/** One step of a decision. */
+export type RoutingStep = z.infer<typeof RoutingStep>;
+
+/** How far the free time check at submit looks ahead, in days (spec 0037's Numbers). */
+export const FREE_TIME_DAYS = 14;
+/** The longest the free time check at submit may take before the route is answered unchecked (AC-1380). */
+export const FREE_TIME_LIMIT_MS = 2_500;
+/** What a visitor reads when no page a form would send them to has free time (AC-1358). */
+export const NO_FREE_TIME_MESSAGE = 'Thanks. Someone from our team will contact you.';
+
+/** What a surface does when no rule matches: a page (by name), a message, a link, or the page's whole rotation. */
+export const RoutingFallback = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('page'), pageId: Uuid, name: z.string() }),
+  z.object({ kind: z.literal('message') }),
+  z.object({ kind: z.literal('redirect') }),
+  z.object({ kind: z.literal('rotation') }),
+]);
+/** What a surface does when no rule matches. */
+export type RoutingFallback = z.infer<typeof RoutingFallback>;
+
+/** One routed surface on Routing › Overview (AC-1383): its rules, its fallback and the last 30 days' counts. */
+export const RoutingSurface = z.object({
+  kind: z.enum(['form', 'booking_page']),
+  id: Uuid,
+  name: z.string(),
+  /** The workspace link (migration 0128), always listed, first. */
+  isWorkspaceLink: z.boolean(),
+  /** `live`, `paused`, or for a form `draft` (never published) and `archived`. */
+  status: z.string(),
+  rules: z.number().int().min(0),
+  /** Each rule by id and name, in order, for the Decisions filter; one over a field hidden from the reader has none. */
+  ruleList: z.array(z.object({ id: z.string(), name: z.string().optional() })),
+  fallback: RoutingFallback,
+  /** Decisions in the last 30 days that a rule (not the fallback) made. */
+  matched: z.number().int().min(0),
+  /** Decisions in the last 30 days that led to a booking. */
+  booked: z.number().int().min(0),
+});
+/** One routed surface. */
+export type RoutingSurface = z.infer<typeof RoutingSurface>;
+
+/** Routing › Overview: the workspace link first, then every form and team page with rules. */
+export const RoutingOverview = z.object({ surfaces: z.array(RoutingSurface) });
+/** Routing › Overview. */
+export type RoutingOverview = z.infer<typeof RoutingOverview>;
+
+/** The most decisions one page of Routing › Decisions holds. */
+export const ROUTING_DECISIONS_PAGE = 50;
+
+/** `routing.decisions`' filters (AC-1383) and its cursor. */
+export const RoutingDecisionsInput = WorkspaceScoped.extend({
+  surfaceId: Uuid.optional(),
+  /** A rule's id, or `fallback` for decisions no rule made. */
+  ruleId: z.union([RuleId, z.literal('fallback')]).optional(),
+  hostId: Uuid.optional(),
+  qualified: z.enum(['yes', 'no', 'none']).optional(),
+  /** Days, `YYYY-MM-DD`, inclusive, read in UTC. */
+  from: z.iso.date().optional(),
+  to: z.iso.date().optional(),
+  cursor: z.string().max(200).optional(),
+});
+/** `routing.decisions`' input. */
+export type RoutingDecisionsInput = z.infer<typeof RoutingDecisionsInput>;
+
+/** A decision's step as the log shows it: with the page's name. */
+export const RoutingStepView = RoutingStep.extend({ pageName: z.string().optional() });
+/** A decision's step as the log shows it. */
+export type RoutingStepView = z.infer<typeof RoutingStepView>;
+
+/**
+ * One decision as Routing › Decisions shows it (AC-1375): names and outcomes only, no record fact, and only when the
+ * reader may see the person it was for.
+ */
+export const RoutingDecision = z.object({
+  id: Uuid,
+  decidedAt: z.string(),
+  surface: z.object({ kind: z.enum(['form', 'booking_page']), id: Uuid, name: z.string() }),
+  /**
+   * The rule that decided: its place and name in the surface's rules now, neither once it is removed, and `hidden`
+   * (no place, no name) when it reads a field the reader can't see. Absent: the fallback.
+   */
+  rule: z
+    .object({
+      id: z.string(),
+      position: z.number().int().min(1).optional(),
+      name: z.string().optional(),
+      hidden: z.literal(true).optional(),
+    })
+    .optional(),
+  qualified: z.boolean().optional(),
+  /** The page a form sent the visitor to. */
+  routedPage: z.object({ id: Uuid, name: z.string() }).optional(),
+  /** The hosts the decision narrowed to, by name. */
+  hosts: z.array(z.object({ id: Uuid, name: z.string() })),
+  /** The booking that followed, with its host and start. */
+  booking: z
+    .object({ id: Uuid, hostName: z.string(), startsAt: z.string(), status: z.string(), noShow: z.boolean() })
+    .optional(),
+  /** Who it was for: the booking's visitor, or the form's lead, by name. */
+  guest: z.string().optional(),
+  steps: z.array(RoutingStepView),
+  /** Rules passed over because a fact couldn't be read, by place ("Rule 2"). */
+  skipped: z.array(z.string()),
+});
+/** One decision. */
+export type RoutingDecision = z.infer<typeof RoutingDecision>;
+
+/** A page of decisions, newest first, and the cursor for the next. */
+export const RoutingDecisionPage = z.object({ decisions: z.array(RoutingDecision), next: z.string().optional() });
+/** A page of decisions. */
+export type RoutingDecisionPage = z.infer<typeof RoutingDecisionPage>;
+
+/** `routing.decision`'s input. */
+export const RoutingDecisionInput = WorkspaceScoped.extend({ id: Uuid });
+/** `routing.decision`'s input. */
+export type RoutingDecisionInput = z.infer<typeof RoutingDecisionInput>;
+
+/**
+ * Lead routing's procedures (spec 0043; spec 0037 L6): the per rule report for a surface's editors, and for holders
+ * of `routing.manage` the Overview and the Decisions log across every surface. Rules are saved with their form or page.
+ */
 export const routingContract = {
   report: oc.input(RoutingReportInput).output(RoutingReport),
+  overview: oc.input(WorkspaceScoped).output(RoutingOverview),
+  decisions: oc.input(RoutingDecisionsInput).output(RoutingDecisionPage),
+  decision: oc.input(RoutingDecisionInput).output(RoutingDecision),
 };

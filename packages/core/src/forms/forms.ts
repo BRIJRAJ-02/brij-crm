@@ -13,6 +13,7 @@ import { randomBytes } from 'node:crypto';
 import { and, desc, eq, inArray, isNull, max, ne, sql } from 'drizzle-orm';
 import type { PgUpdateSetSource } from 'drizzle-orm/pg-core';
 import {
+  choiceKeysOf,
   defaultQuestions,
   fitsAttribute,
   FORM_COUNT_CAP,
@@ -57,7 +58,7 @@ import {
   type FormRow,
 } from './shared.ts';
 
-const { forms, formSubmissions, formVersions, members, objects, rotationRoster, rotations } = schema;
+const { bookingPages, forms, formSubmissions, formVersions, members, objects, rotationRoster, rotations } = schema;
 
 /** What a form the reader can't see, or one that doesn't exist, answers. */
 export const UNKNOWN_FORM = 'That form does not exist.';
@@ -508,6 +509,90 @@ export interface CreateFormInput {
   readonly id: string;
   readonly name?: string;
   readonly mainObjectId?: string | null;
+  /** `team_link` makes the Team link (spec 0037, AC-1353) instead of an empty form. */
+  readonly starter?: 'team_link';
+}
+
+/** The Team link's name, unless the maker names it. */
+export const TEAM_LINK_NAME = 'Book a call';
+/** The most team pages the Team link offers (spec 0037's Numbers). */
+export const TEAM_LINK_PAGES_MAX = 8;
+/** The Team link's choice question's key: its rules read it. */
+const TEAM_LINK_KEY = 'meeting';
+
+/** One team page the Team link offers: its id and title. */
+interface TeamLinkPage {
+  readonly id: string;
+  readonly title: string;
+}
+
+/**
+ * The live team pages the maker may send visitors to (the same door a form's booking route goes through), the
+ * workspace link first and then by title, at most 8.
+ */
+async function teamLinkPages(tx: WorkspaceTx, scope: EngineScope): Promise<readonly TeamLinkPage[]> {
+  const rows = await tx
+    .select({ id: bookingPages.id, title: bookingPages.title })
+    .from(bookingPages)
+    .where(and(eq(bookingPages.kind, 'round_robin'), eq(bookingPages.status, 'live'), isNull(bookingPages.deletedAt)))
+    .orderBy(sql`(${bookingPages.scope} = 'workspace') desc`, sql`lower(${bookingPages.title})`, bookingPages.id);
+  const usable: TeamLinkPage[] = [];
+  for (const row of rows) {
+    if (usable.length === TEAM_LINK_PAGES_MAX) break;
+    if ((await bookingTargetProblem(tx, scope, row.id, 'seen')) === undefined) usable.push(row);
+  }
+  return usable;
+}
+
+/**
+ * The Team link's document (AC-1353): Name and Email, then "What would you like to book?" with one choice per page
+ * (two pages with one title told apart by a number), one rule per choice booking that page, and the first page
+ * (the workspace link when there is one) as After someone sends it. From then on it is an ordinary form.
+ */
+function teamLinkDocument(draft: FormDocument, pages: readonly TeamLinkPage[]): FormDocument {
+  const seen = new Map<string, number>();
+  const choices = pages.map((page) => {
+    const base = page.title.trim().slice(0, 70) || 'Meeting';
+    const count = (seen.get(base.toLowerCase()) ?? 0) + 1;
+    seen.set(base.toLowerCase(), count);
+    return count === 1 ? base : `${base} (${String(count)})`;
+  });
+  const choiceKeys = choiceKeysOf({ choices });
+  const [first] = pages;
+  const question: FormQuestion = {
+    id: TEAM_LINK_KEY,
+    key: TEAM_LINK_KEY,
+    label: 'What would you like to book?',
+    answerType: 'choice',
+    choices,
+    choiceKeys,
+    required: true,
+    update: 'fill',
+    kept: true,
+  };
+  return {
+    ...draft,
+    headline: TEAM_LINK_NAME,
+    buttonText: 'Continue',
+    questions: [...draft.questions.filter((each) => each.key !== 'phone'), question],
+    routing: {
+      rules: pages.map((page, index) => ({
+        id: `book-${String(index + 1)}`,
+        when: { join: 'all' as const, rules: [{ key: TEAM_LINK_KEY, op: 'is' as const, value: choices[index] ?? '' }] },
+        then: { kind: 'book' as const, bookingPageId: page.id, message: '' },
+      })),
+    },
+    ...(first === undefined
+      ? {}
+      : {
+          after: {
+            kind: 'booking' as const,
+            bookingPageId: first.id,
+            countdownSeconds: 0,
+            message: '',
+          },
+        }),
+  };
 }
 
 /**
@@ -532,6 +617,14 @@ export async function createForm(
         if (existing.createdById === scope.actor.id) return viewOf(tx, scope, existing);
         throw refuse('ID_TAKEN', 'A form with that id already exists.');
       }
+      // The Team link (spec 0037, AC-1353): the live team pages its maker may use, the workspace link first.
+      const teamPages = input.starter === 'team_link' ? await teamLinkPages(tx, scope) : undefined;
+      if (teamPages?.length === 0) {
+        throw refuse('CONFIG_INVALID', 'Make a team page or the workspace link first.');
+      }
+      const shaped = (document: FormDocument) =>
+        teamPages === undefined ? document : teamLinkDocument(document, teamPages);
+      const name = input.name?.trim() ?? (teamPages === undefined ? UNTITLED_FORM : TEAM_LINK_NAME);
       const objectId =
         input.mainObjectId === undefined
           ? await defaultObject(tx, scope.access)
@@ -541,9 +634,9 @@ export async function createForm(
       if (objectId === undefined) {
         const kept = await insertForm(tx, scope, {
           id: input.id,
-          name: input.name?.trim() ?? UNTITLED_FORM,
+          name,
           objectId: null,
-          document: firstDraft(undefined),
+          document: shaped(firstDraft(undefined)),
         });
         return viewOf(tx, scope, kept);
       }
@@ -551,9 +644,9 @@ export async function createForm(
       const attributes = await loadAttributes(tx, objectId);
       const form = await insertForm(tx, scope, {
         id: input.id,
-        name: input.name?.trim() ?? UNTITLED_FORM,
+        name,
         objectId,
-        document: firstDraft({ objectId, attributes, primaryId: object.primaryAttributeId }),
+        document: shaped(firstDraft({ objectId, attributes, primaryId: object.primaryAttributeId })),
       });
       return viewOf(tx, scope, form);
     },

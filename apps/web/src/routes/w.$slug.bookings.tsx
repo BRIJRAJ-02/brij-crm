@@ -38,11 +38,16 @@ function BookingsRoute() {
   const access = useMyAccess();
   const seesOthers = access?.scheduling?.seesOthers === true;
   const isAdmin = useCan('booking.admin') || seesOthers;
-  // The Roster only for someone who sees a colleague's scheduling (spec 0037, AC-1447); its address falls back to
-  // Availability for everyone else (`bookings.roster`).
+  // The Roster only for someone who sees a colleague's scheduling, and Routing only for a holder of routing.manage
+  // (spec 0037, AC-1447); either address falls back for everyone else.
+  const canRoute = useCan('routing.manage');
   const tabs = useMemo(
-    () => BOOKINGS_TABS.filter((each) => each !== 'roster' || (access !== undefined && rosterIsShown(access))),
-    [access],
+    () =>
+      BOOKINGS_TABS.filter(
+        (each) =>
+          (each !== 'roster' || (access !== undefined && rosterIsShown(access))) && (each !== 'routing' || canRoute),
+      ),
+    [access, canRoute],
   );
   const { hosts: value, choose } = useHostsChoice(slug, isAdmin);
   const hosts = useMemo(() => (isAdmin ? { value, onChange: choose } : undefined), [isAdmin, value, choose]);

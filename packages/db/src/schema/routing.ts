@@ -6,7 +6,18 @@
 // surface: a form's in its version document, a team page's in
 // `booking_pages.routing`.
 import { sql } from 'drizzle-orm';
-import { boolean, check, foreignKey, index, pgTable, primaryKey, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import {
+  boolean,
+  check,
+  foreignKey,
+  index,
+  jsonb,
+  pgTable,
+  primaryKey,
+  text,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core';
 import { bookingPages, bookings } from './booking.ts';
 import { id, timestamptz, workspaceId } from './common.ts';
 
@@ -36,6 +47,11 @@ export const routingDecisions = pgTable(
     hosts: uuid('hosts').array(),
     /** The booking that followed (a form's hand off) or was made (a team page's). */
     bookingId: uuid('booking_id'),
+    /**
+     * What happened beyond the rule, in order (spec 0037, AC-1358): `RoutingStep`s, `{ kind, pageId?, reason? }`, such as a
+     * page with no free time and the fallback used instead. Null when nothing did. Nullable with no default (AC-1446).
+     */
+    steps: jsonb('steps'),
     decidedAt: timestamptz('decided_at').notNull().defaultNow(),
   },
   (t) => [
@@ -52,6 +68,8 @@ export const routingDecisions = pgTable(
     }),
     // The report: one surface's decisions in a window.
     index('routing_decisions_by_surface').on(t.workspaceId, t.surfaceId, t.decidedAt),
+    // Routing › Decisions (spec 0037, AC-1383): every surface's decisions, newest first, keyset paged by time and id.
+    index('routing_decisions_by_time').on(t.workspaceId, t.decidedAt.desc(), t.id.desc()),
     // One decision per submission (AC-1607), which a hand off's booking finds it by: a retried or doubled submit
     // can never decide twice, nor count twice in a rule's report.
     uniqueIndex('routing_decisions_one_per_submission')

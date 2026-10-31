@@ -76,7 +76,8 @@ import { noVideoLinkReason } from './destination.ts';
 import { LeaveGuard } from '../navigation/LeaveGuard.tsx';
 import { PageConflicts, PageDestination } from './PageDestination.tsx';
 import { HostsCard } from './HostsCard.tsx';
-import { recordFacts } from '../routing/facts.ts';
+import { pageFacts } from '../routing/facts.ts';
+import { FormOnlyCard } from './FormOnlyCard.tsx';
 import type { RecordFields } from '../routing/record-fields.ts';
 import { RulesCard } from '../routing/RulesCard.tsx';
 import { strings as routingStrings } from '../routing/strings.ts';
@@ -228,6 +229,7 @@ const settingsOf = (page: BookingPageView): BookingPageSettings => ({
   questions: page.questions,
   fileToCrm: page.fileToCrm,
   answersObjectId: page.answersObjectId,
+  formOnly: page.formOnly,
 });
 
 /** Why a slug can't be sent, in plain words, or undefined when it can. */
@@ -1322,7 +1324,7 @@ export function PageEditor({
                         surface={{ kind: 'page', pageId: page.id, pool: teamPool }}
                         {...(isLocked ? {} : { report: { kind: 'booking_page' as const, pageId: page.id } })}
                         rules={page.routing?.rules ?? []}
-                        facts={recordFields === undefined ? [] : recordFacts(recordFields.person, recordFields.company)}
+                        facts={pageFacts(page.questions, recordFields)}
                         factLabel={routingStrings.questionOrField}
                         emptyFacts={routingStrings.noFields}
                         description={routingStrings.pageRoutingLine(page.routing?.rules.length ?? 0)}
@@ -1335,6 +1337,16 @@ export function PageEditor({
                             {},
                             { routing: { rules: [...rules] } },
                           );
+                          setPage(saved);
+                          onNotice?.(routingStrings.saved);
+                        }}
+                      />
+                      <FormOnlyCard
+                        data={data}
+                        slug={slug}
+                        page={page}
+                        isLocked={isLocked}
+                        onSaved={(saved) => {
                           setPage(saved);
                           onNotice?.(routingStrings.saved);
                         }}

@@ -113,12 +113,15 @@ export type FormView = z.infer<typeof FormView>;
 /**
  * A new form (AC-649): "Untitled form" with Name, Email and Phone on People,
  * unless named. `mainObjectId` picks another object, and `null` keeps its
- * submissions only, adding nothing to the CRM.
+ * submissions only, adding nothing to the CRM. `starter: 'team_link'` makes
+ * the Team link instead (spec 0037, AC-1353): "Book a call" asking which live
+ * team page to book, one rule per page, and the workspace link as the fallback.
  */
 export const CreateFormInput = WorkspaceScoped.extend({
   id: uuidV7('The form id must be a UUID v7.'),
   name: FormName.optional(),
   mainObjectId: Uuid.nullable().optional(),
+  starter: z.literal('team_link').optional(),
   mutationId: Uuid,
 });
 /** A new form. */

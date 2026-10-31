@@ -12,6 +12,7 @@ export const strings = {
     roster: 'Roster',
     // "Round robin" is what the feature is called everywhere else in the product, so the tab says it too.
     'round-robin': 'Round robin',
+    routing: 'Routing',
     calendars: 'Calendars',
   },
   tabsLabel: 'Which bookings',

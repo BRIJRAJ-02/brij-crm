@@ -5,7 +5,14 @@
 // follows. A form's rules never read the CRM, so record facts are unreadable
 // here and a rule reading one is skipped.
 import { and, eq } from 'drizzle-orm';
-import { FORM_ROUTES, hiddenFacts, isRecordFact, type FormDocument, type Route } from '@crm/contracts';
+import {
+  FORM_ROUTES,
+  hiddenFacts,
+  isRecordFact,
+  type FormDocument,
+  type Route,
+  type RoutingStep,
+} from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { decideRoute } from './decide.ts';
 
@@ -72,6 +79,7 @@ export async function submissionDecision(
       readonly routedPageId: string | null;
       readonly hosts: readonly string[] | null;
       readonly qualified: boolean | null;
+      readonly steps: unknown;
     }
   | undefined
 > {
@@ -82,6 +90,7 @@ export async function submissionDecision(
       routedPageId: routingDecisions.routedPageId,
       hosts: routingDecisions.hosts,
       qualified: routingDecisions.qualified,
+      steps: routingDecisions.steps,
     })
     .from(routingDecisions)
     .where(and(eq(routingDecisions.surfaceKind, 'form'), eq(routingDecisions.submissionId, submissionId)))
@@ -98,4 +107,46 @@ export async function storedRoute(
   const decision = await submissionDecision(tx, submissionId);
   if (decision?.ruleId === null || decision === undefined) return undefined;
   return document.routing.rules.find((rule) => rule.id === decision.ruleId)?.then;
+}
+
+/**
+ * Records what the free time check did (spec 0037, AC-1358) on a submission's decision: its steps, and the page the
+ * visitor was sent to in the end (null when none: they read "someone will contact you"), its hosts kept only when
+ * that is still the page the rule chose. A form with no rules has no decision yet, so one is written here, rule null,
+ * so every step shows in Decisions.
+ */
+export async function recordSteps(
+  tx: WorkspaceTx,
+  input: {
+    readonly workspaceId: string;
+    readonly formId: string;
+    readonly submissionId: string;
+    readonly steps: readonly RoutingStep[];
+    readonly routedPageId: string | null;
+    readonly keepHosts: boolean;
+  },
+): Promise<void> {
+  const steps = input.steps.map((step) => ({ ...step }));
+  const updated = await tx
+    .update(routingDecisions)
+    .set({
+      steps,
+      routedPageId: input.routedPageId,
+      ...(input.keepHosts ? {} : { hosts: null }),
+    })
+    .where(and(eq(routingDecisions.surfaceKind, 'form'), eq(routingDecisions.submissionId, input.submissionId)))
+    .returning({ id: routingDecisions.id });
+  if (updated.length > 0) return;
+  await tx
+    .insert(routingDecisions)
+    .values({
+      workspaceId: input.workspaceId,
+      surfaceKind: 'form',
+      surfaceId: input.formId,
+      ruleId: null,
+      submissionId: input.submissionId,
+      routedPageId: input.routedPageId,
+      steps,
+    })
+    .onConflictDoNothing();
 }

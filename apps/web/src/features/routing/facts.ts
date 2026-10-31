@@ -193,3 +193,15 @@ export function storedShowWhen(showWhen: ShowWhen): {
     })),
   };
 }
+
+/**
+ * What a team page's rules read (spec 0037, AC-1352): the page's own questions first (by key, as a form's), then
+ * the person's and company's fields once read.
+ */
+export function pageFacts(
+  questions: readonly FormQuestion[],
+  fields:
+    { readonly person: readonly AttributeDefinition[]; readonly company: readonly AttributeDefinition[] } | undefined,
+): readonly Fact[] {
+  return [...questionFacts(questions), ...(fields === undefined ? [] : recordFacts(fields.person, fields.company))];
+}

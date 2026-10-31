@@ -49,6 +49,8 @@ export function CapturesCreateProvider({ slug, tab, children }: CapturesCreatePr
   // Bookings' "Create a link only page" arrives as `?new=link-only`: the dialog opens preset, and closing it drops it.
   const search: { readonly new?: unknown } = useSearch({ strict: false });
   const isAskedLinkOnly = tab === 'links' && search.new === 'link-only';
+  // Routing's "New team link" arrives as `?new=team-link` (spec 0037, AC-1353): the dialog opens on the Team link.
+  const isAskedTeamLink = tab === 'links' && search.new === 'team-link' && canManageForms;
   const [makingForm, setMakingForm] = useState<string | undefined>(undefined);
 
   // New form makes "Untitled form" at once and opens it: no dialog first, the builder is the dialog.
@@ -93,11 +95,20 @@ export function CapturesCreateProvider({ slug, tab, children }: CapturesCreatePr
         data={data}
         slug={slug}
         canBookTeams={canBookTeams}
-        isOpen={isAddingPage || isAskedLinkOnly}
+        isOpen={isAddingPage || isAskedLinkOnly || isAskedTeamLink}
         isLinkOnly={isAskedLinkOnly}
+        isTeamLinkAsked={isAskedTeamLink}
+        {...(canManageForms
+          ? {
+              onTeamLink: (formId: string) => {
+                setAddingPage(false);
+                void navigate({ href: formHref(slug, formId) });
+              },
+            }
+          : {})}
         onClose={() => {
           setAddingPage(false);
-          if (isAskedLinkOnly) void navigate({ href: linksHref(slug), replace: true });
+          if (isAskedLinkOnly || isAskedTeamLink) void navigate({ href: linksHref(slug), replace: true });
         }}
         onCreated={(page) => {
           setAddingPage(false);

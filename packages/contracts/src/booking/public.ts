@@ -89,6 +89,11 @@ export const PublicBookingPage = z.object({
    * choices, required, show when), never where an answer is filed. Absent on a page that asks none (AC-5704).
    */
   questions: z.array(PublicQuestion).optional(),
+  /**
+   * The page books only through a form (spec 0037, AC-1388) and this visit carries no hand off: the visitor sees the
+   * page's closed state. Only the host's own editor preview draws it anyway. Absent otherwise.
+   */
+  formOnly: z.literal(true).optional(),
 });
 /** The page's facts. */
 export type PublicBookingPage = z.infer<typeof PublicBookingPage>;

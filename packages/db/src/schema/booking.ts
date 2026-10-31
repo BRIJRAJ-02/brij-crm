@@ -99,6 +99,11 @@ export const bookingPages = pgTable(
     answersObjectId: uuid('answers_object_id'),
     /** A team page's routing rules (spec 0043, AC-1608): `RoutingRules`, tried at each booking. */
     routing: jsonb('routing').notNull().default({ rules: [] }),
+    /**
+     * Only through a form (spec 0037, AC-1388): a team page that books only with a form's hand off. Off by default, so no
+     * page changes behaviour by itself; `booking_pages` is small, so the default is safe (AC-1446).
+     */
+    formOnly: boolean('form_only').notNull().default(false),
     /** `{ mode: 'create' | 'move_open', stageOptionId }` (milestone 2). */
     deal: jsonb('deal'),
     status: text('status').notNull().default('live'),

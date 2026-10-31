@@ -307,6 +307,12 @@ export const BookingPageSettings = z.object({
    * 0057, AC-5708): on by default, today's behaviour. Off, the booking keeps the answers and touches no record.
    */
   fileToCrm: z.boolean(),
+  /**
+   * Only through a form (spec 0037, AC-1388): a team page that books only with a form's hand off, so nobody skips a
+   * team link's questions by keeping the page's address; without one it answers as a closed page. Off by default, so
+   * no page changes behaviour on its own; meaningless on a personal page, whose writes refuse it.
+   */
+  formOnly: z.boolean(),
 });
 /** Every setting a member edits. */
 export type BookingPageSettings = z.infer<typeof BookingPageSettings>;

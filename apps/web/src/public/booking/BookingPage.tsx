@@ -229,8 +229,14 @@ export function BookingPage({
   // The last preview message, kept until the page loads to lay it over.
   const [preview, setPreview] = useState<unknown>(undefined);
   const load = useCallback(() => {
-    client.page(publicKey).then(
+    client.page(publicKey, handoff).then(
       (page) => {
+        // A page that books only through a form, reached without one (spec 0037, AC-1388): its closed state. The
+        // host's own editor preview still draws it.
+        if (page.formOnly === true && !isEditorPreview) {
+          setLoaded({ state: 'closed' });
+          return;
+        }
         if (page.path !== undefined) onAddress?.(page.path);
         setLoaded({ state: 'ready', page });
       },
@@ -239,7 +245,7 @@ export function BookingPage({
         setLoaded({ state: code === 'NOT_FOUND' ? 'gone' : code === 'BOOKING_CLOSED' ? 'closed' : 'failed' });
       },
     );
-  }, [client, publicKey, onAddress]);
+  }, [client, publicKey, handoff, isEditorPreview, onAddress]);
   useEffect(load, [load]);
   useEffect(() => {
     if (isPreview) return;
