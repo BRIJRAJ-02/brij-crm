@@ -1,5 +1,7 @@
 import {
   bookAsHost,
+  listEditors,
+  setEditors,
   bookingAssignments,
   reassignBooking,
   reassignUpcoming,
@@ -356,6 +358,23 @@ export const rotationsRouter = member.rotations.router({
   delete: member.rotations.delete.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, () =>
       deleteRotation(context.scope, { rotationId: input.rotationId }),
+    ),
+  ),
+});
+
+// Page and rotation editors (spec 0037, AC-1331): Sharing. Settings, not CRM data: no outbox row, but the write goes
+// through `commitWrite`.
+export const editorsRouter = member.editors.router({
+  list: member.editors.list.handler(({ context, input }) =>
+    listEditors(context.scope, { resourceType: input.resourceType, resourceId: input.resourceId }),
+  ),
+  set: member.editors.set.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, () =>
+      setEditors(context.scope, {
+        resourceType: input.resourceType,
+        resourceId: input.resourceId,
+        memberIds: input.memberIds,
+      }),
     ),
   ),
 });

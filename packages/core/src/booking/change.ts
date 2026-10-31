@@ -133,7 +133,12 @@ async function readTarget(
       .where(and(eq(bookingHosts.bookingId, row.id), sql`${bookingHosts.memberId} <> ${row.hostMemberId}`))
   ).map((host) => host.memberId);
   const reached = await bookingReaderIn(tx, target.scope);
-  const may = bookingAccess(reached, { hostMemberId: row.hostMemberId, ownerMemberId: pageManagerOf(page), coHostIds });
+  const may = bookingAccess(reached, {
+    hostMemberId: row.hostMemberId,
+    pageId: row.pageId,
+    ownerMemberId: pageManagerOf(page),
+    coHostIds,
+  });
   if (may === undefined) throw refuse('NOT_FOUND', MISSING);
   if (may === 'see') throw refuse('FORBIDDEN', SEE_ONLY);
   return { row, page };

@@ -123,3 +123,59 @@ export const memberBookingLimits = pgTable(
     }),
   ],
 );
+
+/**
+ * Editors of a booking page or a rotation (spec 0037, AC-1331): one row per member (or, from lane L3a, per team) a
+ * page or rotation names as an editor, who changes everything on it except its editors, its deletion and, for a page,
+ * its owner. `resource_type` is text with a value check (`booking_page` or `rotation`) and `resource_id` has no
+ * foreign key, since it names either table: core deletes a resource's rows in the transaction that deletes it, and
+ * reads only live resources. `team_id` has no foreign key yet: teams arrive with spec 0031 slice 8, whose migration
+ * adds it; until then core refuses a team. At most 20 per resource, checked in core (`EDITOR_LIMIT`).
+ */
+export const schedulingEditors = pgTable(
+  'scheduling_editors',
+  {
+    workspaceId: workspaceId(),
+    id: id(),
+    /** `booking_page` or `rotation`. */
+    resourceType: text('resource_type').notNull(),
+    resourceId: uuid('resource_id').notNull(),
+    memberId: uuid('member_id'),
+    teamId: uuid('team_id'),
+    ...auditColumns(),
+  },
+  (t) => [
+    primaryKey({ name: 'scheduling_editors_pkey', columns: [t.workspaceId, t.id] }),
+    foreignKey({
+      name: 'scheduling_editors_member',
+      columns: [t.workspaceId, t.memberId],
+      foreignColumns: [members.workspaceId, members.id],
+    }),
+    // One row per resource and editor; its prefix serves a resource's list and its count.
+    uniqueIndex('scheduling_editors_one').on(
+      t.workspaceId,
+      t.resourceType,
+      t.resourceId,
+      sql`coalesce(${t.memberId}, ${t.teamId})`,
+    ),
+    // What a member edits (the access check, the lists' Editor badge, the removal).
+    index('scheduling_editors_by_member')
+      .on(t.workspaceId, t.memberId)
+      .where(sql`${t.memberId} is not null`),
+    index('scheduling_editors_by_team')
+      .on(t.workspaceId, t.teamId)
+      .where(sql`${t.teamId} is not null`),
+    check('scheduling_editors_resource_type', sql`${t.resourceType} in ('booking_page', 'rotation')`),
+    check('scheduling_editors_one_editor', sql`num_nonnulls(${t.memberId}, ${t.teamId}) = 1`),
+    ...actorConstraints('scheduling_editors', 'created_by', t.workspaceId, {
+      type: t.createdByType,
+      id: t.createdById,
+      memberId: t.createdByMemberId,
+    }),
+    ...actorConstraints('scheduling_editors', 'updated_by', t.workspaceId, {
+      type: t.updatedByType,
+      id: t.updatedById,
+      memberId: t.updatedByMemberId,
+    }),
+  ],
+);
