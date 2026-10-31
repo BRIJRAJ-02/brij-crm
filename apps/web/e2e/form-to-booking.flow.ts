@@ -100,7 +100,7 @@ test.describe('a form that sends its visitor on to book', () => {
     await visitor.waitForTimeout(2_500);
     await visitor.getByRole('button', { name: 'Send' }).click();
     await expect(visitor.getByRole('heading', { name: 'Thank you. That is with us.' })).toBeVisible();
-    await expect(visitor.getByRole('button', { name: 'Book now' })).toBeVisible();
+    await expect(visitor.getByRole('button', { name: 'Book a time' })).toBeVisible();
 
     // On to the booking page (by its key, or by its owner's handle) with the signed hand off and nothing else in the
     // address; then the page takes the hand off out of the address.

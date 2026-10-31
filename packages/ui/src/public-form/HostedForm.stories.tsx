@@ -279,7 +279,10 @@ const booking = (seconds: number) => () =>
     next: { kind: 'booking' as const, url: '/b/intro-call?p=token', countdownSeconds: seconds, text: '' },
   });
 
-/** Sent, and on to book: "Taking you to book a time in 30…" with the ring draining, Book now and Stay here (AC-1059). */
+/**
+ * Sent, and on to book: what was sent read back (spec 0058, AC-19), Book a time with a quiet Stay here, then "Taking
+ * you to book a time in 30…" with the ring draining (AC-1059).
+ */
 export const BookAfter: Story = {
   // The ring and the number move with time, so no screenshot.
   parameters: { crm: { screenshot: false } },
@@ -289,7 +292,8 @@ export const BookAfter: Story = {
     await userEvent.type(canvas.getByLabelText('Work email'), 'ada@example.com');
     await userEvent.click(canvas.getByRole('button', { name: 'Send' }));
     await waitFor(() => expect(canvas.getByRole('heading', { name: 'Thank you. That is with us.' })).toHaveFocus());
-    await expect(canvas.getByRole('button', { name: 'Book now' })).toBeInTheDocument();
+    await expect(canvas.getByRole('button', { name: 'Book a time' })).toBeInTheDocument();
+    await expect(canvas.getByText('ada@example.com')).toBeInTheDocument();
     await expect(args.onRedirect).not.toHaveBeenCalled();
   },
 };
