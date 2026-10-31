@@ -593,7 +593,8 @@
     transition: color var(--duration-hover) var(--ease-hover);
   }
 
-  /* The blocks arrive with a short rise. Movement only where motion is welcome; the fade always. */
+  /* The blocks arrive with a short fade and rise, only where motion is welcome. Under reduced motion they are simply
+     there: no fade either (spec 0058, AC-2), on the public page and in the preview alike. */
   @keyframes rise {
     from {
       opacity: 0;
@@ -602,11 +603,8 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    @keyframes rise {
-      from {
-        opacity: 0;
-        translate: none;
-      }
+    .blocks {
+      animation: none;
     }
   }
 
