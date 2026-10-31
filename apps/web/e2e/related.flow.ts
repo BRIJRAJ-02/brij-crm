@@ -113,11 +113,7 @@ test('a company’s Team: added and removed from its page, with Undo, live in a 
     timeout: LIVE_MS,
   });
 
-  // Overview's Team card: both, and View all moves focus to the section's heading.
-  const card = page.getByRole('tabpanel', { name: 'Overview' }).getByRole('list', { name: 'Team' });
-  await expect(card).toContainText('Alan Turing');
-  await expect(card).toContainText('Grace Hopper');
-  await page.getByRole('button', { name: 'View all 2 people in Team' }).click();
-  await expect(sidebar.getByRole('button', { name: /^Team/ })).toBeFocused();
+  // Related records live in the sidebar alone (owner, 31 Oct): Overview holds no copy of them.
+  await expect(page.getByRole('tabpanel', { name: 'Overview' }).getByRole('list', { name: 'Team' })).toHaveCount(0);
   await readerContext.close();
 });

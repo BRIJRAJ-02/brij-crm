@@ -1,7 +1,7 @@
 // Brief
 // Purpose: a record at a glance, the first tab of its page.
 // Main task: see the newest things that happened to it, and go on to the whole timeline.
-// Leaves out: Related cards (milestone 3) and Highlights (#18). Open tasks (#19) sit above it, from the page.
+// Leaves out: related records (the sidebar holds them, with Add) and Highlights (#18). Open tasks sit above it.
 import type { ActivityFeed } from '@crm/data';
 import { Button, Card } from '@crm/ui';
 import { ActivityTab } from './ActivityTab.tsx';

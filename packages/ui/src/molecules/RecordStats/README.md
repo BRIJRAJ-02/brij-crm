@@ -4,7 +4,7 @@ A record's stat strip: a few counts and the last activity, side by side, under t
 
 ## Why it exists
 
-New (13 Oct reference batch 4, the record panel and lists). The owner's reference puts a strip of numbers under a record's name (tickets, overdue, response time). Nothing in the library held it: `DescriptionList` pairs a label with plain text down a column or in columns of pairs, and edits nothing; a strip needs each value in the heading type, a count or a relative time, a loading skeleton per value, and a tile that goes somewhere when pressed. A `DescriptionList` variant would have carried all of that into every key and value list. It sits in `molecules`, shared by `RecordHeader` and `RecordPanel`.
+New (13 Oct reference batch 4, the record panel and lists). The owner's reference puts a strip of numbers under a record's name (tickets, overdue, response time). Nothing in the library held it: `DescriptionList` pairs a label with plain text down a column or in columns of pairs, and edits nothing; a strip needs each value in one strong type, a count or a relative time, a loading skeleton per value, and a tile that goes somewhere when pressed. A `DescriptionList` variant would have carried all of that into every key and value list. It sits in `molecules`, shared by `RecordHeader` and `RecordPanel`.
 
 ## Use
 
@@ -25,9 +25,9 @@ New (13 Oct reference batch 4, the record panel and lists). The owner's referenc
 
 ## States
 
-- A stat with nothing yet ("None") is quiet body text in text-tertiary, not the heading type, so it never reads as the strip's headline (QA, 22 October 2026).
+- Every value takes the same type (`text-body-strong`), and the stats share the row equally, so "4 minutes ago" never shouts beside an empty stat (owner, 31 October 2026, replacing the heading type). A stat with nothing yet shows a quiet dash in `text-tertiary`, heard as "None".
 
-Default, loading (skeleton values), none (a stat with no value), pressable (hover takes `surface-hover`, focus the inset ring), narrow (as many to a row as fit at 140px each, a short last row stretching; under 480px of box the values step down to body strong type, so a relative time like "13 minutes ago" reads whole on a phone, and the same with four stats or more in a row).
+Default, loading (skeleton values), none (a stat with no value: a dash), pressable (hover takes `surface-hover`, focus the inset ring), narrow (equal shares of at least 140px each, a short last row stretching).
 
 ## Keyboard
 

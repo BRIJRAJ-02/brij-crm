@@ -1,7 +1,7 @@
 // Brief
 // Purpose: glance at a record beside its table or board, and change it, without leaving the list (Twenty's side panel).
 // Main task: read and edit its details, then step to the record above or below with ↑ and ↓ and keep going.
-// Leaves out: Overview, the stat strip and the record's menu (delete, copy link), all on its full page one press away.
+// Leaves out: Overview, the stat strip and the record's menu (rename, delete, copy link), all on its full page one press away.
 import type { AttributeDefinition, MemberSummary, ObjectSummary, RecordState, RecordView } from '@crm/data';
 import { useCommentCount, useNoteTotal, useRecord, useRecordFileCount, useTaskTotal } from '@crm/data/react';
 import { Callout, EmptyState, RecordPanel, type RecordPanelTab } from '@crm/ui';
@@ -24,6 +24,7 @@ import { recordHref, recordName } from './details.ts';
 import type { PeekLoadStep, PeekSteps, PeekTab } from './params.ts';
 import { openPeek, type PeekSources } from './peek.ts';
 import { RecordDetails } from './RecordDetails.tsx';
+import { RecordQuickActions, RecordSummaryFacts, contactOf } from './RecordSummary.tsx';
 import { RelatedSections } from './RelatedSections.tsx';
 import { strings } from './strings.ts';
 import { recordLinks } from './timeline.ts';
@@ -386,6 +387,30 @@ function LoadedPeek(
       <RecordPanel
         {...common}
         record={display}
+        // The record at a glance under its name, and its quick actions (owner, 31 Oct).
+        facts={
+          <RecordSummaryFacts
+            name={display.name}
+            attributes={sources.attributes}
+            record={shown}
+            referenceDisplays={state.referenceDisplays}
+          />
+        }
+        quickActions={
+          <RecordQuickActions
+            {...contactOf(sources.attributes, shown)}
+            {...(canEdit
+              ? {
+                  onLog: () => {
+                    setLog('new');
+                  },
+                  onTask: () => {
+                    setTask('new');
+                  },
+                }
+              : {})}
+          />
+        }
         selectedTab={tab}
         onTabChange={(next) => {
           const found = tabs.find((each) => each.id === next);

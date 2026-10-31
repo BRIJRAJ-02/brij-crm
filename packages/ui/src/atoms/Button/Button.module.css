@@ -242,7 +242,7 @@
      holds 3:1 against its own soft fill and the surface in both themes (the
      plain accent fell to 2.8:1 on its fill in dark). */
   .root[data-selected],
-  .root[data-expanded]:not([data-variant='danger']) {
+  .root[data-expanded]:not([data-variant='danger'], [data-variant='link']) {
     border-color: var(--accent-line);
     background: var(--accent-soft);
     box-shadow: none;
@@ -256,7 +256,8 @@
   }
 
   @media (hover: hover) and (pointer: fine) {
-    .root:not([data-selected], [data-expanded])[data-hovered] {
+    .root:not([data-selected], [data-expanded])[data-hovered],
+    .root[data-variant='link'][data-expanded][data-hovered] {
       background: var(--surface-hover);
     }
 

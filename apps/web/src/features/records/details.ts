@@ -58,6 +58,13 @@ export function relatedSides(
     });
 }
 
+/** Whether a value has something in it: not null, not blank text, not an empty list. */
+export const isFilled = (value: unknown): boolean =>
+  value !== null &&
+  value !== undefined &&
+  !(typeof value === 'string' && value.trim() === '') &&
+  !(Array.isArray(value) && value.length === 0);
+
 /** A reference value's links, as a list: one link, several, or none. */
 export function refsOf(value: unknown): readonly RecordRef[] {
   const list: readonly unknown[] = Array.isArray(value) ? value : value === null || value === undefined ? [] : [value];

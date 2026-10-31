@@ -43,7 +43,6 @@ import {
   Button,
   Callout,
   Card,
-  CopyButton,
   EmptyState,
   Link,
   LockReason,
@@ -53,7 +52,6 @@ import {
   Tooltip,
   type RecordStat,
   type RelatedRecordsHandle,
-  sharedStrings,
   TaskList,
   TopBar,
 } from '@crm/ui';
@@ -85,7 +83,9 @@ import { RecordLists } from '../lists/RecordLists.tsx';
 import { strings as listStrings } from '../lists/strings.ts';
 import { RecordActions } from './RecordActions.tsx';
 import { RecordDetails } from './RecordDetails.tsx';
-import { PendingRelatedCard, RelatedCards, RelatedSections, type RelatedSource } from './RelatedSections.tsx';
+import { RelatedSections, type RelatedSource } from './RelatedSections.tsx';
+import { RecordQuickActions, RecordSummaryFacts, contactOf } from './RecordSummary.tsx';
+import { RenameDialog } from './RenameDialog.tsx';
 import { strings } from './strings.ts';
 import { recordLinks } from './timeline.ts';
 
@@ -259,7 +259,6 @@ function PendingTab({ tab }: { readonly tab: RecordTab }) {
       >
         <ActivityFeed label={strings.recentActivity} entries={NO_ENTRIES} status="loading" />
       </Card>
-      <PendingRelatedCard />
     </>
   );
 }
@@ -431,7 +430,7 @@ function RecordScreen({
   const router = useRouter();
   // The trashed banner's Restore: pending while it runs; once back, the record is read again and the page is normal.
   const [isRestoring, setRestoring] = useState(false);
-  // The narrow page's Details fold, opened by a Related card's "View all" before focus moves into it.
+  // The narrow page's Details fold, held here so it stays open across renders.
   const [isSidebarExpanded, setSidebarExpanded] = useState(false);
   const relatedHandles = useRef(new Map<string, RelatedRecordsHandle>());
   // One ref callback per side for the page's life, so a section's handle isn't let go and taken again each render.
@@ -446,13 +445,8 @@ function RecordScreen({
     handleRefs.current.set(attributeId, made);
     return made;
   }, []);
-  const viewAllRelated = (attributeId: string) => {
-    setSidebarExpanded(true);
-    // A frame for the narrow page's Details fold to open; the section then opens itself if folded and takes focus.
-    requestAnimationFrame(() => {
-      relatedHandles.current.get(attributeId)?.focus();
-    });
-  };
+  // Rename, from the More menu: the name is the header's, no longer a row in Details (owner, 31 Oct).
+  const [isRenaming, setRenaming] = useState(false);
   const openTotal = useTaskTotal(open);
   const notesTotal = useNoteTotal(notes);
   const commentCount = useCommentCount(comments);
@@ -704,10 +698,7 @@ function RecordScreen({
             openTab('activity');
           }}
         />
-        {/* A trashed record's links are hidden until it is restored (AC-376): no Related cards. */}
-        {related !== undefined && trashed?.status !== 'trashed' && !(state.status === 'deleted' && state.isLost) && (
-          <RelatedCards related={related} link={link} onViewAll={viewAllRelated} />
-        )}
+        {/* Related records live in the sidebar alone, with their Add (owner, 31 Oct: shown twice). */}
       </>
     );
   }
@@ -879,7 +870,9 @@ function RecordScreen({
     },
   ];
 
-  // The library's CopyButton (A77): a check and "Copied" for two seconds, said to screen readers, a toast only on failure.
+  // Email and Call in the header's quick actions: the record's first address and number.
+  const contact = contactOf(attributes, shown);
+  const nameAttribute = attributes.find((each) => each.isPrimary);
   const pageLink = new URL(recordHref(slug, object.apiSlug, recordId, tab), window.location.origin).href;
 
   const restore = () => {
@@ -949,6 +942,14 @@ function RecordScreen({
                   record={display}
                   objectName={object.singularName}
                   stats={stats}
+                  facts={
+                    <RecordSummaryFacts
+                      name={name}
+                      attributes={attributes}
+                      record={shown}
+                      referenceDisplays={state.referenceDisplays}
+                    />
+                  }
                   // An object the person may only read says so, with why on its lock, rather than dropping editors.
                   {...(isViewOnly
                     ? {
@@ -961,12 +962,19 @@ function RecordScreen({
                       }
                     : {})}
                 >
-                  <CopyButton
-                    variant="ghost"
-                    value={pageLink}
-                    label={strings.copyLink}
-                    announcement={strings.linkCopied}
-                    failureMessage={sharedStrings.couldntCopy}
+                  {/* Quick actions: reach the person, or log what happened, without leaving the header. */}
+                  <RecordQuickActions
+                    {...contact}
+                    {...(canAddTasks
+                      ? {
+                          onLog: () => {
+                            openLog('new');
+                          },
+                          onTask: () => {
+                            openTask('new');
+                          },
+                        }
+                      : {})}
                   />
                   {listSection !== undefined && canEdit && (
                     <HeaderAddToList
@@ -983,6 +991,13 @@ function RecordScreen({
                     recordId={recordId}
                     pageLink={pageLink}
                     canDelete={canEdit}
+                    {...(canEdit && nameAttribute !== undefined
+                      ? {
+                          onRename: () => {
+                            setRenaming(true);
+                          },
+                        }
+                      : {})}
                   />
                 </RecordHeader>
               }
@@ -1045,6 +1060,20 @@ function RecordScreen({
       {dialog}
       {noteWindow}
       {logDialog}
+      {isRenaming && nameAttribute !== undefined && (
+        <RenameDialog
+          attribute={nameAttribute}
+          value={shown.values[nameAttribute.id] ?? null}
+          singularName={object.singularName}
+          isOpen
+          onClose={() => {
+            setRenaming(false);
+          }}
+          onSave={(value) => {
+            data.records.setValue(slug, { rowId: recordId, columnId: nameAttribute.id, value });
+          }}
+        />
+      )}
     </>
   );
 }

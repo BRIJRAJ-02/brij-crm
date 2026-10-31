@@ -26,6 +26,32 @@
     padding: var(--space-12) var(--space-16) 0;
   }
 
+  /* Previous and Next sit together as one pair, a space-8 gap after them before Open full page and Close. */
+  .steps {
+    display: inline-flex;
+    align-items: center;
+    margin-inline-end: var(--space-8);
+  }
+
+  /* The record at a glance: its facts, then one row of quick actions, over the tabs. */
+  .summary {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    gap: var(--space-8);
+    padding: var(--space-12) var(--space-16) 0;
+  }
+
+  .facts {
+    min-inline-size: 0;
+  }
+
+  .quick {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-4);
+  }
+
   .tabs {
     display: flex;
     flex: 1;

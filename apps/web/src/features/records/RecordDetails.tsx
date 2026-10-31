@@ -21,7 +21,7 @@ import { useParams, useRouteContext } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
 import { AttributeDialog } from '../settings/AttributeDialog.tsx';
 import { objectSettingsHref } from '../settings/nav.ts';
-import { refsOf } from './details.ts';
+import { isFilled, refsOf } from './details.ts';
 import { useLinkEditing } from './links.ts';
 import { useMemberPicker } from './members.ts';
 import { useRecordForm } from './RecordForm.tsx';
@@ -48,7 +48,7 @@ export interface RecordDetailsProps {
 }
 
 /** How a linked record shows while its name loads (no name: a skeleton chip) or when it can't be read. */
-function displayOf(ref: RecordRef, state: NameState): RecordRefDisplay {
+export function displayOf(ref: RecordRef, state: NameState): RecordRefDisplay {
   if (state === 'loading') return { ...ref, name: '', kind: 'other' };
   if (state === 'unknown') return { ...ref, name: strings.unavailableRecord, kind: 'other' };
   return state;
@@ -136,8 +136,11 @@ export function RecordDetails({
     [schemaObject, recordId, canCommit, data, slug],
   );
   if (record === undefined) return <AttributeList label={strings.details} sections={[]} isLoading />;
-  const items = fields.map(({ definition, attribute }) => {
+  // The name is the header's, never a row too (owner, 31 Oct: shown three times, cut short in the row). An unnamed
+  // record keeps the row, so it can be named in place; the page's More menu renames a named one.
+  const items = fields.flatMap(({ definition, attribute }) => {
     const value = record.values[definition.id] ?? null;
+    if (definition.isPrimary && isFilled(value)) return [];
     const refs = definition.type === 'record_reference' ? refsOf(value) : [];
     const names = refs.length === 0 ? [] : (referenceDisplays?.(refs) ?? []);
     const display =
@@ -147,12 +150,14 @@ export function RecordDetails({
           ? undefined
           : refs.map((ref, index) => displayOf(ref, names[index] ?? 'loading'));
     const error = cellErrors?.get(definition.id);
-    return {
-      attribute,
-      value,
-      ...(display === undefined ? {} : { display }),
-      ...(error === undefined ? {} : { error }),
-    };
+    return [
+      {
+        attribute,
+        value,
+        ...(display === undefined ? {} : { display }),
+        ...(error === undefined ? {} : { error }),
+      },
+    ];
   });
   return (
     <FieldActionsContext value={actions}>

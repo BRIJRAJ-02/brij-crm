@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboard
 import { FocusScope, mergeProps, useFocusVisible, useKeyboard } from 'react-aria';
 import { Dialog, Heading } from 'react-aria-components';
 import { Button } from '../../atoms/Button/Button.tsx';
+import { ShortcutTooltip } from '../../atoms/Tooltip/ShortcutTooltip.tsx';
 import { TruncatedText } from '../../atoms/TruncatedText/TruncatedText.tsx';
 import styles from './Panel.module.css';
 import { strings } from './strings.ts';
@@ -148,7 +149,9 @@ export function Panel({
             )}
             <span className={styles.actions}>
               {actions}
-              <Button variant="ghost" icon="x" label={strings.close} onPress={onClose} />
+              <ShortcutTooltip content={strings.close} kbd="ESC">
+                <Button variant="ghost" icon="x" label={strings.close} onPress={onClose} />
+              </ShortcutTooltip>
             </span>
           </header>
           <div className={styles.body} data-flush={isFlush || undefined} data-stacked={isStacked || undefined}>

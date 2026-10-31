@@ -1,7 +1,7 @@
 /* RecordLayout: fills its slot. Wide, the main column (the header, padded
    space-16 at the sides, over the tabs and the chosen panel) beside the
-   sidebar at the Panel molecule's width (size-panel) with a hairline before
-   it; the panel and the sidebar each scroll inside themselves. Narrow (below
+   sidebar at the Panel molecule's width (size-panel) on its own
+   surface-subtle with a hairline before it; the panel and the sidebar each scroll inside themselves. Narrow (below
    bp-container-md plus size-panel, measured in script), one scrolling column: the header, the
    sidebar's Disclosure, then the tabs, whose panel keeps the slot's height.
    A notice spans the top. */
@@ -71,6 +71,8 @@
     padding: var(--space-12) var(--space-16);
     overflow: auto;
     border-inline-start: var(--border-width-hairline) solid var(--border-subtle);
+    /* Its own surface, a step from the main column's, so the two read apart at a glance (owner, 31 Oct). */
+    background: var(--surface-subtle);
   }
 
   .stack {

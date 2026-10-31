@@ -1,0 +1,33 @@
+/* RecordFacts: a wrapping line of facts, space-12 apart, each a muted sm
+   icon then its value in text-body, the value held to one line. */
+@layer components {
+  .root {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-4) var(--space-12);
+    align-items: center;
+    min-inline-size: 0;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    color: var(--text-secondary);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
+  .fact {
+    display: inline-flex;
+    gap: var(--space-6);
+    align-items: center;
+    min-inline-size: 0;
+    max-inline-size: 100%;
+  }
+
+  .value {
+    display: inline-flex;
+    min-inline-size: 0;
+    overflow: hidden;
+    color: var(--text);
+    white-space: nowrap;
+  }
+}
