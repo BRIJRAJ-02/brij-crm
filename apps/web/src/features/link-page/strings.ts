@@ -12,7 +12,7 @@ export const strings = {
   /** The page's place in Settings: a page of Profile's. */
   profile: 'Profile',
   blocks: 'Blocks',
-  blocksText: 'One page for everything people can do with you. Drag to reorder.',
+  blocksText: 'Drag to reorder.',
   // The figures (AC-5127): over the last 30 days, with the 30 before as the comparison. A number keeps its word on
   // its line (a no break space), so a phone never strands the "2" away from "views".
   noPresses: 'No clicks yet',
@@ -101,7 +101,7 @@ export const strings = {
   shareImageRemoving: 'Remove this picture?',
   shareImageRemoveText: 'Your link shows the card we draw instead.',
   appearance: 'Appearance',
-  appearanceText: 'Pick a look. Every change saves as you go.',
+  appearanceText: 'Saves as you go.',
   /**
    * The five named starting points (spec 0054, AC-5420). The name is never stored: picking one writes the six
    * keys behind it, so a look can never drift out of step with the word that named it.
@@ -204,9 +204,7 @@ export const strings = {
   shareOnline: 'Share online',
   yourPage: 'Your page',
   yourAddress: 'Your address',
-  pasteItAnywhere: 'Paste it in your bio, an email signature or a message.',
   shareInPerson: 'Share in person',
-  scanIt: 'Anyone can scan this with their phone camera to open your page.',
   downloadCode: 'Download',
   editPageAction: 'Edit page',
   doneEditing: 'Done',

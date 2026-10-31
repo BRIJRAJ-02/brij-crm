@@ -246,8 +246,9 @@ export function HeaderActions({
       )}
       {/* Edit page lives on the page's own card; the bar carries only the way back out of the builder. */}
       {isEditing && (
+        // Secondary: the builder's one primary is Add item, the thing it is opened for; Done only steps back out.
         <Button
-          variant="primary"
+          variant="secondary"
           icon="check"
           isLabelCollapsible
           label={strings.doneEditing}
