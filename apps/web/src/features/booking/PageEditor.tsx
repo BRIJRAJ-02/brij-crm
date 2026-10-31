@@ -40,6 +40,7 @@ import {
   FieldGroup,
   InfoTip,
   Link,
+  Modal,
   PreviewFrame,
   PreviewLayout,
   Popover,
@@ -103,6 +104,8 @@ import {
 } from './links.ts';
 import { scheduleStrings } from './schedule-strings.ts';
 import { strings as rotationStrings } from './rotation-strings.ts';
+import { SharingPanel } from './SharingPanel.tsx';
+import { sharingStrings } from './sharing-strings.ts';
 import { scheduleChoices } from './schedules.ts';
 import { strings } from './strings.ts';
 import { canMatchVisitor } from './visitor-match.ts';
@@ -122,6 +125,8 @@ export interface PageEditorProps {
   readonly ownerMember?: string;
   /** The workspace's active members, on a round robin page: its fixed host picker. */
   readonly people?: readonly MemberSummary[];
+  /** The workspace's active members for Sharing's picker, for an admin (spec 0037, AC-1331). */
+  readonly sharingPeople?: readonly MemberSummary[];
   /** Says a change that saved at once went through (the Hosts card's). */
   readonly onNotice?: (message: string) => void;
   /** A round robin page's Routing card (spec 0043): the person's and company's fields its rules may read. */
@@ -250,6 +255,7 @@ export function PageEditor({
   schedules,
   ownerMember,
   people = [],
+  sharingPeople,
   onNotice,
   recordFields,
   tab,
@@ -265,6 +271,9 @@ export function PageEditor({
   const [isReadingTargets, setReadingTargets] = useState(false);
   // Adding attributes needs `schema.manage`; without it a question with nothing to file onto stays with the booking.
   const canBuild = useCan('schema.manage');
+  // Sharing (spec 0037, AC-1331): whoever may change the page sees its editors; only an admin changes them.
+  const canShare = useCan('booking.admin');
+  const [isSharing, setSharing] = useState(false);
   const { toasts } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
   // A page the reader can't change shows as it is, every control read only, with no Save.
@@ -765,9 +774,18 @@ export function PageEditor({
                       status: page.status === 'live' ? ('live' as const) : ('paused' as const),
                       onPause: () => setLive('paused'),
                       onResume: () => setLive('live'),
-                      ...(page.ownerName === undefined ? { onDuplicate: duplicate } : {}),
-                      onDelete: () => setDeleting(true),
+                      ...(page.ownerName === undefined && page.isEditor !== true ? { onDuplicate: duplicate } : {}),
+                      // An editor changes the page but never deletes it (AC-1331).
+                      ...(page.isEditor === true ? {} : { onDelete: () => setDeleting(true) }),
                       deleteLabel: strings.deletePage,
+                      extra: [
+                        {
+                          id: 'sharing',
+                          label: sharingStrings.menuItem,
+                          icon: 'users' as const,
+                          onAction: () => setSharing(true),
+                        },
+                      ],
                     },
                   })}
             />
@@ -775,6 +793,25 @@ export function PageEditor({
         ),
         body: (
           <>
+            <Modal
+              title={sharingStrings.dialogTitle(page.title)}
+              isOpen={isSharing}
+              onOpenChange={setSharing}
+              actions={<Button slot="close">{sharingStrings.close}</Button>}
+            >
+              {isSharing && (
+                <SharingPanel
+                  data={data}
+                  slug={slug}
+                  resourceType="booking_page"
+                  resourceId={page.id}
+                  resourceName={page.title}
+                  canChange={canShare}
+                  people={sharingPeople ?? people}
+                  toasts={toasts}
+                />
+              )}
+            </Modal>
             <DeletePageDialog
               page={isDeleting ? page : undefined}
               onClose={() => setDeleting(false)}

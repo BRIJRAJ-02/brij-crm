@@ -1,6 +1,6 @@
 // New meeting (spec 0027, AC-709 to AC-711), in Chromium: the day moves in place rather than asking the member to
-// close the dialog and draw again (the design pass of 22 October 2026), the note that nobody is invited yet comes
-// first, and the guest's zone sits with who it is with.
+// close the dialog and draw again (the design pass of 22 October 2026), For first and the one line note that no
+// calendar is connected before the guest (31 October 2026), and the guest's zone sits with who it is with.
 import type {
   BookingPageView,
   CalendarListState,
@@ -166,7 +166,7 @@ describe('New meeting', () => {
 
   it('says nobody is invited yet before the fields, and keeps their zone with who it is with', async () => {
     await open();
-    const note = page.getByText(/No calendar connected/).element();
+    const note = page.getByText('No calendar connected: no video link.').element();
     const name = page.getByRole('textbox', { name: 'With' }).element();
     const email = page.getByRole('textbox', { name: 'Email' }).element();
     const zone = page.getByRole('button', { name: /Their time zone/ }).element();
@@ -358,6 +358,10 @@ describe('New meeting', () => {
       forPeople: [{ id: sam, name: 'Sam' }],
       limitsAt,
     });
+    // For leads the form (31 Oct 2026), yet typing still starts in With.
+    const forPicker = page.getByRole('button', { name: /For$/ }).element();
+    expect(before(forPicker, page.getByRole('textbox', { name: 'With' }).element())).toBe(true);
+    await expect.element(page.getByRole('textbox', { name: 'With' })).toHaveFocus();
     // The member's own time: no limit, no warning.
     await expect.poll(() => limitsAt.mock.calls.length).toBe(1);
     expect(limitsAt).toHaveBeenLastCalledWith({ at: '2026-10-23T09:30:00.000Z' });
@@ -366,7 +370,9 @@ describe('New meeting', () => {
     await userEvent.click(page.getByRole('button', { name: /For$/ }));
     await userEvent.click(page.getByRole('option', { name: 'Sam' }));
     const warning = page.getByRole('status').filter({ hasText: 'Sam is at their limit of 5 meetings that day.' });
-    await expect.element(warning).toHaveTextContent('Sam is at their limit of 5 meetings that day.');
+    await expect
+      .element(warning)
+      .toHaveTextContent('Sam is at their limit of 5 meetings that day. Booking anyway goes over it.');
     expect(limitsAt).toHaveBeenLastCalledWith({ memberId: sam, at: '2026-10-23T09:30:00.000Z' });
     // Book it still books.
     await userEvent.fill(page.getByRole('textbox', { name: 'With' }), 'Ada');
@@ -380,7 +386,8 @@ describe('New meeting', () => {
       Promise.resolve({ day: { limit: 4, count: 6 }, week: { limit: 20, count: 20 } }),
     );
     await open({ limitsAt });
-    const words = 'You’re past your limit of 4 meetings that day and at your limit of 20 meetings that week.';
+    const words =
+      'You’re past your limit of 4 meetings that day and at your limit of 20 meetings that week. Booking anyway goes over both.';
     const warning = page.getByRole('status').filter({ hasText: 'past your limit' });
     await expect.element(warning).toHaveTextContent(words);
     const shown = warning.element();

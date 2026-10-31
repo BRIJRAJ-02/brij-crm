@@ -337,7 +337,8 @@ function viewOf(
       : {}),
     bookingsThisMonth: count,
     canChange: changeable,
-    ...(edits.has(page.id) ? { isEditor: true } : {}),
+    // Only as one of its editors: not its owner, an admin or a manager of its owner (AC-1332's badge).
+    ...(edits.has(page.id) && !mayChange(scope, page, reach) ? { isEditor: true } : {}),
     createdAt: page.createdAt.toISOString(),
     updatedAt: page.updatedAt.toISOString(),
   };

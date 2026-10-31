@@ -9,7 +9,6 @@ export const strings = {
     calendar: 'Calendar',
     list: 'List',
     availability: 'Availability',
-    roster: 'Roster',
     // "Round robin" is what the feature is called everywhere else in the product, so the tab says it too.
     'round-robin': 'Round robin',
     calendars: 'Calendars',
@@ -106,7 +105,6 @@ export const strings = {
   /** New meeting's day: the drawn span's, or the next free one, and changed in place. */
   day: 'Day',
   /** Under Their time zone: it doesn't move From and To, which are on the member's clock. */
-  theirTimeZoneHint: 'Only changes how their invitation shows the time.',
   who: 'Who',
   page: 'Booking page',
   guests: 'Also invited',
@@ -152,7 +150,8 @@ export const strings = {
   fromCalendar: 'From your calendar. Timefix keeps the time blocked but doesn’t manage this event.',
   // The member's own calendar time with nobody else invited (spec 0024, the owner's call on 20 October 2026).
   busy: 'Busy',
-  busyNote: 'Busy for you, closed to booking.',
+  busyNote:
+    'Something on your calendar with nobody else invited. Its details stay in your calendar, and nobody can book this time.',
   // Time the member closed (spec 0027).
   blocked: 'Blocked',
   held: 'Reserved time',
@@ -229,7 +228,7 @@ export const strings = {
     ];
     if (parts.length === 0) return '';
     const who = name === undefined ? 'You’re' : `${name} is`;
-    return `${who} ${parts.join(' and ')}.`;
+    return `${who} ${parts.join(' and ')}. Booking anyway goes over ${parts.length === 1 ? 'it' : 'both'}.`;
   },
   bookSomeoneIn: 'Book someone in',
   newMeeting: 'New meeting',
@@ -275,9 +274,8 @@ export const strings = {
   notInCrmToastMs: 12_000,
   /** Booked, but the guest's records couldn't be made: the reason, so it can be fixed (late trap #71). */
   bookedNotInCrm: (name: string, reason: string) => `Booked with ${name}, but they weren’t added to the CRM. ${reason}`,
-  /** New meeting without a calendar: the guest is still emailed, with the invitation attached (Q57). What's missing
-   * is the event on the member's own calendar, and a video call's link. */
-  noCalendar: 'No calendar connected, so no video link. They’re still emailed.',
+  /** New meeting without a calendar (Q57; one line, copy handoff 31 Oct 2026): the guest is still emailed. */
+  noCalendar: 'No calendar connected: no video link.',
   holdThisTime: 'Reserve for link only pages',
   holdFor: 'For',
   anyPrivatePage: 'Any link only page',
@@ -324,7 +322,7 @@ export const strings = {
   moving: 'Moving',
   moveTo: (time: string, day: string) => `Move to ${time} on ${day}`,
   findingTimes: 'Finding free times…',
-  noMoveTimes: 'No free times in the next two weeks. Free some on Availability, or cancel.',
+  noMoveTimes: 'No free times on this page in the next two weeks. Free some up on Availability, or cancel instead.',
   slotName: (time: string, day: string, minutes: number) => `${time}, ${day}, ${String(minutes)} minutes`,
   timeGone: 'That time has just gone. Pick another.',
   changeFailed: 'That didn’t go through. Try again in a moment.',
@@ -370,22 +368,23 @@ export const strings = {
   reassignNamesFailed: 'Couldn’t load the group’s members, so only Next in the group is offered.',
   reassign: 'Reassign',
   reassigning: 'Reassigning',
-  reassigned: 'Reassigned. Guest and hosts are emailed.',
+  reassigned: 'Reassigned. The guest and both hosts are emailed.',
   /** Reassign from Host away (spec 0037, AC-1284): to the time off's stand in, else the next in the group. */
   awayReassignTitle: (page: string, visitor: string) => `Reassign ${page} with ${visitor}?`,
   awayToStandin: (standin: string, host: string) =>
-    `${standin} takes it, as ${host}’s stand in while they’re away. Guest and hosts are emailed.`,
+    `${standin} takes it, as ${host}’s stand in while they’re away. The guest, ${standin} and ${host} are emailed.`,
   awayStandinOutside: (host: string, rotation: string) =>
-    `${host}’s stand in can’t take ${rotation}’s bookings now, so whoever is free then and next in it takes it. Guest and hosts are emailed.`,
+    `${host}’s stand in can’t take ${rotation}’s bookings now, so whoever is free then and next in it takes it. The guest and both hosts are emailed.`,
   awayMembersFailed: (rotation: string) =>
     `Couldn’t load who is in ${rotation}, so the server checks the stand in is free and in it.`,
   awayNotChanged: (host: string, rotation: string) =>
     `Nobody else in ${rotation} is free then, so it stays with ${host}.`,
   awayToNext: (rotation: string) =>
-    `Whoever is free then and next in ${rotation} takes it. Guest and hosts are emailed.`,
-  awayStandinUnknown: (host: string) => `${host}’s stand in takes it while they’re away. Guest and hosts are emailed.`,
+    `Whoever is free then and next in ${rotation} takes it. The guest and both hosts are emailed.`,
+  awayStandinUnknown: (host: string) =>
+    `${host}’s stand in takes it while they’re away. The guest and both hosts are emailed.`,
   theGroup: 'its round robin group',
-  reassignedTo: (member: string) => `Reassigned to ${member}. Guest and hosts are emailed.`,
+  reassignedTo: (member: string) => `Reassigned to ${member}. The guest and both hosts are emailed.`,
   assignedIn: (rotation: string) => `Assigned in ${rotation}`,
   assignedLine: (member: string, why: string) => `${member} ${why}`,
   noLongerCounts: (line: string) => `${line} (no longer counts)`,

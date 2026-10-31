@@ -32,6 +32,8 @@ import type {
   BookingAssignment,
   ReassignedBooking,
   RotationAdjustment,
+  EditorResource,
+  EditorView,
   ReassignedUpcoming,
   RotationDistribution,
   RotationMemberInput,
@@ -414,6 +416,8 @@ export type {
   BookingAssignment,
   ReassignedBooking,
   RotationAdjustment,
+  EditorResource,
+  EditorView,
   ReassignedUpcoming,
   RotationDistribution,
   RotationMemberInput,
@@ -2585,6 +2589,17 @@ export function createDataLayer({
   const rotationLists = createCaptureList<RotationView>({
     read: (workspace) => call((options) => api.rotations.list({ workspace }, options)),
   });
+  // Sharing (spec 0037, AC-1331): one held list per page or rotation, keyed `workspace|type|id`, patched by `set`.
+  const editorKey = (workspace: string, type: EditorResource, id: string) => `${workspace}|${type}|${id}`;
+  const editorLists = createCaptureList<EditorView>({
+    read: (key) => {
+      const [workspace = '', type = '', id = ''] = key.split('|');
+      const resourceType: EditorResource = type === 'booking_page' ? 'booking_page' : 'rotation';
+      return call((options) => api.editors.list({ workspace, resourceType, resourceId: id }, options)).then(
+        (answer) => answer.editors,
+      );
+    },
+  });
   const formLists = createCaptureList<FormSummary>({
     read: (workspace) =>
       call((options) => api.forms.list({ workspace, archived: false }, options)).then((page) => page.items),
@@ -4113,6 +4128,47 @@ export function createDataLayer({
           send: () => call((options) => api.rotations.delete({ workspace, rotationId, mutationId: mintId() }, options)),
           ...shownDrop(rotationLists.items(workspace), rotationId),
         }),
+    },
+    /**
+     * Sharing on a booking page or a rotation (spec 0037, AC-1331): its editors as a held list (`view`), and `set`,
+     * which shows the new list at once and puts the old one back on a refusal (`EDITOR_LIMIT`, `CONFIG_INVALID` on
+     * `memberIds.<n>`, `FORBIDDEN`), which it rejects with. Only `booking.admin` sets them.
+     */
+    editors: {
+      /** A page's or rotation's editors; `useCaptureList` reads it. */
+      view: (workspace: string, resourceType: EditorResource, resourceId: string): CaptureListView<EditorView> =>
+        editorLists.view(editorKey(workspace, resourceType, resourceId)),
+      /** Replaces the editors with `editors`, in order shown; the server's answer put in place. */
+      set: (
+        workspace: string,
+        resourceType: EditorResource,
+        resourceId: string,
+        editors: readonly EditorView[],
+      ): Promise<readonly EditorView[]> => {
+        const key = editorKey(workspace, resourceType, resourceId);
+        const before = editorLists.items(key) ?? [];
+        return editorLists
+          .write(key, {
+            send: () =>
+              call((options) =>
+                api.editors.set(
+                  {
+                    workspace,
+                    resourceType,
+                    resourceId,
+                    memberIds: editors.map((each) => each.id),
+                    mutationId: mintId(),
+                  },
+                  options,
+                ),
+              ),
+            show: () => [...editors],
+            undo: (now) =>
+              now.length === editors.length && now.every((each, index) => each === editors[index]) ? before : now,
+            land: (_items, answer) => answer.editors,
+          })
+          .then((answer) => answer.editors);
+      },
     },
     audit: {
       /**
