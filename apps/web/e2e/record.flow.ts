@@ -60,7 +60,9 @@ test('a record opens from the table, edits in place, and keeps its tab', async (
 
   // Copy link puts the page's address on the clipboard.
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-  await page.getByRole('button', { name: 'Copy link' }).click();
+  // Copy link sits in More actions (the header's ⋯), beside Rename.
+  await page.getByRole('button', { name: 'More actions' }).first().click();
+  await page.getByRole('menuitem', { name: 'Copy link' }).click();
   await expect(page.getByText('Link copied')).toBeVisible();
 
   // View all opens the Activity tab: the address is replaced (Back leaves the record) and focus lands on the tab.

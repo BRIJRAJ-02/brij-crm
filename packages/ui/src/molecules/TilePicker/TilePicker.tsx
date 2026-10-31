@@ -64,7 +64,9 @@ export function TilePicker({ label, items, value, onChange, isDisabled = false, 
   );
   return (
     <div className={styles.root} data-invalid={error === undefined ? undefined : ''}>
-      <FieldLabel as="text" id={labelId} label={label} tone="strong" isDisabled={isDisabled} />
+      {/* The group's name stays at full strength when the tiles are off: it labels a list, not a control axe (or a
+          reader) can see is disabled, so a dimmed name would only be hard to read (WCAG 1.4.3). The tiles dim. */}
+      <FieldLabel as="text" id={labelId} label={label} tone="strong" />
       <ListBox
         aria-labelledby={labelId}
         {...(error === undefined ? {} : { 'aria-describedby': errorId })}

@@ -143,6 +143,7 @@ export const ProminentTitle: Story = {
   ),
   play: async ({ canvas }) => {
     const heading = canvas.getByRole('heading', { level: 2, name: 'Good afternoon, Ada' });
-    await expect(getComputedStyle(heading).fontSize).toBe('18px');
+    // The note title type (28px), a clear step above the 15px card titles under it.
+    await expect(getComputedStyle(heading).fontSize).toBe('28px');
   },
 };

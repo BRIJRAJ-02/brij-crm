@@ -34,7 +34,7 @@ It wraps React Aria's `ListBox` with `layout="grid"`, its sections and headers, 
 
 ## States
 
-Rest, hover (pointer only, surface-hover), focus (the inset ring; an outline in forced colours), selected (the accent's soft fill and the accent line's edge, as Radio's cards, its icon in the accent, and its words under the tiles), disabled (the whole picker, its label faded), and an error line.
+Rest, hover (pointer only, surface-hover), focus (the inset ring; an outline in forced colours), selected (the accent's soft fill and the accent line's edge, as Radio's cards, its icon in the accent, and its words under the tiles), disabled (every tile faded; its label stays readable, since it names a list rather than a disabled control), and an error line.
 
 Not here, on purpose: read only, since an attribute's type that can't change shows as a read only Select (AttributeSettings when editing), one line rather than twenty tiles of which one counts; loading and a failed load, since the items are props the caller already holds; and empty, since a picker with nothing to pick isn't drawn (a caller with no items leaves it out).
 

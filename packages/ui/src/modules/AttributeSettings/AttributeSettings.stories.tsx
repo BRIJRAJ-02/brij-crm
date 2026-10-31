@@ -566,7 +566,8 @@ export const TypeSettings: Story = {
     const display = within(dialog).getByRole('button', { name: /Display$/ });
     await userEvent.click(display);
     await userEvent.click(await screen.findByRole('option', { name: /^Percent/ }));
-    await waitFor(() => expect(document.querySelector('[role="listbox"]')).toBeNull());
+    // The Display list closes (the type tiles are a listbox too, so the list is found by its option).
+    await waitFor(() => expect(screen.queryByRole('option', { name: /^Percent/ })).toBeNull());
     // Focus is back on the picker, so ⌘↵ submits from there.
     await waitFor(() => expect(display).toHaveFocus());
     await userEvent.keyboard('{Meta>}{Enter}{/Meta}');
