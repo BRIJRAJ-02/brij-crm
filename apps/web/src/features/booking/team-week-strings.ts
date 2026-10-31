@@ -21,7 +21,6 @@ export const teamWeekStrings = {
   /** The team filter (AC-1289). */
   teamFilter: 'Filter by team',
   everyone: 'Everyone',
-  teamSize: (count: number) => (count === 1 ? '1 person' : `${String(count)} people`),
   hours,
   people: (count: number) => (count === 1 ? '1 person' : `${String(count)} people`),
   nobody: 'Nobody',
@@ -112,6 +111,7 @@ export const teamWeekStrings = {
   noMatchBody: 'Try another name.',
   clearSearch: 'Clear search',
   noMatchInTeam: 'Try another team or name.',
+  noMatchTeam: 'Try another team.',
   showMore: 'Show more',
   moreFailed: 'Couldn’t load more people.',
   tryAgain: 'Try again',

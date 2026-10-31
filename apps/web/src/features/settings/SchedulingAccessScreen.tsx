@@ -170,7 +170,7 @@ export function SchedulingAccessScreen({
       <Card>
         {roleReach && (
           <SettingsRow
-            leading={<Icon name="users-round" tone="muted" />}
+            leading={<Icon name="users" tone="muted" />}
             leadingAlign="center"
             title={strings.everyone}
             description={strings.everyoneFromRole(ROLE_LABELS[access.role])}
@@ -188,7 +188,7 @@ export function SchedulingAccessScreen({
                 delegation.target.type === 'member' ? (
                   person(delegation.target.memberId)
                 ) : (
-                  <Icon name={delegation.target.type === 'team' ? 'users' : 'users-round'} tone="muted" />
+                  <Icon name={delegation.target.type === 'team' ? 'users-round' : 'users'} tone="muted" />
                 )
               }
               leadingAlign="center"

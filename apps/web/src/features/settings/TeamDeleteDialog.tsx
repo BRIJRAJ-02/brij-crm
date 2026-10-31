@@ -8,30 +8,31 @@ import { Button, Modal } from '@crm/ui';
 import { useState } from 'react';
 import { strings } from './teams-strings.ts';
 
-/** A delete waiting on its confirm: the team and the delegations over it. */
+/** A delete waiting on its confirm: the team and the delegations over it (undefined: they couldn't be read). */
 export interface TeamDeleteQuestion {
   readonly team: TeamView;
-  readonly over: readonly DelegationView[];
+  readonly over: readonly DelegationView[] | undefined;
 }
 
 /**
  * The workspace's delegations over `teamId`, from the scheduling access store's one held list (the Members page's
- * too). Nothing when it can't be read: the server deletes them anyway, and only a holder of `members.manage` reads it.
+ * too). Undefined when it can't be read, so the delete asks rather than offering an Undo that couldn't bring
+ * scheduling access back (the server deletes it either way).
  */
 export async function delegationsOverTeam(
   data: DataLayer,
   slug: string,
   teamId: string,
-): Promise<readonly DelegationView[]> {
+): Promise<readonly DelegationView[] | undefined> {
   try {
     const store = await data.scheduling.open();
     const held = store.delegations(slug, 'everyone');
     await held.ready();
     const state = held.getSnapshot();
-    if (state.status !== 'ready') return [];
+    if (state.status !== 'ready') return undefined;
     return state.delegations.filter((each) => each.target.type === 'team' && each.target.teamId === teamId);
   } catch {
-    return [];
+    return undefined;
   }
 }
 
@@ -55,8 +56,9 @@ export function TeamDeleteDialog({
   if (question !== undefined && question !== last) setLast(question);
   const shown = question ?? last;
   if (shown === undefined) return null;
-  const people = new Set(shown.over.map((each) => each.delegateMemberId)).size;
-  const levels = new Set(shown.over.map((each) => each.level));
+  const over = shown.over;
+  const people = new Set(over?.map((each) => each.delegateMemberId)).size;
+  const levels = new Set(over?.map((each) => each.level));
   const level = levels.size > 1 ? 'both' : levels.has('manage') ? 'manage' : 'view';
   return (
     <Modal
@@ -82,7 +84,11 @@ export function TeamDeleteDialog({
         </>
       }
     >
-      <p>{strings.loseScheduling(people, level, shown.team.name)}</p>
+      <p>
+        {over === undefined
+          ? strings.loseSchedulingUnknown(shown.team.name)
+          : strings.loseScheduling(people, level, shown.team.name)}
+      </p>
     </Modal>
   );
 }

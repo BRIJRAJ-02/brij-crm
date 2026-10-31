@@ -27,8 +27,12 @@ export const Route = createFileRoute('/w/$slug/bookings/roster')({
     }
     const zone = memberZone(context.data, params.slug);
     const q = rosterSearch(location.search).q ?? '';
-    const team = await (await context.data.scheduling.open()).openTeamWeek(params.slug, deps.week, q, zone);
-    return { zone, ...team };
+    const [team, teams] = await Promise.all([
+      context.data.scheduling.open().then((store) => store.openTeamWeek(params.slug, deps.week, q, zone)),
+      // The team filter (AC-1289): the cached list, read again on a live team change; none when it fails.
+      context.data.teams.list(params.slug).catch(() => []),
+    ]);
+    return { zone, teams, ...team };
   },
   // Shown only once the loading delay passed: its skeletons show at once.
   pendingComponent: RosterRoutePending,
@@ -58,6 +62,7 @@ function RosterRoute() {
       search={q ?? ''}
       zone={loaded.zone}
       members={loaded.members}
+      teams={loaded.teams}
     />
   );
 }

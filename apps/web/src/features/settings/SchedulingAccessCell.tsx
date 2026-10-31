@@ -60,35 +60,22 @@ export interface SchedulingAccessCellProps {
   /** The reader's own member id: a grant shows in their own Scheduling access page too when it names them. */
   readonly me: string;
   readonly member: MemberView;
+  /** The workspace's teams (the route loaded them), naming team delegations; undefined when they weren't read. */
+  readonly teams?: readonly TeamView[] | undefined;
 }
 
 /** The value Everyone takes in the target picker; a team's is `@team:` and its id; a person's is their id. */
 const EVERYONE = '@everyone';
 const TEAM = '@team:';
 
+/** No teams read: team delegations read as "A team" and the picker offers none. */
+const NO_TEAMS: readonly TeamView[] = [];
+
 /** The picker's value as a delegation's target. */
 function targetOf(value: string): DelegationTarget {
   if (value === EVERYONE) return { type: 'everyone' };
   if (value.startsWith(TEAM)) return { type: 'team', teamId: value.slice(TEAM.length) };
   return { type: 'member', memberId: value };
-}
-
-/** The workspace's teams, for names and the target picker: the data layer's cached list, read once. */
-function useTeamList(data: DataLayer, slug: string): readonly TeamView[] {
-  const [list, setList] = useState<readonly TeamView[]>([]);
-  useEffect(() => {
-    let isCurrent = true;
-    data.teams.list(slug).then(
-      (teams) => {
-        if (isCurrent) setList(teams);
-      },
-      () => undefined,
-    );
-    return () => {
-      isCurrent = false;
-    };
-  }, [data, slug]);
-  return list;
 }
 
 /**
@@ -152,11 +139,11 @@ function Reach({
   slug,
   me,
   member,
+  teams = NO_TEAMS,
 }: SchedulingAccessCellProps & { readonly store: SchedulingAccessStore }) {
   const held = store.delegations(slug, 'everyone');
   const state = useScheduling(held);
   const members = useMemberList(data, slug);
-  const teams = useTeamList(data, slug);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [isOpen, setOpen] = useState(false);
   const [question, setQuestion] = useState<RemoveAccessQuestion | undefined>(undefined);
@@ -285,7 +272,7 @@ function Editor({
       id: `${TEAM}${team.id}`,
       label: team.name,
       description: strings.teamOptionText(team.memberIds.length),
-      leading: <Icon name="users" tone="muted" />,
+      leading: <Icon name="users-round" tone="muted" />,
     }));
   const targets = [
     ...(hasEveryone
@@ -295,7 +282,7 @@ function Editor({
             id: EVERYONE,
             label: strings.everyoneOption,
             description: strings.everyoneOptionText,
-            leading: <Icon name="users-round" tone="muted" />,
+            leading: <Icon name="users" tone="muted" />,
           },
         ]),
     ...teamItems,
@@ -340,7 +327,7 @@ function Editor({
                   isDecorative
                 />
               ) : (
-                <Icon name={delegation.target.type === 'team' ? 'users' : 'users-round'} tone="muted" />
+                <Icon name={delegation.target.type === 'team' ? 'users-round' : 'users'} tone="muted" />
               )
             }
             leadingAlign="center"

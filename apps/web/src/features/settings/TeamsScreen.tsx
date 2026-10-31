@@ -103,7 +103,7 @@ export function TeamsScreen({ data, toasts, slug, teams, members, canManage }: T
     if (deleting !== undefined) return;
     setDeleting(team.id);
     void delegationsOverTeam(data, slug, team.id).then((over) => {
-      if (over.length === 0) {
+      if (over !== undefined && over.length === 0) {
         remove(team, true);
         return;
       }

@@ -37,7 +37,7 @@ import { checkId, newId, uuidList } from '../engine/ids.ts';
 import { inputInvalid, refuse } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import { runWrite, type AfterWrite, type WriteContext } from '../engine/write.ts';
-import { writeAudit, type AuditSource } from '../members/audit.ts';
+import { writeAudit, writeAudits, type AuditSource } from '../members/audit.ts';
 import type { RemovalEffect } from '../members/removal-effect.ts';
 
 const { members, scheduleDelegations, teams, workspaces } = schema;
@@ -580,15 +580,18 @@ export async function deleteTeamDelegations(
     .delete(scheduleDelegations)
     .where(and(eq(scheduleDelegations.workspaceId, scope.workspaceId), eq(scheduleDelegations.targetTeamId, teamId)))
     .returning();
-  for (const row of gone) {
-    await writeAudit(
-      tx,
-      scope.workspaceId,
-      scope.actor,
-      { action: 'delegation.revoked', targetType: 'member', targetId: row.delegateMemberId, before: auditFields(row) },
-      source,
-    );
-  }
+  await writeAudits(
+    tx,
+    scope.workspaceId,
+    scope.actor,
+    gone.map((row) => ({
+      action: 'delegation.revoked' as const,
+      targetType: 'member' as const,
+      targetId: row.delegateMemberId,
+      before: auditFields(row),
+    })),
+    source,
+  );
   const delegates = [...new Set(gone.map((row) => row.delegateMemberId))];
   if (delegates.length > 0) context.record({ access: delegates });
   return delegates;
