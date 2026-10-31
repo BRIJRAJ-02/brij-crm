@@ -184,6 +184,13 @@ const FIXTURES: Record<ListedAuditAction, readonly AuditRow[]> = {
     }),
   ],
   'workspace_security.signed_out_everyone': [row('workspace_security.signed_out_everyone', 'workspace', newId())],
+  'webhook.created': [row('webhook.created', 'workspace', newId(), { after: { host: 'hooks.example.com' } })],
+  'webhook.updated': [row('webhook.updated', 'workspace', newId(), { after: { host: 'hooks.example.com' } })],
+  'webhook.secret_rotated': [
+    row('webhook.secret_rotated', 'workspace', newId(), { after: { host: 'hooks.example.com' } }),
+  ],
+  'webhook.deleted': [row('webhook.deleted', 'workspace', newId(), { after: { host: 'hooks.example.com' } })],
+  'webhook.turned_off': [row('webhook.turned_off', 'workspace', newId(), { after: { host: 'hooks.example.com' } })],
   'rotation.adjusted': [
     row('rotation.adjusted', 'rotation', rotation, { after: { memberId: bea, units: 2, note: 'Holiday' } }),
   ],

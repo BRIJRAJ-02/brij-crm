@@ -76,6 +76,13 @@ export const AUDIT_ACTIONS = [
   // Spec 0033 (AC-899): an owner changed the workspace's sign in rules, or signed everyone out of it.
   'workspace_security.changed',
   'workspace_security.signed_out_everyone',
+  // Spec 0064 (AC-6419, AC-6420, AC-6423): a webhook endpoint added, changed, its secret rotated, deleted, or turned
+  // off by the system after 3 days of failures. The row keeps the endpoint's host, never its path or its secret.
+  'webhook.created',
+  'webhook.updated',
+  'webhook.secret_rotated',
+  'webhook.deleted',
+  'webhook.turned_off',
   // Owner ask A102 (22 Oct 2026): a person put their Public booking pages in a new order on their profile.
   'booking_page.profile_reordered',
   // Scheduling access (spec 0037, AC-1257): See or Manage over someone's scheduling given, changed or taken back.

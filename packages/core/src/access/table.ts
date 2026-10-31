@@ -134,6 +134,7 @@ export const ACCESS_TABLE = {
   listAuditEvents: { permission: 'audit.read' },
   // Settings › Webhooks (spec 0064, AC-6419 to AC-6425): owners and admins.
   listWebhooks: { permission: 'webhooks.manage' },
+  checkWebhooksAccess: { permission: 'webhooks.manage' },
   createWebhook: { permission: 'webhooks.manage' },
   updateWebhook: { permission: 'webhooks.manage' },
   rotateWebhookSecret: { permission: 'webhooks.manage' },

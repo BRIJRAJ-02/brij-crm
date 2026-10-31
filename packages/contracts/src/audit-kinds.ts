@@ -37,7 +37,15 @@ export const AUDIT_KINDS = {
     'join_request.declined',
   ],
   workspace: ['workspace.updated', 'workspace.deleted', 'workspace.restored'],
-  security: ['workspace_security.changed', 'workspace_security.signed_out_everyone'],
+  security: [
+    'workspace_security.changed',
+    'workspace_security.signed_out_everyone',
+    'webhook.created',
+    'webhook.updated',
+    'webhook.secret_rotated',
+    'webhook.deleted',
+    'webhook.turned_off',
+  ],
   scheduling: [
     'rotation.adjusted',
     'rotation.adjustment_undone',

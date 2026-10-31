@@ -455,6 +455,14 @@ export function toEntryView(row: AuditRow, names: AuditNames): AuditEntryView | 
     case 'workspace.restored':
     case 'workspace_security.signed_out_everyone':
       return { ...base, action, target: workspace, params: {}, changes: [] };
+    case 'webhook.created':
+    case 'webhook.updated':
+    case 'webhook.secret_rotated':
+    case 'webhook.deleted':
+    case 'webhook.turned_off': {
+      const host = typeof after.host === 'string' ? after.host : typeof before.host === 'string' ? before.host : '';
+      return { ...base, action, target: workspace, params: { host }, changes: [] };
+    }
     case 'workspace_security.changed': {
       const twoFactor = typeof after.requireTwoFactor === 'boolean' ? after.requireTwoFactor : undefined;
       const days = has(after, 'sessionLengthDays')

@@ -1,4 +1,5 @@
 import {
+  checkWebhooksAccess,
   createWebhook,
   deleteWebhook,
   listWebhookDeliveries,
@@ -81,6 +82,8 @@ export const webhooksRouter = member.webhooks.router({
   ),
   test: member.webhooks.test.handler(async ({ context, input }) => {
     const services = servicesOf(context);
+    // The power first, so nobody without it can spend an admin's sends.
+    await checkWebhooksAccess(context.scope);
     await limitSends(context, context.scope.workspaceId, input.endpointId);
     return commitWrite(context, { mutationId: input.mutationId }, async () => {
       const send = await prepareWebhookTest(context.scope, services.key, { endpointId: input.endpointId });

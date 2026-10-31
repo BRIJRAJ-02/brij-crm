@@ -719,6 +719,7 @@ export { listAuditEvents, AUDIT_CURSOR_MESSAGE } from './audit/audit.ts';
  * event and Resend, which the api sends from the request and records here.
  */
 export {
+  checkWebhooksAccess,
   createWebhook,
   deleteWebhook,
   listWebhookDeliveries,

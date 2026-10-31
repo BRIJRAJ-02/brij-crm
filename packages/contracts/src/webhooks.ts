@@ -233,9 +233,11 @@ export const WebhookBookingData = z.strictObject({
 /** A booking event's data. */
 export type WebhookBookingData = z.infer<typeof WebhookBookingData>;
 
-/** Where a form submission came from: the UTM tags and the referrer, as the visitor's browser gave them. */
+/**
+ * Where a form submission came from: the UTM tags and the referrer (with no query or fragment, which can hold another
+ * site's values), as the visitor's browser gave them.
+ */
 export const WebhookSource = z.strictObject({
-  page_url: z.string().optional(),
   referrer: z.string().optional(),
   utm_source: z.string().optional(),
   utm_medium: z.string().optional(),

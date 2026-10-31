@@ -44,7 +44,25 @@ export const WEBHOOK_AGENT = 'Timefix-Webhooks/1';
 /** What a host resolves to, every answer with its family. Injected so tests never touch DNS. */
 export type WebhookLookup = (hostname: string) => Promise<readonly LookupAddress[]>;
 
-const resolveAll: WebhookLookup = (hostname) => dns.lookup(hostname, { all: true, verbatim: true });
+/** How long resolving an endpoint's host may take, inside the send's own limit. */
+export const WEBHOOK_DNS_TIMEOUT_MS = 2_000;
+
+/**
+ * Every A and AAAA answer for a host, through c-ares with a 2 second timeout and one try, never the OS resolver's
+ * thread pool (a name whose nameserver never answers would hold one of its 4 threads for its own timeout). A family
+ * that fails answers nothing; both failing is no answer, which is refused.
+ */
+const resolveAll: WebhookLookup = async (hostname) => {
+  const resolver = new dns.Resolver({ timeout: WEBHOOK_DNS_TIMEOUT_MS, tries: 1 });
+  const [v4, v6] = await Promise.all([
+    resolver.resolve4(hostname).catch((): string[] => []),
+    resolver.resolve6(hostname).catch((): string[] => []),
+  ]);
+  return [
+    ...v4.map((address): LookupAddress => ({ address, family: 4 })),
+    ...v6.map((address): LookupAddress => ({ address, family: 6 })),
+  ];
+};
 
 /** Sends one delivery and says how it went. Never throws. */
 export type WebhookSender = (send: WebhookSend) => Promise<WebhookSendResult>;
@@ -71,11 +89,17 @@ export function webhookHeaders(send: WebhookSend, unixSeconds: number): Record<s
   };
 }
 
-/** A lookup that answers only the address already checked, in whichever shape the caller asked for. */
-export function pinnedLookup(pinned: LookupAddress): LookupFunction {
+/**
+ * A lookup that answers only the addresses already checked, IPv4 first (a host with no IPv6 route still connects),
+ * in whichever shape the connection asks for.
+ */
+export function pinnedLookup(checked: readonly LookupAddress[]): LookupFunction {
+  const ordered = [...checked].sort((a, b) => a.family - b.family);
   return (_hostname, options, callback) => {
-    if (options.all === true) callback(null, [pinned]);
-    else callback(null, pinned.address, pinned.family);
+    const [first] = ordered;
+    if (first === undefined) callback(new Error('No checked address.'), '');
+    else if (options.all === true) callback(null, ordered);
+    else callback(null, first.address, first.family);
   };
 }
 
@@ -101,8 +125,6 @@ export function createWebhookSender(options: WebhookSenderOptions = {}): Webhook
     const url = new URL(send.url);
     const found = await lookup(url.hostname).catch((): readonly LookupAddress[] => []);
     if (resolvedProblem(found.map((each) => each.address)) !== undefined) return refused('address');
-    const [pinned] = found;
-    if (pinned === undefined) return refused('address');
     const headers = webhookHeaders(send, Math.floor(now() / 1000));
     return new Promise<WebhookSendResult>((resolve) => {
       let settled = false;
@@ -111,7 +133,8 @@ export function createWebhookSender(options: WebhookSenderOptions = {}): Webhook
         settled = true;
         resolve(result);
       };
-      const signal = AbortSignal.timeout(timeoutMs);
+      // The send's whole limit, the lookup's time taken off it.
+      const signal = AbortSignal.timeout(Math.max(1_000, timeoutMs - elapsed()));
       const outgoing = request(
         {
           method: 'POST',
@@ -120,7 +143,7 @@ export function createWebhookSender(options: WebhookSenderOptions = {}): Webhook
           port: 443,
           path: `${url.pathname}${url.search}`,
           headers: { ...headers, 'content-length': String(Buffer.byteLength(send.body)) },
-          lookup: pinnedLookup(pinned),
+          lookup: pinnedLookup(found),
           agent: false,
           signal,
           ...(options.ca === undefined ? {} : { ca: options.ca }),

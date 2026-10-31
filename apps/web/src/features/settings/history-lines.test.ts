@@ -257,6 +257,26 @@ const SENTENCES: readonly (readonly [AuditEntryView, string])[] = [
     'Ada Lovelace signed everyone out of the workspace',
   ],
   [
+    { ...base, action: 'webhook.created', target: workspace, params: { host: 'hooks.example.com' } },
+    'Ada Lovelace added the webhook endpoint hooks.example.com',
+  ],
+  [
+    { ...base, action: 'webhook.updated', target: workspace, params: { host: 'hooks.example.com' } },
+    'Ada Lovelace changed the webhook endpoint hooks.example.com',
+  ],
+  [
+    { ...base, action: 'webhook.secret_rotated', target: workspace, params: { host: 'hooks.example.com' } },
+    'Ada Lovelace rotated the signing secret of hooks.example.com',
+  ],
+  [
+    { ...base, action: 'webhook.deleted', target: workspace, params: { host: 'hooks.example.com' } },
+    'Ada Lovelace deleted the webhook endpoint hooks.example.com',
+  ],
+  [
+    { ...base, action: 'webhook.turned_off', target: workspace, params: { host: 'hooks.example.com' } },
+    'Ada Lovelace turned off hooks.example.com after 3 days of failed deliveries',
+  ],
+  [
     { ...base, action: 'rotation.adjusted', target: rotation, params: { person: bea, units: 2 } },
     'Ada Lovelace adjusted Bea Rao’s count in Sales by +2',
   ],

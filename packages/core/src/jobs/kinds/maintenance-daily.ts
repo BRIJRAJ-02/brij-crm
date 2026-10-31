@@ -311,8 +311,8 @@ async function oldEmails(context: WriteContext, at: Checkpoint, limit: number): 
  */
 async function oldWebhookDeliveries(context: WriteContext, at: Checkpoint, limit: number): Promise<StepOutcome> {
   const removed = await context.tx.execute(sql`
-    delete from webhook_deliveries where id in (
-      select id from webhook_deliveries where created_at < now() - make_interval(days => ${WEBHOOK_LOG_DAYS})
+    delete from webhook_deliveries where (workspace_id, id) in (
+      select workspace_id, id from webhook_deliveries where created_at < now() - make_interval(days => ${WEBHOOK_LOG_DAYS})
       order by created_at limit ${limit}
     )
   `);

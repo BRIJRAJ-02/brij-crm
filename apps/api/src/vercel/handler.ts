@@ -176,7 +176,9 @@ export function createFunctionApi(source: Record<string, string | undefined>, pl
       ? undefined
       : createJobDrain({
           directUrl: own.DATABASE_URL_DIRECT,
-          compose: (queue) => composeJobTasks({ env, db, onStored: () => undefined, queue }),
+          compose: (queue) =>
+            // A webhook try gets 5 of a drain turn's 15 seconds at most (spec 0064); the worker gives it 10.
+            composeJobTasks({ env, db, onStored: () => undefined, queue, webhookTimeoutMs: 5_000 }),
           log,
           onFault: (error) => captureFault(error, { task: 'jobs' }),
         });

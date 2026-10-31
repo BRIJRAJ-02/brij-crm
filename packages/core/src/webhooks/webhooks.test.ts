@@ -364,3 +364,61 @@ describe('delivering (AC-6423, AC-6425)', () => {
     expect(await queued(send.deliveryId)).toHaveLength(0);
   });
 });
+
+describe('across workspaces and in the audit log', () => {
+  it('answers NOT_FOUND to another workspace’s admin for every endpoint and delivery id of this one', async () => {
+    const a = await workspace();
+    const b = await workspace();
+    const made = await core.createWebhook(a.owner, deps, {
+      url: 'https://a.example.com',
+      description: '',
+      events: ['booking.created'],
+    });
+    const ping = await core.prepareWebhookTest(a.owner, key, { endpointId: made.endpoint.id });
+    const endpointId = made.endpoint.id;
+    for (const call of [
+      core.updateWebhook(b.owner, deps, { endpointId, description: 'mine now' }),
+      core.rotateWebhookSecret(b.owner, deps, { endpointId }),
+      core.deleteWebhook(b.owner, { endpointId }),
+      core.listWebhookDeliveries(b.owner, { endpointId }),
+      core.prepareWebhookTest(b.owner, key, { endpointId }),
+      core.prepareWebhookResend(b.owner, key, { deliveryId: ping.deliveryId }),
+    ]) {
+      expect(await refusalOf(call)).toMatchObject({ code: 'NOT_FOUND' });
+    }
+    // The queue function reads under the caller's workspace, and with none set it reads nothing.
+    const queuedFromB = await db.withWorkspace(b.workspaceId, (tx) =>
+      tx.execute<{ queued: boolean }>(sql`select crm_enqueue_webhook_delivery(${ping.deliveryId}::uuid) as queued`),
+    );
+    expect(queuedFromB.rows[0]?.queued).toBe(false);
+    const handles = await db.withWorkspace(b.workspaceId, (tx) =>
+      tx.execute(sql`select handle from crm_webhook_form_handles(${core.newId()}::uuid)`),
+    );
+    expect(handles.rows).toEqual([]);
+  });
+
+  it('keeps an audit row for each change, naming the endpoint by its host only', async () => {
+    const { owner, workspaceId } = await workspace();
+    const made = await core.createWebhook(owner, deps, {
+      url: 'https://hooks.zapier.example/hooks/catch/123/secretpath/',
+      description: '',
+      events: ['booking.created'],
+    });
+    const endpointId = made.endpoint.id;
+    await core.updateWebhook(owner, deps, { endpointId, status: 'off' });
+    await core.rotateWebhookSecret(owner, deps, { endpointId });
+    await core.deleteWebhook(owner, { endpointId });
+    const rows = await testQuery<{ action: string; after: unknown }>(
+      ownerUrl,
+      `select action, after from audit_events where workspace_id = $1 and action like 'webhook.%' order by at, action`,
+      [workspaceId],
+    );
+    expect(rows.map((row) => row.action).sort()).toEqual([
+      'webhook.created',
+      'webhook.deleted',
+      'webhook.secret_rotated',
+      'webhook.updated',
+    ]);
+    for (const row of rows) expect(row.after).toEqual({ host: 'hooks.zapier.example' });
+  });
+});

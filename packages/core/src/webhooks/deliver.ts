@@ -17,7 +17,7 @@ import { queueWebhookEndpointOff } from '../emails/queue.ts';
 import { isUuid, newId } from '../engine/ids.ts';
 import { refuse } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
-import { deliveryColumns, ENDPOINT_NOT_FOUND, toDelivery } from './endpoints.ts';
+import { auditWebhook, deliveryColumns, ENDPOINT_NOT_FOUND, hostOf, toDelivery } from './endpoints.ts';
 import { webhookEnvelope } from './payloads.ts';
 import { openSecret, type WebhookKey } from './signing.ts';
 
@@ -157,6 +157,7 @@ const excerptOf = (text: string | undefined): string | null =>
  */
 async function recordTry(
   tx: WorkspaceTx,
+  scope: EngineScope,
   send: WebhookSend,
   result: WebhookSendResult,
   options: { readonly retry: boolean; readonly random?: () => number },
@@ -193,21 +194,25 @@ async function recordTry(
         sql`update webhook_endpoints set failing_since = null where id = ${send.endpointId}::uuid and failing_since is not null`,
       );
     } else {
+      // Only a failure that starts a spell or ends one 3 days in writes the row; one in between changes nothing.
       const spell = await tx.execute<{ off: boolean; spell_ms: string; slug: string; url: string }>(sql`
         update webhook_endpoints e set failing_since = coalesce(e.failing_since, now()),
           status = case when e.failing_since <= now() - make_interval(days => ${WEBHOOK_FAILING_DAYS}) then 'off'
             else e.status end,
           off_reason = case when e.failing_since <= now() - make_interval(days => ${WEBHOOK_FAILING_DAYS})
             then 'failing' else e.off_reason end,
-          updated_at = now()
+          updated_at = case when e.failing_since <= now() - make_interval(days => ${WEBHOOK_FAILING_DAYS})
+            then now() else e.updated_at end
         from workspaces w
         where e.id = ${send.endpointId}::uuid and e.status = 'active' and w.id = e.workspace_id
+          and (e.failing_since is null or e.failing_since <= now() - make_interval(days => ${WEBHOOK_FAILING_DAYS}))
         returning e.status = 'off' as off, floor(extract(epoch from e.failing_since) * 1000)::bigint::text as spell_ms,
           w.slug, e.url
       `);
       const turned = spell.rows[0];
       if (turned?.off === true) {
         endpointOff = true;
+        await auditWebhook(tx, scope, 'webhook.turned_off', turned.url);
         await tellAdmins(tx, {
           endpointId: send.endpointId,
           spellMillis: turned.spell_ms,
@@ -221,11 +226,8 @@ async function recordTry(
   return { delivery, nextAttemptAt: delivery.nextAttemptAt, endpointOff };
 }
 
-/** The endpoint as an email may name it: host and path, never the query a receiver may keep a token in. */
-const endpointLine = (url: string): string => {
-  const parsed = new URL(url);
-  return `${parsed.host}${parsed.pathname === '/' ? '' : parsed.pathname}`.slice(0, 200);
-};
+/** The endpoint as an email may name it: its host only, since Zapier, Make and n8n keep their token in the path. */
+const endpointLine = (url: string): string => hostOf(url).slice(0, 200) || 'Your webhook endpoint';
 
 /** Emails each active owner and admin that an endpoint turned off (AC-6423). */
 async function tellAdmins(
@@ -258,7 +260,7 @@ export async function finishWebhookDelivery(
   checkScope(scope);
   if (scope.access.principal.kind !== 'system') throw new Error('Only the system records queued webhooks.');
   return inWorkspace(scope, (tx) =>
-    recordTry(tx, send, result, { retry: true, ...(random === undefined ? {} : { random }) }),
+    recordTry(tx, scope, send, result, { retry: true, ...(random === undefined ? {} : { random }) }),
   );
 }
 
@@ -328,5 +330,5 @@ export async function recordWebhookSend(
   result: WebhookSendResult,
 ): Promise<WebhookDelivery> {
   requirePermission(scope, 'webhooks.manage');
-  return inWorkspace(scope, async (tx) => (await recordTry(tx, send, result, { retry: false })).delivery);
+  return inWorkspace(scope, async (tx) => (await recordTry(tx, scope, send, result, { retry: false })).delivery);
 }

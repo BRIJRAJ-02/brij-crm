@@ -80,7 +80,7 @@ export const webhookDeliveries = pgTable(
     endpointId: uuid('endpoint_id').notNull(),
     eventId: uuid('event_id').notNull(),
     eventType: text('event_type').notNull(),
-    /** The whole body as sent, at most 64 KB. */
+    /** The whole body as sent: at most 64 KB as text (core's cap); the check allows jsonb's own overhead on top. */
     payload: jsonb('payload').notNull(),
     attempt: smallint('attempt').notNull().default(0),
     state: text('state').notNull().default('pending'),
@@ -100,7 +100,7 @@ export const webhookDeliveries = pgTable(
       foreignColumns: [webhookEndpoints.workspaceId, webhookEndpoints.id],
     }).onDelete('cascade'),
     check('webhook_deliveries_state', sql`${t.state} in ('pending', 'sent', 'failed', 'gave_up')`),
-    check('webhook_deliveries_payload', sql`pg_column_size(${t.payload}) <= 65536`),
+    check('webhook_deliveries_payload', sql`pg_column_size(${t.payload}) <= 131072`),
     check('webhook_deliveries_excerpt', sql`length(${t.responseExcerpt}) <= 1024`),
     check('webhook_deliveries_sent', sql`(${t.sentAt} is null) = (${t.state} <> 'sent')`),
     uniqueIndex('webhook_deliveries_once').on(t.workspaceId, t.endpointId, t.eventId),

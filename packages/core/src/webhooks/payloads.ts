@@ -103,15 +103,26 @@ export async function bookingWebhookData(tx: WorkspaceTx, bookingId: string): Pr
 }
 
 /** The source fields a payload carries from a submission's stored context. */
-const SOURCE_KEYS = ['page_url', 'referrer', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'];
+const SOURCE_KEYS = ['referrer', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'];
+
+/** An address with its query and fragment taken off, which can hold another site's values. */
+const bare = (value: string): string | undefined => {
+  if (!URL.canParse(value)) return undefined;
+  const url = new URL(value);
+  return `${url.origin}${url.pathname}`;
+};
 
 /** A submission's source, from its stored context. */
 function sourceOf(context: unknown): WebhookSource {
   if (typeof context !== 'object' || context === null) return {};
   const record = context as Readonly<Record<string, unknown>>;
-  return Object.fromEntries(
-    SOURCE_KEYS.flatMap((key) => (typeof record[key] === 'string' ? [[key, record[key]]] : [])),
-  );
+  const kept = SOURCE_KEYS.flatMap((key) => {
+    const value = record[key];
+    if (typeof value !== 'string') return [];
+    const shown = key === 'referrer' ? bare(value) : value;
+    return shown === undefined ? [] : [[key, shown] as const];
+  });
+  return Object.fromEntries(kept);
 }
 
 interface SubmissionRow extends Record<string, unknown> {

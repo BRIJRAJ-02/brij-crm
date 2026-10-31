@@ -59,7 +59,7 @@ CREATE TABLE "webhook_deliveries" (
 	"sent_at" timestamp (6) with time zone,
 	CONSTRAINT "webhook_deliveries_pkey" PRIMARY KEY("workspace_id","id"),
 	CONSTRAINT "webhook_deliveries_state" CHECK ("webhook_deliveries"."state" in ('pending', 'sent', 'failed', 'gave_up')),
-	CONSTRAINT "webhook_deliveries_payload" CHECK (pg_column_size("webhook_deliveries"."payload") <= 65536),
+	CONSTRAINT "webhook_deliveries_payload" CHECK (pg_column_size("webhook_deliveries"."payload") <= 131072),
 	CONSTRAINT "webhook_deliveries_excerpt" CHECK (length("webhook_deliveries"."response_excerpt") <= 1024),
 	CONSTRAINT "webhook_deliveries_sent" CHECK (("webhook_deliveries"."sent_at" is null) = ("webhook_deliveries"."state" <> 'sent'))
 );

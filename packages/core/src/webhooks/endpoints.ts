@@ -19,6 +19,7 @@ import { sql, type SQL } from 'drizzle-orm';
 import { requirePermission } from '../access/check.ts';
 import { inWorkspace } from '../access/run.ts';
 import { lockKey } from '../booking/locks.ts';
+import { writeAudit } from '../members/audit.ts';
 import { isUuid } from '../engine/ids.ts';
 import { inputInvalid, refuse, refuseOn } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
@@ -123,6 +124,33 @@ export async function listWebhooks(scope: EngineScope, available: boolean): Prom
   return { available, endpoints: found.rows.map(toEndpoint) };
 }
 
+/**
+ * Refuses FORBIDDEN unless the scope holds `webhooks.manage`: the check the api makes before it counts a send against
+ * an endpoint's limit, so nobody without the power can use up an admin's sends.
+ */
+export function checkWebhooksAccess(scope: EngineScope): Promise<void> {
+  // A promise, so a refusal reaches the caller the way every service's does.
+  return Promise.resolve().then(() => requirePermission(scope, 'webhooks.manage'));
+}
+
+/** An endpoint's host, the one part of its address the audit log and an email may name. */
+export const hostOf = (url: string): string => (URL.canParse(url) ? new URL(url).host : '');
+
+/** One audit row for an endpoint (spec 0064): the host only, never the path, which can hold a receiver's token. */
+export function auditWebhook(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  action: 'webhook.created' | 'webhook.updated' | 'webhook.secret_rotated' | 'webhook.deleted' | 'webhook.turned_off',
+  url: string,
+): Promise<void> {
+  return writeAudit(tx, scope.workspaceId, scope.actor, {
+    action,
+    targetType: 'workspace',
+    targetId: scope.workspaceId,
+    after: { host: hostOf(url) },
+  });
+}
+
 /** The member a write is made by, for `created_by_member_id`; null for any other actor. */
 const memberOf = (scope: EngineScope): string | null =>
   scope.access.principal.kind === 'member' ? scope.access.principal.memberId : null;
@@ -153,6 +181,7 @@ export async function createWebhook(
       values (${scope.workspaceId}::uuid, ${id}::uuid, ${url}, ${input.description},
         ${`{${input.events.join(',')}}`}::text[], ${sealed}, ${secretHint(secret)}, ${memberOf(scope)}::uuid)
     `);
+    await auditWebhook(tx, scope, 'webhook.created', url);
     return { endpoint: await readEndpoint(tx, id), secret };
   });
 }
@@ -184,10 +213,12 @@ export async function updateWebhook(
     if (input.status === 'off') {
       sets.push(sql`status = 'off', off_reason = case when status = 'off' then off_reason else 'turned_off' end`);
     }
-    const changed = await tx.execute(
-      sql`update webhook_endpoints set ${sql.join(sets, sql`, `)} where id = ${input.endpointId}::uuid`,
+    const changed = await tx.execute<{ url: string }>(
+      sql`update webhook_endpoints set ${sql.join(sets, sql`, `)} where id = ${input.endpointId}::uuid returning url`,
     );
-    if ((changed.rowCount ?? 0) === 0) throw refuse('NOT_FOUND', ENDPOINT_NOT_FOUND);
+    const row = changed.rows[0];
+    if (row === undefined) throw refuse('NOT_FOUND', ENDPOINT_NOT_FOUND);
+    await auditWebhook(tx, scope, 'webhook.updated', row.url);
     return readEndpoint(tx, input.endpointId);
   });
 }
@@ -206,13 +237,16 @@ export async function rotateWebhookSecret(
   const secret = newWebhookSecret();
   const sealed = sealSecret(deps.key, secret, { workspaceId: scope.workspaceId, endpointId: input.endpointId });
   return inWorkspace(scope, async (tx) => {
-    const changed = await tx.execute(sql`
+    const changed = await tx.execute<{ url: string }>(sql`
       update webhook_endpoints set previous_secret_sealed = secret_sealed,
         previous_secret_until = now() + make_interval(hours => ${WEBHOOK_ROTATION_OVERLAP_HOURS}),
         secret_sealed = ${sealed}, secret_hint = ${secretHint(secret)}, updated_at = now()
       where id = ${input.endpointId}::uuid
+      returning url
     `);
-    if ((changed.rowCount ?? 0) === 0) throw refuse('NOT_FOUND', ENDPOINT_NOT_FOUND);
+    const row = changed.rows[0];
+    if (row === undefined) throw refuse('NOT_FOUND', ENDPOINT_NOT_FOUND);
+    await auditWebhook(tx, scope, 'webhook.secret_rotated', row.url);
     return { endpoint: await readEndpoint(tx, input.endpointId), secret };
   });
 }
@@ -224,11 +258,15 @@ export async function deleteWebhook(
 ): Promise<{ readonly deleted: boolean }> {
   requirePermission(scope, 'webhooks.manage');
   if (!isUuid(input.endpointId)) throw refuse('NOT_FOUND', ENDPOINT_NOT_FOUND);
-  const removed = await inWorkspace(scope, (tx) =>
-    tx.execute(sql`delete from webhook_endpoints where id = ${input.endpointId}::uuid`),
-  );
-  if ((removed.rowCount ?? 0) === 0) throw refuse('NOT_FOUND', ENDPOINT_NOT_FOUND);
-  return { deleted: true };
+  return inWorkspace(scope, async (tx) => {
+    const removed = await tx.execute<{ url: string }>(
+      sql`delete from webhook_endpoints where id = ${input.endpointId}::uuid returning url`,
+    );
+    const row = removed.rows[0];
+    if (row === undefined) throw refuse('NOT_FOUND', ENDPOINT_NOT_FOUND);
+    await auditWebhook(tx, scope, 'webhook.deleted', row.url);
+    return { deleted: true };
+  });
 }
 
 interface DeliveryRow extends Record<string, unknown> {

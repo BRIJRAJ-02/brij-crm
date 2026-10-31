@@ -60,6 +60,8 @@ export interface JobTasksOptions {
   readonly onStored: () => void;
   /** The queue rows the daily cleanup's requeue phase reads, while the queue is open. */
   readonly queue?: QueueRows;
+  /** A webhook send's limit, when not the sender's 10 seconds: the Vercel drain's turns are short (spec 0064). */
+  readonly webhookTimeoutMs?: number;
 }
 
 /** The runners' work, ready for `startJobRunners`. */
@@ -250,7 +252,9 @@ export function composeJobTasks(options: JobTasksOptions): JobTasks {
     webhookKey === undefined
       ? undefined
       : (() => {
-          const send = createWebhookSender();
+          const send = createWebhookSender(
+            options.webhookTimeoutMs === undefined ? {} : { timeoutMs: options.webhookTimeoutMs },
+          );
           return (payload: unknown) =>
             runWebhookDelivery(
               { systemScope: (workspaceId) => systemScope(db, workspaceId), key: webhookKey, send, log },

@@ -56,6 +56,12 @@ export const LANES = {
   light: { task: 'crm_job_light', concurrency: 4, pollMs: 2_000 },
 } as const;
 
+/**
+ * Webhook deliveries' own runner (spec 0064): 4 at once, apart from the light lane, so receivers that time out (10
+ * seconds each) never hold the slots a workspace's emails, notices and calendar sync run in.
+ */
+export const WEBHOOK_LANE = { concurrency: 4, pollMs: 2_000 } as const;
+
 /** How often stale locks are released and the backlog is logged, while the runners run. */
 const HOUSEKEEPING_MS = 60_000;
 
@@ -212,6 +218,8 @@ export interface JobRunnersOptions {
    * its own next try, and only the database throws, for Graphile's 3 tries.
    */
   readonly webhookDeliver?: (payload: unknown) => Promise<void>;
+  /** How many webhook tries run at once, when not `WEBHOOK_LANE`'s own (the drain runs 1). */
+  readonly webhookConcurrency?: number;
   /**
    * Calendar health (spec 0037, AC-1310, AC-1311): one episode's email (`runCalendarHealthEmailTask`), and who hears
    * a held sweep (Sentry's warning). With it, the light runner takes `crm_calendar_health_email` and holds the
@@ -625,7 +633,6 @@ export async function startJobRunners(options: JobRunnersOptions): Promise<JobRu
       const email = lane === LANES.light ? options.email : undefined;
       const notificationEmail = lane === LANES.light ? options.notificationEmail : undefined;
       const schedulingNotice = lane === LANES.light ? options.schedulingNotice : undefined;
-      const webhookDeliver = lane === LANES.light ? options.webhookDeliver : undefined;
       const calendarHealth = lane === LANES.light ? options.calendarHealth : undefined;
       const cutOff = lane === LANES.light ? options.cutOff : undefined;
       runners.push(
@@ -669,11 +676,6 @@ export async function startJobRunners(options: JobRunnersOptions): Promise<JobRu
                       options.onActivity,
                     ),
                   }),
-              ...(webhookDeliver === undefined
-                ? {}
-                : {
-                    [WEBHOOK_TASK]: counted((payload) => webhookDeliver(payload), inFlight, options.onActivity),
-                  }),
               ...(calendarHealth === undefined
                 ? {}
                 : {
@@ -707,6 +709,25 @@ export async function startJobRunners(options: JobRunnersOptions): Promise<JobRu
             // the pool closes: unbatched, they're sent and not awaited, so a stop right after a slice handed its job
             // over could close the pool first and leave the finished call's row locked (key cleared, so harmless,
             // but kept until the daily cleanup).
+            preset: { worker: { completeJobBatchDelay: 0, failJobBatchDelay: 0 } },
+          }),
+        ),
+      );
+    }
+    // Webhook deliveries on a runner of their own (spec 0064), so a receiver that times out never holds a light slot.
+    const webhookDeliver = options.webhookDeliver;
+    if (webhookDeliver !== undefined) {
+      runners.push(
+        watch(
+          await run({
+            pgPool: queue.pool,
+            concurrency: options.webhookConcurrency ?? WEBHOOK_LANE.concurrency,
+            noHandleSignals: true,
+            logger,
+            pollInterval: options.pollInterval ?? WEBHOOK_LANE.pollMs,
+            taskList: {
+              [WEBHOOK_TASK]: counted((payload) => webhookDeliver(payload), inFlight, options.onActivity),
+            },
             preset: { worker: { completeJobBatchDelay: 0, failJobBatchDelay: 0 } },
           }),
         ),

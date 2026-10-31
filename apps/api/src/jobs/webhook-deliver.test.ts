@@ -68,13 +68,22 @@ describe('the webhook sender (AC-6424)', () => {
   });
 
   it('connects only to the address it checked, whatever the connection asks the resolver', () => {
-    const lookup = pinnedLookup({ address: '93.184.216.34', family: 4 });
+    const lookup = pinnedLookup([
+      { address: '2606:4700:4700::1111', family: 6 },
+      { address: '93.184.216.34', family: 4 },
+    ]);
     const one: unknown[] = [];
     lookup('hooks.example.com', {}, (...args: unknown[]) => one.push(args));
     lookup('hooks.example.com', { all: true }, (...args: unknown[]) => one.push(args));
     expect(one).toEqual([
       [null, '93.184.216.34', 4],
-      [null, [{ address: '93.184.216.34', family: 4 }]],
+      [
+        null,
+        [
+          { address: '93.184.216.34', family: 4 },
+          { address: '2606:4700:4700::1111', family: 6 },
+        ],
+      ],
     ]);
   });
 });

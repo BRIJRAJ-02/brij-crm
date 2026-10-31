@@ -164,6 +164,11 @@ const SENTENCES: SentenceTemplates = {
     return actor('changed the sign in rules');
   },
   'workspace_security.signed_out_everyone': () => actor('signed everyone out of the workspace'),
+  'webhook.created': (entry) => actor(`added the webhook endpoint ${entry.params.host}`),
+  'webhook.updated': (entry) => actor(`changed the webhook endpoint ${entry.params.host}`),
+  'webhook.secret_rotated': (entry) => actor(`rotated the signing secret of ${entry.params.host}`),
+  'webhook.deleted': (entry) => actor(`deleted the webhook endpoint ${entry.params.host}`),
+  'webhook.turned_off': (entry) => actor(`turned off ${entry.params.host} after 3 days of failed deliveries`),
   'rotation.adjusted': (entry, w) =>
     actor(
       `adjusted ${w.persons(entry.params.person)} count in ${w.thing(entry.target)} by ${units(entry.params.units)}`,
