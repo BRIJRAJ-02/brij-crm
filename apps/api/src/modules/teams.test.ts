@@ -1,7 +1,7 @@
 // Teams through the real app (spec 0031, slice 8, AC-824 to AC-827): an owner makes, renames, fills and deletes a
 // team; a member reads the list and changes nothing; a team id from another workspace is not found; and
 // `access.mine` carries the caller's teams.
-import { newId } from '@crm/core';
+import { newId, storedRules } from '@crm/core';
 import type { Database, IdentityStore } from '@crm/db';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { MailMessage } from '../mail/mailer.ts';
@@ -30,6 +30,8 @@ beforeAll(() => {
           return mailpit.send(message);
         },
       },
+      // The stored rules, as production reads them (rules.ts): they carry a member's teams to access.mine.
+      rules: storedRules,
     },
   ));
 });
