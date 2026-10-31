@@ -2,7 +2,7 @@ import type { RecordRefDisplay, TaskView } from '@crm/data';
 import { describe, expect, it } from 'vitest';
 import { withLinks } from '../records/timeline.ts';
 import { isTaskParam } from '../records/params.ts';
-import { chipOrder, memberDisplay, tabCount, toTaskEntry } from './entries.ts';
+import { chipRecords, memberDisplay, tabCount, toTaskEntry } from './entries.ts';
 
 const acme: RecordRefDisplay = { objectId: 'o1', recordId: 'r1', name: 'Acme', kind: 'company' };
 const ada: RecordRefDisplay = { objectId: 'o2', recordId: 'r2', name: 'Ada', kind: 'person' };
@@ -23,10 +23,11 @@ const task: TaskView = {
 };
 
 describe('tasks as the list draws them (spec 0019)', () => {
-  it('shows the first record that isn’t the page’s, and the page’s record when it is the only one', () => {
-    expect(chipOrder([acme, ada], 'r1').map((record) => record.name)).toEqual(['Ada', 'Acme']);
-    expect(chipOrder([acme], 'r1').map((record) => record.name)).toEqual(['Acme']);
-    expect(chipOrder([acme, ada]).map((record) => record.name)).toEqual(['Acme', 'Ada']);
+  it('leaves the page’s own record out of the chips, and shows every record elsewhere', () => {
+    expect(chipRecords([acme, ada], 'r1').map((record) => record.name)).toEqual(['Ada']);
+    expect(chipRecords([acme], 'r1')).toEqual([]);
+    expect(chipRecords([acme, ada]).map((record) => record.name)).toEqual(['Acme', 'Ada']);
+    expect(toTaskEntry(task, members, 'r1').recordCount).toBe(1);
   });
 
   it('names the assignee from the members, and a removed one as Former member', () => {
@@ -39,7 +40,7 @@ describe('tasks as the list draws them (spec 0019)', () => {
       title: 'Call back',
       dueOn: '2026-10-20',
       assignee: { name: 'Grace Hopper' },
-      recordCount: 2,
+      recordCount: 1,
     });
     expect(toTaskEntry(task, members).readOnlyReason).toBeUndefined();
     expect(toTaskEntry({ ...task, canChange: false }, members).readOnlyReason).toBe('You can only view this task.');

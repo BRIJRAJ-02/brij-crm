@@ -1927,8 +1927,10 @@ export function DataGrid<Row>({
           onKeyDown={onKeyDown}
           onFocus={onFocus}
           onBlur={onBlur}
-          onPointerDownCapture={() => {
+          onPointerDownCapture={(event) => {
             peekPress.current = undefined;
+            // A press on a control that names itself (Open in panel) has done what its tip said: the tip goes.
+            if (event.target instanceof Element && event.target.closest('[data-tip-label]') !== null) closeTip();
           }}
           onPointerDown={onPointerDown}
           onPointerOver={onPointerOver}

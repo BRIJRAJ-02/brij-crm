@@ -41,6 +41,9 @@ export interface FileDropProps {
   readonly wrongTypeText?: (fileName: string) => string | undefined;
 }
 
+/** The most accepted types the zone lists under its hint; more, and only the size shows (owner, less text). */
+const MAX_LISTED_TYPES = 3;
+
 function accepts(file: File, types: readonly string[] | undefined): boolean {
   if (types === undefined || types.length === 0) return true;
   const name = file.name.toLowerCase();
@@ -83,8 +86,10 @@ export function FileDrop({
     setError(undefined);
     onFiles(allowsMultiple ? files : files.slice(0, 1));
   };
+  // A short list of types helps choose (an import's CSV or Excel); a long one is a wall of extensions, so past
+  // MAX_LISTED_TYPES the line keeps only the size and the types are said where they matter, in a refusal.
   const limits = [
-    acceptedTypes === undefined ? undefined : acceptedTypes.join(', '),
+    acceptedTypes === undefined || acceptedTypes.length > MAX_LISTED_TYPES ? undefined : acceptedTypes.join(', '),
     maxSize === undefined ? undefined : strings.upTo(formatFileSize(maxSize, locale)),
   ].filter((part) => part !== undefined);
   const refusal =

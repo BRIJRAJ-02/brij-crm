@@ -1,9 +1,8 @@
 // Tasks as the library draws them (spec 0019, value sourcing): plain
 // functions with no React, so they test in Node. A task's assignee is named
 // from the members ("Former member" for one no longer active), the record
-// chip on a record's own Tasks tab shows the first linked record that isn't
-// that record (that record when it is the only one), and a task the reader
-// may not change says why.
+// chips on a record's own page leave that record out (its other records still
+// show), and a task the reader may not change says why.
 import type { ActorDisplay, MemberSummary, RecordRefDisplay, TaskView } from '@crm/data';
 import type { TaskEntry } from '@crm/ui';
 import { strings } from './strings.ts';
@@ -17,15 +16,12 @@ export function memberDisplay(members: readonly MemberSummary[], memberId: strin
 }
 
 /**
- * The records in the order the chip shows them: on a record's own page, the
- * others first (the page's record would say nothing), the page's record last;
- * elsewhere, in link order.
+ * The records a task's chips show: on a record's own page, its other records only (the page's own chip on every
+ * row said nothing, owner 31 October 2026, so a task linked to that record alone shows no chip); elsewhere, every
+ * record in link order.
  */
-export function chipOrder(records: readonly RecordRefDisplay[], pageRecordId?: string): readonly RecordRefDisplay[] {
-  if (pageRecordId === undefined) return records;
-  const others = records.filter((record) => record.recordId !== pageRecordId);
-  const own = records.filter((record) => record.recordId === pageRecordId);
-  return [...others, ...own];
+export function chipRecords(records: readonly RecordRefDisplay[], pageRecordId?: string): readonly RecordRefDisplay[] {
+  return pageRecordId === undefined ? records : records.filter((record) => record.recordId !== pageRecordId);
 }
 
 /** A task as TaskList's entry. */
@@ -36,8 +32,12 @@ export function toTaskEntry(task: TaskView, members: readonly MemberSummary[], p
     isDone: task.isDone,
     ...(task.dueOn === undefined ? {} : { dueOn: task.dueOn }),
     ...(task.assigneeMemberId === undefined ? {} : { assignee: memberDisplay(members, task.assigneeMemberId) }),
-    records: chipOrder(task.records, pageRecordId),
-    recordCount: task.recordCount,
+    records: chipRecords(task.records, pageRecordId),
+    // Less the page's own, when the task links it.
+    recordCount:
+      pageRecordId !== undefined && task.records.some((record) => record.recordId === pageRecordId)
+        ? task.recordCount - 1
+        : task.recordCount,
     ...(task.canChange ? {} : { readOnlyReason: strings.readOnly }),
   };
 }

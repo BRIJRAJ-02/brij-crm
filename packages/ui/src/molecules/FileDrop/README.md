@@ -12,7 +12,7 @@ New. Imports (#30) and file attributes (#32) take files the same way, and say up
 <FileDrop label="Upload a CSV" acceptedTypes={['text/csv', '.xlsx']} maxSize={50_000_000} onFiles={start} />
 ```
 
-- `acceptedTypes` takes MIME types or extensions; `maxSize` is in bytes and shows as "up to 50 MB".
+- `acceptedTypes` takes MIME types or extensions; `maxSize` is in bytes and shows as "up to 50 MB". Up to three types are listed under the hint beside the size; with more (a record's Files takes twelve), the line shows the size only and the types are named in the refusal of a file it won't take, so the zone never reads as a wall of extensions (the owner, 31 October 2026, less text).
 - A file of the wrong type or over the size is refused with a sentence on what to do; `onFiles` only gets files that pass.
 - `allowsMultiple` takes several at once; otherwise the first.
 - `wrongTypeText(fileName)` lets the screen say something better than "Choose .csv" for a type it can name (the import page: an Excel file, and how to save it as CSV); answering undefined keeps the built in sentence.

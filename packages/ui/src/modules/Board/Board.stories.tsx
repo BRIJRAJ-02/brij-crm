@@ -51,7 +51,7 @@ interface SampleProps {
   readonly status?: LoadStatus;
   readonly onRetry?: () => void;
   readonly startShowingEmpty?: boolean;
-  /** A "No Stage" column first, empty, which stays a slim strip. */
+  /** A "No Stage" column first, empty: a column like the others. */
   readonly withNoValue?: boolean;
   readonly onAddCard?: (columnId: string) => void;
   /** Columns fold into strips, held by the story as the screen keeps them per view. */
@@ -90,7 +90,7 @@ function SampleBoard({
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set(startCollapsed));
   const [added, setAdded] = useState<readonly string[]>([]);
   const columns: readonly BoardColumn[] = [
-    ...(withNoValue ? [{ id: 'none', title: 'No Stage', isArchived: false, isCollapsedWhenEmpty: true }] : []),
+    ...(withNoValue ? [{ id: 'none', title: 'No Stage', isArchived: false }] : []),
     ...SAMPLE_STAGES.map((stage) => ({ id: stage.id, title: stage.label, hue: stage.hue, isArchived: stage.archived })),
     { id: 'lost', title: 'Lost', hue: 'red' as const, isArchived: false },
     ...added.map((title) => ({ id: `added-${title}`, title, hue: 'gray' as const, isArchived: false })),
@@ -310,14 +310,17 @@ export const EmptyColumns: Story = {
   },
 };
 
-/** An empty "No Stage" column is a slim strip with its title and count, out of the way until a card moves. */
-export const CollapsedNoValue: Story = {
+/**
+ * An empty "No Stage" column is a column like the others: their width, the same head, and a short dashed drop zone
+ * (owner item 60: the slim strip with its title down it read as a clipped column).
+ */
+export const EmptyNoValue: Story = {
   args: { startShowingEmpty: true, withNoValue: true },
   play: async ({ canvas }) => {
-    const strip = canvas.getByRole('region', { name: /No Stage/ });
-    await expect(within(strip).queryByRole('grid')).not.toBeInTheDocument();
-    await expect(strip.getBoundingClientRect().width).toBeLessThan(80);
-    await expect(within(strip).getByText(/^0 cards$/)).toBeInTheDocument();
+    const none = canvas.getByRole('region', { name: /No Stage/ });
+    const lost = canvas.getByRole('region', { name: /Lost/ });
+    await expect(within(none).getByRole('grid')).toBeInTheDocument();
+    await expect(none.getBoundingClientRect().width).toBe(lost.getBoundingClientRect().width);
   },
 };
 

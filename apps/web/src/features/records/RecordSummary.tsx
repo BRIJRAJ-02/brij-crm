@@ -3,7 +3,7 @@
 // Main task: read the key facts (job title, company, email, phone) and act at once: Email, Call, Log activity, Add task.
 // Leaves out: every other attribute (Details holds them), and any fact with nothing in it.
 import { toFieldAttribute, type AttributeDefinition, type NameState, type RecordRef, type RecordView } from '@crm/data';
-import { AttributeDisplay, Button, ButtonLink, RecordFacts, Tooltip, type IconName, type RecordFact } from '@crm/ui';
+import { AttributeDisplay, Button, ButtonLink, iconOf, RecordFacts, Tooltip, type RecordFact } from '@crm/ui';
 import { isFilled, refsOf } from './details.ts';
 import { displayOf } from './RecordDetails.tsx';
 import { strings } from './strings.ts';
@@ -26,10 +26,9 @@ function firstFilled(
     .find((attribute) => isFilled(record.values[attribute.id]));
 }
 
-/** Which attribute a fact takes, and its icon. */
+/** Which attribute a fact takes. */
 interface FactPick {
   readonly id: string;
-  readonly icon?: IconName;
   readonly match: (attribute: AttributeDefinition) => boolean;
 }
 
@@ -67,13 +66,13 @@ export function factsOf(
   referenceDisplays?: (refs: readonly RecordRef[]) => readonly NameState[],
 ): readonly RecordFact[] {
   const picks: readonly FactPick[] = [
-    { id: 'job', icon: 'briefcase', match: (each: AttributeDefinition) => each.apiSlug === 'job_title' },
+    { id: 'job', match: (each: AttributeDefinition) => each.apiSlug === 'job_title' },
     {
       id: 'company',
       match: (each: AttributeDefinition) => each.type === 'record_reference' && !each.isMulti,
     },
     { id: 'email', match: (each: AttributeDefinition) => each.type === 'email' },
-    { id: 'phone', icon: 'phone', match: (each: AttributeDefinition) => each.type === 'phone' },
+    { id: 'phone', match: (each: AttributeDefinition) => each.type === 'phone' },
     { id: 'domain', match: (each: AttributeDefinition) => each.type === 'domain' },
   ];
   const found = picks.flatMap((pick) => {
@@ -95,7 +94,9 @@ export function factsOf(
     return {
       id: pick.id,
       label: attribute.title,
-      ...(pick.icon === undefined ? {} : { icon: pick.icon }),
+      // Every fact with its field's own muted icon, the one the details beside it show, so none stands alone
+      // (job title had one, company and email none, 31 October 2026).
+      icon: iconOf({ type: attribute.type, apiSlug: attribute.apiSlug }),
       content: (
         <AttributeDisplay
           attribute={toFieldAttribute(attribute)}

@@ -123,10 +123,6 @@ export function Board({
   const [draggingFrom, setDraggingFrom] = useState<string | undefined>(undefined);
   // The column a moving card is over (itself or one of its cards): told once per change, not per frame.
   const [overGroup, setOverGroup] = useState<string | undefined>(undefined);
-  // Columns that have held cards while this board is up: a strip that filled never snaps shut under the pointer.
-  const [hasHeld, setHasHeld] = useState<ReadonlySet<string>>(() => new Set());
-  const holding = columns.filter((column) => column.count > 0 && !hasHeld.has(column.id));
-  if (holding.length > 0) setHasHeld(new Set([...hasHeld, ...holding.map((column) => column.id)]));
   // Stages made here from "+ Add stage", by name: each shows while empty, so a new stage never vanishes into the
   // hidden empty columns the moment it is made.
   const [added, setAdded] = useState<ReadonlySet<string>>(() => new Set());
@@ -252,12 +248,9 @@ export function Board({
             isReorderable={isReorderable}
             draggingFrom={draggingFrom}
             isOver={overGroup === column.id}
-            // A strip stays a strip while a card moves (it takes the drop as it is, so no column shifts under the
-            // pointer), and one that has held cards on this board stays wide when its last card leaves.
-            isCollapsed={
-              collapsedIds?.has(column.id) === true ||
-              (column.isCollapsedWhenEmpty === true && column.count === 0 && !hasHeld.has(column.id))
-            }
+            // A folded strip stays a strip while a card moves (it takes the drop as it is, so no column shifts under
+            // the pointer). The "No <field>" column is a column like the rest (owner item 60, 31 October 2026).
+            isCollapsed={collapsedIds?.has(column.id) === true}
             {...(onCollapsedChange === undefined
               ? {}
               : {

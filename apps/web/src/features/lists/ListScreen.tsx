@@ -947,7 +947,7 @@ function ListBoardColumns(
     return {
       id: key,
       title: option?.label ?? strings.noValue(field.title),
-      ...(option === undefined ? { isCollapsedWhenEmpty: true } : { hue: option.hue }),
+      ...(option === undefined ? {} : { hue: option.hue }),
       count: Math.max(0, (held?.count ?? 0) + arrived.length - ((held?.entryIds.length ?? 0) - kept.length)),
       ...(held?.atLeast === true ? { isCountAtLeast: true } : {}),
       cards: arraySource(cards, (card) => card.id),
