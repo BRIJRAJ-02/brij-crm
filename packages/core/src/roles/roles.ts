@@ -695,11 +695,15 @@ export async function setDefaultRole(
   );
 }
 
-/** Moves a custom role to `position` among the custom roles (0 first), the others closing up around it. */
+/**
+ * Moves a custom role to `position` among the custom roles (0 first), the others closing up around it. One
+ * `role.updated` audit row with its place before and after.
+ */
 export async function moveRole(
   scope: EngineScope,
   input: { readonly roleId: string; readonly position: number },
   hooks: readonly AfterWrite[] = [],
+  options: RoleWriteOptions = {},
 ): Promise<void> {
   requirePermission(scope, 'access.manage');
   const roleId = checkId(input.roleId, ROLE_NOT_FOUND);
@@ -727,6 +731,19 @@ export async function moveRole(
           .set({ position })
           .where(and(eq(workspaceRoles.workspaceId, scope.workspaceId), eq(workspaceRoles.id, row.id)));
       }
+      await writeAudit(
+        tx,
+        scope.workspaceId,
+        scope.actor,
+        {
+          action: 'role.updated',
+          targetType: 'role',
+          targetId: moving.id,
+          before: { name: moving.name, position: from },
+          after: { name: moving.name, position: to },
+        },
+        options.source,
+      );
       context.record({ members: writer(scope) });
     },
     hooks,

@@ -780,14 +780,16 @@ describe('linkStillReads', () => {
 });
 
 describe('a member who can’t invite', () => {
-  it('reads one note in the shared words, and no controls', async () => {
+  it('reads no note over the list, and no controls', async () => {
     const counted = layerWith(() => Promise.resolve());
     await renderMembers(counted.layer, {
       invitations: 'none',
       access: { memberId: LINUS.id, role: 'member', roleLabel: 'Member', permissions: [] },
     });
-    await expect.element(page.getByText('Only owners and admins can change this.')).toBeVisible();
-    expect(page.getByText('Only owners and admins can change this.').elements()).toHaveLength(1);
+    // No note over the list: who changes it is a lock in the page's header bar (the owner's less-text rule), which
+    // this harness doesn't mount.
+    await expect.element(page.getByRole('row', { name: /Linus Torvalds/ })).toBeVisible();
+    expect(page.getByText('Only owners and admins can change this.').elements()).toHaveLength(0);
     expect(page.getByRole('tab').elements()).toHaveLength(0);
     expect(page.getByRole('button', { name: /Role for/ }).elements()).toHaveLength(0);
     // Their own row's menu says what they can do (spec 0037, AC-1243); nobody else's has one.

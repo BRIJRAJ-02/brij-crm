@@ -18,6 +18,9 @@ import { isRefusal } from '../engine/refusals.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
 import { outboxHook } from '../engine/outbox.ts';
 import { inviteMembers } from '../members/invitations.ts';
+import { delegatesReachedBy, grantDelegation } from '../scheduling/delegations.ts';
+import { createTeam } from '../teams/teams.ts';
+import { holdersOf } from './held.ts';
 import { getMyAccess, setMemberRole, setMemberRoles } from '../members/members.ts';
 import { testScope } from '../testing.ts';
 import {
@@ -27,6 +30,7 @@ import {
   duplicateRole,
   getRole,
   listRoles,
+  moveRole,
   roleOverview,
   setDefaultRole,
   updateRole,
@@ -354,6 +358,79 @@ describe('audiences (AC-1247)', () => {
     expect(of(priya)?.members.find((each) => each.memberId === priya)?.permissions).toEqual(['forms.manage']);
     expect(of(priya)?.key).toBe('open');
     expect(of(vera)?.key).not.toBe('open');
+  });
+});
+
+describe('what a custom role holds now, wherever it is rechecked (spec 0037, J9)', () => {
+  it('rechecks booking.manage under lock from the custom role: taken away since the door, a self grant is refused', async () => {
+    const w = await world();
+    const priya = await w.add('Priya');
+    const sam = await w.add('Sam');
+    const role = await w.make('Assistant', ['booking.manage']);
+    await setMemberRole(w.owner, { memberId: priya, customRoleId: role.id });
+    const scope = await w.entered(priya);
+    await updateRole(w.owner, { roleId: role.id, permissions: [], updatedAt: role.updatedAt ?? '' });
+    expect(
+      await refusalOf(
+        grantDelegation(scope, { delegateMemberId: sam, target: { type: 'member', memberId: priya }, level: 'view' }),
+      ),
+    ).toMatchObject({ code: 'FORBIDDEN' });
+  });
+
+  it('counts custom roles that manage everyone among those told a booking needs a host', async () => {
+    const w = await world();
+    const desk = await w.add('Desk');
+    const plain = await w.add('Plain');
+    const manages = await w.make('Receptionist', ['schedule.manage', 'schedule.view']);
+    const sees = await w.make('Watcher', ['schedule.view']);
+    await setMemberRole(w.owner, { memberId: desk, customRoleId: manages.id });
+    await setMemberRole(w.owner, { memberId: plain, customRoleId: sees.id });
+    const told = await db.withWorkspace(w.workspaceId, (tx) => holdersOf(tx, w.workspaceId, 'schedule.manage'));
+    expect(told.map((each) => each.id).sort()).toEqual([w.memberId, desk].sort());
+  });
+
+  it('names custom role holders whose reach a change moves: their team mates, and everyone for a role over everyone', async () => {
+    const w = await world();
+    const lead = await w.add('Lead');
+    const desk = await w.add('Desk');
+    const mate = await w.add('Mate');
+    const teamRole = await w.make('Sales lead', ['schedule.view.team']);
+    const allRole = await w.make('Receptionist', ['schedule.view']);
+    await setMemberRole(w.owner, { memberId: lead, customRoleId: teamRole.id });
+    await setMemberRole(w.owner, { memberId: desk, customRoleId: allRole.id });
+    await createTeam(w.owner, { name: 'Sales', memberIds: [lead, mate] });
+    const reached = await db.withWorkspace(w.workspaceId, (tx) => delegatesReachedBy(tx, w.workspaceId, [mate]));
+    expect([...reached].sort()).toEqual([lead, desk].sort());
+  });
+
+  it('audits a move among the custom roles', async () => {
+    const w = await world();
+    await w.make('First');
+    const second = await w.make('Second');
+    await moveRole(w.owner, { roleId: second.id, position: 0 });
+    const [row] = await w.audit('role.updated');
+    expect(row).toMatchObject({ before: { name: 'Second', position: 1 }, after: { name: 'Second', position: 0 } });
+    expect((await listRoles(w.owner)).roles.map((each) => each.label).slice(4)).toEqual(['Second', 'First']);
+  });
+
+  it('changes several in one go, and refuses the whole change when it would leave no owner', async () => {
+    const w = await world();
+    const a = await w.add('A');
+    const b = await w.add('B', 'guest');
+    const role = await w.make('Doctor');
+    expect(
+      await refusalOf(setMemberRoles(w.owner, { memberIds: [a, w.memberId], customRoleId: role.id })),
+    ).toMatchObject({ code: 'LAST_OWNER' });
+    const untouched = await testQuery<{ custom_role_id: string | null }>(
+      ownerUrl,
+      `select custom_role_id::text from members where id = $1`,
+      [a],
+    );
+    expect(untouched[0]?.custom_role_id).toBeNull();
+    const done = await setMemberRoles(w.owner, { memberIds: [a, b], customRoleId: role.id }, [outboxHook()]);
+    expect(done.changed).toBe(2);
+    expect(await w.audit('member.role_changed')).toHaveLength(2);
+    expect((await w.outbox('access')).at(-1)?.item_ids?.slice().sort()).toEqual([a, b].sort());
   });
 });
 

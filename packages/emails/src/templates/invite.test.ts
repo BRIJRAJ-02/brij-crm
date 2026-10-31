@@ -37,6 +37,19 @@ describe('the invitation email', () => {
     );
   });
 
+  it('names a custom role by its own name (spec 0037)', async () => {
+    const email = await renderMemberInvite(
+      { ...PARAMS, role: 'member', roleName: 'Receptionist' },
+      { appOrigin: ORIGIN, workspaceName: 'Acme' },
+    );
+    expect(email.text).toContain('Ada Lovelace invited you to join Acme as a Receptionist.');
+    const analyst = await renderMemberInvite(
+      { ...PARAMS, role: 'member', roleName: 'Analyst' },
+      { appOrigin: ORIGIN, workspaceName: 'Acme' },
+    );
+    expect(analyst.text).toContain('as an Analyst.');
+  });
+
   it('refuses an accept link off the app, and params it doesn’t know', async () => {
     const context = { appOrigin: ORIGIN, workspaceName: 'Acme' };
     await expect(renderMemberInvite({ ...PARAMS, acceptPath: '//evil.example/invite' }, context)).rejects.toThrow();

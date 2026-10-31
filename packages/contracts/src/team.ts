@@ -147,6 +147,8 @@ export const InvitationView = z.object({
   role: Role,
   /** The custom role it gives (spec 0037, AC-1236), when any: `role` is then `member`. */
   customRoleId: Uuid.optional(),
+  /** That custom role's name, said in place of `role` (the Invitations tab, the email). */
+  roleLabel: z.string().optional(),
   /** Who sent it, by their name in this workspace; empty when the system did. */
   invitedBy: z.string(),
   invitedAt: z.iso.datetime({ offset: true }),
