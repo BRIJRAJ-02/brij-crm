@@ -190,6 +190,8 @@ describe('the bar on a phone (AC-1)', () => {
           <HeaderActions
             live={{ isLive: true, setLive: () => undefined, goLive: () => undefined, switchRef: { current: null } }}
             handle="ada-lovelace-2"
+            linkPage={linkPageStore}
+            slug="acme"
             isEditing
             onEditing={() => undefined}
           />

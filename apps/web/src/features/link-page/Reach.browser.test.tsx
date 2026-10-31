@@ -1,8 +1,9 @@
 // The link page editor's spec 0061 pieces in Chromium (R4): Insights with its figures readable as tables and its
 // empty line (AC-6118), the CSV's address (AC-6120), ready links per place and the builder (AC-6125), a tile's size
-// picked by sight (AC-6103), and a full new kind off in the Add grid (AC-6115).
+// picked by sight (AC-6103), a full new kind off in the Add grid (AC-6115), and the code's style waiting for the
+// saved one before it offers Save (AC-6124).
 import '@crm/ui/styles.css';
-import type { DataLayer, InsightsState, LinkPageStore, ProfileCounts } from '@crm/data';
+import type { InsightsState, LinkPageStore, ProfileCounts, QrStyleState } from '@crm/data';
 import type { ReactNode } from 'react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
@@ -10,7 +11,7 @@ import { renderInApp, type InApp } from '../../testing/renderInApp.tsx';
 import { SizePicker } from './block-extras.tsx';
 import { Insights } from './Insights.tsx';
 import { KindPicker } from './KindPicker.tsx';
-import { markedAddress, ShareLinksModal } from './ShareTools.tsx';
+import { markedAddress, QrStyleModal, ShareLinksModal } from './ShareTools.tsx';
 
 let shown: InApp | undefined;
 
@@ -25,7 +26,7 @@ afterEach(() => {
 
 async function render(screen: () => ReactNode) {
   shown = await renderInApp(() => <main>{screen()}</main>, {
-    data: {} as Partial<DataLayer>,
+    data: {},
     pattern: '/w/$slug/link-page',
     at: '/w/acme/link-page',
   });
@@ -121,7 +122,8 @@ describe('Insights (AC-6118, AC-6119, AC-6120)', () => {
     ));
     await expect.element(page.getByText('No visits yet')).toBeVisible();
     await expect.element(page.getByText('Share your page to see where people come from.')).toBeVisible();
-    expect(page.getByRole('link', { name: 'Download CSV' }).query()).toBeNull();
+    // The CSV stays in its place on an empty period, so the header never shifts as figures arrive.
+    await expect.element(page.getByRole('link', { name: 'Download CSV' })).toBeVisible();
   });
 });
 
@@ -138,14 +140,56 @@ describe('links for each place (AC-6125)', () => {
       .element(page.getByRole('textbox', { name: 'QR code' }))
       .toHaveValue('timefix.com/ada?utm_source=qr&utm_medium=print');
     const source = page.getByRole('textbox', { name: 'Source' });
-    await source.fill('news letter');
-    await expect.element(source).toHaveAccessibleDescription(/Use letters, numbers/);
+    await source.fill('news/letter');
+    await expect.element(source).toHaveAccessibleDescription(/Use only letters, numbers/);
     expect(page.getByRole('textbox', { name: 'Your link' }).query()).toBeNull();
-    await source.fill('Newsletter');
+    await source.fill('News letter');
     await page.getByRole('textbox', { name: 'Campaign' }).fill('spring');
     await expect
       .element(page.getByRole('textbox', { name: 'Your link' }))
-      .toHaveValue('timefix.com/ada?utm_source=newsletter&utm_campaign=spring');
+      .toHaveValue('timefix.com/ada?utm_source=news_letter&utm_campaign=spring');
+  });
+});
+
+describe('the code’s style (AC-6124)', () => {
+  it('opened before the saved style loads, offers no Save, so it never wipes a style it never read', async () => {
+    let state: QrStyleState = { status: 'loading' };
+    const listeners = new Set<() => void>();
+    const saveQrStyle = vi.fn(() => Promise.resolve(undefined));
+    const held = {
+      subscribe: (listener: () => void) => {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+      getSnapshot: () => state,
+      retain: () => () => undefined,
+      retry: () => undefined,
+    };
+    const store = {
+      reach: {
+        qrStyle: () => held,
+        saveQrStyle,
+        rules: { qrColourProblem: () => undefined, qrLabelProblem: () => undefined },
+        pictureSrc: (_slug: string, id: string) => `/api/profile/images/${id}`,
+      },
+    } as unknown as LinkPageStore;
+    await render(() => (
+      <QrStyleModal
+        linkPage={store}
+        slug="acme"
+        handle="ada"
+        address="https://timefix.com/ada"
+        quickPicks={[]}
+        isOpen
+        onClose={() => undefined}
+      />
+    ));
+    await expect.element(page.getByRole('button', { name: 'Save' })).toBeDisabled();
+    state = { status: 'ready', style: { colour: '#1f2937', label: 'Hello' }, isSaving: false };
+    for (const listener of listeners) listener();
+    await expect.element(page.getByRole('textbox', { name: 'Label' })).toHaveValue('Hello');
+    await page.getByRole('button', { name: 'Save' }).click();
+    expect(saveQrStyle).toHaveBeenCalledWith('acme', { colour: '#1f2937', label: 'Hello' });
   });
 });
 

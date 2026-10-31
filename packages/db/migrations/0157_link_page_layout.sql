@@ -1,4 +1,5 @@
--- A link page's layout (spec 0061, AC-6103, 31 Oct 2026; lane R4; numbered 0157, after the brand kit and blocks merged as 0155 and 0156). The spec reads "the page's layout (spec 0060)",
+-- A link page's layout (spec 0061, AC-6103, 31 Oct 2026; lane R4). Numbered 0157, after the brand kit's 0155 and the
+-- blocks' 0156 merged. The spec reads "the page's layout (spec 0060)",
 -- but neither spec stored one, so the look gains one optional key: `layout`, `list` (what every page drew before)
 -- or `grid`. Absent is `list`, so no stored look changes and no default moves. The check keeps every rule it had and
 -- lets this one key through, with its two words only. Written, as the rest of the look, through

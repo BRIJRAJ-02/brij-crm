@@ -20,7 +20,7 @@ import {
   useFormatSettings,
   type StatItem,
 } from '@crm/ui';
-import { lazy, Suspense, useRef, useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { reachStrings as words } from './reach-strings.ts';
 import { rowWords } from './registry.tsx';
 
@@ -72,10 +72,11 @@ export function Insights({ linkPage, slug, items }: InsightsProps) {
   );
   // A period switch keeps the last figures on screen until the new ones land, so the card never collapses to a
   // skeleton and grows back under the reader; the first read draws the figures' own shapes.
-  const lastReady = useRef<ProfileCounts | undefined>(undefined);
-  if (state.status === 'ready') lastReady.current = state.counts;
+  // Kept as state set while rendering (React's pattern for a value derived from the last props), never a ref.
+  const [lastReady, setLastReady] = useState<ProfileCounts | undefined>(undefined);
+  if (state.status === 'ready' && state.counts !== lastReady) setLastReady(state.counts);
   const counts = state.status === 'ready' ? state.counts : undefined;
-  const shown = counts ?? (state.status === 'loading' ? lastReady.current : undefined);
+  const shown = counts ?? (state.status === 'loading' ? lastReady : undefined);
   const hasViews = counts !== undefined && counts.views > 0;
   return (
     <Card

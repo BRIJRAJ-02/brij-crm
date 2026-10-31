@@ -343,6 +343,38 @@ export interface ReachApi {
   readonly upload: (workspace: string, picture: Blob) => Promise<StoredPicture>;
 }
 
+/**
+ * Sends a picture's bytes to `/api/profile/images` on `origin` for the workspace named (spec 0061, AC-6101,
+ * AC-6108), from the link page's own chunk so it never rides in the first load. Answers the stored picture, or
+ * rejects with a DataError (the network, or the route's refusal with its status).
+ */
+export async function sendPicture(origin: string, workspace: string, picture: Blob): Promise<StoredPicture> {
+  let response: Response;
+  try {
+    response = await fetch(new URL('/api/profile/images', origin).href, {
+      method: 'POST',
+      headers: { 'x-crm-workspace': workspace, 'content-type': picture.type },
+      body: picture,
+      credentials: 'include',
+    });
+  } catch (error: unknown) {
+    throw toDataError(error);
+  }
+  let answer: unknown;
+  try {
+    answer = await response.json();
+  } catch {
+    answer = undefined;
+  }
+  const fields = typeof answer === 'object' && answer !== null ? (answer as Record<string, unknown>) : {};
+  if (!response.ok) throw toDataError({ ...fields, status: response.status });
+  const { image, width, height } = fields;
+  if (typeof image !== 'string' || typeof width !== 'number' || typeof height !== 'number') {
+    throw toDataError({ code: 'INTERNAL', message: 'The picture didn’t upload. Try again.' });
+  }
+  return { image, width, height };
+}
+
 /** How long a period's figures serve a new holder before they are read again. */
 export const INSIGHTS_FRESH_MS = 60_000;
 
@@ -407,31 +439,37 @@ export function createReach(deps: {
   const makeQr = (): QrStyleHeld => {
     let confirmed: ProfileQrStyle | undefined;
     let failed: DataError | undefined;
-    // The newest change on its way: shown over what was confirmed, and the only one whose answer lands.
+    // The newest change on its way, shown over what was confirmed. Each save takes a ticket: the newest answer to
+    // land is what was confirmed (an older save landing late never undoes a newer one), and only the newest save's
+    // answer clears what is shown. A read sent before a save never lands over it, since it may hold the old style.
     let shown: ProfileQrStyle | undefined;
     let ticket = 0;
+    let landed = 0;
     let readAt: number | undefined;
     let state: QrStyleState = { status: 'loading' };
     const listeners = new Set<() => void>();
     const show = () => {
-      if (confirmed === undefined) {
+      const base = shown ?? confirmed;
+      if (base === undefined) {
         state = failed === undefined ? { status: 'loading' } : { status: 'error', error: failed };
       } else {
-        state = { status: 'ready', style: shown ?? confirmed, isSaving: shown !== undefined };
+        state = { status: 'ready', style: base, isSaving: shown !== undefined };
       }
       for (const listener of listeners) listener();
     };
     const read = () => {
       readAt = now();
+      const sentAt = ticket;
       deps.api.qrStyle({ workspace: qrWorkspace }).then(
         (style) => {
+          if (sentAt !== ticket) return;
           confirmed = style;
           failed = undefined;
           show();
         },
         (error: unknown) => {
           readAt = undefined;
-          if (confirmed === undefined) {
+          if (confirmed === undefined && sentAt === ticket) {
             failed = toDataError(error);
             show();
           }
@@ -444,17 +482,22 @@ export function createReach(deps: {
       show();
       return deps.api.saveQrStyle({ workspace: qrWorkspace, style, mutationId: deps.mintId() }).then(
         (saved) => {
-          if (mine !== ticket) return undefined;
-          confirmed = saved;
-          shown = undefined;
+          if (mine > landed) {
+            landed = mine;
+            confirmed = saved;
+            failed = undefined;
+          }
+          if (mine === ticket) shown = undefined;
           show();
           return undefined;
         },
         (error: unknown) => {
           if (mine === ticket) {
-            // Refused: what was saved stands again, and the reason goes back to the control that changed.
+            // Refused: what was saved stands again, and the reason goes back to the control that changed. With no
+            // saved style known yet (the first read was set aside for this save), it is read again.
             shown = undefined;
             show();
+            if (confirmed === undefined) read();
           }
           return toDataError(error);
         },

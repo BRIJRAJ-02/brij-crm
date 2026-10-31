@@ -48,11 +48,11 @@ import {
   createReach,
   linkExtrasOf,
   linkExtrasProblems,
+  sendPicture,
   withExtras,
   type DraftExtras,
   type DraftLinkExtras,
   type DraftWindow,
-  type ReachApi,
   type ReachDraft,
 } from './reach.ts';
 import type { Notice } from '../notice.ts';
@@ -919,8 +919,8 @@ export function openLinkPage(given: {
   readonly notify: (notice: Notice) => void;
   readonly summary: (error: DataError) => string;
   /** Email signup (spec 0052, AC-5217): the workspaces one may be made in, and the one call that makes it. */
-  /** Sends a picture to `/api/profile/images` for the workspace named (spec 0061): the stored picture. */
-  readonly upload: ReachApi['upload'];
+  /** The api's origin: a picture goes to its `/api/profile/images` (spec 0061). */
+  readonly origin: string;
   readonly signup: {
     readonly workspaces: () => Promise<
       readonly { readonly id: string; readonly slug: string; readonly name: string }[]
@@ -961,7 +961,7 @@ export function openLinkPage(given: {
       fetchThumbnail: (input) => call((options) => profile.fetchThumbnail(input, options)),
       qrStyle: (input) => call((options) => profile.qrStyle(input, options)),
       saveQrStyle: (input) => call((options) => profile.saveQrStyle(input, options)),
-      upload: given.upload,
+      upload: (workspace, picture) => sendPicture(given.origin, workspace, picture),
     },
     mintId: given.mintId,
   });

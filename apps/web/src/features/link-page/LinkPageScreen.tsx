@@ -75,6 +75,7 @@ import { DeleteBlockDialog, KindPicker } from './KindPicker.tsx';
 import { LinkPageOverview } from './LinkPageOverview.tsx';
 import { LiveSwitch, useLinkPageLive, type LinkPageLive } from './private-page.tsx';
 import { ShareLinkPageModal } from './ShareLinkPageModal.tsx';
+import { drawnQrStyle, ShareLinksModal, useQrStyle } from './ShareTools.tsx';
 import { strings } from './strings.ts';
 
 /** Props for the Link page screen. */
@@ -222,6 +223,9 @@ export function LinkPageScreen({ data, linkPage, brand, slug, profile, isEditing
                 live={live}
                 handle={handle}
                 workspaceName={profile.workspaceName}
+                linkPage={linkPage}
+                slug={slug}
+                personImage={profile.image === undefined || profile.pictureHidden === true ? undefined : profile.image}
                 isEditing={isEditing}
                 onEditing={onEditing}
               />
@@ -264,18 +268,28 @@ export function HeaderActions({
   live,
   handle,
   workspaceName,
+  linkPage,
+  slug,
+  personImage,
   isEditing,
   onEditing,
 }: {
   readonly live: LinkPageLive;
   readonly handle: string;
   readonly workspaceName?: string | undefined;
+  /** The store and workspace the saved QR style is read from (spec 0061, AC-6124). */
+  readonly linkPage: LinkPageStore;
+  readonly slug: string;
+  /** The person's picture, when it shows on their pages: a styled code may carry it. */
+  readonly personImage?: string | undefined;
   readonly isEditing: boolean;
   readonly onEditing: (isEditing: boolean) => void;
 }) {
   const address = publicProfileUrl(handle);
   const shown = address.replace(/^https?:\/\//, '');
   const [isSharing, setSharing] = useState(false);
+  const [isMarking, setMarking] = useState(false);
+  const qrStyle = drawnQrStyle(useQrStyle(linkPage, slug), linkPage, slug, personImage);
   return (
     <>
       <LiveSwitch live={live} />
@@ -320,9 +334,16 @@ export function HeaderActions({
         workspaceName={workspaceName}
         isPublic={live.isLive}
         onGoLive={() => live.setLive(true)}
+        qrStyle={qrStyle}
+        onShareLinks={() => {
+          // One dialog at a time: Share steps aside for the links, rather than stacking two scrims.
+          setSharing(false);
+          setMarking(true);
+        }}
         isOpen={isSharing}
         onClose={() => setSharing(false)}
       />
+      <ShareLinksModal address={address} isOpen={isMarking} onClose={() => setMarking(false)} />
     </>
   );
 }

@@ -11,11 +11,13 @@ import {
   Button,
   Callout,
   ChoiceChips,
+  EmptyState,
   Field,
   FieldGroup,
   Modal,
   QrCode,
   Separator,
+  Skeleton,
   type AccentQuickPick,
 } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
@@ -49,9 +51,9 @@ export function markedAddress(
   return url.toString();
 }
 
-/** A typed mark, as Insights will keep it: lower case and trimmed, or its problem. */
+/** A typed mark, as Insights will keep it: lower case, trimmed, spaces as underscores, or its problem. */
 function markOf(typed: string): { readonly value: string; readonly problem?: string } {
-  const value = typed.trim().toLowerCase();
+  const value = typed.trim().toLowerCase().replace(/\s+/g, '_');
   if (value === '') return { value };
   return MARK.test(value) ? { value } : { value, problem: words.builderInvalid };
 }
@@ -211,9 +213,47 @@ export interface QrStyleModalProps {
 /**
  * Style your QR code (AC-6124): a colour (refused with a hint when it is too light to scan), a picture in the
  * middle (theirs, or one uploaded) and a frame with a label, drawn as they are picked; Save keeps them for the
- * page, and the code downloads as a 1024 pixel PNG or as SVG.
+ * page, and the code downloads as a 1024 pixel PNG or as SVG. The choices start from the saved style, so the form
+ * waits for it: opened before it loads, the dialog shows its shape loading and offers no Save, since saving then
+ * would wipe a style it never read.
  */
-export function QrStyleModal({
+export function QrStyleModal(props: QrStyleModalProps) {
+  const { linkPage, slug, isOpen, onClose } = props;
+  const held = linkPage.reach.qrStyle(slug);
+  const state = useLinkPageQrStyle(held);
+  if (state.status === 'ready') return <QrStyleForm {...props} saved={state.style} />;
+  const showSkeleton = state.status === 'loading';
+  return (
+    <Modal
+      title={words.qrStyleTitle}
+      hint={words.qrBackground}
+      isOpen={isOpen}
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+      actions={
+        <>
+          <Button slot="close">{words.cancel}</Button>
+          <Button variant="primary" isDisabled>
+            {words.qrSave}
+          </Button>
+        </>
+      }
+    >
+      {showSkeleton ? (
+        <div aria-busy>
+          <Skeleton shape="block" width="full" />
+          <Skeleton lines={3} />
+        </div>
+      ) : (
+        <EmptyState tone="error" layout="row" title={words.qrStyleFailed} onRetry={() => held.retry()} />
+      )}
+    </Modal>
+  );
+}
+
+/** The form itself, once the saved style is known: its choices start from it. */
+function QrStyleForm({
   linkPage,
   slug,
   handle,
@@ -222,17 +262,17 @@ export function QrStyleModal({
   quickPicks,
   isOpen,
   onClose,
-}: QrStyleModalProps) {
+  saved,
+}: QrStyleModalProps & { readonly saved: ProfileQrStyle }) {
   const { toasts } = useRouteContext({ from: '__root__' });
-  const saved = useQrStyle(linkPage, slug);
   const { rules } = linkPage.reach;
-  const [colour, setColour] = useState<string | undefined>(saved?.colour);
-  const [pictureFrom, setPictureFrom] = useState<'none' | 'person' | 'upload'>(saved?.picture?.from ?? 'none');
+  const [colour, setColour] = useState<string | undefined>(saved.colour);
+  const [pictureFrom, setPictureFrom] = useState<'none' | 'person' | 'upload'>(saved.picture?.from ?? 'none');
   const [upload, setUpload] = useState<HeldPicture | undefined>(() =>
-    saved?.picture?.from === 'upload' ? heldPicture(linkPage, slug, saved.picture.image) : undefined,
+    saved.picture?.from === 'upload' ? heldPicture(linkPage, slug, saved.picture.image) : undefined,
   );
-  const [hasFrame, setHasFrame] = useState(saved?.label !== undefined);
-  const [label, setLabel] = useState(saved?.label ?? words.qrLabelPlaceholder);
+  const [hasFrame, setHasFrame] = useState(saved.label !== undefined);
+  const [label, setLabel] = useState(saved.label ?? words.qrLabelPlaceholder);
   const [refusal, setRefusal] = useState<string | undefined>(undefined);
   const [isSaving, setSaving] = useState(false);
   const [isDownloading, setDownloading] = useState(false);

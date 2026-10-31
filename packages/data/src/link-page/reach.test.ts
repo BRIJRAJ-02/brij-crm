@@ -238,4 +238,36 @@ describe('Insights and the code’s style, as screens hold them', () => {
     await expect(refused).resolves.toMatchObject({ code: 'CONFIG_INVALID' });
     expect(held.getSnapshot()).toEqual({ status: 'ready', style: saved, isSaving: false });
   });
+  it('never lets a read sent before a save, or an older save landing late, undo the newest style', async () => {
+    const read = deferred<ProfileQrStyle>();
+    const saves = [deferred<ProfileQrStyle>(), deferred<ProfileQrStyle>()];
+    let sent = 0;
+    const reach = createReach({
+      api: {
+        counts: () => Promise.resolve(COUNTS),
+        fetchThumbnail: () => Promise.reject(new Error('unused')),
+        qrStyle: () => read.promise,
+        saveQrStyle: () => {
+          const answer = saves[sent];
+          sent += 1;
+          return answer === undefined ? Promise.reject(new Error('unexpected')) : answer.promise;
+        },
+        upload: () => Promise.reject(new Error('unused')),
+      },
+      mintId: () => 'm',
+    });
+    const held = reach.qrStyle('acme');
+    held.retain();
+    const first = reach.saveQrStyle('acme', { colour: '#1f2937' });
+    const second = reach.saveQrStyle('acme', { colour: '#0b3d91' });
+    read.resolve({});
+    await read.promise;
+    await Promise.resolve();
+    expect(held.getSnapshot()).toEqual({ status: 'ready', style: { colour: '#0b3d91' }, isSaving: true });
+    saves[1]?.resolve({ colour: '#0b3d91' });
+    await second;
+    saves[0]?.resolve({ colour: '#1f2937' });
+    await first;
+    expect(held.getSnapshot()).toEqual({ status: 'ready', style: { colour: '#0b3d91' }, isSaving: false });
+  });
 });
