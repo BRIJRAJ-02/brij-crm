@@ -16,7 +16,7 @@ import { Table } from '../../molecules/Table/Table.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { SaveBar } from '../SaveBar/SaveBar.tsx';
 import { TopBar } from '../Toolbar/Toolbar.tsx';
-import { Select } from '../../molecules/Select/Select.tsx';
+import { Select } from '../../molecules/Select/SelectWithFaces.tsx';
 import { Field } from '../../molecules/Field/Field.tsx';
 import { Form } from '../../molecules/Form/Form.tsx';
 import { Switch } from '../../atoms/Switch/Switch.tsx';

@@ -5,7 +5,7 @@ import { Switch } from '../atoms/Switch/Switch.tsx';
 import { CountryPicker } from '../molecules/CountryPicker/CountryPicker.tsx';
 import { Field } from '../molecules/Field/Field.tsx';
 import { PhoneField, type PhoneFieldValue } from '../molecules/PhoneField/PhoneField.tsx';
-import { Select } from '../molecules/Select/Select.tsx';
+import { SelectBase } from '../molecules/Select/Select.tsx';
 import { lazy, Suspense } from 'react';
 import { Skeleton } from '../atoms/Skeleton/Skeleton.tsx';
 import { isUploadedFile, type HostedFileHandlers } from './files.ts';
@@ -114,7 +114,7 @@ export function Question({
       );
     case 'dropdown':
       return (
-        <Select
+        <SelectBase
           {...labelProps}
           items={(question.choices ?? []).map((choice) => ({ id: choice, label: choice }))}
           placeholder={words.chooseOne}

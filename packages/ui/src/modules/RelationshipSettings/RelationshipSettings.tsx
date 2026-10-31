@@ -16,7 +16,8 @@ import { Field } from '../../molecules/Field/Field.tsx';
 import { Form, type FormRefusal } from '../../molecules/Form/Form.tsx';
 import { InfoTip } from '../../molecules/InfoTip/InfoTip.tsx';
 import { Modal } from '../../molecules/Modal/Modal.tsx';
-import { Select, type SelectItem } from '../../molecules/Select/Select.tsx';
+import { Select } from '../../molecules/Select/SelectWithFaces.tsx';
+import { type SelectItem } from '../../molecules/Select/Select.tsx';
 import { strings } from './strings.ts';
 
 /** An object a side may sit on, as the dialog names it and draws its tile. */
