@@ -1,9 +1,5 @@
 -- The link page's Live or Private switch (spec 0058, AC-23, 31 Oct 2026; the owner: "rest take industry standard
-<<<<<<<< HEAD:packages/db/migrations/0145_link_page_switch.sql
--- decisions"). Number 0145 (first 0135) is a placeholder, renumbered after main's last when the lanes merge.
-========
 -- decisions"). Renumbered 0154, after main's 0153, when the lanes merged.
->>>>>>>> 27335f3ee27758800f479624aa792aca17804d0f:packages/db/migrations/0154_link_page_switch.sql
 --
 -- What changes:
 -- * A handle its owner claims (first run or Settings › Profile) is live at once, as on Linktree. The app calls
