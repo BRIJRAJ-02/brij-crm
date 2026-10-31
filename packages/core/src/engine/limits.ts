@@ -4,6 +4,7 @@
 // #38 later reads the numbers from the workspace's plan.
 import { and, count, eq, isNull, sql } from 'drizzle-orm';
 import { INVITES_LIMIT, SEAT_LIMIT, TRANSFER_LIMITS } from '@crm/contracts';
+import { COMPUTED_PER_OBJECT } from '@crm/contracts/computed';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { checkId } from './ids.ts';
 import { refuse, refuseAll } from './refusals.ts';
@@ -45,6 +46,8 @@ export const LIMITS = {
   unfinishedImports: TRANSFER_LIMITS.unfinishedImports,
   /** Rows one export writes (owner decision 4, until files move to R2). */
   exportRows: TRANSFER_LIMITS.exportRows,
+  /** Computed attributes on one object (spec 0015, AC-331), each also counting toward `attributesPerParent`. */
+  computedPerObject: COMPUTED_PER_OBJECT,
 } as const;
 
 /** One set of limits. */

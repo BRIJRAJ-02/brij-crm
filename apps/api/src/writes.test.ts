@@ -49,6 +49,8 @@ const READS: ReadonlySet<string> = new Set([
   'attributes.impact',
   // What changing an attribute's type would do, read before the change (the field types lane).
   'attributes.checkTypeChange',
+  // A computed attribute's values for a few records, worked out before it is made (spec 0015): writes nothing.
+  'computed.preview',
   'members.list',
   // Teams (spec 0031, slice 8): the list every member reads.
   'teams.list',
@@ -1140,6 +1142,29 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
       mutationId,
     });
     return [{ kind: 'definitions', object_id: m.people.id, attribute_ids: [made.id], mutation_id: mutationId }];
+  },
+  // A computed attribute whose fill failed, worked out again (spec 0015, AC-334): its definition changes, and the
+  // fill it starts is the system's job.
+  'computed.refill': async (m, mutationId) => {
+    const sides = await m.client.attributes.list({ workspace: m.slug, objectId: m.companies.id });
+    const via = sides.find((each) => each.type === 'record_reference' && each.relationship !== undefined);
+    if (via === undefined) throw new Error('Companies has no relationship side.');
+    const made = await m.client.attributes.create({
+      workspace: m.slug,
+      objectId: m.companies.id,
+      id: newId(),
+      title: 'People count',
+      type: 'number',
+      computed: { kind: 'rollup', via: via.id, calc: 'count' },
+      mutationId: newId(),
+    });
+    await testQuery(
+      ownerUrl,
+      `update attributes set computed_state = 'broken', computed_error = 'Working out values failed.' where id = $1`,
+      [made.id],
+    );
+    await m.client.computed.refill({ workspace: m.slug, attributeId: made.id, mutationId });
+    return [{ kind: 'definitions', object_id: m.companies.id, attribute_ids: [made.id], mutation_id: mutationId }];
   },
   // Attribute writes (spec 0012, milestone 2): one definitions row per object, naming the attributes changed.
   'attributes.update': async (m, mutationId) => {

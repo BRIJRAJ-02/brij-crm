@@ -334,6 +334,10 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       update: os.reports.update.handler(() => notServed()),
       delete: os.reports.delete.handler(() => notServed()),
     },
+    computed: {
+      preview: os.computed.preview.handler(() => notServed()),
+      refill: os.computed.refill.handler(() => notServed()),
+    },
     attributes: {
       list: os.attributes.list.handler(() => behaviour.attributes()),
       create: os.attributes.create.handler(({ input }) => {

@@ -58,6 +58,21 @@ export interface AttributeDef {
   readonly ruleCount: number;
   /** Moves whenever one of those rules changes, so a write that loaded them notices (`holdDefinitions`). */
   readonly rulesVersion: number;
+  /**
+   * A computed attribute's stored definition (spec 0015), or null: its values are the system's alone, so every
+   * write that takes them from a caller refuses it (`parseFor`). Absent where a definition is built by hand.
+   */
+  readonly computed?: unknown;
+  /** Where a computed attribute's values stand, or null. */
+  readonly computedState?: 'filling' | 'ok' | 'broken' | null;
+}
+
+/** The kind of a computed attribute's stored definition, or undefined for any other attribute. */
+export function computedKindOf(attribute: Pick<AttributeDef, 'computed'>): 'lookup' | 'rollup' | 'formula' | undefined {
+  const { computed } = attribute;
+  if (typeof computed !== 'object' || computed === null || !('kind' in computed)) return undefined;
+  const { kind } = computed;
+  return kind === 'lookup' || kind === 'rollup' || kind === 'formula' ? kind : undefined;
 }
 
 /**
@@ -121,6 +136,8 @@ const DEF_COLUMNS = {
   position: attributes.position,
   ruleCount: attributes.ruleCount,
   rulesVersion: attributes.rulesVersion,
+  computed: attributes.computed,
+  computedState: attributes.computedState,
 } as const;
 
 /** One attribute by id, or a `NOT_FOUND` refusal (a malformed id too, before any query). */
@@ -378,6 +395,10 @@ export function checkWriter(attribute: AttributeDef, writer: Actor): void {
 export function parseFor(attribute: AttributeDef, input: unknown): unknown {
   if (attribute.isSystem) {
     throw refuse('ATTRIBUTE_READ_ONLY', `${attribute.title} is set by the system.`, attribute.id);
+  }
+  // A computed attribute's values are the system's alone (spec 0015, AC-323), written by `writeComputedBatch`.
+  if (computedKindOf(attribute) !== undefined) {
+    throw refuse('ATTRIBUTE_READ_ONLY', `${attribute.title} is worked out from other attributes.`, attribute.id);
   }
   if (attribute.archivedAt !== null) {
     throw refuse('ATTRIBUTE_READ_ONLY', `${attribute.title} is archived. Restore it to change it.`, attribute.id);

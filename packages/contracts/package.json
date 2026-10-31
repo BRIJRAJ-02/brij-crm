@@ -49,7 +49,9 @@
     "./roster": "./src/booking/roster.ts",
     "./zones": "./src/booking/zones.ts",
     "./emails": "./src/emails.ts",
-    "./brand": "./src/brand.ts"
+    "./brand": "./src/brand.ts",
+    "./computed": "./src/computed-rules.ts",
+    "./formula": "./src/formula/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

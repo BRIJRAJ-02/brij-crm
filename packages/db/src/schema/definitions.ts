@@ -80,6 +80,18 @@ export const objects = pgTable(
   ],
 );
 
+/** Where a computed attribute's values stand (spec 0015). */
+export const computedState = pgEnum('computed_state', ['filling', 'ok', 'broken']);
+
+/** How a computed attribute reads one of its inputs (spec 0015): the dependency index's roles. */
+export const computedInputRole = pgEnum('computed_input_role', [
+  'same_record',
+  'far_value',
+  'link',
+  'far_condition',
+  'option_labels',
+]);
+
 /** A typed field on an object, or on a list (an entry's own values). */
 export const attributes = pgTable(
   'attributes',
@@ -112,10 +124,29 @@ export const attributes = pgTable(
     ruleCount: smallint('rule_count').notNull().default(0),
     /** Up by one whenever one of those rules is made, changed or deleted, so a write that loaded them sees a change. */
     rulesVersion: integer('rules_version').notNull().default(0),
+    /**
+     * A computed attribute's definition (spec 0015): a lookup, a rollup or a formula, parsed by
+     * `ComputedDefinition` before it gets here. Set exactly when the attribute is computed; `type` and
+     * `is_multi` then hold its result type.
+     */
+    computed: jsonb('computed'),
+    /** Whether a computed attribute's values are being worked out, are up to date, or stopped updating. */
+    computedState: computedState('computed_state'),
+    /** Why a computed attribute stopped updating ("Amount is archived."), while `broken`. */
+    computedError: text('computed_error'),
+    /** Up by one with each definition change, so a fill started for an older one ends doing nothing. */
+    computedVersion: integer('computed_version').notNull().default(0),
+    /** How many computed attributes deep this one builds (1 to 3), for the depth limit. */
+    computedDepth: smallint('computed_depth'),
+    /** The computed attributes that read this one, kept with their definitions in the same transaction. */
+    dependentCount: smallint('dependent_count').notNull().default(0),
     ...auditColumns(),
   },
   (t): PgTableExtraConfigValue[] => [
     primaryKey({ name: 'attributes_pkey', columns: [t.workspaceId, t.id] }),
+    check('attributes_computed', sql`(${t.computed} is null) = (${t.computedState} is null)`),
+    check('attributes_computed_depth', sql`${t.computedDepth} is null or ${t.computedDepth} between 1 and 3`),
+    check('attributes_dependents', sql`${t.dependentCount} >= 0`),
     foreignKey({
       name: 'attributes_object',
       columns: [t.workspaceId, t.objectId],
@@ -271,6 +302,45 @@ export const lists = pgTable(
       type: t.updatedByType,
       id: t.updatedById,
       memberId: t.updatedByMemberId,
+    }),
+  ],
+);
+
+/**
+ * The dependency index (spec 0015): one row per input a computed attribute reads, rebuilt whole in the
+ * transaction that creates or changes its definition. A write's planner finds the computed attributes its
+ * change feeds through `computed_inputs_by_input`. `via_attribute_id` is the relationship side a far input is
+ * read through.
+ */
+export const computedInputs = pgTable(
+  'computed_inputs',
+  {
+    workspaceId: workspaceId(),
+    computedAttributeId: uuid('computed_attribute_id').notNull(),
+    inputAttributeId: uuid('input_attribute_id').notNull(),
+    role: computedInputRole('role').notNull(),
+    viaAttributeId: uuid('via_attribute_id'),
+  },
+  (t) => [
+    primaryKey({
+      name: 'computed_inputs_pkey',
+      columns: [t.workspaceId, t.computedAttributeId, t.inputAttributeId, t.role],
+    }),
+    index('computed_inputs_by_input').on(t.workspaceId, t.inputAttributeId),
+    foreignKey({
+      name: 'computed_inputs_computed',
+      columns: [t.workspaceId, t.computedAttributeId],
+      foreignColumns: [attributes.workspaceId, attributes.id],
+    }),
+    foreignKey({
+      name: 'computed_inputs_input',
+      columns: [t.workspaceId, t.inputAttributeId],
+      foreignColumns: [attributes.workspaceId, attributes.id],
+    }),
+    foreignKey({
+      name: 'computed_inputs_via',
+      columns: [t.workspaceId, t.viaAttributeId],
+      foreignColumns: [attributes.workspaceId, attributes.id],
     }),
   ],
 );

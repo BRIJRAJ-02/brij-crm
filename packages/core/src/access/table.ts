@@ -112,6 +112,9 @@ export const ACCESS_TABLE = {
   moveAttribute: { permission: 'schema.manage' },
   archiveAttributes: { permission: 'schema.manage' },
   restoreAttributes: { permission: 'schema.manage' },
+  // Computed attributes (spec 0015, AC-330): the preview and the refill.
+  previewComputed: { permission: 'schema.manage' },
+  refillComputed: { permission: 'schema.manage' },
   defineOption: { permission: 'schema.manage' },
   updateOption: { permission: 'schema.manage' },
   // Settings' option writes (spec 0012, milestone 3).

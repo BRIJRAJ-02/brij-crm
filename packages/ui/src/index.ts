@@ -404,6 +404,19 @@ export {
   type AttributeSettingsProps,
   type AttributeSettingsValues,
 } from './modules/AttributeSettings/AttributeSettings.tsx';
+export type {
+  AttributeSettingsComputed,
+  ComputedDraft,
+  ComputedFarAttribute,
+  ComputedPreviewState,
+  ComputedSide,
+} from './modules/AttributeSettings/ComputedSettings.tsx';
+export {
+  FormulaEditor,
+  type FormulaCheck,
+  type FormulaEditorAttribute,
+  type FormulaEditorProps,
+} from './modules/FormulaEditor/FormulaEditor.tsx';
 export {
   typeChangeStep,
   type TypeChangePreview,

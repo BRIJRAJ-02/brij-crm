@@ -3,6 +3,7 @@ import { accessRulesContract } from './access-rules.ts';
 import { accountContract } from './account.ts';
 import { auditContract } from './audit.ts';
 import { attributesContract } from './attributes.ts';
+import { computedContract } from './computed.ts';
 import { bookingPagesContract, bookingsContract } from './booking/pages.ts';
 import { schedulesContract } from './booking/schedules.ts';
 import { timeOffContract } from './booking/time-off.ts';
@@ -52,6 +53,7 @@ export * from './access-rules.ts';
 export * from './account.ts';
 export * from './activity.ts';
 export * from './attributes.ts';
+export * from './computed.ts';
 export * from './audit.ts';
 export * from './board-model.ts';
 export * from './booking/index.ts';
@@ -133,6 +135,8 @@ export const contract = {
   workspaceSecurity: workspaceSecurityContract,
   objects: objectsContract,
   attributes: attributesContract,
+  // Computed attributes (spec 0015): the preview, and the refill after a failed fill.
+  computed: computedContract,
   options: optionsContract,
   // Bulk actions (spec 0022) join the records namespace from their own file.
   records: { ...recordsContract, ...bulkRecordsContract },

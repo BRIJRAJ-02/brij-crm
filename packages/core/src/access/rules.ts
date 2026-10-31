@@ -97,6 +97,8 @@ export async function ownerAttributeOf(tx: WorkspaceTx, objectId: string): Promi
         eq(attributes.type, 'actor_reference'),
         eq(attributes.isSystem, false),
         isNull(attributes.archivedAt),
+        // A computed member (a lookup of a related record's owner) is worked out, never set: it decides nothing.
+        isNull(attributes.computed),
       ),
     )
     .orderBy(sql`(${attributes.apiSlug} = 'owner') desc`, asc(attributes.position), asc(attributes.id))
