@@ -385,9 +385,36 @@ export const BrandedDark: Story = {
 export const BrandFromRead: Story = {
   parameters: { crm: { screenshot: false } },
   args: { form: { ...LEAD, key: 'AbCdEfGhIjKlMnOp', brand: { logo: '0123456789ab' } } },
-  play: async ({ canvasElement }) => {
-    const logo = canvasElement.querySelector('img[src^="/api/public/forms/"]');
-    await expect(logo).toHaveAttribute('src', '/api/public/forms/AbCdEfGhIjKlMnOp/logo?v=0123456789ab');
-    await expect(logo).toHaveAttribute('alt', '');
+  // Storybook serves no logo, so the picture fails and leaves the form; WebKit can get there before `play` starts.
+  // So every logo the form draws is noted as it lands, before the story renders, and read back below.
+  loaders: [
+    () => {
+      const drawn: { readonly src: string | null; readonly alt: string | null }[] = [];
+      const watch = new MutationObserver((changes) => {
+        for (const change of changes) {
+          for (const node of change.addedNodes) {
+            const images = node instanceof Element ? [node, ...node.querySelectorAll('img')] : [];
+            for (const image of images) {
+              if (image instanceof HTMLImageElement && image.getAttribute('src')?.startsWith('/api/public/forms/')) {
+                drawn.push({ src: image.getAttribute('src'), alt: image.getAttribute('alt') });
+              }
+            }
+          }
+        }
+      });
+      watch.observe(document.body, { childList: true, subtree: true });
+      return { drawn, watch };
+    },
+  ],
+  play: async ({ canvasElement, loaded }) => {
+    const { drawn, watch } = loaded as {
+      readonly drawn: readonly { readonly src: string | null; readonly alt: string | null }[];
+      readonly watch: MutationObserver;
+    };
+    await waitFor(() => expect(drawn.length).toBeGreaterThan(0));
+    watch.disconnect();
+    await expect(drawn[0]).toEqual({ src: '/api/public/forms/AbCdEfGhIjKlMnOp/logo?v=0123456789ab', alt: '' });
+    // A logo that fails leaves rather than drawing a broken picture.
+    await waitFor(() => expect(canvasElement.querySelector('img[src^="/api/public/forms/"]')).toBeNull());
   },
 };

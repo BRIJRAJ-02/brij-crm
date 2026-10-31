@@ -214,8 +214,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_purge_workspace_end', owner: 'crm_purge' },
       { name: 'crm_save_picture_hidden', owner: 'crm_handle' },
       { name: 'crm_save_profile_accent', owner: 'crm_handle' },
-      { name: 'crm_save_profile_indexable', owner: 'crm_handle' },
       { name: 'crm_save_profile_image', owner: 'crm_handle' },
+      { name: 'crm_save_profile_indexable', owner: 'crm_handle' },
       { name: 'crm_save_profile_item', owner: 'crm_handle' },
       { name: 'crm_save_profile_share_image', owner: 'crm_handle' },
       // The look of the page (spec 0054, migration 0105).
@@ -525,6 +525,11 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_set_public_profile_live',
         // A deleted account's handles freed after their 90 days (migration 0126).
         'crm_sweep_released_handles',
+        // The link page's own accent and photos (spec 0060, migration 0136): read for its look stylesheet and its
+        // image routes, and set from its owner's Design panel.
+        'crm_profile_look',
+        'crm_save_profile_accent',
+        'crm_save_profile_image',
         // An old handle let go to make room at the cap (late trap #76, migration 0124): called only by the two
         // above that take a handle, as crm_pack_profile_items is, so it has no signature below.
         'crm_make_handle_room',
@@ -560,10 +565,13 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_show_public_profile(uuid, uuid)',
         'crm_set_public_profile_live(uuid, uuid, boolean)',
         'crm_sweep_released_handles(integer)',
+        'crm_profile_look(uuid, uuid)',
+        'crm_save_profile_accent(uuid, uuid, text, text)',
+        'crm_save_profile_image(uuid, uuid, text, text, text, text)',
       ],
       // One per signature: every one of these is crm_app's to call and nobody else's. Counted from the list
       // rather than written out, since a signature added without the count moved read as unreachable and passed.
-      Array.from({ length: 30 }, () => 'app'),
+      Array.from({ length: 33 }, () => 'app'),
     ],
   ])(
     'keeps %s unable to log in, owning only %s, and out of the app’s reach',
@@ -2203,10 +2211,20 @@ describe('the auth schema: global identity, outside row level security (spec 000
       // Letting an old handle go into the hold to make room at the cap (late trap #76, migration 0124): the person
       // cleared, and only through crm_make_handle_room.
       'auth.public_handles.user_id UPDATE',
+      // The page's own accent pair and photos (spec 0060, migration 0136): eight columns, and only through
+      // crm_save_profile_accent and crm_save_profile_image. These lines are the whole of what that spec widened.
+      'auth.public_profiles.accent UPDATE',
+      'auth.public_profiles.accent_dark UPDATE',
       'auth.public_profiles.bio UPDATE',
       // When the page became its owner's choice (spec 0058, AC-23, migration 0135): only through
       // crm_show_public_profile and crm_set_public_profile_live.
       'auth.public_profiles.claimed_at UPDATE',
+      'auth.public_profiles.cover_path UPDATE',
+      'auth.public_profiles.cover_type UPDATE',
+      'auth.public_profiles.cover_version UPDATE',
+      'auth.public_profiles.ground_path UPDATE',
+      'auth.public_profiles.ground_type UPDATE',
+      'auth.public_profiles.ground_version UPDATE',
       'auth.public_profiles.handle UPDATE',
       // Whether search engines may show their page (spec 0055, migration 0108): one more column, and only
       // through crm_save_profile_indexable. This line is the whole of what that spec widened.

@@ -323,7 +323,9 @@ describe('the walk: a principal without the access is refused', () => {
 
   it.each(byPermission)('%s refuses a member without %o, FORBIDDEN with the catalog sentence', async (name, entry) => {
     const { scope } = await memberOf('member');
-    expect(await refusalOf(service(name)(scope, {}))).toEqual({
+    // Called inside a promise, so a check that refuses at once (`requireBrandEditor`, which the logo route asks before
+    // it reads a byte) is read the same way as a service that refuses after its first await.
+    expect(await refusalOf(Promise.resolve().then(() => service(name)(scope, {})))).toEqual({
       code: 'FORBIDDEN',
       message: PERMISSIONS[entry.permission].message,
     });

@@ -54,34 +54,46 @@ const HARD = [
 
 const HEXES = [...HARD, ...Array.from({ length: 5000 }, randomHex)];
 
-function holds(swatch: BrandSwatch, surfaces: readonly string[]): void {
+/**
+ * Every way `swatch` falls short on `surfaces`, as a line naming the colours: none when it meets AA everywhere.
+ * Counted in plain code and asserted once per run, so thousands of hexes check in a second rather than through
+ * tens of thousands of `expect` calls (which timed out on CI's busy runners, 31 Oct 2026).
+ */
+function shortfalls(swatch: BrandSwatch, surfaces: readonly string[]): string[] {
+  const found: string[] = [];
   for (const surface of surfaces) {
-    expect(contrastRatio(swatch.accent, surface), `accent ${swatch.accent} on ${surface}`).toBeGreaterThanOrEqual(
-      CONTROL_CONTRAST,
-    );
-    expect(contrastRatio(swatch.link, surface), `link ${swatch.link} on ${surface}`).toBeGreaterThanOrEqual(
-      TEXT_CONTRAST,
-    );
+    if (!(contrastRatio(swatch.accent, surface) >= CONTROL_CONTRAST))
+      found.push(`accent ${swatch.accent} on ${surface}`);
+    if (!(contrastRatio(swatch.link, surface) >= TEXT_CONTRAST)) found.push(`link ${swatch.link} on ${surface}`);
   }
-  expect(contrastRatio(swatch.onAccent, swatch.accent)).toBeGreaterThanOrEqual(TEXT_CONTRAST);
-  for (const colour of [swatch.accent, swatch.onAccent, swatch.link]) expect(colour).toMatch(BRAND_HEX_PATTERN);
+  if (!(contrastRatio(swatch.onAccent, swatch.accent) >= TEXT_CONTRAST)) {
+    found.push(`on accent ${swatch.onAccent} on ${swatch.accent}`);
+  }
+  for (const colour of [swatch.accent, swatch.onAccent, swatch.link]) {
+    if (!BRAND_HEX_PATTERN.test(colour)) found.push(`not a hex: ${colour}`);
+  }
+  return found;
 }
 
-describe('brandVariables', () => {
+// Thousands of colours each: a second or two here, many times that on CI's shared runners while every package's
+// suite runs beside it, so the walks get a minute rather than the default five seconds.
+describe('brandVariables', { timeout: 60_000 }, () => {
   it('meets AA on every surface in light and dark for every accent (AC-5)', () => {
+    const found: string[] = [];
     for (const accent of HEXES) {
       const colours = brandVariables({ accent });
-      holds(colours.light, LIGHT_SURFACES);
-      holds(colours.dark, DARK_SURFACES);
+      found.push(...shortfalls(colours.light, LIGHT_SURFACES), ...shortfalls(colours.dark, DARK_SURFACES));
     }
+    expect(found).toEqual([]);
   });
 
   it('holds a separate dark accent to the dark surfaces too (AC-6)', () => {
+    const found: string[] = [];
     for (let index = 0; index < 1000; index += 1) {
       const colours = brandVariables({ accent: randomHex(), accentDark: randomHex() });
-      holds(colours.light, LIGHT_SURFACES);
-      holds(colours.dark, DARK_SURFACES);
+      found.push(...shortfalls(colours.light, LIGHT_SURFACES), ...shortfalls(colours.dark, DARK_SURFACES));
     }
+    expect(found).toEqual([]);
   });
 
   it('leaves an accent that already reads alone, and moves only one that does not', () => {
