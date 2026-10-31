@@ -9,6 +9,7 @@ import {
   Button,
   Callout,
   Field,
+  InfoTip,
   focusLater,
   Link,
   Modal,
@@ -154,7 +155,7 @@ export function NewPageDialog({
           reset();
           setCreated(page);
           // Create page leaves with the form, so focus goes to the panel's first control, Copy link, never the page.
-          focusLater(() => document.querySelector<HTMLElement>('[role="dialog"] section[aria-labelledby] button'));
+          focusLater(() => document.querySelector<HTMLElement>('[role="dialog"] section button'));
         },
         (error: unknown) => {
           setBusy(false);
@@ -181,7 +182,8 @@ export function NewPageDialog({
     };
     return (
       <Modal
-        title={created.title}
+        // The one heading: the panel under it leads with its line, not a second title.
+        title={strings.readyTitle}
         isOpen={isOpen}
         onOpenChange={(open) => {
           if (!open) finish();
@@ -192,12 +194,13 @@ export function NewPageDialog({
         }
       >
         <ReadyPanel
-          title={strings.readyTitle}
           message={strings.readyMessage}
           link={publicBookingUrl(created)}
           shareTitle={created.title}
           previewLabel={strings.readyPreview}
-          // The visitor's page itself, small and inert, at the QR code's height (the slot's own frame).
+          // The visitor's page itself, inert, at the QR code's height, drawn at half size from its top so the page's
+          // name and title show rather than being cut at the slot's foot.
+          previewScale="shrunk"
           preview={<PreviewFrame src={`/b/${created.publicKey}`} title={created.title} version={created.updatedAt} />}
         />
       </Modal>
@@ -276,25 +279,19 @@ export function NewPageDialog({
       {canBookTeams && (
         <RadioGroup
           label={rotationStrings.whoBooks}
-          variant="cards"
+          // Three short choices in a row; what each means waits in the tip, not in three lines under them.
+          info={<InfoTip label={rotationStrings.whoBooks}>{rotationStrings.whoBooksInfo}</InfoTip>}
+          orientation="horizontal"
           value={who}
           isDisabled={isBusy}
           onChange={(value) => {
             if (value === 'me' || value === 'rotation' || value === 'everyone') setWho(value);
           }}
         >
-          <Radio value="me" icon="user" description={rotationStrings.bookMeLine}>
-            {rotationStrings.bookMe}
-          </Radio>
-          <Radio value="rotation" icon="users" description={rotationStrings.bookRotationLine}>
-            {rotationStrings.bookRotation}
-          </Radio>
+          <Radio value="me">{rotationStrings.bookMe}</Radio>
+          <Radio value="rotation">{rotationStrings.bookRotation}</Radio>
           {/* A workspace link is on nobody's profile, so Link only means nothing for it. */}
-          {!isLinkOnly && (
-            <Radio value="everyone" icon="building" description={rotationStrings.bookEveryoneLine}>
-              {rotationStrings.bookEveryone}
-            </Radio>
-          )}
+          {!isLinkOnly && <Radio value="everyone">{rotationStrings.bookEveryone}</Radio>}
         </RadioGroup>
       )}
       {isTeam &&

@@ -99,11 +99,16 @@ describe('New booking page', () => {
     const { onCreated } = await render();
     await userEvent.fill(page.getByRole('textbox', { name: strings.title }), 'Intro call');
     await userEvent.click(page.getByRole('button', { name: strings.createPage }));
-    const ready = page.getByRole('dialog', { name: 'Intro call' });
+    const ready = page.getByRole('dialog', { name: strings.readyTitle });
     await expect.element(ready.getByRole('heading', { name: strings.readyTitle })).toBeVisible();
+    // One heading: the Modal's title says it, and the panel leads with its line.
+    expect(ready.getByRole('heading').elements()).toHaveLength(1);
     // Focus moves on to Copy link, the panel's one primary, so it never drops to the page.
     await expect.element(ready.getByRole('button', { name: 'Copy link' })).toHaveFocus();
-    await expect.element(ready.getByText(`${location.origin}/b/k3x9k3x9k3x9k3x9`)).toBeVisible();
+    // The address is cut in the middle when short of room: its start and its end (the key) stay in view.
+    const end = ready.getByText('k3x9k3x9k3x9k3x9', { exact: true });
+    await expect.element(end).toBeVisible();
+    expect(end.element().parentElement?.textContent).toBe(`${location.origin}/b/k3x9k3x9k3x9k3x9`);
     await expect.element(ready.getByRole('button', { name: 'Copy link' })).toBeVisible();
     await expect.element(ready.getByRole('img', { name: 'QR code for the link' })).toBeVisible();
     await expect.element(ready.getByRole('group', { name: strings.readyPreview })).toBeVisible();

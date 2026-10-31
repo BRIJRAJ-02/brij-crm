@@ -133,9 +133,10 @@ describe('Booking pages › New: Everyone on the roster', () => {
       { data, pattern: '/w/$slug/captures/links', at: '/w/acme/captures/links' },
     );
     await userEvent.fill(page.getByRole('textbox', { name: strings.title }), 'Talk to us');
-    // The radio itself sits under its card's label, which takes the press.
     await userEvent.click(page.getByRole('radio', { name: new RegExp(rotationStrings.bookEveryone) }), { force: true });
-    await expect.element(page.getByText(rotationStrings.bookEveryoneLine)).toBeVisible();
+    await expect.element(page.getByRole('radio', { name: new RegExp(rotationStrings.bookEveryone) })).toBeChecked();
+    // No help lines under the choices (spec 0058, AC-3): what each means is in the tip.
+    expect(page.getByText(/on nobody’s profile/).elements()).toHaveLength(0);
     // Nothing else to choose: the hosts are the workspace's, each booked by their own hours.
     expect(page.getByRole('button', { name: new RegExp(rotationStrings.rotation) }).elements()).toHaveLength(0);
     expect(page.getByText('Schedule', { exact: true }).elements()).toHaveLength(0);
