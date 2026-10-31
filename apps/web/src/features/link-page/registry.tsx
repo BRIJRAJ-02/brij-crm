@@ -230,7 +230,7 @@ export const BLOCK_KINDS: Readonly<Record<AddableKind, BlockKind>> = {
     label: reachStrings.addTimes,
     description: reachStrings.addTimesText,
     icon: 'clock',
-    hue: 'green',
+    hue: 'sky',
     Editor: TimesChooser,
     isEditable: true,
   },
@@ -288,8 +288,7 @@ function shownAddress(url: string): string {
 /** How a block's row reads; a link to one of our pages outside this workspace leads with saying so, and is off. */
 export function rowWords(item: ProfileItem): BlockRowWords {
   // Spec 0061's kinds: what each is, in the words its Add tile uses, with what it holds after.
-  if (item.kind === 'socials')
-    return { title: reachStrings.socials, address: reachStrings.socialsHint.split('.')[0] ?? '' };
+  if (item.kind === 'socials') return { title: reachStrings.socials, address: reachStrings.socialsRow };
   if (item.kind === 'media') {
     return {
       title: item.title ?? reachStrings.mediaUntitled,

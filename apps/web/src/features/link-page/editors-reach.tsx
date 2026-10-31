@@ -5,7 +5,20 @@
 // Leaves out: saving itself (the screen does, through the data layer, optimistic), and drawing the blocks, which is
 // the library's LinkPage.
 import type { BlockDraft, BlockProblems, ProfilePageChoice } from '@crm/data';
-import { Button, ButtonLink, Callout, ChoiceChips, EmptyState, Field, FileDrop, Form, Select, Skeleton } from '@crm/ui';
+import {
+  Button,
+  ButtonLink,
+  Callout,
+  ChoiceChips,
+  EmptyState,
+  Field,
+  FileDrop,
+  focusLater,
+  Form,
+  Select,
+  Skeleton,
+} from '@crm/ui';
+import { useRouteContext } from '@tanstack/react-router';
 import { useEffect, useId, useState, type ReactNode } from 'react';
 import { linksHref } from '../booking/links.ts';
 import {
@@ -50,6 +63,8 @@ export function SocialsEditor({ item, items, linkPage, socialLinks, chrome, onSu
       formId={formId}
       submitLabel={editing === undefined ? strings.add : strings.save}
       onClose={onClose}
+      // A row with no links draws nothing on the page, so there is nothing to add until there are some.
+      canSubmit={socialLinks.length > 0}
       {...(chrome === undefined ? {} : { chrome })}
       preview={
         socialLinks.length === 0 ? undefined : (
@@ -65,7 +80,7 @@ export function SocialsEditor({ item, items, linkPage, socialLinks, chrome, onSu
         {socialLinks.length === 0 ? (
           <Callout tone="info">{words.socialsNone}</Callout>
         ) : (
-          <p>{`${words.socialsCount(socialLinks.length)}. ${words.socialsHint}`}</p>
+          <Callout tone="info">{`${words.socialsCount(socialLinks.length)}. ${words.socialsHint}`}</Callout>
         )}
         {extras.fields}
       </Form>
@@ -180,6 +195,7 @@ export function ImageEditor({ item, items, linkPage, slug, chrome, onSubmit, onC
   const [url, setUrl] = useState(editing?.url ?? '');
   const [problems, setProblems] = useState<BlockProblems>({});
   const extras = useBlockExtras(editing, true);
+  const [isSending, setSending] = useState(false);
   const draft: BlockDraft = {
     kind: 'image',
     ...(picture === undefined ? {} : { image: picture.image }),
@@ -203,6 +219,7 @@ export function ImageEditor({ item, items, linkPage, slug, chrome, onSubmit, onC
       formId={formId}
       submitLabel={editing === undefined ? strings.add : strings.save}
       onClose={onClose}
+      isWaiting={isSending}
       {...(chrome === undefined ? {} : { chrome })}
       preview={
         picture === undefined ? undefined : (
@@ -233,6 +250,7 @@ export function ImageEditor({ item, items, linkPage, slug, chrome, onSubmit, onC
             setPicture(next);
             setProblems((held) => ({ ...held, image: undefined }));
           }}
+          onSendingChange={setSending}
           {...(problems.image === undefined ? {} : { error: problems.image })}
         />
         <Field
@@ -299,6 +317,7 @@ export function GalleryEditor({ item, items, linkPage, slug, chrome, onSubmit, o
   const [display, setDisplay] = useState<'row' | 'grid'>(editing?.display ?? 'row');
   const [problems, setProblems] = useState<BlockProblems>({});
   const extras = useBlockExtras(editing, true);
+  const { toasts } = useRouteContext({ from: '__root__' });
   const { upload, isSending } = usePictureUpload(linkPage, slug);
   const draft: BlockDraft = {
     kind: 'gallery',
@@ -307,6 +326,7 @@ export function GalleryEditor({ item, items, linkPage, slug, chrome, onSubmit, o
     ...extras.draft,
   };
   const submit = () => {
+    if (isSending) return;
     const checked = linkPage.check(draft, items, editing?.id);
     if (!checked.ok) {
       setProblems(checked.problems);
@@ -321,55 +341,79 @@ export function GalleryEditor({ item, items, linkPage, slug, chrome, onSubmit, o
     // A picture's reason is by its place, so a move or a removal clears them all rather than leave one on another.
     setProblems({});
   };
+  /** Moves a picture one place, keeping focus on its own arrow (the other one where it reached an end). */
+  const move = (at: number, by: -1 | 1) => {
+    const to = at + by;
+    const moving = pictures[at];
+    const other = pictures[to];
+    if (moving === undefined || other === undefined) return;
+    const next = [...pictures];
+    next[to] = moving;
+    next[at] = other;
+    change(next);
+    // The same arrow while the picture can still go that way, else the other one.
+    const canGoOn = by === -1 ? to > 0 : to < next.length - 1;
+    const keep = (by === -1) === canGoOn ? words.galleryMoveUp(to + 1) : words.galleryMoveDown(to + 1);
+    focusLater(() => document.querySelector<HTMLElement>(`[aria-label="${keep}"]`) ?? undefined);
+  };
+  /** Takes a picture out, then focuses the description now in its place, else the one before, else the drop zone. */
+  const remove = (at: number) => {
+    const next = pictures.filter((_one, place) => place !== at);
+    change(next);
+    focusLater(() => {
+      const near = Math.min(at, next.length - 1);
+      const field = near < 0 ? null : document.querySelector<HTMLElement>(`[name="alt-${String(near)}"]`);
+      return (
+        field ??
+        document.querySelector<HTMLElement>(
+          `[aria-label="${words.galleryAdd}"] button, [aria-label="${words.galleryAddFirst}"] button`,
+        ) ??
+        undefined
+      );
+    });
+  };
+  const drawn = pictures.map((each, at) => ({
+    src: each.src,
+    width: each.width,
+    height: each.height,
+    alt: each.alt.trim() === '' ? words.galleryAlt(at + 1) : each.alt.trim(),
+  }));
   return (
     <EditorModal
       title={editing === undefined ? words.newGallery : words.editGallery}
       formId={formId}
       submitLabel={editing === undefined ? strings.add : strings.save}
       onClose={onClose}
+      isWaiting={isSending}
       {...(chrome === undefined ? {} : { chrome })}
-      preview={
-        pictures.length === 0 ? undefined : (
+    >
+      <Form id={formId} onSubmit={submit} label={editing === undefined ? words.newGallery : words.editGallery}>
+        {/* The pictures as the page will show them, above their descriptions, so each numbered field sits under
+            the picture it names: How it looks, where the descriptions are typed. */}
+        {pictures.length > 0 && (
           <DraftPage
             layout="blocks"
             caption={strings.howItLooks}
-            blocks={[
-              {
-                kind: 'gallery',
-                id: editing?.id ?? 'draft',
-                images: pictures.map((each, at) => ({
-                  src: each.src,
-                  width: each.width,
-                  height: each.height,
-                  alt: each.alt.trim() === '' ? words.galleryAlt(at + 1) : each.alt.trim(),
-                })),
-                display,
-              },
-            ]}
+            blocks={[{ kind: 'gallery', id: editing?.id ?? 'draft', images: drawn, display }]}
           />
-        )
-      }
-    >
-      <Form id={formId} onSubmit={submit} label={editing === undefined ? words.newGallery : words.editGallery}>
-        {isSending ? (
-          <Skeleton shape="field" width="full" />
-        ) : room > 0 ? (
-          <FileDrop
-            label={words.galleryAdd}
-            acceptedTypes={PICTURE_TYPES}
-            maxSize={PICTURE_PICK_MAX_BYTES}
-            allowsMultiple
-            onFiles={(files) => {
-              void upload(files.slice(0, room)).then((stored) => {
-                setPictures((held) => [...held, ...stored.map((each) => ({ ...each, alt: '' }))]);
-                setProblems((held) => ({ ...held, images: undefined }));
-              });
-            }}
-          />
-        ) : (
-          <p>{words.galleryFull}</p>
         )}
-        {problems.images !== undefined && <Callout tone="danger">{problems.images}</Callout>}
+        <FileDrop
+          label={pictures.length === 0 ? words.galleryAddFirst : words.galleryAdd}
+          acceptedTypes={PICTURE_TYPES}
+          maxSize={PICTURE_PICK_MAX_BYTES}
+          allowsMultiple
+          isPending={isSending}
+          isDisabled={room <= 0}
+          {...(problems.images === undefined ? {} : { error: problems.images })}
+          onFiles={(files) => {
+            if (files.length > room) toasts.toast({ tone: 'info', message: words.galleryRoom(room) });
+            void upload(files.slice(0, room)).then((stored) => {
+              setPictures((held) => [...held, ...stored.map((each) => ({ ...each, alt: '' }))]);
+              setProblems((held) => ({ ...held, images: undefined }));
+            });
+          }}
+        />
+        {room <= 0 && <Callout tone="info">{words.galleryFull}</Callout>}
         {pictures.map((each, at) => (
           <Field
             key={each.image}
@@ -391,17 +435,18 @@ export function GalleryEditor({ item, items, linkPage, slug, chrome, onSubmit, o
                     variant="ghost"
                     icon="arrow-up"
                     label={words.galleryMoveUp(at + 1)}
-                    onPress={() =>
-                      change([...pictures.slice(0, at - 1), each, pictures[at - 1] ?? each, ...pictures.slice(at + 1)])
-                    }
+                    onPress={() => move(at, -1)}
                   />
                 )}
-                <Button
-                  variant="ghost"
-                  icon="trash"
-                  label={words.galleryRemove(at + 1)}
-                  onPress={() => change(pictures.filter((one) => one.image !== each.image))}
-                />
+                {at < pictures.length - 1 && (
+                  <Button
+                    variant="ghost"
+                    icon="arrow-down"
+                    label={words.galleryMoveDown(at + 1)}
+                    onPress={() => move(at, 1)}
+                  />
+                )}
+                <Button variant="ghost" icon="trash" label={words.galleryRemove(at + 1)} onPress={() => remove(at)} />
               </>
             }
           />

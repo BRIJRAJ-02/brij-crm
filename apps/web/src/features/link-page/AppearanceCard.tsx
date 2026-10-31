@@ -57,7 +57,7 @@ interface Choice {
 }
 
 /** A row's choices for one key, each setting that key alone. */
-function choicesOf<Key extends keyof PageTheme>(
+function choicesOf<Key extends Exclude<keyof PageTheme, 'layout'>>(
   key: Key,
   names: readonly (readonly [PageTheme[Key], string])[],
 ): readonly Choice[] {

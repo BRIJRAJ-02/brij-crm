@@ -10,6 +10,7 @@ import {
   Callout,
   Checkbox,
   ChoiceChips,
+  Disclosure,
   EmptyState,
   Field,
   Form,
@@ -25,7 +26,6 @@ import {
 import { countryOfE164, DIAL_CODES, toE164 } from '@crm/contracts/forms';
 import { createContext, useContext, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { useRouteContext } from '@tanstack/react-router';
 import { formsHref } from '../captures/tabs.ts';
 import { linksHref } from '../booking/links.ts';
 import { heldPicture, PictureField, useBlockExtras, type HeldPicture } from './block-extras.tsx';
@@ -58,12 +58,17 @@ export function useFocusesFirstField(): boolean {
   return useContext(EditorFrameContext)?.focusesFields ?? true;
 }
 
-/** The first field of the chosen kind: the first one in the dialog that isn't in the picker. */
+/**
+ * The first field of the chosen kind: the first control in its form, outside the picker. A picture's kinds open on
+ * their drop zone's browse button, and Social icons, which has nothing to type, on its Schedule fold.
+ */
 function firstFieldOutside(picker: HTMLElement): HTMLElement | undefined {
   const dialog = picker.closest('[role="dialog"]');
   if (dialog === null) return undefined;
-  const fields = dialog.querySelectorAll<HTMLElement>('input:not([type="hidden"]), textarea, select');
-  return [...fields].find((field) => !picker.contains(field));
+  const fields = dialog.querySelectorAll<HTMLElement>(
+    'form input:not([type="hidden"]), form textarea, form select, form button',
+  );
+  return [...fields].find((field) => !picker.contains(field) && field.offsetParent !== null);
 }
 
 /**
@@ -147,6 +152,7 @@ export function EditorModal({
   onClose,
   preview,
   canSubmit = true,
+  isWaiting = false,
   chrome,
   children,
 }: {
@@ -157,6 +163,8 @@ export function EditorModal({
   readonly preview?: ReactNode;
   /** False while there is nothing to submit (the choices loading, failed or empty): only Cancel shows. */
   readonly canSubmit?: boolean;
+  /** A picture is still uploading: the submit waits, spinning, so nothing is saved without it (spec 0061). */
+  readonly isWaiting?: boolean;
   readonly chrome?: EditorChrome;
   readonly children: ReactNode;
 }) {
@@ -164,7 +172,13 @@ export function EditorModal({
   const submit = canSubmit ? (
     // Inside the Add modal it travels into a slot of the footer: full width of that slot, so on a phone, where the
     // footer stacks its buttons the dialog's width, it is as wide as Cancel; beside Cancel it keeps its own width.
-    <Button variant="primary" type="submit" form={formId} {...(frame === undefined ? {} : { isFullWidth: 'center' })}>
+    <Button
+      variant="primary"
+      type="submit"
+      form={formId}
+      isPending={isWaiting}
+      {...(frame === undefined ? {} : { isFullWidth: 'center' })}
+    >
       {chrome?.submitLabel ?? submitLabel}
     </Button>
   ) : undefined;
@@ -250,7 +264,6 @@ export function LinkEditor({
 }: BlockEditorProps) {
   const focusFirst = useFocusesFirstField();
   const formId = useId();
-  const { toasts } = useRouteContext({ from: '__root__' });
   const editing = item?.kind === 'link' ? item : undefined;
   // A title that was only the address's site starts empty, so it keeps following the address when that changes.
   const [title, setTitle] = useState(
@@ -265,7 +278,7 @@ export function LinkEditor({
   // On an add the link isn't saved yet, so its site's picture is fetched once the add lands (the server reads the
   // saved address, never one typed here).
   const [wantsSiteThumb, setWantsSiteThumb] = useState(false);
-  const [isFetching, setFetching] = useState(false);
+  const [isSending, setSending] = useState(false);
   const [style, setStyle] = useState<'row' | 'featured'>(editing?.style ?? 'row');
   const [notice, setNotice] = useState<'none' | 'sensitive' | '18' | '21'>(editing?.notice ?? 'none');
   const extras = useBlockExtras(editing, true);
@@ -292,39 +305,27 @@ export function LinkEditor({
   const mark = linkPage.markOf(shownUrl);
   // Allowed all the same: someone may want their LinkedIn as a big row too (crm-87, phase 1c review).
   const isInSocials = mark !== undefined && socialNetworks.includes(mark);
+  // The site's own picture is read by the server from the address it holds, so it is fetched once the save lands,
+  // for an add and an edit alike (an edited address is read as saved, never as typed).
+  const canUseSite = guessed !== undefined && thumb === undefined;
   const submit = () => {
+    if (isSending) return;
     if (!checked.ok) {
       setProblems(checked.problems);
       extras.take(checked.problems);
       return;
     }
-    onSubmit(draft, undefined, wantsSiteThumb && thumb === undefined ? { siteThumb: true } : undefined);
+    onSubmit(draft, undefined, wantsSiteThumb && canUseSite ? { siteThumb: true } : undefined);
   };
-  // An edit's link is saved, so its site's picture is read now, by its id.
-  const fetchSiteThumb = () => {
-    if (editing === undefined || isFetching) return;
-    setFetching(true);
-    linkPage.reach
-      .fetchThumbnail(slug, editing.id)
-      .then(
-        (found) => {
-          if ('none' in found) toasts.toast({ tone: 'info', message: reachStrings.thumbSiteNone });
-          else setThumb(heldPicture(linkPage, slug, found.image, found));
-        },
-        (error: unknown) =>
-          toasts.toast({
-            tone: 'danger',
-            message: error instanceof Error && error.message !== '' ? error.message : reachStrings.pictureFailed,
-          }),
-      )
-      .finally(() => setFetching(false));
-  };
+  // Shown as and Ask first are for some links, not most: folded, and open by themselves once either is set.
+  const [isMoreOpen, setMoreOpen] = useState(style === 'featured' || notice !== 'none');
   return (
     <EditorModal
       title={editing === undefined ? strings.newLink : strings.editLink}
       formId={formId}
       submitLabel={editing === undefined ? strings.add : strings.save}
       onClose={onClose}
+      isWaiting={isSending}
       {...(chrome === undefined ? {} : { chrome })}
       preview={
         <DraftPage
@@ -415,7 +416,6 @@ export function LinkEditor({
         />
         <PictureField
           label={thumb === undefined ? reachStrings.thumbUpload : reachStrings.imageReplace}
-          hint={reachStrings.thumbHint}
           linkPage={linkPage}
           slug={slug}
           {...(thumb === undefined ? {} : { value: thumb })}
@@ -423,48 +423,48 @@ export function LinkEditor({
             setThumb(next);
             setWantsSiteThumb(false);
           }}
+          onSendingChange={setSending}
           isRemovable
-          {...(thumb !== undefined
-            ? {}
-            : editing === undefined
-              ? {
-                  extra: (
-                    <Checkbox label={reachStrings.thumbSite} isSelected={wantsSiteThumb} onChange={setWantsSiteThumb} />
-                  ),
-                }
-              : {
-                  extra: (
-                    <Button variant="ghost" size="md" icon="image" isPending={isFetching} onPress={fetchSiteThumb}>
-                      {reachStrings.thumbSite}
-                    </Button>
-                  ),
-                })}
+          {...(canUseSite
+            ? {
+                extra: (
+                  <Checkbox label={reachStrings.thumbSite} isSelected={wantsSiteThumb} onChange={setWantsSiteThumb} />
+                ),
+              }
+            : {})}
         />
-        <ChoiceChips
-          isSingle
-          label={reachStrings.style}
-          choices={[
-            { id: 'row', label: reachStrings.styleRow },
-            { id: 'featured', label: reachStrings.styleFeatured },
-          ]}
-          selected={[style]}
-          onChange={(picked) => {
-            if (picked[0] === 'row' || picked[0] === 'featured') setStyle(picked[0]);
-            setProblems((held) => ({ ...held, style: undefined }));
-          }}
-          {...(problems.style === undefined ? {} : { error: problems.style })}
-        />
-        <ChoiceChips
-          isSingle
-          label={reachStrings.notice}
-          choices={NOTICE_CHOICES}
-          selected={[notice]}
-          onChange={(picked) => {
-            const found = NOTICE_CHOICES.find((each) => each.id === picked[0]);
-            if (found !== undefined) setNotice(found.id);
-          }}
-        />
-        {notice !== 'none' && <p>{linkPage.reach.rules.noticeSentence(notice)}</p>}
+        <Disclosure
+          title={reachStrings.moreOptions}
+          variant="fields"
+          headingLevel={4}
+          isExpanded={isMoreOpen || problems.style !== undefined}
+          onExpandedChange={setMoreOpen}
+        >
+          <ChoiceChips
+            isSingle
+            label={reachStrings.style}
+            choices={[
+              { id: 'row', label: reachStrings.styleRow },
+              { id: 'featured', label: reachStrings.styleFeatured },
+            ]}
+            selected={[style]}
+            onChange={(picked) => {
+              if (picked[0] === 'row' || picked[0] === 'featured') setStyle(picked[0]);
+              setProblems((held) => ({ ...held, style: undefined }));
+            }}
+            {...(problems.style === undefined ? {} : { error: problems.style })}
+          />
+          <ChoiceChips
+            isSingle
+            label={reachStrings.notice}
+            choices={NOTICE_CHOICES}
+            selected={[notice]}
+            onChange={(picked) => {
+              const found = NOTICE_CHOICES.find((each) => each.id === picked[0]);
+              if (found !== undefined) setNotice(found.id);
+            }}
+          />
+        </Disclosure>
         {extras.fields}
       </Form>
     </EditorModal>

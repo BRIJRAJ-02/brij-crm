@@ -95,3 +95,33 @@ export const AsButtonPending: Story = {
     </Stage>
   ),
 };
+
+/** Uploading what was picked: the zone stays, says so, and takes no second pick (spec 0061). */
+export const Pending: Story = {
+  args: { label: 'Choose a picture', acceptedTypes: ['image/jpeg', 'image/png', 'image/webp'], isPending: true },
+  render: (args) => (
+    <Stage width="narrow">
+      <FileDrop {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('button', { name: /uploading/ })).toBeInTheDocument();
+  },
+};
+
+/** The screen's own refusal, in the zone's refusal line. */
+export const Refused: Story = {
+  args: {
+    label: 'Choose a picture',
+    acceptedTypes: ['image/jpeg', 'image/png', 'image/webp'],
+    error: 'Add a picture.',
+  },
+  render: (args) => (
+    <Stage width="narrow">
+      <FileDrop {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('alert')).toHaveTextContent('Add a picture.');
+  },
+};

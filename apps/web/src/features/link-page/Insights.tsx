@@ -10,7 +10,9 @@ import {
   ButtonLink,
   Card,
   EmptyState,
+  FieldGroup,
   SegmentedControl,
+  Separator,
   Skeleton,
   Stats,
   Table,
@@ -18,7 +20,7 @@ import {
   useFormatSettings,
   type StatItem,
 } from '@crm/ui';
-import { lazy, Suspense, useState } from 'react';
+import { lazy, Suspense, useRef, useState } from 'react';
 import { reachStrings as words } from './reach-strings.ts';
 import { rowWords } from './registry.tsx';
 
@@ -68,7 +70,13 @@ export function Insights({ linkPage, slug, items }: InsightsProps) {
       segments={linkPage.reach.insightDays.map((each) => ({ value: String(each), label: words.days(each) }))}
     />
   );
+  // A period switch keeps the last figures on screen until the new ones land, so the card never collapses to a
+  // skeleton and grows back under the reader; the first read draws the figures' own shapes.
+  const lastReady = useRef<ProfileCounts | undefined>(undefined);
+  if (state.status === 'ready') lastReady.current = state.counts;
   const counts = state.status === 'ready' ? state.counts : undefined;
+  const shown = counts ?? (state.status === 'loading' ? lastReady.current : undefined);
+  const hasViews = counts !== undefined && counts.views > 0;
   return (
     <Card
       title={words.insights}
@@ -76,21 +84,26 @@ export function Insights({ linkPage, slug, items }: InsightsProps) {
       actions={
         <>
           {period}
-          {counts !== undefined && counts.views > 0 && (
-            <ButtonLink
-              variant="ghost"
-              icon="download"
-              href={linkPage.reach.insightsCsvHref(slug, from, today)}
-              download=""
-            >
-              {words.csv}
-            </ButtonLink>
-          )}
+          {/* Always in its place, so the period beside it never moves; off while the period has nothing to give. */}
+          <ButtonLink
+            variant="ghost"
+            icon="download"
+            href={linkPage.reach.insightsCsvHref(slug, from, today)}
+            download=""
+            isDisabled={!hasViews}
+          >
+            {words.csv}
+          </ButtonLink>
         </>
       }
     >
-      {state.status === 'loading' ? (
-        <Stats label={words.insights} items={[]} isLoading />
+      {shown !== undefined && state.status === 'loading' ? (
+        <Figures counts={shown} items={items} />
+      ) : state.status === 'loading' ? (
+        <>
+          <Stats label={words.insights} items={[]} isLoading />
+          <Skeleton shape="fill" />
+        </>
       ) : state.status === 'error' ? (
         <EmptyState
           tone="error"
@@ -133,8 +146,19 @@ function Figures({ counts, items }: { readonly counts: ProfileCounts; readonly i
       value: words.figure(counts.visitors),
       ...compared(counts.visitors, counts.before.visitors, counts.days),
     },
-    { id: 'presses', label: words.presses, value: words.figure(presses) },
-    { id: 'bookings', label: words.bookings, value: words.figure(bookings) },
+    // The funnel (AC-6119) as the two rates under their figures: clicks of views, bookings of clicks.
+    {
+      id: 'presses',
+      label: words.presses,
+      value: words.figure(presses),
+      comparison: words.funnelPresses(words.rate(presses, counts.views)),
+    },
+    {
+      id: 'bookings',
+      label: words.bookings,
+      value: words.figure(bookings),
+      comparison: words.funnelBookings(words.rate(bookings, presses)),
+    },
   ];
   const series = counts.series ?? [];
   const points = series.map((each) => {
@@ -159,61 +183,52 @@ function Figures({ counts, items }: { readonly counts: ProfileCounts; readonly i
           />
         </Suspense>
       )}
-      <SegmentedControl
-        label={words.facts}
-        size="compact"
-        value={fact}
-        onChange={(next) => {
-          const found = FACTS.find((each) => each === next);
-          if (found !== undefined) setFact(found);
-        }}
-        segments={FACTS.map((each) => ({ value: each, label: words[each] }))}
-      />
-      <Table
-        label={words[fact]}
-        columns={[
-          { id: 'value', label: words[fact], isRowHeader: true },
-          { id: 'views', label: words.views, align: 'end', size: 'fit' },
-          { id: 'visitors', label: words.visitors, align: 'end', size: 'fit' },
-        ]}
-        rows={values}
-        getRowId={(row) => row.value}
-        renderCell={(row, column) =>
-          column === 'value'
-            ? factValue(fact, row.value, locale)
-            : words.figure(column === 'views' ? row.views : row.visitors)
-        }
-        emptyState={<EmptyState layout="row" title={words.factNone} />}
-      />
-      <Table
-        label={words.blockPresses}
-        columns={[
-          { id: 'block', label: words.blockPresses, isRowHeader: true },
-          { id: 'presses', label: words.presses, align: 'end', size: 'fit' },
-        ]}
-        rows={pressed}
-        getRowId={(row) => row.id}
-        renderCell={(row, column) => (column === 'block' ? (named.get(row.id) ?? '') : words.figure(row.presses))}
-        emptyState={<EmptyState layout="row" title={words.blockPressesNone} />}
-      />
-      <Stats
-        label={words.funnel}
-        items={[
-          { id: 'views', label: words.views, value: words.figure(counts.views) },
-          {
-            id: 'presses',
-            label: words.presses,
-            value: words.figure(presses),
-            comparison: words.funnelPresses(words.rate(presses, counts.views)),
-          },
-          {
-            id: 'bookings',
-            label: words.bookings,
-            value: words.figure(bookings),
-            comparison: words.funnelBookings(words.rate(bookings, presses)),
-          },
-        ]}
-      />
+      <Separator />
+      <FieldGroup tone="heading" headingLevel={3} label={words.facts}>
+        <SegmentedControl
+          label={words.facts}
+          size="compact"
+          value={fact}
+          onChange={(next) => {
+            const found = FACTS.find((each) => each === next);
+            if (found !== undefined) setFact(found);
+          }}
+          segments={FACTS.map((each) => ({ value: each, label: words[each] }))}
+        />
+        <Table
+          label={words[fact]}
+          columns={[
+            { id: 'value', label: words[fact], isRowHeader: true },
+            { id: 'views', label: words.views, align: 'end', size: 'fit' },
+            { id: 'visitors', label: words.visitors, align: 'end', size: 'fit' },
+          ]}
+          rows={values}
+          getRowId={(row) => row.value}
+          renderCell={(row, column) =>
+            column === 'value'
+              ? factValue(fact, row.value, locale)
+              : words.figure(column === 'views' ? row.views : row.visitors)
+          }
+          emptyState={<EmptyState layout="row" title={words.factNone} />}
+        />
+      </FieldGroup>
+      <Separator />
+      <FieldGroup tone="heading" headingLevel={3} label={words.blockPresses}>
+        <Table
+          label={words.blockPresses}
+          columns={[
+            { id: 'block', label: words.blockPresses, isRowHeader: true },
+            { id: 'presses', label: words.presses, align: 'end', size: 'fit' },
+          ]}
+          rows={pressed}
+          getRowId={(row) => row.id}
+          // A block deleted within the period keeps its clicks, under a name that says so.
+          renderCell={(row, column) =>
+            column === 'block' ? (named.get(row.id) ?? words.deletedBlock) : words.figure(row.presses)
+          }
+          emptyState={<EmptyState layout="row" title={words.blockPressesNone} />}
+        />
+      </FieldGroup>
     </>
   );
 }

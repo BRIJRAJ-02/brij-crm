@@ -19,8 +19,12 @@ New. Imports (#30) and file attributes (#32) take files the same way, and say up
 
 - `variant="button"` (27 October 2026) is the browse button alone, `label` its words, with `isPending` while what was picked is on its way: for a picker beside the thing it changes, first run's avatar, where a drop area would draw the picture a second time. Same type and size checks, same refusal line under it. Why a variant, not a new component: it is FileDrop's own FileTrigger and checks with the drop area taken away; a second file picker would have checked files a second way.
 
+- `isPending` on the zone (31 October 2026, spec 0061's link page pictures): the zone stays put, its words say "uploading…", it is busy and takes no drop, and its browse button keeps focus but takes no second pick. Why: swapping the zone for a skeleton while a picture uploaded unmounted the button that had focus, and the form jumped by the zone's height twice.
+- `error` (31 October 2026): the screen's own refusal ("Add a picture.") in the zone's refusal line, so it reads as this control's error, not a note beside it.
+
 ## States
 
+Uploading (`isPending`), refused by the screen (`error`).
 - Its hint reads "Drag a file here, or browse" when it takes one file and "Drag files here, or browse" with `allowsMultiple` (QA, 22 October 2026).
 
 Idle, with a preview, drag over (accent), focus, refused (the error under it), disabled.

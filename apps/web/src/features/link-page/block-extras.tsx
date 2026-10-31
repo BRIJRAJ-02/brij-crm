@@ -3,9 +3,10 @@
 // from the library's own controls: the window is the field set's Date and time, so a schedule reads and types as
 // every other date and time in the CRM does.
 import type { DraftWindow, LinkPageStore, ProfileItem, StoredPicture } from '@crm/data';
-import { AttributeEditor, Button, Callout, Disclosure, FileDrop, Skeleton, TileGrid, type IconName } from '@crm/ui';
+import { AttributeEditor, Button, Disclosure, FileDrop, TileGrid, type IconName } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
+import { usePageLayout } from './draft-look.tsx';
 import { PICTURE_PICK_MAX_BYTES, preparePicture } from './photo-prep.ts';
 import { reachStrings as strings } from './reach-strings.ts';
 
@@ -40,7 +41,6 @@ export function ScheduleFields({ value, onChange, problems }: ScheduleFieldsProp
       headingLevel={4}
       isExpanded={isOpen || hasProblem}
       onExpandedChange={setOpen}
-      {...(isSet ? { count: 1, countLabel: strings.scheduleCount } : {})}
     >
       <AttributeEditor
         attribute={{
@@ -72,7 +72,6 @@ export function ScheduleFields({ value, onChange, problems }: ScheduleFieldsProp
         onCommit={(next) => end('hideAfter', next)}
         {...(problems?.hideAfter === undefined ? {} : { error: problems.hideAfter })}
       />
-      <p>{strings.scheduleHint}</p>
     </Disclosure>
   );
 }
@@ -171,26 +170,26 @@ export function usePictureUpload(linkPage: LinkPageStore, slug: string) {
 /** Props for PictureField. */
 export interface PictureFieldProps {
   readonly label: string;
-  readonly hint?: string;
   readonly linkPage: LinkPageStore;
   readonly slug: string;
   readonly value?: HeldPicture;
   readonly onChange: (picture: HeldPicture | undefined) => void;
-  /** Its refusal ("Add a picture."). */
+  /** Its refusal ("Add a picture."), in the drop zone's own refusal line. */
   readonly error?: string;
-  /** Offered beside Remove: a link's "Use the site's picture". */
+  /** Under the zone, its own row: a link's "Use the site's picture". */
   readonly extra?: ReactNode;
   /** Whether Remove is offered (a link's picture may go; an image block's is replaced instead). */
   readonly isRemovable?: boolean;
+  /** Said as an upload starts and ends, so the editor holds its submit until the picture is there. */
+  readonly onSendingChange?: (isSending: boolean) => void;
 }
 
 /**
- * One picture: the drop area showing the picture there now (so its owner sees what they replace), held busy while
- * the next one uploads, with Remove where the block may have none.
+ * One picture: the drop area showing the picture there now (so its owner sees what they replace), busy in place
+ * while the next one uploads (focus stays on its browse button), with Remove where the block may have none.
  */
 export function PictureField({
   label,
-  hint,
   linkPage,
   slug,
   value,
@@ -198,39 +197,35 @@ export function PictureField({
   error,
   extra,
   isRemovable = false,
+  onSendingChange,
 }: PictureFieldProps) {
   const { upload, isSending } = usePictureUpload(linkPage, slug);
+  useEffect(() => {
+    onSendingChange?.(isSending);
+  }, [isSending, onSendingChange]);
   return (
     <>
-      {isSending ? (
-        <Skeleton shape="field" width="full" />
-      ) : (
-        <FileDrop
-          label={label}
-          acceptedTypes={PICTURE_TYPES}
-          maxSize={PICTURE_PICK_MAX_BYTES}
-          {...(value === undefined ? {} : { preview: { src: value.src, alt: strings.pictureAlt } })}
-          onFiles={(files) => {
-            const [file] = files;
-            if (file === undefined) return;
-            void upload([file]).then((stored) => {
-              const [first] = stored;
-              if (first !== undefined) onChange(first);
-            });
-          }}
-        />
-      )}
-      {hint !== undefined && error === undefined && <p>{hint}</p>}
-      {error !== undefined && <Callout tone="danger">{error}</Callout>}
-      {(extra !== undefined || (isRemovable && value !== undefined)) && (
-        <div>
-          {extra}
-          {isRemovable && value !== undefined && (
-            <Button variant="ghost" size="md" icon="trash" onPress={() => onChange(undefined)}>
-              {strings.thumbRemove}
-            </Button>
-          )}
-        </div>
+      <FileDrop
+        label={label}
+        acceptedTypes={PICTURE_TYPES}
+        maxSize={PICTURE_PICK_MAX_BYTES}
+        isPending={isSending}
+        {...(error === undefined ? {} : { error })}
+        {...(value === undefined ? {} : { preview: { src: value.src, alt: strings.pictureAlt } })}
+        onFiles={(files) => {
+          const [file] = files;
+          if (file === undefined) return;
+          void upload([file]).then((stored) => {
+            const [first] = stored;
+            if (first !== undefined) onChange(first);
+          });
+        }}
+      />
+      {extra}
+      {isRemovable && value !== undefined && (
+        <Button variant="ghost" size="md" icon="trash" onPress={() => onChange(undefined)}>
+          {strings.thumbRemove}
+        </Button>
       )}
     </>
   );
@@ -257,6 +252,7 @@ export function sizeOfItem(item: ProfileItem | undefined): 'small' | 'wide' | 'l
  * sized kind's SizePicker, then the folded Schedule. `draft` is what goes into the block's draft.
  */
 export function useBlockExtras(item: ProfileItem | undefined, isSized: boolean) {
+  const isGrid = usePageLayout() === 'grid';
   const [window, setWindow] = useState<DraftWindow>(() => windowOfItem(item));
   const [size, setSize] = useState(() => sizeOfItem(item));
   const [problems, setProblems] = useState<{ showFrom?: string; hideAfter?: string; size?: string }>({});
@@ -270,7 +266,9 @@ export function useBlockExtras(item: ProfileItem | undefined, isSized: boolean) 
   };
   const fields = (
     <>
-      {isSized && <SizePicker value={size} onChange={setSize} />}
+      {/* Only where it changes something a visitor sees: a list page draws every block as a row. The size a block
+          already has is kept whatever the layout, so switching to a grid brings it back. */}
+      {isSized && isGrid && <SizePicker value={size} onChange={setSize} />}
       <ScheduleFields
         value={window}
         onChange={(next) => {

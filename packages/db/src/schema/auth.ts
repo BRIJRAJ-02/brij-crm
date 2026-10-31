@@ -404,10 +404,11 @@ export const publicProfiles = auth.table(
     check(
       'public_profiles_theme',
       // Postgres refuses a subquery in a check constraint, so "no key but these ten" is the ten taken away leaving
-      // an empty object. A check whose expression is NULL passes, so "all ten present" needs `coalesce`.
+      // an empty object. A check whose expression is NULL passes, so "all ten present" needs `coalesce`. `layout`
+      // (spec 0061, migration 0148) is the one optional key: absent is `list`.
       sql`${t.theme} is null or (
         jsonb_typeof(${t.theme}) = 'object'
-        and ${t.theme} - 'ground' - 'hue' - 'mode' - 'shape' - 'fill' - 'font' - 'gradient' - 'pattern' - 'header' - 'avatar' = '{}'::jsonb
+        and ${t.theme} - 'ground' - 'hue' - 'mode' - 'shape' - 'fill' - 'font' - 'gradient' - 'pattern' - 'header' - 'avatar' - 'layout' = '{}'::jsonb
         and coalesce(${t.theme} ->> 'ground', '') in ('plain', 'paper', 'tint', 'ink', 'gradient', 'pattern', 'image')
         and coalesce(${t.theme} ->> 'hue', '') in ('gray', 'red', 'orange', 'yellow', 'lime', 'green', 'sky', 'blue', 'purple')
         and coalesce(${t.theme} ->> 'mode', '') in ('light', 'dark', 'system')
@@ -418,6 +419,7 @@ export const publicProfiles = auth.table(
         and coalesce(${t.theme} ->> 'pattern', '') in ('dots', 'grid', 'lines', 'waves')
         and coalesce(${t.theme} ->> 'header', '') in ('centred', 'cover', 'left')
         and coalesce(${t.theme} ->> 'avatar', '') in ('circle', 'rounded', 'none')
+        and coalesce(${t.theme} ->> 'layout', 'list') in ('list', 'grid')
       )`,
     ),
     check(
