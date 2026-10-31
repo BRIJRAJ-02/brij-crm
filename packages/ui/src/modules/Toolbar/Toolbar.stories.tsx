@@ -297,7 +297,6 @@ export const WithViewActions: Story = {
           id: 'make-private',
           label: 'Make private',
           icon: 'lock',
-          startsGroup: true,
           reason: 'Make another view the default first.',
         },
         { id: 'lock', label: 'Lock', icon: 'lock' },
@@ -306,7 +305,6 @@ export const WithViewActions: Story = {
           label: 'Delete view',
           icon: 'trash',
           isDanger: true,
-          startsGroup: true,
           reason: 'Make another view the default first.',
         },
       ]}

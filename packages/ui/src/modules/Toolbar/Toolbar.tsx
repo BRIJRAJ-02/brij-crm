@@ -130,11 +130,6 @@ export interface ViewAction {
   readonly reason?: string;
   readonly isDanger?: boolean;
   /**
-   * Kept for callers; the menu no longer draws a hairline for it: the view's actions are one group (owner item 51,
-   * 31 October 2026).
-   */
-  readonly startsGroup?: boolean;
-  /**
    * The action is a choice of states (Who can see it): a submenu of them, the current one checked. Choosing one
    * runs `onAction` with `<action id>/<choice id>`.
    */

@@ -18,7 +18,15 @@ import type { EditorProps, FieldAttribute } from '../../fields/types.ts';
 import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
 import { FilterChip } from '../../molecules/FilterChip/FilterChip.tsx';
 import { Field } from '../../molecules/Field/Field.tsx';
-import { Menu, MenuItem, MenuSection, MenuTrigger, SubmenuTrigger, type MenuKey } from '../../molecules/Menu/Menu.tsx';
+import {
+  Menu,
+  MenuItem,
+  MenuSection,
+  MenuSeparator,
+  MenuTrigger,
+  SubmenuTrigger,
+  type MenuKey,
+} from '../../molecules/Menu/Menu.tsx';
 import { Select } from '../../molecules/Select/SelectWithFaces.tsx';
 import { focusLater } from '../../lib/focus-later.ts';
 import { memoIntl } from '../../lib/intl-memo.ts';
@@ -322,23 +330,18 @@ function GroupRows({ builder, group, path }: GroupRowsProps) {
                 part: 'operator',
               });
             }}
+            // A group is the second choice, last in Add filter's own menu (owner item 48), not a button as loud.
+            {...(canNest(path)
+              ? {
+                  onPickGroup: (attribute: FieldAttribute) => {
+                    structure.change(
+                      addItem(value, path, { conjunction: 'and', conditions: [startOn(builder, attribute)] }),
+                      { row: [...path, end, 0], part: 'operator' },
+                    );
+                  },
+                }
+              : {})}
           />
-          {canNest(path) && (
-            <AttributeTrigger
-              builder={builder}
-              label={strings.addGroup}
-              addIcon="list-plus"
-              onPick={(relationPath, attribute) => {
-                structure.change(
-                  addItem(value, path, {
-                    conjunction: 'and',
-                    conditions: [throughPath(relationPath, startOn(builder, attribute))],
-                  }),
-                  { row: [...path, end, 0], part: 'operator' },
-                );
-              }}
-            />
-          )}
           {path.length > 0 && (
             <Button
               variant="ghost"
@@ -727,10 +730,13 @@ interface AttributeTriggerProps {
   /** What the row filters on now; without it the trigger is an Add button with `label`. */
   readonly current?: { readonly icon: IconName; readonly names: readonly string[] };
   readonly label?: string;
-  /** The Add button's icon: a plus for Add filter, the list's for Add group (the quieter, second choice). */
-  readonly addIcon?: IconName;
   readonly onPick: (path: readonly string[], attribute: FieldAttribute) => void;
+  /** Adds a group starting on the attribute picked: Add group, last in the Add menu after a hairline. */
+  readonly onPickGroup?: (attribute: FieldAttribute) => void;
 }
+
+/** The key prefix of Add group's attributes, which no attribute id holds. */
+const GROUP_KEY = '\u0000group:';
 
 /** The attribute picker: the object's attributes, with relations opening their own as a submenu. */
 /**
@@ -741,9 +747,14 @@ function usePickVariant(): 'secondary' {
   return 'secondary';
 }
 
-function AttributeTrigger({ builder, current, label, addIcon = 'plus', onPick }: AttributeTriggerProps) {
+function AttributeTrigger({ builder, current, label, onPick, onPickGroup }: AttributeTriggerProps) {
   const pickVariant = usePickVariant();
   const pick = (key: MenuKey) => {
+    if (String(key).startsWith(GROUP_KEY)) {
+      const attribute = builder.attributes.find((each) => each.id === String(key).slice(GROUP_KEY.length));
+      if (attribute !== undefined) onPickGroup?.(attribute);
+      return;
+    }
     const [relationId, attributeId] = String(key).split(SEPARATOR);
     if (attributeId === undefined) {
       const attribute = builder.attributes.find((each) => each.id === relationId);
@@ -760,7 +771,7 @@ function AttributeTrigger({ builder, current, label, addIcon = 'plus', onPick }:
   const trigger =
     current === undefined ? (
       // Quiet: an add never outweighs the conditions it adds to (owner items 43 and 48).
-      <Button variant="ghost" icon={addIcon}>
+      <Button variant="ghost" icon="plus">
         {label ?? strings.addFilter}
       </Button>
     ) : (
@@ -803,6 +814,23 @@ function AttributeTrigger({ builder, current, label, addIcon = 'plus', onPick }:
           <MenuSection label={strings.system} isLabelHidden={own.length === 0}>
             {system.map(entry)}
           </MenuSection>
+        )}
+        {current === undefined && onPickGroup !== undefined && <MenuSeparator />}
+        {current === undefined && onPickGroup !== undefined && (
+          <SubmenuTrigger>
+            {[
+              <MenuItem key="group" id={GROUP_KEY} icon="list-plus">
+                {strings.addGroup}
+              </MenuItem>,
+              <Menu key="group-attributes" label={strings.addGroup} onAction={pick}>
+                {[...own, ...system].map((attribute) => (
+                  <MenuItem key={attribute.id} id={`${GROUP_KEY}${attribute.id}`} icon={iconOf(attribute)}>
+                    {attribute.name}
+                  </MenuItem>
+                ))}
+              </Menu>,
+            ]}
+          </SubmenuTrigger>
         )}
       </Menu>
     </MenuTrigger>

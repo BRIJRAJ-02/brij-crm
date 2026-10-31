@@ -104,12 +104,17 @@ export function SidebarSections({
     return path === href || path.startsWith(`${href}/`);
   })?.id;
   const navigate = useNavigate();
-  // A row's own menu (owner item 90): its settings, rename, its icon, its link, a new tab, its deleted records, and
-  // Hide from sidebar last, apart. Rename and the icon open the settings page that edits them.
+  // A row's own menu (owner item 90): its settings (where its name and icon change), its link, a new tab, its trash,
+  // and Hide from sidebar last, apart. Each item does what it says, so no Rename that only opens a page.
   const go = (href: string) => {
     void navigate({ href });
   };
   const copyLink = (href: string) => {
+    // No clipboard outside a secure context: say so rather than throw.
+    if (typeof navigator.clipboard === 'undefined') {
+      toasts.toast({ tone: 'danger', message: sharedStrings.couldntCopy });
+      return;
+    }
     navigator.clipboard.writeText(new URL(href, window.location.origin).href).then(
       () => {
         toasts.toast({ tone: 'success', message: strings.linkCopied });
@@ -128,8 +133,7 @@ export function SidebarSections({
       <Menu
         label={strings.itemOptions(object.pluralName)}
         onAction={(key) => {
-          if (key === 'settings') go(objectSettingsHref(slug, object));
-          if (key === 'rename' || key === 'icon') go(objectSettingsHref(slug, object, 'configuration'));
+          if (key === 'settings') go(objectSettingsHref(slug, object, 'configuration'));
           if (key === 'copy') copyLink(href);
           if (key === 'tab') openInNewTab(href);
           if (key === 'trash') go(`${trashHref(slug)}?object=${encodeURIComponent(object.id)}`);
@@ -139,20 +143,14 @@ export function SidebarSections({
         <MenuItem id="settings" icon="settings">
           {strings.objectSettings}
         </MenuItem>
-        <MenuItem id="rename" icon="pencil">
-          {strings.rename}
-        </MenuItem>
-        <MenuItem id="icon" icon="palette">
-          {strings.changeIcon}
-        </MenuItem>
         <MenuItem id="copy" icon="link">
           {strings.copyLink}
         </MenuItem>
         <MenuItem id="tab" icon="external-link">
           {strings.openInNewTab}
         </MenuItem>
-        <MenuItem id="trash" icon="trash">
-          {strings.deletedRecords}
+        <MenuItem id="trash" icon="archive-restore">
+          {strings.openTrash}
         </MenuItem>
         <MenuSeparator />
         <MenuItem id="hide" icon="eye-off">
@@ -167,7 +165,7 @@ export function SidebarSections({
       <Menu
         label={strings.itemOptions(list.name)}
         onAction={(key) => {
-          if (key === 'settings' || key === 'rename') go(listSettingsHref(slug, list));
+          if (key === 'settings') go(listSettingsHref(slug, list));
           if (key === 'copy') copyLink(href);
           if (key === 'tab') openInNewTab(href);
           if (key === 'hide') hideList(list);
@@ -175,9 +173,6 @@ export function SidebarSections({
       >
         <MenuItem id="settings" icon="settings">
           {strings.listSettings}
-        </MenuItem>
-        <MenuItem id="rename" icon="pencil">
-          {strings.rename}
         </MenuItem>
         <MenuItem id="copy" icon="link">
           {strings.copyLink}

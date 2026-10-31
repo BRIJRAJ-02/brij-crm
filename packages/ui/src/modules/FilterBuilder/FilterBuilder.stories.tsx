@@ -1,7 +1,7 @@
 import type { FilterGroup } from '@crm/contracts/values';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
-import { expect, fn, waitFor } from 'storybook/test';
+import { expect, fn, waitFor, within } from 'storybook/test';
 import type { FieldAttribute } from '../../fields/types.ts';
 import { attributeOf } from '../../workbench/attributes.ts';
 import { SAMPLE_MEMBERS, SAMPLE_STAGES, SAMPLE_TAGS } from '../../workbench/field-samples.ts';
@@ -163,6 +163,18 @@ export const Empty: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByText('No filters yet')).toBeInTheDocument();
     await expect(canvas.getByRole('button', { name: 'Add filter' })).toBeInTheDocument();
+  },
+};
+
+/** One Add filter: a group is its second choice, last in its menu after a hairline, not a second button. */
+export const AddGroupInMenu: Story = {
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas, userEvent }) => {
+    await expect(canvas.queryByRole('button', { name: 'Add group' })).toBeNull();
+    const add = canvas.getAllByRole('button', { name: 'Add filter' }).at(-1);
+    if (add === undefined) throw new Error('No Add filter');
+    await userEvent.click(add);
+    await expect(await within(document.body).findByRole('menuitem', { name: 'Add group' })).toBeInTheDocument();
   },
 };
 

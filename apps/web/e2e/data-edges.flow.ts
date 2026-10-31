@@ -97,7 +97,7 @@ test.describe('the data journey’s edges', () => {
       .getByRole('navigation', { name: 'Main navigation' })
       .getByRole('button', { name: 'More for People' })
       .click();
-    await page.getByRole('menuitem', { name: 'Deleted records' }).click();
+    await page.getByRole('menuitem', { name: 'Open trash' }).click();
     await expect(page).toHaveURL(new RegExp(`/w/${slug}/settings/trash`));
 
     await page.goto(`/w/${slug}/objects/people`);

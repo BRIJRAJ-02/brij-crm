@@ -145,11 +145,16 @@
     visibility: hidden;
   }
 
-  .row[data-hovered] > .grip,
   .row[data-focus-visible] > .grip,
-  .row:focus-within > .grip,
+  .row:has(:focus-visible) > .grip,
   .row[data-dragging] > .grip {
     opacity: 1;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .row[data-hovered] > .grip {
+      opacity: 1;
+    }
   }
 
   /* No hover on a touch screen: the grips stay. */

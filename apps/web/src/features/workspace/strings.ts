@@ -56,11 +56,10 @@ export const strings = {
   /** An object's and a list's own menu in the sidebar (owner item 90, 31 October 2026), as Attio's. */
   objectSettings: 'Object settings',
   listSettings: 'List settings',
-  rename: 'Rename',
-  changeIcon: 'Change icon and colour',
   copyLink: 'Copy link',
   openInNewTab: 'Open in new tab',
-  deletedRecords: 'Deleted records',
+  /** The object's deleted records, in Settings › Trash (it left the view's menu, owner item 52). */
+  openTrash: 'Open trash',
   linkCopied: 'Link copied',
   /** Hide from sidebar's toast on an object, with Undo. */
   hiddenFromSidebar: (pluralName: string) => `${pluralName} hidden from sidebar`,

@@ -244,7 +244,6 @@ export function useViewMenu({
             id: 'who',
             label: strings.whoCanSee,
             icon: view.visibility === 'private' ? 'lock' : 'users',
-            startsGroup: true,
             choices: whoChoices,
             run: () => undefined,
           },
@@ -294,7 +293,6 @@ export function useViewMenu({
                 id: 'set-default',
                 label: strings.setDefault,
                 icon: 'star',
-                ...(sharing.length === 0 ? { startsGroup: true } : {}),
                 run: () => {
                   run(data.views.setDefault(slug, parentId, view.id));
                 },
@@ -308,7 +306,6 @@ export function useViewMenu({
       label: strings.deleteView,
       icon: 'trash',
       isDanger: true,
-      startsGroup: true,
       // One click, with Undo in its toast (the owner, 30 October 2026: Undo over a confirm).
       run: () => {
         remove();

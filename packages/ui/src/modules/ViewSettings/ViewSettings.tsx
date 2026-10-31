@@ -98,12 +98,19 @@ export function ViewSettings({
   // A row that moves to the other list takes its place's focus with it: the row now in its place, else the row
   // before, else the row itself in its new list, so hiding three columns in a row is three presses of Enter.
   const lists = useRef<Partial<Record<ListId, HTMLDivElement | null>>>({});
-  const focusNext = useRef<{ readonly list: ListId; readonly index: number; readonly id: string } | undefined>(
-    undefined,
-  );
+  const focusNext = useRef<
+    | {
+        readonly list: ListId;
+        readonly index: number;
+        readonly id: string;
+        /** The fields as they were asked to change: focus moves once new ones arrive, not on a render before. */
+        readonly before: readonly ViewField[];
+      }
+    | undefined
+  >(undefined);
   useEffect(() => {
     const target = focusNext.current;
-    if (target === undefined) return;
+    if (target === undefined || target.before === fields) return;
     focusNext.current = undefined;
     focusLater(() => {
       const rows = [...(lists.current[target.list]?.querySelectorAll<HTMLElement>('[role="row"]') ?? [])];
@@ -115,7 +122,7 @@ export function ViewSettings({
   });
 
   const setShown = (id: string, next: boolean, from: ListId, index: number) => {
-    focusNext.current = { list: from, index, id };
+    focusNext.current = { list: from, index, id, before: fields };
     onChange(fields.map((each) => (each.attribute.id === id ? { ...each, isShown: next } : each)));
   };
 
@@ -190,7 +197,8 @@ export function ViewSettings({
             const index = items.findIndex((field) => field.attribute.id === String(key));
             if (!isFull && index >= 0) setShown(String(key), true, list, index);
           },
-          ...(isFull ? { disabledBehavior: 'selection' as const } : {}),
+          // At the limit the rows are disabled too, so Enter says so rather than doing nothing.
+          ...(isFull ? { disabledKeys: items.map((field) => field.attribute.id) } : {}),
         };
 
   const section = (list: Exclude<ListId, 'shown'>, title: string, items: readonly ViewField[]) =>
@@ -198,7 +206,7 @@ export function ViewSettings({
       <section className={styles.section} aria-label={title}>
         <div className={styles.head}>
           <span className={styles.label}>{title}</span>
-          <span className={styles.count}>{number(items.length)}</span>
+          <span className={styles.count}>{isFull && !isReadOnly ? strings.atLimit : number(items.length)}</span>
         </div>
         <GridList
           ref={(element) => {

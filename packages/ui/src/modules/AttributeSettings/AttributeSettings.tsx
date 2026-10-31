@@ -838,7 +838,9 @@ function AttributeForm({
       }}
       onSubmit={submit}
       label={label}
-      focusesFirstField={!isReadOnly}
+      // The type comes first, and its Select holds a hidden native select the form's first field search would find:
+      // the name takes focus itself instead.
+      focusesFirstField={false}
     >
       {/* Said once, above the settings, rather than under each of them. */}
       {readOnlyReason !== undefined && <Callout>{readOnlyReason}</Callout>}
@@ -870,6 +872,7 @@ function AttributeForm({
         name="title"
         autoComplete="off"
         {...(isCreating ? { placeholder: strings.namePlaceholder } : {})}
+        autoFocus={!isReadOnly}
         isRequired
         maxLength={100}
         value={name}

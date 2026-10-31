@@ -11,6 +11,8 @@ export const strings = {
   shownOf: (count: string, total: string) => `${count} of ${total}`,
   /** A list's name for screen readers: "Columns, shown". */
   list: (label: string, section: string) => `${label}, ${section.toLocaleLowerCase()}`,
+  /** Over Hidden while Shown is at its limit (a board card's six): why Show is off. */
+  atLimit: 'Hide one to add another',
   searchFields: 'Search attributes',
   findField: 'Find a field',
   noMatches: 'No attributes match',
