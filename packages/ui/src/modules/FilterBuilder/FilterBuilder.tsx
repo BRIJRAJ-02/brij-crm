@@ -18,8 +18,15 @@ import type { EditorProps, FieldAttribute } from '../../fields/types.ts';
 import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
 import { FilterChip } from '../../molecules/FilterChip/FilterChip.tsx';
 import { Field } from '../../molecules/Field/Field.tsx';
-import { InPopover } from '../../molecules/Popover/Popover.tsx';
-import { Menu, MenuItem, MenuTrigger, SubmenuTrigger, type MenuKey } from '../../molecules/Menu/Menu.tsx';
+import {
+  Menu,
+  MenuItem,
+  MenuSection,
+  MenuSeparator,
+  MenuTrigger,
+  SubmenuTrigger,
+  type MenuKey,
+} from '../../molecules/Menu/Menu.tsx';
 import { Select } from '../../molecules/Select/SelectWithFaces.tsx';
 import { focusLater } from '../../lib/focus-later.ts';
 import { memoIntl } from '../../lib/intl-memo.ts';
@@ -205,30 +212,24 @@ export function FilterBuilder(props: FilterBuilderProps) {
     },
   };
   if (value.conditions.length === 0) {
+    // One quiet line, then Add filter: no tile or paragraph in a small popover (owner, less text, 31 October 2026).
     return (
       <div ref={rootRef} className={styles.root} data-filter-adder="">
-        <EmptyState
-          title={strings.noFilters}
-          icon="list-filter"
-          {...(isReadOnly
-            ? {}
-            : {
-                actions: (
-                  <AttributeTrigger
-                    builder={props}
-                    label={strings.addFilter}
-                    onPick={(path, attribute) => {
-                      structure.change(addItem(value, [], throughPath(path, startOn(props, attribute))), {
-                        row: [0],
-                        part: 'operator',
-                      });
-                    }}
-                  />
-                ),
-              })}
-        >
-          {isReadOnly ? undefined : strings.noFiltersText}
-        </EmptyState>
+        <EmptyState title={strings.noFilters} icon="list-filter" layout="row" />
+        {!isReadOnly && (
+          <span className={styles.foot}>
+            <AttributeTrigger
+              builder={props}
+              label={strings.addFilter}
+              onPick={(path, attribute) => {
+                structure.change(addItem(value, [], throughPath(path, startOn(props, attribute))), {
+                  row: [0],
+                  part: 'operator',
+                });
+              }}
+            />
+          </span>
+        )}
       </div>
     );
   }
@@ -329,22 +330,18 @@ function GroupRows({ builder, group, path }: GroupRowsProps) {
                 part: 'operator',
               });
             }}
+            // A group is the second choice, last in Add filter's own menu (owner item 48), not a button as loud.
+            {...(canNest(path)
+              ? {
+                  onPickGroup: (attribute: FieldAttribute) => {
+                    structure.change(
+                      addItem(value, path, { conjunction: 'and', conditions: [startOn(builder, attribute)] }),
+                      { row: [...path, end, 0], part: 'operator' },
+                    );
+                  },
+                }
+              : {})}
           />
-          {canNest(path) && (
-            <AttributeTrigger
-              builder={builder}
-              label={strings.addGroup}
-              onPick={(relationPath, attribute) => {
-                structure.change(
-                  addItem(value, path, {
-                    conjunction: 'and',
-                    conditions: [throughPath(relationPath, startOn(builder, attribute))],
-                  }),
-                  { row: [...path, end, 0], part: 'operator' },
-                );
-              }}
-            />
-          )}
           {path.length > 0 && (
             <Button
               variant="ghost"
@@ -362,6 +359,7 @@ function GroupRows({ builder, group, path }: GroupRowsProps) {
             <span className={styles.clearAll}>
               <Button
                 variant="ghost"
+                icon="x"
                 onPress={() => {
                   structure.change({ ...value, conditions: [] }, { adder: [] });
                 }}
@@ -733,20 +731,30 @@ interface AttributeTriggerProps {
   readonly current?: { readonly icon: IconName; readonly names: readonly string[] };
   readonly label?: string;
   readonly onPick: (path: readonly string[], attribute: FieldAttribute) => void;
+  /** Adds a group starting on the attribute picked: Add group, last in the Add menu after a hairline. */
+  readonly onPickGroup?: (attribute: FieldAttribute) => void;
 }
+
+/** The key prefix of Add group's attributes, which no attribute id holds. */
+const GROUP_KEY = '\u0000group:';
 
 /** The attribute picker: the object's attributes, with relations opening their own as a submenu. */
 /**
- * A condition's pickers in a popover (the view's filter) are quiet, borderless until hovered, as Attio's are: the
- * popover's edge already frames them. On a page (a rule's conditions) they keep the secondary edge.
+ * A condition's pickers always carry the secondary edge and fill, in a popover too: borderless pickers read as
+ * plain text, not dropdowns (owner item 44, 31 October 2026; they were ghost in a popover until then).
  */
-function usePickVariant(): 'ghost' | 'secondary' {
-  return useContext(InPopover) ? 'ghost' : 'secondary';
+function usePickVariant(): 'secondary' {
+  return 'secondary';
 }
 
-function AttributeTrigger({ builder, current, label, onPick }: AttributeTriggerProps) {
+function AttributeTrigger({ builder, current, label, onPick, onPickGroup }: AttributeTriggerProps) {
   const pickVariant = usePickVariant();
   const pick = (key: MenuKey) => {
+    if (String(key).startsWith(GROUP_KEY)) {
+      const attribute = builder.attributes.find((each) => each.id === String(key).slice(GROUP_KEY.length));
+      if (attribute !== undefined) onPickGroup?.(attribute);
+      return;
+    }
     const [relationId, attributeId] = String(key).split(SEPARATOR);
     if (attributeId === undefined) {
       const attribute = builder.attributes.find((each) => each.id === relationId);
@@ -762,7 +770,8 @@ function AttributeTrigger({ builder, current, label, onPick }: AttributeTriggerP
   };
   const trigger =
     current === undefined ? (
-      <Button variant="dashed" icon="plus">
+      // Quiet: an add never outweighs the conditions it adds to (owner items 43 and 48).
+      <Button variant="ghost" icon="plus">
         {label ?? strings.addFilter}
       </Button>
     ) : (
@@ -770,33 +779,59 @@ function AttributeTrigger({ builder, current, label, onPick }: AttributeTriggerP
         {current.names.join(strings.pathJoin)}
       </Button>
     );
+  // The object's own attributes first; system ones (Record ID, Created at) after, under System: nobody starts there.
+  const own = builder.attributes.filter((attribute) => attribute.isSystem !== true);
+  const system = builder.attributes.filter((attribute) => attribute.isSystem === true);
+  const entry = (attribute: FieldAttribute) => {
+    const related = builder.relatedAttributes?.(attribute);
+    const item = (
+      <MenuItem key={attribute.id} id={attribute.id} icon={iconOf(attribute)}>
+        {attribute.name}
+      </MenuItem>
+    );
+    if (related === undefined || related.length === 0) return item;
+    return (
+      <SubmenuTrigger key={attribute.id}>
+        {[
+          item,
+          <Menu key="related" label={attribute.name} onAction={pick}>
+            {related.map((each) => (
+              <MenuItem key={each.id} id={`${attribute.id}${SEPARATOR}${each.id}`} icon={iconOf(each)}>
+                {each.name}
+              </MenuItem>
+            ))}
+          </Menu>,
+        ]}
+      </SubmenuTrigger>
+    );
+  };
   const menuTrigger = (
     <MenuTrigger>
       {trigger}
       <Menu label={strings.attributes} search={{ label: strings.searchAttributes }} onAction={pick}>
-        {builder.attributes.map((attribute) => {
-          const related = builder.relatedAttributes?.(attribute);
-          const item = (
-            <MenuItem key={attribute.id} id={attribute.id} icon={iconOf(attribute)}>
-              {attribute.name}
-            </MenuItem>
-          );
-          if (related === undefined || related.length === 0) return item;
-          return (
-            <SubmenuTrigger key={attribute.id}>
-              {[
-                item,
-                <Menu key="related" label={attribute.name} onAction={pick}>
-                  {related.map((each) => (
-                    <MenuItem key={each.id} id={`${attribute.id}${SEPARATOR}${each.id}`} icon={iconOf(each)}>
-                      {each.name}
-                    </MenuItem>
-                  ))}
-                </Menu>,
-              ]}
-            </SubmenuTrigger>
-          );
-        })}
+        {own.map(entry)}
+        {system.length > 0 && (
+          <MenuSection label={strings.system} isLabelHidden={own.length === 0}>
+            {system.map(entry)}
+          </MenuSection>
+        )}
+        {current === undefined && onPickGroup !== undefined && <MenuSeparator />}
+        {current === undefined && onPickGroup !== undefined && (
+          <SubmenuTrigger>
+            {[
+              <MenuItem key="group" id={GROUP_KEY} icon="list-plus">
+                {strings.addGroup}
+              </MenuItem>,
+              <Menu key="group-attributes" label={strings.addGroup} onAction={pick}>
+                {[...own, ...system].map((attribute) => (
+                  <MenuItem key={attribute.id} id={`${GROUP_KEY}${attribute.id}`} icon={iconOf(attribute)}>
+                    {attribute.name}
+                  </MenuItem>
+                ))}
+              </Menu>,
+            ]}
+          </SubmenuTrigger>
+        )}
       </Menu>
     </MenuTrigger>
   );

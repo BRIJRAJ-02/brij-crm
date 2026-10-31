@@ -359,7 +359,11 @@ export function RulesEditor({
         {!isReadOnly && rules.length > 0 && <span className={styles.usage}>{strings.usage(rules.length, limit)}</span>}
       </div>
       {hint !== undefined && !isReadOnly && <span className={styles.note}>{hint}</span>}
-      {rules.length === 0 && <p className={styles.empty}>{kinds.length === 0 ? strings.noKinds : strings.noRules}</p>}
+      {/* Editable with kinds to add, the empty list says nothing: Add rule is the next step (owner item 98). Read
+          only, one line says what holds. */}
+      {rules.length === 0 && (kinds.length === 0 || isReadOnly) && (
+        <p className={styles.empty}>{kinds.length === 0 ? strings.noKinds : strings.noRules}</p>
+      )}
       {rules.length > 0 && (
         <SortableList
           ids={rules.map((rule) => rule.id)}
@@ -534,7 +538,7 @@ export function RulesEditor({
       {!isReadOnly && kinds.length > 0 && (
         <span className={styles.adder} data-adder="">
           <MenuTrigger>
-            <Button variant="dashed" icon="plus" isDisabled={isFull}>
+            <Button variant="ghost" icon="plus" isDisabled={isFull}>
               {strings.addRule}
             </Button>
             <Menu

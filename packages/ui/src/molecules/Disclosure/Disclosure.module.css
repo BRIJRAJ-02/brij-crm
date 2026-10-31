@@ -47,7 +47,8 @@
 
     .actions[data-quiet]:has([aria-expanded='true'], [data-lifted]),
     .headingRow:hover > .actions[data-quiet],
-    .headingRow:focus-within > .actions[data-quiet] {
+    /* Keyboard focus only: a click on the label leaves focus there, and the actions stayed out for good. */
+    .headingRow:has(:focus-visible) > .actions[data-quiet] {
       opacity: 1;
     }
   }
@@ -131,6 +132,14 @@
 
   .content[data-edge='page'] {
     padding-inline: 0;
+  }
+
+  /* The trigger's chevron and the panel's fields on the form's own edge, as Name and Type above them (owner item
+     99, 31 October 2026): both run out by their space-4 inset, which stays as room for a field's focus halo. */
+  .trigger[data-variant='fields'],
+  .root[data-variant='fields'] > .panel {
+    inline-size: calc(100% + 2 * var(--space-4));
+    margin-inline: calc(-1 * var(--space-4));
   }
 
   /* The fields variant: more fields inside a form, stacked as the form stacks its own. */

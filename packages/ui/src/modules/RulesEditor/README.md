@@ -4,7 +4,7 @@ An attribute's validation rules, in order (spec 0013): each read as the message 
 
 ## Why it exists
 
-New, for AttributeSettings' Validation section (spec 0013, milestone 1). Nothing in the library held a reorderable list whose rows open into a small form of their own: OptionsEditor's rows are one line of fields each (a label, a colour, a stage's outcome), and a rule needs its kind's settings, a message and a whole FilterBuilder. A variant of OptionsEditor would have carried two different row shapes and two sets of props, so this is its own module, built the same way (a React Aria GridList with drag and keyboard reorder through `lib/reorder.ts`, a row menu, a dashed Add button) and composed of Field, Select, Checkbox, RadioGroup, DatePicker, Disclosure, Menu and FilterBuilder.
+New, for AttributeSettings' Validation section (spec 0013, milestone 1). Nothing in the library held a reorderable list whose rows open into a small form of their own: OptionsEditor's rows are one line of fields each (a label, a colour, a stage's outcome), and a rule needs its kind's settings, a message and a whole FilterBuilder. A variant of OptionsEditor would have carried two different row shapes and two sets of props, so this is its own module, built the same way (a React Aria GridList with drag and keyboard reorder through `lib/reorder.ts`, a row menu, an Add button) and composed of Field, Select, Checkbox, RadioGroup, DatePicker, Disclosure, Menu and FilterBuilder.
 
 ## Use
 
@@ -36,7 +36,7 @@ New, for AttributeSettings' Validation section (spec 0013, milestone 1). Nothing
 
 ## States
 
-Empty (with a line saying any value is accepted, or that the type takes no rules: AttributeSettings shows no section then, so only the first is storied), rules closed, one open (each kind's settings storied), refused (on its setting, or under a closed row), full, read only, dragging, drop target, focus. No loading state: the rules come in with the attribute, and the dialog draws its own. No disabled state: read only stands in for it, as in OptionsEditor.
+Empty (editable: no sentence, only Add rule, a quiet ghost button, owner item 98, 31 October 2026; read only: a line saying any value is accepted; a type that takes no rules says so, though AttributeSettings shows no section then), rules closed, one open (each kind's settings storied), refused (on its setting, or under a closed row), full, read only, dragging, drop target, focus. No loading state: the rules come in with the attribute, and the dialog draws its own. No disabled state: read only stands in for it, as in OptionsEditor.
 
 Known follow up: the list's frame (the label and its count, the GridList with its focus, dragging and drop target states, the empty line and the Add button) repeats OptionsEditor's CSS. Both should move onto one shared list molecule before a third editor of this shape arrives. An open row keeps its drag hooks (as OptionsEditor's rows do), and its handle's place collapses while it is open.
 

@@ -594,8 +594,9 @@ export function OptionsEditor({
       )}
       {!isReadOnly && (
         <span className={styles.adder} data-adder="">
+          {/* Quiet, as every add in a settings dialog is: the options outweigh the way to add one (31 October 2026). */}
           <Button
-            variant="dashed"
+            variant="ghost"
             icon="plus"
             isDisabled={isFull || draft !== undefined}
             onPress={() => {

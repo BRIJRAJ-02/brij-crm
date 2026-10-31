@@ -234,8 +234,10 @@ export function BulkActionBar({
           </span>
         )}
         {hasCount && !shown.isAllMatching && shown.hasOffer && (shown.count < shown.total || shown.isTotalAtLeast) && (
+          // Its icon says it is a control, never a label beside the count (owner item 89).
           <Button
             variant="ghost"
+            icon="list-checks"
             onPress={() => {
               wantsFocus.current = true;
               onSelectAllMatching?.();

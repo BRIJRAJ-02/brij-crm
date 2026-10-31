@@ -13,7 +13,6 @@ export const strings = {
   /** A sort chip's name: "Sort: Funding raised, descending, and 1 more". */
   sortName: (attribute: string, direction: 'ascending' | 'descending', more: number) =>
     `Sort: ${attribute}, ${direction}${more === 0 ? '' : more === 1 ? ', and 1 more' : `, and ${String(more)} more`}`,
-  directions: { ascending: 'ascending', descending: 'descending' },
   /** The default order's chip: "Sorted by Created at". */
   sortedBy: (attribute: string) => `Sorted by ${attribute}`,
   /** The default order's chip, named in full: "Sort: Created at, descending, the default order". */

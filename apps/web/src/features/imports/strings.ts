@@ -23,7 +23,9 @@ export const strings = {
   exportAll: (columns: number) => `Export all columns (${n(columns)})`,
   /** Why the export items are off on a view past the limit. */
   exportTooMany: 'Narrow the filter to 100,000 or fewer',
-  /** The bulk bar's export of the ticked rows, and what its toast calls them. */
+  /** The bulk bar's export of the ticked rows: one word on screen, the bar already says how many (owner item 89). */
+  exportShort: 'Export',
+  /** Its full name for screen readers, starting with the word on screen. */
   exportSelected: (count: number) => `Export ${n(count)} selected`,
   title: (pluralName: string) => `Import ${pluralName.toLowerCase()}`,
   /** A list's field in the column picker (spec 0048, AC-4833): where the value goes, by its list. */

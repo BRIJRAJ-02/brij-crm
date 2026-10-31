@@ -203,7 +203,8 @@
 
     .rowActions:has([aria-expanded='true'], [data-lifted]),
     .row:hover > .rowActions,
-    .row:focus-within > .rowActions {
+    /* Keyboard focus only: a click leaves focus on the link, and its menu button stayed out for good. */
+    .row:has(:focus-visible) > .rowActions {
       opacity: 1;
     }
   }

@@ -947,6 +947,8 @@ export function ViewScreen(props: ViewScreenProps) {
         isOpen={isSettingsOpen}
         onOpenChange={setSettingsOpen}
         label={strings.viewSettings}
+        // Under its button, its end on the button's end: it opens from the bar's end, so it never hugs the window.
+        placement="bottom end"
       >
         <ViewSettings
           {...(boardPlan === undefined

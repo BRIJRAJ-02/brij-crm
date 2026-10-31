@@ -1,7 +1,11 @@
 /* Popover: the raised surface every menu, select and picker opens in. It grows
    from its trigger (React Aria's --trigger-anchor-point), exits faster, and
    skips the animation when opened from the keyboard. Its gap to the trigger is
-   a margin on the placed side, so it comes from a token. */
+   a margin on the placed side, so it comes from a token. One shell for every
+   overlay (owner items 42 and 45, 31 October 2026): the surface edge (border),
+   shadow-md, a space-6 gap off its trigger so it reads as a layer, never flush
+   on the bar it opened from, and never taller than the window: React Aria's
+   inline max height, capped here, with the content scrolling inside. */
 @layer components {
   .root {
     /* Fallbacks; React Aria sets both inline while the popover is open. */
@@ -9,11 +13,14 @@
     --trigger-anchor-point: top left;
 
     box-sizing: border-box;
+    /* A builder or a long list ends at the window, its content scrolling inside (the dialog below). */
+    display: flex;
+    flex-direction: column;
     max-inline-size: calc(100vw - 2 * var(--space-16));
     /* The content scrolls, never the surface: a scrollbar here would change
        the width a virtualised menu measures, and loop. */
     overflow: hidden;
-    border: var(--border-width-hairline) solid var(--border-subtle);
+    border: var(--border-width-hairline) solid var(--border);
     border-radius: var(--radius-lg);
     background: var(--surface-raised);
     box-shadow: var(--shadow-md);
@@ -48,30 +55,33 @@
     inline-size: var(--size-dialog);
   }
 
-  /* A builder (filters, sorts): the wide dialog's width, never past the window. Content sized by a container
-     query has no width of its own, so it needs one here. */
+  /* The filter builder: a form dialog's width and a column more, never past the window. Its rows wrap rather than
+     stretch (owner item 46), and content sized by a container query has no width of its own, so it needs one here. A
+     sort builder sizes to its content instead (width content). */
   .root[data-width='builder'] {
-    inline-size: var(--size-dialog-wide);
+    inline-size: calc(var(--size-dialog-form) + var(--size-column-min));
   }
 
   .root[data-placement='bottom'] {
-    margin-block-start: var(--space-4);
+    margin-block-start: var(--space-6);
   }
 
   .root[data-placement='top'] {
-    margin-block-end: var(--space-4);
+    margin-block-end: var(--space-6);
   }
 
   .root[data-placement='right'] {
-    margin-inline-start: var(--space-4);
+    margin-inline-start: var(--space-6);
   }
 
   .root[data-placement='left'] {
-    margin-inline-end: var(--space-4);
+    margin-inline-end: var(--space-6);
   }
 
   .dialog {
     box-sizing: border-box;
+    flex: 1 1 auto;
+    min-block-size: 0;
     max-block-size: inherit;
     padding: var(--popover-panel-inset);
     overflow: auto;

@@ -1,6 +1,6 @@
 // The data journey's edges (CRM flow pass, 30 October 2026): a board column's "+" opens New deal with its stage
 // set; the view bar's Import / Export menu; Match columns guarding a required field nobody matched and asking
-// which way round a date column's dates are; Open trash from the view menu and ⌘K; and ⌘K's page actions.
+// which way round a date column's dates are; Deleted records from the sidebar's object menu and ⌘K; and ⌘K's page actions.
 import { randomUUID } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
 import { addPerson, newWorkspace } from './people.ts';
@@ -86,13 +86,17 @@ test.describe('the data journey’s edges', () => {
     await expect(page.getByRole('button', { name: 'Continue' })).toBeEnabled();
   });
 
-  test('the trash is a step away: the view menu’s Open trash, and ⌘K', async ({ page }) => {
+  test('the trash is a step away: the object’s Deleted records in the sidebar, and ⌘K', async ({ page }) => {
     test.setTimeout(120_000);
     const tag = randomUUID().slice(0, 8);
     const slug = `datatrash-${tag}`;
     await newWorkspace(page, `datatrash-${tag}@example.com`, slug);
     await page.goto(`/w/${slug}/objects/people`);
-    await page.getByRole('button', { name: 'All People', exact: true }).first().click();
+    // Open trash left the view's menu for the object's own (31 October 2026).
+    await page
+      .getByRole('navigation', { name: 'Main navigation' })
+      .getByRole('button', { name: 'More for People' })
+      .click();
     await page.getByRole('menuitem', { name: 'Open trash' }).click();
     await expect(page).toHaveURL(new RegExp(`/w/${slug}/settings/trash`));
 

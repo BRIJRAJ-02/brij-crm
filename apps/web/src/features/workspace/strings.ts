@@ -53,6 +53,14 @@ export const strings = {
   help: 'Help and shortcuts',
   /** Item and section menus (spec 0034, AC-932, AC-933). */
   hideFromSidebar: 'Hide from sidebar',
+  /** An object's and a list's own menu in the sidebar (owner item 90, 31 October 2026), as Attio's. */
+  objectSettings: 'Object settings',
+  listSettings: 'List settings',
+  copyLink: 'Copy link',
+  openInNewTab: 'Open in new tab',
+  /** The object's deleted records, in Settings › Trash (it left the view's menu, owner item 52). */
+  openTrash: 'Open trash',
+  linkCopied: 'Link copied',
   /** Hide from sidebar's toast on an object, with Undo. */
   hiddenFromSidebar: (pluralName: string) => `${pluralName} hidden from sidebar`,
   moveUp: 'Move up',

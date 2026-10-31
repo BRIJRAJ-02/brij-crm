@@ -1,5 +1,5 @@
 /* Field: an 11px text-secondary label over a 30px box with a field-border
-   quiet hairline (#eaeaea, below 3:1 by the owner's call, 20 Oct 2026); focus turns it accent-line
+   quiet hairline (field-border, below 3:1 by the owner's call, 20 Oct 2026); focus turns it accent-line
    and adds the faint focus halo, an error turns
    the border danger. Read only fills the box with surface-subtle and shows a
    lock; disabled fades it. The search variant is rounded with an icon; the

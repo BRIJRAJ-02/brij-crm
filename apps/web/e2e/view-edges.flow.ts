@@ -89,7 +89,7 @@ test.describe('the table view’s edges', () => {
     await expect(bar(page).getByRole('status').filter({ hasText: 'selected' })).toHaveText('2 selected');
 
     // A search is a filter: the old rows can't be known to match it, so the ticks go, and a toast says why.
-    await toolbar(page).getByRole('button', { name: 'Search people' }).click();
+    await toolbar(page).getByRole('searchbox', { name: 'Search people' }).click();
     await page.keyboard.type('Cy');
     await expect(page.getByText('Selection cleared.')).toBeVisible();
     await expect(bar(page)).toHaveCount(0);
@@ -98,8 +98,8 @@ test.describe('the table view’s edges', () => {
   test('search narrows the view by name, is never saved, and Esc clears it', async ({ page }) => {
     test.setTimeout(180_000);
     await threePeople(page, 'vsearch');
-    await toolbar(page).getByRole('button', { name: 'Search people' }).click();
     const search = toolbar(page).getByRole('searchbox', { name: 'Search people' });
+    await search.click();
     await expect(search).toBeFocused();
     await page.keyboard.type('bea');
     await expect(table(page).getByRole('rowheader', { name: /Bea Stone/ })).toBeVisible();
@@ -114,18 +114,19 @@ test.describe('the table view’s edges', () => {
     await page.getByRole('button', { name: 'Clear search' }).click();
     await expect(table(page).getByRole('rowheader', { name: /Ada Byron/ })).toBeVisible();
 
-    // Esc clears it and folds it back to the button.
-    await toolbar(page).getByRole('button', { name: 'Search people' }).click();
+    // Esc clears it, focus staying in the field.
+    await search.click();
     await page.keyboard.type('ada');
     await expect(table(page).getByRole('rowheader', { name: /Bea Stone/ })).toHaveCount(0);
     await page.keyboard.press('Escape');
-    await expect(toolbar(page).getByRole('button', { name: 'Search people' })).toBeFocused();
+    await expect(search).toBeFocused();
+    await expect(search).toHaveValue('');
     await expect(table(page).getByRole('rowheader', { name: /Bea Stone/ })).toBeVisible();
 
     // A reload shows every row: the search was never kept.
     await page.reload();
     await expect(table(page).getByRole('rowheader', { name: /Bea Stone/ })).toBeVisible();
-    await expect(toolbar(page).getByRole('searchbox')).toHaveCount(0);
+    await expect(toolbar(page).getByRole('searchbox', { name: 'Search people' })).toHaveValue('');
   });
 
   test('a ghost "New person" after the last row opens the create dialog, beside the count', async ({ page }) => {

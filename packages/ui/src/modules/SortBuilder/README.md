@@ -14,13 +14,14 @@ New. Every view (#20) sorts by up to five attributes, and the SortChip in the to
 
 - The first row reads "Sort by", the rest "then by".
 - Each row picks its attribute (from those not sorted by yet) and its direction, and has Remove. A row is laid out as FilterBuilder's: the lead in FilterBuilder's lead width, then the attribute (a secondary Button with the type's icon, `10 × size-chip` wide) and the direction (a secondary Button with the arrow, `7 × size-chip` wide, opening a single choice Menu, as a filter's operator does), so the rows line up as columns whatever the names; both shrink together in a narrow slot. A long attribute name is cut, and shows whole in a tooltip on hover or focus (Button's `tooltipWhenCut`). Why: the owner's feedback on spec 0020's milestone 1 (rows that didn't line up, and sorts that looked unlike filters).
+- Rows share one grid (each a subgrid), so the builder sizes to its content (the view's popover is `content` wide, owner item 36) while the columns still line up; the lead is as wide as "Sort by". The handle shows only with two sorts or more (item 37). Remove is a ghost x, as the chip's; Add sort is a ghost button (item 43). The attribute menu lists the object's own attributes first and system ones after, under System.
 - A row drags by its handle (the library's drag wrapper, dnd-kit): the handle shows the grab cursor, the lifted row rises above the others (`shadow-md`) and they slide out of its way.
 - Add sort offers the attributes not sorted by yet, until there are five.
 - `isReadOnly` shows each sort in the same columns, as FilterBuilder's read only rows do: the type's icon and the attribute, then the direction in secondary text.
 
 ## States
 
-Empty ("No sorts yet", with Add sort), filled, a long name cut (whole in a tooltip), at five (no Add sort), read only. Loading and error don't apply: a view opens the builder once its attributes are in. Read only stands for disabled. A row being dragged fades; the drop target takes the inset ring. Focus is the inset ring on a row, the halo on a handle.
+Empty (one quiet line, "Newest records first", the order that runs, then Add sort), one sort (no handle), filled, a long name cut (whole in a tooltip), at five (no Add sort), read only. Loading and error don't apply: a view opens the builder once its attributes are in. Read only stands for disabled. A row being dragged fades; the drop target takes the inset ring. Focus is the inset ring on a row, the halo on a handle.
 
 ## Keyboard
 

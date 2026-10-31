@@ -78,7 +78,10 @@ describe('contrast (AC-4)', () => {
     expect(missed).toEqual([
       'light: control-border on surface-selected < 3.5',
       'light: control-border on accent-soft < 3.5',
+      // The lighter dark hover of 31 October 2026 (item 102) misses with the old values too.
+      'dark: control-border on surface-hover < 3.5',
       'dark: control-border on surface-selected < 3.5',
+      'dark: accent-line on surface-hover < 3',
       'dark: accent-line on surface-selected < 3',
     ]);
   });

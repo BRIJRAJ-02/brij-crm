@@ -55,9 +55,21 @@
     outline: none;
   }
 
-  /* The view's open search: wide enough for a name, never the whole bar. */
+  /* The view's search: compact beside Filter, wider while focused or holding text, never the whole bar. */
   .search {
     inline-size: calc(8 * var(--size-chip));
+    transition: inline-size var(--duration-move) var(--ease-out);
+  }
+
+  .search:focus-within,
+  .search[data-filled] {
+    inline-size: calc(12 * var(--size-chip));
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .search {
+      transition: none;
+    }
   }
 
   .end {

@@ -73,13 +73,12 @@ async function createView(page: Page, current: string, name: string, everyone: b
 async function toggleColumn(page: Page, column: string): Promise<void> {
   await page.getByRole('button', { name: 'View settings' }).click();
   const settings = page.getByRole('dialog', { name: 'View settings' });
-  const toggle = settings.getByRole('switch', { name: `Show ${column}` });
-  const wasOn = await toggle.isChecked();
-  // The switch's input is hidden under its label (the library's switch): press the label, as a person does.
-  await toggle.locator('xpath=ancestor::label[1]').click();
-  // The switch shows the change at once (the layout goes to the server behind it).
-  if (wasOn) await expect(toggle).not.toBeChecked();
-  else await expect(toggle).toBeChecked();
+  // Shown columns have Hide, hidden ones Show (31 October 2026, in place of a switch per column).
+  const hide = settings.getByRole('button', { name: `Hide ${column}` });
+  const wasOn = (await hide.count()) > 0;
+  await (wasOn ? hide : settings.getByRole('button', { name: `Show ${column}` })).click();
+  // The list shows the change at once (the layout goes to the server behind it).
+  await expect(settings.getByRole('button', { name: `${wasOn ? 'Show' : 'Hide'} ${column}` })).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(settings).toBeHidden();
 }

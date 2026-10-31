@@ -93,11 +93,11 @@ export const Default: Story = {
   },
 };
 
-/** No rules yet: a line says any value of the type is accepted, and Add rule offers the type's kinds. */
+/** No rules yet: no sentence, only Add rule (a quiet ghost button) offering the type's kinds, and the tip. */
 export const Empty: Story = {
   args: { initial: [] },
   play: async ({ canvas }) => {
-    await expect(canvas.getByText('No rules yet, so any value is accepted.')).toBeInTheDocument();
+    await expect(canvas.queryByText('No rules yet, so any value is accepted.')).toBeNull();
     await expect(canvas.getByRole('button', { name: 'About Rules' })).toBeInTheDocument();
     await expect(canvas.getByRole('button', { name: 'Add rule' })).toBeEnabled();
   },

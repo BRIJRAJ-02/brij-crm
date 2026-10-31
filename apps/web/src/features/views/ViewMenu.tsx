@@ -27,7 +27,6 @@ import {
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { duplicatesHref } from '../duplicates/paths.ts';
 import { strings as duplicateStrings } from '../duplicates/strings.ts';
-import { trashHref } from '../workspace/objects.ts';
 import { useId, useState, type ReactNode } from 'react';
 import { strings } from './strings.ts';
 
@@ -248,7 +247,6 @@ export function useViewMenu({
             id: 'who',
             label: strings.whoCanSee,
             icon: view.visibility === 'private' ? 'lock' : 'users',
-            startsGroup: true,
             choices: whoChoices,
             run: () => undefined,
           },
@@ -298,25 +296,10 @@ export function useViewMenu({
                 id: 'set-default',
                 label: strings.setDefault,
                 icon: 'star',
-                ...(sharing.length === 0 ? { startsGroup: true } : {}),
                 run: () => {
                   run(data.views.setDefault(slug, parentId, view.id));
                 },
               })),
-        ]
-      : []),
-    // Deleted records wait in the trash (spec 0022); a delete's toast has room for Undo only, so the way there is here.
-    ...(listId === undefined
-      ? [
-          {
-            id: 'open-trash',
-            label: strings.openTrash,
-            icon: 'trash' as const,
-            startsGroup: true,
-            run: () => {
-              void navigate({ href: `${trashHref(slug)}?object=${encodeURIComponent(object.id)}` });
-            },
-          },
         ]
       : []),
     // Likely duplicates of this object (spec 0049, AC-4907): a page of pairs to merge or dismiss.
@@ -332,12 +315,13 @@ export function useViewMenu({
           },
         ]
       : []),
-    ...entry(reasonFor('delete'), {
+    // Open trash moved to the object's own menu in the sidebar (owner item 52, 31 October 2026): the trash is the
+    // object's, not this view's. A Delete that can't run now is left out rather than shown with a sentence (item 53).
+    ...entry(reasonFor('delete') === undefined ? undefined : null, {
       id: 'delete',
       label: strings.deleteView,
       icon: 'trash',
       isDanger: true,
-      startsGroup: true,
       // One click, with Undo in its toast (the owner, 30 October 2026: Undo over a confirm).
       run: () => {
         remove();

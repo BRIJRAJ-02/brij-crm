@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
-import { expect, fn, screen, waitFor } from 'storybook/test';
+import { expect, fn, screen, waitFor, within } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Select } from '../../molecules/Select/SelectWithFaces.tsx';
 import { attributeOf } from '../../workbench/attributes.ts';
@@ -21,6 +21,8 @@ const MANY: readonly ViewField[] = [
     attribute: attributeOf('text', name),
     isShown: false,
   })),
+  { attribute: attributeOf('timestamp', 'Created at', { isSystem: true, isReadOnly: true }), isShown: false },
+  { attribute: attributeOf('text', 'Record ID', { isSystem: true, isReadOnly: true }), isShown: false },
 ];
 
 interface SampleProps {
@@ -95,24 +97,53 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** A switch per column; the name is always shown and stays first. */
+/** Shown in order with Hide on each, the name locked first; Hidden below with Show. */
 export const Default: Story = {
   parameters: { crm: { preview: true } },
   play: async ({ canvas }) => {
-    await expect(canvas.getByText('4 of 5 shown')).toBeInTheDocument();
-    await expect(canvas.getByText('Always shown')).toBeInTheDocument();
-    await expect(canvas.queryByRole('switch', { name: 'Show Name' })).not.toBeInTheDocument();
+    await expect(canvas.getByRole('grid', { name: 'Columns, shown' })).toBeInTheDocument();
+    await expect(canvas.getByRole('grid', { name: 'Columns, hidden' })).toBeInTheDocument();
+    await expect(canvas.getByRole('img', { name: 'Always shown' })).toBeInTheDocument();
+    await expect(canvas.queryByRole('button', { name: 'Hide Name' })).not.toBeInTheDocument();
+    await expect(canvas.queryAllByRole('switch')).toHaveLength(0);
   },
 };
 
-/** A switch shows or hides its column. */
+/** Show moves a column into Shown, at its place in the view; Hide moves it back. */
 export const ShowAndHide: Story = {
   args: { onChange: fn() },
   parameters: { crm: { screenshot: false } },
   play: async ({ args, canvas, userEvent }) => {
-    await userEvent.click(canvas.getByRole('switch', { name: 'Show ARR' }));
+    await userEvent.click(canvas.getByRole('button', { name: 'Show ARR' }));
     await expect(args.onChange).toHaveBeenCalled();
-    await expect(canvas.getByText('5 of 5 shown')).toBeInTheDocument();
+    await expect(canvas.queryByRole('grid', { name: 'Columns, hidden' })).not.toBeInTheDocument();
+    await userEvent.click(canvas.getByRole('button', { name: 'Hide Owner' }));
+    await expect(within(canvas.getByRole('grid', { name: 'Columns, hidden' })).getByText('Owner')).toBeInTheDocument();
+  },
+};
+
+/** Enter on a hidden row shows it, and focus stays in Hidden's place for the next one. */
+export const ShowByKeyboard: Story = {
+  args: { initial: MANY, onChange: fn() },
+  parameters: { crm: { screenshot: false } },
+  play: async ({ args, canvas, userEvent }) => {
+    const hidden = canvas.getByRole('grid', { name: 'Columns, hidden' });
+    const first = within(hidden).getAllByRole('row')[0];
+    if (first === undefined) throw new Error('No hidden rows');
+    first.focus();
+    await userEvent.keyboard('{Enter}');
+    await expect(args.onChange).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(within(hidden).getAllByRole('row')[0]).toHaveFocus());
+  },
+};
+
+/** System fields (Created at, Record ID) sit apart, under System, after the rest. */
+export const SystemFields: Story = {
+  args: { initial: MANY },
+  play: async ({ canvas }) => {
+    const system = canvas.getByRole('grid', { name: 'Columns, system' });
+    await expect(within(system).getAllByRole('row')).toHaveLength(2);
+    await expect(within(canvas.getByRole('grid', { name: 'Columns, hidden' })).queryByText('Record ID')).toBeNull();
   },
 };
 
@@ -148,22 +179,26 @@ export const ReorderByKeyboard: Story = {
   },
 };
 
-/** Past eight attributes, a search field narrows the list. */
+/** Past eight attributes, a search field ("Find a field") narrows every list; Esc clears it. */
 export const Search: Story = {
   args: { initial: MANY },
   parameters: { crm: { screenshot: false } },
   play: async ({ canvas, userEvent }) => {
-    await userEvent.type(canvas.getByLabelText('Search attributes'), 'reg');
+    const search = canvas.getByLabelText('Search attributes');
+    await expect(search).toHaveAttribute('placeholder', 'Find a field');
+    await userEvent.type(search, 'reg');
     await waitFor(() => expect(canvas.getAllByRole('row')).toHaveLength(1));
+    await userEvent.type(search, 'zzz');
+    await expect(canvas.getByText('No attributes match')).toBeInTheDocument();
   },
 };
 
-/** A view you can't edit: the switches are read only and there are no handles. */
+/** A view you can't edit: the lists show what is shown and hidden, with no Show, Hide or handles. */
 export const ReadOnly: Story = {
   args: { isReadOnly: true, onChange: fn() },
   play: async ({ args, canvas, userEvent }) => {
-    await expect(canvas.queryAllByRole('button', { name: /^Move / })).toHaveLength(0);
-    await userEvent.click(canvas.getByRole('switch', { name: 'Show ARR' }));
+    await expect(canvas.queryAllByRole('button', { name: /^(Move|Show|Hide) / })).toHaveLength(0);
+    await userEvent.click(within(canvas.getByRole('grid', { name: 'Columns, hidden' })).getByText('ARR'));
     await expect(args.onChange).not.toHaveBeenCalled();
   },
 };
@@ -198,17 +233,17 @@ export const WithFooter: Story = {
 };
 
 /**
- * A board's card fields: at most `maxShown` besides the name. The head counts against the limit, and at it the
- * hidden fields' switches are disabled until one is hidden.
+ * A board's card fields: at most `maxShown` besides the name. Shown counts against the limit, and at it the
+ * hidden fields can't be added until one is hidden.
  */
 export const AtTheLimit: Story = {
   args: { maxShown: 3 },
   play: async ({ canvas, userEvent }) => {
-    await expect(canvas.getByText('3 of 3 shown')).toBeInTheDocument();
-    await expect(canvas.getByRole('switch', { name: 'Show ARR' })).toBeDisabled();
-    await userEvent.click(canvas.getByRole('switch', { name: 'Show Owner' }));
-    await expect(canvas.getByText('2 of 3 shown')).toBeInTheDocument();
-    await expect(canvas.getByRole('switch', { name: 'Show ARR' })).toBeEnabled();
+    await expect(canvas.getByText('3 of 3')).toBeInTheDocument();
+    await expect(canvas.getByRole('button', { name: 'Show ARR' })).toBeDisabled();
+    await userEvent.click(canvas.getByRole('button', { name: 'Hide Owner' }));
+    await expect(canvas.getByText('2 of 3')).toBeInTheDocument();
+    await expect(canvas.getByRole('button', { name: 'Show ARR' })).toBeEnabled();
   },
 };
 

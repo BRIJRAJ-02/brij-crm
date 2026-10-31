@@ -26,8 +26,18 @@ export const strings = {
   noValues: 'No values to convert.',
   allConvert: (count: string, n: number) => (n === 1 ? 'Its 1 value converts.' : `All ${count} values convert.`),
   name: 'Name',
+  /** The name's example while creating (owner item 93). */
+  namePlaceholder: 'e.g. Industry',
   nameMissing: 'Name the attribute.',
   type: 'Type',
+  /** The type picker's headings while creating (owner item 92). */
+  typeGroups: {
+    basic: 'Basic',
+    contact: 'Contact',
+    choice: 'Choice',
+    relation: 'Relation',
+    computed: 'Computed',
+  },
   /** Under the type while creating, for the types whose name alone doesn't say what they hold. */
   typeHints: {
     status: 'Pipeline stages, one per record.',
@@ -49,7 +59,10 @@ export const strings = {
   moreSettings: 'More settings',
   description: 'Description',
   required: 'Required',
+  /** Required's and Unique's few words (owner item 96). */
+  requiredHint: 'Can’t be left empty',
   unique: 'Unique',
+  uniqueHint: 'No two records share it',
   allowMultiple: 'Allow multiple',
   allowMultipleLocked: 'Set when the attribute was made.',
   defaultValue: 'Default value',

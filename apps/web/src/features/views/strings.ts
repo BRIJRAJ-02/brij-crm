@@ -1,7 +1,6 @@
 /** The view screen's copy (spec 0020). */
 export const strings = {
   /** The view menu's way to the trash, filtered to this object. */
-  openTrash: 'Open trash',
   toolbar: 'View options',
   sort: 'Sort',
   filter: 'Filter',

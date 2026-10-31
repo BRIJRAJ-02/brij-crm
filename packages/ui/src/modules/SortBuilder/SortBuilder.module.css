@@ -1,44 +1,47 @@
-/* SortBuilder: a list of size-input tall rows, space-4 apart, laid out as
-   FilterBuilder's rows are: the drag handle, the lead ("Sort by" or "then
-   by") in FilterBuilder's lead width, then the attribute and the direction
-   at fixed widths (shrinking together in a narrow slot), so the rows line up
-   as columns, then Remove. A row drags by its handle or anywhere on it: the
-   grab cursor says so. A row being dragged fades; the drop line is the
+/* SortBuilder: rows space-4 apart sharing one grid (each row a subgrid), so
+   the columns line up and the whole builder sizes to its content (owner
+   items 36 to 38, 31 October 2026): the drag handle (only with two sorts or
+   more), the lead ("Sort by" or "then by") at its own width, then the
+   attribute and the direction up to fixed widths (shrinking together in a
+   narrow slot), then Remove. A row being dragged lifts; the drop line is the
    accent. */
 @layer components {
   .root {
     display: flex;
     flex-direction: column;
     gap: var(--space-8);
-    min-inline-size: 0;
+    min-inline-size: var(--size-menu);
   }
 
   .list {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-4);
+    display: grid;
+    grid-template-columns:
+      max-content minmax(0, calc(10 * var(--size-chip)))
+      minmax(0, calc(7 * var(--size-chip))) auto;
+    gap: var(--space-4) var(--space-8);
+    align-items: center;
     outline: none;
+  }
+
+  .listMovable {
+    grid-template-columns:
+      auto max-content minmax(0, calc(10 * var(--size-chip)))
+      minmax(0, calc(7 * var(--size-chip))) auto;
+  }
+
+  .listReadOnly {
+    grid-template-columns: max-content minmax(0, calc(10 * var(--size-chip))) minmax(0, calc(7 * var(--size-chip)));
   }
 
   .row {
     display: grid;
-    grid-template-columns:
-      auto calc(4 * var(--size-chip)) minmax(0, calc(10 * var(--size-chip)))
-      minmax(0, calc(7 * var(--size-chip))) auto;
-    gap: var(--space-8);
+    grid-column: 1 / -1;
+    grid-template-columns: subgrid;
     align-items: center;
-    justify-content: start;
     min-block-size: var(--size-input);
     padding-inline: calc(var(--popover-text-inset) - var(--popover-panel-inset));
     border-radius: var(--radius-sm);
     outline: none;
-  }
-
-  /* Read only: no handle, so the lead, attribute and direction keep their columns' widths from the start. */
-  .readOnly {
-    grid-template-columns:
-      calc(4 * var(--size-chip)) minmax(0, calc(10 * var(--size-chip)))
-      minmax(0, calc(7 * var(--size-chip)));
   }
 
   /* The row being moved (the drag wrapper sets data-dragging): lifted above the rest, which slide out of its way. */

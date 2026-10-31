@@ -151,7 +151,7 @@ test.describe('saved views', () => {
     await expect(page.getByRole('radio', { name: 'Board' })).toBeChecked();
     await settings.click();
     const dialog = page.getByRole('dialog', { name: 'View settings' });
-    await expect(dialog.getByRole('grid', { name: 'Card fields' })).toBeVisible();
+    await expect(dialog.getByRole('grid', { name: 'Card fields, shown' })).toBeVisible();
     await dialog.getByRole('button', { name: 'Add attribute' }).click();
     const addDialog = page.getByRole('dialog', { name: 'New attribute' });
     await expect(addDialog).toBeVisible();

@@ -220,7 +220,8 @@ export function ViewToolbar({
           ? {
               end: (
                 <>
-                  <Button variant="ghost" onPress={onDiscard} isDisabled={isSaving}>
+                  {/* A real button beside Save, not grey text (owner item 41). */}
+                  <Button icon="undo-2" onPress={onDiscard} isDisabled={isSaving}>
                     {strings.discard}
                   </Button>
                   {canSave ? (
@@ -319,11 +320,11 @@ export function ViewToolbar({
           if (!isOpen) setSortEdited(false);
         }}
         label={strings.sorts}
-        width="builder"
+        // Sized to its rows (owner item 36): one sort is a short row, not a wide empty panel.
       >
         <SortBuilder
           attributes={sortFields}
-          // The default order opens the builder empty, where it says "Newest records show first." (the order that
+          // The default order opens the builder empty, where it says "Newest records first" (the order that
           // runs), so Add sort starts a sort of its own rather than adding after a Created at nobody chose.
           value={isDefaultOrder && !isSortEdited ? [] : query.sorts}
           onChange={(sorts) => {

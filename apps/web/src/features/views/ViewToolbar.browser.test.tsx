@@ -91,7 +91,7 @@ describe('the view bar sort chip', () => {
   it('opens the Sort builder on the default that runs, and Add sort starts a sort of its own', async () => {
     await render(DEFAULT);
     await userEvent.click(page.getByRole('button', { name: 'Sorted by Created at' }));
-    await expect.element(page.getByText('Newest records show first.')).toBeVisible();
+    await expect.element(page.getByText('Newest records first')).toBeVisible();
     await userEvent.click(page.getByRole('button', { name: 'Add sort' }));
     await userEvent.click(page.getByRole('menuitem', { name: 'Name' }));
     // One sort, the new one: the chip says it alone, with no "+1" for a Created at nobody chose.

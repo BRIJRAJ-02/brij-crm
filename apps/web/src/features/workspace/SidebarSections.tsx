@@ -14,10 +14,12 @@ import type {
   ObjectSummary,
 } from '@crm/data';
 import { moveIndexFor, navKey, sectionOrder } from '@crm/data/navigation';
-import { Menu, MenuItem, NavGroup, NavItem, NavSection, type Toasts } from '@crm/ui';
-import { useLocation } from '@tanstack/react-router';
-import { objectHref } from './objects.ts';
+import { Menu, MenuItem, MenuSeparator, NavGroup, NavItem, NavSection, sharedStrings, type Toasts } from '@crm/ui';
+import { useLocation, useNavigate } from '@tanstack/react-router';
+import type { ReactElement } from 'react';
+import { objectHref, trashHref } from './objects.ts';
 import { listHref } from '../lists/paths.ts';
+import { listSettingsHref, objectSettingsHref } from '../settings/nav.ts';
 import { strings as listStrings } from '../lists/strings.ts';
 import { drawnSections, PAGE_LINKS, prefsOf, sectionMoveIndex, type SidebarPage } from './sidebar.ts';
 import { strings } from './strings.ts';
@@ -101,8 +103,94 @@ export function SidebarSections({
     const href = listHref(slug, list);
     return path === href || path.startsWith(`${href}/`);
   })?.id;
+  const navigate = useNavigate();
+  // A row's own menu (owner item 90): its settings (where its name and icon change), its link, a new tab, its trash,
+  // and Hide from sidebar last, apart. Each item does what it says, so no Rename that only opens a page.
+  const go = (href: string) => {
+    void navigate({ href });
+  };
+  const copyLink = (href: string) => {
+    // No clipboard outside a secure context: say so rather than throw.
+    if (typeof navigator.clipboard === 'undefined') {
+      toasts.toast({ tone: 'danger', message: sharedStrings.couldntCopy });
+      return;
+    }
+    navigator.clipboard.writeText(new URL(href, window.location.origin).href).then(
+      () => {
+        toasts.toast({ tone: 'success', message: strings.linkCopied });
+      },
+      () => {
+        toasts.toast({ tone: 'danger', message: sharedStrings.couldntCopy });
+      },
+    );
+  };
+  const openInNewTab = (href: string) => {
+    window.open(href, '_blank', 'noopener');
+  };
+  const objectMenu = (object: ObjectSummary) => {
+    const href = objectHref(slug, object);
+    return (
+      <Menu
+        label={strings.itemOptions(object.pluralName)}
+        onAction={(key) => {
+          if (key === 'settings') go(objectSettingsHref(slug, object, 'configuration'));
+          if (key === 'copy') copyLink(href);
+          if (key === 'tab') openInNewTab(href);
+          if (key === 'trash') go(`${trashHref(slug)}?object=${encodeURIComponent(object.id)}`);
+          if (key === 'hide') hideObject(object);
+        }}
+      >
+        <MenuItem id="settings" icon="settings">
+          {strings.objectSettings}
+        </MenuItem>
+        <MenuItem id="copy" icon="link">
+          {strings.copyLink}
+        </MenuItem>
+        <MenuItem id="tab" icon="external-link">
+          {strings.openInNewTab}
+        </MenuItem>
+        <MenuItem id="trash" icon="archive-restore">
+          {strings.openTrash}
+        </MenuItem>
+        <MenuSeparator />
+        <MenuItem id="hide" icon="eye-off">
+          {strings.hideFromSidebar}
+        </MenuItem>
+      </Menu>
+    );
+  };
+  const listMenu = (list: ListView) => {
+    const href = listHref(slug, list);
+    return (
+      <Menu
+        label={strings.itemOptions(list.name)}
+        onAction={(key) => {
+          if (key === 'settings') go(listSettingsHref(slug, list));
+          if (key === 'copy') copyLink(href);
+          if (key === 'tab') openInNewTab(href);
+          if (key === 'hide') hideList(list);
+        }}
+      >
+        <MenuItem id="settings" icon="settings">
+          {strings.listSettings}
+        </MenuItem>
+        <MenuItem id="copy" icon="link">
+          {strings.copyLink}
+        </MenuItem>
+        <MenuItem id="tab" icon="external-link">
+          {strings.openInNewTab}
+        </MenuItem>
+        <MenuSeparator />
+        <MenuItem id="hide" icon="eye-off">
+          {strings.hideFromSidebar}
+        </MenuItem>
+      </Menu>
+    );
+  };
   const context: ItemContext = {
     slug,
+    objectMenu,
+    listMenu,
     objectOf,
     listOf,
     currentObject,
@@ -201,6 +289,8 @@ export function itemMenu(name: string, label: string, onAction: () => void) {
 /** What an item needs to draw itself. */
 interface ItemContext {
   readonly slug: string;
+  readonly objectMenu: (object: ObjectSummary) => ReactElement;
+  readonly listMenu: (list: ListView) => ReactElement;
   readonly objectOf: ReadonlyMap<string, ObjectSummary>;
   readonly listOf: ReadonlyMap<string, ListView>;
   readonly currentObject: string | undefined;
@@ -214,7 +304,7 @@ interface ItemContext {
 /** One entry as its NavItem: an object or a Scheduling page; nothing it can't draw. */
 function itemOf(
   entry: NavEntry,
-  { slug, objectOf, listOf, currentObject, currentList, currentPage, change, hideObject, hideList }: ItemContext,
+  { slug, objectOf, listOf, currentObject, currentList, currentPage, change, objectMenu, listMenu }: ItemContext,
 ) {
   const key = navKey(entry);
   const hide = () => {
@@ -231,9 +321,7 @@ function itemOf(
         hue={object.hue}
         href={objectHref(slug, object)}
         isCurrent={object.apiSlug === currentObject}
-        menu={itemMenu(object.pluralName, strings.hideFromSidebar, () => {
-          hideObject(object);
-        })}
+        menu={objectMenu(object)}
       >
         {object.pluralName}
       </NavItem>,
@@ -266,9 +354,7 @@ function itemOf(
         hue={list.hue}
         href={listHref(slug, list)}
         isCurrent={list.id === currentList}
-        menu={itemMenu(list.name, strings.hideFromSidebar, () => {
-          hideList(list);
-        })}
+        menu={listMenu(list)}
       >
         {list.name}
       </NavItem>,

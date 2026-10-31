@@ -55,6 +55,8 @@ export interface FieldAttribute {
    */
   readonly isRequiredOnSubmit?: boolean;
   readonly isUnique: boolean;
+  /** Kept by the system (Record ID, Created at, Updated by): pickers list it apart, under System, after the rest. */
+  readonly isSystem?: boolean;
   readonly isReadOnly: boolean;
   readonly readOnlyReason?: string;
   /** A formula, rollup or lookup: the system works it out, people never edit it. */

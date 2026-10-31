@@ -31,6 +31,8 @@ export interface FieldAttributeShape {
   readonly allowMultiple: boolean;
   readonly isRequired: boolean;
   readonly isUnique: boolean;
+  /** Kept by the system (Record ID, Created at): pickers list it apart, after the rest. */
+  readonly isSystem?: boolean;
   readonly isReadOnly: boolean;
   readonly readOnlyReason?: string;
   readonly cardinality?: 'one' | 'many';
@@ -110,6 +112,7 @@ export function toFieldAttribute(
     allowMultiple: definition.isMulti,
     isRequired: definition.isRequired,
     isUnique: definition.isUnique,
+    ...(definition.isSystem ? { isSystem: true } : {}),
     isReadOnly: definition.isSystem || isReference || ruled !== undefined,
     ...(reason === undefined ? {} : { readOnlyReason: reason }),
     ...(definition.type === 'record_reference' ? { cardinality: definition.isMulti ? 'many' : 'one' } : {}),
