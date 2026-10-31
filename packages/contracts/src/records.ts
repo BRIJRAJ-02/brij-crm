@@ -4,6 +4,7 @@
 import { oc } from '@orpc/contract';
 import * as z from 'zod';
 import { RecordActivity, RecordActivityInput } from './activity.ts';
+import { duplicatesContract } from './duplicates.ts';
 import { ApiRefusal } from './errors.ts';
 import { ActorReferenceValue, Timestamp } from './values/attribute-values.ts';
 import {
@@ -713,4 +714,6 @@ export const recordsContract = {
   // Merging two records (spec 0049): a read only preview for the dialog, then the merge itself.
   mergePreview: oc.input(MergePreviewInput).output(MergePreview),
   merge: oc.input(MergeRecordsInput).output(MergedRecord),
+  /** Likely duplicates (spec 0049). */
+  duplicates: duplicatesContract,
 };

@@ -81,6 +81,7 @@ import { RecordLists } from '../lists/RecordLists.tsx';
 import { strings as listStrings } from '../lists/strings.ts';
 import { RecordActions } from './RecordActions.tsx';
 import { RecordDetails } from './RecordDetails.tsx';
+import { RecordDuplicateBanner } from '../duplicates/RecordDuplicateBanner.tsx';
 import { PendingRelatedCard, RelatedCards, RelatedSections, type RelatedSource } from './RelatedSections.tsx';
 import { strings } from './strings.ts';
 import { recordLinks } from './timeline.ts';
@@ -920,6 +921,9 @@ function RecordScreen({
         {strings.noLongerAvailable(object.singularName)}
       </Callout>
     );
+  } else {
+    // Likely duplicates (spec 0049, AC-4906): nothing shows until a pair arrives.
+    notice = <RecordDuplicateBanner slug={slug} object={object} record={shown} attributes={attributes} />;
   }
 
   return (
@@ -981,7 +985,7 @@ function RecordScreen({
               sidebarLabel={strings.details}
               isSidebarExpanded={isSidebarExpanded}
               onSidebarExpandedChange={setSidebarExpanded}
-              {...(notice === undefined ? {} : { notice })}
+              notice={notice}
               sidebar={
                 <>
                   <RecordDetails

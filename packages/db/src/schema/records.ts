@@ -330,6 +330,11 @@ export const values = pgTable(
     jsonValue: jsonb('json_value'),
     uniqueKey: text('unique_key'),
     heldUniqueKey: text('held_unique_key'),
+    /**
+     * A record's name, email or domain item as likely duplicates compare it (spec 0049, AC-4902):
+     * `crm_match_key(crm_match_kind(attribute), text_value)`, written with the row. Null for every other value.
+     */
+    matchKey: text('match_key'),
     activeFrom: timestamptz('active_from').notNull(),
     activeUntil: timestamptz('active_until'),
     setByType: setBy.type.notNull(),
@@ -409,6 +414,10 @@ export const values = pgTable(
     uniqueIndex('values_unique')
       .on(t.workspaceId, t.attributeId, t.uniqueKey)
       .where(sql`${t.activeUntil} is null and ${t.uniqueKey} is not null`),
+    // Likely duplicates (spec 0049): one record's name, email or domain to the records holding the same key.
+    index('values_match')
+      .on(t.workspaceId, t.attributeId, t.matchKey, t.ownerId)
+      .where(sql`${t.activeUntil} is null and ${t.matchKey} is not null`),
     // As of reads and history.
     index('values_history').on(t.workspaceId, t.ownerId, t.attributeId, t.activeFrom),
     // The foreign key checks when a purge or an erasure deletes records and entries: one lookup each, not a scan.

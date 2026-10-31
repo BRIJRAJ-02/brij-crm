@@ -117,6 +117,9 @@ const READS: ReadonlySet<string> = new Set([
   'records.stageSince',
   'records.getTrashed',
   'records.search',
+  'records.duplicates.check',
+  'records.duplicates.list',
+  'imports.duplicates',
   // A record page's related section (spec 0014, milestone 3): one side's linked records, a page at a time.
   'links.page',
   'realtime.connectionToken',
@@ -994,6 +997,37 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
       mutationId,
     });
     return [{ kind: 'records', object_id: m.people.id, record_ids: [id], mutation_id: mutationId }];
+  },
+  // "Not a duplicate" and its Undo (spec 0049): a dismissal row and an audit row, no outbox row of their own.
+  'records.duplicates.dismiss': async (m, mutationId) => {
+    const ids: [string, string] = [newId(), newId()];
+    for (const id of ids) {
+      await m.client.records.create({
+        workspace: m.slug,
+        objectId: m.people.id,
+        id,
+        values: { [m.attribute('name')]: { firstName: 'Ada' } },
+        mutationId: newId(),
+      });
+    }
+    await m.client.records.duplicates.dismiss({ workspace: m.slug, objectId: m.people.id, recordIds: ids, mutationId });
+    return ids.map((id) => ({ kind: 'records', object_id: m.people.id, record_ids: [id] }));
+  },
+  'records.duplicates.restore': async (m, mutationId) => {
+    const ids: [string, string] = [newId(), newId()];
+    for (const id of ids) {
+      await m.client.records.create({
+        workspace: m.slug,
+        objectId: m.people.id,
+        id,
+        values: { [m.attribute('name')]: { firstName: 'Ada' } },
+        mutationId: newId(),
+      });
+    }
+    const pair = { workspace: m.slug, objectId: m.people.id, recordIds: ids };
+    await m.client.records.duplicates.dismiss({ ...pair, mutationId: newId() });
+    await m.client.records.duplicates.restore({ ...pair, mutationId });
+    return ids.map((id) => ({ kind: 'records', object_id: m.people.id, record_ids: [id] }));
   },
   'records.setValues': async (m, mutationId) => {
     const id = newId();
@@ -2675,6 +2709,8 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'views.setLocked': 2,
   'views.setDefault': 2,
   'views.delete': 2,
+  'records.duplicates.dismiss': 3,
+  'records.duplicates.restore': 4,
   'records.setValues': 2,
   'records.setValuesBatch': 3,
   'records.deleteMany': 2,

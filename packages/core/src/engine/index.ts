@@ -123,6 +123,15 @@ export {
   type SearchInput,
   type SearchResult,
 } from './record-search.ts';
+export {
+  checkDuplicates,
+  dismissPair,
+  listDuplicates,
+  restorePair,
+  type DuplicateMatchView,
+  type DuplicatePairPage,
+  type DuplicatePairView,
+} from './duplicates.ts';
 export { outboxEvents, outboxHook, type OutboxEvent, type OutboxHookOptions } from './outbox.ts';
 export {
   inputInvalid,

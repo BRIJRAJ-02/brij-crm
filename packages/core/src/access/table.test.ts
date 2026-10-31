@@ -1279,6 +1279,25 @@ const DATA_CASES: Readonly<Record<string, DataCase>> = {
       contentType: 'application/pdf',
     }),
   ),
+  // Likely duplicates (spec 0049): an object the reader can't see is absent; one they only read can't dismiss.
+  checkDuplicates: refused('NOT_FOUND', (scope, world) =>
+    core.checkDuplicates(scope, { objectId: world.people, values: {} }),
+  ),
+  listDuplicates: refused('NOT_FOUND', (scope, world) => core.listDuplicates(scope, { objectId: world.people })),
+  dismissPair: refused('FORBIDDEN', async (scope, world) => {
+    const other = await core.createRecord(world.owner, {
+      objectId: world.people,
+      values: { [world.name]: { firstName: 'Bob' } },
+    });
+    return core.dismissPair(scope, { objectId: world.people, recordIds: [world.recordId, other.recordId] });
+  }),
+  restorePair: refused('FORBIDDEN', async (scope, world) => {
+    const other = await core.createRecord(world.owner, {
+      objectId: world.people,
+      values: { [world.name]: { firstName: 'Bob' } },
+    });
+    return core.restorePair(scope, { objectId: world.people, recordIds: [world.recordId, other.recordId] });
+  }),
   // The record picker's search (spec 0014): an object the reader can't see is absent.
   searchRecords: refused('NOT_FOUND', (scope, world) =>
     core.searchRecords(scope, { objectId: world.people, query: '' }),
@@ -1429,6 +1448,9 @@ const DATA_CASES: Readonly<Record<string, DataCase>> = {
   ),
   checkImportLinks: refused('FORBIDDEN', (scope, world) =>
     core.checkImportLinks(scope, { objectId: world.people, attributeId: world.name, names: ['Acme'] }),
+  ),
+  checkImportDuplicates: refused('FORBIDDEN', (scope, world) =>
+    core.checkImportDuplicates(scope, { objectId: world.people, rows: [{ name: { firstName: 'Ada' } }] }),
   ),
   checkImportMatches: refused('FORBIDDEN', (scope, world) =>
     core.checkImportMatches(scope, { objectId: world.people, attributeId: world.name, values: ['ada@example.com'] }),

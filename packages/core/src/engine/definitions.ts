@@ -27,6 +27,7 @@ import { checkHue, checkLabel, checkTarget, hasStageSettings, type OptionOutcome
 import { isRefusal, postgresError, refuse, refuseOn } from './refusals.ts';
 import { actorRow, type EngineScope } from './scope.ts';
 import { clearUniqueKeys, fillUniqueKeys, UNIQUE_TYPES } from './unique.ts';
+import { rekeyMatches } from './match-keys.ts';
 import { ARCHIVED_BY, isArchivedNow, loadAttribute, type AttributeDef } from './values.ts';
 import { runWrite, type AfterWrite, type WriteContext } from './write.ts';
 import { writeRules } from '../validation/rules.ts';
@@ -1430,6 +1431,11 @@ export async function updateObject(scope: EngineScope, input: ObjectUpdate, hook
       if (object === undefined) throw refuse('NOT_FOUND', 'That object does not exist.');
       // The old name stops being filled at bookings: refused when that leaves a live page's guests out of the CRM.
       if (named?.before !== undefined) await checkStillFilled(tx, context.scope.access, named.before);
+      // Likely duplicates key an object's name (spec 0049): the old name stops matching, the new one starts.
+      if (named !== undefined) {
+        if (named.before !== undefined) await rekeyMatches(tx, named.before.id);
+        await rekeyMatches(tx, named.attribute.id);
+      }
       // Every record's name changes with a new name attribute: a whole object change, so every tab reads the
       // objects again, and the data layer then reads the records it holds again wherever their names show.
       context.record({ definitions: [{ objectId: object.id, attributeIds: [] }] });

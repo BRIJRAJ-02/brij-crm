@@ -13,6 +13,7 @@ import { ExportIdInput } from './forms/forms.ts';
 import { TRANSFER_LIMITS } from './transfer-limits.ts';
 import { Uuid, uuidV7 } from './values/ids.ts';
 import { FilterGroup } from './values/filters.ts';
+import { RecordRefDisplay } from './values/options.ts';
 import { SortRules } from './values/sorts.ts';
 import { WorkspaceScoped } from './workspaces.ts';
 
@@ -174,6 +175,25 @@ export const ImportMatches = z.object({
 /** Which values name a record. */
 export type ImportMatches = z.infer<typeof ImportMatches>;
 
+/**
+ * A file's create rows, to say before the start which look like existing records (spec 0049, AC-4918): the import's
+ * object, and per row its name cell's value in the name attribute's shape and, on People, its Company cell as typed.
+ */
+export const ImportDuplicatesInput = WorkspaceScoped.extend({
+  objectId: Uuid,
+  rows: z
+    .array(z.object({ name: z.unknown(), company: z.string().trim().min(1).max(500).optional() }))
+    .min(1)
+    .max(IMPORT_MATCHES_PAGE),
+});
+/** Create rows to check for likely duplicates. */
+export type ImportDuplicatesInput = z.infer<typeof ImportDuplicatesInput>;
+
+/** Per row asked about, in order: the live record it looks like, as a chip shows it, when the member can read one. */
+export const ImportDuplicates = z.object({ rows: z.array(z.object({ match: RecordRefDisplay.optional() })) });
+/** Which create rows look like existing records. */
+export type ImportDuplicates = z.infer<typeof ImportDuplicates>;
+
 /** Where an import is: rows arriving, its job started, or taken back. */
 export const ImportStatus = z.enum(['staging', 'started', 'undone']);
 /** Where an import is. */
@@ -311,6 +331,8 @@ export const importsContract = {
   undo: oc.input(ImportWriteInput).output(ImportView),
   links: oc.input(ImportLinksInput).output(ImportLinks),
   matches: oc.input(ImportMatchesInput).output(ImportMatches),
+  /** The preview's likely duplicates (spec 0049, AC-4918). */
+  duplicates: oc.input(ImportDuplicatesInput).output(ImportDuplicates),
 };
 
 /**

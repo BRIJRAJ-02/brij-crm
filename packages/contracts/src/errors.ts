@@ -156,6 +156,8 @@ export const ApiRefusal = z.object({
   field: z.string().optional(),
   /** The rule a `VALIDATION_FAILED` refusal is about (spec 0013). */
   ruleId: z.string().optional(),
+  /** The record a `UNIQUE_CONFLICT` value belongs to, when the writer may see it (spec 0049, AC-4905). */
+  holder: z.object({ recordId: z.string(), objectId: z.string(), name: z.string() }).optional(),
 });
 /** One engine refusal inside an error's data. */
 export type ApiRefusal = z.infer<typeof ApiRefusal>;

@@ -55,6 +55,7 @@ export * from './activity.ts';
 export * from './attributes.ts';
 export * from './audit.ts';
 export * from './board-model.ts';
+export * from './duplicates.ts';
 export * from './booking/index.ts';
 export * from './booking/blocks.ts';
 export * from './booking/pages.ts';

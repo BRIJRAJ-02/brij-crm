@@ -1,6 +1,6 @@
 import type { AttributeDefinition } from '@crm/data';
 import { describe, expect, it } from 'vitest';
-import { applyLabels, cellGroups, labelKey, rowPlan, type LabelChoice } from './review.ts';
+import { applyLabels, cellGroups, createdRows, firstName, labelKey, rowPlan, type LabelChoice } from './review.ts';
 
 type SelectLike = Pick<AttributeDefinition, 'type' | 'isMulti' | 'options'>;
 const options: AttributeDefinition['options'] = [
@@ -73,5 +73,24 @@ describe('rowPlan', () => {
 
   it('counts every row new with no lookup (no match attribute)', () => {
     expect(rowPlan(rows, undefined, 'fill', 'create')).toEqual({ created: 4, updated: 0, skipped: 0 });
+  });
+});
+
+describe('createdRows (spec 0049, AC-4918)', () => {
+  const ready = [{ rowNumber: 2 }, { rowNumber: 3 }, { rowNumber: 4 }];
+  it('keeps the rows the plan creates: no match, no earlier row’s key, not skipped', () => {
+    const answers = [
+      { keys: ['a'], matched: false },
+      { keys: ['a'], matched: false },
+      { keys: ['b'], matched: true },
+    ];
+    expect(createdRows(ready, answers, 'create')).toEqual([0]);
+    expect(createdRows(ready, undefined, 'create')).toEqual([0, 1, 2]);
+    expect(createdRows(ready, answers, 'skip')).toEqual([]);
+  });
+  it('reads a relation cell’s first name', () => {
+    expect(firstName({ names: [' Acme ', 'Globex'] })).toBe('Acme');
+    expect(firstName({ names: [] })).toBeUndefined();
+    expect(firstName('Acme')).toBeUndefined();
   });
 });

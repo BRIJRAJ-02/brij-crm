@@ -133,3 +133,34 @@ export function rowPlan(
   });
   return { created, updated, skipped };
 }
+
+/**
+ * Which ready rows the import will create, by their index among the ready rows, as `rowPlan` counts them: a row
+ * that finds no record (nor an earlier row's key) and isn't skipped. The preview checks only these against the
+ * object's records for likely duplicates (spec 0049, AC-4918).
+ */
+export function createdRows(
+  ready: readonly Pick<StagedRow, 'rowNumber'>[],
+  answers: readonly RowMatch[] | undefined,
+  onNoMatch: ImportOnNoMatch,
+): readonly number[] {
+  if (answers === undefined) return ready.map((_, index) => index);
+  const made = new Set<string>();
+  const created: number[] = [];
+  ready.forEach((_, index) => {
+    const answer = answers[index] ?? { keys: [], matched: false };
+    if (answer.matched || answer.keys.some((key) => made.has(key)) || onNoMatch === 'skip') return;
+    created.push(index);
+    for (const key of answer.keys) made.add(key);
+  });
+  return created;
+}
+
+/** A relation cell's first name, as staged (`{ names }`), for a person's Company. */
+export function firstName(value: unknown): string | undefined {
+  if (typeof value !== 'object' || value === null || !('names' in value) || !Array.isArray(value.names)) {
+    return undefined;
+  }
+  const [first] = value.names as unknown[];
+  return typeof first === 'string' && first.trim() !== '' ? first.trim() : undefined;
+}

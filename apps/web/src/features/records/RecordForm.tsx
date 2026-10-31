@@ -67,6 +67,7 @@ export function useRecordForm(slug: string): { readonly open: OpenRecordForm; re
         singularName={object.singularName}
         objectKey={object.standardKey ?? object.apiSlug}
         objectId={object.id}
+        objectSlug={object.apiSlug}
         memberPicker={memberPicker}
         {...(primary === undefined || name === undefined ? {} : { preset: { [primary.id]: name } })}
         onCreated={(record) => {
