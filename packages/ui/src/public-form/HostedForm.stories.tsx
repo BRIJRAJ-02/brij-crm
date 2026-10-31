@@ -1,6 +1,7 @@
 import { formStrings, type PublicForm } from '@crm/contracts/forms';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, waitFor } from 'storybook/test';
+import { settleAnimations } from '../workbench/animations.ts';
 import { Stage } from '../workbench/Stage/Stage.tsx';
 import { FormLoading, HostedForm } from './HostedForm.tsx';
 
@@ -210,17 +211,25 @@ export const Failed: Story = {
   },
 };
 
-/** The thank you replaces the form, with focus on its heading; Send another starts again. */
+/**
+ * The thank you replaces the form, with focus on its heading: what was sent, read back (spec 0058, AC-19), then one
+ * next step, Send another, which starts again.
+ */
 export const Thanks: Story = {
   args: {
     onSubmit: () => Promise.resolve({ kind: 'done' as const, next: { kind: 'message' as const, text: '' } }),
   },
-  play: async ({ canvas }) => {
+  play: async ({ canvas, canvasElement }) => {
     await userEvent.type(canvas.getByLabelText('Your name'), 'Ada Lovelace');
     await userEvent.type(canvas.getByLabelText('Work email'), 'ada@example.com');
     await userEvent.click(canvas.getByRole('button', { name: 'Send' }));
     await waitFor(() => expect(canvas.getByRole('heading', { name: 'Thank you. That is with us.' })).toHaveFocus());
-    await expect(canvas.getByText('We will come back to you at the address you gave.')).toBeInTheDocument();
+    await settleAnimations();
+    await expect(canvas.getByText('We will come back to you at the address you gave.')).toBeVisible();
+    // Only what was answered: the empty phone and size are left out.
+    await expect(canvasElement.querySelector('dl')).toHaveTextContent('Your nameAda LovelaceWork emailada@example.com');
+    // One next step, and only one.
+    await expect(canvas.getAllByRole('button').map((button) => button.textContent)).toEqual(['Send another']);
   },
 };
 
@@ -270,7 +279,10 @@ const booking = (seconds: number) => () =>
     next: { kind: 'booking' as const, url: '/b/intro-call?p=token', countdownSeconds: seconds, text: '' },
   });
 
-/** Sent, and on to book: "Taking you to book a time in 30…" with the ring draining, Book now and Stay here (AC-1059). */
+/**
+ * Sent, and on to book: what was sent read back (spec 0058, AC-19), Book a time with a quiet Stay here, then "Taking
+ * you to book a time in 30…" with the ring draining (AC-1059).
+ */
 export const BookAfter: Story = {
   // The ring and the number move with time, so no screenshot.
   parameters: { crm: { screenshot: false } },
@@ -280,7 +292,8 @@ export const BookAfter: Story = {
     await userEvent.type(canvas.getByLabelText('Work email'), 'ada@example.com');
     await userEvent.click(canvas.getByRole('button', { name: 'Send' }));
     await waitFor(() => expect(canvas.getByRole('heading', { name: 'Thank you. That is with us.' })).toHaveFocus());
-    await expect(canvas.getByRole('button', { name: 'Book now' })).toBeInTheDocument();
+    await expect(canvas.getByRole('button', { name: 'Book a time' })).toBeInTheDocument();
+    await expect(canvas.getByText('ada@example.com')).toBeInTheDocument();
     await expect(args.onRedirect).not.toHaveBeenCalled();
   },
 };
@@ -384,7 +397,7 @@ export const BrandedDark: Story = {
 /** A live form's read names its logo by version, and the form draws it from its own key's route (AC-4). */
 export const BrandFromRead: Story = {
   parameters: { crm: { screenshot: false } },
-  args: { form: { ...LEAD, key: 'AbCdEfGhIjKlMnOp', brand: { logo: '0123456789ab' } } },
+  args: { form: { ...LEAD, key: 'project-enquiry', brand: { logo: '0123456789ab' } } },
   // Storybook serves no logo, so the picture fails and leaves the form; WebKit can get there before `play` starts.
   // So every logo the form draws is noted as it lands, before the story renders, and read back below.
   loaders: [
@@ -413,7 +426,7 @@ export const BrandFromRead: Story = {
     };
     await waitFor(() => expect(drawn.length).toBeGreaterThan(0));
     watch.disconnect();
-    await expect(drawn[0]).toEqual({ src: '/api/public/forms/AbCdEfGhIjKlMnOp/logo?v=0123456789ab', alt: '' });
+    await expect(drawn[0]).toEqual({ src: '/api/public/forms/project-enquiry/logo?v=0123456789ab', alt: '' });
     // A logo that fails leaves rather than drawing a broken picture.
     await waitFor(() => expect(canvasElement.querySelector('img[src^="/api/public/forms/"]')).toBeNull());
   },

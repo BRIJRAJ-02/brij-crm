@@ -52,6 +52,15 @@ const readPage = (origin) => async (handle, slug, signal) => {
   return await answer.json();
 };
 
+/** Files this answer under its cache tags, and never fails the answer for it (a missed tag only shortens its life). */
+async function tagQuietly(tags) {
+  try {
+    await addCacheTag([...tags]);
+  } catch {
+    // The short s-maxage bounds an untagged answer anyway.
+  }
+}
+
 export async function GET(request) {
   const url = new URL(request.url);
   // The canonical address is the public origin's, never the host this request happened to arrive on (AC-5502);
@@ -73,8 +82,9 @@ export async function GET(request) {
     },
   });
   // A link page's shell is filed under its handle, so the page's Live or Private switch deletes it from the edge at
-  // once (spec 0058, AC-23). A failed tag leaves only the answer's short s-maxage, which bounds it anyway.
-  if (tags !== undefined && tags.length > 0) await addCacheTag([...tags]).catch(() => undefined);
+  // once (spec 0058, AC-23). A failed tag leaves only the answer's short s-maxage, which bounds it anyway. The runtime's
+  // addCacheTag may answer no promise at all, or throw, so it is awaited inside a try, never chained with `.catch`.
+  if (tags !== undefined && tags.length > 0) await tagQuietly(tags);
   return new Response(body, {
     status,
     headers: {

@@ -61,8 +61,9 @@ describe('lookHref and brandHref', () => {
     expect(brandHref('booking', 'AbCdEfGhIjKlMnOp', 'abcdef012345')).toBe(
       '/api/public/booking/AbCdEfGhIjKlMnOp/brand.css?v=abcdef012345',
     );
-    expect(brandHref('forms', 'AbCdEfGhIjKlMnOp', 'abcdef012345')).toBe(
-      '/api/public/forms/AbCdEfGhIjKlMnOp/brand.css?v=abcdef012345',
+    // A form is named by its address, the slug its door takes (spec 0060, AC-4).
+    expect(brandHref('forms', 'project-enquiry', 'abcdef012345')).toBe(
+      '/api/public/forms/project-enquiry/brand.css?v=abcdef012345',
     );
   });
 
@@ -71,7 +72,9 @@ describe('lookHref and brandHref', () => {
     expect(lookHref('../x', 'abcdef012345')).toBeUndefined();
     expect(lookHref('anish', 'abc"><b>')).toBeUndefined();
     expect(brandHref('booking', 'short', 'abcdef012345')).toBeUndefined();
-    expect(brandHref('forms', 'AbCdEfGhIjKlMnOp', undefined)).toBeUndefined();
+    expect(brandHref('forms', 'project-enquiry', undefined)).toBeUndefined();
+    expect(brandHref('forms', '../x', 'abcdef012345')).toBeUndefined();
+    expect(brandHref('forms', 'Project_Enquiry', 'abcdef012345')).toBeUndefined();
   });
 });
 

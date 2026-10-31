@@ -470,6 +470,7 @@ jobs: # Which jobs this push needs (25 October 2026). The library's stories in t
           e2e/switching.flow.ts
           e2e/forms-publish.flow.ts
           e2e/members.flow.ts
+          e2e/guests.flow.ts
           e2e/schedules.flow.ts
           e2e/command.flow.ts
           e2e/attributes.flow.ts

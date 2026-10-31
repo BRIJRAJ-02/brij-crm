@@ -405,7 +405,7 @@ export const publicProfiles = auth.table(
       'public_profiles_theme',
       // Postgres refuses a subquery in a check constraint, so "no key but these ten" is the ten taken away leaving
       // an empty object. A check whose expression is NULL passes, so "all ten present" needs `coalesce`. `layout`
-      // (spec 0061, migration 0148) is the one optional key: absent is `list`.
+      // (spec 0061, migration 0157) is the one optional key: absent is `list`.
       sql`${t.theme} is null or (
         jsonb_typeof(${t.theme}) = 'object'
         and ${t.theme} - 'ground' - 'hue' - 'mode' - 'shape' - 'fill' - 'font' - 'gradient' - 'pattern' - 'header' - 'avatar' - 'layout' = '{}'::jsonb

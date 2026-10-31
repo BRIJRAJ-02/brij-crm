@@ -16,6 +16,11 @@ export interface DescriptionItem {
   readonly copy?: { readonly value: string; readonly label: string };
   /** The description stands in for a missing value ("No answer"): drawn in the quiet text colour. */
   readonly isPlaceholder?: boolean;
+  /**
+   * An email or web address under the description, on a line of its own (a guest's name, then their email). It is
+   * kept whole: it never breaks at a hyphen or a dot, and breaks anywhere only when it is longer than the line.
+   */
+  readonly address?: string;
 }
 
 /** Props for DescriptionList. */
@@ -42,7 +47,10 @@ export function DescriptionList({ items, layout = 'columns' }: DescriptionListPr
             data-placeholder={item.isPlaceholder === true ? '' : undefined}
           >
             {item.copy === undefined ? (
-              item.description
+              <>
+                {item.description}
+                {item.address !== undefined && <span className={styles.address}>{item.address}</span>}
+              </>
             ) : (
               <>
                 <span className={styles.value}>{item.description}</span>

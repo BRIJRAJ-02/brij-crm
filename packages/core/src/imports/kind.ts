@@ -26,7 +26,8 @@ import { insertRecord, readRecords, updateRecord, updateRecordInBatch } from '..
 import { addEntryIn, checkWritableList } from '../engine/lists.ts';
 import { isRefusal, refuse } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
-import { loadAttributes, loadListAttributes, type AttributeDef } from '../engine/values.ts';
+import { currentItems, loadAttributes, loadListAttributes, type AttributeDef } from '../engine/values.ts';
+import { decodeValue } from '../engine/columns.ts';
 import type { WriteContext } from '../engine/write.ts';
 import { defineKind, MAX_ATTEMPTS, type ItemOutcome, type KindDefinition } from '../jobs/registry.ts';
 import {
@@ -301,6 +302,14 @@ interface StoredOutcome {
   readonly written?: unknown;
   readonly made?: readonly Made[];
   readonly entry_id?: string;
+  readonly entry_changes?: EntryChanges;
+}
+
+/** What a row changed on an entry already in an "Each record once" list, so the import's undo puts it back. */
+export interface EntryChanges {
+  readonly entryId: string;
+  readonly before: Readonly<Record<string, unknown>>;
+  readonly written: Readonly<Record<string, string>>;
 }
 
 /** Takes every match key's lock of the batch in one order, so two imports of one new key meet in turn (two rows never both create). */
@@ -484,16 +493,38 @@ async function importRowInto(
   if (plan.listId === undefined || recordId === undefined) return done;
   const values = listValuesOf(plan, row.values);
   const entry = await addEntryIn(context, { listId: plan.listId, recordId, values });
+  let changes: EntryChanges | undefined;
   if (entry.existing) {
     const next = Object.fromEntries(Object.entries(values).map(([id, value]) => [id, { value }]));
     if (Object.keys(next).length === 0) return done;
+    // What the entry held, read under the lock the add took, so the undo can put it back.
+    const held = await currentItems(context.tx, [entry.entryId], Object.keys(next));
     const results = await updateRecord(context, { entryId: entry.entryId, values: next });
-    if (!Object.values(results).some((result) => result.versionId !== undefined)) return done;
+    const written = Object.fromEntries(
+      Object.entries(results).flatMap(([id, result]) =>
+        result.versionId === undefined ? [] : [[id, result.versionId]],
+      ),
+    );
+    if (Object.keys(written).length === 0) return done;
+    const before = Object.fromEntries(
+      Object.keys(written).flatMap((id) => {
+        const attribute = plan.listAttributes.get(id);
+        if (attribute === undefined) return [];
+        const items = held.filter((item) => item.attributeId === id);
+        return [[id, decodeValue(attribute.type, attribute.isMulti, items)]];
+      }),
+    );
+    changes = { entryId: entry.entryId, before, written };
   }
   const changed = done.result.outcome === 'skipped' ? 'updated' : done.result.outcome;
   return {
     result: { ...done.result, outcome: changed },
-    stored: { ...done.stored, outcome: changed, ...(entry.existing ? {} : { entry_id: entry.entryId }) },
+    stored: {
+      ...done.stored,
+      outcome: changed,
+      ...(entry.existing ? {} : { entry_id: entry.entryId }),
+      ...(changes === undefined ? {} : { entry_changes: changes }),
+    },
     made: done.made,
     ...(done.filed === undefined ? {} : { filed: done.filed }),
   };
@@ -526,10 +557,11 @@ async function storeOutcomes(tx: WorkspaceTx, scope: EngineScope, importId: stri
       before = coalesce(v.before, r.before),
       written = coalesce(v.written, r.written),
       made = coalesce(v.made, r.made),
-      entry_id = coalesce(v.entry_id, r.entry_id)
+      entry_id = coalesce(v.entry_id, r.entry_id),
+      entry_changes = coalesce(v.entry_changes, r.entry_changes)
     from jsonb_to_recordset(${JSON.stringify(stored)}::jsonb) as v(
       row_number int, outcome text, record_id uuid, error_code text, error_message text, before jsonb, written jsonb,
-      made jsonb, entry_id uuid
+      made jsonb, entry_id uuid, entry_changes jsonb
     )
     where r.workspace_id = ${scope.workspaceId} and r.import_id = ${importId} and r.row_number = v.row_number
   `);

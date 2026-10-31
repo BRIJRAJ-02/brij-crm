@@ -123,6 +123,11 @@ export interface DataGridProps<Row> {
   readonly rowAvatar?: (row: Row) => string | undefined;
   readonly selection?: GridSelection;
   readonly onSelectionChange?: (selection: GridSelection) => void;
+  /**
+   * False for a reader who can act on no row (a guest viewing a shared object): no row ticks and no select all, the
+   * checkbox column staying as an empty gutter so every column keeps its place. True by default.
+   */
+  readonly isSelectable?: boolean;
   /** Column order, widths, pins and hiding, on release or key press, never mid drag. */
   readonly onColumnsChange?: (columns: readonly GridColumn[], pinnedCount: number) => void;
   /** One edit or clear, already valid for its type. */
@@ -360,6 +365,7 @@ export function DataGrid<Row>({
   rowAvatar,
   selection,
   onSelectionChange,
+  isSelectable = true,
   onColumnsChange,
   onCellChange,
   onCellsChange,
@@ -1080,6 +1086,7 @@ export function DataGrid<Row>({
     if (missing > 0) toasts.toast({ tone: 'success', message: strings.leftOut(number(missing)) });
   };
   const toggleRowAt = (row: number, extend: boolean) => {
+    if (!isSelectable) return;
     const id = rowIdAt(row);
     if (id === undefined) return;
     if (extend && anchorRow !== undefined) {
@@ -1093,6 +1100,7 @@ export function DataGrid<Row>({
   const screenSelected = screenIds.filter((id) => isRowSelected(currentSelection, id)).length;
   const isScreenSelected = screenIds.length > 0 && screenSelected === screenIds.length;
   const toggleScreen = () => {
+    if (!isSelectable) return;
     changeSelection(withRows(currentSelection, onScreenIds(), !isScreenSelected), true);
   };
 
@@ -1579,6 +1587,7 @@ export function DataGrid<Row>({
       menuFor={menuFor}
       screen={isScreenSelected ? 'all' : screenSelected > 0 ? 'some' : 'none'}
       isEmpty={count === 0}
+      isSelectable={isSelectable}
       handlers={headerHandlers}
       sortColumn={sort?.columnId}
       sortDirection={sort?.direction}
@@ -1658,7 +1667,7 @@ export function DataGrid<Row>({
           aria-colindex={1}
           className={styles.check}
           data-cell={keyOf(row, 0)}
-          data-pressable=""
+          data-pressable={isSelectable ? '' : undefined}
           data-focused={isFocusedAt(row, 0) || undefined}
           data-active={(isWithin && isFocusedAt(row, 0)) || undefined}
           tabIndex={isFocusedAt(row, 0) ? 0 : -1}
@@ -1674,7 +1683,9 @@ export function DataGrid<Row>({
             if (event.detail === 0 || pressedBy.current === 'touch') toggleRowAt(row, event.shiftKey);
           }}
         >
-          {rowData !== undefined && <CheckboxMark label={strings.selectRow(name)} isSelected={isSelected} />}
+          {rowData !== undefined && isSelectable && (
+            <CheckboxMark label={strings.selectRow(name)} isSelected={isSelected} />
+          )}
         </div>
         {drawn.flatMap((each, index) => {
           const place = placeOf(each);
@@ -1992,6 +2003,8 @@ interface GridHeaderProps {
   readonly menuFor: string | undefined;
   readonly screen: 'none' | 'some' | 'all';
   readonly isEmpty: boolean;
+  /** False: no select all in the header (the reader can act on no row). */
+  readonly isSelectable: boolean;
   readonly handlers: HeaderHandlers;
   /** The column the rows are sorted by, and which way. */
   readonly sortColumn: string | undefined;
@@ -2060,6 +2073,7 @@ const GridHeader = memo(function GridHeader({
   menuFor,
   screen,
   isEmpty,
+  isSelectable,
   handlers,
   sortColumn,
   sortDirection,
@@ -2103,21 +2117,24 @@ const GridHeader = memo(function GridHeader({
       <div role="row" aria-rowindex={1} className={styles.header} data-add={addColumn === undefined ? undefined : ''}>
         {/* eslint-disable-next-line jsx-a11y-x/click-events-have-key-events -- the grid's one key handler toggles it with Space */}
         <div
-          role="columnheader"
+          // With nothing to tick, the gutter heads no column: an empty cell, not a header with no name.
+          role={isSelectable ? 'columnheader' : 'gridcell'}
           aria-colindex={1}
           className={styles.check}
           data-cell={keyOf(-1, 0)}
-          data-pressable={isEmpty ? undefined : ''}
+          data-pressable={isEmpty || !isSelectable ? undefined : ''}
           data-focused={focusCol === 0 || undefined}
           tabIndex={focusCol === 0 ? 0 : -1}
           onClick={handlers.toggleScreen}
         >
-          <CheckboxMark
-            label={strings.selectOnScreen}
-            isSelected={screen === 'all'}
-            isIndeterminate={screen === 'some'}
-            isReadOnly={isEmpty}
-          />
+          {isSelectable ? (
+            <CheckboxMark
+              label={strings.selectOnScreen}
+              isSelected={screen === 'all'}
+              isIndeterminate={screen === 'some'}
+              isReadOnly={isEmpty}
+            />
+          ) : null}
         </div>
         {drawn.flatMap((each, index) => {
           const place = cellPlace(placed, each, lastPinnedId);

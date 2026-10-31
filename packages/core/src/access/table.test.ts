@@ -36,6 +36,11 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   // until #24 stores them: the door's input, not a service.
   'enterWorkspace',
   'enterWithKey',
+  // A key's throttled last used touch (parity #34): the key's own row, after the door let it in.
+  'noteKeyUse',
+  // A key's shape, pure (parity 34).
+  'keyToken',
+  'parseKeyToken',
   'enterAsActor',
   'systemScope',
   'NO_RULE_SOURCE',
@@ -793,6 +798,46 @@ describe('the walk: a principal without the access is refused', () => {
     },
   );
 
+  // Spec 0037, AC-1331, AC-1337: a rotation's changes are booking.admin's and its editors'; a member in it who doesn't
+  // edit it is refused, and a principal without booking.manage first.
+  it.each(entries.filter(([, entry]) => 'editor' in entry).map(([name]) => name))(
+    '%s refuses a principal without booking.manage, and a member who doesn’t edit the rotation',
+    async (name) => {
+      const { scope, workspaceId, ownerId, memberId } = await memberOf('member');
+      const key = testScope({ db, workspaceId, actor: { type: 'api_key', id: core.newId() }, scopes: [] });
+      expect(await refusalOf(Promise.resolve().then(() => service(name)(key, {})))).toEqual({
+        code: 'FORBIDDEN',
+        message: PERMISSIONS['booking.manage'].message,
+      });
+      const owner = testScope({ db, workspaceId, actor: { type: 'member', id: ownerId } });
+      // The workspace link books "Everyone on the roster", which the member is in (and so sees) but doesn't edit.
+      const link = await core.createBookingPage(owner, {
+        id: core.newId(),
+        title: 'Talk to us',
+        timeZone: 'UTC',
+        scope: 'workspace',
+      });
+      const rotationId = link.hosts?.rotations[0] ?? '';
+      const input = {
+        rotationId,
+        resourceType: 'rotation',
+        resourceId: rotationId,
+        settings: { name: 'Mine now' },
+        memberId,
+        units: 1,
+        note: 'Mine',
+        adjustmentId: core.newId(),
+      };
+      expect((await refusalOf(service(name)(scope, input))).code).toBe('FORBIDDEN');
+      // The link itself is the owner's to change: its editors answer as absent.
+      if (name === 'listEditors') {
+        expect(
+          (await refusalOf(core.listEditors(scope, { resourceType: 'booking_page', resourceId: link.id }))).code,
+        ).toBe('NOT_FOUND');
+      }
+    },
+  );
+
   // The workspace's every delegation (the Members page's column, AC-1267): `members.manage` alone.
   it('listDelegations refuses a member asking for every delegation in the workspace', async () => {
     const { scope } = await memberOf('member');
@@ -948,6 +993,19 @@ describe('the walk: a principal without the access is refused', () => {
   });
 });
 
+/** A second live person, made by the owner, to merge into the pilot (spec 0049). */
+async function another(world: Awaited<ReturnType<typeof dataWorld>>): Promise<string> {
+  return (
+    await core.createRecord(world.owner, { objectId: world.people, values: { [world.name]: { firstName: 'Twin' } } })
+  ).recordId;
+}
+
+/** The pilot's revision now, and a fresh record's (0): what a merge dialog would have read. */
+async function revisionsOf(world: Awaited<ReturnType<typeof dataWorld>>): Promise<{ keep: number; merge: number }> {
+  const [pilot] = await core.getRecords(world.owner, { ids: [world.recordId] });
+  return { keep: pilot?.revision ?? 0, merge: 0 };
+}
+
 /** A workspace whose People object a member can't see, and one where they may only read it (and its list). */
 async function dataWorld() {
   const { scope: memberScope, workspaceId, objects, ownerId } = await memberOf('member');
@@ -974,6 +1032,10 @@ async function dataWorld() {
   await core.deleteRecord(owner, { recordId: trashedId });
   const { listId } = await core.defineList(owner, { objectId: people, apiSlug: 'crew', name: 'Crew' });
   const { entryId } = await core.addEntry(owner, { listId, recordId });
+  // A field on the list itself, for the list's many entry edit (AC-4826).
+  const entryNote = (
+    await core.createAttribute(owner, { objectId: people, listId, id: core.newId(), title: 'Note', type: 'text' })
+  ).id;
   const peopleView =
     (
       await db.withWorkspace(workspaceId, (tx) =>
@@ -1073,6 +1135,17 @@ async function dataWorld() {
             ${core.recordFilePath(workspaceId, recordId, recordFileId, '.pdf')}, 'cv.pdf', 1024, 'application/pdf')`,
     ),
   );
+  // A file on the person's Files tab (#32): a `record_files` row with no attribute, added by the owner.
+  const attachmentId = core.newId();
+  await db.withWorkspace(workspaceId, (tx) =>
+    tx.execute(
+      sql`insert into record_files (workspace_id, id, record_id, attribute_id, pathname, name, size, content_type,
+            created_by)
+          values (${workspaceId}::uuid, ${attachmentId}::uuid, ${recordId}::uuid, null,
+            ${core.recordFilePath(workspaceId, recordId, attachmentId, '.pdf')}, 'brief.pdf', 1024, 'application/pdf',
+            ${ownerId}::uuid)`,
+    ),
+  );
   // A report on People (the reports lane), so the walk has one the principal at none must not see.
   const reportId = (
     await core.createReport(owner, {
@@ -1093,6 +1166,7 @@ async function dataWorld() {
     fileId,
     resume,
     recordFileId,
+    attachmentId,
     name: attribute('name'),
     jobTitle: attribute('job_title'),
     company: attribute('company'),
@@ -1102,6 +1176,7 @@ async function dataWorld() {
     trashedId,
     listId,
     entryId,
+    entryNote,
     peopleView,
     taskId,
     noteId,
@@ -1303,6 +1378,7 @@ const DATA_CASES: Readonly<Record<string, DataCase>> = {
   ),
   entriesForRecord: refused('NOT_FOUND', (scope, world) => core.entriesForRecord(scope, { recordId: world.recordId })),
   getActivity: refused('NOT_FOUND', (scope, world) => core.getActivity(scope, { recordId: world.recordId })),
+  getLastContacted: refused('NOT_FOUND', (scope, world) => core.getLastContacted(scope, { recordId: world.recordId })),
   getStageSince: refused('NOT_FOUND', (scope, world) =>
     core.getStageSince(scope, { recordId: world.recordId, attributeId: world.stage }),
   ),
@@ -1324,6 +1400,47 @@ const DATA_CASES: Readonly<Record<string, DataCase>> = {
       contentType: 'application/pdf',
     }),
   ),
+  // A record's Files tab (#32): a reader who can't see the record finds nothing; one who may only read it adds,
+  // deletes and restores nothing.
+  listAttachments: refused('NOT_FOUND', (scope, world) => core.listAttachments(scope, { recordId: world.recordId })),
+  prepareAttachment: refused('FORBIDDEN', (scope, world) =>
+    core.prepareAttachment(scope, { recordId: world.recordId, size: 1 }),
+  ),
+  registerAttachment: refused('FORBIDDEN', (scope, world) =>
+    core.registerAttachment(scope, {
+      recordId: world.recordId,
+      fileId: core.newId(),
+      pathname: 'records/x/y/z.pdf',
+      name: 'brief.pdf',
+      size: 1,
+      contentType: 'application/pdf',
+    }),
+  ),
+  deleteAttachment: refused('FORBIDDEN', (scope, world) =>
+    core.deleteAttachment(scope, { fileId: world.attachmentId }),
+  ),
+  restoreAttachment: refused('FORBIDDEN', (scope, world) =>
+    core.restoreAttachment(scope, { fileId: world.attachmentId }),
+  ),
+  // Likely duplicates (spec 0049): an object the reader can't see is absent; one they only read can't dismiss.
+  checkDuplicates: refused('NOT_FOUND', (scope, world) =>
+    core.checkDuplicates(scope, { objectId: world.people, values: {} }),
+  ),
+  listDuplicates: refused('NOT_FOUND', (scope, world) => core.listDuplicates(scope, { objectId: world.people })),
+  dismissPair: refused('FORBIDDEN', async (scope, world) => {
+    const other = await core.createRecord(world.owner, {
+      objectId: world.people,
+      values: { [world.name]: { firstName: 'Bob' } },
+    });
+    return core.dismissPair(scope, { objectId: world.people, recordIds: [world.recordId, other.recordId] });
+  }),
+  restorePair: refused('FORBIDDEN', async (scope, world) => {
+    const other = await core.createRecord(world.owner, {
+      objectId: world.people,
+      values: { [world.name]: { firstName: 'Bob' } },
+    });
+    return core.restorePair(scope, { objectId: world.people, recordIds: [world.recordId, other.recordId] });
+  }),
   // The record picker's search (spec 0014): an object the reader can't see is absent.
   searchRecords: refused('NOT_FOUND', (scope, world) =>
     core.searchRecords(scope, { objectId: world.people, query: '' }),
@@ -1475,6 +1592,9 @@ const DATA_CASES: Readonly<Record<string, DataCase>> = {
   checkImportLinks: refused('FORBIDDEN', (scope, world) =>
     core.checkImportLinks(scope, { objectId: world.people, attributeId: world.name, names: ['Acme'] }),
   ),
+  checkImportDuplicates: refused('FORBIDDEN', (scope, world) =>
+    core.checkImportDuplicates(scope, { objectId: world.people, rows: [{ name: { firstName: 'Ada' } }] }),
+  ),
   checkImportMatches: refused('FORBIDDEN', (scope, world) =>
     core.checkImportMatches(scope, { objectId: world.people, attributeId: world.name, values: ['ada@example.com'] }),
   ),
@@ -1565,6 +1685,30 @@ const DATA_CASES: Readonly<Record<string, DataCase>> = {
   restoreBatch: refused('FORBIDDEN', async (scope, world) =>
     core.restoreBatch(scope, { batchId: await batchOf(world) }).then(refusedOutcome),
   ),
+  // Record merge (spec 0049): refused on a read only object before either record is looked up. The owner merges a
+  // second person made for the call into the pilot.
+  mergeRecords: refused('FORBIDDEN', async (scope, world) =>
+    core.mergeRecords(scope, {
+      objectId: world.people,
+      keepId: world.recordId,
+      mergeId: await another(world),
+      revisions: await revisionsOf(world),
+    }),
+  ),
+  mergeAndRead: refused('FORBIDDEN', async (scope, world) =>
+    core.mergeAndRead(scope, {
+      objectId: world.people,
+      keepId: world.recordId,
+      mergeId: await another(world),
+      revisions: await revisionsOf(world),
+    }),
+  ),
+  previewMerge: refused('FORBIDDEN', async (scope, world) =>
+    core.previewMerge(scope, { objectId: world.people, keepId: world.recordId, mergeId: await another(world) }),
+  ),
+  readMergePreview: refused('FORBIDDEN', async (scope, world) =>
+    core.readMergePreview(scope, { objectId: world.people, keepId: world.recordId, mergeId: await another(world) }),
+  ),
   updateMany: refused('FORBIDDEN', (scope, world) =>
     core.updateMany(scope, {
       objectId: world.people,
@@ -1651,6 +1795,17 @@ const DATA_CASES: Readonly<Record<string, DataCase>> = {
     return core.undoEntriesJob(scope, registry, { id: core.newId(), jobId: started.id });
   }),
   editEntry: refused('FORBIDDEN', (scope, world) => core.editEntry(scope, { entryId: world.entryId, values: {} })),
+  // A list field of many entries (AC-4826): the list at write before the field or any entry is read.
+  editEntries: refused('FORBIDDEN', (scope, world) =>
+    core.editEntries(scope, {
+      listId: world.listId,
+      entryIds: [world.entryId],
+      edit: { attributeId: world.entryNote, op: 'clear' },
+    }),
+  ),
+  setEntriesValues: refused('FORBIDDEN', (scope, world) =>
+    core.setEntriesValues(scope, { listId: world.listId, items: [{ entryId: world.entryId, values: {} }] }),
+  ),
   // A batch answers per entry (AC-4818): each refused, the call itself answered.
   removeEntries: refused('FORBIDDEN', async (scope, world) =>
     entryOutcome(await core.removeEntries(scope, { entryIds: [world.entryId] })),

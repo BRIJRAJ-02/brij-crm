@@ -243,7 +243,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_save_social_links', owner: 'crm_handle' },
       { name: 'crm_search_similar', owner: 'crm_search' },
       { name: 'crm_search_text', owner: 'crm_search' },
-      // The link page's Live or Private switch (spec 0058, AC-23, migration 0145).
+      // The link page's Live or Private switch (spec 0058, AC-23, migration 0154).
       { name: 'crm_set_public_profile_live', owner: 'crm_handle' },
       // Private until its owner acts (27 Oct 2026, migration 0116).
       { name: 'crm_show_public_profile', owner: 'crm_handle' },
@@ -567,11 +567,11 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         // A link page made for every membership (26 Oct 2026, migration 0116).
         'crm_ensure_public_profile',
         'crm_show_public_profile',
-        // The link page's Live or Private switch (spec 0058, AC-23, migration 0145).
+        // The link page's Live or Private switch (spec 0058, AC-23, migration 0154).
         'crm_set_public_profile_live',
         // A deleted account's handles freed after their 90 days (migration 0126).
         'crm_sweep_released_handles',
-        // The link page's own accent and photos (spec 0060, migration 0146): read for its look stylesheet and its
+        // The link page's own accent and photos (spec 0060, migration 0155): read for its look stylesheet and its
         // image routes, and set from its owner's Design panel.
         'crm_profile_look',
         'crm_save_profile_accent',
@@ -1505,7 +1505,7 @@ describe('isolation', () => {
     await expect(
       db.withWorkspace(a.workspaceId, (tx) => tx.execute(sql`delete from records where id = ${inA.recordId}`)),
     ).rejects.toMatchObject({ cause: { code: '23503', constraint: 'notes_record' } });
-    // A note's links (migration 0145): its own workspace's only, and never to another workspace's record.
+    // A note's links (migration 0154): its own workspace's only, and never to another workspace's record.
     await db.withWorkspace(a.workspaceId, (tx) =>
       tx.execute(
         sql`insert into note_records (workspace_id, note_id, record_id, position, created_by_type) values (${a.workspaceId}, ${inA.noteId}, ${inA.recordId}, 0, 'system')`,
@@ -2360,12 +2360,12 @@ describe('the auth schema: global identity, outside row level security (spec 000
       // Letting an old handle go into the hold to make room at the cap (late trap #76, migration 0124): the person
       // cleared, and only through crm_make_handle_room.
       'auth.public_handles.user_id UPDATE',
-      // The page's own accent pair and photos (spec 0060, migration 0146): eight columns, and only through
+      // The page's own accent pair and photos (spec 0060, migration 0155): eight columns, and only through
       // crm_save_profile_accent and crm_save_profile_image. These lines are the whole of what that spec widened.
       'auth.public_profiles.accent UPDATE',
       'auth.public_profiles.accent_dark UPDATE',
       'auth.public_profiles.bio UPDATE',
-      // When the page became its owner's choice (spec 0058, AC-23, migration 0145): only through
+      // When the page became its owner's choice (spec 0058, AC-23, migration 0154): only through
       // crm_show_public_profile and crm_set_public_profile_live.
       'auth.public_profiles.claimed_at UPDATE',
       'auth.public_profiles.cover_path UPDATE',

@@ -5,10 +5,16 @@
 import { oc } from '@orpc/contract';
 import * as z from 'zod';
 import { TimeZoneName } from './booking/settings.ts';
+import { COUNTRY_CODES } from './values/countries.ts';
+import { CURRENCY_CODES } from './values/currencies.ts';
 import { Uuid } from './values/ids.ts';
 import { WorkspaceScoped, WorkspaceSlug } from './workspaces.ts';
 
 export { namesMatch, WORKSPACE_PURGE_DAYS } from './team-limits.ts';
+
+/** The codes a workspace may default to, as sets: the contract takes a plain string, so the browser's types stay simple. */
+const CURRENCIES: ReadonlySet<string> = new Set(CURRENCY_CODES);
+const COUNTRIES: ReadonlySet<string> = new Set(COUNTRY_CODES);
 
 /** A workspace's name: 1 to 64 characters, trimmed (AC-822). */
 export const WorkspaceName = z.string().trim().min(1, 'Name the workspace.').max(64, 'Use at most 64 characters.');
@@ -21,6 +27,10 @@ export const WorkspaceSettings = z.object({
   name: z.string(),
   slug: WorkspaceSlug,
   timeZone: z.string(),
+  /** Where new Currency attributes and imported amounts start (ISO 4217); absent keeps the language's region's. */
+  currency: z.string().optional(),
+  /** Where new phone numbers start (ISO 3166 alpha 2); absent keeps the language's region's. */
+  country: z.string().optional(),
   /** A logo on our origin; absent until #32, so the page shows initials. */
   logoUrl: z.string().optional(),
 });
@@ -28,13 +38,23 @@ export const WorkspaceSettings = z.object({
 export type WorkspaceSettings = z.infer<typeof WorkspaceSettings>;
 
 /**
- * A change to the workspace's name, default time zone or address, in any mix
- * (`workspace.manage`). A new address follows the rule a new workspace's
- * does; the old one keeps finding the workspace and is never anyone else's.
+ * A change to the workspace's name, default time zone, default currency and country or address, in any mix
+ * (`workspace.manage`); `null` for the currency or country takes it back to the language's region's. A new address
+ * follows the rule a new workspace's does; the old one keeps finding the workspace and is never anyone else's.
  */
 export const UpdateWorkspaceInput = WorkspaceScoped.extend({
   name: WorkspaceName.optional(),
   timeZone: TimeZoneName.optional(),
+  currency: z
+    .string()
+    .refine((code) => CURRENCIES.has(code), { error: 'Pick a currency, such as USD.' })
+    .nullable()
+    .optional(),
+  country: z
+    .string()
+    .refine((code) => COUNTRIES.has(code), { error: 'Pick a country, such as GB.' })
+    .nullable()
+    .optional(),
   slug: WorkspaceSlug.optional(),
   mutationId: Uuid,
 });

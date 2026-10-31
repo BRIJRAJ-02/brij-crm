@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type Ref } from 'react';
+import { useEffect, useRef, useState, type ReactNode, type Ref } from 'react';
 import { Button } from '../atoms/Button/Button.tsx';
 import { VisuallyHidden } from '../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import '../lib/custom-properties.ts';
@@ -17,6 +17,8 @@ export interface FormBookingProps {
   readonly seconds: number;
   /** The form's own thank you words, when it has them. */
   readonly text: string;
+  /** What was sent, read back above the way on (spec 0058, AC-19): the thank you's SentAnswers. */
+  readonly summary?: ReactNode;
 }
 
 /** How long the page waits, having gone, before offering Book a time again (a browser that blocked the move). */
@@ -24,15 +26,16 @@ const STILL_HERE_MS = 3000;
 
 /**
  * Sent, and on to book (spec 0023 AC-1059): the thank you's check and
- * heading, then "Taking you to book a time in 5…" with the number counting
- * down inside a draining ring, Book now to go at once and Stay here to stop.
- * The countdown holds while focus or the pointer is on the buttons, so
+ * heading, what was sent (spec 0058, AC-19), then one way on, Book a time,
+ * with a quiet Stay here beside it, and under them "Taking you to book a
+ * time in 5…" with the number counting down inside a draining ring.
+ * The countdown holds while focus is on the buttons or the pointer moves onto them, so
  * nobody is taken away while reaching for Stay here. After Stay here, the
  * one button reads Book a time and keeps focus. The sentence is said once,
  * politely; the number itself is never announced. Under reduced motion the
  * ring is gone and only the number changes.
  */
-export function FormBooking({ state, mode, heading, url, seconds, text }: FormBookingProps) {
+export function FormBooking({ state, mode, heading, url, seconds, text, summary }: FormBookingProps) {
   const { words } = state;
   const [left, setLeft] = useState(seconds);
   const [isStaying, setStaying] = useState(false);
@@ -92,59 +95,63 @@ export function FormBooking({ state, mode, heading, url, seconds, text }: FormBo
   };
 
   return (
-    <FormConfirmation mode={mode} heading={heading} title={words.thanksTitle} text={text}>
-      {/* Said once as it appears, never each second. */}
-      <VisuallyHidden>
-        <p aria-live="polite">
-          {!isSaid || isStaying ? '' : seconds === 0 ? words.bookingNow : words.bookingIn(seconds)}
-        </p>
-      </VisuallyHidden>
-      {!isStaying && (
-        <p className={styles.line} aria-hidden="true">
-          {hasGone ? (
-            words.bookingNow
-          ) : (
-            <>
-              <span>{words.bookingInBefore}</span>
-              <span
-                className={styles.count}
-                data-held={isHeld || undefined}
-                style={{ '--countdown': `${String(seconds)}s` }}
-              >
-                <svg className={styles.ring} viewBox="0 0 36 36" aria-hidden="true" focusable="false">
-                  <circle className={styles.track} cx="18" cy="18" r="16" pathLength="100" />
-                  <circle className={styles.drain} cx="18" cy="18" r="16" pathLength="100" />
-                </svg>
-                <span className={styles.number}>{String(left)}</span>
-              </span>
-              <span>{words.bookingInAfter}</span>
-            </>
-          )}
-        </p>
-      )}
-      <div
-        className={styles.actions}
-        onFocus={() => {
-          setHeld(true);
-        }}
-        onBlur={(event) => {
-          if (!(event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)))
+    <FormConfirmation mode={mode} heading={heading} title={words.thanksTitle} text={text} summary={summary}>
+      <div className={styles.next}>
+        {/* Said once as it appears, never each second. */}
+        <VisuallyHidden>
+          <p aria-live="polite">
+            {!isSaid || isStaying ? '' : seconds === 0 ? words.bookingNow : words.bookingIn(seconds)}
+          </p>
+        </VisuallyHidden>
+        <div
+          className={styles.actions}
+          onFocus={() => {
+            setHeld(true);
+          }}
+          onBlur={(event) => {
+            if (!(event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)))
+              setHeld(false);
+          }}
+          // Held when the pointer moves onto the buttons, not merely when they appear under a pointer left resting
+          // where Send was: only a visitor reaching for them stops the count.
+          onPointerMove={() => {
+            if (!isHeld) setHeld(true);
+          }}
+          onPointerLeave={() => {
             setHeld(false);
-        }}
-        onPointerEnter={() => {
-          setHeld(true);
-        }}
-        onPointerLeave={() => {
-          setHeld(false);
-        }}
-      >
-        <Button variant="primary" size="lg" ref={primary} onPress={go}>
-          {isStaying ? words.bookATime : words.bookNow}
-        </Button>
-        {!isStaying && !hasGone && (
-          <Button variant="ghost" size="lg" onPress={stay}>
-            {words.stayHere}
+          }}
+        >
+          <Button variant="primary" size="lg" ref={primary} onPress={go}>
+            {words.bookATime}
           </Button>
+          {!isStaying && !hasGone && (
+            <Button variant="ghost" onPress={stay}>
+              {words.stayHere}
+            </Button>
+          )}
+        </div>
+        {!isStaying && (
+          <p className={styles.line} aria-hidden="true">
+            {hasGone ? (
+              words.bookingNow
+            ) : (
+              <>
+                <span>{words.bookingInBefore}</span>
+                <span
+                  className={styles.count}
+                  data-held={isHeld || undefined}
+                  style={{ '--countdown': `${String(seconds)}s` }}
+                >
+                  <svg className={styles.ring} viewBox="0 0 36 36" aria-hidden="true" focusable="false">
+                    <circle className={styles.track} cx="18" cy="18" r="16" pathLength="100" />
+                    <circle className={styles.drain} cx="18" cy="18" r="16" pathLength="100" />
+                  </svg>
+                  <span className={styles.number}>{String(left)}</span>
+                </span>
+                <span>{words.bookingInAfter}</span>
+              </>
+            )}
+          </p>
         )}
       </div>
     </FormConfirmation>

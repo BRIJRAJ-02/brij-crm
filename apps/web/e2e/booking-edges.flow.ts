@@ -259,7 +259,7 @@ test.describe('the booking journey’s edges', () => {
     await page.getByRole('button', { name: /^New booking page/ }).click();
     const create = page.getByRole('dialog', { name: 'Add a booking page' });
     await create.getByLabel('Title').fill('Team call');
-    await create.getByText('A round robin group').click();
+    await create.getByText('Round robin group', { exact: true }).click();
     await expect(create.getByText(/^Make a round robin group first\./)).toBeVisible();
     // Settings opens beside it, so the title typed here isn't lost on the way (B8).
     const [settings] = await Promise.all([

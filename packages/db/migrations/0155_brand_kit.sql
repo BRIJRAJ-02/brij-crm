@@ -1,5 +1,4 @@
--- Brand kit and link page themes (spec 0060, 31 Oct 2026). Numbered 0146, after the Live switch's 0145.
---
+-- Brand kit and link page themes (spec 0060, 31 Oct 2026). Renumbered 0155, after main's 0154, when the lanes merged.
 --
 -- What changes:
 -- * `workspace_brands`, a new tenant table: one row per workspace, made the first time an owner or admin saves the
@@ -253,12 +252,12 @@ begin
       or not has_function_privilege('crm_app', one, 'EXECUTE')
       or has_function_privilege('crm_identity', one, 'EXECUTE')
       or has_function_privilege('public', one, 'EXECUTE') then
-      raise exception '0136_brand_kit: % is not crm_handle''s definer for crm_app alone', one;
+      raise exception '0155_brand_kit: % is not crm_handle''s definer for crm_app alone', one;
     end if;
   end loop;
   -- The app still reaches the profile row only through the definers.
   if has_any_column_privilege('crm_app', 'auth.public_profiles', 'SELECT, INSERT, UPDATE, REFERENCES') then
-    raise exception '0136_brand_kit: crm_app must hold nothing on auth.public_profiles';
+    raise exception '0155_brand_kit: crm_app must hold nothing on auth.public_profiles';
   end if;
 end
 $$;

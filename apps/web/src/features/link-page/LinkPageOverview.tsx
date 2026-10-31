@@ -8,6 +8,7 @@
 import type { DataLayer, LinkPageStore, ProfileItem } from '@crm/data';
 import {
   Button,
+  ButtonGroup,
   ButtonLink,
   Card,
   EmptyState,
@@ -109,7 +110,6 @@ export function LinkPageOverview({
             tone="heading"
             headingLevel={3}
             label={strings.shareOnline}
-            hint={strings.pasteItAnywhere}
             action={
               <>
                 <Button variant="ghost" size="sm" icon="link" onPress={() => setMarking(true)}>
@@ -131,22 +131,22 @@ export function LinkPageOverview({
             />
           </FieldGroup>
           <Separator />
-          <FieldGroup tone="heading" headingLevel={3} label={strings.shareInPerson} hint={strings.scanIt}>
+          <FieldGroup tone="heading" headingLevel={3} label={strings.shareInPerson}>
             <QrCode ref={codeRef} value={address} label={shareStrings.qrLabel} size="sm" {...qrStyle}>
-              <p>
-                <strong>{shown}</strong>
-              </p>
-              <Button icon="download" isPending={isSaving} onPress={download}>
-                {strings.downloadCode}
-              </Button>
-              <Button variant="ghost" icon="palette" onPress={() => setStyling(true)}>
-                {reachStrings.qrStyle}
-              </Button>
-              {wallet !== undefined && (
-                <ButtonLink href={wallet} isExternal icon="wallet">
-                  {homeStrings.addToWallet}
-                </ButtonLink>
-              )}
+              {/* The address is in the field just above; beside the code, only what to do with it. */}
+              <ButtonGroup label={strings.shareInPerson} layout="row">
+                <Button icon="download" isPending={isSaving} onPress={download}>
+                  {strings.downloadCode}
+                </Button>
+                <Button variant="ghost" icon="palette" onPress={() => setStyling(true)}>
+                  {reachStrings.qrStyle}
+                </Button>
+                {wallet !== undefined && (
+                  <ButtonLink href={wallet} isExternal icon="wallet">
+                    {homeStrings.addToWallet}
+                  </ButtonLink>
+                )}
+              </ButtonGroup>
             </QrCode>
           </FieldGroup>
         </Card>

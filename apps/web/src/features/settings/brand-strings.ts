@@ -7,15 +7,17 @@ export const strings = {
   /** Said once to a member who may read the kit but not change it. */
   readOnly: 'Only owners and admins change the brand.',
   logo: 'Logo',
-  logoText: 'On every booking page and form.',
+  logoText: 'On booking pages, forms, the sidebar and the browser tab. A square mark reads best small.',
   logoDrop: 'Add your logo',
   logoReplace: 'Replace logo',
   logoAlt: 'Your logo',
+  /** The types the logo takes, as people name them, in the picker's hint. */
+  logoTypes: 'PNG, JPG or WebP',
   /** A member's view of a kit with no logo. */
   noLogo: 'No logo',
   logoRemove: 'Remove logo',
   logoRemoving: 'Remove the logo?',
-  logoRemoveText: 'Booking pages and forms show no logo.',
+  logoRemoveText: 'Booking pages and forms show no logo, and the sidebar and tab go back to Timefix’s mark.',
   logoUnreadable: 'That picture couldn’t be read. Try a PNG, JPEG or WebP.',
   colour: 'Colour',
   colourText: 'Buttons, the chosen day, links and focus rings.',
@@ -35,7 +37,6 @@ export const strings = {
   sampleMeeting: 'Intro call',
   sampleLength: '30 min',
   sampleChooseTime: 'Choose a time',
-  sampleDay: 'Tomorrow',
   /** The sample form the preview draws. */
   sampleHeadline: 'Tell us about your project',
   sampleName: 'Your name',

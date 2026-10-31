@@ -94,7 +94,8 @@ function AvailabilityRoute() {
       me={me}
       ownHours={ownHours}
       nameOf={(id) => people.find((person) => person.id === id)?.name}
-      people={people}
+      // Who may cover time off: never a guest, who takes no bookings (spec 0031, slice 9). Names still read from all.
+      people={people.filter((person) => person.role !== 'guest')}
     />
   );
 }

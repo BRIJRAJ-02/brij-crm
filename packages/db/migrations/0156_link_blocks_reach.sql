@@ -1,4 +1,4 @@
--- Link page blocks and reach (spec 0061, 31 Oct 2026). Numbered 0147, after the brand kit's 0146.
+-- Link page blocks and reach (spec 0061, 31 Oct 2026). Renumbered 0156, after the brand kit's 0155, when the lanes merged.
 --
 --
 -- What changes:

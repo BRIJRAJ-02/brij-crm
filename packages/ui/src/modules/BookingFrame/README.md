@@ -1,6 +1,10 @@
 # BookingFrame
 
-A booking page's frame (spec 0025, 0025-experience.md; laid out as the timefix booking page, the owner's call on 20 October 2026): the host in a rail of their own (a large picture, the name, the meeting as the page's `h1`, its facts, and a "Powered by Timefix" card pinned at the rail's foot), beside one card: a heading row with Month or List, the month and the day's times side by side (the times scroll inside their pane at the month's height), and a band across the foot for the Book bar. Under the page breakpoint everything stacks and Timefix moves to the page's end, centred. This folder also holds `BookingFoot` (that foot alone, for the guest's booking page) and `BookingMessage` (one small card for a page with nothing to book: loading, not found, paused, or failed with Try again).
+A booking page's frame (spec 0025, 0025-experience.md; laid out as the timefix booking page, the owner's call on 20 October 2026): the host in a rail of their own (a large picture, the name, the meeting as the page's `h1`, its facts, and a "Powered by Timefix" card pinned at the rail's foot), beside one card: a heading row with the picker's controls in one compact group at its end (the clock and the view, spec 0058, AC-24), the month and the day's times side by side (the times scroll inside their pane at the month's height), and a band across the foot for the Book bar. Under the page breakpoint everything stacks and Timefix moves to the page's end, centred. This folder also holds `BookingFoot` (that foot alone, for the guest's booking page) and `BookingMessage` (one small card for a page with nothing to book: loading, not found, paused, or failed with Try again).
+
+### The foot
+
+`BookingFoot` is how every public page ends, and nothing turns it off. On a wide booking page it is a card at the rail's end: "POWERED BY" over the Timefix wordmark, then "Claim your free page" under a hairline (the owner kept this card on 31 October 2026, over a quiet one-line foot). Everywhere else it is centred under the card, "Powered by" over the wordmark and the claim link. `href` and `newTabLabel` let a page tag the wordmark itself and open it in a new tab (the guest's page).
 
 ## Why it exists
 

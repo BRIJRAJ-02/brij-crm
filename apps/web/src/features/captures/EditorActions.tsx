@@ -49,8 +49,8 @@ export interface EditorActionsProps {
     readonly onResume: () => void;
     /** Absent leaves Duplicate out (a colleague's booking page: a copy would be the reader's own). */
     readonly onDuplicate?: () => void;
-    /** Opens the editor's delete confirm. */
-    readonly onDelete: () => void;
+    /** Opens the editor's delete confirm; absent leaves Delete out (a page's editor, spec 0037, AC-1331). */
+    readonly onDelete?: () => void;
     /** "Delete booking page", "Delete form". */
     readonly deleteLabel: string;
     readonly extra?: readonly EditorExtraAction[];
@@ -96,7 +96,7 @@ export function EditorActions({ link, linkOffReason, viewHref, preview, publish,
               if (key === 'pause') menu.onPause();
               if (key === 'resume') menu.onResume();
               if (key === 'duplicate') menu.onDuplicate?.();
-              if (key === 'delete') menu.onDelete();
+              if (key === 'delete') menu.onDelete?.();
               menu.extra?.find((each) => each.id === key)?.onAction();
             }}
           >
@@ -125,10 +125,12 @@ export function EditorActions({ link, linkOffReason, viewHref, preview, publish,
                 {each.label}
               </MenuItem>
             ))}
-            <MenuSeparator />
-            <MenuItem id="delete" icon="trash" isDanger>
-              {menu.deleteLabel}
-            </MenuItem>
+            {menu.onDelete !== undefined && <MenuSeparator />}
+            {menu.onDelete !== undefined && (
+              <MenuItem id="delete" icon="trash" isDanger>
+                {menu.deleteLabel}
+              </MenuItem>
+            )}
           </Menu>
         </MenuTrigger>
       )}

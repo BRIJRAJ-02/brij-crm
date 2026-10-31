@@ -137,6 +137,44 @@ export const FailedPicture: Story = {
   },
 };
 
+/** A workspace's square mark. */
+const SQUARE_LOGO = `data:image/svg+xml,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="22" fill="#2f6bff"/></svg>',
+)}`;
+
+/** A wordmark four times as wide as it is tall, in dark ink on nothing. */
+const WORDMARK_LOGO = `data:image/svg+xml,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 60"><circle cx="30" cy="30" r="22" fill="#e5484d"/><rect x="62" y="18" width="168" height="24" rx="6" fill="#1d1f24"/></svg>',
+)}`;
+
+/**
+ * `fit="contain"`, a workspace's own logo (spec 0060): a square mark and a wide wordmark each whole inside the tile,
+ * on the light plate with its hairline, at the sidebar's `sm` and General's `md`; a logo that failed keeps its
+ * letter on the tile's hue.
+ */
+export const ContainedLogo: Story = {
+  render: () => (
+    <Stage>
+      <Avatar name="Northwind" shape="square" hue="ink" size="sm" fit="contain" src={SQUARE_LOGO} />
+      <Avatar name="Northwind" shape="square" hue="ink" size="sm" fit="contain" src={WORDMARK_LOGO} />
+      <Avatar name="Northwind" shape="square" hue="ink" size="md" fit="contain" src={SQUARE_LOGO} />
+      <Avatar name="Northwind" shape="square" hue="ink" size="md" fit="contain" src={WORDMARK_LOGO} />
+      <Avatar name="Northwind" shape="square" hue="ink" size="md" fit="contain" src={BROKEN_PICTURE} />
+    </Stage>
+  ),
+  play: async ({ canvas, canvasElement }) => {
+    await waitFor(() => {
+      if (canvasElement.querySelector('img[data-fade="waiting"]') !== null) throw new Error('Still loading.');
+    });
+    const avatars = canvas.getAllByRole('img', { name: 'Northwind' });
+    const pictures = canvasElement.querySelectorAll('img');
+    await expect(pictures).toHaveLength(4);
+    for (const picture of pictures) await expect(getComputedStyle(picture).objectFit).toBe('contain');
+    // The failed one keeps its letter.
+    await expect(avatars.at(-1)?.textContent).toBe('N');
+  },
+};
+
 /**
  * The big sizes with a picture: it fades in over the initials once loaded, or shows at once when the browser
  * already holds it. Either way the initials go once it has loaded.

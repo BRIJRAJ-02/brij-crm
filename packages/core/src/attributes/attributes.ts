@@ -3,7 +3,15 @@
 // inline, and the settings that create, edit, move, archive and restore
 // them. Reads and writes go through the scope the access door made.
 import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
-import type { AttributeDefinition, AttributeOption, AttributeRelationship, PickerAttributeType } from '@crm/contracts';
+import type {
+  AttributeComputed,
+  AttributeDefinition,
+  AttributeOption,
+  AttributeRelationship,
+  ComputedDefinitionInput,
+  PickerAttributeType,
+} from '@crm/contracts';
+import { computedBlocks, computedReason, createComputedAttribute } from '../computed/define.ts';
 import { conditionAttributeIds } from '@crm/contracts/validation';
 import {
   AttributeDefault,
@@ -26,7 +34,7 @@ import {
   type AttributeRef,
 } from '../engine/definitions.ts';
 import { checkId } from '../engine/ids.ts';
-import { refuse } from '../engine/refusals.ts';
+import { refuse, refuseOn } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import { ARCHIVED_BY } from '../engine/values.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
@@ -60,12 +68,20 @@ interface DefinitionContext {
   readonly canSeeObject: (objectId: string) => boolean;
   /** Each record reference's relationship block (spec 0014), by attribute id. */
   readonly relationships?: ReadonlyMap<string, AttributeRelationship>;
+  /** Each computed attribute's block (spec 0015), by attribute id. */
+  readonly computed?: ReadonlyMap<string, AttributeComputed>;
 }
 
 /** An attribute's relationship block, when it is a side of one (spec 0014). */
 function relationshipOf(id: string, context: DefinitionContext): { relationship?: AttributeRelationship } {
   const relationship = context.relationships?.get(id);
   return relationship === undefined ? {} : { relationship };
+}
+
+/** A computed attribute's block, when it is one (spec 0015). */
+function computedOf(id: string, context: DefinitionContext): { computed?: AttributeComputed } {
+  const computed = context.computed?.get(id);
+  return computed === undefined ? {} : { computed };
 }
 
 function definitionOf(row: AttributeRow, context: DefinitionContext, readOnly?: string): AttributeDefinition {
@@ -93,6 +109,7 @@ function definitionOf(row: AttributeRow, context: DefinitionContext, readOnly?: 
       : {}),
     ...(OPTION_TYPES.includes(row.type) ? { options: [...(context.options.get(row.id) ?? [])] } : {}),
     ...relationshipOf(row.id, context),
+    ...computedOf(row.id, context),
     ...(readOnly === undefined ? {} : { readOnly: { reason: readOnly } }),
     validation: validationOf(row, context.rules.get(row.id) ?? []),
   };
@@ -290,12 +307,15 @@ export async function listObjectAttributes(
       rules: anyRules ? await rulesOf(tx, id, (attributeId) => visibleIds.has(attributeId)) : new Map(),
       canSeeObject: (far) => objectLevel(scope.access, far) !== 'none',
       relationships: await relationshipBlocks(tx, scope.access, listed),
+      computed: await computedBlocks(tx, listed),
     };
     return listed.map((row) =>
       definitionOf(
         row,
         context,
-        readOnlyReason(scope.access, row, object) ?? (row.isSystem ? `${row.title} is set by the system.` : undefined),
+        readOnlyReason(scope.access, row, object) ??
+          computedReason(row) ??
+          (row.isSystem ? `${row.title} is set by the system.` : undefined),
       ),
     );
   });
@@ -461,6 +481,8 @@ export interface CreateAttributeInput {
   readonly options?: readonly NewAttributeOption[] | undefined;
   /** Its first validation rules, in order (spec 0013, AC-252). */
   readonly rules?: readonly ValidationRuleInput[] | undefined;
+  /** A computed attribute (spec 0015): its type is then derived from it. */
+  readonly computed?: ComputedDefinitionInput | undefined;
 }
 
 /** One option a new select or status attribute starts with (AC-230); a stage's target time is `P<N>D`. */
@@ -489,6 +511,7 @@ export async function createAttribute(
 ): Promise<AttributeDefinition> {
   if (input.listId !== undefined) return createListAttribute(scope, { ...input, listId: input.listId }, hooks);
   requirePermission(scope, 'schema.manage');
+  if (input.computed !== undefined) return createComputed(scope, { ...input, computed: input.computed }, hooks);
   const objectId = checkId(input.objectId, OBJECT_NOT_FOUND);
   // An object the caller can't see answers as an unknown one (spec 0009, AC-140).
   if (objectLevel(scope.access, objectId) === 'none') throw refuse('NOT_FOUND', OBJECT_NOT_FOUND);
@@ -521,6 +544,41 @@ export async function createAttribute(
             })),
           }),
       ...(input.rules === undefined ? {} : { rules: input.rules }),
+    },
+    hooks,
+  );
+  return readOne(scope, { attributeId: made.attributeId, objectId, listId: null });
+}
+
+/**
+ * A new computed attribute (spec 0015, AC-312): its type comes from its definition, and Required, Unique, a
+ * default, options and rules are refused (AC-323). Answers it `filling`, as every member's table shows it.
+ */
+async function createComputed(
+  scope: EngineScope,
+  input: CreateAttributeInput & { readonly computed: ComputedDefinitionInput },
+  hooks: readonly AfterWrite[],
+): Promise<AttributeDefinition> {
+  const taken = [
+    input.isRequired === true ? 'isRequired' : undefined,
+    input.isUnique === true ? 'isUnique' : undefined,
+    input.defaultValue === undefined ? undefined : 'defaultValue',
+    input.options === undefined || input.options.length === 0 ? undefined : 'options',
+    input.rules === undefined || input.rules.length === 0 ? undefined : 'rules',
+  ].find((each) => each !== undefined);
+  if (taken !== undefined) {
+    throw refuseOn('CONFIG_INVALID', 'A computed attribute is worked out, so it takes no such setting.', taken);
+  }
+  const objectId = checkId(input.objectId, OBJECT_NOT_FOUND);
+  const made = await createComputedAttribute(
+    scope,
+    {
+      id: input.id,
+      objectId,
+      title: input.title,
+      apiSlug: input.apiSlug,
+      description: input.description,
+      computed: input.computed,
     },
     hooks,
   );
@@ -593,6 +651,8 @@ export interface EditAttributeInput {
   readonly defaultValue?: AttributeDefault | null | undefined;
   /** Its validation rules, in order (spec 0013, AC-252): the list replaces the attribute's own rules. */
   readonly rules?: readonly ValidationRuleInput[] | undefined;
+  /** A computed attribute's new definition, of the same result type (spec 0015, AC-322). */
+  readonly computed?: ComputedDefinitionInput | undefined;
 }
 
 /**
@@ -619,6 +679,7 @@ export async function editAttribute(
       ...(input.config === undefined ? {} : { config: input.config }),
       ...(input.defaultValue === undefined ? {} : { defaultValue: input.defaultValue }),
       ...(input.rules === undefined ? {} : { rules: input.rules }),
+      ...(input.computed === undefined ? {} : { computed: input.computed }),
     },
     hooks,
   );

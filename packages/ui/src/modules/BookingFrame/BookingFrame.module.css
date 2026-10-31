@@ -195,9 +195,10 @@
      whether or not the toolbar has arrived. */
   .head {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
-    gap: var(--space-12);
+    gap: var(--space-8) var(--space-12);
     min-block-size: calc(var(--size-control) + 2 * var(--space-2));
     padding: var(--space-20) var(--space-20) 0;
   }
@@ -209,8 +210,13 @@
     letter-spacing: var(--tracking-title);
   }
 
+  /* The picker's corner (spec 0058, AC-24): the page's few controls (the clock, the view) as one compact group,
+     side by side on one gap, as Cal.com keeps them. On a narrow phone the group wraps under the heading. */
   .toolbar {
     display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-8);
     margin-inline-start: auto;
   }
 

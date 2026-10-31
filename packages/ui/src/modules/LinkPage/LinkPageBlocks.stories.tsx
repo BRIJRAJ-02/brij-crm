@@ -380,7 +380,8 @@ export const Picture: Story = {
       'rel',
       'noopener noreferrer nofollow',
     );
-    await expect(canvas.getByText('Talking calendars at SaaStr')).toBeVisible();
+    // The blocks fade in as they arrive (LinkPage's `rise`), so the caption is waited for, not read mid fade.
+    await waitFor(() => expect(canvas.getByText('Talking calendars at SaaStr')).toBeVisible());
     await picturesDrawn(canvasElement);
   },
 };

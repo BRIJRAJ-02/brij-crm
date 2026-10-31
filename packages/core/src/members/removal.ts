@@ -17,6 +17,7 @@ import { notificationsRemoval } from '../notifications/inbox.ts';
 import { rotationsRemoval } from '../rotation/removal.ts';
 import { delegationsRemoval } from '../scheduling/delegations.ts';
 import { limitsRemoval } from '../scheduling/limits.ts';
+import { editorsRemoval } from '../scheduling/editors.ts';
 import { recentsRemoval } from '../search/recents.ts';
 import { teamsRemoval } from '../teams/teams.ts';
 import { viewsRemoval } from '../views/manage.ts';
@@ -123,6 +124,8 @@ export const REMOVAL_EFFECTS: readonly RemovalEffect[] = [
   teamsRemoval,
   // Parity #53: the automations they run as switch off (CREATOR_GONE).
   automationsRemoval,
+  // Spec 0037, AC-1331: the pages and rotations they edited.
+  editorsRemoval,
 ];
 
 /**
@@ -133,6 +136,7 @@ export const REMOVAL_EFFECTS: readonly RemovalEffect[] = [
  */
 export const KEPT_ON_REMOVAL: Readonly<Record<string, string>> = {
   records_deleted_by: 'history: who moved a record to the trash',
+  api_keys_revoked_by: 'history: who revoked an API key',
   booking_time_blocks_standin:
     'time off still names who was to cover; a stand in who left covers nothing (awayAt reads active members only)',
   values_set_by: 'history: who set a value',

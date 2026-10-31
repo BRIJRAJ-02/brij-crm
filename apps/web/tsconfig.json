@@ -28,6 +28,7 @@
     "handle-meta.test.ts",
     "handle-shell.ts",
     "handle-shell.test.ts",
+    "handle-entry.test.ts",
     "card-image.ts",
     "card-image.test.ts",
     "playwright.config.ts",

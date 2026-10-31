@@ -27,6 +27,8 @@ export const strings = {
     unchecked: 'unchecked',
     created: 'created this record',
     deleted: 'moved this record to the trash',
+    /** Another record merged into this one (spec 0049): "merged Jane D. into this record". */
+    merged: 'merged',
     /** One actor's changes at one moment, counted. */
     changedMany: (count: number) => `changed ${String(count)} attributes`,
     note: 'added a note',
@@ -48,6 +50,9 @@ export const strings = {
     added: 'added',
     removed: 'removed',
   },
+  /** A merge entry's end, after the merged record's name; and its name when the reader can't see it. */
+  intoThisRecord: 'into this record',
+  aRecord: 'a record',
   /** Where linked records went: "added Jane Doe to Team", "removed Jane Doe from Team". */
   linkedTo: 'to',
   linkedFrom: 'from',

@@ -22,9 +22,10 @@
 // file. The daily cleanup takes a row only once no live value and no history
 // row on that cell names its id (`record_files` phase), exactly as
 // `orphanUploads` waits for its submission.
+import { RECORD_FILE_KEPT_DAYS, RECORD_FILES_FULL, WORKSPACE_FILE_BYTES } from '@crm/contracts';
 import type { FileValue } from '@crm/contracts/values';
 import { schema, type WorkspaceTx } from '@crm/db';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { inWorkspace } from '../access/run.ts';
 import { attributeLevel, checkRecordVisible, UNKNOWN_RECORD } from '../access/visibility.ts';
 import { objectLevel } from '../access/policy.ts';
@@ -45,7 +46,39 @@ export const CELL_NOT_WRITABLE = 'You can’t change this field.';
 export const RECORD_FILES_PER_RECORD = 100;
 
 /** What a record holding `RECORD_FILES_PER_RECORD` files already answers. */
-export const TOO_MANY_RECORD_FILES = 'This record holds as many files as it can. Remove one first.';
+export const TOO_MANY_RECORD_FILES = RECORD_FILES_FULL;
+
+/** Why one more file can't be kept: its record is full, or the workspace is out of file storage. */
+export type FileCapRefusal = 'full' | 'storage';
+
+/**
+ * Takes the workspace's file lock for the rest of the transaction, so two uploads at once (a cell's and a Files
+ * tab's alike) can't both pass the last of a cap. Taken after the record's own lock, before counting.
+ */
+export async function lockFileCaps(tx: WorkspaceTx, workspaceId: string): Promise<void> {
+  await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`record_files:${workspaceId}`}, 0))`);
+}
+
+/**
+ * Which cap, if any, one more file of `size` bytes on `recordId` would pass: `RECORD_FILES_PER_RECORD` live files
+ * on the record (cells and Files tab together), or `WORKSPACE_FILE_BYTES` of live files in the workspace (a deleted
+ * file waiting out its Undo days counts again only if it is brought back). One statement, under row level security.
+ */
+export async function fileCapReached(
+  tx: WorkspaceTx,
+  recordId: string,
+  size: number,
+): Promise<FileCapRefusal | undefined> {
+  const counted = await tx.execute<{ on_record: number; total: string }>(sql`
+    select
+      (select count(*)::int from record_files where record_id = ${recordId}::uuid and deleted_at is null) as on_record,
+      (select coalesce(sum(size), 0)::bigint::text from record_files where deleted_at is null) as total
+  `);
+  const [row] = counted.rows;
+  if ((row?.on_record ?? 0) >= RECORD_FILES_PER_RECORD) return 'full';
+  if (Number(row?.total ?? '0') + size > WORKSPACE_FILE_BYTES) return 'storage';
+  return undefined;
+}
 
 /** A stored file a member may download: where it is kept and how to name it. */
 export interface ReadableRecordFile {
@@ -98,15 +131,11 @@ async function fileCell(
  */
 export async function prepareRecordFile(
   scope: EngineScope,
-  input: { readonly recordId: string; readonly attributeId: string },
-): Promise<'ok' | 'full'> {
+  input: { readonly recordId: string; readonly attributeId: string; readonly size?: number },
+): Promise<'ok' | FileCapRefusal> {
   return inWorkspace(scope, async (tx) => {
     const cell = await fileCell(tx, scope, input.recordId, input.attributeId, true);
-    const [held] = await tx
-      .select({ count: sql<number>`count(*)::int` })
-      .from(recordFiles)
-      .where(eq(recordFiles.recordId, cell.recordId));
-    return (held?.count ?? 0) >= RECORD_FILES_PER_RECORD ? 'full' : 'ok';
+    return (await fileCapReached(tx, cell.recordId, input.size ?? 0)) ?? 'ok';
   });
 }
 
@@ -127,15 +156,17 @@ export interface RegisterRecordFile {
  * row level security, so the store's `put` never stands in for a check.
  * `full` means nothing was recorded and the caller deletes what it stored.
  */
-export async function registerRecordFile(scope: EngineScope, input: RegisterRecordFile): Promise<FileValue | 'full'> {
+export async function registerRecordFile(
+  scope: EngineScope,
+  input: RegisterRecordFile,
+): Promise<FileValue | FileCapRefusal> {
   return inWorkspace(scope, async (tx) => {
     const cell = await fileCell(tx, scope, input.recordId, input.attributeId, true);
-    const [held] = await tx
-      .select({ count: sql<number>`count(*)::int` })
-      .from(recordFiles)
-      .where(eq(recordFiles.recordId, cell.recordId));
-    if ((held?.count ?? 0) >= RECORD_FILES_PER_RECORD) return 'full';
+    await lockFileCaps(tx, scope.workspaceId);
+    const refused = await fileCapReached(tx, cell.recordId, input.size);
+    if (refused !== undefined) return refused;
     await tx.insert(recordFiles).values({
+      ...(scope.actor.type === 'member' && scope.actor.id !== null ? { createdBy: scope.actor.id } : {}),
       workspaceId: scope.workspaceId,
       id: checkId(input.fileId, UNKNOWN_RECORD_FILE),
       recordId: cell.recordId,
@@ -208,10 +239,15 @@ export async function findOrphanRecordFiles(
     select f.id::text, f.pathname from record_files f
     where f.workspace_id = ${input.workspaceId}
       and f.created_at < now() - make_interval(hours => ${input.graceHours})
-      and not exists (
-        select 1 from values v
-        where v.workspace_id = f.workspace_id and v.record_id = f.record_id
-          and v.attribute_id = f.attribute_id and v.json_value ->> 'fileId' = f.id::text)
+      and (
+        (f.attribute_id is not null and not exists (
+          select 1 from values v
+          where v.workspace_id = f.workspace_id and v.record_id = f.record_id
+            and v.attribute_id = f.attribute_id and v.json_value ->> 'fileId' = f.id::text))
+        -- A Files tab attachment (#32): deleted past its Undo days, or its record removed for good.
+        or (f.attribute_id is null and (
+          f.deleted_at < now() - make_interval(days => ${RECORD_FILE_KEPT_DAYS})
+          or not exists (select 1 from records r where r.workspace_id = f.workspace_id and r.id = f.record_id))))
     order by f.created_at limit ${input.limit}
     for update skip locked
   `);
@@ -233,7 +269,10 @@ export async function readRecordFile(
 ): Promise<ReadableRecordFile> {
   const id = checkId(input.fileId, UNKNOWN_RECORD_FILE);
   return inWorkspace(scope, async (tx) => {
-    const [row] = await tx.select().from(recordFiles).where(eq(recordFiles.id, id));
+    const [row] = await tx
+      .select()
+      .from(recordFiles)
+      .where(and(eq(recordFiles.id, id), isNull(recordFiles.deletedAt)));
     if (row === undefined) throw refuse('NOT_FOUND', UNKNOWN_RECORD_FILE);
     const found = await tx.execute<{ object_id: string }>(
       sql`select object_id::text from records where id = ${row.recordId}::uuid`,
@@ -241,10 +280,14 @@ export async function readRecordFile(
     const objectId = found.rows[0]?.object_id;
     if (objectId === undefined) throw refuse('NOT_FOUND', UNKNOWN_RECORD_FILE);
     // A record hidden from this member reads exactly as the file not existing.
+    if (objectLevel(scope.access, objectId) === 'none') throw refuse('NOT_FOUND', UNKNOWN_RECORD_FILE);
     await checkRecordVisible(tx, scope.access, { recordId: row.recordId, objectId }, UNKNOWN_RECORD_FILE);
-    const attribute = (await loadAttributes(tx, objectId)).get(row.attributeId);
-    if (attribute === undefined || attributeLevel(scope.access, attribute) === 'hidden') {
-      throw refuse('NOT_FOUND', UNKNOWN_RECORD_FILE);
+    // A Files tab attachment (#32) follows its record alone; a cell's file its field too.
+    if (row.attributeId !== null) {
+      const attribute = (await loadAttributes(tx, objectId)).get(row.attributeId);
+      if (attribute === undefined || attributeLevel(scope.access, attribute) === 'hidden') {
+        throw refuse('NOT_FOUND', UNKNOWN_RECORD_FILE);
+      }
     }
     return { pathname: row.pathname, name: row.name, size: row.size, contentType: row.contentType };
   });

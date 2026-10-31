@@ -20,7 +20,8 @@ export const strings = {
   /** A section's menu button: "Records options". */
   sectionMenu: (title: string) => `${title} options`,
   /** How to move with the keyboard, read with a grip. */
-  reorderHelp: 'Press Space to pick it up, the arrow keys to move it, Space to drop it, or Escape to put it back.',
+  reorderHelp:
+    'Press Space or Enter to pick it up, the arrow keys to move it, Space or Enter to drop it, or Escape to put it back.',
   reorderLifted: (name: string, position: number, count: number) =>
     `${name} picked up, at position ${String(position)} of ${String(count)}.`,
   reorderPosition: (name: string, position: number, count: number) =>

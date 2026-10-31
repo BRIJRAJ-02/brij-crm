@@ -334,6 +334,10 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       update: os.reports.update.handler(() => notServed()),
       delete: os.reports.delete.handler(() => notServed()),
     },
+    computed: {
+      preview: os.computed.preview.handler(() => notServed()),
+      refill: os.computed.refill.handler(() => notServed()),
+    },
     attributes: {
       list: os.attributes.list.handler(() => behaviour.attributes()),
       create: os.attributes.create.handler(({ input }) => {
@@ -424,6 +428,8 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       addMany: os.entries.addMany.handler(notServed),
       forRecord: os.entries.forRecord.handler(notServed),
       setValues: os.entries.setValues.handler(notServed),
+      updateMany: os.entries.updateMany.handler(notServed),
+      setValuesBatch: os.entries.setValuesBatch.handler(notServed),
       remove: os.entries.remove.handler(notServed),
       restore: os.entries.restore.handler(notServed),
       addMatching: os.entries.addMatching.handler(notServed),
@@ -454,6 +460,13 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       activity: os.records.activity.handler(({ input }) => behaviour.activity(input.recordId, input.cursor)),
       getTrashed: os.records.getTrashed.handler(({ input }) => behaviour.trashed(input.recordId)),
       stageSince: os.records.stageSince.handler(() => ({})),
+      lastContacted: os.records.lastContacted.handler(() => ({})),
+      duplicates: {
+        check: os.records.duplicates.check.handler(notServed),
+        list: os.records.duplicates.list.handler(notServed),
+        dismiss: os.records.duplicates.dismiss.handler(notServed),
+        restore: os.records.duplicates.restore.handler(notServed),
+      },
       search: os.records.search.handler(({ input }) => {
         sent.push(input);
         return { results: behaviour.search(input.query) };
@@ -469,6 +482,8 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
         return { mode: 'inline' as const, results: behaviour.restoreBatch(input.batchId), echoes: 1 };
       }),
       startBulk: os.records.startBulk.handler(() => notServed()),
+      mergePreview: os.records.mergePreview.handler(() => notServed()),
+      merge: os.records.merge.handler(() => notServed()),
       updateMany: os.records.updateMany.handler(({ input }) => {
         mutationIds.push(input.mutationId);
         sent.push(input);
@@ -491,6 +506,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       }),
       setRole: os.members.setRole.handler(notServed),
       removalPreview: os.members.removalPreview.handler(notServed),
+      guestPreview: os.members.guestPreview.handler(notServed),
       remove: os.members.remove.handler(notServed),
       leave: os.members.leave.handler(notServed),
       transferOwnership: os.members.transferOwnership.handler(notServed),
@@ -585,6 +601,12 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       restore: os.automations.restore.handler(notServed),
       runs: os.automations.runs.handler(notServed),
     },
+    apiKeys: {
+      list: os.apiKeys.list.handler(notServed),
+      create: os.apiKeys.create.handler(notServed),
+      revoke: os.apiKeys.revoke.handler(notServed),
+      restore: os.apiKeys.restore.handler(notServed),
+    },
     preferences: {
       get: os.preferences.get.handler(notServed),
       update: os.preferences.update.handler(notServed),
@@ -665,6 +687,12 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       resolve: os.comments.resolve.handler(notServed),
       react: os.comments.react.handler(notServed),
       versions: os.comments.versions.handler(notServed),
+    },
+    // A record's files (#32) are driven against their own fake in `files/store.test.ts`.
+    files: {
+      list: os.files.list.handler(notServed),
+      delete: os.files.delete.handler(notServed),
+      restore: os.files.restore.handler(notServed),
     },
     notifications: {
       list: os.notifications.list.handler(notServed),
@@ -768,6 +796,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       getExport: os.submissions.getExport.handler(notServed),
     },
     imports: {
+      duplicates: os.imports.duplicates.handler(notServed),
       create: os.imports.create.handler(notServed),
       stage: os.imports.stage.handler(notServed),
       start: os.imports.start.handler(notServed),
@@ -838,6 +867,10 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       undoAdjustment: os.rotations.undoAdjustment.handler(notServed),
       reassignUpcoming: os.rotations.reassignUpcoming.handler(notServed),
       delete: os.rotations.delete.handler(notServed),
+    },
+    editors: {
+      list: os.editors.list.handler(notServed),
+      set: os.editors.set.handler(notServed),
     },
     nav: {
       get: os.nav.get.handler(notServed),

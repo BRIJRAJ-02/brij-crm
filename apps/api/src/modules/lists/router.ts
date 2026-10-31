@@ -4,6 +4,7 @@ import {
   archiveList,
   countEntries,
   createList,
+  editEntries,
   editEntry,
   entriesForRecord,
   entryMembership,
@@ -14,10 +15,12 @@ import {
   removeEntries,
   restoreEntries,
   restoreList,
+  setEntriesValues,
   startAddMatching,
   startRemoveMatching,
   undoEntriesJob,
   updateList,
+  type EntryEditResults,
   type EntryOutcome,
   type WrittenEntry,
 } from '@crm/core';
@@ -80,6 +83,19 @@ const writtenView = (written: WrittenEntry, echoes: number) => ({
   ...written.entry,
   ...(written.record === undefined ? {} : { record: written.record }),
   written: written.written,
+  echoes,
+});
+
+/** A batch write's per entry outcomes as the contract answers them. */
+const editsView = (answer: EntryEditResults, echoes: number) => ({
+  results: answer.results.map((result) => ({
+    entryId: result.entryId,
+    ...(result.entry === undefined ? {} : { entry: result.entry }),
+    ...(result.written === undefined ? {} : { written: { ...result.written } }),
+    ...(Object.hasOwn(result, 'before') ? { before: result.before } : {}),
+    ...(result.refusals === undefined ? {} : { refusals: [...result.refusals] }),
+  })),
+  records: [...answer.records],
   echoes,
 });
 
@@ -204,6 +220,28 @@ export const entriesRouter = member.entries.router({
       editEntry(context.scope, { entryId: input.entryId, values: input.values }, hooks),
     );
     return writtenView(result, echoes);
+  }),
+  // One list field of up to 500 entries (AC-4826), and its undo's batch: each entry on its own.
+  updateMany: member.entries.updateMany.handler(async ({ context, input }) => {
+    const { result, echoes } = await commitCounted(context, { mutationId: input.mutationId }, (hooks) =>
+      editEntries(
+        context.scope,
+        {
+          listId: input.listId,
+          entryIds: input.entryIds,
+          edit: input.edit,
+          ...(input.timeZone === undefined ? {} : { timeZone: input.timeZone }),
+        },
+        hooks,
+      ),
+    );
+    return editsView(result, echoes);
+  }),
+  setValuesBatch: member.entries.setValuesBatch.handler(async ({ context, input }) => {
+    const { result, echoes } = await commitCounted(context, { mutationId: input.mutationId }, (hooks) =>
+      setEntriesValues(context.scope, { listId: input.listId, items: input.items }, hooks),
+    );
+    return editsView(result, echoes);
   }),
   remove: member.entries.remove.handler(async ({ context, input }) => {
     const { result, echoes } = await commitCounted(context, { mutationId: input.mutationId }, (hooks) =>

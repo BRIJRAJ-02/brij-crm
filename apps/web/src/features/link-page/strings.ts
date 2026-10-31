@@ -12,7 +12,7 @@ export const strings = {
   /** The page's place in Settings: a page of Profile's. */
   profile: 'Profile',
   blocks: 'Blocks',
-  blocksText: 'One page for everything people can do with you. Drag to reorder.',
+  blocksText: 'Drag to reorder.',
   // The figures (AC-5127): over the last 30 days, with the 30 before as the comparison. A number keeps its word on
   // its line (a no break space), so a phone never strands the "2" away from "views".
   noPresses: 'No clicks yet',
@@ -181,6 +181,10 @@ export const strings = {
   groundPhoto: 'Background photo',
   groundPhotoDrop: 'Add a background photo',
   photoAlt: 'The photo on your page',
+  /** The types a cover or ground photo takes, as people name them, in the picker's hint. */
+  photoTypes: 'PNG, JPG or WebP',
+  /** The types a share picture takes, as people name them, in the picker's hint. */
+  shareImageTypes: 'PNG or JPG',
   photoRemove: 'Remove photo',
   photoRemoving: 'Remove this photo?',
   photoRemoveText: 'Your page goes back to its plain background.',
@@ -256,9 +260,7 @@ export const strings = {
   shareOnline: 'Share online',
   yourPage: 'Your page',
   yourAddress: 'Your address',
-  pasteItAnywhere: 'Paste it in your bio, an email signature or a message.',
   shareInPerson: 'Share in person',
-  scanIt: 'Anyone can scan this with their phone camera to open your page.',
   downloadCode: 'Download',
   editPageAction: 'Edit page',
   doneEditing: 'Done',

@@ -1,19 +1,27 @@
 // Writing and reading one attribute's value (spec 0004, the write protocol):
 // the owner row is locked first, an unchanged value writes nothing, and a new
 // version's time never runs before the one it replaces.
-import { and, eq, inArray, isNull, or, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { SYSTEM_ONLY_TYPES, type AttributeType } from '@crm/contracts/values';
 import { encodeValue, sameItems, type ItemColumns, type StoredItem } from './columns.ts';
 import { parseAttributeInput } from './parse-value.ts';
 import { canonicalId, checkId, isUuid, uuidArray, uuidList } from './ids.ts';
-import { postgresError, refuse, writeConflict } from './refusals.ts';
+import { isRefusal, postgresError, refuse, refuseAll, writeConflict } from './refusals.ts';
 import { syncSortKey } from './sort-keys.ts';
 import { uniqueKeyOf } from './unique.ts';
 import { actorRow, type Actor } from './scope.ts';
 import type { ValueChange, WriteContext } from './write.ts';
-import { isOpen, type Access } from '../access/policy.ts';
-import { checkList, checkObject, checkRecordVisible, UNKNOWN_ENTRY, UNKNOWN_RECORD } from '../access/visibility.ts';
+import { isOpen, objectLevel, type Access } from '../access/policy.ts';
+import {
+  attributeVisible,
+  checkList,
+  checkObject,
+  checkRecordVisible,
+  recordRuleSql,
+  UNKNOWN_ENTRY,
+  UNKNOWN_RECORD,
+} from '../access/visibility.ts';
 
 const { attributeOptions, attributes, listEntries, lists, members, records, values } = schema;
 
@@ -58,6 +66,21 @@ export interface AttributeDef {
   readonly ruleCount: number;
   /** Moves whenever one of those rules changes, so a write that loaded them notices (`holdDefinitions`). */
   readonly rulesVersion: number;
+  /**
+   * A computed attribute's stored definition (spec 0015), or null: its values are the system's alone, so every
+   * write that takes them from a caller refuses it (`parseFor`). Absent where a definition is built by hand.
+   */
+  readonly computed?: unknown;
+  /** Where a computed attribute's values stand, or null. */
+  readonly computedState?: 'filling' | 'ok' | 'broken' | null;
+}
+
+/** The kind of a computed attribute's stored definition, or undefined for any other attribute. */
+export function computedKindOf(attribute: Pick<AttributeDef, 'computed'>): 'lookup' | 'rollup' | 'formula' | undefined {
+  const { computed } = attribute;
+  if (typeof computed !== 'object' || computed === null || !('kind' in computed)) return undefined;
+  const { kind } = computed;
+  return kind === 'lookup' || kind === 'rollup' || kind === 'formula' ? kind : undefined;
 }
 
 /**
@@ -121,6 +144,8 @@ const DEF_COLUMNS = {
   position: attributes.position,
   ruleCount: attributes.ruleCount,
   rulesVersion: attributes.rulesVersion,
+  computed: attributes.computed,
+  computedState: attributes.computedState,
 } as const;
 
 /** One attribute by id, or a `NOT_FOUND` refusal (a malformed id too, before any query). */
@@ -378,6 +403,10 @@ export function checkWriter(attribute: AttributeDef, writer: Actor): void {
 export function parseFor(attribute: AttributeDef, input: unknown): unknown {
   if (attribute.isSystem) {
     throw refuse('ATTRIBUTE_READ_ONLY', `${attribute.title} is set by the system.`, attribute.id);
+  }
+  // A computed attribute's values are the system's alone (spec 0015, AC-323), written by `writeComputedBatch`.
+  if (computedKindOf(attribute) !== undefined) {
+    throw refuse('ATTRIBUTE_READ_ONLY', `${attribute.title} is worked out from other attributes.`, attribute.id);
   }
   if (attribute.archivedAt !== null) {
     throw refuse('ATTRIBUTE_READ_ONLY', `${attribute.title} is archived. Restore it to change it.`, attribute.id);
@@ -638,10 +667,41 @@ export async function writeAttribute(
           ...itemInsert(item),
           position,
           uniqueKey: attribute.isUnique ? uniqueKeyOf(attribute.type, item) : null,
+          matchKey: write.ownerKind === 'record' ? matchKeySql(attribute, item.textValue) : null,
         }));
+  /** Another record holds one of these keys: say whose when the writer may see it (AC-4905), else the old sentence. */
+  const taken = async (): Promise<never> => {
+    const keys = rows.flatMap((row) =>
+      'uniqueKey' in row && typeof row.uniqueKey === 'string' ? [row.uniqueKey] : [],
+    );
+    const holder = await visibleHolder(context, attribute, ownerId, keys);
+    if (holder !== undefined) {
+      throw refuseAll([
+        {
+          code: 'UNIQUE_CONFLICT',
+          message: `${holder.value} belongs to ${holder.name === '' ? 'another record' : holder.name}.`,
+          attributeId: attribute.id,
+          holder: { recordId: holder.recordId, objectId: holder.objectId, name: holder.name },
+        },
+      ]);
+    }
+    throw refuse('UNIQUE_CONFLICT', `Another record already has this value for ${attribute.title}.`, attribute.id);
+  };
   try {
-    await tx.insert(values).values(rows);
+    if (attribute.isUnique) {
+      // A taken key skips its row rather than failing the statement, so the transaction can still read who holds it.
+      const inserted = await tx
+        .insert(values)
+        .values(rows)
+        .onConflictDoNothing({
+          target: [values.workspaceId, values.attributeId, values.uniqueKey],
+          where: sql.raw('active_until is null and unique_key is not null'),
+        })
+        .returning({ id: values.id });
+      if (inserted.length < rows.length) await taken();
+    } else await tx.insert(values).values(rows);
   } catch (error) {
+    if (isRefusal(error)) throw error;
     const pg = postgresError(error);
     if (pg?.code === '23505' && pg.constraint === 'values_unique') {
       throw refuse('UNIQUE_CONFLICT', `Another record already has this value for ${attribute.title}.`, attribute.id);
@@ -668,8 +728,65 @@ export async function writeAttribute(
   };
 }
 
+/**
+ * The live record holding one of `keys` for a unique attribute, when the writer may see it (spec 0049, AC-4905):
+ * its object not at `none` and inside its record rule, in the statement. Its name only when its name attribute is
+ * visible to them; the value as it is held. Undefined when no holder is visible, so the refusal names nothing.
+ */
+async function visibleHolder(
+  context: WriteContext,
+  attribute: AttributeDef,
+  ownerId: string,
+  keys: readonly string[],
+): Promise<
+  { readonly recordId: string; readonly objectId: string; readonly name: string; readonly value: string } | undefined
+> {
+  const { tx, scope } = context;
+  if (keys.length === 0 || attribute.objectId === null) return undefined;
+  if (!isOpen(scope.access) && objectLevel(scope.access, attribute.objectId) === 'none') return undefined;
+  const rule = recordRuleSql(scope.access, attribute.objectId, 'r');
+  const found = await tx.execute<{ id: string; value: string; primary_id: string | null; name: string | null }>(sql`
+    select r.id::text as id, v.text_value as value, o.primary_attribute_id::text as primary_id,
+      (select n.text_value from "values" n where n.owner_id = r.id and n.attribute_id = o.primary_attribute_id
+        and n.active_until is null and not n.is_cleared order by n.position limit 1) as name
+    from "values" v
+    join records r on r.workspace_id = v.workspace_id and r.id = v.owner_id and r.deleted_at is null
+    join objects o on o.workspace_id = r.workspace_id and o.id = r.object_id
+    where v.attribute_id = ${attribute.id}::uuid and v.unique_key = any(${textArray(keys)}) and v.active_until is null
+      and v.owner_id <> ${ownerId}::uuid${rule === undefined ? sql`` : sql` and ${rule}`}
+    limit 1
+  `);
+  const [row] = found.rows;
+  if (row === undefined) return undefined;
+  const nameSeen =
+    row.primary_id !== null &&
+    attributeVisible(scope.access, { id: row.primary_id, objectId: attribute.objectId, listId: null });
+  return { recordId: row.id, objectId: attribute.objectId, name: nameSeen ? (row.name ?? '') : '', value: row.value };
+}
+
+/** Text keys as a `text[]` parameter. */
+const textArray = (keys: readonly string[]): SQL =>
+  sql`array(select jsonb_array_elements_text(${JSON.stringify(keys)}::jsonb))`;
+
+/** The types whose values can be a record's name, email or domain: the only ones likely duplicates key. */
+const MATCHED_TYPES: ReadonlySet<string> = new Set(['text', 'personal_name', 'email', 'domain', 'url']);
+
+/**
+ * A record's item as likely duplicates compare it (spec 0049, AC-4902), as SQL: the migration's
+ * `crm_match_key` over the kind `crm_match_kind` gives the attribute (its email or domain type, or the
+ * object's name attribute), so the one normalisation lives in SQL. Null for anything that can't match.
+ */
+function matchKeySql(attribute: AttributeDef, text: string | null): SQL | null {
+  if (text === null || attribute.objectId === null || !MATCHED_TYPES.has(attribute.type)) return null;
+  const kind =
+    attribute.type === 'email' || attribute.type === 'domain'
+      ? sql`${attribute.type}::text`
+      : sql`crm_match_kind(${attribute.id}::uuid)`;
+  return sql`crm_match_key(${kind}, ${text}::text)`;
+}
+
 /** One item's columns as an insert, with the member foreign key column for an actor value. */
-function itemInsert(item: ItemColumns) {
+export function itemInsert(item: ItemColumns) {
   return {
     textValue: item.textValue,
     numberValue: item.numberValue,

@@ -37,11 +37,15 @@ async function standalone(svg: SVGSVGElement, size: number): Promise<string> {
     else picture.setAttribute('href', data);
   }
   const shapes = svg.querySelectorAll('rect, path, text');
+  // The ground is the light theme's surface whatever the app's theme: in a dark app the code on screen sits on a
+  // softer grey so it doesn't glare, but the saved code prints on the light surface (AC-5122). The SVG carries the
+  // light theme. Only the ground, the first shape: a styled code's frame is a line with no fill of its own.
+  const white = getComputedStyle(svg).getPropertyValue('--surface').trim();
   copy.querySelectorAll('rect, path, text').forEach((shape, index) => {
     const drawn = shapes[index];
     if (drawn !== undefined) {
       const look = getComputedStyle(drawn);
-      shape.setAttribute('fill', look.fill);
+      shape.setAttribute('fill', index === 0 && white !== '' ? white : look.fill);
       // A styled code's frame is a line, and its label words (spec 0061, AC-6124): both carry their look too.
       if (look.stroke !== 'none' && look.stroke !== '') shape.setAttribute('stroke', look.stroke);
       if (shape.tagName === 'text') {

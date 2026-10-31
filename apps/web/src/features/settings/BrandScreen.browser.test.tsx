@@ -99,6 +99,10 @@ describe('Settings › Brand', () => {
     await expect.element(page.getByText('Only owners and admins change the brand.')).toBeInTheDocument();
     await expect.element(page.getByRole('button', { name: 'Any colour' })).not.toBeInTheDocument();
     await expect.element(page.getByRole('button', { name: 'Add your logo' })).not.toBeInTheDocument();
+    // Its colour is text, not swatches announced as radios a click can't move.
+    await expect.element(page.getByRole('radiogroup', { name: 'Colour' })).not.toBeInTheDocument();
+    await expect.element(page.getByRole('radio', { name: 'Timefix' })).not.toBeInTheDocument();
+    await expect.element(page.getByText('#0fc27b', { exact: false })).toBeVisible();
   });
 
   it.each(THEMES)('is clean under axe in %s', async (theme) => {

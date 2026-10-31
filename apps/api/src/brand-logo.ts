@@ -14,6 +14,7 @@
 // The global Origin check refuses a write from anywhere but the app. Nothing here logs a logo or its path.
 import { createHash, randomUUID } from 'node:crypto';
 import {
+  brandCacheTags,
   BRAND_IMAGE_MAX_BYTES,
   matchesContent,
   pictureTypeOf,
@@ -27,6 +28,7 @@ import { bodyLimit } from 'hono/body-limit';
 import type { Auth, AuthSession } from './auth/auth.ts';
 import { toApiError } from './errors.ts';
 import type { PublicLimiter } from './limits.ts';
+import type { EdgeCache } from './edge-cache.ts';
 import { errorFields, log } from './log.ts';
 import { stripPictureMetadata } from './picture-strip.ts';
 import { PRIVATE_PICTURE_CACHE_CONTROL, pictureResponse, startsAs, type PictureType } from './public/picture.ts';
@@ -52,6 +54,8 @@ export interface ImageRouteDeps {
   readonly files: FileStore | undefined;
   readonly limiter: PublicLimiter;
   readonly errorResponse: (code: ErrorCode, message: string) => Response;
+  /** The edge cache the public brand answers are filed in; a new or removed logo purges the workspace's tag. */
+  readonly edgeCache?: EdgeCache;
 }
 
 /** What the routes read off the request: as the app sets them. */
@@ -209,6 +213,7 @@ export function mountBrandLogo(app: Hono<{ Variables: ImageVariables }>, deps: I
         log.warn('brand.logo.old_kept', { requestId: c.get('requestId'), ...errorFields(error) });
       });
     }
+    await deps.edgeCache?.forget(brandCacheTags(scope.workspaceId));
     log.info('brand.logo.uploaded', { requestId: c.get('requestId'), type: image.type });
     return c.json({ version: image.version });
   });
@@ -227,6 +232,7 @@ export function mountBrandLogo(app: Hono<{ Variables: ImageVariables }>, deps: I
         log.warn('brand.logo.removal_kept', { requestId: c.get('requestId'), ...errorFields(error) });
       });
     }
+    if (previous !== undefined) await deps.edgeCache?.forget(brandCacheTags(entered.scope.workspaceId));
     return c.json({ removed: previous !== undefined });
   });
 }

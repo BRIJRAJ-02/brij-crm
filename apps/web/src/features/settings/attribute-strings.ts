@@ -9,6 +9,9 @@ export const strings = {
     `${option} archived, so new records get ${first} as their ${field}.`,
   defaultOptionGone: (option: string, field: string) => `${option} archived, so new records get no ${field}.`,
   undo: 'Undo',
+  /** A computed attribute's badge on the Attributes tab (spec 0015), and while it has stopped updating. */
+  computedKinds: { lookup: 'Lookup', rollup: 'Rollup', formula: 'Formula' } as Partial<Record<string, string>>,
+  notUpdating: 'Not updating',
   /** Under Unique when a Save is refused for values records share: the object's table. */
   openTable: (plural: string) => `Open ${plural}`,
   /** A Required When rule, read only in the dialog: the attributes its condition looks at (none named: hidden). */

@@ -93,9 +93,10 @@ export function qrPictureBox(count: number): {
 }
 
 /**
- * A QR code, drawn as one SVG path: dark modules on a white ground in both
- * themes (the light theme's tokens, scoped to the code), since not every
- * scanner reads an inverted code. `uqr` is imported
+ * A QR code, drawn as one SVG path: dark modules on a light ground in both
+ * themes (the light theme's tokens, scoped to the code; a softer grey in a
+ * dark app, so it doesn't glare), since not every scanner reads an
+ * inverted code. `uqr` is imported
  * only here. With `children`, a column beside it. With spec 0061's style
  * (`colour`, `picture`, `frameLabel`), the same code in the owner's colour,
  * with their picture in the middle and a labelled frame, all inside the one SVG
@@ -129,8 +130,8 @@ export function QrCode({ value, label, children, size: width = 'md', ref, colour
     <svg
       ref={ref}
       className={styles.root}
-      // The light theme's tokens inside the code in either theme: a white ground and dark modules, on screen and in
-      // a saved PNG (AC-5122), since not every scanner reads an inverted or grey grounded code.
+      // The light theme's tokens inside the code in either theme: a light ground and dark modules, since not every
+      // scanner reads an inverted code. A saved PNG is always white (AC-5122).
       data-theme="light"
       data-size={width}
       data-framed={isFramed || undefined}

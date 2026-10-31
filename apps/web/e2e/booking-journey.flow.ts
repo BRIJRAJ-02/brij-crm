@@ -31,6 +31,8 @@ test.describe('the booking journey', () => {
     await expect(create.getByLabel('Title')).toBeFocused();
     await create.getByLabel('Title').fill('Intro call');
     await create.getByRole('button', { name: 'Create page' }).click();
+    // The Ready panel shows the link (spec 0058, AC-5); Edit page goes on to the editor.
+    await page.getByRole('button', { name: 'Edit page' }).click();
     await expect(page).toHaveURL(/\/captures\/links\/[0-9a-f-]{36}/, { timeout: 30_000 });
     await expect(page.getByText('Live').first()).toBeVisible();
 

@@ -44,6 +44,15 @@
     object-fit: contain;
   }
 
+  /* Read only: the picture itself at a control's height, as wide as it needs up to a column, never cropped. */
+  .preview[data-read-only] {
+    align-self: flex-start;
+    block-size: var(--size-input);
+    max-inline-size: var(--size-column);
+    max-block-size: none;
+    border-radius: var(--radius-xs);
+  }
+
   .label {
     font: var(--text-body-strong);
     letter-spacing: var(--tracking-body-strong);

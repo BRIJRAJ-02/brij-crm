@@ -417,7 +417,26 @@ export function NewMeetingDialog({
         label={strings.newMeeting}
         focusesFirstField
       >
-        {/* First, so it is read before the form is filled in, and never below the dialog's fold. */}
+        {/* Whose meeting first (AC-1272): it decides the pages, the calendar and the note below. */}
+        {forPeople.length > 0 && (
+          <Select
+            label={strings.forWhom}
+            {...(forName === undefined ? {} : { hint: strings.forHint(forName) })}
+            items={[
+              { id: ME, label: strings.forMe },
+              ...forPeople.map((person) => ({
+                id: person.id,
+                label: person.name,
+                leading: <Avatar name={person.name} id={person.id} size="xs" isDecorative />,
+              })),
+            ]}
+            value={forId}
+            isDisabled={busy}
+            isSearchable={forPeople.length > 8}
+            onChange={(id) => setForId(id ?? ME)}
+          />
+        )}
+        {/* Before the guest, so it is read before the form is filled in, and never below the dialog's fold. */}
         {!hasCalendar && forId === ME && <Callout tone="info">{strings.noCalendar}</Callout>}
         <Field
           ref={withRef}
@@ -493,7 +512,6 @@ export function NewMeetingDialog({
         {/* Who it is with, then their zone, together: the zone only sets how their invitation reads the time. */}
         <Select
           label={strings.theirTimeZone}
-          hint={strings.theirTimeZoneHint}
           items={zones}
           filter={zoneMatches}
           isSearchable
@@ -523,25 +541,6 @@ export function NewMeetingDialog({
           hint={strings.timesIn(zoneDisplay(memberTimeZone, start.getTime()))}
           isDisabled={busy}
         />
-        {/* Whose meeting: after the guest and the time, since most are the member's own (AC-1272). */}
-        {forPeople.length > 0 && (
-          <Select
-            label={strings.forWhom}
-            {...(forName === undefined ? {} : { hint: strings.forHint(forName) })}
-            items={[
-              { id: ME, label: strings.forMe },
-              ...forPeople.map((person) => ({
-                id: person.id,
-                label: person.name,
-                leading: <Avatar name={person.name} id={person.id} size="xs" isDecorative />,
-              })),
-            ]}
-            value={forId}
-            isDisabled={busy}
-            isSearchable={forPeople.length > 8}
-            onChange={(id) => setForId(id ?? ME)}
-          />
-        )}
         {forName !== undefined && choices.length === 0 && (
           <Callout tone="warning">{strings.noPagesFor(forName)}</Callout>
         )}

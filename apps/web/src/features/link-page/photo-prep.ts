@@ -10,6 +10,12 @@ export const BRAND_PHOTO_TYPES: readonly string[] = ['image/png', 'image/jpeg', 
 /** The largest file a person may pick, before it is drawn again: a phone's photo is a few megabytes. */
 export const BRAND_PHOTO_PICK_MAX_BYTES = 20_000_000;
 
+/**
+ * The largest logo a person may pick: the server's own limit (4 MB), said as it is in the picker's hint. A logo is
+ * small, so the redraw never needs room to shrink a phone's photo here.
+ */
+export const BRAND_LOGO_PICK_MAX_BYTES = 4_000_000;
+
 /** What each picture is for, and how it is drawn again. */
 export type BrandPhotoKind = 'logo' | 'cover' | 'ground';
 

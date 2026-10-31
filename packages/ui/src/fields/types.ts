@@ -163,6 +163,8 @@ export interface TextContext {
   readonly attribute: FieldAttribute;
   readonly members?: readonly ActorDisplay[];
   readonly defaultCountry?: string;
+  /** The workspace's currency, for an amount whose symbol or code names none ("$" in an Australian workspace) and an attribute with no default of its own. */
+  readonly defaultCurrency?: string;
   readonly phone?: PhoneParser;
   /** The value's display shapes (record and member names), so references copy as names. */
   readonly display?: unknown;

@@ -16,6 +16,7 @@ import { inWorkspace } from '../access/run.ts';
 import { requireFieldManager, requireOptionManager } from '../lists/manager.ts';
 import { isOpen } from '../access/policy.ts';
 import { attributeVisible } from '../access/visibility.ts';
+import { afterOptionChange, refuseMirrorWrite } from '../computed/mirrors.ts';
 
 const { attributeOptions, attributes } = schema;
 
@@ -162,6 +163,7 @@ export async function insertOptionOf(
   input: Omit<OptionInput, 'attributeId'>,
 ): Promise<InsertedOption> {
   const { tx, scope } = context;
+  refuseMirrorWrite(attribute);
   checkOptionInput(attribute, input);
   if (input.id !== undefined && !isUuidV7(input.id)) {
     throw refuse('CONFIG_INVALID', 'The option id must be a UUID v7.');
@@ -200,6 +202,8 @@ export async function insertOptionOf(
     }
     // The attribute's options changed: its object's (or list's) screens read its definition again.
     recordDefinition(context, attribute);
+    // Its lookups' mirrors follow in the same save (spec 0015, AC-314).
+    await afterOptionChange(context, attribute.id, false);
     return { optionId: row.id, replayed: false };
   });
 }
@@ -313,6 +317,7 @@ export async function updateOption(
       if (!isOpen(scope.access) && !attributeVisible(scope.access, owner)) {
         throw refuse('NOT_FOUND', 'That option does not exist.');
       }
+      refuseMirrorWrite(owner);
       // The attribute's row first, then the option's: the order every option create and restore takes.
       await lockOptionParent(tx, owner.id);
       const [option] = await tx.select().from(attributeOptions).where(eq(attributeOptions.id, optionId)).for('update');
@@ -364,6 +369,8 @@ export async function updateOption(
           })
           .where(eq(attributeOptions.id, option.id)),
       );
+      // Its lookups' mirrors follow, and formulas reading it by label work out again (spec 0015, AC-314).
+      await afterOptionChange(context, owner.id, input.label !== undefined && input.label.trim() !== option.label);
       return ref;
     },
     hooks,

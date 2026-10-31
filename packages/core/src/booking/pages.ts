@@ -36,21 +36,24 @@ import { checkPageSchedule } from '../availability/schedules.ts';
 import type { EngineScope } from '../access/mint.ts';
 import { can } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
+import { uuidArray } from '../engine/ids.ts';
 import { postgresError, refuse, refuseOn } from '../engine/refusals.ts';
 import { writeAudit } from '../members/audit.ts';
 import { changedRuleIds, checkPageRoutes, rulesChanged } from '../routing/check.ts';
 import { NONE_UNSEEN, rulesSeen, unseenRules, withUnseenRules, type UnseenRule } from '../routing/seen.ts';
 import { actorRow } from '../engine/scope.ts';
+import type { WriteContext } from '../engine/write.ts';
 import type { RemovalEffect } from '../members/removal-effect.ts';
 import { ownerSlugs, publicProfilesOf } from './handles.ts';
 import { pageAuditSides } from './page-audit.ts';
 import { queueSchedulingNotice } from '../scheduling/notice.ts';
+import { deleteEditorsOf, editedBy } from '../scheduling/editor-rows.ts';
 import { placeNewPage } from '../profile/items.ts';
 import { linksOf, seenLinks } from './links.ts';
 import { lockKey } from './locks.ts';
 import { lockRotations } from '../rotation/assign.ts';
 import { everyoneRotation } from '../rotation/roster.ts';
-import { eligibleMembers, pageRotations, ROTATION_ROLES, TEAM_LIMITS } from '../rotation/team.ts';
+import { eligibleMembers, GUESTS_CANT_HOST, pageRotations, ROTATION_ROLES, TEAM_LIMITS } from '../rotation/team.ts';
 import { loadPage, pagesOf, type PageRecord } from './slots.ts';
 import {
   checkAnswersObject,
@@ -84,18 +87,25 @@ function memberOf(scope: EngineScope): string | undefined {
  * AC-751), whoever made it, and so is a workspace link, which is always round
  * robin. The caller has already checked the reader holds `booking.manage`
  * (AC-1275), and, for a page reached through `reach`, that its owner is an
- * active member who isn't a guest (`managedOwners`).
+ * active member who isn't a guest (`managedOwners`). A page the reader edits (`edits`, spec 0037, AC-1331) they
+ * change too, a round robin page included; its deletion and its editors stay `booking.admin`'s (and a personal
+ * page's deletion its owner's too).
  */
 function mayChange(
   scope: EngineScope,
-  page: { readonly ownerMemberId: string; readonly kind: string; readonly scope?: string },
+  page: { readonly id?: string; readonly ownerMemberId: string; readonly kind: string; readonly scope?: string },
   reach?: SchedulingReach,
+  edits: ReadonlySet<string> = NO_EDITS,
 ): boolean {
   if (can(scope.access, 'booking.admin')) return true;
+  if (page.id !== undefined && edits.has(page.id)) return true;
   if (page.kind === 'round_robin') return false;
   if (page.ownerMemberId === memberOf(scope)) return true;
   return reach !== undefined && page.scope === 'member' && canActFor(reach, page.ownerMemberId, 'manage');
 }
+
+/** No page edited (spec 0037, AC-1331): the default for a check that doesn't need editors. */
+const NO_EDITS: ReadonlySet<string> = new Set();
 
 /**
  * The reader's scheduling reach, for reaching colleagues' pages (decision 13), or undefined when it can't widen
@@ -176,14 +186,36 @@ async function pageToChange(tx: WorkspaceTx, scope: EngineScope, pageId: string,
   const names = others ? await managedOwners(tx, [row.ownerMemberId]) : new Map<string, string>();
   const ownerName = names.get(row.ownerMemberId);
   const reach = others && ownerName !== undefined ? await pageReach(tx, scope) : undefined;
-  if (!mayChange(scope, row, reach)) throw refuse('NOT_FOUND', NOT_FOUND_MESSAGE);
+  const edits = await editedBy(tx, scope, 'booking_page');
+  if (!mayChange(scope, row, reach, edits)) throw refuse('NOT_FOUND', NOT_FOUND_MESSAGE);
   const [page] = await pagesOf(tx, [row]);
   if (page === undefined) throw refuse('NOT_FOUND', NOT_FOUND_MESSAGE);
-  return ownerName === undefined ? page : { ...page, ownerName, reach };
+  return {
+    ...page,
+    ...(ownerName === undefined ? {} : { ownerName }),
+    ...(reach === undefined ? {} : { reach }),
+    edits,
+  };
 }
 
-/** A page as `pageToChange` reads it: someone else's carries their name and the reach that opened it. */
-type ReachedPage = PageRecord & { readonly ownerName?: string; readonly reach?: SchedulingReach };
+/**
+ * A page as `pageToChange` reads it: someone else's carries their name and the reach that opened it, and every page
+ * the pages the reader edits (spec 0037, AC-1331).
+ */
+type ReachedPage = PageRecord & {
+  readonly ownerName?: string;
+  readonly reach?: SchedulingReach;
+  readonly edits?: ReadonlySet<string>;
+};
+
+/**
+ * Whether the reader changes the page only as one of its editors (spec 0037, AC-1331): not `booking.admin`, not its
+ * owner (a workspace link has none) and not through Manage over its owner. Such a reader may not delete it.
+ */
+function onlyEdits(scope: EngineScope, page: ReachedPage): boolean {
+  if (page.edits === undefined || !page.edits.has(page.id)) return false;
+  return !mayChange(scope, page, page.reach);
+}
 
 /** The first moment of this UTC month and of the next. */
 function thisMonth(now: Date): { readonly from: Date; readonly to: Date } {
@@ -254,8 +286,9 @@ function viewOf(
   unseen: UnseenRule,
   seen: (questions: PageRecord['questions'], named?: string | null) => PageRecord['questions'],
   reach?: SchedulingReach,
+  edits: ReadonlySet<string> = NO_EDITS,
 ): BookingPageView {
-  const changeable = mayChange(scope, page, reach);
+  const changeable = mayChange(scope, page, reach, edits);
   return {
     id: page.id,
     publicKey: page.publicKey,
@@ -299,6 +332,8 @@ function viewOf(
       : {}),
     bookingsThisMonth: count,
     canChange: changeable,
+    // Only as one of its editors: not its owner, an admin or a manager of its owner (AC-1332's badge).
+    ...(edits.has(page.id) && !mayChange(scope, page, reach) ? { isEditor: true } : {}),
     createdAt: page.createdAt.toISOString(),
     updatedAt: page.updatedAt.toISOString(),
   };
@@ -319,6 +354,8 @@ export async function listBookingPages(
   return inWorkspace(scope, async (tx) => {
     const mine = can(scope.access, 'booking.admin') ? undefined : (member ?? '00000000-0000-0000-0000-000000000000');
     const reach = await pageReach(tx, scope);
+    // The pages the reader edits (spec 0037, AC-1332), whoever's they are, round robin ones included.
+    const edits = await editedBy(tx, scope, 'booking_page');
     // Whose personal pages the reach opens (decision 13): everyone's with Manage over everyone, else those named.
     const managed =
       reach === undefined || reach.all === 'manage'
@@ -340,6 +377,7 @@ export async function listBookingPages(
                 eq(bookingPages.scope, 'workspace'),
                 reach?.all === 'manage' ? theirs : undefined,
                 managed.length === 0 ? undefined : and(theirs, inArray(bookingPages.ownerMemberId, managed)),
+                edits.size === 0 ? undefined : inArray(bookingPages.id, [...edits]),
               ),
         ),
       )
@@ -351,11 +389,12 @@ export async function listBookingPages(
       listed.filter((row) => isSomeoneElses(scope, row)).map((row) => row.ownerMemberId),
       reach !== undefined,
     );
+    const nameOf = (ownerId: string) => names.get(ownerId);
     const rows = listed.filter(
       (row) => !isSomeoneElses(scope, row) || mine === undefined || names.has(row.ownerMemberId),
     );
     const pages = (await pagesOf(tx, rows)).map((page) => {
-      const ownerName = isSomeoneElses(scope, page) ? names.get(page.ownerMemberId) : undefined;
+      const ownerName = isSomeoneElses(scope, page) ? nameOf(page.ownerMemberId) : undefined;
       return ownerName === undefined ? page : { ...page, ownerName };
     });
     const ids = pages.map((page) => page.id);
@@ -383,6 +422,7 @@ export async function listBookingPages(
         unseen,
         seen,
         reach,
+        edits,
       ),
     );
   });
@@ -416,6 +456,7 @@ async function viewWithCounts(tx: WorkspaceTx, scope: EngineScope, page: Reached
     unseen,
     seen,
     page.reach,
+    page.edits,
   );
 }
 
@@ -445,6 +486,40 @@ async function ownerHandle(
 }
 
 const HOSTS_INVALID = 'A round robin page needs 1 to 3 rotations and at most 8 hosts in all.';
+
+/** The refusal for adding someone as a host without Manage over them (spec 0037, AC-1340). */
+export const ADD_HOST_FORBIDDEN = 'You can only add people whose scheduling you manage.';
+
+/**
+ * Who may change a round robin page's hosts beyond `booking.admin` (spec 0037, AC-1340): a new fixed host needs
+ * Manage over them (anyone who may edit the page may remove one), and a new rotation must be one the reader sees (in
+ * it, or its editor), else NOT_FOUND, as a rotation they can't see. One reach read, only when someone is added.
+ */
+async function checkHostsReach(tx: WorkspaceTx, scope: EngineScope, page: PageRecord, hosts: TeamHosts): Promise<void> {
+  if (can(scope.access, 'booking.admin')) return;
+  const before = (await pageHosts(tx, [page])).get(page.id) ?? { fixed: [], rotations: [] };
+  const joining = hosts.fixed.filter((memberId) => !before.fixed.includes(memberId));
+  if (joining.length > 0) {
+    const reach = await schedulingReach(tx, scope);
+    if (!joining.every((memberId) => canActFor(reach, memberId, 'manage'))) {
+      throw refuseOn('FORBIDDEN', ADD_HOST_FORBIDDEN, 'hosts');
+    }
+  }
+  const linking = hosts.rotations.filter((rotationId) => !before.rotations.includes(rotationId));
+  if (linking.length === 0) return;
+  const me = memberOf(scope);
+  const edited = await editedBy(tx, scope, 'rotation');
+  const seen = await tx.execute<{ id: string }>(sql`
+    select r.id::text from rotations r
+    where r.id = any(${uuidArray(linking)}) and r.deleted_at is null
+      and exists (select 1 from rotation_roster m where m.workspace_id = r.workspace_id and m.rotation_id = r.id
+        and m.member_id = ${me ?? null}::uuid)
+  `);
+  const visible = new Set([...seen.rows.map((row) => row.id), ...edited]);
+  if (!linking.every((rotationId) => visible.has(rotationId))) {
+    throw refuseOn('NOT_FOUND', 'That rotation doesn’t exist any more. Pick another.', 'hosts');
+  }
+}
 
 /**
  * Sets a round robin page's hosts (spec 0037, AC-1319), replacing them: 0 to
@@ -476,19 +551,12 @@ async function setPageHosts(tx: WorkspaceTx, workspaceId: string, pageId: string
   }
   if (fixed.length > 0) {
     const people = await tx
-      .select({ id: members.id })
+      .select({ id: members.id, role: members.role })
       .from(members)
-      .where(
-        and(
-          inArray(members.id, fixed),
-          eq(members.status, 'active'),
-          sql`${members.role}::text in (${sql.join(
-            ROTATION_ROLES.map((role) => sql`${role}`),
-            sql`, `,
-          )})`,
-        ),
-      );
-    if (people.length !== fixed.length) {
+      .where(and(inArray(members.id, fixed), eq(members.status, 'active')));
+    // A guest can't host (spec 0037, AC-1432): said as such, not as a stranger.
+    if (people.some((person) => person.role === 'guest')) throw refuseOn('MEMBER_INVALID', GUESTS_CANT_HOST, 'hosts');
+    if (people.filter((person) => ROTATION_ROLES.includes(person.role)).length !== fixed.length) {
       throw refuseOn('HOSTS_INVALID', 'Only active members of this workspace can be fixed hosts.', 'hosts');
     }
   }
@@ -902,6 +970,7 @@ export async function updateBookingPage(
       if (page.kind !== 'round_robin') {
         throw refuseOn('CONFIG_INVALID', 'Only a round robin page books from rotations.', 'hosts');
       }
+      await checkHostsReach(tx, scope, page, input.hosts);
       await setPageHosts(tx, scope.workspaceId, page.id, input.hosts);
     }
     // Live afterwards, with its rotations new or the page just turned on: each has to have someone to seat.
@@ -911,6 +980,17 @@ export async function updateBookingPage(
       (input.hosts !== undefined || page.status !== 'live')
     ) {
       await checkRotationsBook(tx, scope.workspaceId, page.id);
+    }
+    // A personal or collective page turned back on needs a host who isn't a guest (spec 0037, AC-1432): a page paused
+    // when its owner became a guest stays paused until they are a member again.
+    if (page.kind !== 'round_robin' && settings.status === 'live' && page.status !== 'live') {
+      const hosts = await tx.execute<{ n: number }>(sql`
+        select count(*)::int as n from booking_page_members m
+        join members h on h.workspace_id = m.workspace_id and h.id = m.member_id
+          and h.status = 'active' and h.role::text <> 'guest'
+        where m.workspace_id = ${scope.workspaceId}::uuid and m.page_id = ${page.id}::uuid
+      `);
+      if ((hosts.rows[0]?.n ?? 0) === 0) throw refuseOn('MEMBER_INVALID', GUESTS_CANT_HOST, 'status');
     }
     // Routing rules (spec 0043, AC-1608): only a round robin page's, each naming members of its rotations; audited.
     // The writer sends the rules they see; those over a field hidden from them are put back as they were, in place.
@@ -986,7 +1066,17 @@ export async function updateBookingPage(
       if (row !== undefined && page.isPrivate && !row.isPrivate && page.scope === 'member') {
         await placeNewPage(tx, scope, row);
       }
-      return await viewWithCounts(tx, scope, { ...changed, ownerName: page.ownerName, reach: page.reach }, now);
+      return await viewWithCounts(
+        tx,
+        scope,
+        {
+          ...changed,
+          ...(page.ownerName === undefined ? {} : { ownerName: page.ownerName }),
+          ...(page.reach === undefined ? {} : { reach: page.reach }),
+          ...(page.edits === undefined ? {} : { edits: page.edits }),
+        },
+        now,
+      );
     } catch (error) {
       throw slugRefusal(error) ?? error;
     }
@@ -1030,7 +1120,10 @@ export async function deleteBookingPage(
   requirePermission(scope, 'booking.manage');
   return inWorkspace(scope, async (tx) => {
     const page = await pageToChange(tx, scope, input.pageId, true);
+    // An editor changes everything on a page but its deletion (spec 0037, AC-1331).
+    if (onlyEdits(scope, page)) throw refuse('FORBIDDEN', 'Only an admin or the page’s owner can delete it.');
     await changedFor(tx, scope, page, undefined);
+    await deleteEditorsOf(tx, 'booking_page', [page.id]);
     const by = actorRow(scope.actor);
     await tx
       .update(bookingPages)
@@ -1157,8 +1250,10 @@ export async function listBookings(
       isSomeoneElses(scope, page) && (await managedOwners(tx, [page.ownerMemberId])).has(page.ownerMemberId)
         ? await pageReach(tx, scope)
         : undefined;
-    // A deleted page's bookings stay readable to whoever could change it.
-    if (!mayChange(scope, page, reach)) throw refuse('NOT_FOUND', NOT_FOUND_MESSAGE);
+    // A deleted page's bookings stay readable to whoever could change it, its editors too (AC-1262).
+    if (!mayChange(scope, page, reach, await editedBy(tx, scope, 'booking_page'))) {
+      throw refuse('NOT_FOUND', NOT_FOUND_MESSAGE);
+    }
     const upcoming = input.when === 'upcoming';
     const rows = await tx
       .select()
@@ -1277,3 +1372,47 @@ export const bookingPagesRemoval: RemovalEffect = {
     `);
   },
 };
+
+/**
+ * A live page the reader may change, for its editors' list (spec 0037, AC-1331): its id, title, owner and scope, or
+ * NOT_FOUND, exactly as the page's own read answers. Locked when `lock`, so a delete waits for an editors change.
+ */
+export async function pageForEditors(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  pageId: string,
+  lock: boolean,
+): Promise<{ readonly id: string; readonly title: string }> {
+  const page = await pageToChange(tx, scope, pageId, lock);
+  return { id: page.id, title: page.title };
+}
+
+/**
+ * The booking pages' part of a member becoming a guest (spec 0037, AC-1432): as a removal does, the pages nobody else
+ * can host pause and they leave other people's pools, but they stay in their own pages' pools, so a page of theirs
+ * waits, paused, for them to be a member again (it can't be turned on while they are a guest).
+ */
+export async function pauseGuestPages(context: WriteContext, memberId: string): Promise<void> {
+  const { tx, scope } = context;
+  const by = actorRow(scope.actor);
+  const theirs = await tx.execute<{ id: string }>(
+    sql`select rotation_id::text as id from rotation_members where member_id = ${memberId}::uuid
+      union select id::text from rotations where follows = 'everyone' and deleted_at is null`,
+  );
+  await lockRotations(
+    tx,
+    scope.workspaceId,
+    theirs.rows.map((row) => row.id),
+  );
+  await tx.execute(sql`
+    update booking_pages p
+    set status = 'paused', paused_reason = 'host_removed', updated_at = now(),
+      updated_by_type = ${by.type}, updated_by_id = ${by.id}::uuid, updated_by_member_id = ${by.memberId}::uuid
+    where p.workspace_id = ${scope.workspaceId}::uuid and ${hostlessPages(memberId)}
+  `);
+  await tx.execute(sql`
+    delete from booking_page_members m using booking_pages p
+    where m.workspace_id = ${scope.workspaceId}::uuid and m.member_id = ${memberId}::uuid
+      and p.workspace_id = m.workspace_id and p.id = m.page_id and p.owner_member_id is distinct from ${memberId}::uuid
+  `);
+}
