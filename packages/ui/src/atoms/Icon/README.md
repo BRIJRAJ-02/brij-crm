@@ -23,9 +23,13 @@ Each attribute type has one icon, used everywhere that type appears: `globe` dom
 
 Add one import and one line to `icons.ts`, under its lucide.dev name. With the scoped sets beside it, it is the only file allowed to import `lucide-react` (ESLint enforces it), so every icon the app ships is listed there, and nothing else ships.
 
+## The base set
+
+`base-icons.ts` holds the few icons Icon draws with no scope around it: the hosted form's (its controls' checks, chevrons and alerts, and its upload). UiProvider puts the whole registry in scope (`<IconScope icons={icons}>`), so every page under it draws every icon at once. The hosted form mounts `UiProviderBase` instead, which brings no registry, so its first load carries only the base set (about 20 kB gzipped less, 31 October 2026). There a registry icon outside the base set draws nothing; `icons.test.ts` fails if a file the form draws with names one. Every base name is in the registry too.
+
 ## Scoped sets
 
-Every page loads the registry, so an icon that only a lazy part of the library draws goes in that part's scoped set instead, and loads with its chunk. `editor-icons.ts` holds the note editor's own icons: the format toolbar's (bold, italic, strikethrough, highlighter) and the slash menu's (the three headings, the ordered list, the quote and the code block). The part wraps itself in `IconScope`, and the Icons inside draw from the registry and the set:
+Every page loads the registry, so an icon that only a lazy part of the library draws goes in that part's scoped set instead, and loads with its chunk. `editor-icons.ts` holds the note editor's own icons: the format toolbar's (bold, italic, strikethrough, highlighter) and the slash menu's (the three headings, the ordered list, the quote and the code block). The part wraps itself in `IconScope`, which adds to the scope around it (UiProvider's registry), and the Icons inside draw from both:
 
 ```tsx
 <IconScope icons={editorIcons}>
