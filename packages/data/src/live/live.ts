@@ -54,6 +54,11 @@ export interface LiveTransport {
   readonly listen: (channel: LiveChannel) => () => void;
   /** The connection failed or dropped. */
   readonly onTrouble: (listener: () => void) => () => void;
+  /**
+   * Closed with 4500, "access changed" (spec 0007, AC-84): the listener asks
+   * for each channel again, and the client reconnects once it settles.
+   */
+  readonly onAccessChanged?: (listener: () => Promise<void>) => () => void;
   readonly close: () => void;
 }
 
@@ -116,6 +121,9 @@ export interface LiveOptions {
 
 /** The longest spread before a refetch or catch up that many browsers make at once. */
 export const REFETCH_JITTER_MS = 2000;
+
+/** How long after asking for a workspace's channel a 4500 close doesn't ask again (the access event asked first). */
+const REJOINED_RECENTLY_MS = 10_000;
 
 export { COARSE_JOB_MS };
 
@@ -327,6 +335,12 @@ interface Watched {
    * a trailing one waits for the end of its 5 seconds.
    */
   readonly jobPaced: Map<string, { last: number; trailing: boolean }>;
+  /** The channel it listens on: its audience's (spec 0007, milestone 4), from the last token the door signed. */
+  channel: string | undefined;
+  /** Asking the door for the channel again after an access change, so a burst of them asks once. */
+  rejoining: Promise<void> | undefined;
+  /** When the last such ask ended: a 4500 close right after an access event's ask doesn't ask again. */
+  rejoinedAt: number | undefined;
   stop: () => void;
 }
 
@@ -381,10 +395,25 @@ export function createLive({
     if (transport !== undefined) return transport;
     const opening = open(url, connectionToken).then(
       (opened) => {
-        stopTrouble = opened.onTrouble(() => {
+        const stopFailing = opened.onTrouble(() => {
           // Not connected yet, or no longer: a workspace still starting is paused (a live one says so itself).
           for (const entry of watched.values()) if (entry.state === 'starting') setState(entry, 'down');
         });
+        // Disconnected with 4500 (spec 0007, AC-84): every watched workspace asks for its audience channel again
+        // before the client reconnects, after a random 0 to 2 seconds, so a rule change that names a whole team
+        // doesn't bring every browser back in step. One that just asked (the access event got there first) doesn't.
+        const stopAccess = opened.onAccessChanged?.(async () => {
+          await wait(random() * REFETCH_JITTER_MS);
+          const recent = (entry: Watched) =>
+            entry.rejoinedAt !== undefined && now() - entry.rejoinedAt < REJOINED_RECENTLY_MS;
+          await Promise.all(
+            [...watched].flatMap(([workspace, entry]) => (recent(entry) ? [] : [rejoin(workspace, entry, opened)])),
+          );
+        });
+        stopTrouble = () => {
+          stopFailing();
+          stopAccess?.();
+        };
         return opened;
       },
       (error: unknown) => {
@@ -590,6 +619,7 @@ export function createLive({
           entry.needsResync = true;
           marks.set(workspace, granted.head);
         }
+        entry.channel = granted.channel;
         entry.stop = opened.listen(channelFor(workspace, entry, granted));
         return;
       } catch {
@@ -599,11 +629,74 @@ export function createLive({
     }
   };
 
+  /**
+   * Asks the door for the workspace's channel again (spec 0007, milestone 4):
+   * an access change (a rule, a role, a team, a removal) may have moved the
+   * person to another audience. Kept when it didn't move; else the old
+   * subscription goes and the new channel is listened to, which catches up
+   * from the watermark at once (every channel carries every `seq`). Refused
+   * (no longer a member), it stops listening. A failed call never falls back
+   * to the old channel (it may carry what the person may no longer read): it
+   * lets go, paused, and subscribes again from scratch with backoff, as a new
+   * watch does. One at a time per workspace; `granted`, when the caller holds
+   * a fresh answer already (a renewal), is used instead of asking again.
+   */
+  const rejoin = (workspace: string, entry: Watched, opened?: LiveTransport, granted?: Granted): Promise<void> => {
+    if (entry.isStopped || entry.refused || asleep || entry.channel === undefined) return Promise.resolve();
+    if (entry.rejoining !== undefined) return entry.rejoining;
+    // Read fresh after each await: a release may stop the entry meanwhile, and a hidden tab may let go.
+    const isStopped = () => entry.isStopped || asleep;
+    const letGo = () => {
+      entry.stop();
+      entry.stop = () => undefined;
+      entry.channel = undefined;
+      setState(entry, 'down');
+    };
+    const asking = (async () => {
+      const answer = granted ?? (await subscriptionToken(workspace).catch(() => null));
+      if (isStopped()) return;
+      if (answer === undefined) {
+        letGo();
+        return;
+      }
+      if (answer === null) {
+        letGo();
+        entry.hasSubscribed = false;
+        // Its own retry loop: a token, then the channel it names.
+        start(workspace, entry).catch(() => {
+          setState(entry, 'down');
+        });
+        return;
+      }
+      if (answer.channel === entry.channel) return;
+      const transport = opened ?? (await connect());
+      if (isStopped()) return;
+      entry.stop();
+      entry.channel = answer.channel;
+      // A new subscription: it catches up from the watermark as soon as it is subscribed.
+      entry.hasSubscribed = false;
+      entry.stop = transport.listen(channelFor(workspace, entry, answer));
+    })().finally(() => {
+      entry.rejoining = undefined;
+      entry.rejoinedAt = now();
+    });
+    entry.rejoining = asking;
+    return asking;
+  };
+
   /** The workspace's channel, and what its events, subscribes and drops do. */
   const channelFor = (workspace: string, entry: Watched, granted: Granted): LiveChannel => ({
     name: granted.channel,
     token: granted.token,
-    renew: async () => (await subscriptionToken(workspace))?.token,
+    renew: async () => {
+      const renewed = await subscriptionToken(workspace);
+      // The person's audience moved (a token for another channel would be refused): listen there instead.
+      if (renewed !== undefined && renewed.channel !== granted.channel) {
+        void rejoin(workspace, entry, undefined, renewed);
+        return undefined;
+      }
+      return renewed?.token;
+    },
     onPublication: (data) => {
       receive(workspace, entry, data);
     },
@@ -715,6 +808,9 @@ export function createLive({
         held: new Map(),
         due: new Set(),
         jobPaced: new Map(),
+        channel: undefined,
+        rejoining: undefined,
+        rejoinedAt: undefined,
         stop: () => undefined,
       };
       entry.watchers += 1;
@@ -744,6 +840,15 @@ export function createLive({
         // Nothing watched: let the connection go.
         if (watched.size === 0) close();
       };
+    },
+    /**
+     * The person's access in `workspace` changed (an `access` event naming
+     * them): asks the door for its channel again and moves there when their
+     * audience did (spec 0007, milestone 4). Nothing while it isn't watched.
+     */
+    rejoin: (workspace: string): Promise<void> => {
+      const entry = watched.get(workspace);
+      return entry === undefined ? Promise.resolve() : rejoin(workspace, entry);
     },
     /** Stops every watch, forgets the watermarks and disconnects (sign out, or the session ended). */
     stop: () => {

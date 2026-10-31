@@ -124,8 +124,6 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   // the caller as an audience of one.
   'outboxEvent',
   'planDelivery',
-  'workspaceEvent',
-  'isAudiencesNeedChannels',
   'stubEvent',
   'wireEvent',
   'createCollapse',

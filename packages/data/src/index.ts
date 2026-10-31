@@ -1949,11 +1949,14 @@ export function createDataLayer({
     });
   });
   router.on('access', (workspace, event) => {
-    // The person's access changed: everything held is read again under it (spec 0009, AC-146; milestone 4 adds
-    // the new channel and the 4500 disconnect).
+    // The person's access changed: everything held is read again under it (spec 0009, AC-146), and the live client
+    // asks for its channel again, moving when the person's audience did (spec 0007, milestone 4; the relay's 4500
+    // disconnect does the same, and whichever comes first asks once).
     void namesMe(workspace, event.memberIds).then((named) => {
       if (!named) return;
       spread(`resync ${workspace}`, () => {
+        // Spread as the reads are, so a rule change naming a whole team doesn't ask the door in step.
+        void live?.then((loaded) => loaded.rejoin(workspace)).catch(() => undefined);
         access.delete(workspace);
         router.resync(workspace);
         // Whose scheduling they reach may have changed too (spec 0037, AC-1274): Bookings' lists and weeks and Home's
