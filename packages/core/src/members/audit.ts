@@ -27,6 +27,9 @@ export interface AuditEntry {
     | 'booking'
     | 'form'
     | 'booking_page'
+    | 'team'
+    | 'object'
+    | 'list'
     | 'record';
   readonly targetId: string;
   /** Changed fields only, never a token, code or secret. */

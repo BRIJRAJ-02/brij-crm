@@ -1,8 +1,11 @@
 import {
   archiveAttributes,
   attributeImpact,
+  changeAttributeType,
+  checkTypeChange,
   createAttribute,
   editAttribute,
+  listListAttributes,
   listObjectAttributes,
   moveAttribute,
   restoreAttributes,
@@ -13,8 +16,11 @@ import { member } from '../../orpc.ts';
 // Inside a workspace: the door has let in an active member, and `context.scope` is theirs. Every write needs
 // `schema.manage`, checked by the engine (spec 0012); refusals name the field they are about themselves.
 export const attributesRouter = member.attributes.router({
+  // A list's own fields with `listId` (spec 0048), else the object's.
   list: member.attributes.list.handler(({ context, input }) =>
-    listObjectAttributes(context.scope, input.objectId, { includeArchived: input.includeArchived === true }),
+    input.listId === undefined
+      ? listObjectAttributes(context.scope, input.objectId, { includeArchived: input.includeArchived === true })
+      : listListAttributes(context.scope, input.listId, { includeArchived: input.includeArchived === true }),
   ),
   create: member.attributes.create.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
@@ -22,6 +28,7 @@ export const attributesRouter = member.attributes.router({
         context.scope,
         {
           objectId: input.objectId,
+          listId: input.listId,
           id: input.id,
           title: input.title,
           type: input.type,
@@ -69,6 +76,14 @@ export const attributesRouter = member.attributes.router({
   ),
   impact: member.attributes.impact.handler(({ context, input }) =>
     attributeImpact(context.scope, { attributeId: input.attributeId }),
+  ),
+  checkTypeChange: member.attributes.checkTypeChange.handler(({ context, input }) =>
+    checkTypeChange(context.scope, { attributeId: input.attributeId, to: input.to, config: input.config }),
+  ),
+  changeType: member.attributes.changeType.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+      changeAttributeType(context.scope, { attributeId: input.attributeId, to: input.to, config: input.config }, hooks),
+    ),
   ),
   restore: member.attributes.restore.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, (hooks) =>

@@ -1,3 +1,4 @@
+import { sharedStrings } from '@crm/ui';
 import { replacedStrings } from './replaced.ts';
 
 /** The workspace frame's and the object page's copy. */
@@ -9,8 +10,8 @@ export const strings = {
   signOut: 'Sign out',
   /** An archived object's address (spec 0012, AC-226). */
   objectArchived: (plural: string) => `${plural} is archived`,
-  objectArchivedText: 'Its records are kept. Restore it to bring it back to the sidebar with everything it held.',
-  objectArchivedMemberText: 'Its records are kept. A workspace owner or admin can restore it.',
+  /** Only a member who can't restore it needs a line: whom to ask. */
+  objectArchivedMemberText: 'Ask an owner or admin to restore it.',
   objectRestored: (plural: string) => `${plural} restored.`,
   restore: 'Restore',
   restoring: 'Restoring',
@@ -24,7 +25,7 @@ export const strings = {
   /** Leaving the workspace (spec 0031, AC-812), from the workspace menu: it asks first. */
   leaveWorkspace: 'Leave workspace',
   leaveTitle: (workspace: string) => `Leave ${workspace}?`,
-  leaveText: 'You lose access at once. To come back, someone has to invite you again.',
+  leaveText: 'You lose access now. Someone has to invite you back.',
   leaving: 'Leaving',
   records: 'Records',
   /** The sidebar's way to the trash (spec 0022), at its foot (spec 0034, AC-930). */
@@ -59,17 +60,16 @@ export const strings = {
   moveDown: 'Move down',
   customiseSidebar: 'Customise sidebar',
   /** Customise sidebar's code didn't load. */
-  customiseUnavailable: 'Couldn’t open Customise sidebar. Reload the page, then try again.',
+  customiseUnavailable: 'Couldn’t open. Reload.',
   /** An item's and a section's menu, for screen readers: "Deals options". */
   itemOptions: (name: string) => `${name} options`,
   sectionOptions: (title: string) => `${title} options`,
   /** The workspace menu's way into settings (spec 0012), above Sign out. */
   settings: 'Settings',
   noObjects: 'No objects yet',
-  noObjectsText: 'This workspace has no records to show yet.',
   loadingTitle: 'Loading',
   failedTitle: 'Couldn’t load this workspace',
-  failedText: 'Something went wrong. Try again in a moment.',
+  failedText: sharedStrings.couldntDoThat,
   workspaceMissingTitle: 'Workspace not found',
   // A deleted workspace, as its owner sees it within the window (spec 0031, AC-823).
   deletedTitle: (name: string) => `${name} is deleted`,
@@ -83,18 +83,15 @@ export const strings = {
   workspaceMissingText: 'That workspace doesn’t exist, or you’re not a member of it.',
   pageMissingTitle: 'Page not found',
   pageMissingText: 'There’s nothing at this address.',
-  checkAddress: 'Check the address for a typo, or open your workspace.',
   openWorkspace: 'Open your workspace',
   // A workspace's sign in rules holding this session back (spec 0033, AC-894).
   twoFactorRequiredTitle: (workspace: string) => `${workspace} requires two factor sign in`,
-  twoFactorRequiredText:
-    'Set up an authenticator app to open it. Your other workspaces open as usual from the workspace menu.',
+  twoFactorRequiredText: 'Set up an authenticator app to open it.',
   twoFactorDone: 'You’re set up. Two factor sign in now protects your account in every workspace.',
   setUpNow: 'Set up now',
   continueToWorkspace: 'Continue',
   signInAgainTitle: (workspace: string) => `${workspace} asks you to sign in again`,
-  signInAgainText:
-    'Its owner set how long a sign in lasts, or signed everyone out. Confirm it’s you to open it again. Your other workspaces stay open.',
+  signInAgainText: 'Confirm it’s you to open it again.',
   signInAgainFailed: 'Couldn’t sign you out. Check your connection, then try again.',
   confirmItsYou: 'Confirm it’s you',
   sendCode: 'Email me a code',
@@ -103,7 +100,6 @@ export const strings = {
   stillHeld: 'The workspace still asks for two factor sign in. Try again in a moment.',
   stillHeldSignIn: 'The workspace still asks you to sign in again. Sign out, then sign in.',
   emptyTitle: (pluralName: string) => `No ${pluralName.toLowerCase()} yet`,
-  emptyText: (pluralName: string) => `${pluralName} you add show here.`,
   /** The TopBar's action and the new record dialog's title ("New person"). */
   newRecord: (singularName: string) => `New ${singularName.toLowerCase()}`,
   creating: 'Creating',
@@ -120,7 +116,7 @@ export const strings = {
   /** While a column's total is read. */
   calcPending: '…',
   /** The person's own filter changed while rows were ticked: the old rows can't be known to match. */
-  selectionCleared: 'Selection cleared: the filter changed.',
+  selectionCleared: 'Selection cleared.',
   cancel: 'Cancel',
   addAttribute: 'Add attribute',
   /** After Add attribute: the new column often lands off screen, so say it was added. */
@@ -141,8 +137,6 @@ export const strings = {
   /** While another filter's or order's first rows load (spec 0006, AC-57; spec 0020). */
   updating: 'Updating',
   retry: 'Retry',
-  /** A failure the server didn't explain. */
-  somethingWrong: 'Something went wrong. Try again in a moment.',
   /** Above the table while the live connection is down (AC-38). */
   livePaused: 'Live updates paused, reconnecting',
   groupingTooMany: (field: string, count: number, max: number) =>
@@ -165,8 +159,8 @@ export const strings = {
   cleared: (cells: string) => `Cleared ${cells} cells.`,
   undo: 'Undo',
   /** A paste over more records, or more data, than one write takes (AC-50): nothing shows or saves. */
-  pasteTooMany: (limit: string) => `Nothing was pasted. Paste into at most ${limit} records at once.`,
-  pasteTooBig: 'Nothing was pasted. That’s more than one change can save, so paste fewer cells at once.',
+  pasteTooMany: (limit: string) => `Paste at most ${limit} records.`,
+  pasteTooBig: 'Too much to paste. Try fewer cells.',
   /** After an undo (AC-48, AC-49). */
   undidCell: (attribute: string, record: string) => `Undid ${attribute} on ${record}.`,
   undidCells: (cells: string) => `Undid ${cells} changes.`,
@@ -175,11 +169,10 @@ export const strings = {
   /** A bulk edit undone (spec 0022, AC-530), in its object's words ("Undid the edit of 2 people."), as its toast said it. */
   undidBulk: (records: string) => `Undid the edit of ${records}.`,
   /** Cells an undo kept because they changed since; never says who (it may be the person, in another tab). */
-  keptSince: (cells: number, shown: string) =>
-    cells === 1 ? '1 cell was changed since, so it was kept.' : `${shown} cells were changed since, so they were kept.`,
+  keptSince: (cells: number, shown: string) => (cells === 1 ? 'Kept 1 newer edit.' : `Kept ${shown} newer edits.`),
   nothingToUndo: 'Nothing to undo.',
   /** A toast's Undo pressed after newer changes: nothing is undone. */
-  undoStale: 'Newer changes came after that one, so it wasn’t undone. Undo them first.',
+  undoStale: sharedStrings.undoStale,
   /** Someone else's later save replaced the person's value (AC-46), and who changed it, from replaced.ts. */
   ...replacedStrings,
   /** ShortcutHelp, opened with ? anywhere in the workspace. */

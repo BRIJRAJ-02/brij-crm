@@ -250,11 +250,6 @@ describe('Workspace changes', () => {
   ] as const)('says its %s state', async (_name, state, words) => {
     await renderHistory('changes', true, <WorkspaceChangesTab log={logIn(state).log} />);
     await expect.poll(() => document.body.textContent).toContain(words);
-    if (state.status === 'ready') {
-      expect(document.body.textContent).toContain(
-        'Invitations, role changes, removals and changes to settings and scheduling show here.',
-      );
-    }
     if (state.status === 'forbidden') expect(page.getByRole('grid').elements()).toHaveLength(0);
   });
 
@@ -384,14 +379,14 @@ describe('while the route loads', () => {
   it('heads Your sign ins as the loaded section does, so nothing changes when it arrives', async () => {
     await pending('sign-ins', false, <SignInsPending />);
     await expect.element(page.getByRole('heading', { name: 'Your sign ins' })).toBeVisible();
-    expect(document.body.textContent).toContain('In every workspace, for the last 90 days.');
+    expect(document.body.textContent).toContain('Every workspace, last 90 days.');
     expect(document.body.textContent).not.toContain('Recent activity');
     shown?.unmount();
     shown = undefined;
     await renderHistory('sign-ins', false, signIns());
     await expect.poll(() => document.body.textContent).toContain('Signed in');
     expect(page.getByRole('heading', { name: 'Your sign ins' }).elements()).toHaveLength(1);
-    expect(document.body.textContent).toContain('In every workspace, for the last 90 days.');
+    expect(document.body.textContent).toContain('Every workspace, last 90 days.');
     expect(document.body.textContent).not.toContain('Recent activity');
   });
 

@@ -145,22 +145,52 @@ describe("Centrifugo's workspace namespace (compose and CI)", () => {
     await expect.poll(seqs).toEqual([1, 3, 4]);
   });
 
-  it('unsubscribes a removed person from the channel, and they hear nothing more (spec 0031, AC-817)', async () => {
+  it('keeps audience channels apart: a token for one never opens another (spec 0007, milestone 4)', async () => {
+    const userId = randomUUID();
+    const open = `workspace:${randomUUID()}`;
+    const restricted = `${open}.0123456789abcdef`;
+    const client = await connected(userId);
+    expect(
+      await client.call({ subscribe: { channel: restricted, token: token({ sub: userId, channel: restricted }) } }),
+    ).toMatchObject({ subscribe: { recoverable: true } });
+    const { publishBatch } = createCentrifugoPublisher({ apiUrl: API_URL, apiKey: API_KEY });
+    expect(
+      await publishBatch([
+        { channel: open, data: { seq: 1, to: 'open' }, idempotencyKey: randomUUID() },
+        { channel: restricted, data: { seq: 1, to: 'restricted' }, idempotencyKey: randomUUID() },
+      ]),
+    ).toEqual({ published: 2 });
+    const heard = () =>
+      client.pushes.flatMap((push) => {
+        const data = (push.push as { pub?: { data?: { to?: string } } } | undefined)?.pub?.data;
+        return data === undefined ? [] : [data.to];
+      });
+    await expect.poll(heard).toEqual(['restricted']);
+    // A restricted audience's token is no key to the open channel.
+    const other = await connected(userId);
+    await other.call({ subscribe: { channel: open, token: token({ sub: userId, channel: restricted }) } });
+    expect(await other.closed).toMatchObject({ code: 3500, reason: 'invalid token' });
+  });
+
+  it('unsubscribes a removed person from every audience channel, and they hear nothing more (AC-817)', async () => {
     const userId = randomUUID();
     const channel = `workspace:${randomUUID()}`;
+    const restricted = `${channel}.0123456789abcdef`;
     const client = await connected(userId);
     await client.call({ subscribe: { channel, token: token({ sub: userId, channel }) } });
+    await client.call({ subscribe: { channel: restricted, token: token({ sub: userId, channel: restricted }) } });
     const { publishBatch, unsubscribe } = createCentrifugoPublisher({ apiUrl: API_URL, apiKey: API_KEY });
-    await unsubscribe(channel, [userId]);
-    // Centrifugo tells the client its subscription ended.
+    await unsubscribe([channel, restricted], [userId]);
     await expect
-      .poll(() => client.pushes.some((push) => (push.push as { unsubscribe?: unknown } | undefined)?.unsubscribe))
-      .toBe(true);
-    await publishBatch([{ channel, data: { seq: 1 }, idempotencyKey: randomUUID() }]);
+      .poll(
+        () => client.pushes.filter((push) => (push.push as { unsubscribe?: unknown } | undefined)?.unsubscribe).length,
+      )
+      .toBe(2);
+    await publishBatch([{ channel: restricted, data: { seq: 1 }, idempotencyKey: randomUUID() }]);
     await new Promise((resolve) => setTimeout(resolve, 200));
     expect(client.pushes.some((push) => (push.push as { pub?: unknown } | undefined)?.pub)).toBe(false);
     await expect(
-      createCentrifugoPublisher({ apiUrl: API_URL, apiKey: 'wrong' }).unsubscribe(channel, [userId]),
+      createCentrifugoPublisher({ apiUrl: API_URL, apiKey: 'wrong' }).unsubscribe([channel], [userId]),
     ).rejects.toMatchObject({ code: 'PUBLISH_FAILED' });
   });
 
@@ -187,6 +217,23 @@ describe("Centrifugo's disconnect by user (spec 0033, AC-891)", () => {
     expect(await someoneElse.call({ presence_stats: { channel: `workspace:${randomUUID()}` } })).not.toHaveProperty(
       'closed',
     );
+  });
+
+  it('closes several users’ connections in one call with 4500 "access changed" (spec 0007, AC-84)', async () => {
+    const [ada, bea] = [randomUUID(), randomUUID()];
+    const adas = await connected(ada);
+    const beas = await connected(bea);
+    const someoneElse = await connected();
+    const { disconnectUsers } = createCentrifugoDisconnect({ apiUrl: API_URL, apiKey: API_KEY });
+    await disconnectUsers([ada, bea], { code: 4500, reason: 'access changed' });
+    expect(await adas.closed).toEqual({ code: 4500, reason: 'access changed' });
+    expect(await beas.closed).toEqual({ code: 4500, reason: 'access changed' });
+    expect(await someoneElse.call({ presence_stats: { channel: `workspace:${randomUUID()}` } })).not.toHaveProperty(
+      'closed',
+    );
+    await expect(
+      createCentrifugoDisconnect({ apiUrl: API_URL, apiKey: 'not-the-key' }).disconnectUsers([ada], SIGNED_OUT),
+    ).rejects.toMatchObject({ code: 'PUBLISH_FAILED' });
   });
 
   it('answers false, never throws, when Centrifugo refuses the key or can’t be reached', async () => {

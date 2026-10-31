@@ -1,6 +1,6 @@
 // Brief
 // Purpose: never save over someone else's filters silently (spec 0020, AC-469).
-// Main task: choose Replace (mine over theirs), Save as new view (keep both), or Cancel (keep my draft, unsaved).
+// Main task: choose Replace theirs (mine over theirs), Save as new view (keep both), or Keep editing (my draft, unsaved).
 // Leaves out: merging the two filters.
 import { Button, Modal } from '@crm/ui';
 import { strings } from './strings.ts';
@@ -16,7 +16,7 @@ export interface ViewChangedDialogProps {
   readonly onCancel: () => void;
 }
 
-/** "This view changed": Cancel first (focus starts there, Esc), then Save as new view, then Replace. */
+/** "This view changed": Keep editing first (focus starts there, Esc), then Save as new view, then Replace theirs. */
 export function ViewChangedDialog({ sentence, isReplacing, onReplace, onSaveAsNew, onCancel }: ViewChangedDialogProps) {
   return (
     <Modal
@@ -43,7 +43,7 @@ export function ViewChangedDialog({ sentence, isReplacing, onReplace, onSaveAsNe
         </>
       }
     >
-      {strings.changedText(sentence ?? '')}
+      {sentence}
     </Modal>
   );
 }

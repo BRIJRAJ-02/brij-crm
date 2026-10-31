@@ -32,6 +32,7 @@ const form = newId();
 const page = newId();
 const booking = newId();
 const record = newId();
+const listId = newId();
 
 const names: AuditNames = {
   members: new Map([
@@ -51,6 +52,7 @@ const names: AuditNames = {
   forms: new Map([[form, { name: 'Contact us', isGone: false }]]),
   bookingPages: new Map([[page, { name: 'Intro call', isGone: false }]]),
   bookings: new Map([[booking, { pageTitle: 'Intro call', startsAt: '2026-10-24T09:30:00.000000Z' }]]),
+  lists: new Map([[listId, { name: 'Deals', isGone: false }]]),
 };
 
 /** A stored row as the page statement reads it. */
@@ -230,6 +232,10 @@ const FIXTURES: Record<ListedAuditAction, readonly AuditRow[]> = {
     }),
   ],
   'booking.no_show': [row('booking.no_show', 'booking', booking)],
+  'list.created': [row('list.created', 'list', listId)],
+  'list.updated': [row('list.updated', 'list', listId, { before: { name: 'Sales' }, after: { name: 'Deals' } })],
+  'list.archived': [row('list.archived', 'list', listId)],
+  'list.restored': [row('list.restored', 'list', listId)],
   'booking.no_show_undone': [row('booking.no_show_undone', 'booking', booking)],
   'booking.record_linked': [
     row('booking.record_linked', 'booking', booking, { before: { recordId: null }, after: { recordId: record } }),
@@ -286,6 +292,27 @@ const FIXTURES: Record<ListedAuditAction, readonly AuditRow[]> = {
   'booking.changed_for': [
     row('booking.changed_for', 'booking', booking, { after: { memberId: bea, change: 'moved' } }),
     row('booking.changed_for', 'booking', booking, { after: { memberId: bea, change: 'made' } }),
+  ],
+  // As the call sites in teams.ts and rules.ts write them (target types `team` and `object`).
+  'team.changed': [
+    row('team.changed', 'team', newId(), { after: { change: 'created', name: 'Sales' } }),
+    row('team.changed', 'team', newId(), { before: { name: 'Sales' }, after: { change: 'renamed', name: 'Revenue' } }),
+    row('team.changed', 'team', newId(), { before: { name: 'Revenue' }, after: { change: 'deleted', left: [bea] } }),
+    row('team.changed', 'team', newId(), { after: { change: 'members', name: 'Sales', joined: [bea], left: [] } }),
+  ],
+  'access.rule_set': [
+    row('access.rule_set', 'object', newId(), {
+      before: { level: 'write', records: 'all', isDefault: true },
+      after: {
+        object: 'Deals',
+        subject: 'team',
+        team: 'Sales',
+        level: 'write',
+        records: 'own',
+        fields: { Salary: 'hidden' },
+        isDefault: false,
+      },
+    }),
   ],
 };
 
@@ -422,6 +449,28 @@ describe('toEntryView, per action', () => {
       expect(entry.params).toEqual({});
       expect(JSON.stringify(entry)).not.toContain(record);
     }
+  });
+
+  it('says a team change and an access rule in the names stored then, with only the counts of people and fields', () => {
+    expect(only('team.changed', 0).params).toEqual({ change: 'created', team: 'Sales', joined: 0, left: 0 });
+    expect(only('team.changed', 1).params).toEqual({ change: 'renamed', team: 'Sales', joined: 0, left: 0 });
+    expect(only('team.changed', 2).params).toEqual({ change: 'deleted', team: 'Revenue', joined: 0, left: 1 });
+    expect(only('team.changed', 3).params).toEqual({ change: 'members', team: 'Sales', joined: 1, left: 0 });
+    expect(only('access.rule_set').params).toEqual({
+      object: 'Deals',
+      who: 'Sales',
+      level: 'write',
+      records: 'own',
+      fields: 1,
+      isDefault: false,
+    });
+    // A level the code doesn't know is no entry rather than a wrong sentence.
+    const odd = row('access.rule_set', 'object', newId(), {
+      after: { object: 'Deals', level: 'manage', records: 'all' },
+    });
+    expect(toEntryView(odd, names)).toBeUndefined();
+    // The field rules' names are counted, never passed on.
+    expect(JSON.stringify(only('access.rule_set'))).not.toContain('Salary');
   });
 
   it('names a delegation’s delegate, level and whom it is over, and drops a level it doesn’t know', () => {

@@ -425,7 +425,7 @@ export function TwoFactorSection({
   }
 
   return (
-    <SettingsSection title={copy.section} description={copy.description}>
+    <SettingsSection title={copy.section}>
       {card}
       {modal}
     </SettingsSection>

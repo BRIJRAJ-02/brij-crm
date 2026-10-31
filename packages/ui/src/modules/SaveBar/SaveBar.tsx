@@ -182,9 +182,7 @@ export function SaveBar({ status, error, onSave, onDiscard, blockedReason, onFoc
                     </Button>
                   </>
                 }
-              >
-                {strings.discardText}
-              </Modal>
+              />
             </ModalTrigger>
           )}
           {/* The check's place takes the spinner while it saves, so Save never changes width. */}

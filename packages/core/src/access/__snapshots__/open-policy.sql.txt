@@ -969,8 +969,8 @@ end), "title", "type", "is_multi", "is_required", "is_unique", "is_system", "sys
 ) end), "config", "default_value", "relationship_id", "position", "rule_count", "rules_version" from "attributes" where "attributes"."list_id" = $1
   ["<id 2>"]
 
-select "position", "text_value", "number_value"::text, "date_value"::text, to_char("timestamp_value" at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'), "bool_value", "option_id", "actor_type", "actor_id", "json_value", "owner_id", "attribute_id", "version_id", "is_cleared" from "values" where ("values"."owner_id" in ($1) and "values"."active_until" is null and "values"."is_cleared" = $2)
-  ["<id 10>",false]
+select "position", "text_value", "number_value"::text, "date_value"::text, to_char("timestamp_value" at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'), "bool_value", "option_id", "actor_type", "actor_id", "json_value", "owner_id", "attribute_id", "version_id", "is_cleared" from "values" where ("values"."owner_id" in ($1) and "values"."active_until" is null)
+  ["<id 10>"]
 
 commit
   []
@@ -2079,17 +2079,35 @@ end), "title", "type", "is_multi", "is_required", "is_unique", "is_system", "sys
   ["<id 2>",51]
 
 
-    select n.id::text as note_id, to_char(n.created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as at, n.created_by_type as actor_type,
-      n.created_by_id::text as actor_id, n.title, left(n.content_text, 600) as head
-    from notes n
-    where n.record_id = $1::uuid and n.deleted_at is null
-      and exists (select 1 from records r where r.workspace_id = n.workspace_id and r.id = n.record_id and r.deleted_at is null)
-      and true
-      and true
-    order by n.created_at desc, ('note:' || n.id::text) collate "C"
-    limit $2
+    (
+      select n.id::text as note_id, to_char((n.occurred_at) at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as at, n.created_by_type as actor_type,
+        n.created_by_id::text as actor_id, n.title, left(n.content_text, 600) as head, n.kind, n.duration_minutes,
+        n.outcome
+      from notes n
+      where n.record_id = $1::uuid and n.deleted_at is null and true
+        and exists (select 1 from records r where r.workspace_id = n.workspace_id and r.id = n.record_id and r.deleted_at is null)
+        and true and true
+      order by n.occurred_at desc, ('note:' || n.id::text) collate "C"
+      limit $2
+    )
+    union all
+    (
+      select l.note_id::text as note_id, to_char((case when n.kind = 'note' then l.created_at else n.occurred_at end) at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as at,
+        l.created_by_type as actor_type, l.created_by_id::text as actor_id, n.title, left(n.content_text, 600) as head,
+        n.kind, n.duration_minutes, n.outcome
+      from note_records l
+      join notes n on n.workspace_id = l.workspace_id and n.id = l.note_id and n.record_id <> l.record_id
+        and n.deleted_at is null
+      join records h on h.workspace_id = n.workspace_id and h.id = n.record_id and h.deleted_at is null
+      join objects ho on ho.workspace_id = h.workspace_id and ho.id = h.object_id and ho.archived_at is null
+      where l.record_id = $3::uuid and true and true
+        and exists (select 1 from records r where r.workspace_id = l.workspace_id and r.id = l.record_id and r.deleted_at is null)
+        and true and true
+      order by (case when n.kind = 'note' then l.created_at else n.occurred_at end) desc, ('note:' || l.note_id::text) collate "C"
+      limit $4
+    )
   
-  ["<id 2>",51]
+  ["<id 2>",51,"<id 2>",51]
 
 
     (

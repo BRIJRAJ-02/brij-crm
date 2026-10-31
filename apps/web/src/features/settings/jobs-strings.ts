@@ -43,11 +43,11 @@ export const strings = {
   } satisfies Record<JobStatus, string>,
   /** InfoTips beside the two statuses a new member wouldn't read from the word alone. */
   statusHelp: {
-    preparing: 'It’s gathering the records it will work on. Nothing has changed yet.',
-    ready: 'This job waits until someone presses Review. If it expires first, nothing changes.',
+    preparing: 'Counting records. Nothing has changed yet.',
+    ready: 'Waits for Review. If it expires, nothing changes.',
   },
   /** An example for Needs confirm's InfoTip. */
-  readyExample: 'A bulk delete of 2,000 people waits here until you confirm it.',
+  readyExample: 'Deleting 2,000 people waits for your OK.',
   system: 'System',
   removedMember: 'A removed member',
   /** "250 of 1,000", the counts formatted in the browser's language. */
@@ -66,7 +66,7 @@ export const strings = {
   cancel: 'Cancel',
   /** Cancel's confirm, naming the job: "Cancel “Bulk delete”?". */
   cancelTitle: (label: string) => `Cancel “${label}”?`,
-  cancelText: 'It stops before its next batch. What it already did stays done.',
+  cancelText: 'It stops after this batch. Done work stays.',
   /** Cancel's confirm keeps the job: its dismiss can't be called Cancel too. */
   keepJob: 'Keep job',
   cancelling: 'Cancelling',
@@ -89,12 +89,12 @@ export const strings = {
     },
     'records.bulk_edit': {
       title: (records: string) => `Update ${records}?`,
-      text: 'Each one gets the change this job was started with. This can’t be undone.',
+      text: 'Applies the same change to each. Can’t be undone.',
       action: (records: string) => `Update ${records}`,
     },
     'records.bulk_restore': {
       title: (records: string) => `Restore ${records}?`,
-      text: 'They come back with their links, list entries, notes and history.',
+      text: 'They come back with everything on them.',
       action: (records: string) => `Restore ${records}`,
     },
   },
@@ -115,13 +115,10 @@ export const strings = {
   records: (count: string) => `${count} records`,
   showMore: 'Show more',
   emptyTitle: 'No background jobs yet',
-  /** Under the empty title: what shows here, every job for owners and admins, the person's own for everyone else. */
-  emptyText: 'Long work in this workspace, such as bulk changes, shows here as it runs.',
-  emptyTextMine: 'Long work you start, such as bulk changes, shows here as it runs.',
   /** Beside the title for members, who see only the jobs they started (the page had no description after 21 October 2026). */
   mineBadge: 'Only yours',
   failedTitle: 'Couldn’t load the background jobs',
-  failedText: 'Something went wrong. Try again in a moment.',
+  failedText: 'Try again in a moment.',
   /** Local and previews only (AC-123). */
   runTest: 'Run a test job',
 } as const;

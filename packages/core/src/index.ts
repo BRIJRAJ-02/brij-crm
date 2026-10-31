@@ -17,6 +17,12 @@ export {
   type DoorSession,
   type RuleSource,
 } from './access/door.ts';
+// The production rule source: the stored rules and the member's teams, read with the door's one statement.
+export { storedRules } from './access/stored-rules.ts';
+// An object's access rules (spec 0032): what the Member role and each team may do with its records.
+export { getObjectAccess, ownerAttributeOf, setObjectAccess } from './access/rules.ts';
+export { previewAccess } from './access/preview.ts';
+export type { AccessRuleOptions, ObjectAccessRule } from './access/rules.ts';
 export {
   EVENT_KINDS,
   eventFacts,
@@ -123,6 +129,17 @@ export {
   type SignInAlertDeps,
 } from './account/activity.ts';
 export { milestoneHook, type ReachedMilestone } from './milestones/milestones.ts';
+// Automations (parity #53): the write hook that queues runs, and the member door's part (the worker's runs are in `@crm/core/system`).
+export { automationHook } from './automations/hook.ts';
+export {
+  createAutomation,
+  deleteAutomation,
+  listAutomationRuns,
+  listAutomations,
+  restoreAutomation,
+  setAutomationEnabled,
+  updateAutomation,
+} from './automations/service.ts';
 export { type AuditSource } from './members/audit.ts';
 // Settings › Workspace › General, the owner's delete and restore, and Account › Profile (spec 0031, slice 7).
 export {
@@ -202,6 +219,7 @@ export {
   archiveAttributes,
   createAttribute,
   editAttribute,
+  listListAttributes,
   listObjectAttributes,
   moveAttribute,
   restoreAttributes,
@@ -209,7 +227,36 @@ export {
   type EditAttributeInput,
   type NewAttributeOption,
 } from './attributes/attributes.ts';
+// Lists and their entries (spec 0048).
+export {
+  addListEntries,
+  addListEntry,
+  archiveList,
+  countEntries,
+  createList,
+  editEntry,
+  entriesForRecord,
+  entryMembership,
+  getList,
+  listLists,
+  queryEntries,
+  readEntryPage,
+  removeEntries,
+  restoreEntries,
+  restoreList,
+  updateList,
+  type AddedEntries,
+  type AddListEntryInput,
+  type CreateListInput,
+  type EditEntryInput,
+  type EntryPage,
+  type EntryWindow,
+  type UpdateListInput,
+  type WrittenEntry,
+} from './lists/lists.ts';
+export { ENTRY_JOB_KINDS, startAddMatching, startRemoveMatching, undoEntriesJob } from './lists/jobs.ts';
 export { attributeImpact } from './attributes/impact.ts';
+export { changeAttributeType, checkTypeChange, type TypeChangeRequest } from './attributes/type-change.ts';
 export {
   archiveOption,
   createOption,
@@ -294,12 +341,26 @@ export {
   type CreateViewInput,
   type UpdateViewInput,
 } from './views/manage.ts';
+// Saved reports (the reports lane, spec 0050 reserved): a chart's definition, read and changed through the door.
+export {
+  createReport,
+  deleteReport,
+  listReports,
+  REPORT_NOT_FOUND,
+  REPORT_NOT_YOURS,
+  updateReport,
+  type NewReport,
+  type ReportChange,
+} from './reports/reports.ts';
 // The sidebar (spec 0034): each member's own row, read through the door and changed one operation at a time.
 export { changeNav, readNav } from './navigation/navigation.ts';
 export {
   deleteNote,
   getNote,
+  linkNote,
   listNotes,
+  NOTE_LINK_FORBIDDEN,
+  NOTE_LINKS_FULL,
   NOTE_READ_ONLY,
   restoreNote,
   saveNote,
@@ -517,15 +578,13 @@ export { listVisibleMembers } from './scheduling/visible.ts';
 export { copyWeek, readTeamWeek, setDayHours, setUsualHours } from './availability/team-week.ts';
 export { createTimeOff, deleteTimeOff, listTimeOff, updateTimeOff } from './scheduling/time-off.ts';
 export { getLimits, limitsAt, setLimits } from './scheduling/limits.ts';
+// Teams (spec 0031, slice 8, AC-824 to AC-827): flat groups of members that access rules name.
+export { changeTeamMembers, createTeam, deleteTeam, listTeams, renameTeam } from './teams/teams.ts';
+export type { TeamWriteOptions } from './teams/teams.ts';
+export { membersAffectedByTeamChange } from './teams/reach.ts';
 export { PREFERENCES_MEMBERS_ONLY, readMyPreferences, updateMyPreferences } from './members/preferences.ts';
 export { outboxEvent, stubEvent, wireEvent } from './realtime/events.ts';
-export {
-  AUDIENCES_NEED_CHANNELS,
-  isAudiencesNeedChannels,
-  planDelivery,
-  workspaceEvent,
-  type Delivery,
-} from './realtime/plan.ts';
+export { planDelivery, type Delivery } from './realtime/plan.ts';
 export { audienceOf, catchUp, CATCH_UP_MAX_ROWS, createCollapse, workspaceHead } from './realtime/catch-up.ts';
 export {
   cancelJob,

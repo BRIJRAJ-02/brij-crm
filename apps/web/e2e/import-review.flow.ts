@@ -60,7 +60,7 @@ test.describe('import: review values and the preview', () => {
       await expect(page.getByRole('grid', { name: 'Rows to import' }).getByText(amount).first()).toBeVisible();
     }
     await expect(page.getByRole('grid', { name: 'Rows to import' }).getByText('Negotiation').first()).toBeVisible();
-    await expect(page.getByText('5 new. You can undo it for 7 days.')).toBeVisible();
+    await expect(page.getByText('5 new. Undo for 7 days.')).toBeVisible();
     // The Steps bar's done steps go back.
     await page.getByRole('button', { name: /Review values/u }).click();
     await expect(page.getByRole('heading', { name: 'Review values' })).toBeVisible();
@@ -90,13 +90,13 @@ test.describe('import: review values and the preview', () => {
     await expect(page.getByRole('list', { name: 'Import steps' }).getByRole('listitem')).toHaveCount(3);
     await expect(page.getByRole('button', { name: /Match existing records by/u })).toContainText('Email addresses');
     // Ada is there already; the second Bob meets the record the first makes.
-    await expect(page.getByText('1 new · 2 update. You can undo it for 7 days.')).toBeVisible();
+    await expect(page.getByText('1 new · 2 update. Undo for 7 days.')).toBeVisible();
 
     // Without a match key on an object holding records, importing again would duplicate: said before the start.
     await choose(page, /Match existing records by/u, 'Don’t match, always add');
-    await expect(page.getByText('Rows are always added; importing this file again creates duplicates.')).toBeVisible();
+    await expect(page.getByText('Rows are added as new. Importing again makes duplicates.')).toBeVisible();
     await choose(page, /Match existing records by/u, 'Email addresses');
-    await expect(page.getByText('Rows are always added; importing this file again creates duplicates.')).toBeHidden();
+    await expect(page.getByText('Rows are added as new. Importing again makes duplicates.')).toBeHidden();
 
     // Start goes at once; the summary counts one made and none twice.
     await page.getByRole('button', { name: 'Start import' }).click();

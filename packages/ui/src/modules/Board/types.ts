@@ -12,6 +12,8 @@ export interface BoardCard {
   readonly displays?: Readonly<Record<string, unknown>>;
   /** Set when this card can't be moved: shown in its tooltip, and it has no handle. */
   readonly readOnlyReason?: string;
+  /** The record's open comment threads: a comment mark and the count after its name; nothing for 0 or absent. */
+  readonly openThreads?: number;
 }
 
 /** One column: an option of the grouping attribute. */
@@ -38,6 +40,16 @@ export interface BoardColumn {
   readonly isCollapsedWhenEmpty?: boolean;
   /** Never a drop target, for this reason, shown while a card is moving (a required field's "No <field>" column). */
   readonly refusesDrop?: { readonly reason: string };
+}
+
+/**
+ * The "+ Add stage" column at the board's end: what it says ("Add stage", "Add option"), and what makes a column of
+ * the name typed. It answers undefined once the column is made (the field clears for the next one), or why it was
+ * refused, which the field shows under the name it keeps.
+ */
+export interface BoardAddColumn {
+  readonly label: string;
+  readonly onAdd: (title: string) => Promise<string | undefined>;
 }
 
 /** A card moved: where to, and (when the board can reorder) the card it now sits before. */

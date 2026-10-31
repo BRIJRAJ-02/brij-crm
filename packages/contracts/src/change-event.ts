@@ -268,6 +268,17 @@ export const TimeOffEvent = z.object({
   mutationId,
 });
 
+/**
+ * An automation, or a run's outcome, changed (parity #53): names nothing, and only an audience whose members all hold
+ * `automations.manage` receives it (any other gets the stub). A screen holding the automations or their run log reads
+ * them again.
+ */
+export const AutomationsEvent = z.object({
+  ...place,
+  kind: z.literal('automations'),
+  mutationId,
+});
+
 /** Background jobs changed (spec 0008): refetch them, or when `coarse` the unfinished jobs you hold. */
 export const JobsEvent = z.object({
   ...place,
@@ -306,6 +317,7 @@ export const ChangeEvent = z.discriminatedUnion('kind', [
   NavEvent,
   CalendarsEvent,
   TimeOffEvent,
+  AutomationsEvent,
   CommentsEvent,
   NotificationsEvent,
   RestrictedEvent,
@@ -331,6 +343,7 @@ export const CHANGE_EVENT_KINDS = [
   'notifications',
   'calendars',
   'time_off',
+  'automations',
   'restricted',
 ] as const satisfies readonly ChangeEvent['kind'][];
 
@@ -340,4 +353,28 @@ export type ChangeEventKind = (typeof CHANGE_EVENT_KINDS)[number];
 /** The channel a workspace's change events go to: `workspace:<id>` (Centrifugo's `workspace` namespace). */
 export function workspaceChannel(workspaceId: string): string {
   return `workspace:${workspaceId}`;
+}
+
+/** The audience key of members whose data policy restricts nothing (spec 0009's `policyKey`). */
+export const OPEN_AUDIENCE = 'open';
+
+/** What an audience key looks like: `open`, or 16 hex characters of a policy's hash (spec 0009). */
+const AUDIENCE_KEY = /^(?:open|[0-9a-f]{16})$/;
+
+/** Whether `key` is an audience key (`open`, or a policy's 16 hex characters). */
+export function isAudienceKey(key: string): boolean {
+  return AUDIENCE_KEY.test(key);
+}
+
+/**
+ * The channel one audience of a workspace listens on (spec 0007, milestone 4):
+ * members who share a data policy share it. The open audience keeps
+ * `workspace:<id>`, so a workspace with no access rules has exactly the one
+ * channel it always had (and browsers open across a deploy keep it); every
+ * other audience has `workspace:<id>.<key>`. Throws on a key that isn't one, so
+ * a channel name is never built from anything else.
+ */
+export function audienceChannel(workspaceId: string, key: string): string {
+  if (!isAudienceKey(key)) throw new Error('Not an audience key.');
+  return key === OPEN_AUDIENCE ? workspaceChannel(workspaceId) : `${workspaceChannel(workspaceId)}.${key}`;
 }

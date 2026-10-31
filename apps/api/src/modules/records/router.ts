@@ -40,6 +40,7 @@ export const recordsRouter = member.records.router({
           ...(input.filter === undefined ? {} : { filter: input.filter }),
           ...(input.sorts === undefined ? {} : { sorts: input.sorts }),
           ...(input.attributeIds === undefined ? {} : { attributeIds: input.attributeIds }),
+          ...(input.threadCounts === true ? { threadCounts: true } : {}),
           ...(input.now === undefined ? {} : { now: input.now }),
           ...(input.timeZone === undefined ? {} : { timeZone: input.timeZone }),
         },
@@ -139,6 +140,7 @@ export const recordsRouter = member.records.router({
           ...(input.filter === undefined ? {} : { filter: input.filter }),
           ...(input.sorts === undefined ? {} : { sorts: input.sorts }),
           ...(input.attributeIds === undefined ? {} : { attributeIds: input.attributeIds }),
+          ...(input.threadCounts === true ? { threadCounts: true } : {}),
           ...(input.limit === undefined ? {} : { limit: input.limit }),
           ...(input.probeArchived === undefined ? {} : { probeArchived: input.probeArchived }),
           ...(input.now === undefined ? {} : { now: input.now }),
@@ -153,7 +155,9 @@ export const recordsRouter = member.records.router({
     }),
   ),
   get: member.records.get.handler(({ context, input }) =>
-    readRecordsById(context.scope, input.ids, input.attributeIds),
+    readRecordsById(context.scope, input.ids, input.attributeIds, {
+      ...(input.threadCounts === true ? { threadCounts: true } : {}),
+    }),
   ),
   // The record page (spec 0017): a page of its timeline, and a record in the trash, which opens read only.
   activity: member.records.activity.handler(async ({ context, input }) => {

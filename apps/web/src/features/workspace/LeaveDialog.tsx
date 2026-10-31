@@ -5,7 +5,7 @@
 // Leaves out: who else may remove them (the Members page), and the only owner's way out (they hand ownership on
 // first, slice 4); the server refuses them LAST_OWNER, said inside the dialog.
 import { isDataError, type DataLayer } from '@crm/data';
-import { Button, Callout, Modal } from '@crm/ui';
+import { Button, Callout, Modal, sharedStrings } from '@crm/ui';
 import { useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 import { strings } from './strings.ts';
@@ -39,7 +39,7 @@ export function LeaveDialog({ data, slug, workspaceName, isOpen, onClose }: Leav
       },
       (error: unknown) => {
         setBusy(false);
-        setFailure(isDataError(error) ? error.message : strings.somethingWrong);
+        setFailure(isDataError(error) ? error.message : sharedStrings.couldntDoThat);
       },
     );
   };

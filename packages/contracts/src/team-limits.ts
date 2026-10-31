@@ -22,6 +22,15 @@ export type InviteLinkDays = (typeof INVITE_LINK_DAYS)[number];
 /** The most people one invite link may let in, when it is capped (AC-818). */
 export const INVITE_LINK_USES_MAX = 1000;
 
+/** The longest a team's name may be (spec 0031, AC-824). */
+export const TEAM_NAME_MAX = 64;
+
+/** Teams one workspace may hold: a sanity cap, so a list of teams stays a list. */
+export const TEAMS_MAX = 100;
+
+/** People one team change may add or take out at once. */
+export const TEAM_CHANGE_MAX = 200;
+
 /** How long a deleted workspace waits before its purge, while an owner can restore it (spec 0031, AC-823). */
 export const WORKSPACE_PURGE_DAYS = 30;
 

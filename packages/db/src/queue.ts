@@ -82,6 +82,8 @@ export interface QueueConnection {
    * (`crm_calendar_health_candidates`). With nothing owed, both counts read 0: there is nothing to hold.
    */
   calendarHealthDue(max: number): Promise<CalendarHealthSweep>;
+  /** The ids of live workspaces with an enabled task due automation, after `after`, at most `max` (1 to 500): `crm_automation_due_workspaces` (parity #53). */
+  automationDueWorkspaces(after: string | undefined, max: number): Promise<readonly string[]>;
   /** Deleted workspaces past their window, oldest first, at most `max` (1 to 50): `crm_workspaces_to_purge` (spec 0031). */
   workspacesToPurge(max: number): Promise<readonly string[]>;
   /** One outbox prune batch (`pruneOutbox`, spec 0007) on this connection: only crm_worker may run it. */
@@ -259,6 +261,13 @@ export function openQueueConnection(options: {
           fresh: row.fresh,
         })),
       };
+    },
+    async automationDueWorkspaces(after, max) {
+      const result = await pool.query<{ id: string }>(
+        'select id from public.crm_automation_due_workspaces($1, $2) as w(id)',
+        [after ?? null, max],
+      );
+      return result.rows.map((row) => row.id);
     },
     async workspacesToPurge(max) {
       const result = await pool.query<{ id: string }>('select id from public.crm_workspaces_to_purge($1) as w(id)', [

@@ -233,6 +233,11 @@ export const lists = pgTable(
     objectId: uuid('object_id').notNull(),
     apiSlug: text('api_slug').notNull(),
     name: text('name').notNull(),
+    /** The list's tile (spec 0048): an `OBJECT_ICONS` name and a hue token, as objects have. */
+    icon: text('icon').notNull().default('list'),
+    hue: text('hue').notNull().default('gray'),
+    /** The view everyone lands on (spec 0048, as objects since spec 0020); set in the same transaction as the list. */
+    defaultViewId: uuid('default_view_id'),
     /** False when a record may sit in the list once only. */
     allowsDuplicates: boolean('allows_duplicates').notNull().default(true),
     /** Live entries, read and moved under `FOR UPDATE` by the limits module. */
@@ -247,7 +252,15 @@ export const lists = pgTable(
       columns: [t.workspaceId, t.objectId],
       foreignColumns: [objects.workspaceId, objects.id],
     }),
+    foreignKey({
+      name: 'lists_default_view',
+      columns: [t.workspaceId, t.defaultViewId],
+      foreignColumns: [views.workspaceId, views.id],
+    }),
     uniqueIndex('lists_api_slug').on(t.workspaceId, t.apiSlug),
+    // Names are unique ignoring case, archived lists included, so a restore never collides (spec 0048, AC-4803).
+    uniqueIndex('lists_name').on(t.workspaceId, sql`lower(${t.name})`),
+    check('lists_hue', sql`${t.hue} in ('gray', 'red', 'orange', 'yellow', 'lime', 'green', 'sky', 'blue', 'purple')`),
     check('lists_entry_count', sql`${t.entryCount} >= 0`),
     ...actorConstraints('lists', 'created_by', t.workspaceId, {
       type: t.createdByType,

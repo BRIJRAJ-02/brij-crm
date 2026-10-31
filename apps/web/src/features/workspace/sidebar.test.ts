@@ -164,6 +164,27 @@ describe('the sections the sidebar draws (AC-921, AC-928, AC-931)', () => {
     ]);
   });
 
+  // Spec 0048 (AC-4801, AC-4804): the readable live lists, oldest first; empty, Lists shows only to a list maker.
+  it('draws Lists with the live lists, and empty only for someone who may make one', () => {
+    const nav = navOf();
+    const lists = [
+      { id: '0192f0c8-0000-7000-8000-00000000a001', isArchived: false },
+      { id: '0192f0c8-0000-7000-8000-00000000a002', isArchived: true },
+    ];
+    const sections = drawnSections(nav, universeOf(OBJECTS, nav, lists));
+    expect(sections.map((section) => section.key)).toEqual(['records', 'lists', 'scheduling']);
+    expect(sections[1]?.entries.map((entry) => entry.id)).toEqual([lists[0]?.id]);
+    expect(drawnSections(nav, universeOf(OBJECTS, nav)).map((section) => section.key)).toEqual([
+      'records',
+      'scheduling',
+    ]);
+    expect(drawnSections(nav, universeOf(OBJECTS, nav), true).map((section) => section.key)).toEqual([
+      'records',
+      'lists',
+      'scheduling',
+    ]);
+  });
+
   it('leaves Scheduling out for someone with none of its pages (a guest, spec 0031)', () => {
     const nav = navOf({ scheduling: [] });
     expect(drawnSections(nav, universeOf(OBJECTS, nav)).map((section) => section.key)).toEqual(['records']);

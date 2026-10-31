@@ -43,6 +43,11 @@ interface SampleGridProps {
   readonly confirmsPaste?: boolean;
   /** Notes on rows by id: a record made here, a row that left the view. */
   readonly rowNotes?: ReadonlyMap<string, RowNote>;
+  /** The row whose record is open beside the grid, and its place (the grid scrolls to it). */
+  readonly activeId?: string;
+  readonly activeIndex?: number;
+  /** Open comment threads by row id. */
+  readonly commentCounts?: ReadonlyMap<string, number>;
   /** Columns not read yet for these rows (a column just shown): their cells draw skeletons. */
   readonly unknown?: { readonly rows: readonly string[]; readonly column: string };
   readonly sort?: { readonly columnId: string; readonly direction: 'ascending' | 'descending' };
@@ -57,6 +62,8 @@ interface SampleGridProps {
   /** The "+" header's menu: hidden columns to show, then New attribute. */
   readonly addColumnItems?: readonly { readonly id: string; readonly label: string }[];
   readonly onAddColumnItem?: (id: string) => void;
+  /** Why New attribute is off: the object is at its attribute limit. */
+  readonly addColumnLock?: string;
   /** The screen's own column menu items (spec 0012). */
   readonly columnActions?: (columnId: string) => readonly GridColumnAction[];
   /** "Create" in a select or status cell's list (spec 0012, AC-238). */
@@ -85,6 +92,9 @@ function SampleGrid({
   onRowOpen,
   confirmsPaste,
   rowNotes,
+  activeId,
+  activeIndex,
+  commentCounts,
   unknown,
   sort,
   withAvatars = false,
@@ -93,6 +103,7 @@ function SampleGrid({
   onAddColumn,
   addColumnItems,
   onAddColumnItem,
+  addColumnLock,
   columnActions,
   onCreateOption,
   floatingBar,
@@ -185,11 +196,15 @@ function SampleGrid({
         {...(onRowOpen === undefined ? {} : { onRowOpen })}
         {...(confirmsPaste === undefined ? {} : { confirmsPaste })}
         {...(rowNotes === undefined ? {} : { rowNotes })}
+        {...(activeId === undefined ? {} : { activeId })}
+        {...(activeIndex === undefined ? {} : { activeIndex })}
+        {...(commentCounts === undefined ? {} : { commentCount: (row: SampleRow) => commentCounts.get(row.id) })}
         {...(sort === undefined ? {} : { sort, onSort: () => undefined })}
         {...(withAvatars ? { rowAvatar: () => undefined, untitled: 'Unnamed company' } : {})}
         {...(onAddColumn === undefined ? {} : { onAddColumn })}
         {...(addColumnItems === undefined ? {} : { addColumnItems })}
         {...(onAddColumnItem === undefined ? {} : { onAddColumnItem })}
+        {...(addColumnLock === undefined ? {} : { addColumnLock })}
         {...(columnActions === undefined ? {} : { columnActions })}
         {...(onCreateOption === undefined ? {} : { onCreateOption })}
         {...(floatingBar === undefined ? {} : { floatingBar })}
@@ -735,6 +750,50 @@ export const AddColumnMenu: Story = {
   },
 };
 
+/**
+ * At the attribute limit (the field types pass): with nothing hidden, the "+" is a lock whose name and tooltip say
+ * why; with hidden columns its menu still shows them, and New attribute… is off with the reason under it.
+ */
+export const AddColumnAtLimit: Story = {
+  args: {
+    onAddColumn: fn(),
+    addColumnLock: '120 of 120 used. Archive one first.',
+  },
+  parameters: { crm: { screenshot: false } },
+  play: async ({ args, canvas, userEvent }) => {
+    const lock = canvas.getByRole('button', { name: '120 of 120 used. Archive one first.' });
+    await userEvent.click(lock);
+    await expect(args.onAddColumn).not.toHaveBeenCalled();
+  },
+};
+
+/** At the limit with hidden columns: the menu still shows them, and New attribute… is off with the reason under it. */
+export const AddColumnMenuAtLimit: Story = {
+  args: {
+    onAddColumn: fn(),
+    addColumnItems: [{ id: 'domain', label: 'Domain' }],
+    onAddColumnItem: fn(),
+    addColumnLock: '120 of 120 used. Archive one first.',
+  },
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Add attribute' }));
+    const menu = await waitFor(() => {
+      const found = document.querySelector('[role="menu"]');
+      if (found === null) throw new globalThis.Error('No menu yet.');
+      return found;
+    });
+    await expect(menu).toHaveTextContent('Domain');
+    await expect(menu).toHaveTextContent('120 of 120 used. Archive one first.');
+    const item = [...menu.querySelectorAll('[role="menuitem"]')].find((each) =>
+      each.textContent.includes('New attribute…'),
+    );
+    await expect(item).toHaveAttribute('aria-disabled', 'true');
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(document.querySelector('[role="menu"]')).toBeNull());
+  },
+};
+
 /** Twenty columns: the unpinned ones virtualise too, and the name stays pinned while the rest scroll. */
 export const ManyColumns: Story = {
   args: { columnCount: 20 },
@@ -923,6 +982,30 @@ export const RowNotesAndUnreadCells: Story = {
     await expect(cell(canvasElement, 0, 1)).toHaveTextContent('New');
     await expect(cell(canvasElement, 3, 2)?.querySelector('[data-shape]')).not.toBeNull();
     await expect(cell(canvasElement, 1, 2)?.querySelector('[data-shape]')).toBeNull();
+  },
+};
+
+/**
+ * The record open beside the grid: its row is tinted and marked current, and the grid scrolls it into view (row 150
+ * is far below the first screen). Rows with open comment threads carry a comment mark and the count after the name.
+ */
+export const OpenRowAndComments: Story = {
+  args: {
+    activeId: 'company-150',
+    activeIndex: 150,
+    commentCounts: new Map<string, number>([
+      ['company-150', 2],
+      ['company-151', 1],
+    ]),
+  },
+  play: async ({ canvasElement }) => {
+    // The grid scrolled to the open row, which is far below the first screen.
+    const open = '[role="row"][aria-current="true"]';
+    await waitFor(() => expect(canvasElement.querySelector(open)).not.toBeNull());
+    const row = canvasElement.querySelector<HTMLElement>(open);
+    await expect(row).toBeVisible();
+    // The count is part of the row header, so it is read with the name.
+    await expect(row).toHaveTextContent('2 open comment threads');
   },
 };
 

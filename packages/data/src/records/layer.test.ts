@@ -915,6 +915,18 @@ describe('editing a cell', () => {
     expect(queries).toHaveLength(2);
   });
 
+  it('drops a record its own rule now hides, and says what the server said as news, not a failure (AC-848)', async () => {
+    const { layer, view, edits, frame, notices } = await readyView();
+    void layer.setValues(WS, [change('Paris')]);
+    await settle();
+    const said = "Saved. It's owned by Grace Hopper, so you can no longer see it.";
+    edits[0]?.fail(dataError('RECORD_OUT_OF_SCOPE', said));
+    await settle();
+    frame();
+    expect(view.getSnapshot().source.getItem(1)).toBeUndefined();
+    expect(notices).toEqual([{ tone: 'success', message: said }]);
+  });
+
   it('names a cell read with no version as never set, and leaves out one never read', async () => {
     const { layer, edits } = await readyView();
     void layer.setValues(WS, [
@@ -2045,6 +2057,89 @@ describe('bulk edit (spec 0022, AC-530, AC-540)', () => {
       echoes: 1,
     });
     expect(await undone).toMatchObject({ kind: 'undone', action: 'bulk', cells: 2, undone: 2 });
+  });
+
+  it('undoes the fields of one Apply together: one press takes them all back, newest first', async () => {
+    const { layer, bulkEdits, batches, frame } = await readyView();
+    const group = 'apply-1';
+    const ids = [idAt(0), idAt(1)];
+    const first = layer.bulkEdit(WS, PEOPLE, ids, {
+      attributeId: CITY,
+      type: 'text',
+      isMulti: false,
+      op: 'set',
+      value: 'Paris',
+      group,
+    });
+    frame();
+    await settle();
+    bulkEdits[0]?.answer([
+      { recordId: idAt(0), record: edited(0, 'Paris', 4), written: { [CITY]: version(4) }, before: 'London' },
+      { recordId: idAt(1), record: edited(1, 'Paris', 5), written: { [CITY]: version(5) }, before: 'Leeds' },
+    ]);
+    await first;
+    const second = layer.bulkEdit(WS, PEOPLE, ids, {
+      attributeId: NAME,
+      type: 'text',
+      isMulti: false,
+      op: 'set',
+      value: 'Pia',
+      group,
+    });
+    frame();
+    await settle();
+    const both = (name: string, nameAt: number, cityAt: number) =>
+      [0, 1].map((row) =>
+        rowOf(
+          idAt(row),
+          { [NAME]: name, [CITY]: 'Paris' },
+          { [CITY]: version(cityAt + row), [NAME]: version(nameAt + row) },
+          nameAt + row,
+        ),
+      );
+    bulkEdits[1]?.answer(
+      both('Pia', 6, 4).map((record, row) => ({
+        recordId: idAt(row),
+        record,
+        written: { [NAME]: version(6 + row) },
+        before: `P${String(row)}`,
+      })),
+    );
+    await second;
+    const undone = layer.undo.run(WS);
+    await settle();
+    // The newest field goes back first.
+    expect(batches[0]?.input.items).toEqual([
+      { recordId: idAt(0), values: { [NAME]: { value: 'P0', ifVersionId: version(6) } } },
+      { recordId: idAt(1), values: { [NAME]: { value: 'P1', ifVersionId: version(7) } } },
+    ]);
+    batches[0]?.answer({
+      results: [0, 1].map((row) => ({
+        recordId: idAt(row),
+        record: rowOf(
+          idAt(row),
+          { [NAME]: `P${String(row)}`, [CITY]: 'Paris' },
+          { [CITY]: version(4 + row), [NAME]: version(8 + row) },
+          8 + row,
+        ),
+      })),
+      echoes: 1,
+    });
+    await settle();
+    expect(batches[1]?.input.items).toEqual([
+      { recordId: idAt(0), values: { [CITY]: { value: 'London', ifVersionId: version(4) } } },
+      { recordId: idAt(1), values: { [CITY]: { value: 'Leeds', ifVersionId: version(5) } } },
+    ]);
+    batches[1]?.answer({
+      results: [
+        { recordId: idAt(0), record: edited(0, 'London', 10) },
+        { recordId: idAt(1), record: edited(1, 'Leeds', 11) },
+      ],
+      echoes: 1,
+    });
+    expect(await undone).toMatchObject({ kind: 'undone', action: 'bulk', cells: 2, undone: 4 });
+    // One press took the whole Apply: nothing is left under it.
+    expect(await layer.undo.run(WS)).toEqual({ kind: 'nothing' });
   });
 
   it('rolls a refused record back with its cell marked, and a retry that changed nothing pushes no undo', async () => {

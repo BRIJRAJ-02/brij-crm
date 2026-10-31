@@ -1,3 +1,5 @@
+import { sharedStrings } from '@crm/ui';
+
 /** The attribute screens' copy (spec 0012, milestone 2): the Attributes tab, the dialog's toasts and the archive confirm. */
 export const strings = {
   /** Archiving an option a default named (late trap #34): what new records get now, in the default Callout's words. */
@@ -31,12 +33,11 @@ export const strings = {
   archived: 'Archived',
   archivedAttributes: 'Archived attributes',
   noAttributes: 'No attributes yet',
-  noAttributesText: 'Add one with New attribute.',
-  noAttributesMemberText: 'A workspace owner or admin can add one.',
+  noAttributesMemberText: 'Ask an owner or admin.',
   /** Badges (AC-227). */
   primary: 'Primary',
   /** Primary's InfoTip in the Rules column. */
-  primaryHelp: 'The attribute that names each record. It shows as the record’s title in tables, links and search.',
+  primaryHelp: 'Names each record in tables, links and search.',
   required: 'Required',
   unique: 'Unique',
   /** How many validation rules an attribute holds (spec 0013). */
@@ -69,10 +70,9 @@ export const strings = {
   saved: (title: string) => `${title} saved.`,
   /** Two ends, as one toast names them. */
   both: (first: string, second: string) => `${first} and ${second}`,
-  readOnlyNote: 'Only owners and admins can change this.',
   /** Why a dialog opened read only. */
   systemReason: (title: string) => `${title} is set by the system.`,
-  memberReason: 'Only workspace owners and admins can change attributes.',
+  memberReason: sharedStrings.ownersAndAdminsOnly,
   /** A relationship's Type cell: its far object and how many each record links to. */
   relationshipType: (plural: string, holdsOne: boolean) => `→ ${plural} · ${holdsOne ? 'one' : 'many'}`,
   /** The search above a long list of attributes, and what it says when nothing matches. */
@@ -85,7 +85,8 @@ export const strings = {
   objectCreated: (plural: string) => `${plural} created.`,
   loading: 'Loading attributes',
   loadFailed: 'Couldn’t load the attributes',
-  somethingWrong: 'Something went wrong. Try again in a moment.',
+  /** The Change type step's link to the table filtered to the records whose values don't convert. */
+  showRecords: (count: number) => (count === 1 ? 'Show the record' : `Show ${String(count)} records`),
   /** The archive confirm (spec 0012, screens). */
   confirmTitle: (title: string) => `Archive ${title}?`,
   /** The archive confirm's one line of what uses it (flow pass, 30 October 2026). */
@@ -98,9 +99,8 @@ export const strings = {
   recordsMoved: (label: string) => `Moving its records to ${label}.`,
   moveRecordsFailed: (label: string, why: string) => `Couldn’t move its records to ${label}. ${why}`,
   sharedValues: (count: number) => (count === 1 ? '1 value is shared' : `${String(count)} values are shared`),
-  confirmText: 'It leaves every table and form. Its values are kept and come back if you restore it.',
-  confirmBoth:
-    'It leaves every table and form. Its values are kept and come back if you restore it. It is one end of a relationship: the other end is archived with it, and both come back together.',
+  confirmText: 'Hidden from tables and forms. Values are kept.',
+  confirmBoth: 'Hidden from tables and forms, with its other end. Values are kept.',
   archiving: 'Archiving',
   confirmArchive: (title: string) => `Archive ${title}`,
   cancel: 'Cancel',

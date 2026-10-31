@@ -91,6 +91,11 @@ export interface CellsEntry {
   readonly kind: UndoKind;
   readonly objectId: string;
   readonly cells: readonly UndoCell[];
+  /**
+   * A bulk edit's group (the CRM flow pass, 31 October 2026): the edits of one Apply, one per field, share it, and
+   * Cmd+Z takes them back together, as the toast's Undo does.
+   */
+  readonly group?: string;
   /** Companies the edit filed people under (spec 0059): undoing the edit undoes them too. */
   readonly filed?: readonly FiledLink[];
 }
@@ -157,12 +162,25 @@ export interface LinksEntry {
   readonly inverse: LinkStep;
 }
 
-/** One user action on the undo stack: an edit of cells, a delete, a create, or a link delta. */
-export type UndoEntry = CellsEntry | DeleteEntry | CreateEntry | LinksEntry;
+/**
+ * An action another store of the layer undoes itself (spec 0048: a list
+ * entry's cell, an entry removed or added): undoing it runs `run`, which
+ * answers the toast's sentence. On the same stack as the records' actions, so
+ * Cmd+Z undoes the newest whichever store made it.
+ */
+export interface ExternalEntry {
+  readonly id: string;
+  readonly kind: 'external';
+  readonly objectId: string;
+  readonly run: () => Promise<{ readonly message: string; readonly tone: 'success' | 'danger' }>;
+}
+
+/** One user action on the undo stack: an edit of cells, a delete, a create, a link delta, or another store's. */
+export type UndoEntry = CellsEntry | DeleteEntry | CreateEntry | LinksEntry | ExternalEntry;
 
 /** Whether an entry is an edit of cells (a cell, a paste or a range clear). */
 export function isCellsEntry(entry: UndoEntry): entry is CellsEntry {
-  return entry.kind !== 'delete' && entry.kind !== 'create' && entry.kind !== 'links';
+  return entry.kind !== 'delete' && entry.kind !== 'create' && entry.kind !== 'links' && entry.kind !== 'external';
 }
 
 /** How many cells an entry holds against the stack's budget: a delete, a create or a link delta counts as one. */
@@ -193,6 +211,11 @@ export interface UndoStack {
   readonly pop: (workspace: string) => UndoEntry | undefined;
   /** The newest entry, left on the stack. */
   readonly top: (workspace: string) => UndoEntry | undefined;
+  /**
+   * Takes the edits of one group off the top of the stack, newest first: the entries just under the one popped that
+   * share its `group` (the rest of one Apply's fields). Stops at the first entry of another group.
+   */
+  readonly popGroup: (workspace: string, group: string) => readonly CellsEntry[];
   /** Takes the entry with this id off the stack, wherever it sits (a delete job undone from its toast). */
   readonly drop: (workspace: string, id: string) => void;
   /** The entry with this id, wherever it sits, left on the stack; undefined when it is gone. */
@@ -271,6 +294,17 @@ export function createUndoStack(depth: number = UNDO_DEPTH, cellBudget: number =
       return top;
     },
     top: (workspace) => stacks.get(workspace)?.at(-1),
+    popGroup: (workspace, group) => {
+      const stack = stacks.get(workspace) ?? [];
+      const taken: CellsEntry[] = [];
+      for (let at = stack.length - 1; at >= 0; at -= 1) {
+        const entry = stack[at];
+        if (entry === undefined || !isCellsEntry(entry) || entry.group !== group) break;
+        taken.push(entry);
+      }
+      if (taken.length > 0) stacks.set(workspace, stack.slice(0, stack.length - taken.length));
+      return taken;
+    },
     drop: (workspace, id) => {
       const stack = stacks.get(workspace);
       if (stack === undefined || !stack.some((entry) => entry.id === id)) return;

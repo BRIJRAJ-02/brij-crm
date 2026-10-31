@@ -26,6 +26,11 @@ export interface RelatedSide {
   readonly attribute: AttributeDefinition;
   /** The object its records come from: their noun ("people") and pages. */
   readonly farObject: ObjectSummary;
+  /**
+   * The name attributes of every object its records may come from (a side can link to several), so its section
+   * reads a held record again when that record's name changes, whichever object it belongs to.
+   */
+  readonly farNameAttributeIds: readonly string[];
 }
 
 /**
@@ -43,8 +48,13 @@ export function relatedSides(
     .filter((attribute) => attribute.type === 'record_reference' && attribute.isMulti && !attribute.isSystem)
     .toSorted((a, b) => a.position - b.position)
     .flatMap((attribute) => {
-      const farObject = objects.find((object) => object.id === attribute.relationship?.targetObjectIds[0]);
-      return farObject === undefined ? [] : [{ attribute, farObject }];
+      const targetIds = attribute.relationship?.targetObjectIds ?? [];
+      const farObject = objects.find((object) => object.id === targetIds[0]);
+      if (farObject === undefined) return [];
+      const farNameAttributeIds = targetIds.flatMap(
+        (id) => objects.find((object) => object.id === id)?.primaryAttributeId ?? [],
+      );
+      return [{ attribute, farObject, farNameAttributeIds }];
     });
 }
 

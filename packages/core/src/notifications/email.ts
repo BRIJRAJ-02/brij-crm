@@ -40,6 +40,7 @@ function sentenceOf(view: NotificationView, actor: string): string {
   if (view.kind === 'mention' && view.noteId !== undefined) return `${actor} mentioned you in a note`;
   if (view.kind === 'mention') return `${actor} mentioned you`;
   if (view.kind === 'reply') return `${actor} replied in a thread`;
+  if (view.kind === 'task_due') return 'A task is due today';
   return `${actor} assigned you a task`;
 }
 

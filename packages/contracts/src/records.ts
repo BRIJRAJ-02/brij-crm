@@ -37,7 +37,7 @@ export const MAX_READ_ATTRIBUTES = 250;
  * object's are ignored, not refused, so they reveal nothing. Absent reads
  * every attribute.
  */
-const ReadAttributeIds = z
+export const ReadAttributeIds = z
   .array(Uuid)
   .max(MAX_READ_ATTRIBUTES, `Read at most ${String(MAX_READ_ATTRIBUTES)} attributes at once.`);
 
@@ -48,7 +48,7 @@ const ReadAttributeIds = z
  * so two blocks never disagree about "today". The server's clock and UTC
  * when absent; an unknown zone is refused `FILTER_INVALID`.
  */
-const QueryClock = {
+export const QueryClock = {
   // Postgres has no year 0: a clock in 0000 would fail in the database rather than as an input problem.
   now: Timestamp.refine((value) => !value.startsWith('0000'), {
     error: 'Give a time from the year 0001 on.',
@@ -61,7 +61,7 @@ const QueryClock = {
  * ("today", "in the last 7 days") resolve where the person is (spec 0013).
  * UTC when absent; an unknown zone reads as UTC.
  */
-const WriteTimeZone = z.string().min(1).max(64).optional();
+export const WriteTimeZone = z.string().min(1).max(64).optional();
 
 /** The most records one `records.setValuesBatch` changes (spec 0006, AC-50); more is refused 422 `CONFIG_INVALID`. */
 export const MAX_BATCH_RECORDS = 500;
@@ -102,6 +102,11 @@ export const RecordView = z.object({
   values: z.record(z.string(), z.unknown()),
   versions: z.record(z.string(), Uuid),
   linkTotals: z.record(z.string(), z.number().int().min(0)),
+  /**
+   * The record's open comment threads (the count a table row and a board card show), on a read that asked for them
+   * with `threadCounts`; 0 when none. Absent on every other read, which a client's copy keeps its count through.
+   */
+  openThreads: z.number().int().min(0).optional(),
 });
 /** A record as a screen holds it. */
 export type RecordView = z.infer<typeof RecordView>;
@@ -128,6 +133,8 @@ export const QueryRecordsInput = WorkspaceScoped.extend({
   filter: FilterGroup.optional(),
   sorts: SortRules.optional(),
   attributeIds: ReadAttributeIds.optional(),
+  /** Add each record's open comment threads (`openThreads`): one more statement for the window. */
+  threadCounts: z.boolean().optional(),
   ...QueryClock,
 }).refine((input) => input.position === undefined || input.cursor === undefined, {
   error: 'Give a position or a cursor, not both.',
@@ -204,6 +211,8 @@ export const RecordGroupsInput = WorkspaceScoped.extend({
     .max(BOARD_MAX_GROUP_LIMIT, `Ask for at most ${String(BOARD_MAX_GROUP_LIMIT)} cards a column.`)
     .optional(),
   probeArchived: z.boolean().optional(),
+  /** Add each card's open comment threads (`openThreads`): one more statement a column. */
+  threadCounts: z.boolean().optional(),
   ...QueryClock,
 });
 /** The first cards of a board's columns. */
@@ -317,6 +326,8 @@ export type RecordAggregateGroups = z.infer<typeof RecordAggregateGroups>;
 export const GetRecordsInput = WorkspaceScoped.extend({
   ids: z.array(Uuid).max(MAX_GET_IDS, `Read at most ${String(MAX_GET_IDS)} records at once.`),
   attributeIds: ReadAttributeIds.optional(),
+  /** Add each record's open comment threads (`openThreads`). */
+  threadCounts: z.boolean().optional(),
 });
 /** Records by id. */
 export type GetRecordsInput = z.infer<typeof GetRecordsInput>;

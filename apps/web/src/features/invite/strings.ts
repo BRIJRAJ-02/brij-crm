@@ -14,14 +14,13 @@ export const strings = {
   joining: 'Joining workspace',
   /** The signed in card's one field (QA N14), as first run's. */
   yourName: 'Your name',
-  yourNameHint: 'How your team sees you. You can change it later in Settings.',
+  yourNameHint: 'Shown to your team.',
   signInToAccept: 'Sign in to join',
   signedInAs: (email: string) => `Signed in as ${email}`,
   useAnother: 'Use another address',
   invalidTitle: 'This invitation is no longer valid',
   invalidText: 'Ask whoever invited you to send a new one.',
   goHome: 'Go to your workspaces',
-  somethingWrong: 'Something went wrong. Try again in a moment.',
   /** The sign out confirm's line here: where signing in again leads. */
   signOutText: 'You’ll sign in again, then come back to this invitation.',
   signOutFailed: 'Couldn’t sign out. Check your connection, then try again.',

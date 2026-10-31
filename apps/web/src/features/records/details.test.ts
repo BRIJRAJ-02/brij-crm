@@ -135,6 +135,20 @@ describe('relatedSides (spec 0017, AC-375)', () => {
       ['Team', 'people'],
     ]);
   });
+  it('watches the name attribute of every object a side links to, not just the first', () => {
+    const named = (object: typeof PEOPLE, primaryAttributeId: string) => ({ ...object, primaryAttributeId });
+    const team = attribute({
+      id: 't',
+      type: 'record_reference',
+      isMulti: true,
+      relationship: { ...relationship(PEOPLE.id), targetObjectIds: [PEOPLE.id, COMPANIES.id] },
+    });
+    const [side] = relatedSides([team], [named(PEOPLE, 'person-name'), named(COMPANIES, 'company-name')]);
+    expect(side?.farNameAttributeIds).toEqual(['person-name', 'company-name']);
+    // A target the person can't see, or one with no name attribute, adds nothing.
+    const [partial] = relatedSides([team], [named(PEOPLE, 'person-name')]);
+    expect(partial?.farNameAttributeIds).toEqual(['person-name']);
+  });
   it('leaves out a side whose far object the person can’t see', () => {
     const team = attribute({ id: 't', type: 'record_reference', isMulti: true, relationship: relationship(PEOPLE.id) });
     expect(relatedSides([team], [COMPANIES])).toEqual([]);

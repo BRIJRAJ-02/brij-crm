@@ -35,3 +35,13 @@ export type ErrorCodeName = (typeof ERROR_CODES)[number];
  * none (spec 0009's 4500, "access changed", is the other terminal code).
  */
 export const SIGNED_OUT_DISCONNECT_CODE = 4501;
+
+/**
+ * The code Centrifugo closes a browser's live connection with when the
+ * person's access in a workspace changed (spec 0009, AC-146; spec 0007,
+ * AC-84): a role, a rule, a team or a removal. Terminal, so the client never
+ * resubscribes with the token it held: it asks the door for each channel
+ * again (its audience channel may have moved, or it is no longer a member),
+ * then reconnects and catches up.
+ */
+export const ACCESS_CHANGED_DISCONNECT_CODE = 4500;

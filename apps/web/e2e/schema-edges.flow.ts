@@ -19,7 +19,7 @@ test.describe('the schema’s edges', () => {
     await newWorkspace(page, `owner-${tag}@${domain}`, slug);
     await page.goto(`/w/${slug}/settings/members`);
     await page.getByRole('tab', { name: /Joining/ }).click();
-    await page.getByRole('switch', { name: 'Company email' }).click();
+    await page.getByRole('switch', { name: `Let @${domain} ask to join` }).click();
     await expect(page.getByText(`People at @${domain} can now ask to join.`)).toBeVisible();
 
     // Someone at the same domain asks, in a browser of their own.

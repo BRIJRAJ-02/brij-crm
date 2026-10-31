@@ -23,7 +23,7 @@
 // before the fallback, never past the hour, which `at` still bounds.
 // The relay still tries the cut at once, the fast path, and this task is the
 // guarantee. Logs carry ids and counts only.
-import { workspaceChannel } from '@crm/contracts';
+import { audienceChannel, isAudienceKey, OPEN_AUDIENCE } from '@crm/contracts';
 import type { QueuedTask } from '@crm/db';
 import * as z from 'zod';
 import type { DisconnectReason, DisconnectUser, Unsubscribe } from './centrifugo.ts';
@@ -64,20 +64,37 @@ const DISCONNECT_BATCH = 20;
 /** How long after the relay's own try the task first runs: the fast path usually landed by then. */
 export const CUTOFF_DELAY_MS = 15_000;
 
+/** The most audience keys one task holds: a workspace's distinct data policies, far fewer in practice. */
+const MAX_AUDIENCES = 64;
+
 const MemberId = z.uuid();
+/** An audience key (`open`, or a policy's 16 hex characters): the only thing a channel name is built from. */
+const AudienceKey = z.string().refine(isAudienceKey);
 /**
  * Its payload: the workspace, the members the `access` row named, the row's
- * commit time, and how many tries came before this queue row (none from the
- * relay). Ids and counts only.
+ * commit time, the audience keys the row was planned for (spec 0007,
+ * milestone 4: the channels the removed may hold; absent in a task queued
+ * before audiences, which means the one open channel), and how many tries came
+ * before this queue row (none from the relay). Ids, keys and counts only.
  */
 export const CutOffPayload = z.strictObject({
   workspaceId: z.uuid(),
   memberIds: z.array(MemberId).min(1).max(MAX_MEMBERS),
   at: z.iso.datetime(),
+  audiences: z.array(AudienceKey).max(MAX_AUDIENCES).optional(),
   tried: z.int().min(1).max(MAX_TRIES).optional(),
 });
 /** Its payload. */
 export type CutOffPayload = z.infer<typeof CutOffPayload>;
+
+/**
+ * The channels a cut off unsubscribes the removed from (spec 0007, milestone 4): the open one, `workspace:<id>`,
+ * always (any token issued before the workspace had rules names it), then each audience key's channel, once each.
+ */
+export function cutOffChannels(workspaceId: string, audiences: readonly string[]): readonly string[] {
+  const keys = new Set([OPEN_AUDIENCE, ...audiences.filter(isAudienceKey)]);
+  return [...keys].map((key) => audienceChannel(workspaceId, key));
+}
 
 /** The connection close the fallback sends: the same 4501 the client already handles by checking its session. */
 export const REMOVED: DisconnectReason = { code: SIGNED_OUT.code, reason: 'removed' };
@@ -94,10 +111,15 @@ export function cutOffTask(
   memberIds: readonly string[],
   at: string,
   now: number,
+  audiences: readonly string[] = [],
 ): QueuedTask | undefined {
   const ids = [...new Set(memberIds)].filter((id) => MemberId.safeParse(id).success).slice(0, MAX_MEMBERS);
   if (ids.length === 0) return undefined;
-  const payload: CutOffPayload = { workspaceId, memberIds: ids, at };
+  // The open channel is always cut (`cutOffChannels`), so a workspace with no rules queues what it always did.
+  const keys = [...new Set(audiences)]
+    .filter((key) => key !== OPEN_AUDIENCE && isAudienceKey(key))
+    .slice(0, MAX_AUDIENCES);
+  const payload: CutOffPayload = { workspaceId, memberIds: ids, at, ...(keys.length === 0 ? {} : { audiences: keys }) };
   return {
     identifier: CUTOFF_TASK,
     payload,
@@ -177,7 +199,7 @@ export async function runCutOff(deps: CutOffDeps, payload: unknown, attempt: Cut
     deps.log.error('realtime.cutoff.payload_invalid', {});
     return { outcome: 'invalid' };
   }
-  const { workspaceId, memberIds, at, tried = 0 } = parsed.data;
+  const { workspaceId, memberIds, at, audiences, tried = 0 } = parsed.data;
   const now = deps.now?.() ?? Date.now();
   // This try's number across every queue row the cut off has had.
   const tryNumber = tried + attempt.attempt;
@@ -211,7 +233,7 @@ export async function runCutOff(deps: CutOffDeps, payload: unknown, attempt: Cut
     return { outcome: 'none' };
   }
   try {
-    await deps.unsubscribe(workspaceChannel(workspaceId), userIds);
+    await deps.unsubscribe(cutOffChannels(workspaceId, audiences ?? []), userIds);
     deps.log.info('realtime.cutoff', { ...fields, users: userIds.length, outcome: 'unsubscribed' });
     return { outcome: 'unsubscribed' };
   } catch {

@@ -53,7 +53,8 @@ describe('access.mine', () => {
       memberId: expect.any(String) as string,
       role: 'member',
       roleLabel: 'Member',
-      permissions: ['records.export', 'booking.manage', 'availability.own'],
+      permissions: ['lists.manage', 'records.export', 'booking.manage', 'availability.own'],
+      teamIds: [],
       // Spec 0037, AC-1261: a member reaches nobody's scheduling but their own.
       scheduling: { seesOthers: false, managesOthers: false, seesEveryone: false, managesEveryone: false },
     });

@@ -53,7 +53,7 @@ test.describe('options', () => {
     const own = page.getByRole('grid', { name: 'Attributes' });
     await own.getByRole('row', { name: /Pipeline/ }).click();
     const edit = page.getByRole('dialog', { name: 'Edit attribute' });
-    await expect(edit.getByText('Changes to options save as you make them.')).toBeVisible();
+    await expect(edit.getByText('Options save as you go.')).toBeVisible();
     const editStages = edit.getByRole('grid', { name: 'Stages' });
     await expect(editStages.getByRole('textbox', { name: 'Building target days' })).toHaveValue('14');
     await editStages.getByRole('button', { name: 'Actions for Blocked' }).click();

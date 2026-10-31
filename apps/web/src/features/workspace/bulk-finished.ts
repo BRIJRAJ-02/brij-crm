@@ -34,26 +34,36 @@ export async function bulkFinished(deps: BulkFinishedDeps, workspace: string, jo
     names: byId.get(each.objectId) ?? RECORDS,
     count: each.count,
   }));
+  // A list's bulk add or removal (spec 0048): Undo starts the job that takes exactly it back, with no confirm.
+  const isListJob = job.kind === 'entries.bulk_add' || job.kind === 'entries.bulk_remove';
   const content = bulkJobToast(
     job,
     names,
     {
       onView,
-      ...(objectId === undefined
-        ? {}
-        : {
+      ...(isListJob
+        ? {
             onUndo: () => {
-              void data.records.restoreDeleted(workspace, objectId, job.id, job.done).then(
-                (result) => {
-                  const undone = lifecycleUndoToast(result);
-                  if (undone !== undefined) toast(undone);
-                },
-                () => {
-                  toast({ tone: 'danger', message: bulkStrings.somethingWrong });
-                },
-              );
+              void data.lists.startJob(workspace, { kind: 'undo', id: data.jobs.newId(), jobId: job.id }).catch(() => {
+                toast({ tone: 'danger', message: bulkStrings.somethingWrong });
+              });
             },
-          }),
+          }
+        : objectId === undefined
+          ? {}
+          : {
+              onUndo: () => {
+                void data.records.restoreDeleted(workspace, objectId, job.id, job.done).then(
+                  (result) => {
+                    const undone = lifecycleUndoToast(result);
+                    if (undone !== undefined) toast(undone);
+                  },
+                  () => {
+                    toast({ tone: 'danger', message: bulkStrings.somethingWrong });
+                  },
+                );
+              },
+            }),
     },
     left,
   );

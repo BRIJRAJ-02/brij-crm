@@ -12,11 +12,11 @@ import { defineOption, updateOption, type OptionRef } from '../engine/options.ts
 import { refuse } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import type { AfterWrite } from '../engine/write.ts';
-import { requirePermission } from '../access/check.ts';
+import { requireFieldManager, requireOptionManager } from '../lists/manager.ts';
 import { inWorkspace } from '../access/run.ts';
 import { readOne } from './attributes.ts';
 
-const { attributeOptions, attributes } = schema;
+const { attributeOptions, attributes, lists } = schema;
 
 const ATTRIBUTE_NOT_FOUND = 'That attribute does not exist.';
 const OPTION_NOT_FOUND = 'That option does not exist.';
@@ -25,14 +25,24 @@ const OPTION_NOT_FOUND = 'That option does not exist.';
 type Outcome = 'open' | 'won' | 'lost';
 
 /** The object an attribute sits on, or `NOT_FOUND`: options here are an object's attribute's (a list's have no screens). */
-async function objectOfAttribute(tx: WorkspaceTx, scope: EngineScope, attributeId: string): Promise<string> {
+async function parentOfAttribute(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  attributeId: string,
+): Promise<{ readonly objectId: string | null; readonly listId: string | null }> {
   // Row level security keeps the read to this workspace; the filter says so too (house style).
   const [row] = await tx
-    .select({ objectId: attributes.objectId })
+    .select({ objectId: attributes.objectId, listId: attributes.listId })
     .from(attributes)
     .where(and(eq(attributes.workspaceId, scope.workspaceId), eq(attributes.id, attributeId)));
-  if (row?.objectId === undefined || row.objectId === null) throw refuse('NOT_FOUND', ATTRIBUTE_NOT_FOUND);
-  return row.objectId;
+  if (row === undefined) throw refuse('NOT_FOUND', ATTRIBUTE_NOT_FOUND);
+  if (row.listId === null) return { objectId: row.objectId, listId: null };
+  // A list's field is read through its object, as `listListAttributes` reads it (decision 2).
+  const [list] = await tx
+    .select({ objectId: lists.objectId })
+    .from(lists)
+    .where(and(eq(lists.workspaceId, scope.workspaceId), eq(lists.id, row.listId)));
+  return { objectId: list?.objectId ?? null, listId: row.listId };
 }
 
 /** The attribute and object an option belongs to, or `NOT_FOUND`. */
@@ -42,7 +52,7 @@ async function ownerOfOption(tx: WorkspaceTx, scope: EngineScope, optionId: stri
     .from(attributeOptions)
     .where(and(eq(attributeOptions.workspaceId, scope.workspaceId), eq(attributeOptions.id, optionId)));
   if (row === undefined) throw refuse('NOT_FOUND', OPTION_NOT_FOUND);
-  await objectOfAttribute(tx, scope, row.attributeId).catch(() => {
+  await parentOfAttribute(tx, scope, row.attributeId).catch(() => {
     throw refuse('NOT_FOUND', OPTION_NOT_FOUND);
   });
   return row.attributeId;
@@ -87,9 +97,9 @@ export async function createOption(
   input: CreateOptionInput,
   hooks: readonly AfterWrite[] = [],
 ): Promise<AttributeOption> {
-  requirePermission(scope, 'schema.manage');
+  await requireFieldManager(scope, input.attributeId);
   const attributeId = checkId(input.attributeId, ATTRIBUTE_NOT_FOUND);
-  const objectId = await inWorkspace(scope, (tx) => objectOfAttribute(tx, scope, attributeId));
+  const parent = await inWorkspace(scope, (tx) => parentOfAttribute(tx, scope, attributeId));
   const made = await defineOption(
     scope,
     {
@@ -102,7 +112,7 @@ export async function createOption(
     },
     hooks,
   );
-  return optionAfter(scope, { optionId: made.optionId, attributeId, objectId, listId: null });
+  return optionAfter(scope, { optionId: made.optionId, attributeId, ...parent });
 }
 
 /** What the options editor may change on an option (AC-236); `null` clears a stage's target time. */
@@ -124,7 +134,7 @@ export async function editOption(
   input: EditOptionInput,
   hooks: readonly AfterWrite[] = [],
 ): Promise<AttributeOption> {
-  requirePermission(scope, 'schema.manage');
+  await requireOptionManager(scope, input.optionId);
   const optionId = checkId(input.optionId, OPTION_NOT_FOUND);
   await inWorkspace(scope, (tx) => ownerOfOption(tx, scope, optionId));
   const ref = await updateOption(
@@ -150,7 +160,7 @@ export async function moveOption(
   input: { readonly optionId: string; readonly position: number },
   hooks: readonly AfterWrite[] = [],
 ): Promise<AttributeOption[]> {
-  requirePermission(scope, 'schema.manage');
+  await requireOptionManager(scope, input.optionId);
   const optionId = checkId(input.optionId, OPTION_NOT_FOUND);
   await inWorkspace(scope, (tx) => ownerOfOption(tx, scope, optionId));
   return optionsAfter(scope, await updateOption(scope, { optionId, position: input.position }, hooks));
@@ -166,7 +176,7 @@ export async function archiveOption(
   input: { readonly optionId: string },
   hooks: readonly AfterWrite[] = [],
 ): Promise<AttributeOption> {
-  requirePermission(scope, 'schema.manage');
+  await requireOptionManager(scope, input.optionId);
   const optionId = checkId(input.optionId, OPTION_NOT_FOUND);
   await inWorkspace(scope, (tx) => ownerOfOption(tx, scope, optionId));
   return optionAfter(scope, await updateOption(scope, { optionId, archived: true }, hooks));
@@ -182,7 +192,7 @@ export async function restoreOption(
   input: { readonly optionId: string },
   hooks: readonly AfterWrite[] = [],
 ): Promise<AttributeOption> {
-  requirePermission(scope, 'schema.manage');
+  await requireOptionManager(scope, input.optionId);
   const optionId = checkId(input.optionId, OPTION_NOT_FOUND);
   await inWorkspace(scope, (tx) => ownerOfOption(tx, scope, optionId));
   return optionAfter(scope, await updateOption(scope, { optionId, archived: false }, hooks));

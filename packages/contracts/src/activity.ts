@@ -28,13 +28,17 @@ export const MAX_ACTIVITY_CURSOR = 512;
 /**
  * The kinds of timeline entry: #19 adds notes and tasks, #29 comments, spec
  * 0024 meetings, spec 0023 form submissions, and `deleted` while the record
- * is in the trash; a client ignores a kind it doesn't map.
+ * is in the trash; a client ignores a kind it doesn't map. A call and a
+ * `logged_meeting` are notes with a kind (migration 0137), logged by a person
+ * and shown where they happened; `meeting` is a calendar meeting.
  */
 export const ActivityKind = z.enum([
   'created',
   'change',
   'links',
   'note',
+  'call',
+  'logged_meeting',
   'task',
   'comment',
   'meeting',
@@ -76,6 +80,9 @@ export const ActivityItem = z.object({
   title: z.string().optional(),
   excerpt: z.string().optional(),
   isDone: z.boolean().optional(),
+  /** A `call` or `logged_meeting`: its length in minutes and how it went, when it says. */
+  durationMinutes: z.number().int().min(1).optional(),
+  outcome: z.string().optional(),
   meeting: MeetingView.optional(),
   /**
    * A meeting a booking made (spec 0057, AC-5714): the visitor's answers to the booking page's own questions, label

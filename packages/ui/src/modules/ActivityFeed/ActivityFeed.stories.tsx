@@ -592,6 +592,46 @@ export const GroupedChanges: Story = {
   },
 };
 
+/** A call and a meeting a person logged: the phone and people icons, an outcome tag, how long, and the start of the notes. */
+export const LoggedActivities: Story = {
+  render: () => {
+    const entries: ActivityEntry[] = [
+      {
+        id: 'call',
+        at: '2026-10-08T10:00:00.000Z',
+        actor: ADA,
+        kind: 'call',
+        duration: '30 min',
+        outcome: { label: 'Connected', hue: 'green' },
+        excerpt: 'Walked through the renewal. They want the API limits raised before signing.',
+        href: '#call',
+      },
+      {
+        id: 'meeting',
+        at: '2026-10-07T14:00:00.000Z',
+        actor: GRACE,
+        kind: 'logged_meeting',
+        outcome: { label: 'No show', hue: 'red' },
+        href: '#meeting',
+      },
+      { id: 'bare', at: '2026-10-07T09:00:00.000Z', actor: ADA, kind: 'call' },
+    ];
+    return (
+      <Stage height="grid">
+        <ActivityFeed label="Activity" entries={arraySource(entries, (entry) => entry.id)} />
+      </Stage>
+    );
+  },
+  play: async ({ canvas }) => {
+    const [call, meeting, bare] = canvas.getAllByRole('article');
+    await expect(call).toHaveAccessibleName(/Ada Lovelace logged a call/);
+    await expect(meeting).toHaveAccessibleName(/Grace Hopper logged a meeting/);
+    await expect(bare).toHaveAccessibleName(/Ada Lovelace logged a call/);
+    await expect(canvas.getByText('Connected')).toBeInTheDocument();
+    await expect(canvas.getByText('30 min')).toBeInTheDocument();
+  },
+};
+
 /** Another record merged into this one (spec 0049): its name as a flat chip, or "a record" when it can't be named. */
 export const Merged: Story = {
   parameters: { crm: { screenshot: false } },

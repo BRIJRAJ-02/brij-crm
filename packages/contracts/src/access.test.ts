@@ -27,6 +27,7 @@ describe('the permission catalog', () => {
       'access.manage',
       'schema.manage',
       'views.manage',
+      'lists.manage',
       'records.purge',
       'forms.manage',
       'records.export',
@@ -84,6 +85,7 @@ describe('the permission catalog', () => {
     expect(of('any')).toEqual([
       'schema.manage',
       'views.manage',
+      'lists.manage',
       'records.purge',
       'forms.manage',
       'records.export',
@@ -125,6 +127,8 @@ describe('the role table', () => {
     'access.manage': ['owner', 'admin'],
     'schema.manage': ['owner', 'admin'],
     'views.manage': ['owner', 'admin'],
+    // Spec 0048, decision 1: every member makes their own lists.
+    'lists.manage': ['owner', 'admin', 'member'],
     'records.purge': ['owner', 'admin'],
     'forms.manage': ['owner', 'admin'],
     'records.export': ['owner', 'admin', 'member'],
@@ -174,7 +178,7 @@ describe('the role table', () => {
 });
 
 describe('the key scope catalog', () => {
-  it('holds every permission but the thirteen that stay with people, plus the two data levels', () => {
+  it('holds every permission but the fourteen that stay with people, plus the two data levels', () => {
     for (const forbidden of [
       'security.manage',
       'members.manage',
@@ -189,13 +193,14 @@ describe('the key scope catalog', () => {
       'schedule.view.team',
       'schedule.manage',
       'schedule.manage.team',
+      'lists.manage',
     ]) {
       expect(KEY_SCOPES).not.toContain(forbidden);
     }
     expect(KEY_SCOPES).toContain('schema.manage');
     expect(KEY_SCOPES).toContain('records.export');
     expect(KEY_SCOPES.slice(-2)).toEqual([...KEY_DATA_SCOPES]);
-    expect(KEY_SCOPES).toHaveLength(PERMISSION_NAMES.length - 13 + 2);
+    expect(KEY_SCOPES).toHaveLength(PERMISSION_NAMES.length - 14 + 2);
   });
 });
 

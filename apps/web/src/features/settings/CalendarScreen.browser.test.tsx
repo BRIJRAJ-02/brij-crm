@@ -161,11 +161,7 @@ describe('Settings › Calendars', () => {
     change(off);
     await expect.element(page.getByRole('checkbox', { name: 'Check Team for conflicts' })).not.toBeChecked();
     // Its toast says so, with Undo.
-    await expect
-      .element(
-        page.getByText('Team is no longer checked for conflicts. Team won’t be listed once you leave this page.'),
-      )
-      .toBeVisible();
+    await expect.element(page.getByText('Not checking Team. Gone from this list next visit.')).toBeVisible();
     // The next visit: Team is no longer in use, so it no longer shows.
     shown?.unmount();
     await renderCalendars(listOf(off).held);

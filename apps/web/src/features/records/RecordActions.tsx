@@ -5,7 +5,7 @@
 // Undo toast; a refusal stays on the page, said in a danger toast. Merge with… (spec 0049) asks for the other record
 // and opens the merge dialog, which is its own confirmation; a merge that took this record away goes on to the kept.
 import type { AttributeDefinition, MemberSummary, ObjectSummary } from '@crm/data';
-import { Button, focusLater, Menu, MenuItem, MenuSeparator, MenuTrigger, Tooltip } from '@crm/ui';
+import { Button, focusLater, Menu, MenuItem, MenuSeparator, MenuTrigger, sharedStrings, Tooltip } from '@crm/ui';
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useRef } from 'react';
 import { mergeStrings, useMergeDialog } from '../duplicates/merge/index.ts';
@@ -69,7 +69,7 @@ export function RecordActions({
         toasts.toast({ tone: 'success', message: strings.linkCopied });
       },
       () => {
-        toasts.toast({ tone: 'danger', message: strings.copyFailed });
+        toasts.toast({ tone: 'danger', message: sharedStrings.couldntCopy });
       },
     );
   };

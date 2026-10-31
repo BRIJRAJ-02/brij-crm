@@ -1,7 +1,6 @@
 /* CustomiseSidebar: the dialog's sections, each a quiet label over rows of an
    icon, the name and a switch at the end. The reset's confirm is a Modal of its own. */
 @layer components {
-  .intro,
   .empty {
     margin: 0 0 var(--space-12);
     color: var(--text-secondary);

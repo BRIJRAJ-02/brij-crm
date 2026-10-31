@@ -5,6 +5,7 @@
 import { isDataError, type ApiRefusal } from '@crm/data';
 import type { FormRefusal } from '@crm/ui';
 import { strings } from './strings.ts';
+import { sharedStrings } from '@crm/ui';
 
 /** The form's refusals for a failed write: on the fields in `fields`, else above them. */
 export function formRefusals(
@@ -12,7 +13,7 @@ export function formRefusals(
   fields: readonly string[],
   wordsFor: (refusal: ApiRefusal) => string = (refusal) => refusal.message,
 ): readonly FormRefusal[] {
-  if (!isDataError(error)) return [{ code: 'INTERNAL', message: strings.somethingWrong }];
+  if (!isDataError(error)) return [{ code: 'INTERNAL', message: sharedStrings.couldntDoThat }];
   const onField = (field: string | undefined) => (field !== undefined && fields.includes(field) ? field : undefined);
   const refusals = (error.data?.refusals ?? []).map((refusal): FormRefusal => {
     const field = onField(refusal.field);

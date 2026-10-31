@@ -3,8 +3,8 @@
 // which reads its own data and draws its own loading, empty and error states.
 //
 // Home shows two cards, Today and Your link page, and nothing else (the owner, 27 October 2026). Finish setting up,
-// My tasks, Recently viewed, New captures, Team today and This week came off; their components are still in
-// sections/, so bringing one back is putting its entry back here.
+// My tasks, Recently viewed, New captures, Team today and This week came off, and their components were deleted
+// (31 October 2026); their pure helpers (setup.ts, team.ts, captures.ts, metrics.ts, due.ts) stay, with their tests.
 import type { HomeSection } from './registry.ts';
 import { homeStrings as linkPageStrings } from '../link-page/home-strings.ts';
 import { LinkPageSection } from './sections/LinkPageSection.tsx';

@@ -65,6 +65,26 @@ export const QuickPick: Story = {
   },
 };
 
+/** `onNow` (a date and time's editor): Now first among the picks, with the time it means; choosing it calls back. */
+export const WithNow: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { onNow: fn() },
+  render: (args) => (
+    <Stage width="narrow">
+      <DatePicker {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas, args, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: /Open calendar/ }));
+    const calendar = await dialog();
+    const [first] = calendar.querySelectorAll('[role="menuitem"]');
+    if (!(first instanceof HTMLElement) || !first.textContent.startsWith('Now')) throw new Error('Now is not first');
+    await userEvent.click(first);
+    await expect(args.onNow).toHaveBeenCalledOnce();
+    await waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeNull());
+  },
+};
+
 /** Typed from the keyboard, segment by segment. */
 export const Typed: Story = {
   parameters: { crm: { screenshot: false } },

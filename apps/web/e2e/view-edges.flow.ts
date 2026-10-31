@@ -91,7 +91,7 @@ test.describe('the table view’s edges', () => {
     // A search is a filter: the old rows can't be known to match it, so the ticks go, and a toast says why.
     await toolbar(page).getByRole('button', { name: 'Search people' }).click();
     await page.keyboard.type('Cy');
-    await expect(page.getByText('Selection cleared: the filter changed.')).toBeVisible();
+    await expect(page.getByText('Selection cleared.')).toBeVisible();
     await expect(bar(page)).toHaveCount(0);
   });
 
