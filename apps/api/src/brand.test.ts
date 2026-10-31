@@ -274,6 +274,21 @@ describe('the brand kit', () => {
     await send('/api/brand/logo', { method: 'DELETE', cookie: owner.cookie, workspace: owner.slug });
     expect(forgotten.slice(before)).toEqual([[tag], [tag]]);
   });
+
+  it('purges the workspace’s brand answers when a member saves their own accent, which a personal page wears (AC-14, AC-21)', async () => {
+    const owner = await memberWithWorkspace(app);
+    const tag = `brand:${owner.workspace.id}`;
+    const before = forgotten.length;
+    expect(
+      await owner.client.profile.saveAccent({
+        workspace: owner.slug,
+        accent: '#7c3aed',
+        accentDark: null,
+        mutationId: newId(),
+      }),
+    ).toEqual({ accent: '#7c3aed', accentDark: null });
+    expect(forgotten.slice(before)).toEqual([[tag]]);
+  });
 });
 
 describe('a link page’s look', () => {
