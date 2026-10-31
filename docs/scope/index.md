@@ -77,7 +77,7 @@ Build order is the order of the rows below (a feature added later takes the next
 | 28 | Notifications | Slice 7 | [Collaboration](collaboration.md) | in-progress |
 | 29 | Comments and mentions | Slice 7 | [Collaboration](collaboration.md) | in-progress |
 | 30 | Import and export | Slice 8 | [Data in and out](data-in-out.md) | in-progress |
-| 31 | Duplicate detection and merge | Slice 8 | [Data in and out](data-in-out.md) | planned |
+| 31 | Duplicate detection and merge | Slice 8 | [Data in and out](data-in-out.md) | in-progress |
 | 32 | File attachments | Slice 8 | [Data in and out](data-in-out.md) | planned |
 | 33 | Global search | Slice 8 | [Data in and out](data-in-out.md) | in-progress |
 | 34 | Public API and keys | Slice 9 | [Data in and out](data-in-out.md) | planned |
