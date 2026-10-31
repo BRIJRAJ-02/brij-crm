@@ -2,16 +2,16 @@
 // Purpose: Sharing on a booking page or a rotation (spec 0037, AC-1331): who besides admins may edit it.
 // Main task: an admin adds an editor from a person picker or removes one (asked first); an editor sees who else edits.
 // Leaves out: teams as editors (lane L3a), what an editor may do (the server's), and the page's or rotation's own settings.
-import type { DataLayer, EditorResource, EditorView } from '@crm/data';
+import { isDataError, type DataLayer, type EditorResource, type EditorView } from '@crm/data';
 import { useCaptureList } from '@crm/data/react';
 import {
   Avatar,
   Button,
-  Card,
   EmptyState,
   Modal,
   Select,
   SettingsRow,
+  SettingsStack,
   Skeleton,
   focusLater,
   type Toasts,
@@ -19,7 +19,7 @@ import {
 import { useRef, useState } from 'react';
 import { sharingStrings as strings } from './sharing-strings.ts';
 
-/** The most editors a page or rotation names (spec 0037's Numbers). */
+/** The most editors a page or rotation names (spec 0037's Numbers): the server refuses more with EDITOR_LIMIT. */
 const EDITORS_MAX = 20;
 
 /** Someone who may be added: an active member of the workspace. */
@@ -27,6 +27,8 @@ export interface SharingPerson {
   readonly id: string;
   readonly name: string;
   readonly email?: string;
+  /** Their role, when known: owners and admins edit everything already, so they are never offered. */
+  readonly role?: string;
 }
 
 /** Props for the panel. */
@@ -39,17 +41,18 @@ export interface SharingPanelProps {
   readonly resourceName: string;
   /** The reader may change the editors (`booking.admin`); anyone else reads the list. */
   readonly canChange: boolean;
-  /** Who an admin may add (the workspace's active members); unused when the reader can't change them. */
+  /** Who an admin may add (the workspace's members who aren't admins); unused when the reader can't change them. */
   readonly people: readonly SharingPerson[];
   readonly toasts: Toasts;
 }
 
-/** A person as a row's mark. */
-const mark = (person: { readonly id: string; readonly name: string }) => (
-  <Avatar name={person.name} id={person.id} size="sm" isDecorative />
-);
+/** By name, as the server lists them, so a row added at once doesn't move when the answer lands. */
+const byName = (left: EditorView, right: EditorView) => left.name.localeCompare(right.name);
 
-/** The editors, with Add an editor and each row's Remove for an admin. Every change shows at once. */
+/**
+ * The editors, with Add an editor and each row's Remove for an admin. A change shows at once and the picker and the
+ * Remove buttons wait for its answer, so two changes never race each other.
+ */
 export function SharingPanel({
   data,
   slug,
@@ -63,15 +66,23 @@ export function SharingPanel({
   const view = data.editors.view(slug, resourceType, resourceId);
   const state = useCaptureList(view);
   const [removing, setRemoving] = useState<EditorView | undefined>(undefined);
+  // The last person asked about stays named while the confirm plays its exit.
+  const [asked, setAsked] = useState<EditorView | undefined>(undefined);
+  const [isSaving, setSaving] = useState(false);
   const pickerRef = useRef<HTMLButtonElement>(null);
   const editors = state.status === 'ready' ? state.items : [];
   const save = (next: readonly EditorView[], done: string) => {
-    data.editors.set(slug, resourceType, resourceId, next).then(
+    setSaving(true);
+    data.editors.set(slug, resourceType, resourceId, [...next].sort(byName)).then(
       () => {
+        setSaving(false);
         toasts.toast({ tone: 'success', message: done });
+        // A removed row took its button with it: focus goes to the picker once it takes picks again.
+        focusLater(() => pickerRef.current);
       },
       (error: unknown) => {
-        toasts.toast({ tone: 'danger', message: error instanceof Error ? error.message : strings.refused });
+        setSaving(false);
+        toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : strings.refused });
       },
     );
   };
@@ -80,49 +91,48 @@ export function SharingPanel({
     return <EmptyState tone="error" layout="row" title={strings.failed} onRetry={() => view.reload()} />;
   }
   const held = new Set(editors.map((each) => each.id));
-  const addable = people.filter((person) => !held.has(person.id));
+  const addable = people.filter((person) => !held.has(person.id) && person.role !== 'owner' && person.role !== 'admin');
   const isFull = editors.length >= EDITORS_MAX;
   return (
-    <Card>
+    <SettingsStack>
       {canChange && (
-        <SettingsRow title={strings.add} control="field">
-          <Select
-            triggerRef={pickerRef}
-            label={strings.add}
-            isLabelHidden
-            savesOnPick
-            isSearchable
-            placeholder={isFull ? strings.full : strings.addPlaceholder}
-            isDisabled={isFull || addable.length === 0}
-            items={addable.map((person) => ({
-              id: person.id,
-              label: person.name,
-              ...(person.email === undefined ? {} : { description: person.email }),
-              leading: <Avatar name={person.name} id={person.id} size="xs" isDecorative />,
-            }))}
-            value={null}
-            onChange={(id) => {
-              const person = addable.find((each) => each.id === id);
-              if (person === undefined) return;
-              save([...editors, { id: person.id, name: person.name }], strings.added(person.name));
-            }}
-          />
-        </SettingsRow>
+        <Select
+          triggerRef={pickerRef}
+          label={strings.add}
+          isLabelHidden
+          savesOnPick
+          isSearchable
+          placeholder={isFull ? strings.full : addable.length === 0 ? strings.nobodyToAdd : strings.addPlaceholder}
+          isDisabled={isSaving || isFull || addable.length === 0}
+          items={addable.map((person) => ({
+            id: person.id,
+            label: person.name,
+            ...(person.email === undefined ? {} : { description: person.email }),
+            leading: <Avatar name={person.name} id={person.id} size="xs" isDecorative />,
+          }))}
+          value={null}
+          onChange={(id) => {
+            const person = addable.find((each) => each.id === id);
+            if (person === undefined) return;
+            save([...editors, { id: person.id, name: person.name }], strings.added(person.name));
+          }}
+        />
       )}
       {editors.map((editor) => (
         <SettingsRow
           key={editor.id}
-          leading={mark(editor)}
+          leading={<Avatar name={editor.name} id={editor.id} size="sm" isDecorative />}
           leadingAlign="center"
           title={editor.name}
-          description={strings.editorLine}
         >
           {canChange && (
             <Button
               variant="ghost"
               icon="x"
               label={strings.remove(editor.name)}
+              isDisabled={isSaving}
               onPress={() => {
+                setAsked(editor);
                 setRemoving(editor);
               }}
             />
@@ -131,7 +141,7 @@ export function SharingPanel({
       ))}
       {editors.length === 0 && <EmptyState layout="row" icon="users" title={strings.none} />}
       <Modal
-        title={strings.removeTitle(removing?.name ?? '')}
+        title={strings.removeTitle(asked?.name ?? '')}
         variant="confirm"
         tone="danger"
         isOpen={removing !== undefined}
@@ -151,8 +161,6 @@ export function SharingPanel({
                   editors.filter((each) => each.id !== gone.id),
                   strings.removed(gone.name),
                 );
-                // The row goes with its button: focus moves to the picker.
-                focusLater(() => pickerRef.current);
               }}
             >
               {strings.removeAction}
@@ -160,8 +168,8 @@ export function SharingPanel({
           </>
         }
       >
-        <p>{strings.removeText(removing?.name ?? '', resourceName)}</p>
+        <p>{strings.removeText(asked?.name ?? '', resourceName)}</p>
       </Modal>
-    </Card>
+    </SettingsStack>
   );
 }

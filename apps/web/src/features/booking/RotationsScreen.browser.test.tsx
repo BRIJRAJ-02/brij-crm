@@ -208,6 +208,8 @@ describe('Sharing (spec 0037, AC-1331, AC-1433)', () => {
     await expect.element(dialog.getByText(sharingStrings.removeText(MAYA.name, 'Sales'))).toBeVisible();
     await userEvent.click(dialog.getByRole('button', { name: sharingStrings.removeAction }));
     expect(again.editors.set).toHaveBeenLastCalledWith('acme', 'rotation', SALES.id, []);
+    // The row went with its button: focus is on the picker, not lost to the page.
+    await expect.element(page.getByRole('button', { name: new RegExp(sharingStrings.add) })).toHaveFocus();
   });
 
   it('shows an editor the badge and who else edits, with nothing to change and no Delete', async () => {

@@ -166,7 +166,7 @@ describe('New meeting', () => {
 
   it('says nobody is invited yet before the fields, and keeps their zone with who it is with', async () => {
     await open();
-    const note = page.getByText('No calendar connected: no video link.').element();
+    const note = page.getByText('Guest emailed only. No calendar event or video link.').element();
     const name = page.getByRole('textbox', { name: 'With' }).element();
     const email = page.getByRole('textbox', { name: 'Email' }).element();
     const zone = page.getByRole('button', { name: /Their time zone/ }).element();

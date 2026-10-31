@@ -261,9 +261,19 @@ describe('rotation editors (AC-1331, AC-1337, AC-1340, AC-1329, AC-1330)', () =>
     expect(seen.canAdjust).toBe(false);
     expect(seen.rows[0]?.fairShare).toBeUndefined();
 
-    // Taken off: the lead no longer reaches it.
+    // Taken off: the lead no longer reaches it, and is told.
     await setEditors(w.owner, { resourceType: 'rotation', resourceId: rotation.id, memberIds: [] });
     expect((await listRotations(w.as(lead), NOW)).map((each) => each.id)).toEqual([]);
+    expect(
+      (await refusalOf(updateRotation(w.as(lead), { rotationId: rotation.id, settings: { name: 'Back' } }))).code,
+    ).toBe('NOT_FOUND');
+    const after = await w.rows<{ to_member_id: string; params: Record<string, unknown> }>(
+      `select to_member_id::text, params from emails where workspace_id = $1 and kind = 'editor_added' order by created_at, id`,
+    );
+    expect(after.map((row) => [row.to_member_id, row.params.removed ?? false])).toEqual([
+      [lead, false],
+      [lead, true],
+    ]);
   });
 
   it('refuses a 21st editor (EDITOR_LIMIT) and someone not here, and drops the editors with the rotation', async () => {
@@ -373,6 +383,31 @@ describe('page editors (AC-1331, AC-1332, AC-1262, AC-1340)', () => {
     expect(
       await w.rows(`select 1 from scheduling_editors where workspace_id = $1 and resource_id = $2`, [page.id]),
     ).toEqual([]);
+  });
+
+  it('lets an editor change a colleague’s own page, never its address or its deletion, and the owner is told', async () => {
+    const w = await world();
+    const lead = await w.add('Lena Lead');
+    const bea = await w.add('Bea Ortiz');
+    const page = await createBookingPage(w.as(bea), { id: newId(), title: 'Bea’s intro', timeZone: 'UTC' }, NOW);
+    await setEditors(w.owner, { resourceType: 'booking_page', resourceId: page.id, memberIds: [lead] });
+    const listed = (await listBookingPages(w.as(lead), NOW)).find((each) => each.id === page.id);
+    expect(listed).toMatchObject({ ownerName: 'Bea Ortiz', isEditor: true, canChange: true });
+    await updateBookingPage(w.as(lead), { pageId: page.id, settings: { title: 'Intro with Bea' } }, NOW);
+    expect(
+      await refusalOf(updateBookingPage(w.as(lead), { pageId: page.id, settings: { slug: 'mine' } }, NOW)),
+    ).toMatchObject({ code: 'FORBIDDEN', field: 'slug' });
+    expect(await refusalOf(deleteBookingPage(w.as(lead), { pageId: page.id }))).toMatchObject({ code: 'FORBIDDEN' });
+    const told = await w.rows<{ target_id: string }>(
+      `select target_id from audit_events where workspace_id = $1 and action = 'booking_page.changed_for'`,
+    );
+    expect(told.map((row) => row.target_id)).toEqual([bea]);
+    // Bea leaves: her page pauses, and her editor no longer reaches it.
+    await removeMember(w.owner, { memberId: bea });
+    expect((await listBookingPages(w.as(lead), NOW)).map((each) => each.id)).not.toContain(page.id);
+    expect(
+      (await refusalOf(updateBookingPage(w.as(lead), { pageId: page.id, settings: { status: 'live' } }, NOW))).code,
+    ).toBe('NOT_FOUND');
   });
 
   it('drops a removed member’s editor rows', async () => {
