@@ -228,9 +228,14 @@ function PendingTab({ tab }: { readonly tab: RecordTab }) {
         status="loading"
         onAction={() => undefined}
         toolbar={
-          <Button variant="primary" isDisabled>
-            {noteStrings.newNote}
-          </Button>
+          <>
+            <Button isFullWidth icon="pencil" isDisabled>
+              {noteStrings.writeNote}
+            </Button>
+            <Button variant="ghost" icon="phone" isDisabled>
+              {noteStrings.logActivity}
+            </Button>
+          </>
         }
       />
     );
@@ -630,7 +635,22 @@ function RecordScreen({
   }, [commandMenu, commandName, slug, object.apiSlug, recordId]);
   let tabContent: ReactNode;
   if (tab === 'activity') {
-    tabContent = <ActivityTab feed={feed} feedFor={feedFor} link={link} taskHref={taskHref} onAddPerson={addPerson} />;
+    tabContent = (
+      <ActivityTab
+        feed={feed}
+        feedFor={feedFor}
+        link={link}
+        taskHref={taskHref}
+        onAddPerson={addPerson}
+        {...(canAddTasks
+          ? {
+              onLog: () => {
+                openLog('new');
+              },
+            }
+          : {})}
+      />
+    );
   } else if (tab === 'comments') {
     tabContent = (
       <CommentsTab

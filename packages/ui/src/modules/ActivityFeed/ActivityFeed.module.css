@@ -5,12 +5,16 @@
    quiet row (its icon and its title), or a card with the title and a two
    line excerpt. A links entry names its records as flat chips
    in the line. A meeting's card holds its time, its attendees and its video
-   link. Period headings are 11px labels. The inline layout draws a few
+   link. Period headings are 11px labels in text-secondary. Entries and
+   headings are held to size-column-max plus size-column, so a time sits
+   near its words on a wide page. The inline layout draws a few
    entries in place, with no scroll of its own. */
 @layer components {
   .root {
     --feed-height: 0;
     --entry-offset: 0;
+    /* The entries' width at most, so a time sits near its words on a wide page (owner, 31 Oct). */
+    --feed-max: calc(var(--size-column-max) + var(--size-column));
 
     display: flex;
     flex-direction: column;
@@ -31,7 +35,9 @@
   .slot {
     position: absolute;
     inset-block-start: 0;
-    inset-inline: 0;
+    inset-inline-start: 0;
+    inline-size: 100%;
+    max-inline-size: var(--feed-max);
     display: flex;
     flex-direction: column;
     border-radius: var(--radius-md);
@@ -58,11 +64,14 @@
     transform: none;
   }
 
+  /* A period's heading in the secondary colour, so the day reads as the feed's landmark (owner, 31 Oct: too faint).
+     Held to the entries' width. */
   .period {
+    max-inline-size: var(--feed-max);
     margin: 0;
     padding-block: var(--space-12) var(--space-4);
     padding-inline: var(--space-4);
-    color: var(--text-tertiary);
+    color: var(--text-secondary);
     font: var(--text-label-strong);
     letter-spacing: var(--tracking-label-strong);
   }
@@ -183,6 +192,12 @@
   .changesNames {
     min-inline-size: 0;
     color: var(--text-secondary);
+  }
+
+  /* Show all's words start on the names' line: the link button's own inset pulled back. */
+  .changesMore {
+    display: flex;
+    margin-inline-start: calc(-1 * var(--space-4));
   }
 
   .changesRow {

@@ -322,6 +322,16 @@
     opacity: var(--opacity-disabled);
   }
 
+  /* A disabled primary drops its blue for the neutral off look, so it reads as not yet, never as a broken accent
+     (owner, 31 Oct: a faded blue Comment looked broken). */
+  .root[data-variant='primary'][data-disabled] {
+    border-color: var(--border-subtle);
+    background: var(--surface-sunken);
+    box-shadow: none;
+    color: var(--text-tertiary);
+    opacity: 1;
+  }
+
   .root[data-pending] {
     opacity: var(--opacity-busy);
   }

@@ -36,7 +36,7 @@ async function withGrace(page: Page, prefix: string): Promise<{ readonly slug: s
 /** Writes a note titled `title` on the record page open now, and closes its window. */
 async function writeNote(page: Page, title: string, text: string) {
   await page.getByRole('tab', { name: /Notes/ }).click();
-  await page.getByRole('button', { name: 'New note' }).first().click();
+  await page.getByRole('button', { name: 'Write a note…' }).first().click();
   const window = page.getByRole('dialog').filter({ has: page.getByRole('textbox', { name: 'Note' }) });
   await window.getByRole('textbox', { name: 'Title' }).fill(title);
   await window.getByRole('textbox', { name: 'Note' }).click();

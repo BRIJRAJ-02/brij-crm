@@ -885,6 +885,9 @@ function hasDetail(entry: ActivityEntry): boolean {
   return entry.title !== undefined || entry.excerpt !== undefined;
 }
 
+/** At most this many changes at one moment show their values at once; more keep to their names behind Show all. */
+const CHANGES_SHOWN = 3;
+
 /** A change's old value, the arrow and the new value, each through the field set's one display (the card surface). */
 function ChangeDetail({
   entry,
@@ -932,7 +935,11 @@ function ChangesDetail({
   readonly entry: Extract<ActivityEntry, { kind: 'changes' }>;
   readonly detailId: string;
 }) {
-  const [isOpen, setOpen] = useState(false);
+  // A few changes show their old and new values at once (owner, 31 Oct: the names alone said nothing); a long run
+  // keeps to the names, with Show all.
+  const isShort = entry.changes.length <= CHANGES_SHOWN;
+  const [isOpenChoice, setOpen] = useState(false);
+  const isOpen = isShort || isOpenChoice;
   const names = [...new Set(entry.changes.map((change) => change.attribute.name))].join(strings.nameSeparator);
   return (
     <span id={detailId} className={styles.changes}>
@@ -950,18 +957,20 @@ function ChangesDetail({
       ) : (
         <span className={styles.changesNames}>{names}</span>
       )}
-      <span>
-        <Button
-          variant="ghost"
-          size="sm"
-          isExpanded={isOpen}
-          onPress={() => {
-            setOpen((open) => !open);
-          }}
-        >
-          {isOpen ? strings.showLess : strings.showAll}
-        </Button>
-      </span>
+      {!isShort && (
+        // A quiet text control whose words start on the detail's own line (owner, 31 Oct: it sat at another indent).
+        <span className={styles.changesMore}>
+          <Button
+            variant="link"
+            isExpanded={isOpen}
+            onPress={() => {
+              setOpen((open) => !open);
+            }}
+          >
+            {isOpen ? strings.showLess : strings.showAll}
+          </Button>
+        </span>
+      )}
     </span>
   );
 }

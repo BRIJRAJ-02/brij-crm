@@ -8,6 +8,8 @@ export const strings = {
   addTask: 'Add a task',
   addTaskPlaceholder: 'Add a task and press Enter',
   newTask: 'New task',
+  /** The quick add's way to the full task: its due date and assignee. */
+  newTaskWithDetails: 'Add with a due date and assignee',
   /** Overview's block's way to the Tasks tab: short like Recent activity's, so both fit a phone's card head. */
   viewAll: 'View all',
   /** Its accessible name, apart from Recent activity's "View all" beside it (starts with the visible words). */

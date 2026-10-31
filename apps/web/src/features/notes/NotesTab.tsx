@@ -1,6 +1,6 @@
 // Brief
 // Purpose: what the team learned about this record, on its page's Notes tab.
-// Main task: write a note ("New note") or log a call or meeting ("Log activity"), and find one again to open it.
+// Main task: write a note ("Write a note…") or log a call or meeting ("Log activity"), and find one again to open it.
 // Leaves out: writing together in real time (#27), comments (#29), search inside notes (⌘K finds them by title).
 import type { MemberSummary, NoteList as NoteListSource } from '@crm/data';
 import { useNoteList } from '@crm/data/react';
@@ -31,17 +31,21 @@ export function NotesTab({ list, members, canAdd, onOpenNote, onOpenLog }: Notes
   useEffect(() => {
     preloadNoteEditor();
   }, []);
-  const newNote = (
+  // The tab opens on the note to write (owner, 31 Oct): "Write a note…" fills the row and opens a new note ready to
+  // type into; Log activity is the quiet second choice. Empty, the list is one line under them.
+  const compose = (
     <>
       <Button
-        variant="primary"
+        isFullWidth
+        icon="pencil"
         onPress={() => {
           onOpenNote('new');
         }}
       >
-        {strings.newNote}
+        {strings.writeNote}
       </Button>
       <Button
+        variant="ghost"
         icon="phone"
         onPress={() => {
           onOpenLog('new');
@@ -51,8 +55,6 @@ export function NotesTab({ list, members, canAdd, onOpenNote, onOpenLog }: Notes
       </Button>
     </>
   );
-  // Empty, New note sits in the empty state, under its words (as Attio and Twenty do); with notes, above them.
-  const isEmpty = state.status === 'ready' && notes.count === 0;
   return (
     <NoteList
       label={strings.listLabel}
@@ -66,8 +68,8 @@ export function NotesTab({ list, members, canAdd, onOpenNote, onOpenLog }: Notes
         if (kind === 'call' || kind === 'meeting') onOpenLog(id);
         else onOpenNote(id);
       }}
-      {...(canAdd ? { emptyActions: newNote } : {})}
-      {...(canAdd && !isEmpty ? { toolbar: newNote } : {})}
+      emptyLayout={canAdd ? 'row' : 'block'}
+      {...(canAdd ? { toolbar: compose } : {})}
     />
   );
 }

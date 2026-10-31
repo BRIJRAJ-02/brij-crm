@@ -1,10 +1,8 @@
 /** The comments and inbox screens' copy (spec 0038). */
 export const strings = {
   comments: 'Comments',
-  /** AC-1162: the tab with no threads yet, over the composer. */
+  /** AC-1162: the tab with no threads yet, for someone who can't write one (a writer sees the composer alone). */
   noComments: 'No comments yet',
-  /** Under No comments yet, for someone who can write one. */
-  noCommentsText: 'Start the conversation.',
   loadFailed: 'Comments didn’t load',
   loadFailedText: 'Check your connection and try again.',
   unavailable: 'Comments aren’t available for this record',
