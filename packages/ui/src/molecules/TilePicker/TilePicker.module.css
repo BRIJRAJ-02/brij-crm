@@ -1,0 +1,129 @@
+/* TilePicker: the question in the field label's type over sections of tiles, four a row (two in a narrow slot),
+   each heading in the sidebar label's type, then the chosen tile's few words. A tile is a control a row tall: a
+   field border and radius-md, its icon then its name; hover takes surface-hover, focus the inset ring, the chosen
+   one the accent's soft fill and edge. */
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+    min-inline-size: 0;
+    container-type: inline-size;
+  }
+
+  .label {
+    color: var(--text);
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label-strong);
+  }
+
+  .list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    outline: none;
+  }
+
+  .section {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--space-4);
+  }
+
+  .heading {
+    grid-column: 1 / -1;
+    padding-block-start: var(--space-2);
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .tile {
+    display: flex;
+    gap: var(--space-6);
+    align-items: center;
+    min-inline-size: 0;
+    min-block-size: var(--size-nav-item);
+    padding-inline: var(--space-8);
+    border: var(--border-width-hairline) solid var(--field-border);
+    border-radius: var(--radius-md);
+    background: var(--surface-raised);
+    color: var(--text);
+    outline: none;
+    transition: background-color var(--duration-hover) var(--ease-hover);
+  }
+
+  .icon {
+    display: grid;
+    flex: none;
+    place-items: center;
+    color: var(--text-secondary);
+  }
+
+  .name {
+    overflow: hidden;
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* The chosen tile's name and its few words, one quiet line under the tiles. */
+  .chosen {
+    display: flex;
+    gap: var(--space-6);
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .chosenName {
+    color: var(--text);
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label-strong);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .tile[data-hovered] {
+      background: var(--surface-hover);
+    }
+  }
+
+  .tile[data-focus-visible] {
+    box-shadow: var(--shadow-focus-inset);
+  }
+
+  .tile[data-selected] {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+  }
+
+  .tile[data-selected] .icon {
+    color: var(--accent-line);
+  }
+
+  .tile[data-disabled] {
+    color: var(--text-tertiary);
+  }
+
+  .error {
+    display: flex;
+    gap: var(--space-4);
+    align-items: center;
+    color: var(--danger);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  @container (width < 480px) {
+    .section {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (forced-colors: active) {
+    .tile[data-selected] {
+      border-color: Highlight;
+    }
+  }
+}

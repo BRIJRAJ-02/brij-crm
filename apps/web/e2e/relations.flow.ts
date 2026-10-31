@@ -60,8 +60,7 @@ async function newRelationship(page: Page, name: string) {
   await chooseNewAttribute(page);
   const attribute = page.getByRole('dialog', { name: 'New attribute' });
   await attribute.getByLabel('Name', { exact: true }).fill(name);
-  await attribute.getByRole('button', { name: /Type$/ }).click();
-  await page.getByRole('option', { name: 'Relationship', exact: true }).click();
+  await attribute.getByRole('option', { name: 'Relationship', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'New relationship' });
   await expect(dialog).toBeVisible();
   return dialog;

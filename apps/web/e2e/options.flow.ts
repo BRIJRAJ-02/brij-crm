@@ -30,8 +30,7 @@ test.describe('options', () => {
     await page.getByRole('button', { name: 'New attribute' }).click();
     const dialog = page.getByRole('dialog', { name: 'New attribute' });
     await dialog.getByLabel('Name', { exact: true }).fill('Pipeline');
-    await dialog.getByRole('button', { name: /Type$/ }).click();
-    await page.getByRole('option', { name: 'Status', exact: true }).click();
+    await dialog.getByRole('option', { name: 'Status', exact: true }).click();
     const stages = dialog.getByRole('grid', { name: 'Stages' });
     await expect(stages.getByRole('row')).toHaveCount(3);
     await stages.getByRole('textbox', { name: 'Stage 2' }).fill('Building');

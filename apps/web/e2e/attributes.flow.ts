@@ -40,10 +40,8 @@ async function createAttribute(page: Page, each: TypeCase): Promise<void> {
   await expect(dialog).toBeVisible();
   await expect(dialog.getByLabel('Name', { exact: true })).toBeFocused();
   await dialog.getByLabel('Name', { exact: true }).fill(each.name);
-  await dialog.getByRole('button', { name: /Type$/ }).click();
-  await page.getByRole('option', { name: each.type, exact: true }).click();
-  // The list of fifteen reaches over the settings below it: gone before the next click lands there.
-  await expect(page.getByRole('listbox')).toBeHidden();
+  // The types are tiles in the dialog (owner item 92), each an option by its name.
+  await dialog.getByRole('option', { name: each.type, exact: true }).click();
   // Everything past Name and Type is folded under More settings (the owner, 30 October 2026).
   if (['description', 'unique', 'required', 'multiple', 'days', 'currentUser'].some((key) => key in each)) {
     await dialog.getByRole('button', { name: 'More settings' }).click();
@@ -96,9 +94,7 @@ test('an owner adds, edits, moves, archives and restores attributes without setu
   // each guest would quietly be left out of the CRM (late trap #11). The refusal says how to get past it.
   await page.getByRole('button', { name: 'New attribute' }).click();
   await dialog.getByLabel('Name', { exact: true }).fill('Score');
-  await dialog.getByRole('button', { name: /Type$/ }).click();
-  await page.getByRole('option', { name: 'Rating', exact: true }).click();
-  await expect(page.getByRole('listbox')).toBeHidden();
+  await dialog.getByRole('option', { name: 'Rating', exact: true }).click();
   await dialog.getByRole('button', { name: 'More settings' }).click();
   await dialog.getByText('Required', { exact: true }).click();
   await dialog.getByRole('button', { name: 'Create attribute' }).click();

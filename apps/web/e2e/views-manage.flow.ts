@@ -312,8 +312,7 @@ test.describe('a schema change keeps the table where it was', () => {
     await chooseNewAttribute(page);
     const attribute = page.getByRole('dialog', { name: 'New attribute' });
     await attribute.getByLabel('Name', { exact: true }).fill('Employers');
-    await attribute.getByRole('button', { name: /Type$/ }).click();
-    await page.getByRole('option', { name: 'Relationship', exact: true }).click();
+    await attribute.getByRole('option', { name: 'Relationship', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'New relationship' });
     await dialog
       .getByRole('button', { name: /Related object/ })

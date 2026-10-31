@@ -22,8 +22,7 @@ test.describe('the relationship dialog’s preview', () => {
     await chooseNewAttribute(page);
     const attribute = page.getByRole('dialog', { name: 'New attribute' });
     await attribute.getByLabel('Name', { exact: true }).fill('Investors');
-    await attribute.getByRole('button', { name: /Type$/ }).click();
-    await page.getByRole('option', { name: 'Relationship', exact: true }).click();
+    await attribute.getByRole('option', { name: 'Relationship', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'New relationship' });
     await expect(dialog).toBeVisible();
     // Nothing to draw until both objects are chosen.

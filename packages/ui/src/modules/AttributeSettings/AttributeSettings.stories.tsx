@@ -102,13 +102,14 @@ export const GroupedTypes: Story = {
     const name = inDialog(dialog, 'Name');
     await waitFor(() => expect(name).toHaveFocus());
     await expect(name).toHaveAttribute('placeholder', 'e.g. Industry');
-    const type = within(dialog).getByRole('button', { name: /Type$/ });
-    // The type sits above the name.
+    // The types are tiles in sight, under their headings, above the name (owner item 92).
+    const type = within(dialog).getByRole('listbox', { name: 'Type' });
     await expect(type.compareDocumentPosition(name) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    await userEvent.click(type);
-    await expect(await screen.findByText('Contact')).toBeInTheDocument();
-    await expect(screen.getByText('Choice')).toBeInTheDocument();
-    await userEvent.keyboard('{Escape}');
+    await expect(within(type).getByText('Contact')).toBeInTheDocument();
+    await expect(within(type).getByText('Choice')).toBeInTheDocument();
+    await expect(within(type).getByRole('option', { name: 'Text' })).toHaveAttribute('aria-selected', 'true');
+    await userEvent.click(within(type).getByRole('option', { name: 'Email' }));
+    await expect(within(type).getByRole('option', { name: 'Email' })).toHaveAttribute('aria-selected', 'true');
     await userEvent.click(within(dialog).getByRole('button', { name: 'More settings' }));
     await expect(within(dialog).getByRole('checkbox', { name: 'Required' })).toHaveAccessibleDescription(
       'Can’t be left empty',
