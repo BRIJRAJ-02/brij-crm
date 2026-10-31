@@ -103,7 +103,7 @@ export const members = pgTable(
     role: memberRole('role').notNull().default('member'),
     /**
      * Their custom role (spec 0037, AC-1233), with `role` then `member`; none holds a built in role. The foreign key
-     * to `workspace_roles` (`on delete restrict`: a delete moves its holders first) is in migration 0143's SQL.
+     * to `workspace_roles` (`on delete restrict`: a delete moves its holders first) is in migration 0157's SQL.
      */
     customRoleId: uuid('custom_role_id'),
     /** Their picture, once file storage (#32) arrives; until then none, and screens show initials (spec 0031). */
