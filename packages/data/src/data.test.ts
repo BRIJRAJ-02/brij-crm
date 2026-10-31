@@ -830,6 +830,10 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       reassignUpcoming: os.rotations.reassignUpcoming.handler(notServed),
       delete: os.rotations.delete.handler(notServed),
     },
+    editors: {
+      list: os.editors.list.handler(notServed),
+      set: os.editors.set.handler(notServed),
+    },
     nav: {
       get: os.nav.get.handler(notServed),
       change: os.nav.change.handler(notServed),

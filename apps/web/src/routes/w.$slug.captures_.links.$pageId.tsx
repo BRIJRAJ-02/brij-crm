@@ -62,12 +62,16 @@ export const Route = createFileRoute('/w/$slug/captures_/links/$pageId')({
         page.kind === 'round_robin'
           ? (await Promise.all([context.data.members.list(params.slug), context.data.rotations.held(params.slug)]))[0]
           : undefined;
+      // Sharing's picker (spec 0037, AC-1331): the workspace's members, for an admin; a failed read leaves none.
+      const sharingPeople = mine.permissions.includes('booking.admin')
+        ? (people ?? (await context.data.members.list(params.slug).catch(() => undefined)))
+        : undefined;
       // Its Routing card (spec 0043): the person's and company's fields rules may read; a failed read leaves none.
       const fields =
         page.kind === 'round_robin' && page.canChange
           ? await readRecordFields(context.data, params.slug).catch(() => undefined)
           : undefined;
-      return { page, mayRead, ownerMember, people, fields, targets, objects };
+      return { page, mayRead, ownerMember, people, sharingPeople, fields, targets, objects };
     } catch (error) {
       if (isDataError(error) && error.code === 'NOT_FOUND') {
         return {
@@ -75,6 +79,7 @@ export const Route = createFileRoute('/w/$slug/captures_/links/$pageId')({
           mayRead: false,
           ownerMember: undefined,
           people: undefined,
+          sharingPeople: undefined,
           fields: undefined,
           targets: undefined,
           objects: [],
@@ -151,7 +156,7 @@ function Missing({
 }
 
 function EditorRoute() {
-  const { page, mayRead, ownerMember, people, fields, targets, objects } = Route.useLoaderData();
+  const { page, mayRead, ownerMember, people, sharingPeople, fields, targets, objects } = Route.useLoaderData();
   const { slug } = Route.useParams();
   const { tab = 'page' } = Route.useSearch();
   const navigate = Route.useNavigate();
@@ -168,6 +173,7 @@ function EditorRoute() {
       {...(mayRead ? { schedules: data.schedules.view(slug, ownerMember, memberZone(data, slug)) } : {})}
       {...(ownerMember === undefined ? {} : { ownerMember })}
       {...(people === undefined ? {} : { people })}
+      {...(sharingPeople === undefined ? {} : { sharingPeople })}
       {...(fields === undefined ? {} : { recordFields: fields })}
       {...(targets === undefined ? {} : { targets })}
       objects={objects}
