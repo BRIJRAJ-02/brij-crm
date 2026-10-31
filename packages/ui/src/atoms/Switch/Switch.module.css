@@ -71,26 +71,22 @@
     opacity: var(--opacity-disabled);
   }
 
-  /* offLabel: the label and the off word share one cell, so the switch keeps one width either way. While off the
-     label is clear and the word shows. The word is generated content, so Switch names the input with the label
-     outright and the word never joins its accessible name. */
-  .label[data-off] {
-    display: inline-grid;
+  /* offStatus: a small word beside the switch while it is off, its description (React Aria wires it). Generated
+     content, so it is there only while off and the description is empty while on. */
+  .field:has(> .status) {
+    flex-direction: row;
+    gap: var(--space-8);
+    align-items: center;
   }
 
-  .label[data-off]::after {
-    grid-area: 1 / 1;
-    visibility: hidden;
-    content: attr(data-off);
+  .status {
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
   }
 
-  .root:not([data-selected]) .label[data-off] {
-    color: transparent;
-  }
-
-  .root:not([data-selected]) .label[data-off]::after {
-    color: var(--text);
-    visibility: visible;
+  .field:not(:has([data-selected])) > .status::after {
+    content: attr(data-status);
   }
 
   .label[data-described] {
