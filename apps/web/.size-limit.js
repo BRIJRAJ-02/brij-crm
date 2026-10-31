@@ -64,18 +64,11 @@ export default [
   // What is left, 1.17 kB, is the question's own code and the lazy boundary: measured, and no more than measured.
   // Raising this is a spec change, so it is the owner's call; it was taken while they waited on the deploy and is
   // theirs to reverse.
-  //
-  // 224.2 kB and 17.25 kB from 31 October 2026 (spec 0060, AC-21, the brand kit on forms). Measured on CI before the
-  // spec: 222.98 kB and 16.89 kB. The spec allows each public page 1 kB more JavaScript and the shared CSS 4 kB more.
-  // What it added: the workspace's logo over the form and the preview's accent hook (`page-variables`, 0.41 kB), the
-  // accent pair worked out in `FormParts.module.css` (0.31 kB of CSS), and the page linking its brand stylesheet and
-  // waiting a moment for it so the form draws in its colour from the first frame (`public/stylesheet.ts`, 0.33 kB).
-  // Cut first: the link page's path builder moved out to the profile's own chunk (60 B), and nothing else on the
-  // form's first load is the spec's. Measured after: 224.16 kB and 17.2 kB, so these go up by that and no more. It is
-  // 0.18 kB past AC-21's 1 kB; taking `page-variables` off the public path (the previews setting the accent on their
-  // own wrapper) would win it back, and is the next cut if this is reversed. Raising this is a spec change.
-  { name: 'Hosted form JavaScript (gzipped)', path: inDist(form.js), limit: '224.2 kB', gzip: true, running: false },
-  { name: 'Hosted form CSS (gzipped)', path: inDist(form.css), limit: '17.25 kB', gzip: true, running: false },
+  // 31 October 2026: room won back without a raise. The form mounts UiProviderBase (no icon registry, brand art or
+  // toast region), its questions use SelectBase (no StatusDot or Badge), and Lucide's shape keys are numbered: from
+  // 222.99 kB and 16.98 kB to about 188.6 kB and 15.4 kB. These lines stay where they were.
+  { name: 'Hosted form JavaScript (gzipped)', path: inDist(form.js), limit: '223 kB', gzip: true, running: false },
+  { name: 'Hosted form CSS (gzipped)', path: inDist(form.css), limit: '17 kB', gzip: true, running: false },
   { name: 'Booking page JavaScript (gzipped)', path: inDist(book.js), limit: '230 kB', gzip: true, running: false },
   { name: 'Booking page CSS (gzipped)', path: inDist(book.css), limit: '18 kB', gzip: true, running: false },
 ];
