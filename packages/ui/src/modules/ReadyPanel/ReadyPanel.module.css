@@ -117,6 +117,17 @@
     background: var(--surface-subtle);
   }
 
+  /* With no preview, a quiet line sits beside the QR, centred on it, so the code doesn't stand alone in an empty
+     row; it takes the rest of the width. */
+  .scan {
+    flex: 1 1 var(--size-column-narrow);
+    align-self: center;
+    min-inline-size: 0;
+    margin: 0;
+    color: var(--text-secondary);
+    text-wrap: pretty;
+  }
+
   .more {
     display: flex;
     flex-direction: column;
@@ -145,17 +156,11 @@
     }
   }
 
-  @keyframes fade {
-    from {
-      opacity: 0;
-    }
-  }
-
+  /* Reduced motion: the panel and its mark are there at once (spec 0058, AC-2), with no fade. */
   @media (prefers-reduced-motion: reduce) {
     .root,
     .check {
-      animation-name: fade;
-      animation-delay: initial;
+      animation: none;
     }
   }
 
