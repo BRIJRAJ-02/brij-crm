@@ -494,6 +494,10 @@ const SENTENCES: readonly (readonly [AuditEntryView, string])[] = [
     { ...base, action: 'rotation.changed', target: rotation, params: { added: 1, removed: 0 } },
     'Ada Lovelace changed who is in Sales',
   ],
+  [
+    { ...base, action: 'editors.changed', target: rotation, params: { added: 1, removed: 0 } },
+    'Ada Lovelace changed who can edit Sales',
+  ],
 ];
 
 describe('every listed action', () => {
