@@ -158,7 +158,9 @@ function EditorModal({
 }) {
   const frame = useContext(EditorFrameContext);
   const submit = canSubmit ? (
-    <Button variant="primary" type="submit" form={formId}>
+    // Inside the Add modal it travels into a slot of the footer: full width of that slot, so on a phone, where the
+    // footer stacks its buttons the dialog's width, it is as wide as Cancel; beside Cancel it keeps its own width.
+    <Button variant="primary" type="submit" form={formId} {...(frame === undefined ? {} : { isFullWidth: 'center' })}>
       {chrome?.submitLabel ?? submitLabel}
     </Button>
   ) : undefined;

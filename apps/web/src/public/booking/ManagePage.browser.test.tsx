@@ -41,9 +41,7 @@ describe('ManagePage', () => {
     await expect
       .element(page.getByRole('heading', { level: 1, name: 'This link doesn’t open a booking' }))
       .toBeVisible();
-    await expect
-      .element(page.getByText('Open the one in the latest email about this booking.', { exact: false }))
-      .toBeVisible();
+    await expect.element(page.getByText('Use the one in your latest email.', { exact: false })).toBeVisible();
     expect(document.title).toBe('This link doesn’t open a booking · Timefix');
   });
 

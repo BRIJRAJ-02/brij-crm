@@ -9,7 +9,9 @@
 // paged (spec 0006), always by cursor. A list board is its columns' first
 // cards from `entries.groups`. Live `entries` events read the named entries
 // again and settle the list's views once their rows may have moved.
+import { applyOp, type BulkOp } from '@crm/contracts/bulk-ops';
 import type {
+  EntryEditResults,
   EntryGroups,
   EntryPage,
   EntryResults,
@@ -25,6 +27,7 @@ import type { MutationLog } from '../live/mutations.ts';
 import type { LiveEventOf } from '../live/router.ts';
 import type { Notice } from '../notice.ts';
 import type { ExternalEntry } from '../records/history.ts';
+import type { BulkEditResult } from '../records/layer.ts';
 import type { NameState, RecordRef } from '../records/names.ts';
 import { createPlainStore } from '../records/plain-store.ts';
 import type { RecordBody, RecordStore, StoreListener } from '../records/store.ts';
@@ -102,6 +105,23 @@ export interface EntriesApi {
     readonly values: Readonly<Record<string, { readonly value: unknown; readonly baseVersionId?: string | null }>>;
     readonly mutationId: string;
   }) => Promise<WrittenEntry>;
+  readonly updateMany: (input: {
+    readonly workspace: string;
+    readonly listId: string;
+    readonly entryIds: readonly string[];
+    readonly edit: { readonly attributeId: string; readonly op: BulkOp; readonly value?: unknown };
+    readonly timeZone: string;
+    readonly mutationId: string;
+  }) => Promise<EntryEditResults>;
+  readonly setValuesBatch: (input: {
+    readonly workspace: string;
+    readonly listId: string;
+    readonly items: readonly {
+      readonly entryId: string;
+      readonly values: Readonly<Record<string, { readonly value: unknown; readonly ifVersionId?: string }>>;
+    }[];
+    readonly mutationId: string;
+  }) => Promise<EntryEditResults>;
   readonly remove: (input: {
     readonly workspace: string;
     readonly entryIds: readonly string[];
@@ -256,6 +276,11 @@ export const LIST_WORDS = {
   restoredSome: (back: number, kept: number, reason: string) =>
     `Put ${back.toLocaleString('en')} back. ${kept.toLocaleString('en')} stayed out: ${reason}`,
   undidCell: (title: string, name: string) => `Undid ${title} on ${name}`,
+  undidBulk: (title: string, count: number) =>
+    `Undid ${title} on ${count.toLocaleString('en')} ${count === 1 ? 'entry' : 'entries'}`,
+  /** Some kept the value someone set since the bulk edit. */
+  undidBulkSome: (title: string, back: number, kept: number) =>
+    `Undid ${title} on ${back.toLocaleString('en')}. ${kept.toLocaleString('en')} changed since, so kept.`,
   undidAdd: (name: string, list: string) => `Took ${name} out of ${list} again`,
   undidAddMany: (count: number, list: string) =>
     `Took ${count.toLocaleString('en')} ${count === 1 ? 'entry' : 'entries'} out of ${list} again`,
@@ -964,6 +989,141 @@ export function createEntriesLayer({
     }
   }
 
+  /** A list field's bulk edit, as a screen asks for it: the field's type tells what its rows show at once. */
+  interface EntryBulkEdit {
+    readonly attributeId: string;
+    readonly title: string;
+    readonly type: string;
+    readonly isMulti: boolean;
+    readonly op: BulkOp;
+    readonly value?: unknown;
+  }
+
+  /**
+   * Changes one list field of up to 500 entries of one list as one action
+   * (AC-4826): the rows this tab holds show the new value at once (`applyOp`,
+   * as the server runs it under each entry's lock), then one
+   * `entries.updateMany`. Each entry lands or rolls back on its own, a refused
+   * one's cell saying why. The entries it changed go on the undo stack as one
+   * entry: Cmd+Z or the toast's Undo puts each `before` back while the cell
+   * still holds the version this edit wrote, keeping a cell changed since.
+   */
+  async function bulkEdit(
+    workspace: string,
+    list: ListRef,
+    entryIds: readonly string[],
+    request: EntryBulkEdit,
+  ): Promise<BulkEditResult> {
+    const ids = [...new Set(entryIds)];
+    if (ids.length > 500) return { kind: 'too-many', limit: 500 };
+    if (ids.length === 0) return { kind: 'done', updated: 0, unchanged: 0, refused: 0 };
+    const { attributeId } = request;
+    const cellOf = (entryId: string) => `${entryId}:${attributeId}`;
+    const shownViews = [...views.values()].filter((open) => open.workspace === workspace && open.listId === list.id);
+    for (const open of shownViews) for (const id of ids) open.setCellError(cellOf(id), undefined);
+    const mutationId = mintId();
+    const layers = new Map<string, ReturnType<typeof entries.edit>>();
+    for (const id of ids) {
+      const shown = entries.get(id);
+      if (shown === undefined) continue;
+      const next = applyOp(request, request.op, shown.values[attributeId] ?? null, request.value);
+      layers.set(id, entries.edit(id, { [attributeId]: next }, mutationId));
+    }
+    mutations.sent(mutationId);
+    let answer: EntryEditResults;
+    try {
+      answer = await api.updateMany({
+        workspace,
+        listId: list.id,
+        entryIds: ids,
+        edit: { attributeId, op: request.op, ...(Object.hasOwn(request, 'value') ? { value: request.value } : {}) },
+        timeZone: timeZone(workspace),
+        mutationId,
+      });
+      mutations.answered(mutationId, answer.echoes);
+    } catch (failed) {
+      mutations.forget(mutationId);
+      for (const layer of layers.values()) layer.refuse();
+      return { kind: 'failed', error: toDataError(failed) };
+    }
+    records.receive(answer.records);
+    const back: { readonly entryId: string; readonly before: unknown; readonly versionId: string }[] = [];
+    let updated = 0;
+    let unchanged = 0;
+    let refused = 0;
+    let firstReason: string | undefined;
+    for (const result of answer.results) {
+      const layer = layers.get(result.entryId);
+      if (result.entry !== undefined) {
+        remember(result.entry);
+        if (layer === undefined) entries.receive([result.entry]);
+        else layer.confirm(result.entry);
+        const versionId = result.written?.[attributeId];
+        if (versionId === undefined) unchanged += 1;
+        else {
+          updated += 1;
+          if (Object.hasOwn(result, 'before'))
+            back.push({ entryId: result.entryId, before: result.before ?? null, versionId });
+        }
+        continue;
+      }
+      layer?.refuse();
+      refused += 1;
+      const message = result.refusals?.[0]?.message ?? LIST_WORDS.couldNotUndo;
+      firstReason ??= message;
+      for (const open of shownViews) open.setCellError(cellOf(result.entryId), message);
+    }
+    settleList(workspace, list.id);
+    if (back.length === 0) {
+      return {
+        kind: 'done',
+        updated,
+        unchanged,
+        refused,
+        ...(firstReason === undefined ? {} : { reason: firstReason }),
+      };
+    }
+    const undoId = mintId();
+    records.pushUndo(workspace, {
+      id: undoId,
+      kind: 'external',
+      objectId: list.objectId,
+      run: async () => {
+        try {
+          const undone = await sent((undoMutation) =>
+            api.setValuesBatch({
+              workspace,
+              listId: list.id,
+              items: back.map((cell) => ({
+                entryId: cell.entryId,
+                values: { [attributeId]: { value: cell.before, ifVersionId: cell.versionId } },
+              })),
+              mutationId: undoMutation,
+            }),
+          );
+          take({ entries: undone.results.flatMap((result) => result.entry ?? []), records: undone.records }, false);
+          settleList(workspace, list.id);
+          const landedBack = undone.results.filter((result) => result.entry !== undefined).length;
+          const kept = undone.results.length - landedBack;
+          if (landedBack === 0) return { tone: 'danger', message: LIST_WORDS.couldNotUndo };
+          return kept === 0
+            ? { tone: 'success', message: LIST_WORDS.undidBulk(request.title, landedBack) }
+            : { tone: 'success', message: LIST_WORDS.undidBulkSome(request.title, landedBack, kept) };
+        } catch {
+          return { tone: 'danger', message: LIST_WORDS.couldNotUndo };
+        }
+      },
+    });
+    return {
+      kind: 'done',
+      updated,
+      unchanged,
+      refused,
+      ...(firstReason === undefined ? {} : { reason: firstReason }),
+      undoId,
+    };
+  }
+
   /**
    * Takes entries out of a list (AC-4817, AC-4818): their rows leave at once,
    * 500 a call; each refused one comes back, and the answer says how many and
@@ -1294,6 +1454,7 @@ export function createEntriesLayer({
     board,
     add,
     setCell,
+    bulkEdit,
     remove,
     restore,
     membership,

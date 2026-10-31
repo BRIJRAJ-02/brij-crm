@@ -108,9 +108,9 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
   const [isBusy, setBusy] = useState(false);
   const [isConfirming, setConfirming] = useState(false);
   // What went wrong, and the member a refusal was about, taken from the list that was sent, not the draft since.
-  const [failure, setFailure] = useState<{ readonly message: string; readonly memberId?: string } | undefined>(
-    undefined,
-  );
+  const [failure, setFailure] = useState<
+    { readonly message: string; readonly memberId?: string; readonly isReach?: boolean } | undefined
+  >(undefined);
   const [nameError, setNameError] = useState<string | undefined>(undefined);
   const nameOf = (memberId: string) =>
     people.find((person) => person.id === memberId)?.name ??
@@ -137,7 +137,9 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
   // A refusal about one member ("Maya Patel needs to set hours or connect a calendar first.") offers to remove them,
   // and, while they are an active member (so hours are what they lack), their hours in a new tab, so the group stays.
   const refused = failure?.memberId;
-  const isRefusedActive = refused !== undefined && people.some((person) => person.id === refused);
+  // Someone the reader doesn't manage (spec 0037, AC-1340) lacks no hours: then only Remove from group is offered.
+  const isRefusedActive =
+    refused !== undefined && failure?.isReach !== true && people.some((person) => person.id === refused);
   // Where focus goes once a member's row or the refusal's Remove from group leaves with them: Create or Save, or the
   // next row's remove button. Left to itself it would fall to the title bar's Close, where Enter loses the draft.
   const saveRef = useRef<HTMLButtonElement>(null);
@@ -209,6 +211,7 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
         setFailure({
           message: isDataError(error) ? error.message : strings.somethingWrong,
           ...(memberId === undefined ? {} : { memberId }),
+          ...(isDataError(error) && error.code === 'FORBIDDEN' ? { isReach: true } : {}),
         });
       },
     );

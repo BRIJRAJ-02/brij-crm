@@ -66,6 +66,9 @@ export function MonthTiles({
   if (shown.month !== month) setShown({ month, direction: month > shown.month ? 'forward' : 'back' });
   const cells = monthCells(month, locale, weekStart);
   const open = cells.filter((key): key is string => key !== undefined && openDays.has(key));
+  // The month's first day and its place, so a cell outside the month can name its neighbour's date.
+  const lead = cells.findIndex((key) => key !== undefined);
+  const first = cells[lead] ?? `${month}-01`;
   const tabbable =
     (focused !== undefined && open.includes(focused) ? focused : undefined) ??
     (value !== undefined && open.includes(value) ? value : undefined) ??
@@ -143,7 +146,18 @@ export function MonthTiles({
         }}
       >
         {cells.map((key, index) => {
-          if (key === undefined) return <span key={`blank-${String(index)}`} aria-hidden="true" />;
+          // Outside the month: the neighbour's date, drawn by CSS from data-date (decoration, not text), quiet and out
+          // of reach, so the six weeks that hold every month at one height never leave an empty row over the times
+          // (spec 0058).
+          if (key === undefined)
+            return (
+              <span
+                key={`outside-${String(index)}`}
+                className={styles.outside}
+                data-date={dayLabels(addDays(first, index - lead), locale).day}
+                aria-hidden="true"
+              />
+            );
           const labels = dayLabels(key, locale);
           const isOpen = openDays.has(key);
           const isToday = key === today;

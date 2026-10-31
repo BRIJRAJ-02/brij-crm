@@ -29,7 +29,7 @@ export const Invite: Story = {
   },
 };
 
-/** With a match: Match with your calendar takes the row, in place of the small link (25 Oct 2026). */
+/** With a match: the same small Connect your calendar link opens the dialog first (spec 0058, AC-24). */
 export const Match: Story = {
   render: function Render(args) {
     const [isOpen, setIsOpen] = useState(false);
@@ -49,10 +49,19 @@ export const Match: Story = {
     );
   },
   play: async ({ canvas }) => {
-    await userEvent.click(canvas.getByRole('button', { name: 'Match with your calendar' }));
+    // Small and secondary, never the row's width: booking stays the page's one ask.
+    const link = canvas.getByRole('button', { name: 'Connect your calendar' });
+    await expect(link).toHaveAttribute('data-variant', 'ghost');
+    await userEvent.click(link);
     const dialog = await screen.findByRole('dialog');
     await waitFor(() => expect(dialog).toBeVisible());
     await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    // Focus comes back to the link, which opens its tooltip; the shot is of the row at rest, not a tooltip
+    // clipped by the frame.
+    await userEvent.unhover(link);
+    link.blur();
+    await waitFor(() => expect(screen.queryByRole('tooltip')).toBeNull());
   },
 };
 

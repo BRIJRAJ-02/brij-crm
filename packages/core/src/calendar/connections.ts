@@ -141,6 +141,11 @@ export async function connectCalendar(
 ): Promise<CalendarConnectionView> {
   checkScope(scope);
   const memberId = actingMember(scope);
+  // A guest takes no bookings and writes no records (spec 0031, slice 9): a calendar's sync would file meetings and
+  // make people for them, so a guest connects none.
+  if (scope.access.principal.kind === 'member' && scope.access.principal.role === 'guest') {
+    throw refuse('FORBIDDEN', 'Guests can’t connect a calendar.');
+  }
   const accountEmail = normaliseEmail(input.exchanged.accountEmail);
   const sealed = sealTokens(input.tokenKey, input.exchanged, {
     workspaceId: scope.workspaceId,

@@ -94,7 +94,6 @@ function Opened({
       {failure !== undefined && <Callout tone="danger">{failure}</Callout>}
       <Field
         label={scheduleStrings.name}
-        hint={scheduleStrings.nameHint}
         value={name}
         maxLength={SCHEDULE_NAME_MAX}
         isRequired

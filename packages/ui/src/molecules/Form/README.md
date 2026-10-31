@@ -59,7 +59,7 @@ Idle, field refused (on the field, in its hint's place, which reads as invalid, 
 
 ## Keyboard
 
-- `focusesFirstField` puts focus in the first field as the form mounts: a dialog that opens to be filled in (New person) starts where the typing does. `focusesFirstField="select"` also selects that field's text, so typing replaces it: Rename opened right after Duplicate, so no "copy" is left by accident (30 October 2026). Why a variant: an ordinary edit form keeps the caret where it lands.
+- `focusesFirstField` puts focus in the first field as the form mounts: a dialog that opens to be filled in (New person) starts where the typing does. `focusesFirstField="select"` also selects that field's text, so typing replaces it: Rename opened right after Duplicate, so no "copy" is left by accident (30 October 2026). A Select's hidden native `<select>` is skipped, so a form that opens with a Select (New meeting's For) still starts in its first field one types in (31 October 2026). Why a variant: an ordinary edit form keeps the caret where it lands.
 - ⌘↵ (Ctrl+Enter elsewhere) submits from anywhere in the form, a list or a long text included, after the field in use commits on blur: what the keycap a Modal's footer gives a submit that names a Form (`⌘↵`) promises. Enter submits only from a single line field, so the footer never shows `↵` for a Form's submit (30 October 2026).
 
 Enter in a single line field submits, in a Modal too (the footer's submit names the form). Tab goes through the fields, then the submit, then any `actions`. When a new answer brings refusals, focus moves to the first refused field, whose description reads the refusal; if focus is already there (the person pressed Enter in it), the refusal is announced instead.

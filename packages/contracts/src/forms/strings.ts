@@ -61,10 +61,11 @@ export interface FormStrings {
   /** A question with no label yet, in the builder's preview. */
   readonly untitledQuestion: string;
   /**
-   * Under every form until branding removal arrives as a plan flag (AC-577): "Powered by" over the Timefix mark, as
-   * on a link page and a booking page (spec 0060, AC-19), and the mark's name.
+   * The words before the Timefix wordmark under every form (spec 0058, AC-26), as on a link page and a booking page
+   * (spec 0060, AC-19). Nothing takes it off until branding removal arrives as a plan flag (AC-577).
    */
   readonly poweredBy: string;
+  /** The wordmark's name, read after "Powered by". */
   readonly product: string;
   /** The dial code picker's name with the country picked: "Country code, United States". */
   readonly dialCodeOf: (country: string) => string;
@@ -81,11 +82,9 @@ export interface FormStrings {
   readonly bookingInAfter: string;
   /** Going on to the booking page at once (a countdown of 0). */
   readonly bookingNow: string;
-  /** Goes to the booking page now. */
-  readonly bookNow: string;
   /** Stops the countdown and stays on the thank you. */
   readonly stayHere: string;
-  /** After Stay here: the way to the booking page, for later. */
+  /** The way on to the booking page: at once during the countdown, or later after Stay here. */
   readonly bookATime: string;
   /** A step form's place: "Step 2 of 3". */
   readonly stepOf: (step: number, steps: number) => string;
@@ -154,7 +153,6 @@ const EN: FormStrings = {
   bookingInBefore: 'Taking you to book a time in',
   bookingInAfter: '…',
   bookingNow: 'Taking you to book a time…',
-  bookNow: 'Book now',
   stayHere: 'Stay here',
   bookATime: 'Book a time',
   stepOf: (step, steps) => `Step ${String(step)} of ${String(steps)}`,

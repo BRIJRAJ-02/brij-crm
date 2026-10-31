@@ -166,6 +166,18 @@
     letter-spacing: var(--tracking-label);
   }
 
+  /* A card's value (a merge's side): the body's type and colour, cut to the card, under the label's line. */
+  .preview {
+    min-inline-size: 0;
+    padding-inline-start: calc(var(--size-check) + var(--space-8));
+    /* Cut to the card, but not a chip's edge or ring: the display truncates long text itself. */
+    overflow: clip;
+    overflow-clip-margin: var(--space-4);
+    color: var(--text);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
   .error {
     color: var(--danger);
     font: var(--text-label);

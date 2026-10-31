@@ -53,7 +53,9 @@ export function InviteTeamDialog({ data, slug, isOpen, onClose, onInvited }: Inv
           roles: options,
           // New rows start as Member (the owner, 22 October 2026), whatever the workspace's default for joining.
           defaultRole: options.find((each) => each.builtIn === 'member')?.id ?? roles.defaultRole,
-          memberEmails: new Set(members.map((member) => member.email.toLowerCase())),
+          memberEmails: new Set(
+            members.flatMap((member) => (member.email === undefined ? [] : [member.email.toLowerCase()])),
+          ),
           invitedEmails: new Set(invitations.filter((each) => !each.isExpired).map((each) => each.email.toLowerCase())),
         });
       })

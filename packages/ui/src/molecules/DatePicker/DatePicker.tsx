@@ -1,5 +1,6 @@
 import {
   endOfMonth,
+  endOfWeek,
   fromAbsolute,
   isSameDay,
   parseDate,
@@ -116,6 +117,30 @@ export function rangePresets(
     { label: strings.thisQuarter, start: quarterStart, end: endOfMonth(quarterStart.add({ months: 2 })) },
   ];
 }
+
+/**
+ * The forward looking range presets from `today`, for what gets planned (time off, a trip): Tomorrow, the rest of
+ * this week, next week and next month, ends included. Weeks start on the language's first day.
+ */
+export function futureRangePresets(
+  today: CalendarDate,
+  locale: string,
+  weekStart: WeekStart = 'auto',
+): readonly { readonly label: string; readonly start: CalendarDate; readonly end: CalendarDate }[] {
+  const firstDay = weekStartDay(weekStart);
+  const tomorrow = today.add({ days: 1 });
+  const nextWeek = startOfWeek(today.add({ weeks: 1 }), locale, firstDay);
+  const nextMonth = startOfMonth(today).add({ months: 1 });
+  return [
+    { label: strings.tomorrow, start: tomorrow, end: tomorrow },
+    { label: strings.restOfWeek, start: today, end: endOfWeek(today, locale, firstDay) },
+    { label: strings.nextWeek, start: nextWeek, end: endOfWeek(nextWeek, locale, firstDay) },
+    { label: strings.nextMonthRange, start: nextMonth, end: endOfMonth(nextMonth) },
+  ];
+}
+
+/** Which presets a DateRangePicker offers: `past` looks back (reports, filters), `future` looks ahead (plans). */
+export type RangePresetSet = 'past' | 'future';
 
 /** The calendar's state, single or range: both page and focus the same way. */
 function useCalendarState() {
@@ -481,13 +506,14 @@ function isRange(
 }
 
 /**
- * The range presets as an inline menu under the calendar: Last 7 days, This month, Last month, This quarter. The
- * one the range matches is checked.
+ * The range presets as an inline menu under the calendar: Last 7 days, This month, Last month, This quarter, or
+ * with `set="future"` Tomorrow, Rest of this week, Next week, Next month. The one the range matches is checked.
  */
-function RangePresets({ today }: { readonly today: CalendarDate }) {
+function RangePresets({ today, set }: { readonly today: CalendarDate; readonly set: RangePresetSet }) {
   const state = useContext(DateRangePickerStateContext);
+  const { locale, weekStart } = useFormatSettings();
   if (state === null) return null;
-  const presets = rangePresets(today);
+  const presets = set === 'future' ? futureRangePresets(today, locale, weekStart) : rangePresets(today);
   return (
     <div className={styles.picks}>
       <Menu
@@ -683,6 +709,11 @@ export interface DateRangePickerProps extends DateFieldLook {
   readonly value?: DateRange | null;
   readonly defaultValue?: DateRange | null;
   readonly onChange?: (value: DateRange | null) => void;
+  /**
+   * The presets under the calendar: `past` (the default: Last 7 days, This month, Last month, This quarter) for
+   * looking back, `future` (Tomorrow, Rest of this week, Next week, Next month) for planning ahead, as time off is.
+   */
+  readonly presets?: RangePresetSet;
 }
 
 function toRange(value: DateRange | null | undefined) {
@@ -694,7 +725,7 @@ function toRange(value: DateRange | null | undefined) {
  * DatePicker's range variant, for filters and dashboards: a start and an end day, picked on one calendar as one
  * unbroken band, or from the presets under it.
  */
-export function DateRangePicker({ value, defaultValue, onChange, ...look }: DateRangePickerProps) {
+export function DateRangePicker({ value, defaultValue, onChange, presets = 'past', ...look }: DateRangePickerProps) {
   const isInPopover = use(InPopover);
   const controlled = toRange(value);
   const initial = toRange(defaultValue);
@@ -736,7 +767,7 @@ export function DateRangePicker({ value, defaultValue, onChange, ...look }: Date
         >
           <CalendarBody today={today} />
         </RangeCalendar>
-        <RangePresets today={today} />
+        <RangePresets today={today} set={presets} />
       </Popover>
     </AriaDateRangePicker>
   );

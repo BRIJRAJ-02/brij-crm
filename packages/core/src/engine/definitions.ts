@@ -27,6 +27,7 @@ import { checkHue, checkLabel, checkTarget, hasStageSettings, type OptionOutcome
 import { isRefusal, postgresError, refuse, refuseOn } from './refusals.ts';
 import { actorRow, type EngineScope } from './scope.ts';
 import { clearUniqueKeys, fillUniqueKeys, UNIQUE_TYPES } from './unique.ts';
+import { rekeyMatches } from './match-keys.ts';
 import { ARCHIVED_BY, isArchivedNow, loadAttribute, type AttributeDef } from './values.ts';
 import { runWrite, type AfterWrite, type WriteContext } from './write.ts';
 import { writeRules } from '../validation/rules.ts';
@@ -46,6 +47,13 @@ import { requireFieldManager } from '../lists/manager.ts';
 import { joinNames, objectsRuledBy } from '../access/rule-guard.ts';
 import { attributeVisible } from '../access/visibility.ts';
 import { objectLevel, type Access } from '../access/policy.ts';
+import type { ComputedDefinitionInput } from '@crm/contracts';
+import {
+  attributesOfObject,
+  changeComputedDefinition,
+  checkComputed,
+  refuseComputedSettings,
+} from '../computed/define.ts';
 
 const { attributeOptions, attributes, members, objects, relationships, workspaceCounters } = schema;
 
@@ -126,6 +134,8 @@ export interface AttributeUpdate {
   readonly defaultValue?: unknown;
   /** Its validation rules, in order (spec 0013, AC-252): the list replaces the attribute's own rules. */
   readonly rules?: readonly ValidationRuleInput[];
+  /** A computed attribute's new definition, of the same result type (spec 0015, AC-322). */
+  readonly computed?: ComputedDefinitionInput;
 }
 
 /** What an object's names and look may change to, and the attribute that names its records. */
@@ -908,6 +918,8 @@ export async function updateAttribute(
       // A rename of a relationship's side locks both sides first, in id order, as every write over both does.
       if (input.title !== undefined) await lockWithPair(tx, input.attributeId);
       const attribute = await editable(tx, context.scope.access, input.attributeId);
+      // A computed attribute takes no Required, Unique, default or rules (spec 0015, AC-323).
+      refuseComputedSettings(attribute, input);
       if (input.title !== undefined) checkName(input.title, 'title', 'title');
       const far = input.title === undefined ? undefined : await farEnd(tx, attribute);
       // A relationship from an object to itself keeps two different names (spec 0014, AC-307).
@@ -976,6 +988,8 @@ export async function updateAttribute(
         })
         .where(eq(attributes.id, attribute.id));
       recordDefinition(context, attribute, ruled.attributeIds);
+      // A computed attribute's new definition, of the same result type (spec 0015, AC-322).
+      if (input.computed !== undefined) await changeComputedDefinition(context, attribute, input.computed);
       // The other side carries this side's name in its relationship block (spec 0014): its object changes too.
       if (far !== undefined && input.title !== undefined && input.title.trim() !== attribute.title) {
         recordDefinition(context, far);
@@ -1058,6 +1072,11 @@ export async function archiveAttribute(
           );
       }
       for (const end of live) recordDefinition(context, end);
+      // Computed attributes reading it stop updating and keep their values (spec 0015, AC-327, AC-339).
+      await checkComputed(
+        context,
+        live.map((end) => end.id),
+      );
       return ends.map(refOf);
     },
     hooks,
@@ -1268,6 +1287,11 @@ export async function restoreAttribute(
           );
       }
       for (const end of archived) recordDefinition(context, end);
+      // Computed attributes that stopped when it was archived work out again (spec 0015, AC-327).
+      await checkComputed(
+        context,
+        archived.map((end) => end.id),
+      );
       return ends.map(refOf);
     },
     hooks,
@@ -1430,6 +1454,11 @@ export async function updateObject(scope: EngineScope, input: ObjectUpdate, hook
       if (object === undefined) throw refuse('NOT_FOUND', 'That object does not exist.');
       // The old name stops being filled at bookings: refused when that leaves a live page's guests out of the CRM.
       if (named?.before !== undefined) await checkStillFilled(tx, context.scope.access, named.before);
+      // Likely duplicates key an object's name (spec 0049): the old name stops matching, the new one starts.
+      if (named !== undefined) {
+        if (named.before !== undefined) await rekeyMatches(tx, named.before.id);
+        await rekeyMatches(tx, named.attribute.id);
+      }
       // Every record's name changes with a new name attribute: a whole object change, so every tab reads the
       // objects again, and the data layer then reads the records it holds again wherever their names show.
       context.record({ definitions: [{ objectId: object.id, attributeIds: [] }] });
@@ -1470,7 +1499,8 @@ export async function setObjectArchived(
     throw refuse('NOT_FOUND', 'That object does not exist.');
   await runWrite(
     scope,
-    async ({ tx, ...context }) => {
+    async (context) => {
+      const { tx } = context;
       if (input.archived) await checkNoLiveForms(tx, context.scope.access, input.objectId.toLowerCase());
       const updated = await tx
         .update(objects)
@@ -1480,6 +1510,8 @@ export async function setObjectArchived(
       const [object] = updated;
       if (object === undefined) throw refuse('NOT_FOUND', 'That object does not exist.');
       context.record({ definitions: [{ objectId: object.id, attributeIds: [] }] });
+      // Computed attributes reading its attributes stop, or work out again on a restore (spec 0015, AC-327).
+      await checkComputed(context, await attributesOfObject(tx, object.id));
     },
     hooks,
   );

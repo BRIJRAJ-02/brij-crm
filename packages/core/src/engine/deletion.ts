@@ -64,6 +64,7 @@ async function lockedRecord(tx: WorkspaceTx, recordId: string) {
     .select({
       objectId: records.objectId,
       deletedAt: records.deletedAt,
+      mergedInto: records.mergedIntoRecordId,
       expired: sql<boolean>`${records.deletedAt} < now() - ${RESTORE_WINDOW}::interval`,
     })
     .from(records)
@@ -270,6 +271,8 @@ export async function restoreRecord(
       const record = await lockAnyRecord(tx, recordId, scope.access);
       if (record.deletedAt === null) return { recordId, state: 'live' as const };
       if (record.expired) throw refuse('NOT_FOUND', 'That record was deleted more than 30 days ago.');
+      // A merged record never comes back (spec 0049, AC-4914): it answers as gone.
+      if (record.mergedInto !== null) throw refuse('NOT_FOUND', 'That record does not exist.');
       const ref = { recordId, objectId: record.objectId };
       const entries = await liveEntries(tx, ref);
       const far = await farReferences(tx, ref);

@@ -1,7 +1,8 @@
 // Brief
-// Purpose: Settings › Workspace › General (spec 0031, AC-822, AC-823): the workspace's name, web address and time zone.
+// Purpose: Settings › Workspace › General (spec 0031, AC-822, AC-823): the workspace's name, web address, time zone,
+// and the currency and country new money and phone fields start in.
 // Main task: rename it (saved when the field is left or on Enter, with Undo), change its address (its own dialog), or
-// pick its time zone (saved at once, with Undo); owners can delete it.
+// pick its time zone, currency or country (saved at once, with Undo); owners can delete it.
 // Leaves out: a Save bar and a leave check (each change saves on its own), the logo (no row until upload arrives with #32), and members (their own page).
 import { isDataError, type DataLayer, type WorkspaceSettings } from '@crm/data';
 import {
@@ -9,6 +10,8 @@ import {
   Callout,
   Card,
   CopyButton,
+  CountryPicker,
+  CurrencyPicker,
   Field,
   focusLater,
   InfoTip,
@@ -50,7 +53,7 @@ export interface GeneralScreenProps {
 
 /** What a saved toast's Undo puts back, and how to tell the workspace still holds the change it undoes. */
 interface SavedUndo {
-  readonly what: 'name' | 'time zone';
+  readonly what: 'name' | 'time zone' | 'currency' | 'country';
   readonly run: () => void;
   /** Whether the workspace, as read, still holds this change. */
   readonly isStill: (now: WorkspaceSettings) => boolean;
@@ -87,6 +90,7 @@ export function GeneralScreen({
   // The name on its way, so Enter and then leaving the field send it once.
   const sending = useRef<string | undefined>(undefined);
   const [zoneBusy, setZoneBusy] = useState(false);
+  const [regionBusy, setRegionBusy] = useState(false);
   const [isChanging, setChanging] = useState(false);
   // A fresh address dialog per opening, so its field starts from the address again.
   const [opened, setOpened] = useState(0);
@@ -109,6 +113,7 @@ export function GeneralScreen({
   });
   // The time zone on its way, read by an Undo pressed meanwhile (a ref, as the toast outlives the render it came from).
   const zoneSending = useRef<string | undefined>(undefined);
+  const regionSending = useRef<'currency' | 'country' | undefined>(undefined);
   const lastSaved = useRef<string | undefined>(undefined);
   /** Closes the open Undo, if any: a newer change is on its way. */
   const closeSaved = () => {
@@ -254,6 +259,41 @@ export function GeneralScreen({
       });
   };
 
+  /** Saves the workspace's currency or country (null is Automatic), with an Undo that saves the one before. */
+  const setRegion = (
+    field: 'currency' | 'country',
+    next: string | null,
+    previous: string | null,
+    withUndo: boolean,
+  ) => {
+    setRegionBusy(true);
+    regionSending.current = field;
+    closeSaved();
+    data.workspace
+      .update(slug, field === 'currency' ? { currency: next } : { country: next })
+      .then(async () => {
+        await onChanged();
+        saved(
+          strings.regionChanged(field, next ?? undefined),
+          withUndo
+            ? {
+                what: field,
+                run: () => {
+                  setRegion(field, previous, next, false);
+                },
+                isStill: (now) => (now[field] ?? null) === next,
+                isBusy: () => regionSending.current !== undefined,
+              }
+            : undefined,
+        );
+      })
+      .catch(fail)
+      .finally(() => {
+        if (regionSending.current === field) regionSending.current = undefined;
+        setRegionBusy(false);
+      });
+  };
+
   return (
     <SettingsPage title={strings.generalTitle}>
       {/* Said once for the page; each field keeps its lock. */}
@@ -342,6 +382,39 @@ export function GeneralScreen({
               }}
             />
           </SettingsRow>
+          <SettingsRow
+            title={strings.currency}
+            control="field"
+            meta={<InfoTip label={strings.currency}>{strings.regionInfo}</InfoTip>}
+          >
+            <CurrencyPicker
+              label={strings.currency}
+              isLabelHidden
+              isClearable
+              placeholder={strings.automatic}
+              value={settings.currency ?? null}
+              isReadOnly={!canEdit}
+              isDisabled={regionBusy}
+              onChange={(code) => {
+                if (code !== (settings.currency ?? null)) setRegion('currency', code, settings.currency ?? null, true);
+              }}
+            />
+          </SettingsRow>
+          <SettingsRow title={strings.country} control="field">
+            <CountryPicker
+              label={strings.country}
+              isLabelHidden
+              list="all"
+              isClearable
+              placeholder={strings.automatic}
+              value={settings.country ?? null}
+              isReadOnly={!canEdit}
+              isDisabled={regionBusy}
+              onChange={(code) => {
+                if (code !== (settings.country ?? null)) setRegion('country', code, settings.country ?? null, true);
+              }}
+            />
+          </SettingsRow>
         </Card>
       </SettingsSection>
       {mayDelete && (
@@ -419,6 +492,12 @@ export function GeneralPending() {
             )}
           </SettingsRow>
           <SettingsRow title={strings.timeZone} control="field">
+            <Skeleton shape="field" />
+          </SettingsRow>
+          <SettingsRow title={strings.currency} control="field">
+            <Skeleton shape="field" />
+          </SettingsRow>
+          <SettingsRow title={strings.country} control="field">
             <Skeleton shape="field" />
           </SettingsRow>
         </Card>

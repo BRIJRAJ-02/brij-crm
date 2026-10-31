@@ -71,6 +71,7 @@ const ROLES_LIST: RolesList = {
     { id: 'owner', label: 'Owner', description: 'Everything.', builtIn: 'owner' },
     { id: 'admin', label: 'Admin', description: 'Members and settings.', builtIn: 'admin' },
     { id: 'member', label: 'Member', description: 'Records.', builtIn: 'member' },
+    { id: 'guest', label: 'Guest', description: 'What is shared.', builtIn: 'guest' },
   ],
   defaultRole: 'member',
 };
@@ -201,6 +202,9 @@ function layerWith(answer: () => Promise<void>, startLink: InviteLinkView = LINK
           invitations: 0,
           ownedForms: 0,
         }),
+      // What making someone a guest stops (spec 0031, slice 9).
+      guestPreview: () =>
+        Promise.resolve({ pausedPages: 1, rotations: 2, upcomingBookings: 3, delegations: 0, hidesLinkPage: true }),
       list: () => Promise.resolve([ADA, LINUS]),
       remove: async () => {
         calls.remove += 1;
@@ -498,6 +502,10 @@ describe('changing roles', () => {
     await renderMembers(layer, { members: [ADA, { ...LINUS, role: 'admin' }] });
     await page.getByRole('button', { name: /Role for Linus Torvalds/ }).click();
     await page.getByRole('option', { name: 'Member' }).click();
+    // A step down asks first (Admin to Member), then says it as a change made at once does.
+    const confirm = page.getByRole('alertdialog', { name: 'Make Linus Torvalds a Member?' });
+    await expect.element(confirm.getByText('Linus Torvalds can no longer manage members or settings.')).toBeVisible();
+    await confirm.getByRole('button', { name: 'Make Member' }).click();
     await expect
       .element(
         page.getByText(
@@ -507,6 +515,33 @@ describe('changing roles', () => {
       .toBeVisible();
     await page.getByRole('button', { name: 'Invite people' }).last().click();
     await expect.element(page.getByRole('dialog', { name: /Invite/ })).toBeVisible();
+  });
+
+  it('asks before making someone a guest, listing what stops (slice 9)', async () => {
+    const counted = layerWith(() => Promise.resolve());
+    await renderMembers(counted.layer);
+    await page.getByRole('button', { name: /Role for Linus Torvalds/ }).click();
+    await page.getByRole('option', { name: 'Guest' }).click();
+    const confirm = page.getByRole('alertdialog', { name: 'Make Linus Torvalds a Guest?' });
+    await expect.element(confirm.getByText('1 page paused')).toBeVisible();
+    await expect.element(confirm.getByText('Leaves 2 round robins')).toBeVisible();
+    await expect.element(confirm.getByText('3 bookings need a host')).toBeVisible();
+    await expect.element(confirm.getByText('Link page hidden')).toBeVisible();
+    await confirm.getByRole('button', { name: 'Cancel' }).click();
+    expect(counted.calls.setRole).toBe(0);
+  });
+
+  it('still asks when the count fails, and says it couldn’t count (slice 9)', async () => {
+    const counted = layerWith(() => Promise.resolve());
+    const confirm = page.getByRole('alertdialog', { name: 'Make Linus Torvalds a Guest?' });
+    const failing = {
+      ...counted.layer,
+      members: { ...counted.layer.members, guestPreview: () => Promise.reject(new Error('down')) },
+    };
+    await renderMembers(failing);
+    await page.getByRole('button', { name: /Role for Linus Torvalds/ }).click();
+    await page.getByRole('option', { name: 'Guest' }).click();
+    await expect.element(confirm.getByText('Couldn’t count what changes')).toBeVisible();
   });
 
   it('shows your own role as text, with no picker: an owner hands on through Transfer (owner, 22 October 2026)', async () => {

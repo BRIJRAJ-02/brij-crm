@@ -29,6 +29,7 @@ describe('settingsNav', () => {
         'Objects',
         'Lists',
         'Automations',
+        'Developer',
         'Background jobs',
         'History',
         'Trash',
@@ -54,6 +55,7 @@ describe('settingsNav', () => {
       objects: '/w/acme/settings/objects',
       lists: '/w/acme/settings/lists',
       automations: '/w/acme/settings/automations',
+      developer: '/w/acme/settings/developer',
       jobs: '/w/acme/settings/jobs',
       history: '/w/acme/settings/history',
       // The trash opens inside Settings, its sidebar and trail kept (A120, 23 October 2026).
@@ -92,17 +94,33 @@ describe('visibleSettingsNav', () => {
     expect(visibleSettingsNav(settingsNav('acme'), ['booking.manage'])).toEqual(
       workspaceGroups.map((group) => ({
         ...group,
-        entries: group.entries.filter((entry) => entry.id !== 'workspace-security' && entry.id !== 'automations'),
+        entries: group.entries.filter(
+          (entry) => entry.id !== 'workspace-security' && entry.id !== 'automations' && entry.id !== 'developer',
+        ),
       })),
     );
     // Workspace › Security only for those who change sign in rules (spec 0033).
     expect(
-      visibleSettingsNav(settingsNav('acme'), ['booking.manage', 'security.manage', 'automations.manage']),
+      visibleSettingsNav(settingsNav('acme'), [
+        'booking.manage',
+        'security.manage',
+        'automations.manage',
+        'api_keys.manage',
+      ]),
     ).toEqual(workspaceGroups);
     // Calendars and Round robin are tabs of Bookings (25 October 2026), so neither is in here to lose.
     expect(visibleSettingsNav(settingsNav('acme'), []).map((group) => group.entries.map((entry) => entry.id))).toEqual([
       ['profile', 'preferences', 'security', 'notifications', 'scheduling-access'],
       ['general', 'brand', 'members', 'teams', 'objects', 'lists', 'jobs', 'history', 'trash'],
+    ]);
+  });
+
+  it('leaves out for a guest the pages they can’t use: Scheduling access, Teams, Objects, Lists, jobs (spec 0031)', () => {
+    expect(
+      visibleSettingsNav(settingsNav('acme'), [], false, true).map((group) => group.entries.map((entry) => entry.id)),
+    ).toEqual([
+      ['profile', 'preferences', 'security', 'notifications'],
+      ['general', 'members', 'history', 'trash'],
     ]);
   });
 

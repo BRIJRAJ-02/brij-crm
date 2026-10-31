@@ -18,6 +18,8 @@ export interface NewMembership {
   readonly email: string;
   /** They made the workspace (first run), rather than joining one: the welcome says so. */
   readonly created?: boolean;
+  /** They joined as a guest (spec 0031, slice 9): no link page, as guests in Slack or Calendly have no profile (#77). */
+  readonly isGuest?: boolean;
 }
 
 /** The link page editor's path in a workspace. */
@@ -26,10 +28,11 @@ export const linkPageEditPath = (slug: string): string => `/w/${slug}/link-page`
 /**
  * Makes the new member's link page and queues their welcome email, in the caller's transaction. Never throws: the
  * page runs under its own savepoint (`ensureLinkPage`), and so does the email, so a membership stands whatever
- * happens here. Answers the handle, or undefined when no page was made (the daily cleanup tries again).
+ * happens here. Answers the handle, or undefined when no page was made (the daily cleanup tries again), or for a
+ * guest, who gets none.
  */
 export async function welcomeMember(tx: WorkspaceTx, member: NewMembership): Promise<string | undefined> {
-  const handle = await ensureLinkPage(tx, member);
+  const handle = member.isGuest === true ? undefined : await ensureLinkPage(tx, member);
   try {
     await tx.transaction((savepoint) =>
       queueWorkspaceWelcome(savepoint, {

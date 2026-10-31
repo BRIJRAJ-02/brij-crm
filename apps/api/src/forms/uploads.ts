@@ -11,17 +11,30 @@
 //   type allowlist, first byte check and name cleaning, its own limits (per member and per instance), and the same
 //   degrading when `BLOB_READ_WRITE_TOKEN` is unset (503). The core checks the record and the field before a byte
 //   is stored, and again before the row lands.
+// - `POST /records/:recordId/files?workspace=<slug>`: a member adding a file to a record's Files tab (#32, the
+//   crm-files lane). The same order as a cell's: the instance ceiling, the session, the per member limit, the declared
+//   size, the type, the body to at most 4 MiB, the first bytes, then a name with an executable extension anywhere in
+//   it refused (`hasExecutableName`), the name cleaned; the core checks the record (seen, its object writable, live),
+//   the record's cap and the workspace's storage before a byte is stored, and again under the workspace's lock when
+//   the row and its `files` outbox row land; the relay is woken once that commits. `x-crm-mutation-id` (a uuid the
+//   tab minted) rides in the event, so the tab that sent it skips its own echo.
 // - `GET /files/:fileId?workspace=<slug>`: a member's download, through the session and the member door. The core
-//   decides: a record's own file first (the record is theirs to see and the field isn't hidden from them), else a
-//   submission's upload (attached to a submission the member may open and among the answers they may see). Anyone
-//   else gets the same 404. The bytes stream from the private store as an attachment, never sniffed, never cached.
+//   decides: a record's own file first (a Files tab file: the record is theirs to see; a cell's: the field isn't
+//   hidden from them either), else a submission's upload (attached to a submission the member may open and among the
+//   answers they may see). Anyone else gets the same 404. The bytes stream from the private store as an attachment,
+//   never sniffed, never cached; `&inline=1` shows a PNG, JPEG, GIF or WebP in the tab instead (`opensInline`), with
+//   the same headers. No URL here is a credential: every read is the session and the door, so a link kept after the
+//   reader lost access, or pasted elsewhere, opens nothing.
 // Nothing here logs a file name or its content.
 import { randomUUID } from 'node:crypto';
 import {
   ERROR_MAP,
   FORM_UPLOAD_MAX_BYTES,
   formStrings,
+  hasExecutableName,
   matchesContent,
+  opensInline,
+  RECORD_FILE_MAX_BYTES,
   sanitiseFileName,
   storedNameOf,
   UPLOAD_NAME_HEADER,
@@ -30,25 +43,29 @@ import {
   type UploadedFile,
 } from '@crm/contracts';
 import {
+  ATTACHMENT_REFUSALS,
   discardUpload,
   enterPublicForm,
   isRefusal,
+  prepareAttachment,
   prepareRecordFile,
   prepareUpload,
   readRecordFile,
   readUpload,
   recordFilePath,
+  registerAttachment,
   registerRecordFile,
   registerUpload,
-  TOO_MANY_RECORD_FILES,
 } from '@crm/core';
 import type { Database } from '@crm/db';
 import type { Context, Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import type { Auth, AuthSession } from '../auth/auth.ts';
+import { commitWrite } from '../hooks.ts';
 import { errorFields, log } from '../log.ts';
 import { captureFault } from '../monitoring/sentry.ts';
 import { RECORD_FILE_LIMITS, UPLOAD_LIMITS, type LimitRule, type PublicLimiter } from '../limits.ts';
+import type { WakeRelay } from '../realtime/wake.ts';
 import type { FileStore } from '../storage/blob.ts';
 import { hashAddress } from './public.ts';
 
@@ -66,7 +83,14 @@ export interface FormFilesDeps {
   readonly ipSalt: string;
   readonly auth: Auth;
   readonly enter: Enter;
+  /** Pokes the relay once a Files tab write commits, so other tabs hear it. */
+  readonly wakeRelay: WakeRelay;
 }
+
+/** The header a Files tab upload names its mutation in: the tab's own id for the write, echoed in its event. */
+export const MUTATION_HEADER = 'x-crm-mutation-id';
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 
 interface Variables {
   requestId: string;
@@ -81,13 +105,13 @@ function fail(code: ErrorCode, message: string, headers?: Record<string, string>
 }
 
 /** A file name as a header carries it: ASCII in `filename`, the full name in `filename*`. */
-function disposition(fileName: string): string {
+function disposition(fileName: string, kind: 'attachment' | 'inline' = 'attachment'): string {
   const ascii = fileName.replace(/[^\x20-\x7e]/gu, '_').replace(/["\\]/gu, '_');
   const encoded = encodeURIComponent(fileName).replace(
     /['()*!]/gu,
     (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`,
   );
-  return `attachment; filename="${ascii}"; filename*=UTF-8''${encoded}`;
+  return `${kind}; filename="${ascii}"; filename*=UTF-8''${encoded}`;
 }
 
 /** The file name a request header carries (percent encoded); empty when absent or not decodable. */
@@ -100,6 +124,12 @@ function nameOf(header: string | undefined): string {
 }
 
 const NOT_FOUND = { code: 'NOT_FOUND', message: 'This file doesn’t exist, or you can’t open it.' };
+
+/** What a record file over the cap answers. */
+const TOO_LARGE = 'That file is larger than the 4 MB a record takes.';
+
+/** What a record file of a type it doesn't take answers. */
+const WRONG_TYPE = 'That type of file isn’t accepted. Send a PDF, an image, a text or an Office file.';
 
 /** Mounts the file routes on an app whose base path is `/api`. */
 export function mountFormFiles(app: Hono<{ Variables: Variables }>, deps: FormFilesDeps): void {
@@ -272,9 +302,8 @@ export function mountFormFiles(app: Hono<{ Variables: Variables }>, deps: FormFi
       try {
         const scope = await deps.enter(session, slug);
         // The record and the field are checked before a byte is stored, and again when the row lands.
-        if ((await prepareRecordFile(scope, { recordId, attributeId })) === 'full') {
-          return fail('LIMIT_REACHED', TOO_MANY_RECORD_FILES);
-        }
+        const ready = await prepareRecordFile(scope, { recordId, attributeId, size: body.byteLength });
+        if (ready !== 'ok') return fail('LIMIT_REACHED', ATTACHMENT_REFUSALS[ready]);
         const extension = storedNameOf(fileId, type).slice(fileId.length);
         const pathname = recordFilePath(scope.workspaceId, recordId, fileId, extension);
         await files.put(pathname, body, type.contentType);
@@ -288,9 +317,9 @@ export function mountFormFiles(app: Hono<{ Variables: Variables }>, deps: FormFi
             size: body.byteLength,
             contentType: type.contentType,
           });
-          if (registered === 'full') {
+          if (typeof registered === 'string') {
             await files.remove([pathname]).catch(() => undefined);
-            return fail('LIMIT_REACHED', TOO_MANY_RECORD_FILES);
+            return fail('LIMIT_REACHED', ATTACHMENT_REFUSALS[registered]);
           }
           log.info('record.file', { requestId: c.get('requestId'), size: body.byteLength });
           return c.json(registered satisfies UploadedFile, 201, { 'cache-control': 'no-store' });
@@ -314,6 +343,88 @@ export function mountFormFiles(app: Hono<{ Variables: Variables }>, deps: FormFi
     },
   );
 
+  app.post(
+    '/records/:recordId/files',
+    bodyLimit({
+      maxSize: RECORD_FILE_MAX_BYTES,
+      onError: () => fail('PAYLOAD_TOO_LARGE', TOO_LARGE),
+    }),
+    async (c: Context<{ Variables: Variables }>) => {
+      const ceiling = deps.limiter('record-files:instance', RECORD_FILE_LIMITS.perInstance);
+      if (!ceiling.allowed) {
+        return fail('RATE_LIMITED', words.tooMany, { 'retry-after': String(ceiling.retryAfterSeconds) });
+      }
+      const { files } = deps;
+      if (files === undefined) return fail('API_UNAVAILABLE', 'File uploads are not available right now.');
+      const slug = c.req.query('workspace');
+      const session = await deps.auth.session(c.req.raw.headers, c.get('clientIp'));
+      if (session === undefined || slug === undefined) return c.json(NOT_FOUND, 404);
+      for (const cookie of session.setCookies) c.header('set-cookie', cookie, { append: true });
+      const spent = limited([[`record-files:member:${session.user.id}`, RECORD_FILE_LIMITS.perMember]]);
+      if (spent !== undefined) return spent;
+      const declared = Number(c.req.header('content-length') ?? '');
+      if (Number.isFinite(declared) && declared > RECORD_FILE_MAX_BYTES) return fail('PAYLOAD_TOO_LARGE', TOO_LARGE);
+      const type = uploadTypeOf(c.req.header('content-type') ?? '');
+      if (type === undefined) return fail('INPUT_INVALID', WRONG_TYPE);
+      const rawName = nameOf(c.req.header(UPLOAD_NAME_HEADER));
+      // Before and after cleaning: a zero width mark or a full width letter must not slip `.exe` past the check.
+      if (hasExecutableName(rawName) || hasExecutableName(rawName.normalize('NFKC'))) {
+        return fail('INPUT_INVALID', WRONG_TYPE);
+      }
+      const body = new Uint8Array(await c.req.arrayBuffer());
+      if (body.byteLength === 0) return fail('INPUT_INVALID', 'That file is empty.');
+      if (body.byteLength > RECORD_FILE_MAX_BYTES) return fail('PAYLOAD_TOO_LARGE', TOO_LARGE);
+      if (!matchesContent(type, body.subarray(0, 4_096))) {
+        return fail('INPUT_INVALID', 'That file isn’t what its type says. Choose another file.');
+      }
+      const name = sanitiseFileName(rawName, type);
+      if (hasExecutableName(name)) return fail('INPUT_INVALID', WRONG_TYPE);
+      const fileId = randomUUID();
+      const recordId = c.req.param('recordId') ?? '';
+      const minted = c.req.header(MUTATION_HEADER) ?? '';
+      const mutationId = UUID.test(minted) ? minted.toLowerCase() : randomUUID();
+      try {
+        const scope = await deps.enter(session, slug);
+        // The record, its cap and the workspace's storage are checked before a byte is stored, and again on landing.
+        const ready = await prepareAttachment(scope, { recordId, size: body.byteLength });
+        if (ready !== 'ok') return fail('LIMIT_REACHED', ATTACHMENT_REFUSALS[ready]);
+        const extension = storedNameOf(fileId, type).slice(fileId.length);
+        const pathname = recordFilePath(scope.workspaceId, recordId, fileId, extension);
+        await files.put(pathname, body, type.contentType);
+        try {
+          const registered = await commitWrite(
+            { wakeRelay: deps.wakeRelay, user: { id: session.user.id } },
+            { mutationId },
+            (hooks) =>
+              registerAttachment(
+                scope,
+                { recordId, fileId, pathname, name, size: body.byteLength, contentType: type.contentType },
+                hooks,
+              ),
+          );
+          if (typeof registered === 'string') {
+            await files.remove([pathname]).catch(() => undefined);
+            return fail('LIMIT_REACHED', ATTACHMENT_REFUSALS[registered]);
+          }
+          log.info('record.attachment', { requestId: c.get('requestId'), size: body.byteLength });
+          return c.json(registered, 201, { 'cache-control': 'no-store' });
+        } catch (error) {
+          // The row didn't land: the file would be unreachable, so it goes now rather than wait for the cleanup.
+          await files.remove([pathname]).catch(() => undefined);
+          throw error;
+        }
+      } catch (error) {
+        if (isRefusal(error)) {
+          const { code, message } = error.refusal;
+          return fail(code === 'FORBIDDEN' ? 'FORBIDDEN' : 'NOT_FOUND', message);
+        }
+        log.error('Record attachment upload failed', { requestId: c.get('requestId'), ...errorFields(error) });
+        captureFault(error, { requestId: c.get('requestId'), route: '/api/records/:recordId/files' });
+        return fail('INTERNAL', words.fileFailed);
+      }
+    },
+  );
+
   app.get('/files/:fileId', async (c) => {
     const slug = c.req.query('workspace');
     const session = await deps.auth.session(c.req.raw.headers, c.get('clientIp'));
@@ -328,13 +439,17 @@ export function mountFormFiles(app: Hono<{ Variables: Variables }>, deps: FormFi
       });
       const stored = await deps.files.get(file.pathname);
       if (stored === undefined) return c.json(NOT_FOUND, 404);
-      // The type is the allowlisted one recorded at upload, never the visitor's; an attachment, so nothing runs.
+      // The type is the allowlisted one recorded at upload, never the visitor's; an attachment, so nothing runs. A
+      // raster image asked inline shows in the tab, under the same sandbox.
+      const inline = c.req.query('inline') === '1' && opensInline(file.contentType);
       return c.body(stored.stream, 200, {
         'content-type': file.contentType,
         'content-length': String(stored.size),
-        'content-disposition': disposition(file.name),
+        'content-disposition': disposition(file.name, inline ? 'inline' : 'attachment'),
         'cache-control': 'private, no-store',
         'x-content-type-options': 'nosniff',
+        // Only this app's own pages may load it, whatever the cookie's SameSite says (an inline image above all).
+        'cross-origin-resource-policy': 'same-origin',
         'content-security-policy': "default-src 'none'; sandbox",
       });
     } catch (error) {

@@ -64,6 +64,8 @@ function setup(overrides: Partial<EntriesApi> = {}) {
       }),
     forRecord: () => Promise.resolve({ entries: [entry('e1', 'r1', 'lead')] }),
     setValues: (input) => Promise.resolve(written({ ...entry(input.entryId, 'r1'), values: { [STAGE]: 'won' } })),
+    updateMany: () => Promise.resolve({ results: [], records: [], echoes: 1 }),
+    setValuesBatch: () => Promise.resolve({ results: [], records: [], echoes: 1 }),
     remove: (input) => Promise.resolve({ results: input.entryIds.map((entryId) => ({ entryId })), echoes: 1 }),
     restore: (input) => Promise.resolve({ results: input.entryIds.map((entryId) => ({ entryId })), echoes: 1 }),
     ...overrides,
@@ -189,6 +191,87 @@ describe('adding, editing and removing (AC-4810, AC-4813, AC-4817)', () => {
     const said = await undo[0]?.run();
     expect(said?.tone).toBe('success');
     expect(restored).toEqual([['e1']]);
+  });
+});
+
+describe('a bulk edit of a list field (AC-4826)', () => {
+  it('shows the value at once, marks a refused cell, and one Undo puts back only what it changed', async () => {
+    const batches: unknown[] = [];
+    let answer: (value: unknown) => void = () => undefined;
+    const { layer, undo } = setup({
+      query: () =>
+        Promise.resolve({
+          entries: [entry('e1', 'r1', 'lead'), entry('e2', 'r2', 'lead'), entry('e3', 'r3', 'won')],
+          records: [record('r1', 'Ada'), record('r2', 'Bo'), record('r3', 'Cy')],
+        }),
+      count: () => Promise.resolve({ count: 3, atLeast: false }),
+      updateMany: () =>
+        new Promise((resolve) => {
+          answer = () => {
+            resolve({
+              results: [
+                {
+                  entryId: 'e1',
+                  entry: { ...entry('e1', 'r1', 'won'), versions: { [STAGE]: 'v1' } },
+                  written: { [STAGE]: 'v1' },
+                  before: 'lead',
+                },
+                { entryId: 'e2', refusals: [{ code: 'FORBIDDEN', message: 'You can only view this list.' }] },
+                { entryId: 'e3', entry: entry('e3', 'r3', 'won') },
+              ],
+              records: [],
+              echoes: 1,
+            });
+          };
+        }),
+      setValuesBatch: (input) => {
+        batches.push(input.items);
+        return Promise.resolve({
+          results: [{ entryId: 'e1', entry: entry('e1', 'r1', 'lead'), written: { [STAGE]: 'v2' } }],
+          records: [],
+          echoes: 1,
+        });
+      },
+    });
+    const view = layer.view('acme', LIST, {}, []);
+    view.retain();
+    await view.ready();
+    view.getSnapshot().source.onRangeChange({ start: 0, end: 10 });
+    await settle();
+    const editing = layer.bulkEdit('acme', LIST, ['e1', 'e2', 'e3'], {
+      attributeId: STAGE,
+      title: 'Stage',
+      type: 'status',
+      isMulti: false,
+      op: 'set',
+      value: 'won',
+    });
+    // Shown at once, before the answer.
+    expect(layer.rowOf('e2')?.values[STAGE]).toBe('won');
+    answer(undefined);
+    const result = await editing;
+    expect(result).toMatchObject({ kind: 'done', updated: 1, unchanged: 1, refused: 1 });
+    expect(layer.rowOf('e2')?.values[STAGE]).toBe('lead');
+    expect(view.getSnapshot().cellErrors.get(`e2:${STAGE}`)).toBe('You can only view this list.');
+    expect(undo).toHaveLength(1);
+    const said = await undo[0]?.run();
+    expect(said).toEqual({ tone: 'success', message: 'Undid Stage on 1 entry' });
+    expect(batches).toEqual([[{ entryId: 'e1', values: { [STAGE]: { value: 'lead', ifVersionId: 'v1' } } }]]);
+  });
+
+  it('pushes no Undo when nothing changed, and answers a failed call whole', async () => {
+    const { layer, undo } = setup({
+      updateMany: () => Promise.reject(dataError('API_UNAVAILABLE', 'Offline.')),
+    });
+    const failed = await layer.bulkEdit('acme', LIST, ['e1'], {
+      attributeId: STAGE,
+      title: 'Stage',
+      type: 'status',
+      isMulti: false,
+      op: 'clear',
+    });
+    expect(failed.kind).toBe('failed');
+    expect(undo).toHaveLength(0);
   });
 });
 

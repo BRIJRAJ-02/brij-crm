@@ -140,6 +140,7 @@ export {
   type DisclosureProps,
 } from './molecules/Disclosure/Disclosure.tsx';
 export { CountryPicker, type CountryPickerProps } from './molecules/CountryPicker/CountryPicker.tsx';
+export { CurrencyPicker, type CurrencyPickerProps } from './molecules/CurrencyPicker/CurrencyPicker.tsx';
 export { EmptyState, type EmptyStateProps, type EmptyStateTone } from './molecules/EmptyState/EmptyState.tsx';
 export { Field, type FieldProps, type FieldSize, type FieldSuggestions } from './molecules/Field/Field.tsx';
 export { FieldGroup, type FieldGroupProps } from './molecules/FieldGroup/FieldGroup.tsx';
@@ -197,12 +198,12 @@ export {
 } from './molecules/Select/DeferredSelect.tsx';
 export { ChoiceChips, type ChoiceChip, type ChoiceChipsProps } from './molecules/ChoiceChips/ChoiceChips.tsx';
 export { ConditionRow, type ConditionRowProps } from './molecules/ConditionRow/ConditionRow.tsx';
+export { Sentence, type SentenceProps } from './molecules/Sentence/Sentence.tsx';
 export {
   SpotIllustration,
   type SpotIllustrationKind,
   type SpotIllustrationProps,
 } from './molecules/SpotIllustration/SpotIllustration.tsx';
-export { Sentence, type SentenceProps } from './molecules/Sentence/Sentence.tsx';
 export { Steps, type Step, type StepsProps, type StepsVariant } from './molecules/Steps/Steps.tsx';
 /** The rows to pick from under a field being typed in, focus staying in the field (Field's `combobox` names it). */
 export {
@@ -276,6 +277,7 @@ export { SectionList, type SectionListProps, type SectionListSection } from './m
 export {
   WeekCalendar,
   type WeekCalendarBlock,
+  type WeekCalendarMove,
   type WeekCalendarSpan,
   type WeekCalendarDay,
   type WeekCalendarProps,
@@ -427,6 +429,19 @@ export {
   type AttributeSettingsProps,
   type AttributeSettingsValues,
 } from './modules/AttributeSettings/AttributeSettings.tsx';
+export type {
+  AttributeSettingsComputed,
+  ComputedDraft,
+  ComputedFarAttribute,
+  ComputedPreviewState,
+  ComputedSide,
+} from './modules/AttributeSettings/ComputedSettings.tsx';
+export {
+  FormulaEditor,
+  type FormulaCheck,
+  type FormulaEditorAttribute,
+  type FormulaEditorProps,
+} from './modules/FormulaEditor/FormulaEditor.tsx';
 export {
   typeChangeStep,
   type TypeChangePreview,

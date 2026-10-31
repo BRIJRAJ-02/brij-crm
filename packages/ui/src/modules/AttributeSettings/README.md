@@ -54,3 +54,11 @@ Focus starts in the name. Tab moves through the settings in order. ⌘↵ (Ctrl+
 ## Differences from the artifact
 
 Not in the artifact. A Number's Display is a RadioGroup, not the SegmentedControl spec 0012's screens name, for the reason the default's kind is one. Rules are Checkboxes, not Switches: they are saved with the form, and the Switch takes effect at once (its README). The name comes before the type, as the object and record dialogs ask for the name first, so the first focused field is the one to type in.
+
+## Computed attributes (spec 0015)
+
+- `computed` (`AttributeSettingsComputed`) adds Lookup, Rollup and Formula to the picker right after Member, and draws their settings from `ComputedSettings.tsx` in place of the type's settings and options; More settings then holds only the description (a computed attribute takes no Required, Unique, default or rules). Why in this module: they are entries of this dialog's type picker, and their settings are a type's settings.
+- A Lookup reads as one sentence, "From [Company] show [Industry]", and a Rollup as "[Count] of [Amount] across [Deals]", each blank an inline Select inside a Sentence, so the fewest choices show and the sentence starts complete (the first side, the first field that fits, Count). Count where adds a FilterBuilder on the related object's own attributes. A Formula is typed in the FormulaEditor, checked as it is typed by `checkFormulaSource` from `@crm/contracts/formula`.
+- Each ends with the preview: a small Table of up to 5 records and their values through `AttributeDisplay`, with a Spinner while a newer answer is out, and "Couldn't work out the preview." with Try again when it fails. The screen holds it (`data.computed.preview`); `onDraftChange` hands it each complete definition.
+- An object with no relationship to follow shows an EmptyState with New relationship (`onNewRelationship`). An existing computed attribute (`attribute.computed`) shows its kind as its type, read only, and while it has stopped updating a danger Callout "Not updating: <reason>", with Try again after a failed fill (`onRefill`).
+- `values.computed` carries the definition; `changed` names `computed` on an edit.

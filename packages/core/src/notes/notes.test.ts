@@ -18,6 +18,7 @@ import { createWorkspace } from '../engine/workspaces.ts';
 import { runWrite } from '../engine/write.ts';
 import { rescope, testScope } from '../testing.ts';
 import { deleteNote, getNote, linkNote, listNotes, restoreNote, saveNote } from './notes.ts';
+import { getLastContacted } from '../records/last-contacted.ts';
 
 const { appUrl } = inject('testDatabase');
 let db: Database;
@@ -573,6 +574,48 @@ describe('a call or meeting logged on a record (migration 0137)', () => {
     expect(meeting.note).toMatchObject({ kind: 'meeting', outcome: 'no_show' });
     // No time given: now, to the moment it was made.
     expect(meeting.note.occurredAt).toBe(meeting.note.createdAt);
+  });
+
+  it('answers Last contacted from calls and meetings already past, never a note or an unanswered call', async () => {
+    const w = await workspace();
+    const acme = await w.company('Acme');
+    const when = async () => {
+      const { at } = await getLastContacted(w.scope, { recordId: acme });
+      return at === undefined ? undefined : Date.parse(at);
+    };
+    expect(await when()).toBeUndefined();
+    await saveNote(w.scope, { id: newId(), recordId: acme, content: doc('Just a note.') });
+    await saveNote(w.scope, {
+      id: newId(),
+      recordId: acme,
+      kind: 'call',
+      occurredAt: hoursAgo(1),
+      outcome: 'no_answer',
+    });
+    await saveNote(w.scope, {
+      id: newId(),
+      recordId: acme,
+      kind: 'meeting',
+      occurredAt: hoursAgo(2),
+      outcome: 'no_show',
+    });
+    expect(await when()).toBeUndefined();
+    const call = await saveNote(w.scope, {
+      id: newId(),
+      recordId: acme,
+      kind: 'call',
+      occurredAt: hoursAgo(26),
+      outcome: 'connected',
+    });
+    expect(await when()).toBe(Date.parse(call.note.occurredAt));
+    const meeting = await saveNote(w.scope, { id: newId(), recordId: acme, kind: 'meeting', occurredAt: hoursAgo(3) });
+    expect(await when()).toBe(Date.parse(meeting.note.occurredAt));
+    // Deleted, it no longer counts.
+    await deleteNote(w.scope, { noteId: meeting.note.id });
+    expect(await when()).toBe(Date.parse(call.note.occurredAt));
+    // A record from another workspace answers as unknown.
+    const other = await workspace();
+    expect(await refusalOf(getLastContacted(other.scope, { recordId: acme }))).toMatchObject({ code: 'NOT_FOUND' });
   });
 
   it('refuses a detail its kind does not take, a duration out of range, a kind that changes and a time a day ahead', async () => {

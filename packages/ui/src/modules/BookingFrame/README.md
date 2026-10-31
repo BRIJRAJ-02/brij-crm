@@ -1,6 +1,10 @@
 # BookingFrame
 
-A booking page's frame (spec 0025, 0025-experience.md; laid out as the timefix booking page, the owner's call on 20 October 2026): the host in a rail of their own (a large picture, the name, the meeting as the page's `h1`, its facts, and a "Powered by Timefix" card pinned at the rail's foot), beside one card: a heading row with Month or List, the month and the day's times side by side (the times scroll inside their pane at the month's height), and a band across the foot for the Book bar. Under the page breakpoint everything stacks and Timefix moves to the page's end, centred. This folder also holds `BookingFoot` (that foot alone, for the guest's booking page) and `BookingMessage` (one small card for a page with nothing to book: loading, not found, paused, or failed with Try again).
+A booking page's frame (spec 0025, 0025-experience.md; laid out as the timefix booking page, the owner's call on 20 October 2026): the host in a rail of their own (a large picture, the name, the meeting as the page's `h1`, its facts, and "Powered by Timefix" pinned at the rail's foot), beside one card: a heading row with the picker's controls in one compact group at its end (the clock and the view, spec 0058, AC-24), the month and the day's times side by side (the times scroll inside their pane at the month's height), and a band across the foot for the Book bar. Under the page breakpoint everything stacks and Timefix moves to the page's end, centred. This folder also holds `BookingFoot` (that foot alone, for the guest's booking page) and `BookingMessage` (one small card for a page with nothing to book: loading, not found, paused, or failed with Try again).
+
+### The foot (spec 0058, AC-26)
+
+`BookingFoot` is how every public page ends, and nothing turns it off: "Powered by" and the Timefix wordmark on one quiet line in the label size and the secondary text colour (the text under the pointer), then "Claim your free page" where the page passes `claimHref`. It draws no box: on a wide booking page it sits at the rail's end on the rail's own left edge, level with the card's foot; everywhere else it is centred under the card. `href` and `newTabLabel` let a page tag the wordmark itself and open it in a new tab (the guest's page).
 
 ## Why it exists
 

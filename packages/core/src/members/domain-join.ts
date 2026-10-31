@@ -467,7 +467,7 @@ export async function decideJoinRequest(
         return decision;
       }
       const [mine] = await tx
-        .select({ id: members.id })
+        .select({ id: members.id, role: members.role })
         .from(members)
         .where(
           and(
@@ -505,12 +505,16 @@ export async function decideJoinRequest(
         await recordJoinReach(context, scope.workspaceId, memberId);
       }
       // Their link page (26 Oct 2026): the one they hold here, or one made now. The approval email says where it is.
-      const handle = await ensureLinkPage(tx, {
-        userId: request.userId,
-        workspaceId: scope.workspaceId,
-        name: joinerName(undefined, request.name, request.email),
-        email: request.email,
-      });
+      // One already in as a guest keeps none (spec 0031 slice 9, late trap #77).
+      const handle =
+        mine?.role === 'guest'
+          ? undefined
+          : await ensureLinkPage(tx, {
+              userId: request.userId,
+              workspaceId: scope.workspaceId,
+              name: joinerName(undefined, request.name, request.email),
+              email: request.email,
+            });
       await tx
         .update(joinRequests)
         .set({ status: 'approved', memberId, ...decided })
@@ -523,7 +527,12 @@ export async function decideJoinRequest(
           action: 'join_request.approved',
           targetType: 'member',
           targetId: memberId,
-          after: { role: 'member', requestId: request.id, ...(mine === undefined ? {} : { alreadyMember: true }) },
+          after: {
+            // One already in keeps their role (a guest stays a guest).
+            role: mine?.role ?? 'member',
+            requestId: request.id,
+            ...(mine === undefined ? {} : { alreadyMember: true }),
+          },
         },
         options.source,
       );

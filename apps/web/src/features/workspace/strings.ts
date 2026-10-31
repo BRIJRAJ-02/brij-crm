@@ -66,6 +66,9 @@ export const strings = {
   /** The workspace menu's way into settings (spec 0012), above Sign out. */
   settings: 'Settings',
   noObjects: 'No objects yet',
+  /** A guest with nothing shared (spec 0031, AC-828). */
+  nothingSharedTitle: 'Nothing has been shared with you yet',
+  nothingSharedText: 'Ask an admin.',
   loadingTitle: 'Loading',
   failedTitle: 'Couldn’t load this workspace',
   failedText: sharedStrings.couldntDoThat,
@@ -188,4 +191,7 @@ export const strings = {
   calendarPrevious: 'Previous week, or previous day',
   calendarDay: 'Day view',
   calendarWeek: 'Week view',
+  /** A focused booking on the week: Alt and the arrows move it, with Shift its length. */
+  calendarMove: 'Move a booking',
+  calendarResize: 'Change its length',
 } as const;

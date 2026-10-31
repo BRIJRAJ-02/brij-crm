@@ -14,6 +14,7 @@ import {
 import { formConfirmation, formSubmission } from './templates/forms.ts';
 import { memberInvite } from './templates/invite.ts';
 import {
+  editorAdded,
   importFinished,
   jobFailed,
   schedulingAccessGiven,
@@ -177,6 +178,16 @@ export const CATALOG: Catalog = {
       everyone: false,
       byName: 'Priya Shah',
       path: '/w/acme/bookings/availability',
+    },
+  },
+  editor_added: {
+    template: editorAdded,
+    medium: 'email_calendar_alert',
+    sample: {
+      resourceType: 'booking_page',
+      resourceName: 'Intro call',
+      byName: 'Priya Shah',
+      path: '/w/acme/captures/links',
     },
   },
   scheduling_access_removed: {

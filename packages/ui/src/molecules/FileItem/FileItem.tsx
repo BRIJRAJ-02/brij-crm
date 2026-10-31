@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { FileIcon } from '../../atoms/FileIcon/FileIcon.tsx';
 import { Link } from '../../atoms/Link/Link.tsx';
@@ -16,8 +17,13 @@ export interface FileItemProps {
   readonly progress?: number;
   /** Why the upload failed, as a sentence that says what to do. */
   readonly error?: string;
-  /** Its download link, from #32. */
+  /**
+   * Its download link, from #32. It always opens in a new tab: the api answers a file (an image to look at, or a
+   * download), never an app page, so the router must not take the click.
+   */
   readonly href?: string;
+  /** Who added it and when (a name and a RelativeTime), after its size; a record's Files tab. */
+  readonly detail?: ReactNode;
   /** Shows a remove button. */
   readonly onRemove?: () => void;
   /** `row` (the default) with its size and progress; `chip`, a 20px chip with the icon and name, for cells and cards. */
@@ -43,13 +49,31 @@ export function formatFileSize(bytes: number, locale: string): string {
 }
 
 /** One file in a list: its type icon, name and size, upload progress or its error, and remove. */
-export function FileItem({ name, size, contentType, progress, error, href, onRemove, variant = 'row' }: FileItemProps) {
+export function FileItem({
+  name,
+  size,
+  contentType,
+  progress,
+  error,
+  href,
+  detail,
+  onRemove,
+  variant = 'row',
+}: FileItemProps) {
   const { locale } = useFormatSettings();
   if (variant === 'chip') {
     return (
       <span className={styles.root} data-variant="chip">
         <FileIcon contentType={contentType} size="xs" />
-        <span className={styles.name}>{href === undefined ? name : <Link href={href}>{name}</Link>}</span>
+        <span className={styles.name}>
+          {href === undefined ? (
+            name
+          ) : (
+            <Link href={href} opensInNewTab>
+              {name}
+            </Link>
+          )}
+        </span>
       </span>
     );
   }
@@ -58,12 +82,28 @@ export function FileItem({ name, size, contentType, progress, error, href, onRem
     <div className={styles.root} data-state={error === undefined ? (isUploading ? 'uploading' : 'done') : 'failed'}>
       <FileIcon contentType={contentType} />
       <span className={styles.text}>
-        <span className={styles.name}>{href === undefined ? name : <Link href={href}>{name}</Link>}</span>
+        <span className={styles.name}>
+          {href === undefined ? (
+            name
+          ) : (
+            <Link href={href} opensInNewTab>
+              {name}
+            </Link>
+          )}
+        </span>
         {error === undefined ? (
           isUploading ? (
             <ProgressBar label={strings.uploading(name)} value={progress} isLabelHidden />
           ) : (
-            <span className={styles.size}>{formatFileSize(size, locale)}</span>
+            <span className={styles.size}>
+              {formatFileSize(size, locale)}
+              {detail !== undefined && (
+                <>
+                  {strings.separator}
+                  {detail}
+                </>
+              )}
+            </span>
           )
         ) : (
           <span className={styles.error}>{error}</span>

@@ -47,6 +47,7 @@ import { Route as WSlugSettingsIndexRouteImport } from './routes/w.$slug.setting
 import { Route as WSlugSettingsAutomationsRouteImport } from './routes/w.$slug.settings.automations.tsx'
 import { Route as WSlugSettingsBrandRouteImport } from './routes/w.$slug.settings.brand.tsx'
 import { Route as WSlugSettingsCalendarRouteImport } from './routes/w.$slug.settings.calendar.tsx'
+import { Route as WSlugSettingsDeveloperRouteImport } from './routes/w.$slug.settings.developer.tsx'
 import { Route as WSlugSettingsGeneralRouteImport } from './routes/w.$slug.settings.general.tsx'
 import { Route as WSlugSettingsJobsRouteImport } from './routes/w.$slug.settings.jobs.tsx'
 import { Route as WSlugSettingsMembersRouteImport } from './routes/w.$slug.settings.members.tsx'
@@ -59,6 +60,7 @@ import { Route as WSlugCapturesLinksIndexRouteImport } from './routes/w.$slug.ca
 import { Route as WSlugCapturesFormsFormIdRouteImport } from './routes/w.$slug.captures_.forms.$formId.tsx'
 import { Route as WSlugCapturesLinksPageIdRouteImport } from './routes/w.$slug.captures_.links.$pageId.tsx'
 import { Route as WSlugListsListImportRouteImport } from './routes/w.$slug.lists.$list_.import.tsx'
+import { Route as WSlugObjectsObjectDuplicatesRouteImport } from './routes/w.$slug.objects.$object_.duplicates.tsx'
 import { Route as WSlugObjectsObjectImportRouteImport } from './routes/w.$slug.objects.$object_.import.tsx'
 import { Route as WSlugSettingsAccountIndexRouteImport } from './routes/w.$slug.settings.account.index.tsx'
 import { Route as WSlugSettingsAccountCalendarsRouteImport } from './routes/w.$slug.settings.account.calendars.tsx'
@@ -289,6 +291,11 @@ const WSlugSettingsCalendarRoute = WSlugSettingsCalendarRouteImport.update({
   path: '/calendar',
   getParentRoute: () => WSlugSettingsRoute,
 } as any)
+const WSlugSettingsDeveloperRoute = WSlugSettingsDeveloperRouteImport.update({
+  id: '/developer',
+  path: '/developer',
+  getParentRoute: () => WSlugSettingsRoute,
+} as any)
 const WSlugSettingsGeneralRoute = WSlugSettingsGeneralRouteImport.update({
   id: '/general',
   path: '/general',
@@ -352,6 +359,12 @@ const WSlugListsListImportRoute = WSlugListsListImportRouteImport.update({
   path: '/lists/$list/import',
   getParentRoute: () => WSlugRoute,
 } as any)
+const WSlugObjectsObjectDuplicatesRoute =
+  WSlugObjectsObjectDuplicatesRouteImport.update({
+    id: '/objects/$object_/duplicates',
+    path: '/objects/$object/duplicates',
+    getParentRoute: () => WSlugRoute,
+  } as any)
 const WSlugObjectsObjectImportRoute =
   WSlugObjectsObjectImportRouteImport.update({
     id: '/objects/$object_/import',
@@ -608,6 +621,7 @@ export interface FileRoutesByFullPath {
   '/w/$slug/settings/automations': typeof WSlugSettingsAutomationsRoute
   '/w/$slug/settings/brand': typeof WSlugSettingsBrandRoute
   '/w/$slug/settings/calendar': typeof WSlugSettingsCalendarRoute
+  '/w/$slug/settings/developer': typeof WSlugSettingsDeveloperRoute
   '/w/$slug/settings/general': typeof WSlugSettingsGeneralRoute
   '/w/$slug/settings/jobs': typeof WSlugSettingsJobsRoute
   '/w/$slug/settings/members': typeof WSlugSettingsMembersRoute
@@ -621,6 +635,7 @@ export interface FileRoutesByFullPath {
   '/w/$slug/captures/forms/$formId': typeof WSlugCapturesFormsFormIdRoute
   '/w/$slug/captures/links/$pageId': typeof WSlugCapturesLinksPageIdRoute
   '/w/$slug/lists/$list/import': typeof WSlugListsListImportRoute
+  '/w/$slug/objects/$object/duplicates': typeof WSlugObjectsObjectDuplicatesRoute
   '/w/$slug/objects/$object/import': typeof WSlugObjectsObjectImportRoute
   '/w/$slug/settings/account/calendars': typeof WSlugSettingsAccountCalendarsRoute
   '/w/$slug/settings/account/notifications': typeof WSlugSettingsAccountNotificationsRoute
@@ -693,6 +708,7 @@ export interface FileRoutesByTo {
   '/w/$slug/settings/automations': typeof WSlugSettingsAutomationsRoute
   '/w/$slug/settings/brand': typeof WSlugSettingsBrandRoute
   '/w/$slug/settings/calendar': typeof WSlugSettingsCalendarRoute
+  '/w/$slug/settings/developer': typeof WSlugSettingsDeveloperRoute
   '/w/$slug/settings/general': typeof WSlugSettingsGeneralRoute
   '/w/$slug/settings/jobs': typeof WSlugSettingsJobsRoute
   '/w/$slug/settings/members': typeof WSlugSettingsMembersRoute
@@ -706,6 +722,7 @@ export interface FileRoutesByTo {
   '/w/$slug/captures/forms/$formId': typeof WSlugCapturesFormsFormIdRoute
   '/w/$slug/captures/links/$pageId': typeof WSlugCapturesLinksPageIdRoute
   '/w/$slug/lists/$list/import': typeof WSlugListsListImportRoute
+  '/w/$slug/objects/$object/duplicates': typeof WSlugObjectsObjectDuplicatesRoute
   '/w/$slug/objects/$object/import': typeof WSlugObjectsObjectImportRoute
   '/w/$slug/settings/account/calendars': typeof WSlugSettingsAccountCalendarsRoute
   '/w/$slug/settings/account/notifications': typeof WSlugSettingsAccountNotificationsRoute
@@ -783,6 +800,7 @@ export interface FileRoutesById {
   '/w/$slug/settings/automations': typeof WSlugSettingsAutomationsRoute
   '/w/$slug/settings/brand': typeof WSlugSettingsBrandRoute
   '/w/$slug/settings/calendar': typeof WSlugSettingsCalendarRoute
+  '/w/$slug/settings/developer': typeof WSlugSettingsDeveloperRoute
   '/w/$slug/settings/general': typeof WSlugSettingsGeneralRoute
   '/w/$slug/settings/jobs': typeof WSlugSettingsJobsRoute
   '/w/$slug/settings/members': typeof WSlugSettingsMembersRoute
@@ -796,6 +814,7 @@ export interface FileRoutesById {
   '/w/$slug/captures_/forms/$formId': typeof WSlugCapturesFormsFormIdRoute
   '/w/$slug/captures_/links/$pageId': typeof WSlugCapturesLinksPageIdRoute
   '/w/$slug/lists/$list_/import': typeof WSlugListsListImportRoute
+  '/w/$slug/objects/$object_/duplicates': typeof WSlugObjectsObjectDuplicatesRoute
   '/w/$slug/objects/$object_/import': typeof WSlugObjectsObjectImportRoute
   '/w/$slug/settings/account/calendars': typeof WSlugSettingsAccountCalendarsRoute
   '/w/$slug/settings/account/notifications': typeof WSlugSettingsAccountNotificationsRoute
@@ -874,6 +893,7 @@ export interface FileRouteTypes {
     | '/w/$slug/settings/automations'
     | '/w/$slug/settings/brand'
     | '/w/$slug/settings/calendar'
+    | '/w/$slug/settings/developer'
     | '/w/$slug/settings/general'
     | '/w/$slug/settings/jobs'
     | '/w/$slug/settings/members'
@@ -887,6 +907,7 @@ export interface FileRouteTypes {
     | '/w/$slug/captures/forms/$formId'
     | '/w/$slug/captures/links/$pageId'
     | '/w/$slug/lists/$list/import'
+    | '/w/$slug/objects/$object/duplicates'
     | '/w/$slug/objects/$object/import'
     | '/w/$slug/settings/account/calendars'
     | '/w/$slug/settings/account/notifications'
@@ -959,6 +980,7 @@ export interface FileRouteTypes {
     | '/w/$slug/settings/automations'
     | '/w/$slug/settings/brand'
     | '/w/$slug/settings/calendar'
+    | '/w/$slug/settings/developer'
     | '/w/$slug/settings/general'
     | '/w/$slug/settings/jobs'
     | '/w/$slug/settings/members'
@@ -972,6 +994,7 @@ export interface FileRouteTypes {
     | '/w/$slug/captures/forms/$formId'
     | '/w/$slug/captures/links/$pageId'
     | '/w/$slug/lists/$list/import'
+    | '/w/$slug/objects/$object/duplicates'
     | '/w/$slug/objects/$object/import'
     | '/w/$slug/settings/account/calendars'
     | '/w/$slug/settings/account/notifications'
@@ -1048,6 +1071,7 @@ export interface FileRouteTypes {
     | '/w/$slug/settings/automations'
     | '/w/$slug/settings/brand'
     | '/w/$slug/settings/calendar'
+    | '/w/$slug/settings/developer'
     | '/w/$slug/settings/general'
     | '/w/$slug/settings/jobs'
     | '/w/$slug/settings/members'
@@ -1061,6 +1085,7 @@ export interface FileRouteTypes {
     | '/w/$slug/captures_/forms/$formId'
     | '/w/$slug/captures_/links/$pageId'
     | '/w/$slug/lists/$list_/import'
+    | '/w/$slug/objects/$object_/duplicates'
     | '/w/$slug/objects/$object_/import'
     | '/w/$slug/settings/account/calendars'
     | '/w/$slug/settings/account/notifications'
@@ -1383,6 +1408,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WSlugSettingsCalendarRouteImport
       parentRoute: typeof WSlugSettingsRoute
     }
+    '/w/$slug/settings/developer': {
+      id: '/w/$slug/settings/developer'
+      path: '/developer'
+      fullPath: '/w/$slug/settings/developer'
+      preLoaderRoute: typeof WSlugSettingsDeveloperRouteImport
+      parentRoute: typeof WSlugSettingsRoute
+    }
     '/w/$slug/settings/general': {
       id: '/w/$slug/settings/general'
       path: '/general'
@@ -1465,6 +1497,13 @@ declare module '@tanstack/react-router' {
       path: '/lists/$list/import'
       fullPath: '/w/$slug/lists/$list/import'
       preLoaderRoute: typeof WSlugListsListImportRouteImport
+      parentRoute: typeof WSlugRoute
+    }
+    '/w/$slug/objects/$object_/duplicates': {
+      id: '/w/$slug/objects/$object_/duplicates'
+      path: '/objects/$object/duplicates'
+      fullPath: '/w/$slug/objects/$object/duplicates'
+      preLoaderRoute: typeof WSlugObjectsObjectDuplicatesRouteImport
       parentRoute: typeof WSlugRoute
     }
     '/w/$slug/objects/$object_/import': {
@@ -1773,6 +1812,7 @@ interface WSlugSettingsRouteChildren {
   WSlugSettingsAutomationsRoute: typeof WSlugSettingsAutomationsRoute
   WSlugSettingsBrandRoute: typeof WSlugSettingsBrandRoute
   WSlugSettingsCalendarRoute: typeof WSlugSettingsCalendarRoute
+  WSlugSettingsDeveloperRoute: typeof WSlugSettingsDeveloperRoute
   WSlugSettingsGeneralRoute: typeof WSlugSettingsGeneralRoute
   WSlugSettingsJobsRoute: typeof WSlugSettingsJobsRoute
   WSlugSettingsMembersRoute: typeof WSlugSettingsMembersRoute
@@ -1816,6 +1856,7 @@ const WSlugSettingsRouteChildren: WSlugSettingsRouteChildren = {
   WSlugSettingsAutomationsRoute: WSlugSettingsAutomationsRoute,
   WSlugSettingsBrandRoute: WSlugSettingsBrandRoute,
   WSlugSettingsCalendarRoute: WSlugSettingsCalendarRoute,
+  WSlugSettingsDeveloperRoute: WSlugSettingsDeveloperRoute,
   WSlugSettingsGeneralRoute: WSlugSettingsGeneralRoute,
   WSlugSettingsJobsRoute: WSlugSettingsJobsRoute,
   WSlugSettingsMembersRoute: WSlugSettingsMembersRoute,
@@ -1884,6 +1925,7 @@ interface WSlugRouteChildren {
   WSlugCapturesFormsFormIdRoute: typeof WSlugCapturesFormsFormIdRoute
   WSlugCapturesLinksPageIdRoute: typeof WSlugCapturesLinksPageIdRoute
   WSlugListsListImportRoute: typeof WSlugListsListImportRoute
+  WSlugObjectsObjectDuplicatesRoute: typeof WSlugObjectsObjectDuplicatesRoute
   WSlugObjectsObjectImportRoute: typeof WSlugObjectsObjectImportRoute
   WSlugCapturesFormsFormIdPreviewRoute: typeof WSlugCapturesFormsFormIdPreviewRoute
   WSlugListsListViewsViewIdRoute: typeof WSlugListsListViewsViewIdRoute
@@ -1915,6 +1957,7 @@ const WSlugRouteChildren: WSlugRouteChildren = {
   WSlugCapturesFormsFormIdRoute: WSlugCapturesFormsFormIdRoute,
   WSlugCapturesLinksPageIdRoute: WSlugCapturesLinksPageIdRoute,
   WSlugListsListImportRoute: WSlugListsListImportRoute,
+  WSlugObjectsObjectDuplicatesRoute: WSlugObjectsObjectDuplicatesRoute,
   WSlugObjectsObjectImportRoute: WSlugObjectsObjectImportRoute,
   WSlugCapturesFormsFormIdPreviewRoute: WSlugCapturesFormsFormIdPreviewRoute,
   WSlugListsListViewsViewIdRoute: WSlugListsListViewsViewIdRoute,

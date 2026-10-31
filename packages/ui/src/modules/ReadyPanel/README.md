@@ -10,7 +10,7 @@ New. Nothing in the library showed a finished thing with its link: LinkCard show
 
 ```tsx
 <Modal
-  title="Booking page created"
+  title="Your booking page is ready"
   isOpen
   actions={
     <Button variant="primary" slot="close">
@@ -19,19 +19,20 @@ New. Nothing in the library showed a finished thing with its link: LinkCard show
   }
 >
   <ReadyPanel
-    title="Your booking page is ready"
     message="Anyone with the link can book."
     link="https://timefix.com/b/k3x9"
-    preview={<MiniPage />}
+    preview={<PreviewFrame src="/b/k3x9" title="Intro call" />}
+    previewScale="shrunk"
     copyVariant="secondary"
   />
 </Modal>
 ```
 
 - One column on one left and right edge, blocks `space-16` apart. The link row, Copy and Share are `size-input` tall.
-- `link` is shown, copied (Copy swaps to a tick and "Copied" for two seconds, announced as "Link copied"), shared, and drawn as the QR code.
+- `title` is the one heading. Inside a Modal, leave it out and let the Modal's title say it, so the dialog has one heading; the mark then sits beside `message`, in the text colour.
+- `link` is shown, cut in the middle when the field is short (the start up to the last slash gives way to an ellipsis, the page's own name always shows), copied (Copy swaps to a tick and "Copied" for two seconds, announced as "Link copied"), shared, and drawn as the QR code.
 - Share uses `onShare` when given, otherwise the browser's share sheet, and is left out where the browser has none. A closed sheet is not an error.
-- `preview` is a framed slot at the QR's height beside it (below it in a narrow slot), named by `previewLabel`. It is at most `size-column` tall: a taller picture (a whole phone) is cut there, its top kept in view. Without one, a quiet line beside the QR says to point a phone's camera at it, so the code never stands alone in an empty row.
+- `preview` is a framed slot at the QR's height beside it (below it in a narrow slot), named by `previewLabel`. It is at most `size-column` tall: a taller picture (a whole phone) is cut there, its top kept in view. The preview is inert: nothing in it takes focus, a press or a scroll. `previewScale="shrunk"` lays a whole page out at twice the slot and draws it at half (`scale-shrunk`) from its top, so its head (a booking page's name and title) shows instead of being cut. Without one, a quiet line beside the QR says to point a phone's camera at it, so the code never stands alone in an empty row.
 - Copy is primary by default. In a Modal whose footer has its own primary (Done), pass `copyVariant="secondary"` so the dialog keeps one primary.
 - `children` come below (embed tiles: `TileGrid variant="choice"`); `actions` sit at the end.
 - Motion: the panel eases in on opacity and a `space-8` rise, and the mark pops on opacity and scale, from the modal's duration and curve. Under reduced motion both appear at once, with no fade (spec 0058, AC-2).

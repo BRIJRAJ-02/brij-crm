@@ -9,6 +9,7 @@ import { strings as listStrings } from '../lists/strings.ts';
 import { jobsHref, settingsHomeHref, trashHref } from '../workspace/objects.ts';
 import { historyHref } from './history-href.ts';
 import { strings as automations } from '../automations/strings.ts';
+import { strings as developer } from './developer-nav-strings.ts';
 import { strings as history } from './history-nav-strings.ts';
 import { strings as jobs } from './jobs-strings.ts';
 import { strings as members } from './members-strings.ts';
@@ -60,6 +61,9 @@ export const brandSettingsHref = (slug: string) => `/w/${slug}/settings/brand`;
 /** Settings › Workspace › Automations (parity #53): what the workspace does for itself. */
 export const automationsHref = (slug: string) => `/w/${slug}/settings/automations`;
 
+/** Settings › Workspace › Developer (parity #34): the workspace's API keys, for `api_keys.manage`. */
+export const developerHref = (slug: string) => `/w/${slug}/settings/developer`;
+
 /** Settings › Workspace › Members (spec 0031): who is in the workspace, roles and invitations. */
 export const membersSettingsHref = (slug: string) => `/w/${slug}/settings/members`;
 
@@ -91,6 +95,7 @@ export type SettingsPageId =
   | 'lists'
   | 'jobs'
   | 'automations'
+  | 'developer'
   | 'history'
   | 'trash'
   | 'admin-overview'
@@ -133,7 +138,8 @@ export interface SettingsNavEntry {
     | 'calendar-days'
     | 'calendar-clock'
     | 'globe'
-    | 'palette';
+    | 'palette'
+    | 'code';
   /** A quiet word after the name. Every entry opens a page in Settings (20 Oct 2026; Trash too since 23 Oct 2026). */
   readonly meta?: string;
   /** A permission the page needs before the member may open it at all; absent, every member may. */
@@ -143,6 +149,8 @@ export interface SettingsNavEntry {
    * a workspace permission; the server checks every read on its own.
    */
   readonly operatorOnly?: true;
+  /** Not for a guest (spec 0031, slice 9): a page about scheduling, which guests have none of. */
+  readonly notForGuests?: true;
 }
 
 /** One group of the settings navigation, under its label. */
@@ -173,12 +181,14 @@ export function settingsNav(slug: string): readonly SettingsNavGroup[] {
         { id: 'preferences', label: strings.preferences, href: preferencesHref(slug), icon: 'sliders-horizontal' },
         { id: 'security', label: security.title, href: securitySettingsHref(slug), icon: 'shield-check' },
         { id: 'notifications', label: notifications.title, href: notificationSettingsHref(slug), icon: 'bell' },
-        // Who can see or manage the member's scheduling, and whose they reach (spec 0037, AC-1266): every member.
+        // Who can see or manage the member's scheduling, and whose they reach (spec 0037, AC-1266): every member
+        // but a guest, who has no scheduling.
         {
           id: 'scheduling-access',
           label: schedulingAccess.title,
           href: schedulingAccessHref(slug),
           icon: 'calendar-clock',
+          notForGuests: true,
         },
       ],
     },
@@ -193,7 +203,7 @@ export function settingsNav(slug: string): readonly SettingsNavGroup[] {
         { id: 'brand', label: brand.navLabel, href: brandSettingsHref(slug), icon: 'palette' },
         { id: 'members', label: members.title, href: membersSettingsHref(slug), icon: 'users' },
         // Teams (spec 0031, slice 8, AC-832): every member reads them; changing them is for `teams.manage`.
-        { id: 'teams', label: teams.title, href: teamsSettingsHref(slug), icon: 'users-round' },
+        { id: 'teams', label: teams.title, href: teamsSettingsHref(slug), icon: 'users-round', notForGuests: true },
         // The workspace's sign in rules (spec 0033): owners only, so nobody else sees the entry at all.
         {
           id: 'workspace-security',
@@ -202,9 +212,15 @@ export function settingsNav(slug: string): readonly SettingsNavGroup[] {
           icon: 'lock',
           requires: 'security.manage',
         },
-        { id: 'objects', label: strings.objects, href: objectsSettingsHref(slug), icon: 'box' },
+        { id: 'objects', label: strings.objects, href: objectsSettingsHref(slug), icon: 'box', notForGuests: true },
         // Lists (spec 0048, AC-4828): every member may open it; they see the lists they may read.
-        { id: 'lists', label: listStrings.settingsTitle, href: listsSettingsHref(slug), icon: 'list' },
+        {
+          id: 'lists',
+          label: listStrings.settingsTitle,
+          href: listsSettingsHref(slug),
+          icon: 'list',
+          notForGuests: true,
+        },
         // Automations (parity #53): for `automations.manage` alone, so nobody else sees the entry at all.
         {
           id: 'automations',
@@ -213,7 +229,15 @@ export function settingsNav(slug: string): readonly SettingsNavGroup[] {
           icon: 'zap',
           requires: 'automations.manage',
         },
-        { id: 'jobs', label: jobs.title, href: jobsHref(slug), icon: 'list-checks' },
+        // Developer (parity #34): API keys, for `api_keys.manage` alone, so nobody else sees the entry at all.
+        {
+          id: 'developer',
+          label: developer.title,
+          href: developerHref(slug),
+          icon: 'code',
+          requires: 'api_keys.manage',
+        },
+        { id: 'jobs', label: jobs.title, href: jobsHref(slug), icon: 'list-checks', notForGuests: true },
         // History (spec 0046): every member opens it; Workspace changes inside it is for `audit.read` alone.
         { id: 'history', label: history.title, href: historyHref(slug), icon: 'clock' },
         // The trash left the sidebar for here (the owner, 22 October 2026), and opens inside Settings, its sidebar
@@ -255,12 +279,13 @@ export const adminHref = (slug: string, page?: 'users' | 'booking-pages' | 'webs
  * The groups as this member sees them: entries they may not open are left
  * out, and so is a group left with none, never shown locked (AC-682).
  * `permissions` undefined (still loading) keeps only entries that need none;
- * Super admin's entries show only when `isOperator` (spec 0047).
+ * Super admin's entries show only when `isOperator` (spec 0047); a guest's leave out the scheduling ones.
  */
 export function visibleSettingsNav(
   groups: readonly SettingsNavGroup[],
   permissions: readonly Permission[] | undefined,
   isOperator = false,
+  isGuest = false,
 ): readonly SettingsNavGroup[] {
   return groups
     .map((group) => ({
@@ -268,6 +293,7 @@ export function visibleSettingsNav(
       entries: group.entries.filter(
         (entry) =>
           (entry.operatorOnly !== true || isOperator) &&
+          (entry.notForGuests !== true || !isGuest) &&
           (entry.requires === undefined || (permissions?.includes(entry.requires) ?? false)),
       ),
     }))
@@ -289,6 +315,7 @@ export function settingsPageOf(pathname: string): SettingsPageId | undefined {
   if (rest === 'lists' || rest.startsWith('lists/')) return 'lists';
   if (rest === 'jobs') return 'jobs';
   if (rest === 'automations') return 'automations';
+  if (rest === 'developer') return 'developer';
   if (rest === 'history' || rest === 'history/changes' || rest === 'history/sign-ins') return 'history';
   if (rest === 'members') return 'members';
   if (rest === 'teams') return 'teams';

@@ -54,6 +54,11 @@
     text-wrap: pretty;
   }
 
+  /* With no heading (the Modal's title says it), the line beside the mark is the panel's lead, in the text colour. */
+  .head[data-untitled] .message {
+    color: var(--text);
+  }
+
   .linkLabel {
     margin-block-end: calc(-1 * var(--space-8));
     color: var(--text-secondary);
@@ -68,7 +73,8 @@
     align-items: center;
   }
 
-  /* The address: a read only box that takes the room left of the buttons, cut with an ellipsis, all selectable. */
+  /* The address: a read only box that takes the room left of the buttons, all selectable. It is cut in the middle:
+     the start (up to the last slash) gives way to an ellipsis, the end (the page's own name) always shows. */
   .address {
     display: flex;
     flex: 1 1 var(--size-column);
@@ -82,9 +88,20 @@
     border-radius: var(--radius-md);
     background: var(--surface-subtle);
     color: var(--text);
-    text-overflow: ellipsis;
+    /* An address reads letter for letter: Inter's contextual alternates would draw the x in "k3x9" as a times sign. */
+    font-feature-settings: 'calt' 0;
     white-space: nowrap;
     user-select: all;
+  }
+
+  .addressStart {
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .addressEnd {
+    flex: none;
   }
 
   /* The QR and the preview share a height (the QR's), side by side; a narrow slot stacks them. */
@@ -112,9 +129,35 @@
     min-block-size: var(--size-column-narrow);
     max-block-size: var(--size-column);
     overflow: hidden;
+    position: relative;
     border: var(--border-width-hairline) solid var(--border-subtle);
     border-radius: var(--radius-md);
     background: var(--surface-subtle);
+  }
+
+  /* At its own size the glimpse adds no box: the picture is the slot's flex item, as if the wrapper weren't there. */
+  .glimpse {
+    display: contents;
+  }
+
+  /* Shrunk: the picture is laid out at twice the slot and drawn at half from the top, so a page's head shows. */
+  .preview[data-scale='shrunk'] .glimpse {
+    display: flex;
+    align-items: flex-start;
+    justify-content: safe center;
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline-start: 0;
+    inline-size: calc(100% / var(--scale-shrunk));
+    block-size: calc(100% / var(--scale-shrunk));
+    transform: scale(var(--scale-shrunk));
+    transform-origin: top left;
+  }
+
+  .preview[data-scale='shrunk'] .glimpse:dir(rtl) {
+    inset-inline-start: auto;
+    inset-inline-end: 0;
+    transform-origin: top right;
   }
 
   /* With no preview, a quiet line sits beside the QR, centred on it, so the code doesn't stand alone in an empty

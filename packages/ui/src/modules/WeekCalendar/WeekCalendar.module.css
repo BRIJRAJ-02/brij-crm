@@ -450,7 +450,7 @@
 
   /* Under a pointer a block lifts, as Google Calendar's do. */
   @media (hover: hover) and (pointer: fine) {
-    .block:hover:not([data-open], [data-kind='more']) {
+    .block:hover:not([data-open], [data-kind='more'], [data-moving]) {
       z-index: var(--z-raised);
       box-shadow: var(--shadow-md);
     }
@@ -462,6 +462,80 @@
     box-shadow: var(--shadow-focus);
     outline: var(--border-width-hairline) solid var(--accent-line);
     outline-offset: var(--border-width-hairline);
+  }
+
+  /* A booking that can move (the screen's `move`): the cursor says it can be taken, and its foot is an edge that
+     changes its length. */
+  .block[data-movable] {
+    cursor: grab;
+  }
+
+  /* Held, by the pointer or by keys: lifted above its neighbours at its new place (the shift is whole columns and
+     minutes of the grid), its time saying where it is. It follows the pointer in grid steps, so nothing eases. */
+  .block[data-moving] {
+    z-index: var(--z-raised);
+    box-shadow: var(--shadow-lg);
+    cursor: grabbing;
+    translate: var(--shift-x, 0) calc(var(--shift-minutes, 0) / 60 * var(--hour));
+  }
+
+  /* Held where the host can't take it (busy, outside their hours, taken): outlined red, and let go it slides home. */
+  .block[data-refused] {
+    outline: var(--border-width-thick) solid var(--danger);
+    outline-offset: calc(-1 * var(--border-width-thick));
+    cursor: not-allowed;
+  }
+
+  /* Let go where it can't land, or put back: it slides home instead of jumping. */
+  .block[data-settling] {
+    transition:
+      translate var(--duration-move) var(--ease-in-out),
+      box-shadow var(--duration-hover) var(--ease-hover);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .block[data-settling] {
+      transition: none;
+    }
+  }
+
+  /* The edge at a movable block's foot, a thin strip across it. Its mark shows while the block is under a pointer
+     or held; in a block too short to spare the room it is only the cursor. */
+  .edge {
+    position: absolute;
+    inset-block-end: 0;
+    inset-inline: 0;
+    block-size: var(--space-6);
+    max-block-size: 40%;
+    cursor: ns-resize;
+  }
+
+  .edge::after {
+    position: absolute;
+    inset-block-end: var(--space-2);
+    inset-inline-start: 50%;
+    inline-size: var(--space-16);
+    block-size: var(--border-width-thick);
+    border-radius: var(--radius-full);
+    background: var(--text-tertiary);
+    content: '';
+    opacity: 0;
+    translate: -50% 0;
+    transition: opacity var(--duration-hover) var(--ease-hover);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .block[data-movable]:hover .edge::after {
+      opacity: 1;
+    }
+  }
+
+  .block[data-moving] .edge::after {
+    opacity: 1;
+  }
+
+  .block:is([data-size='tiny'], [data-size='pair'], [data-size='compact']) .edge::after {
+    display: none;
   }
 
   /* The block's brand mark: it gives way to the title in a block too narrow for both. */
