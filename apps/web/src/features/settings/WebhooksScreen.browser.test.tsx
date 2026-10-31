@@ -43,6 +43,16 @@ const DELIVERY: WebhookDelivery = {
   createdAt: '2026-10-31T09:00:00.000Z',
 };
 
+// The frame around the page (sidebar, Tasks badge, calendar banner), all still loading.
+const LOADING = { status: 'loading' as const };
+const stillLoading = {
+  subscribe: () => () => undefined,
+  getSnapshot: () => LOADING,
+  retain: () => () => undefined,
+  ready: () => Promise.resolve(),
+  reload: () => undefined,
+};
+
 beforeAll(async () => {
   await page.viewport(1280, 800);
 });
@@ -87,7 +97,13 @@ function layerWith(overrides: Partial<DataLayer['webhooks']> = {}) {
     resend: vi.fn(() => Promise.resolve({ ...DELIVERY, state: 'sent' as const, responseStatus: 200, attempt: 2 })),
     ...overrides,
   };
-  return { layer: { webhooks } as unknown as DataLayer, webhooks };
+  const layer = {
+    calendar: { view: () => stillLoading },
+    nav: { source: () => stillLoading, change: () => undefined },
+    tasks: { due: () => stillLoading },
+    webhooks,
+  };
+  return { layer: layer as unknown as DataLayer, webhooks };
 }
 
 async function renderScreen(layer: DataLayer, initial: WebhookList): Promise<Toasts> {
