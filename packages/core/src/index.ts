@@ -166,7 +166,7 @@ export {
   cleanTitle,
 } from './profile/embeds.ts';
 export { checkProfileImage, readPageMeta, profileImageStorePath, type CheckedImage } from './profile/images.ts';
-export { deviceFact, viewFacts } from './profile/sources.ts';
+export { deviceFact } from './profile/sources.ts';
 export { zonedToUtc, windowOf } from './profile/schedule.ts';
 // A workspace's brand kit and the caller's own link page accent and photos (spec 0060).
 export {

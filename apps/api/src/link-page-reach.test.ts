@@ -233,6 +233,8 @@ describe('the crawl files (AC-6123)', () => {
       block: { kind: 'link', title: 'Site', url: 'ada.example.com' },
       mutationId: newId(),
     });
+    // Live by its owner's own switch, as a page a visitor can open (spec 0058, AC-23).
+    await ada.client.profile.show({ workspace: ada.slug, live: true, mutationId: newId() });
     const sitemap = await edge('/api/public/sitemap-handles.xml');
     expect(sitemap.headers.get('cache-control')).toBe('public, max-age=3600, s-maxage=3600');
     expect(await sitemap.text()).toContain(`/${ada.handle}</loc>`);

@@ -30,7 +30,6 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   'readPageMeta',
   'profileImageStorePath',
   'deviceFact',
-  'viewFacts',
   'zonedToUtc',
   'windowOf',
   // The door and its entries mint scopes; they don't take one. NO_RULE_SOURCE is what the door reads rules from
