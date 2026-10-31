@@ -5,7 +5,6 @@
 export { actorType, attributeType, systemColumn } from './common.ts';
 export { memberOnboarding, memberRole, memberStatus, members, workspaceCounters, workspaces } from './workspaces.ts';
 export { workspaceRoles } from './roles.ts';
-export { attributes, lists, objects, relationshipCardinality, relationships } from './definitions.ts';
 export {
   attributes,
   computedInputRole,

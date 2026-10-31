@@ -4,7 +4,7 @@
 // a host route names (a team page's rules, or a form's live or draft rules) can't be deleted: 409 `SKILL_IN_USE`,
 // naming where. Each write is one `routing.skills_changed` audit row with before and after. Skills are settings, as
 // rotations and editors are: no outbox row; screens read them again.
-import { and, asc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, ne, sql } from 'drizzle-orm';
 import {
   SKILL_GROUPS,
   SKILLS_MAX,
@@ -31,7 +31,7 @@ const { memberSkills, members, routingSettings, routingSkills } = schema;
 const LIMIT_MESSAGE = `A workspace can have at most ${String(SKILLS_MAX)} skills.`;
 const SKILL_MISSING = 'That skill doesn’t exist any more.';
 const NAME_TAKEN = 'That group already has a skill with this name.';
-const NOT_A_TEAMMATE = 'Pick an active teammate.';
+const NOT_A_TEAMMATE = 'Pick an active teammate who isn’t a guest.';
 
 const groupOrder = (group: string) => SKILL_GROUPS.indexOf(group as SkillGroup);
 
@@ -57,7 +57,8 @@ export async function readSkills(tx: WorkspaceTx): Promise<SkillsView> {
     .select({ memberId: memberSkills.memberId, skillId: memberSkills.skillId })
     .from(memberSkills)
     .innerJoin(members, and(eq(members.workspaceId, memberSkills.workspaceId), eq(members.id, memberSkills.memberId)))
-    .where(eq(members.status, 'active'))
+    // A guest takes no bookings (spec 0037, AC-1432), so a skill they held before becoming one is not listed.
+    .where(and(eq(members.status, 'active'), ne(members.role, 'guest')))
     .orderBy(asc(memberSkills.memberId));
   const byMember = new Map<string, string[]>();
   for (const row of held) byMember.set(row.memberId, [...(byMember.get(row.memberId) ?? []), row.skillId]);
@@ -277,7 +278,8 @@ export async function setMemberSkills(
     const [member] = await tx
       .select({ id: members.id })
       .from(members)
-      .where(and(eq(members.id, input.memberId), eq(members.status, 'active')))
+      // A guest takes no bookings (spec 0037, AC-1432), so holds no skill a route could pick them by.
+      .where(and(eq(members.id, input.memberId), eq(members.status, 'active'), ne(members.role, 'guest')))
       .for('no key update');
     if (member === undefined) throw refuseOn('CONFIG_INVALID', NOT_A_TEAMMATE, 'memberId');
     if (wanted.length > 0) {
