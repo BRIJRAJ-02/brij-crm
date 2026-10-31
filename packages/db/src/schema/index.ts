@@ -4,6 +4,7 @@
 // that lead with workspace_id (spec 0004).
 export { actorType, attributeType, systemColumn } from './common.ts';
 export { memberOnboarding, memberRole, memberStatus, members, workspaceCounters, workspaces } from './workspaces.ts';
+export { workspaceRoles } from './roles.ts';
 export { attributes, lists, objects, relationshipCardinality, relationships } from './definitions.ts';
 export { attributeOptions, optionOutcome } from './options.ts';
 export { outbox, outboxKind } from './outbox.ts';

@@ -136,10 +136,19 @@ export const invitationsRouter = {
   create: member.invitations.create.handler(async ({ context, input }) => {
     const { scope } = context;
     const outcome = await commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
-      inviteMembers(scope, { emails: input.emails, role: input.role }, hooks, {
-        source: sourceOf(context),
-        limit: (sends) => limitSends(context, scope.workspaceId, context.user.id, sends),
-      }),
+      inviteMembers(
+        scope,
+        {
+          emails: input.emails,
+          role: input.role,
+          ...(input.customRoleId === undefined ? {} : { customRoleId: input.customRoleId }),
+        },
+        hooks,
+        {
+          source: sourceOf(context),
+          limit: (sends) => limitSends(context, scope.workspaceId, context.user.id, sends),
+        },
+      ),
     );
     const unsent = await mailAll(context, outcome, outcome.sent);
     return { invited: outcome.sent.map((each) => each.invitation), refused: [...outcome.refused], unsent };
@@ -170,6 +179,7 @@ export const invitationsRouter = {
         {
           enabled: input.enabled,
           ...(input.role === undefined ? {} : { role: input.role }),
+          ...(input.customRoleId === undefined ? {} : { customRoleId: input.customRoleId }),
           ...(input.expiresInDays === undefined ? {} : { expiresInDays: input.expiresInDays }),
           ...(input.maxUses === undefined ? {} : { maxUses: input.maxUses }),
           ...(input.reset === undefined ? {} : { reset: input.reset }),

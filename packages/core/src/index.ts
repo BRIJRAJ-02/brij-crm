@@ -554,11 +554,11 @@ export {
   getMyAccess,
   leaveWorkspace,
   listMembers,
-  listRoles,
   previewGuest,
   previewRemoval,
   removeMember,
   setMemberRole,
+  setMemberRoles,
   transferOwnership,
   type MemberWithRole,
   type MemberWriteOptions,
@@ -574,6 +574,19 @@ export { listVisibleMembers } from './scheduling/visible.ts';
 export { copyWeek, readTeamWeek, setDayHours, setUsualHours } from './availability/team-week.ts';
 export { createTimeOff, deleteTimeOff, listTimeOff, updateTimeOff } from './scheduling/time-off.ts';
 export { getLimits, limitsAt, setLimits } from './scheduling/limits.ts';
+// Custom roles (spec 0037, job J9): the roles every picker offers, the Roles page, and the role writes.
+export {
+  createRole,
+  deleteRole,
+  duplicateRole,
+  getRole,
+  listRoles,
+  moveRole,
+  roleOverview,
+  setDefaultRole,
+  updateRole,
+  type RoleWriteOptions,
+} from './roles/roles.ts';
 // Teams (spec 0031, slice 8, AC-824 to AC-827): flat groups of members that access rules name.
 export { changeTeamMembers, createTeam, deleteTeam, listTeams, renameTeam } from './teams/teams.ts';
 export type { TeamWriteOptions } from './teams/teams.ts';

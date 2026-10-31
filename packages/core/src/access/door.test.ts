@@ -383,4 +383,64 @@ describe('the door’s cost (AC-149)', () => {
     );
     expect(p95(added)).toBeLessThan(5);
   });
+
+  // Spec 0037, AC-1222 and AC-1234: a custom role rides the same member read (a left join), measured with 20 roles.
+  it('reads a custom role in the member’s own statement, still within AC-149 with 20 roles', async () => {
+    const a = await userWithWorkspace();
+    const roleIds = Array.from({ length: 20 }, () => newId());
+    await testQuery(
+      ownerUrl,
+      `insert into workspace_roles (workspace_id, id, name, permissions, position, created_by_type, updated_by_type)
+       select $1, ids.id, 'Role ' || ids.n, '{schedule.view,members.manage}', ids.n - 1, 'system', 'system'
+       from unnest($2::uuid[]) with ordinality as ids(id, n)`,
+      [a.workspace.id, roleIds],
+    );
+    // A second person holding the last of the 20 roles.
+    const holderEmail = `${tag()}@example.com`;
+    const holder = await createTestUser(identityUrl, { email: holderEmail });
+    await testQuery(
+      ownerUrl,
+      `insert into members (workspace_id, user_id, name, email, role, custom_role_id, created_by_type, updated_by_type)
+       values ($1, $2, 'Priya', $3, 'member', $4, 'system', 'system')`,
+      [a.workspace.id, holder, holderEmail, roleIds[19]],
+    );
+    const enter = (userId: string) =>
+      enterWorkspace(
+        { db, identity, rules: NO_RULE_SOURCE },
+        { userId, slug: a.workspace.slug, session: signedInNow() },
+      );
+    const scope = await enter(holder);
+    // The stored admin grant is nothing (grant `admin`); the `any` one holds.
+    expect([...scope.access.permissions]).toEqual(['schedule.view']);
+    // What the custom role adds to each request beyond the join, timed alone: its policy and the seal.
+    const principal = scope.access.principal;
+    if (principal.kind !== 'member') throw new Error('Not a member.');
+    const added: number[] = [];
+    for (let run = 0; run < 2_000; run += 1) {
+      const started = performance.now();
+      const access = roleAccess(principal, NO_RULES, {
+        permissions: ['schedule.view', 'members.manage'],
+        defaultObjectLevel: 'write',
+      });
+      mintScope({ db, workspaceId: a.workspace.id, actor: { type: 'member', id: principal.memberId }, access });
+      added.push(performance.now() - started);
+    }
+    // The whole door, for the record, the owner's and the holder's turns taken one after the other.
+    const owner: number[] = [];
+    const held: number[] = [];
+    for (let run = 0; run < 40; run += 1) {
+      for (const [userId, samples] of [
+        [a.userId, owner],
+        [holder, held],
+      ] as const) {
+        const started = performance.now();
+        await enter(userId);
+        samples.push(performance.now() - started);
+      }
+    }
+    console.warn(
+      `door p95 with 20 custom roles: added ${p95(added).toFixed(3)} ms, whole ${p95(held).toFixed(1)} ms (owner ${p95(owner).toFixed(1)} ms)`,
+    );
+    expect(p95(added)).toBeLessThan(5);
+  });
 });

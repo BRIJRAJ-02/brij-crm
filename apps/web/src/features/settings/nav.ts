@@ -15,6 +15,7 @@ import { strings as members } from './members-strings.ts';
 import { strings as notifications } from './notifications-strings.ts';
 import { strings as schedulingAccess } from './scheduling-access-nav-strings.ts';
 import { strings as teams } from './teams-nav-strings.ts';
+import { strings as roles } from './roles-nav-strings.ts';
 import { strings as security } from './security-strings.ts';
 import { strings as workspaceSecurity } from './workspace-security-strings.ts';
 import { strings } from './strings.ts';
@@ -63,6 +64,12 @@ export const membersSettingsHref = (slug: string) => `/w/${slug}/settings/member
 /** Settings › Workspace › Teams (spec 0031, slice 8): the groups of people that access rules name. */
 export const teamsSettingsHref = (slug: string) => `/w/${slug}/settings/teams`;
 
+/** Settings › Workspace › Roles (spec 0037, AC-1239): every role and what it can do. */
+export const rolesSettingsHref = (slug: string) => `/w/${slug}/settings/roles`;
+
+/** One role's page (spec 0037, AC-1240), by its id: a built in role's name, or a custom role's uuid. */
+export const roleHref = (slug: string, roleId: string) => `/w/${slug}/settings/roles/${roleId}`;
+
 /** Settings › Account › Notifications (spec 0038): the member's email for this workspace. */
 export const notificationSettingsHref = (slug: string) => `/w/${slug}/settings/account/notifications`;
 
@@ -82,6 +89,7 @@ export type SettingsPageId =
   | 'general'
   | 'members'
   | 'teams'
+  | 'roles'
   | 'workspace-security'
   | 'objects'
   | 'lists'
@@ -118,6 +126,7 @@ export interface SettingsNavEntry {
     | 'building'
     | 'users'
     | 'lock'
+    | 'id-card'
     | 'box'
     | 'list'
     | 'list-checks'
@@ -191,6 +200,8 @@ export function settingsNav(slug: string): readonly SettingsNavGroup[] {
         { id: 'members', label: members.title, href: membersSettingsHref(slug), icon: 'users' },
         // Teams (spec 0031, slice 8, AC-832): every member reads them; changing them is for `teams.manage`.
         { id: 'teams', label: teams.title, href: teamsSettingsHref(slug), icon: 'users-round', notForGuests: true },
+        // Roles (spec 0037, AC-1239): every member reads them; making and changing them is for `access.manage`.
+        { id: 'roles', label: roles.title, href: rolesSettingsHref(slug), icon: 'id-card', notForGuests: true },
         // The workspace's sign in rules (spec 0033): owners only, so nobody else sees the entry at all.
         {
           id: 'workspace-security',
@@ -296,6 +307,7 @@ export function settingsPageOf(pathname: string): SettingsPageId | undefined {
   if (rest === 'history' || rest === 'history/changes' || rest === 'history/sign-ins') return 'history';
   if (rest === 'members') return 'members';
   if (rest === 'teams') return 'teams';
+  if (rest === 'roles' || rest.startsWith('roles/')) return 'roles';
   if (rest === 'security') return 'workspace-security';
   if (rest === 'trash') return 'trash';
   if (rest === 'admin') return 'admin-overview';

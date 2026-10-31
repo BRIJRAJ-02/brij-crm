@@ -5,7 +5,7 @@
 // requests to join, resend or cancel invitations, and set the invite link and company email (the Joining tab); an
 // owner hands the workspace on; a step down (to Guest above all) asks first; everyone reads who is in, a guest
 // without anyone's email.
-// Leaves out: leaving (the workspace menu's), teams (their own page), and a role for the invite link.
+// Leaves out: leaving (the workspace menu's), teams and roles (their own pages), and a role for the invite link.
 import {
   isDataError,
   ROLE_DESCRIPTIONS,
@@ -21,10 +21,12 @@ import {
   type MyAccess,
   type Role,
   type RolesList,
+  type RolesOverview,
 } from '@crm/data';
 import {
   Avatar,
   Badge,
+  BulkActionBar,
   Button,
   ButtonGroup,
   Callout,
@@ -69,7 +71,9 @@ import {
   useSchedulingStore,
 } from '../booking/CalendarHealth.tsx';
 import { calendarHealthStrings } from '../booking/calendar-health-strings.ts';
-import { canRemove, grantableRoles, invitableRoles, takesAccess } from './members.ts';
+import { canRemove, grantableRoles, invitableRoles } from './members.ts';
+import { CapabilitiesDialog } from './CapabilitiesDialog.tsx';
+import { roleTakesAway } from './roles.ts';
 import { strings } from './members-strings.ts';
 import { SettingsPage } from './SettingsPage.tsx';
 
@@ -95,8 +99,10 @@ export interface MembersScreenProps {
   /** The email domains, for holders of `workspace.manage`. */
   readonly domains?: WorkspaceDomainsView | undefined;
   readonly access: MyAccess;
-  /** The roles every role picker offers (`roles.list`, spec 0037, AC-1439), most power first. */
+  /** The roles every role picker offers (`roles.list`, spec 0037, AC-1439), most power first, then custom roles. */
   readonly roles: RolesList;
+  /** Every role with what it holds (`roles.overview`): whether a change takes access away, "What can Priya do". */
+  readonly overview: RolesOverview;
 }
 
 const MEMBER_COLUMNS: readonly TableColumn[] = [
@@ -164,6 +170,7 @@ export function MembersScreen({
   domains,
   access,
   roles,
+  overview,
 }: MembersScreenProps) {
   const router = useRouter();
   // Owners and admins see who has two factor sign in (spec 0033, AC-895): decided by access, so it never slides in.
@@ -185,7 +192,12 @@ export function MembersScreen({
   // The member the remove dialog asks about, if any (it reads what their removal does, AC-816).
   const [removing, setRemoving] = useState<MemberView | undefined>(undefined);
   // A role shown at once while its change is sent, put back if the server refuses (by member id).
-  const [pendingRoles, setPendingRoles] = useState<ReadonlyMap<string, Role>>(new Map());
+  const [pendingRoles, setPendingRoles] = useState<ReadonlyMap<string, string>>(new Map());
+  // The person "What can Priya do" is open on (spec 0037, AC-1243).
+  const [explaining, setExplaining] = useState<MemberView | undefined>(undefined);
+  // The people ticked for Change role (spec 0037, AC-1242), and whether that change is on its way.
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  const [isBulkBusy, setBulkBusy] = useState(false);
   // The pick whose guest count is out: a later pick's answer wins, an earlier one is dropped.
   const counting = useRef<symbol | undefined>(undefined);
   // The search as typed; the route searches once typing pauses.
@@ -215,11 +227,27 @@ export function MembersScreen({
   const isGuest = actor === 'guest';
   const canInvite = invitations !== undefined && access.permissions.includes('members.invite');
   // The roles list's options this person may invite as, or give a member: the owner rules, as the server keeps them.
+  // Custom roles (spec 0037, AC-1242) sit on the Member role, so they come with it, after the built in ones.
   const optionsFor = (allowed: readonly Role[]) =>
-    roles.roles.filter((option) => option.builtIn !== undefined && allowed.includes(option.builtIn));
+    roles.roles.filter((option) =>
+      option.builtIn === undefined ? allowed.includes('member') : allowed.includes(option.builtIn),
+    );
   const inviteRoles = optionsFor(invitableRoles(actor));
-  /** A role's name as the roles list says it. */
-  const labelOf = (role: Role) => roles.roles.find((option) => option.builtIn === role)?.label ?? ROLE_LABELS[role];
+  /** A role's name as the roles list says it: a built in role's name, or a custom role's id. */
+  const labelOf = (role: string) => {
+    const builtIn = ROLES.find((each) => each === role);
+    return (
+      roles.roles.find((option) => option.id === role)?.label ?? (builtIn === undefined ? role : ROLE_LABELS[builtIn])
+    );
+  };
+  /** The role a member holds, as the role Selects name it: their custom role's id, else their built in role. */
+  const roleIdOf = (member: MemberView) => member.customRoleId ?? member.role;
+  /** A role option for a Select: custom ones under "Custom". */
+  const itemOf = (option: RolesList['roles'][number]) => ({
+    id: option.id,
+    label: option.label,
+    ...(option.builtIn === undefined ? { group: strings.custom } : {}),
+  });
   const held = more.from === page ? more : { from: page, members: [], cursor: page.nextCursor };
   const rows = [...page.members, ...held.members];
   // Calendar health for the rows shown, read together, for holders of `members.manage` (AC-1308).
@@ -251,7 +279,7 @@ export function MembersScreen({
   };
 
   /** One toast for a role change, with the invitations it cancelled and Invite people to send them again. */
-  const sayRoleChanged = (member: MemberView, role: Role, cancelled: number | undefined) => {
+  const sayRoleChanged = (member: MemberView, role: string, cancelled: number | undefined) => {
     const message = strings.roleChanged(member.name, labelOf(role));
     // Cancelled invitations are sent again from Invite people, which stays on the toast until dismissed.
     toasts.toast(
@@ -266,7 +294,7 @@ export function MembersScreen({
   };
 
   // Someone else's role changes at once and goes back, with the server's reason, if it refuses.
-  const changeRole = (member: MemberView, role: Role) => {
+  const changeRole = (member: MemberView, role: string) => {
     setPendingRoles((pending) => new Map(pending).set(member.id, role));
     data.members.setRole(slug, member.id, role).then(
       async (changed) => {
@@ -283,16 +311,23 @@ export function MembersScreen({
 
   // Only someone else's role has a picker (your own reads as text). A pick that gives more changes it at once; one that
   // takes access away asks first (the owner, 21 October 2026), saying what becoming a guest stops (spec 0031, slice 9).
-  const askRole = (member: MemberView, role: Role) => {
-    if (role === member.role) return;
-    if (!takesAccess(member.role, role)) {
+  const askRole = (member: MemberView, role: string) => {
+    const current = roleIdOf(member);
+    if (role === current) return;
+    if (!roleTakesAway(overview.roles, current, role)) {
       changeRole(member, role);
       return;
     }
+    const builtInStep = member.customRoleId === undefined && (member.role === 'owner' || member.role === 'admin');
     const ask = (chips: readonly string[]) => {
       setQuestion({
         title: strings.roleDownTitle(member.name, labelOf(role)),
-        text: role === 'guest' ? strings.roleGuestText(member.name) : strings.roleDownText(member.name, member.role),
+        text:
+          role === 'guest'
+            ? strings.roleGuestText(member.name)
+            : builtInStep
+              ? strings.roleDownText(member.name, member.role)
+              : strings.roleCustomDown(member.name),
         chips,
         action: strings.roleDownAction(labelOf(role)),
         // The same one toast as a change made at once says it, so the confirm adds none of its own.
@@ -310,7 +345,7 @@ export function MembersScreen({
     // says it couldn't count. Only the latest pick's answer opens the confirm.
     const pick = Symbol(member.id);
     counting.current = pick;
-    setPendingRoles((pending) => new Map(pending).set(member.id, member.role));
+    setPendingRoles((pending) => new Map(pending).set(member.id, current));
     const settle = () => {
       settleRole(member.id);
       return counting.current === pick;
@@ -330,6 +365,41 @@ export function MembersScreen({
         if (settle()) ask([strings.guestUncounted]);
       },
     );
+  };
+
+  // Change role for everyone ticked (spec 0037, AC-1242): at once when it gives more, asked first when it takes any
+  // access away from anyone; one call, so a refusal changes nobody.
+  const askBulkRole = (role: string) => {
+    if (isBulkBusy) return;
+    const picked = rows.filter((member) => selected.has(member.id) && member.id !== access.memberId);
+    if (picked.length === 0) return;
+    const run = async () => {
+      setBulkBusy(true);
+      try {
+        const done = await data.members.setRoles(
+          slug,
+          picked.map((member) => member.id),
+          role,
+        );
+        await reload();
+        setSelected(new Set());
+        toasts.toast({ tone: 'success', message: strings.bulkRoleChanged(done.changed, labelOf(role)) });
+      } finally {
+        setBulkBusy(false);
+      }
+    };
+    if (!picked.some((member) => roleTakesAway(overview.roles, roleIdOf(member), role))) {
+      run().catch((error: unknown) => {
+        toasts.toast({ tone: 'danger', message: messageOf(error) });
+      });
+      return;
+    }
+    setQuestion({
+      title: strings.bulkRoleTitle(picked.length, labelOf(role)),
+      text: strings.bulkRoleText,
+      action: strings.roleDownAction(labelOf(role)),
+      run,
+    });
   };
 
   // Handing the workspace on can't be taken back in one click, so it asks first (AC-813).
@@ -404,7 +474,7 @@ export function MembersScreen({
 
   const memberCell = (member: MemberView, column: string) => {
     const isMe = member.id === access.memberId;
-    const role = pendingRoles.get(member.id) ?? member.role;
+    const role = pendingRoles.get(member.id) ?? roleIdOf(member);
     switch (column) {
       case 'name':
         return (
@@ -433,12 +503,12 @@ export function MembersScreen({
             isLabelHidden
             // The role reads as text with its chevron, like the rows that can't change it, rather than a column of boxes.
             variant="inline"
-            items={options.map((option) => ({ id: option.id, label: option.label }))}
+            items={options.map(itemOf)}
             value={role}
             isDisabled={pendingRoles.has(member.id)}
             onChange={(chosen) => {
-              const picked = options.find((option) => option.id === chosen)?.builtIn;
-              if (picked !== undefined) askRole(member, picked);
+              const picked = options.find((option) => option.id === chosen);
+              if (picked !== undefined) askRole(member, picked.id);
             }}
           />
         );
@@ -459,19 +529,29 @@ export function MembersScreen({
         // Ask to reconnect (spec 0037, AC-1309): a colleague whose calendar needs them.
         const calendar = isMe ? undefined : health.get(member.id);
         const mayAsk = offersAsk(calendar);
+        // "What can Priya do" (spec 0037, AC-1243): about oneself, or anyone for holders of `members.manage`.
+        const mayExplain = isMe || canManage;
         // No menu at all for a row the reader can't act on, rather than a locked one.
-        if (!mayTransfer && !mayRemove && !mayAsk) return null;
+        if (!mayTransfer && !mayRemove && !mayAsk && !mayExplain) return null;
+        const first = member.name.trim().split(/\s+/)[0] ?? member.name;
         return (
           <MenuTrigger>
             <Button variant="ghost" icon="ellipsis" label={strings.rowActions(member.name)} />
             <Menu
               label={strings.rowActions(member.name)}
               onAction={(key) => {
+                if (key === 'explain') setExplaining(member);
                 if (key === 'transfer') transfer(member);
                 if (key === 'remove') remove(member);
                 if (key === 'ask-reconnect') askReconnect(healthStore, slug, member.id, member.name);
               }}
             >
+              {mayExplain && (
+                <MenuItem id="explain" icon="id-card">
+                  {strings.capabilities.menu(first)}
+                </MenuItem>
+              )}
+              {mayExplain && (mayAsk || mayTransfer || mayRemove) && <MenuSeparator />}
               {askReconnectItem(calendar)}
               {mayAsk && (mayTransfer || mayRemove) && <MenuSeparator />}
               {mayTransfer && (
@@ -625,7 +705,35 @@ export function MembersScreen({
         renderCell={memberCell}
         isScrollable
         emptyState={<EmptyState icon="search" title={strings.noMatches} />}
+        {...(canManage
+          ? {
+              selected,
+              onSelectedChange: setSelected,
+              getSelectLabel: (member: MemberView) => strings.selectMember(member.name),
+            }
+          : {})}
       />
+      {canManage && selected.size > 0 && (
+        <BulkActionBar
+          count={selected.size}
+          total={rows.length}
+          onClear={() => {
+            setSelected(new Set());
+          }}
+        >
+          <Select
+            savesOnPick
+            label={strings.bulkRoleLabel(selected.size)}
+            isLabelHidden
+            placeholder={strings.bulkRole}
+            items={optionsFor(grantableRoles(actor, 'member')).map(itemOf)}
+            isDisabled={isBulkBusy}
+            onChange={(chosen) => {
+              if (chosen !== null) askBulkRole(chosen);
+            }}
+          />
+        </BulkActionBar>
+      )}
       {held.cursor !== undefined && (
         <Button variant="ghost" onPress={showMore} isPending={isLoadingMore}>
           {strings.showMore}
@@ -803,14 +911,29 @@ export function MembersScreen({
       >
         <RoleGuide roles={roles.roles} initialRole={roles.roles.find((option) => option.builtIn === access.role)?.id} />
       </Modal>
+      <CapabilitiesDialog
+        data={data}
+        slug={slug}
+        member={explaining}
+        roles={overview.roles}
+        members={rows}
+        readsEveryone={canManage}
+        onClose={() => {
+          setExplaining(undefined);
+        }}
+      />
       {canInvite && (
         <InviteDialog
           data={data}
           slug={slug}
           isOpen={isInviting}
           roles={inviteRoles}
-          // New rows start as Member (the owner, 22 October 2026), whatever the workspace's default for joining.
-          defaultRole={inviteRoles.find((option) => option.builtIn === 'member')?.id ?? roles.defaultRole}
+          // New rows start with the role new people get (spec 0037, AC-1237): Member, unless a custom role is marked.
+          defaultRole={
+            inviteRoles.find((option) => option.id === roles.defaultRole)?.id ??
+            inviteRoles.find((option) => option.builtIn === 'member')?.id ??
+            roles.defaultRole
+          }
           memberEmails={
             new Set(rows.flatMap((member) => (member.email === undefined ? [] : [member.email.toLowerCase()])))
           }

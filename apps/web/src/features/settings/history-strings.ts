@@ -118,12 +118,16 @@ const SENTENCES: SentenceTemplates = {
       ? { subject: 'none', text: `${asker}’s request to join closed when they deleted their account` }
       : actor(`declined ${entry.target.name ?? 'someone'}’s request to join`);
   },
-  'member.role_changed': (entry, w) =>
-    actor(
-      entry.params.from === undefined || entry.params.to === undefined
+  'member.role_changed': (entry, w) => {
+    // A custom role (spec 0037) by the name it had then, else the built in role's.
+    const from = entry.params.fromName ?? (entry.params.from === undefined ? undefined : w.role(entry.params.from));
+    const to = entry.params.toName ?? (entry.params.to === undefined ? undefined : w.role(entry.params.to));
+    return actor(
+      from === undefined || to === undefined
         ? `changed ${w.persons(entry.target.person)} role`
-        : `changed ${w.persons(entry.target.person)} role from ${w.role(entry.params.from)} to ${w.role(entry.params.to)}`,
-    ),
+        : `changed ${w.persons(entry.target.person)} role from ${from} to ${to}`,
+    );
+  },
   'member.removed': (entry, w) => actor(`removed ${w.person(entry.target.person)} from the workspace`),
   'member.left': () => actor('left the workspace'),
   'workspace.ownership_transferred': (entry, w) =>
@@ -235,6 +239,16 @@ const SENTENCES: SentenceTemplates = {
   'time_off.deleted': (entry, w) => actor(`removed ${w.persons(entry.target.person)} time off`),
   'limits.changed': (entry, w) => actor(`changed ${w.persons(entry.target.person)} meeting limits`),
   'calendar.reconnect_asked': (entry, w) => actor(`asked ${w.person(entry.target.person)} to reconnect their calendar`),
+  // Custom roles (spec 0037).
+  'role.created': (entry) => actor(`made the ${entry.params.role} role`),
+  'role.updated': (entry) => actor(`changed the ${entry.params.role} role`),
+  'role.deleted': (entry) =>
+    actor(
+      entry.params.moved === undefined || entry.params.moved === 0
+        ? `deleted the ${entry.params.role} role`
+        : `deleted the ${entry.params.role} role and moved ${String(entry.params.moved)} ${entry.params.moved === 1 ? 'person' : 'people'}`,
+    ),
+  'role.default_changed': (entry) => actor(`made ${entry.params.role} the role new people get`),
   'team.changed': (entry) => {
     const { team, joined, left } = entry.params;
     switch (entry.params.change) {

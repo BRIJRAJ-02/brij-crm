@@ -17,6 +17,7 @@ import {
   memberNameFor,
   OWNER_RULES_MESSAGE,
   PERMISSIONS,
+  ROLE_LABELS,
   ROLE_PERMISSIONS,
   SEAT_LIMIT_MESSAGE,
   type InvitationView,
@@ -40,8 +41,12 @@ import { inWorkspace } from '../access/run.ts';
 import { touched } from '../engine/definitions.ts';
 import { writeAudit, type AuditSource } from './audit.ts';
 import { welcomeMember } from './welcome.ts';
+import { defaultCustomRole, readCustomRole } from '../roles/roles.ts';
 
-const { invitations, members, workspaces } = schema;
+const { invitations, members, workspaceRoles, workspaces } = schema;
+
+/** The answer for an invitation naming a custom role that is gone (spec 0037, AC-1236). */
+const CUSTOM_ROLE_GONE = "That role doesn't exist.";
 
 /** How long an email invitation works after its last send, as SQL (`INVITE_DAYS`, 7). */
 const INVITE_WINDOW = sql`now() + interval '7 days'`;
@@ -299,6 +304,7 @@ async function viewsOf(tx: WorkspaceTx, workspaceId: string, ids?: readonly stri
       id: invitations.id,
       email: invitations.email,
       role: invitations.role,
+      customRoleId: invitations.customRoleId,
       invitedBy: inviter.name,
       invitedAt: invitations.createdAt,
       expiresAt: invitations.expiresAt,
@@ -325,6 +331,7 @@ async function viewsOf(tx: WorkspaceTx, workspaceId: string, ids?: readonly stri
     kind: 'email' as const,
     email: row.email ?? '',
     role: isRole(row.role) ? row.role : 'member',
+    ...(row.customRoleId === null ? {} : { customRoleId: row.customRoleId }),
     invitedBy: row.invitedBy ?? '',
     invitedAt: new Date(row.invitedAt).toISOString(),
     expiresAt: new Date(row.expiresAt ?? row.invitedAt).toISOString(),
@@ -350,13 +357,15 @@ function addresses(emails: readonly string[]): string[] {
  */
 export async function inviteMembers(
   scope: EngineScope,
-  input: { readonly emails: readonly string[]; readonly role: Role },
+  input: { readonly emails: readonly string[]; readonly role: Role; readonly customRoleId?: string | undefined },
   hooks: readonly AfterWrite[] = [],
   options: InviteWriteOptions = {},
 ): Promise<InviteOutcome> {
   checkInvites(scope);
   if (!isRole(input.role)) throw refuse('CONFIG_INVALID', 'Pick a role.');
-  const role = input.role;
+  // A custom role (spec 0037, AC-1236) sits on the Member role.
+  const customRoleId = input.customRoleId === undefined ? undefined : checkId(input.customRoleId, CUSTOM_ROLE_GONE);
+  const role = customRoleId === undefined ? input.role : 'member';
   if (role === 'owner' && actingRole(scope) !== 'owner') throw refuse('FORBIDDEN', OWNER_RULES_MESSAGE);
   const wanted = addresses(input.emails);
   if (wanted.length === 0 || wanted.length > INVITE_BATCH_MAX) {
@@ -368,6 +377,11 @@ export async function inviteMembers(
     async ({ tx }) => {
       const acting = await checkActingNow(tx, scope, role);
       await lockInvitations(tx, scope.workspaceId);
+      // The custom role it gives still exists, held for share so a delete waits for this invite (AC-1236).
+      const customRole =
+        customRoleId === undefined ? undefined : await readCustomRole(tx, scope.workspaceId, customRoleId, 'share');
+      if (customRoleId !== undefined && customRole === undefined) throw refuse('NOT_FOUND', CUSTOM_ROLE_GONE);
+      const givenCustom = customRole?.id ?? null;
       const already = await tx
         .select({ email: sql<string>`lower(${members.email})` })
         .from(members)
@@ -427,6 +441,7 @@ export async function inviteMembers(
             .set({
               tokenHash: hash,
               role,
+              customRoleId: givenCustom,
               sendCount: sql`${invitations.sendCount} + 1`,
               lastSentAt: sql`now()`,
               expiresAt: INVITE_WINDOW,
@@ -449,6 +464,7 @@ export async function inviteMembers(
             kind: 'email',
             email,
             role,
+            customRoleId: givenCustom,
             tokenHash: hash,
             maxUses: 1,
             sendCount: 1,
@@ -481,7 +497,7 @@ export async function inviteMembers(
                 targetType: 'invitation',
                 targetId: each.id,
                 // The address stays in `invitations`: the log names the invitation, never personal data it can't drop.
-                after: { role },
+                after: { role, ...(customRole === undefined ? {} : { customRoleId: customRole.id }) },
               },
           options.source,
         );
@@ -641,6 +657,8 @@ interface HeldInvitation {
   readonly uses: number;
   readonly email: string;
   readonly role: Role;
+  /** The custom role it gives (spec 0037, AC-1236) and its name now, when any. */
+  readonly customRole?: { readonly id: string; readonly name: string };
   readonly status: string;
   readonly live: boolean;
   readonly usedBy: string | null;
@@ -672,6 +690,8 @@ async function readInvitation(tx: WorkspaceTx, workspaceId: string, entered: Ent
       id: invitations.id,
       email: invitations.email,
       role: invitations.role,
+      customRoleId: invitations.customRoleId,
+      customRoleName: workspaceRoles.name,
       status: invitations.status,
       kind: invitations.kind,
       // An email invitation always has an expiry; a link without one never expires.
@@ -693,6 +713,10 @@ async function readInvitation(tx: WorkspaceTx, workspaceId: string, entered: Ent
       inviter,
       and(eq(inviter.workspaceId, invitations.workspaceId), eq(inviter.id, invitations.updatedByMemberId)),
     )
+    .leftJoin(
+      workspaceRoles,
+      and(eq(workspaceRoles.workspaceId, invitations.workspaceId), eq(workspaceRoles.id, invitations.customRoleId)),
+    )
     .where(
       and(
         eq(invitations.workspaceId, workspaceId),
@@ -703,6 +727,8 @@ async function readInvitation(tx: WorkspaceTx, workspaceId: string, entered: Ent
   const [row] = await (lock ? query.for('update', { of: invitations }) : query);
   if (row === undefined || (row.kind !== 'email' && row.kind !== 'link') || row.deletedAt !== null) return undefined;
   if (!isRole(row.role)) return undefined;
+  // A custom role that can't be read opens nothing (spec 0037, AC-1236): the accept answers `INVITE_INVALID`.
+  if (row.customRoleId !== null && (row.customRoleName === null || row.role !== 'member')) return undefined;
   const held: HeldInvitation = {
     id: row.id,
     kind: row.kind,
@@ -710,6 +736,9 @@ async function readInvitation(tx: WorkspaceTx, workspaceId: string, entered: Ent
     uses: row.uses,
     email: row.email ?? '',
     role: row.role,
+    ...(row.customRoleId === null || row.customRoleName === null
+      ? {}
+      : { customRole: { id: row.customRoleId, name: row.customRoleName } }),
     status: row.status,
     live: row.live,
     usedBy: row.usedBy,
@@ -740,6 +769,7 @@ export async function peekInvite(deps: { readonly db: Database }, token: string)
     workspaceName: held.workspaceName,
     inviterName: held.inviterName ?? '',
     role: held.role,
+    roleLabel: held.customRole?.name ?? ROLE_LABELS[held.role],
     ...(held.kind === 'email' ? { invitedEmailMasked: maskEmail(held.email) } : {}),
   };
 }
@@ -864,6 +894,7 @@ export async function acceptInvite(
         name: name.slice(0, 80),
         email,
         role: held.role,
+        customRoleId: held.customRole?.id ?? null,
         createdByType: 'system',
         updatedByType: 'system',
       });
@@ -883,7 +914,11 @@ export async function acceptInvite(
           action: 'invitation.accepted',
           targetType: 'member',
           targetId: memberId,
-          after: { role: held.role, invitationId: held.id },
+          after: {
+            role: held.role,
+            invitationId: held.id,
+            ...(held.customRole === undefined ? {} : { customRoleId: held.customRole.id }),
+          },
         },
         options.source,
       );
@@ -957,6 +992,7 @@ async function joinByLink(
     scope.workspaceId,
     { id: user.id, name: user.name, email, ...(user.typedName === undefined ? {} : { typedName: user.typedName }) },
     held.role,
+    held.customRole?.id,
   );
   await welcomeMember(tx, {
     memberId,
@@ -995,6 +1031,7 @@ async function openLink(tx: WorkspaceTx, workspaceId: string, lock: boolean) {
     .select({
       id: invitations.id,
       role: invitations.role,
+      customRoleId: invitations.customRoleId,
       linkToken: invitations.linkToken,
       expiresAt: invitations.expiresAt,
       maxUses: invitations.maxUses,
@@ -1015,6 +1052,7 @@ function linkView(row: Awaited<ReturnType<typeof openLink>>): InviteLinkView {
     token: row.linkToken,
     // Member or guest (AC-818, spec 0031 slice 9); anything else a link can't hold reads as the safer guest.
     role: row.role === 'member' || row.role === 'guest' ? row.role : 'guest',
+    ...(row.customRoleId === null || row.role !== 'member' ? {} : { customRoleId: row.customRoleId }),
     ...(row.expiresAt === null ? {} : { expiresAt: new Date(row.expiresAt).toISOString() }),
     ...(row.maxUses === null ? {} : { maxUses: row.maxUses }),
     uses: row.uses,
@@ -1042,6 +1080,8 @@ export async function setInviteLink(
   input: {
     readonly enabled: boolean;
     readonly role?: InviteLinkRole;
+    /** A custom role it gives (spec 0037, AC-1237), `null` for none; with it the role is `member`. */
+    readonly customRoleId?: string | null | undefined;
     readonly expiresInDays?: number | null;
     readonly maxUses?: number | null;
     readonly reset?: boolean;
@@ -1101,17 +1141,37 @@ export async function setInviteLink(
             : LINK_EXPIRY(days);
       const maxUses = uses === undefined ? (open?.maxUses ?? null) : uses;
       // The role it gives stays as it is unless named: changing only the expiry never turns a guest link into a
-      // member one.
-      const role = input.role ?? (open?.role === 'guest' ? 'guest' : 'member');
+      // member one. A custom role (spec 0037) is a member link naming it, read now so a deleted one is refused.
+      const askedCustom =
+        input.customRoleId === undefined || input.customRoleId === null
+          ? input.customRoleId
+          : checkId(input.customRoleId, CUSTOM_ROLE_GONE);
+      if (typeof askedCustom === 'string') {
+        if ((await readCustomRole(tx, scope.workspaceId, askedCustom, 'share')) === undefined) {
+          throw refuse('NOT_FOUND', CUSTOM_ROLE_GONE);
+        }
+      }
+      const role =
+        typeof askedCustom === 'string' ? 'member' : (input.role ?? (open?.role === 'guest' ? 'guest' : 'member'));
+      const customRoleId =
+        typeof askedCustom === 'string'
+          ? askedCustom
+          : askedCustom === null || input.role !== undefined || role !== 'member'
+            ? null
+            : open === undefined
+              ? // A new link lets people in with the role new people get (spec 0037, AC-1237).
+                ((await defaultCustomRole(tx, scope.workspaceId))?.id ?? null)
+              : (open.customRoleId ?? null);
       const changes = {
-        ...(input.role === undefined ? {} : { role }),
+        ...(input.role === undefined && askedCustom === undefined ? {} : { role }),
+        ...(askedCustom === undefined ? {} : { customRoleId: askedCustom }),
         ...(days === undefined ? {} : { expiresInDays: days }),
         ...(uses === undefined ? {} : { maxUses: uses }),
       };
       if (open !== undefined && input.reset !== true) {
         await tx
           .update(invitations)
-          .set({ role, expiresAt, maxUses, ...by })
+          .set({ role, customRoleId, expiresAt, maxUses, ...by })
           .where(and(eq(invitations.workspaceId, scope.workspaceId), eq(invitations.id, open.id)));
         await writeAudit(
           tx,
@@ -1143,6 +1203,7 @@ export async function setInviteLink(
         id,
         kind: 'link',
         role,
+        customRoleId,
         tokenHash: hash,
         linkToken: token,
         expiresAt,
@@ -1230,6 +1291,7 @@ export async function addJoiner(
   workspaceId: string,
   user: { readonly id: string; readonly name: string; readonly email: string; readonly typedName?: string },
   role: Role,
+  customRoleId?: string,
 ): Promise<string> {
   const memberId = newId();
   const name = joinerName(user.typedName, user.name, user.email);
@@ -1240,6 +1302,8 @@ export async function addJoiner(
     name: name.slice(0, 80),
     email: user.email,
     role,
+    // A custom role (spec 0037) sits on the Member role; the caller read that it exists in this transaction.
+    customRoleId: role === 'member' ? (customRoleId ?? null) : null,
     createdByType: 'system',
     updatedByType: 'system',
   });

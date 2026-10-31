@@ -222,7 +222,17 @@ export const AuditEntryView = z.discriminatedUnion('action', [
   entry(['join_request.approved'], member, z.strictObject({ alreadyMember: z.boolean() })),
   /** `account_deleted`: the system closed it when the asker deleted their account. */
   entry(['join_request.declined'], joinRequest, z.strictObject({ reason: z.literal('account_deleted').optional() })),
-  entry(['member.role_changed'], member, z.strictObject({ from: Role.optional(), to: Role.optional() })),
+  /** `fromName` and `toName`: a custom role's name then (spec 0037), beside the built in role it sits on. */
+  entry(
+    ['member.role_changed'],
+    member,
+    z.strictObject({
+      from: Role.optional(),
+      to: Role.optional(),
+      fromName: z.string().optional(),
+      toName: z.string().optional(),
+    }),
+  ),
   entry(['member.removed', 'member.left', 'workspace.ownership_transferred', 'account.deleted'], member, NoParams),
   /** `fields` holds only known fields; empty, the sentence says the profile changed. */
   entry(
@@ -330,6 +340,20 @@ export const AuditEntryView = z.discriminatedUnion('action', [
       records: z.enum(['all', 'own', 'team']),
       fields: z.number().int().min(0),
       isDefault: z.boolean(),
+    }),
+  ),
+  /**
+   * A custom role made, changed or deleted, or the default for new people changed (spec 0037): the role's name then,
+   * how many permissions a change added and removed, and how many people a delete moved.
+   */
+  entry(
+    ['role.created', 'role.updated', 'role.deleted', 'role.default_changed'],
+    workspace,
+    z.strictObject({
+      role: z.string(),
+      added: z.number().int().min(0).optional(),
+      removed: z.number().int().min(0).optional(),
+      moved: z.number().int().min(0).optional(),
     }),
   ),
   /** A booking made, moved or cancelled by someone other than its host (spec 0037, AC-1263). */

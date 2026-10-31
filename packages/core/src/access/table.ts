@@ -136,6 +136,8 @@ export const ACCESS_TABLE = {
   purgeDeleted: { permission: 'records.purge' },
   // Members.
   setMemberRole: { ownerRules: true },
+  // Spec 0037, AC-1242: Change role for several at once, under the same owner rules, all or nothing.
+  setMemberRoles: { ownerRules: true },
   removeMember: { ownerRules: true },
   // Spec 0031, AC-816: the remove dialog's counts, for `members.manage` or about oneself.
   previewRemoval: { ownerRules: true },
@@ -158,6 +160,16 @@ export const ACCESS_TABLE = {
   previewAccess: { permission: 'access.manage' },
   // Spec 0037, AC-1439: the roles every role picker offers.
   listRoles: { anyMember: true },
+  // Custom roles (spec 0037, job J9, AC-1228): every member reads the roles (a guest their names only); owners and
+  // admins (`access.manage`) make and change them.
+  roleOverview: { anyMember: true },
+  getRole: { anyMember: true },
+  createRole: { permission: 'access.manage' },
+  updateRole: { permission: 'access.manage' },
+  duplicateRole: { permission: 'access.manage' },
+  deleteRole: { permission: 'access.manage' },
+  setDefaultRole: { permission: 'access.manage' },
+  moveRole: { permission: 'access.manage' },
   // A workspace's sign in rules (spec 0033, milestone 4): owners only.
   getWorkspaceSecurity: { permission: 'security.manage' },
   setWorkspaceSecurity: { permission: 'security.manage' },

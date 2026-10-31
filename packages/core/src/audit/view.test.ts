@@ -300,6 +300,19 @@ const FIXTURES: Record<ListedAuditAction, readonly AuditRow[]> = {
     row('team.changed', 'team', newId(), { before: { name: 'Revenue' }, after: { change: 'deleted', left: [bea] } }),
     row('team.changed', 'team', newId(), { after: { change: 'members', name: 'Sales', joined: [bea], left: [] } }),
   ],
+  'role.created': [row('role.created', 'role', newId(), { after: { name: 'Sales lead', permissions: [] } })],
+  'role.updated': [
+    row('role.updated', 'role', newId(), {
+      before: { name: 'Sales lead' },
+      after: { name: 'Sales leads', added: ['schedule.view'], removed: [] },
+    }),
+  ],
+  'role.deleted': [
+    row('role.deleted', 'role', newId(), { before: { name: 'Doctor' }, after: { name: 'Doctor', moved: 3 } }),
+  ],
+  'role.default_changed': [
+    row('role.default_changed', 'role', newId(), { before: { name: 'Member' }, after: { name: 'Sales lead' } }),
+  ],
   'access.rule_set': [
     row('access.rule_set', 'object', newId(), {
       before: { level: 'write', records: 'all', isDefault: true },
@@ -471,6 +484,16 @@ describe('toEntryView, per action', () => {
     expect(toEntryView(odd, names)).toBeUndefined();
     // The field rules' names are counted, never passed on.
     expect(JSON.stringify(only('access.rule_set'))).not.toContain('Salary');
+  });
+
+  it('names a custom role by its name then, with what a change added and removed and a delete moved (spec 0037)', () => {
+    expect(only('role.created').params).toEqual({ role: 'Sales lead' });
+    expect(only('role.updated').params).toEqual({ role: 'Sales leads', added: 1, removed: 0 });
+    expect(only('role.updated').changes).toEqual([
+      { field: 'name', before: { kind: 'text', text: 'Sales lead' }, after: { kind: 'text', text: 'Sales leads' } },
+    ]);
+    expect(only('role.deleted').params).toEqual({ role: 'Doctor', moved: 3 });
+    expect(only('role.default_changed').params).toEqual({ role: 'Sales lead' });
   });
 
   it('names a delegation’s delegate, level and whom it is over, and drops a level it doesn’t know', () => {

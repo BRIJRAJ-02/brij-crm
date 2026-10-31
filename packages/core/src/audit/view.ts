@@ -373,11 +373,19 @@ export function toEntryView(row: AuditRow, names: AuditNames): AuditEntryView | 
     case 'member.role_changed': {
       const from = roleOf(before.role);
       const to = roleOf(after.role);
+      // A custom role (spec 0037) by the name it had then.
+      const fromName = text(before.customRoleName);
+      const toName = text(after.customRoleName);
       return {
         ...base,
         action,
         target: memberTarget(),
-        params: { ...(from === undefined ? {} : { from }), ...(to === undefined ? {} : { to }) },
+        params: {
+          ...(from === undefined ? {} : { from }),
+          ...(to === undefined ? {} : { to }),
+          ...(fromName === undefined ? {} : { fromName }),
+          ...(toName === undefined ? {} : { toName }),
+        },
         changes: change('role', role(before.role), role(after.role)),
       };
     }
@@ -631,6 +639,29 @@ export function toEntryView(row: AuditRow, names: AuditNames): AuditEntryView | 
         target: bookingTarget(),
         params: { host: person(after.memberId), change: made },
         changes: [],
+      };
+    }
+    case 'role.created':
+    case 'role.updated':
+    case 'role.deleted':
+    case 'role.default_changed': {
+      // The role by the name it had then (spec 0037); a change counts the permissions it added and took away.
+      const counted = (value: unknown) => (Array.isArray(value) ? value.length : undefined);
+      const added = counted(after.added);
+      const removed = counted(after.removed);
+      const moved =
+        typeof after.moved === 'number' && Number.isInteger(after.moved) && after.moved >= 0 ? after.moved : undefined;
+      return {
+        ...base,
+        action,
+        target: workspace,
+        params: {
+          role: text(after.name) ?? text(before.name) ?? 'a role',
+          ...(added === undefined ? {} : { added }),
+          ...(removed === undefined ? {} : { removed }),
+          ...(moved === undefined ? {} : { moved }),
+        },
+        changes: action === 'role.updated' ? change('name', plain(before.name), plain(after.name)) : [],
       };
     }
     case 'team.changed': {

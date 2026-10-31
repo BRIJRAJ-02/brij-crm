@@ -12,7 +12,28 @@
 // what the server enforces.
 //
 // Plain TypeScript, no Zod: the role pickers are on the first load.
-import { ROLE_PERMISSIONS, type Permission, type Role } from './access.ts';
+import {
+  CUSTOM_ROLE_PERMISSIONS,
+  grantOf,
+  PERMISSION_GROUPS,
+  PERMISSION_NAMES,
+  PERMISSIONS,
+  ROLE_PERMISSIONS,
+  type GrantLevel,
+  type Permission,
+  type PermissionGroup,
+  type Role,
+} from './access.ts';
+
+export {
+  CUSTOM_ROLE_PERMISSIONS,
+  grantOf,
+  PERMISSION_GROUPS,
+  PERMISSION_NAMES,
+  PERMISSIONS,
+  type GrantLevel,
+  type PermissionGroup,
+};
 
 /**
  * What each permission lets someone do, as a capability rather than a
@@ -142,7 +163,15 @@ export interface AreaPowers {
  * with the server or with each other.
  */
 export function rolePowers(role: Role): readonly AreaPowers[] {
-  const held = new Set<string>(ROLE_PERMISSIONS[role]);
+  return powersOf(ROLE_PERMISSIONS[role]);
+}
+
+/**
+ * What a list of permissions lets someone do, area by area: a custom role's (spec 0037), as `rolePowers` reads a
+ * built in role's, so both explain themselves the same way.
+ */
+export function powersOf(permissions: readonly Permission[]): readonly AreaPowers[] {
+  const held = new Set<string>(permissions);
   return PERMISSION_AREAS.map((area) => {
     const has = area.permissions.filter((permission) => held.has(permission));
     const hasnt = area.permissions.filter((permission) => !held.has(permission));

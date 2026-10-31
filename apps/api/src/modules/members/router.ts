@@ -6,6 +6,7 @@ import {
   previewRemoval,
   removeMember,
   setMemberRole,
+  setMemberRoles,
   transferOwnership,
   type RemovedMember,
 } from '@crm/core';
@@ -52,9 +53,31 @@ export const membersRouter = member.members.router({
   ),
   setRole: member.members.setRole.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
-      setMemberRole(context.scope, { memberId: input.memberId, role: input.role }, hooks, {
-        source: sourceOf(context),
-      }),
+      setMemberRole(
+        context.scope,
+        {
+          memberId: input.memberId,
+          ...(input.role === undefined ? {} : { role: input.role }),
+          ...(input.customRoleId === undefined ? {} : { customRoleId: input.customRoleId }),
+        },
+        hooks,
+        { source: sourceOf(context) },
+      ),
+    ),
+  ),
+  // One role for several people (spec 0037, AC-1242): the same owner rules, all in one transaction.
+  setRoles: member.members.setRoles.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+      setMemberRoles(
+        context.scope,
+        {
+          memberIds: input.memberIds,
+          ...(input.role === undefined ? {} : { role: input.role }),
+          ...(input.customRoleId === undefined ? {} : { customRoleId: input.customRoleId }),
+        },
+        hooks,
+        { source: sourceOf(context) },
+      ),
     ),
   ),
   removalPreview: member.members.removalPreview.handler(({ context, input }) =>

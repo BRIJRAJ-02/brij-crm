@@ -89,6 +89,11 @@ export const ERROR_MAP = {
   DELEGATE_INVALID: UNPROCESSABLE,
   MEMBER_INVALID: UNPROCESSABLE,
   DELEGATION_LIMIT: CONFLICT,
+  // Custom roles (spec 0037, AC-1228, AC-1238).
+  ROLE_NAME_RESERVED: UNPROCESSABLE,
+  PERMISSION_NOT_ALLOWED: UNPROCESSABLE,
+  ROLE_LIMIT: CONFLICT,
+  MOVE_TO_INVALID: UNPROCESSABLE,
   // Time off (spec 0037, AC-1288): "Someone can have at most 50 upcoming time off entries."
   TIME_OFF_LIMIT: CONFLICT,
   // The sidebar (spec 0034, AC-934): "You have 50 favourites. Remove one first."

@@ -679,6 +679,11 @@ describe('the walk: a principal without the access is refused', () => {
     '%s answers any member',
     async (name) => {
       const { scope } = await memberOf('member');
+      // One custom role by id (spec 0037): any member reaches the lookup, and a role that isn't there is absent.
+      if (name === 'getRole') {
+        expect(await refusalOf(core.getRole(scope, { roleId: core.newId() }))).toMatchObject({ code: 'NOT_FOUND' });
+        return;
+      }
       await expect(Promise.resolve(service(name)(scope, ANY_MEMBER_INPUT[name]))).resolves.toBeDefined();
     },
   );

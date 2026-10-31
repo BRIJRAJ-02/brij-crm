@@ -490,6 +490,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
         return { members: listed, total: listed.length };
       }),
       setRole: os.members.setRole.handler(notServed),
+      setRoles: os.members.setRoles.handler(notServed),
       removalPreview: os.members.removalPreview.handler(notServed),
       guestPreview: os.members.guestPreview.handler(notServed),
       remove: os.members.remove.handler(notServed),
@@ -582,7 +583,17 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       update: os.preferences.update.handler(notServed),
     },
     access: { mine: os.access.mine.handler(() => behaviour.access()) },
-    roles: { list: os.roles.list.handler(notServed) },
+    roles: {
+      list: os.roles.list.handler(notServed),
+      overview: os.roles.overview.handler(notServed),
+      get: os.roles.get.handler(notServed),
+      create: os.roles.create.handler(notServed),
+      update: os.roles.update.handler(notServed),
+      duplicate: os.roles.duplicate.handler(notServed),
+      delete: os.roles.delete.handler(notServed),
+      setDefault: os.roles.setDefault.handler(notServed),
+      move: os.roles.move.handler(notServed),
+    },
     scheduling: {
       delegations: {
         list: os.scheduling.delegations.list.handler(notServed),

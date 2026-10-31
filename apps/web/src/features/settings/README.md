@@ -199,6 +199,14 @@ One list, a row a team: its name (a link to the dialog for those who may change 
 
 Built from library parts only: SettingsLayout (through `SettingsPage`), Table, AvatarStack, Button, Menu, Modal, Form, Field, Select, EmptyState and Callout; no new component or CSS.
 
+## Settings › Workspace › Roles (`/w/$slug/settings/roles`, RolesScreen.tsx, RoleScreen.tsx, NewRoleDialog.tsx, DeleteRoleDialog.tsx)
+
+Spec 0037, job J9. Purpose: every role, built in then custom, and what each can do. Main task: owners and admins (`access.manage`) make a role, open one to change it, or copy, default or delete one; everyone compares roles. Leaves out: object, field and record rules (an object's Access tab) and per person scheduling access (Members). The list is a Table (name with Built in and Default badges, description, people, a row menu for custom roles); Compare is one read only Table per catalog group (the first with the roles as headers, the rest continuing it), a check or a dash per role. A role's page (`/roles/$roleId`, a built in role by its name) has Permissions and People tabs: Details (name, description), Data access (Read and write, Read only), then each group as a Card of rows, each a label, an InfoTip with its one line and a Checkbox; permissions only built in roles hold show disabled with "Only built in roles can do this"; Scheduling's reach is two Selects (Only their own, Their teams, Everyone) written back as the four `schedule.*` permissions (`roles.ts`, `withReach`). One SaveBar; a save that changes what people can do asks first ("This changes what 7 people can do."), and leaving with changes asks too (LeaveGuard). People lists the holders with their role as a Select (a step down asks first). New role asks a name, a description and Start from (Member, Viewer, or a custom role); Delete asks where its people move. Role definitions are settings: writes wait for the server, and a live `members` event reloads the route.
+
+### What can Priya do (CapabilitiesDialog.tsx)
+
+Spec 0037, AC-1243: the Members row menu's "What can <first name> do", for the person themself and holders of `members.manage`: their role's areas (RolePowers, from `powersOf`), then three lines on scheduling (whom they see, whom they manage, who manages them; `capabilities.ts`) from their role and the delegations the scheduling store holds. Members' role Select lists the custom roles under "Custom", and owners and admins tick several people for Change role in the bulk bar (asked first when it takes access away from anyone).
+
 ## An object's Access tab (AccessTab.tsx)
 
 - **Purpose**: who can see and edit one object's records (spec 0032, AC-846, AC-851, AC-856), for `access.manage`.

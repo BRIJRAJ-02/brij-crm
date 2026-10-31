@@ -97,14 +97,24 @@ export interface DelegationReachRow {
   readonly member_role: string | null;
   /** The role now of whoever last granted it, when they are still an active member. */
   readonly grantor_role: string | null;
+  /**
+   * Whether that member's custom role (spec 0037, AC-1229) holds `availability.own`: null when they hold none (or the
+   * row isn't a member delegation), so their built in role decides. Absent from rows a test builds by hand.
+   */
+  readonly member_owns_hours?: boolean | null;
 }
 
 /** A role the code knows that is an owner's or an admin's; an unknown one counts as one (fail closed). */
 const isProtected = (role: string | null): boolean => role === null || !isRole(role) || role !== 'member';
 
-/** Whether a member with `role` can change their own hours; an unknown role can't (fail closed). */
-const ownsHours = (role: string | null): boolean =>
-  role !== null && isRole(role) && (ROLE_PERMISSIONS[role] as readonly string[]).includes('availability.own');
+/**
+ * Whether a member with `role` can change their own hours; an unknown role can't (fail closed). A custom role holder
+ * (spec 0037) by what their role holds, read beside them (`custom`).
+ */
+const ownsHours = (role: string | null, custom: boolean | null | undefined): boolean => {
+  if (custom !== null && custom !== undefined) return custom;
+  return role !== null && isRole(role) && (ROLE_PERMISSIONS[role] as readonly string[]).includes('availability.own');
+};
 
 /**
  * The reach from the caller's delegations (pure, AC-1270): each row's level over its member, the highest level per
@@ -121,6 +131,7 @@ export function combineReach(
   const otherwise = new Map<string, SchedulingLevel>();
   const selfManaged = new Set<string>();
   const roles = new Map<string, string | null>();
+  const customHours = new Map<string, boolean | null | undefined>();
   for (const row of rows) {
     const level = parseSchedulingLevel(row.level);
     const memberId = row.member_id;
@@ -135,6 +146,7 @@ export function combineReach(
       if (!row.granted_by_self && !byOwner) continue;
     }
     roles.set(memberId, row.member_role);
+    if (row.target_type === 'member') customHours.set(memberId, row.member_owns_hours);
     members.set(memberId, higherLevel(members.get(memberId), level) ?? level);
     if (row.granted_by_self && row.target_type === 'member') {
       if (level === 'manage') selfManaged.add(memberId);
@@ -144,7 +156,9 @@ export function combineReach(
   }
   const hoursSeenOnly = new Set<string>();
   for (const memberId of selfManaged) {
-    if (!ownsHours(roles.get(memberId) ?? null) && otherwise.get(memberId) !== 'manage') hoursSeenOnly.add(memberId);
+    if (!ownsHours(roles.get(memberId) ?? null, customHours.get(memberId)) && otherwise.get(memberId) !== 'manage') {
+      hoursSeenOnly.add(memberId);
+    }
   }
   return { self, all, members, hoursSeenOnly };
 }
@@ -168,14 +182,15 @@ export async function schedulingReach(tx: WorkspaceTx, scope: EngineScope): Prom
   // members by the workspace's active members. The granter is whoever last set the level.
   const found = await tx.execute<DelegationReachRow & Record<string, unknown>>(sql`
     select d.target_type, d.level, d.granted_by_self, t.id::text as member_id, t.role::text as member_role,
-      g.role::text as grantor_role
+      g.role::text as grantor_role, 'availability.own' = any(cr.permissions) as member_owns_hours
     from schedule_delegations d
     left join members t on t.workspace_id = d.workspace_id and t.id = d.target_member_id and t.status = 'active'
+    left join workspace_roles cr on cr.workspace_id = t.workspace_id and cr.id = t.custom_role_id
     left join members g on g.workspace_id = d.workspace_id and g.id = d.updated_by_member_id and g.status = 'active'
     where d.workspace_id = ${scope.workspaceId}::uuid and d.delegate_member_id = ${me}::uuid
       and d.target_type = 'member'
     union all
-    select d.target_type, d.level, d.granted_by_self, t.id::text, t.role::text, null
+    select d.target_type, d.level, d.granted_by_self, t.id::text, t.role::text, null, null
     from schedule_delegations d
     join members t on t.workspace_id = d.workspace_id and t.status = 'active' and t.id <> d.delegate_member_id
     where d.workspace_id = ${scope.workspaceId}::uuid and d.delegate_member_id = ${me}::uuid

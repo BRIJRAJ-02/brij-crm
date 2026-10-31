@@ -91,8 +91,10 @@ const READS: ReadonlySet<string> = new Set([
   'operator.pages',
   'operator.page',
   'operator.site',
-  // The roles every role picker offers (spec 0037, AC-1439).
+  // The roles every role picker offers (spec 0037, AC-1439), and the Roles page's reads (job J9).
   'roles.list',
+  'roles.overview',
+  'roles.get',
   // Scheduling access (spec 0037): a member's delegations both ways, and the members in their See reach.
   'scheduling.delegations.list',
   'members.visible',
@@ -2632,6 +2634,13 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'imports.start': 3,
   'imports.undo': 5,
   'members.setRole': 3,
+  'members.setRoles': 3,
+  // Custom roles (spec 0037, job J9): a role made first, then the write (two for a move).
+  'roles.update': 2,
+  'roles.duplicate': 2,
+  'roles.delete': 2,
+  'roles.setDefault': 2,
+  'roles.move': 3,
   'members.remove': 3,
   'members.leave': 3,
   'members.transferOwnership': 3,
@@ -2772,6 +2781,73 @@ Object.assign(WRITES, {
       { kind: 'members' },
       { kind: 'members', item_ids: [me], mutation_id: mutationId },
       { kind: 'access', item_ids: [me], mutation_id: mutationId },
+    ];
+  },
+});
+
+// Custom roles (spec 0037, job J9): every role write stores a `members` row naming the writer (every Roles and
+// Members screen reads the roles again); one that changes what its holders can do, or moves them, also names them in
+// an `access` row (here nobody holds the role, so none). Change role for several people is a role change for each.
+const newRole = (m: Member, name = 'Sales lead', mutationId = newId()) =>
+  m.client.roles.create({
+    workspace: m.slug,
+    id: newId(),
+    name,
+    permissions: ['booking.manage'],
+    dataAccess: 'write',
+    startFrom: 'member',
+    mutationId,
+  });
+Object.assign(WRITES, {
+  'roles.create': async (m: Member, mutationId: string) => {
+    const me = (await m.client.access.mine({ workspace: m.slug })).memberId;
+    await newRole(m, 'Sales lead', mutationId);
+    return [{ kind: 'members', item_ids: [me], mutation_id: mutationId }];
+  },
+  'roles.update': async (m: Member, mutationId: string) => {
+    const me = (await m.client.access.mine({ workspace: m.slug })).memberId;
+    const role = await newRole(m);
+    await m.client.roles.update({
+      workspace: m.slug,
+      roleId: role.id,
+      permissions: ['booking.manage', 'schedule.view'],
+      updatedAt: role.updatedAt ?? '',
+      mutationId,
+    });
+    return [{ kind: 'members' }, { kind: 'members', item_ids: [me], mutation_id: mutationId }];
+  },
+  'roles.duplicate': async (m: Member, mutationId: string) => {
+    const me = (await m.client.access.mine({ workspace: m.slug })).memberId;
+    const role = await newRole(m);
+    await m.client.roles.duplicate({ workspace: m.slug, roleId: role.id, id: newId(), mutationId });
+    return [{ kind: 'members' }, { kind: 'members', item_ids: [me], mutation_id: mutationId }];
+  },
+  'roles.delete': async (m: Member, mutationId: string) => {
+    const me = (await m.client.access.mine({ workspace: m.slug })).memberId;
+    const role = await newRole(m);
+    await m.client.roles.delete({ workspace: m.slug, roleId: role.id, moveTo: 'member', mutationId });
+    return [{ kind: 'members' }, { kind: 'members', item_ids: [me], mutation_id: mutationId }];
+  },
+  'roles.setDefault': async (m: Member, mutationId: string) => {
+    const me = (await m.client.access.mine({ workspace: m.slug })).memberId;
+    const role = await newRole(m);
+    await m.client.roles.setDefault({ workspace: m.slug, roleId: role.id, mutationId });
+    return [{ kind: 'members' }, { kind: 'members', item_ids: [me], mutation_id: mutationId }];
+  },
+  'roles.move': async (m: Member, mutationId: string) => {
+    const me = (await m.client.access.mine({ workspace: m.slug })).memberId;
+    await newRole(m, 'First');
+    const second = await newRole(m, 'Second');
+    await m.client.roles.move({ workspace: m.slug, roleId: second.id, position: 0, mutationId });
+    return [{ kind: 'members' }, { kind: 'members' }, { kind: 'members', item_ids: [me], mutation_id: mutationId }];
+  },
+  'members.setRoles': async (m: Member, mutationId: string) => {
+    const mate = await teammate(m);
+    await m.client.members.setRoles({ workspace: m.slug, memberIds: [mate.memberId], role: 'admin', mutationId });
+    return [
+      { kind: 'members' },
+      { kind: 'members', item_ids: [mate.memberId], mutation_id: mutationId },
+      { kind: 'access', item_ids: [mate.memberId], mutation_id: mutationId },
     ];
   },
 });

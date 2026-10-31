@@ -13,6 +13,7 @@
 // Map stays writable at run time behind a `Readonly` type.
 import { createHash } from 'node:crypto';
 import {
+  customRolePermissions,
   KEY_DATA_SCOPES,
   ROLE_DEFAULT_LEVEL,
   KEY_FORBIDDEN_PERMISSIONS,
@@ -79,6 +80,11 @@ export type Principal =
       /** The signed in identity (`auth.user.id`); a member made without one has none. */
       readonly userId?: string;
       readonly role: Role;
+      /**
+       * The custom role they hold (spec 0037, AC-1233), when any: `role` is then `member`. Its permissions and data
+       * access come in beside the principal (`CustomRoleGrant`), read by the door in the member's own statement.
+       */
+      readonly customRoleId?: string;
       /** The member's teams (spec 0031, AC-825), empty for a member in none. */
       readonly teamIds: readonly string[];
       /**
@@ -212,8 +218,12 @@ export function policyKey(policy: Omit<DataPolicy, 'key'>): string {
   return createHash('sha256').update(canonical).digest('hex').slice(0, 16);
 }
 
+/**
+ * Whether a rule's subject applies to the member (spec 0037, roles design): a `role` subject only to members without
+ * a custom role (a custom role holder is never under Member's rules, AC-1248); a team subject to its members.
+ */
 function subjectMatches(subject: RuleSubject, principal: MemberPrincipal): boolean {
-  if (subject.type === 'role') return subject.role === principal.role;
+  if (subject.type === 'role') return principal.customRoleId === undefined && subject.role === principal.role;
   return principal.teamIds.includes(subject.teamId);
 }
 
@@ -289,10 +299,14 @@ function readView(stored: StoredView | undefined, fallback: ObjectLevel): Subjec
  * object (never above that view's own object level), and the broadest record scope across those views. A view
  * whose stored level or kind the code doesn't know sees nothing of the object (fail closed).
  */
-function memberPolicy(principal: MemberPrincipal, rules: AccessRules): DataPolicy {
+function memberPolicy(
+  principal: MemberPrincipal,
+  rules: AccessRules,
+  roleLevel: ObjectLevel = roleDefault(principal.role),
+): DataPolicy {
   // Owners and admins are never restricted by stored rules (AC-843): a rule can't name them (AC-842), and a team only
   // grants, so they keep the open policy and its audience. Only rules injected by hand (tests) name their role.
-  const namesRole = (subject: RuleSubject) => subject.type === 'role' && subject.role === principal.role;
+  const namesRole = (subject: RuleSubject) => subjectMatches(subject, principal) && subject.type === 'role';
   if (
     (principal.role === 'owner' || principal.role === 'admin') &&
     !rules.levels.some((rule) => namesRole(rule.subject)) &&
@@ -328,7 +342,7 @@ function memberPolicy(principal: MemberPrincipal, rules: AccessRules): DataPolic
     if (view !== undefined) view.record = { kind: rule.kind, attributeId: rule.attributeId };
   }
   // What the role gets on an object no rule names: `write` for a member, nothing for a role the list gives nothing.
-  const defaultLevel = roleDefault(principal.role);
+  const defaultLevel = roleLevel;
   const objectIds = new Set<string>();
   for (const byObject of stored.values()) for (const objectId of byObject.keys()) objectIds.add(objectId);
   const objects = new Map<string, ObjectLevel>();
@@ -336,7 +350,7 @@ function memberPolicy(principal: MemberPrincipal, rules: AccessRules): DataPolic
   const records = new Map<string, RecordRule>();
   for (const objectId of objectIds) {
     // The role always has a view (its default when it holds no rule); a team has one only where it holds a rule.
-    const views: SubjectView[] = [readView(stored.get('role')?.get(objectId), roleDefault(principal.role))];
+    const views: SubjectView[] = [readView(stored.get('role')?.get(objectId), defaultLevel)];
     for (const [key, byObject] of stored) {
       if (key === 'role') continue;
       const team = byObject.get(objectId);
@@ -391,12 +405,35 @@ function memberPolicy(principal: MemberPrincipal, rules: AccessRules): DataPolic
 }
 
 /**
+ * A custom role as the policy reads it (spec 0037, AC-1229, AC-1234): its permission names as stored, and its data
+ * access as stored. Only catalog names of grant `any` are held; a data access the code doesn't know reads as `read`.
+ */
+export interface CustomRoleGrant {
+  readonly permissions: readonly string[];
+  readonly defaultObjectLevel: string;
+}
+
+/** A custom role's default object level (AC-1229): `write` only when stored so, any other value `read` (fail closed). */
+export function customRoleLevel(stored: string): ObjectLevel {
+  return stored === 'write' ? 'write' : 'read';
+}
+
+/**
  * A member's access: the permissions their role lists in the catalog, and the
  * data policy the rules give them (`NO_RULES` until #24: write everywhere).
- * A role the code doesn't know grants nothing and sees nothing.
+ * A role the code doesn't know grants nothing and sees nothing. A custom role
+ * holder (spec 0037) holds the role's stored permissions kept to those of grant
+ * `any` (`customRolePermissions`), and the role's data access is their default
+ * object level; Member's rules never apply to them. A principal naming a
+ * custom role with no grant beside it is refused like an unknown role.
  */
-export function roleAccess(principal: MemberPrincipal, rules: AccessRules = NO_RULES): Access {
-  if (!isRole(principal.role)) {
+export function roleAccess(
+  principal: MemberPrincipal,
+  rules: AccessRules = NO_RULES,
+  customRole?: CustomRoleGrant,
+): Access {
+  const custom = principal.customRoleId !== undefined;
+  if (!isRole(principal.role) || (custom && (customRole === undefined || principal.role !== 'member'))) {
     return Object.freeze({
       principal: Object.freeze({ ...principal }),
       permissions: Object.freeze([]),
@@ -405,8 +442,15 @@ export function roleAccess(principal: MemberPrincipal, rules: AccessRules = NO_R
   }
   return Object.freeze({
     principal: Object.freeze({ ...principal, teamIds: Object.freeze([...principal.teamIds]) }),
-    permissions: Object.freeze([...ROLE_PERMISSIONS[principal.role]]),
-    data: memberPolicy(principal, rules),
+    permissions: Object.freeze(
+      custom && customRole !== undefined
+        ? [...customRolePermissions(customRole.permissions)]
+        : [...ROLE_PERMISSIONS[principal.role]],
+    ),
+    data:
+      custom && customRole !== undefined
+        ? memberPolicy(principal, rules, customRoleLevel(customRole.defaultObjectLevel))
+        : memberPolicy(principal, rules),
   });
 }
 
@@ -637,11 +681,18 @@ export function readOnlyReason(
   object: { readonly id: string; readonly pluralName: string },
 ): string | undefined {
   if (objectLevel(access, object.id) === 'read') {
+    // A Read only custom role (spec 0037, AC-1229) reads every object through its default: the role is the reason.
+    if (!Object.hasOwn(access.data.objects, object.id) && access.data.defaultObject === 'read') {
+      return READ_ONLY_ROLE_REASON;
+    }
     return `You can view ${object.pluralName} but not change them.`;
   }
   if (fieldLevel(access, attribute) === 'read') return fieldReadOnlyReason(attribute.title);
   return undefined;
 }
+
+/** Why every field reads read only for a holder of a Read only custom role (spec 0037, AC-1229). */
+export const READ_ONLY_ROLE_REASON = 'Your role can view records but not change them.';
 
 /** Why a field rule leaves an attribute read only: "Your role can't change <title>." */
 export function fieldReadOnlyReason(title: string): string {

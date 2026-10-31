@@ -48,6 +48,7 @@ import {
   SYSTEM_ACCESS,
   type Access,
   type AccessRules,
+  type CustomRoleGrant,
 } from './policy.ts';
 
 /**
@@ -60,13 +61,13 @@ import {
  */
 export type RuleSource = (
   tx: WorkspaceTx,
-  member: { readonly memberId: string; readonly role: string },
+  member: { readonly memberId: string; readonly role: string; readonly customRoleId?: string },
 ) => Promise<AccessRules>;
 
 /** No rules and no teams, with no query: for tests; production reads `storedRules`. */
 export const NO_RULE_SOURCE: RuleSource = () => Promise.resolve(NO_RULES);
 
-const { members, objects, teamMembers, teams, workspaces, workspaceSecurity } = schema;
+const { members, objects, teamMembers, teams, workspaceRoles, workspaces, workspaceSecurity } = schema;
 
 /** Where the door reports a member row it refused for a role the code doesn't know (the member id only). */
 export interface DoorLog {
@@ -148,11 +149,94 @@ function notFound(): RefusalError {
   return refuse('NOT_FOUND', "That workspace doesn't exist, or you're not a member of it.");
 }
 
-/** A member row as the door reads it: its id, its user, and its role as stored (checked against the catalog). */
-interface MemberRow {
+/**
+ * A member row as the door reads it: its id, its user, its role as stored (checked against the catalog), and its
+ * custom role (spec 0037, AC-1234) with that role's permissions and data access, read by a left join in the same
+ * statement: `customRole` is undefined when the row names a role that can't be read (fail closed, AC-1244).
+ */
+export interface MemberRow {
   readonly id: string;
   readonly userId: string | null;
   readonly role: string;
+  readonly customRoleId?: string;
+  readonly customRole?: CustomRoleGrant & { readonly name: string };
+}
+
+/**
+ * The columns a member's custom role adds to the door's member read (AC-1234): the member's `custom_role_id`, then
+ * the role's name, permissions and data access through `customRoleJoin`, a left join on the role's key.
+ */
+export const CUSTOM_ROLE_COLUMNS = {
+  customRoleId: members.customRoleId,
+  customRoleName: workspaceRoles.name,
+  customRolePermissions: workspaceRoles.permissions,
+  customRoleLevel: workspaceRoles.defaultObjectLevel,
+} as const;
+
+/** The join `CUSTOM_ROLE_COLUMNS` reads through: the member's own custom role, in their workspace. */
+export const customRoleJoin = and(
+  eq(workspaceRoles.workspaceId, members.workspaceId),
+  eq(workspaceRoles.id, members.customRoleId),
+);
+
+/** A member row with `CUSTOM_ROLE_COLUMNS` as the door's `MemberRow`. */
+export function memberRowOf(row: {
+  readonly id: string;
+  readonly userId: string | null;
+  readonly role: string;
+  readonly customRoleId: string | null;
+  readonly customRoleName: string | null;
+  readonly customRolePermissions: readonly string[] | null;
+  readonly customRoleLevel: string | null;
+}): MemberRow {
+  const base = { id: row.id, userId: row.userId, role: row.role };
+  if (row.customRoleId === null) return base;
+  if (row.customRoleName === null || row.customRolePermissions === null || row.customRoleLevel === null) {
+    return { ...base, customRoleId: row.customRoleId };
+  }
+  return {
+    ...base,
+    customRoleId: row.customRoleId,
+    customRole: {
+      name: row.customRoleName,
+      permissions: row.customRolePermissions,
+      defaultObjectLevel: row.customRoleLevel,
+    },
+  };
+}
+
+/**
+ * Whether the door can let a member row in (AC-134, AC-1244): a role the code knows, and, when it names a custom
+ * role, one that was read and sits on the Member role. Anything else is refused as an unknown role.
+ */
+export function isKnownMember(member: MemberRow): boolean {
+  if (!isRole(member.role)) return false;
+  if (member.customRoleId === undefined) return true;
+  return member.role === 'member' && member.customRole !== undefined;
+}
+
+/** What a member row hands the rule source: their id, role and custom role. */
+const ruleSubjectOf = (member: MemberRow) => ({
+  memberId: member.id,
+  role: member.role,
+  ...(member.customRoleId === undefined ? {} : { customRoleId: member.customRoleId }),
+});
+
+/** A known member row's access, from the rules the source read for them (pure). */
+export function memberAccess(member: MemberRow, rules: AccessRules): Access {
+  return roleAccess(
+    {
+      kind: 'member',
+      memberId: member.id,
+      ...(member.userId === null ? {} : { userId: member.userId }),
+      role: isRole(member.role) ? member.role : 'guest',
+      ...(member.customRoleId === undefined ? {} : { customRoleId: member.customRoleId }),
+      teamIds: rules.teamIds ?? [],
+      ...(rules.teamMemberIds === undefined ? {} : { teamMemberIds: rules.teamMemberIds }),
+    },
+    rules,
+    member.customRole,
+  );
 }
 
 /**
@@ -172,6 +256,7 @@ async function activeMember(
         id: members.id,
         userId: members.userId,
         role: members.role,
+        ...CUSTOM_ROLE_COLUMNS,
         requireTwoFactor: workspaceSecurity.requireTwoFactor,
         sessionLengthDays: workspaceSecurity.sessionLengthDays,
         sessionsValidAfter: workspaceSecurity.sessionsValidAfter,
@@ -179,6 +264,8 @@ async function activeMember(
       .from(members)
       .innerJoin(workspaces, eq(workspaces.id, members.workspaceId))
       .leftJoin(workspaceSecurity, eq(workspaceSecurity.workspaceId, members.workspaceId))
+      // The member's custom role, in the same statement (spec 0037, AC-1234): no extra round trip.
+      .leftJoin(workspaceRoles, customRoleJoin)
       .where(
         and(
           'userId' in which ? eq(members.userId, which.userId) : eq(members.id, which.memberId),
@@ -188,15 +275,15 @@ async function activeMember(
       )
       .limit(1);
     if (row === undefined) return undefined;
-    const member: MemberRow = { id: row.id, userId: row.userId, role: row.role };
+    const member = memberRowOf(row);
     const signIn: SignInRules = {
       requireTwoFactor: row.requireTwoFactor,
       sessionLengthDays: row.sessionLengthDays,
       sessionsValidAfter: row.sessionsValidAfter === null ? null : new Date(row.sessionsValidAfter),
     };
-    // An unknown role is refused before any rule is read, and its rules don't matter.
-    if (!isRole(member.role)) return { member, rules: NO_RULES, signIn };
-    return { member, rules: await rules(tx, { memberId: member.id, role: member.role }), signIn };
+    // An unknown role (or a custom role that can't be read) is refused before any rule is read.
+    if (!isKnownMember(member)) return { member, rules: NO_RULES, signIn };
+    return { member, rules: await rules(tx, ruleSubjectOf(member)), signIn };
   });
 }
 
@@ -211,21 +298,11 @@ function memberScope(
   member: MemberRow,
   rules: AccessRules,
 ): EngineScope {
-  if (!isRole(member.role)) {
+  if (!isKnownMember(member)) {
     deps.log?.warn('Refused a member whose role the code does not know', { memberId: member.id });
     throw notFound();
   }
-  const access = roleAccess(
-    {
-      kind: 'member',
-      memberId: member.id,
-      ...(member.userId === null ? {} : { userId: member.userId }),
-      role: member.role,
-      teamIds: rules.teamIds ?? [],
-      ...(rules.teamMemberIds === undefined ? {} : { teamMemberIds: rules.teamMemberIds }),
-    },
-    rules,
-  );
+  const access = memberAccess(member, rules);
   return mintScope({ db: deps.db, workspaceId, actor: { type: 'member', id: member.id }, access });
 }
 
@@ -317,9 +394,10 @@ export async function enterWorkspaceToLeave(
   if (!isUuid(input.userId) || !isUuid(input.workspaceId)) throw notFound();
   const found = await deps.db.withWorkspace(input.workspaceId, async (tx) => {
     const [row] = await tx
-      .select({ id: members.id, userId: members.userId, role: members.role })
+      .select({ id: members.id, userId: members.userId, role: members.role, ...CUSTOM_ROLE_COLUMNS })
       .from(members)
       .innerJoin(workspaces, eq(workspaces.id, members.workspaceId))
+      .leftJoin(workspaceRoles, customRoleJoin)
       .where(
         and(
           eq(members.workspaceId, input.workspaceId),
@@ -332,7 +410,7 @@ export async function enterWorkspaceToLeave(
     return row;
   });
   if (found === undefined) throw notFound();
-  return memberScope(deps, input.workspaceId, found, NO_RULES);
+  return memberScope(deps, input.workspaceId, memberRowOf(found), NO_RULES);
 }
 
 /**
@@ -403,10 +481,11 @@ export async function memberScopeIn(
   if (beside.actor.type !== 'system') throw new Error('Only system work reads a member’s scope.');
   const { workspaceId } = beside;
   if (!isUuid(memberId)) return undefined;
-  const [row] = await tx
-    .select({ id: members.id, userId: members.userId, role: members.role })
+  const [read] = await tx
+    .select({ id: members.id, userId: members.userId, role: members.role, ...CUSTOM_ROLE_COLUMNS })
     .from(members)
     .innerJoin(workspaces, eq(workspaces.id, members.workspaceId))
+    .leftJoin(workspaceRoles, customRoleJoin)
     .where(
       and(
         eq(members.workspaceId, workspaceId),
@@ -416,19 +495,10 @@ export async function memberScopeIn(
       ),
     )
     .limit(1);
-  if (row === undefined || !isRole(row.role)) return undefined;
-  const found = await rules(tx, { memberId: row.id, role: row.role });
-  const access = roleAccess(
-    {
-      kind: 'member',
-      memberId: row.id,
-      ...(row.userId === null ? {} : { userId: row.userId }),
-      role: row.role,
-      teamIds: found.teamIds ?? [],
-      ...(found.teamMemberIds === undefined ? {} : { teamMemberIds: found.teamMemberIds }),
-    },
-    found,
-  );
+  if (read === undefined) return undefined;
+  const row = memberRowOf(read);
+  if (!isKnownMember(row)) return undefined;
+  const access = memberAccess(row, await rules(tx, ruleSubjectOf(row)));
   return rescope(beside, { type: 'member', id: row.id }, access);
 }
 
@@ -525,25 +595,25 @@ export async function previewScope(
     const all = await workspaceRules(tx);
     if (as.type === 'member') {
       if (!isUuid(as.memberId)) return undefined;
-      const [row] = await tx
-        .select({ id: members.id, name: members.name, role: members.role })
+      const [read] = await tx
+        .select({
+          id: members.id,
+          userId: members.userId,
+          name: members.name,
+          role: members.role,
+          ...CUSTOM_ROLE_COLUMNS,
+        })
         .from(members)
+        .leftJoin(workspaceRoles, customRoleJoin)
         .where(
           and(eq(members.workspaceId, scope.workspaceId), eq(members.id, as.memberId), eq(members.status, 'active')),
         );
-      if (row === undefined || !isRole(row.role)) return undefined;
+      if (read === undefined) return undefined;
+      const row = memberRowOf(read);
+      if (!isKnownMember(row)) return undefined;
       const rules = all.forMember(row.id);
-      const access = roleAccess(
-        {
-          kind: 'member',
-          memberId: row.id,
-          role: row.role,
-          teamIds: rules.teamIds ?? [],
-          teamMemberIds: rules.teamMemberIds ?? [],
-        },
-        rules,
-      );
-      return { access, name: row.name };
+      const access = memberAccess(row, { ...rules, teamMemberIds: rules.teamMemberIds ?? [] });
+      return { access, name: read.name };
     }
     if (!isUuid(as.teamId)) return undefined;
     const [team] = await tx

@@ -441,6 +441,7 @@ describe('accepting (AC-805, AC-806, AC-807)', () => {
       workspaceName: 'Acme',
       inviterName: 'Ada',
       role: 'admin',
+      roleLabel: 'Admin',
       invitedEmailMasked: `${invitee.slice(0, 1)}***@example.com`,
     });
     expect(await isInvitedEmail({ db }, invitee.toUpperCase())).toBe(true);

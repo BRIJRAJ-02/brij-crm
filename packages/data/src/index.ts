@@ -5,6 +5,7 @@
 // store, a view per object, and optimistic creates and edits (loaded when a
 // screen first asks for records), patched in place by live change events
 // while a screen shows a workspace (the realtime client loads with the first).
+import { ROLES as BUILT_IN_ROLES } from '@crm/contracts/roles';
 import type {
   ActivityKind,
   RecordsExportView,
@@ -96,7 +97,12 @@ import type {
   ScheduleMember,
   GuestPreview,
   RemovalPreview,
+  RoleDefinition,
   RolesList,
+  RolesOverview,
+  DataAccess,
+  StartFrom,
+  SetRolesResult,
   SubmissionState,
   Usage,
   ValidationRuleInput,
@@ -500,6 +506,11 @@ export type {
   RemovalPreview,
   RoleOption,
   RolesList,
+  RoleDefinition,
+  RolesOverview,
+  DataAccess,
+  StartFrom,
+  SetRolesResult,
   RecordRefDisplay,
   RecordView,
   RelationshipView,
@@ -617,9 +628,17 @@ export { isReservedSlug, RESERVED_SLUGS, toApiSlug } from '@crm/contracts/slugs'
 export { ROLE_DESCRIPTIONS, ROLE_LABELS, ROLES } from '@crm/contracts/roles';
 /** What each role lets someone do, area by area, derived from the permissions the server enforces (Members, Invite). */
 export {
+  CUSTOM_ROLE_PERMISSIONS,
   EVERYONE_CAN,
+  grantOf,
   PERMISSION_AREAS,
+  PERMISSION_GROUPS,
+  PERMISSION_NAMES,
+  PERMISSIONS,
+  powersOf,
   rolePowers,
+  type GrantLevel,
+  type PermissionGroup,
   type AreaPowers,
   type AreaStanding,
   type PermissionArea,
@@ -1180,6 +1199,18 @@ function toFormSummary(form: FormView): FormSummary {
 }
 
 /**
+ * A role as a role Select picks it (spec 0037, AC-1242): a built in role's name, or a custom role's id, as
+ * `roles.list` names each one.
+ */
+export type RoleChoice = string;
+
+/** A role choice as the API takes it: `role` for a built in one, `customRoleId` for a custom one. */
+function roleInput(choice: RoleChoice): { readonly role: Role } | { readonly customRoleId: string } {
+  const builtIn = BUILT_IN_ROLES.find((role) => role === choice);
+  return builtIn === undefined ? { customRoleId: choice } : { role: builtIn };
+}
+
+/**
  * The one client data layer. Screens read and write through it and never
  * call the network themselves. Every failure rejects with a DataError
  * (`{ code, message, data?, retryAfterSeconds? }`); a 401 from any call but
@@ -1234,6 +1265,8 @@ export function createDataLayer({
   const auditLogs = new Map<string, AuditLog>();
   // The roles every role picker offers (spec 0037, AC-1439), per workspace, for the app load.
   let roles = new Map<string, Promise<RolesList>>();
+  // Every role with what it holds (spec 0037, `roles.overview`): Settings › Roles, Compare and "What can Priya do".
+  let rolesOverview = new Map<string, Promise<RolesOverview>>();
   let attributes = new Map<string, Promise<AttributeDefinition[]>>();
   // Each object's attributes with the archived ones too (settings, spec 0012), apart from the live lists the tables read.
   let allAttributes = new Map<string, Promise<AttributeDefinition[]>>();
@@ -1332,6 +1365,7 @@ export function createDataLayer({
     access = new Map();
     auditLogs.clear();
     roles = new Map();
+    rolesOverview = new Map();
     attributes = new Map();
     allAttributes = new Map();
     lists = new Map();
@@ -1801,6 +1835,17 @@ export function createDataLayer({
     cached(teams, workspace, () =>
       call((options) => api.teams.list({ workspace }, options)).then((read) => read.teams),
     );
+  const readRoles = (workspace: string) =>
+    cached(roles, workspace, () => call((options) => api.roles.list({ workspace }, options)));
+  const readRolesOverview = (workspace: string) =>
+    cached(rolesOverview, workspace, () => call((options) => api.roles.overview({ workspace }, options)));
+  /** Drops what a role write changed: the role lists, the members (their roles) and the person's own access. */
+  const dropRoles = (workspace: string) => {
+    roles.delete(workspace);
+    rolesOverview.delete(workspace);
+    members.delete(workspace);
+    access.delete(workspace);
+  };
   const readAccess = (workspace: string) =>
     cached(access, workspace, () => call((options) => api.access.mine({ workspace }, options)));
   /** Whether `memberIds` names the person, by the access this tab holds (unknown counts as named). */
@@ -1940,6 +1985,9 @@ export function createDataLayer({
         refreshHeld(members, workspace, () => readMembers(workspace)),
         // Teams share the event (spec 0031, slice 8): a team made, renamed, filled or deleted names its people.
         refreshHeld(teams, workspace, () => readTeams(workspace)),
+        // So do custom roles (spec 0037): a role made, changed, deleted or given names its writer and holders.
+        refreshHeld(roles, workspace, () => readRoles(workspace)),
+        refreshHeld(rolesOverview, workspace, () => readRolesOverview(workspace)),
       ]);
     });
     // A role changed may be the person's own: their access is read again (the server checks every call anyway).
@@ -2118,6 +2166,8 @@ export function createDataLayer({
     usage.delete(workspace);
     members.delete(workspace);
     teams.delete(workspace);
+    roles.delete(workspace);
+    rolesOverview.delete(workspace);
     dropAllAttributes(workspace);
     onDefinitionsChange();
   });
@@ -4655,12 +4705,26 @@ export function createDataLayer({
        * `NOT_FOUND`. The list, and the person's own access, are read again after. Answers how many open invitations
        * they sent the change cancelled, when any (their new role can't send them).
        */
-      async setRole(workspace: string, memberId: string, role: Role): Promise<SetRoleResult> {
+      async setRole(workspace: string, memberId: string, role: RoleChoice): Promise<SetRoleResult> {
         const changed = await call((options) =>
-          api.members.setRole({ workspace, memberId, role, mutationId: mintId() }, options),
+          api.members.setRole({ workspace, memberId, ...roleInput(role), mutationId: mintId() }, options),
         );
-        members.delete(workspace);
-        access.delete(workspace);
+        dropRoles(workspace);
+        return changed;
+      },
+      /**
+       * Change role for several people at once (spec 0037, AC-1242), waiting for the server: one transaction, so a
+       * refusal (`FORBIDDEN`, `LAST_OWNER`, `SEAT_LIMIT`, `NOT_FOUND`) changes nobody. The lists and the person's own
+       * access are read again after.
+       */
+      async setRoles(workspace: string, memberIds: readonly string[], role: RoleChoice): Promise<SetRolesResult> {
+        const changed = await call((options) =>
+          api.members.setRoles(
+            { workspace, memberIds: [...memberIds], ...roleInput(role), mutationId: mintId() },
+            options,
+          ),
+        );
+        dropRoles(workspace);
         return changed;
       },
       /**
@@ -4846,11 +4910,26 @@ export function createDataLayer({
       /** The open email invitations, newest first: holders of `members.invite` only (`FORBIDDEN` otherwise). */
       list: (workspace: string): Promise<InvitationView[]> =>
         call((options) => api.invitations.list({ workspace }, options)),
-      /** Invites 1 to 20 addresses with one role. Refusals: `FORBIDDEN`, `INVITES_LIMIT`, `SEAT_LIMIT`, `RATE_LIMITED`. */
-      create: (workspace: string, emails: readonly string[], role: Role): Promise<InviteResult> =>
-        call((options) =>
-          api.invitations.create({ workspace, emails: [...emails], role, mutationId: mintId() }, options),
-        ),
+      /**
+       * Invites 1 to 20 addresses with one role: a built in one, or a custom role's id (spec 0037, AC-1236).
+       * Refusals: `FORBIDDEN`, `INVITES_LIMIT`, `SEAT_LIMIT`, `RATE_LIMITED`, `NOT_FOUND` (a role deleted meanwhile).
+       */
+      create: (workspace: string, emails: readonly string[], role: RoleChoice): Promise<InviteResult> => {
+        const given = roleInput(role);
+        return call((options) =>
+          api.invitations.create(
+            {
+              workspace,
+              emails: [...emails],
+              ...('role' in given
+                ? { role: given.role }
+                : { role: 'member' as const, customRoleId: given.customRoleId }),
+              mutationId: mintId(),
+            },
+            options,
+          ),
+        );
+      },
       /** Sends an open invitation again: a new link, the old one dead. `sent` is false when its email failed. */
       resend: (workspace: string, invitationId: string) =>
         call((options) => api.invitations.resend({ workspace, invitationId, mutationId: mintId() }, options)),
@@ -5088,10 +5167,114 @@ export function createDataLayer({
        * ones now, custom ones once they exist, and the default for new
        * people. Cached for the app load.
        */
-      list: (workspace: string): Promise<RolesList> =>
-        cached(roles, workspace, () =>
-          beforeRead(workspace).then(() => call((options) => api.roles.list({ workspace }, options))),
-        ),
+      list: (workspace: string): Promise<RolesList> => beforeRead(workspace).then(() => readRoles(workspace)),
+      /**
+       * Every role with its permissions, data access, people and default flag (spec 0037, AC-1239), for Settings ›
+       * Roles, Compare and "What can Priya do". Cached for the app load; a live `members` event reads it again.
+       */
+      overview: (workspace: string): Promise<RolesOverview> =>
+        beforeRead(workspace).then(() => readRolesOverview(workspace)),
+      /** One custom role as it stands now, for its page: read fresh each time. Refusals: `NOT_FOUND`. */
+      get: (workspace: string, roleId: string): Promise<RoleDefinition> =>
+        beforeRead(workspace).then(() => call((options) => api.roles.get({ workspace, roleId }, options))),
+      /** A fresh id for a new role, so a retried create makes one role. */
+      newId: (): string => mintId(),
+      /**
+       * Makes a custom role (spec 0037, AC-1228), waiting for the server: the name rules, the catalog's grant levels
+       * and the 20 role cap live there. Refusals: `FORBIDDEN`, `NAME_TAKEN` and `ROLE_NAME_RESERVED` (on `name`),
+       * `PERMISSION_NOT_ALLOWED`, `ROLE_LIMIT`.
+       */
+      async create(
+        workspace: string,
+        role: {
+          readonly id: string;
+          readonly name: string;
+          readonly description?: string;
+          readonly permissions: readonly string[];
+          readonly dataAccess: DataAccess;
+          readonly startFrom: StartFrom;
+        },
+      ): Promise<RoleDefinition> {
+        const made = await call((options) =>
+          api.roles.create(
+            {
+              workspace,
+              id: role.id,
+              name: role.name,
+              ...(role.description === undefined ? {} : { description: role.description }),
+              permissions: [...role.permissions],
+              dataAccess: role.dataAccess,
+              startFrom: role.startFrom,
+              mutationId: mintId(),
+            },
+            options,
+          ),
+        );
+        dropRoles(workspace);
+        return made;
+      },
+      /**
+       * Saves a custom role (spec 0037, AC-1231): what is given changes, against the version the page read
+       * (`updatedAt`; another save since is `STALE`). Answers the role and how many people it changed for.
+       */
+      async update(
+        workspace: string,
+        roleId: string,
+        change: {
+          readonly name?: string;
+          readonly description?: string;
+          readonly permissions?: readonly string[];
+          readonly dataAccess?: DataAccess;
+          readonly updatedAt: string;
+        },
+      ): Promise<{ readonly role: RoleDefinition; readonly affectedMembers: number }> {
+        const saved = await call((options) =>
+          api.roles.update(
+            {
+              workspace,
+              roleId,
+              ...(change.name === undefined ? {} : { name: change.name }),
+              ...(change.description === undefined ? {} : { description: change.description }),
+              ...(change.permissions === undefined ? {} : { permissions: [...change.permissions] }),
+              ...(change.dataAccess === undefined ? {} : { dataAccess: change.dataAccess }),
+              updatedAt: change.updatedAt,
+              mutationId: mintId(),
+            },
+            options,
+          ),
+        );
+        dropRoles(workspace);
+        return saved;
+      },
+      /** Copies a custom role as "<name> copy" (spec 0037, AC-1232). Refusals: `ROLE_LIMIT`, `NOT_FOUND`. */
+      async duplicate(workspace: string, roleId: string): Promise<RoleDefinition> {
+        const made = await call((options) =>
+          api.roles.duplicate({ workspace, roleId, id: mintId(), mutationId: mintId() }, options),
+        );
+        dropRoles(workspace);
+        return made;
+      },
+      /**
+       * Deletes a custom role, moving its people and open invitations to `moveTo` (spec 0037, AC-1238): `member`
+       * or another custom role's id. Answers how many people moved. Refusals: `MOVE_TO_INVALID`, `NOT_FOUND`.
+       */
+      async delete(workspace: string, roleId: string, moveTo: string): Promise<{ readonly moved: number }> {
+        const done = await call((options) =>
+          api.roles.delete({ workspace, roleId, moveTo, mutationId: mintId() }, options),
+        );
+        dropRoles(workspace);
+        return done;
+      },
+      /** The role new people get (spec 0037, AC-1237): a custom role's id, or `null` for Member. */
+      async setDefault(workspace: string, roleId: string | null): Promise<void> {
+        await call((options) => api.roles.setDefault({ workspace, roleId, mutationId: mintId() }, options));
+        dropRoles(workspace);
+      },
+      /** Moves a custom role to `position` among the custom roles (0 first). */
+      async move(workspace: string, roleId: string, position: number): Promise<void> {
+        await call((options) => api.roles.move({ workspace, roleId, position, mutationId: mintId() }, options));
+        dropRoles(workspace);
+      },
     },
     access: {
       /**
