@@ -1,5 +1,9 @@
 import {
   addRecord,
+  checkDuplicates,
+  dismissPair,
+  listDuplicates,
+  restorePair,
   aggregateGroups,
   aggregateMatches,
   bulkEditRecords,
@@ -10,17 +14,24 @@ import {
   editRecords,
   getActivity,
   getStageSince,
+  mergeAndRead,
   queryGroups,
   queryRecords,
+  readMergePreview,
   readRecordsById,
   readTrashedRecord,
   searchRecords,
   startBulk,
   undoDelete,
 } from '@crm/core';
-import { withInputFields } from '../../errors.ts';
+import { apiError, withInputFields } from '../../errors.ts';
 import { commitCounted, commitWrite } from '../../hooks.ts';
 import { member } from '../../orpc.ts';
+
+/** Duplicate checks one member may make a minute (spec 0049): a check runs 300 ms after typing stops. */
+const CHECKS_PER_MINUTE = 60;
+/** Pages of pairs one member may read a minute: a page and a banner each read up to 2,000 records' keys. */
+const LISTS_PER_MINUTE = 120;
 
 // Inside a workspace: the door has let in an active member, and `context.scope` is theirs.
 export const recordsRouter = member.records.router({
@@ -173,6 +184,59 @@ export const recordsRouter = member.records.router({
   stageSince: member.records.stageSince.handler(({ context, input }) =>
     getStageSince(context.scope, { recordId: input.recordId, attributeId: input.attributeId }),
   ),
+  // Likely duplicates (spec 0049): the check while a member types (60 a minute each, through the central limiter),
+  // the Duplicates page's pairs, and "Not a duplicate" with its Undo.
+  duplicates: {
+    check: member.records.duplicates.check.handler(async ({ context, input, signal }) => {
+      const memberId = context.scope.actor.id ?? context.user.id;
+      const limit = await context.limiter.consumeRateLimit(
+        `duplicates:check:${context.scope.workspaceId}:${memberId}`,
+        {
+          window: 60,
+          max: CHECKS_PER_MINUTE,
+        },
+      );
+      if (!limit.allowed) throw apiError('RATE_LIMITED', 'Too many checks in the last minute. Try again shortly.');
+      const matches = await checkDuplicates(
+        context.scope,
+        {
+          objectId: input.objectId,
+          values: input.values,
+          ...(input.excludeRecordId === undefined ? {} : { excludeRecordId: input.excludeRecordId }),
+        },
+        signal,
+      );
+      return { matches: [...matches] };
+    }),
+    list: member.records.duplicates.list.handler(async ({ context, input, signal }) => {
+      const memberId = context.scope.actor.id ?? context.user.id;
+      const limit = await context.limiter.consumeRateLimit(`duplicates:list:${context.scope.workspaceId}:${memberId}`, {
+        window: 60,
+        max: LISTS_PER_MINUTE,
+      });
+      if (!limit.allowed) throw apiError('RATE_LIMITED', 'Too many reads in the last minute. Try again shortly.');
+      const page = await listDuplicates(
+        context.scope,
+        {
+          objectId: input.objectId,
+          ...(input.recordId === undefined ? {} : { recordId: input.recordId }),
+          ...(input.cursor === undefined ? {} : { cursor: input.cursor }),
+        },
+        signal,
+      );
+      return { pairs: [...page.pairs], ...(page.cursor === undefined ? {} : { cursor: page.cursor }) };
+    }),
+    dismiss: member.records.duplicates.dismiss.handler(({ context, input }) =>
+      commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+        dismissPair(context.scope, { objectId: input.objectId, recordIds: input.recordIds }, hooks),
+      ),
+    ),
+    restore: member.records.duplicates.restore.handler(({ context, input }) =>
+      commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+        restorePair(context.scope, { objectId: input.objectId, recordIds: input.recordIds }, hooks),
+      ),
+    ),
+  },
   getTrashed: member.records.getTrashed.handler(({ context, input }) =>
     readTrashedRecord(context.scope, input.recordId),
   ),
@@ -302,5 +366,25 @@ export const recordsRouter = member.records.router({
       ),
     );
     return { results: result, echoes };
+  }),
+  // Merging two records (spec 0049): the dialog's read only preview, then the merge, which answers the kept record.
+  mergePreview: member.records.mergePreview.handler(({ context, input }) =>
+    readMergePreview(context.scope, { objectId: input.objectId, keepId: input.keepId, mergeId: input.mergeId }),
+  ),
+  merge: member.records.merge.handler(async ({ context, input }) => {
+    const { result, echoes } = await commitCounted(context, { mutationId: input.mutationId }, (hooks) =>
+      mergeAndRead(
+        context.scope,
+        {
+          objectId: input.objectId,
+          keepId: input.keepId,
+          mergeId: input.mergeId,
+          picks: input.picks,
+          revisions: input.revisions,
+        },
+        hooks,
+      ),
+    );
+    return { record: result.record, mergedId: result.mergedId, moved: result.moved, echoes };
   }),
 });

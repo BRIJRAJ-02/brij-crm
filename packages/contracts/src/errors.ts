@@ -120,6 +120,11 @@ export const ERROR_MAP = {
   SIGN_IN_AGAIN: { status: 403 },
   OWNER_NEEDS_TWO_FACTOR: CONFLICT,
   WORKSPACE_REQUIRES_TWO_FACTOR: CONFLICT,
+  // Record merge (spec 0049, AC-4917): "Jane Doe changed while you were merging", two records that can't merge, and
+  // "Too much is attached to merge in one go".
+  CONFLICT: CONFLICT,
+  INVALID: UNPROCESSABLE,
+  MERGE_TOO_LARGE: UNPROCESSABLE,
   PAYLOAD_TOO_LARGE: { status: 413 },
   ATTRIBUTE_VALUE_INVALID: UNPROCESSABLE,
   VALUE_REQUIRED: UNPROCESSABLE,
@@ -154,6 +159,8 @@ export const ApiRefusal = z.object({
   field: z.string().optional(),
   /** The rule a `VALIDATION_FAILED` refusal is about (spec 0013). */
   ruleId: z.string().optional(),
+  /** The record a `UNIQUE_CONFLICT` value belongs to, when the writer may see it (spec 0049, AC-4905). */
+  holder: z.object({ recordId: z.string(), objectId: z.string(), name: z.string() }).optional(),
 });
 /** One engine refusal inside an error's data. */
 export type ApiRefusal = z.infer<typeof ApiRefusal>;

@@ -107,6 +107,11 @@ export const ENGINE_REFUSAL_CODES = [
   'SIGN_IN_AGAIN',
   'OWNER_NEEDS_TWO_FACTOR',
   'WORKSPACE_REQUIRES_TWO_FACTOR',
+  // Record merge (spec 0049, AC-4917): a record changed while the dialog was open; two records that can't be merged
+  // (the same one, or of different objects); more attached than one merge moves.
+  'CONFLICT',
+  'INVALID',
+  'MERGE_TOO_LARGE',
 ] as const;
 
 /** One of the engine's refusal codes. */
@@ -124,4 +129,9 @@ export interface EngineRefusal {
   readonly field?: string;
   /** The rule a `VALIDATION_FAILED` refusal is about (spec 0013). */
   readonly ruleId?: string;
+  /**
+   * The record holding a `UNIQUE_CONFLICT` value, only when the writer may see it (spec 0049, AC-4905), with its
+   * name as they may read it (empty when its name is hidden from them).
+   */
+  readonly holder?: { readonly recordId: string; readonly objectId: string; readonly name: string };
 }

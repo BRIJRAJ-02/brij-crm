@@ -282,6 +282,9 @@ export {
   queryRecords,
   readRecordsById,
   readTrashedRecord,
+  mergeAndRead,
+  readMergePreview,
+  type MergedView,
   type AddRecordInput,
   type EditRecordInput,
   type RecordWindow,
@@ -744,6 +747,7 @@ export { routingReport } from './routing/report.ts';
 export { searchWorkspace, type GlobalSearchInput } from './search/search.ts';
 export { listRecents, visitRecent, RECENTS_KEPT, type RecentVisit } from './search/recents.ts';
 export {
+  checkImportDuplicates,
   checkImportLinks,
   checkImportMatches,
   createImport,

@@ -2,17 +2,18 @@
 // rows, creating a record with a browser minted id (and answering a retry of
 // it), and setting values, each write answering the fresh record. Every read
 // and write goes through the scope the access door made.
-import { and, eq, isNotNull } from 'drizzle-orm';
+import { and, eq, isNotNull, sql } from 'drizzle-orm';
 import type {
   BatchRecordResult,
   FiledCompany,
+  MergePreview,
   RecordPage,
   RecordView,
   TrashedRecord,
   UpdateOutcome,
 } from '@crm/contracts';
 import type { FilterGroup, SortRules } from '@crm/contracts/values';
-import { schema } from '@crm/db';
+import { schema, type WorkspaceTx } from '@crm/db';
 import { updateMany, type BulkEditInput } from '../engine/bulk-edit.ts';
 import { canonicalId, checkId, isUuidV7, uuidV7Time } from '../engine/ids.ts';
 import { queryPage } from '../engine/query/page.ts';
@@ -25,6 +26,7 @@ import {
   type AttributeResult,
   type ValueInput,
 } from '../engine/records.ts';
+import { mergeRecords, previewMerge, type MergeInput, type MergePair } from '../engine/merge.ts';
 import { inputInvalid, isRefusal, refuse } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import type { AttributeDef } from '../engine/values.ts';
@@ -120,6 +122,7 @@ export async function readTrashedRecord(scope: EngineScope, recordId: string): P
         deletedAt: records.deletedAt,
         deletedByType: records.deletedByType,
         deletedById: records.deletedById,
+        mergedInto: records.mergedIntoRecordId,
         objectArchivedAt: objects.archivedAt,
       })
       .from(records)
@@ -138,12 +141,42 @@ export async function readTrashedRecord(scope: EngineScope, recordId: string): P
     await checkObject(tx, scope.access, row.objectId, 'read', UNKNOWN_RECORD);
     const [record] = await readRecords(tx, scope.access, [id], { trashed: true });
     if (record === undefined) throw refuse('NOT_FOUND', UNKNOWN_RECORD);
+    const mergedInto = row.mergedInto === null ? undefined : await mergeTarget(tx, scope, id);
     return {
       record,
       deletedAt: row.deletedAt.toISOString(),
       deletedBy: { type: row.deletedByType, id: row.deletedById },
+      ...(mergedInto === undefined ? {} : { mergedInto }),
     };
   });
+}
+
+/**
+ * Where a merged record's address goes (spec 0049, AC-4914): its
+ * `merged_into_record_id` followed to the end of the chain (at most 50 steps,
+ * through the primary key), when that record is live and the reader may see
+ * it (`readRecords` applies the record rule); else nothing, and the page
+ * reads as a trashed record would.
+ */
+async function mergeTarget(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  recordId: string,
+): Promise<{ readonly recordId: string; readonly display: RecordView['display'] } | undefined> {
+  const chain = await tx.execute<{ id: string }>(sql`
+    with recursive chain(id, next, depth) as (
+      select id, merged_into_record_id, 0 from records where id = ${recordId}::uuid
+      union all
+      select r.id, r.merged_into_record_id, c.depth + 1
+      from chain c join records r on r.id = c.next
+      where c.depth < 50
+    )
+    select id::text from chain where next is null order by depth desc limit 1
+  `);
+  const end = chain.rows[0]?.id;
+  if (end === undefined || end === recordId) return undefined;
+  const [view] = await readRecords(tx, scope.access, [end], { attributeIds: [] });
+  return view === undefined ? undefined : { recordId: view.id, display: view.display };
 }
 
 /**
@@ -457,4 +490,31 @@ export async function bulkEditRecords(
       ? { recordId: outcome.recordId, record, written: { [attributeId]: outcome.versionId }, before: outcome.before }
       : { recordId: outcome.recordId, record };
   });
+}
+
+/** A merge's answer (spec 0049): the kept record read after the merge committed, the merged id, and what moved. */
+export interface MergedView {
+  readonly record: RecordView;
+  readonly mergedId: string;
+  readonly moved: MergePreview['moved'];
+}
+
+/**
+ * Merges two records (spec 0049, `records.merge`) and answers the kept
+ * record fresh, read after the write committed. `RECORD_DELETED` from the
+ * read back means the kept record went to the trash right after.
+ */
+export async function mergeAndRead(
+  scope: EngineScope,
+  input: MergeInput,
+  hooks: readonly AfterWrite[] = [],
+): Promise<MergedView> {
+  const result = await mergeRecords(scope, input, hooks);
+  return { record: await freshRecord(scope, result.recordId), mergedId: result.mergedId, moved: result.moved };
+}
+
+/** What a merge would do (spec 0049, `records.mergePreview`), as the dialog reads it. */
+export async function readMergePreview(scope: EngineScope, input: MergePair): Promise<MergePreview> {
+  const preview = await previewMerge(scope, input);
+  return { ...preview, rows: [...preview.rows], displays: [...preview.displays] };
 }

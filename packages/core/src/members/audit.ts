@@ -29,7 +29,8 @@ export interface AuditEntry {
     | 'booking_page'
     | 'team'
     | 'object'
-    | 'list';
+    | 'list'
+    | 'record';
   readonly targetId: string;
   /** Changed fields only, never a token, code or secret. */
   readonly before?: Readonly<Record<string, unknown>>;

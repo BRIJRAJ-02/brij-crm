@@ -266,6 +266,11 @@ export const ACCESS_TABLE = {
   registerRecordFile: { data: 'write' },
   // The record picker's search (spec 0014): only records the reader may see.
   searchRecords: { data: 'read' },
+  // Likely duplicates (spec 0049): read on the object to check and list; write to dismiss and restore a pair.
+  checkDuplicates: { data: 'read' },
+  listDuplicates: { data: 'read' },
+  dismissPair: { data: 'write' },
+  restorePair: { data: 'write' },
   // A record page's related sections (spec 0014, milestone 3): only linked records the reader may see, on a side they may see.
   pageLinks: { data: 'read' },
   // The command menu (spec 0039): it searches, lists and keeps only what the reader may read; the rest is absent.
@@ -289,6 +294,11 @@ export const ACCESS_TABLE = {
   deleteRecords: { data: 'write' },
   restoreRecords: { data: 'write' },
   restoreBatch: { data: 'write' },
+  // Record merge (spec 0049, AC-4919): object write before any record is read, the preview too.
+  mergeRecords: { data: 'write' },
+  previewMerge: { data: 'write' },
+  mergeAndRead: { data: 'write' },
+  readMergePreview: { data: 'write' },
   // Bulk edits (spec 0022, milestone 2): object and field write, checked once for the call.
   updateMany: { data: 'write' },
   bulkEditRecords: { data: 'write' },
@@ -464,6 +474,8 @@ export const ACCESS_TABLE = {
   checkImportLinks: { data: 'write' },
   // The preview's new and update counts: the same, finding only readable records.
   checkImportMatches: { data: 'write' },
+  // The preview's likely duplicates (spec 0049, AC-4918): the same, naming only readable records.
+  checkImportDuplicates: { data: 'write' },
   // Records exports (spec 0040): read on the object (and the view) to start; only the starter reads one back.
   startRecordsExport: { data: 'read' },
   getRecordsExport: { data: 'read' },

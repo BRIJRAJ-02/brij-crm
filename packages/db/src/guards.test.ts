@@ -225,7 +225,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_save_social_links', owner: 'crm_handle' },
       { name: 'crm_search_similar', owner: 'crm_search' },
       { name: 'crm_search_text', owner: 'crm_search' },
-      // The link page's Live or Private switch (spec 0058, AC-23, migration 0147).
+      // The link page's Live or Private switch (spec 0058, AC-23, migration 0149).
       { name: 'crm_set_public_profile_live', owner: 'crm_handle' },
       // Private until its owner acts (27 Oct 2026, migration 0116).
       { name: 'crm_show_public_profile', owner: 'crm_handle' },
@@ -527,7 +527,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         // A link page made for every membership (26 Oct 2026, migration 0116).
         'crm_ensure_public_profile',
         'crm_show_public_profile',
-        // The link page's Live or Private switch (spec 0058, AC-23, migration 0147).
+        // The link page's Live or Private switch (spec 0058, AC-23, migration 0149).
         'crm_set_public_profile_live',
         // A deleted account's handles freed after their 90 days (migration 0126).
         'crm_sweep_released_handles',
@@ -1400,7 +1400,7 @@ describe('isolation', () => {
     await expect(
       db.withWorkspace(a.workspaceId, (tx) => tx.execute(sql`delete from records where id = ${inA.recordId}`)),
     ).rejects.toMatchObject({ cause: { code: '23503', constraint: 'notes_record' } });
-    // A note's links (migration 0147): its own workspace's only, and never to another workspace's record.
+    // A note's links (migration 0149): its own workspace's only, and never to another workspace's record.
     await db.withWorkspace(a.workspaceId, (tx) =>
       tx.execute(
         sql`insert into note_records (workspace_id, note_id, record_id, position, created_by_type) values (${a.workspaceId}, ${inA.noteId}, ${inA.recordId}, 0, 'system')`,
@@ -2230,7 +2230,7 @@ describe('the auth schema: global identity, outside row level security (spec 000
       // cleared, and only through crm_make_handle_room.
       'auth.public_handles.user_id UPDATE',
       'auth.public_profiles.bio UPDATE',
-      // When the page became its owner's choice (spec 0058, AC-23, migration 0147): only through
+      // When the page became its owner's choice (spec 0058, AC-23, migration 0149): only through
       // crm_show_public_profile and crm_set_public_profile_live.
       'auth.public_profiles.claimed_at UPDATE',
       'auth.public_profiles.handle UPDATE',

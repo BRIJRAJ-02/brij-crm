@@ -19,10 +19,18 @@ Bring data in from CSV and Excel, and take any view out again.
 - [x] Test it: `/test import and export`
 Spec [0040](../specs/0040-import-export/index.md) · code in `packages/core/src/imports/`, `packages/core/src/exports/`, `apps/web/src/features/imports/`
 
-### 31. Duplicate detection and merge · needs a decision · planned
+### 31. Duplicate detection and merge · in-progress
 Find records that are the same person or company, and merge them without losing anything.
 **Done when:** likely duplicates are suggested with the reason; a merge keeps every value, link, note, task, comment and history entry from both records; a "not a duplicate" answer is remembered; imports and email sync avoid creating new duplicates.
-- [ ] Design it (spec): `/architect duplicate detection and merge` (spec number 0049 is set aside for it; the old Timefix duplicate and company match logic is the starting point)
+- [x] Design it (spec): `/architect duplicate detection and merge`
+- [ ] Build it: `/develop duplicate detection and merge`
+   - [ ] Merge end to end (migration, engine merge, API, dialog, redirect)
+   - [ ] Likely pairs, the add warning and the record banner
+   - [ ] The Duplicates page and Not a duplicate
+   - [ ] Likely duplicates in the import preview
+- [ ] Verify it: `/check verify duplicate detection and merge`
+- [ ] Test it: `/test duplicate detection and merge`
+Spec [0049](../specs/0049-duplicates-merge/index.md) · code in `packages/core/src/engine/merge.ts`, `packages/core/src/engine/duplicates.ts`, `apps/web/src/features/duplicates/`
 
 ### 32. File attachments · needs a decision · planned
 Keep files with the records they belong to.
