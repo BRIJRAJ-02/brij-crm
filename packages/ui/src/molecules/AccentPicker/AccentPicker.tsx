@@ -258,21 +258,21 @@ export function AccentPicker({
             <Icon name={isAny ? 'check' : 'plus'} size="xs" />
           </AriaButton>
         </Tooltip>
+        {/* The system's own picker, opened by Any colour: out of sight and out of the tab order, since the swatch and
+            the hex field already reach every colour from the keyboard. */}
+        <input
+          ref={native}
+          className={styles.native}
+          type="color"
+          tabIndex={-1}
+          aria-hidden="true"
+          defaultValue={picked ?? defaultValue ?? strings.hexPlaceholder}
+          disabled={isDisabled}
+          onChange={(event) => {
+            onPreview?.(event.target.value.toLowerCase());
+          }}
+        />
       </div>
-      {/* The system's own picker, opened by Any colour: out of sight and out of the tab order, since the swatch and
-          the hex field already reach every colour from the keyboard. */}
-      <input
-        ref={native}
-        className={styles.native}
-        type="color"
-        tabIndex={-1}
-        aria-hidden="true"
-        defaultValue={picked ?? defaultValue ?? strings.hexPlaceholder}
-        disabled={isDisabled}
-        onChange={(event) => {
-          onPreview?.(event.target.value.toLowerCase());
-        }}
-      />
       <div className={styles.hex}>
         <Field
           label={strings.hex}

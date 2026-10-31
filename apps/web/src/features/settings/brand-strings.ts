@@ -37,7 +37,6 @@ export const strings = {
   sampleMeeting: 'Intro call',
   sampleLength: '30 min',
   sampleChooseTime: 'Choose a time',
-  sampleDay: 'Tomorrow',
   /** The sample form the preview draws. */
   sampleHeadline: 'Tell us about your project',
   sampleName: 'Your name',

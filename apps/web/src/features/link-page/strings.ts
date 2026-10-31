@@ -183,6 +183,8 @@ export const strings = {
   photoAlt: 'The photo on your page',
   /** The types a cover or ground photo takes, as people name them, in the picker's hint. */
   photoTypes: 'PNG, JPG or WebP',
+  /** The types a share picture takes, as people name them, in the picker's hint. */
+  shareImageTypes: 'PNG or JPG',
   photoRemove: 'Remove photo',
   photoRemoving: 'Remove this photo?',
   photoRemoveText: 'Your page goes back to its plain background.',

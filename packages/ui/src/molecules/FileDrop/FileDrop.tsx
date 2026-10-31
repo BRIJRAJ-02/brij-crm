@@ -32,6 +32,12 @@ export interface FileDropProps {
   readonly preview?: { readonly src: string; readonly alt: string };
   readonly isDisabled?: boolean;
   /**
+   * Shows what is there with no way to change it (a member's view of the workspace's logo): `preview` alone, drawn
+   * at a control's height, and nothing that looks or announces as a control. Without a preview it draws nothing,
+   * so the screen says there is none.
+   */
+  readonly isReadOnly?: boolean;
+  /**
    * `zone` (the default) is the drop area with its browse button. `button` is the browse button alone, with
    * `label` as its words, for a picker that sits beside what it changes (first run's avatar, 27 October 2026),
    * where a drop area would draw the picture twice. Same checks, same refusal line; nothing to drop onto.
@@ -67,6 +73,7 @@ export function FileDrop({
   onFiles,
   preview,
   isDisabled = false,
+  isReadOnly = false,
   variant = 'zone',
   isPending = false,
   wrongTypeText,
@@ -100,6 +107,19 @@ export function FileDrop({
         {error}
       </span>
     );
+  if (isReadOnly) {
+    return shown !== undefined && failed !== shown ? (
+      <img
+        className={styles.preview}
+        data-read-only=""
+        src={shown}
+        alt={preview?.alt ?? ''}
+        onError={() => {
+          setFailed(shown);
+        }}
+      />
+    ) : null;
+  }
   if (variant === 'button') {
     return (
       <div className={styles.field}>

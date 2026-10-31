@@ -8,14 +8,34 @@
     flex-direction: column;
     align-items: flex-start;
     gap: var(--space-8);
+    container-type: inline-size;
   }
 
   /* The swatches, then Any colour at the end of the same row, on the same gap. */
   .row {
+    position: relative;
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: var(--space-6);
+  }
+
+  /* Narrower than the default, the nine picks and Any colour on one line (11 swatches, 280px; the nearest
+     breakpoint, 320px): rows of six and five, Any colour ending the second, rather than one swatch wrapping alone
+     (a phone, 31 Oct 2026). The ten radios wrap at six, four on the second row; Any colour steps back two columns
+     from beside the group's box to sit right after them. */
+  @container (inline-size < 320px) {
+    .swatches {
+      max-inline-size: calc(6 * var(--size-tile) + 5 * var(--space-6));
+    }
+
+    .row {
+      align-items: flex-end;
+    }
+
+    .swatch[data-any] {
+      margin-inline-start: calc(-2 * (var(--size-tile) + var(--space-6)));
+    }
   }
 
   .swatches {
@@ -69,9 +89,12 @@
     opacity: var(--opacity-disabled);
   }
 
-  /* The system picker: there to be opened, never seen. */
+  /* The system picker: there to be opened, never seen. It sits under Any colour at the row's end, so the browser's
+     window opens there, beside the swatches, rather than over the row's label. */
   .native {
     position: absolute;
+    inset-block-start: 100%;
+    inset-inline-end: 0;
     inline-size: var(--border-width-hairline);
     block-size: var(--border-width-hairline);
     opacity: 0;

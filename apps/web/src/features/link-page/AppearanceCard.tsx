@@ -23,6 +23,7 @@ import {
   HuePicker,
   LinkPageThumbnail,
   Modal,
+  SettingsStack,
   TileGrid,
   type AccentQuickPick,
   type Hue,
@@ -297,56 +298,59 @@ export function AppearanceCard({ theme, onChange, refusal, extras }: AppearanceC
         isExpanded={isCustomising}
         onExpandedChange={setCustomising}
       >
-        {extras !== undefined && (
-          <AccentPicker
-            label={strings.colour}
-            defaultName={strings.colourDefault}
-            {...(look?.workspaceAccent === undefined ? {} : { defaultValue: look.workspaceAccent })}
-            {...(look?.accent === undefined ? {} : { value: look.accent })}
-            quickPicks={extras.quickPicks}
-            isDisabled={look === undefined}
-            {...(colours?.adjusted === true ? { drawn: { light: colours.light, dark: colours.dark } } : {})}
-            onPreview={extras.onPreviewAccent}
-            onChange={(accent) => {
-              extras.onAccent(accent, accent === undefined ? undefined : look?.accentDark);
-            }}
-          >
-            {/* A separate colour for dark pages (AC-6), once there is a colour of the page's own to set it beside. */}
-            {look?.accent !== undefined && (
-              <Disclosure title={strings.colourMore} variant="quiet">
-                <AccentPicker
-                  label={strings.colourMore}
-                  defaultName={strings.colourDarkDefault}
-                  {...(look.accentDark === undefined ? {} : { value: look.accentDark })}
-                  quickPicks={extras.quickPicks}
-                  onChange={(accentDark) => {
-                    extras.onAccent(look.accent, accentDark);
-                  }}
-                />
-              </Disclosure>
-            )}
-          </AccentPicker>
-        )}
-        {row(strings.ground, GROUNDS, groundId(theme))}
-        {/* The tint takes the person's hue, which changes nothing under any other background. */}
-        {theme.ground === 'tint' && (
-          <HuePicker
-            isLabelShown
-            label={strings.hue}
-            value={theme.hue}
-            onChange={(hue: Hue) => {
-              pick({ ...theme, hue });
-            }}
-          />
-        )}
-        {theme.ground === 'image' && photo('ground')}
-        {row(strings.font, FONTS, theme.font, 'font')}
-        {row(strings.fill, FILLS, theme.fill)}
-        {row(strings.shape, SHAPES, theme.shape, 'shape')}
-        {row(strings.header, HEADERS, theme.header)}
-        {theme.header === 'cover' && photo('cover')}
-        {row(strings.avatar, AVATARS, theme.avatar)}
-        {row(strings.mode, MODES, theme.mode, 'mode')}
+        {/* Each row's caption a step from the row above, so it reads with its own tiles (verify, 31 Oct 2026). */}
+        <SettingsStack variant="plain">
+          {extras !== undefined && (
+            <AccentPicker
+              label={strings.colour}
+              defaultName={strings.colourDefault}
+              {...(look?.workspaceAccent === undefined ? {} : { defaultValue: look.workspaceAccent })}
+              {...(look?.accent === undefined ? {} : { value: look.accent })}
+              quickPicks={extras.quickPicks}
+              isDisabled={look === undefined}
+              {...(colours?.adjusted === true ? { drawn: { light: colours.light, dark: colours.dark } } : {})}
+              onPreview={extras.onPreviewAccent}
+              onChange={(accent) => {
+                extras.onAccent(accent, accent === undefined ? undefined : look?.accentDark);
+              }}
+            >
+              {/* A separate colour for dark pages (AC-6), once there is a colour of the page's own to set it beside. */}
+              {look?.accent !== undefined && (
+                <Disclosure title={strings.colourMore} variant="quiet">
+                  <AccentPicker
+                    label={strings.colourMore}
+                    defaultName={strings.colourDarkDefault}
+                    {...(look.accentDark === undefined ? {} : { value: look.accentDark })}
+                    quickPicks={extras.quickPicks}
+                    onChange={(accentDark) => {
+                      extras.onAccent(look.accent, accentDark);
+                    }}
+                  />
+                </Disclosure>
+              )}
+            </AccentPicker>
+          )}
+          {row(strings.ground, GROUNDS, groundId(theme))}
+          {/* The tint takes the person's hue, which changes nothing under any other background. */}
+          {theme.ground === 'tint' && (
+            <HuePicker
+              isLabelShown
+              label={strings.hue}
+              value={theme.hue}
+              onChange={(hue: Hue) => {
+                pick({ ...theme, hue });
+              }}
+            />
+          )}
+          {theme.ground === 'image' && photo('ground')}
+          {row(strings.font, FONTS, theme.font, 'font')}
+          {row(strings.fill, FILLS, theme.fill)}
+          {row(strings.shape, SHAPES, theme.shape, 'shape')}
+          {row(strings.header, HEADERS, theme.header)}
+          {theme.header === 'cover' && photo('cover')}
+          {row(strings.avatar, AVATARS, theme.avatar)}
+          {row(strings.mode, MODES, theme.mode, 'mode')}
+        </SettingsStack>
       </Disclosure>
       <Modal
         isOpen={removing !== undefined}

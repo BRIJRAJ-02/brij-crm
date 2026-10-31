@@ -21,7 +21,6 @@ import {
   SegmentedControl,
   SettingsRow,
   Skeleton,
-  SlotList,
   type PageBrand,
   type Toasts,
 } from '@crm/ui';
@@ -37,9 +36,6 @@ export interface BrandScreenProps {
   readonly slug: string;
   readonly toasts: Toasts;
 }
-
-/** The sample times on the preview's booking page: a working morning. */
-const SAMPLE_TIMES = ['09:00', '09:30', '10:00', '10:30'] as const;
 
 /** The sample form the preview draws: two questions and a button, enough to show the colour on each. */
 const SAMPLE_FORM: PublicForm = {
@@ -119,7 +115,8 @@ export function BrandScreen({ brand, slug, toasts }: BrandScreenProps) {
   };
   const preview =
     shown === 'booking' ? (
-      // A sketch of a booking page, inert: the kit's logo heads its rail and its colour marks the chosen day and time.
+      // A sketch of a booking page, inert: the kit's logo heads its rail and its colour marks the chosen day. The day's
+      // times are left out, as a phone shows them once a day is picked, so the whole page and its foot fit the phone.
       <div inert>
         <BookingFrame
           isCompact
@@ -128,14 +125,6 @@ export function BrandScreen({ brand, slug, toasts }: BrandScreenProps) {
           title={strings.sampleMeeting}
           facts={[{ id: 'length', icon: 'clock', children: strings.sampleLength }]}
           heading={strings.sampleChooseTime}
-          aside={
-            <SlotList
-              heading={strings.sampleDay}
-              slots={SAMPLE_TIMES.map((time) => ({ id: time, label: time, name: time }))}
-              value={SAMPLE_TIMES[1]}
-              onChange={() => undefined}
-            />
-          }
         >
           <MonthTiles
             month={month.month}
@@ -209,8 +198,7 @@ export function BrandScreen({ brand, slug, toasts }: BrandScreenProps) {
               ) : (
                 <FileDrop
                   label={strings.logo}
-                  variant="button"
-                  isDisabled
+                  isReadOnly
                   preview={{ src: logoSrc, alt: strings.logoAlt }}
                   onFiles={() => undefined}
                 />
