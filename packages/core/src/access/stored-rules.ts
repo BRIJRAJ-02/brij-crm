@@ -66,6 +66,9 @@ function computedOf(row: Row): ComputedInputRule | undefined {
  * their role or any of those teams. A member in no team and a workspace with no rules cost the same one statement.
  */
 export const storedRules: RuleSource = async (tx, member) => {
+  // A custom role holder is never under their base role's rules (spec 0037): no role subject matches them. Null never
+  // equals a stored role, so the arms below read their teams' rules alone. (Custom role subjects arrive with J10.)
+  const roleSubject = member.customRoleId === undefined ? member.role : null;
   const found = await tx.execute<Row>(sql`
     with workspace as (select nullif(current_setting('app.workspace_id', true), '')::uuid as id),
     mine as (
@@ -83,13 +86,13 @@ export const storedRules: RuleSource = async (tx, member) => {
         r.attribute_id::text, r.level
       from access_rules r
       where r.workspace_id = (select id from workspace)
-        and (r.subject_role = ${member.role} or r.subject_team_id in (select team_id from mine))
+        and (r.subject_role = ${roleSubject}::text or r.subject_team_id in (select team_id from mine))
     union all
     select 'record', r.subject_type, coalesce(r.subject_role, r.subject_team_id::text), r.object_id::text,
         r.attribute_id::text, r.kind
       from record_rules r
       where r.workspace_id = (select id from workspace)
-        and (r.subject_role = ${member.role} or r.subject_team_id in (select team_id from mine))
+        and (r.subject_role = ${roleSubject}::text or r.subject_team_id in (select team_id from mine))
     union all
     select 'computed', ci.computed_attribute_id::text, c.object_id::text, ci.input_attribute_id::text, i.object_id::text, c.computed->>'kind'
       from computed_inputs ci
@@ -97,9 +100,9 @@ export const storedRules: RuleSource = async (tx, member) => {
       join attributes i on i.workspace_id = ci.workspace_id and i.id = ci.input_attribute_id
       where ci.workspace_id = (select id from workspace) and c.object_id is not null and i.object_id is not null
         and (exists (select 1 from access_rules r where r.workspace_id = (select id from workspace)
-            and (r.subject_role = ${member.role} or r.subject_team_id in (select team_id from mine)))
+            and (r.subject_role = ${roleSubject}::text or r.subject_team_id in (select team_id from mine)))
           or exists (select 1 from record_rules r where r.workspace_id = (select id from workspace)
-            and (r.subject_role = ${member.role} or r.subject_team_id in (select team_id from mine))))
+            and (r.subject_role = ${roleSubject}::text or r.subject_team_id in (select team_id from mine))))
   `);
   const levels: LevelRule[] = [];
   const records: RecordRuleRow[] = [];

@@ -5,6 +5,7 @@
 // confirm. The Joining tab: Asking to join, Pending invitations, then Other ways to join (the invite link, whose
 // limits save with a toast and Undo, then Company email). A member reads one note and no controls.
 import type {
+  RolesOverview,
   DataLayer,
   InvitationView,
   InviteLinkView,
@@ -72,6 +73,48 @@ const ROLES_LIST: RolesList = {
     { id: 'admin', label: 'Admin', description: 'Members and settings.', builtIn: 'admin' },
     { id: 'member', label: 'Member', description: 'Records.', builtIn: 'member' },
     { id: 'guest', label: 'Guest', description: 'What is shared.', builtIn: 'guest' },
+  ],
+  defaultRole: 'member',
+};
+// What each built in role holds (spec 0037, `roles.overview`): a step down asks first by it.
+const OVERVIEW: RolesOverview = {
+  roles: [
+    {
+      id: 'owner',
+      label: 'Owner',
+      description: '',
+      builtIn: 'owner',
+      permissions: ['workspace.delete', 'members.manage', 'records.export'],
+      dataAccess: 'write',
+      isDefault: false,
+    },
+    {
+      id: 'admin',
+      label: 'Admin',
+      description: '',
+      builtIn: 'admin',
+      permissions: ['members.manage', 'records.export'],
+      dataAccess: 'write',
+      isDefault: false,
+    },
+    {
+      id: 'member',
+      label: 'Member',
+      description: '',
+      builtIn: 'member',
+      permissions: ['records.export'],
+      dataAccess: 'write',
+      isDefault: true,
+    },
+    {
+      id: 'guest',
+      label: 'Guest',
+      description: '',
+      builtIn: 'guest',
+      permissions: [],
+      dataAccess: 'read',
+      isDefault: false,
+    },
   ],
   defaultRole: 'member',
 };
@@ -306,6 +349,7 @@ async function renderMembers(
         {...(extras.domains === undefined ? {} : { domains: extras.domains })}
         access={extras.access ?? ACCESS}
         roles={ROLES_LIST}
+        overview={OVERVIEW}
       />
     );
   };

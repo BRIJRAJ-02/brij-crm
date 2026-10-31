@@ -81,6 +81,8 @@ import { Route as WSlugSettingsHistoryChangesRouteImport } from './routes/w.$slu
 import { Route as WSlugSettingsHistorySignInsRouteImport } from './routes/w.$slug.settings.history.sign-ins.tsx'
 import { Route as WSlugSettingsListsIndexRouteImport } from './routes/w.$slug.settings.lists.index.tsx'
 import { Route as WSlugSettingsObjectsIndexRouteImport } from './routes/w.$slug.settings.objects.index.tsx'
+import { Route as WSlugSettingsRolesIndexRouteImport } from './routes/w.$slug.settings.roles.index.tsx'
+import { Route as WSlugSettingsRolesRoleIdRouteImport } from './routes/w.$slug.settings.roles.$roleId.tsx'
 import { Route as WSlugSettingsSchedulingCalendarsRouteImport } from './routes/w.$slug.settings.scheduling.calendars.tsx'
 import { Route as WSlugSettingsSchedulingRotationsRouteImport } from './routes/w.$slug.settings.scheduling.rotations.tsx'
 import { Route as WSlugSettingsSchedulingRoundRobinRouteImport } from './routes/w.$slug.settings.scheduling.round-robin.tsx'
@@ -482,6 +484,17 @@ const WSlugSettingsObjectsIndexRoute =
     path: '/objects/',
     getParentRoute: () => WSlugSettingsRoute,
   } as any)
+const WSlugSettingsRolesIndexRoute = WSlugSettingsRolesIndexRouteImport.update({
+  id: '/roles/',
+  path: '/roles/',
+  getParentRoute: () => WSlugSettingsRoute,
+} as any)
+const WSlugSettingsRolesRoleIdRoute =
+  WSlugSettingsRolesRoleIdRouteImport.update({
+    id: '/roles/$roleId',
+    path: '/roles/$roleId',
+    getParentRoute: () => WSlugSettingsRoute,
+  } as any)
 const WSlugSettingsSchedulingCalendarsRoute =
   WSlugSettingsSchedulingCalendarsRouteImport.update({
     id: '/scheduling/calendars',
@@ -649,6 +662,7 @@ export interface FileRoutesByFullPath {
   '/w/$slug/settings/forms/$formId': typeof WSlugSettingsFormsFormIdRoute
   '/w/$slug/settings/history/changes': typeof WSlugSettingsHistoryChangesRoute
   '/w/$slug/settings/history/sign-ins': typeof WSlugSettingsHistorySignInsRoute
+  '/w/$slug/settings/roles/$roleId': typeof WSlugSettingsRolesRoleIdRoute
   '/w/$slug/settings/scheduling/calendars': typeof WSlugSettingsSchedulingCalendarsRoute
   '/w/$slug/settings/scheduling/rotations': typeof WSlugSettingsSchedulingRotationsRoute
   '/w/$slug/settings/scheduling/round-robin': typeof WSlugSettingsSchedulingRoundRobinRoute
@@ -661,6 +675,7 @@ export interface FileRoutesByFullPath {
   '/w/$slug/settings/history/': typeof WSlugSettingsHistoryIndexRoute
   '/w/$slug/settings/lists/': typeof WSlugSettingsListsIndexRoute
   '/w/$slug/settings/objects/': typeof WSlugSettingsObjectsIndexRoute
+  '/w/$slug/settings/roles/': typeof WSlugSettingsRolesIndexRoute
   '/w/$slug/captures/forms/$formId/preview': typeof WSlugCapturesFormsFormIdPreviewRoute
   '/w/$slug/lists/$list/views/$viewId': typeof WSlugListsListViewsViewIdRoute
   '/w/$slug/objects/$object/$recordId/$tab': typeof WSlugObjectsObjectRecordIdTabRoute
@@ -736,6 +751,7 @@ export interface FileRoutesByTo {
   '/w/$slug/settings/forms/$formId': typeof WSlugSettingsFormsFormIdRoute
   '/w/$slug/settings/history/changes': typeof WSlugSettingsHistoryChangesRoute
   '/w/$slug/settings/history/sign-ins': typeof WSlugSettingsHistorySignInsRoute
+  '/w/$slug/settings/roles/$roleId': typeof WSlugSettingsRolesRoleIdRoute
   '/w/$slug/settings/scheduling/calendars': typeof WSlugSettingsSchedulingCalendarsRoute
   '/w/$slug/settings/scheduling/rotations': typeof WSlugSettingsSchedulingRotationsRoute
   '/w/$slug/settings/scheduling/round-robin': typeof WSlugSettingsSchedulingRoundRobinRoute
@@ -748,6 +764,7 @@ export interface FileRoutesByTo {
   '/w/$slug/settings/history': typeof WSlugSettingsHistoryIndexRoute
   '/w/$slug/settings/lists': typeof WSlugSettingsListsIndexRoute
   '/w/$slug/settings/objects': typeof WSlugSettingsObjectsIndexRoute
+  '/w/$slug/settings/roles': typeof WSlugSettingsRolesIndexRoute
   '/w/$slug/captures/forms/$formId/preview': typeof WSlugCapturesFormsFormIdPreviewRoute
   '/w/$slug/lists/$list/views/$viewId': typeof WSlugListsListViewsViewIdRoute
   '/w/$slug/objects/$object/$recordId/$tab': typeof WSlugObjectsObjectRecordIdTabRoute
@@ -828,6 +845,7 @@ export interface FileRoutesById {
   '/w/$slug/settings/forms/$formId': typeof WSlugSettingsFormsFormIdRoute
   '/w/$slug/settings/history/changes': typeof WSlugSettingsHistoryChangesRoute
   '/w/$slug/settings/history/sign-ins': typeof WSlugSettingsHistorySignInsRoute
+  '/w/$slug/settings/roles/$roleId': typeof WSlugSettingsRolesRoleIdRoute
   '/w/$slug/settings/scheduling/calendars': typeof WSlugSettingsSchedulingCalendarsRoute
   '/w/$slug/settings/scheduling/rotations': typeof WSlugSettingsSchedulingRotationsRoute
   '/w/$slug/settings/scheduling/round-robin': typeof WSlugSettingsSchedulingRoundRobinRoute
@@ -840,6 +858,7 @@ export interface FileRoutesById {
   '/w/$slug/settings/history/': typeof WSlugSettingsHistoryIndexRoute
   '/w/$slug/settings/lists/': typeof WSlugSettingsListsIndexRoute
   '/w/$slug/settings/objects/': typeof WSlugSettingsObjectsIndexRoute
+  '/w/$slug/settings/roles/': typeof WSlugSettingsRolesIndexRoute
   '/w/$slug/captures_/forms/$formId_/preview': typeof WSlugCapturesFormsFormIdPreviewRoute
   '/w/$slug/lists/$list_/views/$viewId': typeof WSlugListsListViewsViewIdRoute
   '/w/$slug/objects/$object_/$recordId/$tab': typeof WSlugObjectsObjectRecordIdTabRoute
@@ -921,6 +940,7 @@ export interface FileRouteTypes {
     | '/w/$slug/settings/forms/$formId'
     | '/w/$slug/settings/history/changes'
     | '/w/$slug/settings/history/sign-ins'
+    | '/w/$slug/settings/roles/$roleId'
     | '/w/$slug/settings/scheduling/calendars'
     | '/w/$slug/settings/scheduling/rotations'
     | '/w/$slug/settings/scheduling/round-robin'
@@ -933,6 +953,7 @@ export interface FileRouteTypes {
     | '/w/$slug/settings/history/'
     | '/w/$slug/settings/lists/'
     | '/w/$slug/settings/objects/'
+    | '/w/$slug/settings/roles/'
     | '/w/$slug/captures/forms/$formId/preview'
     | '/w/$slug/lists/$list/views/$viewId'
     | '/w/$slug/objects/$object/$recordId/$tab'
@@ -1008,6 +1029,7 @@ export interface FileRouteTypes {
     | '/w/$slug/settings/forms/$formId'
     | '/w/$slug/settings/history/changes'
     | '/w/$slug/settings/history/sign-ins'
+    | '/w/$slug/settings/roles/$roleId'
     | '/w/$slug/settings/scheduling/calendars'
     | '/w/$slug/settings/scheduling/rotations'
     | '/w/$slug/settings/scheduling/round-robin'
@@ -1020,6 +1042,7 @@ export interface FileRouteTypes {
     | '/w/$slug/settings/history'
     | '/w/$slug/settings/lists'
     | '/w/$slug/settings/objects'
+    | '/w/$slug/settings/roles'
     | '/w/$slug/captures/forms/$formId/preview'
     | '/w/$slug/lists/$list/views/$viewId'
     | '/w/$slug/objects/$object/$recordId/$tab'
@@ -1099,6 +1122,7 @@ export interface FileRouteTypes {
     | '/w/$slug/settings/forms/$formId'
     | '/w/$slug/settings/history/changes'
     | '/w/$slug/settings/history/sign-ins'
+    | '/w/$slug/settings/roles/$roleId'
     | '/w/$slug/settings/scheduling/calendars'
     | '/w/$slug/settings/scheduling/rotations'
     | '/w/$slug/settings/scheduling/round-robin'
@@ -1111,6 +1135,7 @@ export interface FileRouteTypes {
     | '/w/$slug/settings/history/'
     | '/w/$slug/settings/lists/'
     | '/w/$slug/settings/objects/'
+    | '/w/$slug/settings/roles/'
     | '/w/$slug/captures_/forms/$formId_/preview'
     | '/w/$slug/lists/$list_/views/$viewId'
     | '/w/$slug/objects/$object_/$recordId/$tab'
@@ -1646,6 +1671,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WSlugSettingsObjectsIndexRouteImport
       parentRoute: typeof WSlugSettingsRoute
     }
+    '/w/$slug/settings/roles/': {
+      id: '/w/$slug/settings/roles/'
+      path: '/roles'
+      fullPath: '/w/$slug/settings/roles/'
+      preLoaderRoute: typeof WSlugSettingsRolesIndexRouteImport
+      parentRoute: typeof WSlugSettingsRoute
+    }
+    '/w/$slug/settings/roles/$roleId': {
+      id: '/w/$slug/settings/roles/$roleId'
+      path: '/roles/$roleId'
+      fullPath: '/w/$slug/settings/roles/$roleId'
+      preLoaderRoute: typeof WSlugSettingsRolesRoleIdRouteImport
+      parentRoute: typeof WSlugSettingsRoute
+    }
     '/w/$slug/settings/scheduling/calendars': {
       id: '/w/$slug/settings/scheduling/calendars'
       path: '/scheduling/calendars'
@@ -1833,6 +1872,7 @@ interface WSlugSettingsRouteChildren {
   WSlugSettingsFormsFormIdRoute: typeof WSlugSettingsFormsFormIdRoute
   WSlugSettingsHistoryChangesRoute: typeof WSlugSettingsHistoryChangesRoute
   WSlugSettingsHistorySignInsRoute: typeof WSlugSettingsHistorySignInsRoute
+  WSlugSettingsRolesRoleIdRoute: typeof WSlugSettingsRolesRoleIdRoute
   WSlugSettingsSchedulingCalendarsRoute: typeof WSlugSettingsSchedulingCalendarsRoute
   WSlugSettingsSchedulingRotationsRoute: typeof WSlugSettingsSchedulingRotationsRoute
   WSlugSettingsSchedulingRoundRobinRoute: typeof WSlugSettingsSchedulingRoundRobinRoute
@@ -1843,6 +1883,7 @@ interface WSlugSettingsRouteChildren {
   WSlugSettingsHistoryIndexRoute: typeof WSlugSettingsHistoryIndexRoute
   WSlugSettingsListsIndexRoute: typeof WSlugSettingsListsIndexRoute
   WSlugSettingsObjectsIndexRoute: typeof WSlugSettingsObjectsIndexRoute
+  WSlugSettingsRolesIndexRoute: typeof WSlugSettingsRolesIndexRoute
   WSlugSettingsAdminUsersUserIdRoute: typeof WSlugSettingsAdminUsersUserIdRoute
   WSlugSettingsListsListTabRoute: typeof WSlugSettingsListsListTabRoute
   WSlugSettingsObjectsObjectTabRoute: typeof WSlugSettingsObjectsObjectTabRoute
@@ -1877,6 +1918,7 @@ const WSlugSettingsRouteChildren: WSlugSettingsRouteChildren = {
   WSlugSettingsFormsFormIdRoute: WSlugSettingsFormsFormIdRoute,
   WSlugSettingsHistoryChangesRoute: WSlugSettingsHistoryChangesRoute,
   WSlugSettingsHistorySignInsRoute: WSlugSettingsHistorySignInsRoute,
+  WSlugSettingsRolesRoleIdRoute: WSlugSettingsRolesRoleIdRoute,
   WSlugSettingsSchedulingCalendarsRoute: WSlugSettingsSchedulingCalendarsRoute,
   WSlugSettingsSchedulingRotationsRoute: WSlugSettingsSchedulingRotationsRoute,
   WSlugSettingsSchedulingRoundRobinRoute:
@@ -1888,6 +1930,7 @@ const WSlugSettingsRouteChildren: WSlugSettingsRouteChildren = {
   WSlugSettingsHistoryIndexRoute: WSlugSettingsHistoryIndexRoute,
   WSlugSettingsListsIndexRoute: WSlugSettingsListsIndexRoute,
   WSlugSettingsObjectsIndexRoute: WSlugSettingsObjectsIndexRoute,
+  WSlugSettingsRolesIndexRoute: WSlugSettingsRolesIndexRoute,
   WSlugSettingsAdminUsersUserIdRoute: WSlugSettingsAdminUsersUserIdRoute,
   WSlugSettingsListsListTabRoute: WSlugSettingsListsListTabRoute,
   WSlugSettingsObjectsObjectTabRoute: WSlugSettingsObjectsObjectTabRoute,

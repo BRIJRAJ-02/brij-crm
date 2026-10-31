@@ -75,6 +75,12 @@ export const ENGINE_REFUSAL_CODES = [
   'DELEGATION_LIMIT',
   // A guest named as a host or in a rotation (spec 0037, AC-1432): guests can't take bookings.
   'MEMBER_INVALID',
+  // Custom roles (spec 0037, AC-1228, AC-1238): a built in role's name, a permission only built in roles hold, the
+  // 21st role, and a delete moving its people to a role that can't take them.
+  'ROLE_NAME_RESERVED',
+  'PERMISSION_NOT_ALLOWED',
+  'ROLE_LIMIT',
+  'MOVE_TO_INVALID',
   // Time off (spec 0037, AC-1288): a member with 50 upcoming time off entries.
   'TIME_OFF_LIMIT',
   // Page and rotation editors (spec 0037, AC-1331): a page or rotation with 20 editors.

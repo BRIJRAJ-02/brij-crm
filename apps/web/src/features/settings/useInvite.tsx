@@ -7,7 +7,6 @@ import {
   type DataLayer,
   type InvitationView,
   type InviteResult,
-  type Role,
   type RoleOption,
 } from '@crm/data';
 import {
@@ -56,12 +55,16 @@ export function inviteProblem(row: InviteRow, rows: readonly InviteRow[], known:
 export function inviteGroups(
   rows: readonly InviteRow[],
   roles: readonly RoleOption[] | undefined,
-): readonly { readonly role: Role; readonly emails: readonly string[] }[] {
+): readonly { readonly role: string; readonly emails: readonly string[] }[] {
   const email = (row: InviteRow) => row.email.trim().toLowerCase();
   if (roles === undefined) return rows.length === 0 ? [] : [{ role: 'member', emails: rows.map(email) }];
+  // A built in role by its name, a custom role (spec 0037, AC-1236) by its id, as the data layer takes them.
   return roles
-    .map((option) => ({ role: option.builtIn, emails: rows.filter((row) => row.roleId === option.id).map(email) }))
-    .filter((group): group is { role: Role; emails: string[] } => group.role !== undefined && group.emails.length > 0);
+    .map((option) => ({
+      role: option.builtIn ?? option.id,
+      emails: rows.filter((row) => row.roleId === option.id).map(email),
+    }))
+    .filter((group) => group.emails.length > 0);
 }
 
 /** What the invite form is given. */

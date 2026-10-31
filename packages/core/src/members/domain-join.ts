@@ -29,6 +29,7 @@ import { runWrite, type AfterWrite } from '../engine/write.ts';
 import { recordJoinReach } from '../scheduling/delegations.ts';
 import { ensureLinkPage } from '../booking/handles.ts';
 import { writeAudit } from './audit.ts';
+import { defaultCustomRole } from '../roles/roles.ts';
 import {
   addJoiner,
   joinerName,
@@ -494,11 +495,14 @@ export async function decideJoinRequest(
       let memberId = mine?.id;
       if (memberId === undefined) {
         await checkSeats(tx, scope, 1);
+        // They join with the role new people get (spec 0037, AC-1237): the default custom role, else Member.
+        const joinsAs = await defaultCustomRole(tx, scope.workspaceId);
         memberId = await addJoiner(
           tx,
           scope.workspaceId,
           { id: request.userId, name: request.name, email: request.email },
           'member',
+          joinsAs?.id,
         );
         context.record({ members: [memberId] });
         // An everyone delegation reaches them now (spec 0037, AC-1274).

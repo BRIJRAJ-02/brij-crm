@@ -355,6 +355,8 @@ export const MyAccess = z.object({
   role: Role,
   roleLabel: z.string(),
   permissions: z.array(Permission),
+  /** The custom role the caller holds (spec 0037, AC-1235), when any: `role` is then `member`, `roleLabel` its name. */
+  customRoleId: Uuid.optional(),
   /** The teams the caller is in (spec 0031, AC-825); absent from an answer that predates teams. */
   teamIds: z.array(Uuid).optional(),
   /**
@@ -381,8 +383,8 @@ export const accessContract = {
 /**
  * One role a person may hold, as every role picker offers it (spec 0037,
  * AC-1439): its id, its name and one line on what it can do. Built in roles
- * are named by their role; custom roles (spec 0037) will join with ids of
- * their own.
+ * are named by their role; custom roles (spec 0037, AC-1242) by their uuid,
+ * with no `builtIn`.
  */
 export const RoleOption = z.object({
   id: z.string().min(1).max(64),
@@ -394,7 +396,10 @@ export const RoleOption = z.object({
 /** One role a person may hold. */
 export type RoleOption = z.infer<typeof RoleOption>;
 
-/** The workspace's roles, most power first, and the one new people get unless someone picks another. */
+/**
+ * The workspace's roles, most power first, then its custom roles in their order, and the one new people get unless
+ * someone picks another: `member`, or the custom role marked "Default for new people" (AC-1237).
+ */
 export const RolesList = z.object({
   roles: z.array(RoleOption),
   defaultRole: z.string(),
@@ -402,11 +407,182 @@ export const RolesList = z.object({
 /** The workspace's roles. */
 export type RolesList = z.infer<typeof RolesList>;
 
+/** The most custom roles a workspace may have (spec 0037, AC-1228). */
+export const CUSTOM_ROLES_MAX = 20;
+/** The longest custom role name (AC-1228). */
+export const ROLE_NAME_MAX = 40;
+/** The longest custom role description (AC-1228). */
+export const ROLE_DESCRIPTION_MAX = 200;
+
 /**
- * The roles every role picker offers (spec 0037, AC-1439): the Invite
- * dialog, the Members page, and later the invite link and join approvals,
- * so custom roles join them without a client change. Any member may read it.
+ * Who may ever hold a permission (AC-1244): its catalog grant level, and `owner` for a name the catalog doesn't list
+ * or an entry with none, so an unknown or half added permission is never held by anyone but the Owner role.
+ */
+export function grantOf(name: string): GrantLevel {
+  if (!Object.hasOwn(PERMISSIONS, name)) return 'owner';
+  const entry: unknown = (PERMISSIONS as Readonly<Record<string, unknown>>)[name];
+  const grant = typeof entry === 'object' && entry !== null && 'grant' in entry ? entry.grant : undefined;
+  return grant === 'admin' || grant === 'any' ? grant : 'owner';
+}
+
+/** The permissions a custom role may hold (AC-1228): every catalog permission of grant `any`, in catalog order. */
+export const CUSTOM_ROLE_PERMISSIONS: readonly Permission[] = PERMISSION_NAMES.filter(
+  (name) => grantOf(name) === 'any',
+);
+
+/**
+ * A custom role's stored permission names as the permissions it holds (AC-1234, AC-1248): only catalog names of
+ * grant `any`, each once, in catalog order. Anything else stored, an admin or owner permission or a name the code
+ * doesn't know, grants nothing.
+ */
+export function customRolePermissions(stored: readonly string[]): readonly Permission[] {
+  return CUSTOM_ROLE_PERMISSIONS.filter((name) => stored.includes(name));
+}
+
+/**
+ * A custom role's data access (AC-1229): `write`, Read and write, the default; `read`, Read only, so its holders
+ * create, edit and delete no record.
+ */
+export const DataAccess = z.enum(['write', 'read']);
+/** A custom role's data access. */
+export type DataAccess = z.infer<typeof DataAccess>;
+
+/** What a new custom role starts from (AC-1228, AC-1229): Member, the Viewer preset (Read only, nothing), or a custom role. */
+export const StartFrom = z.union([z.literal('member'), z.literal('viewer'), Uuid]);
+/** What a new custom role starts from. */
+export type StartFrom = z.infer<typeof StartFrom>;
+
+/** A custom role's name (AC-1228): 1 to 40 characters, trimmed. The reserved names are refused by the server. */
+export const RoleName = z
+  .string()
+  .trim()
+  .min(1, { error: 'Name the role.' })
+  .max(ROLE_NAME_MAX, { error: `Use ${String(ROLE_NAME_MAX)} characters or fewer.` });
+
+/** A custom role's description (AC-1228): up to 200 characters. */
+export const RoleDescription = z
+  .string()
+  .trim()
+  .max(ROLE_DESCRIPTION_MAX, { error: `Use ${String(ROLE_DESCRIPTION_MAX)} characters or fewer.` });
+
+/** A stored permission name as a role write sends it; the server keeps it to the catalog's `any` ones. */
+const PermissionName = z.string().min(1).max(64);
+
+/**
+ * One role as the Roles page and Compare show it (spec 0037, `roles.overview`, AC-1239): built in roles by their role
+ * (permissions from the pinned table, `builtIn` set), custom roles by their uuid with their stored permissions kept
+ * to the ones they hold. `holders` counts its active members; a guest reading it gets names only (no permissions, no
+ * counts).
+ */
+export const RoleDefinition = z.object({
+  id: z.string().min(1).max(64),
+  label: z.string(),
+  description: z.string(),
+  builtIn: Role.optional(),
+  permissions: z.array(Permission),
+  dataAccess: DataAccess,
+  holders: z.number().int().min(0).optional(),
+  isDefault: z.boolean(),
+  /** A custom role's version, for `roles.update`'s `STALE` check; absent for a built in role. */
+  updatedAt: z.iso.datetime({ offset: true }).optional(),
+});
+/** One role as the Roles page shows it. */
+export type RoleDefinition = z.infer<typeof RoleDefinition>;
+
+/** Every role, built in first then custom in their order, and the default for new people (AC-1239). */
+export const RolesOverview = z.object({
+  roles: z.array(RoleDefinition),
+  defaultRole: z.string(),
+});
+/** Every role. */
+export type RolesOverview = z.infer<typeof RolesOverview>;
+
+/** One custom role, by id, to read. */
+export const RoleRead = WorkspaceScoped.extend({ roleId: Uuid });
+/** One custom role, by id. */
+export type RoleRead = z.infer<typeof RoleRead>;
+
+/** A new custom role (AC-1228): its own id (so a retry makes one role), name, description, permissions and start. */
+export const CreateRoleInput = WorkspaceScoped.extend({
+  id: Uuid,
+  name: RoleName,
+  description: RoleDescription.optional(),
+  permissions: z.array(PermissionName).max(64),
+  dataAccess: DataAccess,
+  startFrom: StartFrom,
+  mutationId: Uuid,
+});
+/** A new custom role. */
+export type CreateRoleInput = z.infer<typeof CreateRoleInput>;
+
+/** A change to a custom role (AC-1231): what is given changes; `updatedAt` is the version the editor read. */
+export const UpdateRoleInput = WorkspaceScoped.extend({
+  roleId: Uuid,
+  name: RoleName.optional(),
+  description: RoleDescription.optional(),
+  permissions: z.array(PermissionName).max(64).optional(),
+  dataAccess: DataAccess.optional(),
+  updatedAt: z.iso.datetime({ offset: true }),
+  mutationId: Uuid,
+});
+/** A change to a custom role. */
+export type UpdateRoleInput = z.infer<typeof UpdateRoleInput>;
+
+/** A role after a change, and how many people it changed for. */
+export const RoleUpdated = z.object({ role: RoleDefinition, affectedMembers: z.number().int().min(0) });
+/** A role after a change. */
+export type RoleUpdated = z.infer<typeof RoleUpdated>;
+
+/** A copy of a custom role (AC-1232), under its own id. */
+export const DuplicateRoleInput = WorkspaceScoped.extend({ roleId: Uuid, id: Uuid, mutationId: Uuid });
+/** A copy of a custom role. */
+export type DuplicateRoleInput = z.infer<typeof DuplicateRoleInput>;
+
+/** Deleting a custom role (AC-1238): where its people and open invitations go, Member or another custom role. */
+export const DeleteRoleInput = WorkspaceScoped.extend({
+  roleId: Uuid,
+  moveTo: z.union([z.literal('member'), Uuid]),
+  mutationId: Uuid,
+});
+/** Deleting a custom role. */
+export type DeleteRoleInput = z.infer<typeof DeleteRoleInput>;
+
+/** What a delete moved: its people (open invitations move too, uncounted). */
+export const RoleDeleted = z.object({ moved: z.number().int().min(0) });
+/** What a delete moved. */
+export type RoleDeleted = z.infer<typeof RoleDeleted>;
+
+/** The role new people get (AC-1237): a custom role, or `null` for Member. */
+export const SetDefaultRoleInput = WorkspaceScoped.extend({ roleId: Uuid.nullable(), mutationId: Uuid });
+/** The role new people get. */
+export type SetDefaultRoleInput = z.infer<typeof SetDefaultRoleInput>;
+
+/** A custom role moved to a place among the custom roles (0 first). */
+export const MoveRoleInput = WorkspaceScoped.extend({
+  roleId: Uuid,
+  position: z
+    .number()
+    .int()
+    .min(0)
+    .max(CUSTOM_ROLES_MAX - 1),
+  mutationId: Uuid,
+});
+/** A custom role moved. */
+export type MoveRoleInput = z.infer<typeof MoveRoleInput>;
+
+/**
+ * The roles (spec 0037, AC-1439 and job J9). `list` is what every role picker offers (the Invite dialog, the Members
+ * page, the invite link and join approvals); `overview` and `get` the Roles page and Compare; any member may read
+ * them. Every write is `access.manage`'s and answers the role as it stands.
  */
 export const rolesContract = {
   list: oc.input(WorkspaceScoped).output(RolesList),
+  overview: oc.input(WorkspaceScoped).output(RolesOverview),
+  get: oc.input(RoleRead).output(RoleDefinition),
+  create: oc.input(CreateRoleInput).output(RoleDefinition),
+  update: oc.input(UpdateRoleInput).output(RoleUpdated),
+  duplicate: oc.input(DuplicateRoleInput).output(RoleDefinition),
+  delete: oc.input(DeleteRoleInput).output(RoleDeleted),
+  setDefault: oc.input(SetDefaultRoleInput).output(z.void()),
+  move: oc.input(MoveRoleInput).output(z.void()),
 };

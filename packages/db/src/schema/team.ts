@@ -39,6 +39,8 @@ export const invitations = pgTable(
     /** The invited address, lowercase; null for the invite link. */
     email: text('email'),
     role: memberRole('role').notNull(),
+    /** The custom role it gives (spec 0037, AC-1236), with `role` then `member`; the foreign key is in migration 0143. */
+    customRoleId: uuid('custom_role_id'),
     status: text('status').notNull().default('open'),
     /** The SHA-256 of the link's token, as 64 lowercase hex digits. An email invitation's token is never stored. */
     tokenHash: text('token_hash').notNull(),
@@ -77,6 +79,7 @@ export const invitations = pgTable(
       columns: [t.workspaceId, t.usedByMemberId],
       foreignColumns: [members.workspaceId, members.id],
     }),
+    check('invitations_custom_role', sql`${t.customRoleId} is null or ${t.role} = 'member'`),
     check('invitations_kind', sql`${t.kind} in ('email', 'link')`),
     check('invitations_status', sql`${t.status} in ('open', 'used', 'revoked')`),
     check(
@@ -105,6 +108,10 @@ export const invitations = pgTable(
     index('invitations_open_address')
       .on(t.email)
       .where(sql`${t.status} = 'open' and ${t.kind} = 'email'`),
+    // A custom role's open invitations: moved when the role is deleted (spec 0037, AC-1238).
+    index('invitations_custom_role')
+      .on(t.workspaceId, t.customRoleId)
+      .where(sql`${t.customRoleId} is not null`),
     // The Invitations tab: open ones, newest first.
     index('invitations_open')
       .on(t.workspaceId, t.createdAt.desc(), t.id)

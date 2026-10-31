@@ -525,3 +525,56 @@ describe('visibleAttributes, filterRecordView and readOnlyReason', () => {
     ).toBe("Your role can't change Salary.");
   });
 });
+
+describe('a custom role (spec 0037, AC-1229, AC-1234, AC-1248)', () => {
+  const ROLE = '00000000-0000-7000-8000-0000000000e1';
+  const holder = (teamIds: readonly string[] = []): MemberPrincipal => ({
+    ...member('member', teamIds),
+    customRoleId: ROLE,
+  });
+  const grant = (permissions: readonly string[], defaultObjectLevel = 'write') => ({ permissions, defaultObjectLevel });
+
+  it('holds only the grant any permissions it stores: an admin or owner one, or an unknown name, is nothing', () => {
+    const access = roleAccess(
+      holder(),
+      NO_RULES,
+      grant(['schedule.manage', 'members.invite', 'jobs.manage', 'billing.manage', 'routing.manage', 'made.up']),
+    );
+    expect([...access.permissions]).toEqual(['schedule.manage']);
+    expect(can(access, 'members.invite')).toBe(false);
+  });
+
+  it('reads its data access as the default object level, any value but write as read (fail closed)', () => {
+    expect(roleAccess(holder(), NO_RULES, grant([], 'write')).data.defaultObject).toBe('write');
+    expect(roleAccess(holder(), NO_RULES, grant([], 'read')).data.defaultObject).toBe('read');
+    expect(roleAccess(holder(), NO_RULES, grant([], 'everything')).data.defaultObject).toBe('read');
+    const readOnly = roleAccess(holder(), NO_RULES, grant([], 'read'));
+    expect(
+      readOnlyReason(readOnly, { id: FIELD, objectId: OBJECT, title: 'Name' }, { id: OBJECT, pluralName: 'People' }),
+    ).toBe('Your role can view records but not change them.');
+  });
+
+  it('refuses a principal naming a custom role with none read beside it, or on a base role other than Member', () => {
+    const missing = roleAccess(holder(), NO_RULES);
+    expect(missing.permissions).toEqual([]);
+    expect(objectLevel(missing, OBJECT)).toBe('none');
+    const onAdmin = roleAccess({ ...member('admin'), customRoleId: ROLE }, NO_RULES, grant(['schedule.view']));
+    expect(onAdmin.permissions).toEqual([]);
+  });
+
+  it('is never under Member’s rules, and a team’s grant still opens what it grants (most open wins)', () => {
+    const teamRule: LevelRule = {
+      subject: { type: 'team', teamId: TEAM },
+      target: { type: 'object', objectId: OTHER },
+      level: 'write',
+    };
+    const both = rules([objectRule('none'), teamRule]);
+    // A Member is under Member's rule; a holder of a custom role isn't.
+    expect(objectLevel(roleAccess(member('member'), both), OBJECT)).toBe('none');
+    expect(objectLevel(roleAccess(holder(), both, grant([])), OBJECT)).toBe('write');
+    // A Read only holder in a team that grants write on OTHER gets write there, read elsewhere.
+    const readOnlyInTeam = roleAccess(holder([TEAM]), both, grant([], 'read'));
+    expect(objectLevel(readOnlyInTeam, OTHER)).toBe('write');
+    expect(objectLevel(readOnlyInTeam, OBJECT)).toBe('read');
+  });
+});

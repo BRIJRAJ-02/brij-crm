@@ -29,6 +29,8 @@ export type MemberSummary = z.infer<typeof MemberSummary>;
  */
 export const MemberView = MemberSummary.extend({
   role: Role,
+  /** Their custom role (spec 0037, AC-1233), when they hold one: `role` is then `member`. */
+  customRoleId: Uuid.optional(),
   joinedAt: z.iso.datetime({ offset: true }),
   /** A picture on our own origin (a path, never another site's address); absent until #32, so screens show initials. */
   avatarUrl: z
@@ -136,8 +138,18 @@ export const RemovedMemberResult = z.object({ jobId: Uuid.optional() });
 /** A removal's answer. */
 export type RemovedMemberResult = z.infer<typeof RemovedMemberResult>;
 
-/** A role change (spec 0009, AC-137; spec 0031, AC-811). */
-export const SetRoleInput = MemberInput.extend({ role: Role });
+/** Exactly one of a built in role and a custom role, as a role change names it (spec 0037, AC-1233). */
+const oneRole = (value: { readonly role?: unknown; readonly customRoleId?: unknown }) =>
+  (value.role === undefined) !== (value.customRoleId === undefined);
+
+/**
+ * A role change (spec 0009, AC-137; spec 0031, AC-811): a built in `role`, or a `customRoleId` (spec 0037, AC-1233),
+ * never both.
+ */
+export const SetRoleInput = MemberInput.extend({ role: Role.optional(), customRoleId: Uuid.optional() }).refine(
+  oneRole,
+  { error: 'Pick a role.', path: ['role'] },
+);
 /** A role change. */
 export type SetRoleInput = z.infer<typeof SetRoleInput>;
 
@@ -149,6 +161,30 @@ export const SetRoleResult = MemberView.extend({ cancelledInvitations: z.number(
 /** A member with their new role, and the invitations the change cancelled. */
 export type SetRoleResult = z.infer<typeof SetRoleResult>;
 
+/** The most people one Change role changes at once (spec 0037, AC-1242). */
+export const SET_ROLES_MAX = 100;
+
+/** Change role for several people at once (spec 0037, AC-1242): one role for all, in one transaction. */
+export const SetRolesInput = WorkspaceScoped.extend({
+  memberIds: z
+    .array(Uuid)
+    .min(1, { error: 'Pick at least one person.' })
+    .max(SET_ROLES_MAX, { error: `Change at most ${String(SET_ROLES_MAX)} people at once.` }),
+  role: Role.optional(),
+  customRoleId: Uuid.optional(),
+  mutationId: Uuid,
+}).refine(oneRole, { error: 'Pick a role.', path: ['role'] });
+/** Change role for several people at once. */
+export type SetRolesInput = z.infer<typeof SetRolesInput>;
+
+/** What a Change role for several did: how many changed, and the open invitations cancelled with them. */
+export const SetRolesResult = z.object({
+  changed: z.number().int().min(0),
+  cancelledInvitations: z.number().int().min(1).optional(),
+});
+/** What a Change role for several did. */
+export type SetRolesResult = z.infer<typeof SetRolesResult>;
+
 /**
  * A workspace's members. `list` answers the active ones a page at a time to
  * every member. `setRole` and `remove` follow spec 0009's owner rules (403
@@ -158,6 +194,8 @@ export type SetRoleResult = z.infer<typeof SetRoleResult>;
 export const membersContract = {
   list: oc.input(MembersInput).output(MembersPage),
   setRole: oc.input(SetRoleInput).output(SetRoleResult),
+  /** One role for several people (spec 0037, AC-1242): the same rules as `setRole`, all or nothing. */
+  setRoles: oc.input(SetRolesInput).output(SetRolesResult),
   /** What removing a member will do (AC-816): `members.manage`, or about oneself. */
   removalPreview: oc.input(MemberRead).output(RemovalPreview),
   /** What making a member a guest will do (spec 0031, slice 9): `members.manage` only. */

@@ -220,4 +220,29 @@ export const strings = {
   // The invite dialog opened outside Settings › Members (InviteTeamDialog), when its first read fails.
   inviteLoadFailed: 'Couldn’t load your team. Check your connection, then try again.',
   inviteTryAgain: 'Try again',
+  /** "What can Priya do" (spec 0037, AC-1243). */
+  capabilities: {
+    menu: (first: string) => `What can ${first} do`,
+    title: (first: string) => `What ${first} can do`,
+    openRole: 'Open role',
+    readOnly: 'Can see records, but not change them.',
+    sees: 'Sees scheduling of',
+    manages: 'Manages scheduling of',
+    managedBy: 'Scheduling managed by',
+    ownersAndAdmins: 'Owners and admins',
+    holdersOf: (role: string) => `Everyone with ${role}`,
+    teamHoldersOf: (role: string) => `${role} in their teams`,
+    everyoneGrant: (name: string) => `${name} (everyone)`,
+    unread: 'Couldn’t read this. Try again later.',
+  },
+  /** Change role for several at once (spec 0037, AC-1242). */
+  bulkRole: 'Change role',
+  bulkRoleLabel: (count: number) => `Change role for ${String(count)} ${count === 1 ? 'person' : 'people'}`,
+  bulkRoleTitle: (count: number, role: string) => `Make ${String(count)} ${count === 1 ? 'person' : 'people'} ${role}?`,
+  bulkRoleText: 'Some of them will lose access they have now.',
+  bulkRoleChanged: (count: number, role: string) =>
+    `${String(count)} ${count === 1 ? 'person is' : 'people are'} now ${role}.`,
+  selectMember: (name: string) => `Select ${name}`,
+  roleCustomDown: (name: string) => `${name} will lose some of what they can do now.`,
+  custom: 'Custom',
 } as const;
