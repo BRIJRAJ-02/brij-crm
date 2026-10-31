@@ -116,6 +116,11 @@ export const AUDIT_ACTIONS = [
   'list.updated',
   'list.archived',
   'list.restored',
+  // Settings › Developer (parity #34): an API key made, revoked or brought back in its Undo window. The target is the
+  // workspace; `after` holds the key's name and id.
+  'api_key.created',
+  'api_key.revoked',
+  'api_key.restored',
 ] as const;
 /** One action the audit log records. */
 export const AuditAction = z.enum(AUDIT_ACTIONS);

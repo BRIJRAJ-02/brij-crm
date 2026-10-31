@@ -467,6 +467,10 @@ export function toEntryView(row: AuditRow, names: AuditNames): AuditEntryView | 
     case 'workspace.restored':
     case 'workspace_security.signed_out_everyone':
       return { ...base, action, target: workspace, params: {}, changes: [] };
+    case 'api_key.created':
+    case 'api_key.revoked':
+    case 'api_key.restored':
+      return { ...base, action, target: workspace, params: { name: text(after.name) ?? 'a key' }, changes: [] };
     case 'workspace_security.changed': {
       const twoFactor = typeof after.requireTwoFactor === 'boolean' ? after.requireTwoFactor : undefined;
       const days = has(after, 'sessionLengthDays')

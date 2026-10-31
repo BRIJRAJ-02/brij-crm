@@ -20,6 +20,7 @@ import { exportsContract, importsContract } from './imports.ts';
 import { entriesContract } from './entries.ts';
 import { listsContract } from './lists.ts';
 import { automationsContract } from './automations.ts';
+import { apiKeysContract } from './developer.ts';
 import { jobsContract } from './jobs.ts';
 import { meContract } from './me.ts';
 import { navContract } from './navigation.ts';
@@ -73,6 +74,7 @@ export * from './errors.ts';
 export * from './forms/index.ts';
 export * from './imports.ts';
 export * from './automations.ts';
+export * from './developer.ts';
 export * from './jobs.ts';
 export * from './lists.ts';
 export * from './scheduling.ts';
@@ -155,6 +157,8 @@ export const contract = {
   scheduling: schedulingContract,
   realtime: realtimeContract,
   automations: automationsContract,
+  // Settings › Developer (parity #34): API keys for /api/v1.
+  apiKeys: apiKeysContract,
   jobs: jobsContract,
   usage: usageContract,
   views: viewsContract,

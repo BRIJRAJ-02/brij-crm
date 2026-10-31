@@ -8,6 +8,8 @@ export {
   enterDeletedWorkspace,
   enterPublicForm,
   enterWithKey,
+  noteKeyUse,
+  type KeyEntry,
   enterWorkspace,
   type DeletedEntry,
   NO_RULE_SOURCE,
@@ -140,6 +142,8 @@ export {
   setAutomationEnabled,
   updateAutomation,
 } from './automations/service.ts';
+// API keys (parity #34): Settings › Developer's list, make, revoke and Undo; the door's part is `enterWithKey`.
+export { createApiKey, listApiKeys, restoreApiKey, revokeApiKey } from './developer/keys.ts';
 export { type AuditSource } from './members/audit.ts';
 // Settings › Workspace › General, the owner's delete and restore, and Account › Profile (spec 0031, slice 7).
 export {
