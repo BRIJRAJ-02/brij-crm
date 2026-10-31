@@ -1,4 +1,4 @@
--- Brand kit and link page themes (spec 0060, 31 Oct 2026). Numbered 0146, after train2's 0142 to 0144 and the Live switch's 0145.
+-- Brand kit and link page themes (spec 0060, 31 Oct 2026). Numbered 0146, after the Live switch's 0145.
 --
 --
 -- What changes:

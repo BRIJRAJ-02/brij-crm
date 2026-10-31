@@ -1,5 +1,5 @@
 -- The link page's Live or Private switch (spec 0058, AC-23, 31 Oct 2026; the owner: "rest take industry standard
--- decisions"). Renumbered 0145, after main's 0144, when the lanes merged.
+-- decisions"). Numbered 0145 after main's 0144.
 --
 -- What changes:
 -- * A handle its owner claims (first run or Settings › Profile) is live at once, as on Linktree. The app calls
