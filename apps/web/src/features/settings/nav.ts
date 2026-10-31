@@ -199,8 +199,9 @@ export function settingsNav(slug: string): readonly SettingsNavGroup[] {
         // General, then Members (spec 0031, AC-832): every member may open both; what they may change is the server's
         // call.
         { id: 'general', label: workspace.generalTitle, href: generalSettingsHref(slug), icon: 'building' },
-        // Brand (spec 0060): every member reads it; owners and admins change it.
-        { id: 'brand', label: brand.navLabel, href: brandSettingsHref(slug), icon: 'palette' },
+        // Brand (spec 0060): every member but a guest reads it (it dresses booking pages and forms, which guests
+        // have none of, spec 0031); owners and admins change it.
+        { id: 'brand', label: brand.navLabel, href: brandSettingsHref(slug), icon: 'palette', notForGuests: true },
         { id: 'members', label: members.title, href: membersSettingsHref(slug), icon: 'users' },
         // Teams (spec 0031, slice 8, AC-832): every member reads them; changing them is for `teams.manage`.
         { id: 'teams', label: teams.title, href: teamsSettingsHref(slug), icon: 'users-round', notForGuests: true },
