@@ -118,7 +118,7 @@ export function WebhooksScreen({ data, toasts, slug, initial }: WebhooksScreenPr
   if (!initial.available) {
     return (
       <SettingsPage title={strings.title} titleRef={titleRef}>
-        <EmptyState icon="webhook" title={strings.unavailableTitle}>
+        <EmptyState icon="plug" title={strings.unavailableTitle}>
           {strings.unavailableText}
         </EmptyState>
       </SettingsPage>
@@ -145,7 +145,7 @@ export function WebhooksScreen({ data, toasts, slug, initial }: WebhooksScreenPr
           onRowAction={setOpenId}
           emptyState={
             <EmptyState
-              icon="webhook"
+              icon="plug"
               title={strings.emptyTitle}
               actions={
                 <Button variant="primary" icon="plus" onPress={startAdding}>
@@ -585,7 +585,7 @@ function EndpointDialog({
     <Modal
       key="window"
       title={endpoint.description === '' ? strings.endpointTitle : endpoint.description}
-      icon="webhook"
+      icon="plug"
       variant="window"
       isOpen
       context={endpoint.url}

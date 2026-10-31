@@ -110,7 +110,7 @@ export interface SettingsNavEntry {
     | 'calendar-days'
     | 'calendar-clock'
     | 'globe'
-    | 'webhook';
+    | 'plug';
   /** A quiet word after the name. Every entry opens a page in Settings (20 Oct 2026; Trash too since 23 Oct 2026). */
   readonly meta?: string;
   /** A permission the page needs before the member may open it at all; absent, every member may. */
@@ -180,7 +180,7 @@ export function settingsNav(slug: string): readonly SettingsNavGroup[] {
           id: 'webhooks',
           label: webhooks.navLabel,
           href: webhooksHref(slug),
-          icon: 'webhook',
+          icon: 'plug',
           requires: 'webhooks.manage',
         },
         { id: 'objects', label: strings.objects, href: objectsSettingsHref(slug), icon: 'box' },
