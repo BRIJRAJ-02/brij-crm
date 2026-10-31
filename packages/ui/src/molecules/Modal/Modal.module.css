@@ -85,8 +85,8 @@
     gap: var(--space-8);
     min-block-size: calc(var(--size-control) + 2 * var(--space-8));
     padding-block: var(--space-8);
-    /* The close button's glyph, not its box, ends at the inset: the box is size-control wide around a size-icon. */
-    padding-inline: var(--overlay-inset) calc(var(--overlay-inset) - (var(--size-control) - var(--size-icon)) / 2);
+    /* The same inset both sides, on the spacing scale; the close button's glyph, not its box, ends at it (.close). */
+    padding-inline: var(--overlay-inset);
     border-block-end: var(--border-width-hairline) solid var(--border-subtle);
   }
 
@@ -128,7 +128,7 @@
     display: inline-flex;
     gap: var(--space-2);
     align-items: center;
-    margin-inline-start: auto;
+    margin-inline: auto calc((var(--size-icon) - var(--size-control)) / 2);
   }
 
   /* A note's "Saved": quiet, beside the actions it explains. */
@@ -432,19 +432,20 @@
     }
   }
 
+  /* Reduced motion: the dialog and its scrim appear and leave at once (spec 0058, AC-2), with no fade. RAC waits
+     for an exit animation only while one runs, so none means it unmounts on the spot. */
   @media (prefers-reduced-motion: reduce) {
+    .scrim[data-entering],
+    .scrim[data-exiting],
     .root[data-entering],
-    .root[data-variant='sheet'][data-entering],
-    .root[data-variant='drawer'][data-entering],
-    :dir(rtl) .root[data-variant='drawer'][data-entering] {
-      animation-name: fade-in;
-    }
-
     .root[data-exiting],
+    .root[data-variant='sheet'][data-entering],
     .root[data-variant='sheet'][data-exiting],
+    .root[data-variant='drawer'][data-entering],
     .root[data-variant='drawer'][data-exiting],
+    :dir(rtl) .root[data-variant='drawer'][data-entering],
     :dir(rtl) .root[data-variant='drawer'][data-exiting] {
-      animation-name: fade-out;
+      animation: none;
     }
   }
 
