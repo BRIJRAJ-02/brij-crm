@@ -52,8 +52,10 @@ export interface TimeOffDialogProps {
   readonly onClose: () => void;
   /** Saved: the screen says so. */
   readonly onSaved: (saved: TimeOffSaved, isNew: boolean) => void;
-  /** Open Bookings, from the meetings inside. */
-  readonly onOpenBookings: () => void;
+  /** Open Bookings, from the meetings inside; absent where the reader is on Bookings already. */
+  readonly onOpenBookings?: () => void;
+  /** The reader, left out of Who covers while the time off is their own (a For pick lists them). */
+  readonly meId?: string | undefined;
 }
 
 /** The dialog: one Modal, the form first, then (only when meetings are inside) what was saved over. */
@@ -81,6 +83,7 @@ function TimeOffForm({
   isOpen,
   people: everyone,
   forPeople = [],
+  meId,
   onClose,
   onSaved,
   onOpenBookings,
@@ -91,7 +94,8 @@ function TimeOffForm({
   const offersFor = given === undefined && entry === undefined && forPeople.length > 0;
   const [forId, setForId] = useState(ME);
   const member = given ?? (forId === ME ? undefined : forPeople.find((person) => person.id === forId));
-  const people = member === undefined ? everyone : everyone.filter((person) => person.id !== member.id);
+  const away = member?.id ?? meId;
+  const people = away === undefined ? everyone : everyone.filter((person) => person.id !== away);
   const store = data.scheduling.loaded()?.timeOff;
   const [id] = useState(() => store?.newId() ?? '');
   const [range, setRange] = useState<{ readonly start: string; readonly end: string } | null>(
@@ -177,7 +181,7 @@ function TimeOffForm({
         actions={
           <>
             {/* Bookings opens the reader's own: for a colleague's time off it wouldn't show these meetings. */}
-            {first === undefined && (
+            {first === undefined && onOpenBookings !== undefined && (
               <Button
                 onPress={() => {
                   close();
@@ -234,7 +238,7 @@ function TimeOffForm({
         {offersFor && (
           <Select
             label={strings.forLabel}
-            isSearchable={forPeople.length > 6}
+            isSearchable={forPeople.length > 8}
             items={[
               { id: ME, label: strings.forMe },
               ...forPeople.map((person) => ({
@@ -288,7 +292,6 @@ function TimeOffForm({
         />
         <Select
           label={strings.standin}
-          hint={first === undefined ? strings.standinHint : strings.standinHintFor(first)}
           isSearchable
           items={[
             { id: NOBODY, label: strings.nobody },
@@ -313,15 +316,7 @@ function TimeOffForm({
           }}
           {...(errors.standin === undefined ? {} : { error: errors.standin })}
         />
-        <Field
-          label={strings.note}
-          hint={first === undefined ? strings.noteHint : strings.noteHintFor(first)}
-          isMultiline
-          maxLength={NOTE_MAX}
-          showCounter
-          value={note}
-          onChange={setNote}
-        />
+        <Field label={strings.note} isMultiline maxLength={NOTE_MAX} showCounter value={note} onChange={setNote} />
       </Form>
     </Modal>
   );

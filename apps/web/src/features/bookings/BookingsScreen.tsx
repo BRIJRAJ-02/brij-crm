@@ -2066,8 +2066,9 @@ function WeekView(props: BookingsCalendarScreenProps) {
           entry={undefined}
           initialDay={timeOffDay}
           isOpen={timeOffDay !== undefined}
-          // Anyone the reader sees may cover; the one away is left out by the dialog.
-          people={props.team.members.filter((person) => person.id !== me)}
+          // Anyone the reader sees may cover (the reader too, for a colleague); the one away is left out by the dialog.
+          people={props.team.members}
+          meId={me}
           forPeople={forPeople}
           onClose={() => setTimeOffDay(undefined)}
           onSaved={(saved) => {
@@ -2075,7 +2076,6 @@ function WeekView(props: BookingsCalendarScreenProps) {
             const name = forPeople.find((person) => person.id === saved.entry.memberId)?.name;
             toasts.toast({ tone: 'success', message: strings.timeOffSaved(name) });
           }}
-          onOpenBookings={() => setTimeOffDay(undefined)}
         />
       )}
     </>

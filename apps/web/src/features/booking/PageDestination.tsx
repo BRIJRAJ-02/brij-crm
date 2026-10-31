@@ -82,7 +82,19 @@ function destinationField(
     return (
       <Select
         label={strings.addBookingsTo}
-        items={[{ id: picked, label: picked === DEFAULT ? strings.ownersDefault : strings.ownersPick }]}
+        items={[
+          {
+            id: picked,
+            label:
+              ownerName === undefined
+                ? picked === DEFAULT
+                  ? strings.ownersDefault
+                  : strings.ownersPick
+                : picked === DEFAULT
+                  ? strings.defaultOf(ownerName)
+                  : strings.pickOf(ownerName),
+          },
+        ]}
         value={picked}
         isReadOnly
         // A read only Select shows its reason in place of a hint or an error: the unusable pick matters more.
