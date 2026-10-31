@@ -96,6 +96,7 @@ import type {
   RelationshipView,
   Role,
   ScheduleMember,
+  GuestPreview,
   RemovalPreview,
   RolesList,
   SubmissionState,
@@ -507,6 +508,7 @@ export type {
   AuditTarget,
   AuditValue,
   Role,
+  GuestPreview,
   RemovalPreview,
   RoleOption,
   RolesList,
@@ -4828,6 +4830,13 @@ export function createDataLayer({
         beforeRead(workspace).then(() =>
           call((options) => api.members.removalPreview({ workspace, memberId }, options)),
         ),
+      /**
+       * What making a member a guest will do (spec 0031, slice 9), for the confirm: pages that pause, rotations they
+       * leave, upcoming bookings that need a host, delegations that go. Read fresh each time. Refusals:
+       * `FORBIDDEN`, `NOT_FOUND`.
+       */
+      guestPreview: (workspace: string, memberId: string): Promise<GuestPreview> =>
+        beforeRead(workspace).then(() => call((options) => api.members.guestPreview({ workspace, memberId }, options))),
       /**
        * Removes a member (spec 0031, AC-811, AC-816), handing their records
        * and open tasks to `reassignTo` as a background job when one is given

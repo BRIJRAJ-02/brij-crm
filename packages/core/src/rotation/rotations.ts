@@ -30,7 +30,7 @@ import { queueSchedulingNotice } from '../scheduling/notice.ts';
 import { deleteEditorsOf, editedBy } from '../scheduling/editor-rows.ts';
 import { lockRotation, windowCounts, windowStart } from './ledger.ts';
 import { keepRosterRows, rosterCalibration } from './roster.ts';
-import { eligibleMembers, ROTATION_ROLES, rulesOf } from './team.ts';
+import { eligibleMembers, GUESTS_CANT_HOST, ROTATION_ROLES, rulesOf } from './team.ts';
 
 const {
   availabilitySchedules,
@@ -239,6 +239,10 @@ async function checkMembers(tx: WorkspaceTx, list: readonly RotationMemberInput[
   const byId = new Map(found.map((row) => [row.id, row]));
   for (const [index, member] of list.entries()) {
     const row = byId.get(member.memberId);
+    // A guest can't host (spec 0037, AC-1432): said as such, not as a stranger.
+    if (row?.status === 'active' && row.role === 'guest') {
+      throw refuseOn('MEMBER_INVALID', GUESTS_CANT_HOST, `members.${String(index)}`);
+    }
     if (row === undefined || row.status !== 'active' || !ROTATION_ROLES.includes(row.role)) {
       throw refuseOn(
         'CONFIG_INVALID',

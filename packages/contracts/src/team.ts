@@ -203,7 +203,7 @@ export type InvitePeek = z.infer<typeof InvitePeek>;
 
 export { INVITE_LINK_DAYS, INVITE_LINK_USES_MAX, type InviteLinkDays } from './team-limits.ts';
 
-/** The roles an invite link may give (AC-818): never owner or admin (guest joins with slice 9). */
+/** The roles an invite link may give (AC-818): member or guest, never owner or admin. */
 export const InviteLinkRole = Role.exclude(['owner', 'admin']);
 /** A role an invite link may give. */
 export type InviteLinkRole = z.infer<typeof InviteLinkRole>;

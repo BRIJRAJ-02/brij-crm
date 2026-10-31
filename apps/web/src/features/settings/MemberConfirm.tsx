@@ -1,10 +1,11 @@
 // Brief
 // Purpose: ask before a change on the Members page that ends something (the owner, 21 October 2026): cancelling an
-// invitation, declining a request, handing the workspace over, and turning off the invite link or company email.
+// invitation, declining a request, handing the workspace over, turning off the invite link or company email, and a
+// role change that takes access away (with what becoming a guest stops, as chips).
 // Main task: read what will happen, then the verb (or the way out); it closes once the server agrees.
 // Leaves out: the change's own rules (the server's) and what the page says afterwards (the caller's toast).
 import { isDataError } from '@crm/data';
-import { Button, Callout, Modal, sharedStrings } from '@crm/ui';
+import { Badge, Button, Callout, FieldGroup, Modal, sharedStrings } from '@crm/ui';
 import { useState } from 'react';
 import { strings } from './members-strings.ts';
 
@@ -12,6 +13,8 @@ import { strings } from './members-strings.ts';
 export interface MemberQuestion {
   readonly title: string;
   readonly text: string;
+  /** What else happens, a few words each ("2 pages paused"), as chips under the sentence; none when empty. */
+  readonly chips?: readonly string[];
   /** The commit's verb ("Cancel invitation"), never OK or Yes. */
   readonly action: string;
   /** The way out's words, when Cancel would clash with the verb ("Keep invitation" beside "Cancel invitation"). */
@@ -99,6 +102,13 @@ function Asked({
     >
       {failure !== undefined && <Callout tone="danger">{failure}</Callout>}
       {question.text}
+      {question.chips !== undefined && question.chips.length > 0 && (
+        <FieldGroup label={strings.whatChanges} layout="row">
+          {question.chips.map((chip) => (
+            <Badge key={chip} size="chip" text={chip} dot="orange" />
+          ))}
+        </FieldGroup>
+      )}
     </Modal>
   );
 }

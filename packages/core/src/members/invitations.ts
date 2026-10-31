@@ -350,7 +350,7 @@ export async function inviteMembers(
   options: InviteWriteOptions = {},
 ): Promise<InviteOutcome> {
   checkInvites(scope);
-  if (!isRole(input.role)) throw refuse('CONFIG_INVALID', 'Pick owner, admin or member.');
+  if (!isRole(input.role)) throw refuse('CONFIG_INVALID', 'Pick a role.');
   const role = input.role;
   if (role === 'owner' && actingRole(scope) !== 'owner') throw refuse('FORBIDDEN', OWNER_RULES_MESSAGE);
   const wanted = addresses(input.emails);
@@ -407,8 +407,10 @@ export async function inviteMembers(
       if ((openCount?.n ?? 0) + fresh.length > cap) {
         throw refuse('INVITES_LIMIT', `A workspace holds at most ${String(cap)} open invitations. Revoke some first.`);
       }
-      // A resent invitation already holds its seat; each new one takes one (a guest, from slice 9, none).
-      await checkSeats(tx, scope, fresh.length);
+      // A resent invitation already holds its seat, unless it was a guest's and now isn't; each new one takes one. A
+      // guest takes none (spec 0031, AC-809).
+      const seated = role === 'guest' ? 0 : fresh.length + open.filter((row) => row.role === 'guest').length;
+      await checkSeats(tx, scope, seated);
       const sent: { id: string; token: string; sendCount: number; resent: boolean; was?: Role }[] = [];
       const by = touched(scope);
       for (const email of toInvite) {
@@ -888,6 +890,7 @@ export async function acceptInvite(
         slug: held.slug,
         name,
         email,
+        isGuest: held.role === 'guest',
       });
       // Everyone's member list reads them in (spec 0007, AC-82), and an everyone delegation reaches them (AC-1274).
       context.record({ members: [memberId] });
@@ -942,7 +945,8 @@ async function joinByLink(
     )
     .limit(1);
   if (taken !== undefined) throw inviteInvalid();
-  await checkSeats(tx, scope, 1);
+  // A guest takes no seat (spec 0031, AC-809).
+  await checkSeats(tx, scope, held.role === 'guest' ? 0 : 1);
   const memberId = await addJoiner(
     tx,
     scope.workspaceId,
@@ -956,6 +960,7 @@ async function joinByLink(
     slug: held.slug,
     name: joinerName(user.typedName, user.name, email),
     email,
+    isGuest: held.role === 'guest',
   });
   // The link stays open for the next person; its uses count up to its most.
   await tx

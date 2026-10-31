@@ -20,6 +20,8 @@ export interface SummaryInput {
   readonly object: string;
   readonly role: SummaryStanding & { readonly isDefault: boolean };
   readonly teams: readonly SummaryTeam[];
+  /** The Guest role's standing (spec 0031, AC-828): said only once a rule shares the object with guests. */
+  readonly guest?: SummaryStanding;
 }
 
 const LEVEL_RANK: Readonly<Record<ObjectAccessLevel, number>> = { none: 0, read: 1, write: 2 };
@@ -48,10 +50,21 @@ function adds(team: SummaryStanding, role: SummaryStanding): boolean {
 /**
  * The result in one or two short sentences. The Member role at its default says "Everyone can edit Deals." (teams
  * can't add to it); otherwise the role's sentence, and a sentence for each kind of access a team grants beyond it,
- * with a role that sees nothing read last as "Other members can’t see them."
+ * with a role that sees nothing read last as "Other members can’t see them." Guests a rule shares the object with
+ * get one sentence at the end, "Guests can view Deals."; guests with nothing shared are left out.
  */
-export function summarizeAccess({ object, role, teams }: SummaryInput): string {
-  if (role.isDefault) return strings.summary.everyone(object);
+export function summarizeAccess({ object, role, teams, guest }: SummaryInput): string {
+  // Guests see nothing by default, so they are said only when a rule shares the object with them: one sentence.
+  const forGuests =
+    guest === undefined || guest.level === 'none'
+      ? undefined
+      : `${strings.summary.guests} ${strings.summary.verbs[guest.level]} ${recordsOf(guest.records, object)}.`;
+  const withGuests = (line: string): string => (forGuests === undefined ? line : `${line} ${forGuests}`);
+  if (role.isDefault) {
+    return forGuests === undefined
+      ? strings.summary.everyone(object)
+      : withGuests(`${strings.summary.members} ${strings.summary.verbs.write} ${object}.`);
+  }
   const granting = teams.filter((team) => adds(team, role));
   const groups = new Map<string, { readonly standing: SummaryStanding; readonly names: string[] }>();
   for (const team of granting) {
@@ -70,5 +83,5 @@ export function summarizeAccess({ object, role, teams }: SummaryInput): string {
       ? `${hasTeams ? strings.summary.otherMembers : strings.summary.members} ${strings.summary.verbs.none} ${hasTeams ? strings.summary.them : object}`
       : `${strings.summary.members} ${strings.summary.verbs[role.level]} ${recordsOf(role.records, object)}`;
   const sentences = role.level === 'none' ? [...forTeams, forRole] : [forRole, ...forTeams];
-  return `${sentences.join('. ')}.`;
+  return withGuests(`${sentences.join('. ')}.`);
 }

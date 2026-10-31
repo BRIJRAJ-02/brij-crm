@@ -69,7 +69,7 @@ import {
   useSchedulingStore,
 } from '../booking/CalendarHealth.tsx';
 import { calendarHealthStrings } from '../booking/calendar-health-strings.ts';
-import { canRemove, grantableRoles, invitableRoles } from './members.ts';
+import { canRemove, grantableRoles, invitableRoles, takesAccess } from './members.ts';
 import { strings } from './members-strings.ts';
 import { SettingsPage } from './SettingsPage.tsx';
 
@@ -116,6 +116,9 @@ const MEMBER_COLUMNS: readonly TableColumn[] = [
   { id: 'joined', label: strings.columns.joined },
   { id: 'actions', label: strings.columns.actions, isLabelHidden: true, align: 'end' },
 ];
+
+/** A guest's columns (spec 0031, AC-829): no Email, since the server tells a guest nobody's address. */
+const GUEST_COLUMNS: readonly TableColumn[] = MEMBER_COLUMNS.filter((column) => column.id !== 'email');
 
 /** The same columns with Two factor after Role, for owners and admins, whom the server tells (spec 0033, AC-895). */
 const MEMBER_COLUMNS_WITH_FACTOR: readonly TableColumn[] = [
@@ -210,6 +213,7 @@ export function MembersScreen({
 
   const reload = () => router.invalidate();
   const actor = access.role;
+  const isGuest = actor === 'guest';
   const canInvite = invitations !== undefined && access.permissions.includes('members.invite');
   // The roles list's options this person may invite as, or give a member: the owner rules, as the server keeps them.
   const optionsFor = (allowed: readonly Role[]) =>
@@ -274,10 +278,56 @@ export function MembersScreen({
     );
   };
 
-  // Only someone else's role has a picker (your own reads as text), so a pick changes it at once.
+  // Only someone else's role has a picker (your own reads as text). A pick that gives more changes it at once; one that
+  // takes access away asks first (the owner, 21 October 2026), saying what becoming a guest stops (spec 0031, slice 9).
   const askRole = (member: MemberView, role: Role) => {
     if (role === member.role) return;
-    changeRole(member, role);
+    if (!takesAccess(member.role, role)) {
+      changeRole(member, role);
+      return;
+    }
+    const ask = (chips: readonly string[]) => {
+      setQuestion({
+        title: strings.roleDownTitle(member.name, labelOf(role)),
+        text:
+          role === 'guest'
+            ? strings.roleGuestText(member.name)
+            : strings.roleDownText(member.name, labelOf(member.role)),
+        chips,
+        action: strings.roleDownAction(labelOf(role)),
+        run: async () => {
+          const changed = await data.members.setRole(slug, member.id, role);
+          const cancelled = changed.cancelledInvitations;
+          // Cancelled invitations are sent again from Invite people, on a toast of their own beside the confirm's.
+          if (cancelled !== undefined) {
+            toasts.toast({
+              tone: 'success',
+              message: strings.roleInvitationsCancelled(cancelled),
+              action: { label: strings.invite, onAction: () => setInviting(true) },
+            });
+          }
+        },
+        done: strings.roleChanged(member.name, labelOf(role)),
+      });
+    };
+    if (role !== 'guest') {
+      ask([]);
+      return;
+    }
+    // What becoming a guest stops, counted first; a failed count still asks, with the sentence alone.
+    data.members.guestPreview(slug, member.id).then(
+      (preview) => {
+        ask([
+          ...(preview.pausedPages > 0 ? [strings.guestPages(preview.pausedPages)] : []),
+          ...(preview.rotations > 0 ? [strings.guestRotations(preview.rotations)] : []),
+          ...(preview.upcomingBookings > 0 ? [strings.guestBookings(preview.upcomingBookings)] : []),
+          ...(preview.delegations > 0 ? [strings.guestDelegations(preview.delegations)] : []),
+        ]);
+      },
+      () => {
+        ask([]);
+      },
+    );
   };
 
   // Handing the workspace on can't be taken back in one click, so it asks first (AC-813).
@@ -565,7 +615,7 @@ export function MembersScreen({
       isLabelHidden
       variant="search"
       size="sm"
-      placeholder={strings.searchPlaceholder}
+      placeholder={isGuest ? strings.searchNamePlaceholder : strings.searchPlaceholder}
       value={typed}
       onChange={setTyped}
     />
@@ -575,7 +625,7 @@ export function MembersScreen({
     <>
       <Table
         label={strings.membersTab}
-        columns={canManage ? MEMBER_COLUMNS_WITH_FACTOR : MEMBER_COLUMNS}
+        columns={canManage ? MEMBER_COLUMNS_WITH_FACTOR : isGuest ? GUEST_COLUMNS : MEMBER_COLUMNS}
         rows={rows}
         getRowId={(member) => member.id}
         renderCell={memberCell}
@@ -766,7 +816,9 @@ export function MembersScreen({
           roles={inviteRoles}
           // New rows start as Member (the owner, 22 October 2026), whatever the workspace's default for joining.
           defaultRole={inviteRoles.find((option) => option.builtIn === 'member')?.id ?? roles.defaultRole}
-          memberEmails={new Set(rows.map((member) => member.email.toLowerCase()))}
+          memberEmails={
+            new Set(rows.flatMap((member) => (member.email === undefined ? [] : [member.email.toLowerCase()])))
+          }
           // An expired invitation can be sent again, so only live ones refuse a row.
           invitedEmails={new Set(invitations.filter((each) => !each.isExpired).map((each) => each.email.toLowerCase()))}
           onClose={() => setInviting(false)}

@@ -66,6 +66,9 @@ export const strings = {
   /** The workspace menu's way into settings (spec 0012), above Sign out. */
   settings: 'Settings',
   noObjects: 'No objects yet',
+  /** A guest with nothing shared (spec 0031, AC-828). */
+  nothingSharedTitle: 'Nothing has been shared with you yet.',
+  nothingSharedText: 'Ask an admin.',
   loadingTitle: 'Loading',
   failedTitle: 'Couldn’t load this workspace',
   failedText: sharedStrings.couldntDoThat,

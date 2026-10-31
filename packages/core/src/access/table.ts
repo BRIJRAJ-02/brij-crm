@@ -146,6 +146,8 @@ export const ACCESS_TABLE = {
   removeMember: { ownerRules: true },
   // Spec 0031, AC-816: the remove dialog's counts, for `members.manage` or about oneself.
   previewRemoval: { ownerRules: true },
+  // Spec 0031, slice 9: the guest dialog's counts, for holders of `members.manage` only (they alone change roles).
+  previewGuest: { permission: 'members.manage' },
   // Spec 0031: leaving is the removal on oneself, open to any member; the only owner is refused LAST_OWNER.
   leaveWorkspace: { anyMember: true },
   // Spec 0031, AC-813: an owner hands the workspace on; anyone else is refused.
