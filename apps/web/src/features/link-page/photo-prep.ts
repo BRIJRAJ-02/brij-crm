@@ -80,7 +80,7 @@ export async function preparePhoto(file: Blob, kind: BrandPhotoKind): Promise<Bl
 }
 
 /** The largest picture a block may be picked from (spec 0061, AC-6108): `PROFILE_IMAGE_PICK_MAX_BYTES`. */
-export const PICTURE_PICK_MAX_BYTES = 10 * 1024 * 1024;
+export const PICTURE_PICK_MAX_BYTES = 10_000_000;
 
 /** The longest side a block's picture is made before upload (AC-6108): `PROFILE_IMAGE_EDGE`. */
 const PICTURE_EDGE = 1600;

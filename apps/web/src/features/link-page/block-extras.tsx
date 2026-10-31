@@ -208,6 +208,7 @@ export function PictureField({
       <FileDrop
         label={label}
         acceptedTypes={PICTURE_TYPES}
+        typesText={strings.pictureTypes}
         maxSize={PICTURE_PICK_MAX_BYTES}
         isPending={isSending}
         {...(error === undefined ? {} : { error })}

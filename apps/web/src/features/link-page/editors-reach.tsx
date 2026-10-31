@@ -399,6 +399,7 @@ export function GalleryEditor({ item, items, linkPage, slug, chrome, onSubmit, o
         <FileDrop
           label={pictures.length === 0 ? words.galleryAddFirst : words.galleryAdd}
           acceptedTypes={PICTURE_TYPES}
+          typesText={words.pictureTypes}
           maxSize={PICTURE_PICK_MAX_BYTES}
           allowsMultiple
           isPending={isSending}

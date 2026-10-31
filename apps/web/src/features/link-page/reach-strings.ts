@@ -52,6 +52,7 @@ export const reachStrings = {
   pictureAlt: 'Your picture',
   pictureUnreadable: 'That picture can’t be read. Choose a JPEG, PNG or WebP.',
   pictureFailed: 'The picture didn’t upload. Try again.',
+  pictureTypes: 'JPG, PNG or WebP',
   newGallery: 'Add a gallery',
   editGallery: 'Edit gallery',
   gallery: 'Gallery',
@@ -156,7 +157,7 @@ export const reachStrings = {
 
   // Share links per place (AC-6125) and the builder.
   shareLinks: 'Links for each place',
-  shareLinksText: 'Each one is your address, marked with where it was shared, so Insights can show it.',
+  shareLinksText: 'Insights shows each one under Sources.',
   shareLinksOpen: 'Share links',
   placeInstagram: 'Instagram',
   placeTiktok: 'TikTok',
