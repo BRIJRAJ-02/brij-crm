@@ -7,13 +7,10 @@ import type {
   ActivityKind,
   ActivityFeed as ActivityFeedSource,
   AttributeDefinition,
-  EntriesLayer,
-  ListView,
   MemberSummary,
   NoteList as NoteListSource,
   ObjectSummary,
   RecordComments,
-  RecordEntries,
   RecordFilesSource,
   RecordState,
   RecordSubscription,
@@ -80,6 +77,7 @@ import { recordHref, recordName } from './details.ts';
 import { isRecordTab, type RecordTab } from './params.ts';
 import { OverviewTab } from './OverviewTab.tsx';
 import { AddToListMenu, listsToAddTo } from '../lists/AddToListMenu.tsx';
+import type { ListSectionSource } from '../lists/list-section.ts';
 import { RecordLists } from '../lists/RecordLists.tsx';
 import { strings as listStrings } from '../lists/strings.ts';
 import { RecordActions } from './RecordActions.tsx';
@@ -128,13 +126,6 @@ export interface RecordPageProps {
   readonly files: RecordFilesSource | undefined;
   /** The Lists section (spec 0048, AC-4822): the lists over this object and this record's entries; none when no list is readable. */
   readonly listSection?: ListSectionSource | undefined;
-}
-
-/** What the Lists section reads: loaded by the route, shown by the page. */
-export interface ListSectionSource {
-  readonly lists: readonly ListView[];
-  readonly layer: EntriesLayer;
-  readonly source: RecordEntries;
 }
 
 /** The page's tabs, in order. */

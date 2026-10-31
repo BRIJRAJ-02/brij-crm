@@ -19,6 +19,7 @@ import { tabCount } from '../tasks/entries.ts';
 import { strings as taskStrings } from '../tasks/strings.ts';
 import { TaskDialog } from '../tasks/TaskDialog.tsx';
 import { TasksTab } from '../tasks/TasksTab.tsx';
+import { RecordLists } from '../lists/RecordLists.tsx';
 import { ActivityTab } from './ActivityTab.tsx';
 import { recordHref, recordName } from './details.ts';
 import type { PeekLoadStep, PeekSteps, PeekTab } from './params.ts';
@@ -234,7 +235,7 @@ function LoadedPeek(
   const { slug, object, members, tab, onTabChange, onClose, sources } = props;
   // The record these sources are for: the one asked for once its sources arrive, the last one until then.
   const { recordId } = sources;
-  const { data } = useRouteContext({ from: '__root__' });
+  const { data, toasts } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
   const state = useRecord(sources.record);
   const openTotal = useTaskTotal(sources.open);
@@ -321,6 +322,19 @@ function LoadedPeek(
                 }
               : {})}
           />
+          {/* The Lists section, the record page's own, above the related ones as there. */}
+          {!isLost && sources.listSection !== undefined && (
+            <RecordLists
+              data={data}
+              toasts={toasts}
+              slug={slug}
+              object={object}
+              recordId={recordId}
+              record={shown.display}
+              members={members}
+              {...sources.listSection}
+            />
+          )}
           {!isLost && (
             <RelatedSections
               slug={slug}

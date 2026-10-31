@@ -1,4 +1,4 @@
-import { isDataError, type DataLayer } from '@crm/data';
+import { isDataError } from '@crm/data';
 import { LoadingNow } from '@crm/ui';
 import { createFileRoute, redirect, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import {
@@ -9,6 +9,7 @@ import {
   isTaskParam,
   isThreadParam,
 } from '../features/records/params.ts';
+import { readListSection } from '../features/lists/list-section.ts';
 import { RecordPage, RecordPendingPage } from '../features/records/RecordPage.tsx';
 import { failedPage, missingPage } from '../features/workspace/ObjectScreen.tsx';
 import { strings } from '../features/workspace/strings.ts';
@@ -45,18 +46,6 @@ function recordSearch(search: Record<string, unknown>): RecordSearch {
     ...(isLogParam(search.log) ? { log: search.log } : {}),
     ...(isThreadParam(search.thread) ? { thread: search.thread } : {}),
   };
-}
-
-/** The lists over the object and this record's entries, or undefined when there is nothing to show (never fails the page). */
-async function readListSection(data: DataLayer, slug: string, objectId: string, recordId: string) {
-  try {
-    const lists = (await data.lists.list(slug)).filter((list) => list.objectId === objectId);
-    if (lists.length === 0) return undefined;
-    const layer = await data.lists.entries();
-    return { lists, layer, source: layer.forRecord(slug, recordId) };
-  } catch {
-    return undefined;
-  }
 }
 
 /** How long the route waits for the record before showing the page loading in place. */

@@ -14,6 +14,7 @@ import type {
   RecordSubscription,
   TaskList,
 } from '@crm/data';
+import { readListSection, type ListSectionSource } from '../lists/list-section.ts';
 import { detailAttributes, relatedSides } from './details.ts';
 import type { RelatedSource } from './RelatedSections.tsx';
 
@@ -33,6 +34,8 @@ export interface PeekSources {
   readonly notes: NoteList;
   readonly comments: RecordComments;
   readonly files: RecordFilesSource;
+  /** The Lists section, as on the record's page; undefined when no list the person may read sits over the object. */
+  readonly listSection: ListSectionSource | undefined;
 }
 
 /** Opens one record's subscriptions for the panel, as the record page's route does for its page. */
@@ -46,7 +49,7 @@ export async function openPeek(
   const shown = detailAttributes(attributes);
   const [objects, access] = await Promise.all([data.objects.list(slug), data.access.mine(slug).catch(() => undefined)]);
   const sides = relatedSides(attributes, objects);
-  const [record, feed, open, notes, comments, files, sections] = await Promise.all([
+  const [record, feed, open, notes, comments, files, sections, listSection] = await Promise.all([
     data.records.one(
       slug,
       recordId,
@@ -70,6 +73,7 @@ export async function openPeek(
         }),
       ),
     ),
+    readListSection(data, slug, object.id, recordId),
   ]);
   const related = sides.flatMap((side, index) => {
     const section = sections[index];
@@ -89,5 +93,6 @@ export async function openPeek(
     notes,
     comments,
     files,
+    listSection,
   };
 }
