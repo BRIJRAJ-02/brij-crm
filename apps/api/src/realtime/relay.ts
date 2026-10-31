@@ -672,7 +672,7 @@ export function createRelay(deps: RelayDeps): Relay {
         }
       }
       const queued = task !== undefined;
-      if (names && row !== undefined && deps.cutOff !== undefined) {
+      if (names && deps.cutOff !== undefined) {
         const tried = deps.cutOff(workspaceId, row.itemIds, keys).catch((error: unknown) => {
           log.warn('Cutting removed members off the live channel failed; it is tried again', {
             workspaceId,

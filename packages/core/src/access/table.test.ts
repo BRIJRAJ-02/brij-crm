@@ -921,6 +921,10 @@ async function dataWorld() {
   await core.deleteRecord(owner, { recordId: trashedId });
   const { listId } = await core.defineList(owner, { objectId: people, apiSlug: 'crew', name: 'Crew' });
   const { entryId } = await core.addEntry(owner, { listId, recordId });
+  // A field on the list itself, for the list's many entry edit (AC-4826).
+  const entryNote = (
+    await core.createAttribute(owner, { objectId: people, listId, id: core.newId(), title: 'Note', type: 'text' })
+  ).id;
   const peopleView =
     (
       await db.withWorkspace(workspaceId, (tx) =>
@@ -1049,6 +1053,7 @@ async function dataWorld() {
     trashedId,
     listId,
     entryId,
+    entryNote,
     peopleView,
     taskId,
     noteId,
@@ -1604,7 +1609,7 @@ const DATA_CASES: Readonly<Record<string, DataCase>> = {
     core.editEntries(scope, {
       listId: world.listId,
       entryIds: [world.entryId],
-      edit: { attributeId: core.newId(), op: 'clear' },
+      edit: { attributeId: world.entryNote, op: 'clear' },
     }),
   ),
   setEntriesValues: refused('FORBIDDEN', (scope, world) =>
