@@ -87,6 +87,7 @@ import type {
   RuleSubject,
   SetObjectAccessResult,
   SetRoleResult,
+  MergePreview,
   TeamView,
   RecordView,
   SessionLengthDays,
@@ -348,6 +349,8 @@ import type {
   LinkCell,
   LinkChange,
   LinkOutcome,
+  MergeOutcome,
+  MergeRequest,
   ObjectShape,
   RecordsApi,
   RecordsLayer,
@@ -522,6 +525,8 @@ export type {
   RemovalPreview,
   RoleOption,
   RolesList,
+  MergePreview,
+  MergeSide,
   RecordRefDisplay,
   RecordView,
   RelationshipView,
@@ -859,6 +864,8 @@ export type {
   LinkCell,
   LinkChange,
   LinkOutcome,
+  MergeOutcome,
+  MergeRequest,
   RecordsView,
   UnfileOutcome,
   ViewQuery,
@@ -2887,6 +2894,12 @@ export function createDataLayer({
       landed(
         input.workspace,
         call((options) => api.records.restoreBatch(input, options)),
+      ),
+    mergePreview: (input) => call((options) => api.records.mergePreview(input, options)),
+    merge: (input) =>
+      landed(
+        input.workspace,
+        call((options) => api.records.merge(input, options)),
       ),
     updateMany: (input) =>
       landed(
@@ -5775,6 +5788,25 @@ export function createDataLayer({
         const result = await (await recordsLayer()).deleteMany(workspace, objectId, recordIds);
         if (result.kind === 'done' && result.deleted > 0) trashMoved(workspace, recordIds);
         return result;
+      },
+      /**
+       * What merging two records would do (spec 0049): both records as read
+       * now, the rows that differ (the reader may see and change them) with
+       * the side preselected, and how much moves. A plain read for the dialog.
+       */
+      mergePreview: async (workspace: string, pair: Omit<MergeRequest, 'picks' | 'revisions'>): Promise<MergePreview> =>
+        (await recordsLayer()).mergePreview(workspace, pair),
+      /**
+       * Merges one record into another (spec 0049). Not optimistic (spec 0049,
+       * AC-4916): the answer comes first, then the kept record shows its new
+       * values everywhere and the merged one leaves every screen; a refusal
+       * changes nothing. Pressing Merge again while one is out joins it.
+       */
+      merge: async (workspace: string, request: MergeRequest): Promise<MergeOutcome> => {
+        const outcome = await (await recordsLayer()).merge(workspace, request);
+        // A merged record is in no trash (AC-4914): only a favourite of it follows.
+        if (outcome.kind === 'merged') favouritesMoved(workspace, [request.mergeId]);
+        return outcome;
       },
       /**
        * Edits one attribute of up to 500 records of one object as one action

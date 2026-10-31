@@ -2,7 +2,7 @@
 // each value row (`values.ts`), and written again here for every current value
 // of an attribute whose kind changed, when a custom object is named by another
 // attribute (late trap #15). The keys are always `crm_match_key` over
-// `crm_match_kind`, both in SQL (migration 0145), so nothing here normalises.
+// `crm_match_kind`, both in SQL (migration 0146), so nothing here normalises.
 import { sql } from 'drizzle-orm';
 import type { WorkspaceTx } from '@crm/db';
 

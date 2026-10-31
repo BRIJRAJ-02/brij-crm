@@ -27,6 +27,8 @@ describe('the kinds of change', () => {
       'access.previewed',
       'record.duplicate_dismissed',
       'record.duplicate_restored',
+      // A merge (spec 0049) reads on the kept record's timeline instead.
+      'record.merged',
     ]);
     // Spec 0037's scheduling rows (AC-1263) are listed with their sentences since J5.
     expect(auditKindOf('schedule.changed')).toBe('scheduling');

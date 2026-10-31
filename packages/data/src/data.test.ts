@@ -475,6 +475,8 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
         return { mode: 'inline' as const, results: behaviour.restoreBatch(input.batchId), echoes: 1 };
       }),
       startBulk: os.records.startBulk.handler(() => notServed()),
+      mergePreview: os.records.mergePreview.handler(() => notServed()),
+      merge: os.records.merge.handler(() => notServed()),
       updateMany: os.records.updateMany.handler(({ input }) => {
         mutationIds.push(input.mutationId);
         sent.push(input);

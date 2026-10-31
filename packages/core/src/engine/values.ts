@@ -765,7 +765,7 @@ function matchKeySql(attribute: AttributeDef, text: string | null): SQL | null {
 }
 
 /** One item's columns as an insert, with the member foreign key column for an actor value. */
-function itemInsert(item: ItemColumns) {
+export function itemInsert(item: ItemColumns) {
   return {
     textValue: item.textValue,
     numberValue: item.numberValue,

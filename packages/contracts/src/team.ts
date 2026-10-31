@@ -125,6 +125,9 @@ export const AUDIT_ACTIONS = [
   // newer record; `after` holds both record ids, never a value.
   'record.duplicate_dismissed',
   'record.duplicate_restored',
+  // Two records merged (spec 0049, AC-4915): the target is the kept record; `before` names the merged one, `after`
+  // what moved (others' notes and comments included, accepted on purpose).
+  'record.merged',
 ] as const;
 /** One action the audit log records. */
 export const AuditAction = z.enum(AUDIT_ACTIONS);

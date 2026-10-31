@@ -8,7 +8,7 @@ import { useWorkspaceName, WorkspacePage } from '../features/workspace/Workspace
 
 // An object's likely duplicates (spec 0049, AC-4907): `/w/$slug/objects/$object/duplicates`, from the view menu's
 // Find duplicates, narrowed to one record's pairs by `?record=<id>` (the record banner's Review). The loader reads the
-// object through the data layer and starts the pairs' first page; the page draws its loading, empty, failed and no
+// object, its attributes and the members (for the merge dialog) through the data layer and makes the pairs' list; the page draws its loading, empty, failed and no
 // access states from it. An archived object, or none, shows as missing.
 
 /** The page's address: one record to narrow it to, by id. */
@@ -27,8 +27,14 @@ export const Route = createFileRoute('/w/$slug/objects/$object_/duplicates')({
     });
     const object = objects.find((each) => each.apiSlug === params.object);
     if (object === undefined || object.isArchived) return { screen: undefined };
+    const [attributes, members] = await Promise.all([
+      context.data.attributes.list(params.slug, object.id),
+      context.data.members.list(params.slug),
+    ]);
     const pairs = context.data.records.duplicates.pairs(params.slug, object.id, deps.record);
-    return { screen: { object, pairs, ...(deps.record === undefined ? {} : { recordId: deps.record }) } };
+    return {
+      screen: { object, pairs, attributes, members, ...(deps.record === undefined ? {} : { recordId: deps.record }) },
+    };
   },
   pendingComponent: () => (
     <LoadingNow>
