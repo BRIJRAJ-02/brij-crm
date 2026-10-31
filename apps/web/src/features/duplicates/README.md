@@ -28,3 +28,9 @@ duplicate warning, the review page and the banner (spec 0049 tasks 5 to 7) open 
 
 - Opening a merged record's page goes to the record it was merged into, with "Jane D. was merged into Jane Doe"
   (AC-4914). When the reader can't see that record, the page reads as a record in the trash would.
+
+## Not yet
+
+- A merged record whose kept record the reader can't see opens as a trashed one, with a Restore the server refuses.
+- A value card's links (a URL, a record chip) still take a Tab stop inside the card; the `preview` surface should draw
+  chips without links (a field set rule).
