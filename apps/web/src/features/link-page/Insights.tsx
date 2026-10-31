@@ -77,11 +77,11 @@ export function Insights({ linkPage, slug, items }: InsightsProps) {
   if (state.status === 'ready' && state.counts !== lastReady) setLastReady(state.counts);
   const counts = state.status === 'ready' ? state.counts : undefined;
   const shown = counts ?? (state.status === 'loading' ? lastReady : undefined);
-  const hasViews = counts !== undefined && counts.views > 0;
+  // From what shows, so a period switch never flickers the CSV off and on while the next figures load.
+  const hasViews = shown !== undefined && shown.views > 0;
   return (
     <Card
       title={words.insights}
-      description={words.insightsText}
       actions={
         <>
           {period}

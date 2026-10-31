@@ -80,7 +80,7 @@ export function ScheduleFields({ value, onChange, problems }: ScheduleFieldsProp
 const SIZES: readonly { readonly id: 'small' | 'wide' | 'large'; readonly icon: IconName }[] = [
   { id: 'small', icon: 'square' },
   { id: 'wide', icon: 'rectangle-horizontal' },
-  { id: 'large', icon: 'layout-grid' },
+  { id: 'large', icon: 'grid-2x2' },
 ];
 
 /** Props for SizePicker. */
@@ -223,7 +223,7 @@ export function PictureField({
       />
       {extra}
       {isRemovable && value !== undefined && (
-        <Button variant="ghost" size="md" icon="trash" onPress={() => onChange(undefined)}>
+        <Button variant="ghost" size="sm" icon="trash" onPress={() => onChange(undefined)}>
           {strings.thumbRemove}
         </Button>
       )}

@@ -1037,8 +1037,11 @@ export function openLinkPage(given: {
     /** Brings one link in bio page across (spec 0055, AC-5524): the rows land hidden, for a person to turn on. */
     importLinks: (workspace: string, id: string, url: string): Promise<ProfileLinkImport> =>
       store.importLinks(workspace, id, url),
-    /** Signed out: forgets the copy. */
-    clear: store.clear,
+    /** Signed out: forgets the copy, and the figures and code style beside it. */
+    clear: (): void => {
+      store.clear();
+      reach.clear();
+    },
   };
 }
 

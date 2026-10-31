@@ -270,4 +270,34 @@ describe('Insights and the code’s style, as screens hold them', () => {
     await first;
     expect(held.getSnapshot()).toEqual({ status: 'ready', style: { colour: '#0b3d91' }, isSaving: false });
   });
+  it('forgets the figures and the style on clear, and an answer sent before it never lands after it', async () => {
+    const read = deferred<ProfileQrStyle>();
+    let reads = 0;
+    const reach = createReach({
+      api: {
+        counts: () => Promise.resolve(COUNTS),
+        fetchThumbnail: () => Promise.reject(new Error('unused')),
+        qrStyle: () => {
+          reads += 1;
+          return reads === 1 ? read.promise : new Promise<ProfileQrStyle>(() => undefined);
+        },
+        saveQrStyle: () => Promise.resolve({}),
+        upload: () => Promise.reject(new Error('unused')),
+      },
+      mintId: () => 'm',
+    });
+    const before = reach.qrStyle('acme');
+    before.retain();
+    reach.clear();
+    read.resolve({ colour: '#1f2937' });
+    await read.promise;
+    await Promise.resolve();
+    expect(before.getSnapshot()).toEqual({ status: 'loading' });
+    const after = reach.qrStyle('acme');
+    expect(after).not.toBe(before);
+    after.retain();
+    expect(reads).toBe(2);
+    expect(after.getSnapshot()).toEqual({ status: 'loading' });
+    expect(reach.insights('acme', 7)).not.toBe(reach.insights('other', 7));
+  });
 });

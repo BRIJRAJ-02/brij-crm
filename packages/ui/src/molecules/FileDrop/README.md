@@ -26,10 +26,9 @@ New. Imports (#30) and file attributes (#32) take files the same way, and say up
 
 ## States
 
-Uploading (`isPending`), refused by the screen (`error`).
 - Its hint reads "Drag a file here, or browse" when it takes one file and "Drag files here, or browse" with `allowsMultiple` (QA, 22 October 2026).
 
-Idle, with a preview, drag over (accent), focus, refused (the error under it), disabled.
+Idle, with a preview, drag over (accent), focus, uploading (`isPending`), refused (the error under it, or the screen's own `error`), disabled.
 
 `preview` (26 October 2026) draws the picture that is there already in the upload icon's place, for a single file
 picker that replaces one: a page's share image, and later an avatar or a logo. Somebody should see what they are

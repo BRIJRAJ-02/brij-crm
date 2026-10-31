@@ -9,6 +9,7 @@ import { useLinkPageQrStyle } from '@crm/data/react';
 import {
   AccentPicker,
   Button,
+  ButtonGroup,
   Callout,
   ChoiceChips,
   EmptyState,
@@ -210,50 +211,33 @@ export interface QrStyleModalProps {
   readonly onClose: () => void;
 }
 
+/** The dialog's choices, started from the saved style each time it opens. */
+interface QrDraft {
+  readonly colour?: string;
+  readonly pictureFrom: 'none' | 'person' | 'upload';
+  readonly upload?: HeldPicture;
+  readonly hasFrame: boolean;
+  readonly label: string;
+}
+
+function draftOf(saved: ProfileQrStyle, linkPage: LinkPageStore, slug: string): QrDraft {
+  return {
+    ...(saved.colour === undefined ? {} : { colour: saved.colour }),
+    pictureFrom: saved.picture?.from ?? 'none',
+    ...(saved.picture?.from === 'upload' ? { upload: heldPicture(linkPage, slug, saved.picture.image) } : {}),
+    hasFrame: saved.label !== undefined,
+    label: saved.label ?? words.qrLabelPlaceholder,
+  };
+}
+
 /**
  * Style your QR code (AC-6124): a colour (refused with a hint when it is too light to scan), a picture in the
  * middle (theirs, or one uploaded) and a frame with a label, drawn as they are picked; Save keeps them for the
  * page, and the code downloads as a 1024 pixel PNG or as SVG. The choices start from the saved style, so the form
  * waits for it: opened before it loads, the dialog shows its shape loading and offers no Save, since saving then
- * would wipe a style it never read.
+ * would wipe a style it never read. One dialog throughout, kept mounted, so it never enters twice and its exit plays.
  */
-export function QrStyleModal(props: QrStyleModalProps) {
-  const { linkPage, slug, isOpen, onClose } = props;
-  const held = linkPage.reach.qrStyle(slug);
-  const state = useLinkPageQrStyle(held);
-  if (state.status === 'ready') return <QrStyleForm {...props} saved={state.style} />;
-  const showSkeleton = state.status === 'loading';
-  return (
-    <Modal
-      title={words.qrStyleTitle}
-      hint={words.qrBackground}
-      isOpen={isOpen}
-      onOpenChange={(open) => {
-        if (!open) onClose();
-      }}
-      actions={
-        <>
-          <Button slot="close">{words.cancel}</Button>
-          <Button variant="primary" isDisabled>
-            {words.qrSave}
-          </Button>
-        </>
-      }
-    >
-      {showSkeleton ? (
-        <div aria-busy>
-          <Skeleton shape="block" width="full" />
-          <Skeleton lines={3} />
-        </div>
-      ) : (
-        <EmptyState tone="error" layout="row" title={words.qrStyleFailed} onRetry={() => held.retry()} />
-      )}
-    </Modal>
-  );
-}
-
-/** The form itself, once the saved style is known: its choices start from it. */
-function QrStyleForm({
+export function QrStyleModal({
   linkPage,
   slug,
   handle,
@@ -262,35 +246,41 @@ function QrStyleForm({
   quickPicks,
   isOpen,
   onClose,
-  saved,
-}: QrStyleModalProps & { readonly saved: ProfileQrStyle }) {
+}: QrStyleModalProps) {
   const { toasts } = useRouteContext({ from: '__root__' });
+  const held = linkPage.reach.qrStyle(slug);
+  const state = useLinkPageQrStyle(held);
   const { rules } = linkPage.reach;
-  const [colour, setColour] = useState<string | undefined>(saved.colour);
-  const [pictureFrom, setPictureFrom] = useState<'none' | 'person' | 'upload'>(saved.picture?.from ?? 'none');
-  const [upload, setUpload] = useState<HeldPicture | undefined>(() =>
-    saved.picture?.from === 'upload' ? heldPicture(linkPage, slug, saved.picture.image) : undefined,
-  );
-  const [hasFrame, setHasFrame] = useState(saved.label !== undefined);
-  const [label, setLabel] = useState(saved.label ?? words.qrLabelPlaceholder);
+  const [draft, setDraft] = useState<QrDraft | undefined>(undefined);
+  const [wasOpen, setWasOpen] = useState(isOpen);
+  // Each opening starts from the saved style as it is then; closing keeps the choices on screen while it leaves.
+  if (isOpen !== wasOpen) {
+    setWasOpen(isOpen);
+    if (isOpen) setDraft(undefined);
+  }
+  if (isOpen && draft === undefined && state.status === 'ready') setDraft(draftOf(state.style, linkPage, slug));
   const [refusal, setRefusal] = useState<string | undefined>(undefined);
   const [isSaving, setSaving] = useState(false);
-  const [isDownloading, setDownloading] = useState(false);
+  const [downloading, setDownloading] = useState<'png' | 'svg' | undefined>(undefined);
   const codeRef = useRef<SVGSVGElement>(null);
-  const colourProblem = colour === undefined ? undefined : rules.qrColourProblem(colour);
-  const labelProblem = hasFrame ? rules.qrLabelProblem(label) : undefined;
-  const style: ProfileQrStyle = {
-    ...(colour === undefined || colourProblem !== undefined ? {} : { colour }),
-    ...(pictureFrom === 'person'
-      ? { picture: { from: 'person' as const } }
-      : pictureFrom === 'upload' && upload !== undefined
-        ? { picture: { from: 'upload' as const, image: upload.image } }
-        : {}),
-    ...(hasFrame && labelProblem === undefined ? { label: label.trim() } : {}),
-  };
+  const change = (next: Partial<QrDraft>) => setDraft((was) => (was === undefined ? was : { ...was, ...next }));
+  const colourProblem = draft?.colour === undefined ? undefined : rules.qrColourProblem(draft.colour);
+  const labelProblem = draft?.hasFrame === true ? rules.qrLabelProblem(draft.label) : undefined;
+  const style: ProfileQrStyle =
+    draft === undefined
+      ? {}
+      : {
+          ...(draft.colour === undefined || colourProblem !== undefined ? {} : { colour: draft.colour }),
+          ...(draft.pictureFrom === 'person'
+            ? { picture: { from: 'person' as const } }
+            : draft.pictureFrom === 'upload' && draft.upload !== undefined
+              ? { picture: { from: 'upload' as const, image: draft.upload.image } }
+              : {}),
+          ...(draft.hasFrame && labelProblem === undefined ? { label: draft.label.trim() } : {}),
+        };
   const drawn = drawnQrStyle(style, linkPage, slug, personImage);
   const save = () => {
-    if (colourProblem !== undefined || labelProblem !== undefined || isSaving) return;
+    if (draft === undefined || colourProblem !== undefined || labelProblem !== undefined || isSaving) return;
     setSaving(true);
     setRefusal(undefined);
     const isPlain = Object.keys(style).length === 0;
@@ -306,12 +296,12 @@ function QrStyleForm({
   };
   const download = (kind: 'png' | 'svg') => {
     const svg = codeRef.current;
-    if (svg === null || isDownloading) return;
-    setDownloading(true);
+    if (svg === null || downloading !== undefined) return;
+    setDownloading(kind);
     (kind === 'png' ? qrPng(svg) : qrSvg(svg))
       .then((file) => saveFile(file, `${handle}-link-page.${kind}`))
-      .catch(() => toasts.toast({ tone: 'danger', message: words.pictureFailed }))
-      .finally(() => setDownloading(false));
+      .catch(() => toasts.toast({ tone: 'danger', message: words.downloadFailed }))
+      .finally(() => setDownloading(undefined));
   };
   return (
     <Modal
@@ -329,7 +319,7 @@ function QrStyleForm({
           <Button
             variant="primary"
             isPending={isSaving}
-            isDisabled={colourProblem !== undefined || labelProblem !== undefined}
+            isDisabled={draft === undefined || colourProblem !== undefined || labelProblem !== undefined}
             onPress={save}
           >
             {words.qrSave}
@@ -337,72 +327,97 @@ function QrStyleForm({
         </>
       }
     >
-      <QrCode ref={codeRef} value={address} label={words.qrPreview} size="sm" {...drawn}>
-        <Button icon="download" isPending={isDownloading} onPress={() => download('png')}>
-          {words.qrPng}
-        </Button>
-        <Button icon="download" isDisabled={isDownloading} onPress={() => download('svg')}>
-          {words.qrSvg}
-        </Button>
-      </QrCode>
-      <AccentPicker
-        label={words.qrColour}
-        {...(colour === undefined ? {} : { value: colour })}
-        onChange={(next) => {
-          setColour(next);
-          setRefusal(undefined);
-        }}
-        defaultName={words.qrColourDefault}
-        defaultValue="#000000"
-        quickPicks={quickPicks}
-      >
-        {(colourProblem ?? refusal) !== undefined && <Callout tone="danger">{colourProblem ?? refusal}</Callout>}
-      </AccentPicker>
-      <ChoiceChips
-        isSingle
-        label={words.qrPicture}
-        choices={[
-          { id: 'none', label: words.qrPictureNone },
-          ...(personImage === undefined ? [] : [{ id: 'person', label: words.qrPicturePerson }]),
-          { id: 'upload', label: words.qrPictureUpload },
-        ]}
-        selected={[pictureFrom]}
-        onChange={(picked) => {
-          const next = picked[0];
-          if (next === 'none' || next === 'person' || next === 'upload') setPictureFrom(next);
-        }}
-      />
-      {pictureFrom === 'upload' && (
-        <PictureField
-          label={upload === undefined ? words.imagePick : words.imageReplace}
-          linkPage={linkPage}
-          slug={slug}
-          {...(upload === undefined ? {} : { value: upload })}
-          onChange={(next) => {
-            if (next !== undefined) setUpload(next);
-          }}
-        />
-      )}
-      <ChoiceChips
-        isSingle
-        label={words.qrFrame}
-        choices={[
-          { id: 'none', label: words.qrFrameNone },
-          { id: 'label', label: words.qrFrameLabel },
-        ]}
-        selected={[hasFrame ? 'label' : 'none']}
-        onChange={(picked) => setHasFrame(picked[0] === 'label')}
-      />
-      {hasFrame && (
-        <Field
-          label={words.qrLabel}
-          autoComplete="off"
-          maxLength={20}
-          showCounter
-          value={label}
-          onChange={setLabel}
-          {...(labelProblem === undefined ? {} : { error: labelProblem })}
-        />
+      {draft === undefined ? (
+        state.status === 'error' ? (
+          <EmptyState tone="error" layout="row" title={words.qrStyleFailed} onRetry={() => held.retry()} />
+        ) : (
+          <>
+            <Skeleton shape="block" width="full" />
+            <Skeleton lines={3} />
+          </>
+        )
+      ) : (
+        <>
+          <QrCode ref={codeRef} value={address} label={words.qrPreview} size="sm" {...drawn}>
+            <ButtonGroup label={words.qrDownload} layout="row">
+              <Button
+                icon="download"
+                isPending={downloading === 'png'}
+                isDisabled={downloading === 'svg'}
+                onPress={() => download('png')}
+              >
+                {words.qrPng}
+              </Button>
+              <Button
+                icon="download"
+                isPending={downloading === 'svg'}
+                isDisabled={downloading === 'png'}
+                onPress={() => download('svg')}
+              >
+                {words.qrSvg}
+              </Button>
+            </ButtonGroup>
+          </QrCode>
+          <AccentPicker
+            label={words.qrColour}
+            {...(draft.colour === undefined ? {} : { value: draft.colour })}
+            onChange={(next) => {
+              change({ colour: next });
+              setRefusal(undefined);
+            }}
+            defaultName={words.qrColourDefault}
+            defaultValue="#000000"
+            quickPicks={quickPicks}
+          >
+            {(colourProblem ?? refusal) !== undefined && <Callout tone="danger">{colourProblem ?? refusal}</Callout>}
+          </AccentPicker>
+          <ChoiceChips
+            isSingle
+            label={words.qrPicture}
+            choices={[
+              { id: 'none', label: words.qrPictureNone },
+              ...(personImage === undefined ? [] : [{ id: 'person', label: words.qrPicturePerson }]),
+              { id: 'upload', label: words.qrPictureUpload },
+            ]}
+            selected={[draft.pictureFrom]}
+            onChange={(picked) => {
+              const next = picked[0];
+              if (next === 'none' || next === 'person' || next === 'upload') change({ pictureFrom: next });
+            }}
+          />
+          {draft.pictureFrom === 'upload' && (
+            <PictureField
+              label={draft.upload === undefined ? words.imagePick : words.imageReplace}
+              linkPage={linkPage}
+              slug={slug}
+              {...(draft.upload === undefined ? {} : { value: draft.upload })}
+              onChange={(next) => {
+                if (next !== undefined) change({ upload: next });
+              }}
+            />
+          )}
+          <ChoiceChips
+            isSingle
+            label={words.qrFrame}
+            choices={[
+              { id: 'none', label: words.qrFrameNone },
+              { id: 'label', label: words.qrFrameLabel },
+            ]}
+            selected={[draft.hasFrame ? 'label' : 'none']}
+            onChange={(picked) => change({ hasFrame: picked[0] === 'label' })}
+          />
+          {draft.hasFrame && (
+            <Field
+              label={words.qrLabel}
+              autoComplete="off"
+              maxLength={20}
+              showCounter
+              value={draft.label}
+              onChange={(next) => change({ label: next })}
+              {...(labelProblem === undefined ? {} : { error: labelProblem })}
+            />
+          )}
+        </>
       )}
     </Modal>
   );

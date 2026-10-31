@@ -5,7 +5,7 @@
 // Leaves out: the figures, which live in Insights on the overview. Loaded with the chunk that opens it, so neither it
 // nor the QR library is in the first load. The code is drawn in the owner's saved style (spec 0061, AC-6124), and
 // Links for each place opens from beside the address (AC-6125).
-import { Button, ButtonLink, Callout, Field, Modal, QrCode } from '@crm/ui';
+import { Button, ButtonGroup, ButtonLink, Callout, Field, Modal, QrCode } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useRef, useState } from 'react';
 import { qrPng, saveFile } from './qr-png.ts';
@@ -99,11 +99,11 @@ export function ShareLinkPageModal({
       )}
       <Field label={strings.address} isLabelHidden variant="copy" icon="link" value={shown} copyLabel={strings.copy} />
       {isPublic && onShareLinks !== undefined && (
-        <div>
+        <ButtonGroup label={reachStrings.shareLinksOpen} layout="row">
           <Button variant="ghost" size="sm" icon="link" onPress={onShareLinks}>
-            {reachStrings.shareLinks}
+            {reachStrings.shareLinksOpen}
           </Button>
-        </div>
+        </ButtonGroup>
       )}
     </Modal>
   );

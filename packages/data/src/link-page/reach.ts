@@ -386,12 +386,13 @@ export function createReach(deps: {
   readonly now?: () => number;
 }) {
   const now = deps.now ?? Date.now;
-  // One copy per period: the figures are the person's own, the same whichever workspace the screen is in, so the
-  // workspace only picks the route the read goes through.
-  const insightsHeld = new Map<ProfileInsightDays, InsightsHeld>();
-  let insightsWorkspace = '';
+  // One copy per workspace and period, since the server counts a page's views within the workspace it is read
+  // through. Everything held goes with `clear()` (sign in, sign out), and nothing sent before it lands after it.
+  const insightsHeld = new Map<string, InsightsHeld>();
+  let era = 0;
 
-  const makeInsights = (days: ProfileInsightDays): InsightsHeld => {
+  const makeInsights = (workspace: string, days: ProfileInsightDays): InsightsHeld => {
+    const born = era;
     let state: InsightsState = { status: 'loading' };
     let readAt: number | undefined;
     let asked = 0;
@@ -403,12 +404,12 @@ export function createReach(deps: {
     const read = () => {
       const ticket = (asked += 1);
       readAt = now();
-      deps.api.counts({ workspace: insightsWorkspace, days }).then(
+      deps.api.counts({ workspace, days }).then(
         (counts) => {
-          if (ticket === asked) set({ status: 'ready', counts });
+          if (ticket === asked && born === era) set({ status: 'ready', counts });
         },
         (error: unknown) => {
-          if (ticket !== asked) return;
+          if (ticket !== asked || born !== era) return;
           readAt = undefined;
           // Figures already shown stay; a first read that failed says so, with Try again.
           if (state.status !== 'ready') set({ status: 'error', error: toDataError(error) });
@@ -422,7 +423,11 @@ export function createReach(deps: {
       },
       getSnapshot: () => state,
       retain() {
-        if (readAt === undefined || now() - readAt >= INSIGHTS_FRESH_MS) read();
+        if (readAt === undefined || now() - readAt >= INSIGHTS_FRESH_MS) {
+          // A first read that failed says loading again while the next one is out, not the old error.
+          if (state.status === 'error') set({ status: 'loading' });
+          read();
+        }
         return () => undefined;
       },
       retry() {
@@ -432,11 +437,15 @@ export function createReach(deps: {
     };
   };
 
-  let qrHeld: QrStyleHeld | undefined;
-  let qrWorkspace = '';
-  let qrSave: ((style: ProfileQrStyle | null) => Promise<DataError | undefined>) | undefined;
+  /** The QR's style for one workspace: the held copy, and the save that lays a change over it. */
+  interface QrPart {
+    readonly held: QrStyleHeld;
+    readonly save: (style: ProfileQrStyle | null) => Promise<DataError | undefined>;
+  }
+  const qrParts = new Map<string, QrPart>();
 
-  const makeQr = (): QrStyleHeld => {
+  const makeQr = (workspace: string): QrPart => {
+    const born = era;
     let confirmed: ProfileQrStyle | undefined;
     let failed: DataError | undefined;
     // The newest change on its way, shown over what was confirmed. Each save takes a ticket: the newest answer to
@@ -460,28 +469,29 @@ export function createReach(deps: {
     const read = () => {
       readAt = now();
       const sentAt = ticket;
-      deps.api.qrStyle({ workspace: qrWorkspace }).then(
+      deps.api.qrStyle({ workspace }).then(
         (style) => {
-          if (sentAt !== ticket) return;
+          if (sentAt !== ticket || born !== era) return;
           confirmed = style;
           failed = undefined;
           show();
         },
         (error: unknown) => {
           readAt = undefined;
-          if (confirmed === undefined && sentAt === ticket) {
+          if (confirmed === undefined && sentAt === ticket && born === era) {
             failed = toDataError(error);
             show();
           }
         },
       );
     };
-    qrSave = (style) => {
+    const save = (style: ProfileQrStyle | null): Promise<DataError | undefined> => {
       const mine = (ticket += 1);
       shown = style ?? {};
       show();
-      return deps.api.saveQrStyle({ workspace: qrWorkspace, style, mutationId: deps.mintId() }).then(
+      return deps.api.saveQrStyle({ workspace, style, mutationId: deps.mintId() }).then(
         (saved) => {
+          if (born !== era) return undefined;
           if (mine > landed) {
             landed = mine;
             confirmed = saved;
@@ -492,7 +502,7 @@ export function createReach(deps: {
           return undefined;
         },
         (error: unknown) => {
-          if (mine === ticket) {
+          if (mine === ticket && born === era) {
             // Refused: what was saved stands again, and the reason goes back to the control that changed. With no
             // saved style known yet (the first read was set aside for this save), it is read again.
             shown = undefined;
@@ -503,14 +513,16 @@ export function createReach(deps: {
         },
       );
     };
-    return {
+    const held: QrStyleHeld = {
       subscribe(listener) {
         listeners.add(listener);
         return () => listeners.delete(listener);
       },
       getSnapshot: () => state,
       retain() {
-        if (readAt === undefined) read();
+        // Read again after a minute, so a style saved in another tab shows before this one starts a form from it;
+        // never under a change still on its way.
+        if (shown === undefined && (readAt === undefined || now() - readAt >= INSIGHTS_FRESH_MS)) read();
         return () => undefined;
       },
       retry() {
@@ -519,34 +531,44 @@ export function createReach(deps: {
         read();
       },
     };
+    return { held, save };
+  };
+  const qrPart = (workspace: string): QrPart => {
+    const found = qrParts.get(workspace);
+    if (found !== undefined) return found;
+    const made = makeQr(workspace);
+    qrParts.set(workspace, made);
+    return made;
   };
 
   return {
     /** One period's Insights (AC-6118, AC-6119): 7, 30 or 90 days, read when first held, kept a minute. */
     insights: (workspace: string, days: ProfileInsightDays): InsightsHeld => {
-      insightsWorkspace = workspace;
-      const found = insightsHeld.get(days);
+      const key = `${workspace}:${String(days)}`;
+      const found = insightsHeld.get(key);
       if (found !== undefined) return found;
-      const made = makeInsights(days);
-      insightsHeld.set(days, made);
+      const made = makeInsights(workspace, days);
+      insightsHeld.set(key, made);
       return made;
     },
     /** The periods Insights offers. */
     insightDays: PROFILE_INSIGHT_DAYS,
     /** The share QR's style (AC-6124), read when first held. */
-    qrStyle: (workspace: string): QrStyleHeld => {
-      qrWorkspace = workspace;
-      qrHeld ??= makeQr();
-      return qrHeld;
-    },
+    qrStyle: (workspace: string): QrStyleHeld => qrPart(workspace).held,
     /**
      * Saves the QR's style whole (`null` back to the plain code): shown at once, put back on a refusal, which comes
      * back rather than a toast, since the control that changed is where its reason belongs.
      */
-    saveQrStyle: (workspace: string, style: ProfileQrStyle | null): Promise<DataError | undefined> => {
-      qrWorkspace = workspace;
-      qrHeld ??= makeQr();
-      return qrSave?.(style) ?? Promise.resolve(undefined);
+    saveQrStyle: (workspace: string, style: ProfileQrStyle | null): Promise<DataError | undefined> =>
+      qrPart(workspace).save(style),
+    /**
+     * Forgets every figure and style held (sign in, sign out, an account deleted): the next person holds fresh
+     * copies, and an answer sent for the last person never lands in theirs.
+     */
+    clear: (): void => {
+      era += 1;
+      insightsHeld.clear();
+      qrParts.clear();
     },
     /**
      * Stores a picture for the page (AC-6101, AC-6108): the bytes, already made at most 1,600 pixels by the screen,

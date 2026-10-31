@@ -77,11 +77,8 @@ export function SocialsEditor({ item, items, linkPage, socialLinks, chrome, onSu
       }
     >
       <Form id={formId} onSubmit={submit} label={words.newSocials}>
-        {socialLinks.length === 0 ? (
-          <Callout tone="info">{words.socialsNone}</Callout>
-        ) : (
-          <Callout tone="info">{`${words.socialsCount(socialLinks.length)}. ${words.socialsHint}`}</Callout>
-        )}
+        {/* With links, the preview above says it all; only an empty row needs words. */}
+        {socialLinks.length === 0 && <Callout tone="info">{words.socialsNone}</Callout>}
         {extras.fields}
       </Form>
     </EditorModal>
@@ -205,6 +202,8 @@ export function ImageEditor({ item, items, linkPage, slug, chrome, onSubmit, onC
     ...extras.draft,
   };
   const submit = () => {
+    // Enter in a field submits too: a picture still on its way would be lost, so the save waits for it.
+    if (isSending) return;
     const checked = linkPage.check(draft, items, editing?.id);
     if (!checked.ok) {
       setProblems(checked.problems);

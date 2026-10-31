@@ -176,18 +176,16 @@ export function LinkPageOverview({
       )}
       {!isEmpty && <Insights linkPage={linkPage} slug={slug} items={items} />}
       <ShareLinksModal address={address} isOpen={isMarking} onClose={() => setMarking(false)} />
-      {isStyling && (
-        <QrStyleModal
-          linkPage={linkPage}
-          slug={slug}
-          handle={handle}
-          address={address}
-          {...(personImage === undefined ? {} : { personImage })}
-          quickPicks={quickPicks}
-          isOpen
-          onClose={() => setStyling(false)}
-        />
-      )}
+      <QrStyleModal
+        linkPage={linkPage}
+        slug={slug}
+        handle={handle}
+        address={address}
+        {...(personImage === undefined ? {} : { personImage })}
+        quickPicks={quickPicks}
+        isOpen={isStyling}
+        onClose={() => setStyling(false)}
+      />
     </>
   );
 }
