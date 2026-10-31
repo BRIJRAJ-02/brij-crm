@@ -260,6 +260,18 @@ export interface AttributeSettingsProps {
 /** What the member editor's search answers (its list type is the field set's union of display shapes). */
 type MemberSource = ReturnType<NonNullable<AttributeEditorProps['onSearch']>>;
 
+/** The picker's group for each type key while creating (owner item 92); one not named here is Basic. */
+const TYPE_GROUP: Readonly<Record<string, 'basic' | 'contact' | 'choice' | 'relation' | 'computed'>> = {
+  email: 'contact',
+  phone: 'contact',
+  link: 'contact',
+  location: 'contact',
+  select: 'choice',
+  multi_select: 'choice',
+  status: 'choice',
+  member: 'relation',
+};
+
 /** The key the picker offers Relationship under. */
 const RELATIONSHIP = 'relationship';
 
@@ -720,10 +732,13 @@ function AttributeForm({
     });
   };
 
+  // Creating, the picker groups the types (owner item 92, 31 October 2026), so the list shows what is possible at a
+  // glance: Basic, Contact, Choice, Relation and Computed, each under its heading.
   const itemOf = (each: PickerType): SelectItem => ({
     id: each.key,
     label: pickerLabel(each),
     icon: fieldTypeOf(each.type).icon,
+    ...(isCreating ? { group: strings.typeGroups[TYPE_GROUP[each.key] ?? 'basic'] } : {}),
   });
   // Creating: the offered entries, then Relationship when #15 gives it. Editing: the attribute's own type, which
   // may be one the picker doesn't offer (a personal name, a relationship).
@@ -731,7 +746,12 @@ function AttributeForm({
   const computedItems: readonly SelectItem[] =
     computed === undefined
       ? []
-      : COMPUTED_KINDS.map((kind) => ({ id: kind, label: strings[kind], icon: COMPUTED_ICONS[kind] }));
+      : COMPUTED_KINDS.map((kind) => ({
+          id: kind,
+          label: strings[kind],
+          icon: COMPUTED_ICONS[kind],
+          group: strings.typeGroups.computed,
+        }));
   const memberAt = offered.findIndex((each) => each.key === 'member');
   const splitAt = memberAt === -1 ? offered.length : memberAt + 1;
   const items: readonly SelectItem[] = isCreating
@@ -741,7 +761,14 @@ function AttributeForm({
         ...offered.slice(splitAt).map(itemOf),
         ...(relationshipEntry === undefined
           ? []
-          : [{ id: RELATIONSHIP, label: relationshipEntry.label, icon: fieldTypeOf('record_reference').icon }]),
+          : [
+              {
+                id: RELATIONSHIP,
+                label: relationshipEntry.label,
+                icon: fieldTypeOf('record_reference').icon,
+                group: strings.typeGroups.relation,
+              },
+            ]),
       ]
     : [
         computedKind !== undefined
@@ -815,27 +842,8 @@ function AttributeForm({
     >
       {/* Said once, above the settings, rather than under each of them. */}
       {readOnlyReason !== undefined && <Callout>{readOnlyReason}</Callout>}
-      <Field
-        label={strings.name}
-        name="title"
-        autoComplete="off"
-        isRequired
-        maxLength={100}
-        value={name}
-        onChange={changeName}
-        {...(isReadOnly ? { isReadOnly } : {})}
-      />
-      {archivedHolder !== undefined && apiNames !== undefined && (
-        <Button
-          variant="ghost"
-          icon="archive-restore"
-          onPress={() => {
-            apiNames.onRestore(archivedHolder);
-          }}
-        >
-          {strings.restoreArchived(name.trim())}
-        </Button>
-      )}
+      {/* The type first, then its name (owner item 92): what kind of field it is decides the rest. Focus still
+          starts in the name, the one thing to type. */}
       <Select
         label={strings.type}
         items={items}
@@ -855,6 +863,28 @@ function AttributeForm({
       {!isCreating && onChangeType === undefined && onRecreate !== undefined && (
         <Button variant="link" isDisabled={isBusy} onPress={onRecreate}>
           {strings.wrongType}
+        </Button>
+      )}
+      <Field
+        label={strings.name}
+        name="title"
+        autoComplete="off"
+        {...(isCreating ? { placeholder: strings.namePlaceholder } : {})}
+        isRequired
+        maxLength={100}
+        value={name}
+        onChange={changeName}
+        {...(isReadOnly ? { isReadOnly } : {})}
+      />
+      {archivedHolder !== undefined && apiNames !== undefined && (
+        <Button
+          variant="ghost"
+          icon="archive-restore"
+          onPress={() => {
+            apiNames.onRestore(archivedHolder);
+          }}
+        >
+          {strings.restoreArchived(name.trim())}
         </Button>
       )}
       {computedKind !== undefined && computed !== undefined && (
@@ -919,7 +949,8 @@ function AttributeForm({
         <Field
           label={strings.description}
           name="description"
-          isMultiline
+          // One line that grows as it is typed into (owner item 95): most descriptions are a phrase.
+          isWrapping
           maxLength={500}
           showCounter={!isReadOnly}
           value={description}
@@ -934,6 +965,7 @@ function AttributeForm({
           <>
             <Checkbox
               label={strings.required}
+              description={strings.requiredHint}
               isSelected={isRequired}
               isReadOnly={isReadOnly}
               onChange={(next) => {
@@ -949,6 +981,7 @@ function AttributeForm({
             {allowsUnique && (
               <Checkbox
                 label={strings.unique}
+                description={strings.uniqueHint}
                 isSelected={isUnique}
                 isReadOnly={isReadOnly}
                 onChange={(next) => {

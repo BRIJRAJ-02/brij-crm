@@ -90,6 +90,32 @@ export const Create: Story = {
   },
 };
 
+/**
+ * The type comes first, its list grouped (Basic, Contact, Choice, Relation, Computed) so you see what is possible;
+ * the name follows with an example, and focus still starts there. Required and Unique say what they do in a few
+ * words.
+ */
+export const GroupedTypes: Story = {
+  args: { typeKeys: undefined },
+  play: async ({ userEvent }) => {
+    const dialog = await openDialog();
+    const name = inDialog(dialog, 'Name');
+    await waitFor(() => expect(name).toHaveFocus());
+    await expect(name).toHaveAttribute('placeholder', 'e.g. Industry');
+    const type = within(dialog).getByRole('button', { name: /Type$/ });
+    // The type sits above the name.
+    await expect(type.compareDocumentPosition(name) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    await userEvent.click(type);
+    await expect(await screen.findByText('Contact')).toBeInTheDocument();
+    await expect(screen.getByText('Choice')).toBeInTheDocument();
+    await userEvent.keyboard('{Escape}');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'More settings' }));
+    await expect(within(dialog).getByRole('checkbox', { name: 'Required' })).toHaveAccessibleDescription(
+      'Can’t be left empty',
+    );
+  },
+};
+
 /** A name left empty is refused on its field before anything is sent (⌘↵ submits from any field). */
 export const NameMissing: Story = {
   parameters: { crm: { screenshot: false } },
