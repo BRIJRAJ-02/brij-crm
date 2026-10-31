@@ -681,6 +681,7 @@ export { routingReport } from './routing/report.ts';
 export { searchWorkspace, type GlobalSearchInput } from './search/search.ts';
 export { listRecents, visitRecent, RECENTS_KEPT, type RecentVisit } from './search/recents.ts';
 export {
+  checkImportDuplicates,
   checkImportLinks,
   checkImportMatches,
   createImport,

@@ -17,6 +17,7 @@ import {
   type StagedRow,
   type StageResult,
 } from '@crm/contracts';
+import type { RecordRefDisplay } from '@crm/contracts/values';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { checkScope } from '../access/mint.ts';
 import { inWorkspace } from '../access/run.ts';
@@ -31,7 +32,8 @@ import { loadAttributes, type AttributeDef } from '../engine/values.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
 import type { JobRegistry } from '../jobs/registry.ts';
 import { startJob } from '../jobs/service.ts';
-import { farObjects, foldName, resolveNames } from './links.ts';
+import { farObjects, foldName, nameKey, resolveNames, type Resolved } from './links.ts';
+import { duplicateRules, findImportDuplicates } from '../engine/duplicates.ts';
 import {
   checkSettings,
   IMPORT_NOT_FOUND,
@@ -174,6 +176,44 @@ export async function checkImportMatches(
     const keyed = input.values.map((value) => matchKeysOf(attribute, { [attribute.id]: value }));
     const found = await readableMatches(tx, scope, objectId, attribute.id, [...new Set(keyed.flat())]);
     return { rows: keyed.map((keys) => ({ keys, matched: keys.some((key) => found.has(key)) })) };
+  });
+}
+
+/** One staged create row for the preview's likely duplicates: its name cell's value and, on People, its Company cell. */
+export interface ImportDuplicateAsk {
+  readonly name: unknown;
+  readonly company?: string;
+}
+
+/**
+ * Says which of a file's create rows look like a live record before the import starts (spec 0049, AC-4918): by
+ * AC-4901's name rules, the same name, and on People the same Company (the cell's name resolved as the import links
+ * it). Only records the member can read are named, so nothing is revealed that the import itself wouldn't. Nothing
+ * is merged or skipped. Write on the object, as only an importer asks. Read only.
+ */
+export async function checkImportDuplicates(
+  scope: EngineScope,
+  input: { readonly objectId: string; readonly rows: readonly ImportDuplicateAsk[] },
+): Promise<readonly (RecordRefDisplay | undefined)[]> {
+  checkScope(scope);
+  if (input.rows.length > IMPORT_MATCHES_PAGE) {
+    throw refuse('CONFIG_INVALID', `Ask about at most ${IMPORT_MATCHES_PAGE.toLocaleString('en')} rows at a time.`);
+  }
+  return inWorkspace(scope, async (tx) => {
+    const objectId = await liveObject(tx, scope, input.objectId);
+    const rules = await duplicateRules(tx, scope, objectId);
+    const company = rules.name?.company?.attribute;
+    const names =
+      company === undefined ? [] : input.rows.flatMap((row) => (row.company === undefined ? [] : [row.company]));
+    const resolved =
+      company === undefined || names.length === 0
+        ? new Map<string, Resolved>()
+        : await resolveNames(tx, scope, await farObjects(tx, company), names);
+    const rows = input.rows.map((row) => {
+      const found = row.company === undefined ? undefined : resolved.get(foldName(nameKey(row.company)));
+      return { name: row.name, ...(found?.ok === true ? { companyIds: [found.recordId] } : {}) };
+    });
+    return findImportDuplicates(tx, scope, objectId, rows);
   });
 }
 

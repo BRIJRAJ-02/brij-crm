@@ -1,5 +1,6 @@
 import {
   checkImportLinks,
+  checkImportDuplicates,
   checkImportMatches,
   createImport,
   getImport,
@@ -69,4 +70,14 @@ export const importsRouter = member.imports.router({
       values: input.values,
     }),
   ),
+  duplicates: member.imports.duplicates.handler(async ({ context, input }) => {
+    const matches = await checkImportDuplicates(context.scope, {
+      objectId: input.objectId,
+      rows: input.rows.map((row) => ({
+        name: row.name,
+        ...(row.company === undefined ? {} : { company: row.company }),
+      })),
+    });
+    return { rows: matches.map((match) => (match === undefined ? {} : { match })) };
+  }),
 });

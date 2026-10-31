@@ -115,4 +115,9 @@ export interface EngineRefusal {
   readonly field?: string;
   /** The rule a `VALIDATION_FAILED` refusal is about (spec 0013). */
   readonly ruleId?: string;
+  /**
+   * The record holding a `UNIQUE_CONFLICT` value, only when the writer may see it (spec 0049, AC-4905), with its
+   * name as they may read it (empty when its name is hidden from them).
+   */
+  readonly holder?: { readonly recordId: string; readonly objectId: string; readonly name: string };
 }

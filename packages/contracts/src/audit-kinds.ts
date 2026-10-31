@@ -75,6 +75,9 @@ export const AUDIT_KINDS = {
 export const AUDIT_NOT_LISTED = [
   'member.preferences_changed',
   'booking_page.profile_reordered',
+  // Spec 0049: kept for the record of who dismissed a pair; its sentence in History is owed (not in this slice).
+  'record.duplicate_dismissed',
+  'record.duplicate_restored',
 ] as const satisfies readonly AuditAction[];
 
 /** An action Workspace changes lists: every catalog action outside `AUDIT_NOT_LISTED`. */

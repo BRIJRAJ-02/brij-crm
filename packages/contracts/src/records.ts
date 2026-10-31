@@ -4,6 +4,7 @@
 import { oc } from '@orpc/contract';
 import * as z from 'zod';
 import { RecordActivity, RecordActivityInput } from './activity.ts';
+import { duplicatesContract } from './duplicates.ts';
 import { ApiRefusal } from './errors.ts';
 import { ActorReferenceValue, Timestamp } from './values/attribute-values.ts';
 import {
@@ -606,4 +607,6 @@ export const recordsContract = {
   stageSince: oc.input(StageSinceInput).output(StageSince),
   getTrashed: oc.input(GetTrashedInput).output(TrashedRecord),
   search: oc.input(SearchRecordsInput).output(SearchResults),
+  /** Likely duplicates (spec 0049). */
+  duplicates: duplicatesContract,
 };

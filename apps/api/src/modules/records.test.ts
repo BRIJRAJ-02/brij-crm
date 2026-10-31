@@ -226,8 +226,10 @@ describe('records.create', () => {
     expect(refusalsOf(conflict)).toMatchObject([
       {
         code: 'UNIQUE_CONFLICT',
-        message: 'Another record already has this value for Email addresses.',
+        // The holder the writer can see is named, with what Open needs (spec 0049, AC-4905).
+        message: 'ada@example.com belongs to Ada Lovelace.',
         attributeId: m.attribute('email_addresses'),
+        holder: { objectId: m.people.id, name: 'Ada Lovelace' },
       },
     ]);
     expect((await m.client.records.count({ workspace: m.slug, objectId: m.people.id })).count).toBe(1);

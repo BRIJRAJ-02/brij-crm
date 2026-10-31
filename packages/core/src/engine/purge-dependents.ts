@@ -82,6 +82,16 @@ export const PURGE_DEPENDENTS: readonly PurgeDependent[] = Object.freeze([
     (ids) => sql`update bookings set company_record_id = null where company_record_id = any(${ids})`,
   ),
   removing('bookings_deal', (ids) => sql`update bookings set deal_record_id = null where deal_record_id = any(${ids})`),
+  // A pair marked "Not a duplicate" (spec 0049) goes with either record: two statements, one through each index.
+  {
+    name: 'duplicate_dismissals',
+    remove: async (tx, recordIds) => {
+      const ids = uuidArray(recordIds);
+      const low = await tx.execute(sql`delete from record_duplicate_dismissals where low_record_id = any(${ids})`);
+      const high = await tx.execute(sql`delete from record_duplicate_dismissals where high_record_id = any(${ids})`);
+      return (low.rowCount ?? 0) + (high.rowCount ?? 0);
+    },
+  },
 ]);
 
 /**

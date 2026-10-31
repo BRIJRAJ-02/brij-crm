@@ -101,6 +101,10 @@ export const AUDIT_ACTIONS = [
   'calendar.reconnect_asked',
   // A booking made, moved or cancelled by someone other than its host: the target is the booking, `memberId` the host.
   'booking.changed_for',
+  // Likely duplicates (spec 0049, AC-4908): a pair marked "Not a duplicate", and that undone. The target is the
+  // newer record; `after` holds both record ids, never a value.
+  'record.duplicate_dismissed',
+  'record.duplicate_restored',
 ] as const;
 /** One action the audit log records. */
 export const AuditAction = z.enum(AUDIT_ACTIONS);
