@@ -64,6 +64,8 @@ export const strings = {
   // Lists around the record (AC-4822 to AC-4827).
   listsSection: 'Lists',
   notInAny: 'Not in any list',
+  listsNoun: (count: number) => (count === 1 ? 'list' : 'lists'),
+  listsFailed: 'Couldn’t load the lists',
   openList: 'Open list',
   entryActions: (list: string) => `${list} actions`,
   addToListMenu: 'Add to list',

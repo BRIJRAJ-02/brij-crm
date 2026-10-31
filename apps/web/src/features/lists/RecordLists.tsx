@@ -110,10 +110,12 @@ function EntryCard({
   }));
   // The list's name heads its entry with the entry's menu at the end of that line, rather than alone under the fields.
   return (
+    // The default variant, as the Lists section over it: its chevron first and its menu always in sight (the
+    // label variant hid Open list until hover). An h4 under the section's h3.
     <Disclosure
       key={row.id}
       title={list.name}
-      variant="label"
+      headingLevel={4}
       defaultExpanded
       actions={
         <MenuTrigger>
@@ -179,7 +181,7 @@ export function RecordLists({
       title={strings.listsSection}
       isRuled
       defaultExpanded
-      {...(state.status === 'loading' ? {} : { count: rows.length })}
+      {...(state.status === 'ready' ? { count: rows.length, countLabel: strings.listsNoun(rows.length) } : {})}
       {...(writable.length === 0
         ? {}
         : {
@@ -203,6 +205,9 @@ export function RecordLists({
     >
       {state.status === 'loading' ? (
         <Skeleton lines={2} />
+      ) : state.status === 'error' ? (
+        // A failed read never says "Not in any list": it says it couldn't tell, with Try again.
+        <EmptyState tone="error" title={strings.listsFailed} layout="row" onRetry={source.retry} />
       ) : rows.length === 0 ? (
         <EmptyState title={strings.notInAny} layout="row" />
       ) : (

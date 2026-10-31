@@ -4,8 +4,10 @@ import { Button } from '../../atoms/Button/Button.tsx';
 import { Switch } from '../../atoms/Switch/Switch.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { DescriptionList } from '../DescriptionList/DescriptionList.tsx';
+import { EmptyState } from '../EmptyState/EmptyState.tsx';
 import { Select } from '../Select/SelectWithFaces.tsx';
 import { Table } from '../Table/Table.tsx';
+import { TileGrid } from '../TileGrid/TileGrid.tsx';
 import { Card } from './Card.tsx';
 
 const meta = {
@@ -244,5 +246,39 @@ export const FooterWraps: Story = {
       await expect(button.left).toBeGreaterThanOrEqual(frame?.left ?? Infinity);
       await expect(button.right).toBeLessThanOrEqual(frame?.right ?? -Infinity);
     }
+  },
+};
+
+/**
+ * A body that is only a filling empty state takes the card's free height beside a taller card, the state centred in
+ * it (Home's empty Today beside the link page card).
+ */
+export const FillEmpty: Story = {
+  render: () => (
+    <Stage width="fill">
+      <TileGrid columns="two">
+        <Card title="Next up">
+          <EmptyState
+            icon="calendar"
+            title="No meetings this week"
+            layout="fill"
+            actions={<Button icon="calendar">Bookings</Button>}
+          />
+        </Card>
+        <Card title="Your link page">
+          <Switch label="Live" defaultSelected />
+          <Switch label="Show the QR code" />
+          <Switch label="Show booking pages" defaultSelected />
+          <Switch label="Show forms" />
+        </Card>
+      </TileGrid>
+    </Stage>
+  ),
+  play: async ({ canvas, canvasElement }) => {
+    const cards = canvasElement.querySelectorAll('.ws-card-root');
+    const state = canvas.getByRole('status').getBoundingClientRect();
+    const card = cards[0]?.getBoundingClientRect();
+    // The state fills the stretched card below its title, rather than sitting as a line under it.
+    await expect(state.height).toBeGreaterThan((card?.height ?? 0) / 2);
   },
 };

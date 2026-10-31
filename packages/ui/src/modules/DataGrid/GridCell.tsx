@@ -98,10 +98,11 @@ export interface GridCellProps {
    */
   readonly onOpenPanel?: () => void;
   /**
-   * Whether a press began on Open in panel, held by the grid: focusing a row gives it an element of its own, so the
-   * press's start and its release land on two different cells, and only a flag that outlives the first cell can join them.
+   * The row whose Open in panel the pointer went down on, held by the grid (which clears it on every press):
+   * focusing a row gives it an element of its own, so the press's start and its release land on two different
+   * cells, and only a mark that outlives the first cell can join them.
    */
-  readonly peekPress?: { current: boolean };
+  readonly peekPress?: { current: number | undefined };
   /** A checkbox value: a click on the mark toggles it. */
   readonly onToggle?: () => void;
   /** On the row header: the row's note (spec 0006, AC-56), drawn after the value and read with it. */
@@ -221,15 +222,17 @@ export function GridCell({
   // (a screen reader's, `detail` 0). Only a press that both started and ended on it counts: a drag (a range, a text
   // selection) that merely ends over it opens nothing.
   const isOnPeek = (target: EventTarget) => target instanceof Element && target.closest('[data-peek]') !== null;
-  const ownPress = useRef(false);
+  const ownPress = useRef<number | undefined>(undefined);
   const peekPressed = peekPress ?? ownPress;
   const onPointerDownCapture = (event: PointerEvent<HTMLDivElement>) => {
-    peekPressed.current = event.button === 0 && isOnPeek(event.target);
+    peekPressed.current = event.button === 0 && isOnPeek(event.target) ? row : undefined;
   };
+  // Only this row's own Open in panel, pressed and released: a drag from another row's, or one that left it, opens
+  // nothing.
   const onPointerUpCapture = (event: PointerEvent<HTMLDivElement>) => {
     const pressed = peekPressed.current;
-    peekPressed.current = false;
-    if (pressed && event.button === 0 && isOnPeek(event.target)) onOpenPanel?.();
+    peekPressed.current = undefined;
+    if (pressed === row && event.button === 0 && isOnPeek(event.target)) onOpenPanel?.();
   };
   const onClickCapture = (event: MouseEvent<HTMLDivElement>) => {
     if (event.detail === 0 && isOnPeek(event.target)) onOpenPanel?.();
