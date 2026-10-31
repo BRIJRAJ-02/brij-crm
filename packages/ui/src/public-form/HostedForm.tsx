@@ -20,6 +20,7 @@ import styles from './HostedForm.module.css';
 import type { FormBooking as EagerFormBooking, FormBookingProps } from './FormBooking.tsx';
 import type { HostedRemoveUpload, HostedUpload } from './files.ts';
 import { Question } from './Question.tsx';
+import { SentAnswers } from './SentAnswers.tsx';
 import {
   useHostedForm,
   type HostedFormMode,
@@ -40,11 +41,11 @@ const loadBooking = () => import('./FormBooking.tsx');
 /**
  * Sent, while the countdown's chunk is still arriving or when it can't be fetched (a flaky network, or a deploy
  * between load and Send): the answers are saved, so the thank you shows with Book a time as its one way on, never a
- * blank page.
+ * blank page. What was sent reads back above it, as on the countdown.
  */
-function BookingFallback({ state, mode, heading, url, text }: FormBookingProps) {
+function BookingFallback({ state, mode, heading, url, text, summary }: FormBookingProps) {
   return (
-    <FormConfirmation mode={mode} heading={heading} title={state.words.thanksTitle} text={text}>
+    <FormConfirmation mode={mode} heading={heading} title={state.words.thanksTitle} text={text} summary={summary}>
       <Button
         variant="primary"
         size="lg"
@@ -144,6 +145,7 @@ export function HostedForm({
         url={state.view.url}
         seconds={state.view.seconds}
         text={state.view.text}
+        summary={<SentAnswers form={form} state={state} />}
       />
     );
   } else if (state.view.kind === 'thanks')

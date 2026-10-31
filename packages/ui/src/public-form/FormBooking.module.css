@@ -1,9 +1,17 @@
 /* Sent, and on to book (spec 0023 AC-1059), inside the shared confirmation:
    the countdown line with its number inside a ring that drains over the
-   countdown (and holds while the visitor is on the buttons), then Book now
-   beside Stay here. Under reduced motion the ring is gone and only the number
+   countdown (and holds while the visitor is on the buttons), under Book a
+   time and a quiet Stay here, so the one way on leads and the countdown has
+   a row of its own. Under reduced motion the ring is gone and only the number
    changes; in forced colours the ring draws in the system's text colour. */
 @layer components {
+  .next {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-12);
+  }
+
   .line {
     display: inline-flex;
     align-items: center;
@@ -18,7 +26,7 @@
 
     display: inline-grid;
     place-items: center;
-    margin-inline-start: var(--space-6);
+    margin-inline: var(--space-6) var(--space-2);
     inline-size: var(--space-32);
     block-size: var(--space-32);
   }
@@ -65,6 +73,7 @@
   .actions {
     display: flex;
     flex-wrap: wrap;
+    align-items: center;
     justify-content: center;
     gap: var(--space-8);
   }
