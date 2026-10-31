@@ -126,7 +126,8 @@ test.describe('teams and access', () => {
     const invite = page.getByRole('dialog', { name: 'Invite people' });
     await invite.getByRole('textbox', { name: 'Email' }).fill(grace);
     await invite.getByRole('button', { name: /^Invite/ }).click();
-    await invite.getByRole('button', { name: 'Done' }).click();
+    // A clean invite closes the dialog by itself.
+    await expect(invite).toHaveCount(0);
     const link = await inviteLinkFor(page.request, grace);
     const memberContext = await browser.newContext();
     const member = await memberContext.newPage();
@@ -200,7 +201,8 @@ test.describe('teams and access', () => {
     const invite = page.getByRole('dialog', { name: 'Invite people' });
     await invite.getByRole('textbox', { name: 'Email' }).fill(grace);
     await invite.getByRole('button', { name: /^Invite/ }).click();
-    await invite.getByRole('button', { name: 'Done' }).click();
+    // A clean invite closes the dialog by itself.
+    await expect(invite).toHaveCount(0);
     const memberContext = await browser.newContext();
     const member = await memberContext.newPage();
     await joinThrough(member, await inviteLinkFor(page.request, grace), grace, slug);

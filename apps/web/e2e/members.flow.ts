@@ -104,8 +104,9 @@ test('invites two people: the wrong address is refused, the invited one joins, a
   await expect(invite.getByRole('textbox', { name: 'Email 2' })).toBeFocused();
   await page.keyboard.type(other);
   await invite.getByRole('button', { name: 'Invite 2 people' }).click();
-  await expect(invite.getByText(`Invited ${invitee}, ${other}.`, { exact: false })).toBeVisible();
-  await invite.getByRole('button', { name: 'Done' }).click();
+  // A clean invite closes the dialog and says so in a toast; only a partial one keeps its summary open.
+  await expect(page.getByText('Invited 2 people')).toBeVisible();
+  await expect(invite).toHaveCount(0);
   await page.getByRole('tab', { name: /Joining/ }).click();
   await expect(page.getByRole('rowheader', { name: invitee })).toBeVisible();
   // Joining holds the pending invitations, then the other ways in: the invite link, then the company email.

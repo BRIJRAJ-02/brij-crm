@@ -153,7 +153,7 @@ function Asked({
       }
     >
       {failure !== undefined && <Callout tone="danger">{failure}</Callout>}
-      {strings.removeText}
+      <p>{strings.removeText}</p>
       {read.status === 'loading' && <div aria-busy="true">{showSkeleton && <Skeleton lines={2} />}</div>}
       {read.status === 'failed' && <Callout tone="warning">{strings.previewFailed}</Callout>}
       {read.status === 'ready' && read.preview.requiredDefaults > 0 && (

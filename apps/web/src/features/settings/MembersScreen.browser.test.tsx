@@ -14,7 +14,7 @@ import type {
   RolesList,
   WorkspaceDomainsView,
 } from '@crm/data';
-import { createToasts, UiProvider, type Toasts } from '@crm/ui';
+import { createToasts, sharedStrings, UiProvider, type Toasts } from '@crm/ui';
 import {
   createMemoryHistory,
   createRootRouteWithContext,
@@ -640,7 +640,7 @@ describe('the Joining tab', () => {
     counted.elsewhere({ enabled: false });
     await reload();
     await page.getByRole('button', { name: 'Undo' }).click();
-    await expect.element(page.getByText('The invite link changed again since, so nothing was undone.')).toBeVisible();
+    await expect.element(page.getByText(sharedStrings.undoStale)).toBeVisible();
     expect(counted.calls.setLink).toEqual([{ enabled: true, maxUses: 50 }]);
     expect(counted.link().enabled).toBe(false);
   });

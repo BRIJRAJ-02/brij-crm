@@ -73,7 +73,7 @@ export function DeleteWorkspaceDialog({ data, slug, name, isOpen, onClose, onDel
         </>
       }
     >
-      {strings.deleteText}
+      <span>{strings.deleteText}</span>
       <Field
         label={strings.typeName(name)}
         // Typing the name is the dialog's one task, so its field takes focus as it opens (Q102).
