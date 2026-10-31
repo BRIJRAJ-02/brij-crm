@@ -63,6 +63,8 @@ const READS: ReadonlySet<string> = new Set([
   'invitations.link',
   // What a removal will do, for the remove dialog (slice 5, AC-816).
   'members.removalPreview',
+  // What making a member a guest will do, for the confirm dialog (slice 9, AC-1432).
+  'members.guestPreview',
   // Domain join (slice 6): the workspaces to ask, a workspace's domains, and its open requests.
   'join.list',
   'joinRequests.domains',

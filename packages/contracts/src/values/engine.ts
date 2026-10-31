@@ -73,6 +73,8 @@ export const ENGINE_REFUSAL_CODES = [
   // team before teams exist); a delegate holding 50 or a member with 20 delegates.
   'DELEGATE_INVALID',
   'DELEGATION_LIMIT',
+  // A guest named as a host or in a rotation (spec 0037, AC-1432): guests can't take bookings.
+  'MEMBER_INVALID',
   // Time off (spec 0037, AC-1288): a member with 50 upcoming time off entries.
   'TIME_OFF_LIMIT',
   // The sidebar (spec 0034, AC-934): 50 favourites, or 400 stored items.

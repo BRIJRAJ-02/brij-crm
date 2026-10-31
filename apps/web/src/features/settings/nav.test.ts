@@ -103,6 +103,15 @@ describe('visibleSettingsNav', () => {
     ]);
   });
 
+  it('leaves Scheduling access out for a guest, who has no scheduling (spec 0031, slice 9)', () => {
+    expect(
+      visibleSettingsNav(settingsNav('acme'), [], false, true).map((group) => group.entries.map((entry) => entry.id)),
+    ).toEqual([
+      ['profile', 'preferences', 'security', 'notifications'],
+      ['general', 'members', 'teams', 'objects', 'lists', 'jobs', 'history', 'trash'],
+    ]);
+  });
+
   it('shows Super admin only to a super admin, whatever their workspace role (spec 0047)', () => {
     const ids = (isOperator: boolean) =>
       visibleSettingsNav(settingsNav('acme'), ['booking.manage', 'security.manage'], isOperator).map(

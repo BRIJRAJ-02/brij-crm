@@ -17,8 +17,9 @@ export const HOME_SECTIONS: readonly HomeSection[] = [
     id: 'linkPage',
     title: linkPageStrings.title,
     width: 'half',
-    // Everyone has a link page once they claim a handle; before, the card says how (AC-5123).
-    isVisible: () => true,
+    // Everyone who books has a link page once they claim a handle; before, the card says how (AC-5123). A guest
+    // books nothing and has none (spec 0031 slice 9, late trap #77).
+    isVisible: (context) => context.permissions.includes('booking.manage'),
     isHideable: true,
     Component: LinkPageSection,
   },

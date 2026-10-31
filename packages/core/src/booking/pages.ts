@@ -47,7 +47,7 @@ import { linksOf, seenLinks } from './links.ts';
 import { lockKey } from './locks.ts';
 import { lockRotations } from '../rotation/assign.ts';
 import { everyoneRotation } from '../rotation/roster.ts';
-import { eligibleMembers, pageRotations, ROTATION_ROLES, TEAM_LIMITS } from '../rotation/team.ts';
+import { eligibleMembers, GUESTS_CANT_HOST, pageRotations, ROTATION_ROLES, TEAM_LIMITS } from '../rotation/team.ts';
 import { loadPage, pagesOf, type PageRecord } from './slots.ts';
 import {
   checkAnswersObject,
@@ -379,19 +379,12 @@ async function setPageHosts(tx: WorkspaceTx, workspaceId: string, pageId: string
   }
   if (fixed.length > 0) {
     const people = await tx
-      .select({ id: members.id })
+      .select({ id: members.id, role: members.role })
       .from(members)
-      .where(
-        and(
-          inArray(members.id, fixed),
-          eq(members.status, 'active'),
-          sql`${members.role}::text in (${sql.join(
-            ROTATION_ROLES.map((role) => sql`${role}`),
-            sql`, `,
-          )})`,
-        ),
-      );
-    if (people.length !== fixed.length) {
+      .where(and(inArray(members.id, fixed), eq(members.status, 'active')));
+    // A guest can't host (spec 0037, AC-1432): said as such, not as a stranger.
+    if (people.some((person) => person.role === 'guest')) throw refuseOn('MEMBER_INVALID', GUESTS_CANT_HOST, 'hosts');
+    if (people.filter((person) => ROTATION_ROLES.includes(person.role)).length !== fixed.length) {
       throw refuseOn('HOSTS_INVALID', 'Only active members of this workspace can be fixed hosts.', 'hosts');
     }
   }

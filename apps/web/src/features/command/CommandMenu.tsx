@@ -80,7 +80,8 @@ export function CommandMenu({ slug, mode, isOpen, onOpenChange, record }: Comman
 
   const byObject = useMemo(() => new Map(objects.map((object) => [object.id, object])), [objects]);
   const pages = useMemo(() => pageCommands(slug, objects, permissions, lists), [slug, objects, permissions, lists]);
-  const settings = useMemo(() => settingsCommands(slug, permissions), [slug, permissions]);
+  const isGuest = loaded?.access?.role === 'guest';
+  const settings = useMemo(() => settingsCommands(slug, permissions, isGuest), [slug, permissions, isGuest]);
   // The page the menu opened over: its object and view get their own actions (Import, Export this view).
   const params: { readonly object?: string; readonly viewId?: string } = useParams({ strict: false });
   const here = objects.find((object) => object.apiSlug === params.object);

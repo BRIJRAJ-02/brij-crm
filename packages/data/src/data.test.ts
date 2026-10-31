@@ -491,6 +491,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       }),
       setRole: os.members.setRole.handler(notServed),
       removalPreview: os.members.removalPreview.handler(notServed),
+      guestPreview: os.members.guestPreview.handler(notServed),
       remove: os.members.remove.handler(notServed),
       leave: os.members.leave.handler(notServed),
       transferOwnership: os.members.transferOwnership.handler(notServed),

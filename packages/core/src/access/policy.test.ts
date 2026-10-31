@@ -57,14 +57,18 @@ const fieldRule = (level: string, role = 'member'): LevelRule => ({
 });
 
 describe('roles', () => {
-  it.each(ROLES)('gives a %s exactly the permissions its catalog row lists, and write on everything', (role) => {
-    const access = roleAccess(member(role));
-    expect(access.permissions).toEqual(ROLE_PERMISSIONS[role]);
-    expect(access.data.key).toBe(OPEN_KEY);
-    expect(objectLevel(access, OBJECT)).toBe('write');
-    expect(fieldLevel(access, { id: FIELD, objectId: OBJECT })).toBe('write');
-    expect(recordRule(access, OBJECT)).toBeUndefined();
-  });
+  // A guest sees nothing by default: its own block below.
+  it.each(ROLES.filter((role) => role !== 'guest'))(
+    'gives a %s exactly the permissions its catalog row lists, and write on everything',
+    (role) => {
+      const access = roleAccess(member(role));
+      expect(access.permissions).toEqual(ROLE_PERMISSIONS[role]);
+      expect(access.data.key).toBe(OPEN_KEY);
+      expect(objectLevel(access, OBJECT)).toBe('write');
+      expect(fieldLevel(access, { id: FIELD, objectId: OBJECT })).toBe('write');
+      expect(recordRule(access, OBJECT)).toBeUndefined();
+    },
+  );
 
   it('never inherits: an admin holds no owner only permission, a member nothing but export and their booking pages', () => {
     expect(can(roleAccess(member('admin')), 'billing.manage')).toBe(false);
@@ -80,7 +84,7 @@ describe('roles', () => {
   });
 
   it('fails closed on a role the code does not know: no permission and no data', () => {
-    const access = roleAccess(member('guest'));
+    const access = roleAccess(member('viewer'));
     expect(access.permissions).toEqual([]);
     expect(objectLevel(access, OBJECT)).toBe('none');
     expect(fieldLevel(access, { id: FIELD, objectId: OBJECT })).toBe('hidden');
@@ -247,6 +251,40 @@ describe('the data grid: object level × field level', () => {
     expect(objectLevel(access, OBJECT)).toBe('none');
     expect(fieldLevel(access, { id: FIELD, objectId: OBJECT })).toBe('hidden');
     expect(objectLevel(access, 'constructor')).toBe('none');
+  });
+});
+
+describe('a guest (spec 0031, AC-828)', () => {
+  const teamWrite: LevelRule = {
+    subject: { type: 'team', teamId: TEAM },
+    target: { type: 'object', objectId: OBJECT },
+    level: 'write',
+  };
+
+  it('holds no permission and sees nothing until a rule shares an object', () => {
+    const access = roleAccess(member('guest'));
+    expect(access.permissions).toEqual([]);
+    expect(access.data.defaultObject).toBe('none');
+    expect(objectLevel(access, OBJECT)).toBe('none');
+    expect(access.data.key).not.toBe(OPEN_KEY);
+    // A rule for Members never reaches a guest.
+    expect(objectLevel(roleAccess(member('guest'), rules([objectRule('write')])), OBJECT)).toBe('none');
+  });
+
+  it('views what the Guest role is shared, and nothing else', () => {
+    const access = roleAccess(member('guest'), rules([objectRule('read', 'guest')]));
+    expect(objectLevel(access, OBJECT)).toBe('read');
+    expect(objectLevel(access, OTHER)).toBe('none');
+    expect(fieldLevel(access, { id: FIELD, objectId: OBJECT })).toBe('read');
+  });
+
+  it('never edits: a stored edit for the Guest role, or a team that edits, gives them view at most', () => {
+    expect(objectLevel(roleAccess(member('guest'), rules([objectRule('write', 'guest')])), OBJECT)).toBe('read');
+    expect(objectLevel(roleAccess(member('guest', [TEAM]), rules([teamWrite])), OBJECT)).toBe('read');
+    // The same team still lets a member in it edit.
+    expect(objectLevel(roleAccess(member('member', [TEAM]), rules([objectRule('none'), teamWrite])), OBJECT)).toBe(
+      'write',
+    );
   });
 });
 

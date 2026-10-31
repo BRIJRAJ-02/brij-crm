@@ -47,7 +47,8 @@ export const strings = {
   ownersAndAdmins: 'Owners and admins',
   ownersAndAdminsTip: 'They always see and edit everything.',
   /** Each role a rule can be about, as a group of people; a role added to the roles list fails here until named. */
-  roleGroups: { member: 'Members' } as const satisfies Record<RuleRole, string>,
+  roleGroups: { member: 'Members', guest: 'Guests' } as const satisfies Record<RuleRole, string>,
+  guestsTip: 'Guests can view, never edit.',
   addTeam: 'Add team',
   makeTeam: 'Make a team first',
   removeRow: (name: string) => `Remove ${name}`,
@@ -112,6 +113,7 @@ export const strings = {
       string
     >,
     members: 'Members',
+    guests: 'Guests',
     otherMembers: 'Other members',
     them: 'them',
     and: 'and',

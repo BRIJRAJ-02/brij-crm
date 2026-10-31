@@ -172,7 +172,9 @@ async function reseat(
           and not exists (
             select 1 from booking_hosts h
             join members m on m.workspace_id = h.workspace_id and m.id = h.member_id
-            where h.workspace_id = b.workspace_id and h.booking_id = b.id and m.status <> 'active'
+            -- A guest can't host either (spec 0031 slice 9): they count as gone.
+            where h.workspace_id = b.workspace_id and h.booking_id = b.id
+              and (m.status <> 'active' or m.role::text = 'guest')
           )
       `);
     } catch (error) {
@@ -277,7 +279,7 @@ export async function reseatGone(
     const fixedGone = await tx.execute<{ n: number }>(sql`
       select count(*)::int as n from booking_hosts h
       join members m on m.workspace_id = h.workspace_id and m.id = h.member_id
-      where h.booking_id = ${bookingId}::uuid and m.status <> 'active'
+      where h.booking_id = ${bookingId}::uuid and (m.status <> 'active' or m.role::text = 'guest')
         and not exists (
           select 1 from rotation_assignments a
           where a.workspace_id = h.workspace_id and a.booking_id = h.booking_id and a.member_id = h.member_id

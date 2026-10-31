@@ -234,7 +234,7 @@ describe('the rules hold under a race and for the system', () => {
     expect(await refusalOf(setMemberRole(owner, { memberId: newId(), role: 'admin' }))).toMatchObject({
       code: 'NOT_FOUND',
     });
-    expect(await refusalOf(setMemberRole(owner, { memberId: t.owner, role: 'guest' as Role }))).toMatchObject({
+    expect(await refusalOf(setMemberRole(owner, { memberId: t.owner, role: 'viewer' as Role }))).toMatchObject({
       code: 'CONFIG_INVALID',
     });
   });

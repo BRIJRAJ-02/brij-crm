@@ -109,6 +109,8 @@ export interface WorkspaceFrameProps {
   readonly roleLabel?: string;
   /** The person owns this workspace: Leave is hidden while they are its only owner (the server refuses it then). */
   readonly isOwner?: boolean;
+  /** The person is a guest here (spec 0031, slice 9): Settings leaves out the scheduling pages. */
+  readonly isGuest?: boolean;
   /** Every workspace the person is in, oldest first: the workspace menu lists them to switch (spec 0031, AC-801). */
   readonly workspaces?: readonly WorkspaceSummary[];
   /** Its objects; undefined while they load, so the Records section shows skeleton rows. */
@@ -153,6 +155,7 @@ export function WorkspaceFrame({
   workspaces,
   roleLabel,
   isOwner = false,
+  isGuest = false,
   objects,
   lists,
   isMissing = false,
@@ -268,7 +271,13 @@ export function WorkspaceFrame({
   const sidebar = useMemo(
     () =>
       settings !== undefined ? (
-        <SettingsNavigation slug={slug} settings={settings} permissions={permissions} isOperator={isOperator} />
+        <SettingsNavigation
+          slug={slug}
+          settings={settings}
+          permissions={permissions}
+          isOperator={isOperator}
+          isGuest={isGuest}
+        />
       ) : (
         <Sidebar
           workspace={workspaceName ?? strings.product}
@@ -393,6 +402,7 @@ export function WorkspaceFrame({
       slug,
       permissions,
       isOperator,
+      isGuest,
       workspaceName,
       isMissing,
       commandMenu,
@@ -599,11 +609,13 @@ function SettingsNavigation({
   settings,
   permissions,
   isOperator,
+  isGuest,
 }: {
   readonly slug: string;
   readonly settings: SettingsSidebar;
   readonly permissions: readonly Permission[] | undefined;
   readonly isOperator: boolean;
+  readonly isGuest: boolean;
 }) {
   return (
     <Sidebar
@@ -612,7 +624,7 @@ function SettingsNavigation({
       label={settingsStrings.settings}
       keyboard="arrows"
     >
-      {visibleSettingsNav(settingsNav(slug), permissions, isOperator).map((group) => (
+      {visibleSettingsNav(settingsNav(slug), permissions, isOperator, isGuest).map((group) => (
         <NavGroup key={group.id} label={group.label} isLabelShown>
           {group.entries.map((entry) => (
             <NavItem

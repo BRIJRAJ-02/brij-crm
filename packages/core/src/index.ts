@@ -555,6 +555,7 @@ export {
   leaveWorkspace,
   listMembers,
   listRoles,
+  previewGuest,
   previewRemoval,
   removeMember,
   setMemberRole,
