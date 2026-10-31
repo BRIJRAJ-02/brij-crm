@@ -16,6 +16,7 @@ import middleware, {
   hasSessionHint,
   ORIGIN_HEADER,
   PUBLIC_HOST_PATH,
+  CRAWL_FILES,
   publicHostRedirect,
   SESSION_HINT_COOKIE,
   SESSION_HINT_PRESENT,
@@ -439,6 +440,7 @@ describe('the public host check written out in middleware.ts', () => {
     expect(HANDLE_PATH.source).toBe(paths.HANDLE_PATH.source);
     expect(CARD_PATH.source).toBe(paths.CARD_PATH.source);
     expect(STRIP_PATH.source).toBe(paths.STRIP_PATH.source);
+    expect(CRAWL_FILES).toEqual(paths.CRAWL_FILES);
   });
 
   it('moves exactly what public-paths.ts moves', () => {

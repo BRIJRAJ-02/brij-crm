@@ -104,8 +104,9 @@ async function pageOf(m: Awaited<ReturnType<typeof memberWithWorkspace>>) {
 }
 
 /** What a public block is called in a list: its title, a testimonial's author, or nothing. */
-function nameOf(item: { readonly title?: string; readonly author?: string }): string {
-  return item.title ?? item.author ?? '';
+function nameOf(item: object): string {
+  if ('title' in item && typeof item.title === 'string') return item.title;
+  return 'author' in item && typeof item.author === 'string' ? item.author : '';
 }
 
 describe('the member procedures (AC-623, AC-645)', () => {
@@ -250,15 +251,33 @@ describe('handle addresses (22 Oct 2026)', () => {
       },
       mutationId: newId(),
     });
-    const second = await failure(() =>
+    // Up to three cards (spec 0061, AC-6114), each its own Save contact; with no `card`, the first answers.
+    const home = await m.client.profile.saveItem({
+      workspace: m.slug,
+      id: newId(),
+      block: { kind: 'contact', fullName: 'Ada at home' },
+      mutationId: newId(),
+    });
+    const club = await m.client.profile.saveItem({
+      workspace: m.slug,
+      id: newId(),
+      block: { kind: 'contact', fullName: 'Ada at the club' },
+      mutationId: newId(),
+    });
+    const fourth = await failure(() =>
       m.client.profile.saveItem({
         workspace: m.slug,
         id: newId(),
-        block: { kind: 'contact', fullName: 'Ada at home' },
+        block: { kind: 'contact', fullName: 'Ada elsewhere' },
         mutationId: newId(),
       }),
     );
-    expect(second).toMatchObject({ code: 'LIMIT_REACHED', message: 'A link page holds one contact card.' });
+    expect(fourth).toMatchObject({ code: 'LIMIT_REACHED', message: 'A link page holds up to 3 contact cards.' });
+    expect(await (await handles(`${handle}/contact.vcf?card=${home.id}`)).text()).toContain('FN:Ada at home');
+    expect((await handles(`${handle}/contact.vcf?card=${newId()}`)).status).toBe(404);
+    for (const extra of [home, club]) {
+      await m.client.profile.deleteItem({ workspace: m.slug, id: extra.id, mutationId: newId() });
+    }
     const answer = await handles(`${handle}/contact.vcf`);
     expect(answer.status).toBe(200);
     expect(answer.headers.get('content-type')).toBe('text/vcard; charset=utf-8');

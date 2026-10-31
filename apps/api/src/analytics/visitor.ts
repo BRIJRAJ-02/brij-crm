@@ -2,6 +2,7 @@
 // daily visitor id, a device class, and whether the visit is a machine's. The
 // address and the user agent go into the id's HMAC and are never kept.
 import { createHmac } from 'node:crypto';
+import { deviceFact } from '@crm/core';
 
 /** The key visitor ids are made with, from a server secret (the forms' address salt), under its own label. */
 export function visitorKey(secret: string): Buffer {
@@ -34,9 +35,8 @@ export function isMachine(userAgent: string | undefined): boolean {
 
 /** A device class from a user agent: a phone, a tablet, or anything else as desktop. */
 export function deviceOf(userAgent: string): 'mobile' | 'tablet' | 'desktop' {
-  if (/iPad|Tablet|PlayBook|Silk|Android(?!.*Mobile)/i.test(userAgent)) return 'tablet';
-  if (/Mobi|iPhone|iPod|Android.*Mobile|Windows Phone/i.test(userAgent)) return 'mobile';
-  return 'desktop';
+  // One rule for site visits and link page views (spec 0061, AC-6116): core's.
+  return deviceFact(userAgent);
 }
 
 /** Today's UTC day, `YYYY-MM-DD`. */

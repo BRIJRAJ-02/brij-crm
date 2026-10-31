@@ -759,6 +759,21 @@ export async function readLinkPage(
 }
 
 /**
+ * A live booking page's address and lengths, for a next times block (spec 0061, AC-6110): its slug and the lengths
+ * it offers, in its own order, through the entry the door made. A page that isn't live is refused as the slots read
+ * refuses it.
+ */
+export async function readTimesPage(
+  entry: BookingEntry,
+): Promise<{ readonly slug: string; readonly durations: readonly number[] }> {
+  checkEntry(entry);
+  return inWorkspace(entry.scope, async (tx) => {
+    const page = await livePage(tx, entry);
+    return { slug: page.slug, durations: page.durations };
+  });
+}
+
+/**
  * Whether the signed in person with this user id hosts the page (spec 0028,
  * AC-720): on their own page they get neither the overlay nor the prefill.
  */

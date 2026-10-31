@@ -62,6 +62,7 @@ import {
   pressesChip,
   previewBlock,
   rowWords,
+  isNewKind,
   type AddableKind,
   type ChosenFacts,
 } from './registry.tsx';
@@ -149,6 +150,11 @@ function shownItem(id: string, block: ProfileBlock, was: ProfileItem | undefined
   if (block.kind === 'contact') return { ...block, id, updatedAt };
   if (block.kind === 'text' || block.kind === 'faq' || block.kind === 'testimonial') {
     return { ...block, id, updatedAt };
+  }
+  // Spec 0061's kinds: the server's answer is what the list shows (their editors arrive with lane R4).
+  if (block.kind !== 'link') {
+    if (was !== undefined) return was;
+    throw new Error('This editor adds no block of this kind yet.');
   }
   return { ...block, id, hue: block.hue ?? (was?.kind === 'link' ? was.hue : 'blue'), updatedAt };
 }
@@ -557,13 +563,21 @@ function Blocks({
   const rowMenu = (item: ProfileItem, index: number) => {
     const words = rowWords(item);
     const href = copyHrefOf(item);
-    const kind = BLOCK_KINDS[item.kind];
+    // Spec 0061's kinds have no editor here yet (lane R4): their rows offer what every row does, and no Edit.
+    const kind = isNewKind(item) ? { isEditable: false } : BLOCK_KINDS[item.kind];
+    const editKind = isNewKind(item) ? undefined : item.kind;
     return (
       <MenuTrigger>
         <Button variant="ghost" icon="ellipsis" label={strings.moreFor(words.title)} />
         <Menu label={strings.moreFor(words.title)}>
           {kind.isEditable && (
-            <MenuItem id="edit" icon="pencil" onAction={() => setEditing({ kind: item.kind, item, id: item.id })}>
+            <MenuItem
+              id="edit"
+              icon="pencil"
+              onAction={() => {
+                if (editKind !== undefined) setEditing({ kind: editKind, item, id: item.id });
+              }}
+            >
               {strings.edit}
             </MenuItem>
           )}
@@ -803,6 +817,7 @@ function Blocks({
         onOpen={(id) => {
           const item = items.find((each) => each.id === id);
           if (item === undefined) return;
+          if (isNewKind(item)) return;
           if (BLOCK_KINDS[item.kind].isEditable) setEditing({ kind: item.kind, item, id: item.id });
           // A booking page block opens the booking page's own editor, in its workspace.
           else if (item.kind === 'page' && item.page !== undefined) {

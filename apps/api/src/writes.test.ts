@@ -71,6 +71,8 @@ const READS: ReadonlySet<string> = new Set([
   'profile.formChoices',
   // Add to Wallet (spec 0055): the address to save their own page from, made and never stored.
   'profile.walletLink',
+  // The share QR's style (spec 0061, AC-6124): a read of schema auth through a definer.
+  'profile.qrStyle',
   'deletedWorkspace.deleted',
   'access.mine',
   // Settings › History's Workspace changes (spec 0046).
@@ -715,6 +717,26 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     return [];
   },
   // The link page's blocks (spec 0051) live in schema auth: no tenant change, so no outbox row.
+  // The share QR's style (spec 0061, AC-6124): one column in schema auth, no outbox row of its own.
+  'profile.saveQrStyle': async (m, mutationId) => {
+    await m.client.profile.update({ workspace: m.slug, handle: freeHandle(), mutationId: newId() });
+    await m.client.profile.saveQrStyle({ workspace: m.slug, style: { colour: '#1f2937' }, mutationId });
+    return [];
+  },
+  // "Use the site's picture" (spec 0061, AC-6101): the test page names none, so nothing is kept and nothing changes.
+  'profile.fetchThumbnail': async (m, mutationId) => {
+    await m.client.profile.update({ workspace: m.slug, handle: freeHandle(), mutationId: newId() });
+    const link = await m.client.profile.saveItem({
+      workspace: m.slug,
+      id: newId(),
+      block: { kind: 'link', title: 'Site', url: 'https://example.com' },
+      mutationId: newId(),
+    });
+    expect(await m.client.profile.fetchThumbnail({ workspace: m.slug, id: link.id, mutationId })).toEqual({
+      none: true,
+    });
+    return [];
+  },
   'profile.saveItem': async (m, mutationId) => {
     await m.client.profile.saveItem({
       workspace: m.slug,
@@ -2367,6 +2389,8 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'bookingPages.delete': 2,
   'bookingPages.reorderProfile': 2,
   'profile.saveTheme': 2,
+  'profile.saveQrStyle': 2,
+  'profile.fetchThumbnail': 3,
   'profile.saveAccent': 2,
   'profile.setIndexable': 2,
   'profile.show': 2,

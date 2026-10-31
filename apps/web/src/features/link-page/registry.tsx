@@ -97,10 +97,21 @@ export interface BlockKind {
  * signup makes a hosted form with one email field and then adds an ordinary `form` block for it, so it is an entry
  * in this picker and nothing else: no kind word, no column, no renderer and nothing new on the public page.
  */
-export type AddableKind = ProfileBlockKind | 'signup';
+export type AddableKind = Exclude<ProfileBlockKind, SpecSixtyOneKind> | 'signup';
+
+/**
+ * Spec 0061's kinds, which this editor doesn't add or draw yet (its R4 lane builds their editors): a row of one
+ * says what it is and nothing more, and the preview leaves it out.
+ */
+type SpecSixtyOneKind = 'socials' | 'media' | 'image' | 'gallery' | 'times' | 'banner';
+
+/** Whether a stored block is one of spec 0061's kinds, which this editor shows only by its name for now. */
+export function isNewKind(item: ProfileItem): item is Extract<ProfileItem, { kind: SpecSixtyOneKind }> {
+  return ['socials', 'media', 'image', 'gallery', 'times', 'banner'].includes(item.kind);
+}
 
 /** Whether an entry makes a block of its own kind, or one of another kind (Email signup makes a form). */
-export function blockKindOf(kind: AddableKind): ProfileBlockKind {
+export function blockKindOf(kind: AddableKind): Exclude<ProfileBlockKind, SpecSixtyOneKind> {
   return kind === 'signup' ? 'form' : kind;
 }
 
@@ -201,6 +212,7 @@ function shownAddress(url: string): string {
 
 /** How a block's row reads; a link to one of our pages outside this workspace leads with saying so, and is off. */
 export function rowWords(item: ProfileItem): BlockRowWords {
+  if (isNewKind(item)) return { title: item.kind, address: '' };
   if (item.kind === 'link') {
     return item.outsideWorkspace === true
       ? { title: item.title, address: `${strings.notInWorkspace} · ${shownAddress(item.url)}`, isOff: true }
@@ -265,6 +277,7 @@ export function previewBlock(
   handle: string,
   markOf: (url: string) => LinkPageMark | undefined,
 ): LinkPageBlock | undefined {
+  if (isNewKind(item)) return undefined;
   if (item.kind === 'heading')
     return {
       kind: 'heading',

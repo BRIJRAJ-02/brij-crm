@@ -19,9 +19,13 @@ import {
   readProfileItems,
   saveProfileItem,
   personPicture,
+  readOwnLinkAddress,
+  readQrStyle,
+  saveQrStyle,
   updateMyMemberProfile,
   type ProfileExtras,
 } from '@crm/core';
+import { createMediaReader, readSitePicture, storeLinkPicture } from '../../link-page-pictures.ts';
 import { apiError } from '../../errors.ts';
 import { commitWrite } from '../../hooks.ts';
 import { member, type RequestContext, type SessionContext } from '../../orpc.ts';
@@ -58,6 +62,10 @@ const HALF_HOUR = 1800;
 const IMPORT_SOURCE_MAX = 400;
 /** A page of links is a few hundred kilobytes at most (AC-5525). */
 const IMPORT_MAX_BYTES = 1024 * 1024;
+/** Outside reads for a link page's pictures and media, per person (spec 0061, AC-6128): 30 a minute. */
+const OUTSIDE_READS = { window: 60, max: 30 } as const;
+/** The same site read for anyone's thumbnail: 60 a minute, so a page of links can't point us at one site's door. */
+const SITE_READS = { window: 60, max: 60 } as const;
 
 // Settings › Account › Profile (spec 0031, slice 7, AC-821): the caller's own member row, behind the member door.
 export const profileRouter = member.profile.router({
@@ -115,10 +123,33 @@ export const profileRouter = member.profile.router({
     }
     return shown;
   }),
-  counts: member.profile.counts.handler(async ({ context }) => {
-    const counts = await readProfileCounts(context.scope);
+  counts: member.profile.counts.handler(async ({ context, input }) => {
+    const counts = await readProfileCounts(context.scope, new Date(), input.days ?? 30);
     return { ...counts, presses: [...counts.presses] };
   }),
+  /**
+   * "Use the site's picture" (spec 0061, AC-6101): the link's own saved address, never one in the request, read for
+   * its `og:image` through the pinned outside fetch (https only, every address checked before connecting and after
+   * each redirect, 3 seconds, 64 kB of page and 1 MB of picture), then kept as one of the owner's pictures. 30 reads
+   * a minute per person and 60 per site. The editor saves the link with the picture's id.
+   */
+  fetchThumbnail: member.profile.fetchThumbnail.handler(async ({ context, input }) => {
+    const address = await readOwnLinkAddress(context.scope, input.id);
+    if (address === undefined) throw apiError('NOT_FOUND', 'That link isn’t on your link page any more.');
+    const mine = await context.limiter.consumeRateLimit(`link-page-read:${context.user.id}`, OUTSIDE_READS);
+    const site = await context.limiter.consumeRateLimit(`link-page-site:${new URL(address).hostname}`, SITE_READS);
+    if (!mine.allowed || !site.allowed) throw apiError('LIMIT_REACHED', 'Try the site’s picture again in a minute.');
+    return commitWrite(context, { mutationId: input.mutationId }, async () => {
+      const bytes = await readSitePicture(context.linkPageFetch, address);
+      if (bytes === undefined) return { none: true as const };
+      const stored = await storeLinkPicture(context.files, context.scope, context.user.id, bytes, 'thumb');
+      return stored.ok ? { image: stored.image, width: stored.width, height: stored.height } : { none: true as const };
+    });
+  }),
+  qrStyle: member.profile.qrStyle.handler(({ context }) => readQrStyle(context.scope)),
+  saveQrStyle: member.profile.saveQrStyle.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, () => saveQrStyle(context.scope, input.style)),
+  ),
   pageChoices: member.profile.pageChoices.handler(async ({ context }) => [
     ...(await listProfilePageChoices(context.scope)),
   ]),
@@ -191,8 +222,23 @@ export const profileRouter = member.profile.router({
       ),
     );
   }),
-  saveItem: member.profile.saveItem.handler(({ context, input }) =>
-    commitWrite(context, { mutationId: input.mutationId }, () =>
+  saveItem: member.profile.saveItem.handler(async ({ context, input }) => {
+    // A media block's title and poster are read once, on save (spec 0061, AC-6105), within the person's budget of
+    // outside reads; past it, the block saves with the provider's name and no poster.
+    const reads =
+      input.block.kind === 'media'
+        ? await context.limiter.consumeRateLimit(`link-page-read:${context.user.id}`, OUTSIDE_READS)
+        : undefined;
+    const readMedia =
+      reads?.allowed === true
+        ? createMediaReader({
+            fetch: context.linkPageFetch,
+            files: context.files,
+            scope: context.scope,
+            userId: context.user.id,
+          })
+        : undefined;
+    return commitWrite(context, { mutationId: input.mutationId }, () =>
       saveProfileItem(
         context.scope,
         {
@@ -200,10 +246,10 @@ export const profileRouter = member.profile.router({
           block: input.block,
           ...(input.isEdit === undefined ? {} : { isEdit: input.isEdit }),
         },
-        { publicOrigins: context.publicOrigins },
+        { publicOrigins: context.publicOrigins, ...(readMedia === undefined ? {} : { readMedia }) },
       ),
-    ),
-  ),
+    );
+  }),
   orderItems: member.profile.orderItems.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, () =>
       orderProfileItems(context.scope, input.ids, { publicOrigins: context.publicOrigins }),

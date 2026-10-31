@@ -41,6 +41,7 @@ export {
   readPagePicture,
   readProfilePicture,
   readPublicSlots,
+  readTimesPage,
   type IcsOrigin,
   type PublicBookingDeps,
   type PublicPictureDeps,

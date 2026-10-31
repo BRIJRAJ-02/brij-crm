@@ -390,3 +390,69 @@ describe('the edge cache tags', () => {
     expect(booking.tags).toBeUndefined();
   });
 });
+
+describe('structured data and crawler text (spec 0061, AC-6121, AC-6122)', () => {
+  const rich: ShellProfile = {
+    ...profile,
+    image: '/api/public/profiles/anish/picture?v=1',
+    bio: 'Designer </script><script>alert(1)</script>',
+    socials: [
+      { network: 'linkedin', href: 'https://www.linkedin.com/in/anish' },
+      { network: 'x', href: 'javascript:alert(1)' },
+    ],
+    items: [
+      { kind: 'link', id: 'a', title: 'Portfolio <b>', url: 'https://anish.design' },
+      { kind: 'link', id: 'b', title: 'After dark', url: 'https://example.com/x', notice: '18' },
+      { kind: 'link', id: 'c', title: 'Mail me', url: 'mailto:a@b.co' },
+      { kind: 'heading', id: 'd', title: 'Work' },
+    ],
+  };
+
+  /** The one structured data block's JSON, or undefined. */
+  const ldOf = (html: string) => {
+    const found = [...html.matchAll(/<script type="application\/ld\+json">([^<]*)<\/script>/g)];
+    expect(found.length).toBeLessThanOrEqual(1);
+    const [first] = found;
+    return first?.[1] === undefined ? undefined : (JSON.parse(first[1]) as Record<string, unknown>);
+  };
+
+  it('carries one ProfilePage for a Person, with every < written escaped', async () => {
+    const answer = await shellFor('/anish', deps({ readProfile: () => Promise.resolve(rich) }));
+    const ld = ldOf(answer.body);
+    expect(ld).toEqual({
+      '@context': 'https://schema.org',
+      '@type': 'ProfilePage',
+      url: 'https://timefix.com/anish',
+      mainEntity: {
+        '@type': 'Person',
+        name: 'Anish Rao',
+        description: 'Designer </script><script>alert(1)</script>',
+        image: 'https://timefix.com/api/public/profiles/anish/picture?v=1',
+        url: 'https://timefix.com/anish',
+        sameAs: ['https://www.linkedin.com/in/anish'],
+      },
+    });
+    const head = answer.body.slice(0, answer.body.indexOf('</head>'));
+    expect(head).not.toContain('</script><script>alert');
+    expect(head).toContain('\\u003c/script>');
+  });
+
+  it('carries none on a page set not to index', async () => {
+    const answer = await shellFor(
+      '/anish',
+      deps({ readProfile: () => Promise.resolve({ ...rich, indexable: false }) }),
+    );
+    expect(ldOf(answer.body)).toBeUndefined();
+  });
+
+  it('writes the name, the bio and the live web links into the root, escaped, leaving noticed links out', async () => {
+    const answer = await shellFor('/anish', deps({ readProfile: () => Promise.resolve(rich) }));
+    const root = /<div id="root"[^>]*>([\s\S]*?)<\/div>/.exec(answer.body)?.[1] ?? '';
+    expect(root).toContain('<h1>Anish Rao</h1>');
+    expect(root).toContain('<p>Designer &lt;/script&gt;&lt;script&gt;alert(1)&lt;/script&gt;</p>');
+    expect(root).toContain('<a href="https://anish.design">Portfolio &lt;b&gt;</a>');
+    expect(root).not.toContain('After dark');
+    expect(root).not.toContain('mailto:');
+    expect(ldOf(answer.body)).toBeDefined();
+  });
+});

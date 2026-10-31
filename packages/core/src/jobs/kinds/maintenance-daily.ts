@@ -87,6 +87,7 @@ const PHASES = [
   'imports',
   'uploads',
   'record_files',
+  'link_images',
 ] as const;
 
 /** How long a booking page's view counts are kept (spec 0047, AC-1628): a year, by day. */
@@ -144,6 +145,8 @@ const Totals = z.object({
   uploads: Count.default(0),
   /** Record files removed from the store (27 Oct 2026); 0 in an older checkpoint. */
   recordFiles: Count.default(0),
+  /** A link page's pictures no block used for a day (spec 0061); 0 in an older checkpoint. */
+  linkImages: Count.default(0),
 });
 type Totals = z.infer<typeof Totals>;
 
@@ -170,6 +173,7 @@ const NO_TOTALS: Totals = {
   imports: 0,
   uploads: 0,
   recordFiles: 0,
+  linkImages: 0,
 };
 
 /**
@@ -234,6 +238,7 @@ const plus = (totals: Totals, more: Partial<Totals>): Totals => ({
   imports: totals.imports + (more.imports ?? 0),
   uploads: totals.uploads + (more.uploads ?? 0),
   recordFiles: totals.recordFiles + (more.recordFiles ?? 0),
+  linkImages: totals.linkImages + (more.linkImages ?? 0),
 });
 
 /** Phase 1: one purge batch; the phase ends with the first batch that comes back short. */
@@ -708,6 +713,33 @@ async function orphanUploads(
 }
 
 /**
+ * The last phase (spec 0061): a link page's pictures that no block of their page uses, live or archived, nor its
+ * share QR, made more than a day ago (`crm_profile_images_unused`). They are a person's, not a workspace's, so
+ * whichever workspace's cleanup runs first takes them. The bytes go from the store first, then the rows
+ * (`crm_drop_profile_images`, each checked unused again), in one transaction. Without a store the rows wait.
+ */
+async function unusedLinkImages(
+  context: WriteContext,
+  at: Checkpoint,
+  store: UploadStore | undefined,
+): Promise<StepOutcome> {
+  if (store === undefined) return outcome(nextPhase(at, at.totals), at, at.totals, 0);
+  const found = await context.tx.execute<{ id: string; path: string }>(
+    sql`select id::text as id, path from crm_profile_images_unused(${UPLOADS_BATCH}::integer)`,
+  );
+  let removed = 0;
+  if (found.rows.length > 0) {
+    await store.remove(found.rows.map((row) => row.path));
+    const dropped = await context.tx.execute<{ gone: number }>(
+      sql`select crm_drop_profile_images(${`{${found.rows.map((row) => row.id).join(',')}}`}::uuid[]) as gone`,
+    );
+    removed = dropped.rows[0]?.gone ?? 0;
+  }
+  const totals = plus(at.totals, { linkImages: removed });
+  return outcome(found.rows.length === UPLOADS_BATCH ? { ...at, totals } : nextPhase(at, totals), at, totals, removed);
+}
+
+/**
  * Phase 9 (27 Oct 2026): a record's own copy of a file whose cell no longer names it, live or in history. Nothing
  * deletes these bytes eagerly: a cleared or overwritten cell, a trashed record and a restore all leave the history
  * row that names the id, and the file goes only once that row has gone too (an erase, a purge, or history past
@@ -793,6 +825,8 @@ export function maintenanceDaily(queue?: QueueRows, uploads?: UploadStore): Kind
           return orphanUploads(context, at, uploads);
         case 'record_files':
           return orphanRecordFiles(context, at, uploads);
+        case 'link_images':
+          return unusedLinkImages(context, at, uploads);
       }
     },
   });

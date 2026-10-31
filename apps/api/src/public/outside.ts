@@ -14,7 +14,10 @@
 // that needs a connection pinned to the address we checked, which means our own agent. The allow list the
 // import narrows to (seven link in bio hosts) is what covers it meanwhile, and anything added here that is not
 // behind such a list should close it first.
-import { promises as dns } from 'node:dns';
+import { lookup as dnsLookup, promises as dns, type LookupAddress } from 'node:dns';
+import { request } from 'node:https';
+import type { LookupFunction } from 'node:net';
+import { Readable } from 'node:stream';
 import { isFetchableUrl, isRefusedAddress } from '@crm/core/public';
 
 /** The longest an outside read may take, its redirects included. */
@@ -159,4 +162,80 @@ export function createOutsideFetch(
       return miss(signal.aborted ? 'timeout' : 'network');
     }
   };
+}
+
+/** A connection refused because the name answered with an address we never connect to. */
+const REFUSED_ADDRESS = Object.assign(new Error('That host resolves to an address we never connect to.'), {
+  code: 'EREFUSEDADDRESS',
+});
+
+/**
+ * The resolver a pinned connection uses (spec 0061, AC-6128): every address the name answers is checked, and the
+ * socket connects only to one that was. Checked here, at connect, the check and the use are the same lookup, so a
+ * name that answers one way to our check and another to the connection (DNS rebinding) can't reach inward.
+ */
+export function pinnedLookup(resolve: typeof dnsLookup = dnsLookup): LookupFunction {
+  return (hostname, options, callback) => {
+    resolve(hostname, { all: true, verbatim: true }, (error, addresses: LookupAddress[]) => {
+      if (error !== null) {
+        callback(error, '', 4);
+        return;
+      }
+      if (addresses.length === 0 || addresses.some((entry) => isRefusedAddress(entry.address))) {
+        callback(REFUSED_ADDRESS, '', 4);
+        return;
+      }
+      if (options.all === true) {
+        callback(null, addresses);
+        return;
+      }
+      const [first] = addresses;
+      if (first === undefined) callback(REFUSED_ADDRESS, '', 4);
+      else callback(null, first.address, first.family);
+    });
+  };
+}
+
+/**
+ * A `fetch` over `node:https` whose connection is pinned to an address `pinnedLookup` checked (spec 0061, AC-6128):
+ * what the outside fetch uses for addresses no allow list narrows, such as a link's own site and its picture. GET
+ * only, no redirects of its own (the outside fetch follows them, checking each), the caller's headers as given, and
+ * nothing else: no cookie jar, no credentials, no compression asked for.
+ */
+export function createPinnedFetch(lookup: LookupFunction = pinnedLookup()): typeof globalThis.fetch {
+  return (input, init) =>
+    new Promise<Response>((resolve, reject) => {
+      const url = new URL(input instanceof Request ? input.url : String(input));
+      const headers: Record<string, string> = {};
+      new Headers(init?.headers).forEach((value, key) => {
+        headers[key] = value;
+      });
+      const outgoing = request(
+        url,
+        {
+          method: 'GET',
+          headers,
+          lookup,
+          ...(init?.signal === undefined || init.signal === null ? {} : { signal: init.signal }),
+        },
+        (incoming) => {
+          const answered = new Headers();
+          for (const [key, value] of Object.entries(incoming.headers)) {
+            if (Array.isArray(value)) for (const each of value) answered.append(key, each);
+            else if (value !== undefined) answered.set(key, value);
+          }
+          const status = incoming.statusCode ?? 502;
+          const empty = status === 204 || status === 304 || status < 200;
+          if (empty) incoming.resume();
+          resolve(
+            new Response(empty ? null : (Readable.toWeb(incoming) as ReadableStream<Uint8Array>), {
+              status: status < 200 || status > 599 ? 502 : status,
+              headers: answered,
+            }),
+          );
+        },
+      );
+      outgoing.on('error', reject);
+      outgoing.end();
+    });
 }

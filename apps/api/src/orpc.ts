@@ -33,6 +33,7 @@ import type { EdgeCache } from './edge-cache.ts';
 import { apiError, inputProblems } from './errors.ts';
 import { log } from './log.ts';
 import type { OutsideFetch } from './public/outside.ts';
+import type { FileStore } from './storage/blob.ts';
 import type { ReadGate } from './gate.ts';
 import type { Analytics } from './monitoring/posthog.ts';
 import { setRequestScope } from './monitoring/sentry.ts';
@@ -117,6 +118,13 @@ export interface RequestContext extends ResponseHeadersPluginContext {
    * too, rather than calling the network itself.
    */
   outsideFetch: OutsideFetch;
+  /**
+   * The outside read for a link page's pictures and media (spec 0061, AC-6128): the same bounds, its connection
+   * pinned to an address it checked (no DNS rebinding), since a link's own site is behind no allow list.
+   */
+  linkPageFetch: OutsideFetch;
+  /** The private store a link page's pictures are kept in (spec 0061); absent, nothing can be stored here. */
+  files: FileStore | undefined;
   /** The app's own address (`APP_URL`): an invitation's link is `<appUrl>/invite/<token>`. */
   appUrl: string;
   /**

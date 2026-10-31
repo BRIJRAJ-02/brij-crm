@@ -150,3 +150,81 @@ export function withMeta(shell: string, source: MetaSource): string {
     look === undefined ? head : head.replace(/<html\b[^>]*>/, (tag) => tag.replace(/>$/, `${lookAttributes(look)}>`));
   return `${rooted}${metaTags(source)}${shell.slice(headEnd)}`;
 }
+
+/** A person's page as structured data and crawler text are written from (spec 0061, AC-6121, AC-6122). */
+export interface PageFacts {
+  readonly name: string;
+  readonly bio?: string;
+  /** The person's picture, an absolute address on our origin, only when their page shows it. */
+  readonly image?: string;
+  /** The page's canonical address on the public origin. */
+  readonly url: string;
+  /** Their social links' addresses, in their order. */
+  readonly sameAs: readonly string[];
+  /** The page's live links, in order: titles and addresses. A link behind a notice is never among them. */
+  readonly links: readonly { readonly title: string; readonly url: string }[];
+}
+
+/** The most links the crawler text names (AC-6122). */
+export const CRAWLER_LINKS_MAX = 60;
+
+/**
+ * The one `application/ld+json` block an indexable page carries (AC-6121): a `ProfilePage` whose `mainEntity` is a
+ * `Person` with a name, the bio as its description, the picture when it is shown, the page's address and the social
+ * links as `sameAs`. Every `<` is written as `<`, so nothing a person wrote can close the script element.
+ */
+export function jsonLdBlock(facts: PageFacts): string {
+  const person = {
+    '@type': 'Person',
+    name: facts.name,
+    ...(facts.bio === undefined || facts.bio === '' ? {} : { description: facts.bio }),
+    ...(facts.image === undefined ? {} : { image: facts.image }),
+    url: facts.url,
+    ...(facts.sameAs.length === 0 ? {} : { sameAs: [...facts.sameAs] }),
+  };
+  const json = JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': 'ProfilePage',
+    url: facts.url,
+    mainEntity: person,
+  })
+    .replace(/</g, '\\u003c')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029');
+  return `    <script type="application/ld+json">${json}</script>\n`;
+}
+
+/**
+ * The page as simple HTML inside its root (AC-6122): the name, the bio and up to 60 live links' titles and addresses,
+ * in order, every value escaped. The app replaces it when it draws, so this is what a crawler that runs no script reads.
+ * Only web addresses are links here; a mail or phone link is left out, as is anything behind a notice.
+ */
+export function crawlerHtml(facts: PageFacts): string {
+  const links = facts.links
+    .filter((link) => /^https?:\/\//i.test(link.url))
+    .slice(0, CRAWLER_LINKS_MAX)
+    .map((link) => `<li><a href="${escapeHtml(link.url)}">${escapeHtml(link.title)}</a></li>`)
+    .join('');
+  return [
+    `<main data-crawl>`,
+    `<h1>${escapeHtml(facts.name)}</h1>`,
+    facts.bio === undefined || facts.bio === '' ? '' : `<p>${escapeHtml(facts.bio)}</p>`,
+    links === '' ? '' : `<ul>${links}</ul>`,
+    `</main>`,
+  ].join('');
+}
+
+/**
+ * The shell with its structured data before `</head>` and the crawler text inside the page root (AC-6121, AC-6122).
+ * The root must be the build's own empty `<div id="root" …></div>`: a shell that has none comes back unchanged.
+ */
+export function withPageFacts(shell: string, facts: PageFacts, indexable: boolean): string {
+  const root = /(<div id="root"[^>]*>)(<\/div>)/;
+  const headEnd = shell.indexOf('</head>');
+  if (headEnd < 0 || !root.test(shell)) return shell;
+  const head = indexable ? `${shell.slice(0, headEnd)}${jsonLdBlock(facts)}` : shell.slice(0, headEnd);
+  const body = shell
+    .slice(headEnd)
+    .replace(root, (_, open: string, close: string) => `${open}${crawlerHtml(facts)}${close}`);
+  return `${head}${body}`;
+}
