@@ -60,6 +60,7 @@ const STEP: QuestionListItem = {
   id: 'step:company',
   kind: 'step',
   label: 'Step 2 · Your company',
+  typeIcon: 'layers',
   note: '2 questions',
 };
 

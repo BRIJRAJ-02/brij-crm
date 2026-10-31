@@ -98,7 +98,8 @@ export function QuestionList({
         <h2 className={styles.heading} id={headingId}>
           {label}
         </h2>
-        <Badge count={items.length} label={label} />
+        {/* Questions only: a step break is not one more question. */}
+        <Badge count={items.filter((item) => item.kind !== 'step').length} label={label} />
         {actions !== undefined && <span className={styles.actions}>{actions}</span>}
       </header>
       <SortableList
