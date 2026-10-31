@@ -2,8 +2,8 @@
 // Purpose: Settings › Account › Scheduling access (spec 0037, AC-1266): who can see or manage my scheduling, and whose
 // I can reach, timefix's "Sees all calendars" made personal (decision 9: a member picks their own assistant).
 // Main task: add a colleague with See or Manage, change their level, or take it back (asked first, AC-1445).
-// Leaves out: teams (not built), roles (Settings › Members), the reach of other people (the Members page's column).
-import type { DelegationView, MemberView, MyAccess, SchedulingAccessStore, SchedulingLevel } from '@crm/data';
+// Leaves out: team leads' reach (custom roles), roles (Settings › Members), the reach of other people (the Members page's column).
+import type { DelegationView, MemberView, MyAccess, SchedulingAccessStore, SchedulingLevel, TeamView } from '@crm/data';
 import { ROLE_LABELS } from '@crm/data';
 import { useScheduling } from '@crm/data/react';
 import {
@@ -39,6 +39,8 @@ export interface SchedulingAccessScreenProps {
   readonly access: MyAccess;
   /** The workspace's active members, for names, pictures and the Add someone picker. */
   readonly members: readonly MemberView[];
+  /** The workspace's teams, for the names of team delegations (spec 0037, AC-1254). */
+  readonly teams?: readonly TeamView[];
 }
 
 /** A level as a quiet word, for a row that can't change it here. */
@@ -47,7 +49,14 @@ const levelBadge = (level: SchedulingLevel) => (
 );
 
 /** Settings › Account › Scheduling access. */
-export function SchedulingAccessScreen({ scheduling, toasts, slug, access, members }: SchedulingAccessScreenProps) {
+export function SchedulingAccessScreen({
+  scheduling,
+  toasts,
+  slug,
+  access,
+  members,
+  teams = [],
+}: SchedulingAccessScreenProps) {
   const me = access.memberId;
   const state = useScheduling(scheduling.delegations(slug, 'mine'));
   const [isAdding, setAdding] = useState(false);
@@ -57,6 +66,7 @@ export function SchedulingAccessScreen({ scheduling, toasts, slug, access, membe
   const refocus = () => focusLater(() => addRef.current);
   const byId = useMemo(() => new Map(members.map((member) => [member.id, member])), [members]);
   const nameOf = (id: string) => byId.get(id)?.name;
+  const teamOf = (id: string) => teams.find((team) => team.id === id)?.name;
   const delegations = state.status === 'ready' ? state.delegations : [];
   const over = overMe(delegations, me);
   const held = heldBy(delegations, me);
@@ -160,7 +170,7 @@ export function SchedulingAccessScreen({ scheduling, toasts, slug, access, membe
       <Card>
         {roleReach && (
           <SettingsRow
-            leading={<Icon name="users-round" tone="muted" />}
+            leading={<Icon name="users" tone="muted" />}
             leadingAlign="center"
             title={strings.everyone}
             description={strings.everyoneFromRole(ROLE_LABELS[access.role])}
@@ -169,8 +179,8 @@ export function SchedulingAccessScreen({ scheduling, toasts, slug, access, membe
           </SettingsRow>
         )}
         {held.map((delegation) => {
-          const name = targetName(delegation.target, nameOf);
-          const whose = whoseOf(delegation.target, nameOf);
+          const name = targetName(delegation.target, nameOf, teamOf);
+          const whose = whoseOf(delegation.target, nameOf, teamOf);
           return (
             <SettingsRow
               key={delegation.id}
@@ -178,7 +188,7 @@ export function SchedulingAccessScreen({ scheduling, toasts, slug, access, membe
                 delegation.target.type === 'member' ? (
                   person(delegation.target.memberId)
                 ) : (
-                  <Icon name="users-round" tone="muted" />
+                  <Icon name={delegation.target.type === 'team' ? 'users-round' : 'users'} tone="muted" />
                 )
               }
               leadingAlign="center"

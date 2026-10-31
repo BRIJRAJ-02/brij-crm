@@ -1,23 +1,5 @@
-import appleCalendar from '../../assets/apple-calendar.svg';
-import googleCalendar from '../../assets/google-calendar.svg';
-import googleG from '../../assets/google-g.svg';
-import outlook from '../../assets/outlook.svg';
-import angellistDark from '../../assets/social-angellist-dark.svg';
-import angellistLight from '../../assets/social-angellist-light.svg';
-import facebook from '../../assets/social-facebook.svg';
-import githubDark from '../../assets/social-github-dark.svg';
-import githubLight from '../../assets/social-github-light.svg';
-import instagram from '../../assets/social-instagram.svg';
-import linkedin from '../../assets/social-linkedin.svg';
-import threadsDark from '../../assets/social-threads-dark.svg';
-import threadsLight from '../../assets/social-threads-light.svg';
-import tiktokDark from '../../assets/social-tiktok-dark.svg';
-import tiktokLight from '../../assets/social-tiktok-light.svg';
-import xDark from '../../assets/social-x-dark.svg';
-import xLight from '../../assets/social-x-light.svg';
-import youtube from '../../assets/social-youtube.svg';
-import timefixDark from '../../assets/timefix-mark-dark.svg';
-import timefixLight from '../../assets/timefix-mark-light.svg';
+import { useContext } from 'react';
+import { ProviderArtContext } from './art-context.ts';
 import styles from './ProviderMark.module.css';
 import { strings } from './strings.ts';
 
@@ -62,24 +44,6 @@ export interface ProviderMarkProps {
   readonly tone?: 'brand' | 'mono';
 }
 
-/** One image per brand; a black mark (Timefix, X, GitHub, AngelList, TikTok, Threads) has a light and a dark one, shown by theme like the wordmark. */
-const ART: Readonly<Record<ProviderName, string | { readonly light: string; readonly dark: string }>> = {
-  google: googleG,
-  'google-calendar': googleCalendar,
-  outlook,
-  'apple-calendar': appleCalendar,
-  timefix: { light: timefixLight, dark: timefixDark },
-  linkedin,
-  x: { light: xLight, dark: xDark },
-  instagram,
-  github: { light: githubLight, dark: githubDark },
-  facebook,
-  youtube,
-  angellist: { light: angellistLight, dark: angellistDark },
-  tiktok: { light: tiktokLight, dark: tiktokDark },
-  threads: { light: threadsLight, dark: threadsDark },
-};
-
 /**
  * A brand's own mark, as its owner publishes it: Google's G on Continue with
  * Google, the Google Calendar, Outlook and Apple Calendar marks on calendar
@@ -91,7 +55,9 @@ const ART: Readonly<Record<ProviderName, string | { readonly light: string; read
  * page design draws a person's social links (25 October 2026).
  */
 export function ProviderMark({ provider, size = 'md', isLabelled = false, tone = 'brand' }: ProviderMarkProps) {
-  const art = ART[provider];
+  const art = useContext(ProviderArtContext)?.[provider];
+  // Outside UiProvider (under UiProviderBase, the hosted form's) the artwork isn't loaded, so there is no mark.
+  if (art === undefined) return null;
   const alt = isLabelled ? strings.names[provider] : strings.unnamed;
   if (tone === 'mono') {
     // The artwork as a mask over the text colour: its shape only, the same file in either theme.

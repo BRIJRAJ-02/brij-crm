@@ -1,11 +1,18 @@
 // What the scheduling access screens say (spec 0037, AC-1266, AC-1267), as plain functions over the delegations
 // the data layer holds: which rows are over the member and which they hold, each row's source, and a member's reach
-// in a few words for the Members page. No React, so a test reads them directly.
+// in a few words for the Members page. A target is a person, a team (spec 0037, AC-1254) or everyone. No React, so a
+// test reads them directly.
 import type { DelegationTarget, DelegationView, Role } from '@crm/data';
 import { strings } from './scheduling-access-strings.ts';
 
 /** A member's name by id, or undefined for someone no longer here. */
 export type NameOf = (memberId: string) => string | undefined;
+
+/** A team's name by id, or undefined for a team since deleted (or not read yet). */
+export type TeamNameOf = (teamId: string) => string | undefined;
+
+/** Nobody's team names: a screen that holds no teams. */
+const NO_TEAMS: TeamNameOf = () => undefined;
 
 /** Whether a role manages everyone's scheduling through itself (decision 7: the built in Owner and Admin roles). */
 export const roleManagesEveryone = (role: Role): boolean => role === 'owner' || role === 'admin';
@@ -35,15 +42,20 @@ export function sourceOf(delegation: DelegationView, me: string, nameOf: NameOf)
   return name === undefined ? strings.addedByAdmin : strings.addedBy(name);
 }
 
-/** Whose scheduling a target names, as a possessive ("Bea’s", "everyone’s"). */
-export function whoseOf(target: DelegationTarget, nameOf: NameOf): string {
+/** Whose scheduling a target names, as a possessive ("Bea’s", "Sales’", "everyone’s"). */
+export function whoseOf(target: DelegationTarget, nameOf: NameOf, teamOf: TeamNameOf = NO_TEAMS): string {
   if (target.type === 'member') return strings.possessive(nameOf(target.memberId) ?? strings.formerMember);
+  if (target.type === 'team') {
+    const team = teamOf(target.teamId);
+    return team === undefined ? strings.formerTeamPossessive : strings.teamPossessive(team);
+  }
   return strings.everyonesPossessive;
 }
 
-/** A target as a row names it ("Bea Ortiz", "Everyone"). */
-export function targetName(target: DelegationTarget, nameOf: NameOf): string {
+/** A target as a row names it ("Bea Ortiz", "Sales", "Everyone"). */
+export function targetName(target: DelegationTarget, nameOf: NameOf, teamOf: TeamNameOf = NO_TEAMS): string {
   if (target.type === 'member') return nameOf(target.memberId) ?? strings.formerMember;
+  if (target.type === 'team') return teamOf(target.teamId) ?? strings.formerTeam;
   return strings.everyone;
 }
 
@@ -55,15 +67,20 @@ function namesList(names: readonly string[]): string {
 
 /**
  * A member's reach in a few words (AC-1267, the spec's Value sourcing): "Everyone" through an owner's or admin's role,
- * else the Manage reach from their delegations ("Everyone", "Sam and Bea"), with what See reaches further in
+ * else the Manage reach from their delegations ("Everyone", "Sales and Bea"), with what See reaches further in
  * brackets ("Sam (sees everyone)"), and "Only their own" when there is none.
  */
-export function reachWords(role: Role, held: readonly DelegationView[], nameOf: NameOf): string {
+export function reachWords(
+  role: Role,
+  held: readonly DelegationView[],
+  nameOf: NameOf,
+  teamOf: TeamNameOf = NO_TEAMS,
+): string {
   if (roleManagesEveryone(role)) return strings.everyoneByRole;
   const words = (level: 'view' | 'manage') => {
     const ofLevel = held.filter((each) => each.level === level);
     if (ofLevel.some((each) => each.target.type === 'everyone')) return strings.everyone;
-    return namesList(ofLevel.map((each) => targetName(each.target, nameOf)));
+    return namesList(ofLevel.map((each) => targetName(each.target, nameOf, teamOf)));
   };
   const manages = words('manage');
   const sees = manages === strings.everyone ? '' : words('view');

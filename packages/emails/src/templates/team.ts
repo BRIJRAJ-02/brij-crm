@@ -4,6 +4,8 @@
 import type {
   ImportFinishedEmail,
   JobFailedEmail,
+  SchedulingAccessGivenEmail,
+  SchedulingAccessRemovedEmail,
   SchedulingChangedEmail,
   StandinCoveringEmail,
 } from '@crm/contracts/emails';
@@ -136,5 +138,56 @@ export const standinCovering: Template<StandinCoveringEmail> = (params, context)
       { type: 'button', label: 'See your bookings', url: context.link(params.bookingsPath) },
     ],
     why: `You got this email because ${params.memberName} named you as their stand in in ${workspaceOf(context)}.`,
+  };
+};
+
+/** A level as its verb. */
+const verbOf = (level: 'view' | 'manage') => (level === 'manage' ? 'manage' : 'see');
+
+/**
+ * Scheduling access given (spec 0037, AC-1257): "You can now manage Ada Lovelace’s scheduling" to the delegate, and
+ * "Priya Shah can now manage your scheduling" to the member when someone else granted it.
+ */
+export const schedulingAccessGiven: Template<SchedulingAccessGivenEmail> = (params, context) => {
+  const verb = verbOf(params.level);
+  const toMember = params.to === 'member';
+  const subject = toMember
+    ? `${params.otherName} can now ${verb} your scheduling`
+    : `You can now ${verb} ${params.everyone ? 'everyone’s' : `${params.otherName}’s`} scheduling`;
+  const what =
+    params.level === 'manage'
+      ? toMember
+        ? 'They can change your hours, time off and bookings. You’re told when they do.'
+        : 'You can change their hours, time off and bookings.'
+      : toMember
+        ? 'They can see your hours, time off and bookings.'
+        : 'You can see their hours, time off and bookings.';
+  const by = !toMember && params.byName !== undefined ? ` ${params.byName} gave you this access.` : '';
+  return {
+    subject,
+    preheader: what,
+    eyebrow: workspaceOf(context),
+    heading: subject,
+    blocks: [
+      { type: 'paragraph', text: `${what}${by}` },
+      { type: 'button', label: toMember ? 'See who has access' : 'Open Availability', url: context.link(params.path) },
+    ],
+    why: toMember
+      ? `You got this email because someone changed who can see your scheduling in ${workspaceOf(context)}.`
+      : `You got this email because you were given access to scheduling in ${workspaceOf(context)}.`,
+  };
+};
+
+/** Scheduling access removed (spec 0037): "You can no longer see Ada Lovelace’s scheduling", to the delegate. */
+export const schedulingAccessRemoved: Template<SchedulingAccessRemovedEmail> = (params, context) => {
+  const whose = params.memberName === undefined ? 'everyone’s' : `${params.memberName}’s`;
+  const subject = `You can no longer ${verbOf(params.level)} ${whose} scheduling`;
+  return {
+    subject,
+    preheader: `${params.byName} took this access back.`,
+    eyebrow: workspaceOf(context),
+    heading: subject,
+    blocks: [{ type: 'paragraph', text: `${params.byName} took this access back in ${workspaceOf(context)}.` }],
+    why: `You got this email because your access to scheduling in ${workspaceOf(context)} changed.`,
   };
 };

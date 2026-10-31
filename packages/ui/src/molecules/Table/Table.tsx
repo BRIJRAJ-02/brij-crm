@@ -43,7 +43,10 @@ export interface TableColumn {
    * stays its text value, so give the heading words that read the same (a VisuallyHidden "today" where it helps).
    */
   readonly heading?: ReactNode;
-  /** The column for now (today in a week): its header in the link colour, an accent line under it. */
+  /**
+   * The column for now (today in a week): its header in the link colour on the accent's soft surface over an accent
+   * line, so today stands out in both themes.
+   */
   readonly isCurrent?: boolean;
   /** `quiet` tints the whole column a step off the page (a week's weekend, when few work). */
   readonly tone?: 'quiet';

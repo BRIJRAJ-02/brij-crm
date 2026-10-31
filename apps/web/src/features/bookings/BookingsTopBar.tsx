@@ -47,7 +47,10 @@ export function BookingsTopBar({ slug, actionSlot }: BookingsTopBarProps) {
     timeZone,
   );
   // The member's hours, when the Calendar has read them; else nine to five on weekdays.
-  const availability = useMatch({ from: '/w/$slug/bookings/calendar', shouldThrow: false })?.loaderData?.availability;
+  const calendarData = useMatch({ from: '/w/$slug/bookings/calendar', shouldThrow: false })?.loaderData;
+  const availability = calendarData?.availability;
+  // Whom the member Manages, for New meeting's For (spec 0037, AC-1272), as the Calendar read them.
+  const forPeople = calendarData?.forPeople;
   const pages = useCaptureList(data.bookingPages.view(slug));
   const calendar = useCalendar(data.calendar.view(slug));
   const [meeting, setMeeting] = useState<DrawnSpan | undefined>(undefined);
@@ -171,6 +174,7 @@ export function BookingsTopBar({ slug, actionSlot }: BookingsTopBarProps) {
           onSpanChange={setMeeting}
           hasCalendar={connections.length > 0}
           pages={bookable}
+          {...(forPeople === undefined ? {} : { forPeople })}
           onClose={() => {
             setMeeting(undefined);
           }}
@@ -187,6 +191,7 @@ function NewMeetingFromTopBar({
   onSpanChange,
   hasCalendar,
   pages,
+  forPeople,
   onClose,
 }: {
   readonly slug: string;
@@ -194,6 +199,7 @@ function NewMeetingFromTopBar({
   readonly onSpanChange: (span: DrawnSpan) => void;
   readonly hasCalendar: boolean;
   readonly pages: readonly BookingPageView[];
+  readonly forPeople?: readonly { readonly id: string; readonly name: string }[];
   readonly onClose: () => void;
 }) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
@@ -207,6 +213,7 @@ function NewMeetingFromTopBar({
       locale={navigator.languages[0] ?? 'en-GB'}
       hasCalendar={hasCalendar}
       pages={pages}
+      {...(forPeople === undefined ? {} : { forPeople })}
       newKey={data.bookings.newKey}
       people={peopleSearchOf(data, slug, objects)}
       calendars={calendarList}

@@ -478,7 +478,7 @@ describe('reassigning from Host away', () => {
     ]);
     await expect
       .poll(() => notify.mock.calls.at(-1))
-      .toEqual(['success', 'Reassigned to Bo Diaz. The guest and both hosts are emailed.']);
+      .toEqual(['success', 'Reassigned to Bo Diaz. Guest and hosts are emailed.']);
   });
 
   it('keeps the host on Esc, and the card opens again with focus back on its Reassign', async () => {

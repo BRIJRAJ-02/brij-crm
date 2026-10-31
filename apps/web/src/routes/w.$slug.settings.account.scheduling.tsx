@@ -12,13 +12,15 @@ export const Route = createFileRoute('/w/$slug/settings/account/scheduling')({
   // One chunk for the page, its loading and its failure (the first load carries one import for it, not three).
   codeSplitGroupings: [['component', 'pendingComponent', 'errorComponent']],
   loader: async ({ context, params }) => {
-    const [access, members, scheduling] = await Promise.all([
+    const [access, members, scheduling, teams] = await Promise.all([
       context.data.access.mine(params.slug),
       context.data.members.list(params.slug),
       context.data.scheduling.open(),
+      // Team delegations name their team (spec 0037, AC-1254); a failed read leaves them as "Deleted team" only.
+      context.data.teams.list(params.slug).catch(() => []),
     ]);
     await scheduling.delegations(params.slug, 'mine').ready();
-    return { access, members, scheduling };
+    return { access, members, scheduling, teams };
   },
   pendingComponent: () => (
     <LoadingNow>
@@ -32,11 +34,18 @@ export const Route = createFileRoute('/w/$slug/settings/account/scheduling')({
 });
 
 function SchedulingAccessRoute() {
-  const { access, members, scheduling } = Route.useLoaderData();
+  const { access, members, scheduling, teams } = Route.useLoaderData();
   const { slug } = Route.useParams();
   const { toasts } = Route.useRouteContext();
   return (
-    <SchedulingAccessScreen scheduling={scheduling} toasts={toasts} slug={slug} access={access} members={members} />
+    <SchedulingAccessScreen
+      scheduling={scheduling}
+      toasts={toasts}
+      slug={slug}
+      access={access}
+      members={members}
+      teams={teams}
+    />
   );
 }
 

@@ -176,6 +176,10 @@ async function visibleViews(
       if (row.join_name === null || !can(scope.access, 'members.invite')) return [];
       return [{ ...base, joinRequestId: row.join_request_id, excerpt: excerptOf(row.join_name, NOTIFICATION_EXCERPT) }];
     }
+    if (row.kind === 'scheduling_changed') {
+      // Someone changed the reader's own scheduling (spec 0037, AC-1264): about them alone, so always theirs to see.
+      return [{ ...base, excerpt: '' }];
+    }
     if (row.task_id !== null) {
       const task = tasks.get(row.task_id);
       if (task === undefined) return [];
@@ -659,7 +663,7 @@ export async function unemailedNotifications(
     // unemailed here was waiting for a digest since turned off, or its own email was refused, so it goes in this one.
     const kinds: NotificationKind[] = (
       options.digest
-        ? (['mention', 'reply', 'task_assigned', 'task_due', 'form_submission'] as const)
+        ? (['mention', 'reply', 'task_assigned', 'task_due', 'form_submission', 'scheduling_changed'] as const)
         : [
             ...(settings.emailMentions ? (['mention'] as const) : []),
             ...(settings.emailReplies ? (['reply'] as const) : []),

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { Key } from 'react-aria-components';
 import { Tag } from '../../atoms/Tag/Tag.tsx';
 import { Menu, MenuItem } from '../../molecules/Menu/Menu.tsx';
-import { Select } from '../../molecules/Select/Select.tsx';
+import { Select } from '../../molecules/Select/SelectWithFaces.tsx';
 import type { EditorProps } from '../types.ts';
 import { asList, isCompactSurface, toCommittable } from '../values.ts';
 import { strings } from './strings.ts';

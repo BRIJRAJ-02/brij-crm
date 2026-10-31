@@ -518,6 +518,7 @@ export { createTimeBlock, removeTimeBlock, type TimeBlockDraft } from './booking
 export { bookAsHost, HOST_BOOKING_MINUTES, type HostBookingDeps, type HostBookingInput } from './booking/host.ts';
 export { listMeetings, listWorkspaceBookings, readBookingsCalendar } from './booking/list.ts';
 export { readTeamToday } from './home/team-today.ts';
+export { readTeamDay } from './booking/team-day.ts';
 export {
   createHomeMetricsCache,
   readHomeMetrics,

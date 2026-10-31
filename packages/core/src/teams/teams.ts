@@ -1,7 +1,7 @@
 // Teams (spec 0031, slice 8, AC-824 to AC-827): flat groups of members that access rules (spec 0032) name. A member
 // may be in any number of teams. Owners and admins (`teams.manage`) make, rename and delete teams and change who is
 // in them; every member reads the list. A team a rule still names is never deleted (AC-826), so deleting one never
-// takes anyone's access away.
+// takes anyone's record access away; the scheduling delegations over it go with it (spec 0037, AC-1269).
 //
 // Who is in a team changes in exactly one place, `changeTeamMembers`; creating a team with people in it goes
 // through it too. It stores the audit row and the outbox rows in the change's own transaction, and which members
@@ -20,9 +20,10 @@ import { actorRow } from '../engine/scope.ts';
 import { runWrite, type AfterWrite, type WriteContext } from '../engine/write.ts';
 import { writeAudit, type AuditSource } from '../members/audit.ts';
 import type { RemovalEffect } from '../members/removal-effect.ts';
+import { deleteTeamDelegations } from '../scheduling/delegations.ts';
 import { membersAffectedByTeamChange, membersOfTeams } from './reach.ts';
 
-const { accessRules, members, objects, recordRules, scheduleDelegations, teamMembers, teams } = schema;
+const { accessRules, members, objects, recordRules, teamMembers, teams } = schema;
 
 /** What every team write takes beside its input: where the request came from, for the audit row. */
 export interface TeamWriteOptions {
@@ -306,7 +307,7 @@ export async function renameTeam(
   return result;
 }
 
-/** The object names a rule or a delegation that names `teamId` belongs to, for the refusal, or none. */
+/** The object names a rule that names `teamId` belongs to, for the refusal, or none. */
 async function whatNames(tx: WorkspaceTx, workspaceId: string, teamId: string): Promise<readonly string[]> {
   const ruled = await tx
     .selectDistinct({ name: objects.pluralName })
@@ -318,13 +319,7 @@ async function whatNames(tx: WorkspaceTx, workspaceId: string, teamId: string): 
     .from(recordRules)
     .innerJoin(objects, and(eq(objects.workspaceId, recordRules.workspaceId), eq(objects.id, recordRules.objectId)))
     .where(and(eq(recordRules.workspaceId, workspaceId), eq(recordRules.subjectTeamId, teamId)));
-  const names = [...new Set([...ruled, ...scoped].map((row) => row.name))].sort((a, b) => a.localeCompare(b));
-  const [delegation] = await tx
-    .select({ id: scheduleDelegations.id })
-    .from(scheduleDelegations)
-    .where(and(eq(scheduleDelegations.workspaceId, workspaceId), eq(scheduleDelegations.targetTeamId, teamId)))
-    .limit(1);
-  return delegation === undefined ? names : [...names, 'scheduling access'];
+  return [...new Set([...ruled, ...scoped].map((row) => row.name))].sort((a, b) => a.localeCompare(b));
 }
 
 /** "Deals", "Deals and People", "Deals, People and Notes". */
@@ -333,7 +328,8 @@ const joinNames = (names: readonly string[]): string =>
 
 /**
  * Deletes a team with its memberships (spec 0031, AC-826). Refused 409 `IN_USE`, naming where, while an access rule
- * (or a scheduling delegation) still names the team, so a delete never takes access away. Needs `teams.manage`.
+ * still names the team, so a delete never takes record access away. The scheduling delegations over it go with it
+ * (spec 0037, AC-1269; the delete dialog names them first). Needs `teams.manage`.
  */
 export async function deleteTeam(
   scope: EngineScope,
@@ -353,6 +349,7 @@ export async function deleteTeam(
         throw refuse('IN_USE', `${team.name} is used by ${joinNames(used)}. Change that access first.`);
       }
       const former = await membersOfTeams(tx, scope.workspaceId, [teamId]);
+      await deleteTeamDelegations(context, teamId, options.source);
       await tx
         .delete(teamMembers)
         .where(and(eq(teamMembers.workspaceId, scope.workspaceId), eq(teamMembers.teamId, teamId)));

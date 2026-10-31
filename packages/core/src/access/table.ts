@@ -520,6 +520,9 @@ export const ACCESS_TABLE = {
   // The Team week (spec 0037, AC-1289 to AC-1293): rows from the reader's See reach (themself at least); a cell, a
   // copied week and usual hours need Manage over each member's hours (their own with `availability.own`).
   readTeamWeek: { filtered: 'schedulingReach' },
+  // The Team day (spec 0030, as spec 0037 amends it, AC-1434): `booking.manage` first, then columns from the
+  // reader's See reach (themself at least), each booking as Bookings shows it to them (`booking/seen.ts`).
+  readTeamDay: { filtered: 'schedulingReach' },
   setDayHours: { scheduling: 'manage' },
   copyWeek: { scheduling: 'manage' },
   setUsualHours: { scheduling: 'manage' },

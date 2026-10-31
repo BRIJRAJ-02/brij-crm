@@ -40,6 +40,7 @@ export const notificationKind = pgEnum('notification_kind', [
   'join_request',
   'task_due',
   'automation',
+  'scheduling_changed',
 ]);
 
 const actor = actorColumns('actor');
@@ -114,8 +115,9 @@ export const notifications = pgTable(
     }).onDelete('cascade'),
     // A comment notification names its comment, thread and record; a task one (assigned or due) its task; a note mention its note
     // and record; a submission one its submission (and its record, once filed); a join request its request
-    // alone; an automation's its automation and run (and its record or its due task). Kinds compare as text
-    // (0130, 0131, 0135, 0140): each value was added in its own migration's transaction.
+    // alone; an automation's its automation and run (and its record or its due task); someone changing the member's
+    // scheduling (0143) its actor alone. Kinds compare as text (0130, 0131, 0135, 0140, 0143): each value was added in
+    // its own migration's transaction.
     check(
       'notifications_subject',
       sql`(${t.kind}::text in ('task_assigned', 'task_due') and ${t.taskId} is not null and ${t.commentId} is null
@@ -135,7 +137,10 @@ export const notifications = pgTable(
           and ${t.submissionId} is null and ${t.automationId} is null)
         or (${t.kind}::text = 'automation' and ${t.automationId} is not null and ${t.automationRunId} is not null
           and ${t.threadId} is null and ${t.commentId} is null and ${t.taskId} is null and ${t.noteId} is null
-          and ${t.submissionId} is null and ${t.joinRequestId} is null)`,
+          and ${t.submissionId} is null and ${t.joinRequestId} is null)
+        or (${t.kind}::text = 'scheduling_changed' and ${t.actorMemberId} is not null and ${t.recordId} is null
+          and ${t.threadId} is null and ${t.commentId} is null and ${t.taskId} is null and ${t.noteId} is null
+          and ${t.submissionId} is null and ${t.joinRequestId} is null and ${t.automationId} is null)`,
     ),
     foreignKey({
       name: 'notifications_automation',

@@ -12,7 +12,7 @@ import { LoadingNow, useFormatSettings } from '@crm/ui';
 import { useEffect, useMemo, useRef } from 'react';
 import { createFileRoute, useNavigate, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { BookingsCalendarScreen, BookingsFailed } from '../features/bookings/BookingsScreen.tsx';
-import { bookingsSearchOf, parseBookingsSearch, rawOf } from '../features/bookings/search.ts';
+import { bookingsSearchOf, parseBookingsSearch, rawOf, type BookingsSearch } from '../features/bookings/search.ts';
 import { strings } from '../features/bookings/strings.ts';
 import { hostActions } from '../features/bookings/hostActions.ts';
 import { openHoursOf, workingStartOf } from '../features/bookings/span.ts';
@@ -39,28 +39,35 @@ export const Route = createFileRoute('/w/$slug/bookings/calendar')({
     const preferences = await data.preferences.load(params.slug).catch(() => undefined);
     // The member's zone (their Preferences, else the browser's): the week's days, its range and its hours.
     const zone = memberZone(data, params.slug);
-    const shown = bookingsSearchOf(
+    const asked = bookingsSearchOf(
       parseBookingsSearch(location.search),
       new Date(),
       firstDayFor(preferences?.weekStart),
       zone,
-    ).week;
-    // Mine, the default whoever reads (an admin's kept Everyone is the screen's to ask for).
-    const week = heldWeek(shown, data, params.slug, zone);
+    );
+    const shown = asked.week;
+    // The Team day (spec 0030): its first read with the page, so it lands in place; the days either side behind it.
+    const teamDay = asked.view === 'team' ? heldTeamDay(asked, data, params.slug, zone) : undefined;
+    // Mine, the default whoever reads (an admin's kept Everyone is the screen's to ask for); not on the Team day,
+    // which reads its own day instead of a week nobody sees.
+    const week = teamDay === undefined ? heldWeek(shown, data, params.slug, zone) : undefined;
     // The weeks either side, read behind, so Previous and Next show at once.
-    for (const step of [-7, 7])
-      heldWeek(addDays(shown, step), data, params.slug, zone)
-        .ready()
-        .catch(() => undefined);
+    if (week !== undefined) {
+      for (const step of [-7, 7])
+        heldWeek(addDays(shown, step), data, params.slug, zone)
+          .ready()
+          .catch(() => undefined);
+    }
     const calendar = data.calendar.view(params.slug);
-    const [objects, pages, hours, , , visible] = await Promise.all([
+    const [objects, pages, hours, , , , visible] = await Promise.all([
       data.objects.list(params.slug),
       // The Link filter's choices; a member without booking pages has none.
       data.bookingPages.held(params.slug).catch(() => []),
       // Where a day starts when time is drawn from the keyboard; without it, 9:00.
       data.bookings.hours(params.slug, zone).catch(() => undefined),
-      week.ready(),
+      week?.ready(),
       calendar.ready().catch(() => undefined),
+      teamDay?.ready().catch(() => undefined),
       // Whom the member Manages, for For on Block time and New meeting (spec 0037, AC-1272); none when it fails.
       data.scheduling
         .open()
@@ -71,7 +78,9 @@ export const Route = createFileRoute('/w/$slug/bookings/calendar')({
     const connections = state.status === 'ready' ? state.connections.filter((each) => each.status !== 'revoked') : [];
     // The caller comes first in their own reach: For lists the others they Manage.
     const forPeople = visible.slice(1).filter((member) => member.canManage);
-    return { objects, pages, connections, availability: hours?.availability, forPeople };
+    // Everyone the reader may see, for the Team day's People filter (spec 0030, AC-1434).
+    const members = visible.map(({ id, name }) => ({ id, name }));
+    return { objects, pages, connections, availability: hours?.availability, forPeople, members };
   },
   pendingComponent: CalendarPending,
   errorComponent: CalendarError,
@@ -93,6 +102,17 @@ function heldWeek(
   return data.bookings.calendar(slug, range.from, range.to, hosts);
 }
 
+/** The Team day for the address's day and filters (spec 0030): the same held read for the same ask, every time. */
+function heldTeamDay(search: BookingsSearch, data: DataLayer, slug: string, zone: string, day = search.day) {
+  return data.bookings.teamDay(slug, {
+    day,
+    timeZone: zone,
+    ...(search.members === undefined ? {} : { memberIds: search.members }),
+    ...(search.withBookings === true ? { withBookings: true as const } : {}),
+    ...(search.order === undefined ? {} : { order: search.order }),
+  });
+}
+
 /** What the loader read beside the week. */
 interface CalendarLoaded {
   readonly objects: readonly ObjectSummary[];
@@ -101,6 +121,8 @@ interface CalendarLoaded {
   readonly availability: BookingAvailability | undefined;
   /** The colleagues the member Manages: For on Block time and New meeting (AC-1272). */
   readonly forPeople: readonly { readonly id: string; readonly name: string }[];
+  /** Everyone the reader may see: the Team day's People filter. */
+  readonly members: readonly { readonly id: string; readonly name: string }[];
 }
 
 function CalendarRoute() {
@@ -114,12 +136,12 @@ function CalendarRoute() {
 function CalendarPending() {
   return (
     <LoadingNow>
-      <Calendar objects={[]} pages={[]} connections={[]} availability={undefined} forPeople={[]} />
+      <Calendar objects={[]} pages={[]} connections={[]} availability={undefined} forPeople={[]} members={[]} />
     </LoadingNow>
   );
 }
 
-function Calendar({ objects, pages, connections, availability, forPeople }: CalendarLoaded) {
+function Calendar({ objects, pages, connections, availability, forPeople, members }: CalendarLoaded) {
   const { slug } = Route.useParams();
   // The member's zone, as the workspace frame's FormatScope holds it (their Preferences, else the browser's).
   const { timeZone } = useFormatSettings();
@@ -132,6 +154,18 @@ function Calendar({ objects, pages, connections, availability, forPeople }: Cale
   const choice = useBookingsHosts();
   const hosts = choice?.value ?? 'mine';
   const week = heldWeek(search.week, data, slug, timeZone, hosts);
+  // The Team day (spec 0030): its held day, and the days either side read behind it so Previous and Next show at once.
+  const isTeam = search.view === 'team';
+  // Only while Team shows: a day nobody opened is never held, so a booking change never reads it again.
+  const teamDay = isTeam ? heldTeamDay(search, data, slug, timeZone) : undefined;
+  useEffect(() => {
+    if (!isTeam) return;
+    for (const step of [-1, 1])
+      heldTeamDay(search, data, slug, timeZone, addDays(search.day, step))
+        .ready()
+        .catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the day and its filters are what change the ask.
+  }, [isTeam, data, slug, timeZone, search.day, search.members?.join(','), search.withBookings, search.order]);
   // The member's zone changed in Preferences while the page is open: the loader primed the weeks either side in the
   // old one, so prime them again in the new one (each held read is the same one for the same range).
   // Mine or Everyone changed too: the weeks either side of the new choice.
@@ -168,6 +202,12 @@ function Calendar({ objects, pages, connections, availability, forPeople }: Cale
       pageDestination={(pageId) => data.calendar.pageDestination(slug, pageId)}
       newBookingKey={data.bookings.newKey}
       forPeople={forPeople}
+      team={{
+        held: teamDay,
+        data,
+        members,
+        onBlock: (draft, preview, team) => data.bookings.blocks.create(slug, draft, preview, team),
+      }}
       toasts={toasts}
       actions={actions}
       onSearch={(next) =>

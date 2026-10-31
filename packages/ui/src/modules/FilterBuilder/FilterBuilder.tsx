@@ -20,7 +20,7 @@ import { FilterChip } from '../../molecules/FilterChip/FilterChip.tsx';
 import { Field } from '../../molecules/Field/Field.tsx';
 import { InPopover } from '../../molecules/Popover/Popover.tsx';
 import { Menu, MenuItem, MenuTrigger, SubmenuTrigger, type MenuKey } from '../../molecules/Menu/Menu.tsx';
-import { Select } from '../../molecules/Select/Select.tsx';
+import { Select } from '../../molecules/Select/SelectWithFaces.tsx';
 import { focusLater } from '../../lib/focus-later.ts';
 import { memoIntl } from '../../lib/intl-memo.ts';
 import { useFormatSettings } from '../../provider/context.ts';

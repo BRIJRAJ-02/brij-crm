@@ -186,6 +186,7 @@ const READS: ReadonlySet<string> = new Set([
   'bookings.listAll',
   'bookings.meetings',
   'bookings.calendar',
+  'bookings.teamDay',
   'home.teamToday',
   'home.metrics',
   'bookings.hours',

@@ -21,6 +21,8 @@ import {
   type RecordSearch,
   type ObjectSummary,
   type CreateTimeBlockInput,
+  type DataLayer,
+  type TeamDayHeld,
   type TimeBlockOccurrence,
 } from '@crm/data';
 import { useBookingsCalendar, useCalendarList, useMeetings } from '@crm/data/react';
@@ -66,6 +68,7 @@ import { providerOf } from './provider.ts';
 import { useNow } from './useNow.ts';
 import { createPortal } from 'react-dom';
 import { availabilityHref, calendarsHref, newLinkOnlyPageHref } from '../booking/links.ts';
+import { TimeOffDialog } from '../booking/TimeOffDialog.tsx';
 import { linksHref } from '../captures/tabs.ts';
 import { recordLinks, type RecordLink } from '../records/timeline.ts';
 import { belongsElsewhere, isUndoKey, type KeyTarget } from '../workspace/undo.ts';
@@ -78,6 +81,7 @@ import {
 } from './CalendarsAside.tsx';
 import { ALL_CALENDARS, CalendarSwitch, showsOf, switchCalendars, useCalendarChoice } from './CalendarSwitch.tsx';
 import { DrawCard, type ForPerson } from './DrawCard.tsx';
+import { TeamDayView, type TeamDayViewProps } from './TeamDayView.tsx';
 import { NewMeetingDialog, type NewMeeting, type NewMeetingDialogProps } from './NewMeetingDialog.tsx';
 import { instantOf, spanNames, type DrawnSpan } from './span.ts';
 import type { BookingsSearch } from './search.ts';
@@ -286,8 +290,80 @@ function FilterMenu({
   );
 }
 
+/**
+ * The Team day's Filter (spec 0030, AC-766, AC-1438): which people (everyone the reader may see, or some), only those
+ * with bookings, and the order. Filtered, it reads "Filter · N", with a quiet clear beside it.
+ */
+function TeamFilterMenu({
+  search,
+  members,
+  onSearch,
+}: {
+  readonly search: BookingsSearch;
+  readonly members: readonly { readonly id: string; readonly name: string }[];
+  readonly onSearch: (next: Partial<BookingsSearch>) => void;
+}) {
+  const picked = search.members ?? [];
+  const count = (picked.length > 0 ? 1 : 0) + (search.withBookings === true ? 1 : 0);
+  return (
+    <>
+      <MenuTrigger>
+        <Button icon="list-filter">{count === 0 ? strings.filter : strings.filterCount(count)}</Button>
+        <Menu label={strings.filterMenu}>
+          <MenuSection
+            label={strings.teamOrder}
+            selectionMode="single"
+            selectedKeys={[search.order === 'title' ? 'order-title' : 'order-name']}
+            onSelectionChange={(keys) => {
+              const key = [...keys].map(String)[0];
+              if (key !== undefined) onSearch({ order: key === 'order-title' ? 'title' : undefined });
+            }}
+          >
+            <MenuItem id="order-name">{strings.orderName}</MenuItem>
+            <MenuItem id="order-title">{strings.orderTitle}</MenuItem>
+          </MenuSection>
+          <MenuSection
+            label={strings.sourceLabel}
+            selectionMode="multiple"
+            selectedKeys={search.withBookings === true ? ['booked'] : []}
+            onSelectionChange={(keys) => onSearch({ withBookings: [...keys].length > 0 ? true : undefined })}
+          >
+            <MenuItem id="booked">{strings.onlyBooked}</MenuItem>
+          </MenuSection>
+          {members.length > 1 && (
+            <MenuSection
+              label={strings.teamPeople}
+              selectionMode="multiple"
+              // Ticked means shown: everyone while no one is picked.
+              selectedKeys={picked.length === 0 ? members.map((member) => member.id) : picked}
+              onSelectionChange={(keys) => {
+                const ids = [...keys].map(String).filter((id) => members.some((member) => member.id === id));
+                onSearch({ members: ids.length === 0 || ids.length === members.length ? undefined : ids });
+              }}
+            >
+              {members.map((member) => (
+                <MenuItem key={member.id} id={member.id}>
+                  {member.name}
+                </MenuItem>
+              ))}
+            </MenuSection>
+          )}
+        </Menu>
+      </MenuTrigger>
+      {count > 0 && (
+        <Button
+          variant="ghost"
+          icon="x"
+          label={strings.clearFilters}
+          onPress={() => onSearch({ members: undefined, withBookings: undefined })}
+        />
+      )}
+    </>
+  );
+}
+
 /** A booking's card: its state, the guest, when, who, the note, Join call, and the host's changes while it's ahead. */
-function BookingCard({
+export function BookingCard({
   booking,
   personHref: hrefGiven,
   locale,
@@ -295,6 +371,7 @@ function BookingCard({
   onAsk: askGiven,
   focusOnMount,
   headingLevel = 4,
+  managesHost,
 }: {
   readonly booking: BookingListItem;
   readonly personHref: string | undefined;
@@ -307,6 +384,11 @@ function BookingCard({
   readonly focusOnMount?: BookingAsk | undefined;
   /** 4: under the sheet's or the List panel's own heading (level 3); the week's popover has none, and a level too deep there is the smaller harm. */
   readonly headingLevel?: 3 | 4;
+  /**
+   * Whether the reader Manages a member's scheduling (the Team day knows, from its columns): with it, Reassign shows
+   * on a booking whose host they Manage (spec 0030 AC-777, spec 0037 AC-1337). Absent, only booking.admin sees it.
+   */
+  readonly managesHost?: ((memberId: string) => boolean) | undefined;
 }) {
   // The member's zone (their Preferences, else the browser's), as the week is drawn in.
   const { timeZone } = useFormatSettings();
@@ -327,10 +409,12 @@ function BookingCard({
         ? [{ term: strings.assignedTerm, description: strings.assignedFailed }]
         : assignedItems(read.rows, locale);
   const seats = read === undefined || 'failed' in read ? [] : read.rows.filter((row) => row.voidedAt === undefined);
-  // Admins reassign a round robin seat (AC-748; Manage over both hosts, today booking.admin's, AC-1337).
-  const canReassign = useCan('booking.admin');
+  // Reassign a round robin seat (AC-748): admins, and on the Team day anyone who Manages its host (spec 0030 AC-777,
+  // spec 0037 AC-1337); the server checks Manage over both hosts, and the dialog lists only who can take it.
+  const access = useMyAccess();
+  const canReassign = useCan('booking.admin') || managesHost?.(booking.hostMemberId) === true;
   // A colleague's booking (an admin's Everyone, a co-hosted one) says whose it is.
-  const me = useMyAccess()?.memberId;
+  const me = access?.memberId;
   const isColleagues = me !== undefined && booking.hostMemberId !== me && booking.hostName !== '';
   const [reassigning, setReassigning] = useState(false);
   // Host away's Reassign (spec 0037, AC-1284): to the stand in, else the next in the group, after a confirm.
@@ -394,8 +478,28 @@ function BookingCard({
       {booking.hostRemoved === true && <Callout tone="info">{strings.hostRemoved}</Callout>}
       {booking.eventFailed && isConfirmed && <Callout tone="warning">{strings.eventFailed}</Callout>}
       {booking.needsHost && isConfirmed && (
-        <Callout tone="warning" title={strings.needsHost}>
-          {strings.needsHostText}
+        // The card's status already says Needs a host: the notice says why, and offers Reassign where it can.
+        <Callout
+          tone="warning"
+          {...(actions !== undefined && canReassign && seats.length > 0
+            ? {
+                actions: (
+                  <Button
+                    icon="users-round"
+                    onPress={() => {
+                      if (onAsk !== undefined) onAsk('reassign', seats);
+                      else setReassigning(true);
+                    }}
+                  >
+                    {strings.reassignAction}
+                  </Button>
+                ),
+              }
+            : {})}
+        >
+          {actions !== undefined && canReassign && seats.length > 0
+            ? strings.needsHostText
+            : strings.needsHostCancelText}
         </Callout>
       )}
       {booking.hostAway === true && isConfirmed && !booking.needsHost && (
@@ -618,7 +722,7 @@ function useAssignments(
 }
 
 /** One of the member's own calendar events: what, when, which calendar, and that Timefix doesn't manage it. */
-function EventCard({
+export function EventCard({
   event,
   connection,
   locale,
@@ -676,7 +780,7 @@ function EventCard({
 }
 
 /** A busy time's card: when, that it is busy and why, and which calendar holds it. Nothing more is kept. */
-function BusyCard({
+export function BusyCard({
   busy,
   connection,
   locale,
@@ -795,7 +899,7 @@ function nextDay(date: string): string {
  * sit over the card's popover), and opens the card again, focus on Remove,
  * when the confirm is dismissed.
  */
-function BlockCard({
+export function BlockCard({
   turn,
   locale,
   headingLevel = 4,
@@ -854,7 +958,7 @@ function BlockCard({
  * server answers (the block left the week at once), a refusal shows here with the block back, and the screen
  * hands focus on either way. Mount one per question (key it), and keep it while it closes, so its exit plays.
  */
-function RemoveBlockDialog({
+export function RemoveBlockDialog({
   turn,
   isOpen,
   locale,
@@ -988,6 +1092,17 @@ export interface BookingsCalendarScreenProps {
    * show For, Me first, when there is anyone. Absent or empty, neither does.
    */
   readonly forPeople?: readonly ForPerson[];
+  /**
+   * The Team day (spec 0030, as spec 0037 amends it): Team beside Day and Week, its held day, the people the reader
+   * may see (for its People filter), and how a block lands on someone's column. Absent, the switch offers no Team.
+   */
+  readonly team?: {
+    /** The day's held read, while Team shows. */
+    readonly held: TeamDayHeld | undefined;
+    readonly data: DataLayer;
+    readonly members: readonly { readonly id: string; readonly name: string }[];
+    readonly onBlock: TeamDayViewProps['onBlock'];
+  };
 }
 
 /** Bookings › Calendar: the range, previous week, Today, next week and Filter, then the grid and the week's count. */
@@ -1075,10 +1190,21 @@ function emptyHintOf(view: 'week' | 'day', calendar: string | undefined): string
 }
 
 /** The week view's toolbar, grid and count. */
+/** A week nobody reads: what the calendar holds while the Team day shows, so the hidden week isn't kept current. */
+const IDLE_STATE = { status: 'loading' } as const;
+const IDLE_WEEK: BookingsCalendarHeld = {
+  subscribe: () => () => undefined,
+  // One snapshot, always the same object: a new one each read would draw again for ever.
+  getSnapshot: () => IDLE_STATE,
+  retain: () => () => undefined,
+  ready: () => Promise.resolve(),
+  reload: () => undefined,
+};
+
 function WeekView(props: BookingsCalendarScreenProps) {
   const { slug, objects, search, week, pages, connections, locale, onSearch, onRemoveBlock, onBlock } = props;
   const forPeople = props.forPeople ?? NO_PEOPLE;
-  const canBookForOthers = useCan('booking.admin');
+  const canInvite = useCan('members.invite');
   const { workingStart, toasts, onBookAsHost, newBookingKey } = props;
   // The reader: a colleague's booking (an admin's Everyone) names its host on its block.
   const me = useMyAccess()?.memberId;
@@ -1088,7 +1214,8 @@ function WeekView(props: BookingsCalendarScreenProps) {
   const [meeting, setMeeting] = useState<DrawnSpan | undefined>(undefined);
   const bookable = pages.filter((page) => page.status === 'live');
   const personHref = usePersonHref(slug, objects);
-  const state = useBookingsCalendar(week);
+  // The Team day reads its own day: the week isn't held (nor read again on return) while Team shows.
+  const state = useBookingsCalendar(search.view === 'team' && props.team !== undefined ? IDLE_WEEK : week);
   const now = useNow();
   const firstDay = useFirstDay();
   // The member's zone (their Preferences, else the browser's): the week's days, hours, blocks and now line.
@@ -1109,6 +1236,8 @@ function WeekView(props: BookingsCalendarScreenProps) {
   );
   const openings = useRef(0);
   const [draft, setDraft] = useState<DrawnSpan | undefined>(undefined);
+  // Add time off from a drawn span (spec 0037, AC-1272): its day, For the reader or someone they Manage.
+  const [timeOffDay, setTimeOffDay] = useState<string | undefined>(undefined);
   // Each new drawing gets a fresh card; moving the span with From and To keeps the card as it is.
   const [drawCount, setDrawCount] = useState(0);
   // The draft as of the last render, so a save that settles later knows whether its card is still open.
@@ -1172,13 +1301,15 @@ function WeekView(props: BookingsCalendarScreenProps) {
   const jumpRef = useRef<HTMLButtonElement>(null);
   // Day or Week (D and W), in the address (`v=day`), so a reload or a shared link keeps it: the day view is the
   // picked day across the width.
-  const view = search.view ?? 'week';
-  const setView = (next: 'week' | 'day') => {
+  const view = search.view === 'team' && props.team === undefined ? 'day' : (search.view ?? 'week');
+  // Where the Team day's issue counts sit in the bar (AC-1436), drawn by the day itself.
+  const [issuesSlot, setIssuesSlot] = useState<HTMLElement | null>(null);
+  const setView = (next: 'week' | 'day' | 'team') => {
     onSearch({ view: next });
   };
   const shownDay = days.includes(search.day) ? search.day : (days[0] ?? search.week);
   const range =
-    view === 'day'
+    view !== 'week'
       ? new Intl.DateTimeFormat(locale, { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' }).format(
           new Date(`${shownDay}T12:00:00Z`),
         )
@@ -1197,9 +1328,9 @@ function WeekView(props: BookingsCalendarScreenProps) {
       onSearch({ week: weekOf(today, firstDay), day: today });
       return;
     }
-    const step = (action === 'next' ? 1 : -1) * (view === 'day' ? 1 : 7);
+    const step = (action === 'next' ? 1 : -1) * (view === 'week' ? 7 : 1);
     const day = addDays(shownDay, step);
-    onSearch(view === 'day' ? { week: weekOf(day, firstDay), day } : { week: addDays(search.week, step), day });
+    onSearch(view === 'week' ? { week: addDays(search.week, step), day } : { week: weekOf(day, firstDay), day });
   };
   const goRef = useRef(go);
   useEffect(() => {
@@ -1275,21 +1406,21 @@ function WeekView(props: BookingsCalendarScreenProps) {
             </Button>
           </ShortcutTooltip>
           <ShortcutTooltip
-            content={view === 'day' ? strings.previousDay : strings.previousWeek}
+            content={view === 'week' ? strings.previousWeek : strings.previousDay}
             kbd={WEEK_KEYS.previous}
           >
             <Button
               variant="ghost"
               icon="chevron-left"
-              label={view === 'day' ? strings.previousDay : strings.previousWeek}
+              label={view === 'week' ? strings.previousWeek : strings.previousDay}
               onPress={() => go('previous')}
             />
           </ShortcutTooltip>
-          <ShortcutTooltip content={view === 'day' ? strings.nextDay : strings.nextWeek} kbd={WEEK_KEYS.next}>
+          <ShortcutTooltip content={view === 'week' ? strings.nextWeek : strings.nextDay} kbd={WEEK_KEYS.next}>
             <Button
               variant="ghost"
               icon="chevron-right"
-              label={view === 'day' ? strings.nextDay : strings.nextWeek}
+              label={view === 'week' ? strings.nextWeek : strings.nextDay}
               onPress={() => go('next')}
             />
           </ShortcutTooltip>
@@ -1325,7 +1456,10 @@ function WeekView(props: BookingsCalendarScreenProps) {
       }
       title={range}
       after={
-        hasNoCalendar ? (
+        view === 'team' ? (
+          // The Team day's issue counts portal here; the calendar switch is the reader's own week's.
+          <span ref={setIssuesSlot} />
+        ) : hasNoCalendar ? (
           <CalendarsToggle panel={panel} slug={slug} hasNoCalendar />
         ) : calendarList.status === 'error' ? (
           // The switch can't draw without the calendars: say so, with a retry, rather than leave a gap.
@@ -1343,18 +1477,66 @@ function WeekView(props: BookingsCalendarScreenProps) {
             size="compact"
             value={view}
             onChange={(next) => {
-              if (next === 'day' || next === 'week') setView(next);
+              if (next === 'day' || next === 'week' || next === 'team') setView(next);
             }}
             segments={[
               { value: 'day', label: strings.dayView, kbd: WEEK_KEYS.day },
               { value: 'week', label: strings.weekView, kbd: WEEK_KEYS.week },
+              // Team only where there is a team to see, or someone who could invite one (AC-764's empty state).
+              ...(props.team === undefined || (props.team.members.length < 2 && !canInvite)
+                ? []
+                : [{ value: 'team', label: strings.teamView }]),
             ]}
           />
-          <FilterMenu search={search} pages={pages} onSearch={onSearch} />
+          {view === 'team' && props.team !== undefined ? (
+            <TeamFilterMenu search={search} members={props.team.members} onSearch={onSearch} />
+          ) : (
+            <FilterMenu search={search} pages={pages} onSearch={onSearch} />
+          )}
         </>
       }
     />
   );
+  const team = props.team;
+  const held = team?.held;
+  if (view === 'team' && team !== undefined && held !== undefined) {
+    return (
+      <>
+        {framed(
+          <TeamDayView
+            slug={slug}
+            data={team.data}
+            held={held}
+            day={shownDay}
+            isToday={shownDay === today}
+            now={now}
+            nowLabel={nowLabel}
+            timeZone={timeZone}
+            locale={locale}
+            zone={zone}
+            pages={pages}
+            objects={objects}
+            connections={connections}
+            calendars={calendarList}
+            pageDestination={props.pageDestination}
+            peopleSearch={props.peopleSearch}
+            newBookingKey={newBookingKey}
+            limitsAt={props.limitsAt}
+            onBookAsHost={onBookAsHost}
+            onBlock={team.onBlock}
+            onRemoveBlock={onRemoveBlock}
+            actions={props.actions}
+            toasts={toasts}
+            isFiltered={search.members !== undefined || search.withBookings === true}
+            isTitleOrder={search.order === 'title'}
+            members={team.members}
+            onClearFilters={() => onSearch({ members: undefined, withBookings: undefined })}
+            issuesSlot={issuesSlot}
+          />,
+        )}
+      </>
+    );
+  }
   if (state.status === 'loading') {
     // The week itself, busy and empty, so it arrives in place.
     return (
@@ -1432,9 +1614,11 @@ function WeekView(props: BookingsCalendarScreenProps) {
               ? strings.withHost(booking.visitorName, booking.hostName)
               : booking.visitorName,
           kind: 'booking',
-          // Its booking link's colour, as on Links; no mark (every booking is one) and no status while confirmed, so
-          // a block says only what is news: a no show, a booking with no host, or struck through when cancelled.
+          // Its booking link's colour, as on Links, and Timefix's mark (the owner, 31 October 2026: what came through
+          // Timefix shows at a glance beside synced events); no status while confirmed, so a block says only what is
+          // news: a no show, a booking with no host, or struck through when cancelled.
           hue: linkHue(booking.pageId),
+          provider: 'timefix',
           isCancelled: booking.status === 'cancelled',
           ...(booking.status !== 'confirmed'
             ? {}
@@ -1579,7 +1763,7 @@ function WeekView(props: BookingsCalendarScreenProps) {
                 })}
             {...(props.openHours === undefined ? {} : { openHours: props.openHours })}
             emptyHint={emptyHintOf(
-              view,
+              view === 'week' ? 'week' : 'day',
               choice === ALL_CALENDARS
                 ? undefined
                 : (switchable?.find((calendar) => calendar.id === choice)?.name ?? strings.calendars),
@@ -1680,6 +1864,14 @@ function WeekView(props: BookingsCalendarScreenProps) {
                         overlapping={overlapping(bookings, draft, timeZone)}
                         onSpanChange={setDraft}
                         forPeople={forPeople}
+                        {...(props.team === undefined
+                          ? {}
+                          : {
+                              onTimeOff: () => {
+                                setTimeOffDay(draft.dayKey);
+                                setDraft(undefined);
+                              },
+                            })}
                         onClose={({ kind, repeat, label, pageId, forMemberId }) => {
                           const drawn = draft;
                           const forName =
@@ -1844,8 +2036,8 @@ function WeekView(props: BookingsCalendarScreenProps) {
           locale={locale}
           hasCalendar={connections.length > 0}
           pages={bookable}
-          // Only `booking.admin` reads a colleague's pages today, so only they get For here (AC-1273 widens it).
-          forPeople={canBookForOthers ? forPeople : NO_PEOPLE}
+          // Whoever they Manage (AC-1272): Captures › Links gives them those people's pages too (AC-1273).
+          forPeople={forPeople}
           newKey={newBookingKey}
           people={props.peopleSearch}
           limitsAt={props.limitsAt}
@@ -1864,6 +2056,26 @@ function WeekView(props: BookingsCalendarScreenProps) {
             );
           }}
           onClose={() => setMeeting(undefined)}
+        />
+      )}
+      {props.team !== undefined && (
+        <TimeOffDialog
+          data={props.team.data}
+          slug={slug}
+          member={undefined}
+          entry={undefined}
+          initialDay={timeOffDay}
+          isOpen={timeOffDay !== undefined}
+          // Anyone the reader sees may cover (the reader too, for a colleague); the one away is left out by the dialog.
+          people={props.team.members}
+          meId={me}
+          forPeople={forPeople}
+          onClose={() => setTimeOffDay(undefined)}
+          onSaved={(saved) => {
+            setTimeOffDay(undefined);
+            const name = forPeople.find((person) => person.id === saved.entry.memberId)?.name;
+            toasts.toast({ tone: 'success', message: strings.timeOffSaved(name) });
+          }}
         />
       )}
     </>
@@ -2272,7 +2484,7 @@ export function BookingsListScreen({
 }
 
 /** The person's page for a booking, from the workspace's objects. */
-function usePersonHref(slug: string, objects: readonly ObjectSummary[]) {
+export function usePersonHref(slug: string, objects: readonly ObjectSummary[]) {
   const link = recordLinks(slug, objects);
   const people = objects.find((object) => object.standardKey === 'people');
   return (booking: BookingListItem) => personHrefOf(booking, link, people);

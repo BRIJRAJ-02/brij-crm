@@ -57,6 +57,11 @@
     }
   }
 
+  /* The row whose card is open beside it (TeamDay's lane): the selected surface, so it reads as the card's source. */
+  .row[data-open] {
+    background: var(--surface-selected);
+  }
+
   .rows > .row:last-child {
     border-block-end: none;
   }
