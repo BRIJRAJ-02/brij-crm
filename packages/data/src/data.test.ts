@@ -576,6 +576,12 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       restore: os.automations.restore.handler(notServed),
       runs: os.automations.runs.handler(notServed),
     },
+    apiKeys: {
+      list: os.apiKeys.list.handler(notServed),
+      create: os.apiKeys.create.handler(notServed),
+      revoke: os.apiKeys.revoke.handler(notServed),
+      restore: os.apiKeys.restore.handler(notServed),
+    },
     preferences: {
       get: os.preferences.get.handler(notServed),
       update: os.preferences.update.handler(notServed),

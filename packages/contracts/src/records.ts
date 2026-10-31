@@ -343,7 +343,7 @@ export const StageSince = z.object({ since: Timestamp.optional() });
 export type StageSince = z.infer<typeof StageSince>;
 
 /** Values by attribute id, as a write gives them. */
-const ValuesById = z.record(z.uuid(), z.unknown());
+export const ValuesById = z.record(z.uuid(), z.unknown());
 
 /**
  * A new record: its object, a uuid v7 the browser mints (the retry key:

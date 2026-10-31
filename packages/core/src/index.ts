@@ -144,6 +144,8 @@ export {
 } from './automations/service.ts';
 // API keys (parity #34): Settings › Developer's list, make, revoke and Undo; the door's part is `enterWithKey`.
 export { createApiKey, listApiKeys, restoreApiKey, revokeApiKey } from './developer/keys.ts';
+// A key's shape (pure): the api's tests make one to prove an unknown or misplaced key opens nothing.
+export { keyToken, parseKeyToken } from './developer/tokens.ts';
 export { type AuditSource } from './members/audit.ts';
 // Settings › Workspace › General, the owner's delete and restore, and Account › Profile (spec 0031, slice 7).
 export {

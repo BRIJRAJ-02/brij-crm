@@ -50,7 +50,8 @@ export function parseKeyToken(token: string): KeyParts | undefined {
   const secret = body.slice(44);
   if (body[43] !== '_' || !BASE64URL.test(pub) || !BASE64URL.test(secret)) return undefined;
   const bytes = Buffer.from(pub, 'base64url');
-  if (bytes.length !== 32) return undefined;
+  // Only the one spelling of these bytes: base64url's spare bits in the last character would let four spell one key.
+  if (bytes.length !== 32 || bytes.toString('base64url') !== pub) return undefined;
   const workspaceHex = bytes.subarray(0, 16).toString('hex');
   const keyHex = bytes.subarray(16).toString('hex');
   if (!UUID_HEX.test(workspaceHex) || !UUID_HEX.test(keyHex)) return undefined;

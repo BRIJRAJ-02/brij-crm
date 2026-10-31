@@ -104,7 +104,12 @@ export async function createApiKey(
       tx,
       scope.workspaceId,
       scope.actor,
-      { action: 'api_key.created', targetType: 'workspace', targetId: scope.workspaceId, after: { name, keyId: id } },
+      {
+        action: 'api_key.created',
+        targetType: 'workspace',
+        targetId: scope.workspaceId,
+        after: { name, keyId: id, access: input.access },
+      },
       source,
     );
     return toView(row);
@@ -139,7 +144,7 @@ export async function revokeApiKey(
         action: 'api_key.revoked',
         targetType: 'workspace',
         targetId: scope.workspaceId,
-        after: { name: row.name, keyId: row.id },
+        after: { name: row.name, keyId: row.id, access: toView(row).access },
       },
       source,
     );
@@ -180,7 +185,7 @@ export async function restoreApiKey(
         action: 'api_key.restored',
         targetType: 'workspace',
         targetId: scope.workspaceId,
-        after: { name: row.name, keyId: row.id },
+        after: { name: row.name, keyId: row.id, access: toView(row).access },
       },
       source,
     );
