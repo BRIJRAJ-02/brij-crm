@@ -212,16 +212,17 @@ export function GridCell({
   // focuses it and gives the row an element of its own, so the press and its release meet different elements and
   // the Button's own press never fires. It opens as the pointer lifts on it, or on a click with no pointer behind it
   // (a screen reader's, `detail` 0). Only a press that both started and ended on it counts: a drag (a range, a text
-  // selection) that merely ends over it opens nothing.
+  // selection) that merely ends over it opens nothing. The press keeps the row it began on: focusing the row can hand
+  // this cell's element to another row before the release, and the release must still open the row pressed.
   const isOnPeek = (target: EventTarget) => target instanceof Element && target.closest('[data-peek]') !== null;
-  const peekPressed = useRef(false);
+  const peekPressed = useRef<(() => void) | undefined>(undefined);
   const onPointerDownCapture = (event: PointerEvent<HTMLDivElement>) => {
-    peekPressed.current = event.button === 0 && isOnPeek(event.target);
+    peekPressed.current = event.button === 0 && isOnPeek(event.target) ? onOpenPanel : undefined;
   };
   const onPointerUpCapture = (event: PointerEvent<HTMLDivElement>) => {
     const pressed = peekPressed.current;
-    peekPressed.current = false;
-    if (pressed && event.button === 0 && isOnPeek(event.target)) onOpenPanel?.();
+    peekPressed.current = undefined;
+    if (pressed !== undefined && event.button === 0 && isOnPeek(event.target)) pressed();
   };
   const onClickCapture = (event: MouseEvent<HTMLDivElement>) => {
     if (event.detail === 0 && isOnPeek(event.target)) onOpenPanel?.();

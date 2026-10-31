@@ -4,7 +4,7 @@
 // keep the tab on reload, and the unavailable state for an id that names
 // nothing. axe in light and dark on each screen.
 import { expect, test } from '@playwright/test';
-import { addPerson, checkScreen, newWorkspace, openFullPage } from './people.ts';
+import { addPerson, checkScreen, newWorkspace, openFullPage, editDetail } from './people.ts';
 
 const RECORD_URL = /\/w\/[^/]+\/objects\/people\/([0-9a-f-]{36})\/overview$/;
 
@@ -40,7 +40,7 @@ test('a record opens from the table, edits in place, and keeps its tab', async (
   await checkScreen(page, 'record-overview');
 
   // Details edit in place, saved through the data layer.
-  await page.getByRole('button', { name: 'Edit Job title' }).click();
+  await editDetail(page, 'Job title');
   const jobTitle = page.getByRole('textbox', { name: 'Job title' });
   await jobTitle.fill('Rear admiral');
   await jobTitle.press('Enter');

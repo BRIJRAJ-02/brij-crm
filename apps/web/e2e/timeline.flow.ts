@@ -6,7 +6,7 @@
 // ending with the creation. axe in light and dark on the Activity tab.
 import { randomBytes, randomUUID } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
-import { addPerson, checkScreen, newWorkspace, openFullPage, signInAgain } from './people.ts';
+import { addPerson, checkScreen, newWorkspace, openFullPage, signInAgain, editDetail } from './people.ts';
 
 const RECORD_URL = /\/w\/[^/]+\/objects\/people\/([0-9a-f-]{36})\/overview$/;
 /** AC-381: a change shows on an open timeline within a second. */
@@ -71,7 +71,7 @@ test('the timeline shows changes and links, live, and pages as it scrolls', asyn
 
   // An edit in Details shows in Recent activity at once (this tab's own write).
   if (isNarrow) await page.getByRole('button', { name: 'Details', exact: true }).click();
-  await page.getByRole('button', { name: 'Edit Job title' }).click();
+  await editDetail(page, 'Job title');
   const jobTitle = page.getByRole('textbox', { name: 'Job title' });
   await jobTitle.fill('Rear admiral');
   await jobTitle.press('Enter');

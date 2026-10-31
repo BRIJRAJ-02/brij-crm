@@ -104,7 +104,7 @@ test.describe('relations', () => {
     await expect(page.getByRole('grid', { name: 'Companies' })).toBeVisible();
 
     // By keyboard alone: Add attribute (at the foot of View settings since 21 October 2026), a name, Relationship
-    // from the type picker, then Esc puts focus back on what opened it, View settings (AC-305).
+    // from the type picker above it, then Esc puts focus back on what opened it, View settings (AC-305).
     const viewSettings = page.getByRole('button', { name: 'View settings' });
     await viewSettings.focus();
     await page.keyboard.press('Enter');
@@ -116,7 +116,8 @@ test.describe('relations', () => {
     const byKeys = page.getByRole('dialog', { name: 'New attribute' });
     await expect(byKeys.getByLabel('Name', { exact: true })).toBeFocused();
     await page.keyboard.type('Advisers');
-    await page.keyboard.press('Tab');
+    // The type sits above the name (owner item 92): Shift+Tab reaches its picker.
+    await page.keyboard.press('Shift+Tab');
     await page.keyboard.press('ArrowDown');
     await page.getByRole('option', { name: 'Relationship', exact: true }).focus();
     await page.keyboard.press('Enter');

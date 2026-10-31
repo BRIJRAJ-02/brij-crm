@@ -211,7 +211,9 @@ export const GripOnKeyboardFocus: Story = {
   play: async ({ canvas, userEvent }) => {
     const lead = canvas.getByRole('grid', { name: /Lead/ });
     await userEvent.tab();
-    const [focused, other] = within(lead).getAllByRole('row');
+    const [focused, ...rest] = within(lead).getAllByRole('row');
+    // Another card that can move (the locked one beside it has a lock, not a grip).
+    const other = rest.find((row) => within(row).queryByRole('button', { name: /^Move / }) !== null);
     await expect(focused).toHaveFocus();
     const gripOf = (row: HTMLElement | undefined) =>
       within(row ?? document.body).getByRole('button', { name: /^Move / }).parentElement ?? row;
@@ -317,7 +319,8 @@ export const CollapsedNoValue: Story = {
     const strip = canvas.getByRole('region', { name: /No Stage/ });
     await expect(within(strip).queryByRole('grid')).not.toBeInTheDocument();
     await expect(strip.getBoundingClientRect().width).toBeLessThan(80);
-    await expect(within(strip).getByText(/^0 cards$/)).toBeInTheDocument();
+    // The count pill: its number, then its noun for screen readers ("0 cards").
+    await expect(within(strip).getByText('0')).toHaveTextContent(/^0\s+cards$/);
   },
 };
 
@@ -496,7 +499,7 @@ export const CountAtLeast: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByText('10,000+')).toBeInTheDocument();
     // The count pill reads its noun after the number: "10,000+ cards".
-    await expect(canvas.getByText(/^10,000\+ cards$/)).toBeInTheDocument();
+    await expect(canvas.getByText('10,000+')).toHaveTextContent(/^10,000\+\s+cards$/);
   },
 };
 

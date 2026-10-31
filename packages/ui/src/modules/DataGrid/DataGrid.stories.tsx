@@ -17,6 +17,7 @@ import {
   SAMPLE_STAGES,
   sampleMemberSearch,
 } from '../../workbench/field-samples.ts';
+import { settleAnimations } from '../../workbench/animations.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { DataGrid, type GridStatus, type RowNote, type RowSource } from './DataGrid.tsx';
 import type { GridEditorProps } from './GridCell.tsx';
@@ -948,6 +949,8 @@ export const FloatingBarShortList: Story = {
     ),
   },
   play: async ({ canvas, canvasElement }) => {
+    // The bar rises in: settled, so it is read where it lands.
+    await settleAnimations();
     await expect(canvas.getByRole('toolbar', { name: 'Selected records' })).toBeVisible();
     const last = cell(canvasElement, 3, 1);
     const footer = canvasElement.querySelector('[role="row"][aria-rowindex="6"]');

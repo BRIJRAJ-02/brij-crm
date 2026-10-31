@@ -249,3 +249,15 @@ export async function chooseNewAttribute(page: Page): Promise<void> {
   if (await item.isVisible()) await item.click();
   await expect(dialog).toBeVisible();
 }
+
+/**
+ * Opens a Details row's editor by its pencil. A record's Details open with their empty rows folded (owner,
+ * 31 October 2026), so "Show N empty values" opens them first when the row is one of those.
+ */
+export async function editDetail(page: Page, name: string): Promise<void> {
+  const edit = page.getByRole('button', { name: `Edit ${name}` });
+  const show = page.getByRole('button', { name: /^Show \d+ empty values?$/ }).first();
+  await expect(edit.or(show).first()).toBeVisible();
+  if (!(await edit.isVisible()) && (await show.isVisible())) await show.click();
+  await edit.click();
+}

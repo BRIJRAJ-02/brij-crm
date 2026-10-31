@@ -4,7 +4,7 @@
 // a slash. Create a person runs the same New person dialog. axe in light and
 // dark on the open menu.
 import { expect, test } from '@playwright/test';
-import { addPerson, checkScreen, newWorkspace } from './people.ts';
+import { addPerson, checkScreen, newWorkspace, editDetail } from './people.ts';
 
 const RECORD_URL = /\/w\/[^/]+\/objects\/people\/[0-9a-f-]{36}\/overview$/;
 
@@ -37,7 +37,7 @@ test('the command menu finds a record, opens it, and keeps a slash in a text fie
   // A slash typed in a text field stays in the field, and no menu opens.
   const isNarrow = info.project.name === '375';
   if (isNarrow) await page.getByRole('button', { name: 'Details', exact: true }).click();
-  await page.getByRole('button', { name: 'Edit Job title' }).click();
+  await editDetail(page, 'Job title');
   const jobTitle = page.getByRole('textbox', { name: 'Job title' });
   await jobTitle.pressSequentially('a/b');
   await expect(jobTitle).toHaveValue('a/b');
