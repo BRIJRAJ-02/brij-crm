@@ -52,13 +52,18 @@ export const strings = {
   goneAttribute: 'An attribute that no longer exists',
   // A form's New step dividers (spec 0063)
   addStep: 'Add a step',
-  /** A divider's name: its step's place, then its title when it has one ("Step 2 · Your company"). */
-  stepName: (number: number, title?: string) =>
-    title === undefined || title.trim() === '' ? `Step ${String(number)}` : `Step ${String(number)} · ${title.trim()}`,
+  /** A divider's name: its step's place ("New step" while empty), then its title when it has one ("Step 2 · Your company"). */
+  stepName: (number: number, title?: string) => {
+    // A divider with nothing under it yet is no step a visitor counts.
+    const place = number === 0 ? 'New step' : `Step ${String(number)}`;
+    return title === undefined || title.trim() === '' ? place : `${place} · ${title.trim()}`;
+  },
   stepHolds: (count: number) =>
     count === 0 ? 'No questions yet' : count === 1 ? '1 question' : `${String(count)} questions`,
   /** On a divider outside the Steps layout: it is kept, and only Steps draws it. */
   stepsOnly: 'Shows with Steps',
+  /** Add a step's line in the menu outside the Steps layout. */
+  stepsOnlyMenu: 'Visitors see it with Steps',
   separator: ' · ',
   stepTitle: 'Step title',
   stepTitlePlaceholder: 'About your company',

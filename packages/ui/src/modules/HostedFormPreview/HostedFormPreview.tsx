@@ -16,6 +16,11 @@ export interface HostedFormPreviewProps {
   readonly mode?: 'preview' | 'page';
   /** The Timefix wordmark under the form; defaults to the web app's own files, as on the hosted page. */
   readonly logo?: ProductLogo;
+  /**
+   * Steps and One at a time: which step, or which question, the preview shows (from 0), the one being edited beside
+   * it (spec 0063). The inert preview can't be stepped through, so the builder points it.
+   */
+  readonly step?: number;
 }
 
 /**
@@ -23,9 +28,18 @@ export interface HostedFormPreviewProps {
  * the builder shows exactly what goes live: the same tree, the same controls,
  * in the form's own layout (Classic, Steps or One at a time, spec 0063).
  */
-export function HostedFormPreview({ form, mode = 'preview', logo }: HostedFormPreviewProps) {
+export function HostedFormPreview({ form, mode = 'preview', logo, step }: HostedFormPreviewProps) {
   const layout = form.layout ?? 'classic';
+  const logoProps = logo === undefined ? {} : { logo };
   // A change of layout starts the preview again, from its first step.
-  const Drawn = layout === 'classic' ? HostedForm : HostedFormSteps;
-  return <Drawn key={`${mode}-${layout}`} form={form} mode={mode} {...(logo === undefined ? {} : { logo })} />;
+  if (layout === 'classic') return <HostedForm key={`${mode}-${layout}`} form={form} mode={mode} {...logoProps} />;
+  return (
+    <HostedFormSteps
+      key={`${mode}-${layout}`}
+      form={form}
+      mode={mode}
+      {...logoProps}
+      {...(step === undefined ? {} : { previewStep: step })}
+    />
+  );
 }

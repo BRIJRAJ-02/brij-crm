@@ -275,3 +275,13 @@ export const ConversationalLongAnswer: Story = {
     await expect(canvas.getByRole('progressbar', { name: '2 of 2' })).toBeInTheDocument();
   },
 };
+
+/** Steps with no dividers yet: one step is no progress, so the card shows its questions and Send alone. */
+export const StepsOneStep: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { form: { ...STEPPED, steps: [{ keys: ENQUIRY.questions.map((question) => question.key) }] } },
+  play: async ({ canvas }) => {
+    await expect(canvas.queryByRole('progressbar')).not.toBeInTheDocument();
+    await expect(canvas.getByRole('button', { name: 'Send enquiry' })).toBeInTheDocument();
+  },
+};

@@ -20,8 +20,14 @@ import styles from './HostedFormSteps.module.css';
 import { asideOf, labelOf, Question } from './Question.tsx';
 import { useHostedForm } from './use-hosted-form.ts';
 
-/** Props for HostedFormSteps: the same as Classic's; the layout and the steps come with the form. */
-export type HostedFormStepsProps = HostedFormProps;
+/** Props for HostedFormSteps: Classic's; the layout and the steps come with the form. */
+export interface HostedFormStepsProps extends HostedFormProps {
+  /**
+   * In the builder's preview, which step (or question, one at a time) shows: the one being edited beside it, since
+   * the inert preview can't be stepped through. Clamped to the steps there are; ignored outside the preview.
+   */
+  readonly previewStep?: number;
+}
 
 /** The step layouts this component draws. */
 type StepsLayout = 'steps' | 'conversational';
@@ -66,9 +72,12 @@ export function HostedFormSteps({
   onStale,
   now = Date.now,
   logo = TIMEFIX_LOGO,
+  previewStep = 0,
 }: HostedFormStepsProps) {
-  const [index, setIndex] = useState(0);
-  const [hasMoved, setMoved] = useState(false);
+  const [shownIndex, setIndex] = useState(0);
+  // How the visitor last moved: a pointer's move eases the next question in, a key's shows it at once.
+  const [moved, setMoved] = useState<'pointer' | 'key' | undefined>(undefined);
+  const hasMoved = moved !== undefined;
   // Continue and Back focus the new step's first question; a refusal that goes back focuses its problem instead.
   const [focusesStep, setFocusesStep] = useState(false);
   const [round, setRound] = useState(0);
@@ -108,11 +117,14 @@ export function HostedFormSteps({
   if (state.round !== round) {
     setRound(state.round);
     setIndex(0);
-    setMoved(false);
+    setMoved(undefined);
     setFocusesStep(false);
     setPicks(0);
   }
-  const step = groups[Math.min(index, groups.length - 1)] ?? { title: undefined, questions: [] };
+  // The step on screen: the one reached, kept within the steps the path has now (an answer can take some away), or
+  // in the builder's preview the one being edited.
+  const index = Math.max(0, Math.min(mode === 'preview' ? previewStep : shownIndex, groups.length - 1));
+  const step = groups[index] ?? { title: undefined, questions: [] };
   const isLast = index >= groups.length - 1;
   const first = step.questions[0];
 
@@ -125,7 +137,7 @@ export function HostedFormSteps({
 
   const go = (next: number) => {
     setPicks(0);
-    setMoved(true);
+    setMoved(byPointer.current ? 'pointer' : 'key');
     setFocusesStep(true);
     setIndex(next);
   };
@@ -137,7 +149,8 @@ export function HostedFormSteps({
   // Picks by pointer on the question showing: each one starts the pause again, and moving on clears it. The last
   // question never sends by itself: sending is the visitor's own press.
   useEffect(() => {
-    if (picks === 0) return undefined;
+    // Read after the pick has redrawn the path: a choice that leaves nothing after it makes this the last question.
+    if (picks === 0 || isLast) return undefined;
     const timer = window.setTimeout(
       () => {
         formRef.current?.requestSubmit();
@@ -147,6 +160,7 @@ export function HostedFormSteps({
     return () => {
       window.clearTimeout(timer);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- a new pick starts the pause; nothing else does
   }, [picks]);
   const place =
     layout === 'conversational' ? words.questionOf(index + 1, groups.length) : words.stepOf(index + 1, groups.length);
@@ -173,7 +187,7 @@ export function HostedFormSteps({
   else {
     body = (
       <>
-        {isOpen ? (
+        {isOpen && groups.length > 0 ? (
           <div className={styles.line}>
             <ProgressBar label={place} valueLabel={place} value={index + 1} maxValue={groups.length} isLabelHidden />
           </div>
@@ -186,9 +200,12 @@ export function HostedFormSteps({
             <FormHeader form={form} mode={mode} heading={refs.heading} isSubheadingShown={false} />
           </VisuallyHidden>
         )}
-        {!isOpen && (
+        {/* One step is no progress to show: only its title, when it has one. */}
+        {!isOpen && (groups.length > 1 || step.title !== undefined) && (
           <div className={styles.progress}>
-            <ProgressBar label={place} valueLabel={place} value={index + 1} maxValue={groups.length} />
+            {groups.length > 1 && (
+              <ProgressBar label={place} valueLabel={place} value={index + 1} maxValue={groups.length} />
+            )}
             {step.title !== undefined && <StepTitle className={styles.title}>{step.title}</StepTitle>}
           </div>
         )}
@@ -203,7 +220,7 @@ export function HostedFormSteps({
           data-layout={layout}
           noValidate
           ref={formRef}
-          data-moved={hasMoved || undefined}
+          data-moved={moved === 'pointer' || undefined}
           // Capture: a control's press handling keeps these from bubbling.
           onPointerDownCapture={() => {
             byPointer.current = true;

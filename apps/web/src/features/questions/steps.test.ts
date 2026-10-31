@@ -82,6 +82,8 @@ describe('a form’s New step dividers (spec 0063, AC-6303)', () => {
   it('numbers each divider as a visitor counts its step, with what it holds', () => {
     expect(stepPlaces(flow).get('s2')).toEqual({ number: 2, count: 2 });
     expect(stepPlaces(moveItem(flow, 's2', 0)).get('s2')).toEqual({ number: 1, count: 4 });
+    // One with nothing under it yet is no step a visitor counts.
+    expect(stepPlaces(addStep(flow, 's3')).get('s3')).toEqual({ number: 0, count: 0 });
     expect(questionsBefore(flow, 's2').map((each) => each.id)).toEqual(['a', 'b']);
   });
 });

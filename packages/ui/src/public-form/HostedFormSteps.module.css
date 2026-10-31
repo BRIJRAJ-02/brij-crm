@@ -4,9 +4,9 @@
    card, a thin line at the top, the question large with its number, and OK
    with its Enter keycap. A new step appears at once, with focus on its first
    question: steps are mostly reached by Enter, and keyboard steps never wait.
-   One at a time, the next question fades and rises a little into place (spec
-   0063): transform and opacity only, taking input from its first frame, and
-   none at all under reduced motion. */
+   One at a time, a question reached by pointer fades and rises a little into
+   place (spec 0063): transform and opacity only, taking input from its first
+   frame, a fade alone under reduced motion, and none when reached by key. */
 @layer components {
   .line {
     margin-block-end: var(--space-32);
@@ -37,8 +37,9 @@
     margin-block-start: var(--space-32);
   }
 
+  /* Reached by pointer only: a question reached by Enter or Back from the keyboard shows at once. */
   .form[data-layout='conversational'][data-moved] {
-    animation: question-rise var(--duration-modal) var(--ease-out);
+    animation: question-rise var(--duration-move) var(--ease-out);
   }
 
   @keyframes question-rise {
@@ -48,9 +49,16 @@
     }
   }
 
+  @keyframes question-fade {
+    from {
+      opacity: 0;
+    }
+  }
+
+  /* Reduced motion keeps the fade and drops the rise. */
   @media (prefers-reduced-motion: reduce) {
     .form[data-layout='conversational'][data-moved] {
-      animation: none;
+      animation-name: question-fade;
     }
   }
 

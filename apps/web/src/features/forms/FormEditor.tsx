@@ -13,7 +13,7 @@ import {
   type SubmissionState,
   type SubmissionView,
 } from '@crm/data';
-import { FORM_QUESTIONS_MAX, previewOf, publishProblem, type PublishProblem } from '@crm/data/forms';
+import { FORM_QUESTIONS_MAX, pathOf, previewOf, publishProblem, type PublishProblem } from '@crm/data/forms';
 import { useCaptureList } from '@crm/data/react';
 import {
   Button,
@@ -228,6 +228,18 @@ export function FormEditor(props: FormEditorProps) {
   const status = statusOf(form, isChanged);
   const liveIds = useMemo(() => new Set(form.live?.questions.map((question) => question.id) ?? []), [form.live]);
   const preview = useMemo(() => previewOf(draft, { key: form.publicKey }), [draft, form.publicKey]);
+  // The question or divider last opened: Steps and One at a time preview the step it is in (spec 0063).
+  const [previewRow, setPreviewRow] = useState<string | undefined>(undefined);
+  const previewStep = useMemo(() => {
+    if (previewRow === undefined || preview.layout === undefined) return undefined;
+    const steps = pathOf(preview, {}).steps;
+    const stepId = previewRow.startsWith('step:') ? previewRow.slice('step:'.length) : undefined;
+    const key = draft.questions.find((question) => question.id === previewRow)?.key;
+    const at = steps.findIndex((step) =>
+      stepId === undefined ? key !== undefined && step.keys.includes(key) : step.id === stepId,
+    );
+    return at === -1 ? undefined : at;
+  }, [previewRow, preview, draft.questions]);
 
   // Gives each unfiled, labelled question an attribute on the target object, with no prompt: files the question
   // onto it, and offers Undo (unfile, archive). Answers the draft to publish; a failure leaves the question unfiled.
@@ -644,6 +656,7 @@ export function FormEditor(props: FormEditorProps) {
             />
             <QuestionsSection
               {...(props.question === undefined ? {} : { focusQuestionId: props.question })}
+              onOpened={setPreviewRow}
               steps={{
                 steps: draft.steps,
                 layout: draft.layout,
@@ -690,7 +703,7 @@ export function FormEditor(props: FormEditorProps) {
       footer={settings.footer}
       {...(current === 'form'
         ? {
-            preview: <HostedFormPreview form={preview} />,
+            preview: <HostedFormPreview form={preview} {...(previewStep === undefined ? {} : { step: previewStep })} />,
             previewControls: (
               <>
                 <Select

@@ -20,7 +20,12 @@ export type { HostedFormMode, HostedSubmission, HostedSubmitOutcome } from './Ho
  * Classic form's page never carries their code.
  */
 const HostedFormSteps = lazy(() =>
-  import('./HostedFormSteps.tsx').then((module) => ({ default: module.HostedFormSteps })),
+  import('./HostedFormSteps.tsx').then(
+    (module) => ({ default: module.HostedFormSteps }),
+    // A chunk that won't load (a dropped connection, a deploy since the page opened) leaves the visitor Classic,
+    // which asks the same questions and checks them the same way, rather than a blank page.
+    () => ({ default: HostedForm }),
+  ),
 );
 export type { HostedUpload, HostedUploadOutcome, HostedUploadedFile, HostedRemoveUpload } from './files.ts';
 

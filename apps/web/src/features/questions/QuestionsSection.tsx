@@ -123,6 +123,8 @@ export interface QuestionsSectionProps {
    * moves questions and dividers together through `onChange`, and offers Add a step. A booking page has none.
    */
   readonly steps?: StepsProps;
+  /** A question or divider was opened (its row id; a divider's is `step:<id>`): the preview shows its step. */
+  readonly onOpened?: (rowId: string) => void;
 }
 
 /** A form's step dividers, as the questions section draws and changes them. */
@@ -223,6 +225,7 @@ export function QuestionsSection(props: QuestionsSectionProps) {
   const opened = (id: string) => {
     setOpen((before) => new Set([...before, id]));
     setJustAdded(id);
+    props.onOpened?.(id);
   };
 
   // A link to one question opens it and brings it into view, once per question it names: only a new link opens
@@ -395,7 +398,7 @@ export function QuestionsSection(props: QuestionsSectionProps) {
                   }}
                 >
                   {breaks !== undefined && breaks.layout !== 'steps' && (
-                    <MenuItem id="step" icon="layers" description={strings.stepsOnly}>
+                    <MenuItem id="step" icon="layers" description={strings.stepsOnlyMenu}>
                       {strings.addStep}
                     </MenuItem>
                   )}
@@ -435,6 +438,7 @@ export function QuestionsSection(props: QuestionsSectionProps) {
       onOpenChange={(id, isOpen) => {
         // The question or divider a publish refused stays open until it is fixed.
         if (!isOpen && (problem?.questionId === id || `${STEP_ROW}${stepProblem?.stepId ?? ''}` === id)) return;
+        if (isOpen) props.onOpened?.(id);
         setOpen((before) => {
           const next = new Set(before);
           if (isOpen) next.add(id);

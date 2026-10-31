@@ -25,4 +25,9 @@ describe('withoutPresentStyles (spec 0063, AC-6331)', () => {
     expect(withoutPresentStyles(CODE, new Set(['assets/Other.css']))).toBe(CODE);
     expect(withoutPresentStyles('const a=1;', new Set(['assets/A.css']))).toBe('const a=1;');
   });
+
+  it('leaves a list it can’t read name by name untouched', () => {
+    const built = CODE.replace('"assets/Button.css"', 'base+"assets/Button.css"');
+    expect(withoutPresentStyles(built, new Set(['assets/Button.css']))).toBe(built);
+  });
 });

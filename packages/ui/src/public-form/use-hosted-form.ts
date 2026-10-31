@@ -362,8 +362,10 @@ export function useHostedForm({
           if (outcome.next.kind === 'redirect') onRedirect?.(outcome.next.url);
           else if (outcome.next.kind === 'booking') {
             const { url, countdownSeconds, text } = outcome.next;
+            // A countdown of 0 goes at once, and the page says so while it goes (AC-1059).
             if (countdownSeconds === 0) onRedirect?.(url);
-            // Still sending to the visitor while the countdown's chunk arrives; if it can't, they go on at once.
+            // Still sending to the visitor while the countdown's chunk arrives; if it can't, they go on at once (once),
+            // and with nowhere to go they get the thank you.
             setSending(true);
             import('./FormBooking.tsx').then(
               (module) => {
@@ -373,7 +375,9 @@ export function useHostedForm({
                 setFocusTarget('heading');
               },
               () => {
-                onRedirect?.(url);
+                setSending(false);
+                if (onRedirect === undefined) thank(text);
+                else if (countdownSeconds > 0) onRedirect(url);
               },
             );
           } else thank(outcome.next.text);

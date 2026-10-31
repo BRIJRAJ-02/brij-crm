@@ -47,7 +47,13 @@ export function LayoutCard({ layout, hasSteps, isReadOnly, onChange }: LayoutCar
       <TileGrid
         variant="choice"
         label={strings.layoutTitle}
-        tiles={isReadOnly ? LAYOUT_TILES.map((tile) => ({ ...tile, isDisabled: tile.id !== layout })) : LAYOUT_TILES}
+        tiles={
+          isReadOnly
+            ? LAYOUT_TILES.map((tile) =>
+                tile.id === layout ? tile : { ...tile, isDisabled: true, disabledReason: strings.manageOnly },
+              )
+            : LAYOUT_TILES
+        }
         value={layout}
         onChange={(id) => {
           const tile = LAYOUT_TILES.find((each) => each.id === id);

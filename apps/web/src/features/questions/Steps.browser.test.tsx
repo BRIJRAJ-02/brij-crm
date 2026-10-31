@@ -121,21 +121,19 @@ describe('New step dividers (AC-6303)', () => {
     const title = page.getByRole('textbox', { name: 'Step title' });
     await expect.element(title).toHaveFocus();
     await userEvent.type(title, 'About your team');
-    await expect.element(page.getByRole('button', { name: /^Step 2 · About your team/ })).toBeVisible();
+    await expect.element(page.getByRole('button', { name: /^New step · About your team/ })).toBeVisible();
     await expect.element(page.getByText('No questions yet')).toBeVisible();
     // Its head closes it, as a question's does.
-    await userEvent.click(page.getByRole('button', { name: /^Step 2 · About your team/, expanded: true }));
+    await userEvent.click(page.getByRole('button', { name: /^New step · About your team/, expanded: true }));
     await expect.element(title).not.toBeInTheDocument();
-    await userEvent.click(page.getByRole('button', { name: /^Step 2 · About your team/, expanded: false }));
-    // The preview counts the new step only once a question is under it (the steps' order is `steps.test.ts`').
-    await expect
-      .poll(() => document.querySelector('[role="progressbar"]')?.getAttribute('aria-valuetext'))
-      .toBe('Step 1 of 1');
+    await userEvent.click(page.getByRole('button', { name: /^New step · About your team/, expanded: false }));
+    // The preview counts the new step only once a question is under it: one step shows no progress line.
+    await expect.poll(() => document.querySelector('[role="progressbar"]')).toBeNull();
     // Remove it: its questions join the step above, and Undo brings it back.
     await userEvent.click(page.getByRole('button', { name: 'Remove step' }));
-    await expect.element(page.getByRole('button', { name: /^Step 2/ })).not.toBeInTheDocument();
+    await expect.element(page.getByRole('button', { name: /^New step/ })).not.toBeInTheDocument();
     await userEvent.click(page.getByRole('button', { name: 'Undo' }));
-    await expect.element(page.getByRole('button', { name: /^Step 2 · About your team/ })).toBeVisible();
+    await expect.element(page.getByRole('button', { name: /^New step · About your team/ })).toBeVisible();
   });
 
   it('keeps dividers outside Steps, and says quietly that only Steps shows them', async () => {

@@ -24,7 +24,12 @@ New. The builder must show exactly what goes live (spec 0023, `0023-experience.m
 A form's layout in miniature, for the editor's Layout tiles (TileGrid's `choice` variant, spec 0063 AC-6302): Classic as a small card of three fields over its button, Steps as a card with a progress line, two fields and Back beside Continue, and One at a time as one larger question and its OK, with no card.
 
 ```tsx
-<TileGrid variant="choice" label="Layout" value={layout} tiles={[{ id: 'steps', name: 'Steps', thumbnail: <FormLayoutThumbnail layout="steps" /> }]} />
+<TileGrid
+  variant="choice"
+  label="Layout"
+  value={layout}
+  tiles={[{ id: 'steps', name: 'Steps', thumbnail: <FormLayoutThumbnail layout="steps" /> }]}
+/>
 ```
 
 Why here and new: a choice tile takes a Lucide mark or a thumbnail, and no mark draws a form's layout (each new mark would also cost every page's first load, `packages/ui/AGENTS.md`). LinkPageThumbnail draws a link page's look, not a form's shape, and Skeleton is a loading state, not a picture. It lives beside the preview because it pictures the same thing: the form a visitor gets. It is shapes only, in tokens, still, inert and hidden from screen readers (the tile's name says which layout). States: the three layouts, in light and dark (`HostedFormPreview.stories.tsx`, Layout tiles).

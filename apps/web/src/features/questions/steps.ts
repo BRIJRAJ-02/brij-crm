@@ -135,12 +135,19 @@ export function keepBreaks(
   });
 }
 
-/** Each break's place as a visitor counts it ("Step 2"), and how many questions its step holds, by break id. */
+/**
+ * Each break's place as a visitor counts it ("Step 2", 0 for a break with no question under it yet, which visitors
+ * never see), and how many questions its step holds, by break id.
+ */
 export function stepPlaces(flow: Flow): ReadonlyMap<string, { readonly number: number; readonly count: number }> {
+  let number = 0;
   return new Map(
-    stepsOfBreaks(flow.questions, flow.steps).flatMap((step, index) =>
-      step.id === undefined ? [] : [[step.id, { number: index + 1, count: step.keys.length }] as const],
-    ),
+    stepsOfBreaks(flow.questions, flow.steps).flatMap((step) => {
+      if (step.keys.length > 0) number += 1;
+      return step.id === undefined
+        ? []
+        : [[step.id, { number: step.keys.length > 0 ? number : 0, count: step.keys.length }] as const];
+    }),
   );
 }
 

@@ -120,6 +120,14 @@ export const InSteps: Story = {
   },
 };
 
+/** The preview pointed at the step being edited (`step`), as the builder does when a divider or question opens. */
+export const InStepsSecond: Story = {
+  args: { ...InSteps.args, step: 1 },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('progressbar', { hidden: true, name: 'Step 2 of 2' })).toBeInTheDocument();
+  },
+};
+
 /** The preview one question at a time: the first question, large, with no card. */
 export const OneAtATime: Story = {
   args: { form: { ...CONTACT, layout: 'conversational' } },

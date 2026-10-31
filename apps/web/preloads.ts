@@ -45,6 +45,9 @@ const DEPS_CALL = /__vite__mapDeps\(\[([\d,]*)\]\)/g;
 export function withoutPresentStyles(code: string, present: ReadonlySet<string>): string {
   const list = DEPS_LIST.exec(code);
   if (list === null) return code;
+  // Every entry a plain quoted name, or nothing is touched: an expression (`renderBuiltUrl`, a relative `base`)
+  // would shift the indexes this reads.
+  if (!/^("[^"]*"(,"[^"]*")*)?$/.test(list[1] ?? '')) return code;
   const files = [...(list[1] ?? '').matchAll(/"([^"]*)"/g)].map((match) => match[1] ?? '');
   const kept = files.flatMap((file, index) => (file.endsWith('.css') && present.has(file) ? [] : [index]));
   if (kept.length === files.length) return code;
