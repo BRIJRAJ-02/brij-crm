@@ -32,6 +32,14 @@ export const strings = {
   deleted: (name: string) => `${name} deleted.`,
   undo: 'Undo',
   restored: (name: string) => `${name} is back.`,
+  /** The confirm when scheduling access names the team (spec 0037, AC-1269). */
+  deleteTitle: (name: string) => `Delete ${name}?`,
+  deleteTeam: 'Delete team',
+  keepTeam: 'Keep team',
+  loseScheduling: (people: number, level: 'view' | 'manage' | 'both', team: string) =>
+    `${String(people)} ${people === 1 ? 'person loses' : 'people lose'} access to ${
+      level === 'manage' ? 'manage' : level === 'view' ? 'see' : 'see or manage'
+    } ${team.endsWith('s') ? `${team}’` : `${team}’s`} scheduling.`,
   /** An object's Access tab. */
   accessTab: 'Access',
   accessLoading: 'Loading access',

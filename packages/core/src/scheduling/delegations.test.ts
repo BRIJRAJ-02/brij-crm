@@ -139,7 +139,7 @@ describe('a member and their own scheduling (AC-1255)', () => {
     expect(
       await refusalOf(grantDelegation(me, { delegateMemberId: priya, target: { type: 'everyone' }, level: 'view' })),
     ).toEqual({ code: 'FORBIDDEN', message: PERMISSIONS['members.manage'].message });
-    // Themself as their own delegate, a stranger, and a team before teams exist.
+    // Themself as their own delegate, and a stranger; a team, like everyone, is a manager's to give.
     for (const target of [
       { delegateMemberId: bea, target: { type: 'member' as const, memberId: bea } },
       { delegateMemberId: newId(), target: { type: 'member' as const, memberId: bea } },
@@ -152,7 +152,7 @@ describe('a member and their own scheduling (AC-1255)', () => {
       await refusalOf(
         grantDelegation(me, { delegateMemberId: priya, target: { type: 'team', teamId: newId() }, level: 'view' }),
       ),
-    ).toEqual({ code: 'DELEGATE_INVALID', message: 'Teams aren’t set up in this workspace yet.' });
+    ).toEqual({ code: 'FORBIDDEN', message: PERMISSIONS['members.manage'].message });
     expect(await t.auditRows()).toEqual([]);
   });
 

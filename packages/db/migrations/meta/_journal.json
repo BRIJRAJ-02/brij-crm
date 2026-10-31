@@ -1009,6 +1009,13 @@
       "when": 1795500900000,
       "tag": "0143_scheduling_notice_inbox",
       "breakpoints": true
+    },
+    {
+      "idx": 144,
+      "version": "7",
+      "when": 1795501000000,
+      "tag": "0144_team_delegations",
+      "breakpoints": true
     }
   ]
 }

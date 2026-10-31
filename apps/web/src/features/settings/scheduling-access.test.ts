@@ -73,3 +73,25 @@ describe('a member’s reach in words (AC-1267)', () => {
     );
   });
 });
+
+describe('a team target (spec 0037, AC-1254, AC-1267)', () => {
+  const TEAMS: Record<string, string> = { sales: 'Sales', ops: 'Ops', care: 'Care' };
+  const teamOf = (id: string) => TEAMS[id];
+  const overTeam = (delegate: string, teamId: string, level: 'view' | 'manage'): DelegationView => ({
+    ...grant(delegate, 'everyone', level),
+    id: `${delegate}-team-${teamId}`,
+    target: { type: 'team', teamId },
+  });
+
+  it('names the team with its possessive, and one since deleted plainly', () => {
+    expect(whoseOf({ type: 'team', teamId: 'sales' }, nameOf, teamOf)).toBe('Sales’');
+    expect(whoseOf({ type: 'team', teamId: 'care' }, nameOf, teamOf)).toBe('Care’s');
+    expect(whoseOf({ type: 'team', teamId: 'gone' }, nameOf, teamOf)).toBe('a deleted team’s');
+  });
+
+  it('reads a team among the names a member reaches', () => {
+    const held = [overTeam('priya', 'sales', 'manage'), grant('priya', 'bea', 'manage')];
+    expect(reachWords('member', held, nameOf, teamOf)).toBe('Sales and Bea');
+    expect(reachWords('member', [overTeam('priya', 'ops', 'view')], nameOf, teamOf)).toBe('Sees Ops');
+  });
+});

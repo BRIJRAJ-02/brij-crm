@@ -13,6 +13,9 @@ import {
   parseSchedulingLevel,
   reachSummary,
   roleReach,
+  rolesWithTeamScope,
+  TEAM_SCOPE,
+  teamRoleReach,
   type DelegationReachRow,
   type SchedulingReach,
 } from './scheduling.ts';
@@ -123,6 +126,22 @@ describe('the reach from the role', () => {
   });
 });
 
+describe('the reach over team mates from the role (AC-1253)', () => {
+  it('reads the `.team` pair for a member principal only, Manage over See', () => {
+    const lead = (permissions: readonly string[]): Access =>
+      ({ ...member('member'), permissions: [...permissions] }) as Access;
+    expect(teamRoleReach(lead(['schedule.manage.team', 'schedule.view.team']))).toBe('manage');
+    expect(teamRoleReach(lead(['schedule.view.team']))).toBe('view');
+    expect(teamRoleReach(member('member'))).toBeUndefined();
+    expect(teamRoleReach(keyAccess('k', ['schedule.manage.team']))).toBeUndefined();
+    expect(teamRoleReach(SYSTEM_ACCESS)).toBeUndefined();
+  });
+
+  it('names no built in role whose reach runs through teams: owners and admins manage everyone', () => {
+    expect(rolesWithTeamScope()).toEqual([]);
+  });
+});
+
 describe('the reach from delegations', () => {
   it('reaches a member target at its level, and every non owner, non admin member through everyone', () => {
     const combined = combineReach(ME, undefined, [
@@ -147,10 +166,28 @@ describe('the reach from delegations', () => {
     expect(canActFor(combined, BEA, 'manage')).toBe(true);
   });
 
-  it('grants nothing for an unknown level, an unknown or team target, or a target no longer active', () => {
+  it('reaches a team’s members, and team mates through the role’s team scope, never an owner or an admin', () => {
+    const combined = combineReach(ME, undefined, [
+      row({ target_type: 'team', member_id: BEA, level: 'view', grantor_role: null }),
+      row({ target_type: TEAM_SCOPE, member_id: CY, level: 'manage', grantor_role: null }),
+      row({ target_type: 'team', member_id: OWEN, member_role: 'owner', grantor_role: null }),
+      row({ target_type: TEAM_SCOPE, member_id: ADA, member_role: 'admin', grantor_role: null }),
+      // Overlapping: the team scope sees Bea, a team delegation manages her; the higher wins.
+      row({ target_type: TEAM_SCOPE, member_id: BEA, level: 'view', grantor_role: null }),
+    ]);
+    expect(canActFor(combined, BEA, 'view')).toBe(true);
+    expect(canActFor(combined, BEA, 'manage')).toBe(false);
+    expect(canActFor(combined, CY, 'manage')).toBe(true);
+    expect(canActFor(combined, OWEN, 'view')).toBe(false);
+    expect(canActFor(combined, ADA, 'view')).toBe(false);
+    // A team delegation is never a self grant: it changes hours.
+    expect(canActFor(combined, CY, 'manage', 'hours')).toBe(true);
+  });
+
+  it('grants nothing for an unknown level, an unknown target, or a target no longer active', () => {
     const combined = combineReach(ME, undefined, [
       row({ member_id: BEA, level: 'admin' }),
-      row({ target_type: 'team', member_id: CY }),
+      row({ target_type: 'team', member_id: CY, level: 'owner' }),
       row({ target_type: 'department', member_id: CY }),
       // A removed target: the query's join finds no active member.
       row({ member_id: null }),

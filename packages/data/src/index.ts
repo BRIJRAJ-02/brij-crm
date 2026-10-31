@@ -1965,6 +1965,8 @@ export function createDataLayer({
         // Teams share the event (spec 0031, slice 8): a team made, renamed, filled or deleted names its people.
         refreshHeld(teams, workspace, () => readTeams(workspace)),
       ]);
+      // A Roster narrowed to a team reads its rows again (spec 0037, AC-1289).
+      accessLoaded?.teamWeek.teamsChanged(workspace);
     });
     // A role changed may be the person's own: their access is read again (the server checks every call anyway).
     void namesMe(workspace, event.memberIds).then((named) => {
