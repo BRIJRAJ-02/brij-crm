@@ -1,0 +1,131 @@
+/* A link page's gallery (spec 0061, AC-6109): a row that scrolls sideways and snaps a picture at a time, each one the
+   row's height in its own shape, or a grid of squares; in the page's own corners. The viewer is the library's Modal;
+   only its picture is styled here. */
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+  }
+
+  .root[data-fill] {
+    block-size: 100%;
+  }
+
+  .track {
+    display: flex;
+    gap: var(--space-8);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-behavior: smooth;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+  }
+
+  .root[data-fill] .track {
+    flex: 1;
+    min-block-size: 0;
+  }
+
+  .root[data-display='grid'] .track {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    overflow: visible;
+  }
+
+  .item {
+    display: flex;
+    flex: none;
+    scroll-snap-align: start;
+  }
+
+  .root[data-fill] .item {
+    inline-size: 100%;
+  }
+
+  .shot {
+    display: flex;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: var(--page-radius-card, var(--radius-md));
+    background: var(--surface-sunken);
+    overflow: hidden;
+    outline: none;
+  }
+
+  .shot:focus-visible {
+    box-shadow: var(--shadow-focus);
+  }
+
+  .root[data-fill] .shot,
+  .root[data-display='grid'] .shot {
+    inline-size: 100%;
+  }
+
+  /* Along the row every picture is one height, its width its own shape. */
+  .picture {
+    block-size: var(--size-column);
+    inline-size: auto;
+  }
+
+  .root[data-display='grid'] .picture,
+  .root[data-fill] .picture {
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: cover;
+  }
+
+  .root[data-display='grid'] .shot {
+    aspect-ratio: 1;
+  }
+
+  .root[data-fill] .shot {
+    block-size: 100%;
+  }
+
+  /* Previous and Next under the row, at its end, only where a pointer can't swipe. */
+  .steps {
+    display: none;
+    justify-content: flex-end;
+    gap: var(--space-8);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .steps {
+      display: flex;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .track {
+      scroll-behavior: auto;
+    }
+  }
+
+  /* The viewer's picture: as large as the window lets it, whole, centred; a swipe across it moves on. */
+  .large {
+    display: flex;
+    justify-content: center;
+    touch-action: pan-y;
+  }
+
+  .largePicture {
+    max-inline-size: 100%;
+    max-block-size: calc(100dvb - var(--size-bar) * 5);
+    inline-size: auto;
+    block-size: auto;
+    border-radius: var(--radius-md);
+    object-fit: contain;
+    user-select: none;
+  }
+
+  @media (forced-colors: active) {
+    .shot:focus-visible {
+      outline: var(--border-width-thick) solid Highlight;
+    }
+  }
+}

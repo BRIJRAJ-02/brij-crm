@@ -20,8 +20,19 @@
     fill: var(--surface);
   }
 
+  /* The owner's colour when it keeps its contrast (spec 0061, AC-6124), set by the code itself; else the dark text. */
   .modules {
-    fill: var(--text);
+    fill: var(--qr-modules, var(--text));
+  }
+
+  /* The frame and its label take the modules' colour, so a styled code reads as one mark. */
+  .frame {
+    stroke: var(--qr-modules, var(--text));
+  }
+
+  .frameLabel {
+    fill: var(--qr-modules, var(--text));
+    font-family: var(--font-sans);
   }
 
   /* The slot's width decides the layout, not the window's: a dialog is narrower than the page. The code (size-column)

@@ -1,0 +1,142 @@
+/* A link page's media block (spec 0061, AC-6106): a card in the page's own shape and fill, its stage (the poster,
+   then the player in the same box) over a caption naming what plays and from where. A video's stage is 16 by 9; a
+   song's is the provider's compact player height, so pressing Play swaps one box for another of the same size. */
+@layer components {
+  .root {
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    border: var(--page-card-border-width, var(--border-width-hairline)) solid var(--page-card-border, var(--border));
+    border-radius: var(--page-radius-card, var(--radius-md));
+    background: var(--page-card, var(--surface-raised));
+    box-shadow: var(--page-card-shadow, var(--shadow-xs));
+    overflow: hidden;
+  }
+
+  .root[data-fill] {
+    block-size: 100%;
+  }
+
+  .stage {
+    position: relative;
+    display: flex;
+    flex: none;
+    background: var(--surface-sunken);
+  }
+
+  .root[data-shape='video'] .stage {
+    aspect-ratio: 16 / 9;
+  }
+
+  /* Spotify's and SoundCloud's compact players are 152 high (120 + 32); Apple Music's song player 176. */
+  .root[data-shape='audio'] .stage {
+    block-size: calc(var(--size-column-narrow) + var(--space-32));
+  }
+
+  .root[data-provider='applemusic'] .stage {
+    block-size: calc(var(--size-column-narrow) + var(--space-32) + var(--space-24));
+  }
+
+  /* As a grid tile the stage takes what the caption leaves. */
+  .root[data-fill] .stage {
+    flex: 1;
+    min-block-size: 0;
+    aspect-ratio: auto;
+  }
+
+  /* The poster and the player both fill the stage exactly, out of the flow, so the stage's own shape alone decides
+     the box and the swap from one to the other can't move anything. */
+  .poster,
+  .frame {
+    position: absolute;
+    inset: 0;
+    box-sizing: border-box;
+    inline-size: 100%;
+    block-size: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .poster {
+    display: grid;
+    place-items: center;
+    background: none;
+    color: inherit;
+    font: inherit;
+    outline: none;
+  }
+
+  /* Inside the card's clipped corners, so the ring draws within the stage. */
+  .poster:focus-visible {
+    outline: var(--border-width-thick) solid var(--page-accent, var(--accent));
+    outline-offset: calc(var(--border-width-thick) * -1);
+  }
+
+  .posterImage {
+    position: absolute;
+    inset: 0;
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: cover;
+  }
+
+  /* The one Play mark: the accent's own pair, so it holds its contrast on any poster. */
+  .play {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    inline-size: var(--size-toolbar);
+    block-size: var(--size-toolbar);
+    border-radius: var(--radius-full);
+    background: var(--page-accent, var(--accent));
+    box-shadow: var(--shadow-md);
+    color: var(--page-on-accent, var(--on-accent));
+    position: relative;
+    transition: opacity var(--duration-hover) var(--ease-hover);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .poster:not(:disabled):hover .play {
+      opacity: var(--opacity-busy);
+    }
+  }
+
+  .poster:disabled .play {
+    opacity: var(--opacity-disabled);
+  }
+
+  .caption {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding: var(--space-12);
+  }
+
+  .title {
+    color: var(--page-card-text, var(--text));
+    font: var(--text-title);
+    font-family: var(--page-face, var(--font-sans));
+    font-synthesis: none;
+    letter-spacing: var(--tracking-title);
+    overflow-wrap: anywhere;
+  }
+
+  .line {
+    color: var(--page-card-quiet, var(--text-secondary));
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+    font-family: var(--page-body-face, var(--font-sans));
+  }
+
+  @media (forced-colors: active) {
+    .root {
+      border-color: CanvasText;
+    }
+
+    .poster:focus-visible {
+      outline: var(--border-width-thick) solid Highlight;
+    }
+  }
+}

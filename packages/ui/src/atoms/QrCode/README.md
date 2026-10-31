@@ -26,6 +26,18 @@ New. Two factor setup shows the app's secret as a QR code (AC-881). Nothing in t
 - `size="fill"` draws the code at its slot's whole width rather than `size-menu`: the link page's QR Modal (spec 0051, AC-5122) shows it large, to be scanned from across a table or saved to print. A size, not a new component: the image, its quiet zone and its colours are the same. With `children`, the code stays `size-column`.
 - Dark modules on a white ground in both themes: the code carries `data-theme="light"`, so it draws `text` on `surface` from the light theme's tokens whatever the page's theme, because not every scanner reads an inverted code, and a code saved as a PNG from dark mode (a link page's Download QR code) prints white, not grey (AC-5122, 25 October 2026; dark mode's `surface-inverse` ground was a light grey).
 
+## Style (spec 0061, AC-6124)
+
+A link page's share code may carry its owner's style, saved per page and passed in here:
+
+- `colour`: a `#rrggbb` for the modules, drawn only when it keeps 4.5 to 1 against the white ground (`qrModuleColour`, the same rule the server refuses a saved style by); a lighter one draws the plain dark code. It reaches the modules, the frame and its label through `--qr-modules`, set on the code itself.
+- `picture`: a picture in the middle, from our origin only (`safeImageSrc`). It takes at most a fifth of the code's side (`qrPictureBox`: odd, centred on a module), the modules under it and one module round it are left out, and the code switches to the highest error correction (H) to carry it. Clipped to a small round corner.
+- `frameLabel`: a rounded frame outside the whole quiet zone, in the module colour, with the label (up to 20 characters) in a band under the code.
+
+All of it is inside the one SVG, so a saved copy carries it (the caller writes the computed colours into a standalone copy, as `qr-png.ts` does; its `text` element needs its fill written in too, and a centre picture must be a `data:` or same origin address for the copy to draw it). The ground always stays white: not every scanner reads an inverted code. `QrCode.browser.test.tsx` draws each style in Chromium, saves it the way the editor does and decodes it with `jsqr` (a dev dependency for that test alone).
+
+Why options, not a new component: the code, its quiet zone and its ground are the same; only the modules' colour and what sits in the middle and around it change.
+
 ## States
 
 One state: drawn, alone (at `size-menu` or filling its slot) or with its column (side by side, or under it when narrow). It has no hover, focus or disabled state (it is not interactive); the column's controls have their own.

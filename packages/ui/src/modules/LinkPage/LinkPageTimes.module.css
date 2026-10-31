@@ -1,0 +1,57 @@
+/* A link page's next times block (spec 0061, AC-6110): a raised card like the questions beside it, the booking
+   page's title, then its open times as chips that wrap on one gap, then More times at the card's end. */
+@layer components {
+  .root {
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-12);
+    padding: var(--space-12);
+    border: var(--page-card-border-width, var(--border-width-hairline)) solid var(--page-card-border, var(--border));
+    border-radius: var(--page-radius-card, var(--radius-md));
+    background: var(--page-card, var(--surface-raised));
+    box-shadow: var(--page-card-shadow, var(--shadow-xs));
+  }
+
+  .title {
+    margin: 0;
+    color: var(--page-card-text, var(--text));
+    font: var(--text-title);
+    font-family: var(--page-face, var(--font-sans));
+    font-synthesis: none;
+    letter-spacing: var(--tracking-title);
+    overflow-wrap: anywhere;
+  }
+
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-8);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .chip {
+    display: flex;
+  }
+
+  /* A chip's place while the times load: a touch control's height, a column narrow wide. */
+  .chipLoading {
+    display: flex;
+    inline-size: var(--size-column-narrow);
+    block-size: calc(var(--size-toolbar) - var(--space-4));
+    border-radius: var(--radius-md);
+    overflow: hidden;
+  }
+
+  .none {
+    margin: 0;
+    color: var(--page-card-quiet, var(--text-secondary));
+  }
+
+  .more {
+    display: flex;
+    justify-content: flex-end;
+  }
+}

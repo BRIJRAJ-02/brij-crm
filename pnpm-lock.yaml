@@ -186,6 +186,9 @@ catalogs:
     hono:
       specifier: 4.13.12
       version: 4.13.12
+    jsqr:
+      specifier: 1.4.0
+      version: 1.4.0
     lefthook:
       specifier: 2.1.15
       version: 2.1.15
@@ -986,6 +989,9 @@ importers:
       eslint:
         specifier: 'catalog:'
         version: 10.11.0(jiti@2.7.0)
+      jsqr:
+        specifier: 'catalog:'
+        version: 1.4.0
       playwright:
         specifier: 'catalog:'
         version: 1.63.0
@@ -4967,6 +4973,9 @@ packages:
 
   jsonc-parser@3.3.1:
     resolution: {integrity: sha512-HUgH65KyejrUFPvHFPbqOY0rsFip3Bo5wb4ngvdi1EpCYWUQDC5V+Y7mZws+DLkr4M//zQJoanu1SP+87Dv1oQ==}
+
+  jsqr@1.4.0:
+    resolution: {integrity: sha512-dxLob7q65Xg2DvstYkRpkYtmKm2sPJ9oFhrhmudT1dZvNFFTlroai3AWSpLey/w5vMcLBXRgOJsbXpdN9HzU/A==}
 
   jsx-ast-utils-x@0.1.0:
     resolution: {integrity: sha512-eQQBjBnsVtGacsG9uJNB8qOr3yA8rga4wAaGG1qRcBzSIvfhERLrWxMAM1hp5fcS6Abo8M4+bUBTekYR0qTPQw==}
@@ -10162,6 +10171,8 @@ snapshots:
   json5@2.2.3: {}
 
   jsonc-parser@3.3.1: {}
+
+  jsqr@1.4.0: {}
 
   jsx-ast-utils-x@0.1.0: {}
 

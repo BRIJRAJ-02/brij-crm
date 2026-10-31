@@ -1,16 +1,29 @@
-import { useId, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  lazy,
+  Suspense,
+  useContext,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent,
+  type ReactNode,
+} from 'react';
 // The link page's font packs (spec 0060, AC-12): faces the browser fetches only once text is drawn in them.
 import '@crm/tokens/packs.css';
 import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
-import { ButtonLink } from '../../atoms/Button/Button.tsx';
+import { Button, ButtonLink } from '../../atoms/Button/Button.tsx';
 import { CopyButton } from '../../atoms/Button/CopyButton.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { Disclosure, DisclosureGroup } from '../../molecules/Disclosure/Disclosure.tsx';
+import { SocialLinks, type SocialLinkItem } from '../../molecules/SocialLinks/SocialLinks.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
 import { ProviderMark } from '../../atoms/ProviderMark/ProviderMark.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import type { Hue } from '../../hue.ts';
+import { focusLater } from '../../lib/focus-later.ts';
 import { safeHref } from '../../lib/safe-href.ts';
 import { safeImageSrc } from '../../lib/safe-image-src.ts';
 import { usePageVariables, type PageVariables } from '../../lib/page-variables.ts';
@@ -21,6 +34,34 @@ import { strings } from './strings.ts';
 /** A social network whose own mark a link shows (ProviderMark's social marks). */
 export type LinkPageMark =
   'linkedin' | 'x' | 'instagram' | 'github' | 'facebook' | 'youtube' | 'angellist' | 'tiktok' | 'threads';
+
+/**
+ * A picture as the page draws it (spec 0061, AC-6101, AC-6126): a path on our own origin (`safeImageSrc`), with its
+ * size, so its box is held before it loads and nothing moves when it arrives.
+ */
+export interface LinkPagePicture {
+  readonly src: string;
+  readonly width: number;
+  readonly height: number;
+}
+
+/** A tile's size on a grid page (spec 0061, AC-6103): 1 by 1, 2 by 1 or 2 by 2. Absent is `small`. */
+export type LinkPageTileSize = 'small' | 'wide' | 'large';
+
+/** What a link asks before it opens (spec 0061, AC-6113): self declared, as `PROFILE_NOTICES` in the contracts. */
+export type LinkPageNotice = 'sensitive' | '18' | '21';
+
+/** The services a media block plays from (spec 0061, AC-6105), as `MEDIA_PROVIDERS` in the contracts. */
+export type LinkPageMediaProvider = 'youtube' | 'vimeo' | 'spotify' | 'soundcloud' | 'applemusic';
+
+/**
+ * A next times block's open times (spec 0061, AC-6110), which the caller reads once the block nears the screen
+ * (`onTimesNear`). Absent is not read yet: the block holds its place and asks for them.
+ */
+export type LinkPageTimes =
+  | { readonly status: 'loading' }
+  | { readonly status: 'error' }
+  | { readonly status: 'ready'; readonly starts: readonly string[] };
 
 /**
  * One block of a link page, as it draws (spec 0051). Each kind has one renderer here (`RENDERERS`); a later kind is
@@ -42,6 +83,16 @@ export type LinkPageBlock =
       readonly siteIcon?: string;
       /** Else the title's first letter, on this hue. */
       readonly hue: Hue;
+      /**
+       * Its picture (spec 0061, AC-6101), ahead of everything above: in the row's tile, across the top of a featured
+       * card, and over a grid tile. When it fails to load, the tile falls back to the order above.
+       */
+      readonly thumb?: LinkPagePicture;
+      /** `featured` (AC-6102): the larger card, its picture across the top. Absent is the row. */
+      readonly style?: 'row' | 'featured';
+      /** A notice the visitor confirms before the link opens (AC-6113). Such a link is `nofollow`. */
+      readonly notice?: LinkPageNotice;
+      readonly size?: LinkPageTileSize;
     }
   | {
       readonly kind: 'heading';
@@ -97,6 +148,64 @@ export type LinkPageBlock =
       readonly href: string;
       /** Its lengths and kind, said once: "30 min · 60 min · Team". */
       readonly facts: string;
+      readonly size?: LinkPageTileSize;
+    }
+  | {
+      /** The person's social links as one row of marks, wherever the owner put it (spec 0061, AC-6104). */
+      readonly kind: 'socials';
+      readonly id: string;
+      readonly links: readonly SocialLinkItem[];
+    }
+  | {
+      /**
+       * A video or a song behind its facade (spec 0061, AC-6106): nothing loads from the provider until Play. `frame`
+       * is the player's address the server built from the parsed provider and id; one on any other origin never
+       * becomes a frame.
+       */
+      readonly kind: 'media';
+      readonly id: string;
+      readonly provider: LinkPageMediaProvider;
+      readonly title: string;
+      readonly frame: string;
+      readonly poster?: LinkPagePicture;
+      readonly size?: LinkPageTileSize;
+    }
+  | {
+      /** One picture (spec 0061, AC-6108), its alt text required, with an optional caption and link. */
+      readonly kind: 'image';
+      readonly id: string;
+      readonly image: LinkPagePicture;
+      readonly alt: string;
+      readonly caption?: string;
+      /** Where pressing the picture goes: a web address, opened in a new tab. */
+      readonly href?: string;
+      readonly size?: LinkPageTileSize;
+    }
+  | {
+      /** Two to twelve pictures (spec 0061, AC-6109), a swipe row or a grid, each opening large in a viewer. */
+      readonly kind: 'gallery';
+      readonly id: string;
+      readonly images: readonly (LinkPagePicture & { readonly alt: string })[];
+      readonly display: 'row' | 'grid';
+      readonly size?: LinkPageTileSize;
+    }
+  | {
+      /** A booking page's next open times as chips (spec 0061, AC-6110). */
+      readonly kind: 'times';
+      readonly id: string;
+      readonly title: string;
+      /** The booking page's address, `/<handle>/<slug>`: More times, and each chip with `?at=` and `&len=`. */
+      readonly href: string;
+      /** The length the chips are for, in minutes. */
+      readonly duration: number;
+      readonly times?: LinkPageTimes;
+    }
+  | {
+      /** One line at the very top of the page (spec 0061, AC-6112), with an optional link, closed for the visit. */
+      readonly kind: 'banner';
+      readonly id: string;
+      readonly text: string;
+      readonly href?: string;
     }
   | {
       readonly kind: 'contact';
@@ -210,6 +319,26 @@ export interface LinkPageProps {
    * stylesheet (`look.css`) sets the same names. Anything but those names, a checked hex or our own api is dropped.
    */
   readonly variables?: PageVariables;
+  /**
+   * How the blocks lay out (spec 0061, AC-6103): `list` (the default) is one column of rows; `grid` draws the sized
+   * kinds as tiles on 2 columns, 4 where the blocks have the room, in the owner's order exactly (no dense packing),
+   * with every other kind across the whole row.
+   */
+  readonly pageLayout?: 'list' | 'grid';
+  /** A next times block neared the screen with no times yet (AC-6110): the caller reads them, once. */
+  readonly onTimesNear?: (id: string) => void;
+  /**
+   * The banner was closed this visit (AC-6112). With `onCloseBanner`, the caller keeps it (the public page, in the
+   * tab's session); without, the page holds it itself.
+   */
+  readonly isBannerClosed?: boolean;
+  readonly onCloseBanner?: () => void;
+  /**
+   * The noticed links a visitor already said Continue to this visit (AC-6113): they open at once. With
+   * `onContinueNotice`, the caller keeps them (the public page, in the tab's session); without, the page does.
+   */
+  readonly continuedNotices?: readonly string[];
+  readonly onContinueNotice?: (id: string) => void;
 }
 
 /** Which of its two photos a link page has. */
@@ -269,12 +398,14 @@ const LOADING_BLOCKS = 5;
 /**
  * The blocks in groups: those before the first heading, then each heading with the blocks under it. A contact card
  * never takes a place here: it is the header's Save contact, wherever the owner keeps it in their order (the
- * owner's design, 25 October 2026).
+ * owner's design, 25 October 2026). A second and third card (spec 0061, AC-6114) take their places as rows, each with
+ * its own Save contact. A banner never does either: it draws at the very top (AC-6112).
  */
 function groupsOf(blocks: readonly LinkPageBlock[]) {
   const groups: { heading?: Extract<LinkPageBlock, { kind: 'heading' }>; rows: LinkPageBlock[] }[] = [];
+  const header = contactOf(blocks);
   for (const block of blocks) {
-    if (block.kind === 'contact') continue;
+    if (block === header || block.kind === 'banner') continue;
     if (block.kind === 'heading') groups.push({ heading: block, rows: [] });
     else if (groups.length === 0) groups.push({ rows: [block] });
     else groups.at(-1)?.rows.push(block);
@@ -373,7 +504,23 @@ const TILE_ICONS = {
   text: 'file-text',
   faq: 'circle-question-mark',
   testimonial: 'message-square',
-} as const satisfies Record<'heading' | 'text' | 'faq' | 'testimonial', IconName>;
+  // Spec 0061's kinds, each from a mark the registry already holds (no new icon in the first load).
+  socials: 'at-sign',
+  media: 'play',
+  image: 'image',
+  gallery: 'layers',
+  banner: 'megaphone',
+} as const satisfies Record<
+  'heading' | 'text' | 'faq' | 'testimonial' | 'socials' | 'media' | 'image' | 'gallery' | 'banner',
+  IconName
+>;
+
+/** The kinds whose editor row shows a plain mark, since on the page they draw as something other than a row. */
+type MarkedKind = keyof typeof TILE_ICONS;
+
+function isMarked(block: LinkPageBlock): block is Extract<LinkPageBlock, { kind: MarkedKind }> {
+  return Object.hasOwn(TILE_ICONS, block.kind);
+}
 
 export function LinkPageTile({ block }: { readonly block?: LinkPageBlock }) {
   if (block === undefined) {
@@ -383,7 +530,7 @@ export function LinkPageTile({ block }: { readonly block?: LinkPageBlock }) {
       </span>
     );
   }
-  if (block.kind === 'page') {
+  if (block.kind === 'page' || block.kind === 'times') {
     return (
       <span className={styles.tile} data-tile="page">
         <Icon name="calendar-clock" />
@@ -399,7 +546,7 @@ export function LinkPageTile({ block }: { readonly block?: LinkPageBlock }) {
       </span>
     );
   }
-  if (block.kind === 'heading' || block.kind === 'text' || block.kind === 'faq' || block.kind === 'testimonial') {
+  if (isMarked(block)) {
     return (
       <span className={styles.tile} data-tile="icon">
         <Icon name={TILE_ICONS[block.kind]} />
@@ -413,6 +560,45 @@ export function LinkPageTile({ block }: { readonly block?: LinkPageBlock }) {
       </span>
     );
   }
+  if (block.thumb !== undefined) return <ThumbTile block={block} picture={block.thumb} />;
+  return <LinkMarkTile block={block} />;
+}
+
+/**
+ * A link's own picture in its tile (spec 0061, AC-6101), from our origin only. It holds the tile's square whatever
+ * the picture's shape, and the moment it fails the tile falls back to the link's mark, icon, site icon or letter,
+ * so the page never shows a broken picture.
+ */
+function ThumbTile({
+  block,
+  picture,
+}: {
+  readonly block: Extract<LinkPageBlock, { kind: 'link' }>;
+  readonly picture: LinkPagePicture;
+}) {
+  const [failed, setFailed] = useState<string | undefined>(undefined);
+  const image = safeImageSrc(picture.src);
+  if (image === undefined || failed === image) return <LinkMarkTile block={block} />;
+  return (
+    <span className={styles.tile} data-tile="thumb">
+      <img
+        className={styles.thumbImage}
+        src={image}
+        width={picture.width}
+        height={picture.height}
+        alt={strings.thumbAlt}
+        loading="lazy"
+        decoding="async"
+        onError={() => {
+          setFailed(image);
+        }}
+      />
+    </span>
+  );
+}
+
+/** A link's tile without its picture: the order every link had before spec 0061. */
+function LinkMarkTile({ block }: { readonly block: Extract<LinkPageBlock, { kind: 'link' }> }) {
   if (block.mark !== undefined) {
     return (
       <span className={styles.tile} data-tile="mark">
@@ -485,52 +671,156 @@ function BlockText({ title, line }: { readonly title: string; readonly line?: st
   );
 }
 
+/** A link block, the kind most of spec 0061's choices are about. */
+type LinkBlock = Extract<LinkPageBlock, { kind: 'link' }>;
+
+/**
+ * What a block several levels down needs from the page, without threading it through every group (spec 0061): how
+ * the blocks lay out, whether a noticed link was already continued this visit, the way to ask before one opens, and
+ * the times blocks' reader. The default is the editor's: a list, every notice taken as read, nothing to ask.
+ */
+interface PageActions {
+  readonly layout: 'list' | 'grid';
+  readonly isContinued: (id: string) => boolean;
+  readonly ask: (block: LinkBlock) => void;
+  readonly onTimesNear: ((id: string) => void) | undefined;
+}
+
+const PageActionsContext = createContext<PageActions>({
+  layout: 'list',
+  isContinued: () => true,
+  ask: () => undefined,
+  onTimesNear: undefined,
+});
+
+/**
+ * A noticed link's press (AC-6113): until the visitor said Continue to it this visit, the press opens the notice
+ * instead of the link, and counts nothing; the sheet's Continue counts it. Once continued, it opens and counts at once.
+ */
+function useLinkClick(block: LinkBlock, press: (() => void) | undefined) {
+  const actions = useContext(PageActionsContext);
+  if (block.notice === undefined || actions.isContinued(block.id)) return { onClick: press, asks: false };
+  return {
+    onClick: (event: MouseEvent) => {
+      event.preventDefault();
+      actions.ask(block);
+    },
+    asks: true,
+  };
+}
+
+/** A link's `rel`: no referrer, opener or endorsement; `me` only on the person's own profile, never on a noticed link. */
+function relOf(block: LinkBlock): string {
+  return block.mark === undefined || block.notice !== undefined
+    ? 'noopener noreferrer nofollow'
+    : 'me noopener noreferrer nofollow';
+}
+
+/**
+ * A featured link's picture across the top of its card (AC-6102), in a fixed shape so the card is one size whether
+ * the picture loads, fails or was never there: without one, the link's own tile sits in the middle of the band.
+ */
+function FeaturedPicture({ block }: { readonly block: LinkBlock }) {
+  const [failed, setFailed] = useState<string | undefined>(undefined);
+  const { thumb } = block;
+  const image = thumb === undefined ? undefined : safeImageSrc(thumb.src);
+  const shown = image === undefined || failed === image || thumb === undefined ? undefined : { image, thumb };
+  return (
+    <span className={styles.featuredPicture} data-empty={shown === undefined || undefined}>
+      {shown === undefined ? (
+        <LinkMarkTile block={block} />
+      ) : (
+        <img
+          className={styles.coverImage}
+          src={shown.image}
+          width={shown.thumb.width}
+          height={shown.thumb.height}
+          alt={strings.thumbAlt}
+          loading="lazy"
+          decoding="async"
+          onError={() => {
+            setFailed(shown.image);
+          }}
+        />
+      )}
+    </span>
+  );
+}
+
+/** A link as a row, or as the larger featured card (AC-6102). */
+function LinkRow({ block, onPress }: { readonly block: LinkBlock; readonly onPress: (() => void) | undefined }) {
+  const target = linkTarget(block.href);
+  const click = useLinkClick(block, onPress);
+  const isFeatured = block.style === 'featured';
+  const words = <BlockText title={block.title} {...(block.note === undefined ? {} : { line: block.note })} />;
+  // An address the rule refuses draws as words, never as a link.
+  if (target === undefined) {
+    return isFeatured ? (
+      <span className={styles.block} data-featured="" data-inert="">
+        <FeaturedPicture block={block} />
+        <span className={styles.featuredText}>{words}</span>
+      </span>
+    ) : (
+      <span className={styles.block} data-inert="">
+        <LinkPageTile block={block} />
+        {words}
+      </span>
+    );
+  }
+  const isWeb = target.scheme === 'web';
+  const end = (
+    <span className={styles.end}>
+      <Icon name={isWeb ? 'arrow-up-right' : SCHEME_ICONS[target.scheme]} size="sm" />
+    </span>
+  );
+  return (
+    <a
+      className={styles.block}
+      data-featured={isFeatured ? '' : undefined}
+      href={target.href}
+      onClick={click.onClick}
+      // A web page opens in a new tab, with no referrer, no opener and no endorsement. An email, a call or a text
+      // opens the device's app, in place; a noticed one is still never endorsed (AC-6113).
+      {...(isWeb ? { target: '_blank', rel: relOf(block) } : block.notice === undefined ? {} : { rel: 'nofollow' })}
+    >
+      {isFeatured ? (
+        <>
+          <FeaturedPicture block={block} />
+          <span className={styles.featuredText}>
+            {words}
+            {end}
+          </span>
+        </>
+      ) : (
+        <>
+          <LinkPageTile block={block} />
+          {words}
+          {end}
+        </>
+      )}
+      {isWeb && <VisuallyHidden>{strings.newTab}</VisuallyHidden>}
+      {click.asks && <VisuallyHidden>{strings.asksFirst}</VisuallyHidden>}
+    </a>
+  );
+}
+
+/** A path on our own origin a booking page or form block opens in this tab, or undefined. */
+function samePath(href: string): string | undefined {
+  return href.startsWith('/') && !/^\/[/\\]/.test(href) ? href : undefined;
+}
+
 /** Each kind's one renderer. A block of a kind with none never reaches here: callers skip what they can't map. */
 const RENDERERS: {
-  readonly [Kind in Exclude<LinkPageBlock['kind'], 'heading' | 'contact' | 'text' | 'faq' | 'testimonial'>]: (
+  readonly [Kind in RowBlock['kind']]: (
     block: Extract<LinkPageBlock, { kind: Kind }>,
     onPress: (() => void) | undefined,
   ) => ReactNode;
 } = {
-  link: (block, onPress) => {
-    const target = linkTarget(block.href);
-    // An address the rule refuses draws as words, never as a link.
-    if (target === undefined) {
-      return (
-        <span className={styles.block} data-inert="">
-          <LinkPageTile block={block} />
-          <BlockText title={block.title} {...(block.note === undefined ? {} : { line: block.note })} />
-        </span>
-      );
-    }
-    const isWeb = target.scheme === 'web';
-    return (
-      <a
-        className={styles.block}
-        href={target.href}
-        onClick={onPress}
-        // A web page opens in a new tab, with no referrer, no opener and no endorsement; `me` only on the person's
-        // own profile on a network. An email, a call or a text opens the device's app, in place.
-        {...(isWeb
-          ? {
-              target: '_blank',
-              rel: block.mark === undefined ? 'noopener noreferrer nofollow' : 'me noopener noreferrer nofollow',
-            }
-          : {})}
-      >
-        <LinkPageTile block={block} />
-        <BlockText title={block.title} {...(block.note === undefined ? {} : { line: block.note })} />
-        <span className={styles.end}>
-          <Icon name={isWeb ? 'arrow-up-right' : SCHEME_ICONS[target.scheme]} size="sm" />
-        </span>
-        {isWeb && <VisuallyHidden>{strings.newTab}</VisuallyHidden>}
-      </a>
-    );
-  },
+  link: (block, onPress) => <LinkRow block={block} onPress={onPress} />,
   // A Timefix form: a row that opens the form on our own origin, in the same tab. Our page, our policy: no frame,
   // no script from anywhere else, and an ordinary navigation a visitor can come back from (AC-5215).
   form: (block, onPress) => {
-    const target = block.href.startsWith('/') && !/^\/[/\\]/.test(block.href) ? block.href : undefined;
+    const target = samePath(block.href);
     const body = (
       <>
         <LinkPageTile block={block} />
@@ -554,7 +844,7 @@ const RENDERERS: {
     );
   },
   page: (block, onPress) => {
-    const target = block.href.startsWith('/') && !/^\/[/\\]/.test(block.href) ? block.href : undefined;
+    const target = samePath(block.href);
     const body = (
       <>
         <LinkPageTile block={block} />
@@ -577,6 +867,33 @@ const RENDERERS: {
       </a>
     );
   },
+  // A second or third contact card (spec 0061, AC-6114): a row that saves that card, as the header's Save contact
+  // saves the first. A plain link to its vCard on our origin, so it works with no script and a phone offers to add it.
+  contact: (block, onPress) => {
+    const target = ownPath(block.href);
+    const body = (
+      <>
+        <LinkPageTile block={block} />
+        <BlockText title={block.title} {...(block.line === undefined ? {} : { line: block.line })} />
+      </>
+    );
+    if (target === undefined) {
+      return (
+        <span className={styles.block} data-inert="">
+          {body}
+        </span>
+      );
+    }
+    return (
+      <a className={styles.block} href={target} onClick={onPress}>
+        {body}
+        <span className={styles.end}>
+          <Icon name="download" size="sm" />
+        </span>
+        <VisuallyHidden>{strings.saveContact}</VisuallyHidden>
+      </a>
+    );
+  },
 };
 
 /** One block in its row. */
@@ -584,7 +901,7 @@ function BlockRow({
   block,
   onPress,
 }: {
-  readonly block: BlockRowBlock;
+  readonly block: RowBlock;
   readonly onPress: ((id: string) => void) | undefined;
 }) {
   const press = onPress === undefined ? undefined : () => onPress(block.id);
@@ -594,51 +911,334 @@ function BlockRow({
         ? RENDERERS.link(block, press)
         : block.kind === 'form'
           ? RENDERERS.form(block, press)
-          : RENDERERS.page(block, press)}
+          : block.kind === 'page'
+            ? RENDERERS.page(block, press)
+            : RENDERERS.contact(block, press)}
     </li>
   );
 }
 
-/** A group's children in order: each run of pressable rows, and each block that stands apart between them. */
-type Run =
-  | { readonly kind: 'rows'; readonly key: string; readonly isFirst: boolean; readonly rows: BlockRowBlock[] }
-  | { readonly kind: 'apart'; readonly key: string; readonly block: ApartBlock };
+/** A block a row draws: a link, a form, a booking page, or a second contact card. */
+type RowBlock = Extract<LinkPageBlock, { kind: 'link' | 'form' | 'page' | 'contact' }>;
 
-/** A block a row draws: everything but a heading, a contact card, writing, questions and a testimonial. */
-type BlockRowBlock = Exclude<LinkPageBlock, { kind: 'heading' | 'contact' | 'text' | 'faq' | 'testimonial' }>;
+/** A block a grid page draws as a sized tile (spec 0061, AC-6103): `PROFILE_SIZED_KINDS` in the contracts. */
+type TileBlock = Extract<LinkPageBlock, { kind: 'link' | 'page' | 'media' | 'image' | 'gallery' }>;
 
 /**
- * A block that is not a row: the person's own words, the questions they answer, and something a customer said.
- * None of them records a press, because none of them is a thing to press.
+ * A block that is not a row: the person's own words, the questions they answer, something a customer said, and
+ * spec 0061's socials row, media, pictures and next times. On a grid page each spans the whole row.
  */
-type ApartBlock = Extract<LinkPageBlock, { kind: 'text' | 'faq' | 'testimonial' }>;
+type ApartBlock = Extract<
+  LinkPageBlock,
+  { kind: 'text' | 'faq' | 'testimonial' | 'socials' | 'media' | 'image' | 'gallery' | 'times' }
+>;
 
-function runsOf(blocks: readonly LinkPageBlock[]): Run[] {
+function isRowBlock(block: LinkPageBlock): block is RowBlock {
+  return block.kind === 'link' || block.kind === 'form' || block.kind === 'page' || block.kind === 'contact';
+}
+
+function isTileBlock(block: LinkPageBlock): block is TileBlock {
+  return (
+    block.kind === 'link' ||
+    block.kind === 'page' ||
+    block.kind === 'media' ||
+    block.kind === 'image' ||
+    block.kind === 'gallery'
+  );
+}
+
+/** A group's children in order: each run of rows, each run of tiles, and each block that stands apart between them. */
+type Run =
+  | { readonly kind: 'rows'; readonly key: string; readonly isFirst: boolean; readonly rows: RowBlock[] }
+  | { readonly kind: 'tiles'; readonly key: string; readonly isFirst: boolean; readonly tiles: TileBlock[] }
+  | { readonly kind: 'apart'; readonly key: string; readonly block: ApartBlock };
+
+/**
+ * The runs, in the owner's order exactly. On a list page the rows run together and everything else stands apart; on
+ * a grid page (AC-6103) the sized kinds run together as tiles, a form or contact card is a row of its own across the
+ * grid, and every other kind stands apart, so what you see, the reading order and the focus order always match.
+ */
+function runsOf(blocks: readonly LinkPageBlock[], layout: 'list' | 'grid'): Run[] {
   const runs: Run[] = [];
   let isFirst = true;
   for (const block of blocks) {
-    if (block.kind === 'heading' || block.kind === 'contact') continue;
-    if (block.kind === 'text' || block.kind === 'faq' || block.kind === 'testimonial') {
-      runs.push({ kind: 'apart', key: block.id, block });
-      continue;
-    }
+    if (block.kind === 'heading' || block.kind === 'banner') continue;
     const last = runs.at(-1);
-    if (last?.kind === 'rows') last.rows.push(block);
-    else {
-      runs.push({ kind: 'rows', key: block.id, isFirst, rows: [block] });
-      isFirst = false;
+    if (layout === 'grid' && isTileBlock(block)) {
+      if (last?.kind === 'tiles') last.tiles.push(block);
+      else {
+        runs.push({ kind: 'tiles', key: block.id, isFirst, tiles: [block] });
+        isFirst = false;
+      }
+    } else if (isRowBlock(block)) {
+      if (last?.kind === 'rows') last.rows.push(block);
+      else {
+        runs.push({ kind: 'rows', key: block.id, isFirst, rows: [block] });
+        isFirst = false;
+      }
+    } else {
+      runs.push({ kind: 'apart', key: block.id, block });
     }
   }
   return runs;
 }
 
+// Media, a picture, a gallery, next times and the notice sheet each load as their own chunk, and only when a block
+// of that kind is on the page (spec 0061, AC-6126): the first load holds rows, featured cards, the socials row and
+// the banner. Until a chunk arrives, its block holds its own box (`Hold`), so nothing moves when it does.
+const LazyMedia = lazy(() => import('./LinkPageMedia.tsx').then((module) => ({ default: module.LinkPageMedia })));
+const LazyImage = lazy(() => import('./LinkPageImage.tsx').then((module) => ({ default: module.LinkPageImage })));
+const LazyGallery = lazy(() => import('./LinkPageGallery.tsx').then((module) => ({ default: module.LinkPageGallery })));
+const LazyTimes = lazy(() => import('./LinkPageTimes.tsx').then((module) => ({ default: module.LinkPageTimes })));
+const LazyNotice = lazy(() => import('./LinkPageNotice.tsx').then((module) => ({ default: module.LinkPageNotice })));
+
+/** The box a lazy block holds while its chunk loads: its own shape, quietly, out of the accessibility tree. */
+function Hold({
+  shape,
+  picture,
+  isTile,
+}: {
+  readonly shape: 'video' | 'audio' | 'picture' | 'row' | 'times';
+  readonly picture?: LinkPagePicture;
+  readonly isTile: boolean;
+}) {
+  return (
+    <span
+      className={styles.hold}
+      data-hold={shape}
+      data-fill={isTile || undefined}
+      aria-hidden="true"
+      {...(picture === undefined
+        ? {}
+        : { style: { '--hold-ratio': `${String(picture.width)} / ${String(picture.height)}` } })}
+    >
+      <Skeleton shape="fill" />
+    </span>
+  );
+}
+
+/** A media, picture or gallery block, from its own chunk, as a whole row or as a tile. */
+function LazyPictureBlock({
+  block,
+  onPress,
+  isTile,
+}: {
+  readonly block: Extract<LinkPageBlock, { kind: 'media' | 'image' | 'gallery' }>;
+  readonly onPress: ((id: string) => void) | undefined;
+  readonly isTile: boolean;
+}) {
+  const press = onPress === undefined ? undefined : () => onPress(block.id);
+  const pressed = press === undefined ? {} : { onPress: press };
+  if (block.kind === 'media') {
+    const isVideo = block.provider === 'youtube' || block.provider === 'vimeo';
+    return (
+      <Suspense fallback={<Hold shape={isVideo ? 'video' : 'audio'} isTile={isTile} />}>
+        <LazyMedia block={block} isTile={isTile} {...pressed} />
+      </Suspense>
+    );
+  }
+  if (block.kind === 'image') {
+    return (
+      <Suspense fallback={<Hold shape="picture" picture={block.image} isTile={isTile} />}>
+        <LazyImage block={block} isTile={isTile} {...pressed} />
+      </Suspense>
+    );
+  }
+  return (
+    <Suspense fallback={<Hold shape="row" isTile={isTile} />}>
+      <LazyGallery block={block} isTile={isTile} />
+    </Suspense>
+  );
+}
+
 /**
- * A block that stands outside the list of rows: the person's words, or the questions they answer. Its title takes
- * the level under whatever names its group, so a page with no sections never skips from the person's name to an
- * h3 and one with them never repeats a section's own level.
+ * A grid page's tile for a link or a booking page (AC-6103): its picture filling the top when it has one, else its
+ * tile at the top; then its words, and the quiet mark of where it goes. The same press, rel and notice as its row.
  */
-function ApartBlockView({ block, level }: { readonly block: ApartBlock; readonly level: 2 | 3 }) {
+function LinkTile({ block, onPress }: { readonly block: LinkBlock; readonly onPress: (() => void) | undefined }) {
+  const target = linkTarget(block.href);
+  const click = useLinkClick(block, onPress);
+  const isWeb = target?.scheme === 'web';
+  const body = (
+    <>
+      {block.thumb === undefined ? (
+        <span className={styles.tileTop}>
+          <LinkPageTile block={block} />
+        </span>
+      ) : (
+        <TilePicture block={block} picture={block.thumb} />
+      )}
+      <span className={styles.tileFoot}>
+        <BlockText title={block.title} {...(block.note === undefined ? {} : { line: block.note })} />
+        {target !== undefined && (
+          <span className={styles.end}>
+            <Icon name={isWeb ? 'arrow-up-right' : SCHEME_ICONS[target.scheme]} size="sm" />
+          </span>
+        )}
+      </span>
+    </>
+  );
+  if (target === undefined) {
+    return (
+      <span className={styles.tileCard} data-inert="">
+        {body}
+      </span>
+    );
+  }
+  return (
+    <a
+      className={styles.tileCard}
+      href={target.href}
+      onClick={click.onClick}
+      {...(isWeb ? { target: '_blank', rel: relOf(block) } : block.notice === undefined ? {} : { rel: 'nofollow' })}
+    >
+      {body}
+      {isWeb && <VisuallyHidden>{strings.newTab}</VisuallyHidden>}
+      {click.asks && <VisuallyHidden>{strings.asksFirst}</VisuallyHidden>}
+    </a>
+  );
+}
+
+/** A link's picture over its grid tile, falling back to its tile at the top when the picture fails (AC-6101). */
+function TilePicture({ block, picture }: { readonly block: LinkBlock; readonly picture: LinkPagePicture }) {
+  const [failed, setFailed] = useState<string | undefined>(undefined);
+  const image = safeImageSrc(picture.src);
+  if (image === undefined || failed === image) {
+    return (
+      <span className={styles.tileTop}>
+        <LinkMarkTile block={block} />
+      </span>
+    );
+  }
+  return (
+    <span className={styles.tilePicture}>
+      <img
+        className={styles.coverImage}
+        src={image}
+        width={picture.width}
+        height={picture.height}
+        alt={strings.thumbAlt}
+        loading="lazy"
+        decoding="async"
+        onError={() => {
+          setFailed(image);
+        }}
+      />
+    </span>
+  );
+}
+
+/** A booking page as a grid tile: its calendar at the top, its title and lengths at the foot, opened in this tab. */
+function PageTile({
+  block,
+  onPress,
+}: {
+  readonly block: Extract<LinkPageBlock, { kind: 'page' }>;
+  readonly onPress: (() => void) | undefined;
+}) {
+  const target = samePath(block.href);
+  const body = (
+    <>
+      <span className={styles.tileTop}>
+        <LinkPageTile block={block} />
+      </span>
+      <span className={styles.tileFoot}>
+        <BlockText title={block.title} line={block.facts} />
+        {target !== undefined && (
+          <span className={styles.end}>
+            <Icon name="chevron-right" size="sm" />
+          </span>
+        )}
+      </span>
+    </>
+  );
+  return target === undefined ? (
+    <span className={styles.tileCard} data-inert="">
+      {body}
+    </span>
+  ) : (
+    <a className={styles.tileCard} href={target} onClick={onPress}>
+      {body}
+    </a>
+  );
+}
+
+/**
+ * A run of tiles (AC-6103): one list on a grid of 2 columns, 4 where the blocks have the room, each tile `small` (1
+ * by 1), `wide` (2 by 1) or `large` (2 by 2). Rows are as tall as a column is wide, and the grid never packs densely,
+ * so a tile is always after the one before it in the owner's order, on the screen as in the reading and focus order.
+ */
+function TileRun({
+  tiles,
+  label,
+  onPress,
+}: {
+  readonly tiles: readonly TileBlock[];
+  readonly label: string | undefined;
+  readonly onPress: ((id: string) => void) | undefined;
+}) {
+  return (
+    <div className={styles.tilesRoom}>
+      <ul className={styles.tiles} {...(label === undefined ? {} : { 'aria-label': label })}>
+        {tiles.map((block) => {
+          const press = onPress === undefined ? undefined : () => onPress(block.id);
+          return (
+            <li key={block.id} className={styles.tileItem} data-size={block.size ?? 'small'}>
+              {block.kind === 'link' ? (
+                <LinkTile block={block} onPress={press} />
+              ) : block.kind === 'page' ? (
+                <PageTile block={block} onPress={press} />
+              ) : (
+                <LazyPictureBlock block={block} onPress={onPress} isTile />
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+/**
+ * A block that stands outside the list of rows: the person's words, the questions they answer, and spec 0061's
+ * kinds. Its title takes the level under whatever names its group, so a page with no sections never skips from the
+ * person's name to an h3 and one with them never repeats a section's own level.
+ */
+function ApartBlockView({
+  block,
+  level,
+  onPress,
+}: {
+  readonly block: ApartBlock;
+  readonly level: 2 | 3;
+  readonly onPress: ((id: string) => void) | undefined;
+}) {
+  const actions = useContext(PageActionsContext);
   if (block.kind === 'faq') return <FaqBlock block={block} level={level} />;
+  // The person's social links as one row of marks (AC-6104), where the owner put it: each a real link named by its
+  // network, the round marks of the header's own row.
+  if (block.kind === 'socials') {
+    return block.links.length === 0 ? null : (
+      <div className={styles.socials}>
+        <SocialLinks variant="round" links={block.links} label={strings.socials} />
+      </div>
+    );
+  }
+  if (block.kind === 'media' || block.kind === 'image' || block.kind === 'gallery') {
+    return <LazyPictureBlock block={block} onPress={onPress} isTile={false} />;
+  }
+  if (block.kind === 'times') {
+    return (
+      <Suspense fallback={<Hold shape="times" isTile={false} />}>
+        <LazyTimes
+          block={block}
+          level={level}
+          {...(onPress === undefined ? {} : { onPress: () => onPress(block.id) })}
+          {...(actions.onTimesNear === undefined ? {} : { onNear: actions.onTimesNear })}
+        />
+      </Suspense>
+    );
+  }
   // A quiet quote (AC-5220): the words in the reading measure, who said them under it. No frame, no quotation
   // mark graphic and nothing to press — a testimonial is the page talking, not one more thing to tap.
   if (block.kind === 'testimonial') {
@@ -695,8 +1295,8 @@ function FaqBlock({
 }
 
 /**
- * A group's rows, in order: each run of pressable rows as one list, and each block that stands apart between them.
- * Shared by an open group and a folded one, so a block draws the same either side of a fold.
+ * A group's rows, in order: each run of rows as one list, each run of tiles as one grid, and each block that stands
+ * apart between them. Shared by an open group and a folded one, so a block draws the same either side of a fold.
  */
 function GroupRows({
   rows,
@@ -709,24 +1309,28 @@ function GroupRows({
   readonly isNamed: boolean;
   readonly onPress: ((id: string) => void) | undefined;
 }) {
+  const { layout } = useContext(PageActionsContext);
   // Writing is not a row, so it breaks out of the list rather than sitting in one: a run of rows is a list, and a
   // text block is the person's words between the lists.
-  return runsOf(rows).map((run) =>
-    run.kind === 'rows' ? (
-      <ul key={run.key} className={styles.list} {...(!isNamed && run.isFirst ? { 'aria-label': strings.blocks } : {})}>
-        {run.rows.map((block) => (
-          <BlockRow key={block.id} block={block} onPress={onPress} />
-        ))}
-      </ul>
-    ) : (
-      <ApartBlockView key={run.key} block={run.block} level={level} />
-    ),
-  );
+  return runsOf(rows, layout).map((run) => {
+    const label = !isNamed && run.kind !== 'apart' && run.isFirst ? strings.blocks : undefined;
+    if (run.kind === 'tiles') return <TileRun key={run.key} tiles={run.tiles} label={label} onPress={onPress} />;
+    if (run.kind === 'rows') {
+      return (
+        <ul key={run.key} className={styles.list} {...(label === undefined ? {} : { 'aria-label': label })}>
+          {run.rows.map((block) => (
+            <BlockRow key={block.id} block={block} onPress={onPress} />
+          ))}
+        </ul>
+      );
+    }
+    return <ApartBlockView key={run.key} block={run.block} level={level} onPress={onPress} />;
+  });
 }
 
 /** How many blocks a folded section opens onto: what the page would draw, so the number on the row is never a lie. */
 function shownCount(rows: readonly LinkPageBlock[]): number {
-  return rows.filter((block) => block.kind !== 'contact').length;
+  return rows.filter((block) => block.kind !== 'banner').length;
 }
 
 /**
@@ -828,6 +1432,46 @@ function Group({
 }
 
 /**
+ * The banner (spec 0061, AC-6112): one line at the very top of the page, above the person, with its link when it has
+ * one (our own path in this tab, a web page in a new one) and a quiet Close that puts it away for the visit. Calm
+ * chrome in the page's soft accent, so it reads as news rather than as one more row to press.
+ */
+function Banner({
+  block,
+  onPress,
+  onClose,
+}: {
+  readonly block: Extract<LinkPageBlock, { kind: 'banner' }>;
+  readonly onPress: ((id: string) => void) | undefined;
+  readonly onClose?: () => void;
+}) {
+  const own = block.href === undefined ? undefined : ownPath(block.href);
+  const web = block.href === undefined || own !== undefined ? undefined : linkTarget(block.href);
+  const href = own ?? (web?.scheme === 'web' ? web.href : undefined);
+  const isWeb = own === undefined && href !== undefined;
+  return (
+    <section className={styles.banner} aria-label={strings.banner}>
+      <p className={styles.bannerText}>
+        {href === undefined ? (
+          block.text
+        ) : (
+          <a
+            className={styles.bannerLink}
+            href={href}
+            {...(onPress === undefined ? {} : { onClick: () => onPress(block.id) })}
+            {...(isWeb ? { target: '_blank', rel: 'noopener noreferrer nofollow' } : {})}
+          >
+            {block.text}
+            {isWeb && <VisuallyHidden>{strings.newTab}</VisuallyHidden>}
+          </a>
+        )}
+      </p>
+      {onClose !== undefined && <Button variant="ghost" icon="x" label={strings.closeBanner} onPress={onClose} />}
+    </section>
+  );
+}
+
+/**
  * A person's link page, `/<handle>` (spec 0051): their face, name and bio, their social icons, then their blocks in
  * the order they set, each a whole row to press, grouped under the headings they gave, and the foot. One column a
  * thumb reaches, quiet chrome, and nothing loaded from another origin.
@@ -894,8 +1538,50 @@ export function LinkPage({
   variables,
   openFolder,
   onOpenFolder,
+  pageLayout = 'list',
+  onTimesNear,
+  isBannerClosed,
+  onCloseBanner,
+  continuedNotices,
+  onContinueNotice,
 }: LinkPageProps) {
   const captionId = useId();
+  const columnRef = useRef<HTMLDivElement>(null);
+  // The banner and the notices a visitor answered this visit (AC-6112, AC-6113): kept by the caller where it says
+  // so (the public page, in the tab's session), and held here otherwise.
+  const [heldBannerClosed, setHeldBannerClosed] = useState(false);
+  const bannerClosed = onCloseBanner === undefined ? heldBannerClosed : isBannerClosed === true;
+  const [heldContinued, setHeldContinued] = useState<readonly string[]>([]);
+  const isHeld = onContinueNotice === undefined;
+  const [asking, setAsking] = useState<LinkBlock | undefined>(undefined);
+  // Only the page itself asks before a noticed link: the editor's preview and a draft are inert anyway.
+  const isLive = layout === 'page' && !isPreview;
+  const actions = useMemo<PageActions>(
+    () => ({
+      layout: pageLayout,
+      isContinued: (id) => !isLive || (isHeld ? heldContinued : (continuedNotices ?? [])).includes(id),
+      ask: setAsking,
+      onTimesNear,
+    }),
+    [pageLayout, isLive, isHeld, heldContinued, continuedNotices, onTimesNear],
+  );
+  const banner = blocks?.find((block) => block.kind === 'banner');
+  // A socials row block puts the person's marks where the owner placed it, so the header's own row steps aside.
+  const hasSocialsBlock = blocks?.some((block) => block.kind === 'socials') ?? false;
+  const hasNotice = isLive && (blocks?.some((block) => block.kind === 'link' && block.notice !== undefined) ?? false);
+  const closeBanner = () => {
+    setHeldBannerClosed(true);
+    onCloseBanner?.();
+    // Its close button goes with it: focus moves on to the page's first control rather than to nothing.
+    focusLater(() => columnRef.current?.querySelector<HTMLElement>('a[href], button:not([disabled])'));
+  };
+  const continueNotice = (id: string) => {
+    setHeldContinued((held) => (held.includes(id) ? held : [...held, id]));
+    onContinueNotice?.(id);
+    onPress?.(id);
+    setAsking(undefined);
+  };
+  const askingTarget = asking === undefined ? undefined : linkTarget(asking.href);
   // Controlled where a caller keeps the open section (the public page, which puts it in the address), held here
   // where none does (the editor's preview, the stories). One at a time, so the address never names two.
   const [heldFolder, setHeldFolder] = useState<string | undefined>(openFolder);
@@ -913,170 +1599,204 @@ export function LinkPage({
   const variablesRef = usePageVariables(variables);
   if (layout === 'blocks') {
     return (
-      <div
-        className={styles.draft}
-        data-layout="blocks"
-        role="group"
-        {...(caption === undefined ? {} : { 'aria-labelledby': captionId })}
+      <PageActionsContext value={actions}>
+        <div
+          className={styles.draft}
+          data-layout="blocks"
+          role="group"
+          {...(caption === undefined ? {} : { 'aria-labelledby': captionId })}
+        >
+          {caption !== undefined && (
+            <p id={captionId} className={styles.caption}>
+              {caption}
+            </p>
+          )}
+          {/* The block on the page's own ground, in its own look (spec 0060, AC-16): the page in a slice. */}
+          <div
+            className={styles.root}
+            data-draft
+            data-grid={pageLayout === 'grid' || undefined}
+            {...look}
+            ref={variablesRef}
+          >
+            <div className={styles.column}>
+              <div className={styles.blocks} inert>
+                {banner !== undefined && <Banner block={banner} onPress={undefined} />}
+                {/* A contact card draws as the page's Save contact, which is where a visitor meets it. */}
+                <Actions contact={contact} share={undefined} onPress={undefined} />
+                {groupsOf(blocks ?? []).map((group, index) => (
+                  <Group
+                    key={group.heading?.id ?? `top-${String(index)}`}
+                    rows={group.rows}
+                    onPress={undefined}
+                    onToggleFolder={toggleFolder}
+                    {...(shownFolder === undefined ? {} : { openFolder: shownFolder })}
+                    {...(group.heading === undefined ? {} : { heading: group.heading })}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </PageActionsContext>
+    );
+  }
+  const Root = isPreview ? 'div' : 'main';
+  return (
+    <PageActionsContext value={actions}>
+      <Root
+        className={styles.root}
+        data-preview={isPreview || undefined}
+        data-grid={pageLayout === 'grid' || undefined}
+        {...look}
+        ref={variablesRef}
+        {...(isPreview ? { inert: true } : {})}
       >
-        {caption !== undefined && (
-          <p id={captionId} className={styles.caption}>
-            {caption}
-          </p>
-        )}
-        {/* The block on the page's own ground, in its own look (spec 0060, AC-16): the page in a slice. */}
-        <div className={styles.root} data-draft {...look} ref={variablesRef}>
-          <div className={styles.column}>
-            <div className={styles.blocks} inert>
-              {/* A contact card draws as the page's Save contact, which is where a visitor meets it. */}
-              <Actions contact={contact} share={undefined} onPress={undefined} />
-              {groupsOf(blocks ?? []).map((group, index) => (
+        <div className={styles.column} ref={columnRef}>
+          {banner !== undefined && !bannerClosed && <Banner block={banner} onPress={onPress} onClose={closeBanner} />}
+          <header className={styles.hero} aria-busy={person === undefined || undefined}>
+            {person === undefined ? (
+              <>
+                <Skeleton shape="circle" size="xl" />
+                <p className={styles.name}>
+                  <Skeleton shape="text" width="medium" align="center" />
+                </p>
+                <p className={styles.bio}>
+                  <Skeleton shape="text" width="long" align="center" />
+                </p>
+                {/* The pill's own place, so the header doesn't grow when the address arrives. */}
+                {address !== undefined && (
+                  <span className={styles.pillLoading}>
+                    <Skeleton shape="fill" />
+                  </span>
+                )}
+              </>
+            ) : (
+              <>
+                {/* The cover photo (spec 0060, AC-13): a band the face overlaps, drawn from the page's own stylesheet. */}
+                {theme?.header === 'cover' && photos?.cover === true && (
+                  <span className={styles.cover} aria-hidden="true" />
+                )}
+                {theme?.avatar !== 'none' && (
+                  <span className={styles.face}>
+                    <Avatar
+                      name={person.name}
+                      id={person.id}
+                      size="hero"
+                      shape={theme?.avatar === 'rounded' ? 'square' : 'circle'}
+                      isDecorative
+                      {...(person.image === undefined ? {} : { src: person.image })}
+                    />
+                  </span>
+                )}
+                {/* The words beside the face in the left header, and in the column under it otherwise. */}
+                <div className={styles.who}>
+                  <h1 className={styles.name}>{person.name}</h1>
+                  {person.bio !== undefined && person.bio !== '' && <p className={styles.bio}>{person.bio}</p>}
+                  {address !== undefined && (
+                    <span className={styles.address}>
+                      <CopyButton
+                        value={address.value}
+                        label={address.label}
+                        name={strings.copyAddress(address.label)}
+                        announcement={strings.addressCopied}
+                        isRound
+                      />
+                    </span>
+                  )}
+                </div>
+              </>
+            )}
+          </header>
+          {/* The one action under the person, then the way to pass the page on, then where else to find them.
+              Share stands while the page loads: it shares the address the visitor is already on. */}
+          <Actions
+            contact={contact}
+            share={share}
+            onPress={onPress}
+            {...(walletHref === undefined ? {} : { walletHref })}
+          />
+          {!hasSocialsBlock && socials}
+          {toolbar}
+          {/* Mounted while there is a search, so each count (none included) is read out as it changes. */}
+          {summary !== undefined && (
+            <p className={styles.summary} role="status" data-empty={summary === '' || undefined}>
+              {summary}
+            </p>
+          )}
+          {blocks === undefined ? (
+            <ul className={styles.list} aria-busy="true" aria-label={strings.loading}>
+              {Array.from({ length: LOADING_BLOCKS }, (_, index) => (
+                <li key={index} className={styles.item}>
+                  <span className={styles.block} data-loading="">
+                    <LinkPageTile />
+                    <span className={styles.text}>
+                      <span className={styles.title}>
+                        <Skeleton shape="text" width={index % 2 === 0 ? 'medium' : 'long'} />
+                      </span>
+                    </span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : groups.length === 0 && ghosts === 0 ? (
+            empty
+          ) : (
+            <div className={styles.blocks}>
+              {groups.map((group, index) => (
                 <Group
                   key={group.heading?.id ?? `top-${String(index)}`}
                   rows={group.rows}
-                  onPress={undefined}
+                  onPress={onPress}
                   onToggleFolder={toggleFolder}
                   {...(shownFolder === undefined ? {} : { openFolder: shownFolder })}
                   {...(group.heading === undefined ? {} : { heading: group.heading })}
                 />
               ))}
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-  const Root = isPreview ? 'div' : 'main';
-  return (
-    <Root
-      className={styles.root}
-      data-preview={isPreview || undefined}
-      {...look}
-      ref={variablesRef}
-      {...(isPreview ? { inert: true } : {})}
-    >
-      <div className={styles.column}>
-        <header className={styles.hero} aria-busy={person === undefined || undefined}>
-          {person === undefined ? (
-            <>
-              <Skeleton shape="circle" size="xl" />
-              <p className={styles.name}>
-                <Skeleton shape="text" width="medium" align="center" />
-              </p>
-              <p className={styles.bio}>
-                <Skeleton shape="text" width="long" align="center" />
-              </p>
-              {/* The pill's own place, so the header doesn't grow when the address arrives. */}
-              {address !== undefined && (
-                <span className={styles.pillLoading}>
-                  <Skeleton shape="fill" />
-                </span>
-              )}
-            </>
-          ) : (
-            <>
-              {/* The cover photo (spec 0060, AC-13): a band the face overlaps, drawn from the page's own stylesheet. */}
-              {theme?.header === 'cover' && photos?.cover === true && (
-                <span className={styles.cover} aria-hidden="true" />
-              )}
-              {theme?.avatar !== 'none' && (
-                <span className={styles.face}>
-                  <Avatar
-                    name={person.name}
-                    id={person.id}
-                    size="hero"
-                    shape={theme?.avatar === 'rounded' ? 'square' : 'circle'}
-                    isDecorative
-                    {...(person.image === undefined ? {} : { src: person.image })}
-                  />
-                </span>
-              )}
-              {/* The words beside the face in the left header, and in the column under it otherwise. */}
-              <div className={styles.who}>
-                <h1 className={styles.name}>{person.name}</h1>
-                {person.bio !== undefined && person.bio !== '' && <p className={styles.bio}>{person.bio}</p>}
-                {address !== undefined && (
-                  <span className={styles.address}>
-                    <CopyButton
-                      value={address.value}
-                      label={address.label}
-                      name={strings.copyAddress(address.label)}
-                      announcement={strings.addressCopied}
-                      isRound
-                    />
-                  </span>
-                )}
-              </div>
-            </>
-          )}
-        </header>
-        {/* The one action under the person, then the way to pass the page on, then where else to find them.
-              Share stands while the page loads: it shares the address the visitor is already on. */}
-        <Actions
-          contact={contact}
-          share={share}
-          onPress={onPress}
-          {...(walletHref === undefined ? {} : { walletHref })}
-        />
-        {socials}
-        {toolbar}
-        {/* Mounted while there is a search, so each count (none included) is read out as it changes. */}
-        {summary !== undefined && (
-          <p className={styles.summary} role="status" data-empty={summary === '' || undefined}>
-            {summary}
-          </p>
-        )}
-        {blocks === undefined ? (
-          <ul className={styles.list} aria-busy="true" aria-label={strings.loading}>
-            {Array.from({ length: LOADING_BLOCKS }, (_, index) => (
-              <li key={index} className={styles.item}>
-                <span className={styles.block} data-loading="">
-                  <LinkPageTile />
-                  <span className={styles.text}>
-                    <span className={styles.title}>
-                      <Skeleton shape="text" width={index % 2 === 0 ? 'medium' : 'long'} />
-                    </span>
-                  </span>
-                </span>
-              </li>
-            ))}
-          </ul>
-        ) : groups.length === 0 && ghosts === 0 ? (
-          empty
-        ) : (
-          <div className={styles.blocks}>
-            {groups.map((group, index) => (
-              <Group
-                key={group.heading?.id ?? `top-${String(index)}`}
-                rows={group.rows}
-                onPress={onPress}
-                onToggleFolder={toggleFolder}
-                {...(shownFolder === undefined ? {} : { openFolder: shownFolder })}
-                {...(group.heading === undefined ? {} : { heading: group.heading })}
-              />
-            ))}
-            {ghosts > 0 && (
-              // Places for blocks that aren't there yet: decoration, so nothing here is read out or reachable.
-              <ul className={styles.list} aria-hidden="true">
-                {Array.from({ length: ghosts }, (_, index) => (
-                  <li key={index} className={styles.item}>
-                    <span className={styles.block} data-ghost="">
-                      <LinkPageTile />
-                      <span className={styles.text}>
-                        <span className={styles.title}>
-                          <Skeleton shape="text" width={index % 2 === 0 ? 'medium' : 'long'} />
+              {ghosts > 0 && (
+                // Places for blocks that aren't there yet: decoration, so nothing here is read out or reachable.
+                <ul className={styles.list} aria-hidden="true">
+                  {Array.from({ length: ghosts }, (_, index) => (
+                    <li key={index} className={styles.item}>
+                      <span className={styles.block} data-ghost="">
+                        <LinkPageTile />
+                        <span className={styles.text}>
+                          <span className={styles.title}>
+                            <Skeleton shape="text" width={index % 2 === 0 ? 'medium' : 'long'} />
+                          </span>
                         </span>
                       </span>
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+          {after}
+          {foot}
+        </div>
+        {hasNotice && (
+          <Suspense fallback={null}>
+            <LazyNotice
+              asking={
+                asking === undefined || askingTarget === undefined
+                  ? undefined
+                  : {
+                      id: asking.id,
+                      title: asking.title,
+                      notice: asking.notice ?? 'sensitive',
+                      href: askingTarget.href,
+                      isWeb: askingTarget.scheme === 'web',
+                    }
+              }
+              onClose={() => {
+                setAsking(undefined);
+              }}
+              onContinue={continueNotice}
+            />
+          </Suspense>
         )}
-        {after}
-        {foot}
-      </div>
-    </Root>
+      </Root>
+    </PageActionsContext>
   );
 }

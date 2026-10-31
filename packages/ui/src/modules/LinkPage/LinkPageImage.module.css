@@ -1,0 +1,61 @@
+/* A link page's picture block (spec 0061, AC-6108): the picture at the column's width in its own shape, its corners
+   the page's own, and the caption under it in the page's quiet colour. As a grid tile it fills the tile, cropped. */
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+    margin: 0;
+  }
+
+  .root[data-fill] {
+    block-size: 100%;
+  }
+
+  .frame {
+    display: flex;
+    border-radius: var(--page-radius-card, var(--radius-md));
+    background: var(--surface-sunken);
+    overflow: hidden;
+    outline: none;
+  }
+
+  .root[data-fill] .frame {
+    flex: 1;
+    min-block-size: 0;
+  }
+
+  .frame[data-link]:focus-visible {
+    box-shadow: var(--shadow-focus);
+  }
+
+  .picture {
+    inline-size: 100%;
+    block-size: auto;
+  }
+
+  .root[data-fill] .picture {
+    block-size: 100%;
+    object-fit: cover;
+  }
+
+  .missing {
+    padding: var(--space-12);
+    color: var(--page-text-quiet, var(--text-secondary));
+  }
+
+  .caption {
+    padding-inline: var(--space-4);
+    color: var(--page-text-quiet, var(--text-secondary));
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+    font-family: var(--page-body-face, var(--font-sans));
+    overflow-wrap: anywhere;
+  }
+
+  @media (forced-colors: active) {
+    .frame[data-link]:focus-visible {
+      outline: var(--border-width-thick) solid Highlight;
+    }
+  }
+}
