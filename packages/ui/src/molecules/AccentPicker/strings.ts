@@ -15,4 +15,6 @@ export const strings = {
   drawnDark: (hex: string) => `Drawn in dark as ${hex}`,
   /** A quick pick's name: the hue's own. */
   pick: (name: string) => name,
+  /** Read only: a quick pick's name with its hex ("Green, #0fc27b"). */
+  named: (name: string, hex: string) => `${name}, ${hex}`,
 } as const;

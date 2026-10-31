@@ -202,7 +202,7 @@ export function AppearanceCard({ theme, onChange, refusal, extras }: AppearanceC
     onChange(next);
   };
   /** One row of pictures: the page as it is, with this one choice made. */
-  const row = (label: string, choices: readonly Choice[], value: string) => (
+  const row = (label: string, choices: readonly Choice[], value: string, detail?: 'font' | 'shape' | 'mode') => (
     // The row's name over its pictures, as a field's label sits over its field.
     <FieldGroup label={label}>
       <TileGrid
@@ -212,7 +212,13 @@ export function AppearanceCard({ theme, onChange, refusal, extras }: AppearanceC
         tiles={choices.map((choice) => ({
           id: choice.id,
           name: choice.name,
-          thumbnail: <LinkPageThumbnail theme={choice.apply(theme)} variables={variables} />,
+          thumbnail: (
+            <LinkPageThumbnail
+              theme={choice.apply(theme)}
+              variables={variables}
+              {...(detail === undefined ? {} : { detail })}
+            />
+          ),
         }))}
         onChange={(picked) => {
           const found = choices.find((choice) => choice.id === picked);
@@ -238,6 +244,7 @@ export function AppearanceCard({ theme, onChange, refusal, extras }: AppearanceC
         <FileDrop
           label={label}
           acceptedTypes={BRAND_PHOTO_TYPES}
+          typesText={strings.photoTypes}
           maxSize={BRAND_PHOTO_PICK_MAX_BYTES}
           isDisabled={extras === undefined || look === undefined || extras.sending !== undefined}
           {...(src === undefined ? {} : { preview: { src, alt: strings.photoAlt } })}
@@ -333,13 +340,13 @@ export function AppearanceCard({ theme, onChange, refusal, extras }: AppearanceC
           />
         )}
         {theme.ground === 'image' && photo('ground')}
-        {row(strings.font, FONTS, theme.font)}
+        {row(strings.font, FONTS, theme.font, 'font')}
         {row(strings.fill, FILLS, theme.fill)}
-        {row(strings.shape, SHAPES, theme.shape)}
+        {row(strings.shape, SHAPES, theme.shape, 'shape')}
         {row(strings.header, HEADERS, theme.header)}
         {theme.header === 'cover' && photo('cover')}
         {row(strings.avatar, AVATARS, theme.avatar)}
-        {row(strings.mode, MODES, theme.mode)}
+        {row(strings.mode, MODES, theme.mode, 'mode')}
       </Disclosure>
       <Modal
         isOpen={removing !== undefined}

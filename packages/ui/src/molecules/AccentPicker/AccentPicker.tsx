@@ -134,6 +134,54 @@ export function AccentPicker({
       if (hex !== picked) onChange(hex);
     }
   };
+  const heading = isLabelHidden ? (
+    <VisuallyHidden>
+      <span id={labelId}>{label}</span>
+    </VisuallyHidden>
+  ) : (
+    <span id={labelId} className={styles.label}>
+      {label}
+    </span>
+  );
+  const note = drawn !== undefined && HEX.test(drawn.light) && HEX.test(drawn.dark) && (
+    <p className={styles.note} role="status">
+      <span
+        className={styles.drawn}
+        role="img"
+        aria-label={strings.drawnLight(drawn.light)}
+        style={{ '--swatch': drawn.light }}
+      />
+      <span
+        className={styles.drawn}
+        role="img"
+        aria-label={strings.drawnDark(drawn.dark)}
+        style={{ '--swatch': drawn.dark }}
+      />
+      {strings.adjusted}
+    </p>
+  );
+  if (isReadOnly) {
+    // Read only (a member who may not change the kit): the colour as plain text beside its swatch, with no control
+    // that looks or announces as one it isn't. The screen says who may change it.
+    const quick = picks.find((pick) => pick.value === picked);
+    const name = picked === undefined ? defaultName : quick === undefined ? picked : strings.pick(hueNames[quick.hue]);
+    const shown = picked ?? (defaultValue !== undefined && HEX.test(defaultValue) ? defaultValue : undefined);
+    return (
+      <div className={styles.root}>
+        {heading}
+        <p className={styles.current} aria-labelledby={labelId}>
+          <span
+            className={styles.drawn}
+            data-default={shown === undefined || undefined}
+            style={{ '--swatch': shown }}
+          />
+          <span>{quick === undefined || picked === undefined ? name : strings.named(name, picked)}</span>
+        </p>
+        {note}
+        {children}
+      </div>
+    );
+  }
   return (
     <div className={styles.root}>
       {isLabelHidden ? (
@@ -151,7 +199,6 @@ export function AccentPicker({
           aria-labelledby={labelId}
           orientation="horizontal"
           value={selected}
-          isReadOnly={isReadOnly}
           isDisabled={isDisabled}
           onChange={(next) => {
             setTyped(undefined);
@@ -193,26 +240,24 @@ export function AccentPicker({
         </RadioGroup>
         {/* Any colour: a button rather than one more radio, so the arrow keys never open the system picker on the
           way past. It wears the colour once it holds one. */}
-        {!isReadOnly && (
-          <Tooltip content={strings.anyColour}>
-            <AriaButton
-              className={styles.swatch}
-              data-any=""
-              data-selected={isAny || undefined}
-              aria-label={strings.anyColour}
-              isDisabled={isDisabled}
-              style={{ '--swatch': isAny ? picked : undefined, '--swatch-mark': isAny ? markOn(picked) : undefined }}
-              onPress={() => {
-                const input = native.current;
-                if (input === null) return;
-                if (typeof input.showPicker === 'function') input.showPicker();
-                else input.click();
-              }}
-            >
-              <Icon name={isAny ? 'check' : 'plus'} size="xs" />
-            </AriaButton>
-          </Tooltip>
-        )}
+        <Tooltip content={strings.anyColour}>
+          <AriaButton
+            className={styles.swatch}
+            data-any=""
+            data-selected={isAny || undefined}
+            aria-label={strings.anyColour}
+            isDisabled={isDisabled}
+            style={{ '--swatch': isAny ? picked : undefined, '--swatch-mark': isAny ? markOn(picked) : undefined }}
+            onPress={() => {
+              const input = native.current;
+              if (input === null) return;
+              if (typeof input.showPicker === 'function') input.showPicker();
+              else input.click();
+            }}
+          >
+            <Icon name={isAny ? 'check' : 'plus'} size="xs" />
+          </AriaButton>
+        </Tooltip>
       </div>
       {/* The system's own picker, opened by Any colour: out of sight and out of the tab order, since the swatch and
           the hex field already reach every colour from the keyboard. */}
@@ -223,7 +268,7 @@ export function AccentPicker({
         tabIndex={-1}
         aria-hidden="true"
         defaultValue={picked ?? defaultValue ?? strings.hexPlaceholder}
-        disabled={isReadOnly || isDisabled}
+        disabled={isDisabled}
         onChange={(event) => {
           onPreview?.(event.target.value.toLowerCase());
         }}
@@ -235,7 +280,6 @@ export function AccentPicker({
           value={typed ?? picked ?? ''}
           placeholder={strings.hexPlaceholder}
           maxLength={7}
-          isReadOnly={isReadOnly}
           isDisabled={isDisabled}
           {...(refused ? { error: strings.hexRefusal } : {})}
           onChange={(next) => {
@@ -246,23 +290,7 @@ export function AccentPicker({
           onSubmit={commitTyped}
         />
       </div>
-      {drawn !== undefined && HEX.test(drawn.light) && HEX.test(drawn.dark) && (
-        <p className={styles.note} role="status">
-          <span
-            className={styles.drawn}
-            role="img"
-            aria-label={strings.drawnLight(drawn.light)}
-            style={{ '--swatch': drawn.light }}
-          />
-          <span
-            className={styles.drawn}
-            role="img"
-            aria-label={strings.drawnDark(drawn.dark)}
-            style={{ '--swatch': drawn.dark }}
-          />
-          {strings.adjusted}
-        </p>
-      )}
+      {note}
       {children}
     </div>
   );

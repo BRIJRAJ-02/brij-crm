@@ -838,6 +838,12 @@ export interface LinkPageThumbnailProps {
   readonly theme: PageLook;
   /** The page's own accent and photos (LinkPage's `variables`), so a gallery shows each look in the owner's colour. */
   readonly variables?: PageVariables;
+  /**
+   * What a Customise row's tile is about, drawn large in place of the whole miniature, so the tiles in one row tell
+   * apart at a glance: `font` the typeface's own sample, `shape` one button in its corners, `mode` the page in its
+   * mode (Follow visitor split corner to corner, light over dark). Left out, the whole page in miniature.
+   */
+  readonly detail?: 'font' | 'shape' | 'mode';
 }
 
 /**
@@ -848,7 +854,22 @@ export interface LinkPageThumbnailProps {
  * the plain look. It fills its slot (TileGrid's choice thumbnail), never moves, takes no focus and is hidden from
  * screen readers: the tile's own name says which look it is.
  */
-export function LinkPageThumbnail({ theme, variables }: LinkPageThumbnailProps) {
+export function LinkPageThumbnail({ theme, variables, detail }: LinkPageThumbnailProps) {
+  // Follow visitor: the page light and dark at once, one over the other, cut corner to corner.
+  const held = variables === undefined ? {} : { variables };
+  if (detail === 'mode' && theme.mode === 'system') {
+    return (
+      <div className={styles.thumbSplit} aria-hidden="true">
+        <ThumbnailLook theme={{ ...theme, mode: 'light' }} {...held} />
+        <ThumbnailLook theme={{ ...theme, mode: 'dark' }} {...held} />
+      </div>
+    );
+  }
+  return <ThumbnailLook theme={theme} {...held} {...(detail === undefined ? {} : { detail })} />;
+}
+
+/** One look in miniature: the whole page, or only the detail its row is about. */
+function ThumbnailLook({ theme, variables, detail }: LinkPageThumbnailProps) {
   return (
     <div
       className={styles.root}
@@ -858,16 +879,26 @@ export function LinkPageThumbnail({ theme, variables }: LinkPageThumbnailProps) 
       aria-hidden="true"
       inert
     >
-      <div className={styles.thumb}>
-        {theme.header === 'cover' && <span className={styles.thumbCover} />}
-        <span className={styles.thumbHead}>
-          {theme.avatar !== 'none' && <span className={styles.thumbFace} />}
-          <span className={styles.thumbSample}>{strings.thumbnailSample}</span>
-        </span>
-        <span className={styles.thumbRow} />
-        <span className={styles.thumbRow} />
-        <span className={styles.thumbRow} />
-      </div>
+      {detail === 'font' ? (
+        <div className={styles.thumb} data-detail="font">
+          <span className={styles.thumbFont}>{strings.thumbnailSample}</span>
+        </div>
+      ) : detail === 'shape' ? (
+        <div className={styles.thumb} data-detail="shape">
+          <span className={styles.thumbButton} />
+        </div>
+      ) : (
+        <div className={styles.thumb}>
+          {theme.header === 'cover' && <span className={styles.thumbCover} />}
+          <span className={styles.thumbHead}>
+            {theme.avatar !== 'none' && <span className={styles.thumbFace} />}
+            <span className={styles.thumbSample}>{strings.thumbnailSample}</span>
+          </span>
+          <span className={styles.thumbRow} />
+          <span className={styles.thumbRow} />
+          <span className={styles.thumbRow} />
+        </div>
+      )}
     </div>
   );
 }

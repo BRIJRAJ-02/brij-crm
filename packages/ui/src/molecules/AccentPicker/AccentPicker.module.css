@@ -102,6 +102,27 @@
     background: var(--swatch, transparent);
   }
 
+  /* Read only: the colour as text beside its swatch, on the row's left edge. The default with no colour of its own
+     draws the product's accent. */
+  .current {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    margin: 0;
+    color: var(--text);
+    font: var(--text-body);
+  }
+
+  .current > .drawn {
+    inline-size: var(--size-tile);
+    block-size: var(--size-tile);
+    border-radius: var(--radius-sm);
+  }
+
+  .drawn[data-default] {
+    background: var(--accent);
+  }
+
   .drawn + .drawn {
     margin-inline-start: calc(var(--space-4) * -1);
   }

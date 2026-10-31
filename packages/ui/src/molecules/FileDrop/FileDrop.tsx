@@ -14,6 +14,11 @@ export interface FileDropProps {
   readonly label: string;
   /** MIME types or extensions it accepts (`text/csv`, `.xlsx`). Leave it out to take any file. */
   readonly acceptedTypes?: readonly string[];
+  /**
+   * The accepted types as people name them ("PNG, JPG or WebP"), shown in the hint and the refusal in place of the
+   * raw `acceptedTypes` (`image/png, image/jpeg`). Leave it out where the raw list already reads well (`.csv`).
+   */
+  readonly typesText?: string;
   /** The largest file it takes, in bytes. */
   readonly maxSize?: number;
   readonly allowsMultiple?: boolean;
@@ -56,6 +61,7 @@ function accepts(file: File, types: readonly string[] | undefined): boolean {
 export function FileDrop({
   label,
   acceptedTypes,
+  typesText,
   maxSize,
   allowsMultiple = false,
   onFiles,
@@ -69,10 +75,11 @@ export function FileDrop({
   const [error, setError] = useState<string | undefined>(undefined);
   const [failed, setFailed] = useState<string | undefined>(undefined);
   const shown = safeImageSrc(preview?.src);
+  const types = typesText ?? acceptedTypes?.join(', ');
   const take = (files: readonly File[]) => {
     const wrongType = files.find((file) => !accepts(file, acceptedTypes));
     if (wrongType !== undefined) {
-      setError(wrongTypeText?.(wrongType.name) ?? strings.wrongType(wrongType.name, (acceptedTypes ?? []).join(', ')));
+      setError(wrongTypeText?.(wrongType.name) ?? strings.wrongType(wrongType.name, types ?? ''));
       return;
     }
     const tooBig = maxSize === undefined ? undefined : files.find((file) => file.size > maxSize);
@@ -83,10 +90,9 @@ export function FileDrop({
     setError(undefined);
     onFiles(allowsMultiple ? files : files.slice(0, 1));
   };
-  const limits = [
-    acceptedTypes === undefined ? undefined : acceptedTypes.join(', '),
-    maxSize === undefined ? undefined : strings.upTo(formatFileSize(maxSize, locale)),
-  ].filter((part) => part !== undefined);
+  const limits = [types, maxSize === undefined ? undefined : strings.upTo(formatFileSize(maxSize, locale))].filter(
+    (part) => part !== undefined,
+  );
   const refusal =
     error === undefined ? undefined : (
       <span className={styles.error} role="alert">

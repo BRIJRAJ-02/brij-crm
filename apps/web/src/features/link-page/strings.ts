@@ -181,6 +181,8 @@ export const strings = {
   groundPhoto: 'Background photo',
   groundPhotoDrop: 'Add a background photo',
   photoAlt: 'The photo on your page',
+  /** The types a cover or ground photo takes, as people name them, in the picker's hint. */
+  photoTypes: 'PNG, JPG or WebP',
   photoRemove: 'Remove photo',
   photoRemoving: 'Remove this photo?',
   photoRemoveText: 'Your page goes back to its plain background.',

@@ -97,7 +97,11 @@ export const ReadOnly: Story = {
   parameters: { crm: { screenshot: false } },
   args: { value: '#0fc27b', isReadOnly: true },
   play: async ({ canvas }) => {
+    // Nothing that announces as a control it isn't: no swatches to pick, no Any colour, no hex field.
     await expect(canvas.queryByRole('button', { name: 'Any colour' })).toBeNull();
+    await expect(canvas.queryAllByRole('radio')).toHaveLength(0);
+    await expect(canvas.queryByRole('textbox')).toBeNull();
+    await expect(canvas.getByText('#0fc27b', { exact: false })).toBeVisible();
   },
 };
 

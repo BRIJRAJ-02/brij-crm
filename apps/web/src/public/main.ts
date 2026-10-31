@@ -13,7 +13,7 @@ import { mountFormLoading, mountFormMessage, mountHostedForm, type HostedSubmitO
 import { guessCountry } from './country.ts';
 import { contextFromFrame, contextOfPage, hiddenOf } from './context.ts';
 import { closeOnEscape, embedOf, framedUrl, isOwnBookingPath, reportHeight, type PostToHost } from './frame.ts';
-import { brandHref, wearStylesheet } from './stylesheet.ts';
+import { brandHref, brandLogoHref, preloadImage, wearStylesheet } from './stylesheet.ts';
 
 const found = document.querySelector<HTMLElement>('[data-app-root]');
 if (found === null) throw new Error('The page has no root.');
@@ -103,8 +103,11 @@ async function start(): Promise<void> {
     // On the root too, so the lists that open outside the form (in a popover) square their corners with it.
     document.documentElement.dataset.corners = form.look.corners;
     // The workspace's brand (spec 0060, AC-4), linked from our own api and waited on a moment, so the form draws in
-    // its colour from the first frame rather than turning to it.
-    await wearStylesheet(document, brandHref('forms', form.key, form.brand?.version));
+    // its colour from the first frame rather than turning to it, and its logo decoded so it never paints in late.
+    await Promise.all([
+      wearStylesheet(document, brandHref('forms', form.key, form.brand?.version)),
+      preloadImage(brandLogoHref('forms', form.key, form.brand?.logo)),
+    ]);
     const captcha = form.recaptchaSiteKey === undefined ? undefined : loadCaptcha(form.recaptchaSiteKey);
     const keys = new Map<number, string>();
     // A fill ticket per round (the spam checks): asked for as the page loads, and for the next round as one is

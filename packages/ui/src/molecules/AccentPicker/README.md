@@ -18,7 +18,7 @@ A swatch's colour is the one value handed in, as `--swatch`, and only a checked 
 
 ## States
 
-Default chosen, a quick pick chosen (ticked and ringed, the tick black or white by the swatch's luminance so it shows on a pale colour), any colour chosen, a refused hex, adjusted, read only (no Any colour, the hex read only) and disabled. Nothing moves on press (house rule). `children` sits under the hex on the picker's own left edge: the Dark colour disclosure.
+Default chosen, a quick pick chosen (ticked and ringed, the tick black or white by the swatch's luminance so it shows on a pale colour), any colour chosen, a refused hex, adjusted, read only (the colour as text beside one swatch, its quick pick's name with the hex, and no swatch, button or field that would announce as a control a member can't use) and disabled. Nothing moves on press (house rule). `children` sits under the hex on the picker's own left edge: the Dark colour disclosure.
 
 ## Keyboard
 

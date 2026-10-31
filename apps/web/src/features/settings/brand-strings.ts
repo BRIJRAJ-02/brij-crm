@@ -11,6 +11,8 @@ export const strings = {
   logoDrop: 'Add your logo',
   logoReplace: 'Replace logo',
   logoAlt: 'Your logo',
+  /** The types the logo takes, as people name them, in the picker's hint. */
+  logoTypes: 'PNG, JPG or WebP',
   /** A member's view of a kit with no logo. */
   noLogo: 'No logo',
   logoRemove: 'Remove logo',

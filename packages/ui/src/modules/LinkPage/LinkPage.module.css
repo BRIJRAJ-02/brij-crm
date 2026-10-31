@@ -970,6 +970,44 @@
     box-shadow: var(--page-card-shadow);
   }
 
+  /* A Customise row's tile, about one detail (`detail`): the typeface's sample large in its own face, or one button
+     a control high, where soft, round and square corners read apart. Centred in the slot on the page's ground. */
+  .thumb[data-detail] {
+    justify-content: center;
+    block-size: 100%;
+  }
+
+  .thumbFont {
+    color: var(--page-text);
+    font: var(--text-note-title);
+    font-family: var(--page-face);
+    font-synthesis: none;
+  }
+
+  .thumbButton {
+    box-sizing: border-box;
+    inline-size: 100%;
+    block-size: var(--size-control);
+    border: var(--page-card-border-width) solid var(--page-card-border);
+    border-radius: var(--page-radius);
+    background: var(--page-card);
+    box-shadow: var(--page-card-shadow);
+  }
+
+  /* Follow visitor: the light page with the dark one over its lower right half, cut corner to corner. */
+  .thumbSplit {
+    display: grid;
+    block-size: 100%;
+  }
+
+  .thumbSplit > * {
+    grid-area: 1 / 1;
+  }
+
+  .thumbSplit > :last-child {
+    clip-path: polygon(100% 0, 100% 100%, 0 100%);
+  }
+
   /* Late in the file, after the column and the miniature they change: the photo ground's solid sheet (AC-11), and
      the cover miniature's hidden row. */
   .root[data-page-ground='image'] .column,

@@ -26,7 +26,7 @@ import {
   type Toasts,
 } from '@crm/ui';
 import { useMemo, useState } from 'react';
-import { BRAND_PHOTO_PICK_MAX_BYTES, BRAND_PHOTO_TYPES, preparePhoto } from '../link-page/photo-prep.ts';
+import { BRAND_LOGO_PICK_MAX_BYTES, BRAND_PHOTO_TYPES, preparePhoto } from '../link-page/photo-prep.ts';
 import { strings } from './brand-strings.ts';
 import { SettingsPage } from './SettingsPage.tsx';
 
@@ -191,7 +191,8 @@ export function BrandScreen({ brand, slug, toasts }: BrandScreenProps) {
                   <FileDrop
                     label={kit.logo === undefined ? strings.logoDrop : strings.logoReplace}
                     acceptedTypes={BRAND_PHOTO_TYPES}
-                    maxSize={BRAND_PHOTO_PICK_MAX_BYTES}
+                    typesText={strings.logoTypes}
+                    maxSize={BRAND_LOGO_PICK_MAX_BYTES}
                     isDisabled={isSending}
                     {...(logoSrc === undefined ? {} : { preview: { src: logoSrc, alt: strings.logoAlt } })}
                     onFiles={(files) => {

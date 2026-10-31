@@ -29,7 +29,7 @@ const LOOKS: readonly (readonly [string, string, PageLook])[] = [
   ['bold', 'Bold', { ...PLAIN, ground: 'tint', shape: 'pill', fill: 'solid' }],
   ['ink', 'Ink', { ...PLAIN, ground: 'ink', mode: 'dark', fill: 'outline' }],
   ['quiet', 'Quiet', { ...PLAIN, ground: 'paper', shape: 'square', font: 'mono' }],
-  ['dawn', 'Dawn', { ...PLAIN, ground: 'gradient', gradient: 'dawn', shape: 'pill', fill: 'soft', font: 'friendly' }],
+  ['dawn', 'Dawn', { ...PLAIN, ground: 'gradient', gradient: 'dawn', shape: 'pill', fill: 'plain', font: 'friendly' }],
   ['ocean', 'Ocean', { ...PLAIN, ground: 'gradient', gradient: 'ocean', fill: 'solid', font: 'geometric' }],
   ['mint', 'Mint', { ...PLAIN, ground: 'gradient', gradient: 'mint', fill: 'outline', font: 'grotesk' }],
   [
@@ -364,6 +364,73 @@ export const Thumbnails: Story = {
     const thumbs = canvasElement.querySelectorAll('[data-thumbnail]');
     await expect(thumbs).toHaveLength(14);
     await expect(thumbs[0]).toHaveAttribute('aria-hidden', 'true');
+  },
+};
+
+/**
+ * Customise's rows draw only the detail they change (spec 0060, AC-9), so the tiles in a row tell apart: each font in
+ * its own face, each corner on one button, and Follow visitor light and dark at once.
+ */
+export const ThumbnailDetails: Story = {
+  render: () => (
+    <Stage width="fill">
+      {(
+        [
+          [
+            'font',
+            [
+              ['sans', 'Modern'],
+              ['mono', 'Mono'],
+              ['editorial', 'Editorial'],
+              ['display', 'Display'],
+            ],
+          ],
+          [
+            'shape',
+            [
+              ['soft', 'Soft'],
+              ['pill', 'Round'],
+              ['square', 'Square'],
+            ],
+          ],
+          [
+            'mode',
+            [
+              ['light', 'Light'],
+              ['dark', 'Dark'],
+              ['system', 'Follow visitor'],
+            ],
+          ],
+        ] as const
+      ).map(([detail, choices]) => (
+        <TileGrid
+          key={detail}
+          variant="choice"
+          label={detail}
+          defaultValue={choices[0][0]}
+          tiles={choices.map(([value, name]) => ({
+            id: value,
+            name,
+            thumbnail: (
+              <LinkPageThumbnail
+                detail={detail}
+                theme={
+                  detail === 'font'
+                    ? { ...PLAIN, font: value as PageLook['font'] }
+                    : detail === 'shape'
+                      ? { ...PLAIN, shape: value as PageLook['shape'] }
+                      : { ...PLAIN, mode: value as PageLook['mode'] }
+                }
+              />
+            ),
+          }))}
+        />
+      ))}
+    </Stage>
+  ),
+  play: async ({ canvasElement }) => {
+    // Follow visitor draws two pages, light and dark; every other tile one.
+    await expect(canvasElement.querySelectorAll('[data-thumbnail]')).toHaveLength(11);
   },
 };
 

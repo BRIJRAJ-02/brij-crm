@@ -93,6 +93,8 @@ export const PAGE_THEME_PRESETS = [
   { id: 'ink', theme: { ...DEFAULT_PAGE_THEME, ground: 'ink', mode: 'dark', fill: 'outline' } },
   { id: 'quiet', theme: { ...DEFAULT_PAGE_THEME, ground: 'paper', shape: 'square', font: 'mono' } },
   // Spec 0060's nine (AC-8). Gallery needs a photo: the editor offers it once one is uploaded, else the upload.
+  // Dawn's rows are white pills on the warm gradient: a tinted row (the accent a tenth over white) read as a muddy
+  // grey on its peach, and any accent's words keep 4.5:1 on white (verify of spec 0060, 31 Oct 2026).
   {
     id: 'dawn',
     theme: {
@@ -100,7 +102,7 @@ export const PAGE_THEME_PRESETS = [
       ground: 'gradient',
       gradient: 'dawn',
       shape: 'pill',
-      fill: 'soft',
+      fill: 'plain',
       font: 'friendly',
     },
   },
