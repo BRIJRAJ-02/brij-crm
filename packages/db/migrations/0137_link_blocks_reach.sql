@@ -29,6 +29,11 @@
 -- Postgres 17 compatible. Any change to these roles or functions goes through security-access-reviewer.
 set local lock_timeout = '5s';
 --> statement-breakpoint
+-- An earlier migration in the same run may have turned row security off for its transaction (0114 did). The new
+-- tables force it, and a standard SQL body over them is checked against their policies when it is made, so this one
+-- runs with it on.
+set local row_security = on;
+--> statement-breakpoint
 alter table "auth"."profile_items" drop constraint "profile_items_kind";
 --> statement-breakpoint
 alter table "auth"."profile_items" add constraint "profile_items_kind" check ("kind" in ('link', 'page', 'heading',
