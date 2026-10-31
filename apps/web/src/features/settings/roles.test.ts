@@ -32,7 +32,7 @@ const ADMIN = role({
   id: 'admin',
   label: 'Admin',
   builtIn: 'admin',
-  permissions: ['members.manage', 'records.export'],
+  permissions: ['members.manage', 'records.export', 'booking.manage'],
 });
 const LEAD = role({ id: 'r1', label: 'Sales lead', permissions: ['schedule.view.team', 'schedule.manage.team'] });
 const DESK = role({ id: 'r2', label: 'Receptionist', permissions: ['schedule.view', 'schedule.manage'] });

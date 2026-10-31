@@ -611,7 +611,7 @@ export async function deleteRole(
         .update(invitations)
         .set({ customRoleId: nextRoleId, ...touched(scope) })
         .where(and(eq(invitations.workspaceId, scope.workspaceId), eq(invitations.customRoleId, roleId)));
-      // The default goes to Member unless it was this role and it moves its people to another: that one is then it.
+      // A default role deleted leaves Member the default (AC-1238).
       const wasDefault = row.isDefault;
       await tx
         .delete(workspaceRoles)
@@ -753,9 +753,11 @@ export async function defaultCustomRole(
   tx: WorkspaceTx,
   workspaceId: string,
 ): Promise<{ readonly id: string; readonly name: string } | undefined> {
+  // Held for share, so a delete waits for the join that gives it (its holders' foreign key restricts the delete).
   const [row] = await tx
     .select({ id: workspaceRoles.id, name: workspaceRoles.name })
     .from(workspaceRoles)
-    .where(and(eq(workspaceRoles.workspaceId, workspaceId), eq(workspaceRoles.isDefault, true)));
+    .where(and(eq(workspaceRoles.workspaceId, workspaceId), eq(workspaceRoles.isDefault, true)))
+    .for('share');
   return row;
 }

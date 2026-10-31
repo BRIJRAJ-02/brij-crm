@@ -98,7 +98,12 @@ describe('the invite link (AC-818)', () => {
     const token = on.token ?? '';
     expect(await getInviteLink(w.admin)).toEqual(on);
     // The peek names nobody, and the link opens no sign up (owner decision 3).
-    expect(await peekInvite({ db }, token)).toEqual({ workspaceName: 'Acme', inviterName: 'admin', role: 'member' });
+    expect(await peekInvite({ db }, token)).toEqual({
+      workspaceName: 'Acme',
+      inviterName: 'admin',
+      role: 'member',
+      roleLabel: 'Member',
+    });
     const bea = await person('Bea');
     expect(await isInvitedEmail({ db }, bea.email)).toBe(false);
     const joined = await acceptInvite({ db }, bea, token);

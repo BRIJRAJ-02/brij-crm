@@ -20,16 +20,17 @@ import {
   EmptyState,
   Field,
   InfoTip,
+  LockReason,
   Menu,
   MenuItem,
   MenuSeparator,
   MenuTrigger,
   SaveBar,
-  SegmentedControl,
   Select,
   SettingsRow,
   SettingsSection,
   SettingsStack,
+  sharedStrings,
   Table,
   TabPanel,
   Tabs,
@@ -40,6 +41,7 @@ import {
 } from '@crm/ui';
 import { useNavigate, useRouter } from '@tanstack/react-router';
 import { useEffect, useMemo, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { pageHeading } from '../navigation/focus.ts';
 import { LeaveGuard } from '../navigation/LeaveGuard.tsx';
 import { DeleteRoleDialog } from './DeleteRoleDialog.tsx';
@@ -71,6 +73,8 @@ export interface RoleScreenProps {
   readonly canManage: boolean;
   /** Holders of `members.manage` change who holds a role (People tab). */
   readonly canChangePeople: boolean;
+  /** The reader's own member id: their own role is never theirs to change here. */
+  readonly meId: string;
 }
 
 const REACHES: readonly Reach[] = ['self', 'team', 'everyone'];
@@ -90,6 +94,7 @@ export function RoleScreen({
   members,
   canManage,
   canChangePeople,
+  meId,
 }: RoleScreenProps) {
   const router = useRouter();
   const navigate = useNavigate();
@@ -97,17 +102,21 @@ export function RoleScreen({
   const isEditable = isCustom && canManage;
   const [tab, setTab] = useState('permissions');
   const [draft, setDraft] = useState<RoleDraft>(() => draftOf(role));
-  // A newer version of the role (a save here, another admin's, a live reload) starts the draft over from it.
-  const [base, setBase] = useState(role);
-  if (base.updatedAt !== role.updatedAt || base.id !== role.id) {
-    setBase(role);
-    setDraft(draftOf(role));
-  }
-  const [isSaving, setSaving] = useState(false);
+  const [isSaving, setSaving] = useState<boolean>(false);
   const [justSaved, setJustSaved] = useState(false);
   const [failure, setFailure] = useState<string | undefined>(undefined);
   const [question, setQuestion] = useState<MemberQuestion | undefined>(undefined);
   const [isDeleting, setDeleting] = useState(false);
+  // A newer version of the role (a save here, another admin's, a live reload) starts a clean draft over from it; a
+  // draft with edits of its own stays, and says someone else changed the role meanwhile.
+  const [base, setBase] = useState(role);
+  const [isOvertaken, setOvertaken] = useState(false);
+  if (base.updatedAt !== role.updatedAt || base.id !== role.id) {
+    const kept = base.id === role.id && Object.keys(changesOf(role, draft)).length > 0;
+    setBase(role);
+    setOvertaken(kept);
+    if (!kept) setDraft(draftOf(role));
+  }
   useEffect(() => data.members.watch(slug), [data, slug]);
   const changes = changesOf(role, draft);
   const isDirty = Object.keys(changes).length > 0;
@@ -141,6 +150,7 @@ export function RoleScreen({
     try {
       const saved = await data.roles.update(slug, role.id, { ...changes, updatedAt: role.updatedAt });
       setJustSaved(true);
+      setOvertaken(false);
       toasts.toast({ tone: 'success', message: strings.saved(saved.role.label) });
       await reload();
     } catch (error) {
@@ -169,6 +179,7 @@ export function RoleScreen({
       title: strings.saveTitle(role.label),
       text: strings.saveText(count),
       action: strings.saveAction,
+      tone: 'default',
       run: send,
     });
   };
@@ -183,7 +194,33 @@ export function RoleScreen({
         ? 'saved'
         : 'hidden';
 
-  const menu = isEditable ? (
+  const customCount = overview.roles.filter((each) => each.builtIn === undefined).length;
+  const isFull = customCount >= 20;
+  // Member's page offers to be the default again while a custom role is (AC-1237).
+  const resetsDefault = canManage && role.builtIn === 'member' && !role.isDefault;
+  const menu = resetsDefault ? (
+    <MenuTrigger>
+      <Button variant="ghost" icon="ellipsis" label={strings.rowActions(role.label)} />
+      <Menu
+        label={strings.rowActions(role.label)}
+        onAction={() => {
+          data.roles.setDefault(slug, null).then(
+            async () => {
+              await reload();
+              toasts.toast({ tone: 'success', message: strings.defaultSet(role.label) });
+            },
+            (error: unknown) => {
+              toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : strings.somethingWrong });
+            },
+          );
+        }}
+      >
+        <MenuItem id="default" icon="star">
+          {strings.makeDefault}
+        </MenuItem>
+      </Menu>
+    </MenuTrigger>
+  ) : isEditable ? (
     <MenuTrigger>
       <Button variant="ghost" icon="ellipsis" label={strings.rowActions(role.label)} />
       <Menu
@@ -214,7 +251,8 @@ export function RoleScreen({
           if (key === 'delete') setDeleting(true);
         }}
       >
-        <MenuItem id="duplicate" icon="copy">
+        {/* A copy is of the saved role: with edits on screen, save or discard them first. */}
+        <MenuItem id="duplicate" icon="copy" isDisabled={isFull || isDirty}>
           {strings.duplicate}
         </MenuItem>
         {!role.isDefault && (
@@ -234,8 +272,13 @@ export function RoleScreen({
     <SettingsRow
       key={name}
       title={label}
-      {...(isHoldable || !isCustom ? {} : { description: strings.onlyBuiltIn })}
-      meta={<InfoTip label={label}>{description}</InfoTip>}
+      meta={
+        <>
+          <InfoTip label={label}>{description}</InfoTip>
+          {/* Only built in roles hold it (AC-1240): a lock says so in its tooltip, not a line on every row. */}
+          {isCustom && !isHoldable && <LockReason reason={strings.onlyBuiltIn} size="sm" />}
+        </>
+      }
       control="fit"
     >
       <Checkbox
@@ -276,9 +319,11 @@ export function RoleScreen({
   const permissions = (
     <SettingsStack>
       {!isCustom && <Callout>{strings.builtInLocked}</Callout>}
-      {isEditable && (
-        <SettingsSection title={strings.details}>
-          <Card>
+      {isCustom && !canManage && <Callout>{sharedStrings.ownersAndAdminsOnly}</Callout>}
+      {isOvertaken && <Callout tone="warning">{strings.overtaken}</Callout>}
+      <SettingsSection title={strings.details}>
+        <Card>
+          {isEditable && (
             <SettingsRow title={strings.name} control="field">
               <Field
                 label={strings.name}
@@ -291,6 +336,8 @@ export function RoleScreen({
                 }}
               />
             </SettingsRow>
+          )}
+          {isEditable && (
             <SettingsRow title={strings.description} control="field">
               <Field
                 label={strings.description}
@@ -304,25 +351,23 @@ export function RoleScreen({
                 }}
               />
             </SettingsRow>
-          </Card>
-        </SettingsSection>
-      )}
-      <SettingsSection title={strings.dataAccess}>
-        <Card>
+          )}
           <SettingsRow
             title={strings.dataAccess}
             meta={<InfoTip label={strings.dataAccess}>{strings.dataAccessInfo}</InfoTip>}
-            control="fit"
+            control="field"
           >
-            <SegmentedControl
+            <Select
               label={strings.dataAccess}
-              segments={[
-                { value: 'write', label: strings.readWrite },
-                { value: 'read', label: strings.readOnly },
+              isLabelHidden
+              items={[
+                { id: 'write', label: strings.readWrite },
+                { id: 'read', label: strings.readOnly },
               ]}
               value={isEditable ? draft.dataAccess : role.dataAccess}
               isReadOnly={!isEditable}
               onChange={(value) => {
+                if (value === null) return;
                 setFailure(undefined);
                 setDraft((was) => ({ ...was, dataAccess: value === 'read' ? 'read' : 'write' }));
               }}
@@ -370,7 +415,7 @@ export function RoleScreen({
               member={member}
               current={role.id}
               overview={overview}
-              canChange={canChangePeople && member.role !== 'owner'}
+              canChange={canChangePeople && member.role !== 'owner' && member.id !== meId}
               onChanged={reload}
               onAsk={setQuestion}
             />
@@ -434,6 +479,10 @@ export function RoleScreen({
           onDelete={async (gone, moveTo) => {
             const { moved } = await data.roles.delete(slug, gone.id, moveTo);
             setDeleting(false);
+            // The role is gone, and its unsaved edits with it: leaving asks nothing (committed before the move).
+            flushSync(() => {
+              setDraft(draftOf(role));
+            });
             toasts.toast({ tone: 'success', message: strings.deleted(gone.label, moved) });
             await navigate({ href: rolesSettingsHref(slug) });
           }}
@@ -517,15 +566,35 @@ function PersonRole({
   );
 }
 
-/** A role's page while it loads. */
+/** A role's page while it loads: its tabs, then busy cards where Details and the first groups will be. */
 export function RolePending() {
   return (
     <SettingsPage title={strings.loading} isLoading hasTabs>
-      <SettingsStack>
-        <Card isBusy>
-          <SettingsRow title={strings.dataAccess} />
-        </Card>
-      </SettingsStack>
+      <Tabs
+        label={strings.loading}
+        selectedKey="permissions"
+        tabs={[
+          { id: 'permissions', label: strings.permissionsTab },
+          { id: 'people', label: strings.peopleTab },
+        ]}
+      >
+        <TabPanel id="permissions">
+          <SettingsStack>
+            <SettingsSection title={strings.details}>
+              <Card isBusy>
+                <SettingsRow title={strings.dataAccess} />
+              </Card>
+            </SettingsSection>
+            <SettingsSection title={strings.scheduling}>
+              <Card isBusy>
+                <SettingsRow title={strings.see} />
+                <SettingsRow title={strings.manage} />
+              </Card>
+            </SettingsSection>
+          </SettingsStack>
+        </TabPanel>
+        <TabPanel id="people">{null}</TabPanel>
+      </Tabs>
     </SettingsPage>
   );
 }

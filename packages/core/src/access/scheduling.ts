@@ -81,6 +81,20 @@ export function roleReach(access: Access): SchedulingLevel | undefined {
   const { principal } = access;
   if (principal.kind === 'system') return 'manage';
   if (principal.kind !== 'member') return undefined;
+  // A custom role's `schedule.*` never covers owners and admins (decision 7): its reach is `customRoleReach`'s.
+  if (principal.customRoleId !== undefined) return undefined;
+  if (can(access, 'schedule.manage')) return 'manage';
+  if (can(access, 'schedule.view')) return 'view';
+  return undefined;
+}
+
+/**
+ * The reach over everyone but owners and admins that a custom role gives (spec 0037, decision 7): its
+ * `schedule.manage` or `schedule.view`, over every active member on the Member role (custom role holders included).
+ */
+export function customRoleReach(access: Access): SchedulingLevel | undefined {
+  const { principal } = access;
+  if (principal.kind !== 'member' || principal.customRoleId === undefined) return undefined;
   if (can(access, 'schedule.manage')) return 'manage';
   if (can(access, 'schedule.view')) return 'view';
   return undefined;
@@ -199,6 +213,7 @@ export async function schedulingReach(tx: WorkspaceTx, scope: EngineScope): Prom
   if (principal.role === 'guest') return { ...NOBODY, self };
   if (all === 'manage') return { ...NOBODY, self, all };
   const me = principal.memberId;
+  const custom = customRoleReach(access);
   const teamLevel = teamRoleReach(access);
   // One arm per target, so each takes its index: a member delegation's target by the members key, a team
   // delegation's members through `team_members` (its active members now, AC-1254), an everyone delegation's by the
@@ -221,7 +236,7 @@ export async function schedulingReach(tx: WorkspaceTx, scope: EngineScope): Prom
     where d.workspace_id = ${scope.workspaceId}::uuid and d.delegate_member_id = ${me}::uuid
       and d.target_type = 'everyone'
     union all
-    select d.target_type, d.level, d.granted_by_self, t.id::text, t.role::text, null
+    select d.target_type, d.level, d.granted_by_self, t.id::text, t.role::text, null, null
     from schedule_delegations d
     join team_members tm on tm.workspace_id = d.workspace_id and tm.team_id = d.target_team_id
     join members t on t.workspace_id = tm.workspace_id and t.id = tm.member_id and t.status = 'active'
@@ -231,11 +246,20 @@ export async function schedulingReach(tx: WorkspaceTx, scope: EngineScope): Prom
       teamLevel === undefined
         ? sql``
         : sql`union all
-    select ${TEAM_SCOPE}::text, ${teamLevel}::text, false, t.id::text, t.role::text, null
+    select ${TEAM_SCOPE}::text, ${teamLevel}::text, false, t.id::text, t.role::text, null, null
     from team_members mine
     join team_members tm on tm.workspace_id = mine.workspace_id and tm.team_id = mine.team_id
     join members t on t.workspace_id = tm.workspace_id and t.id = tm.member_id and t.status = 'active'
     where mine.workspace_id = ${scope.workspaceId}::uuid and mine.member_id = ${me}::uuid`
+    }
+    ${
+      custom === undefined
+        ? sql``
+        : sql`union all
+    select 'everyone', ${custom}::text, false, t.id::text, t.role::text, null, null
+    from members t
+    where t.workspace_id = ${scope.workspaceId}::uuid and t.status = 'active' and t.role = 'member'
+      and t.id <> ${me}::uuid`
     }
   `);
   return combineReach(self, all, found.rows);

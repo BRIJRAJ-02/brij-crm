@@ -497,11 +497,18 @@ describe('removing a member asks first', () => {
     await expect.element(dialog).not.toBeInTheDocument();
   });
 
-  it('offers no menu on the reader’s own row: leaving is the workspace menu’s', async () => {
+  it('offers only "What can Ada do" on the reader’s own row: leaving is the workspace menu’s', async () => {
     const counted = layerWith(() => Promise.resolve());
     await renderMembers(counted.layer);
     await expect.element(page.getByRole('button', { name: 'Actions for Linus Torvalds' })).toBeVisible();
-    expect(page.getByRole('button', { name: 'Actions for Ada Lovelace' }).elements()).toHaveLength(0);
+    await page.getByRole('button', { name: 'Actions for Ada Lovelace' }).click();
+    expect(
+      page
+        .getByRole('menuitem')
+        .elements()
+        .map((item) => item.textContent),
+    ).toEqual(['What can Ada do']);
+    await userEvent.keyboard('{Escape}');
   });
 });
 
@@ -783,7 +790,9 @@ describe('a member who can’t invite', () => {
     expect(page.getByText('Only owners and admins can change this.').elements()).toHaveLength(1);
     expect(page.getByRole('tab').elements()).toHaveLength(0);
     expect(page.getByRole('button', { name: /Role for/ }).elements()).toHaveLength(0);
-    expect(page.getByRole('button', { name: /Actions for/ }).elements()).toHaveLength(0);
+    // Their own row's menu says what they can do (spec 0037, AC-1243); nobody else's has one.
+    expect(page.getByRole('button', { name: /Actions for/ }).elements()).toHaveLength(1);
+    expect(page.getByRole('button', { name: 'Actions for Linus Torvalds' }).elements()).toHaveLength(1);
     expect(page.getByRole('button', { name: 'Invite people' }).elements()).toHaveLength(0);
   });
 });

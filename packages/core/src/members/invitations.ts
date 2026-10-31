@@ -842,6 +842,14 @@ export async function acceptInvite(
       if (held.status === 'used' && mine !== undefined && held.usedBy === mine.id)
         return { ...opened, memberId: mine.id };
       if (!opensNow(held)) throw inviteInvalid();
+      // The custom role it gives, held for share so a delete waits for this join (spec 0037, AC-1236); gone, it opens
+      // nothing.
+      if (
+        held.customRole !== undefined &&
+        (await readCustomRole(tx, scope.workspaceId, held.customRole.id, 'share')) === undefined
+      ) {
+        throw inviteInvalid();
+      }
       if (held.kind === 'link') return joinByLink(context, held, user, email, mine?.id, options);
       if (!user.emailVerified || held.email !== email) throw mismatch(held.email);
       if (mine !== undefined) {

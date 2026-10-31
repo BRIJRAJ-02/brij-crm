@@ -60,6 +60,7 @@ export const strings = {
   saveAction: 'Save changes',
   saved: (name: string) => `${name} saved.`,
   stale: 'Someone else changed this role. It shows their version now.',
+  overtaken: 'Someone else changed this role. Saving keeps your changes over theirs.',
   /** New role. */
   createTitle: 'New role',
   startFrom: 'Start from',

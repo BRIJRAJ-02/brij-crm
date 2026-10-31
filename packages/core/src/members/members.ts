@@ -726,7 +726,8 @@ export async function transferOwnership(
       if (target.role === 'guest') await checkSeats(tx, scope, 1);
       await tx
         .update(members)
-        .set({ role: 'owner', ...touched(scope) })
+        // An owner holds no custom role (spec 0037, AC-1233).
+        .set({ role: 'owner', customRoleId: null, ...touched(scope) })
         .where(and(eq(members.workspaceId, scope.workspaceId), eq(members.id, target.id)));
       await tx
         .update(members)
@@ -742,7 +743,12 @@ export async function transferOwnership(
           action: 'workspace.ownership_transferred',
           targetType: 'member',
           targetId: target.id,
-          before: { toRole: target.role, fromRole: 'owner', from: principal.memberId },
+          before: {
+            toRole: target.role,
+            ...(target.customRoleId === null ? {} : { toCustomRoleId: target.customRoleId }),
+            fromRole: 'owner',
+            from: principal.memberId,
+          },
           after: { toRole: 'owner', fromRole: 'admin', from: principal.memberId },
         },
         options.source,

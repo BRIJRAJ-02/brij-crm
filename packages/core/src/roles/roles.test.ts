@@ -11,11 +11,13 @@ import { testQuery } from '@crm/db/testing';
 import { audiences } from '../access/audiences.ts';
 import { enterAsActor, systemScope } from '../access/door.ts';
 import { objectLevel } from '../access/policy.ts';
+import { canActFor, schedulingReach } from '../access/scheduling.ts';
 import { storedRules } from '../access/stored-rules.ts';
 import { newId } from '../engine/ids.ts';
 import { isRefusal } from '../engine/refusals.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
 import { outboxHook } from '../engine/outbox.ts';
+import { inviteMembers } from '../members/invitations.ts';
 import { getMyAccess, setMemberRole, setMemberRoles } from '../members/members.ts';
 import { testScope } from '../testing.ts';
 import {
@@ -181,7 +183,12 @@ describe('holding a role (AC-1233 to AC-1235)', () => {
     expect([...scope.access.permissions].sort()).toEqual(['booking.manage', 'schedule.manage']);
     const mine = await getMyAccess(scope);
     expect(mine).toMatchObject({ role: 'member', roleLabel: 'Receptionist', customRoleId: role.id });
-    expect(mine.scheduling).toMatchObject({ managesEveryone: true });
+    // Their schedule.manage reaches everyone on the Member role, never the owner (decision 7).
+    expect(mine.scheduling).toMatchObject({ managesOthers: true, managesEveryone: false });
+    const colleague = await w.add('Sam');
+    const reach = await db.withWorkspace(w.workspaceId, (tx) => schedulingReach(tx, scope));
+    expect(canActFor(reach, colleague, 'manage')).toBe(true);
+    expect(canActFor(reach, w.memberId, 'view')).toBe(false);
     // They can't change roles: the stored members.manage is nothing.
     const other = await w.add('Bea');
     expect(await refusalOf(setMemberRole(scope, { memberId: other, role: 'admin' }))).toMatchObject({
@@ -189,7 +196,7 @@ describe('holding a role (AC-1233 to AC-1235)', () => {
     });
   });
 
-  it('gives a Read only role read on every object, and keeps Member’s rules off its holders', async () => {
+  it('gives a Read only role read on every object, and keeps Member’s rules on its holders until J10', async () => {
     const w = await world();
     const vera = await w.add('Vera Viewer');
     const max = await w.add('Max Member');
@@ -201,7 +208,7 @@ describe('holding a role (AC-1233 to AC-1235)', () => {
       [w.workspaceId],
     );
     const peopleId = people[0]?.id ?? '';
-    // Member's rule takes People away from Members; it doesn't reach a custom role holder.
+    // Member's rule takes People away from Members, custom role holders included (they sit on Member).
     await testQuery(
       ownerUrl,
       `insert into access_rules (workspace_id, subject_type, subject_role, object_id, level, created_by_type, updated_by_type)
@@ -210,7 +217,8 @@ describe('holding a role (AC-1233 to AC-1235)', () => {
     );
     const veraScope = await w.entered(vera);
     expect(veraScope.access.data.defaultObject).toBe('read');
-    expect(objectLevel(veraScope.access, peopleId)).toBe('read');
+    expect(objectLevel(veraScope.access, peopleId)).toBe('none');
+    expect(objectLevel(veraScope.access, newId())).toBe('read');
     expect(objectLevel((await w.entered(max)).access, peopleId)).toBe('none');
   });
 
@@ -244,6 +252,28 @@ describe('holding a role (AC-1233 to AC-1235)', () => {
     expect(await refusalOf(setMemberRole(w.owner, { memberId: sam, customRoleId: newId() }))).toMatchObject({
       code: 'NOT_FOUND',
     });
+  });
+});
+
+describe('invitations (AC-1236)', () => {
+  it('invites into a custom role, and an admin moved into one leaves their invitations opening nothing', async () => {
+    const w = await world();
+    const ada = await w.add('Ada Admin', 'admin');
+    const role = await w.make('Doctor', ['booking.manage']);
+    const sent = await inviteMembers(w.as(ada, 'admin'), {
+      emails: ['new@example.com'],
+      role: 'member',
+      customRoleId: role.id,
+    });
+    expect(sent.sent[0]?.invitation).toMatchObject({ role: 'member', customRoleId: role.id });
+    // Ada now holds a custom role, which never invites (members.invite is grant admin): what she sent is revoked.
+    await setMemberRole(w.owner, { memberId: ada, customRoleId: role.id });
+    const [row] = await testQuery<{ status: string }>(
+      ownerUrl,
+      `select status from invitations where workspace_id = $1 and email = 'new@example.com'`,
+      [w.workspaceId],
+    );
+    expect(row?.status).toBe('revoked');
   });
 });
 

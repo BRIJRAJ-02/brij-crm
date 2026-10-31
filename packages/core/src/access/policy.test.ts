@@ -562,19 +562,20 @@ describe('a custom role (spec 0037, AC-1229, AC-1234, AC-1248)', () => {
     expect(onAdmin.permissions).toEqual([]);
   });
 
-  it('is never under Member’s rules, and a team’s grant still opens what it grants (most open wins)', () => {
+  it('is under Member’s rules until custom roles get their own (J10), and a team’s grant still opens what it grants', () => {
     const teamRule: LevelRule = {
       subject: { type: 'team', teamId: TEAM },
       target: { type: 'object', objectId: OTHER },
       level: 'write',
     };
     const both = rules([objectRule('none'), teamRule]);
-    // A Member is under Member's rule; a holder of a custom role isn't.
+    // A Member is under Member's rule, and so is a holder of a custom role (it sits on Member).
     expect(objectLevel(roleAccess(member('member'), both), OBJECT)).toBe('none');
-    expect(objectLevel(roleAccess(holder(), both, grant([])), OBJECT)).toBe('write');
+    expect(objectLevel(roleAccess(holder(), both, grant([])), OBJECT)).toBe('none');
     // A Read only holder in a team that grants write on OTHER gets write there, read elsewhere.
     const readOnlyInTeam = roleAccess(holder([TEAM]), both, grant([], 'read'));
     expect(objectLevel(readOnlyInTeam, OTHER)).toBe('write');
-    expect(objectLevel(readOnlyInTeam, OBJECT)).toBe('read');
+    expect(objectLevel(readOnlyInTeam, OBJECT)).toBe('none');
+    expect(objectLevel(readOnlyInTeam, FIELD)).toBe('read');
   });
 });
