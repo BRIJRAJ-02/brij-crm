@@ -5953,17 +5953,21 @@ export function createDataLayer({
       /**
        * Each create row of a file, in order: the live record it looks like by the name rules (spec 0049, AC-4918),
        * as a chip shows it, or undefined. Asks 1,000 a call, in turn; a read, so a lost answer is asked again by the
-       * caller. Nothing is merged or skipped.
+       * caller. Nothing is merged or skipped. Aborting `signal` stops the call out and asks no more.
        */
       duplicates: async (
         workspace: string,
         objectId: string,
         rows: readonly { readonly name: unknown; readonly company?: string }[],
+        signal?: AbortSignal,
       ): Promise<readonly (DuplicatePair['a'] | undefined)[]> => {
         const found: (DuplicatePair['a'] | undefined)[] = [];
         for (let start = 0; start < rows.length; start += 1_000) {
           const part = rows.slice(start, start + 1_000);
-          const answer = await call((options) => api.imports.duplicates({ workspace, objectId, rows: part }, options));
+          const answer = await call(
+            (options) => api.imports.duplicates({ workspace, objectId, rows: part }, options),
+            signal,
+          );
           found.push(...answer.rows.map((row) => row.match));
         }
         return found;

@@ -28,6 +28,8 @@ import { member } from '../../orpc.ts';
 
 /** Duplicate checks one member may make a minute (spec 0049): a check runs 300 ms after typing stops. */
 const CHECKS_PER_MINUTE = 60;
+/** Pages of pairs one member may read a minute: a page and a banner each read up to 2,000 records' keys. */
+const LISTS_PER_MINUTE = 120;
 
 // Inside a workspace: the door has let in an active member, and `context.scope` is theirs.
 export const recordsRouter = member.records.router({
@@ -201,6 +203,12 @@ export const recordsRouter = member.records.router({
       return { matches: [...matches] };
     }),
     list: member.records.duplicates.list.handler(async ({ context, input, signal }) => {
+      const memberId = context.scope.actor.id ?? context.user.id;
+      const limit = await context.limiter.consumeRateLimit(`duplicates:list:${context.scope.workspaceId}:${memberId}`, {
+        window: 60,
+        max: LISTS_PER_MINUTE,
+      });
+      if (!limit.allowed) throw apiError('RATE_LIMITED', 'Too many reads in the last minute. Try again shortly.');
       const page = await listDuplicates(
         context.scope,
         {

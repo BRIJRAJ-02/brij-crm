@@ -732,16 +732,17 @@ export function ImportScreen({
   }, [planReady, result, answersNow, noMatchNow, nameAttribute, companyAttribute]);
   useEffect(() => {
     if (likelyAsks === undefined || likelyAsks.length === 0) return undefined;
-    let isCurrent = true;
+    const asking = new AbortController();
     data.imports
       .duplicates(
         slug,
         object.id,
         likelyAsks.map((each) => each.ask),
+        asking.signal,
       )
       .then(
         (found) => {
-          if (!isCurrent) return;
+          if (asking.signal.aborted) return;
           const byRow = new Map(
             likelyAsks.flatMap((each, at) => {
               const match = found[at];
@@ -754,7 +755,7 @@ export function ImportScreen({
         () => undefined,
       );
     return () => {
-      isCurrent = false;
+      asking.abort();
     };
   }, [likelyAsks, data, slug, object.id]);
   const likely = likelyFound.asks === likelyAsks ? likelyFound.byRow : NO_LIKELY;

@@ -240,6 +240,54 @@ describe('what is never suggested (AC-4903, AC-4920)', () => {
     });
   });
 
+  it('pairs no people by a Company the reader can’t see, or one in the trash', async () => {
+    const w = await workspace();
+    const acme = await w.company('Acme');
+    const jane = await w.person('Jane', 'Doe', { companyId: acme });
+    const janeAgain = await w.person('Jane', 'Doe', { companyId: acme });
+    expect(await allPairs(w.scope, w.people)).toEqual([`${janeAgain}:${jane}:name_company`]);
+    const noCompanies = rescope(w.scope, {
+      rules: {
+        levels: [
+          {
+            subject: { type: 'role', role: 'owner' },
+            target: { type: 'object', objectId: w.companies },
+            level: 'none',
+          },
+        ],
+        records: [],
+      },
+    });
+    expect(await allPairs(noCompanies, w.people)).toEqual([]);
+    // Only companies Ada owns, and Acme has no owner: the shared Company is hidden, so no pair, and no check match.
+    await setRecordValues(w.scope, { recordId: acme, values: { [w.id('companies.owner')]: { value: null } } });
+    const ownCompanies = rescope(w.scope, {
+      rules: {
+        levels: [],
+        records: [
+          {
+            subject: { type: 'role', role: 'owner' },
+            objectId: w.companies,
+            kind: 'own',
+            attributeId: w.id('companies.owner'),
+          },
+        ],
+      },
+    });
+    expect(await allPairs(ownCompanies, w.people)).toEqual([]);
+    expect(
+      await checkDuplicates(ownCompanies, {
+        objectId: w.people,
+        values: {
+          [w.id('people.name')]: { fullName: 'Jane Doe' },
+          [w.id('people.company')]: { objectId: w.companies, recordId: acme },
+        },
+      }),
+    ).toEqual([]);
+    await deleteRecord(w.scope, { recordId: acme });
+    expect(await allPairs(w.scope, w.people)).toEqual([]);
+  });
+
   it('gives no pair by an attribute the reader can’t see, and nothing on an object they can’t see', async () => {
     const w = await workspace();
     await w.company('One');

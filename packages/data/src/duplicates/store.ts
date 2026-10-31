@@ -160,7 +160,7 @@ export interface DuplicatePairsOptions {
   readonly isForbidden: (error: unknown) => boolean;
 }
 
-/** A list of likely pairs (see the file's opening). Reads its first page at once. */
+/** A list of likely pairs (see the file's opening). Reads its first page once a screen subscribes. */
 export function createDuplicatePairs({
   load,
   dismiss,
@@ -228,13 +228,24 @@ export function createDuplicatePairs({
     step(0);
   };
 
-  read(true);
+  // Nothing is read until a screen shows the list, and what is out stops when the last one leaves: a route's
+  // preload, a banner asked again, or React's second mount in development leaves no read running unseen.
+  let isRead = false;
   return {
     getSnapshot: () => state,
     subscribe: (listener) => {
       listeners.add(listener);
+      if (!isRead || (controller === undefined && state.status === 'loading')) {
+        isRead = true;
+        read(true);
+      }
       return () => {
         listeners.delete(listener);
+        if (listeners.size === 0 && controller !== undefined) {
+          controller.abort();
+          controller = undefined;
+          if (state.isLoadingMore) set({ ...state, isLoadingMore: false });
+        }
       };
     },
     more: () => {

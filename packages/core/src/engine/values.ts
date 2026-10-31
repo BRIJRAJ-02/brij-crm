@@ -7,7 +7,7 @@ import { SYSTEM_ONLY_TYPES, type AttributeType } from '@crm/contracts/values';
 import { encodeValue, sameItems, type ItemColumns, type StoredItem } from './columns.ts';
 import { parseAttributeInput } from './parse-value.ts';
 import { canonicalId, checkId, isUuid, uuidArray, uuidList } from './ids.ts';
-import { postgresError, refuse, refuseAll, writeConflict } from './refusals.ts';
+import { isRefusal, postgresError, refuse, refuseAll, writeConflict } from './refusals.ts';
 import { syncSortKey } from './sort-keys.ts';
 import { uniqueKeyOf } from './unique.ts';
 import { actorRow, type Actor } from './scope.ts';
@@ -640,26 +640,41 @@ export async function writeAttribute(
           uniqueKey: attribute.isUnique ? uniqueKeyOf(attribute.type, item) : null,
           matchKey: write.ownerKind === 'record' ? matchKeySql(attribute, item.textValue) : null,
         }));
-  try {
-    // A unique attribute's insert runs in a savepoint, so a refusal can still read who holds the value (AC-4905).
-    if (attribute.isUnique) await tx.transaction((point) => point.insert(values).values(rows));
-    else await tx.insert(values).values(rows);
-  } catch (error) {
-    const pg = postgresError(error);
-    if (pg?.code === '23505' && pg.constraint === 'values_unique') {
-      const keys = rows.flatMap((row) =>
-        'uniqueKey' in row && typeof row.uniqueKey === 'string' ? [row.uniqueKey] : [],
-      );
-      const holder = attribute.isUnique ? await visibleHolder(context, attribute, ownerId, keys) : undefined;
-      if (holder !== undefined) {
-        const refusal = {
-          code: 'UNIQUE_CONFLICT' as const,
+  /** Another record holds one of these keys: say whose when the writer may see it (AC-4905), else the old sentence. */
+  const taken = async (): Promise<never> => {
+    const keys = rows.flatMap((row) =>
+      'uniqueKey' in row && typeof row.uniqueKey === 'string' ? [row.uniqueKey] : [],
+    );
+    const holder = await visibleHolder(context, attribute, ownerId, keys);
+    if (holder !== undefined) {
+      throw refuseAll([
+        {
+          code: 'UNIQUE_CONFLICT',
           message: `${holder.value} belongs to ${holder.name === '' ? 'another record' : holder.name}.`,
           attributeId: attribute.id,
           holder: { recordId: holder.recordId, objectId: holder.objectId, name: holder.name },
-        };
-        throw refuseAll([refusal]);
-      }
+        },
+      ]);
+    }
+    throw refuse('UNIQUE_CONFLICT', `Another record already has this value for ${attribute.title}.`, attribute.id);
+  };
+  try {
+    if (attribute.isUnique) {
+      // A taken key skips its row rather than failing the statement, so the transaction can still read who holds it.
+      const inserted = await tx
+        .insert(values)
+        .values(rows)
+        .onConflictDoNothing({
+          target: [values.workspaceId, values.attributeId, values.uniqueKey],
+          where: sql.raw('active_until is null and unique_key is not null'),
+        })
+        .returning({ id: values.id });
+      if (inserted.length < rows.length) await taken();
+    } else await tx.insert(values).values(rows);
+  } catch (error) {
+    if (isRefusal(error)) throw error;
+    const pg = postgresError(error);
+    if (pg?.code === '23505' && pg.constraint === 'values_unique') {
       throw refuse('UNIQUE_CONFLICT', `Another record already has this value for ${attribute.title}.`, attribute.id);
     }
     // A member or option that went away (or never was) after the checks above: refuse it as they would.

@@ -53,17 +53,32 @@ end;
 --> statement-breakpoint
 ALTER TABLE "values" ADD COLUMN "match_key" text;
 --> statement-breakpoint
--- Every current name, email and domain value a record holds now.
-update "values" v set match_key = crm_match_key(k.kind, v.text_value)
-from (
-  select a.workspace_id, a.id, case
-    when a.type::text in ('email', 'domain') then a.type::text
-    when o.primary_attribute_id = a.id then case when o.standard_key = 'companies' then 'company_name' else 'name' end
-  end as kind
-  from attributes a join objects o on o.workspace_id = a.workspace_id and o.id = a.object_id
-) k
-where k.kind is not null and v.workspace_id = k.workspace_id and v.attribute_id = k.id
-  and v.active_until is null and v.text_value is not null and v.record_id is not null;
+-- Every current name, email and domain value a record holds now, for every workspace at once. The owner is subject
+-- to forced row level security like everyone (0009), so FORCE comes off the three tables this reads and writes for the
+-- copy and back on, in one block that takes every lock first; if anything fails, the migration rolls back with FORCE
+-- still on. At today's sizes this is one statement; a workspace near a million records wants a batched job instead
+-- (spec 0049 drift, in the lane's report).
+do $$
+begin
+  lock table "values", attributes, objects in access exclusive mode;
+  alter table "values" no force row level security;
+  alter table attributes no force row level security;
+  alter table objects no force row level security;
+  update "values" v set match_key = crm_match_key(k.kind, v.text_value)
+  from (
+    select a.workspace_id, a.id, case
+      when a.type::text in ('email', 'domain') then a.type::text
+      when o.primary_attribute_id = a.id then case when o.standard_key = 'companies' then 'company_name' else 'name' end
+    end as kind
+    from attributes a join objects o on o.workspace_id = a.workspace_id and o.id = a.object_id
+  ) k
+  where k.kind is not null and v.workspace_id = k.workspace_id and v.attribute_id = k.id
+    and v.active_until is null and v.text_value is not null and v.record_id is not null;
+  alter table "values" force row level security;
+  alter table attributes force row level security;
+  alter table objects force row level security;
+end
+$$;
 --> statement-breakpoint
 CREATE INDEX "values_match" ON "values" USING btree ("workspace_id","attribute_id","match_key","owner_id") WHERE "values"."active_until" is null and "values"."match_key" is not null;
 --> statement-breakpoint

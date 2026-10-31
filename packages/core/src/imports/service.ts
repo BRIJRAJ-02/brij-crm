@@ -33,7 +33,7 @@ import { runWrite, type AfterWrite } from '../engine/write.ts';
 import type { JobRegistry } from '../jobs/registry.ts';
 import { startJob } from '../jobs/service.ts';
 import { farObjects, foldName, nameKey, resolveNames, type Resolved } from './links.ts';
-import { duplicateRules, findImportDuplicates } from '../engine/duplicates.ts';
+import { duplicateRules, findImportDuplicates, reading } from '../engine/duplicates.ts';
 import {
   checkSettings,
   IMPORT_NOT_FOUND,
@@ -194,12 +194,13 @@ export interface ImportDuplicateAsk {
 export async function checkImportDuplicates(
   scope: EngineScope,
   input: { readonly objectId: string; readonly rows: readonly ImportDuplicateAsk[] },
+  signal?: AbortSignal,
 ): Promise<readonly (RecordRefDisplay | undefined)[]> {
   checkScope(scope);
   if (input.rows.length > IMPORT_MATCHES_PAGE) {
     throw refuse('CONFIG_INVALID', `Ask about at most ${IMPORT_MATCHES_PAGE.toLocaleString('en')} rows at a time.`);
   }
-  return inWorkspace(scope, async (tx) => {
+  return reading(scope, signal, async (tx) => {
     const objectId = await liveObject(tx, scope, input.objectId);
     const rules = await duplicateRules(tx, scope, objectId);
     const company = rules.name?.company?.attribute;

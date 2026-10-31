@@ -26,7 +26,15 @@ import type { EngineScope } from './scope.ts';
 import { isArchivedNow, loadAttributes, type AttributeDef } from './values.ts';
 import { runWrite, type AfterWrite } from './write.ts';
 import { isAborted, withCancel } from './query/cancel.ts';
-import { attributeVisible, checkObject, recordRuleSql, UNKNOWN_OBJECT, UNKNOWN_RECORD } from '../access/visibility.ts';
+import { isOpen, objectLevel } from '../access/policy.ts';
+import {
+  attributeVisible,
+  checkObject,
+  farVisibleSql,
+  recordRuleSql,
+  UNKNOWN_OBJECT,
+  UNKNOWN_RECORD,
+} from '../access/visibility.ts';
 import type { RecordRefDisplay } from '@crm/contracts/values';
 import { writeAudit } from '../members/audit.ts';
 
@@ -48,6 +56,8 @@ interface CompanySide {
   readonly attribute: AttributeDef;
   readonly relationshipId: string;
   readonly isFrom: boolean;
+  /** The objects a Company may be, for the far record's visibility. */
+  readonly farObjectIds: readonly string[];
 }
 
 /** The rules one object's pairs are found by, for one reader: only rules over attributes they may see. */
@@ -98,7 +108,11 @@ export async function duplicateRules(tx: WorkspaceTx, scope: EngineScope, object
   const company = live.find((attribute) => attribute.apiSlug === 'company' && attribute.type === 'record_reference');
   if (company === undefined || company.relationshipId === null) return { objectId, emails, domains };
   const relationship = await relationshipOf(tx, company);
-  const side = { attribute: company, relationshipId: relationship.id, isFrom: endOf(relationship, company.id).isFrom };
+  const end = endOf(relationship, company.id);
+  // A Company the reader can't see is never what two people share (AC-4920): with every far object hidden, no rule.
+  const farObjectIds = end.allowed.filter((id) => isOpen(scope.access) || objectLevel(scope.access, id) !== 'none');
+  if (farObjectIds.length === 0) return { objectId, emails, domains };
+  const side = { attribute: company, relationshipId: relationship.id, isFrom: end.isFrom, farObjectIds };
   return { objectId, name: { attribute: named, kind: 'name', company: side }, emails, domains };
 }
 
@@ -108,6 +122,20 @@ function companyColumns(side: CompanySide, alias: string): { readonly mine: SQL;
     ? { mine: sql.raw(`${alias}.from_record_id`), far: sql.raw(`${alias}.to_record_id`) }
     : { mine: sql.raw(`${alias}.to_record_id`), far: sql.raw(`${alias}.from_record_id`) };
 }
+
+/**
+ * The live Company a link at `far` names, as a join on alias `alias`, kept only when the reader may see it (its
+ * object's level and record rule, in the statement): a shared Company the reader can't see says nothing (AC-4920).
+ */
+function liveCompany(scope: EngineScope, side: CompanySide, far: SQL, alias: string): SQL {
+  const at = sql.raw(alias);
+  const seen = farVisibleSql(scope.access, side.farObjectIds, alias);
+  return sql` join records ${at} on ${at}.id = ${far}
+    and ${at}.deleted_at is null${seen === undefined ? sql`` : sql` and ${seen}`}`;
+}
+
+/** Holders read per match key at most: a key this common says little, and it keeps a page to index lookups. */
+const HOLDERS_PER_KEY = 50;
 
 /** The record rule on alias `alias`, as ` and <rule>`, or nothing when the object has none. */
 function ruled(scope: EngineScope, objectId: string, alias: string): SQL {
@@ -216,7 +244,8 @@ export async function findDuplicates(
       item.rank === RANK.name_company && name?.company !== undefined
         ? (() => {
             const { mine, far } = companyColumns(name.company, 'k');
-            return sql` and exists (select 1 from record_links k where k.relationship_id = ${name.company.relationshipId}::uuid
+            return sql` and exists (select 1 from record_links k${liveCompany(scope, name.company, far, 'c')}
+              where k.relationship_id = ${name.company.relationshipId}::uuid
               and k.active_until is null and ${mine} = v.owner_id and ${far} = any(${uuidList(companyIds)}))`;
           })()
         : sql``;
@@ -297,7 +326,7 @@ function decodeCursor(text: string): PairCursor {
  * `union all` of index lookups: the record's own current keys, then the other current values holding each key.
  * Undefined when the reader may use no rule.
  */
-function partnersSql(rules: DuplicateRules): SQL | undefined {
+function partnersSql(scope: EngineScope, rules: DuplicateRules): SQL | undefined {
   const parts: SQL[] = [];
   const name = rules.name;
   if (name !== undefined) {
@@ -310,13 +339,16 @@ function partnersSql(rules: DuplicateRules): SQL | undefined {
             return sql` and exists (select 1 from record_links ka
               join record_links kb on kb.workspace_id = ka.workspace_id and kb.relationship_id = ka.relationship_id
                 and kb.active_until is null and ${kb.far} = ${ka.far} and ${kb.mine} = vb.owner_id
+              ${liveCompany(scope, name.company, ka.far, 'c')}
               where ka.relationship_id = ${name.company.relationshipId}::uuid and ka.active_until is null
                 and ${ka.mine} = va.owner_id)`;
           })();
     const rank = name.company === undefined ? RANK.name : RANK.name_company;
     parts.push(sql`select vb.owner_id as id, ${rank}::int as rank from "values" va
-      join "values" vb on vb.workspace_id = va.workspace_id and vb.attribute_id = va.attribute_id
-        and vb.match_key = va.match_key and vb.active_until is null and vb.owner_id <> va.owner_id
+      cross join lateral (select h.owner_id from "values" h
+        where h.workspace_id = va.workspace_id and h.attribute_id = va.attribute_id and h.match_key = va.match_key
+          and h.active_until is null and h.owner_id <> va.owner_id
+        order by h.owner_id limit ${HOLDERS_PER_KEY}) vb
       where va.owner_id = a.id and va.attribute_id = ${name.attribute.id}::uuid and va.active_until is null
         and va.match_key is not null${company}`);
   }
@@ -326,8 +358,10 @@ function partnersSql(rules: DuplicateRules): SQL | undefined {
   ] as const) {
     if (list.length === 0) continue;
     parts.push(sql`select vb.owner_id as id, ${rank}::int as rank from "values" va
-      join "values" vb on vb.workspace_id = va.workspace_id and vb.attribute_id = va.attribute_id
-        and vb.match_key = va.match_key and vb.active_until is null and vb.owner_id <> va.owner_id
+      cross join lateral (select h.owner_id from "values" h
+        where h.workspace_id = va.workspace_id and h.attribute_id = va.attribute_id and h.match_key = va.match_key
+          and h.active_until is null and h.owner_id <> va.owner_id
+        order by h.owner_id limit ${HOLDERS_PER_KEY}) vb
       where va.owner_id = a.id and va.attribute_id = any(${uuidList(list.map((attribute) => attribute.id))})
         and va.active_until is null and va.match_key is not null`);
   }
@@ -372,7 +406,7 @@ export async function listDuplicatePairs(
   const rules = await duplicateRules(tx, scope, input.objectId);
   const objectId = rules.objectId;
   const cursor = input.cursor === undefined ? undefined : decodeCursor(input.cursor);
-  const partners = partnersSql(rules);
+  const partners = partnersSql(scope, rules);
   if (partners === undefined) return { pairs: [] };
   if (input.recordId !== undefined) return recordPairs(tx, scope, rules, partners, input.recordId, cursor);
 
@@ -484,8 +518,8 @@ async function recordPairs(
   return { pairs, ...(next === undefined ? {} : { cursor: encodeCursor(next) }) };
 }
 
-/** Runs a duplicates read in its own cancellable transaction, under the reads' time limit. */
-async function reading<T>(
+/** Runs a duplicates read in its own cancellable transaction, under the reads' time limit (the import check's too). */
+export async function reading<T>(
   scope: EngineScope,
   signal: AbortSignal | undefined,
   work: (tx: WorkspaceTx) => Promise<T>,
@@ -628,8 +662,8 @@ export interface ImportDuplicateRow {
   readonly companyIds?: readonly string[];
 }
 
-/** The most candidates one import check reads, across every row. */
-const IMPORT_CANDIDATES = 5_000;
+/** The live records one import check reads per distinct name, at most. */
+const IMPORT_PER_KEY = 20;
 
 /**
  * For each staged create row, the live record it looks like by AC-4901's name rules (AC-4918), or undefined: the
@@ -658,16 +692,20 @@ export async function findImportDuplicates(
   const companySql =
     name.company === undefined || company === undefined
       ? sql`null::text`
-      : sql`(select string_agg(${company.far}::text, ',') from record_links k
+      : sql`(select string_agg(${company.far}::text, ',') from record_links k${liveCompany(scope, name.company, company.far, 'c')}
           where k.relationship_id = ${name.company.relationshipId}::uuid and k.active_until is null and ${company.mine} = r.id)`;
+  // Per distinct key, its oldest holders the reader may see, a few at most: a common name costs index lookups.
   const found = await tx.execute<{ key: string; id: string; companies: string | null }>(sql`
-    select v.match_key as key, r.id::text as id, ${companySql} as companies from "values" v
-    join records r on r.workspace_id = v.workspace_id and r.id = v.owner_id and r.object_id = ${objectId}::uuid
-      and r.deleted_at is null${ruled(scope, objectId, 'r')}
-    where v.attribute_id = ${name.attribute.id}::uuid and v.active_until is null
-      and v.match_key = any(array(select jsonb_array_elements_text(${JSON.stringify([...new Set(keyOf.values())])}::jsonb)))
-    order by r.created_at, r.id
-    limit ${IMPORT_CANDIDATES}
+    select q.key, m.id, m.companies
+    from jsonb_array_elements_text(${JSON.stringify([...new Set(keyOf.values())])}::jsonb) as q(key)
+    cross join lateral (
+      select r.id::text as id, ${companySql} as companies from "values" v
+      join records r on r.workspace_id = v.workspace_id and r.id = v.owner_id and r.object_id = ${objectId}::uuid
+        and r.deleted_at is null${ruled(scope, objectId, 'r')}
+      where v.attribute_id = ${name.attribute.id}::uuid and v.active_until is null and v.match_key = q.key
+      order by v.owner_id
+      limit ${IMPORT_PER_KEY}
+    ) m
   `);
   const byKey = new Map<string, { readonly id: string; readonly companies: ReadonlySet<string> }[]>();
   for (const row of found.rows) {

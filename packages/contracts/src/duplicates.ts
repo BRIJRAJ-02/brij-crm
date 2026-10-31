@@ -29,15 +29,18 @@ export const DUPLICATE_REASON_WORDS: Readonly<Record<DuplicateReason, string>> =
   domain: 'Same domain',
 };
 
+/** Draft values by attribute id, keyed as the caller spelled them (core canonicalises the keys). */
+const DraftValues = z.record(z.uuid(), z.unknown());
+
 /**
  * A check of draft values (AC-4904): the object, its draft values by attribute id (the create dialog's fields, or
  * the record page's, a person's Company included), and the record being edited, which never matches itself.
  */
 export const CheckDuplicatesInput = WorkspaceScoped.extend({
   objectId: Uuid,
-  values: z
-    .record(z.uuid(), z.unknown())
-    .refine((values) => Object.keys(values).length <= MAX_CHECK_VALUES, { error: 'Check at most 20 values.' }),
+  values: DraftValues.refine((values) => Object.keys(values).length <= MAX_CHECK_VALUES, {
+    error: 'Check at most 20 values.',
+  }),
   excludeRecordId: Uuid.optional(),
 });
 /** A check of draft values. */

@@ -48,6 +48,7 @@ describe('the pairs', () => {
       isForbidden: () => false,
     });
     expect(list.getSnapshot().status).toBe('loading');
+    list.subscribe(() => undefined);
     await settle();
     await settle();
     expect(list.getSnapshot().pairs.map(pairKey)).toEqual(['a:b', 'c:d']);
@@ -70,7 +71,31 @@ describe('the pairs', () => {
       restore: () => Promise.resolve(),
       isForbidden: () => true,
     });
+    list.subscribe(() => undefined);
     await settle();
     expect(list.getSnapshot().status).toBe('forbidden');
+  });
+});
+
+describe('the pairs’ life', () => {
+  it('reads nothing until a screen shows it, and stops when the last one leaves', async () => {
+    const signals: AbortSignal[] = [];
+    const list = createDuplicatePairs({
+      load: (_cursor, signal) => {
+        signals.push(signal);
+        return new Promise(() => undefined);
+      },
+      dismiss: () => Promise.resolve(),
+      restore: () => Promise.resolve(),
+      isForbidden: () => false,
+    });
+    await settle();
+    expect(signals).toHaveLength(0);
+    const leave = list.subscribe(() => undefined);
+    expect(signals).toHaveLength(1);
+    leave();
+    expect(signals[0]?.aborted).toBe(true);
+    list.subscribe(() => undefined);
+    expect(signals).toHaveLength(2);
   });
 });

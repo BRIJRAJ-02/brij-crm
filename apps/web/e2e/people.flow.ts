@@ -78,7 +78,8 @@ test.describe('the People table', () => {
     await newDialog.getByRole('button', { name: /Add more fields/ }).click();
     await newDialog.getByLabel('Email address', { exact: true }).fill(`grace-${tag}@example.com`);
     await newDialog.getByRole('button', { name: 'Create' }).click();
-    await expect(newDialog.getByText('Another record already has this value for Email addresses.')).toBeVisible();
+    // The holder is named, since this member can see Grace (spec 0049, AC-4905).
+    await expect(newDialog.getByText(`grace-${tag}@example.com belongs to Grace Hopper.`)).toBeVisible();
     await checkScreen(page, '4-new-person-refused');
     await newDialog.getByRole('button', { name: 'Cancel' }).click();
     // The header, the two people and the footer: no third row.
@@ -111,7 +112,7 @@ test.describe('the People table', () => {
     await page.keyboard.press('Escape');
     await expect(email).toHaveAttribute('aria-invalid', 'true');
     await expect(
-      page.getByRole('status').filter({ hasText: 'Another record already has this value for Email addresses.' }),
+      page.getByRole('status').filter({ hasText: `grace-${tag}@example.com belongs to Grace Hopper.` }),
     ).toHaveCount(1);
     await expect(page.getByRole('button', { name: 'Retry' })).toHaveCount(0);
     await expect(email).not.toContainText(`grace-${tag}@example.com`);
