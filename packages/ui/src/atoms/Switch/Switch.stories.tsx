@@ -24,6 +24,21 @@ export const Default: Story = {
 };
 
 /**
+ * The word beside it is the state (the link page's Live or Private): it reads "Private" while off and "Live" once on,
+ * and the accessible name stays "Live" in both, so a screen reader hears on or off, never a double negative.
+ */
+export const StateLabels: Story = {
+  args: { label: 'Live', stateLabels: { on: 'Live', off: 'Private' } },
+  play: async ({ canvas, userEvent }) => {
+    const toggle = canvas.getByRole('switch', { name: 'Live' });
+    await expect(canvas.getByText('Private')).toBeVisible();
+    await userEvent.click(toggle);
+    await expect(toggle).toBeChecked();
+    await expect(canvas.getByText('Live', { selector: '[aria-hidden="true"]' })).toBeVisible();
+  },
+};
+
+/**
  * With its label hidden (a link card's switch), the switch is only its 28px track, so an invisible hit area
  * grows it to at least 32 by 32: a press just beside it still toggles it.
  */
