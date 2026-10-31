@@ -1,7 +1,8 @@
 // `@crm/ui/public-form`: the hosted form's page entry (spec 0023,
 // 0023-experience.md, The visitor). It mounts HostedForm, drawn with the
-// library's own controls, into the page's root inside UiProvider, so the
-// hosted page, the embed and the builder's preview are one component tree.
+// library's own controls, into the page's root inside UiProviderBase (UiProvider
+// without the icon registry and the brand marks, which the form never draws), so
+// the hosted page, the embed and the builder's preview are one component tree.
 // The page's client sends the answers (`onSubmit`); nothing here touches the
 // network. The mount is synchronous, so the page can measure the drawn form
 // for an embed's height at once.
@@ -9,7 +10,7 @@ import { formStrings, type FormLayout, type PublicForm } from '@crm/contracts/fo
 import { createElement, lazy, Suspense, type ReactNode } from 'react';
 import { flushSync } from 'react-dom';
 import { createRoot } from 'react-dom/client';
-import { UiProvider } from '../provider/UiProvider.tsx';
+import { UiProviderBase } from '../provider/UiProviderBase.tsx';
 import { createToasts } from '../provider/toasts.tsx';
 import { FormLoading, FormMessage, HostedForm, type HostedFormMode, type HostedFormProps } from './HostedForm.tsx';
 
@@ -54,7 +55,7 @@ function mount(
     draw: (children) =>
       flushSync(() =>
         react.render(
-          createElement(UiProvider, {
+          createElement(UiProviderBase, {
             locale,
             timeZone,
             toasts,
