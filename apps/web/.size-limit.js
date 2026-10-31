@@ -42,6 +42,26 @@ const form = firstLoad(manifest, 'form.html');
 // On 20 October 2026 landing2 measured 230.64 kB, past the budget. Booking milestone 2 loads the guest page, the
 // visitor bar (its Not you menu) and the details step beside the first paint rather than in it: 214.5 kB.
 const book = firstLoad(manifest, 'book.html');
+// 31 October 2026, spec 0063 (AC-6306, AC-6331): Steps and One at a time are one lazy chunk the hosted form loads only
+// for a form in one of them, so a Classic form's first load carries none of it. Measured as what that chunk adds to
+// the hosted form's first load: its own files and whatever they import that the form had not loaded already.
+// The chunk is the one the hosted form imports dynamically under that name (the app imports the same module
+// statically for the builder's preview, so Rolldown names a shared chunk after it rather than marking an entry).
+const stepsKey = (manifest['form.html']?.dynamicImports ?? []).find((key) => manifest[key]?.name === 'HostedFormSteps');
+if (stepsKey === undefined || form.chunks.includes(stepsKey)) {
+  throw new Error('The step layouts are no longer a lazy chunk of their own: a Classic form would carry them.');
+}
+const stepsChunks = [];
+const visitSteps = (key) => {
+  if (stepsChunks.includes(key) || form.chunks.includes(key)) return;
+  stepsChunks.push(key);
+  for (const imported of manifest[key]?.imports ?? []) visitSteps(imported);
+};
+visitSteps(stepsKey);
+const steps = {
+  js: stepsChunks.flatMap((key) => manifest[key]?.file ?? []),
+  css: [...new Set(stepsChunks.flatMap((key) => manifest[key]?.css ?? []))].filter((file) => !form.css.includes(file)),
+};
 const inDist = (files) => files.map((file) => path.join(DIST, file));
 
 // React's development build carries this message; production never does.
@@ -66,6 +86,14 @@ export default [
   // theirs to reverse.
   { name: 'Hosted form JavaScript (gzipped)', path: inDist(form.js), limit: '223 kB', gzip: true, running: false },
   { name: 'Hosted form CSS (gzipped)', path: inDist(form.css), limit: '17 kB', gzip: true, running: false },
+  // Spec 0063's own line: Steps and One at a time together at most 10 kB, loaded only by a form that uses them.
+  {
+    name: 'Form step layouts, lazy (gzipped)',
+    path: inDist([...steps.js, ...steps.css]),
+    limit: '10 kB',
+    gzip: true,
+    running: false,
+  },
   { name: 'Booking page JavaScript (gzipped)', path: inDist(book.js), limit: '230 kB', gzip: true, running: false },
   { name: 'Booking page CSS (gzipped)', path: inDist(book.css), limit: '18 kB', gzip: true, running: false },
 ];

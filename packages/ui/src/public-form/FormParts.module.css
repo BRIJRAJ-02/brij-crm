@@ -138,6 +138,23 @@
     margin-block-start: var(--space-32);
   }
 
+  /* The step layouts' loading shapes (spec 0063, AC-6306), in the places HostedFormSteps.module.css draws them:
+     Steps' progress line under the header, and one at a time's thin line over it. */
+  .questions[data-layout='steps'] {
+    margin-block-start: var(--space-20);
+  }
+
+  .loadingProgress {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    margin-block-start: var(--space-24);
+  }
+
+  .loadingLine {
+    margin-block-end: var(--space-32);
+  }
+
   /* The email typo hint: a muted line under the field with its Use it. */
   .suggestion {
     display: flex;

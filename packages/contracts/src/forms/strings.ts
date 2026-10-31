@@ -93,6 +93,8 @@ export interface FormStrings {
   readonly next: string;
   /** On to the next question, in a one at a time form. */
   readonly ok: string;
+  /** Under a long answer one at a time, where Enter goes on (spec 0063, AC-6305). */
+  readonly newLine: string;
 }
 
 const EN: FormStrings = {
@@ -157,6 +159,7 @@ const EN: FormStrings = {
   back: 'Back',
   next: 'Continue',
   ok: 'OK',
+  newLine: 'Shift + Enter for a new line',
 };
 
 const CATALOGUE: Readonly<Record<FormLanguage, Partial<FormStrings>>> = {

@@ -1,8 +1,8 @@
-import type { PublicForm } from '@crm/contracts/forms';
+import type { PublicForm, PublicStep } from '@crm/contracts/forms';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, userEvent, waitFor } from 'storybook/test';
 import { Stage } from '../workbench/Stage/Stage.tsx';
-import { HostedFormSteps, type FormStep } from './HostedFormSteps.tsx';
+import { HostedFormSteps } from './HostedFormSteps.tsx';
 
 /** A longer enquiry that falls into topics: about you, your company, your project. */
 const ENQUIRY = {
@@ -47,11 +47,17 @@ const ENQUIRY = {
   ],
 } satisfies PublicForm;
 
-const STEPS: readonly FormStep[] = [
-  { title: 'About you', keys: ['name', 'email', 'phone'] },
-  { title: 'Your company', keys: ['company', 'size'] },
-  { title: 'Your project', keys: ['budget', 'message'] },
+const STEPS: PublicStep[] = [
+  { id: 'you', title: 'About you', keys: ['name', 'email', 'phone'] },
+  { id: 'company', title: 'Your company', keys: ['company', 'size'] },
+  { id: 'project', title: 'Your project', keys: ['budget', 'message'] },
 ];
+
+/** The enquiry in Steps, as the server sends it (spec 0063). */
+const STEPPED: PublicForm = { ...ENQUIRY, layout: 'steps', steps: STEPS };
+
+/** The enquiry one question at a time. */
+const ONE_BY_ONE: PublicForm = { ...ENQUIRY, layout: 'conversational' };
 
 /** A stand in wordmark, 860 by 210 like the product's, drawn in one fill. */
 const wordmark = (fill: string) =>
@@ -63,10 +69,8 @@ const meta = {
   title: 'Public form/HostedFormSteps',
   component: HostedFormSteps,
   args: {
-    form: ENQUIRY,
+    form: STEPPED,
     mode: 'page',
-    layout: 'steps',
-    steps: STEPS,
     logo: { light: wordmark('black'), dark: wordmark('white') },
   },
   render: (args) => (
@@ -139,12 +143,12 @@ export const LastStep: Story = {
 
 /** Steps in the dark colour with square corners: the progress line, Back and Continue square with the fields. */
 export const StepsDarkSquare: Story = {
-  args: { form: { ...ENQUIRY, look: { colour: 'dark', corners: 'square' } } },
+  args: { form: { ...STEPPED, look: { colour: 'dark', corners: 'square' } } },
 };
 
 /** One at a time: no card, a thin line at the top, the question large with its number, OK with its Enter keycap. */
 export const Conversational: Story = {
-  args: { layout: 'conversational' },
+  args: { form: ONE_BY_ONE },
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('progressbar', { name: '1 of 7' })).toBeInTheDocument();
     await expect(canvas.getByRole('textbox', { name: 'Your name' })).toBeInTheDocument();
@@ -153,7 +157,7 @@ export const Conversational: Story = {
 
 /** Enter goes on to the next question, which takes focus; an optional one says so. */
 export const ConversationalNext: Story = {
-  args: { layout: 'conversational' },
+  args: { form: ONE_BY_ONE },
   play: async ({ canvas }) => {
     await userEvent.type(canvas.getByRole('textbox', { name: 'Your name' }), 'Ada Lovelace{Enter}');
     await waitFor(() => expect(canvas.getByRole('textbox', { name: 'Work email' })).toHaveFocus());
@@ -165,7 +169,7 @@ export const ConversationalNext: Story = {
 
 /** One at a time, an empty required question: its message under it, and the question stays. */
 export const ConversationalError: Story = {
-  args: { layout: 'conversational' },
+  args: { form: ONE_BY_ONE },
   play: async ({ canvas }) => {
     await userEvent.click(canvas.getByRole('button', { name: /OK/ }));
     await waitFor(() => expect(canvas.getByText('Answer this question.')).toBeInTheDocument());
@@ -175,16 +179,15 @@ export const ConversationalError: Story = {
 
 /** One at a time in the dark colour. */
 export const ConversationalDark: Story = {
-  args: { layout: 'conversational', form: { ...ENQUIRY, look: { colour: 'dark', corners: 'rounded' } } },
+  args: { form: { ...ONE_BY_ONE, look: { colour: 'dark', corners: 'rounded' } } },
 };
 
 /** One at a time, Enter on a chosen choice goes on, as from a text field. */
 export const ConversationalChoice: Story = {
   parameters: { crm: { screenshot: false } },
   args: {
-    layout: 'conversational',
     form: {
-      ...ENQUIRY,
+      ...ONE_BY_ONE,
       questions: ENQUIRY.questions.filter((question) => question.key === 'budget' || question.key === 'name').reverse(),
     },
   },
@@ -192,5 +195,83 @@ export const ConversationalChoice: Story = {
     await userEvent.click(canvas.getByRole('radio', { name: '5k to 20k' }));
     await userEvent.keyboard('{Enter}');
     await waitFor(() => expect(canvas.getByRole('progressbar', { name: '2 of 2' })).toBeInTheDocument());
+  },
+};
+
+/**
+ * A step whose Show when fails is skipped and not counted (spec 0063, AC-6312): Your company shows only for a team,
+ * so a visitor working alone reads "Step 1 of 2" and goes from About you to Your project.
+ */
+export const StepSkipped: Story = {
+  args: {
+    form: {
+      ...STEPPED,
+      questions: [
+        {
+          id: 'alone',
+          key: 'alone',
+          label: 'Who is this for?',
+          answerType: 'choice',
+          choices: ['Just me', 'My team'],
+          required: true,
+        },
+        ...ENQUIRY.questions.filter((question) => ['company', 'budget'].includes(question.key)),
+      ],
+      steps: [
+        { id: 'you', title: 'About you', keys: ['alone'] },
+        {
+          id: 'company',
+          title: 'Your company',
+          keys: ['company'],
+          showWhen: { join: 'all', rules: [{ key: 'alone', op: 'is', value: 'My team' }] },
+        },
+        { id: 'project', title: 'Your project', keys: ['budget'] },
+      ],
+    },
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('progressbar', { name: 'Step 1 of 2' })).toBeInTheDocument();
+    await userEvent.click(canvas.getByRole('radio', { name: 'My team' }));
+    await waitFor(() => expect(canvas.getByRole('progressbar', { name: 'Step 1 of 3' })).toBeInTheDocument());
+    await userEvent.click(canvas.getByRole('radio', { name: 'Just me' }));
+    await userEvent.click(canvas.getByRole('button', { name: 'Continue' }));
+    await waitFor(() => expect(canvas.getByRole('heading', { level: 2, name: 'Your project' })).toBeInTheDocument());
+    await expect(canvas.getByRole('progressbar', { name: 'Step 2 of 2' })).toBeInTheDocument();
+  },
+};
+
+/** One at a time, a choice picked by pointer goes on by itself after a short pause (AC-6305). */
+export const ConversationalPicks: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: {
+    form: {
+      ...ONE_BY_ONE,
+      questions: ENQUIRY.questions.filter((question) => question.key === 'budget' || question.key === 'name').reverse(),
+    },
+  },
+  play: async ({ canvas }) => {
+    await userEvent.click(canvas.getByRole('radio', { name: 'Over 20k' }));
+    await waitFor(() => expect(canvas.getByRole('textbox', { name: 'Your name' })).toHaveFocus());
+    await expect(canvas.getByRole('progressbar', { name: '2 of 2' })).toBeInTheDocument();
+  },
+};
+
+/** One at a time, a long answer: Shift and Enter breaks the line, Enter goes on (AC-6305). */
+export const ConversationalLongAnswer: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: {
+    form: {
+      ...ONE_BY_ONE,
+      questions: ENQUIRY.questions.filter((question) => question.key === 'message' || question.key === 'name'),
+    },
+  },
+  play: async ({ canvas }) => {
+    await userEvent.type(canvas.getByRole('textbox', { name: 'Your name' }), 'Ada{Enter}');
+    const message = canvas.getByRole('textbox', { name: 'What do you need? (optional)' });
+    await waitFor(() => expect(message).toHaveFocus());
+    await expect(canvas.getByText('Shift + Enter for a new line')).toBeInTheDocument();
+    await userEvent.type(message, 'One{Shift>}{Enter}{/Shift}Two');
+    await expect(message).toHaveValue('One\nTwo');
+    await expect(canvas.getByRole('progressbar', { name: '2 of 2' })).toBeInTheDocument();
   },
 };

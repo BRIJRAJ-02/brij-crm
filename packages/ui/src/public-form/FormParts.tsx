@@ -1,6 +1,7 @@
 import {
   HONEYPOT_IGNORE_ATTRIBUTES,
   HONEYPOT_INPUT_NAME,
+  type FormLayout,
   type FormStrings,
   type PublicForm,
   type PublicQuestion,
@@ -383,14 +384,32 @@ const LOADING_QUESTIONS = 3;
  * card, the headline's and sub heading's places, three questions' places and
  * the button's. It draws at once, so a visitor's first paint is the page
  * rather than a blank window, and it holds the layout the form will take, so
- * the words land in the places already set out for them.
+ * the words land in the places already set out for them. Given a step layout
+ * (spec 0063, AC-6306), while that layout's own code loads, it draws that
+ * layout's shape instead: the progress line and a step's questions over
+ * Continue, or one question at a time with no card.
  */
-export function FormLoading({ mode, words }: { readonly mode: HostedFormMode; readonly words: FormStrings }) {
+export function FormLoading({
+  mode,
+  words,
+  layout = 'classic',
+}: {
+  readonly mode: HostedFormMode;
+  readonly words: FormStrings;
+  readonly layout?: FormLayout;
+}) {
+  const isOpen = layout === 'conversational';
+  const questions = layout === 'classic' ? LOADING_QUESTIONS : isOpen ? 1 : LOADING_QUESTIONS - 1;
   return (
-    <FormGround mode={mode} isLoading>
+    <FormGround mode={mode} kind={isOpen ? 'open' : 'card'} isLoading>
       <VisuallyHidden>
         <p>{words.loading}</p>
       </VisuallyHidden>
+      {isOpen && (
+        <div className={styles.loadingLine}>
+          <Skeleton shape="line" width="full" />
+        </div>
+      )}
       <header className={styles.header}>
         <p className={styles.headline} data-mode={mode}>
           <Skeleton shape="text" width="long" />
@@ -399,14 +418,20 @@ export function FormLoading({ mode, words }: { readonly mode: HostedFormMode; re
           <Skeleton shape="text" width="medium" />
         </p>
       </header>
-      <div className={styles.questions}>
-        {Array.from({ length: LOADING_QUESTIONS }, (_, index) => (
+      {layout === 'steps' && (
+        <div className={styles.loadingProgress}>
+          <Skeleton shape="text" width="short" />
+          <Skeleton shape="line" width="full" />
+        </div>
+      )}
+      <div className={styles.questions} data-layout={layout}>
+        {Array.from({ length: questions }, (_, index) => (
           <div key={index} className={styles.question}>
-            <Skeleton shape="text" width="short" />
+            <Skeleton shape="text" width={isOpen ? 'long' : 'short'} />
             <Skeleton shape="field" width="full" />
           </div>
         ))}
-        <Skeleton shape="field" width="short" />
+        <Skeleton shape="field" width={layout === 'steps' ? 'full' : 'short'} />
       </div>
     </FormGround>
   );

@@ -18,6 +18,8 @@
     "csp.test.ts",
     "style-csp.test.ts",
     "embed-script.ts",
+    "preloads.ts",
+    "preloads.test.ts",
     "embed-script.test.ts",
     "first-load.test.ts",
     "realtime-csp.ts",

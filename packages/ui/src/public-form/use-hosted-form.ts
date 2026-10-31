@@ -8,14 +8,16 @@ import {
   checkAnswers,
   formStrings,
   isBlank,
+  pathOf,
   suggestEmail,
+  type FormPath,
   type FormStrings,
   type PublicForm,
   type PublicQuestion,
   type SubmitNext,
-  visibleQuestions,
 } from '@crm/contracts/forms';
-import { useEffect, useMemo, useRef, useState, type FocusEvent, type RefObject } from 'react';
+import { useEffect, useMemo, useRef, useState, type ComponentType, type FocusEvent, type RefObject } from 'react';
+import type { FormBookingProps } from './FormBooking.tsx';
 import { countriesIn } from '../lib/countries.ts';
 import type { HostedFileHandlers, HostedRemoveUpload, HostedUpload } from './files.ts';
 import { answerOf, focusQuestion } from './Question.tsx';
@@ -87,6 +89,8 @@ export interface HostedFormState {
   readonly summary: readonly PublicQuestion[];
   /** The questions that show for the answers so far (spec 0043, AC-1614): one whose Show when fails is hidden. */
   readonly shown: ReadonlySet<string>;
+  /** The visitor's path (spec 0063, `pathOf`): the steps they see for the answers so far, each with its questions. */
+  readonly path: FormPath;
   /** What a polite live line says after an answer shows or hides questions; empty otherwise. */
   readonly shownNote: string;
   readonly alert: string;
@@ -95,6 +99,11 @@ export interface HostedFormState {
   readonly files: HostedFileHandlers | undefined;
   readonly isClosed: boolean;
   readonly view: HostedFormView;
+  /**
+   * The countdown on to book, once its own chunk has loaded (spec 0063, AC-6331): only a form that sends visitors on
+   * to book draws it, so the hosted page's first load never carries it. The view turns to `booking` only after.
+   */
+  readonly bookingView: ComponentType<FormBookingProps> | undefined;
   readonly round: number;
   readonly trap: string;
   readonly setTrap: (value: string) => void;
@@ -210,6 +219,7 @@ export function useHostedForm({
   const [busy, setBusy] = useState<ReadonlySet<string>>(new Set());
   const [trap, setTrap] = useState('');
   const [view, setView] = useState<HostedFormView>({ kind: 'form' });
+  const [bookingView, setBookingView] = useState<ComponentType<FormBookingProps> | undefined>(undefined);
   const [round, setRound] = useState(0);
   const [startedAt, setStartedAt] = useState(now);
   const [focusTarget, setFocusTarget] = useState<'heading' | undefined>(undefined);
@@ -236,7 +246,9 @@ export function useHostedForm({
   const given = Object.fromEntries(
     form.questions.map((question) => [question.key, answerOf(question, answers[question.key])]),
   );
-  const shown = visibleQuestions(form.questions, given);
+  // The path decides what shows (spec 0063, AC-6314): a question's Show when, and with Steps its step's too.
+  const path = pathOf(form, given);
+  const shown = path.keys;
   // Questions that appear or go with an answer are said aloud once (spec 0043): the count is compared on render.
   const [seenCount, setSeenCount] = useState(shown.size);
   const [shownNote, setShownNote] = useState('');
@@ -350,9 +362,20 @@ export function useHostedForm({
           if (outcome.next.kind === 'redirect') onRedirect?.(outcome.next.url);
           else if (outcome.next.kind === 'booking') {
             const { url, countdownSeconds, text } = outcome.next;
-            setView({ kind: 'booking', url, seconds: countdownSeconds, text });
-            setFocusTarget('heading');
             if (countdownSeconds === 0) onRedirect?.(url);
+            // Still sending to the visitor while the countdown's chunk arrives; if it can't, they go on at once.
+            setSending(true);
+            import('./FormBooking.tsx').then(
+              (module) => {
+                setSending(false);
+                setBookingView(() => module.FormBooking);
+                setView({ kind: 'booking', url, seconds: countdownSeconds, text });
+                setFocusTarget('heading');
+              },
+              () => {
+                onRedirect?.(url);
+              },
+            );
           } else thank(outcome.next.text);
           return;
         case 'invalid':
@@ -423,6 +446,7 @@ export function useHostedForm({
     hints,
     summary,
     shown,
+    path,
     shownNote,
     alert,
     isSending,
@@ -443,6 +467,7 @@ export function useHostedForm({
           },
     isClosed,
     view,
+    bookingView,
     round,
     trap,
     setTrap,

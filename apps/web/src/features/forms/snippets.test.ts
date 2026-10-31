@@ -35,6 +35,8 @@ const draft: FormDocument = {
     { id: 'q6', key: 'deck', label: 'Your deck', answerType: 'file', required: false, update: 'fill' },
   ],
   targets: {},
+  layout: 'classic',
+  steps: [],
   look: { colour: 'light', corners: 'rounded' },
   headline: 'Talk to us',
   buttonText: 'Send it',

@@ -59,6 +59,8 @@ const DRAFT: FormDocument = {
     },
   ],
   targets: { main: { objectId: PEOPLE, matchAttributeId: EMAIL } },
+  layout: 'classic',
+  steps: [],
   look: { colour: 'light', corners: 'rounded' },
   headline: 'Talk to us',
   buttonText: 'Send',

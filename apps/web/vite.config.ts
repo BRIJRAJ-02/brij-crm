@@ -9,6 +9,7 @@ import { apiBundle } from './api-bundle.ts';
 import { contentSecurityPolicy, directiveSources, policyForPath, sentryDsnProblem } from './csp.ts';
 import { embedScript } from './embed-script.ts';
 import { HANDLE_PATH } from './public-paths.ts';
+import { preloadsNotLoaded } from './preloads.ts';
 import { realtimeCspProblem } from './realtime-csp.ts';
 
 // The api the dev server and `vite preview` proxy /api to. API_DEV_ORIGIN moves it, so a second stack (another
@@ -205,6 +206,9 @@ function inlineBookingShell(): Plugin {
   };
 }
 
+/** The bundle reader and its preload rule, shared by `plugins` and `build.modulePreload` below. */
+const preloads = preloadsNotLoaded();
+
 export default defineConfig({
   // One `.env` at the repo root for local work.
   envDir: '../..',
@@ -213,6 +217,8 @@ export default defineConfig({
     'import.meta.env.APP_ENVIRONMENT': JSON.stringify(ENVIRONMENT),
   },
   plugins: [
+    preloads.plugin,
+    preloads.styles,
     // Must come before the React plugin.
     tanstackRouter({
       target: 'react',
@@ -265,6 +271,8 @@ export default defineConfig({
     // each, 21 October 2026), though only calendar screens and the booking receipt draw them, as an image
     // fetched like Outlook's. The small marks that paint at once (Google's G, Timefix's) stay inline.
     assetsInlineLimit: (file, content) => (file.endsWith('.svg') && content.length > 2048 ? false : undefined),
+    // A lazy import preloads only what its importer hasn't loaded already (`preloads.ts`, spec 0063).
+    modulePreload: { resolveDependencies: preloads.resolveDependencies },
     // The app, the hosted form page (spec 0023) and the public booking page (spec 0025), which share nothing with it.
     rollupOptions: {
       input: {

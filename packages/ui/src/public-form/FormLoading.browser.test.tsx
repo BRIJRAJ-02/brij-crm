@@ -85,3 +85,39 @@ it('says what it is waiting for, and guesses no look it would have to take back'
   // No heading stands empty while its words are still coming.
   expect(host.querySelectorAll('h1, h2, h3')).toHaveLength(0);
 });
+
+/** The form in Steps, as the server sends it (spec 0063). */
+const STEPPED: PublicForm = {
+  ...FORM,
+  layout: 'steps',
+  steps: [{ keys: ['name', 'email'] }, { id: 'more', title: 'Your company', keys: ['company'] }],
+};
+
+it('draws a Steps form’s own shape while its chunk loads, then the steps in the same column (AC-6306)', async () => {
+  drawn = mountHostedForm(host, STEPPED, { mode: 'page' });
+  // The chunk is still on its way: the Steps loading shape holds its place, busy, with the progress line's place.
+  const busy = host.querySelector('[aria-busy="true"]');
+  expect(busy).not.toBeNull();
+  const ghostColumn = columnOf('[data-layout="steps"]');
+  await expect
+    .poll(() => host.querySelector('[role="progressbar"]')?.getAttribute('aria-valuetext'))
+    .toBe('Step 1 of 2');
+  expect(host.querySelector('[aria-busy="true"]')).toBeNull();
+  expect(columnOf('form')).toEqual(ghostColumn);
+});
+
+it('draws One at a time’s loading shape with no card, as the form itself has none', async () => {
+  drawn = mountFormLoading(host, 'page', 'conversational');
+  expect(host.querySelector('[aria-busy="true"][data-frame="open"]')).not.toBeNull();
+  drawn.destroy();
+  // The chunk loaded with the test before, so it draws at once now, as a second Steps form on a page would.
+  drawn = mountHostedForm(host, { ...FORM, layout: 'conversational' }, { mode: 'page' });
+  await expect.poll(() => host.querySelector('[role="progressbar"]')?.getAttribute('aria-valuetext')).toBe('1 of 3');
+  expect(host.querySelector('[data-frame="open"]')).not.toBeNull();
+});
+
+it('keeps a Classic form out of the step layouts’ chunk', () => {
+  drawn = mountHostedForm(host, FORM, { mode: 'page' });
+  expect(host.querySelector('[aria-busy="true"]')).toBeNull();
+  expect(host.querySelector('[role="progressbar"]')).toBeNull();
+});

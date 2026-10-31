@@ -25,6 +25,8 @@ const DRAFT: FormDocument = {
   ],
   // An object made by hand: its email isn't unique, so there is no match yet.
   targets: { main: { objectId: DESIGNERS } },
+  layout: 'classic',
+  steps: [],
   look: { colour: 'light', corners: 'rounded' },
   headline: 'Apply',
   buttonText: 'Send',

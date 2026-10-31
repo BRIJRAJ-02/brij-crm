@@ -74,6 +74,8 @@ export interface QuestionProps {
   readonly files?: HostedFileHandlers | undefined;
   /** Keeps the label for screen readers only, when a larger heading above already shows it (one at a time). */
   readonly isLabelHidden?: boolean;
+  /** A line under a long text answer: how to break a line where Enter goes on (one at a time, spec 0063). */
+  readonly hint?: string | undefined;
 }
 
 /** One question, drawn with the library's control for its answer type. */
@@ -87,6 +89,7 @@ export function Question({
   onChange,
   files,
   isLabelHidden = false,
+  hint,
 }: QuestionProps) {
   const label = labelOf(question, words);
   const aside = asideOf(question, words);
@@ -109,6 +112,7 @@ export function Question({
           maxLength={LONG_ANSWER_MAX}
           showCounter
           {...(placeholder === undefined ? {} : { placeholder })}
+          {...(hint === undefined ? {} : { hint })}
           {...errorProps}
         />
       );

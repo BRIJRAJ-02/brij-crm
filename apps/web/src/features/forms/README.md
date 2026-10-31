@@ -20,4 +20,4 @@ Captures, Forms (spec 0023, `0023-experience.md`): forms that collect submission
 - `draft.ts` holds every change to a draft as a plain function; `draft.test.ts` checks them.
 - The publish check is `publishProblem` from `@crm/data/forms`, the server's own.
 - "Submission" is the one word for what a form collects, in every string here.
-- The visitor's page is `src/public/main.ts`, drawn by `@crm/ui/public-form` with no React (about 12 kB gzipped).
+- The visitor's page is `src/public/main.ts`, drawn by `@crm/ui/public-form` with React and the library's own controls, under its budget in `apps/web/.size-limit.js` (223 kB of JavaScript and 17 kB of CSS gzipped). Steps and One at a time are their own lazy chunk, at most 10 kB, which a Classic form never loads (spec 0063).

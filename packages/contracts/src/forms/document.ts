@@ -15,7 +15,8 @@ import {
   OPTION_KEY,
   QUESTION_KEY,
 } from './answer-types.ts';
-import { FORM_LAYOUTS, FORM_STEP_TITLE_MAX, stepsOfBreaks, type ResolvedStep } from './path.ts';
+import { stepsOfBreaks, type ResolvedStep } from './breaks.ts';
+import { FORM_LAYOUTS, FORM_STEP_TITLE_MAX } from './path.ts';
 import { FORM_LANGUAGES } from './public.ts';
 import { RoutingRules, ShowWhenSchema } from './routing.ts';
 import { Uuid, uuidWith } from '../values/ids.ts';

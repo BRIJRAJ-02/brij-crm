@@ -3,7 +3,10 @@
    the step's questions, then Back and Continue in one row. One at a time: no
    card, a thin line at the top, the question large with its number, and OK
    with its Enter keycap. A new step appears at once, with focus on its first
-   question: steps are mostly reached by Enter, and keyboard steps never wait. */
+   question: steps are mostly reached by Enter, and keyboard steps never wait.
+   One at a time, the next question fades and rises a little into place (spec
+   0063): transform and opacity only, taking input from its first frame, and
+   none at all under reduced motion. */
 @layer components {
   .line {
     margin-block-end: var(--space-32);
@@ -32,6 +35,23 @@
 
   .form[data-layout='conversational'] {
     margin-block-start: var(--space-32);
+  }
+
+  .form[data-layout='conversational'][data-moved] {
+    animation: question-rise var(--duration-modal) var(--ease-out);
+  }
+
+  @keyframes question-rise {
+    from {
+      opacity: 0;
+      translate: 0 var(--space-8);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .form[data-layout='conversational'][data-moved] {
+      animation: none;
+    }
   }
 
   /* The question, large, with its number before it in the accent. */

@@ -12,6 +12,8 @@ const DOCUMENT: FormDocument = {
     { id: 'q-email', key: 'email', label: 'Work email', answerType: 'email', required: true, update: 'fill' },
   ],
   targets: {},
+  layout: 'classic',
+  steps: [],
   look: { colour: 'light', corners: 'rounded' },
   headline: 'Talk to us',
   buttonText: 'Send',

@@ -6,7 +6,8 @@
 // else is dropped. Each answer comes back in its canonical shape: text for
 // most types, `true` or `false` for the yes or no types, and a phone as its
 // number in E.164 with the country it was dialled from.
-import { choiceKeysOf, LONG_ANSWER_MAX, SHORT_ANSWER_MAX, type AnswerType } from './answer-types.ts';
+import { choiceKeysOf, LONG_ANSWER_MAX, SHORT_ANSWER_MAX } from './answer-keys.ts';
+import type { AnswerType } from './answer-types.ts';
 import { countryOfE164, DIAL_CODES } from './dial-codes.ts';
 import { groupsOf, type FormLayout, type PathStep } from './path.ts';
 import type { FormLanguage, PublicQuestion } from './public.ts';

@@ -15,7 +15,6 @@ import {
   TIMEFIX_LOGO,
 } from './FormParts.tsx';
 import styles from './HostedForm.module.css';
-import { FormBooking } from './FormBooking.tsx';
 import type { HostedRemoveUpload, HostedUpload } from './files.ts';
 import { Question } from './Question.tsx';
 import {
@@ -92,7 +91,8 @@ export function HostedForm({
   const { words, preview } = state;
   let body;
   if (state.isClosed) body = <FormClosed state={state} mode={mode} heading={refs.heading} />;
-  else if (state.view.kind === 'booking') {
+  else if (state.view.kind === 'booking' && state.bookingView !== undefined) {
+    const FormBooking = state.bookingView;
     body = (
       <FormBooking
         state={state}

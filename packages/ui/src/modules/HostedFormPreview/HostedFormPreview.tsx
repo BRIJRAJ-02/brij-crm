@@ -1,5 +1,6 @@
 import type { PublicForm } from '@crm/contracts/forms';
 import { HostedForm } from '../../public-form/HostedForm.tsx';
+import { HostedFormSteps } from '../../public-form/HostedFormSteps.tsx';
 import type { ProductLogo } from '../AuthLayout/AuthLayout.tsx';
 
 /** Props for HostedFormPreview. */
@@ -19,8 +20,12 @@ export interface HostedFormPreviewProps {
 
 /**
  * The form a visitor fills in, drawn by the hosted page's own component, so
- * the builder shows exactly what goes live: the same tree, the same controls.
+ * the builder shows exactly what goes live: the same tree, the same controls,
+ * in the form's own layout (Classic, Steps or One at a time, spec 0063).
  */
 export function HostedFormPreview({ form, mode = 'preview', logo }: HostedFormPreviewProps) {
-  return <HostedForm key={mode} form={form} mode={mode} {...(logo === undefined ? {} : { logo })} />;
+  const layout = form.layout ?? 'classic';
+  // A change of layout starts the preview again, from its first step.
+  const Drawn = layout === 'classic' ? HostedForm : HostedFormSteps;
+  return <Drawn key={`${mode}-${layout}`} form={form} mode={mode} {...(logo === undefined ? {} : { logo })} />;
 }

@@ -6,8 +6,9 @@
 import { CHOICE_TYPES, fitsAttribute, FORM_SLUG } from './answer-types.ts';
 import type { AttributeType } from '../values/attribute-values.ts';
 import type { FormDocument } from './document.ts';
-import { stepsOfBreaks } from './path.ts';
-import { isHiddenFact, isRecordFact, NUMBER_OPS, type Condition, type ShowWhen } from './show-when.ts';
+import { stepsOfBreaks } from './breaks.ts';
+import { isHiddenFact, isRecordFact } from './conditions.ts';
+import { NUMBER_OPS, type Condition, type ShowWhen } from './show-when.ts';
 
 /** An attribute as the check needs it: its name, type, and whether the publisher may write it. */
 export interface PublishAttribute {

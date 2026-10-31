@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { checkAnswers, type CheckedForm } from './check.ts';
 import { FormDocument, stepsOf, type FormDocumentInput } from './document.ts';
-import { groupsOf, pathOf, stepsOfBreaks, type PathForm } from './path.ts';
+import { stepsOfBreaks } from './breaks.ts';
+import { groupsOf, pathOf, type PathForm } from './path.ts';
 import { publishProblem, type PublishAttribute } from './publish.ts';
 
 const PEOPLE = '0199f0a0-0000-7000-8000-00000000000b';

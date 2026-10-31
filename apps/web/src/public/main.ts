@@ -1,8 +1,10 @@
 // The hosted form page's own entry (spec 0023, 0023-experience.md, The
 // visitor): a second build entry beside the app, sharing nothing with its
-// shell and loading no React. It reads the address from the path
-// (/f/<address>), loads the live form, draws it with the plain renderer and
-// sends the answers through the public client. With `?embed=1` it is the
+// shell. It reads the address from the path (/f/<address>), loads the live
+// form, draws it with `@crm/ui/public-form` (React and the library's own
+// controls, under the hosted form budget in `.size-limit.js`: 223 kB of
+// JavaScript and 17 kB of CSS gzipped; Steps and One at a time load as their
+// own chunk, spec 0063) and sends the answers through the public client. With `?embed=1` it is the
 // iframe a site's embed script (`embed/v1.js`) made: an h2, no page height,
 // the frame's height posted to the host page as it changes, and Escape
 // closing the script's dialog (frame.ts). Every submit carries where it came
