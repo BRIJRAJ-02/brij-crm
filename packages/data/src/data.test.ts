@@ -1863,7 +1863,7 @@ describe('live updates', () => {
     expect(lists()).toBe(before + 1);
   });
 
-  it('reads the objects again when an object itself changed, and nothing for a list (spec 0007, AC-81)', async () => {
+  it('reads the objects again when an object itself changed, and only the list itself for a list (spec 0007, AC-81)', async () => {
     let reads = 0;
     const { api, client, data, definitionChanges } = await liveLayer({
       objects: () => {
@@ -1873,15 +1873,16 @@ describe('live updates', () => {
     });
     await data.objects.list('acme');
     const before = count(api.calls, '/api/rpc/objects/list');
-    // A list's own definitions: no screen holds lists, nothing is read.
+    // A list's own definitions (spec 0048): its fields and the lists go and the pages reload, the objects are not read.
     client.channel().onPublication({ seq: 1, at: AT, kind: 'definitions', listId: TITLE.id, objectId: PEOPLE.id });
     await settled();
     expect(count(api.calls, '/api/rpc/objects/list')).toBe(before);
+    expect(definitionChanges()).toBe(1);
     // People renamed: an event naming the object and no attributes reads the objects again, and they differ.
     client.channel().onPublication({ seq: 2, at: AT, kind: 'definitions', objectId: PEOPLE.id });
     await settled();
     expect(count(api.calls, '/api/rpc/objects/list')).toBe(before + 1);
-    expect(definitionChanges()).toBe(1);
+    expect(definitionChanges()).toBe(2);
     expect((await data.objects.list('acme'))[0]?.pluralName).toBe('Contacts');
   });
 
