@@ -399,3 +399,24 @@ export const Verbatim: Story = {
     await expect(input).toHaveAttribute('spellcheck', 'false');
   },
 };
+
+/** The platform's own date control (`temporal`, a hosted form's Date question): its earliest day, and an error. */
+export const Temporal: Story = {
+  args: {
+    label: 'Start date',
+    temporal: { type: 'date', min: '2026-11-01' },
+    value: '2026-10-30',
+    error: 'Pick 2026-11-01 or later.',
+  },
+  play: async ({ canvas }) => {
+    const input = canvas.getByLabelText('Start date');
+    await expect(input).toHaveAttribute('type', 'date');
+    await expect(input).toHaveAttribute('min', '2026-11-01');
+    await expect(input).toHaveAccessibleDescription('Pick 2026-11-01 or later.');
+  },
+};
+
+/** A time, read only. */
+export const TemporalReadOnly: Story = {
+  args: { label: 'Best time to call', temporal: { type: 'time' }, value: '14:30', isReadOnly: true },
+};

@@ -18,6 +18,7 @@ import {
   Button,
   Callout,
   Checkbox,
+  DatePicker,
   Field,
   InfoTip,
   focusLater,
@@ -911,24 +912,23 @@ function TypeOptions({ question, isReadOnly, onChange }: TypeOptionsProps) {
     case 'date':
       return (
         <SettingsRow title={strings.dateRange} description={strings.dateRangeHint}>
-          <Field
+          {/* The app's one date editor, DatePicker; the visitor's page uses the phone's own picker. */}
+          <DatePicker
             label={strings.earliest}
-            isLabelHidden
-            temporal={{ type: 'date', max: options.latest }}
-            value={options.earliest ?? ''}
+            size="sm"
+            value={options.earliest ?? null}
             isReadOnly={isReadOnly}
             onChange={(earliest) => {
-              onChange({ options: { earliest } });
+              onChange({ options: { earliest: earliest ?? undefined } });
             }}
           />
-          <Field
+          <DatePicker
             label={strings.latest}
-            isLabelHidden
-            temporal={{ type: 'date', min: options.earliest }}
-            value={options.latest ?? ''}
+            size="sm"
+            value={options.latest ?? null}
             isReadOnly={isReadOnly}
             onChange={(latest) => {
-              onChange({ options: { latest } });
+              onChange({ options: { latest: latest ?? undefined } });
             }}
           />
         </SettingsRow>
@@ -996,7 +996,7 @@ function TypeOptions({ question, isReadOnly, onChange }: TypeOptionsProps) {
           <SettingsRow title={strings.picks} description={strings.picksHint}>
             <Field
               label={strings.leastPicks}
-              isLabelHidden
+              size="sm"
               inputMode="numeric"
               placeholder={strings.anyPicks}
               value={options.min === undefined ? '' : String(options.min)}
@@ -1007,7 +1007,7 @@ function TypeOptions({ question, isReadOnly, onChange }: TypeOptionsProps) {
             />
             <Field
               label={strings.mostPicks}
-              isLabelHidden
+              size="sm"
               inputMode="numeric"
               placeholder={strings.anyPicks}
               value={options.max === undefined ? '' : String(options.max)}

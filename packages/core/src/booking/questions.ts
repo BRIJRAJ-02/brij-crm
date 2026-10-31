@@ -12,6 +12,7 @@ import {
   BookingAnswer,
   fitsAttribute,
   questionsProblem,
+  BOOKING_ANSWER_TYPES,
   type BookingQuestions,
   type FormTargetChoices,
   type PhoneAnswer,
@@ -283,6 +284,14 @@ export async function checkPageQuestions(
   const asChecked = new Map(
     [...attributes].map(([id, attribute]) => [id, keptIds.has(id) ? { ...attribute, canWrite: true } : attribute]),
   );
+  // A booking page asks only the types it had before spec 0063 (AC-6311), as its editor offers them.
+  if (questions.some((question) => !BOOKING_ANSWER_TYPES.includes(question.answerType))) {
+    throw refuseOn(
+      'CONFIG_INVALID',
+      'A booking page can’t ask that kind of question yet. Choose another type.',
+      'questions',
+    );
+  }
   const problem = questionsProblem(questions, asChecked);
   if (problem !== undefined) throw refuseOn('CONFIG_INVALID', problem.message, 'questions');
 }

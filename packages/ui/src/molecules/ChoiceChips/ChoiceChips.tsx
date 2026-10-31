@@ -1,6 +1,7 @@
 import { useId, type ReactNode } from 'react';
 import { ToggleButtonGroup, type Key } from 'react-aria-components';
 import { ToggleButton } from '../../atoms/Button/Button.tsx';
+import { FieldLabel } from '../../atoms/FieldLabel/FieldLabel.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import styles from './ChoiceChips.module.css';
 
@@ -34,6 +35,10 @@ export interface ChoiceChipsProps {
   readonly ends?: { readonly start?: string | undefined; readonly end?: string | undefined };
   /** Keeps the label for screen readers only, where a larger heading above shows it (one at a time). */
   readonly isLabelHidden?: boolean;
+  /** After the label, quieter: a hosted form's "(optional)". Part of the group's name. */
+  readonly labelAside?: string | undefined;
+  /** `strong` for a form's question, as a radio group's question reads (a hosted form's Scale and Multi select). */
+  readonly tone?: 'label' | 'strong';
 }
 
 /**
@@ -52,6 +57,8 @@ export function ChoiceChips({
   end,
   ends,
   isLabelHidden = false,
+  labelAside,
+  tone = 'label',
 }: ChoiceChipsProps) {
   const labelId = useId();
   const errorId = useId();
@@ -62,11 +69,15 @@ export function ChoiceChips({
     <div className={styles.root} data-disabled={isDisabled || undefined}>
       {isLabelHidden ? (
         <VisuallyHidden>
-          <span id={labelId}>{label}</span>
+          <span id={labelId}>{labelAside === undefined ? label : `${label} ${labelAside}`}</span>
         </VisuallyHidden>
+      ) : tone === 'strong' ? (
+        // A form's question: the label row every question has, with its aside.
+        <FieldLabel as="text" id={labelId} label={label} aside={labelAside} tone="strong" />
       ) : (
         <span id={labelId} className={styles.label}>
           {label}
+          {labelAside === undefined ? null : ` ${labelAside}`}
         </span>
       )}
       <div className={styles.row}>

@@ -204,6 +204,18 @@ export function questionsProblem(
         questionId: question.id,
       };
     }
+    if (question.answerType === 'multi_select' && question.options?.min !== undefined) {
+      const offered =
+        (question.choices ?? []).filter((choice) => choice.trim() !== '').length +
+        (question.options.other === true ? 1 : 0);
+      if (question.options.min > offered) {
+        return {
+          code: 'CHOICES_MISSING',
+          message: `${named(question)} asks for at least ${String(question.options.min)} picks but offers ${String(offered)}.`,
+          questionId: question.id,
+        };
+      }
+    }
     const filed = question.filedOn;
     if (filed === undefined) continue;
     const attribute = attributes.get(filed.attributeId);

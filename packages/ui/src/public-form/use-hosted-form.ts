@@ -9,6 +9,7 @@ import {
   formStrings,
   isBlank,
   pathOf,
+  SHORT_ANSWER_MAX,
   suggestEmail,
   type FormPath,
   type FormStrings,
@@ -163,6 +164,8 @@ export function prefillAnswer(question: PublicQuestion, given: PrefillValue | un
     .filter((each) => each !== '');
   const [words] = all;
   if (words === undefined) return undefined;
+  // A hidden value longer than its answer takes would be refused where nobody can fix it: its default stands instead.
+  if (question.answerType === 'hidden') return words.length > SHORT_ANSWER_MAX ? undefined : words;
   if (PREFILLED_AS_TEXT.has(question.answerType)) return words;
   switch (question.answerType) {
     case 'dropdown':
@@ -173,13 +176,12 @@ export function prefillAnswer(question: PublicQuestion, given: PrefillValue | un
       return picked.length === 0 ? undefined : { picked };
     }
     case 'date':
-    case 'time': {
-      const checked = checkAnswers({ language: 'en', questions: [question] }, { [question.key]: words });
-      return checked.ok ? checked.answers[question.key] : undefined;
-    }
+    case 'time':
     case 'rating':
     case 'scale': {
-      const checked = checkAnswers({ language: 'en', questions: [question] }, { [question.key]: words });
+      // Checked alone, so its own Show when (which reads other questions) is no part of it.
+      const { showWhen: _decided, ...alone } = question;
+      const checked = checkAnswers({ language: 'en', questions: [alone] }, { [question.key]: words });
       return checked.ok ? checked.answers[question.key] : undefined;
     }
     default:

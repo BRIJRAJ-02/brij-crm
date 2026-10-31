@@ -103,17 +103,27 @@ describe('filing the new answer types (spec 0063, AC-6307)', () => {
   });
 
   it('files a multi select’s picks onto a field of several choices and keeps Other off the record', () => {
-    const { planned, refused } = plan({ questions: [question('teams', 'multi_select', ID.tags)] }, ATTRIBUTES, OPTIONS, {
-      teams: { picked: ['Sales', 'Support'], other: 'Billing' },
-    });
+    const { planned, refused } = plan(
+      { questions: [question('teams', 'multi_select', ID.tags)] },
+      ATTRIBUTES,
+      OPTIONS,
+      {
+        teams: { picked: ['Sales', 'Support'], other: 'Billing' },
+      },
+    );
     expect(refused).toEqual([]);
     expect(planned[0]?.value).toEqual(['o1', 'o2']);
   });
 
   it('refuses a multi select on a field that holds one choice, saying why', () => {
-    const { planned, refused } = plan({ questions: [question('teams', 'multi_select', ID.plan)] }, ATTRIBUTES, OPTIONS, {
-      teams: { picked: ['Pro'] },
-    });
+    const { planned, refused } = plan(
+      { questions: [question('teams', 'multi_select', ID.plan)] },
+      ATTRIBUTES,
+      OPTIONS,
+      {
+        teams: { picked: ['Pro'] },
+      },
+    );
     expect(planned).toEqual([]);
     expect(refused[0]?.message).toBe(`${ID.plan} holds one choice, and several were picked.`);
   });

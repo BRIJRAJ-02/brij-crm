@@ -54,7 +54,7 @@ export function answerOf(question: PublicQuestion, value: unknown): unknown {
     if (typeof value !== 'string' || value === '') return undefined;
     const moment = new Date(value);
     return Number.isNaN(moment.getTime())
-      ? value
+      ? undefined
       : { at: moment.toISOString(), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone };
   }
   if (question.answerType === 'rating' || question.answerType === 'scale' || question.answerType === 'multi_select') {
@@ -235,7 +235,8 @@ export function Question({
     case 'rating':
       return (
         <Rating
-          label={label}
+          // Hidden behind a larger heading, the name still says it is optional.
+          label={isLabelHidden && aside !== undefined ? `${label} ${aside}` : label}
           value={typeof value === 'number' ? value : null}
           onChange={(next) => onChange(next ?? undefined)}
           field={{ aside, error, isLabelHidden }}
@@ -246,7 +247,9 @@ export function Question({
       const to = question.options?.to ?? 10;
       return (
         <ChoiceChips
-          label={aside === undefined ? label : `${label} ${aside}`}
+          label={label}
+          labelAside={aside}
+          tone="strong"
           isLabelHidden={isLabelHidden}
           isSingle
           choices={Array.from({ length: to - from + 1 }, (_, index) => ({
@@ -266,7 +269,9 @@ export function Question({
       return (
         <>
           <ChoiceChips
-            label={aside === undefined ? label : `${label} ${aside}`}
+            label={label}
+            labelAside={aside}
+            tone="strong"
             isLabelHidden={isLabelHidden}
             choices={[
               ...(question.choices ?? []).map((choice) => ({ id: choice, label: choice })),
@@ -278,8 +283,8 @@ export function Question({
               const other = picked.includes(OTHER) ? (draft.other ?? '') : undefined;
               onChange({ picked: choices, ...(other === undefined ? {} : { other }) });
             }}
-            // The problem shows once: under Other's box while it is open, else under the chips.
-            {...(draft.other === undefined ? errorProps : {})}
+            // The problem shows once: under Other's box when it is about the box, else under the chips.
+            {...(draft.other !== undefined && error === words.otherMissing ? {} : errorProps)}
           />
           {draft.other !== undefined && (
             <Field
@@ -288,7 +293,9 @@ export function Question({
               value={draft.other}
               maxLength={SHORT_ANSWER_MAX}
               onChange={(other) => onChange({ picked: draft.picked, other })}
-              {...errorProps}
+              // Ticking Other opens its box with focus in it, so a keyboard or screen reader finds it at once.
+              autoFocus={draft.other === ''}
+              {...(error === words.otherMissing ? errorProps : {})}
             />
           )}
         </>

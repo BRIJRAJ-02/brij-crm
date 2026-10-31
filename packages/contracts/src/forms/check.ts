@@ -112,8 +112,11 @@ export function isBlank(value: unknown): boolean {
     }
     if ('at' in value) return isBlank((value as { readonly at?: unknown }).at);
     // An address: its parts (a phone, which also names a country, is read below by its number).
+    // A country alone is no answer: the page guesses one before a word is typed.
     if (!('number' in value) && ADDRESS_PARTS.some((part) => part in value)) {
-      return ADDRESS_PARTS.every((part) => isBlank((value as Readonly<Record<string, unknown>>)[part]));
+      return ADDRESS_PARTS.every(
+        (part) => part === 'country' || isBlank((value as Readonly<Record<string, unknown>>)[part]),
+      );
     }
     const { number, country } = value as { readonly number?: unknown; readonly country?: unknown };
     if (typeof number !== 'string') return true;
@@ -214,8 +217,9 @@ function addressOf(raw: unknown, words: FormStrings): { value?: AddressAnswer; e
     if (value.trim() !== '') parts[part] = value.trim();
   }
   if (parts.country !== undefined) {
-    if (!/^[A-Za-z]{2}$/.test(parts.country)) return { error: words.country };
+    // A country a record's location takes too: one the dialling codes know.
     parts.country = parts.country.toUpperCase();
+    if (!DIAL_CODES.has(parts.country)) return { error: words.country };
   }
   if (parts.line1 === undefined && parts.city === undefined) return { error: words.address };
   return { value: parts };

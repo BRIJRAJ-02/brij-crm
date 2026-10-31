@@ -36,7 +36,9 @@ type StepsLayout = 'steps' | 'conversational';
 function takesEnter(question: PublicQuestion | undefined): boolean {
   return (
     question !== undefined &&
-    ['short_text', 'long_text', 'email', 'phone', 'website', 'number', 'choice'].includes(question.answerType)
+    ['short_text', 'long_text', 'email', 'phone', 'website', 'number', 'choice', 'rating', 'scale'].includes(
+      question.answerType,
+    )
   );
 }
 
@@ -276,7 +278,13 @@ export function HostedFormSteps({
                   countryNames={state.countryNames}
                   onChange={(value) => {
                     state.change(question, value);
-                    if (isOpen && !preview && question.answerType === 'choice' && byPointer.current && !isLast) {
+                    if (
+                      isOpen &&
+                      !preview &&
+                      ['choice', 'rating', 'scale'].includes(question.answerType) &&
+                      byPointer.current &&
+                      !isLast
+                    ) {
                       setPicks((count) => count + 1);
                     }
                   }}

@@ -1,4 +1,5 @@
 import type { FormStrings } from '@crm/contracts/forms';
+import { useId } from 'react';
 import { FieldLabel } from '../atoms/FieldLabel/FieldLabel.tsx';
 import { CountryPicker } from '../molecules/CountryPicker/CountryPicker.tsx';
 import { Field } from '../molecules/Field/Field.tsx';
@@ -31,7 +32,8 @@ export interface AddressQuestionProps {
  * A hosted form's Address question (spec 0063, AC-6307): one group of the library's own fields, named by the
  * question, in the order an address is written: the street, the apartment, then the city beside the region and
  * the postcode beside the country, which stack on a phone. The problem with it shows under the street, the field
- * a visitor fixes first. No lookup: any provider would add an origin to the page.
+ * a visitor fixes first. No lookup: any provider would add an origin to the page. Not FieldGroup, which heads
+ * read only values and has no question's strong label with its "(optional)".
  */
 export function AddressQuestion({
   questionKey,
@@ -48,10 +50,16 @@ export function AddressQuestion({
   const set = (part: keyof AddressDraft) => (text: string) => {
     onChange({ ...draft, [part]: text });
   };
-  const name = aside === undefined ? label : `${label} ${aside}`;
+  const labelId = useId();
   return (
-    <div role="group" aria-label={name} className={styles.root}>
-      {!isLabelHidden && <FieldLabel as="text" label={label} aside={aside} tone="strong" />}
+    <div
+      role="group"
+      className={styles.root}
+      {...(isLabelHidden
+        ? { 'aria-label': aside === undefined ? label : `${label} ${aside}` }
+        : { 'aria-labelledby': labelId })}
+    >
+      {!isLabelHidden && <FieldLabel as="text" id={labelId} label={label} aside={aside} tone="strong" />}
       <Field
         label={words.addressLine1}
         name={`${questionKey}.line1`}

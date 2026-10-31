@@ -173,8 +173,11 @@ function valueFor(
     case 'status': {
       // A multi select's picks (spec 0063): each by its option, onto a field that holds several. Other's words stay
       // with the submission (AC-6310).
-      const picked = typeof answer === 'object' && answer !== null ? (answer as { picked?: unknown }).picked : undefined;
+      const picked =
+        typeof answer === 'object' && answer !== null ? (answer as { picked?: unknown }).picked : undefined;
       if (Array.isArray(picked)) {
+        // Only Other's words: nothing a field holds, and nothing to clear an earlier value with.
+        if (picked.length === 0) return { refused: 'Only Other was picked, which stays with the submission.' };
         if (!attribute.isMulti) return { refused: `${attribute.title} holds one choice, and several were picked.` };
         const known = options.get(attribute.id) ?? [];
         const ids: string[] = [];
