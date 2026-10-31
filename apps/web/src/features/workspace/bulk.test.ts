@@ -94,6 +94,17 @@ describe('the bulk bar', () => {
       tone: 'success',
       message: 'Undid the create of Ada Lovelace.',
     });
+    // The company her email made went with her (spec 0059): the toast names both, or says it added one.
+    const uncreated = { kind: 'uncreated', objectId: OBJECT, recordName: 'Jane', deleted: true } as const;
+    expect(undoToast({ ...uncreated, companyName: 'Acme' })).toEqual({
+      tone: 'success',
+      message: 'Removed Jane and Acme.',
+    });
+    expect(undoToast({ ...uncreated, companyName: '' })?.message).toBe('Removed Jane and the company it added.');
+    expect(undoToast({ ...uncreated, deleted: false, companyName: 'Acme' })).toEqual({
+      tone: 'danger',
+      message: 'Couldn’t undo the create of Jane.',
+    });
   });
 });
 

@@ -436,8 +436,6 @@ export function NewMeetingDialog({
             onChange={(id) => setForId(id ?? ME)}
           />
         )}
-        {/* Before the guest, so it is read before the form is filled in, and never below the dialog's fold. */}
-        {!hasCalendar && forId === ME && <Callout tone="info">{strings.noCalendar}</Callout>}
         <Field
           ref={withRef}
           label={strings.with}
@@ -508,6 +506,8 @@ export function NewMeetingDialog({
           maxLength={254}
           value={email}
           onChange={setEmail}
+          // Without a calendar the guest still gets an email, and nothing else: one quiet line where it applies.
+          {...(!hasCalendar && forId === ME ? { hint: strings.noCalendar } : {})}
         />
         {/* Who it is with, then their zone, together: the zone only sets how their invitation reads the time. */}
         <Select
@@ -537,8 +537,11 @@ export function NewMeetingDialog({
           onChange={onSpanChange}
           maxMinutes={MAX_MINUTES}
           showsLength
-          // From and To are on the member's clock; Their time zone above only sets the guest's invite.
-          hint={strings.timesIn(zoneDisplay(memberTimeZone, start.getTime()))}
+          // From and To are on the member's clock; Their time zone above only sets the guest's invite. Said only when
+          // the two differ: with the same zone, Their time zone already names it.
+          {...(timeZone === memberTimeZone
+            ? {}
+            : { hint: strings.timesIn(zoneDisplay(memberTimeZone, start.getTime())) })}
           isDisabled={busy}
         />
         {forName !== undefined && choices.length === 0 && (

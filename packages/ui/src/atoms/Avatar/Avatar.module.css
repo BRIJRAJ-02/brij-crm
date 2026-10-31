@@ -122,6 +122,12 @@
     color: var(--surface);
   }
 
+  /* A loaded picture's plate: the page's surface in place of the hue, after every hue so it wins, so a logo with
+     clear parts reads on a neutral ground in both themes; its initials and hue stay the fallback and the wait. */
+  .root[data-picture='loaded'] {
+    background: var(--surface);
+  }
+
   .image {
     position: absolute;
     inset: 0;

@@ -21,6 +21,15 @@
     align-items: start;
   }
 
+  /* FormRow: short fields side by side in the column, one to a row when it is too narrow for two. */
+  .row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--size-column-narrow)), 1fr));
+    align-items: start;
+    gap: var(--space-12);
+    min-inline-size: 0;
+  }
+
   .wide {
     grid-column: 1 / -1;
   }

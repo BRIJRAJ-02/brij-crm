@@ -1,7 +1,7 @@
 // A drawn span's From and To (spec 0027): the same two fields on the card a
 // span opens and in New meeting, so the time can be set exactly, from the
-// keyboard too, and moved where a clash is reported.
-import { Select, useFormatSettings } from '@crm/ui';
+// keyboard too, and moved where a clash is reported. Side by side, as one pair.
+import { FormRow, Select, useFormatSettings } from '@crm/ui';
 import { instantOf, lengthLabel, type DrawnSpan } from './span.ts';
 import { strings } from './strings.ts';
 
@@ -41,7 +41,7 @@ export function SpanTimes({
     (minute) => minute > span.startMinute && minute - span.startMinute <= maxMinutes,
   );
   return (
-    <>
+    <FormRow>
       <Select
         label={strings.from}
         items={steps.map((minute) => ({ id: String(minute), label: label(minute) }))}
@@ -64,6 +64,6 @@ export function SpanTimes({
         {...(isDisabled === undefined ? {} : { isDisabled })}
         onChange={(id) => onChange({ ...span, endMinute: Number(id ?? span.endMinute) })}
       />
-    </>
+    </FormRow>
   );
 }

@@ -94,6 +94,24 @@ export const Picture: Story = {
   },
 };
 
+/** A logo with clear parts, as many favicons are: a blue disc on a transparent ground. */
+const TRANSPARENT_LOGO =
+  'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 4 4"%3E%3Ccircle cx="2" cy="2" r="1.2" fill="%23266df0"/%3E%3C/svg%3E';
+
+/**
+ * A company's transparent logo once loaded: it sits on the neutral plate (`surface`), not its purple hue, so its clear
+ * parts read in both themes (spec 0059 follow up).
+ */
+export const TransparentLogo: Story = {
+  args: { name: 'Northwind', id: 'company_1', shape: 'square', size: 'lg', hue: 'purple', src: TRANSPARENT_LOGO },
+  play: async ({ canvasElement }) => {
+    await waitFor(() => {
+      if (canvasElement.querySelector('img[data-fade="waiting"]') !== null) throw new Error('Still loading.');
+    });
+    await expect(canvasElement.querySelector('[data-picture="loaded"]')).not.toBeNull();
+  },
+};
+
 /** Bytes no browser can draw: a picture that fails as a company's logo does when its site has none (spec 0059). */
 const BROKEN_PICTURE = 'data:image/png;base64,AAAA';
 

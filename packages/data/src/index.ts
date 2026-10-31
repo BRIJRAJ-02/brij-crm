@@ -6213,13 +6213,17 @@ export function createDataLayer({
        * Makes a record at once (see the records layer) with `id` (from
        * `newId`); rejects with the refusals when the server says no. Sending the
        * same id again after a lost answer gets the record already made.
+       * `onFiled` takes the notice that its email filed it under a company
+       * (spec 0059) in place of the app's, before the create settles, so a
+       * create dialog says both in one toast.
        */
       create: async (
         workspace: string,
         objectId: string,
         id: string,
         values: Readonly<Record<string, unknown>>,
-      ): Promise<RecordView> => (await recordsLayer()).create(workspace, objectId, values, id),
+        options?: { readonly onFiled?: (notice: FiledNotice) => void },
+      ): Promise<RecordView> => (await recordsLayer()).create(workspace, objectId, values, id, options?.onFiled),
       /**
        * Makes an option from a select, multi select or status cell and sets
        * it, as one optimistic write (spec 0012, AC-238; see `createOption`).

@@ -3385,7 +3385,46 @@ describe('a company a write filed the person under (spec 0059, AC-5920)', () => 
         refusal: { code: 'IN_USE', message: 'Other records link to it now, so it was kept.' },
       },
     ]);
-    expect(await undone).toMatchObject({ kind: 'uncreated', deleted: true });
+    const result = await undone;
+    expect(result).toMatchObject({ kind: 'uncreated', deleted: true });
+    // The company stayed, so the toast names the person alone.
+    expect(result).not.toHaveProperty('companyName');
+  });
+
+  it('tells a create dialog of its filing in place of the app, before the create settles', async () => {
+    const app: FiledNotice[] = [];
+    const own: FiledNotice[] = [];
+    const { layer, creates } = await readyView({ onFiled: (notice) => app.push(notice) });
+    const id = idAt(7003);
+    const making = layer.create(WS, PEOPLE, { [NAME]: 'Jane' }, id, (notice) => own.push(notice));
+    await settle();
+    creates[0]?.answer({ ...rowOf(id, { [NAME]: 'Jane', [COMPANY]: acme }), filedCompany: filedCompany(true) });
+    await making;
+    expect(own).toHaveLength(1);
+    expect(own[0]?.companies).toEqual([{ name: 'Acme', made: true }]);
+    expect(app).toHaveLength(0);
+  });
+
+  it('names the company its filing made when Cmd+Z trashes it with the person', async () => {
+    const { layer, creates, deletes } = await readyView();
+    const id = idAt(7002);
+    const making = layer.create(WS, PEOPLE, { [NAME]: 'Jane' }, id);
+    await settle();
+    creates[0]?.answer({ ...rowOf(id, { [NAME]: 'Jane', [COMPANY]: acme }), filedCompany: filedCompany(true) });
+    await making;
+    const undone = layer.undo.run(WS);
+    await settle();
+    deletes[0]?.answer([{ recordId: id, state: 'deleted' }]);
+    await settle();
+    expect(deletes[1]?.input).toMatchObject({ objectId: COMPANIES, recordIds: [ACME], unlinkedOnly: true });
+    deletes[1]?.answer([{ recordId: ACME, state: 'deleted' }]);
+    expect(await undone).toEqual({
+      kind: 'uncreated',
+      objectId: PEOPLE,
+      recordName: 'Jane',
+      deleted: true,
+      companyName: 'Acme',
+    });
   });
 
   it('puts Company back with the edited cells on Cmd+Z, in one write, and counts only the edit', async () => {

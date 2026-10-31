@@ -1,6 +1,7 @@
 // The filed notice (spec 0059, AC-5920): a create or an edit of this tab
 // linked people to their companies by their emails' domains. main.tsx raises
-// it, so it is in the first load with only its own words. Its Undo takes back
+// it, so it is in the first load with only its own words; a create dialog
+// says it in its own toast instead (createdFiledToast). Its Undo takes back
 // just the link (and a company the write made), never the edit itself; Cmd+Z
 // undoes both. Pure, so the node tests cover it.
 import type { FiledNotice, UnfileOutcome } from '@crm/data';
@@ -18,6 +19,14 @@ export const filedStrings = {
   undo: 'Unlink',
   linked: (name: string) => (name === '' ? 'Linked to their company.' : `Linked to ${name}.`),
   added: (name: string) => (name === '' ? 'Added their company and linked it.' : `Added ${name} and linked it.`),
+  /**
+   * A create dialog's one toast when the person's email filed them (spec 0059 follow up): the create and the link
+   * together, in place of "Jane created" then "Added Acme and linked it".
+   */
+  createdLinked: (name: string, company: string) =>
+    company === '' ? `${name} created and linked to their company` : `${name} created and linked to ${company}`,
+  createdAdded: (name: string, company: string) =>
+    company === '' ? `${name} created, their company added and linked` : `${name} created, ${company} added and linked`,
   linkedMany: (count: number, made: number) =>
     made === 0
       ? `Linked ${String(count)} people to their companies.`
@@ -67,6 +76,34 @@ export function filedToast(notice: FiledNotice, onUndo: () => void): ToastConten
     message: filedWords(notice),
     action: { label: filedStrings.undo, onAction: onUndo },
   };
+}
+
+/**
+ * One toast for a record a create dialog made whose email filed it (spec 0059 follow up): "Jane created and linked
+ * to Acme", with Unlink, which `onUndo` runs. `name` is the record's name as the created toast says it.
+ */
+export function createdFiledToast(name: string, notice: FiledNotice, onUndo: () => void): ToastContent {
+  const [only] = notice.companies;
+  const message =
+    only === undefined
+      ? filedStrings.createdLinked(name, '')
+      : only.made
+        ? filedStrings.createdAdded(name, only.name)
+        : filedStrings.createdLinked(name, only.name);
+  return { tone: 'success', message, action: { label: filedStrings.undo, onAction: onUndo } };
+}
+
+/** Takes a filing back (its toast's Unlink) and says what it did, or that it failed, through `say`. */
+export function unlinkFiled(notice: FiledNotice, say: (toast: ToastContent) => void): void {
+  void notice.undo().then(
+    (outcome) => {
+      const toast = unfiledToast(outcome);
+      if (toast !== undefined) say(toast);
+    },
+    () => {
+      say({ tone: 'danger', message: filedStrings.undoFailed });
+    },
+  );
 }
 
 /**
