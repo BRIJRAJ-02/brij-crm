@@ -74,7 +74,8 @@ import {
 import { calendarHealthStrings } from '../booking/calendar-health-strings.ts';
 import { canRemove, grantableRoles, invitableRoles } from './members.ts';
 import { CapabilitiesDialog } from './CapabilitiesDialog.tsx';
-import { roleTakesAway } from './roles.ts';
+import { reachOf, roleTakesAway } from './roles.ts';
+import { strings as roleStrings } from './roles-strings.ts';
 import { strings } from './members-strings.ts';
 import { SettingsPage } from './SettingsPage.tsx';
 
@@ -527,7 +528,16 @@ export function MembersScreen({
       }
       case 'twoFactor':
         return member.twoFactor === true ? strings.twoFactorOn : strings.twoFactorOff;
-      case 'scheduling':
+      case 'scheduling': {
+        // A custom role that sees or manages everyone reaches everyone but owners and admins (spec 0037): said as
+        // text, as Owner's and Admin's Everyone is.
+        const customRole =
+          member.customRoleId === undefined
+            ? undefined
+            : overview.roles.find((each) => each.id === member.customRoleId);
+        if (customRole !== undefined && reachOf(customRole.permissions).see === 'everyone') {
+          return roleStrings.allButAdmins;
+        }
         return (
           <SchedulingAccessCell
             data={data}
@@ -538,6 +548,7 @@ export function MembersScreen({
             teams={teams}
           />
         );
+      }
       case 'calendar':
         // A guest connects no calendar (spec 0031, slice 9).
         return member.role === 'guest' ? null : <CalendarHealthChip state={health.get(member.id)} name={member.name} />;
@@ -736,7 +747,7 @@ export function MembersScreen({
                   new Set(rows.filter((member) => ids.has(member.id) && mayRechange(member)).map((m) => m.id)),
                 );
               },
-              getSelectLabel: (member: MemberView) => strings.selectMember(member.name),
+              getSelectLabel: (member: MemberView) => member.name,
             }
           : {})}
       />

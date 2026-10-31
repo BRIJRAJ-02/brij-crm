@@ -65,7 +65,7 @@ export const membersRouter = member.members.router({
       ),
     ),
   ),
-  // One role for several people (spec 0037, AC-1242): the same owner rules, all in one transaction.
+  // One role for several people (spec 0037, AC-1242): checked as setRole is, all in one transaction.
   setRoles: member.members.setRoles.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
       setMemberRoles(

@@ -44,6 +44,7 @@ export const strings = {
   see: 'See other people’s scheduling',
   manage: 'Manage other people’s scheduling',
   reach: { self: 'Only their own', team: 'Their teams', everyone: 'Everyone' },
+  allButAdmins: 'Everyone but owners and admins',
   reachInfo: 'Calendars, hours, time off and bookings. Manage includes See.',
   builtInLocked: 'Built in roles can’t be changed. Make a custom role instead.',
   onlyBuiltIn: 'Only built in roles can do this',
