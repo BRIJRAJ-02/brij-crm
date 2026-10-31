@@ -235,6 +235,8 @@ describe('the crawl files (AC-6123)', () => {
     });
     // Live by its owner's own switch, as a page a visitor can open (spec 0058, AC-23).
     await ada.client.profile.show({ workspace: ada.slug, live: true, mutationId: newId() });
+    // A page made for a membership starts unlisted; its owner lets search engines show it.
+    await ada.client.profile.setIndexable({ workspace: ada.slug, indexable: true, mutationId: newId() });
     const sitemap = await edge('/api/public/sitemap-handles.xml');
     expect(sitemap.headers.get('cache-control')).toBe('public, max-age=3600, s-maxage=3600');
     expect(await sitemap.text()).toContain(`/${ada.handle}</loc>`);
