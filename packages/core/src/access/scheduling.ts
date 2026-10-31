@@ -81,6 +81,20 @@ export function roleReach(access: Access): SchedulingLevel | undefined {
   const { principal } = access;
   if (principal.kind === 'system') return 'manage';
   if (principal.kind !== 'member') return undefined;
+  // A custom role's `schedule.*` never covers owners and admins (decision 7): its reach is `customRoleReach`'s.
+  if (principal.customRoleId !== undefined) return undefined;
+  if (can(access, 'schedule.manage')) return 'manage';
+  if (can(access, 'schedule.view')) return 'view';
+  return undefined;
+}
+
+/**
+ * The reach over everyone but owners and admins that a custom role gives (spec 0037, decision 7): its
+ * `schedule.manage` or `schedule.view`, over every active member on the Member role (custom role holders included).
+ */
+export function customRoleReach(access: Access): SchedulingLevel | undefined {
+  const { principal } = access;
+  if (principal.kind !== 'member' || principal.customRoleId === undefined) return undefined;
   if (can(access, 'schedule.manage')) return 'manage';
   if (can(access, 'schedule.view')) return 'view';
   return undefined;
@@ -178,6 +192,7 @@ export async function schedulingReach(tx: WorkspaceTx, scope: EngineScope): Prom
   if (principal.role === 'guest') return { ...NOBODY, self };
   if (all === 'manage') return { ...NOBODY, self, all };
   const me = principal.memberId;
+  const custom = customRoleReach(access);
   // Two arms, so each takes its index: a member delegation's target by the members key, an everyone delegation's
   // members by the workspace's active members. The granter is whoever last set the level.
   const found = await tx.execute<DelegationReachRow & Record<string, unknown>>(sql`
@@ -195,6 +210,15 @@ export async function schedulingReach(tx: WorkspaceTx, scope: EngineScope): Prom
     join members t on t.workspace_id = d.workspace_id and t.status = 'active' and t.id <> d.delegate_member_id
     where d.workspace_id = ${scope.workspaceId}::uuid and d.delegate_member_id = ${me}::uuid
       and d.target_type = 'everyone'
+    ${
+      custom === undefined
+        ? sql``
+        : sql`union all
+    select 'everyone', ${custom}::text, false, t.id::text, t.role::text, null, null
+    from members t
+    where t.workspace_id = ${scope.workspaceId}::uuid and t.status = 'active' and t.role = 'member'
+      and t.id <> ${me}::uuid`
+    }
   `);
   return combineReach(self, all, found.rows);
 }

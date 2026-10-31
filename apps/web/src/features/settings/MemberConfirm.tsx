@@ -21,6 +21,8 @@ export interface MemberQuestion {
   readonly dismiss?: string;
   /** The change: resolves once the server agrees, throws its refusal otherwise. */
   readonly run: () => Promise<void>;
+  /** `default` for a confirm that ends nothing (a save that reaches people): a primary verb, not a danger one. */
+  readonly tone?: 'danger' | 'default';
 }
 
 /** Props for the confirm. */
@@ -80,7 +82,7 @@ function Asked({
     <Modal
       title={question.title}
       variant="confirm"
-      tone="danger"
+      tone={question.tone ?? 'danger'}
       isOpen={isOpen}
       isBusy={isBusy}
       onOpenChange={(open) => {
@@ -94,7 +96,11 @@ function Asked({
           <Button slot="close" isDisabled={isBusy}>
             {question.dismiss ?? strings.cancel}
           </Button>
-          <Button variant="danger-solid" isPending={isBusy} onPress={commit}>
+          <Button
+            variant={question.tone === 'default' ? 'primary' : 'danger-solid'}
+            isPending={isBusy}
+            onPress={commit}
+          >
             {question.action}
           </Button>
         </>

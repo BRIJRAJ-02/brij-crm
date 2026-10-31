@@ -13,7 +13,7 @@ import {
   type SchedulingAccessStore,
 } from '@crm/data';
 import { useScheduling } from '@crm/data/react';
-import { Badge, Button, ButtonLink, DescriptionList, Modal, RolePowers, Skeleton } from '@crm/ui';
+import { Badge, Button, ButtonLink, Callout, DescriptionList, EmptyState, Modal, RolePowers, Skeleton } from '@crm/ui';
 import { useEffect, useState } from 'react';
 import { managedBy, reachLine, type CapabilityWords, type NameOf } from './capabilities.ts';
 import { roleHref } from './nav.ts';
@@ -37,7 +37,7 @@ export interface CapabilitiesDialogProps {
 
 const WORDS: CapabilityWords = {
   reach: roleStrings.reach,
-  and: (a, b) => `${a} and ${b}`,
+  and: strings.capabilities.and,
   ownersAndAdmins: strings.capabilities.ownersAndAdmins,
   holdersOf: strings.capabilities.holdersOf,
   teamHoldersOf: strings.capabilities.teamHoldersOf,
@@ -76,7 +76,8 @@ function Shown({
       {...(role === undefined ? {} : { context: <Badge text={role.label} isWhole /> })}
       actions={
         <>
-          {role !== undefined && (
+          {/* A guest has no Roles page to open (it is not for guests). */}
+          {role !== undefined && member.role !== 'guest' && (
             <ButtonLink href={roleHref(slug, role.id)} icon="arrow-right">
               {strings.capabilities.openRole}
             </ButtonLink>
@@ -88,7 +89,8 @@ function Shown({
       }
     >
       {role === undefined ? (
-        <Skeleton width="long" />
+        // A role the reader can't name (one deleted since the page loaded): said, never a skeleton left spinning.
+        <EmptyState icon="id-card" title={strings.capabilities.unread} />
       ) : (
         <>
           <RolePowers
@@ -138,6 +140,7 @@ function Scheduling({
   readonly readsEveryone: boolean;
 }) {
   const store = useStore(data);
+  if (store === 'failed') return <Callout tone="danger">{strings.capabilities.unread}</Callout>;
   if (store === undefined) return <Skeleton width="long" />;
   return (
     <Lines
@@ -171,6 +174,8 @@ function Lines({
 }) {
   const state = useScheduling(store.delegations(slug, readsEveryone ? 'everyone' : 'mine'));
   if (state.status === 'loading') return <Skeleton width="long" />;
+  // Never a reach worked out from delegations that weren't read.
+  if (state.status === 'error') return <Callout tone="danger">{strings.capabilities.unread}</Callout>;
   const delegations: readonly DelegationView[] = state.status === 'ready' ? state.delegations : [];
   const nameOf: NameOf = (id) => members.find((each) => each.id === id)?.name;
   const held = delegations.filter((each) => each.delegateMemberId === member.id);
@@ -187,10 +192,7 @@ function Lines({
         {
           id: 'managed',
           term: strings.capabilities.managedBy,
-          description:
-            state.status === 'error'
-              ? strings.capabilities.unread
-              : managedBy(member, roles, delegations, nameOf, WORDS).join(', '),
+          description: managedBy(member, roles, delegations, nameOf, WORDS).join(', '),
         },
       ]}
     />
@@ -198,8 +200,8 @@ function Lines({
 }
 
 /** The scheduling access store: at once when a loader opened it, else opened here (its own chunk). */
-function useStore(data: DataLayer): SchedulingAccessStore | undefined {
-  const [store, setStore] = useState(() => data.scheduling.loaded());
+function useStore(data: DataLayer): SchedulingAccessStore | 'failed' | undefined {
+  const [store, setStore] = useState<SchedulingAccessStore | 'failed' | undefined>(() => data.scheduling.loaded());
   useEffect(() => {
     if (store !== undefined) return;
     let isCurrent = true;
@@ -207,7 +209,9 @@ function useStore(data: DataLayer): SchedulingAccessStore | undefined {
       (opened) => {
         if (isCurrent) setStore(opened);
       },
-      () => undefined,
+      () => {
+        if (isCurrent) setStore('failed');
+      },
     );
     return () => {
       isCurrent = false;

@@ -54,9 +54,9 @@ function recordOf(row: Row): RecordRuleRow | undefined {
  * their role or any of those teams. A member in no team and a workspace with no rules cost the same one statement.
  */
 export const storedRules: RuleSource = async (tx, member) => {
-  // A custom role holder is never under their base role's rules (spec 0037): no role subject matches them. Null never
-  // equals a stored role, so the arms below read their teams' rules alone. (Custom role subjects arrive with J10.)
-  const roleSubject = member.customRoleId === undefined ? member.role : null;
+  // A custom role holder is under their base role's (Member's) rules until custom roles get rule subjects of their own
+  // (spec 0037, J10), so a custom role never sees past a rule Member has.
+  const roleSubject = member.role;
   const found = await tx.execute<Row>(sql`
     with workspace as (select nullif(current_setting('app.workspace_id', true), '')::uuid as id),
     mine as (

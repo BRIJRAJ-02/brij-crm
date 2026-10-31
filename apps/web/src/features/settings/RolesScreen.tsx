@@ -19,6 +19,7 @@ import {
   Button,
   Icon,
   Link,
+  LockReason,
   Menu,
   MenuItem,
   MenuSeparator,
@@ -116,6 +117,32 @@ export function RolesScreen({ data, toasts, slug, overview, canManage }: RolesSc
       case 'people':
         return role.holders === undefined ? '' : String(role.holders);
       default:
+        // Member is the default again from its own row, while a custom role is (AC-1237).
+        if (role.builtIn === 'member' && !role.isDefault) {
+          return (
+            <MenuTrigger>
+              <Button
+                variant="ghost"
+                icon="ellipsis"
+                label={strings.rowActions(role.label)}
+                isPending={busy === role.id}
+              />
+              <Menu
+                label={strings.rowActions(role.label)}
+                onAction={() => {
+                  act(role, async () => {
+                    await data.roles.setDefault(slug, null);
+                    return strings.defaultSet(role.label);
+                  });
+                }}
+              >
+                <MenuItem id="default" icon="star">
+                  {strings.makeDefault}
+                </MenuItem>
+              </Menu>
+            </MenuTrigger>
+          );
+        }
         if (role.builtIn !== undefined) return null;
         return (
           <MenuTrigger>
@@ -171,6 +198,8 @@ export function RolesScreen({ data, toasts, slug, overview, canManage }: RolesSc
           setView(next === 'compare' ? 'compare' : 'list');
         }}
       />
+      {/* At 20 roles, a lock says why New role waits. */}
+      {canManage && isFull && <LockReason reason={strings.atLimit} />}
       {canManage && (
         <Button
           variant="primary"

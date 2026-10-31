@@ -422,6 +422,23 @@ const SENTENCES: readonly (readonly [AuditEntryView, string])[] = [
     },
     'Ada Lovelace made the Sales team',
   ],
+  // Custom roles (spec 0037).
+  [
+    { ...base, action: 'role.created', target: workspace, params: { role: 'Sales lead' } },
+    'Ada Lovelace made the Sales lead role',
+  ],
+  [
+    { ...base, action: 'role.updated', target: workspace, params: { role: 'Sales lead', added: 1, removed: 0 } },
+    'Ada Lovelace changed the Sales lead role',
+  ],
+  [
+    { ...base, action: 'role.deleted', target: workspace, params: { role: 'Doctor', moved: 3 } },
+    'Ada Lovelace deleted the Doctor role and moved 3 people',
+  ],
+  [
+    { ...base, action: 'role.default_changed', target: workspace, params: { role: 'Sales lead' } },
+    'Ada Lovelace made Sales lead the role new people get',
+  ],
   [
     {
       ...base,

@@ -250,6 +250,10 @@ export function MembersScreen({
   });
   const held = more.from === page ? more : { from: page, members: [], cursor: page.nextCursor };
   const rows = [...page.members, ...held.members];
+  // The ticks on rows shown now: a search that hides someone untick them (spec 0037, AC-1242).
+  const ticked: ReadonlySet<string> = new Set(
+    rows.filter((member) => selected.has(member.id)).map((member) => member.id),
+  );
   // Calendar health for the rows shown, read together, for holders of `members.manage` (AC-1308).
   const healthStore = useSchedulingStore(data, canManage);
   const health = useCalendarHealth(healthStore, slug, canManage ? rows.map((member) => member.id) : []);
@@ -367,11 +371,15 @@ export function MembersScreen({
     );
   };
 
+  /** Whether the reader may give this person another role in a Change role for several (the owner rules). */
+  const mayRechange = (member: MemberView) =>
+    member.id !== access.memberId && grantableRoles(actor, member.role).length > 0;
+
   // Change role for everyone ticked (spec 0037, AC-1242): at once when it gives more, asked first when it takes any
   // access away from anyone; one call, so a refusal changes nobody.
   const askBulkRole = (role: string) => {
     if (isBulkBusy) return;
-    const picked = rows.filter((member) => selected.has(member.id) && member.id !== access.memberId);
+    const picked = rows.filter((member) => ticked.has(member.id) && mayRechange(member));
     if (picked.length === 0) return;
     const run = async () => {
       setBulkBusy(true);
@@ -707,15 +715,21 @@ export function MembersScreen({
         emptyState={<EmptyState icon="search" title={strings.noMatches} />}
         {...(canManage
           ? {
-              selected,
-              onSelectedChange: setSelected,
+              selected: ticked,
+              // Only the people the reader may give a role to tick (never themself, an owner only for an owner), so the
+              // bar's count is the change's.
+              onSelectedChange: (ids: ReadonlySet<string>) => {
+                setSelected(
+                  new Set(rows.filter((member) => ids.has(member.id) && mayRechange(member)).map((m) => m.id)),
+                );
+              },
               getSelectLabel: (member: MemberView) => strings.selectMember(member.name),
             }
           : {})}
       />
-      {canManage && selected.size > 0 && (
+      {canManage && ticked.size > 0 && (
         <BulkActionBar
-          count={selected.size}
+          count={ticked.size}
           total={rows.length}
           onClear={() => {
             setSelected(new Set());
@@ -723,10 +737,12 @@ export function MembersScreen({
         >
           <Select
             savesOnPick
-            label={strings.bulkRoleLabel(selected.size)}
+            label={strings.bulkRoleLabel(ticked.size)}
             isLabelHidden
             placeholder={strings.bulkRole}
             items={optionsFor(grantableRoles(actor, 'member')).map(itemOf)}
+            // Always the placeholder: a pick is an action, and a cancelled confirm leaves nothing chosen.
+            value={null}
             isDisabled={isBulkBusy}
             onChange={(chosen) => {
               if (chosen !== null) askBulkRole(chosen);

@@ -26,6 +26,7 @@ export const Route = createFileRoute('/w/$slug/settings/roles/$roleId')({
           members,
           canManage: access.permissions.includes('access.manage'),
           canChangePeople: access.permissions.includes('members.manage'),
+          meId: access.memberId,
         },
       };
     } catch (error) {

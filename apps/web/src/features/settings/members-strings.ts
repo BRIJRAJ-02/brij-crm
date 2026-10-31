@@ -234,6 +234,7 @@ export const strings = {
     teamHoldersOf: (role: string) => `${role} in their teams`,
     everyoneGrant: (name: string) => `${name} (everyone)`,
     unread: 'Couldn’t read this. Try again later.',
+    and: (a: string, b: string) => `${a} and ${b}`,
   },
   /** Change role for several at once (spec 0037, AC-1242). */
   bulkRole: 'Change role',

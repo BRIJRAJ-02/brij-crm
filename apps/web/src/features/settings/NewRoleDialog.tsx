@@ -39,6 +39,7 @@ export function NewRoleDialog({ isOpen, onOpenChange, roles, onCreate }: NewRole
       title={strings.createTitle}
       variant="form"
       isOpen={isOpen}
+      isBusy={isBusy}
       onOpenChange={(open) => {
         if (!open && isBusy) return;
         onOpenChange(open);

@@ -108,8 +108,7 @@ async function peopleCounts(tx: WorkspaceTx, workspaceId: string, teamIds: reado
   const roles = await tx
     .select({ role: members.role, n: sql<number>`count(*)::int` })
     .from(members)
-    // A custom role holder is never under their base role's rules (spec 0037), so Member's count leaves them out.
-    .where(and(eq(members.workspaceId, workspaceId), eq(members.status, 'active'), isNull(members.customRoleId)))
+    .where(and(eq(members.workspaceId, workspaceId), eq(members.status, 'active')))
     .groupBy(members.role);
   const byRole = new Map<string, number>(roles.map((row) => [row.role, row.n]));
   const byTeam = new Map<string, number>();
@@ -605,8 +604,6 @@ export async function setObjectAccess(
                   eq(members.workspaceId, scope.workspaceId),
                   eq(members.status, 'active'),
                   eq(members.role, subject.role),
-                  // Custom role holders aren't under their base role's rules (spec 0037).
-                  isNull(members.customRoleId),
                 ),
               )
           : await tx

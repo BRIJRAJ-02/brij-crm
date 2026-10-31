@@ -219,11 +219,13 @@ export function policyKey(policy: Omit<DataPolicy, 'key'>): string {
 }
 
 /**
- * Whether a rule's subject applies to the member (spec 0037, roles design): a `role` subject only to members without
- * a custom role (a custom role holder is never under Member's rules, AC-1248); a team subject to its members.
+ * Whether a rule's subject applies to the member: a `role` subject to everyone on that base role, a team subject to
+ * its members. A custom role holder sits on Member, so Member's rules apply to them too, until custom roles get rule
+ * subjects of their own with a copy of Member's (spec 0037, J10); otherwise a custom role would see past every rule
+ * Member has (fail closed: the rules only ever narrow Member's default).
  */
 function subjectMatches(subject: RuleSubject, principal: MemberPrincipal): boolean {
-  if (subject.type === 'role') return principal.customRoleId === undefined && subject.role === principal.role;
+  if (subject.type === 'role') return subject.role === principal.role;
   return principal.teamIds.includes(subject.teamId);
 }
 
