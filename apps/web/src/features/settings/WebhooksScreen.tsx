@@ -707,7 +707,6 @@ function EndpointDialog({
                 default:
                   return delivery.eventType === 'ping' ? null : (
                     <Button
-                      size="sm"
                       variant="ghost"
                       isPending={resending === delivery.id}
                       onPress={() => void resend(delivery.id)}
