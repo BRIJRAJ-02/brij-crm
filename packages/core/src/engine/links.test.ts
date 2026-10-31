@@ -1211,6 +1211,7 @@ describe('deletion', () => {
       coarseObjects: [],
       members: [],
       access: [],
+      accessRules: [],
       jobs: [],
       views: [],
       tasks: [],
