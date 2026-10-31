@@ -163,16 +163,15 @@
     background: none;
   }
 
-  /* Quiet bands: a plain small label over its rows, no bar; in label strong and text-secondary, so a day reads as
-     a heading over its rows in dark as well as light (Home item 3, 31 October 2026). */
+  /* Quiet bands: a plain small label over its rows, no bar. */
   .root[data-placement='card'] .band {
     position: static;
     padding: var(--space-8) var(--space-8) var(--space-2);
     border-block-end: none;
     background: none;
-    color: var(--text-secondary);
-    font: var(--text-label-strong);
-    letter-spacing: var(--tracking-label-strong);
+    color: var(--text-tertiary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
   }
 
   .root[data-placement='card'] .row {
@@ -183,12 +182,22 @@
     inline-size: var(--size-column-min);
   }
 
+  /* Agenda (Home's Today): the card placement, with each day's band in label strong and the secondary colour, so a
+     day reads as a heading over its rows in dark as in light (Home item 3, 31 October 2026). */
+  .root[data-agenda] .band {
+    color: var(--text-secondary);
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label-strong);
+  }
+
   /* The time's line is the title button's height and centres its words, so the time and the meeting's title share
-     one line (Home item 13: the time sat higher than the title beside it). */
-  .root[data-placement='card'] .date {
-    display: flex;
-    align-items: center;
-    min-block-size: var(--size-control);
+     one line (Home item 13). Only while they sit side by side: a stacked phone row keeps its own rhythm. */
+  @container (inline-size >= 320px) {
+    .root[data-agenda] .date {
+      display: flex;
+      align-items: center;
+      min-block-size: var(--size-control);
+    }
   }
 
   @container (inline-size < 480px) {

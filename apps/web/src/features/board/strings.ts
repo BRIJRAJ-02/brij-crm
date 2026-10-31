@@ -14,7 +14,7 @@ export const strings = {
   table: 'Table',
   board: 'Board',
   /** An object with nothing to group by (AC-493). */
-  nothingToGroupTitle: 'Pick a field to group by',
+  nothingToGroupTitle: 'Add a field to group by',
   nothingToGroupText: 'Boards group by a status or select field.',
   nothingToGroupTextReader: 'Boards group by a status or select field. Ask an admin to add one.',
   addGroupField: 'Add status or select',

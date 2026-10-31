@@ -155,6 +155,16 @@
     }
   }
 
+  /* With no hover the button always shows, so it takes its own room at the cell's end and the name ellipsises
+     before it rather than running under it. */
+  @media (hover: none) {
+    .peek {
+      position: static;
+      flex: none;
+      margin-inline-start: auto;
+    }
+  }
+
   /* A row header with no name: what the row is called, in the placeholder's colour. */
   .placeholder {
     overflow: hidden;

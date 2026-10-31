@@ -161,7 +161,17 @@
   }
 
   .card[data-focus-visible] {
+    --card-shown: 1;
+
     box-shadow: var(--shadow-focus-inset);
+  }
+
+  /* The card's own quiet controls (its grip) show while it is hovered or holds keyboard focus: an inherited
+     custom property KanbanCard reads, so neither component styles the other's insides. */
+  @media (hover: hover) and (pointer: fine) {
+    .card:hover {
+      --card-shown: 1;
+    }
   }
 
   /* The card whose record is open in the panel beside the board. */
@@ -171,6 +181,18 @@
 
   .card[data-dragging] {
     opacity: var(--opacity-busy);
+  }
+
+  /* Before the loading delay the skeleton holds only the space: no column surface and no card boxes, so a load
+     that lands quickly never flashes grey columns. */
+  .root[data-waiting] {
+    background: transparent;
+  }
+
+  .root[data-waiting] .card {
+    border-color: transparent;
+    background: transparent;
+    box-shadow: none;
   }
 
   .skeleton {

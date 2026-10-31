@@ -180,7 +180,7 @@ export function KanbanColumn({
           {/* The library's count pill, as a tab or the page title shows a count: read as "3 cards". */}
           <Badge
             count={column.count}
-            max={Number.MAX_SAFE_INTEGER}
+            max={Infinity}
             label={strings.cardNoun(plural)}
             {...(column.isCountAtLeast === true ? { isAtLeast: true } : {})}
           />
@@ -299,12 +299,12 @@ export function KanbanCardOverlay({
 
 /**
  * A column while the board loads: the real column's surface, width and head, with a bar in place of its title and
- * `cards` skeleton cards, so the loaded board lands where its loading shape stood. `isShown` false keeps the shape
- * with no bars (before the loading delay).
+ * `cards` skeleton cards, so the loaded board lands where its loading shape stood. `isShown` false keeps the space
+ * with nothing drawn in it (before the loading delay), so a fast load never flashes empty grey columns.
  */
 export function KanbanColumnSkeleton({ cards, isShown }: { readonly cards: number; readonly isShown: boolean }) {
   return (
-    <div className={styles.root} aria-hidden="true">
+    <div className={styles.root} aria-hidden="true" data-skeleton="" data-waiting={isShown ? undefined : ''}>
       <div className={styles.head}>{isShown && <Skeleton width="short" />}</div>
       <div className={styles.skeletonCards}>
         {Array.from({ length: cards }, (_, index) => (

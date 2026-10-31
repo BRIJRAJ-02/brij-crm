@@ -117,7 +117,7 @@ export function TodaySection({ context }: HomeSectionProps) {
       item === undefined ? today : new Intl.DateTimeFormat('en-CA', { timeZone }).format(new Date(item.startsAt));
     void navigate({ to: '/w/$slug/bookings/calendar', params: { slug }, search: { d: day } });
   };
-  return frame(<BookingList label={title} placement="card" groups={groups} onOpen={openDay} />, { title });
+  return frame(<BookingList label={title} placement="agenda" groups={groups} onOpen={openDay} />, { title });
 }
 
 /** The meetings after today in runs by day, keeping their order: one band per day. */

@@ -713,19 +713,16 @@ export function RecordsScreen({
               {...(peekIndex === undefined || grouped !== undefined ? {} : { activeIndex: peekIndex })}
               commentCount={(row) => row.openThreads}
               // A record's name opens its page (and Enter on it); the hover "Open in panel" and Space open it in the
-              // panel beside the table (spec 0017, AC-384; owner, 31 October 2026).
+              // panel beside the table (spec 0017, AC-384; owner, 31 October 2026). With no panel there is no hover
+              // button and Space does nothing: the name is the one way in.
+              onRowOpenPage={(recordId: string) => {
+                openPage(recordId);
+              }}
               {...(peek === undefined
-                ? {
-                    onRowOpen: (recordId: string) => {
-                      openPage(recordId);
-                    },
-                  }
+                ? {}
                 : {
                     onRowOpen: (recordId: string) => {
                       peek.open(recordId);
-                    },
-                    onRowOpenPage: (recordId: string) => {
-                      openPage(recordId);
                     },
                   })}
               // A person is a circle; a company or any other record a square, as on its page.

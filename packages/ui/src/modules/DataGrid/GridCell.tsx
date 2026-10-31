@@ -211,10 +211,17 @@ export function GridCell({
   // Open in panel is heard in the capture phase, before its Button (which stops its own events): pressing a row's cell
   // focuses it and gives the row an element of its own, so the press and its release meet different elements and
   // the Button's own press never fires. It opens as the pointer lifts on it, or on a click with no pointer behind it
-  // (a screen reader's, `detail` 0).
+  // (a screen reader's, `detail` 0). Only a press that both started and ended on it counts: a drag (a range, a text
+  // selection) that merely ends over it opens nothing.
   const isOnPeek = (target: EventTarget) => target instanceof Element && target.closest('[data-peek]') !== null;
+  const peekPressed = useRef(false);
+  const onPointerDownCapture = (event: PointerEvent<HTMLDivElement>) => {
+    peekPressed.current = event.button === 0 && isOnPeek(event.target);
+  };
   const onPointerUpCapture = (event: PointerEvent<HTMLDivElement>) => {
-    if (event.button === 0 && isOnPeek(event.target)) onOpenPanel?.();
+    const pressed = peekPressed.current;
+    peekPressed.current = false;
+    if (pressed && event.button === 0 && isOnPeek(event.target)) onOpenPanel?.();
   };
   const onClickCapture = (event: MouseEvent<HTMLDivElement>) => {
     if (event.detail === 0 && isOnPeek(event.target)) onOpenPanel?.();
@@ -244,7 +251,7 @@ export function GridCell({
       onDoubleClick={onDoubleClick}
       data-row-header={isRowHeader || undefined}
       {...(action === undefined ? {} : { onClick })}
-      {...(canPeek ? { onPointerUpCapture, onClickCapture } : {})}
+      {...(canPeek ? { onPointerDownCapture, onPointerUpCapture, onClickCapture } : {})}
       style={{ '--col-width': `${String(place.width)}px`, '--col-offset': `${String(place.stickyOffset ?? 0)}px` }}
     >
       {avatar !== undefined && isLoaded && mode !== 'cell' && (

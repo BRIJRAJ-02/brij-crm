@@ -124,7 +124,7 @@ export const Colleagues: Story = {
   },
 };
 
-/** Home's Today, in its Card: the card is the frame; one day's bookings and the member's own events, the time in a narrow date column; an event has no guest, so no "You and" line; an all day event has no length. */
+/** Home's Today, in its Card (`agenda`): the card is the frame, each day's band a heading; one day's bookings and the member's own events, the time in a narrow date column; an event has no guest, so no "You and" line; an all day event has no length. */
 export const Agenda: Story = {
   render: (args) => (
     <Stage width="fill">
@@ -132,7 +132,7 @@ export const Agenda: Story = {
         <BookingList
           {...args}
           label="Today"
-          placement="card"
+          placement="agenda"
           groups={[
             {
               id: 'earlier',
@@ -164,6 +164,10 @@ export const Agenda: Story = {
     await expect(canvas.getAllByText(/^You and/)).toHaveLength(1);
     await expect(canvas.getByRole('button', { name: 'Team standup' })).toBeInTheDocument();
     await expect(canvas.getByText('All day')).toBeInTheDocument();
+    // The time sits level with its title (Home item 13): their centres within a pixel.
+    const time = canvas.getByText('9:00 AM').getBoundingClientRect();
+    const title = canvas.getByRole('button', { name: 'Team standup' }).getBoundingClientRect();
+    await expect(Math.abs(time.top + time.height / 2 - (title.top + title.height / 2))).toBeLessThanOrEqual(1);
   },
 };
 
@@ -175,7 +179,7 @@ export const AgendaNarrow: Story = {
         <BookingList
           {...args}
           label="Today"
-          placement="card"
+          placement="agenda"
           groups={[
             {
               id: 'next',

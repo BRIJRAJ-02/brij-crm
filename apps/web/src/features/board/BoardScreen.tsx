@@ -420,6 +420,8 @@ function useBoardStore(
     return {
       failed: {
         retry: () => {
+          // Back to loading while the new attempt runs, so a second failure draws the error again.
+          setFailedKey(undefined);
           setAttempt((count) => count + 1);
         },
       },

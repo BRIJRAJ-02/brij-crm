@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react';
 import styles from './SectionBar.module.css';
 
-/** Props for SectionBar. */
-export interface SectionBarProps {
+/** Props for SectionBar, before its heading's type. */
+interface SectionBarBaseProps {
   /** The section's heading ("19 – 25 October 2026"), an h2. */
   readonly title?: string;
   /**
@@ -14,16 +14,6 @@ export interface SectionBarProps {
   readonly start?: ReactNode;
   /** Controls right after the heading, before the end ones (Bookings' week: its calendar switch after the dates). */
   readonly after?: ReactNode;
-  /**
-   * The heading in body strong rather than title type: a bar whose heading is a place in time (the week's dates)
-   * rather than the section's name, so the controls lead.
-   */
-  readonly isTitleQuiet?: boolean;
-  /**
-   * The heading in heading type (18px) rather than title type: a page's own opening line over cards that carry
-   * title type themselves (Home's greeting over Today), so the page reads greeting, then card titles, then body.
-   */
-  readonly isTitleProminent?: boolean;
   /** Controls at the end (previous, Today, next, Filter). */
   readonly end?: ReactNode;
   /**
@@ -34,6 +24,18 @@ export interface SectionBarProps {
    */
   readonly variant?: SectionBarVariant;
 }
+
+/**
+ * The heading's type, one at a time: `isTitleQuiet` puts it in body strong (a bar whose heading is a place in time,
+ * the week's dates, so the controls lead); `isTitleProminent` in heading type, 18px (a page's own opening line over
+ * cards that carry title type themselves: Home's greeting over Today). Neither: title type.
+ */
+export type SectionBarTitleType =
+  | { readonly isTitleQuiet?: boolean; readonly isTitleProminent?: never }
+  | { readonly isTitleProminent?: boolean; readonly isTitleQuiet?: never };
+
+/** Props for SectionBar: its parts, and at most one heading type. */
+export type SectionBarProps = SectionBarBaseProps & SectionBarTitleType;
 
 /** Where a SectionBar sits. */
 export type SectionBarVariant = 'inline' | 'bar';

@@ -1,6 +1,6 @@
 /* KanbanCard: the card's content, space-6 apart: a head of the record's
    20px avatar, its name in body strong (cut with an ellipsis), and its handle or
-   lock at the end (the grip quiet until hovered or focused); then its card fields, space-4 apart. The card's surface,
+   lock at the end (the grip quiet until the card is hovered or holds focus); then its card fields, space-4 apart. The card's surface,
    border and states belong to its row in KanbanColumn. */
 @layer components {
   .root {
@@ -44,13 +44,13 @@
   }
 
   @media (hover: hover) and (pointer: fine) {
+    /* --card-shown comes from the card's row (KanbanColumn): 1 while it is hovered or holds keyboard focus. */
     .grip {
-      opacity: 0;
+      opacity: var(--card-shown, 0);
       transition: opacity var(--duration-hover) var(--ease-hover);
     }
 
-    .grip:focus-within,
-    .root:hover .grip {
+    .grip:focus-within {
       opacity: 1;
     }
   }
