@@ -2,7 +2,8 @@
 // Guest from Settings › Members; they join and see "Nothing has been shared with you yet", a sidebar with no
 // Scheduling, Settings with no Scheduling access, and Members with no one's email. The owner shares Companies with
 // Guests on its Access tab (view only: Can edit stays off for them), and the guest then opens on Companies. The owner
-// makes the guest a Member at once, then a Guest again behind a confirm that counts the booking page that pauses.
+// makes the guest a Member at once, then a Guest again behind a confirm that counts the booking page that pauses and
+// the link page that hides, which a visitor then can't open.
 // axe in light and dark on each screen, with pictures when FLOW_SCREENSHOTS names a folder.
 import { randomBytes, randomUUID } from 'node:crypto';
 import path from 'node:path';
@@ -137,6 +138,9 @@ test('a guest sees only what is shared with them, and becoming one asks first', 
   await gus.goto(`/w/${slug}`);
   await expect(gus).toHaveURL(new RegExp(`/w/${slug}/objects/companies`), { timeout: 15_000 });
   await expect(sidebar.getByRole('link', { name: 'Companies', exact: true })).toBeVisible();
+  // Viewing only: no Import / Export, no row ticks and no select all.
+  await expect(gus.getByRole('button', { name: 'Import / Export' })).toHaveCount(0);
+  await expect(gus.getByRole('grid').getByRole('checkbox')).toHaveCount(0);
   await check(gus, 'guests-companies');
 
   // The owner makes Gus a Member at once; he makes a booking page; back to Guest asks first and counts the page.
@@ -151,6 +155,13 @@ test('a guest sees only what is shared with them, and becoming one asks first', 
     timeZone: 'UTC',
     mutationId: uuidv7(),
   });
+  // A member has a link page; once shared it is live at his handle.
+  await rpc(gus, 'profile/show', { workspace: slug, mutationId: uuidv7() });
+  const { handle } = (await rpc(gus, 'profile/get', { workspace: slug })) as { handle: string };
+  const visitorContext = await browser.newContext();
+  const visitor = await visitorContext.newPage();
+  await visitor.goto(`/${handle}`);
+  await expect(visitor.getByRole('heading', { level: 1 })).toContainText(/gus/i);
   await page.getByRole('button', { name: /Role for gus/i }).click();
   await expect(page.getByRole('option', { name: 'Guest' })).toBeVisible();
   await check(page, 'guests-role-menu');
@@ -158,6 +169,7 @@ test('a guest sees only what is shared with them, and becoming one asks first', 
   const confirm = page.getByRole('alertdialog', { name: /^Make gus.* a Guest\?$/i });
   await expect(confirm).toBeVisible();
   await expect(confirm.getByText('1 page paused')).toBeVisible();
+  await expect(confirm.getByText('Link page hidden')).toBeVisible();
   await check(page, 'guests-confirm');
   await confirm.getByRole('button', { name: 'Cancel' }).click();
   await expect(confirm).toBeHidden();
@@ -167,6 +179,11 @@ test('a guest sees only what is shared with them, and becoming one asks first', 
   await confirm.getByRole('button', { name: 'Make Guest' }).click();
   await expect(page.getByText(/is now a Guest\./)).toBeVisible();
   await expect(page.getByRole('button', { name: /Role for gus/i })).toHaveText(/Guest/);
+  // His link page is hidden at its address, its contents kept for a later return.
+  await visitor.reload();
+  await expect(visitor.getByRole('heading', { level: 1 })).not.toContainText(/gus/i);
+  await check(visitor, 'guests-link-page-hidden');
 
+  await visitorContext.close();
   await gusContext.close();
 });

@@ -120,6 +120,8 @@ export const GuestPreview = z.object({
   upcomingBookings: z.number().int().min(0),
   /** Scheduling delegations over them or held by them, which go. */
   delegations: z.number().int().min(0),
+  /** Their link page is live and hides (kept, back as it was if they are a member again). */
+  hidesLinkPage: z.boolean(),
 });
 /** What making a member a guest will do. */
 export type GuestPreview = z.infer<typeof GuestPreview>;

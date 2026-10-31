@@ -510,6 +510,16 @@ export async function setObjectAccess(
   if (subject.type === 'role' && subject.role === 'guest' && rule?.level === 'write') {
     throw refuse('CONFIG_INVALID', 'Guests can view, never edit.');
   }
+  // Nor by whose records: a guest owns none, so a guest rule is all of the object's records or none.
+  if (
+    subject.type === 'role' &&
+    subject.role === 'guest' &&
+    rule !== null &&
+    rule.level !== 'none' &&
+    rule.records !== 'all'
+  ) {
+    throw refuse('CONFIG_INVALID', 'Guests see all of an object’s records or none.');
+  }
   // Field rules by canonical id, each a level the code knows.
   const givenFields: FieldRules | undefined =
     rule?.fields === undefined
