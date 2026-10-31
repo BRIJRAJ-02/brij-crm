@@ -70,6 +70,7 @@ function layerWith(answers: readonly StepUpResult[], checked: StepUpResult = { o
   const layer = {
     calendar: { view: () => stillLoading },
     nav: { source: () => stillLoading, change: () => undefined },
+    workspaceLogo: { subscribe: () => () => undefined, src: () => undefined },
     tasks: { due: () => stillLoading },
     account: {
       security: () => view,
@@ -228,6 +229,7 @@ describe('without security.manage', () => {
     const data = {
       calendar: { view: () => stillLoading },
       nav: { source: () => stillLoading, change: () => undefined },
+      workspaceLogo: { subscribe: () => () => undefined, src: () => undefined },
       tasks: { due: () => stillLoading },
       access: {
         mine: () =>

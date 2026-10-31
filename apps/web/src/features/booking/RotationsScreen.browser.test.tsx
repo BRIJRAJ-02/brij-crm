@@ -409,6 +409,7 @@ describe('without booking.manage', () => {
     const data = {
       calendar: { view: () => stillLoading },
       nav: { source: () => stillLoading, change: () => undefined },
+      workspaceLogo: { subscribe: () => () => undefined, src: () => undefined },
       tasks: { due: () => stillLoading },
       access: { mine: () => Promise.resolve(access) },
       members: { list: membersList },

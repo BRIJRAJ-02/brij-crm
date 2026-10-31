@@ -185,6 +185,7 @@ function layerWith(answer: () => Promise<void>, startLink: InviteLinkView = LINK
     calendar: { view: () => calendarView },
     // The frame's sidebar and Tasks badge (spec 0034), still loading.
     nav: { source: () => stillLoading, change: () => undefined },
+    workspaceLogo: { subscribe: () => () => undefined, src: () => undefined },
     tasks: { due: () => stillLoading },
     // The Scheduling access column (spec 0037, AC-1267): nobody holds a delegation.
     scheduling: { loaded: () => ({ delegations: () => noDelegations, health }) },
