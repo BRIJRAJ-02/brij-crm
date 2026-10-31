@@ -599,6 +599,8 @@ export const MergePreview = z.object({
   merge: RecordView,
   rows: z.array(z.object({ attributeId: Uuid, preselected: MergeSide })),
   moved: MergeMoved,
+  /** How the records a row's reference values name show (single sides only), those the reader may see. */
+  displays: z.array(RecordRefDisplay),
   /** More is attached than one merge moves (past `MERGE_MAX_ITEMS`): the merge would be refused `MERGE_TOO_LARGE`. */
   tooLarge: z.boolean(),
 });

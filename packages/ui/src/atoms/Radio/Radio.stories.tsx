@@ -164,3 +164,26 @@ export const Cards: Story = {
     await expect(under?.closest('label')).toBe(canvas.getByRole('radio', { name: /Contact card/ }).closest('label'));
   },
 };
+
+/** A merge's side by side choice (spec 0049): each card a record's name over the value it holds, picked whole. */
+export const CardsWithValues: Story = {
+  args: { label: 'Job title', defaultValue: 'keep' },
+  render: (args) => (
+    <Stage width="dialog">
+      <RadioGroup {...args} variant="cards">
+        <Radio value="keep" preview="Chief Technology Officer">
+          Jane Doe
+        </Radio>
+        <Radio value="merge" preview="CTO">
+          Jane D.
+        </Radio>
+      </RadioGroup>
+    </Stage>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    const merged = canvas.getByRole('radio', { name: 'Jane D.' });
+    await expect(merged).toHaveAccessibleDescription('CTO');
+    await userEvent.click(canvas.getByText('CTO'));
+    await expect(merged).toBeChecked();
+  },
+};

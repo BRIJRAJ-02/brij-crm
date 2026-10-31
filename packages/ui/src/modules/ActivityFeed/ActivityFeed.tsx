@@ -87,6 +87,15 @@ export type ActivityEntry =
     })
   | (EntryBase & {
       /**
+       * Another record merged into this one (spec 0049): "merged Jane D. into
+       * this record", the merged record's name as a flat chip with no page
+       * (it is gone), or "a record" when the reader can't name it.
+       */
+      readonly kind: 'merged';
+      readonly merged?: RecordRefDisplay;
+    })
+  | (EntryBase & {
+      /**
        * Records one write linked and unlinked on a relationship side: up to 3
        * named each way, and how many in all ("and 97 others").
        */
@@ -194,6 +203,7 @@ const KIND_ICONS: Readonly<Record<Exclude<ActivityEntry['kind'], 'change' | 'lin
   created: 'plus',
   changes: 'pencil',
   deleted: 'trash',
+  merged: 'merge',
   note: 'notebook',
   task: 'square-check',
   comment: 'message-square',
@@ -227,6 +237,8 @@ function verbOf(entry: ActivityEntry): string {
       return strings.verbs.created;
     case 'deleted':
       return strings.verbs.deleted;
+    case 'merged':
+      return strings.verbs.merged;
     case 'changes':
       return strings.verbs.changedMany(entry.changes.length);
     case 'links':
@@ -836,7 +848,13 @@ function hasDetail(entry: ActivityEntry): boolean {
   if (isToggle(entry)) return false;
   if (entry.kind === 'change') return !isEmptyValue(entry.from) || !isEmptyValue(entry.to);
   if (entry.kind === 'meeting' || entry.kind === 'changes') return true;
-  if (entry.kind === 'created' || entry.kind === 'deleted' || entry.kind === 'links' || entry.kind === 'submission') {
+  if (
+    entry.kind === 'created' ||
+    entry.kind === 'deleted' ||
+    entry.kind === 'merged' ||
+    entry.kind === 'links' ||
+    entry.kind === 'submission'
+  ) {
     return false;
   }
   return entry.title !== undefined || entry.excerpt !== undefined;
@@ -940,6 +958,7 @@ const Entry = memo(function Entry({ entry, lineId, endsRail, onAddPerson }: Entr
   } else if (
     entry.kind !== 'created' &&
     entry.kind !== 'deleted' &&
+    entry.kind !== 'merged' &&
     entry.kind !== 'links' &&
     entry.kind !== 'submission' &&
     (entry.title !== undefined || entry.excerpt !== undefined)
@@ -982,6 +1001,18 @@ const Entry = memo(function Entry({ entry, lineId, endsRail, onAddPerson }: Entr
               </span>
             ) : entry.kind === 'links' ? (
               <LinksLine entry={entry} />
+            ) : entry.kind === 'merged' ? (
+              <>
+                <span>{strings.verbs.merged}</span>
+                {entry.merged === undefined ? (
+                  <span>{strings.aRecord}</span>
+                ) : (
+                  <span className={styles.keep}>
+                    <RecordChip display={entry.merged} isFlat />
+                  </span>
+                )}
+                <span>{strings.intoThisRecord}</span>
+              </>
             ) : (
               // The verb and the attribute stay on one line, so a narrow feed never splits "set Owner".
               <span className={styles.phrase}>

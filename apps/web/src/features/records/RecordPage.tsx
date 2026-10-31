@@ -51,6 +51,7 @@ import {
 import { useNavigate, useParams, useRouteContext, useRouter } from '@tanstack/react-router';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useCommandMenu } from '../command/CommandMenuProvider.tsx';
+import { mergeStrings } from '../duplicates/merge/index.ts';
 import { CommentsTab, LoadingThreads } from '../comments/CommentsTab.tsx';
 import { strings as commentStrings } from '../comments/strings.ts';
 import { NotesTab } from '../notes/NotesTab.tsx';
@@ -378,6 +379,14 @@ function RecordScreen({
   const canChangeSchema = useCan('schema.manage');
   const navigate = useNavigate();
   const live = useLiveStatus(data.live);
+  // A merged record's address (spec 0049, AC-4914): on to the record it went into, saying so once.
+  const mergedInto = trashed?.status === 'trashed' ? trashed.mergedInto : undefined;
+  const mergedName = trashed?.status === 'trashed' ? trashed.record.display.name : '';
+  useEffect(() => {
+    if (mergedInto === undefined) return;
+    toasts.toast({ tone: 'info', message: mergeStrings.wasMerged(mergedName, mergedInto.display.name) });
+    void navigate({ href: recordHref(slug, object.apiSlug, mergedInto.recordId, tab), replace: true });
+  }, [mergedInto, mergedName, navigate, object.apiSlug, slug, tab, toasts]);
   const unnamed = strings.unnamed(object.singularName);
   const link = useMemo(() => recordLinks(slug, objects), [slug, objects]);
   // Add as person on a meeting (spec 0024, AC-609): one function while the page stays, so timeline entries keep
@@ -876,6 +885,8 @@ function RecordScreen({
                     recordId={recordId}
                     pageLink={pageLink}
                     canDelete={canEdit}
+                    attributes={attributes}
+                    members={members}
                   />
                 </RecordHeader>
               }

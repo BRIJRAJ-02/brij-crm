@@ -469,5 +469,5 @@ export async function mergeAndRead(
 /** What a merge would do (spec 0049, `records.mergePreview`), as the dialog reads it. */
 export async function readMergePreview(scope: EngineScope, input: MergePair): Promise<MergePreview> {
   const preview = await previewMerge(scope, input);
-  return { ...preview, rows: [...preview.rows] };
+  return { ...preview, rows: [...preview.rows], displays: [...preview.displays] };
 }

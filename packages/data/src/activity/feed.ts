@@ -134,6 +134,11 @@ export type ActivityEntryShape =
       readonly kind: 'deleted';
     })
   | (EntryBase & {
+      /** Another record merged into this one (spec 0049): who merged it, and its name when the reader may see it. */
+      readonly kind: 'merged';
+      readonly merged?: RecordRefDisplay;
+    })
+  | (EntryBase & {
       /**
        * One actor's changes made in the same second (one save, an import's
        * row, a bulk edit), drawn as one "changed N attributes" entry with Show
@@ -336,6 +341,10 @@ export function toActivityEntry(item: ActivityItem, context: EntryContext): Acti
   const base = { id: item.id, at: item.at, actor: actorDisplay(item.actor, context.members, context.forms) };
   if (item.kind === 'created') return { ...base, kind: 'created' };
   if (item.kind === 'deleted') return { ...base, kind: 'deleted' };
+  if (item.kind === 'merged') {
+    const merged = item.fromRefs?.[0];
+    return merged === undefined ? { ...base, kind: 'merged' } : { ...base, kind: 'merged', merged };
+  }
   if (item.kind === 'comment') {
     if (item.itemId === undefined) return undefined;
     return {

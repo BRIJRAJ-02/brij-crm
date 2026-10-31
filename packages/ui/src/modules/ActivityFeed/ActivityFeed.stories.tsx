@@ -542,13 +542,20 @@ export const FromAForm: Story = {
   },
 };
 
-/** One actor's changes at one moment as one entry (Show all lays them out), a thread started, and the trash. */
+/** One actor's changes at one moment as one entry (Show all lays them out), a thread started, a merge, and the trash. */
 export const GroupedChanges: Story = {
   render: () => {
     const at = '2026-10-08T12:00:00.000Z';
     const job = attributeOf('text', 'Job title');
     const entries: ActivityEntry[] = [
       { id: 'deleted', at: '2026-10-08T13:30:00.000Z', actor: GRACE, kind: 'deleted' },
+      {
+        id: 'merged',
+        at: '2026-10-08T13:15:00.000Z',
+        actor: GRACE,
+        kind: 'merged',
+        merged: { objectId: 'people', recordId: 'jane-d', name: 'Jane D.', kind: 'person' },
+      },
       {
         id: 'comment',
         at: '2026-10-08T13:00:00.000Z',
@@ -583,8 +590,9 @@ export const GroupedChanges: Story = {
     );
   },
   play: async ({ canvas, userEvent }) => {
-    const [deleted, comment, changes] = canvas.getAllByRole('article');
+    const [deleted, merged, comment, changes] = canvas.getAllByRole('article');
     await expect(deleted).toHaveAccessibleName(/Grace Hopper moved this record to the trash/);
+    await expect(merged).toHaveAccessibleName(/Grace Hopper merged Jane D\. into this record/);
     await expect(comment).toHaveAccessibleName(/Grace Hopper commented/);
     await expect(changes).toHaveAccessibleName(/Ada Lovelace changed 2 attributes/);
     await userEvent.click(canvas.getByRole('button', { name: 'Show all' }));

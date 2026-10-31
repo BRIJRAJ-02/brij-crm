@@ -166,6 +166,16 @@
     letter-spacing: var(--tracking-label);
   }
 
+  /* A card's value (a merge's side): the body's type and colour, cut to the card, under the label's line. */
+  .preview {
+    min-inline-size: 0;
+    padding-inline-start: calc(var(--size-check) + var(--space-8));
+    overflow: hidden;
+    color: var(--text);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
   .error {
     color: var(--danger);
     font: var(--text-label);

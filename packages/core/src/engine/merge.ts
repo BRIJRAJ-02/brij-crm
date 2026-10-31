@@ -107,6 +107,8 @@ export interface MergePreviewResult {
   readonly merge: RecordView;
   readonly rows: readonly MergeRow[];
   readonly moved: MergeMoved;
+  /** How the far records of the rows' reference values show, those the reader may see. */
+  readonly displays: readonly RecordView['display'][];
   readonly tooLarge: boolean;
 }
 
@@ -580,6 +582,16 @@ async function readPlanInputs(tx: WorkspaceTx, access: Access, pair: MergePair) 
   return { attributes, items, links, ends, farVisible, shownLinks };
 }
 
+/** The record ids a reference value names: one `{ objectId, recordId }`, or a list of them. */
+function referenceIds(value: unknown): readonly string[] {
+  const items = Array.isArray(value) ? (value as readonly unknown[]) : [value];
+  return items.flatMap((item) =>
+    typeof item === 'object' && item !== null && 'recordId' in item && typeof item.recordId === 'string'
+      ? [item.recordId]
+      : [],
+  );
+}
+
 /** The dialog's rows in the object's attribute order. */
 function orderedRows(attributes: ReadonlyMap<string, AttributeDef>, rows: readonly MergeRow[]): readonly MergeRow[] {
   const order = [...attributes.values()].sort((a, b) => a.position - b.position).map((attribute) => attribute.id);
@@ -624,10 +636,21 @@ export async function previewMerge(scope: EngineScope, input: MergePair): Promis
     });
     if (keepView === undefined || mergeView === undefined) throw refuse('NOT_FOUND', UNKNOWN_RECORD);
     const { total, ...rest } = counted;
+    const rows = orderedRows(attributes, [...values.rows, ...linkPlan.rows]);
+    // The names of the records a reference row's two sides hold, read as any record read names them.
+    const farIds = rows.flatMap((row) =>
+      byId.get(row.attributeId)?.type === 'record_reference'
+        ? [keepView.values[row.attributeId], mergeView.values[row.attributeId]].flatMap(referenceIds)
+        : [],
+    );
+    const displays = (await readRecords(tx, scope.access, [...new Set(farIds)], { attributeIds: [] })).map(
+      (view) => view.display,
+    );
     return {
       keep: keepView,
       merge: mergeView,
-      rows: orderedRows(attributes, [...values.rows, ...linkPlan.rows]),
+      rows,
+      displays,
       moved: { ...rest, links: shownLinks },
       tooLarge: total > MERGE_MAX_ITEMS,
     };
