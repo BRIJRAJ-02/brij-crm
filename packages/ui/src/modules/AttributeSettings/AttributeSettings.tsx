@@ -347,6 +347,10 @@ const OWN_LABELS: Readonly<Record<string, string>> = {
 /** A picker entry's name: the picker's own label where it has one (Multi select, Link, Phone), else the type's. */
 export const pickerLabel = (entry: PickerType) => OWN_LABELS[entry.key] ?? typeLabelOf(entry.type);
 
+/** A picker entry's icon: Multi select its own, apart from Select's at a glance; every other its type's. */
+export const pickerIcon = (entry: PickerType) =>
+  entry.key === 'multi_select' ? ('list-checks' as const) : fieldTypeOf(entry.type).icon;
+
 /** The settings that land on Form fields by name; the rest are drawn with their own `error`. */
 const FORM_FIELDS: ReadonlySet<string> = new Set(['title', 'apiSlug', 'description', 'offsetDays']);
 
@@ -752,8 +756,7 @@ function AttributeForm({
   const itemOf = (each: PickerType): SelectItem => ({
     id: each.key,
     label: pickerLabel(each),
-    // Multi select apart from Select at a glance; every other entry its type's own icon.
-    icon: each.key === 'multi_select' ? 'list-checks' : fieldTypeOf(each.type).icon,
+    icon: pickerIcon(each),
     ...(isCreating ? { group: strings.typeGroups[TYPE_GROUP[each.key] ?? 'basic'] } : {}),
   });
   // Creating: the offered entries, then Relationship when #15 gives it. Editing: the attribute's own type, which

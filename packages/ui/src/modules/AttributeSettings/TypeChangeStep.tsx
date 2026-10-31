@@ -7,14 +7,13 @@ import { PICKER_TYPES, type AttributeType } from '@crm/contracts/values';
 import { useEffect } from 'react';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Link } from '../../atoms/Link/Link.tsx';
-import { fieldTypeOf } from '../../fields/registry.ts';
 import { formatNumber } from '../../lib/format.ts';
 import { Callout } from '../../molecules/Callout/Callout.tsx';
 import { Select } from '../../molecules/Select/SelectWithFaces.tsx';
 import { useFormatSettings } from '../../provider/context.ts';
 import { useRegionDefaults } from '../../provider/region.ts';
 import type { DialogStep } from '../RelationshipSettings/RelationshipSettings.tsx';
-import { pickerLabel, TypeSettings } from './AttributeSettings.tsx';
+import { pickerIcon, pickerLabel, TypeSettings } from './AttributeSettings.tsx';
 import { strings } from './strings.ts';
 
 /** What a type change would do, as the screen read it: the server's own check. */
@@ -108,7 +107,7 @@ function TypeChangeBody({
   const items = PICKER_TYPES.filter((each) => targets.includes(each.key)).map((each) => ({
     id: each.key,
     label: pickerLabel(each),
-    icon: fieldTypeOf(each.type).icon,
+    icon: pickerIcon(each),
   }));
   return (
     <>
