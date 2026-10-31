@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
 import { expect, fn, screen, waitFor } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
-import { Select } from '../../molecules/Select/Select.tsx';
+import { Select } from '../../molecules/Select/SelectWithFaces.tsx';
 import { attributeOf } from '../../workbench/attributes.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { ViewSettings, type ViewField } from './ViewSettings.tsx';
