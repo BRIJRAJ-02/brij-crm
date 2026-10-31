@@ -16,6 +16,9 @@ import {
   cancelBooking,
   linkBookingRecord,
   markNoShow,
+  routingDecision,
+  routingDecisions,
+  routingOverview,
   routingReport,
   hostTarget,
   moveBooking,
@@ -384,4 +387,11 @@ export const routingRouter = member.routing.router({
   report: member.routing.report.handler(({ context, input }) =>
     routingReport(context.scope, { surface: input.surface, days: input.days }),
   ),
+  // Bookings › Routing (spec 0037, L6), for holders of routing.manage.
+  overview: member.routing.overview.handler(({ context }) => routingOverview(context.scope)),
+  decisions: member.routing.decisions.handler(({ context, input }) => {
+    const { workspace: _, ...filters } = input;
+    return routingDecisions(context.scope, filters);
+  }),
+  decision: member.routing.decision.handler(({ context, input }) => routingDecision(context.scope, { id: input.id })),
 });

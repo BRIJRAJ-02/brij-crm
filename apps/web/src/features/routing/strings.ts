@@ -162,4 +162,8 @@ export const strings = {
   reportFailed: 'The report couldn’t load.',
   share: (count: number, of: number) =>
     of === 0 ? String(count) : `${String(count)} (${String(Math.round((count / of) * 100))}%)`,
+
+  // Only through a form (spec 0037, AC-1388)
+  formOnly: 'Only through a form',
+  formOnlyFailed: 'That didn’t save. Try again.',
 };

@@ -2,7 +2,7 @@ import { createFileRoute, Outlet, useLocation } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
 import { BookingsTabs } from '../features/bookings/BookingsTabs.tsx';
 import { BookingsTopBar } from '../features/bookings/BookingsTopBar.tsx';
-import { bookingsTabOf } from '../features/bookings/tabs.ts';
+import { BOOKINGS_TABS, bookingsTabOf } from '../features/bookings/tabs.ts';
 import { useHostsChoice } from '../features/bookings/HostsSwitch.tsx';
 import { BookingsActionSlot, BookingsHosts } from '../features/bookings/toolbarSlot.ts';
 import { useCan, useMyAccess, WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
@@ -38,6 +38,9 @@ function BookingsRoute() {
   // the strip as they swap.
   const seesOthers = useMyAccess()?.scheduling?.seesOthers === true;
   const isAdmin = useCan('booking.admin') || seesOthers;
+  // Routing only for a holder of routing.manage (spec 0037, AC-1447); its address answers as absent for anyone else.
+  const canRoute = useCan('routing.manage');
+  const tabs = useMemo(() => BOOKINGS_TABS.filter((each) => each !== 'routing' || canRoute), [canRoute]);
   const { hosts: value, choose } = useHostsChoice(slug, isAdmin);
   const hosts = useMemo(() => (isAdmin ? { value, onChange: choose } : undefined), [isAdmin, value, choose]);
   return (
@@ -48,7 +51,12 @@ function BookingsRoute() {
           page={{
             topBar: <BookingsTopBar slug={slug} actionSlot={ownsAction ? setActionSlot : undefined} />,
             body: (
-              <BookingsTabs slug={slug} tab={tab} hosts={READS_BOOKINGS.has(tab) && !isTeamDay ? hosts : undefined}>
+              <BookingsTabs
+                slug={slug}
+                tab={tab}
+                tabs={tabs}
+                hosts={READS_BOOKINGS.has(tab) && !isTeamDay ? hosts : undefined}
+              >
                 <Outlet />
               </BookingsTabs>
             ),

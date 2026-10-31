@@ -15,6 +15,8 @@ export interface BookingsTabsProps {
   readonly slug: string;
   /** The tab the address names. */
   readonly tab: BookingsPageTab;
+  /** The tabs this member has, in order (Routing only for a holder of `routing.manage`). */
+  readonly tabs?: readonly BookingsPageTab[];
   /** The child route's page (an `Outlet`), drawn in the chosen tab's panel. */
   readonly children: ReactNode;
   /**
@@ -28,7 +30,7 @@ export interface BookingsTabsProps {
  * Calendar · List · Availability. Choosing a tab moves to its address; the panel holds whatever that address
  * renders, and the strip's end holds that tab's tools.
  */
-export function BookingsTabs({ slug, tab, children, hosts }: BookingsTabsProps) {
+export function BookingsTabs({ slug, tab, tabs = BOOKINGS_TABS, children, hosts }: BookingsTabsProps) {
   const navigate = useNavigate();
   const [slot, setSlot] = useState<HTMLElement | null>(null);
   return (
@@ -46,7 +48,7 @@ export function BookingsTabs({ slug, tab, children, hosts }: BookingsTabsProps) 
         onSelectionChange={(next) => {
           if (isBookingsPageTab(next) && next !== tab) void navigate({ href: bookingsTabHref(slug, next) });
         }}
-        tabs={BOOKINGS_TABS.map((id) => ({ id, label: strings.pageTabs[id], href: bookingsTabHref(slug, id) }))}
+        tabs={tabs.map((id) => ({ id, label: strings.pageTabs[id], href: bookingsTabHref(slug, id) }))}
       >
         {/* One panel, always the chosen tab's: the page under it stays mounted while the next one loads, rather
             than moving to another panel and mounting again before it is swapped. */}

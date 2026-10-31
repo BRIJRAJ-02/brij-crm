@@ -187,6 +187,10 @@ const READS: ReadonlySet<string> = new Set([
   'nav.get',
   // Lead routing's report (spec 0043).
   'routing.report',
+  // Bookings › Routing (spec 0037, L6): the Overview and the Decisions log, reads only.
+  'routing.overview',
+  'routing.decisions',
+  'routing.decision',
 ]);
 
 let db: Database;

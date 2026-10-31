@@ -42,6 +42,7 @@ export const formsRouter = member.forms.router({
             id: input.id,
             ...(input.name === undefined ? {} : { name: input.name }),
             ...(input.mainObjectId === undefined ? {} : { mainObjectId: input.mainObjectId }),
+            ...(input.starter === undefined ? {} : { starter: input.starter }),
           },
           hooks,
         ),

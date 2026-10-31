@@ -25,6 +25,7 @@ import type { CaptureListState, CaptureListView } from './captures/list.ts';
 import type { HomeHeld, HomeMetricsState, HomeRecentsState, TeamTodayState } from './home/store.ts';
 import type { RoutingReportHeld, RoutingReportState } from './routing/reports.ts';
 import type { PageRulesHeld } from './routing/page-rules.ts';
+import type { RoutingDecisionsHeld, RoutingDecisionsState, RoutingHeld, RoutingOverviewState } from './routing/log.ts';
 import type {
   EmailPreferencesState,
   EmailPreferencesStore,
@@ -382,6 +383,16 @@ export function useTeamToday(view: HomeHeld<TeamTodayState>): TeamTodayState {
  * screen is mounted, so it is read again when the person comes back to the page or marks a booking no show.
  */
 export function useRoutingReport(view: RoutingReportHeld): RoutingReportState {
+  return useRetained(view);
+}
+
+/** Bookings › Routing › Overview (spec 0037, AC-1383), re-rendering when it is read again. Held while mounted. */
+export function useRoutingOverview(view: RoutingHeld<RoutingOverviewState>): RoutingOverviewState {
+  return useRetained(view);
+}
+
+/** Bookings › Routing › Decisions (AC-1383), re-rendering as pages land. Held while mounted. */
+export function useRoutingDecisions(view: RoutingDecisionsHeld): RoutingDecisionsState {
   return useRetained(view);
 }
 

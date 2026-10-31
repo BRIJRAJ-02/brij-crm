@@ -20,6 +20,7 @@ import {
   isRefusal,
   postingRules,
   submitForm,
+  type BusyReader,
   type JobRegistry,
   type PostingRules,
 } from '@crm/core';
@@ -61,6 +62,8 @@ export interface PublicFormsDeps {
   readonly answersKey: string;
   /** Signs the hand off to a booking page after a send (AC-1057); `handoffKey` from the session secret. */
   readonly handoffKey?: Buffer;
+  /** The hosts' cached busy times, for the free time check before a booking route is answered (spec 0037, AC-1358). */
+  readonly busy?: BusyReader;
 }
 
 interface Variables {
@@ -292,6 +295,7 @@ export function mountPublicForms(app: Hono<{ Variables: Variables }>, deps: Publ
               publicOrigins: deps.publicOrigins,
               ...(ipHash === undefined ? {} : { ipHash }),
               ...(handoffKey === undefined ? {} : { signHandoff: (handoff) => signHandoff(handoffKey, handoff) }),
+              ...(deps.busy === undefined ? {} : { freeTime: { busy: deps.busy } }),
             },
             hooks,
           ),

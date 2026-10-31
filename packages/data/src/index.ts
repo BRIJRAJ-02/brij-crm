@@ -37,6 +37,7 @@ import type {
   RotationMemberInput,
   RotationSettings,
   RotationView,
+  RoutingDecision,
   RoutingRules,
   TeamHosts,
   TaskMine,
@@ -146,6 +147,13 @@ import {
   type RoutingReportSurface,
 } from './routing/reports.ts';
 import { createPageRules, type PageRulesHeld } from './routing/page-rules.ts';
+import {
+  createRoutingLog,
+  type RoutingDecisionFilters,
+  type RoutingDecisionsHeld,
+  type RoutingHeld,
+  type RoutingOverviewState,
+} from './routing/log.ts';
 import {
   createAccountSecurityStore,
   isFresh as isSessionFresh,
@@ -387,10 +395,15 @@ export type {
   RotationSettings,
   RotationView,
   Route,
+  RoutingDecision,
+  RoutingFallback,
+  RoutingOverview,
   RoutingReport,
   RoutingReportRow,
   RoutingRule,
   RoutingRules,
+  RoutingStepView,
+  RoutingSurface,
   ShowWhen,
   TeamHosts,
   DateOverride,
@@ -540,6 +553,13 @@ export type {
 } from './routing/reports.ts';
 export type { AuditLog, AuditLogState, AuditLogStatus } from './audit/log.ts';
 export type { PageRulesHeld } from './routing/page-rules.ts';
+export type {
+  RoutingDecisionFilters,
+  RoutingDecisionsHeld,
+  RoutingDecisionsState,
+  RoutingHeld,
+  RoutingOverviewState,
+} from './routing/log.ts';
 export type {
   EmailPreference,
   EmailPreferencesState,
@@ -2160,6 +2180,18 @@ export function createDataLayer({
   });
   // A team page's rules as its Routing card reads them: filled by the page's answers, patched by its updates.
   const pageRules = createPageRules();
+  // Bookings › Routing (spec 0037, L6): the Overview and the Decisions log, held per workspace (and filters), read
+  // again on return.
+  const routingLog = createRoutingLog({
+    overview: (workspace) =>
+      beforeRead(workspace).then(() => call((options) => api.routing.overview({ workspace }, options))),
+    decisions: (workspace, filters, cursor) =>
+      beforeRead(workspace).then(() =>
+        call((options) =>
+          api.routing.decisions({ workspace, ...filters, ...(cursor === undefined ? {} : { cursor }) }, options),
+        ),
+      ),
+  });
 
   // Availability schedules (spec 0035): a held list per workspace and member, patched by every write, read again on
   // a `schedules` event.
@@ -3833,6 +3865,14 @@ export function createDataLayer({
        * `usePageRules`; undefined until an answer carrying the page arrives.
        */
       pageRules: (workspace: string, pageId: string): PageRulesHeld => pageRules.view(workspace, pageId),
+      /** Bookings › Routing › Overview (spec 0037, AC-1383): the routed surfaces; held while the tab shows it. */
+      overview: (workspace: string): RoutingHeld<RoutingOverviewState> => routingLog.overview(workspace),
+      /** Bookings › Routing › Decisions (AC-1383): newest first with these filters, `more()` for the next page. */
+      decisions: (workspace: string, filters: RoutingDecisionFilters): RoutingDecisionsHeld =>
+        routingLog.decisions(workspace, filters),
+      /** One decision by id (a link to it): its explanation, or NOT_FOUND. */
+      decision: (workspace: string, id: string): Promise<RoutingDecision> =>
+        beforeRead(workspace).then(() => call((options) => api.routing.decision({ workspace, id }, options))),
     },
     home: {
       /**
@@ -5658,8 +5698,14 @@ export function createDataLayer({
       /** Creates an untitled form at once (AC-649), waiting for the server (`forms.manage`). */
       create: (
         workspace: string,
-        // `mainObjectId: null` keeps its submissions only, adding nothing to the CRM.
-        form: { readonly id: string; readonly name?: string; readonly mainObjectId?: string | null },
+        // `mainObjectId: null` keeps its submissions only, adding nothing to the CRM; `starter: 'team_link'` makes the
+        // Team link (spec 0037, AC-1353).
+        form: {
+          readonly id: string;
+          readonly name?: string;
+          readonly mainObjectId?: string | null;
+          readonly starter?: 'team_link';
+        },
       ) =>
         formLists.write(workspace, {
           send: () => call((options) => api.forms.create({ workspace, ...form, mutationId: mintId() }, options)),

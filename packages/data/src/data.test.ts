@@ -786,6 +786,9 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
     },
     routing: {
       report: os.routing.report.handler(notServed),
+      overview: os.routing.overview.handler(notServed),
+      decisions: os.routing.decisions.handler(notServed),
+      decision: os.routing.decision.handler(notServed),
     },
     audit: {
       list: os.audit.list.handler(({ input }) => {
@@ -3248,6 +3251,7 @@ describe('a team page’s routing rules (spec 0043, AC-1608)', () => {
     questions: [],
     fileToCrm: true,
     answersObjectId: null,
+    formOnly: false,
     defaultView: 'month',
     profileSection: null,
     profilePosition: 0,

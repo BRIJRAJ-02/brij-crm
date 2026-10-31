@@ -6,9 +6,9 @@
  * shared out between, and the calendars it reads. The last two came up out of Settings › Scheduling (25 October
  * 2026): they are what somebody setting up bookings does next, not workspace housekeeping, and a person who had
  * not connected a calendar had no reason to go looking three levels into Settings for the one thing that makes
- * every other tab work.
+ * every other tab work. Routing (spec 0037, AC-1447) follows Round robin, for holders of `routing.manage` only.
  */
-export const BOOKINGS_TABS = ['calendar', 'list', 'availability', 'round-robin', 'calendars'] as const;
+export const BOOKINGS_TABS = ['calendar', 'list', 'availability', 'round-robin', 'routing', 'calendars'] as const;
 
 /** One of Bookings' tabs. */
 export type BookingsPageTab = (typeof BOOKINGS_TABS)[number];

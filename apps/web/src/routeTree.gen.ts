@@ -37,6 +37,7 @@ import { Route as WSlugBookingsCalendarRouteImport } from './routes/w.$slug.book
 import { Route as WSlugBookingsCalendarsRouteImport } from './routes/w.$slug.bookings.calendars.tsx'
 import { Route as WSlugBookingsListRouteImport } from './routes/w.$slug.bookings.list.tsx'
 import { Route as WSlugBookingsRoundRobinRouteImport } from './routes/w.$slug.bookings.round-robin.tsx'
+import { Route as WSlugBookingsRoutingRouteImport } from './routes/w.$slug.bookings.routing.tsx'
 import { Route as WSlugCapturesIndexRouteImport } from './routes/w.$slug.captures.index.tsx'
 import { Route as WSlugFormsSplatRouteImport } from './routes/w.$slug.forms.$.tsx'
 import { Route as WSlugObjectsObjectRouteImport } from './routes/w.$slug.objects.$object.tsx'
@@ -225,6 +226,11 @@ const WSlugBookingsListRoute = WSlugBookingsListRouteImport.update({
 const WSlugBookingsRoundRobinRoute = WSlugBookingsRoundRobinRouteImport.update({
   id: '/round-robin',
   path: '/round-robin',
+  getParentRoute: () => WSlugBookingsRoute,
+} as any)
+const WSlugBookingsRoutingRoute = WSlugBookingsRoutingRouteImport.update({
+  id: '/routing',
+  path: '/routing',
   getParentRoute: () => WSlugBookingsRoute,
 } as any)
 const WSlugCapturesIndexRoute = WSlugCapturesIndexRouteImport.update({
@@ -530,6 +536,7 @@ export interface FileRoutesByFullPath {
   '/w/$slug/bookings/calendars': typeof WSlugBookingsCalendarsRoute
   '/w/$slug/bookings/list': typeof WSlugBookingsListRoute
   '/w/$slug/bookings/round-robin': typeof WSlugBookingsRoundRobinRoute
+  '/w/$slug/bookings/routing': typeof WSlugBookingsRoutingRoute
   '/w/$slug/forms/$': typeof WSlugFormsSplatRoute
   '/w/$slug/objects/$object': typeof WSlugObjectsObjectRoute
   '/w/$slug/settings/calendar': typeof WSlugSettingsCalendarRoute
@@ -604,6 +611,7 @@ export interface FileRoutesByTo {
   '/w/$slug/bookings/calendars': typeof WSlugBookingsCalendarsRoute
   '/w/$slug/bookings/list': typeof WSlugBookingsListRoute
   '/w/$slug/bookings/round-robin': typeof WSlugBookingsRoundRobinRoute
+  '/w/$slug/bookings/routing': typeof WSlugBookingsRoutingRoute
   '/w/$slug/forms/$': typeof WSlugFormsSplatRoute
   '/w/$slug/objects/$object': typeof WSlugObjectsObjectRoute
   '/w/$slug/settings/calendar': typeof WSlugSettingsCalendarRoute
@@ -683,6 +691,7 @@ export interface FileRoutesById {
   '/w/$slug/bookings/calendars': typeof WSlugBookingsCalendarsRoute
   '/w/$slug/bookings/list': typeof WSlugBookingsListRoute
   '/w/$slug/bookings/round-robin': typeof WSlugBookingsRoundRobinRoute
+  '/w/$slug/bookings/routing': typeof WSlugBookingsRoutingRoute
   '/w/$slug/forms/$': typeof WSlugFormsSplatRoute
   '/w/$slug/objects/$object': typeof WSlugObjectsObjectRoute
   '/w/$slug/settings/calendar': typeof WSlugSettingsCalendarRoute
@@ -763,6 +772,7 @@ export interface FileRouteTypes {
     | '/w/$slug/bookings/calendars'
     | '/w/$slug/bookings/list'
     | '/w/$slug/bookings/round-robin'
+    | '/w/$slug/bookings/routing'
     | '/w/$slug/forms/$'
     | '/w/$slug/objects/$object'
     | '/w/$slug/settings/calendar'
@@ -837,6 +847,7 @@ export interface FileRouteTypes {
     | '/w/$slug/bookings/calendars'
     | '/w/$slug/bookings/list'
     | '/w/$slug/bookings/round-robin'
+    | '/w/$slug/bookings/routing'
     | '/w/$slug/forms/$'
     | '/w/$slug/objects/$object'
     | '/w/$slug/settings/calendar'
@@ -915,6 +926,7 @@ export interface FileRouteTypes {
     | '/w/$slug/bookings/calendars'
     | '/w/$slug/bookings/list'
     | '/w/$slug/bookings/round-robin'
+    | '/w/$slug/bookings/routing'
     | '/w/$slug/forms/$'
     | '/w/$slug/objects/$object'
     | '/w/$slug/settings/calendar'
@@ -1175,6 +1187,13 @@ declare module '@tanstack/react-router' {
       path: '/round-robin'
       fullPath: '/w/$slug/bookings/round-robin'
       preLoaderRoute: typeof WSlugBookingsRoundRobinRouteImport
+      parentRoute: typeof WSlugBookingsRoute
+    }
+    '/w/$slug/bookings/routing': {
+      id: '/w/$slug/bookings/routing'
+      path: '/routing'
+      fullPath: '/w/$slug/bookings/routing'
+      preLoaderRoute: typeof WSlugBookingsRoutingRouteImport
       parentRoute: typeof WSlugBookingsRoute
     }
     '/w/$slug/captures/': {
@@ -1522,6 +1541,7 @@ interface WSlugBookingsRouteChildren {
   WSlugBookingsCalendarsRoute: typeof WSlugBookingsCalendarsRoute
   WSlugBookingsListRoute: typeof WSlugBookingsListRoute
   WSlugBookingsRoundRobinRoute: typeof WSlugBookingsRoundRobinRoute
+  WSlugBookingsRoutingRoute: typeof WSlugBookingsRoutingRoute
   WSlugBookingsIndexRoute: typeof WSlugBookingsIndexRoute
 }
 
@@ -1531,6 +1551,7 @@ const WSlugBookingsRouteChildren: WSlugBookingsRouteChildren = {
   WSlugBookingsCalendarsRoute: WSlugBookingsCalendarsRoute,
   WSlugBookingsListRoute: WSlugBookingsListRoute,
   WSlugBookingsRoundRobinRoute: WSlugBookingsRoundRobinRoute,
+  WSlugBookingsRoutingRoute: WSlugBookingsRoutingRoute,
   WSlugBookingsIndexRoute: WSlugBookingsIndexRoute,
 }
 

@@ -2224,6 +2224,8 @@ function ListBar({
       start={
         <SegmentedControl
           label={strings.tabsLabel}
+          // Compact, as the strip's other switches are: with Routing (and the Roster) the strip holds seven tabs.
+          size="compact"
           value={search.tab}
           onChange={(value) => {
             const tab = TABS.find((each) => each === value);

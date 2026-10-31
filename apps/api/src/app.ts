@@ -548,6 +548,9 @@ export function createApp({
   });
   // The form to booking hand off (spec 0023 AC-1057): one key, signing on the form's side and reading on the page's.
   const formsHandoffKey = handoffKey(env.BETTER_AUTH_SECRET);
+  // Hosts' and signed in visitors' busy times, each kept for its minute: the booking pages' and the forms' free time
+  // check before a booking route (spec 0037, AC-1358) share them.
+  const bookingBusy = createBusyCache(booking.busy);
   mountPublicForms(app, {
     db,
     jobs,
@@ -564,6 +567,7 @@ export function createApp({
     ipSalt,
     answersKey: createHmac('sha256', ipSalt).update('crm-answers-hash-v1').digest('hex'),
     handoffKey: formsHandoffKey,
+    busy: bookingBusy,
     ...(env.RECAPTCHA_SITE_KEY === undefined ? {} : { recaptchaSiteKey: env.RECAPTCHA_SITE_KEY }),
   });
 
@@ -588,8 +592,6 @@ export function createApp({
   // It sees only the client IP the edge guard trusted.
   app.on(['GET', 'POST'], '/auth/*', (c) => auth.handle(c.req.raw, c.get('clientIp'), c.get('origin'), c.get('geo')));
 
-  // Hosts' and signed in visitors' busy times, each kept for its minute.
-  const bookingBusy = createBusyCache(booking.busy);
   // Booking pages' public routes (spec 0025): a page's public key, no session; writes passed the Origin check above.
   // An email's preferences link (the emails lane): its signed token, no session; reads, changes, one click unsubscribe.
   mountEmailPreferences(app, {

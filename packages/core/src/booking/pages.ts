@@ -48,6 +48,7 @@ import { pageAuditSides } from './page-audit.ts';
 import { queueSchedulingNotice } from '../scheduling/notice.ts';
 import { deleteEditorsOf, editedBy } from '../scheduling/editor-rows.ts';
 import { placeNewPage } from '../profile/items.ts';
+import { checkNotRouted } from '../routing/in-use.ts';
 import { linksOf, seenLinks } from './links.ts';
 import { lockKey } from './locks.ts';
 import { lockRotations } from '../rotation/assign.ts';
@@ -322,6 +323,7 @@ function viewOf(
     questions: seen(page.questions, page.answersObjectId),
     fileToCrm: page.fileToCrm,
     answersObjectId: page.answersObjectId,
+    formOnly: page.formOnly,
     ...(page.status === 'paused' && page.pausedReason !== undefined ? { pausedReason: page.pausedReason } : {}),
     // Who hosts it and how it routes are for those who manage it: a member seeing a workspace link gets neither.
     ...(hosts === undefined || !changeable ? {} : { hosts }),
@@ -808,6 +810,7 @@ export async function createBookingPage(
       questions: given.questions ?? [],
       fileToCrm: given.fileToCrm ?? true,
       answersObjectId: given.answersObjectId ?? null,
+      formOnly: kind === 'round_robin' && given.formOnly === true,
     };
     if (settings.scheduleId !== null) await checkPageSchedule(tx, owner, settings.scheduleId);
     if (settings.answersObjectId !== null) {
@@ -856,6 +859,7 @@ export async function createBookingPage(
           questions: settings.questions,
           fileToCrm: settings.fileToCrm,
           answersObjectId: settings.answersObjectId,
+          formOnly: settings.formOnly,
           createdByType: by.type,
           createdById: by.id,
           createdByMemberId: by.memberId,
@@ -930,6 +934,12 @@ export async function updateBookingPage(
     }
     checkTeamSchedule(page.kind, settings.scheduleId);
     checkDurations(settings.durations);
+    // Only through a form is a team page's (spec 0037, AC-1388): a personal page has no form in front of it.
+    if (settings.formOnly === true && page.kind !== 'round_robin') {
+      throw refuseOn('CONFIG_INVALID', 'Only a team page books through a form only.', 'formOnly');
+    }
+    // A page a published form still sends visitors to stays live until that form changes (AC-1341).
+    if (settings.status === 'paused' && page.status === 'live') await checkNotRouted(tx, scope.access, page.id);
     if (settings.scheduleId !== undefined && settings.scheduleId !== null) {
       await checkPageSchedule(tx, page.ownerMemberId, settings.scheduleId);
     }
@@ -1046,6 +1056,7 @@ export async function updateBookingPage(
           ...(questions === undefined ? {} : { questions }),
           ...(settings.fileToCrm === undefined ? {} : { fileToCrm: settings.fileToCrm }),
           ...(settings.answersObjectId === undefined ? {} : { answersObjectId: settings.answersObjectId }),
+          ...(settings.formOnly === undefined ? {} : { formOnly: settings.formOnly }),
           ...(routing === undefined ? {} : { routing }),
           updatedAt: sql`now()`,
           updatedByType: by.type,
@@ -1117,6 +1128,7 @@ export async function deleteBookingPage(
     const page = await pageToChange(tx, scope, input.pageId, true);
     // An editor changes everything on a page but its deletion (spec 0037, AC-1331).
     if (onlyEdits(scope, page)) throw refuse('FORBIDDEN', 'Only an admin or the page’s owner can delete it.');
+    await checkNotRouted(tx, scope.access, page.id);
     await changedFor(tx, scope, page, undefined);
     await deleteEditorsOf(tx, 'booking_page', [page.id]);
     const by = actorRow(scope.actor);

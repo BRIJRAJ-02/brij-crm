@@ -679,6 +679,8 @@ export { listEditors, setEditors } from './scheduling/editors.ts';
 // Lead routing (spec 0043): deciding a route, a surface's report.
 export { decideRoute, recordFactKeys, type RouteDecision } from './routing/decide.ts';
 export { routingReport } from './routing/report.ts';
+// Bookings › Routing (spec 0037, L6): the Overview and the Decisions log, for holders of routing.manage.
+export { routingDecision, routingDecisions, routingOverview } from './routing/log.ts';
 export { searchWorkspace, type GlobalSearchInput } from './search/search.ts';
 export { listRecents, visitRecent, RECENTS_KEPT, type RecentVisit } from './search/recents.ts';
 export {

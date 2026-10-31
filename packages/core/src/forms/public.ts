@@ -8,6 +8,9 @@
 import {
   BOOKING_COUNTDOWN,
   checkAnswers,
+  FREE_TIME_LIMIT_MS,
+  NO_FREE_TIME_MESSAGE,
+  RoutingStep,
   formStrings,
   hiddenFacts,
   storedContext,
@@ -30,7 +33,8 @@ import { startJob } from '../jobs/service.ts';
 import type { JobRegistry } from '../jobs/registry.ts';
 import { FORMS_PROCESS } from './process.ts';
 import { attachUploads, claimSpamUploads, claimUploads } from './uploads.ts';
-import { routeSubmission, storedRoute, submissionDecision } from '../routing/forms.ts';
+import { pageFreeTime, pageFreeTimeWithin, type FreeTimeDeps } from '../routing/free-time.ts';
+import { recordSteps, routeSubmission, storedRoute, submissionDecision } from '../routing/forms.ts';
 import { workspaceAddressProblem } from '../booking/workspace-addresses.ts';
 import { loadForm, loadVersions, publicFormOf, workspacePublicKey, type FormRow } from './shared.ts';
 import {
@@ -333,6 +337,11 @@ export interface SubmitInput {
   readonly signHandoff?: SignHandoff;
   /** Our own public origins: a redirect to another workspace's page is never followed (spec 0056, AC-5612). */
   readonly publicOrigins?: readonly string[];
+  /**
+   * The free time check before a booking route is answered (spec 0037, AC-1358): the cached busy times, and how long
+   * it may take (2.5 seconds unless set, AC-1380). Without it the route is answered unchecked, as before.
+   */
+  readonly freeTime?: FreeTimeDeps & { readonly limitMs?: number };
 }
 
 /** What storing a submission answered: the visitor's next step, and how the spam checks judged it. */
@@ -525,12 +534,18 @@ export async function submitForm(
           .where(and(eq(formSubmissions.formId, form.id), eq(formSubmissions.idempotencyKey, body.idempotencyKey)));
         const same =
           first !== undefined && first.ipHash === (input.ipHash ?? null) && first.answersHash === (hash ?? null);
+        // What the free time check did the first time stands (AC-1358): the same fallback, or the same sentence.
+        const steps = same ? stepsOf((await submissionDecision(tx, first.id))?.steps) : [];
+        if (steps.some((step) => step.kind === 'contact')) {
+          return { next: NO_FREE_TIME_NEXT, verdict: judged.verdict, replayed: true };
+        }
+        const isFallback = steps.some((step) => step.kind === 'fallback');
         const again = await nextOf(
           tx,
           live.document,
           same ? first.id : undefined,
           input.signHandoff,
-          same ? await storedRoute(tx, live.document, first.id) : undefined,
+          same && !isFallback ? await storedRoute(tx, live.document, first.id) : undefined,
           { workspaceId: scope.workspaceId, publicOrigins: input.publicOrigins ?? [] },
         );
         return { next: again, verdict: judged.verdict, replayed: true };
@@ -556,9 +571,151 @@ export async function submitForm(
         workspaceId: scope.workspaceId,
         publicOrigins: input.publicOrigins ?? [],
       });
-      return { next, verdict: judged.verdict, replayed: false };
+      // A booking route gets the free time check once this write is in (AC-1358): never while it holds a connection.
+      const booking =
+        next.kind === 'booking' && input.freeTime !== undefined
+          ? await plannedBooking(tx, live.document, route)
+          : undefined;
+      return {
+        next,
+        verdict: judged.verdict,
+        replayed: false,
+        ...(booking === undefined ? {} : { check: { submissionId: row.id, document: live.document, booking } }),
+      };
     },
     hooks,
   );
-  return result;
+  const pending = 'check' in result ? result.check : undefined;
+  if (pending === undefined || input.freeTime === undefined) {
+    return { next: result.next, verdict: result.verdict, replayed: result.replayed };
+  }
+  const checked = await checkFreeTime(scope, input, pending, input.freeTime);
+  return { next: checked ?? result.next, verdict: result.verdict, replayed: false };
+}
+
+/** The page a submit's next step books (a rule's route, else After someone sends it) when it is live, or undefined. */
+interface PlannedBooking {
+  readonly pageId: string;
+  readonly hosts?: readonly string[];
+  /** True when a rule chose it, so After someone sends it is still there to fall back to. */
+  readonly viaRule: boolean;
+}
+
+/** Which page `nextOf` booked: the rule's when that page is live, else After someone sends it's. */
+async function plannedBooking(
+  tx: WorkspaceTx,
+  document: FormDocument,
+  route: Route | undefined,
+): Promise<PlannedBooking | undefined> {
+  if (route?.kind === 'book') {
+    const [live] = await tx
+      .select({ id: bookingPages.id })
+      .from(bookingPages)
+      .where(
+        and(eq(bookingPages.id, route.bookingPageId), eq(bookingPages.status, 'live'), isNull(bookingPages.deletedAt)),
+      );
+    if (live !== undefined) {
+      return {
+        pageId: route.bookingPageId,
+        viaRule: true,
+        ...(route.hosts === undefined ? {} : { hosts: route.hosts }),
+      };
+    }
+  }
+  return document.after.kind === 'booking' ? { pageId: document.after.bookingPageId, viaRule: false } : undefined;
+}
+
+/** What the visitor reads when no page they could be sent to has free time (AC-1358). */
+const NO_FREE_TIME_NEXT: SubmitNext = { kind: 'message', text: NO_FREE_TIME_MESSAGE, offersMeeting: false };
+
+/** A decision's stored steps, read defensively: anything that doesn't parse is left out. */
+function stepsOf(stored: unknown): readonly RoutingStep[] {
+  if (!Array.isArray(stored)) return [];
+  return stored.flatMap((each) => {
+    const parsed = RoutingStep.safeParse(each);
+    return parsed.success ? [parsed.data] : [];
+  });
+}
+
+/**
+ * The free time check (AC-1358, AC-1380), after the submission's write: the planned page with the route's hosts, then
+ * After someone sends it when a rule chose the page; at most 2.5 seconds in all, past which the route is answered
+ * unchecked. Records each step on the submission's decision (a form with no rules gets its row here, rule null), and
+ * answers the next step when it changed, else undefined.
+ */
+async function checkFreeTime(
+  scope: EngineScope,
+  input: SubmitInput,
+  check: { readonly submissionId: string; readonly document: FormDocument; readonly booking: PlannedBooking },
+  deps: FreeTimeDeps & { readonly limitMs?: number },
+): Promise<SubmitNext | undefined> {
+  const started = performance.now();
+  const limit = deps.limitMs ?? FREE_TIME_LIMIT_MS;
+  const left = () => limit - (performance.now() - started);
+  const look = (pageId: string, hosts?: readonly string[]) =>
+    pageFreeTimeWithin(
+      (isLate) => pageFreeTime(scope, deps, { pageId, ...(hosts === undefined ? {} : { hosts }) }, isLate),
+      left(),
+    );
+  const unchecked = (pageId: string, found: 'timeout' | 'unknown'): RoutingStep => ({
+    kind: 'unchecked',
+    pageId,
+    reason: found === 'timeout' ? 'timeout' : 'calendar',
+  });
+  const { booking, document } = check;
+  const first = await look(booking.pageId, booking.hosts);
+  if (first === 'free') return undefined;
+  const steps: RoutingStep[] = [];
+  let ending: 'planned' | 'after' | 'contact';
+  if (first !== 'none') {
+    steps.push(unchecked(booking.pageId, first));
+    ending = 'planned';
+  } else {
+    steps.push({ kind: 'no_free_time', pageId: booking.pageId });
+    const { after } = document;
+    if (!booking.viaRule) {
+      steps.push({ kind: 'contact' });
+      ending = 'contact';
+    } else if (after.kind !== 'booking') {
+      steps.push({ kind: 'fallback' });
+      ending = 'after';
+    } else {
+      // The same page with no hosts narrowed was just looked at whole: it has nothing either.
+      const second =
+        after.bookingPageId === booking.pageId && booking.hosts === undefined
+          ? 'none'
+          : await look(after.bookingPageId);
+      if (second === 'none') {
+        steps.push({ kind: 'no_free_time', pageId: after.bookingPageId }, { kind: 'contact' });
+        ending = 'contact';
+      } else {
+        steps.push({ kind: 'fallback', pageId: after.bookingPageId });
+        if (second !== 'free') steps.push(unchecked(after.bookingPageId, second));
+        ending = 'after';
+      }
+    }
+  }
+  // The submission is stored already: a failure here leaves the next step as it was rather than failing the visitor.
+  return inWorkspace(scope, async (tx) => {
+    const routedPageId =
+      ending === 'planned'
+        ? booking.pageId
+        : ending === 'after' && document.after.kind === 'booking'
+          ? document.after.bookingPageId
+          : null;
+    await recordSteps(tx, {
+      workspaceId: scope.workspaceId,
+      formId: input.formId,
+      submissionId: check.submissionId,
+      steps,
+      routedPageId,
+      keepHosts: ending === 'planned',
+    });
+    if (ending === 'planned') return undefined;
+    if (ending === 'contact') return NO_FREE_TIME_NEXT;
+    return nextOf(tx, document, check.submissionId, input.signHandoff, undefined, {
+      workspaceId: scope.workspaceId,
+      publicOrigins: input.publicOrigins ?? [],
+    });
+  }).catch((): undefined => undefined);
 }

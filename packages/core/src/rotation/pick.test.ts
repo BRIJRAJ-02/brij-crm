@@ -137,6 +137,7 @@ function teamPage(over: Partial<PageRecord> = {}): PageRecord {
     questions: [],
     fileToCrm: true,
     answersObjectId: null,
+    formOnly: false,
     profileSection: null,
     profilePosition: 0,
     createdAt: at('2026-10-01T00:00:00Z'),

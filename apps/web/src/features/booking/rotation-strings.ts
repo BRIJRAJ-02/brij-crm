@@ -183,6 +183,13 @@ export const strings = {
   bookEveryoneLine: 'Books whoever in the workspace is free, in turn. It’s on nobody’s profile.',
   bookMeLine: 'One on one: guests book you, by your hours.',
   bookRotationLine: 'One host from a group you pick, in turn.',
+  // The Team link (spec 0037, AC-1353): a form in front of the team pages.
+  teamLink: 'Team link',
+  teamLinkName: 'Book a call',
+  teamLinkLine: 'A form asks what they want, then books the right team page.',
+  teamLinkNone: 'Make a team page or the workspace link first.',
+  addTeamLink: 'Add a team link',
+  createTeamLink: 'Create team link',
   // Copy handoff (31 Oct 2026): the switches are the explanation.
   rosterNote: (on: number, all: number) => `${String(on)} of ${String(all)} on.`,
   everyoneSwitch: 'Everyone in the workspace, including people who join later',

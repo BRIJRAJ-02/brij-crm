@@ -130,6 +130,8 @@ export function pageOf(
     questions: BookingQuestions.safeParse(row.questions).data ?? [],
     fileToCrm: row.fileToCrm,
     answersObjectId: row.answersObjectId,
+    // Only a round robin page books through a form only (AC-1388); any other reads off.
+    formOnly: row.kind === 'round_robin' && row.formOnly,
     ...(row.pausedReason === 'host_removed' ? { pausedReason: 'host_removed' as const } : {}),
     routingRules: RoutingRules.safeParse(row.routing).data?.rules ?? [],
     createdAt: row.createdAt,

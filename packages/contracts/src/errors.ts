@@ -89,6 +89,8 @@ export const ERROR_MAP = {
   TIME_OFF_LIMIT: CONFLICT,
   // Page and rotation editors (spec 0037, AC-1331): "A page or rotation can have at most 20 editors."
   EDITOR_LIMIT: CONFLICT,
+  // Routing (spec 0037, AC-1341): "Rule 3 of Contact us sends people here. Change the rule first."
+  ROUTING_IN_USE: CONFLICT,
   // The sidebar (spec 0034, AC-934): "You have 50 favourites. Remove one first."
   NAV_LIMIT: CONFLICT,
   // Domain join (spec 0031, AC-819).
