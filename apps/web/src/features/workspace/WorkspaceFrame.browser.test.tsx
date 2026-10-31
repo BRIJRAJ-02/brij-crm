@@ -529,21 +529,9 @@ describe('the app’s sidebar (spec 0034)', () => {
     expect(sent).toEqual([{ op: 'hide', kind: 'object', id: COMPANIES }]);
   });
 
-  it('moves a section from the keyboard on its grip, counting the sections it doesn’t draw (AC-932)', async () => {
+  it('moves a section from its menu, counting the sections it doesn’t draw (AC-932)', async () => {
     await renderFrame(undefined, { objects: OBJECTS });
-    // The section menu holds no Move up or down (the final copy pass, 31 October 2026): the grip is the way.
-    const grip = button('Move the Records section');
-    if (grip === undefined) throw new Error('No section grip.');
-    await act(async () => {
-      grip.focus();
-      await new Promise((resolve) => setTimeout(resolve, 20));
-    });
-    for (const key of [' ', 'ArrowDown', ' ']) {
-      await act(async () => {
-        grip.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
-        await new Promise((resolve) => setTimeout(resolve, 50));
-      });
-    }
+    await pick('Records options', 'Move down');
     // Drawn: Records, Scheduling; stored: Favourites, Records, Lists, Scheduling. Down lands after Scheduling.
     expect(sent).toEqual([{ op: 'moveSection', section: 'records', toIndex: 3 }]);
   });

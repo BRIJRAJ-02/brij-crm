@@ -1,6 +1,6 @@
 // Brief
 // Purpose: an object's attributes in settings: its own by position, the system ones, and the archived ones.
-// Main task: owners and admins add, edit, move (drag or the grip's keys), archive and restore attributes.
+// Main task: owners and admins add, edit, move (drag, or Move up and down), archive and restore attributes.
 // Leaves out: options and type settings (spec 0012, milestone 3), groups (#18), and the schema map (#56).
 import { isDataError, type AttributeDefinition, type MemberSummary, type ObjectSummary, type Usage } from '@crm/data';
 import {
@@ -236,6 +236,12 @@ export function AttributesTab({
     );
   };
 
+  /** Move up or down past the next live attribute, which is where the row visibly goes. */
+  const step = (attribute: AttributeDefinition, direction: -1 | 1) => {
+    const neighbour = live[live.indexOf(attribute) + direction];
+    if (neighbour !== undefined) moveTo(attribute, own.indexOf(neighbour));
+  };
+
   const restore = (attribute: AttributeDefinition) => {
     if (restoring !== undefined) return;
     setRestoring(attribute.id);
@@ -285,6 +291,7 @@ export function AttributesTab({
       default: {
         // Members get the row and its badges only; the row opens the attribute read only (spec 0012, screens).
         if (!canManage) return null;
+        const at = live.indexOf(attribute);
         return (
           <MenuTrigger>
             <Button variant="ghost" icon="ellipsis" label={strings.rowActions(attribute.title)} />
@@ -292,13 +299,25 @@ export function AttributesTab({
               label={strings.rowActions(attribute.title)}
               onAction={(key) => {
                 if (key === 'edit') onSelect(attribute.id);
+                if (key === 'up') step(attribute, -1);
+                if (key === 'down') step(attribute, 1);
                 if (key === 'archive') setArchiving(attribute.id);
               }}
             >
               <MenuItem id="edit" icon="pencil">
                 {strings.edit}
               </MenuItem>
-              {/* Moves are the row's grip (drag, or Space and the arrows): the menu holds no Move up or down. */}
+              {/* Only the moves there is room for: the first has no Move up, the last no Move down. */}
+              {at > 0 && (
+                <MenuItem id="up" icon="chevron-up" isDisabled={isMoving}>
+                  {strings.moveUp}
+                </MenuItem>
+              )}
+              {at >= 0 && at < live.length - 1 && (
+                <MenuItem id="down" icon="chevron-down" isDisabled={isMoving}>
+                  {strings.moveDown}
+                </MenuItem>
+              )}
               {/* The name every record goes by never archives. */}
               {!attribute.isPrimary && (
                 <>

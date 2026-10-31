@@ -45,9 +45,9 @@ export interface SidebarSectionsProps {
 }
 
 /**
- * The sections in the member's order (AC-931, AC-932, AC-933): each folds from its label and moves by its grip (drag,
- * or Space and the arrows), its menu holds Customise sidebar, and its items reorder by their grips and hide from
- * their menus, each change kept for the member.
+ * The sections in the member's order (AC-931, AC-932, AC-933): each folds from its label, moves by its grip or its
+ * menu (Move up, Move down, Customise sidebar), and its items reorder by their grips and hide from their menus,
+ * each change kept for the member.
  */
 export function SidebarSections({
   data,
@@ -149,10 +149,22 @@ export function SidebarSections({
               <Menu
                 label={strings.sectionOptions(section.title)}
                 onAction={(key) => {
+                  if (key === 'up') moveSection(section.key, index - 1);
+                  if (key === 'down') moveSection(section.key, index + 1);
                   if (key === 'customise') onCustomise();
                 }}
               >
-                {/* Moves are the section's grip (drag, or Space and the arrows), so the menu holds no Move up or down. */}
+                {/* Only the moves there is room for: the first has no Move up, the last no Move down. */}
+                {index > 0 && (
+                  <MenuItem id="up" icon="arrow-up">
+                    {strings.moveUp}
+                  </MenuItem>
+                )}
+                {index < sections.length - 1 && (
+                  <MenuItem id="down" icon="arrow-down">
+                    {strings.moveDown}
+                  </MenuItem>
+                )}
                 <MenuItem id="customise" icon="sliders-horizontal">
                   {strings.customiseSidebar}
                 </MenuItem>
