@@ -410,6 +410,7 @@ export function useBulkActions({
     selection.kind === 'some' && ids.length > 0 && exportColumns.length > 0 ? (
       <Button
         icon="download"
+        label={importStrings.exportSelected(ids.length)}
         onPress={() => {
           if (exporting.current) return;
           exporting.current = true;
@@ -429,7 +430,7 @@ export function useBulkActions({
           });
         }}
       >
-        {importStrings.exportSelected(ids.length)}
+        {importStrings.exportShort}
       </Button>
     ) : undefined;
 

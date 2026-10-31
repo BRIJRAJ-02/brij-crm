@@ -148,6 +148,12 @@
     box-shadow: var(--shadow-focus-inset);
   }
 
+  /* A ticked row is tinted already: after a click its check cell drops the ring, so the row has one selected look
+     (owner item 88, 31 October 2026); keyboard focus keeps it. */
+  .row[data-selected] > .check:not(:focus-visible, :has(:focus-visible)) {
+    box-shadow: none;
+  }
+
   .spacer {
     flex: none;
     inline-size: var(--spacer-width);
