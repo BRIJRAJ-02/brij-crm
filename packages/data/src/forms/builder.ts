@@ -32,6 +32,7 @@ export {
   CONDITIONS_MAX,
   HIDDEN_FIELDS,
   hiddenFactKey,
+  isRecordFact,
   // Routing's shared layer (spec 0037, L7): skills, members with skills, and Known.
   KNOWN_FACT,
   KNOWN_VALUES,
