@@ -115,6 +115,8 @@ function firstDraft(
       target === undefined
         ? {}
         : { main: { objectId: target.objectId, ...(match === undefined ? {} : { matchAttributeId: match.id }) } },
+    layout: 'classic',
+    steps: [],
     look: { colour: 'light', corners: 'rounded' },
     headline: 'Fill this in and we will come back to you',
     buttonText: 'Send',

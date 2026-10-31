@@ -8,13 +8,16 @@
 // number in E.164 with the country it was dialled from.
 import { choiceKeysOf, LONG_ANSWER_MAX, SHORT_ANSWER_MAX, type AnswerType } from './answer-types.ts';
 import { countryOfE164, DIAL_CODES } from './dial-codes.ts';
+import { groupsOf, type FormLayout, type PathStep } from './path.ts';
 import type { FormLanguage, PublicQuestion } from './public.ts';
 import { matchesShowWhen } from './show-when.ts';
 import { formStrings, type FormStrings } from './strings.ts';
 
-/** What the check needs from a form: its questions and its language. */
+/** What the check needs from a form: its questions and its language, and with Steps its steps (spec 0063). */
 export interface CheckedForm {
   readonly language: FormLanguage;
+  readonly layout?: FormLayout | undefined;
+  readonly steps?: readonly PathStep[] | undefined;
   readonly questions: readonly Pick<
     PublicQuestion,
     'key' | 'answerType' | 'required' | 'choices' | 'choiceKeys' | 'showWhen'
@@ -181,25 +184,35 @@ export function checkAnswers(
   const words = formStrings(form.language);
   const values: Record<string, string | boolean | PhoneAnswer | FileAnswer> = {};
   const fields: Record<string, string> = {};
-  for (const question of form.questions) {
+  const byKey = new Map(form.questions.map((question) => [question.key, question]));
+  // In the form's order, step by step (spec 0063, AC-6314): a step whose Show when fails over the answers kept
+  // before it takes its questions off the path, so they are never required and never kept, as a hidden question's.
+  const checkQuestion = (question: (typeof form.questions)[number]): void => {
     // A question whose Show when doesn't hold over the answers kept so far is skipped: never required, never kept.
-    if (!matchesShowWhen(question.showWhen, values)) continue;
-    if (options.absentNotAsked === true && !Object.hasOwn(answers, question.key)) continue;
+    if (!matchesShowWhen(question.showWhen, values)) return;
+    if (options.absentNotAsked === true && !Object.hasOwn(answers, question.key)) return;
     const raw = Object.hasOwn(answers, question.key) ? answers[question.key] : undefined;
     if (question.answerType === 'checkbox' || question.answerType === 'yes_no') {
       const ticked = raw === true || raw === 'yes' || raw === 'true';
       if (question.answerType === 'checkbox' && question.required && !ticked)
         fields[question.key] = words.requiredCheckbox;
       else values[question.key] = ticked;
-      continue;
+      return;
     }
     if (isBlank(raw)) {
       if (question.required) fields[question.key] = words.required;
-      continue;
+      return;
     }
     const checked = checkOne(question.answerType, question.choices, choiceKeysOf(question), raw, words);
     if (checked.error !== undefined) fields[question.key] = checked.error;
     else if (checked.value !== undefined) values[question.key] = checked.value;
+  };
+  for (const group of groupsOf(form)) {
+    if (!matchesShowWhen(group.showWhen, values)) continue;
+    for (const key of group.keys) {
+      const question = byKey.get(key);
+      if (question !== undefined) checkQuestion(question);
+    }
   }
   return Object.keys(fields).length > 0 ? { ok: false, fields } : { ok: true, answers: values };
 }

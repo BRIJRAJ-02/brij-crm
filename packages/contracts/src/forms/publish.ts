@@ -6,6 +6,7 @@
 import { CHOICE_TYPES, fitsAttribute, FORM_SLUG } from './answer-types.ts';
 import type { AttributeType } from '../values/attribute-values.ts';
 import type { FormDocument } from './document.ts';
+import { stepsOfBreaks } from './path.ts';
 import { isHiddenFact, isRecordFact, NUMBER_OPS, type Condition, type ShowWhen } from './show-when.ts';
 
 /** An attribute as the check needs it: its name, type, and whether the publisher may write it. */
@@ -35,7 +36,12 @@ export interface PublishAttribute {
 export interface PublishInput {
   readonly name: string;
   readonly slug: string;
-  readonly document: Pick<FormDocument, 'questions' | 'targets'> & { readonly routing?: FormDocument['routing'] };
+  readonly document: Pick<FormDocument, 'questions' | 'targets'> & {
+    readonly routing?: FormDocument['routing'];
+    /** Steps are checked only with the Steps layout, the one that draws them (spec 0063). */
+    readonly layout?: FormDocument['layout'];
+    readonly steps?: FormDocument['steps'];
+  };
   /** The main object's live attributes, by id (archived and deleted ones absent). */
   readonly attributes: ReadonlyMap<string, PublishAttribute>;
   /** The main object's name, for the sentences that name it; "People" when it isn't given. */
@@ -61,9 +67,12 @@ export interface PublishProblem {
     | 'FILING_FORBIDDEN'
     | 'REQUIRED_MISSING'
     | 'SHOW_WHEN_INVALID'
-    | 'ROUTING_INVALID';
+    | 'ROUTING_INVALID'
+    | 'STEP_EMPTY';
   readonly message: string;
   readonly questionId?: string;
+  /** The step at fault (spec 0063): its Show when, or nothing under it. */
+  readonly stepId?: string;
   /** The routing rule at fault (spec 0043, AC-1605). */
   readonly ruleId?: string;
 }
@@ -293,6 +302,56 @@ function noMatchMessage(input: PublishInput, email: FormDocument['questions'][nu
   return `File the email question on ${where}. ${why}`;
 }
 
+/** A step's name in a sentence: "Step 2", or "Step 2, “About you”," when it has a title. */
+const stepNamed = (title: string | undefined, index: number) =>
+  title === undefined ? `Step ${String(index + 1)}` : `Step ${String(index + 1)}, “${title}”,`;
+
+/**
+ * The first problem with a Steps form's breaks (spec 0063, AC-6312), or undefined: a step with no question under it,
+ * a step's Show when reading what isn't before it, and a step with a Show when holding the email a submission is
+ * matched by, which always shows. Classic and One at a time draw no steps, so their breaks are never refused.
+ */
+function stepsProblem(input: PublishInput): PublishProblem | undefined {
+  const { questions, targets, layout, steps = [] } = input.document;
+  if (layout !== 'steps' || steps.length === 0) return undefined;
+  const all: Readable = new Map(questions.map((question) => [question.key, question]));
+  const resolved = stepsOfBreaks(questions, steps);
+  const before = new Map<string, FormDocument['questions'][number]>();
+  for (const [index, step] of resolved.entries()) {
+    const name = stepNamed(step.title, index);
+    if (step.id !== undefined && step.keys.length === 0) {
+      return {
+        code: 'STEP_EMPTY',
+        message: `${name} has no questions. Move a question under it, or remove the step.`,
+        stepId: step.id,
+      };
+    }
+    const problem = showWhenProblem(step.showWhen, before, all);
+    if (problem !== undefined && step.id !== undefined) {
+      return { code: 'SHOW_WHEN_INVALID', message: `${name} ${problem}. Change its Show when.`, stepId: step.id };
+    }
+    const match = targets.main?.matchAttributeId;
+    const email = step.keys
+      .map((key) => all.get(key))
+      .find(
+        (question) =>
+          question?.answerType === 'email' && match !== undefined && question.filedOn?.attributeId === match,
+      );
+    if (step.showWhen !== undefined && email !== undefined && step.id !== undefined) {
+      return {
+        code: 'SHOW_WHEN_INVALID',
+        message: `${named(email)} is how a submission becomes a person, so its step always shows. Remove the Show when on Step ${String(index + 1)}.`,
+        stepId: step.id,
+      };
+    }
+    for (const key of step.keys) {
+      const question = all.get(key);
+      if (question !== undefined) before.set(key, question);
+    }
+  }
+  return undefined;
+}
+
 /**
  * The first problem that stops a draft going live, or undefined when it can.
  * In order: the name, the address, an email question filed on the match
@@ -342,6 +401,8 @@ export function publishProblem(input: PublishInput): PublishProblem | undefined 
     targets.main === undefined ? undefined : { matchAttributeId: targets.main.matchAttributeId },
   );
   if (problem !== undefined) return problem;
+  const steps = stepsProblem(input);
+  if (steps !== undefined) return steps;
   const all: Readable = new Map(questions.map((question) => [question.key, question]));
   for (const [index, rule] of (input.document.routing?.rules ?? []).entries()) {
     const problem = showWhenProblem(rule.when, all, all, true);

@@ -6,6 +6,7 @@ export * from './answer-types.ts';
 export * from './check.ts';
 export * from './dial-codes.ts';
 export * from './email-hint.ts';
+export * from './path.ts';
 export * from './presets.ts';
 export * from './publish.ts';
 export * from './show-when.ts';
@@ -16,6 +17,7 @@ export type {
   FormLanguage,
   PublicForm,
   PublicQuestion,
+  PublicStep,
   SubmitBody,
   SubmitErrors,
   SubmitHidden,
@@ -23,4 +25,4 @@ export type {
   SubmitResult,
 } from './public.ts';
 export type { SubmissionContext, SubmitContext } from './context.ts';
-export type { FiledOn, FormAfter, FormDocument, FormLook, FormQuestion } from './document.ts';
+export type { FiledOn, FormAfter, FormDocument, FormLook, FormQuestion, FormStep } from './document.ts';

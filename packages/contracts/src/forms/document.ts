@@ -15,6 +15,7 @@ import {
   OPTION_KEY,
   QUESTION_KEY,
 } from './answer-types.ts';
+import { FORM_LAYOUTS, FORM_STEP_TITLE_MAX, stepsOfBreaks, type ResolvedStep } from './path.ts';
 import { FORM_LANGUAGES } from './public.ts';
 import { RoutingRules, ShowWhenSchema } from './routing.ts';
 import { Uuid, uuidWith } from '../values/ids.ts';
@@ -73,6 +74,30 @@ export const FormQuestion = z.strictObject({
 });
 /** One question. */
 export type FormQuestion = z.infer<typeof FormQuestion>;
+
+/** A step's id inside its document: stable across versions, never shown. */
+export const StepId = z
+  .string()
+  .regex(/^[a-z0-9][a-z0-9_-]{0,39}$/, { error: 'A step id is 1 to 40 lower case letters, digits, - or _.' });
+
+/**
+ * A break in the questions (spec 0063, AC-6303): a new step starts at `startsAt`, the id of its first question, with
+ * an optional title and Show when. Absent `startsAt` puts it after the last question, which leaves it empty until a
+ * question follows it. Breaks are kept with every layout and drawn only by Steps.
+ */
+export const FormStep = z.strictObject({
+  id: StepId,
+  title: z
+    .string()
+    .trim()
+    .max(FORM_STEP_TITLE_MAX, { error: `Keep a step’s title to ${String(FORM_STEP_TITLE_MAX)} characters.` })
+    .optional(),
+  startsAt: QuestionId.optional(),
+  /** Shown only when earlier answers match (AC-6312); absent, it always shows. */
+  showWhen: ShowWhenSchema.optional(),
+});
+/** A break in the questions. */
+export type FormStep = z.infer<typeof FormStep>;
 
 /** How the page looks: two axes and nothing else, each mapped onto tokens, so no unreadable pair exists. */
 export const FormLook = z.strictObject({
@@ -156,6 +181,13 @@ export const FormDocument = z
     targets: z.strictObject({
       main: z.strictObject({ objectId: Uuid, matchAttributeId: Uuid.optional() }).optional(),
     }),
+    /** Classic, Steps or One at a time (spec 0063, AC-6302): in the version, so a visitor mid fill never sees it change. */
+    layout: z.enum(FORM_LAYOUTS).default('classic'),
+    /** The breaks between steps, in the questions' order. Drawn only by Steps. */
+    steps: z
+      .array(FormStep)
+      .max(FORM_QUESTIONS_MAX, { error: `A form holds at most ${String(FORM_QUESTIONS_MAX)} steps.` })
+      .default([]),
     look: FormLook.default({ colour: 'light', corners: 'rounded' }),
     headline: z.string().trim().max(120, { error: 'Keep the headline to 120 characters.' }).default(DEFAULT_HEADLINE),
     subheading: z.string().trim().max(240, { error: 'Keep the subheading to 240 characters.' }).optional(),
@@ -216,6 +248,28 @@ export const FormDocument = z
       seen.keys.add(question.key);
       if (attributeId !== undefined) seen.attributes.add(attributeId);
     });
+    const at = new Map(document.questions.map((question, index) => [question.id, index]));
+    const stepIds = new Set<string>();
+    let last = 0;
+    document.steps.forEach((step, index) => {
+      const path = ['steps', index];
+      if (stepIds.has(step.id))
+        context.addIssue({ code: 'custom', path: [...path, 'id'], message: 'Two steps share one id.' });
+      stepIds.add(step.id);
+      const place = step.startsAt === undefined ? document.questions.length : at.get(step.startsAt);
+      if (place === undefined) {
+        context.addIssue({
+          code: 'custom',
+          path: [...path, 'startsAt'],
+          message: 'A step starts at a question that is no longer on the form.',
+        });
+        return;
+      }
+      if (place < last) {
+        context.addIssue({ code: 'custom', path: [...path, 'startsAt'], message: 'The steps are out of order.' });
+      }
+      last = Math.max(last, place);
+    });
     if (files > 1) {
       context.addIssue({
         code: 'custom',
@@ -228,6 +282,11 @@ export const FormDocument = z
 export type FormDocument = z.infer<typeof FormDocument>;
 /** A document as written, before defaults fill in. */
 export type FormDocumentInput = z.input<typeof FormDocument>;
+
+/** A document's steps over its questions (`stepsOfBreaks`), keyed by question key: what the hosted page groups. */
+export function stepsOf(document: Pick<FormDocument, 'questions' | 'steps'>): ResolvedStep<FormStep['showWhen']>[] {
+  return stepsOfBreaks(document.questions, document.steps);
+}
 
 /** True when a question's answer is picked from its own choices. */
 export function isChoiceQuestion(question: Pick<FormQuestion, 'answerType'>): boolean {

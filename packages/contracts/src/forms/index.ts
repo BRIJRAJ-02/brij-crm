@@ -7,6 +7,7 @@ export * from './dial-codes.ts';
 export * from './email-hint.ts';
 export * from './document.ts';
 export * from './forms.ts';
+export * from './path.ts';
 export * from './presets.ts';
 export * from './public.ts';
 export * from './publish.ts';
