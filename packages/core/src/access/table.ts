@@ -248,6 +248,8 @@ export const ACCESS_TABLE = {
   getActivity: { data: 'read' },
   // 13 Oct reference batch 4: a record's stage age, read as its timeline is.
   getStageSince: { data: 'read' },
+  // A record's last contact (the CRM flow pass): read on the record, as its timeline.
+  getLastContacted: { data: 'read' },
   readTrashedRecord: { data: 'read' },
   // A record's own files (27 Oct 2026): keyed on the record, never on the submission a file came from, so a filed
   // file outlives its submission. The read refuses a record the member can't see and a field hidden from them; the

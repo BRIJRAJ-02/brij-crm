@@ -2,6 +2,8 @@
 // One folder per feature; the access door (spec 0005, thin #9) is `access/`.
 export { getSystemStatus, type SystemDeps } from './system/status.ts';
 export * from './engine/index.ts';
+// "Last contacted" on a record's page (the CRM flow pass): calls and meetings, logged or on the calendar.
+export { getLastContacted } from './records/last-contacted.ts';
 // A company's logo from our own origin (spec 0059): the address a record's picture names, and which domains may have one.
 export { companyLogoPath, isLogoDomain, LOGO_PATH } from './engine/logos.ts';
 export {

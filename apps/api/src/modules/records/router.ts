@@ -9,6 +9,7 @@ import {
   editRecord,
   editRecords,
   getActivity,
+  getLastContacted,
   getStageSince,
   queryGroups,
   queryRecords,
@@ -170,6 +171,9 @@ export const recordsRouter = member.records.router({
       : { entries: [...page.entries], nextCursor: page.nextCursor };
   }),
   // A record's stage age (13 Oct reference batch 4): when it entered the stage it is in now.
+  lastContacted: member.records.lastContacted.handler(({ context, input }) =>
+    getLastContacted(context.scope, { recordId: input.recordId }),
+  ),
   stageSince: member.records.stageSince.handler(({ context, input }) =>
     getStageSince(context.scope, { recordId: input.recordId, attributeId: input.attributeId }),
   ),

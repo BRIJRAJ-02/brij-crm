@@ -1235,6 +1235,7 @@ const DATA_CASES: Readonly<Record<string, DataCase>> = {
   ),
   entriesForRecord: refused('NOT_FOUND', (scope, world) => core.entriesForRecord(scope, { recordId: world.recordId })),
   getActivity: refused('NOT_FOUND', (scope, world) => core.getActivity(scope, { recordId: world.recordId })),
+  getLastContacted: refused('NOT_FOUND', (scope, world) => core.getLastContacted(scope, { recordId: world.recordId })),
   getStageSince: refused('NOT_FOUND', (scope, world) =>
     core.getStageSince(scope, { recordId: world.recordId, attributeId: world.stage }),
   ),

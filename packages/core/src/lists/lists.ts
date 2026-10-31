@@ -6,13 +6,7 @@
 // access door made, and the engine's own checks.
 import { and, asc, eq, inArray, isNull, like, or, sql } from 'drizzle-orm';
 import type { ListTemplate, ListView } from '@crm/contracts';
-import {
-  freeApiSlug,
-  toApiSlug,
-  type EngineRefusal,
-  type FilterGroup,
-  type SortRules,
-} from '@crm/contracts/values';
+import { freeApiSlug, toApiSlug, type EngineRefusal, type FilterGroup, type SortRules } from '@crm/contracts/values';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { canonicalId, checkId, isUuid } from '../engine/ids.ts';
 import {

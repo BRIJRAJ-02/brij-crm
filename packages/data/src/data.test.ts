@@ -456,6 +456,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       activity: os.records.activity.handler(({ input }) => behaviour.activity(input.recordId, input.cursor)),
       getTrashed: os.records.getTrashed.handler(({ input }) => behaviour.trashed(input.recordId)),
       stageSince: os.records.stageSince.handler(() => ({})),
+      lastContacted: os.records.lastContacted.handler(() => ({})),
       search: os.records.search.handler(({ input }) => {
         sent.push(input);
         return { results: behaviour.search(input.query) };

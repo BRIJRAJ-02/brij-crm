@@ -121,6 +121,7 @@ import type { AuditLog } from './audit/log.ts';
 import { createAuth } from './auth/auth.ts';
 import { createTrashedLookups, type TrashedSource } from './records/trashed.ts';
 import { createRecordFactsStore, type RecordFacts } from './records/facts.ts';
+import { createRulesStore, type AccessRule, type ObjectAccessSource } from './access/rules-store.ts';
 import {
   type DataError,
   type DataFault,
@@ -839,6 +840,7 @@ export { SEARCH_DELAY_MS, type RecordSearch, type RecordSearchState } from './re
 export type { BoardColumnState, BoardQuery, BoardState, BoardStatus, BoardStore } from './records/board.ts';
 export type { TrashedSource, TrashedState } from './records/trashed.ts';
 export type { NextMeeting, RecordFacts, RecordFactsState } from './records/facts.ts';
+export type { ObjectAccessSource, ObjectAccessState } from './access/rules-store.ts';
 export type { RowNote } from './records/view.ts';
 export type { PurgeSummary, RestoreSummary, TrashRow, TrashState, TrashStatus, TrashView } from './trash/store.ts';
 export { TRASH_NAME_COLUMN } from './trash/columns.ts';
@@ -1294,6 +1296,14 @@ export function createDataLayer({
   const trashedLookups = createTrashedLookups((workspace, recordId) =>
     call((options) => api.records.getTrashed({ workspace, recordId }, options)),
   );
+  // An object's access for its Access tab (spec 0032): one held source per object, live across admins.
+  const rulesStore = createRulesStore({
+    get: (workspace, objectId) =>
+      beforeRead(workspace).then(() => call((options) => api.accessRules.get({ workspace, objectId }, options))),
+    put: (workspace, objectId, subject, rule) =>
+      call((options) => api.accessRules.set({ workspace, objectId, subject, rule, mutationId: mintId() }, options)),
+    watch: (workspace) => watch(workspace),
+  });
   // A record's facts for its stat strip (13 Oct reference batch 4): its next meeting and its stage age.
   const recordFacts = createRecordFactsStore({
     api: {
@@ -1301,6 +1311,8 @@ export function createDataLayer({
         beforeRead(input.workspace).then(() => call((options) => api.calendar.meetings.forRecord(input, options))),
       stageSince: (input) =>
         beforeRead(input.workspace).then(() => call((options) => api.records.stageSince(input, options))),
+      lastContacted: (input) =>
+        beforeRead(input.workspace).then(() => call((options) => api.records.lastContacted(input, options))),
     },
     now: () => new Date().toISOString(),
   });
@@ -1398,6 +1410,7 @@ export function createDataLayer({
     schedules.clear();
     preferences.clear();
     accessLoaded?.clear();
+    rulesStore.clear();
     automationsLoaded?.clear();
     pictureChoice.clear();
     void linkPage?.then((made) => {
@@ -1959,6 +1972,8 @@ export function createDataLayer({
     });
   });
   router.on('access', (workspace, event) => {
+    // Another admin's rule change (it names the members it covers, never the admins): a held Access tab reads again.
+    rulesStore.changed(workspace);
     // The person's access changed: everything held is read again under it (spec 0009, AC-146), and the live client
     // asks for its channel again, moving when the person's audience did (spec 0007, milestone 4; the relay's 4500
     // disconnect does the same, and whichever comes first asks once).
@@ -4824,6 +4839,23 @@ export function createDataLayer({
        */
       preview: (workspace: string, objectId: string, as: PreviewAs): Promise<AccessPreview> =>
         call((options) => api.accessRules.preview({ workspace, objectId, as }, options)),
+      /**
+       * The object's access as the Access tab holds it (`useObjectAccess`): read when first held, live while held (a
+       * rule another admin sets reads it again). `initial` is what the route read, shown at once.
+       */
+      view: (workspace: string, objectId: string, initial?: ObjectAccess): ObjectAccessSource =>
+        rulesStore.view(workspace, objectId, initial),
+      /**
+       * Sets one subject's access through the held source: `shown` turns what is shown into what the change should
+       * look like, at once; the answer replaces it, and a refusal reads the object again and rejects.
+       */
+      change: (
+        workspace: string,
+        objectId: string,
+        subject: RuleSubject,
+        rule: AccessRule,
+        shown: (current: ObjectAccess) => ObjectAccess,
+      ): Promise<SetObjectAccessResult> => rulesStore.set(workspace, objectId, subject, rule, shown),
     },
     /**
      * A workspace's sign in rules (spec 0033, milestone 4): settings, not CRM

@@ -113,6 +113,7 @@ const READS: ReadonlySet<string> = new Set([
   'records.activity',
   // How long a record has sat in its current stage (a status attribute's history): a read.
   'records.stageSince',
+  'records.lastContacted',
   'records.getTrashed',
   'records.search',
   // A record page's related section (spec 0014, milestone 3): one side's linked records, a page at a time.

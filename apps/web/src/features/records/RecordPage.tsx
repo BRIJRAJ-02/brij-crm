@@ -457,9 +457,10 @@ function RecordScreen({
     () => attributes.find((each) => each.apiSlug === 'value' && each.type === 'currency' && !each.isArchived),
     [attributes],
   );
-  // A stage change reads the facts afresh: the age restarts.
+  // A stage change reads the facts afresh (the age restarts), and so does new activity: a call just logged is the
+  // last contact.
   const stageNow = stageAttribute === undefined ? undefined : state.record?.values[stageAttribute.id];
-  const stageKey = typeof stageNow === 'string' ? stageNow : undefined;
+  const stageKey = `${typeof stageNow === 'string' ? stageNow : ''}:${latestAt ?? ''}`;
   const facts = useMemo(
     () => data.records.facts(slug, recordId, stageAttribute?.id, stageKey),
     [data, slug, recordId, stageAttribute?.id, stageKey],
@@ -832,6 +833,13 @@ function RecordScreen({
       icon: 'calendar' as const,
       isLoading: isFactsLoading,
       ...(factState.nextMeeting === undefined ? {} : { time: factState.nextMeeting.startsAt }),
+    },
+    {
+      id: 'contacted',
+      label: strings.lastContacted,
+      icon: 'phone' as const,
+      isLoading: isFactsLoading,
+      ...(factState.lastContacted === undefined ? {} : { time: factState.lastContacted }),
     },
     {
       id: 'activity',
