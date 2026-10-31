@@ -1207,6 +1207,7 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     const sides = await m.client.attributes.list({ workspace: m.slug, objectId: m.companies.id });
     const via = sides.find((each) => each.type === 'record_reference' && each.relationship !== undefined);
     if (via === undefined) throw new Error('Companies has no relationship side.');
+    const madeWith = newId();
     const made = await m.client.attributes.create({
       workspace: m.slug,
       objectId: m.companies.id,
@@ -1214,7 +1215,7 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
       title: 'People count',
       type: 'number',
       computed: { kind: 'rollup', via: via.id, calc: 'count' },
-      mutationId: newId(),
+      mutationId: madeWith,
     });
     await testQuery(
       ownerUrl,
@@ -1222,7 +1223,10 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
       [made.id],
     );
     await m.client.computed.refill({ workspace: m.slug, attributeId: made.id, mutationId });
-    return [{ kind: 'definitions', object_id: m.companies.id, attribute_ids: [made.id], mutation_id: mutationId }];
+    return [
+      { kind: 'definitions', object_id: m.companies.id, attribute_ids: [made.id], mutation_id: madeWith },
+      { kind: 'definitions', object_id: m.companies.id, attribute_ids: [made.id], mutation_id: mutationId },
+    ];
   },
   // Attribute writes (spec 0012, milestone 2): one definitions row per object, naming the attributes changed.
   'attributes.update': async (m, mutationId) => {
@@ -2722,6 +2726,8 @@ Object.assign(WRITES, {
 
 /** How many writes (each one poke) a case in WRITES makes before and with its own. */
 const WRITES_MADE: Readonly<Record<string, number>> = {
+  // A computed attribute made first (spec 0015), then the refill.
+  'computed.refill': 2,
   // Lists (spec 0048): the list, its person and their entry first, then the case's own writes.
   'entries.add': 5,
   'entries.setValues': 5,

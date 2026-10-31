@@ -1024,6 +1024,17 @@ async function dataWorld() {
             ${core.recordFilePath(workspaceId, recordId, recordFileId, '.pdf')}, 'cv.pdf', 1024, 'application/pdf')`,
     ),
   );
+  // A file on the person's Files tab (#32): a `record_files` row with no attribute, added by the owner.
+  const attachmentId = core.newId();
+  await db.withWorkspace(workspaceId, (tx) =>
+    tx.execute(
+      sql`insert into record_files (workspace_id, id, record_id, attribute_id, pathname, name, size, content_type,
+            created_by)
+          values (${workspaceId}::uuid, ${attachmentId}::uuid, ${recordId}::uuid, null,
+            ${core.recordFilePath(workspaceId, recordId, attachmentId, '.pdf')}, 'brief.pdf', 1024, 'application/pdf',
+            ${ownerId}::uuid)`,
+    ),
+  );
   // A report on People (the reports lane), so the walk has one the principal at none must not see.
   const reportId = (
     await core.createReport(owner, {
@@ -1044,6 +1055,7 @@ async function dataWorld() {
     fileId,
     resume,
     recordFileId,
+    attachmentId,
     name: attribute('name'),
     jobTitle: attribute('job_title'),
     company: attribute('company'),
@@ -1276,6 +1288,28 @@ const DATA_CASES: Readonly<Record<string, DataCase>> = {
       size: 1,
       contentType: 'application/pdf',
     }),
+  ),
+  // A record's Files tab (#32): a reader who can't see the record finds nothing; one who may only read it adds,
+  // deletes and restores nothing.
+  listAttachments: refused('NOT_FOUND', (scope, world) => core.listAttachments(scope, { recordId: world.recordId })),
+  prepareAttachment: refused('FORBIDDEN', (scope, world) =>
+    core.prepareAttachment(scope, { recordId: world.recordId, size: 1 }),
+  ),
+  registerAttachment: refused('FORBIDDEN', (scope, world) =>
+    core.registerAttachment(scope, {
+      recordId: world.recordId,
+      fileId: core.newId(),
+      pathname: 'records/x/y/z.pdf',
+      name: 'brief.pdf',
+      size: 1,
+      contentType: 'application/pdf',
+    }),
+  ),
+  deleteAttachment: refused('FORBIDDEN', (scope, world) =>
+    core.deleteAttachment(scope, { fileId: world.attachmentId }),
+  ),
+  restoreAttachment: refused('FORBIDDEN', (scope, world) =>
+    core.restoreAttachment(scope, { fileId: world.attachmentId }),
   ),
   // The record picker's search (spec 0014): an object the reader can't see is absent.
   searchRecords: refused('NOT_FOUND', (scope, world) =>

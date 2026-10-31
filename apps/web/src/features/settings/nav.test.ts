@@ -28,6 +28,7 @@ describe('settingsNav', () => {
         'Objects',
         'Lists',
         'Automations',
+        'Developer',
         'Background jobs',
         'History',
         'Trash',
@@ -51,6 +52,7 @@ describe('settingsNav', () => {
       objects: '/w/acme/settings/objects',
       lists: '/w/acme/settings/lists',
       automations: '/w/acme/settings/automations',
+      developer: '/w/acme/settings/developer',
       jobs: '/w/acme/settings/jobs',
       history: '/w/acme/settings/history',
       // The trash opens inside Settings, its sidebar and trail kept (A120, 23 October 2026).

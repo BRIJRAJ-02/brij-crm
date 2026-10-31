@@ -260,6 +260,13 @@ export const ACCESS_TABLE = {
   readRecordFile: { data: 'read' },
   prepareRecordFile: { data: 'write' },
   registerRecordFile: { data: 'write' },
+  // A record's Files tab (#32): listed by whoever may read the record; added, deleted and restored by whoever may
+  // change its object, on a live record.
+  listAttachments: { data: 'read' },
+  prepareAttachment: { data: 'write' },
+  registerAttachment: { data: 'write' },
+  deleteAttachment: { data: 'write' },
+  restoreAttachment: { data: 'write' },
   // The record picker's search (spec 0014): only records the reader may see.
   searchRecords: { data: 'read' },
   // A record page's related sections (spec 0014, milestone 3): only linked records the reader may see, on a side they may see.

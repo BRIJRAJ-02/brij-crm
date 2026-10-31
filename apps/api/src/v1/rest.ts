@@ -33,7 +33,6 @@ import {
   parseKeyToken,
   queryRecords,
   readRecordsById,
-  type EngineScope,
   type KeyEntry,
   type RuleSource,
 } from '@crm/core';
@@ -123,7 +122,7 @@ export function bearerOf(header: string | undefined): string | undefined {
 }
 
 /** The object a path names, by id or API slug, among those the key may see; undefined answers as unknown. */
-async function objectOf(scope: EngineScope, named: string): Promise<string | undefined> {
+async function objectOf(scope: KeyEntry['scope'], named: string): Promise<string | undefined> {
   const objects = await listObjects(scope);
   return objects.find((object) => object.id === named || object.apiSlug === named)?.id;
 }

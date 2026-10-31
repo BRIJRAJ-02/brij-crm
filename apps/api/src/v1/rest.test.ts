@@ -55,7 +55,10 @@ describe('/api/v1 with an API key', () => {
 
     const objects = await v1('/objects', token);
     expect(objects.status).toBe(200);
-    const made = await v1('/objects/people/records', token, { method: 'POST', body: {} });
+    const made = await v1('/objects/people/records', token, {
+      method: 'POST',
+      body: { values: { [owner.attribute('name')]: { firstName: 'Ada' } } },
+    });
     expect(made.status).toBe(201);
     const record = (await made.json()) as { id: string; objectId: string; createdBy?: { type: string; id: string } };
     expect(record.objectId).toBe(owner.people.id);
@@ -85,6 +88,7 @@ describe('/api/v1 with an API key', () => {
       workspace: owner.slug,
       objectId: owner.people.id,
       id: newId(),
+      values: { [owner.attribute('name')]: { firstName: 'Grace' } },
       mutationId: newId(),
     });
     const path = `/objects/people/records/${theirs.id}`;
@@ -128,6 +132,7 @@ describe('/api/v1 with an API key', () => {
       workspace: b.slug,
       objectId: b.people.id,
       id: newId(),
+      values: { [b.attribute('name')]: { firstName: 'Grace' } },
       mutationId: newId(),
     });
     expect((await v1(`/objects/people/records/${theirs.id}`, token)).status).toBe(404);
