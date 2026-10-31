@@ -35,6 +35,7 @@ import { limitChecks, type LimitCheck } from '../scheduling/limits.ts';
 import { intersectSlots, unionSlots } from './combine.ts';
 import { capStarts, windowCounts, windowStart, type WindowCount } from './ledger.ts';
 import { evenWaiting, hallHolds, type Candidate, type PickRules } from './pick.ts';
+import { thinFollowers } from './follow-team.ts';
 import { rosterCalibration } from './roster.ts';
 
 const { bookingPageRotations, members, rotationRoster, rotations } = schema;
@@ -135,7 +136,8 @@ export async function pageRotations(tx: WorkspaceTx, pageId: string): Promise<re
  * Each rotation's members who may take work now (AC-729, AC-731): switched
  * on, active in the workspace, and not a guest, in the rotation's order. Read
  * through `rotation_roster`, so "Everyone on the roster" (the workspace link)
- * holds every such member, whether or not they have settings of their own.
+ * holds every such member, whether or not they have settings of their own,
+ * and a rotation following a team its members; with fewer than 2 it has none.
  */
 export async function eligibleMembers(
   tx: WorkspaceTx,
@@ -172,7 +174,9 @@ export async function eligibleMembers(
       ),
     )
     .orderBy(asc(rotationRoster.position), asc(members.name), asc(rotationRoster.memberId));
-  for (const { rotationId, ...member } of rows) found.get(rotationId)?.push(member);
+  // A rotation following a team with fewer than 2 people offers no times (spec 0037, AC-1327).
+  const thin = await thinFollowers(tx, rotationIds);
+  for (const { rotationId, ...member } of rows) if (!thin.has(rotationId)) found.get(rotationId)?.push(member);
   return found;
 }
 

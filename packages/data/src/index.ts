@@ -2042,6 +2042,9 @@ export function createDataLayer({
       ]);
       // A Roster narrowed to a team reads its rows again (spec 0037, AC-1289).
       accessLoaded?.teamWeek.teamsChanged(workspace);
+      // Round robin groups that follow the workspace or a team move with who is here (spec 0037, AC-1327): a held
+      // list reads again; one never read waits for its screen.
+      if (rotationLists.items(workspace) !== undefined) rotationLists.view(workspace).reload();
     });
     // A role changed may be the person's own: their access is read again (the server checks every call anyway).
     void namesMe(workspace, event.memberIds).then((named) => {
@@ -4159,10 +4162,18 @@ export function createDataLayer({
         await rotationLists.view(workspace).ready();
         return rotationLists.items(workspace) ?? [];
       },
-      /** A new rotation. Refusals: `ID_TAKEN`, `CONFIG_INVALID` (on `members.<n>`), `FORBIDDEN`. */
+      /**
+       * A new rotation: its chosen `members`, or a team it follows (`followsTeamId`, spec 0037, AC-1327; admins only).
+       * Refusals: `ID_TAKEN`, `CONFIG_INVALID` (on `members.<n>` or `followsTeamId`), `FORBIDDEN`.
+       */
       create: (
         workspace: string,
-        input: { id: string; settings: RotationSettings; members: RotationMemberInput[] },
+        input: {
+          id: string;
+          settings: RotationSettings;
+          members?: RotationMemberInput[];
+          followsTeamId?: string;
+        },
       ): Promise<RotationView> =>
         rotationLists.write(workspace, {
           send: () => call((options) => api.rotations.create({ workspace, ...input, mutationId: mintId() }, options)),
@@ -4170,13 +4181,20 @@ export function createDataLayer({
         }),
       /**
        * Changes the settings given, and the members when given (replacing
-       * the list), in the list at once. Refusals: `CONFIG_INVALID` (on its
-       * field), `NOT_FOUND`, `FORBIDDEN`.
+       * the list, or, in a rotation that follows the workspace or a team,
+       * those people's own settings), in the list at once. `followsTeamId`
+       * makes it follow a team, or `null` chosen people again (spec 0037,
+       * AC-1327): who is in it then shows once the server answers.
+       * Refusals: `CONFIG_INVALID` (on its field), `NOT_FOUND`, `FORBIDDEN`.
        */
       update: (
         workspace: string,
         rotationId: string,
-        change: { settings: Partial<RotationSettings>; members?: RotationMemberInput[] },
+        change: {
+          settings: Partial<RotationSettings>;
+          members?: RotationMemberInput[];
+          followsTeamId?: string | null;
+        },
       ): Promise<RotationView> =>
         rotationLists.write(workspace, {
           send: () =>
@@ -4187,6 +4205,7 @@ export function createDataLayer({
                   rotationId,
                   settings: change.settings,
                   ...(change.members === undefined ? {} : { members: change.members }),
+                  ...(change.followsTeamId === undefined ? {} : { followsTeamId: change.followsTeamId }),
                   mutationId: mintId(),
                 },
                 options,
@@ -4195,18 +4214,26 @@ export function createDataLayer({
           ...shownPatch(rotationLists.items(workspace), rotationId, (rotation) => ({
             ...rotation,
             ...change.settings,
-            ...(change.members === undefined
+            ...(change.members === undefined || change.followsTeamId !== undefined
               ? {}
-              : {
-                  members: change.members.map((member) => {
-                    const before = rotation.members.find((each) => each.memberId === member.memberId);
-                    return {
-                      ...member,
-                      name: before?.name ?? '',
-                      ...(before?.hasCalendar === undefined ? {} : { hasCalendar: before.hasCalendar }),
-                    };
+              : rotation.follows !== undefined
+                ? {
+                    // Following the workspace or a team: only the people named change, everyone else stays.
+                    members: rotation.members.map((member) => {
+                      const changed = change.members?.find((each) => each.memberId === member.memberId);
+                      return changed === undefined ? member : { ...member, ...changed };
+                    }),
+                  }
+                : {
+                    members: change.members.map((member) => {
+                      const before = rotation.members.find((each) => each.memberId === member.memberId);
+                      return {
+                        ...member,
+                        name: before?.name ?? '',
+                        ...(before?.hasCalendar === undefined ? {} : { hasCalendar: before.hasCalendar }),
+                      };
+                    }),
                   }),
-                }),
           })),
           land: (items, rotation) => patchItem<RotationView>(rotationId, () => rotation)(items),
         }),

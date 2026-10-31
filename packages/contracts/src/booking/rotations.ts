@@ -72,6 +72,11 @@ export const RotationMembersInput = z
     error: 'Add each member once.',
   });
 
+/** What a rotation follows instead of chosen members: the workspace (`everyone`) or one team (`team`). */
+export const RotationFollows = z.enum(['everyone', 'team']);
+/** What a rotation follows. */
+export type RotationFollows = z.infer<typeof RotationFollows>;
+
 /** One member of a rotation as Settings shows them. */
 export const RotationMemberView = RotationMemberInput.extend({
   name: z.string(),
@@ -94,10 +99,15 @@ export const RotationView = RotationSettings.extend({
   id: Uuid,
   /**
    * `everyone`: "Everyone on the roster", the workspace link's rotation, whose members are every active member who
-   * isn't a guest, joining and leaving with the workspace; only their own settings (on or off, weight, priority,
-   * caps) change. Absent for a rotation of chosen people.
+   * isn't a guest, joining and leaving with the workspace; `team` (spec 0037, AC-1327): the same over one team
+   * (`followsTeamId`), with no member cap. Only each member's own settings (on or off, weight, priority, caps)
+   * change. Absent for a rotation of chosen people.
    */
-  follows: z.literal('everyone').optional(),
+  follows: RotationFollows.optional(),
+  /** The team it follows, when `follows` is `team`. */
+  followsTeamId: Uuid.optional(),
+  /** That team's name, for the card's line ("Follows Sales"). */
+  followsTeamName: z.string().optional(),
   members: z.array(RotationMemberView),
   /** How many live booking pages book from it. */
   pages: z.number().int().min(0),
@@ -118,11 +128,15 @@ export const ListRotationsInput = WorkspaceScoped;
 /** The rotations read. */
 export type ListRotationsInput = z.infer<typeof ListRotationsInput>;
 
-/** A new rotation. `id` is a UUID v7 the browser mints, and the retry key. */
+/**
+ * A new rotation. `id` is a UUID v7 the browser mints, and the retry key. Either its 2 to 20 `members`, or a team it
+ * follows (`followsTeamId`, spec 0037, AC-1327: `booking.admin` only), whose members it reads as they come and go.
+ */
 export const CreateRotationInput = WorkspaceScoped.extend({
   id: uuidV7('The rotation id must be a UUID v7.'),
   settings: RotationSettings,
-  members: RotationMembersInput,
+  members: RotationMembersInput.optional(),
+  followsTeamId: Uuid.optional(),
   mutationId: Uuid,
 });
 /** A new rotation. */
@@ -143,13 +157,16 @@ export const RotationMembersChange = z
 export type RotationMembersChange = z.infer<typeof RotationMembersChange>;
 
 /**
- * A change to a rotation: only the settings given; `members`, when given, replaces the list (AC-757), or, for
- * "Everyone on the roster", sets those people's own settings and leaves everyone else as they are.
+ * A change to a rotation: only the settings given; `members`, when given, replaces the list (AC-757), or, for a
+ * rotation that follows the workspace or a team, sets those people's own settings and leaves everyone else as they
+ * are. `followsTeamId` (spec 0037, AC-1327, `booking.admin` only): a team id makes it follow that team, and `null`
+ * makes it a rotation of chosen people again, which then needs `members` (2 to 20) in the same change.
  */
 export const UpdateRotationInput = WorkspaceScoped.extend({
   rotationId: Uuid,
   settings: RotationSettings.partial(),
   members: RotationMembersChange.optional(),
+  followsTeamId: Uuid.nullable().optional(),
   mutationId: Uuid,
 });
 /** A change to a rotation. */

@@ -25,6 +25,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import { bookingPages, bookings } from './booking.ts';
 import { auditColumns, id, timestamptz, workspaceId } from './common.ts';
+import { teams } from './teams.ts';
 import { actorConstraints, members } from './workspaces.ts';
 
 /** A rotation: its name, how it picks (Fair, Priority or Even), the window it counts over, and returning guests. */
@@ -51,9 +52,16 @@ export const rotations = pgTable(
     /**
      * Null: the people chosen (`rotation_members`). `everyone` (workspace link, migration 0128): every active member
      * who isn't a guest, worked out on each read (`rotationRoster`); a `rotation_members` row then only holds that
-     * person's own settings. One per workspace (`rotations_everyone`).
+     * person's own settings. One per workspace (`rotations_everyone`). `team` (migration 0155): as `everyone`, over
+     * the team in `followsTeamId`.
      */
     follows: text('follows'),
+    /**
+     * The team a rotation with `follows = 'team'` follows (spec 0037, AC-1327, migration 0155): its active members who
+     * aren't guests, worked out on each read (`rotationRoster`), with no member cap. Set exactly when `follows` is
+     * `team`; the team can't be deleted while a rotation follows it.
+     */
+    followsTeamId: uuid('follows_team_id'),
     ...auditColumns(),
     deletedAt: timestamptz('deleted_at'),
   },
@@ -70,7 +78,21 @@ export const rotations = pgTable(
     check('rotations_even_gap', sql`${t.evenGap} between 1 and 10`),
     check('rotations_returning', sql`${t.returning} in ('owner', 'last_host', 'none')`),
     check('rotations_window', sql`${t.windowDays} in (7, 30, 90)`),
-    check('rotations_follows', sql`${t.follows} is null or ${t.follows} = 'everyone'`),
+    check(
+      'rotations_follows',
+      sql`(${t.follows} is null and ${t.followsTeamId} is null)
+        or (${t.follows} = 'everyone' and ${t.followsTeamId} is null)
+        or (${t.follows} = 'team' and ${t.followsTeamId} is not null)`,
+    ),
+    foreignKey({
+      name: 'rotations_follows_team',
+      columns: [t.workspaceId, t.followsTeamId],
+      foreignColumns: [teams.workspaceId, teams.id],
+    }).onDelete('restrict'),
+    // The rotations following a team: a membership change's leavers, a team's delete guard, the foreign key's check.
+    index('rotations_by_team')
+      .on(t.workspaceId, t.followsTeamId)
+      .where(sql`${t.followsTeamId} is not null`),
     ...actorConstraints('rotations', 'created_by', t.workspaceId, {
       type: t.createdByType,
       id: t.createdById,
@@ -229,7 +251,8 @@ export const rotationAssignments = pgTable(
 /**
  * Who is in each rotation (migration 0128, a view with the reader's own row level security): a rotation's stored
  * members, or, for the everyone rotation, every active owner, admin and member with their stored settings when they
- * have any (`stored`). Every read of a rotation's members goes through it, so the everyone rotation follows
+ * have any (`stored`), or, for a rotation following a team (migration 0155), the team's such members; someone there
+ * with no row is switched on when they have hours or a calendar. Every read of a rotation's members goes through it, so the everyone rotation follows
  * membership with nothing to keep in step. Written by hand in the migration; drizzle only reads it.
  */
 export const rotationRoster = pgView('rotation_roster', {
@@ -244,7 +267,10 @@ export const rotationRoster = pgView('rotation_roster', {
   calibration: numeric('calibration', { precision: 10, scale: 2, mode: 'number' }).notNull(),
   position: smallint('position').notNull(),
   stored: boolean('stored').notNull(),
-  /** No row yet, and joined the workspace after the everyone rotation was made: starts at the pool's average. */
+  /**
+   * No row yet, and arrived late (the everyone rotation: joined the workspace after it was made; a team's: the
+   * rotation had already given out work): starts at the pool's average.
+   */
   joinsLate: boolean('joins_late').notNull(),
 }).existing();
 

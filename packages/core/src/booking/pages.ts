@@ -52,6 +52,7 @@ import { placeNewPage } from '../profile/items.ts';
 import { linksOf, seenLinks } from './links.ts';
 import { lockKey } from './locks.ts';
 import { lockRotations } from '../rotation/assign.ts';
+import { rotationsOfMember } from '../rotation/follow-team.ts';
 import { everyoneRotation } from '../rotation/roster.ts';
 import { eligibleMembers, GUESTS_CANT_HOST, pageRotations, ROTATION_ROLES, TEAM_LIMITS } from '../rotation/team.ts';
 import { loadPage, pagesOf, type PageRecord } from './slots.ts';
@@ -1350,11 +1351,8 @@ export const bookingPagesRemoval: RemovalEffect = {
     const by = actorRow(scope.actor);
     // Their rotations' locks first, as `rotationsRemoval` takes them: a rotation change switching off the one other
     // member waits, and then sees them gone, so no page is left live on a rotation with nobody (late trap #22).
-    const theirs = await tx.execute<{ id: string }>(
-      // "Everyone on the roster" too: someone in it may have no row of their own to find it by.
-      sql`select rotation_id::text as id from rotation_members where member_id = ${memberId}::uuid
-        union select id::text from rotations where follows = 'everyone' and deleted_at is null`,
-    );
+    // "Everyone on the roster" and their teams' rotations too: someone in them may have no row of their own.
+    const theirs = await tx.execute<{ id: string }>(rotationsOfMember(memberId));
     await lockRotations(
       tx,
       scope.workspaceId,
@@ -1395,10 +1393,7 @@ export async function pageForEditors(
 export async function pauseGuestPages(context: WriteContext, memberId: string): Promise<void> {
   const { tx, scope } = context;
   const by = actorRow(scope.actor);
-  const theirs = await tx.execute<{ id: string }>(
-    sql`select rotation_id::text as id from rotation_members where member_id = ${memberId}::uuid
-      union select id::text from rotations where follows = 'everyone' and deleted_at is null`,
-  );
+  const theirs = await tx.execute<{ id: string }>(rotationsOfMember(memberId));
   await lockRotations(
     tx,
     scope.workspaceId,

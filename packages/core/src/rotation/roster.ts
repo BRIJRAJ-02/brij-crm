@@ -11,6 +11,9 @@
 // `replaceMembers`; their first ledger row stores their row with that
 // calibration (`keepRosterRow`, under the rotation's lock), so from then on it
 // is fixed, exactly as a joiner's is.
+//
+// A rotation that follows a team (spec 0037, AC-1327, `follow-team.ts`) is
+// read the same way, over the team's members instead of the workspace's.
 import { and, eq, gte, isNull, sql } from 'drizzle-orm';
 import { schema, type WorkspaceTx } from '@crm/db';
 import type { EngineScope } from '../access/mint.ts';
@@ -93,10 +96,14 @@ export async function everyoneRotation(tx: WorkspaceTx, scope: EngineScope): Pro
 }
 
 /**
- * Before ledger rows or settings for `memberIds` in an everyone rotation, stores the rows of those who have none,
- * each with the calibration a pick would use for them now (`rosterCalibration` over the window as it stands), in
- * one insert. The caller holds the rotation's lock. One lookup and nothing more for a rotation of chosen people or
- * people already stored; someone no longer on the roster is skipped.
+ * Before ledger rows or settings for `memberIds` in a rotation that follows the workspace or a team, stores the rows
+ * of those who have none, each with the calibration a pick would use for them now (`rosterCalibration` over the
+ * window as it stands), in one insert. The caller holds the rotation's lock. One lookup and nothing more for a
+ * rotation of chosen people or people already stored; someone no longer on the roster is skipped.
+ *
+ * A rotation following a team stores every switched on member with no row, not just `memberIds` (spec 0037,
+ * AC-1327): its `joins_late` reads "no row once it has given out work", so after this nobody there now counts as
+ * having joined late, and anyone with no row later (a joiner, a rejoiner, someone who just set hours) does.
  */
 export async function keepRosterRows(
   tx: WorkspaceTx,
@@ -118,10 +125,11 @@ export async function keepRosterRows(
   `,
     )
     .then((found) => found.rows);
-  if (rotation?.follows !== 'everyone') return;
+  if (rotation?.follows !== 'everyone' && rotation?.follows !== 'team') return;
   const stored = new Set(rotation.stored);
+  const isTeam = rotation.follows === 'team';
   const wanted = new Set(memberIds.filter((id) => !stored.has(id)));
-  if (wanted.size === 0) return;
+  if (wanted.size === 0 && !isTeam) return;
   const roster = await tx
     .select({
       memberId: rotationRoster.memberId,
@@ -133,6 +141,8 @@ export async function keepRosterRows(
     })
     .from(rotationRoster)
     .where(and(eq(rotationRoster.rotationId, rotationId), eq(rotationRoster.isOn, true)));
+  // A team's rotation with everyone switched on stored already: nothing to count.
+  if (!roster.some((member) => !member.stored && (isTeam || wanted.has(member.memberId)))) return;
   // The window's live units per member, as `windowCounts` counts them (ledger.ts, which calls this).
   const since = new Date(now.getTime() - rotation.window_days * 86_400_000);
   const counted = await tx
@@ -156,7 +166,7 @@ export async function keepRosterRows(
   );
   const by = actorRow(scope.actor);
   const rows = roster.flatMap((member, index) =>
-    wanted.has(member.memberId) && !member.stored
+    (isTeam || wanted.has(member.memberId)) && !member.stored
       ? [
           {
             workspaceId: scope.workspaceId,

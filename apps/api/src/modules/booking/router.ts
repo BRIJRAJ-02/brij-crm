@@ -321,7 +321,12 @@ export const rotationsRouter = member.rotations.router({
   create: member.rotations.create.handler(async ({ context, input }) => {
     try {
       return await commitWrite(context, { mutationId: input.mutationId }, () =>
-        createRotation(context.scope, { id: input.id, settings: input.settings, members: input.members }),
+        createRotation(context.scope, {
+          id: input.id,
+          settings: input.settings,
+          ...(input.members === undefined ? {} : { members: input.members }),
+          ...(input.followsTeamId === undefined ? {} : { followsTeamId: input.followsTeamId }),
+        }),
       );
     } catch (error) {
       throw withInputFields(error, { ID_TAKEN: 'id' });
@@ -333,6 +338,7 @@ export const rotationsRouter = member.rotations.router({
         rotationId: input.rotationId,
         settings: input.settings,
         ...(input.members === undefined ? {} : { members: input.members }),
+        ...(input.followsTeamId === undefined ? {} : { followsTeamId: input.followsTeamId }),
       }),
     ),
   ),

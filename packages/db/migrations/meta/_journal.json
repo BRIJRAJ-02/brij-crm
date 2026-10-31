@@ -1086,6 +1086,13 @@
       "when": 1795501800000,
       "tag": "0154_link_page_switch",
       "breakpoints": true
+    },
+    {
+      "idx": 155,
+      "version": "7",
+      "when": 1795502400000,
+      "tag": "0155_rotations_follow_team",
+      "breakpoints": true
     }
   ]
 }

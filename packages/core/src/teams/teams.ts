@@ -4,7 +4,8 @@
 // takes anyone's record access away; the scheduling delegations over it go with it (spec 0037, AC-1269).
 //
 // Who is in a team changes in exactly one place, `changeTeamMembers`; creating a team with people in it goes
-// through it too. It stores the audit row and the outbox rows in the change's own transaction, and which members
+// through it too; a rotation following the team needs nothing from it but a leaver's settings dropped (spec 0037,
+// AC-1442, `rotation/follow-team.ts`). It stores the audit row and the outbox rows in the change's own transaction, and which members
 // those rows name is `membersAffectedByTeamChange` (`reach.ts`), the one place spec 0037 extends with scheduling
 // reach (AC-1274).
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
@@ -20,6 +21,7 @@ import { actorRow } from '../engine/scope.ts';
 import { runWrite, type AfterWrite, type WriteContext } from '../engine/write.ts';
 import { writeAudit, type AuditSource } from '../members/audit.ts';
 import type { RemovalEffect } from '../members/removal-effect.ts';
+import { dropTeamLeavers, rotationsFollowing } from '../rotation/follow-team.ts';
 import { deleteTeamDelegations } from '../scheduling/delegations.ts';
 import { membersAffectedByTeamChange, membersOfTeams } from './reach.ts';
 
@@ -181,6 +183,9 @@ async function applyMembers(
             .returning({ memberId: teamMembers.memberId })
         ).map((row) => row.memberId);
   if (joined.length === 0 && left.length === 0) return { joined, left };
+  // A rotation following the team reads its members on every read, so a joiner needs nothing; a leaver's own settings
+  // there go, so rejoining starts afresh (spec 0037, AC-1442).
+  await dropTeamLeavers(tx, teamId, left);
   await writeAudit(
     tx,
     scope.workspaceId,
@@ -328,7 +333,8 @@ const joinNames = (names: readonly string[]): string =>
 
 /**
  * Deletes a team with its memberships (spec 0031, AC-826). Refused 409 `IN_USE`, naming where, while an access rule
- * still names the team, so a delete never takes record access away. The scheduling delegations over it go with it
+ * still names the team, so a delete never takes record access away, and 409 `TEAM_IN_USE`, naming them, while a
+ * round robin group follows it (spec 0037). The scheduling delegations over it go with it
  * (spec 0037, AC-1269; the delete dialog names them first). Needs `teams.manage`.
  */
 export async function deleteTeam(
@@ -347,6 +353,11 @@ export async function deleteTeam(
       const used = await whatNames(tx, scope.workspaceId, teamId);
       if (used.length > 0) {
         throw refuse('IN_USE', `${team.name} is used by ${joinNames(used)}. Change that access first.`);
+      }
+      // A rotation that follows it (spec 0037, AC-826 as widened): it would have nobody to follow.
+      const followed = await rotationsFollowing(tx, teamId);
+      if (followed.length > 0) {
+        throw refuse('TEAM_IN_USE', `${team.name} is followed by ${joinNames(followed)}. Change them first.`);
       }
       const former = await membersOfTeams(tx, scope.workspaceId, [teamId]);
       await deleteTeamDelegations(context, teamId, options.source);

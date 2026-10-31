@@ -2,7 +2,7 @@
 // Purpose: Settings › Scheduling › Round robin (spec 0029, AC-728, AC-752, AC-758): the groups of people round robin pages share meetings across (rotations in code), with a How round robin works help beside the title.
 // Main task: an admin makes a group and changes or deletes one, and shares it with editors (spec 0037, AC-1331); an editor changes it; a member sees the groups they are in and their own share.
 // Leaves out: editing in place, the share bars and the reassign offer (milestone 2), and a rotation's history (spec 0037).
-import type { CalendarHealthState, DataLayer, MemberSummary, RotationView } from '@crm/data';
+import type { CalendarHealthState, DataLayer, MemberSummary, RotationView, TeamView } from '@crm/data';
 import { useCaptureList } from '@crm/data/react';
 import {
   Badge,
@@ -49,6 +49,8 @@ export interface RotationsScreenProps {
   readonly people: readonly MemberSummary[];
   /** The reader holds `booking.admin`: they make, change and delete rotations. */
   readonly canManage: boolean;
+  /** The teams a group may follow (spec 0037, AC-1327), for an admin's dialog; none for anyone else. */
+  readonly teams?: readonly TeamView[];
   /**
    * Drawn as a tab of Bookings rather than a page of Settings (25 October 2026): the body alone, with New group
    * in the frame's own TopBar where Availability puts New schedule, one primary per screen.
@@ -155,7 +157,7 @@ export function RotationsPending({ inFrame = false }: { readonly inFrame?: boole
 }
 
 /** The screen. */
-export function RotationsScreen({ data, slug, people, canManage, inFrame = false }: RotationsScreenProps) {
+export function RotationsScreen({ data, slug, people, canManage, teams = [], inFrame = false }: RotationsScreenProps) {
   const state = useCaptureList(data.rotations.view(slug));
   const { toasts } = useRouteContext({ from: '__root__' });
   const [editing, setEditing] = useState<RotationView | 'new' | undefined>(undefined);
@@ -318,12 +320,22 @@ export function RotationsScreen({ data, slug, people, canManage, inFrame = false
               description={
                 rotation.follows === 'everyone'
                   ? strings.rosterSummary(rotation.members.filter((member) => member.isOn).length, rotation.pages)
-                  : strings.summary(rotation.strategy, rotation.windowDays, rotation.pages)
+                  : rotation.follows === 'team'
+                    ? strings.teamSummary(
+                        rotation.followsTeamName ?? '',
+                        rotation.members.filter((member) => member.isOn).length,
+                        rotation.pages,
+                      )
+                    : strings.summary(rotation.strategy, rotation.windowDays, rotation.pages)
               }
               {...(rotation.canChange
                 ? {
                     actions: (
                       <>
+                        {/* A group following a team with fewer than 2 people offers no times (AC-1327). */}
+                        {rotation.follows === 'team' && rotation.members.length < 2 && (
+                          <Badge text={strings.needsTwo} dot="orange" isWhole />
+                        )}
                         {/* What the reader edits without being an admin (spec 0037, AC-1332). */}
                         {rotation.isEditor === true && <Badge text={sharingStrings.editorBadge} isWhole />}
                         <MenuTrigger>
@@ -407,6 +419,7 @@ export function RotationsScreen({ data, slug, people, canManage, inFrame = false
           data={data}
           slug={slug}
           people={people}
+          teams={teams}
           {...(editing === 'new' ? {} : { rotation: editing })}
           isOpen
           onClose={() => setEditing(undefined)}

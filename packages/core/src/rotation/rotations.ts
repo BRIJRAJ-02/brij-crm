@@ -6,7 +6,8 @@
 // Anyone with `booking.manage` lists the rotations they are in or edit, with
 // everyone's names but only their own count (everyone's for `booking.admin`
 // and editors). Rotations are settings, not CRM data: their writes store no
-// outbox row.
+// outbox row. Only `booking.admin` makes a rotation follow a team (spec 0037,
+// AC-1327, `follow-team.ts`); its members then come and go with the team.
 import { and, asc, eq, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 import {
   PERMISSIONS,
@@ -29,6 +30,7 @@ import { writeAudit } from '../members/audit.ts';
 import { queueSchedulingNotice } from '../scheduling/notice.ts';
 import { deleteEditorsOf, editedBy } from '../scheduling/editor-rows.ts';
 import { lockRotation, windowCounts, windowStart } from './ledger.ts';
+import { FOLLOW_FORBIDDEN, rosterIds, teamToFollow } from './follow-team.ts';
 import { keepRosterRows, rosterCalibration } from './roster.ts';
 import { eligibleMembers, GUESTS_CANT_HOST, ROTATION_ROLES, rulesOf } from './team.ts';
 
@@ -42,6 +44,7 @@ const {
   rotationMembers,
   rotationRoster,
   rotations,
+  teams,
 } = schema;
 
 const NOT_FOUND_MESSAGE = 'That rotation doesn’t exist any more.';
@@ -52,6 +55,9 @@ function memberOf(scope: EngineScope): string | undefined {
 }
 
 type RotationRow = typeof rotations.$inferSelect;
+
+/** A followed team's name as the view carries it, or nothing when the team can't be read. */
+const nameOf = (name: string | undefined) => (name === undefined ? {} : { followsTeamName: name });
 
 /** Each rotation's members, counts and pages, as the reader may see them (AC-752). */
 async function viewsOf(
@@ -130,6 +136,15 @@ async function viewsOf(
     .where(and(inArray(bookingPageRotations.rotationId, ids), isNull(bookingPages.deletedAt)))
     .groupBy(bookingPageRotations.rotationId);
   const pageCounts = new Map(pages.map((row) => [row.rotationId, row.count]));
+  // The teams followed, by name, for the card's line (who is in a team is as open as the member list).
+  const teamIds = [...new Set(rows.flatMap((row) => (row.followsTeamId === null ? [] : [row.followsTeamId])))];
+  const teamNames = new Map(
+    teamIds.length === 0
+      ? []
+      : (await tx.select({ id: teams.id, name: teams.name }).from(teams).where(inArray(teams.id, teamIds))).map(
+          (team) => [team.id, team.name],
+        ),
+  );
   return rows.map((row) => {
     const isEditor = edited.has(row.id);
     const manages = everyone || isEditor;
@@ -148,6 +163,13 @@ async function viewsOf(
     return {
       id: row.id,
       ...(row.follows === 'everyone' ? { follows: 'everyone' as const } : {}),
+      ...(row.follows === 'team' && row.followsTeamId !== null
+        ? {
+            follows: 'team' as const,
+            followsTeamId: row.followsTeamId,
+            ...nameOf(teamNames.get(row.followsTeamId)),
+          }
+        : {}),
       name: row.name,
       strategy: rulesOf(row).strategy,
       windowDays: row.windowDays === 7 || row.windowDays === 90 ? row.windowDays : 30,
@@ -345,10 +367,13 @@ async function rotationToChange(tx: WorkspaceTx, rotationId: string): Promise<Ro
   return row;
 }
 
-/** A new rotation (AC-728): its settings and 2 to 20 members, each starting even. The same id again answers it. */
+/**
+ * A new rotation (AC-728): its settings and 2 to 20 members, each starting even, or a team it follows (spec 0037,
+ * AC-1327), whose members it reads as they come and go, with no cap. The same id again answers it.
+ */
 export async function createRotation(
   scope: EngineScope,
-  input: Pick<CreateRotationInput, 'id' | 'settings' | 'members'>,
+  input: Pick<CreateRotationInput, 'id' | 'settings' | 'members' | 'followsTeamId'>,
   now: Date = new Date(),
 ): Promise<RotationView> {
   requirePermission(scope, 'booking.admin');
@@ -360,7 +385,18 @@ export async function createRotation(
       if (existing.deletedAt !== null) throw refuse('ID_TAKEN', 'A rotation with that id already exists.');
       return firstOf(await viewsOf(tx, scope, [existing], now));
     }
-    await checkMembers(tx, input.members);
+    const { followsTeamId } = input;
+    if (followsTeamId !== undefined) {
+      if (input.members !== undefined) {
+        throw refuseOn('CONFIG_INVALID', 'Pick people or a team to follow, not both.', 'members');
+      }
+      return followingRotation(tx, scope, input, await teamToFollow(tx, followsTeamId), now);
+    }
+    const chosen = input.members;
+    if (chosen === undefined) {
+      throw refuseOn('CONFIG_INVALID', `A rotation needs at least ${String(ROTATION_MEMBERS.min)} members.`, 'members');
+    }
+    await checkMembers(tx, chosen);
     const [row] = await tx
       .insert(rotations)
       .values({
@@ -384,11 +420,11 @@ export async function createRotation(
       tx,
       scope,
       row,
-      input.members.map((member) => member.memberId),
+      chosen.map((member) => member.memberId),
       [],
     );
     await tx.insert(rotationMembers).values(
-      input.members.map((member, position) => ({
+      chosen.map((member, position) => ({
         workspaceId: scope.workspaceId,
         rotationId: row.id,
         memberId: member.memberId,
@@ -409,6 +445,43 @@ export async function createRotation(
     );
     return firstOf(await viewsOf(tx, scope, [row], now));
   });
+}
+
+/**
+ * A new rotation following `team` (AC-1327): no rows of its own until it gives out work; everyone in the team is in
+ * it at once, and told, as anyone added to a rotation is (AC-1264).
+ */
+async function followingRotation(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  input: Pick<CreateRotationInput, 'id' | 'settings'>,
+  team: { readonly id: string },
+  now: Date,
+): Promise<RotationView> {
+  const by = actorRow(scope.actor);
+  const [row] = await tx
+    .insert(rotations)
+    .values({
+      workspaceId: scope.workspaceId,
+      id: input.id,
+      name: input.settings.name,
+      strategy: input.settings.strategy,
+      windowDays: input.settings.windowDays,
+      evenGap: input.settings.evenGap,
+      returning: input.settings.returning,
+      follows: 'team',
+      followsTeamId: team.id,
+      createdByType: by.type,
+      createdById: by.id,
+      createdByMemberId: by.memberId,
+      updatedByType: by.type,
+      updatedById: by.id,
+      updatedByMemberId: by.memberId,
+    })
+    .returning();
+  if (row === undefined) throw new Error('The rotation was not created.');
+  await membersChanged(tx, scope, row, await rosterIds(tx, row.id), []);
+  return firstOf(await viewsOf(tx, scope, [row], now));
 }
 
 /**
@@ -454,7 +527,7 @@ function firstOf(views: readonly RotationView[]): RotationView {
  */
 export async function updateRotation(
   scope: EngineScope,
-  input: Pick<UpdateRotationInput, 'rotationId' | 'settings' | 'members'>,
+  input: Pick<UpdateRotationInput, 'rotationId' | 'settings' | 'members' | 'followsTeamId'>,
   now: Date = new Date(),
 ): Promise<RotationView> {
   requirePermission(scope, 'booking.manage');
@@ -462,8 +535,33 @@ export async function updateRotation(
   return inWorkspace(scope, async (tx) => {
     const current = await rotationToChange(tx, input.rotationId);
     await mayChangeRotation(tx, scope, current.id);
+    // What it follows changes only when asked to change (spec 0037, AC-1327): sending the team it already follows is
+    // no change, so an editor's save of the same group passes.
+    const follow =
+      input.followsTeamId === undefined || input.followsTeamId === current.followsTeamId
+        ? undefined
+        : input.followsTeamId;
+    if (follow !== undefined) {
+      if (!can(scope.access, 'booking.admin')) throw refuseOn('FORBIDDEN', FOLLOW_FORBIDDEN, 'followsTeamId');
+      if (current.follows === 'everyone') {
+        throw refuseOn('CONFIG_INVALID', 'Everyone on the roster follows the workspace.', 'followsTeamId');
+      }
+      if (follow === null && input.members === undefined) {
+        throw refuseOn(
+          'CONFIG_INVALID',
+          `A rotation needs at least ${String(ROTATION_MEMBERS.min)} members.`,
+          'members',
+        );
+      }
+    }
+    // The team's row before the rotation's lock, in the order a membership change takes them.
+    const team = typeof follow === 'string' ? await teamToFollow(tx, follow) : undefined;
     // Under the rotation's lock, so a booking's pick never sees half a change, and the joiners' calibration is exact.
     await lockRotation(tx, scope.workspaceId, current.id);
+    if (team !== undefined) await followTeam(tx, scope, current, team.id);
+    // Back to chosen people: everyone on the roster now keeps their count (stored as they stand), then the list given
+    // replaces them as any rotation's does.
+    if (follow === null) await unfollowTeam(tx, scope, current);
     if (input.members !== undefined) await checkMembersReach(tx, scope, current.id, input.members);
     const { settings } = input;
     const [row] = await tx
@@ -483,7 +581,7 @@ export async function updateRotation(
       .returning();
     if (row === undefined) throw refuse('NOT_FOUND', NOT_FOUND_MESSAGE);
     if (input.members !== undefined) {
-      if (row.follows === 'everyone') await setRosterSettings(tx, scope, row, input.members);
+      if (row.follows !== null) await setRosterSettings(tx, scope, row, input.members);
       else {
         checkMemberCount(input.members);
         await replaceMembers(tx, scope, row, input.members, now);
@@ -492,6 +590,63 @@ export async function updateRotation(
     }
     return firstOf(await viewsOf(tx, scope, [row], now));
   });
+}
+
+/**
+ * Makes the rotation follow `teamId` (AC-1327): people outside the team leave it, their own settings deleted; the
+ * team's people with settings here keep them (and their counts); the rest are in it at once, at the pool's average
+ * once it has given out work. One `rotation.changed` row and the notices name who joined and who left (AC-1264).
+ */
+async function followTeam(tx: WorkspaceTx, scope: EngineScope, rotation: RotationRow, teamId: string): Promise<void> {
+  const by = actorRow(scope.actor);
+  const before = await rosterIds(tx, rotation.id);
+  await tx
+    .update(rotations)
+    .set({
+      follows: 'team',
+      followsTeamId: teamId,
+      updatedAt: sql`now()`,
+      updatedByType: by.type,
+      updatedById: by.id,
+      updatedByMemberId: by.memberId,
+    })
+    .where(eq(rotations.id, rotation.id));
+  await tx.execute(sql`
+    delete from rotation_members rm
+    where rm.workspace_id = ${scope.workspaceId}::uuid and rm.rotation_id = ${rotation.id}::uuid
+      and not exists (
+        select 1 from team_members tm
+        where tm.workspace_id = rm.workspace_id and tm.team_id = ${teamId}::uuid and tm.member_id = rm.member_id
+      )
+  `);
+  const after = await rosterIds(tx, rotation.id);
+  await membersChanged(
+    tx,
+    scope,
+    rotation,
+    after.filter((id) => !before.includes(id)),
+    before.filter((id) => !after.includes(id)),
+  );
+}
+
+/**
+ * Stops following a team: everyone switched on in it is stored first with the count they have now
+ * (`keepRosterRows`), so the chosen list that replaces them keeps the stayers' counts and calibrates only real joiners.
+ */
+async function unfollowTeam(tx: WorkspaceTx, scope: EngineScope, rotation: RotationRow): Promise<void> {
+  await keepRosterRows(tx, scope, rotation.id, await rosterIds(tx, rotation.id));
+  const by = actorRow(scope.actor);
+  await tx
+    .update(rotations)
+    .set({
+      follows: null,
+      followsTeamId: null,
+      updatedAt: sql`now()`,
+      updatedByType: by.type,
+      updatedById: by.id,
+      updatedByMemberId: by.memberId,
+    })
+    .where(eq(rotations.id, rotation.id));
 }
 
 /**
@@ -712,6 +867,8 @@ export async function deleteRotation(
       .update(rotations)
       .set({
         deletedAt: sql`now()`,
+        // A deleted rotation follows no team, so the team can be deleted (its foreign key restricts).
+        ...(current.follows === 'team' ? { follows: null, followsTeamId: null } : {}),
         updatedAt: sql`now()`,
         updatedByType: by.type,
         updatedById: by.id,

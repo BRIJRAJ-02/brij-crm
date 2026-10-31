@@ -188,6 +188,14 @@ export const strings = {
   everyoneSwitch: 'Everyone in the workspace, including people who join later',
   everyoneSwitchOn: (on: number) => `${String(on)} ${on === 1 ? 'person takes' : 'people take'} turns.`,
   switchOffRefused: (name: string) => `Switch ${name} off`,
+  // A group that follows a team (spec 0037, AC-1327).
+  membersFrom: 'Members',
+  chosenPeople: 'People you pick',
+  followsTeamHint: 'Follows the team',
+  followsTeamLine: (team: string) => `Everyone in ${team}, including people who join later.`,
+  needsTwo: 'Needs 2 people',
+  teamSummary: (team: string, on: number, pages: number) =>
+    `Follows ${team}, ${String(on)} on · ${pages === 0 ? 'not on a booking page yet' : pages === 1 ? '1 booking page' : `${String(pages)} booking pages`}`,
   rosterSummary: (on: number, pages: number) =>
     `Everyone in the workspace, ${String(on)} on · used by ${String(pages)} ${pages === 1 ? 'link' : 'links'}`,
   noRotations: 'Make a round robin group first. Round robin opens in a new tab, and what you typed here stays.',

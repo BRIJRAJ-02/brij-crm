@@ -7,7 +7,14 @@
 // at 390 in light and dark.
 // The library's stylesheet first, as main.tsx loads it, so what axe measures is the app's.
 import '@crm/ui/styles.css';
-import { dataError, type DataLayer, type MemberSummary, type MyAccess, type RotationView } from '@crm/data';
+import {
+  dataError,
+  type DataLayer,
+  type MemberSummary,
+  type MyAccess,
+  type RotationView,
+  type TeamView,
+} from '@crm/data';
 import { createToasts, UiProvider, type Toasts } from '@crm/ui';
 import { createMemoryHistory, createRootRouteWithContext, createRouter, RouterProvider } from '@tanstack/react-router';
 import { act, type ReactNode } from 'react';
@@ -459,6 +466,131 @@ describe('without booking.manage', () => {
     await expect.element(page.getByText('There’s nothing at this address.')).toBeVisible();
     expect(membersList).not.toHaveBeenCalled();
     expect(rotationsView).not.toHaveBeenCalled();
+  });
+});
+
+/** Sales, a team of Ada and Maya, and Support, of Ada alone. */
+const SALES_TEAM: TeamView = {
+  id: '0199a6f2-0000-7000-8000-0000000000t1',
+  name: 'Sales',
+  memberIds: [ADA.id, MAYA.id],
+};
+const SUPPORT_TEAM: TeamView = { id: '0199a6f2-0000-7000-8000-0000000000t2', name: 'Support', memberIds: [ADA.id] };
+/** A group that follows Sales (spec 0037, AC-1327). */
+const FOLLOWING: RotationView = { ...SALES, follows: 'team', followsTeamId: SALES_TEAM.id, followsTeamName: 'Sales' };
+
+describe('a group that follows a team (spec 0037, AC-1327)', () => {
+  it('makes a group following a team, sending the team and no people', async () => {
+    const data = layerWith([]);
+    shown = await renderInApp(
+      () => (
+        <RotationDialog
+          data={data}
+          slug="acme"
+          people={[ADA, MAYA]}
+          teams={[SALES_TEAM, SUPPORT_TEAM]}
+          isOpen
+          onClose={() => undefined}
+          onSaved={() => undefined}
+        />
+      ),
+      { data, pattern: '/w/$slug/settings/scheduling/round-robin', at: '/w/acme/settings/scheduling/round-robin' },
+    );
+    await userEvent.fill(page.getByRole('textbox', { name: strings.name }), 'Inbound');
+    await userEvent.click(page.getByRole('button', { name: new RegExp(`^${strings.chosenPeople}`) }));
+    await userEvent.click(page.getByRole('option', { name: /^Sales/ }));
+    await expect.element(page.getByText(strings.followsTeamLine('Sales'))).toBeVisible();
+    // No member picker: the team brings its people.
+    expect(page.getByRole('button', { name: new RegExp(strings.addMemberPlaceholder) }).elements()).toEqual([]);
+    await userEvent.click(page.getByRole('button', { name: strings.create, exact: true }));
+    expect(data.rotations.create).toHaveBeenLastCalledWith('acme', {
+      id: '0199a6f2-0000-7000-8000-0000000000n1',
+      settings: { name: 'Inbound', strategy: 'fair', windowDays: 30, evenGap: 3, returning: 'owner' },
+      followsTeamId: SALES_TEAM.id,
+    });
+  });
+
+  it('says a team of one needs 2 people before it is saved', async () => {
+    const data = layerWith([]);
+    shown = await renderInApp(
+      () => (
+        <RotationDialog
+          data={data}
+          slug="acme"
+          people={[ADA, MAYA]}
+          teams={[SALES_TEAM, SUPPORT_TEAM]}
+          isOpen
+          onClose={() => undefined}
+          onSaved={() => undefined}
+        />
+      ),
+      { data, pattern: '/w/$slug/settings/scheduling/round-robin', at: '/w/acme/settings/scheduling/round-robin' },
+    );
+    await userEvent.click(page.getByRole('button', { name: new RegExp(`^${strings.chosenPeople}`) }));
+    await userEvent.click(page.getByRole('option', { name: /^Support/ }));
+    await expect.element(page.getByText(strings.needsTwo)).toBeVisible();
+  });
+
+  it('shows the team on the card, and Needs 2 people when one is left', async () => {
+    await renderRoundRobin([{ ...FOLLOWING, members: FOLLOWING.members.slice(0, 1) }]);
+    await expect.element(page.getByText('Follows Sales, 1 on · 1 booking page')).toBeVisible();
+    await expect.element(page.getByText(strings.needsTwo, { exact: true })).toBeVisible();
+  });
+
+  it('edits only each person’s own settings, sending only who changed', async () => {
+    const data = layerWith([FOLLOWING]);
+    shown = await renderInApp(
+      () => (
+        <RotationDialog
+          data={data}
+          slug="acme"
+          people={[ADA, MAYA]}
+          teams={[SALES_TEAM, SUPPORT_TEAM]}
+          rotation={FOLLOWING}
+          isOpen
+          onClose={() => undefined}
+          onSaved={() => undefined}
+        />
+      ),
+      { data, pattern: '/w/$slug/settings/scheduling/round-robin', at: '/w/acme/settings/scheduling/round-robin' },
+    );
+    expect(page.getByRole('button', { name: strings.remove(ADA.name), exact: true }).elements()).toEqual([]);
+    await userEvent.fill(page.getByRole('textbox', { name: strings.weightFor(MAYA.name, 'Sales') }), '50');
+    await userEvent.click(page.getByRole('button', { name: strings.save, exact: true }));
+    expect(data.rotations.update).toHaveBeenLastCalledWith('acme', FOLLOWING.id, {
+      settings: { name: 'Sales', strategy: 'fair', windowDays: 30, evenGap: 3, returning: 'owner' },
+      members: [{ memberId: MAYA.id, weight: 50, priority: 2, dailyCap: null, weeklyCap: null, isOn: true }],
+    });
+  });
+
+  it('asks before a new team leaves someone out', async () => {
+    const data = layerWith([FOLLOWING]);
+    shown = await renderInApp(
+      () => (
+        <RotationDialog
+          data={data}
+          slug="acme"
+          people={[ADA, MAYA]}
+          teams={[SALES_TEAM, SUPPORT_TEAM]}
+          rotation={FOLLOWING}
+          isOpen
+          onClose={() => undefined}
+          onSaved={() => undefined}
+        />
+      ),
+      { data, pattern: '/w/$slug/settings/scheduling/round-robin', at: '/w/acme/settings/scheduling/round-robin' },
+    );
+    await userEvent.click(page.getByRole('button', { name: /^Sales/ }));
+    await userEvent.click(page.getByRole('option', { name: /^Support/ }));
+    await userEvent.click(page.getByRole('button', { name: strings.save, exact: true }));
+    const dialog = page.getByRole('alertdialog');
+    await expect.element(dialog.getByText(strings.removeTitle([MAYA.name], 'Sales'))).toBeVisible();
+    expect(data.rotations.update).not.toHaveBeenCalled();
+    await userEvent.click(dialog.getByRole('button', { name: strings.removeAction }));
+    expect(data.rotations.update).toHaveBeenLastCalledWith('acme', FOLLOWING.id, {
+      settings: { name: 'Sales', strategy: 'fair', windowDays: 30, evenGap: 3, returning: 'owner' },
+      followsTeamId: SUPPORT_TEAM.id,
+    });
   });
 });
 

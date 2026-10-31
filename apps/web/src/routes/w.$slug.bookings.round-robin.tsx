@@ -16,13 +16,16 @@ export const Route = createFileRoute('/w/$slug/bookings/round-robin')({
     try {
       const access = await context.data.access.mine(params.slug);
       if (!access.permissions.includes('booking.manage')) return { page: undefined };
-      const [people] = await Promise.all([
+      const canManage = access.permissions.includes('booking.admin');
+      const [people, teams] = await Promise.all([
         context.data.members.list(params.slug),
+        // The teams a group may follow (spec 0037, AC-1327): only an admin picks one.
+        canManage ? context.data.teams.list(params.slug) : Promise.resolve([]),
         context.data.rotations.view(params.slug).ready(),
       ]);
       // A guest is never offered as a member of a group or as its editor: guests take no bookings (spec 0031, slice 9).
       const hosts = people.filter((person) => person.role !== 'guest');
-      return { page: { canManage: access.permissions.includes('booking.admin'), people: hosts } };
+      return { page: { canManage, people: hosts, teams } };
     } catch (error) {
       // The frame above shows "workspace not found" for this one.
       if (isDataError(error) && error.code === 'NOT_FOUND') return { page: undefined };
@@ -43,7 +46,16 @@ function RotationsRoute() {
   const { slug } = Route.useParams();
   const { data } = Route.useRouteContext();
   if (page === undefined) return <SettingsMissing backTo="home" />;
-  return <RotationsScreen inFrame data={data} slug={slug} people={page.people} canManage={page.canManage} />;
+  return (
+    <RotationsScreen
+      inFrame
+      data={data}
+      slug={slug}
+      people={page.people}
+      canManage={page.canManage}
+      teams={page.teams}
+    />
+  );
 }
 
 function RotationsError({ error }: ErrorComponentProps) {

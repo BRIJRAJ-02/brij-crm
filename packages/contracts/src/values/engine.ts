@@ -67,6 +67,8 @@ export const ENGINE_REFUSAL_CODES = [
   'SCHEDULE_NOT_ALLOWED',
   // Round robin (spec 0029, AC-758): a rotation a page or form still books from can't be deleted.
   'IN_USE',
+  // A team a rotation follows can't be deleted (spec 0031 AC-826, widened by spec 0037: "Sales is followed by …").
+  'TEAM_IN_USE',
   // A round robin page's hosts don't fit (spec 0037): 1 to 3 rotations and at most 8 hosts in all.
   'HOSTS_INVALID',
   // Scheduling access (spec 0037, AC-1255, AC-1256): a delegate who can't hold one (removed, the target themself, a

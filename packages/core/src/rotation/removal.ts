@@ -13,6 +13,7 @@ import { inWorkspace } from '../access/run.ts';
 import { enqueueBookingMail } from '../booking/mail-queue.ts';
 import { isRefusal } from '../engine/refusals.ts';
 import { lockRotations } from './assign.ts';
+import { rotationsOfMember } from './follow-team.ts';
 import { reseatGone, type ReseatDeps } from './reassign.ts';
 
 const { bookings } = schema;
@@ -31,11 +32,8 @@ export const rotationsRemoval = {
   run: async (context: RemovalContext, memberId: string): Promise<void> => {
     const { tx, scope } = context;
     // Under each of their rotations' locks, so no pick in flight seats them from a team read before they left.
-    const theirs = await tx.execute<{ id: string }>(
-      // "Everyone on the roster" too: someone in it may have no row of their own to find it by.
-      sql`select rotation_id::text as id from rotation_members where member_id = ${memberId}::uuid
-        union select id::text from rotations where follows = 'everyone' and deleted_at is null`,
-    );
+    // "Everyone on the roster" and their teams' rotations too: someone in them may have no row of their own.
+    const theirs = await tx.execute<{ id: string }>(rotationsOfMember(memberId));
     await lockRotations(
       tx,
       scope.workspaceId,

@@ -3,7 +3,9 @@
 // Main task: add the people who share the meetings, set each one's weight, priority, daily and weekly caps and on or off, then Create or Save.
 // "Everyone on the roster" (the workspace link's rotation, 30 Oct 2026) holds every active member by itself: no Add or
 // Remove, only each person's own settings.
-// Leaves out: shares and history (the Rotations screen), teams (#23 brings rotations that follow a team), and marking who
+// A group may follow a team instead (spec 0037, AC-1327; admins only): its members are the team's, coming and going
+// with it, and only each person's own settings change here.
+// Leaves out: shares and history (the Rotations screen), and marking who
 // can't join in the picker (that needs the server to say who can host; until then its hint says who can, and the
 // server's refusal of one member offers to remove them or open their hours in a new tab).
 import {
@@ -12,6 +14,7 @@ import {
   type MemberSummary,
   type RotationMemberInput,
   type RotationView,
+  type TeamView,
 } from '@crm/data';
 import {
   Button,
@@ -43,6 +46,8 @@ export interface RotationDialogProps {
   readonly people: readonly MemberSummary[];
   /** The rotation being changed; none to make one. */
   readonly rotation?: RotationView;
+  /** The workspace's teams a group may follow (spec 0037, AC-1327): given to admins only, who alone may pick one. */
+  readonly teams?: readonly TeamView[];
   readonly isOpen: boolean;
   readonly onClose: () => void;
   readonly onSaved: (rotation: RotationView) => void;
@@ -91,11 +96,23 @@ const COLUMNS: readonly TableColumn[] = [
   { id: 'on', label: strings.columns.on },
   { id: 'remove', label: strings.columns.remove, isLabelHidden: true, align: 'end' },
 ];
-/** "Everyone on the roster": its members come with the workspace, so no one is removed here. */
+/** The Members choice for people picked here, rather than a team followed. */
+const CHOSEN = 'chosen';
+
+/** "Everyone on the roster" and a team's group: members come with the workspace or team, so no one is removed here. */
 const ROSTER_COLUMNS: readonly TableColumn[] = COLUMNS.filter((column) => column.id !== 'remove');
 
 /** The dialog. The id is minted once per opening, so a retry makes one rotation. */
-export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, onSaved }: RotationDialogProps) {
+export function RotationDialog({
+  data,
+  slug,
+  people,
+  rotation,
+  teams = [],
+  isOpen,
+  onClose,
+  onSaved,
+}: RotationDialogProps) {
   const [name, setName] = useState(rotation?.name ?? '');
   // Too few members shows as the member picker's error once Create or Save was tried.
   const [hasTried, setTried] = useState(false);
@@ -104,6 +121,10 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
   const [evenGap, setEvenGap] = useState(rotation?.evenGap ?? 3);
   const [returning, setReturning] = useState<Returning>(rotation?.returning ?? 'owner');
   const [members, setMembers] = useState<readonly Draft[]>(() => (rotation?.members ?? []).map(draftOf));
+  // Who is in it: people picked here, or the team it follows (its id).
+  const [source, setSource] = useState<string>(
+    rotation?.follows === 'team' && rotation.followsTeamId !== undefined ? rotation.followsTeamId : CHOSEN,
+  );
   const [id] = useState(() => data.rotations.newId());
   const [isBusy, setBusy] = useState(false);
   const [isConfirming, setConfirming] = useState(false);
@@ -116,9 +137,6 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
     people.find((person) => person.id === memberId)?.name ??
     rotation?.members.find((member) => member.memberId === memberId)?.name ??
     memberId;
-  const removed = (rotation?.members ?? []).filter(
-    (member) => !members.some((each) => each.memberId === member.memberId),
-  );
 
   const change = (memberId: string, patch: Partial<Draft>) =>
     setMembers((current) => current.map((member) => (member.memberId === memberId ? { ...member, ...patch } : member)));
@@ -127,13 +145,32 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
     .map((person) => ({ id: person.id, label: person.name, description: person.email }));
   // Everyone on the roster: membership follows the workspace, so the 2 to 20 of a chosen group doesn't apply.
   const isRoster = rotation?.follows === 'everyone';
-  const countError = isRoster
-    ? undefined
-    : members.length < 2
-      ? strings.needTwo
-      : members.length > 20
-        ? strings.tooMany
-        : undefined;
+  // Following a team: its members come with the team, so neither does the 2 to 20.
+  const isFollowing = !isRoster && source !== CHOSEN;
+  const followed = isFollowing ? teams.find((team) => team.id === source) : undefined;
+  const followedName = followed?.name ?? rotation?.followsTeamName ?? '';
+  // The team it already follows: the table edits each person's own settings, as the roster's does.
+  const isSameTeam = isFollowing && source === rotation?.followsTeamId;
+  const isSettingsOnly = isRoster || isSameTeam;
+  // Who a newly picked team brings, as far as this screen knows: its people who can host (guests never).
+  const teamHosts = (followed?.memberIds ?? []).filter((memberId) => people.some((person) => person.id === memberId));
+  const isThin = isFollowing && (isSameTeam ? members.length : teamHosts.length) < 2;
+  // Who a save takes out: anyone not in a newly followed team, or anyone removed from a picked list.
+  const removed = isSettingsOnly
+    ? []
+    : (rotation?.members ?? []).filter((member) =>
+        isFollowing
+          ? !(followed?.memberIds ?? []).includes(member.memberId)
+          : !members.some((each) => each.memberId === member.memberId),
+      );
+  const countError =
+    isRoster || isFollowing
+      ? undefined
+      : members.length < 2
+        ? strings.needTwo
+        : members.length > 20
+          ? strings.tooMany
+          : undefined;
   // A refusal about one member ("Maya Patel needs to set hours or connect a calendar first.") offers to remove them,
   // and, while they are an active member (so hours are what they lack), their hours in a new tab, so the group stays.
   const refused = failure?.memberId;
@@ -160,13 +197,21 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
     setNameError(trimmed === '' ? strings.nameRequired : undefined);
     const weights = members.map((member) => weightOf(member.weight));
     if (trimmed === '' || countError !== undefined || weights.some((weight) => weight === undefined)) return;
-    if (rotation !== undefined && !isRoster && removed.length > 0 && !isConfirming) {
+    if (rotation !== undefined && removed.length > 0 && !isConfirming) {
       setConfirming(true);
       return;
     }
     save(
       trimmed,
-      members.map((member, index) => ({ ...member, weight: weights[index] ?? 100 })),
+      // Only what a rotation takes per member: a held row also carries its name and counts.
+      members.map((member, index) => ({
+        memberId: member.memberId,
+        weight: weights[index] ?? 100,
+        priority: member.priority,
+        dailyCap: member.dailyCap,
+        weeklyCap: member.weeklyCap,
+        isOn: member.isOn,
+      })),
     );
   };
 
@@ -187,15 +232,27 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
     setBusy(true);
     setFailure(undefined);
     const settings = { name: trimmed, strategy, windowDays, evenGap, returning };
-    // Everyone on the roster takes only the people whose own settings changed: nobody joins or leaves by a save.
-    const changed = isRoster ? list.filter((member) => !sameAsHeld(member)) : list;
+    // Everyone on the roster and a team's group take only the people whose own settings changed: nobody joins or
+    // leaves by a save.
+    const changed = isSettingsOnly ? list.filter((member) => !sameAsHeld(member)) : list;
     const sent =
       rotation === undefined
-        ? data.rotations.create(slug, { id, settings, members: list })
-        : data.rotations.update(slug, rotation.id, {
-            settings,
-            ...(isRoster && changed.length === 0 ? {} : { members: changed }),
-          });
+        ? data.rotations.create(
+            slug,
+            isFollowing ? { id, settings, followsTeamId: source } : { id, settings, members: list },
+          )
+        : data.rotations.update(
+            slug,
+            rotation.id,
+            isFollowing && !isSameTeam
+              ? // A newly followed team brings its own people; their settings are set once it is saved.
+                { settings, followsTeamId: source }
+              : {
+                  settings,
+                  ...(rotation.follows === 'team' && !isFollowing ? { followsTeamId: null } : {}),
+                  ...(isSettingsOnly && changed.length === 0 ? {} : { members: changed }),
+                },
+          );
     sent.then(
       (saved) => {
         setBusy(false);
@@ -338,8 +395,8 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
                 : {
                     actions: (
                       <>
-                        {isRoster ? (
-                          // Nobody leaves Everyone on the roster by a save: the fix is to switch them off.
+                        {isSettingsOnly ? (
+                          // Nobody leaves Everyone on the roster or a team's group by a save: the fix is to switch them off.
                           <Button
                             onPress={() => {
                               change(refused, { isOn: false });
@@ -435,9 +492,30 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
               if (value === 'owner' || value === 'last_host' || value === 'none') setReturning(value);
             }}
           />
-          {isRoster ? (
-            <Callout tone="info">
-              {strings.rosterNote(members.filter((member) => member.isOn).length, members.length)}
+          {!isRoster && teams.length > 0 && (
+            <Select
+              label={strings.membersFrom}
+              items={[
+                { id: CHOSEN, label: strings.chosenPeople },
+                ...teams.map((team) => ({ id: team.id, label: team.name, description: strings.followsTeamHint })),
+              ]}
+              value={source}
+              onChange={(value) => {
+                if (value === null) return;
+                setSource(value);
+                setFailure(undefined);
+              }}
+            />
+          )}
+          {isRoster || isSameTeam ? (
+            <Callout tone={isThin ? 'warning' : 'info'}>
+              {isThin
+                ? strings.needsTwo
+                : strings.rosterNote(members.filter((member) => member.isOn).length, members.length)}
+            </Callout>
+          ) : isFollowing ? (
+            <Callout tone={isThin ? 'warning' : 'info'}>
+              {isThin ? strings.needsTwo : strings.followsTeamLine(followedName)}
             </Callout>
           ) : (
             <Select
@@ -459,11 +537,11 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
               }}
             />
           )}
-          {members.length > 0 && (
+          {members.length > 0 && (!isFollowing || isSameTeam) && (
             <Table
               label={strings.members(name.trim() === '' ? strings.newRotation : name.trim())}
               isScrollable
-              columns={isRoster ? ROSTER_COLUMNS : COLUMNS}
+              columns={isSettingsOnly ? ROSTER_COLUMNS : COLUMNS}
               rows={members}
               getRowId={(member) => member.memberId}
               renderCell={renderCell}
