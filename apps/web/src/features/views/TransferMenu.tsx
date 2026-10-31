@@ -1,12 +1,13 @@
 // The view bar's Import / Export menu (spec 0040): Import <plural> for members
-// who may write the object, and Export view (N columns) for everyone who can
-// read it, with Export all columns (M) beside it when some are hidden. Both
+// who may write the object, and Export to Excel and Export to CSV (the shown
+// columns, one press each, lane wip/crm-dataio) for everyone who can read it,
+// with an All columns (M) submenu of the two when some are hidden. Both
 // were only under "This view" in the switcher's menu, where few looked; they
 // stay there too. A view whose table counts past 100,000 records offers the
 // exports switched off, saying to narrow the filter.
 import { useView } from '@crm/data/react';
 import type { ObjectSummary, RecordsView, WindowCount } from '@crm/data';
-import { Button, Menu, MenuItem, MenuTrigger } from '@crm/ui';
+import { Button, Menu, MenuItem, MenuSeparator, MenuTrigger, SubmenuTrigger } from '@crm/ui';
 import { isOverExportLimit } from '../imports/export-run.ts';
 import { importHref } from '../imports/paths.ts';
 import { useCan } from '../workspace/WorkspacePage.tsx';
@@ -22,7 +23,7 @@ export interface TransferMenuProps {
   /** The table's records, whose count switches the exports off past the limit; none on a board. */
   readonly records?: RecordsView;
   /** Export: the screen's export, with its one toast; `withHidden` writes the hidden columns too. */
-  readonly onExport: (withHidden: boolean) => void;
+  readonly onExport: (withHidden: boolean, format: 'csv' | 'xlsx') => void;
 }
 
 /**
@@ -62,8 +63,8 @@ function Transfer({
       <Menu
         label={importStrings.transferMenu}
         onAction={(key) => {
-          if (key === 'export') onExport(false);
-          if (key === 'export-all') onExport(true);
+          if (key === 'export-xlsx') onExport(false, 'xlsx');
+          if (key === 'export-csv') onExport(false, 'csv');
         }}
       >
         {canImport && (
@@ -71,15 +72,42 @@ function Transfer({
             {importStrings.importPlural(object.pluralName)}
           </MenuItem>
         )}
+        {canImport && canExport && <MenuSeparator />}
         {canExport && (
-          <MenuItem id="export" icon="download" {...tooMany}>
-            {importStrings.exportShown(shownColumns)}
+          <MenuItem
+            id="export-xlsx"
+            icon="file-spreadsheet"
+            {...(isTooMany ? tooMany : { description: importStrings.columnsShown(shownColumns) })}
+          >
+            {importStrings.exportExcel}
+          </MenuItem>
+        )}
+        {canExport && (
+          <MenuItem id="export-csv" icon="download" {...tooMany}>
+            {importStrings.exportCsv}
           </MenuItem>
         )}
         {canExport && allColumns > shownColumns && (
-          <MenuItem id="export-all" icon="eye" {...(isTooMany ? tooMany : {})}>
-            {importStrings.exportAll(allColumns)}
-          </MenuItem>
+          // The rarer case, one level down: the hidden columns too, in either format.
+          <SubmenuTrigger>
+            <MenuItem id="export-all" icon="eye" {...(isTooMany ? tooMany : {})}>
+              {importStrings.exportAll(allColumns)}
+            </MenuItem>
+            <Menu
+              label={importStrings.exportAll(allColumns)}
+              onAction={(key) => {
+                if (key === 'all-xlsx') onExport(true, 'xlsx');
+                if (key === 'all-csv') onExport(true, 'csv');
+              }}
+            >
+              <MenuItem id="all-xlsx" icon="file-spreadsheet">
+                {importStrings.excel}
+              </MenuItem>
+              <MenuItem id="all-csv" icon="download">
+                {importStrings.csv}
+              </MenuItem>
+            </Menu>
+          </SubmenuTrigger>
         )}
       </Menu>
     </MenuTrigger>

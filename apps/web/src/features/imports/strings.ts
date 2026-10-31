@@ -19,8 +19,14 @@ export const strings = {
     why === undefined ? `Couldn’t export ${name}.` : `Couldn’t export ${name}. ${why}`,
   tryAgain: 'Try again',
   /** The Import / Export menu's export items: the shown columns, then every column, hidden ones too. */
-  exportShown: (columns: number) => `Export view (${n(columns)} ${columns === 1 ? 'column' : 'columns'})`,
-  exportAll: (columns: number) => `Export all columns (${n(columns)})`,
+  /** The two formats, for the view's shown columns (lane wip/crm-dataio), and how many columns that is. */
+  exportExcel: 'Export to Excel',
+  exportCsv: 'Export to CSV',
+  columnsShown: (columns: number) => `${n(columns)} ${columns === 1 ? 'column' : 'columns'}`,
+  /** The hidden columns too: a submenu of the two formats. */
+  exportAll: (columns: number) => `All columns (${n(columns)})`,
+  excel: 'Excel',
+  csv: 'CSV',
   /** Why the export items are off on a view past the limit. */
   exportTooMany: 'Narrow the filter to 100,000 or fewer',
   /** The bulk bar's export of the ticked rows: one word on screen, the bar already says how many (owner item 89). */
@@ -53,9 +59,11 @@ export const strings = {
   dropLabel: 'Upload a CSV file',
   reading: 'Reading the file',
   refusals: {
-    type: 'Choose a .csv, .tsv or .txt file.',
-    /** An Excel file dropped: how to make it a CSV. */
-    excel: 'Excel file? In Excel choose File › Save as › CSV UTF-8, then drop it here.',
+    type: 'Choose a .csv, .xlsx, .tsv or .txt file.',
+    /** An old or macro Excel file dropped: how to make it one we read. */
+    excel: 'Save it as an Excel Workbook (.xlsx) or CSV, then drop it here.',
+    /** A .xlsx that isn't a workbook we can read. */
+    broken: 'This file isn’t a workbook we can read. Save it again as .xlsx or CSV.',
     bytes: (bytes: number, limit: number) => `This file is ${mb(bytes)}. Import at most ${mb(limit)} at a time.`,
     rows: (limit: number) => `This file has more than ${n(limit)} rows. Split it and import each part.`,
     columns: (columns: number, limit: number) =>
@@ -66,6 +74,8 @@ export const strings = {
   },
   fileSummary: (name: string, rows: number) => `${name}, ${rowsWord(rows)}`,
   chooseAnother: 'Choose another file',
+  /** A workbook's sheet picker on Match columns. */
+  sheet: 'Sheet',
   // Match columns (AC-1114, AC-1115)
   columnsCount: (matched: number, total: number) => `${n(matched)} of ${n(total)} columns will be imported`,
   columnsLabel: 'Columns',

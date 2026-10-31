@@ -89,7 +89,7 @@ test('a People CSV imports through its steps, and its summary says what it did',
 
   // Export CSV (AC-1130, AC-1131): the view comes back as a file, the name first, ready to import again.
   await page.getByRole('button', { name: 'Import / Export' }).click();
-  await page.getByRole('menuitem', { name: /^Export view \(\d+ columns?\)/u }).click();
+  await page.getByRole('menuitem', { name: /^Export to CSV/u }).click();
   const ready = page.getByRole('alertdialog', { name: /People - .* is ready/u });
   await expect(ready).toBeVisible({ timeout: IMPORT_MS });
   const downloading = page.waitForEvent('download');
