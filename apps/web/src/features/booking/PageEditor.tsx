@@ -751,7 +751,7 @@ export function PageEditor({
                   text={page.status === 'live' ? strings.statusLive : strings.statusOff}
                 />
                 {/* Someone else's page (spec 0037, AC-1273): whose it is, beside its status. */}
-                {page.ownerName !== undefined && <Badge text={strings.editingFor(page.ownerName)} />}
+                {page.ownerName !== undefined && <Badge text={strings.editingFor(page.ownerName)} isWhole />}
               </>
             }
           >
