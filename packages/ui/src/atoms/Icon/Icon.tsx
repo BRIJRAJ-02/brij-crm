@@ -1,13 +1,15 @@
-import { createContext, useContext, type ReactNode } from 'react';
+import { createContext, useContext, useMemo, type ReactNode } from 'react';
 import type { Hue } from '../../hue.ts';
+import { baseIcons } from './base-icons.ts';
 import styles from './Icon.module.css';
-import { icons, type IconName } from './icons.ts';
+import type { icons, IconName } from './icons.ts';
 
 /** One glyph, as the registry holds it. */
 type IconGlyph = (typeof icons)[keyof typeof icons];
 
-/** The glyphs a scoped set adds for the Icons under it (none outside every IconScope). */
-const ScopedIcons = createContext<Readonly<Partial<Record<IconName, IconGlyph>>>>({});
+/** The glyphs the scopes around an Icon add to the base set: UiProvider's registry, and the editor's set inside it. */
+const EMPTY: Readonly<Partial<Record<IconName, IconGlyph>>> = {};
+const ScopedIcons = createContext(EMPTY);
 
 /** Props for IconScope. */
 export interface IconScopeProps {
@@ -21,7 +23,10 @@ export interface IconScopeProps {
  * note editor) wraps itself in one, so its icons ship in its own chunk instead of the registry every page loads.
  */
 export function IconScope({ icons: scoped, children }: IconScopeProps) {
-  return <ScopedIcons.Provider value={scoped}>{children}</ScopedIcons.Provider>;
+  // Adds to the scope around it rather than replacing it: the editor's set inside UiProvider's registry.
+  const outer = useContext(ScopedIcons);
+  const value = useMemo(() => (outer === EMPTY ? scoped : { ...outer, ...scoped }), [outer, scoped]);
+  return <ScopedIcons.Provider value={value}>{children}</ScopedIcons.Provider>;
 }
 
 /** Icon sizes, from the `size-icon` tokens: `md` 16 (nav, menus, rows), `sm` 14 (buttons, chips), `xs` 12 (card footers). */
@@ -69,8 +74,9 @@ function accessibleName(label: string | undefined) {
  */
 export function Icon(props: IconProps) {
   const scoped = useContext(ScopedIcons);
-  const Glyph = (icons as Readonly<Partial<Record<IconName, IconGlyph>>>)[props.name] ?? scoped[props.name];
-  // A scoped icon outside its IconScope: nothing to draw (icons.test.ts keeps scoped names inside their scope).
+  const Glyph = scoped[props.name] ?? (baseIcons as Readonly<Partial<Record<IconName, IconGlyph>>>)[props.name];
+  // In no scope and not in the base set: a registry icon outside UiProvider (under the hosted form's
+  // UiProviderBase), or an editor icon outside its IconScope. Nothing to draw (icons.test.ts checks both).
   if (Glyph === undefined) return null;
 
   if (props.tile !== undefined) {
