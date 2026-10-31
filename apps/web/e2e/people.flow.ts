@@ -115,7 +115,8 @@ test.describe('the People table', () => {
       page.getByRole('status').filter({ hasText: `grace-${tag}@example.com belongs to Grace Hopper.` }),
     ).toHaveCount(1);
     await expect(page.getByRole('button', { name: 'Retry' })).toHaveCount(0);
-    await expect(email).not.toContainText(`grace-${tag}@example.com`);
+    // Alan keeps his own address; the refusal under it names Grace's, and who holds it.
+    await expect(email).toHaveText(`alan-${tag}@example.comgrace-${tag}@example.com belongs to Grace Hopper.`);
     await checkScreen(page, '6-edit-refused');
 
     await page.reload();
