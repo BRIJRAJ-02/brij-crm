@@ -1,19 +1,31 @@
 // Brief
-// Purpose: New booking page (spec 0025 experience, AC-678): a centred dialog, "Add a booking page" (the owner's call on 19 October 2026, over the side panel).
-// Main task: a title, one length and the schedule it books by, then Create page into the editor.
-// An admin also chooses who it books: themselves, one host from a rotation (spec 0029, AC-732), or everyone on the roster, which makes a workspace link (30 Oct 2026); a round robin page's other hosts are set in its editor.
-// Leaves out: everything else a page has (its editor), and its web address part: the server makes a free one from the title (22 October 2026: it shows nowhere a visitor sees, since links use the page's key).
+// Purpose: New booking page (spec 0025 experience, AC-678; spec 0058, AC-5 and AC-17): a centred dialog, "Add a booking page", then its Ready panel.
+// Main task: a title and one length, then Create page; the Ready panel shows the link (Copy, Share, QR, a small preview), and Edit page opens the editor.
+// An admin also chooses who it books: themselves, one host from a rotation (spec 0029, AC-732), or everyone on the roster, which makes a workspace link (30 Oct 2026).
+// Leaves out: the schedule (the page follows the default; another is picked on the editor's Hours tab, as Calendly and Cal.com do), everything else a page has (its editor), and its web address part (the server makes one from the title).
 import { isDataError, type BookingPageView, type DataLayer } from '@crm/data';
-import { useCaptureList, useSchedules } from '@crm/data/react';
-import { Button, Callout, Field, InfoTip, Link, Modal, Radio, RadioGroup, SegmentedControl, Select } from '@crm/ui';
+import { useCaptureList } from '@crm/data/react';
+import {
+  Button,
+  Callout,
+  Field,
+  InfoTip,
+  focusLater,
+  Link,
+  Modal,
+  PreviewFrame,
+  Radio,
+  RadioGroup,
+  ReadyPanel,
+  SegmentedControl,
+  Select,
+} from '@crm/ui';
 import { useEffect, useState } from 'react';
 import { strings as rotationStrings } from './rotation-strings.ts';
 import { lengthOf } from './durations.ts';
 import { memberZone } from './zone.ts';
-import { scheduleStrings } from './schedule-strings.ts';
-import { scheduleChoices } from './schedules.ts';
 import { strings } from './strings.ts';
-import { roundRobinHref } from './links.ts';
+import { publicBookingUrl, roundRobinHref } from './links.ts';
 
 /** The lengths offered as segments; any other the server allows goes through Custom. */
 const SEGMENTS = [15, 30, 45, 60] as const;
@@ -27,12 +39,16 @@ export interface NewPageDialogProps {
   readonly canBookTeams?: boolean;
   readonly isOpen: boolean;
   readonly onClose: () => void;
+  /** The page exists and its Ready panel was dismissed (Edit page, Esc or close): the caller opens its editor. */
   readonly onCreated: (page: BookingPageView) => void;
   /** Makes it Link only from the start (Bookings' "Create a link only page", for reserved time). */
   readonly isLinkOnly?: boolean;
 }
 
-/** The dialog: Title, Duration, Schedule, then Cancel or Create page. The id is minted once per opening, so a retry makes one page. */
+/**
+ * The dialog: Title and Duration, then Cancel or Create page; once made, the Ready panel in the same Modal. The page
+ * follows the default schedule. The id is minted once per opening, so a retry makes one page.
+ */
 export function NewPageDialog({
   data,
   slug,
@@ -46,11 +62,8 @@ export function NewPageDialog({
   // A segment's minutes, or `custom` with the typed minutes beside it.
   const [length, setLength] = useState('30');
   const [custom, setCustom] = useState('');
-  // `default` follows the member's default schedule (spec 0035); any other id names one of their schedules.
-  const [schedule, setSchedule] = useState('default');
-  // The member's schedules, held only while the dialog is open: it is mounted, closed, under all of Captures.
-  const schedules = useSchedules(isOpen ? data.schedules.view(slug, undefined, memberZone(data, slug)) : undefined);
-  const choices = schedules.status === 'ready' ? schedules.schedules : [];
+  // The page just made: the dialog turns to its Ready panel until it is dismissed (spec 0058, AC-5).
+  const [created, setCreated] = useState<BookingPageView | undefined>(undefined);
   // `everyone` makes the workspace's own link, booking whoever on the roster is free (team scheduling, decision 3).
   const [who, setWho] = useState<'me' | 'rotation' | 'everyone'>('me');
   const [rotationId, setRotationId] = useState<string | null>(null);
@@ -99,7 +112,6 @@ export function NewPageDialog({
     setTitle('');
     setLength('30');
     setCustom('');
-    setSchedule('default');
     setWho('me');
     setRotationId(null);
     setRotationError(undefined);
@@ -125,11 +137,9 @@ export function NewPageDialog({
         id,
         title: title.trim(),
         timeZone: memberZone(data, slug),
-        // A round robin page books by each host's own hours, so it names no schedule.
+        // A one on one page follows the default schedule (AC-17); a round robin page books by each host's own hours.
         settings: {
-          ...(isTeam || isWorkspace
-            ? { durations: [minutes] }
-            : { durations: [minutes], scheduleId: schedule === 'default' ? null : schedule }),
+          ...(isTeam || isWorkspace ? { durations: [minutes] } : { durations: [minutes], scheduleId: null }),
           ...(isLinkOnly ? { isPrivate: true } : {}),
         },
         ...(isTeam && rotationId !== null
@@ -143,7 +153,9 @@ export function NewPageDialog({
           // The workspace's first link made "Everyone on the roster": the held rotations read it.
           if (isWorkspace) data.rotations.view(slug).reload();
           reset();
-          onCreated(page);
+          setCreated(page);
+          // Create page leaves with the form, so focus goes to the panel's first control, Copy link, never the page.
+          focusLater(() => document.querySelector<HTMLElement>('[role="dialog"] section button'));
         },
         (error: unknown) => {
           setBusy(false);
@@ -162,6 +174,38 @@ export function NewPageDialog({
     reset();
     onClose();
   };
+  if (created !== undefined) {
+    // Any way out of the Ready panel goes on to the editor, as Create page always has.
+    const finish = () => {
+      setCreated(undefined);
+      onCreated(created);
+    };
+    return (
+      <Modal
+        // The one heading: the panel under it leads with its line, not a second title.
+        title={strings.readyTitle}
+        isOpen={isOpen}
+        onOpenChange={(open) => {
+          if (!open) finish();
+        }}
+        actions={
+          // Copy link is the panel's one primary: sharing is what the moment is for.
+          <Button onPress={finish}>{strings.readyEdit}</Button>
+        }
+      >
+        <ReadyPanel
+          message={strings.readyMessage}
+          link={publicBookingUrl(created)}
+          shareTitle={created.title}
+          previewLabel={strings.readyPreview}
+          // The visitor's page itself, inert, at the QR code's height, drawn at half size from its top so the page's
+          // name and title show rather than being cut at the slot's foot.
+          previewScale="shrunk"
+          preview={<PreviewFrame src={`/b/${created.publicKey}`} title={created.title} version={created.updatedAt} />}
+        />
+      </Modal>
+    );
+  }
   return (
     <Modal
       title={isLinkOnly ? strings.addLinkOnlyPage : strings.addPage}
@@ -235,25 +279,19 @@ export function NewPageDialog({
       {canBookTeams && (
         <RadioGroup
           label={rotationStrings.whoBooks}
-          variant="cards"
+          // Three short choices in a row; what each means waits in the tip, not in three lines under them.
+          info={<InfoTip label={rotationStrings.whoBooks}>{rotationStrings.whoBooksInfo}</InfoTip>}
+          orientation="horizontal"
           value={who}
           isDisabled={isBusy}
           onChange={(value) => {
             if (value === 'me' || value === 'rotation' || value === 'everyone') setWho(value);
           }}
         >
-          <Radio value="me" icon="user" description={rotationStrings.bookMeLine}>
-            {rotationStrings.bookMe}
-          </Radio>
-          <Radio value="rotation" icon="users" description={rotationStrings.bookRotationLine}>
-            {rotationStrings.bookRotation}
-          </Radio>
+          <Radio value="me">{rotationStrings.bookMe}</Radio>
+          <Radio value="rotation">{rotationStrings.bookRotation}</Radio>
           {/* A workspace link is on nobody's profile, so Link only means nothing for it. */}
-          {!isLinkOnly && (
-            <Radio value="everyone" icon="building" description={rotationStrings.bookEveryoneLine}>
-              {rotationStrings.bookEveryone}
-            </Radio>
-          )}
+          {!isLinkOnly && <Radio value="everyone">{rotationStrings.bookEveryone}</Radio>}
         </RadioGroup>
       )}
       {isTeam &&
@@ -283,18 +321,6 @@ export function NewPageDialog({
             {...(rotationError === undefined ? {} : { error: rotationError })}
           />
         ))}
-      {!isTeam && !isWorkspace && (
-        <Select
-          label={scheduleStrings.schedule}
-          info={<InfoTip label={scheduleStrings.schedule}>{strings.tips.schedule.text}</InfoTip>}
-          items={scheduleChoices(choices, schedule === 'default' ? null : schedule)}
-          value={schedule}
-          isDisabled={isBusy}
-          onChange={(id) => {
-            if (id !== null) setSchedule(id);
-          }}
-        />
-      )}
     </Modal>
   );
 }

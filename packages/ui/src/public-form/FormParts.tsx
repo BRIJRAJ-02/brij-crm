@@ -16,6 +16,7 @@ import { Callout } from '../molecules/Callout/Callout.tsx';
 import type { ProductLogo } from '../modules/AuthLayout/AuthLayout.tsx';
 import styles from './FormParts.module.css';
 import { labelOf } from './Question.tsx';
+import { SentAnswers } from './SentAnswers.tsx';
 import type { HostedFormMode, HostedFormState } from './use-hosted-form.ts';
 
 /** How a layout sits on its page: `card` (Classic and Steps) or `open` (one question at a time, no card). */
@@ -132,7 +133,10 @@ export function FormHeader({
   );
 }
 
-/** The thank you, in the booking confirmation's shape: the green check, the heading, a muted line, then Send another. */
+/**
+ * The thank you, in the booking confirmation's shape: the green check, the heading, a muted line, what was sent,
+ * then one next step, Send another.
+ */
 export function FormThanks({
   form,
   state,
@@ -151,6 +155,7 @@ export function FormThanks({
       heading={heading}
       title={state.words.thanksTitle}
       text={text !== '' ? text : asksForAddress(form) ? state.words.thanks : state.words.thanksNeutral}
+      summary={<SentAnswers form={form} state={state} />}
     >
       <Button variant="ghost" onPress={state.sendAnother}>
         {state.words.sendAnother}
@@ -169,12 +174,15 @@ export function FormConfirmation({
   heading,
   title,
   text,
+  summary,
   children,
 }: {
   readonly mode: HostedFormMode;
   readonly heading: Ref<HTMLHeadingElement>;
   readonly title: string;
   readonly text?: string;
+  /** What was sent, between the line and what follows (the thank you's summary). */
+  readonly summary?: ReactNode;
   readonly children?: ReactNode;
 }) {
   const Heading = mode === 'page' ? 'h1' : 'h2';
@@ -187,6 +195,7 @@ export function FormConfirmation({
         {title}
       </Heading>
       {text !== undefined && text !== '' && <p className={styles.subheading}>{text}</p>}
+      {summary}
       {children !== undefined && <div className={styles.again}>{children}</div>}
     </div>
   );
@@ -321,7 +330,7 @@ export const TIMEFIX_LOGO: ProductLogo = {
   dark: '/brand/timefix-wordmark-dark.png',
 };
 
-/** The quiet foot under every view: the captcha's notice when there is one, then the Timefix wordmark. */
+/** The quiet foot under every view: the captcha's notice when there is one, then "Powered by" and the Timefix wordmark. */
 export function FormFoot({
   form,
   mode,
@@ -342,10 +351,11 @@ export function FormFoot({
         rel="noopener noreferrer"
         {...(mode === 'embed' ? { target: '_blank' } : {})}
       >
+        <span>{state.words.poweredBy}</span>
         <img
           className={styles.wordmark}
           src={form.look.colour === 'dark' ? logo.dark : logo.light}
-          alt={state.words.madeWith}
+          alt={state.words.product}
         />
       </a>
     </footer>

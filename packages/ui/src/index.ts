@@ -197,6 +197,11 @@ export {
 export { ChoiceChips, type ChoiceChip, type ChoiceChipsProps } from './molecules/ChoiceChips/ChoiceChips.tsx';
 export { ConditionRow, type ConditionRowProps } from './molecules/ConditionRow/ConditionRow.tsx';
 export { Sentence, type SentenceProps } from './molecules/Sentence/Sentence.tsx';
+export {
+  SpotIllustration,
+  type SpotIllustrationKind,
+  type SpotIllustrationProps,
+} from './molecules/SpotIllustration/SpotIllustration.tsx';
 export { Steps, type Step, type StepsProps, type StepsVariant } from './molecules/Steps/Steps.tsx';
 /** The rows to pick from under a field being typed in, focus staying in the field (Field's `combobox` names it). */
 export {
@@ -255,11 +260,14 @@ export { LinkListRowOrder } from './modules/LinkList/RowOrder.tsx';
 /** A person's link page (spec 0051): the public page at `/<handle>`, and the editor's phone preview of it. */
 export {
   LinkPage,
+  LinkPageThumbnail,
   LinkPageTile,
   type LinkPageBlock,
   type LinkPageMark,
   type LinkPagePerson,
   type LinkPageProps,
+  type LinkPageThumbnailProps,
+  type PageLook,
 } from './modules/LinkPage/LinkPage.tsx';
 /** Titled sections, each a Card, that move as wholes: a profile's sections in Settings › Profile (owner ask A102). */
 export { SectionList, type SectionListProps, type SectionListSection } from './modules/SectionList/SectionList.tsx';
@@ -342,6 +350,7 @@ export {
   type GuestsOutcome,
 } from './modules/BookingChanges/BookingChanges.tsx';
 export { DayStrip, type DayStripProps } from './modules/DayStrip/DayStrip.tsx';
+export { ReadyPanel, type ReadyPanelProps } from './modules/ReadyPanel/ReadyPanel.tsx';
 export { MonthTiles, type MonthTilesProps } from './modules/MonthTiles/MonthTiles.tsx';
 export { SlotList, type Slot, type SlotListProps } from './modules/SlotList/SlotList.tsx';
 export {
@@ -353,7 +362,14 @@ export {
 export { SampleTable, type SampleTableProps } from './molecules/SampleTable/SampleTable.tsx';
 export { SectionBar, type SectionBarProps, type SectionBarVariant } from './molecules/SectionBar/SectionBar.tsx';
 export { PageColumn, type PageColumnProps } from './modules/PageColumn/PageColumn.tsx';
-export { TileGrid, type TileGridProps } from './molecules/TileGrid/TileGrid.tsx';
+export {
+  TileGrid,
+  type CardTileGridProps,
+  type ChoiceActionProps,
+  type ChoiceSelectProps,
+  type ChoiceTile,
+  type TileGridProps,
+} from './molecules/TileGrid/TileGrid.tsx';
 export { Stats, type StatItem, type StatsProps } from './molecules/Stats/Stats.tsx';
 export {
   RolePowers,

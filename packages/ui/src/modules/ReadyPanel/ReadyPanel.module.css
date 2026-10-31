@@ -1,0 +1,216 @@
+/* ReadyPanel (spec 0058): the "done, here is your link" moment. One column on one left and right edge, blocks
+   space-16 apart: the head (a success mark and the heading), the link label, the link row (the address in a read
+   only box, then Copy and Share, all size-input tall), the QR and the preview (at most size-column tall) side by side at one height, then more,
+   then the buttons at the end. It eases in on opacity and a small rise; the mark pops in on opacity and scale. */
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-16);
+    box-sizing: border-box;
+    min-inline-size: 0;
+    color: var(--text);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    animation: enter var(--duration-modal) var(--ease-out) backwards;
+  }
+
+  .head {
+    display: flex;
+    gap: var(--space-12);
+    align-items: center;
+  }
+
+  .check {
+    display: grid;
+    flex: none;
+    place-content: center;
+    inline-size: var(--size-input);
+    block-size: var(--size-input);
+    border-radius: var(--radius-full);
+    background: var(--success);
+    color: var(--on-accent);
+    animation: pop var(--duration-modal) var(--ease-out) backwards;
+    animation-delay: var(--duration-hover);
+  }
+
+  .titles {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    min-inline-size: 0;
+  }
+
+  .title {
+    margin: 0;
+    color: var(--text);
+    font: var(--text-title);
+    letter-spacing: var(--tracking-title);
+  }
+
+  .message {
+    margin: 0;
+    color: var(--text-secondary);
+    text-wrap: pretty;
+  }
+
+  /* With no heading (the Modal's title says it), the line beside the mark is the panel's lead, in the text colour. */
+  .head[data-untitled] .message {
+    color: var(--text);
+  }
+
+  .linkLabel {
+    margin-block-end: calc(-1 * var(--space-8));
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .link {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-8);
+    align-items: center;
+  }
+
+  /* The address: a read only box that takes the room left of the buttons, all selectable. It is cut in the middle:
+     the start (up to the last slash) gives way to an ellipsis, the end (the page's own name) always shows. */
+  .address {
+    display: flex;
+    flex: 1 1 var(--size-column);
+    align-items: center;
+    box-sizing: border-box;
+    min-inline-size: 0;
+    block-size: var(--size-input);
+    padding-inline: var(--space-8);
+    overflow: hidden;
+    border: var(--border-width-hairline) solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface-subtle);
+    color: var(--text);
+    /* An address reads letter for letter: Inter's contextual alternates would draw the x in "k3x9" as a times sign. */
+    font-feature-settings: 'calt' 0;
+    white-space: nowrap;
+    user-select: all;
+  }
+
+  .addressStart {
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .addressEnd {
+    flex: none;
+  }
+
+  /* The QR and the preview share a height (the QR's), side by side; a narrow slot stacks them. */
+  .visual {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-16);
+    align-items: stretch;
+  }
+
+  .qr {
+    display: flex;
+    flex: none;
+  }
+
+  /* The preview is a glimpse, capped at size-column tall: a taller picture (a whole phone) is cut at the cap, its
+     top kept in view (safe centring falls back to the start when the content overflows). */
+  .preview {
+    display: flex;
+    flex: 1 1 var(--size-column);
+    align-items: safe center;
+    justify-content: safe center;
+    box-sizing: border-box;
+    min-inline-size: 0;
+    min-block-size: var(--size-column-narrow);
+    max-block-size: var(--size-column);
+    overflow: hidden;
+    position: relative;
+    border: var(--border-width-hairline) solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    background: var(--surface-subtle);
+  }
+
+  /* At its own size the glimpse adds no box: the picture is the slot's flex item, as if the wrapper weren't there. */
+  .glimpse {
+    display: contents;
+  }
+
+  /* Shrunk: the picture is laid out at twice the slot and drawn at half from the top, so a page's head shows. */
+  .preview[data-scale='shrunk'] .glimpse {
+    display: flex;
+    align-items: flex-start;
+    justify-content: safe center;
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline-start: 0;
+    inline-size: calc(100% / var(--scale-shrunk));
+    block-size: calc(100% / var(--scale-shrunk));
+    transform: scale(var(--scale-shrunk));
+    transform-origin: top left;
+  }
+
+  .preview[data-scale='shrunk'] .glimpse:dir(rtl) {
+    inset-inline-start: auto;
+    inset-inline-end: 0;
+    transform-origin: top right;
+  }
+
+  /* With no preview, a quiet line sits beside the QR, centred on it, so the code doesn't stand alone in an empty
+     row; it takes the rest of the width. */
+  .scan {
+    flex: 1 1 var(--size-column-narrow);
+    align-self: center;
+    min-inline-size: 0;
+    margin: 0;
+    color: var(--text-secondary);
+    text-wrap: pretty;
+  }
+
+  .more {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-8);
+    align-items: center;
+    justify-content: flex-end;
+  }
+
+  @keyframes enter {
+    from {
+      opacity: 0;
+      translate: 0 var(--space-8);
+    }
+  }
+
+  @keyframes pop {
+    from {
+      opacity: 0;
+      scale: var(--scale-shrunk);
+    }
+  }
+
+  /* Reduced motion: the panel and its mark are there at once (spec 0058, AC-2), with no fade. */
+  @media (prefers-reduced-motion: reduce) {
+    .root,
+    .check {
+      animation: none;
+    }
+  }
+
+  @media (forced-colors: active) {
+    .address,
+    .preview {
+      border-color: CanvasText;
+    }
+  }
+}

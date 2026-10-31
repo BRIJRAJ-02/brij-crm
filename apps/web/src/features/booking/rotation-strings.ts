@@ -178,11 +178,11 @@ export const strings = {
   // New booking page.
   whoBooks: 'Who it books',
   bookMe: 'Me',
-  bookRotation: 'A round robin group',
+  bookRotation: 'Round robin group',
   bookEveryone: 'Workspace link',
-  bookEveryoneLine: 'Books whoever in the workspace is free, in turn. It’s on nobody’s profile.',
-  bookMeLine: 'One on one: guests book you, by your hours.',
-  bookRotationLine: 'One host from a group you pick, in turn.',
+  /** The one help for Who it books, in its InfoTip. */
+  whoBooksInfo:
+    'Me: guests book you. Round robin group: one host from a group, in turn. Workspace link: whoever is free, on nobody’s profile.',
   // Copy handoff (31 Oct 2026): the switches are the explanation.
   rosterNote: (on: number, all: number) => `${String(on)} of ${String(all)} on.`,
   everyoneSwitch: 'Everyone in the workspace, including people who join later',

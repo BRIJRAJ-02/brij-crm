@@ -1,10 +1,9 @@
 // Brief
-// Purpose: Settings › Account › Link page (spec 0051, built as blocks): what the person's page at /<handle> holds, in
-// order, beside a phone that shows it as a visitor will.
-// Main task: add a booking page, a link or a heading, edit it, move it, archive or delete it; every change shows at
-// once, on the list and in the phone, and is saved as it is made.
-// Leaves out: the contact card, the QR, the socials row (they come in later phases), themes and appearance, and the
-// handle itself (Settings › Profile).
+// Purpose: the Link page (spec 0051, built as blocks): what the person's page at /<handle> holds, in order, beside a
+// phone that shows it as a visitor will, with one Live or Private switch at the top (spec 0058, AC-23).
+// Main task: share the page, or add, edit, move, archive and delete its blocks; every change shows at once, on the
+// list and in the phone, and is saved as it is made.
+// Leaves out: the bio and the picture (Settings › Profile); a handle is claimed right here when there is none.
 import {
   DEFAULT_PAGE_THEME,
   type BlockDraft,
@@ -33,11 +32,9 @@ import {
   MenuItem,
   MenuSeparator,
   MenuTrigger,
-  Modal,
   PreviewLayout,
-  Radio,
-  RadioGroup,
   SocialLinks,
+  SpotIllustration,
   TopBar,
   VisuallyHidden,
   type LinkPageBlock,
@@ -47,8 +44,8 @@ import { useLinkPage } from '@crm/data/react';
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { pageEditorHref, publicBookingOrigin, publicProfileUrl } from '../booking/links.ts';
-import { profileHref } from '../settings/nav.ts';
 import { AppearanceCard } from './AppearanceCard.tsx';
+import { ClaimLink } from './ClaimLink.tsx';
 import { BlockEditorFrame } from './editors.tsx';
 import { SharingCard } from './SharingCard.tsx';
 import { SocialsCardSlot } from '../booking/socials-slot.tsx';
@@ -66,9 +63,9 @@ import {
   type ChosenFacts,
 } from './registry.tsx';
 import { ImportLinksModal } from './ImportLinksModal.tsx';
+import { DeleteBlockDialog, KindPicker } from './KindPicker.tsx';
 import { LinkPageOverview } from './LinkPageOverview.tsx';
-import { homeStrings } from './home-strings.ts';
-import { showLinkPage } from './show.ts';
+import { LiveSwitch, useLinkPageLive, type LinkPageLive } from './private-page.tsx';
 import { ShareLinkPageModal } from './ShareLinkPageModal.tsx';
 import { strings } from './strings.ts';
 
@@ -104,13 +101,13 @@ function EditorOrFrame({
   onClose,
   children,
 }: {
-  readonly frame?: { readonly leading: ReactNode };
+  readonly frame?: { readonly leading: ReactNode; readonly hint: string };
   readonly onClose: () => void;
   readonly children: ReactNode;
 }) {
   if (frame === undefined) return children;
   return (
-    <BlockEditorFrame title={strings.addTitle} hint={strings.addHint} leading={frame.leading} onClose={onClose}>
+    <BlockEditorFrame title={strings.addTitle} hint={frame.hint} leading={frame.leading} onClose={onClose}>
       {children}
     </BlockEditorFrame>
   );
@@ -154,6 +151,8 @@ function shownItem(id: string, block: ProfileBlock, was: ProfileItem | undefined
 /** The link page editor: the blocks beside the phone. */
 export function LinkPageScreen({ data, linkPage, slug, profile, isEditing, onEditing }: LinkPageScreenProps) {
   const handle = profile.handle;
+  // Live or Private (spec 0058, AC-23): opening the screen is what puts a page made for its owner live, once.
+  const live = useLinkPageLive(data, slug, profile.isPublic, { opens: handle !== undefined });
   return (
     // A page of the workspace since 25 October 2026, not a view inside Settings › Account › Profile: its own row
     // in the sidebar, its own bar, and no trail of configuration above it (the owner).
@@ -164,8 +163,7 @@ export function LinkPageScreen({ data, linkPage, slug, profile, isEditing, onEdi
           <TopBar title={strings.title} icon="id-card">
             {handle === undefined ? undefined : (
               <HeaderActions
-                data={data}
-                slug={slug}
+                live={live}
                 handle={handle}
                 workspaceName={profile.workspaceName}
                 isEditing={isEditing}
@@ -178,14 +176,7 @@ export function LinkPageScreen({ data, linkPage, slug, profile, isEditing, onEdi
           handle === undefined ? (
             <PreviewLayout>
               <Card>
-                <EmptyState
-                  layout="row"
-                  icon="at-sign"
-                  title={strings.noHandle}
-                  actions={<ButtonLink href={profileHref(slug)}>{strings.openProfile}</ButtonLink>}
-                >
-                  {strings.noHandleText}
-                </EmptyState>
+                <ClaimLink data={data} slug={slug} suggested={profile.suggestedHandle} />
               </Card>
             </PreviewLayout>
           ) : (
@@ -195,6 +186,8 @@ export function LinkPageScreen({ data, linkPage, slug, profile, isEditing, onEdi
               slug={slug}
               profile={profile}
               handle={handle}
+              isLive={live.isLive}
+              onGoLive={live.goLive}
               isEditing={isEditing}
               onEditing={onEditing}
             />
@@ -205,57 +198,61 @@ export function LinkPageScreen({ data, linkPage, slug, profile, isEditing, onEdi
 }
 
 /**
- * The header's actions, as the owner's design draws them: the page's address as a pill that opens it, and Share,
- * which opens the one Share modal (the QR, the address and the two ways to go on; Home's card opens the same one).
- * Share also makes the page public (27 Oct 2026): a page made with a membership is private until its owner edits it
- * or shares it, and a code handed to somebody has to open for them.
+ * The header's actions, as the owner's design draws them: the one Live or Private switch (spec 0058, AC-23), then,
+ * once Live, the page's address as a pill that opens it, and Share, which opens the one Share modal (the QR, the
+ * address and the two ways to go on; Home's card opens the same one). Sharing never changes whether the page is live: the switch is
+ * the one place that does, and the modal says when the page is private.
  */
-function HeaderActions({
-  data,
-  slug,
+export function HeaderActions({
+  live,
   handle,
   workspaceName,
   isEditing,
   onEditing,
 }: {
-  readonly data: DataLayer;
-  readonly slug: string;
+  readonly live: LinkPageLive;
   readonly handle: string;
   readonly workspaceName?: string | undefined;
   readonly isEditing: boolean;
   readonly onEditing: (isEditing: boolean) => void;
 }) {
-  const { toasts } = useRouteContext({ from: '__root__' });
   const address = publicProfileUrl(handle);
   const shown = address.replace(/^https?:\/\//, '');
   const [isSharing, setSharing] = useState(false);
-  const share = () => {
-    setSharing(true);
-    showLinkPage(data, slug).then(
-      (isPublic) => {
-        if (!isPublic) toasts.toast({ tone: 'danger', message: homeStrings.makePublicFailed });
-      },
-      () => toasts.toast({ tone: 'danger', message: homeStrings.makePublicFailed }),
-    );
-  };
   return (
     <>
-      <ButtonLink
-        variant="secondary"
-        isRound
-        iconRight="external-link"
-        href={address}
-        isExternal
-        label={strings.openAddress(shown)}
-      >
-        {shown}
-      </ButtonLink>
-      <Button icon="upload" onPress={share}>
-        {strings.share}
-      </Button>
+      <LiveSwitch live={live} />
+      {/* Sharing is offered only for a page visitors can open: while Private the switch beside it says so, and
+          the address and Share wait for Live (an unpublished page offers no link, as Notion's and Webflow's do). */}
+      {live.isLive && (
+        <>
+          {/* On a phone's narrow bar the address and Share drop their words for their icons (the overview's card
+              shows the address in full), so the bar never runs past the screen (spec 0058, AC-1). */}
+          <ButtonLink
+            variant="secondary"
+            isRound
+            isLabelCollapsible
+            iconRight="external-link"
+            href={address}
+            isExternal
+            label={strings.openAddress(shown)}
+          >
+            {shown}
+          </ButtonLink>
+          <Button icon="share" isLabelCollapsible label={strings.share} onPress={() => setSharing(true)}>
+            {strings.share}
+          </Button>
+        </>
+      )}
       {/* Edit page lives on the page's own card; the bar carries only the way back out of the builder. */}
       {isEditing && (
-        <Button variant="primary" icon="check" onPress={() => onEditing(false)}>
+        <Button
+          variant="primary"
+          icon="check"
+          isLabelCollapsible
+          label={strings.doneEditing}
+          onPress={() => onEditing(false)}
+        >
           {strings.doneEditing}
         </Button>
       )}
@@ -263,6 +260,8 @@ function HeaderActions({
         address={address}
         handle={handle}
         workspaceName={workspaceName}
+        isPublic={live.isLive}
+        onGoLive={() => live.setLive(true)}
         isOpen={isSharing}
         onClose={() => setSharing(false)}
       />
@@ -277,6 +276,8 @@ function Blocks({
   slug,
   profile,
   handle,
+  isLive,
+  onGoLive,
   isEditing,
   onEditing,
 }: {
@@ -285,6 +286,10 @@ function Blocks({
   readonly slug: string;
   readonly profile: MyProfile;
   readonly handle: string;
+  /** Whether the page is Live, as the switch in the bar holds it (spec 0058, AC-23). */
+  readonly isLive: boolean;
+  /** Turns it Live, as the bar's switch does: the overview's Turn on Live while it is Private. */
+  readonly onGoLive: () => void;
   readonly isEditing: boolean;
   readonly onEditing: (isEditing: boolean) => void;
 }) {
@@ -308,9 +313,6 @@ function Blocks({
   );
   // What a menu's move says to screen readers; a drag says its own.
   const [said, setSaid] = useState('');
-  // The page went public from the overview: the profile read this screen holds still says private, and reading it
-  // again would only tell it what it already knows.
-  const [madePublic, setMadePublic] = useState(false);
   // The look, shown the moment it is picked and saved behind it (AC-5421). A refusal puts back what was there and
   // says why on the card, where the control that changed is.
   const [picked, setPicked] = useState<PageTheme | undefined>(undefined);
@@ -631,34 +633,19 @@ function Blocks({
       </Button>
     </>
   );
+  // A full kind's tile is off and can't take focus, so why it is full is said in the footer's line too, where a
+  // keyboard reaches it; with nothing full the line says where the block lands.
+  const fullReasons = [...new Set(ADDABLE.flatMap((kind) => linkPage.limit(items, blockKindOf(kind)) ?? []))];
+  const addHint = fullReasons.length === 0 ? strings.addHint : fullReasons.join(' ');
+  // The kinds as a grid of icons with a short name each (spec 0058, AC-9), only while adding.
   const kindPicker =
     editing === undefined || editing.item !== undefined ? undefined : (
-      <RadioGroup
-        label={strings.addWhat}
-        variant="cards"
+      <KindPicker
         value={editing.kind}
+        fullReason={(kind) => linkPage.limit(items, blockKindOf(kind))}
         // The id is minted once and kept as the kind changes, so the save that follows is still the one add.
-        onChange={(chosen) => {
-          const kind = ADDABLE.find((each) => each === chosen);
-          if (kind !== undefined) setEditing({ kind, id: editing.id });
-        }}
-      >
-        {ADDABLE.map((kind) => {
-          const entry = BLOCK_KINDS[kind];
-          const full = linkPage.limit(items, blockKindOf(kind));
-          return (
-            <Radio
-              key={kind}
-              value={kind}
-              icon={entry.icon}
-              description={full ?? entry.description}
-              isDisabled={full !== undefined}
-            >
-              {entry.label}
-            </Radio>
-          );
-        })}
-      </RadioGroup>
+        onChange={(kind) => setEditing({ kind, id: editing.id })}
+      />
     );
 
   const previewBlocks = items.flatMap((item) => {
@@ -723,9 +710,29 @@ function Blocks({
       />
     );
   } else if (items.length === 0) {
+    // The first empty moment (spec 0058, AC-8): the drawing, one line and the one primary, Add item, with bringing an
+    // old page across beside it. The card's footer steps aside meanwhile, so nothing is offered twice.
+    // Once an import has landed its rows wait in Archived below: the line says so, and Bring a page across steps
+    // aside rather than offering the same page again.
+    const hasArchived = archived.length > 0;
     list = (
-      <EmptyState layout="row" icon="link" title={strings.empty}>
-        {strings.emptyText}
+      <EmptyState
+        illustration={<SpotIllustration kind="link-page" />}
+        title={strings.empty}
+        actions={
+          <>
+            {!hasArchived && (
+              <Button icon="download" isDisabled={isFull} onPress={() => setImporting(true)}>
+                {strings.bringAcross}
+              </Button>
+            )}
+            <Button variant="primary" icon="plus" isDisabled={isFull} onPress={() => openAdd('link')}>
+              {strings.addItem}
+            </Button>
+          </>
+        }
+      >
+        {hasArchived ? strings.emptyArchived : strings.emptyText}
       </EmptyState>
     );
   } else {
@@ -763,10 +770,14 @@ function Blocks({
           slug={slug}
           handle={handle}
           address={publicProfileUrl(handle)}
-          isPublic={madePublic || profile.isPublic !== false}
-          onPublic={() => setMadePublic(true)}
+          isPublic={isLive}
           isEmpty={state.status === 'ready' && items.length === 0}
           onEdit={() => onEditing(true)}
+          onAdd={() => {
+            onEditing(true);
+            openAdd('link');
+          }}
+          onGoLive={onGoLive}
         />
       </PreviewLayout>
     );
@@ -786,7 +797,7 @@ function Blocks({
               ? `${strings.blocksText} ${strings.countsFailed}`
               : strings.blocksText,
         ].join(' ')}
-        footer={addButtons}
+        {...(state.status === 'ready' && items.length === 0 ? {} : { footer: addButtons })}
       >
         {list}
       </Card>
@@ -845,7 +856,7 @@ function Blocks({
       {Editor !== undefined && editing !== undefined && (
         <EditorOrFrame
           // Adding keeps one dialog across the kinds (the frame owns it); editing opens the kind's own, as before.
-          {...(kindPicker === undefined ? {} : { frame: { leading: kindPicker } })}
+          {...(kindPicker === undefined ? {} : { frame: { leading: kindPicker, hint: addHint } })}
           onClose={() => setEditing(undefined)}
         >
           <Editor
@@ -864,51 +875,27 @@ function Blocks({
         </EditorOrFrame>
       )}
       {deleting !== undefined && (
-        <Modal
-          title={
-            deleting.kind === 'page'
-              ? strings.removePageTitle(rowWords(deleting).title)
-              : strings.deleteTitle(rowWords(deleting).title)
-          }
-          variant="confirm"
-          tone="danger"
-          isOpen
+        <DeleteBlockDialog
+          item={deleting}
           isBusy={isDeleting}
-          onOpenChange={(open) => {
-            if (!open && !isDeleting) setDeleting(undefined);
+          onCancel={() => setDeleting(undefined)}
+          onDelete={() => {
+            setIsDeleting(true);
+            const live = items.findIndex((each) => each.id === deleting.id);
+            const grid = live === -1 ? strings.archived : strings.blocks;
+            const index = live === -1 ? archived.findIndex((each) => each.id === deleting.id) : live;
+            void linkPage.remove(slug, deleting.id).finally(() => {
+              setIsDeleting(false);
+              setDeleting(undefined);
+              focusNear(grid, index);
+            });
           }}
-          actions={
-            <>
-              <Button slot="close" isDisabled={isDeleting}>
-                {strings.cancel}
-              </Button>
-              <Button
-                variant="danger-solid"
-                icon="trash"
-                isPending={isDeleting}
-                onPress={() => {
-                  setIsDeleting(true);
-                  const live = items.findIndex((each) => each.id === deleting.id);
-                  const grid = live === -1 ? strings.archived : strings.blocks;
-                  const index = live === -1 ? archived.findIndex((each) => each.id === deleting.id) : live;
-                  void linkPage.remove(slug, deleting.id).finally(() => {
-                    setIsDeleting(false);
-                    setDeleting(undefined);
-                    focusNear(grid, index);
-                  });
-                }}
-              >
-                {deleting.kind === 'page' ? strings.removePage : strings.deleteBlock}
-              </Button>
-            </>
-          }
-        >
-          {deleting.kind === 'page' ? strings.removePageText : strings.deleteText}
-        </Modal>
+        />
       )}
       {isImporting && (
         <ImportLinksModal
           isOpen
+          archived={archived}
           newId={linkPage.newId}
           onClose={() => setImporting(false)}
           onImport={(id, url) => linkPage.importLinks(slug, id, url)}

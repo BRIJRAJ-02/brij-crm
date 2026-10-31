@@ -64,6 +64,11 @@ export const ChooseATime: Story = {
     await expect(canvas.getByRole('heading', { level: 1, name: 'Intro call · 30 min' })).toBeInTheDocument();
     await userEvent.click(canvas.getByRole('button', { name: /^9:30 AM/ }));
     await expect(canvas.getByRole('button', { name: 'Book Thu Oct 8 at 9:30 AM' })).toBeEnabled();
+    // The clock and the view share the heading row's end, one group on one line (spec 0058, AC-24).
+    const clock = canvas.getByRole('radiogroup', { name: 'Clock' });
+    const view = canvas.getByRole('radiogroup', { name: 'View' });
+    await expect(clock.parentElement).toBe(view.parentElement);
+    await expect(clock.getBoundingClientRect().top).toBe(view.getBoundingClientRect().top);
     // Both feet, the rail's (wide screens) and the page's (phones): each link tagged as the booking page's.
     await expect(timefixLinkTags(canvasElement)).toEqual([
       timefixTags('booking_page', 'footer_logo'),
@@ -397,6 +402,7 @@ function Interactive(args: ComponentProps<typeof BookingFrame>) {
   const [time, setTime] = useState<string | undefined>(undefined);
   const [view, setView] = useState('month');
   const [step, setStep] = useState<'pick' | 'details' | 'back'>('pick');
+  const [hour12, setHour12] = useState(true);
   const bookBar = (
     <Button
       variant="primary"
@@ -439,8 +445,7 @@ function Interactive(args: ComponentProps<typeof BookingFrame>) {
                     slots={TIMES}
                     value={time}
                     onChange={setTime}
-                    hour12
-                    onHour12Change={fn()}
+                    hour12={hour12}
                     layout="grid"
                   />
                 </>
@@ -448,24 +453,34 @@ function Interactive(args: ComponentProps<typeof BookingFrame>) {
               coverFooter: bookBar,
             }
           : {})}
+        // The picker's corner as the page draws it (spec 0058, AC-24): the clock and the view in one compact group.
         toolbar={
-          <SegmentedControl
-            label="View"
-            value={view}
-            onChange={(next) => {
-              setView(next);
-              // A switch is a fresh look, as the page's is: Back's slide doesn't replay.
-              setStep('pick');
-            }}
-            segments={[
-              { value: 'month', label: 'Month', icon: 'calendar', isIconOnly: true },
-              { value: 'list', label: 'List', icon: 'list', isIconOnly: true },
-            ]}
-          />
+          <>
+            <SegmentedControl
+              label="Clock"
+              value={hour12 ? '12' : '24'}
+              onChange={(next) => setHour12(next === '12')}
+              segments={[
+                { value: '12', label: '12h' },
+                { value: '24', label: '24h' },
+              ]}
+            />
+            <SegmentedControl
+              label="View"
+              value={view}
+              onChange={(next) => {
+                setView(next);
+                // A switch is a fresh look, as the page's is: Back's slide doesn't replay.
+                setStep('pick');
+              }}
+              segments={[
+                { value: 'month', label: 'Month', icon: 'calendar', isIconOnly: true },
+                { value: 'list', label: 'List', icon: 'list', isIconOnly: true },
+              ]}
+            />
+          </>
         }
-        aside={
-          <SlotList heading="Thu Oct 8" slots={TIMES} value={time} onChange={setTime} hour12 onHour12Change={fn()} />
-        }
+        aside={<SlotList heading="Thu Oct 8" slots={TIMES} value={time} onChange={setTime} hour12={hour12} />}
       >
         <MonthTiles
           month="2026-10"

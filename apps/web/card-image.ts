@@ -6,6 +6,7 @@
 // The look is the marketing site's, not the app's: its pitch black ground (`--site-ink`), its display face
 // (Host Grotesk) and the field of accent dashes its fold stands on, reproduced from apps/marketing's Backdrop
 // with the same steps, the same noise and the same falloff.
+import { linkPageCacheTags } from '@crm/contracts/handles';
 
 /** The one pair every crawler is told, and the size the card is drawn at. */
 export const CARD_WIDTH = 1200;
@@ -408,9 +409,25 @@ export function cardFonts(assets: CardAssets) {
   ];
 }
 
-/** A card is the same until the page changes, and the address carries the version, so it is kept for a year. */
-export const CARD_CACHE_CONTROL = 'public, max-age=31536000, immutable';
-/** Without a version (somebody typed the address), it is still cached, but only for an hour. */
-export const CARD_CACHE_CONTROL_UNVERSIONED = 'public, max-age=3600, s-maxage=3600';
+/**
+ * The edge cache tags a card is filed under (spec 0058, AC-23): the handle in its address and the page's current one,
+ * as the profile read answered it, so the page's Live or Private switch deletes the card from the edge at once.
+ */
+export function cardCacheTags(handle: string, profile: unknown): readonly string[] {
+  const current =
+    typeof profile === 'object' && profile !== null && 'handle' in profile && typeof profile.handle === 'string'
+      ? profile.handle
+      : undefined;
+  return linkPageCacheTags(handle, current);
+}
+
+/**
+ * A versioned card is the same until the page changes, but the page can be made Private (spec 0058, AC-23), and a
+ * year's `immutable` copy would outlive that in every cache that took it. So it is kept five minutes, filed under the
+ * page's cache tag (`link-page:<handle>`), which the switch deletes from the edge at once.
+ */
+export const CARD_CACHE_CONTROL = 'public, max-age=300, s-maxage=300';
+/** Without a version (somebody typed the address, or the page sent none), the same five minutes. */
+export const CARD_CACHE_CONTROL_UNVERSIONED = 'public, max-age=300, s-maxage=300';
 /** A card drawn from the address alone, because the read missed: kept a minute, so the real one follows soon. */
 export const CARD_CACHE_CONTROL_MISSED = 'public, max-age=60, s-maxage=60';

@@ -6,7 +6,7 @@ import { Tooltip } from '../../atoms/Tooltip/Tooltip.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { focusLater } from '../../lib/focus-later.ts';
 import { Menu, MenuItem, MenuSeparator, MenuTrigger } from '../../molecules/Menu/Menu.tsx';
-import { MatchCalendar, MatchCalendarCta, type MatchCalendarProps } from '../MatchCalendar/MatchCalendar.tsx';
+import { MatchCalendar, type MatchCalendarProps } from '../MatchCalendar/MatchCalendar.tsx';
 import styles from './VisitorBar.module.css';
 import { strings } from './strings.ts';
 
@@ -38,17 +38,11 @@ export interface VisitorBarProps {
   /** While the page asks who the visitor is: the tag's space held, so nothing jumps when it fills. */
   readonly isLoading?: boolean;
   /**
-   * Match with your calendar (the owner, 25 October 2026): the page's own call
-   * to action in place of the small Connect your calendar link, and the dialog
-   * behind it, which the page drives. Left off, the small link stands alone.
+   * Match with your calendar (the owner, 25 October 2026): the dialog behind the small Connect your calendar link,
+   * which the page drives. Since spec 0058 (AC-24, 31 October 2026) the link stays small and secondary, and opens
+   * the dialog rather than leaving for Google at once. Left off, the link goes straight to `connectHref`.
    */
   readonly match?: MatchCalendarProps;
-  /**
-   * While loading, hold Match with your calendar's space rather than the small
-   * tag's, on a page whose visitor will be offered it: the card under the row
-   * never moves when the answer lands.
-   */
-  readonly holdsMatch?: boolean;
 }
 
 /** What the tag says after the visitor's name. */
@@ -95,15 +89,10 @@ export function VisitorBar({
   onNotYou,
   isLoading = false,
   match,
-  holdsMatch = false,
 }: VisitorBarProps) {
   const root = useRef<HTMLDivElement>(null);
   if (isLoading) {
-    return holdsMatch ? (
-      <div className={styles.root} data-cta="">
-        <MatchCalendarCta isLoading onPress={() => undefined} />
-      </div>
-    ) : (
+    return (
       <div className={styles.root} aria-busy="true">
         <span className={styles.placeholder}>
           <Skeleton width="short" />
@@ -114,13 +103,22 @@ export function VisitorBar({
   if (person === undefined) {
     if (match !== undefined) {
       return (
-        // The call to action takes the whole row: it is the page's one ask of a visitor we don't know.
-        <div className={styles.root} data-cta="">
-          <MatchCalendarCta
-            onPress={() => {
-              match.onOpenChange(true);
-            }}
-          />
+        // A quiet secondary action at the row's end (spec 0058, AC-24): booking is the page's one ask, so this offer
+        // stays quiet (ghost, at the body's size so it still reads), and the dialog says what it reads before anything
+        // leaves for Google.
+        <div ref={root} className={styles.root} tabIndex={-1}>
+          <VisuallyHidden>{strings.invite}</VisuallyHidden>
+          <Tooltip content={strings.readsOnly}>
+            <Button
+              variant="ghost"
+              provider="google"
+              onPress={() => {
+                match.onOpenChange(true);
+              }}
+            >
+              {strings.connect}
+            </Button>
+          </Tooltip>
           <MatchCalendar {...match} />
         </div>
       );
@@ -130,7 +128,7 @@ export function VisitorBar({
       <div ref={root} className={styles.root} tabIndex={-1}>
         <VisuallyHidden>{strings.invite}</VisuallyHidden>
         <Tooltip content={strings.readsOnly}>
-          <ButtonLink href={connectHref} provider="google">
+          <ButtonLink variant="ghost" href={connectHref} provider="google">
             {strings.connect}
           </ButtonLink>
         </Tooltip>

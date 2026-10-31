@@ -60,8 +60,10 @@ export interface FormStrings {
   readonly questionsHidden: string;
   /** A question with no label yet, in the builder's preview. */
   readonly untitledQuestion: string;
-  /** Under every form until branding removal arrives as a plan flag (AC-577). */
-  readonly madeWith: string;
+  /** The words before the Timefix wordmark under every form, which nothing takes off (spec 0058, AC-26). */
+  readonly poweredBy: string;
+  /** The wordmark's name, read after "Powered by". */
+  readonly product: string;
   /** The dial code picker's name with the country picked: "Country code, United States". */
   readonly dialCodeOf: (country: string) => string;
   /** Above the button after a submit that found problems: "2 answers need a look". */
@@ -77,11 +79,9 @@ export interface FormStrings {
   readonly bookingInAfter: string;
   /** Going on to the booking page at once (a countdown of 0). */
   readonly bookingNow: string;
-  /** Goes to the booking page now. */
-  readonly bookNow: string;
   /** Stops the countdown and stays on the thank you. */
   readonly stayHere: string;
-  /** After Stay here: the way to the booking page, for later. */
+  /** The way on to the booking page: at once during the countdown, or later after Stay here. */
   readonly bookATime: string;
   /** A step form's place: "Step 2 of 3". */
   readonly stepOf: (step: number, steps: number) => string;
@@ -140,7 +140,8 @@ const EN: FormStrings = {
   questionsShown: 'Your answer added a question below.',
   questionsHidden: 'Your answer removed a question that no longer applies.',
   untitledQuestion: 'Untitled question',
-  madeWith: 'Made with Timefix',
+  poweredBy: 'Powered by',
+  product: 'Timefix',
   dialCodeOf: (country) => `Country code, ${country}`,
   needsALook: (count) => (count === 1 ? '1 answer needs a look' : `${String(count)} answers need a look`),
   didYouMean: (email) => `Did you mean ${email}?`,
@@ -149,7 +150,6 @@ const EN: FormStrings = {
   bookingInBefore: 'Taking you to book a time in',
   bookingInAfter: '…',
   bookingNow: 'Taking you to book a time…',
-  bookNow: 'Book now',
   stayHere: 'Stay here',
   bookATime: 'Book a time',
   stepOf: (step, steps) => `Step ${String(step)} of ${String(steps)}`,

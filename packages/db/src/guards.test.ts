@@ -225,6 +225,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_save_social_links', owner: 'crm_handle' },
       { name: 'crm_search_similar', owner: 'crm_search' },
       { name: 'crm_search_text', owner: 'crm_search' },
+      // The link page's Live or Private switch (spec 0058, AC-23, migration 0154).
+      { name: 'crm_set_public_profile_live', owner: 'crm_handle' },
       // Private until its owner acts (27 Oct 2026, migration 0116).
       { name: 'crm_show_public_profile', owner: 'crm_handle' },
       { name: 'crm_social_links_of', owner: 'crm_handle' },
@@ -321,6 +323,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         atomic: true,
       },
       { name: 'crm_search_text', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      // A plpgsql body: it checks the workspace and the membership before it writes, as the one below does.
+      { name: 'crm_set_public_profile_live', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       // A plpgsql body: it checks the workspace and the membership before it writes.
       { name: 'crm_show_public_profile', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_social_links_of', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
@@ -523,6 +527,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         // A link page made for every membership (26 Oct 2026, migration 0116).
         'crm_ensure_public_profile',
         'crm_show_public_profile',
+        // The link page's Live or Private switch (spec 0058, AC-23, migration 0154).
+        'crm_set_public_profile_live',
         // A deleted account's handles freed after their 90 days (migration 0126).
         'crm_sweep_released_handles',
         // An old handle let go to make room at the cap (late trap #76, migration 0124): called only by the two
@@ -558,11 +564,12 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_profile_handles_of(uuid)',
         'crm_ensure_public_profile(uuid, uuid, text)',
         'crm_show_public_profile(uuid, uuid)',
+        'crm_set_public_profile_live(uuid, uuid, boolean)',
         'crm_sweep_released_handles(integer)',
       ],
       // One per signature: every one of these is crm_app's to call and nobody else's. Counted from the list
       // rather than written out, since a signature added without the count moved read as unreachable and passed.
-      Array.from({ length: 29 }, () => 'app'),
+      Array.from({ length: 30 }, () => 'app'),
     ],
   ])(
     'keeps %s unable to log in, owning only %s, and out of the app’s reach',
@@ -1393,7 +1400,7 @@ describe('isolation', () => {
     await expect(
       db.withWorkspace(a.workspaceId, (tx) => tx.execute(sql`delete from records where id = ${inA.recordId}`)),
     ).rejects.toMatchObject({ cause: { code: '23503', constraint: 'notes_record' } });
-    // A note's links (migration 0135): its own workspace's only, and never to another workspace's record.
+    // A note's links (migration 0154): its own workspace's only, and never to another workspace's record.
     await db.withWorkspace(a.workspaceId, (tx) =>
       tx.execute(
         sql`insert into note_records (workspace_id, note_id, record_id, position, created_by_type) values (${a.workspaceId}, ${inA.noteId}, ${inA.recordId}, 0, 'system')`,
@@ -2223,6 +2230,9 @@ describe('the auth schema: global identity, outside row level security (spec 000
       // cleared, and only through crm_make_handle_room.
       'auth.public_handles.user_id UPDATE',
       'auth.public_profiles.bio UPDATE',
+      // When the page became its owner's choice (spec 0058, AC-23, migration 0154): only through
+      // crm_show_public_profile and crm_set_public_profile_live.
+      'auth.public_profiles.claimed_at UPDATE',
       'auth.public_profiles.handle UPDATE',
       // Whether search engines may show their page (spec 0055, migration 0108): one more column, and only
       // through crm_save_profile_indexable. This line is the whole of what that spec widened.

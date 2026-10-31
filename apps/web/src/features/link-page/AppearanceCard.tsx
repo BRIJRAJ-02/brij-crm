@@ -1,10 +1,11 @@
 // Brief
 // Purpose: the link page's look (spec 0054), picked in a few presses and seen at once.
-// Main task: choose a starting point, then change the ground, hue, light or dark, buttons and typeface.
+// Main task: choose a starting point by its picture (spec 0058, AC-10), then change the ground, hue, light or dark,
+// buttons and typeface.
 // Leaves out: any colour, size or font of its own; every pick is a name from a closed set, and the stylesheet in
 // `packages/ui` is the only place a value lives.
 import { DEFAULT_PAGE_THEME, PAGE_THEME_PRESETS, sameTheme, type DataError, type PageTheme } from '@crm/data';
-import { Button, Card, ChoiceChips, HuePicker, type Hue } from '@crm/ui';
+import { Button, Card, ChoiceChips, HuePicker, LinkPageThumbnail, TileGrid, type Hue } from '@crm/ui';
 import { strings } from './strings.ts';
 
 /** What each starting point is called. The list's order is the contracts' own, so the two can't fall apart. */
@@ -91,13 +92,20 @@ export function AppearanceCard({ theme, onChange, refusal }: AppearanceCardProps
       actions={<Button onPress={() => pick(DEFAULT_PAGE_THEME)}>{strings.reset}</Button>}
       {...(refusal === undefined ? {} : { footerNote: refusal.message })}
     >
-      <ChoiceChips
-        isSingle
+      {/* Each starting point as a picture of the page in that look, its name under it: picked by sight, and the
+          chosen one ringed and ticked, so nobody reads a word to see where they stand. None is ticked once a
+          control below changes a key under it. */}
+      <TileGrid
+        variant="choice"
         label={strings.startingPoint}
-        choices={PAGE_THEME_PRESETS.map((preset) => ({ id: preset.id, label: PRESET_NAMES[preset.id] }))}
-        selected={standing === undefined ? [] : [standing.id]}
+        value={standing?.id ?? null}
+        tiles={PAGE_THEME_PRESETS.map((preset) => ({
+          id: preset.id,
+          name: PRESET_NAMES[preset.id],
+          thumbnail: <LinkPageThumbnail theme={preset.theme} />,
+        }))}
         onChange={(picked) => {
-          const found = PAGE_THEME_PRESETS.find((preset) => preset.id === picked[0]);
+          const found = PAGE_THEME_PRESETS.find((preset) => preset.id === picked);
           if (found !== undefined) pick(found.theme);
         }}
       />

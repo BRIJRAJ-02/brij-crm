@@ -15,10 +15,12 @@ export const PICTURE_TIMEOUT_MS = 3000;
 /** The largest picture read: Google's 256px squares are a few kilobytes. */
 export const PICTURE_MAX_BYTES = 1024 * 1024;
 /**
- * How long a public picture is kept: an hour, in the browser and at the edge. Its path is versioned (a new picture is a
- * new path), so the hour only bounds how long a picture outlives its page, its handle or its account.
+ * How long a public picture is kept: five minutes, in the browser and at the edge, with no stale copy served after.
+ * Its path is versioned (a new picture is a new path), so the five minutes only bound how long a picture outlives its
+ * page, its handle or its account. A link page switched Private deletes its copies at the edge at once (cache tags,
+ * spec 0058 AC-23); the five minutes are the bound where that can't run, on a host with no tags or a failed purge.
  */
-export const PICTURE_CACHE_CONTROL = 'public, max-age=3600, s-maxage=3600';
+export const PICTURE_CACHE_CONTROL = 'public, max-age=300, s-maxage=300';
 /** The signed in person's own picture: their browser only, never the edge. */
 export const PRIVATE_PICTURE_CACHE_CONTROL = 'private, max-age=3600';
 

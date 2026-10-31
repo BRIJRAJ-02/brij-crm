@@ -324,6 +324,12 @@ const viewSegments = [
   { value: 'chat', label: strings.chat, icon: 'message-square' as const, isIconOnly: true },
 ];
 
+/** The clock switch's segments, beside the view switch in the picker's corner (spec 0058, AC-24). */
+const clockSegments = [
+  { value: '12', label: strings.hours12 },
+  { value: '24', label: strings.hours24 },
+];
+
 /**
  * The page while its facts are still coming: the same frame, the same card,
  * the real month of the visitor's own zone with no day open yet, and a time's
@@ -359,10 +365,6 @@ export function LoadingBooking({
       value={undefined}
       onChange={() => undefined}
       hour12={hour12}
-      onHour12Change={(next) => {
-        setHour12(next);
-        saveHour12(next);
-      }}
       layout={layout}
       isLoading
     />
@@ -377,16 +379,27 @@ export function LoadingBooking({
       claimHref={CLAIM_URL}
       heading={strings.chooseTime}
       toolbar={
-        <SegmentedControl
-          label={strings.view}
-          value={view}
-          onChange={(next) => {
-            const picked = next === 'list' || next === 'chat' ? next : 'month';
-            setView(picked);
-            saveView(addressPath, picked);
-          }}
-          segments={viewSegments}
-        />
+        <>
+          <SegmentedControl
+            label={strings.clock}
+            value={hour12 ? '12' : '24'}
+            onChange={(next) => {
+              setHour12(next === '12');
+              saveHour12(next === '12');
+            }}
+            segments={clockSegments}
+          />
+          <SegmentedControl
+            label={strings.view}
+            value={view}
+            onChange={(next) => {
+              const picked = next === 'list' || next === 'chat' ? next : 'month';
+              setView(picked);
+              saveView(addressPath, picked);
+            }}
+            segments={viewSegments}
+          />
+        </>
       }
       view={view}
       // The month sets the card's size in every view, so List and Chat draw over it, as the loaded page does.
@@ -982,8 +995,8 @@ function Booking({
           </Callout>
         )}
         <Suspense fallback={null}>
-          {/* holdsBar is only true off an embed, so the call to action's own space is the space to hold. */}
-          {holdsBar && <VisitorBar isLoading holdsMatch />}
+          {/* The small link's space, held while the page asks who the visitor is (spec 0058, AC-24). */}
+          {holdsBar && <VisitorBar isLoading />}
           {showsBar && (
             <VisitorBar
               {...(person === undefined
@@ -1044,7 +1057,7 @@ function Booking({
   // Every open time clashes with the visitor's calendar: say so, with Show all times.
   const allBusy = isAllHidden && loaded.size >= Math.min(chunks, 2);
   const message = read.unreachable ? (
-    <Callout tone="warning">{strings.unreachable(page.hostName)}</Callout>
+    <Callout tone="warning">{strings.unreachable}</Callout>
   ) : read.failed ? (
     <Callout
       tone="danger"
@@ -1096,13 +1109,22 @@ function Booking({
       value={time}
       onChange={setTime}
       hour12={hour12}
-      onHour12Change={(next) => {
-        setHour12(next);
-        saveHour12(next);
-      }}
       layout={layout}
       isLoading={isLoading}
       drawKey={`${day ?? ''}|${zone}`}
+    />
+  );
+  // The picker's corner (spec 0058, AC-24, as Cal.com's): the clock and the view in one compact group, so the times
+  // below carry nothing but the day and its times. Both stay in reach in every view, by keyboard as before.
+  const clockSwitch = (
+    <SegmentedControl
+      label={strings.clock}
+      value={hour12 ? '12' : '24'}
+      onChange={(next) => {
+        setHour12(next === '12');
+        saveHour12(next === '12');
+      }}
+      segments={clockSegments}
     />
   );
   const viewSwitch = (
@@ -1125,6 +1147,12 @@ function Booking({
           : [{ value: 'chat', label: strings.chat, icon: 'message-square' as const, isIconOnly: true }]),
       ]}
     />
+  );
+  const controls = (
+    <>
+      {clockSwitch}
+      {viewSwitch}
+    </>
   );
 
   const bookBar = (
@@ -1152,7 +1180,7 @@ function Booking({
   if (message !== undefined && detailsStep === undefined) {
     // Nothing to pick in any view: the message alone, the same card whichever view is chosen.
     return (
-      <BookingFrame {...frame} heading={strings.chooseTime} toolbar={viewSwitch} view={view}>
+      <BookingFrame {...frame} heading={strings.chooseTime} toolbar={controls} view={view}>
         {noticeLine}
         {message}
       </BookingFrame>
@@ -1204,7 +1232,7 @@ function Booking({
     <BookingFrame
       {...(isDetails ? withoutBar : frame)}
       heading={strings.chooseTime}
-      toolbar={viewSwitch}
+      toolbar={controls}
       view={isDetails ? 'details' : view}
       {...(isDetails
         ? { coverPlace: 'card' as const, enter: 'forward' as const }

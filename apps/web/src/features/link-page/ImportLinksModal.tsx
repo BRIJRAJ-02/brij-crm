@@ -1,19 +1,25 @@
 // Brief
 // Purpose: bring the rows of somebody's existing link in bio page across (spec 0055, AC-5524 to AC-5528), so a
 // person moving here doesn't retype forty links.
-// Main task: paste the old page's address, and see what came across and what didn't.
+// Main task: paste the old page's address, and see what came across (a count and the list) and what didn't.
 // Leaves out: choosing which rows to bring before they land. Everything lands hidden, so the choosing happens on
 // the page itself with the switch that was already there, and a person who imports and walks away publishes
 // nothing. Loaded with the editor's chunk, never the first load.
 import { Button, Callout, DescriptionList, Field, focusLater, Modal } from '@crm/ui';
-import type { DataError, ProfileLinkImport, SkippedImportRow } from '@crm/data';
+import type { DataError, ProfileItem, ProfileLinkImport, SkippedImportRow } from '@crm/data';
 import { useRef, useState } from 'react';
 import { importStrings as strings } from './import-strings.ts';
+import { rowWords } from './registry.tsx';
 
 /** Props for the import modal. */
 export interface ImportLinksModalProps {
   /** Kept mounted while it closes, so the Modal's own exit plays. */
   readonly isOpen: boolean;
+  /**
+   * The page's archived blocks as the store holds them, where the import's rows land: the answer names them by id,
+   * so the list of what came across is read from here, with no request of its own (spec 0058, AC-16).
+   */
+  readonly archived: readonly ProfileItem[];
   readonly onClose: () => void;
   /** A fresh import id. One import is one id, so a retry of the same address adds nothing twice (AC-5528). */
   readonly newId: () => string;
@@ -36,7 +42,7 @@ function reasonOf(row: SkippedImportRow): string {
  * Bring a page across: one address in, and a plain account of what happened. Two steps in one modal, because
  * the second is the answer to the first and a person reading it has nothing left to decide.
  */
-export function ImportLinksModal({ isOpen, newId, onClose, onImport }: ImportLinksModalProps) {
+export function ImportLinksModal({ isOpen, archived, newId, onClose, onImport }: ImportLinksModalProps) {
   const [url, setUrl] = useState('');
   const [isReading, setReading] = useState(false);
   const [refusal, setRefusal] = useState<DataError | undefined>(undefined);
@@ -70,6 +76,13 @@ export function ImportLinksModal({ isOpen, newId, onClose, onImport }: ImportLin
   };
   const onTheField = refusal !== undefined && ABOUT_THE_ADDRESS.includes(refusal.code);
   const skipped = made?.skipped ?? [];
+  // What came across, in the source page's order: each row in the words its row in Archived uses.
+  const brought = (made?.itemIds ?? []).flatMap((id) => {
+    const item = archived.find((each) => each.id === id);
+    if (item === undefined) return [];
+    const words = rowWords(item);
+    return [{ id: item.id, term: words.title, description: words.address }];
+  });
 
   return (
     <Modal
@@ -105,7 +118,6 @@ export function ImportLinksModal({ isOpen, newId, onClose, onImport }: ImportLin
               {refusal.message}
             </Callout>
           )}
-          <p>{strings.lead}</p>
           <Field
             label={strings.address}
             placeholder={strings.example}
@@ -127,13 +139,17 @@ export function ImportLinksModal({ isOpen, newId, onClose, onImport }: ImportLin
         </>
       ) : (
         <>
-          <Callout tone={made.made > 0 ? 'success' : 'warning'} isAnnounced>
-            {made.existed
-              ? strings.alreadyDone
-              : made.made === 0
-                ? strings.nothingText
-                : `${strings.madeLine(made.made)} ${strings.hiddenNote}`}
-          </Callout>
+          {made.existed || made.made === 0 ? (
+            <Callout tone={made.existed ? 'success' : 'warning'} isAnnounced>
+              {made.existed ? strings.alreadyDone : strings.nothingText}
+            </Callout>
+          ) : (
+            // The count leads, the list follows: what came across, seen rather than described (spec 0058, AC-16).
+            <Callout tone="success" title={strings.madeLine(made.made)} isAnnounced>
+              {strings.hiddenNote}
+            </Callout>
+          )}
+          {!made.existed && brought.length > 0 && <DescriptionList items={brought} />}
           {skipped.length > 0 && (
             <Callout tone="warning" title={strings.skippedLine(skipped.length)}>
               <DescriptionList

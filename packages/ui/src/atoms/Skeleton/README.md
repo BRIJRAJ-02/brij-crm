@@ -25,7 +25,7 @@ const showSkeleton = useDelayedLoading(isLoading);
 
 ## States
 
-It is the loading state. It pulses once per `duration-pulse`, and holds still under reduced motion, or always with `isStill`.
+It is the loading state. It pulses once per `duration-pulse`, and holds still under reduced motion (the text shape's bar too), or always with `isStill`.
 
 ## Keyboard
 

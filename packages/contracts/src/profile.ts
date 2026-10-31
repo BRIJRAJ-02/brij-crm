@@ -158,8 +158,9 @@ export const MyProfile = z.object({
   /** Whether search engines may show their link page (spec 0055, AC-5506); absent with no handle. */
   indexable: z.boolean().optional(),
   /**
-   * Whether their link page is public yet (27 Oct 2026); absent with no handle. A page made with a membership is
-   * private, seen only by its owner, until they first edit it or share its link.
+   * Whether their link page is public (27 Oct 2026; spec 0058, AC-23); absent with no handle. A page made with a
+   * membership is private, seen only by its owner, until they claim its handle or open it; then their Live or
+   * Private switch decides.
    */
   isPublic: z.boolean().optional(),
   /**
@@ -315,8 +316,12 @@ export const profileContract = {
   /** The link page's figures (spec 0051, AC-5127): views, visitors and each block's presses over 30 days. */
   counts: oc.input(WorkspaceScoped).output(ProfileCounts),
   /**
-   * Makes the caller's own link page public (27 Oct 2026), asked as they share its link (copy it, show its code,
-   * save it to a wallet). Editing the page shows it too, with no call of its own. Never makes it private again.
+   * The caller's own link page, Live or Private (spec 0058, AC-23). Without `live`, they opened it: a page made for
+   * them that nobody has chosen for goes live, once, and one they set Private stays so (claiming the handle and
+   * editing the page do the same with no call of their own). With `live`, it is the Live or Private switch, their
+   * own choice from then on. Answers whether the page is public now.
    */
-  show: oc.input(WorkspaceScoped.extend({ mutationId: Uuid })).output(z.object({ isPublic: z.boolean() })),
+  show: oc
+    .input(WorkspaceScoped.extend({ mutationId: Uuid, live: z.boolean().optional() }))
+    .output(z.object({ isPublic: z.boolean() })),
 };

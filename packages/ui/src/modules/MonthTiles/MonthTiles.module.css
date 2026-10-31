@@ -66,6 +66,24 @@
     animation-name: month-back;
   }
 
+  /* A neighbouring month's date in the six weeks: a closed day's size, but drawn in the strong border's grey, plainly
+     behind the month's own days (a closed day keeps text-tertiary), so a run of them never reads as closed days. It is
+     decoration, never a control: the number is generated content from data-date rather than text, so it is no text
+     for the contrast floor or a screen reader. */
+  .outside {
+    display: grid;
+    place-items: center;
+    aspect-ratio: 1;
+    color: var(--border-strong);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .outside::before {
+    content: attr(data-date);
+  }
+
   .day {
     position: relative;
     display: grid;

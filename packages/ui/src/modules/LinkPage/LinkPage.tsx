@@ -797,6 +797,33 @@ function Group({
  * the order they set, each a whole row to press, grouped under the headings they gave, and the foot. One column a
  * thumb reaches, quiet chrome, and nothing loaded from another origin.
  */
+/** Props for LinkPageThumbnail. */
+export interface LinkPageThumbnailProps {
+  /** The look to draw. */
+  readonly theme: PageLook;
+}
+
+/**
+ * A link page in miniature, in one look: its ground, a face, a sample of its typeface and three rows in its shape
+ * and fill (spec 0058, AC-10). It draws from the same look attributes and stylesheet blocks as the page itself, so a
+ * preset or gallery tile shows the real look, never a picture of it. It fills its slot (TileGrid's choice
+ * thumbnail), never moves, takes no focus and is hidden from screen readers: the tile's own name says which look it
+ * is.
+ */
+export function LinkPageThumbnail({ theme }: LinkPageThumbnailProps) {
+  return (
+    <div className={styles.root} data-thumbnail {...lookAttributes(theme)} aria-hidden="true" inert>
+      <div className={styles.thumb}>
+        <span className={styles.thumbFace} />
+        <span className={styles.thumbSample}>{strings.thumbnailSample}</span>
+        <span className={styles.thumbRow} />
+        <span className={styles.thumbRow} />
+        <span className={styles.thumbRow} />
+      </div>
+    </div>
+  );
+}
+
 export function LinkPage({
   person,
   blocks,

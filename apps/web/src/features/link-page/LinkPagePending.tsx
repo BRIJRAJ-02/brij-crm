@@ -1,36 +1,24 @@
-// The link page editor while its route loads: the same layout, the list's rows and the phone's page as skeletons,
-// so nothing moves when they arrive.
-import { Card, LinkList, LinkListRowOrder, LinkPage, LinkPageTile, PreviewLayout } from '@crm/ui';
-import { useParams } from '@tanstack/react-router';
-import { profileHref } from '../settings/nav.ts';
-import { SettingsPage } from '../settings/SettingsPage.tsx';
+// The link page while its route loads: the same frame the screen opens on (its bar, the overview card beside the
+// phone), as skeletons, so nothing moves when they arrive. No trail to Profile: the page is the workspace's own.
+import { Card, LinkPage, PreviewLayout, Skeleton, TopBar } from '@crm/ui';
+import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { strings } from './strings.ts';
 
-/** Settings › Account › Link page, loading. */
+/** The link page, loading. */
 export function LinkPagePending() {
-  const { slug = '' } = useParams({ strict: false });
   return (
-    <SettingsPage
-      title={strings.title}
-      crumbs={[{ id: 'profile', label: strings.profile, href: profileHref(slug) }]}
-      fillsView
-    >
-      <PreviewLayout preview={<LinkPage isPreview />} previewShare="wide">
-        <Card title={strings.blocks} description={strings.blocksText} isBusy>
-          <LinkList
-            label={strings.blocks}
-            searchLabel={strings.blocks}
-            placement="card"
-            isToolbarHidden
-            leadingLoading={<LinkPageTile />}
-            rows={[]}
-            status="loading"
-            onOpen={() => undefined}
-            onMove={() => undefined}
-            rowOrder={LinkListRowOrder}
-          />
-        </Card>
-      </PreviewLayout>
-    </SettingsPage>
+    <WorkspacePage
+      currentPage="linkPage"
+      page={{
+        topBar: <TopBar title={strings.title} icon="id-card" isLoading />,
+        body: (
+          <PreviewLayout preview={<LinkPage isPreview />} previewShare="wide">
+            <Card title={strings.yourPage} isBusy>
+              <Skeleton shape="block" width="full" />
+            </Card>
+          </PreviewLayout>
+        ),
+      }}
+    />
   );
 }

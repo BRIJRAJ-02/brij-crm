@@ -85,6 +85,8 @@ test.describe('availability schedules', () => {
     await page.getByRole('button', { name: 'New booking page' }).first().click();
     await page.getByLabel('Title').fill('Intro call');
     await page.getByRole('button', { name: 'Create page' }).click();
+    // The Ready panel shows the link (spec 0058, AC-5); Edit page goes on to the editor.
+    await page.getByRole('button', { name: 'Edit page' }).click();
     await expect(page).toHaveURL(/captures\/links\/[0-9a-f-]{36}/, { timeout: 60_000 });
     const pageUrl = page.url();
     // The preview beside the editor loads the page by its /b/ link.
@@ -170,7 +172,7 @@ test.describe('availability schedules', () => {
       return page.getByRole('alertdialog', { name: 'Delete the Evenings schedule?' });
     };
     const confirm = await remove();
-    await expect(confirm).toContainText('Intro call will use Working hours, your default, and this can’t be undone.');
+    await expect(confirm).toContainText('Intro call will use Working hours, your default. This can’t be undone.');
     await confirm.getByRole('button', { name: 'Cancel' }).click();
     await expect(confirm).toBeHidden();
     await expect(switcher('Evenings')).toBeVisible();

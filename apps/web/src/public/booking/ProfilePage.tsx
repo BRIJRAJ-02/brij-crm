@@ -37,7 +37,16 @@ function addressOf(handle: string): string {
  * Share this page: the device's own share sheet where there is one (the Web Share API), else the address on the
  * clipboard with a toast saying so. A cancelled sheet is not a failure, so nothing is said and nothing is copied.
  */
-function ShareButton({ address, name }: { readonly address: string; readonly name: string }) {
+function ShareButton({
+  address,
+  name,
+  isAlone,
+}: {
+  readonly address: string;
+  readonly name: string;
+  /** No Save contact beside it: it takes the row, so it says what it does rather than standing as a wide bare icon. */
+  readonly isAlone: boolean;
+}) {
   const toasts = useToasts();
   const [isSharing, setSharing] = useState(false);
   const copy = () =>
@@ -61,7 +70,13 @@ function ShareButton({ address, name }: { readonly address: string; readonly nam
           });
     void done.finally(() => setSharing(false));
   };
-  return <Button variant="secondary" size="touch" icon="upload" label={strings.sharePage} onPress={share} />;
+  return isAlone ? (
+    <Button variant="secondary" size="touch" icon="upload" isFullWidth="center" onPress={share}>
+      {strings.sharePage}
+    </Button>
+  ) : (
+    <Button variant="secondary" size="touch" icon="upload" label={strings.sharePage} onPress={share} />
+  );
 }
 
 /** Past this many rows (headings aside), a search sits above them (AC-5133). */
@@ -320,7 +335,13 @@ export function ProfilePage({ handle, initial, onMoved }: ProfilePageProps) {
       }}
       // The page's own address, as a visitor reads it, with a press to copy it.
       address={{ label: addressOf(current), value: `${globalThis.location.origin}/${current}` }}
-      share={<ShareButton address={`${globalThis.location.origin}/${current}`} name={profile.name} />}
+      share={
+        <ShareButton
+          address={`${globalThis.location.origin}/${current}`}
+          name={profile.name}
+          isAlone={!blocks.some((block) => block.kind === 'contact')}
+        />
+      }
       // No Add to Apple Wallet here (the owner, 27 October 2026). A visitor who has just arrived has nothing to keep
       // yet, and the pass took a row of its own above everything the page is for. `LinkPage` still takes a
       // `walletHref`, and the pass itself is still served at /api/public/handles/<handle>/pass.pkpass, so offering

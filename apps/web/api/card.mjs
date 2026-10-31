@@ -7,6 +7,7 @@
 // Next's bundler and throws `Dynamic require of "fs" is not supported` the moment a plain Node entry imports it.
 import { readFile } from 'node:fs/promises';
 import { registerHooks } from 'node:module';
+import { addCacheTag } from '@vercel/functions';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -35,6 +36,7 @@ const {
   CARD_WIDTH,
   STRIP_HEIGHT,
   STRIP_WIDTH,
+  cardCacheTags,
   cardFonts,
   cardTree,
   handleOf,
@@ -134,6 +136,10 @@ export async function GET(request) {
     profile = undefined;
   }
 
+  // Filed under the page's handles, so its Live or Private switch deletes this card from the edge at once (spec
+  // 0058, AC-23). A failed tag leaves only the card's short s-maxage, which bounds it anyway.
+  await addCacheTag([...cardCacheTags(handle, profile)]).catch(() => undefined);
+
   // The pass's band (the owner, 26 October 2026). It is drawn from the same profile, but never from a chosen
   // share image: that picture is made to be cropped by whatever reads it, and a band 375 × 144 would crop it to
   // nothing recognisable. A pass carries the person, which is what this draws.
@@ -178,7 +184,7 @@ export async function GET(request) {
     status: 200,
     headers: {
       'content-type': 'image/png',
-      // A versioned address is one picture forever; a bare one is kept an hour, since the page behind it changes.
+      // Five minutes either way, versioned or not: the page behind it can be made Private (spec 0058, AC-23).
       'cache-control':
         profile === undefined
           ? CARD_CACHE_CONTROL_MISSED

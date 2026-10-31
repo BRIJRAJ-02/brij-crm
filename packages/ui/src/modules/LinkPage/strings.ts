@@ -1,5 +1,7 @@
 /** LinkPage's built in copy. */
 export const strings = {
+  /** The typeface sample in a look's thumbnail (LinkPageThumbnail): two letters, so a mono look reads as mono. */
+  thumbnailSample: 'Aa',
   /** Read after a link's own words: it opens in a new tab. */
   newTab: '(opens in a new tab)',
   /** The blocks as one list, for screen readers, when no heading names them. */

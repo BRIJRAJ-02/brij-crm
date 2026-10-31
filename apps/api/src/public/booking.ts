@@ -35,6 +35,7 @@ import { isMachine, utcDay, visitorId } from '../analytics/visitor.ts';
 import {
   errorStatus,
   HANDLE_PATTERN,
+  linkPageCacheTags,
   PublicBookInput,
   PublicCancelInput,
   PublicChatInput,
@@ -109,6 +110,7 @@ import type { Database } from '@crm/db';
 import type { Context, Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
+import type { EdgeCache } from '../edge-cache.ts';
 import { inputProblems, toApiError, type SchemaIssue } from '../errors.ts';
 import { errorFields, log } from '../log.ts';
 import type { WakeRelay } from '../realtime/wake.ts';
@@ -176,6 +178,11 @@ export interface PublicBookingServices {
    * count, which never holds up the answer. Absent, nothing is counted.
    */
   readonly views?: { readonly visitorKey: Buffer; readonly keepAlive: (work: Promise<unknown>) => void };
+  /**
+   * The edge cache (spec 0058, AC-23): a link page's public picture and share image are filed under its handle
+   * (`linkPageCacheTags`), so its Live or Private switch deletes them at once. Absent, nothing is tagged.
+   */
+  readonly edgeCache?: EdgeCache;
 }
 
 /** What a booking refused by the bot checks answers: it names something the visitor can do. */
@@ -371,6 +378,7 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
       // handed to the next person who asks for the same address.
       const viewer = await signedInAs(c);
       const owner = await findHandleOwner({ db }, handle, viewer === undefined ? {} : { viewer });
+      if (owner.isShown) services.edgeCache?.tag(linkPageCacheTags(owner.handle, handle));
       return await servePicture(
         c,
         readProfilePicture(owner),
@@ -401,18 +409,22 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
       // The whole query, exactly: anything added would miss the edge's copy and cost a fetch of the site each time.
       if (icon === undefined || new URL(c.req.url).search !== `?v=${icon.version}`) return noIcon();
       const fetched = await services.favicons(icon.url);
-      if (fetched.ok) return iconResponse(fetched);
-      // Why, never the address: it is one a person saved.
-      log.warn('booking.icon.missed', { requestId: c.get('requestId'), reason: fetched.reason });
-      return noIcon();
+      if (!fetched.ok) {
+        // Why, never the address: it is one a person saved.
+        log.warn('booking.icon.missed', { requestId: c.get('requestId'), reason: fetched.reason });
+        return noIcon();
+      }
+      // Filed under the page's tag, so its Private switch deletes the icon from the edge too (spec 0058, AC-23).
+      services.edgeCache?.tag(linkPageCacheTags(found.owner.handle, handle));
+      return iconResponse(fetched);
     } catch (error) {
       return refusalAnswer(error);
     }
   });
 
   // A link page's own share image (spec 0055, AC-5511): the picture its owner set, answered from our own origin so
-  // a pasted link previews with it. Only its current version, so a stale or made up one is never read; a day of
-  // cache, as the card itself gets. Nothing is fetched from anywhere: these bytes are ours.
+  // a pasted link previews with it. Only its current version, so a stale or made up one is never read; five minutes
+  // of cache, as the card itself gets, filed under the page's tag so its Private switch deletes it. Nothing is fetched from anywhere: these bytes are ours.
   app.get('/public/profiles/:handle/share-image', async (c) => {
     const handle = c.req.param('handle');
     if (!HANDLE_PATTERN.test(handle)) return noShareImage();
@@ -427,6 +439,7 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
       const picture = await enterShareImage({ db }, owner.userId, owner.workspaceId);
       // The whole query, exactly: anything added would miss the edge's copy and cost the read each time.
       if (picture === undefined || new URL(c.req.url).search !== `?v=${picture.version}`) return noShareImage();
+      services.edgeCache?.tag(linkPageCacheTags(owner.handle, handle));
       return shareImageResponse(picture);
     } catch (error) {
       return refusalAnswer(error);

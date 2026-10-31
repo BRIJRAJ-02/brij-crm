@@ -59,6 +59,8 @@
     gap: var(--space-6);
     inline-size: 100%;
     block-size: var(--size-nav-item);
+    /* Not the button's UA 1px: the height comes from block-size, the words centred in it. */
+    padding-block: 0;
     padding-inline: var(--space-4) var(--space-8);
     border: none;
     border-radius: var(--radius-sm);
