@@ -7,6 +7,7 @@ import {
   layerOrderStatement,
   linkFontPreloads,
   linkLayerOrder,
+  numberLucideKeys,
   scopedClassName,
   uiVite,
 } from './vite.ts';
@@ -23,6 +24,21 @@ describe('scopedClassName', () => {
 
   it('ignores a query string and Windows separators', () => {
     expect(scopedClassName('tile', 'C:\\repo\\Icon.module.css?direct')).toBe('ws-icon-tile');
+  });
+});
+
+describe('numberLucideKeys', () => {
+  const icon = '["path", { d: "M16 14v.5", key: "1lajdz" }],\n["circle", { cx: "12", key: "w7jh35" }]';
+
+  it("numbers a Lucide icon's shape keys in order, leaving the shapes as they were", () => {
+    expect(numberLucideKeys(icon, '/repo/node_modules/lucide-react/dist/esm/icons/dog.mjs')).toBe(
+      '["path", { d: "M16 14v.5", key: "0" }],\n["circle", { cx: "12", key: "1" }]',
+    );
+  });
+
+  it('leaves every other module alone', () => {
+    expect(numberLucideKeys(icon, '/repo/node_modules/lucide-react/dist/esm/Icon.mjs')).toBeUndefined();
+    expect(numberLucideKeys(icon, '/repo/packages/ui/src/atoms/Icon/icons.ts')).toBeUndefined();
   });
 });
 

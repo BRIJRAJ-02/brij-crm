@@ -24,11 +24,9 @@ import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { DeleteScheduleDialog } from './DeleteScheduleDialog.tsx';
 import { memberZone } from './zone.ts';
 import { availabilityHref, bookingsHref, scheduleHref } from './links.ts';
-import { teamWeekHref } from './team-week-links.ts';
 import { NewScheduleDialog } from './NewScheduleDialog.tsx';
 import { RenameScheduleDialog } from './RenameScheduleDialog.tsx';
 import { ScheduleEditor, ScheduleEditorPending } from './ScheduleEditor.tsx';
-import { AvailabilityViewSwitch } from './TeamWeekScreen.tsx';
 import { LimitsCard, LimitsCardPending } from './LimitsCard.tsx';
 import { TimeOffCard, TimeOffCardPending } from './TimeOffCard.tsx';
 import type { StandinChoice } from './TimeOffDialog.tsx';
@@ -201,20 +199,10 @@ export function AvailabilityScreen({
   );
   // The strip's end, as the Calendar tab's tools are (the owner, 22 October 2026: no row of its own over the card):
   // the schedule switcher, and an admin's compact member filter (AC-971).
-  // Mine | Team (spec 0037, AC-1289): the Team week, the Roster, one switch away.
+  // The team's week is Bookings › Roster, a tab of its own (31 October 2026), so no Mine | Team switch stands here.
   const tools = (
     <SectionBar
-      start={
-        <>
-          <AvailabilityViewSwitch
-            value="mine"
-            onChange={(next) => {
-              if (next === 'team') void navigate({ href: teamWeekHref(slug) });
-            }}
-          />
-          {switcher}
-        </>
-      }
+      start={switcher}
       end={
         <>
           {hasColleagues && (

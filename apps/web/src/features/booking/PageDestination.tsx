@@ -1,7 +1,7 @@
 // Brief
 // Purpose: a booking page's own "Add bookings to" (spec 0024, AC-997) in its editor: which of the owner's calendars its new bookings go on.
 // Main task: the owner picks one of their writable calendars, or their default; it saves at once, like the Live switch.
-// Leaves out: the member's own default (Settings › Calendars), and calendar names for colleagues, who see "Owner’s default" only (spec 0037).
+// Leaves out: the member's own default (Settings › Calendars), and the calendar for anyone but the owner, who reads "Set by Bea" only (spec 0037, AC-1273).
 import type { CalendarListState, CalendarsHeld, PageDestinationState } from '@crm/data';
 import { useCalendarList, usePageDestination } from '@crm/data/react';
 import { Badge, ButtonLink, Card, FieldGroup, Select } from '@crm/ui';
@@ -17,6 +17,8 @@ export interface PageDestinationProps {
   readonly calendars: CalendarsHeld<CalendarListState>;
   /** The reader can't change the page. */
   readonly isReadOnly: boolean;
+  /** The owner's name on someone else's page: where its events go reads "Set by Bea" (spec 0037, AC-1273). */
+  readonly ownerName?: string;
   /** Sets it (`null`: the owner's default): at once, put back with a toast if refused. */
   readonly onChange: (calendarId: string | null) => void;
   /** Settings › Calendars, where an owner with no calendar connects one. */
@@ -30,7 +32,14 @@ const DEFAULT = DEFAULT_DESTINATION;
  * default; colleagues read it only. An owner with no calendar connected gets the section's empty state, with
  * Connect calendar to Settings › Calendars.
  */
-export function PageDestination({ destination, calendars, isReadOnly, onChange, settingsHref }: PageDestinationProps) {
+export function PageDestination({
+  destination,
+  calendars,
+  isReadOnly,
+  ownerName,
+  onChange,
+  settingsHref,
+}: PageDestinationProps) {
   const held = usePageDestination(destination);
   const list = useCalendarList(calendars);
   if (held.status === 'ready' && held.destination.isOwner && list.status === 'ready' && list.accounts.length === 0) {
@@ -46,7 +55,7 @@ export function PageDestination({ destination, calendars, isReadOnly, onChange, 
       />
     );
   }
-  return <Card title={strings.calendarSection}>{destinationField(held, list, isReadOnly, onChange)}</Card>;
+  return <Card title={strings.calendarSection}>{destinationField(held, list, isReadOnly, onChange, ownerName)}</Card>;
 }
 
 /** The section's one field, in each of its states. */
@@ -55,6 +64,7 @@ function destinationField(
   list: ReturnType<typeof useCalendarList>,
   isReadOnly: boolean,
   onChange: (calendarId: string | null) => void,
+  ownerName: string | undefined,
 ) {
   // A failed read keeps the field in place, saying so, rather than leaving a gap.
   if (held.status === 'error' || (held.status === 'ready' && held.destination.isOwner && list.status === 'error')) {
@@ -66,16 +76,35 @@ function destinationField(
   }
   const { calendarId, status, isOwner } = held.destination;
   const choice = destinationChoice(held.destination);
-  const value = choice.value ?? DEFAULT;
   if (!isOwner) {
+    // Never the calendar itself (spec 0037, AC-1273): only whether the owner picked one for this page.
+    const picked = status === 'page' ? 'picked' : DEFAULT;
     return (
       <Select
         label={strings.addBookingsTo}
-        items={[{ id: value, label: value === DEFAULT ? strings.ownersDefault : strings.ownersPick }]}
-        value={value}
+        items={[
+          {
+            id: picked,
+            label:
+              ownerName === undefined
+                ? picked === DEFAULT
+                  ? strings.ownersDefault
+                  : strings.ownersPick
+                : picked === DEFAULT
+                  ? strings.defaultOf(ownerName)
+                  : strings.pickOf(ownerName),
+          },
+        ]}
+        value={picked}
         isReadOnly
         // A read only Select shows its reason in place of a hint or an error: the unusable pick matters more.
-        readOnlyReason={status === 'unusable' ? strings.destinationUnusableColleague : strings.destinationOwnerOnly}
+        readOnlyReason={
+          status === 'unusable'
+            ? strings.destinationUnusableColleague
+            : ownerName === undefined
+              ? strings.destinationOwnerOnly
+              : strings.setBy(ownerName)
+        }
       />
     );
   }

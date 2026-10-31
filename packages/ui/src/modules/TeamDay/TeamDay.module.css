@@ -1,0 +1,67 @@
+/* TeamDay: Needs a host as one slim strip over the grid (only when it holds something), then WeekCalendar's team view
+   with the whole width and height under it. Below 480px of its container the strip is its one button. */
+@layer components {
+  .root {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-inline-size: 0;
+    min-block-size: 0;
+    container-type: inline-size;
+  }
+
+  .grid {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-inline-size: 0;
+    min-block-size: 0;
+  }
+
+  /* One row, never taller: "N need a host" (Button's warning), then the chips (Buttons) scrolling sideways. */
+  .strip {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--space-8);
+    min-inline-size: 0;
+    padding: var(--space-4) var(--space-12);
+    border-block-end: var(--border-width-hairline) solid var(--border-subtle);
+    background: var(--surface-raised);
+  }
+
+  /* Room round each chip for its focus ring, which the sideways scroll would otherwise clip. */
+  .chips {
+    display: flex;
+    flex: 1;
+    gap: var(--space-6);
+    min-inline-size: 0;
+    margin: 0;
+    padding: var(--space-4);
+    overflow-x: auto;
+    list-style: none;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: thin;
+  }
+
+  .item {
+    display: flex;
+    flex: none;
+  }
+
+  /* The list in its popover: a small dialog's width, so a row's time, title and people sit on their lines. */
+  .list {
+    inline-size: var(--size-dialog-sm);
+    max-inline-size: 100%;
+  }
+
+  @container (inline-size < 480px) {
+    .strip {
+      padding-inline: var(--space-8);
+    }
+
+    .chips {
+      display: none;
+    }
+  }
+}

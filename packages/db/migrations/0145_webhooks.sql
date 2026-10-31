@@ -1,4 +1,4 @@
--- Outgoing webhooks (spec 0064, slice 3, placeholder `0xxc`: numbered after main's last, 0141; renumber at the landing).
+-- Outgoing webhooks (spec 0064, slice 3, placeholder `0xxc`: numbered after main's last, 0144; renumber at the landing).
 -- `webhook_endpoints`, a workspace's endpoints with their sealed signing secrets, and `webhook_deliveries`, one row per
 -- event and endpoint, written in the transaction of the write the event describes (AC-6422), unique on (endpoint,
 -- event) so an event is queued for an endpoint once. Both are tenant tables: forced row level security and the

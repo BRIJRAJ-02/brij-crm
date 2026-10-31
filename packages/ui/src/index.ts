@@ -186,7 +186,8 @@ export {
   type SegmentSize,
   type ThemeSwitchProps,
 } from './molecules/SegmentedControl/SegmentedControl.tsx';
-export { Select, type SelectItem, type SelectOptionStyle, type SelectProps } from './molecules/Select/Select.tsx';
+export { type SelectItem, type SelectOptionStyle, type SelectProps } from './molecules/Select/Select.tsx';
+export { Select } from './molecules/Select/SelectWithFaces.tsx';
 export {
   DeferredSelect,
   type DeferredSelectItem,
@@ -383,6 +384,8 @@ export {
   type TeamWeekTone,
   type TeamWeekTotal,
 } from './modules/TeamWeek/TeamWeek.tsx';
+export { PersonLine, type PersonLineProps, type PersonLineTone } from './molecules/PersonLine/PersonLine.tsx';
+export { TeamDay, type TeamDayPerson, type TeamDayProps, type TeamDayTone } from './modules/TeamDay/TeamDay.tsx';
 export {
   SetupChecklist,
   type SetupChecklistProps,

@@ -1,4 +1,4 @@
-import { Select } from '../../molecules/Select/Select.tsx';
+import { Select } from '../../molecules/Select/SelectWithFaces.tsx';
 import { SELECT_SEARCH_THRESHOLD } from '../Select/SelectEditor.tsx';
 import type { EditorProps } from '../types.ts';
 import { isCompactSurface, toCommittable } from '../values.ts';

@@ -122,6 +122,7 @@ export const AUDIT_FIELDS = [
   'handle',
   'bio',
   'socials',
+  'jobTitle',
   'address',
   'domains',
   'expiresInDays',
@@ -228,7 +229,10 @@ export const AuditEntryView = z.discriminatedUnion('action', [
   entry(
     ['member.profile_updated'],
     member,
-    z.strictObject({ isOwn: z.boolean(), fields: z.array(z.enum(['name', 'timeZone', 'handle', 'bio', 'socials'])) }),
+    z.strictObject({
+      isOwn: z.boolean(),
+      fields: z.array(z.enum(['name', 'timeZone', 'jobTitle', 'handle', 'bio', 'socials'])),
+    }),
   ),
   /** `from` and `to` only for a rename alone. */
   entry(
@@ -346,6 +350,14 @@ export const AuditEntryView = z.discriminatedUnion('action', [
   ),
   /** A list made, changed, archived or restored (spec 0048); a rename shows as the name's change. */
   entry(['list.created', 'list.updated', 'list.archived', 'list.restored'], list, NoParams),
+  /** A personal booking page changed or deleted by anyone but its owner (spec 0037, AC-1263): the target is the owner. */
+  entry(['booking_page.changed_for'], member, z.strictObject({ page: z.string(), deleted: z.boolean() })),
+  /** Who is in a rotation changed (spec 0037, AC-1264): how many joined and how many left. */
+  entry(
+    ['rotation.changed'],
+    rotation,
+    z.strictObject({ added: z.number().int().min(0), removed: z.number().int().min(0) }),
+  ),
 ]);
 /** One row of Workspace changes. */
 export type AuditEntryView = z.infer<typeof AuditEntryView>;

@@ -497,6 +497,23 @@ const SENTENCES: readonly (readonly [AuditEntryView, string])[] = [
     },
     'Ada Lovelace set Members back to the default access to Deals',
   ],
+  [
+    {
+      ...base,
+      action: 'booking_page.changed_for',
+      target: member(bea),
+      params: { page: 'Intro call', deleted: false },
+    },
+    'Ada Lovelace changed Bea Rao’s “Intro call” page',
+  ],
+  [
+    { ...base, action: 'booking_page.changed_for', target: member(bea), params: { page: 'Intro call', deleted: true } },
+    'Ada Lovelace deleted Bea Rao’s “Intro call” page',
+  ],
+  [
+    { ...base, action: 'rotation.changed', target: rotation, params: { added: 1, removed: 0 } },
+    'Ada Lovelace changed who is in Sales',
+  ],
 ];
 
 describe('every listed action', () => {

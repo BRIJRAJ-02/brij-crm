@@ -30,7 +30,7 @@ export interface CapturesListProps {
   /** With no cards: the empty state's words and icon, and an optional drawing (SpotIllustration) in place of the icon. */
   readonly empty: {
     readonly title: string;
-    readonly text: string;
+    readonly text?: string;
     readonly icon: IconName;
     readonly illustration?: ReactNode;
   };

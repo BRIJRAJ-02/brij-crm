@@ -19,7 +19,7 @@ import { Menu, MenuItem } from '../../molecules/Menu/Menu.tsx';
 import { Modal } from '../../molecules/Modal/Modal.tsx';
 import { Popover, type PopoverPlacement } from '../../molecules/Popover/Popover.tsx';
 import type { Hue } from '../../hue.ts';
-import { liftClosed, placeBlocks, type More, type Placed as PlacedSlot, type Slot } from './placeBlocks.ts';
+import { liftClosed, NEST_AFTER, placeBlocks, type More, type Placed as PlacedSlot, type Slot } from './placeBlocks.ts';
 import styles from './WeekCalendar.module.css';
 import { strings } from './strings.ts';
 
@@ -34,6 +34,21 @@ export interface WeekCalendarDay {
   readonly label: string;
   readonly isToday: boolean;
   readonly isPast: boolean;
+  /**
+   * The `team` view's head for this column in place of the weekday and date (TeamDay's person: their picture, name
+   * and status). Drawn as it is given; the column keeps `label` as its name.
+   */
+  readonly head?: ReactNode;
+  /**
+   * A stretch drawn across the column under everything on it, with its word at its top (TeamDay's Away band for time
+   * off). Decoration: the column's `label` says it in words.
+   */
+  readonly band?: { readonly label: string; readonly startMinute: number; readonly endMinute: number };
+  /**
+   * False keeps this column from drawing (a colleague the reader may only See on TeamDay): no crosshair, no span, no
+   * Enter to draw, so the cue matches what it does. Absent, it draws whenever `onDraw` is given.
+   */
+  readonly canDraw?: boolean;
 }
 
 /** One block on the grid: a booking, one of the member's own calendar events, or time they closed. */
@@ -168,7 +183,15 @@ export interface WeekCalendarProps {
    * through a dialog outside the block's card (a block removed, a booking cancelled), as the week does itself when
    * the screen closes a card whose block went.
    */
-  readonly focusDay?: { readonly dayKey: string; readonly blockId?: string };
+  readonly focusDay?: {
+    readonly dayKey: string;
+    readonly blockId?: string;
+    /**
+     * Asked for by the person (an issue picked from the Team day's menu): focus moves even though the menu's trigger
+     * holds it once the menu has closed, and the block scrolls into view.
+     */
+    readonly isAsked?: boolean;
+  };
   /**
    * The member's open hours on a day (their availability). The hours outside them are shaded a step darker, as
    * Google Calendar shades outside working hours. Answering undefined shades nothing that day; an empty list shades
@@ -185,8 +208,11 @@ export interface WeekCalendarProps {
   /**
    * `week` (the default) draws the seven days; `day` draws only the selected one across the width, its head still
    * the week's days to pick from, as a phone's narrow week does. In `day`, `emptyHint` shows while that day is empty.
+   * `team` (TeamDay) draws any number of columns (each a person, its `head` drawn in place of a date), at least
+   * `size-column` wide each (never squeezed to fit), scrolling sideways under a head and an hour axis that stay put;
+   * the now line shows in every column, and below 480px one column shows at a time, with Previous and Next.
    */
-  readonly view?: 'week' | 'day';
+  readonly view?: 'week' | 'day' | 'team';
 }
 
 /** The parts of a day outside its open hours, in order. */
@@ -293,6 +319,8 @@ export function WeekCalendar({
   view = 'week',
 }: WeekCalendarProps) {
   const scroller = useRef<HTMLDivElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const isTeam = view === 'team';
   const columns = useRef(new Map<string, HTMLDivElement>());
   const blockRefs = useRef(new Map<string, HTMLButtonElement>());
   // The open card's anchor: the block that was pressed.
@@ -381,7 +409,7 @@ export function WeekCalendar({
     if (focusDay === undefined) return;
     focusLater(() => {
       const active = document.activeElement;
-      if (active !== null && active !== document.body) return undefined;
+      if (focusDay.isAsked !== true && active !== null && active !== document.body) return undefined;
       const block = focusDay.blockId === undefined ? undefined : blockRefs.current.get(focusDay.blockId);
       return block?.isConnected === true ? block : columns.current.get(focusDay.dayKey);
     });
@@ -405,7 +433,8 @@ export function WeekCalendar({
     const place = (tries: number) => {
       const box = scroller.current;
       if (box === null) return;
-      const hour = box.scrollHeight / 24;
+      // The body's own height: in the team view the head scrolls inside too, over it.
+      const hour = (bodyRef.current?.offsetHeight ?? box.scrollHeight) / 24;
       if (box.scrollHeight <= box.clientHeight && tries < 2) {
         frame = requestAnimationFrame(() => place(tries + 1));
         return;
@@ -431,7 +460,12 @@ export function WeekCalendar({
     /** What Up and Down walk, in order: the day's blocks and "+N" chips by start. */
     order: readonly string[],
   ) => {
-    if (onDraw !== undefined && event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) {
+    if (
+      onDraw !== undefined &&
+      day.canDraw !== false &&
+      event.target === event.currentTarget &&
+      (event.key === 'Enter' || event.key === ' ')
+    ) {
       event.preventDefault();
       drawnBy.current = 'keyboard';
       onDraw(defaultSpan(day.key, drawStartMinute?.(day.key) ?? 9 * 60));
@@ -452,40 +486,85 @@ export function WeekCalendar({
   };
 
   const zoneId = useId();
-  /** A day's timed blocks as laid out: closed time full width under the rest, then bookings and events in lanes. */
-  const layoutOf = (dayKey: string) => {
-    const ofDay = blocks.filter((block) => block.dayKey === dayKey);
-    // Laid out as tall as they are drawn: a short block is never under one line (`size-chip`), so two back to back
-    // quarter hours overlap on screen and must share the width or cascade, not paint over each other.
-    const drawn = (block: WeekCalendarBlock) => ({
-      ...block,
-      endMinute: Math.max(block.endMinute, block.startMinute + DRAWN_MINUTES),
-    });
-    // Closed time sits under bookings and events, full width, out of their lanes (AC-705), later over earlier;
-    // where a block would cover its title (a booking at the same time as Busy, even a cancelled one) it takes a
-    // lane beside it instead, so it never hides.
-    const lifted = liftClosed(
-      ofDay.filter((block) => isClosed(block)).map(drawn),
-      ofDay.filter((block) => !isClosed(block)).map(drawn),
-    );
-    const closed: Placed[] = ofDay
-      .filter((block) => isClosed(block) && !lifted.has(block.id))
-      .sort((a, b) => a.startMinute - b.startMinute)
-      .map((block) => ({ ...block, ...WHOLE }));
-    const timed = ofDay.filter((block) => !isClosed(block) || lifted.has(block.id));
-    const ends = new Map(timed.map((block) => [block.id, block.endMinute]));
-    const layout = placeBlocks(timed.map(drawn));
-    const placed = layout.blocks.map((block) => ({ ...block, endMinute: ends.get(block.id) ?? block.endMinute }));
-    const dayBlocks = [...closed, ...placed];
-    // Up and Down walk what shows, "+N" chips among the blocks, by start.
-    const stops = [...dayBlocks, ...layout.more].sort(
-      (a, b) => a.startMinute - b.startMinute || a.indent - b.indent || a.lane - b.lane,
-    );
-    return { ofDay, dayBlocks, more: layout.more, stops };
-  };
+  /**
+   * Each day's blocks as laid out (`layoutOfDay`), worked out once per change of the blocks or the days: a drag re-draws
+   * the grid on every pointer move, and fifty columns of a Team day would lay out again each time.
+   */
+  // A person's column is narrow: what overlaps there sits side by side rather than cascading over what it covers.
+  const nestAfter = isTeam ? Number.POSITIVE_INFINITY : NEST_AFTER;
+  const layouts = useMemo(
+    () => new Map(days.map((day) => [day.key, layoutOfDay(blocks, day.key, nestAfter)] as const)),
+    [blocks, days, nestAfter],
+  );
+  const layoutOf = (dayKey: string) => layouts.get(dayKey) ?? layoutOfDay(blocks, dayKey, nestAfter);
   /** What Up and Down walk on a day: its blocks and "+N" chips by start, as they read down the screen. */
   const orderOf = (dayKey: string): readonly string[] => layoutOf(dayKey).stops.map((stop) => stop.id);
 
+  const at = days.findIndex((day) => day.key === selectedDay);
+  /** The heads over the columns, the zone in the corner: above the hours, or (team) inside them, pinned to the top. */
+  const headRow = (
+    <div className={styles.head}>
+      {isTeam && (
+        // One person at a time on a phone: Previous and Next walk the columns (the arrow keys do too).
+        <span className={styles.stepper}>
+          <Button
+            variant="ghost"
+            size="sm"
+            icon="chevron-left"
+            label={strings.previousColumn}
+            isDisabled={at <= 0}
+            onPress={() => moveDay(selectedDay, -1)}
+          />
+          <Button
+            variant="ghost"
+            size="sm"
+            icon="chevron-right"
+            label={strings.nextColumn}
+            isDisabled={at < 0 || at >= days.length - 1}
+            onPress={() => moveDay(selectedDay, 1)}
+          />
+        </span>
+      )}
+      {zone === undefined ? (
+        <span className={styles.corner} aria-hidden="true" />
+      ) : (
+        <span className={styles.corner}>
+          <span className={styles.zone} aria-hidden="true" title={zone.name}>
+            {/* "GMT+5:30" is wider than the axis: it may break before its sign, "GMT" over "+5:30". */}
+            {zone.short.split(/(?=[+\-\u2212])/).map((part, index) => (
+              <Fragment key={part}>
+                {index > 0 && <wbr />}
+                {part}
+              </Fragment>
+            ))}
+          </span>
+          <VisuallyHidden id={zoneId}>{zone.name}</VisuallyHidden>
+        </span>
+      )}
+      {isTeam
+        ? days.map((day) => (
+            <div key={day.key} className={styles.personHead} data-selected={day.key === selectedDay || undefined}>
+              {day.head ?? day.label}
+            </div>
+          ))
+        : days.map((day) => (
+            <button
+              key={day.key}
+              type="button"
+              className={styles.dayButton}
+              data-today={day.isToday || undefined}
+              data-past={day.isPast || undefined}
+              data-busy={blocks.some((block) => block.dayKey === day.key) || undefined}
+              aria-pressed={day.key === selectedDay}
+              aria-label={day.isToday ? strings.today(day.label) : day.label}
+              onClick={() => onSelectDay(day.key)}
+            >
+              <span className={styles.weekday}>{day.weekday}</span>
+              <span className={styles.dayNumber}>{day.dayNumber}</span>
+            </button>
+          ))}
+    </div>
+  );
   return (
     <section
       className={styles.root}
@@ -495,43 +574,12 @@ export function WeekCalendar({
       aria-busy={isLoading || undefined}
       data-fill={isFill || undefined}
       data-view={view}
+      {...(isTeam ? { style: { '--columns': String(Math.max(days.length, 1)) } } : {})}
     >
-      <div className={styles.head}>
-        {zone === undefined ? (
-          <span className={styles.corner} aria-hidden="true" />
-        ) : (
-          <span className={styles.corner}>
-            <span className={styles.zone} aria-hidden="true" title={zone.name}>
-              {/* "GMT+5:30" is wider than the axis: it may break before its sign, "GMT" over "+5:30". */}
-              {zone.short.split(/(?=[+\-\u2212])/).map((part, index) => (
-                <Fragment key={part}>
-                  {index > 0 && <wbr />}
-                  {part}
-                </Fragment>
-              ))}
-            </span>
-            <VisuallyHidden id={zoneId}>{zone.name}</VisuallyHidden>
-          </span>
-        )}
-        {days.map((day) => (
-          <button
-            key={day.key}
-            type="button"
-            className={styles.dayButton}
-            data-today={day.isToday || undefined}
-            data-past={day.isPast || undefined}
-            data-busy={blocks.some((block) => block.dayKey === day.key) || undefined}
-            aria-pressed={day.key === selectedDay}
-            aria-label={day.isToday ? strings.today(day.label) : day.label}
-            onClick={() => onSelectDay(day.key)}
-          >
-            <span className={styles.weekday}>{day.weekday}</span>
-            <span className={styles.dayNumber}>{day.dayNumber}</span>
-          </button>
-        ))}
-      </div>
+      {!isTeam && headRow}
       <div ref={scroller} className={styles.scroller}>
-        <div className={styles.body}>
+        {isTeam && headRow}
+        <div ref={bodyRef} className={styles.body}>
           <div className={styles.axis} aria-hidden="true">
             {HOURS.map((hour) => (
               <span key={hour} className={styles.hour}>
@@ -541,11 +589,12 @@ export function WeekCalendar({
             {/* The time now on the axis, level with the now line, while today is on the week. */}
             {now !== undefined &&
               (now.label !== undefined || minuteLabel !== undefined) &&
-              days.some((day) => day.key === now.dayKey) && (
+              (isTeam || days.some((day) => day.key === now.dayKey)) && (
                 <span
                   className={styles.nowLabel}
-                  // One day across (a phone), it shows only on today, where its line is.
-                  data-on-day={now.dayKey === selectedDay || undefined}
+                  // One day across (a phone), it shows only on today, where its line is; every column is today in
+                  // the team view.
+                  data-on-day={isTeam || now.dayKey === selectedDay || undefined}
                   style={{ '--start': String(now.minute) }}
                 >
                   {now.label ?? minuteLabel?.(now.minute)}
@@ -565,7 +614,7 @@ export function WeekCalendar({
                 }}
                 role="group"
                 aria-label={isLoading ? strings.dayLoading(day.label) : strings.dayBlocks(day.label, ofDay.length)}
-                {...(onDraw === undefined
+                {...(onDraw === undefined || day.canDraw === false
                   ? {}
                   : { 'aria-description': strings.drawHint, 'aria-keyshortcuts': 'Enter' })}
                 tabIndex={day.key === selectedDay ? 0 : -1}
@@ -573,9 +622,9 @@ export function WeekCalendar({
                 data-selected={day.key === selectedDay || undefined}
                 data-today={day.isToday || undefined}
                 data-past={day.isPast || undefined}
-                data-drawable={onDraw === undefined ? undefined : true}
+                data-drawable={onDraw === undefined || day.canDraw === false ? undefined : true}
                 onKeyDown={(event) => onColumnKey(event, day, orderOf(day.key))}
-                {...(onDraw === undefined
+                {...(onDraw === undefined || day.canDraw === false
                   ? {}
                   : {
                       onPointerDown: (event: PointerEvent<HTMLDivElement>) => {
@@ -660,6 +709,19 @@ export function WeekCalendar({
                         />
                       ));
                 })()}
+                {/* A band across the column (time off), under everything drawn on it; the column's name says it. */}
+                {day.band !== undefined && (
+                  <span
+                    className={styles.band}
+                    aria-hidden="true"
+                    style={{
+                      '--start': String(day.band.startMinute),
+                      '--length': String(Math.max(day.band.endMinute - day.band.startMinute, 15)),
+                    }}
+                  >
+                    <span className={styles.bandLabel}>{day.band.label}</span>
+                  </span>
+                )}
                 {/* The span drawn sits under bookings and events, so it never hides what it is drawn across. */}
                 {(dragging?.dayKey === day.key ? dragging : draft?.dayKey === day.key ? draft : undefined) !==
                   undefined && (
@@ -704,6 +766,7 @@ export function WeekCalendar({
                         block.detail,
                         block.isCancelled,
                         block.status,
+                        block.provider === 'timefix',
                       )}
                       style={{
                         '--start': String(block.startMinute),
@@ -767,7 +830,7 @@ export function WeekCalendar({
                     }
                   />
                 ))}
-                {now?.dayKey === day.key && (
+                {now !== undefined && (isTeam || now.dayKey === day.key) && (
                   <span className={styles.now} style={{ '--start': String(now.minute) }} aria-hidden="true" />
                 )}
               </div>
@@ -777,7 +840,7 @@ export function WeekCalendar({
       </div>
       {emptyHint !== undefined &&
         !isLoading &&
-        !blocks.some((block) => view === 'week' || block.dayKey === selectedDay) && (
+        !blocks.some((block) => view !== 'day' || block.dayKey === selectedDay) && (
           <div className={styles.empty} data-action={emptyAction === undefined ? undefined : ''}>
             <p className={styles.emptyHint}>{emptyHint}</p>
             {emptyAction !== undefined && (
@@ -890,6 +953,38 @@ export function WeekCalendar({
         ))}
     </section>
   );
+}
+
+/** A day's timed blocks as laid out: closed time full width under the rest, then bookings and events in lanes. */
+function layoutOfDay(blocks: readonly WeekCalendarBlock[], dayKey: string, nestAfter: number) {
+  const ofDay = blocks.filter((block) => block.dayKey === dayKey);
+  // Laid out as tall as they are drawn: a short block is never under one line (`size-chip`), so two back to back
+  // quarter hours overlap on screen and must share the width or cascade, not paint over each other.
+  const drawn = (block: WeekCalendarBlock) => ({
+    ...block,
+    endMinute: Math.max(block.endMinute, block.startMinute + DRAWN_MINUTES),
+  });
+  // Closed time sits under bookings and events, full width, out of their lanes (AC-705), later over earlier;
+  // where a block would cover its title (a booking at the same time as Busy, even a cancelled one) it takes a
+  // lane beside it instead, so it never hides.
+  const lifted = liftClosed(
+    ofDay.filter((block) => isClosed(block)).map(drawn),
+    ofDay.filter((block) => !isClosed(block)).map(drawn),
+  );
+  const closed: Placed[] = ofDay
+    .filter((block) => isClosed(block) && !lifted.has(block.id))
+    .sort((a, b) => a.startMinute - b.startMinute)
+    .map((block) => ({ ...block, ...WHOLE }));
+  const timed = ofDay.filter((block) => !isClosed(block) || lifted.has(block.id));
+  const ends = new Map(timed.map((block) => [block.id, block.endMinute]));
+  const layout = placeBlocks(timed.map(drawn), nestAfter);
+  const placed = layout.blocks.map((block) => ({ ...block, endMinute: ends.get(block.id) ?? block.endMinute }));
+  const dayBlocks = [...closed, ...placed];
+  // Up and Down walk what shows, "+N" chips among the blocks, by start.
+  const stops = [...dayBlocks, ...layout.more].sort(
+    (a, b) => a.startMinute - b.startMinute || a.indent - b.indent || a.lane - b.lane,
+  );
+  return { ofDay, dayBlocks, more: layout.more, stops };
 }
 
 /** "+N": blocks folded where a lane would be too narrow, a quiet chip in the last lane that fits; it opens their list. */

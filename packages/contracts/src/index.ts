@@ -9,6 +9,7 @@ import { schedulesContract } from './booking/schedules.ts';
 import { timeOffContract } from './booking/time-off.ts';
 import { limitsContract } from './booking/limits.ts';
 import { availabilityContract } from './booking/team-week.ts';
+import { teamDayProcedure } from './booking/team-day.ts';
 import { preferencesContract } from './preferences.ts';
 import { rotationsContract } from './booking/rotations.ts';
 import { bulkRecordsContract } from './bulk.ts';
@@ -63,6 +64,7 @@ export * from './booking/schedules.ts';
 export * from './booking/time-off.ts';
 export * from './booking/limits.ts';
 export * from './booking/team-week.ts';
+export * from './booking/team-day.ts';
 export * from './booking/rotations.ts';
 export * from './bulk.ts';
 export * from './bulk-ops.ts';
@@ -173,7 +175,8 @@ export const contract = {
   forms: formsContract,
   submissions: submissionsContract,
   bookingPages: bookingPagesContract,
-  bookings: bookingsContract,
+  // The Team day (spec 0030, as spec 0037 amends it): Bookings › Calendar's Team view.
+  bookings: { ...bookingsContract, teamDay: teamDayProcedure },
   schedules: schedulesContract,
   // Time off (spec 0037, AC-1281 to AC-1288): whole days away, with a reason and a stand in.
   timeOff: timeOffContract,

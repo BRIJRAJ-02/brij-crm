@@ -398,7 +398,7 @@ export function toEntryView(row: AuditRow, names: AuditNames): AuditEntryView | 
       return { ...base, action, target: memberTarget(), params: {}, changes: [] };
     case 'member.profile_updated': {
       const target = memberTarget();
-      const known = (['name', 'timeZone', 'handle', 'bio', 'socials'] as const).filter(
+      const known = (['name', 'timeZone', 'jobTitle', 'handle', 'bio', 'socials'] as const).filter(
         (field) => has(after, field) || has(before, field),
       );
       // A deleted account's own values went with it (AC-4610): the fields stay named, their values don't.
@@ -704,6 +704,28 @@ export function toEntryView(row: AuditRow, names: AuditNames): AuditEntryView | 
         target: thing('list', names.lists),
         params: {},
         changes: action === 'list.updated' ? change('name', plain(before.name), plain(after.name)) : [],
+      };
+    }
+    case 'booking_page.changed_for': {
+      // Whose page and its title; the fields that changed stay in the row (the owner's notice lists them).
+      const title = text(after.title) ?? text(before.title);
+      if (title === undefined) return undefined;
+      return {
+        ...base,
+        action,
+        target: memberTarget(),
+        params: { page: title, deleted: after.deleted === true },
+        changes: [],
+      };
+    }
+    case 'rotation.changed': {
+      const many = (value: unknown) => (Array.isArray(value) ? value.length : 0);
+      return {
+        ...base,
+        action,
+        target: thing('rotation', names.rotations),
+        params: { added: many(after.added), removed: many(after.removed) },
+        changes: [],
       };
     }
     default:

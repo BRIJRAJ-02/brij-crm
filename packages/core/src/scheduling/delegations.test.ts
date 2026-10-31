@@ -139,7 +139,7 @@ describe('a member and their own scheduling (AC-1255)', () => {
     expect(
       await refusalOf(grantDelegation(me, { delegateMemberId: priya, target: { type: 'everyone' }, level: 'view' })),
     ).toEqual({ code: 'FORBIDDEN', message: PERMISSIONS['members.manage'].message });
-    // Themself as their own delegate, a stranger, and a team before teams exist.
+    // Themself as their own delegate, and a stranger; a team, like everyone, is a manager's to give.
     for (const target of [
       { delegateMemberId: bea, target: { type: 'member' as const, memberId: bea } },
       { delegateMemberId: newId(), target: { type: 'member' as const, memberId: bea } },
@@ -152,7 +152,7 @@ describe('a member and their own scheduling (AC-1255)', () => {
       await refusalOf(
         grantDelegation(me, { delegateMemberId: priya, target: { type: 'team', teamId: newId() }, level: 'view' }),
       ),
-    ).toEqual({ code: 'DELEGATE_INVALID', message: 'Teams aren’t set up in this workspace yet.' });
+    ).toEqual({ code: 'FORBIDDEN', message: PERMISSIONS['members.manage'].message });
     expect(await t.auditRows()).toEqual([]);
   });
 
@@ -340,6 +340,64 @@ describe('a removal (AC-1269)', () => {
     const rows = await t.accessRows();
     expect(rows.some((ids) => ids.includes(priya))).toBe(true);
     expect(canActFor(await t.reachOf(priya, 'member'), bea, 'view')).toBe(false);
+  });
+});
+
+describe('the emails (AC-1257, the index’s Emails table)', () => {
+  const emails = (workspaceId: string) =>
+    testQuery<{ kind: string; to_member_id: string; params: Record<string, unknown> }>(
+      ownerUrl,
+      `select kind, to_member_id::text, params from emails
+         where workspace_id = $1 and kind like 'scheduling_access_%' order by created_at, id`,
+      [workspaceId],
+    );
+
+  it('tells the delegate, and the member when someone else granted it; a level change again; a removal by others', async () => {
+    const t = await team(['member', 'member']);
+    const [bea = '', priya = ''] = t.ids;
+    const input = { delegateMemberId: priya, target: { type: 'member' as const, memberId: bea } };
+    await grantDelegation(t.as(t.owner, 'owner'), { ...input, level: 'view' });
+    let sent = await emails(t.workspaceId);
+    expect(sent).toEqual([
+      expect.objectContaining({
+        kind: 'scheduling_access_given',
+        to_member_id: priya,
+        params: expect.objectContaining({ to: 'delegate', level: 'view', otherName: 'M0', byName: 'Ada' }) as unknown,
+      }),
+      expect.objectContaining({
+        kind: 'scheduling_access_given',
+        to_member_id: bea,
+        params: expect.objectContaining({ to: 'member', level: 'view', otherName: 'M1' }) as unknown,
+      }),
+    ]);
+    // Bea makes it Manage herself: Priya is told, Bea isn't (she did it).
+    const grant = await grantDelegation(t.as(bea, 'member'), { ...input, level: 'manage' });
+    sent = await emails(t.workspaceId);
+    expect(sent.slice(2)).toEqual([
+      expect.objectContaining({
+        to_member_id: priya,
+        params: expect.not.objectContaining({ byName: expect.anything() as unknown }) as unknown,
+      }),
+    ]);
+    await revokeDelegation(t.as(bea, 'member'), { id: grant.id });
+    sent = await emails(t.workspaceId);
+    expect(sent.at(-1)).toMatchObject({
+      kind: 'scheduling_access_removed',
+      to_member_id: priya,
+      params: { level: 'manage', memberName: 'M0', byName: 'M0' },
+    });
+  });
+
+  it('sends nothing when the delegate takes their own access back', async () => {
+    const t = await team(['member', 'member']);
+    const [bea = '', priya = ''] = t.ids;
+    const made = await grantDelegation(t.as(bea, 'member'), {
+      delegateMemberId: priya,
+      target: { type: 'member', memberId: bea },
+      level: 'view',
+    });
+    await revokeDelegation(t.as(priya, 'member'), { id: made.id });
+    expect((await emails(t.workspaceId)).map((each) => each.kind)).toEqual(['scheduling_access_given']);
   });
 });
 

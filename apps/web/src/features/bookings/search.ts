@@ -1,6 +1,7 @@
 // What Bookings' addresses hold, read and written in one place for both tabs'
 // routes (plain functions, no React, so loaders can use them):
-// - Calendar: `w` (the week's Monday), `d` (the day picked), `v` (`day` for the day view), `link`, `cal`;
+// - Calendar: `w` (the week's Monday), `d` (the day picked), `v` (`day` for the day view, `team` for the Team day),
+//   `link`, `cal`; the Team day's filters `who` (people's ids), `booked` and `order` (spec 0030, AC-766);
 // - List: `tab` (`past`, `cancelled`), `src` (`bookings`, `calendar`), `link`, `cal`.
 // The list pages by cursor (More), so the address holds no page.
 import type { BookingsTab, MeetingSource } from '@crm/data';
@@ -10,7 +11,11 @@ import { dayKeyOf, isDayKey, weekOf } from './week.ts';
 export interface RawBookingsSearch {
   readonly w?: string;
   readonly d?: string;
-  readonly v?: 'day';
+  readonly v?: 'day' | 'team';
+  /** The Team day's people, by id, comma separated; absent is everyone the reader may see. */
+  readonly who?: string;
+  readonly booked?: '1';
+  readonly order?: 'title';
   readonly tab?: 'past' | 'cancelled';
   readonly src?: 'bookings' | 'calendar';
   readonly link?: string;
@@ -24,7 +29,13 @@ export interface BookingsSearch {
   /** The day selected (a narrow screen shows it alone). */
   readonly day: string;
   /** The calendar's Day or Week (D and W); absent is the week. Kept in the address, so a reload or a link keeps it. */
-  readonly view?: 'week' | 'day';
+  readonly view?: 'week' | 'day' | 'team';
+  /** The Team day's people (spec 0030, AC-766): absent is everyone the reader may see. */
+  readonly members?: readonly string[];
+  /** The Team day: only people with a booking that day. */
+  readonly withBookings?: boolean;
+  /** The Team day's order (AC-1438): by job title; absent is me first, then by name. */
+  readonly order?: 'title';
   readonly tab: BookingsTab;
   /** The list's meetings: all, the bookings, or the calendar events. */
   readonly source: MeetingSource;
@@ -39,7 +50,12 @@ export function parseBookingsSearch(search: Record<string, unknown>): RawBooking
   return {
     ...(isDayKey(search.w) ? { w: search.w } : {}),
     ...(isDayKey(search.d) ? { d: search.d } : {}),
-    ...(search.v === 'day' ? { v: 'day' as const } : {}),
+    ...(search.v === 'day' || search.v === 'team' ? { v: search.v } : {}),
+    ...(typeof search.who === 'string' && /^[0-9a-f-]{36}(,[0-9a-f-]{36}){0,49}$/i.test(search.who)
+      ? { who: search.who }
+      : {}),
+    ...(search.booked === '1' || search.booked === 1 ? { booked: '1' as const } : {}),
+    ...(search.order === 'title' ? { order: 'title' as const } : {}),
     ...(search.tab === 'past' || search.tab === 'cancelled' ? { tab: search.tab } : {}),
     ...(search.src === 'bookings' || search.src === 'calendar' ? { src: search.src } : {}),
     ...(typeof search.link === 'string' && /^[0-9a-f-]{36}$/i.test(search.link) ? { link: search.link } : {}),
@@ -55,6 +71,9 @@ export function bookingsSearchOf(raw: RawBookingsSearch, now: Date, firstDay: nu
     week: weekOf(raw.w ?? day, firstDay),
     day,
     ...(raw.v === undefined ? {} : { view: raw.v }),
+    ...(raw.who === undefined ? {} : { members: raw.who.split(',') }),
+    ...(raw.booked === undefined ? {} : { withBookings: true }),
+    ...(raw.order === undefined ? {} : { order: raw.order }),
     tab: raw.tab ?? 'upcoming',
     source: raw.src ?? 'all',
     ...(raw.link === undefined ? {} : { link: raw.link }),
@@ -69,7 +88,15 @@ export function rawOf(tab: 'calendar' | 'list', search: BookingsSearch): RawBook
     ...(search.cal === undefined ? {} : { cal: search.cal.join(',') }),
   };
   if (tab === 'calendar') {
-    return { w: search.week, d: search.day, ...(search.view === 'day' ? { v: 'day' as const } : {}), ...shared };
+    return {
+      w: search.week,
+      d: search.day,
+      ...(search.view === 'day' || search.view === 'team' ? { v: search.view } : {}),
+      ...(search.members === undefined || search.members.length === 0 ? {} : { who: search.members.join(',') }),
+      ...(search.withBookings === true ? { booked: '1' as const } : {}),
+      ...(search.order === undefined ? {} : { order: search.order }),
+      ...shared,
+    };
   }
   return {
     ...(search.tab === 'upcoming' ? {} : { tab: search.tab }),

@@ -274,18 +274,66 @@ function SingleDayEditor(props: Parameters<typeof HoursEditor>[0]) {
   );
 }
 
-/** One date's hours (the Team week's cell, spec 0037): the day's switch and windows, with no Copy and no Set all days. */
+/**
+ * One date's hours (the Team week's cell, spec 0037): Working, then the day's windows at full width, with no Copy and
+ * no Set all days; an end before its start is never offered.
+ */
 export const SingleDay: Story = {
   render: (args) => (
-    <Stage width="narrow">
+    <Stage>
       <SingleDayEditor {...args} />
     </Stage>
   ),
   play: async ({ canvas }) => {
-    await expect(canvas.getByRole('switch', { name: 'Tue 3' })).toBeChecked();
+    await expect(canvas.getByRole('switch', { name: 'Working' })).toBeChecked();
     await expect(canvas.queryByRole('button', { name: /Copy/ })).not.toBeInTheDocument();
     await expect(canvas.queryByRole('button', { name: /Set all days/ })).not.toBeInTheDocument();
-    await userEvent.click(canvas.getByRole('switch', { name: 'Tue 3' }));
-    await expect(canvas.getByText('Unavailable')).toBeInTheDocument();
+    // Both times whole: the editor takes its content's width, so neither Select is cut off.
+    const until = canvas.getByRole('button', { name: /Tue 3 until/ });
+    await expect(until.getBoundingClientRect().width).toBeGreaterThan(0);
+    await userEvent.click(canvas.getByRole('button', { name: 'Add more hours on Tue 3' }));
+    await expect(canvas.getAllByRole('button', { name: /Tue 3 until/ })).toHaveLength(2);
+    await userEvent.click(canvas.getByRole('switch', { name: 'Working' }));
+    await expect(canvas.queryByRole('button', { name: /Tue 3 until/ })).not.toBeInTheDocument();
+  },
+};
+
+/** One date's hours, with the row's error (overlapping windows) under them, and the whole editor disabled. */
+export const SingleDayErrorAndDisabled: Story = {
+  render: (args) => (
+    <Stage>
+      <div>
+        <HoursEditor
+          {...args}
+          label="Hours on Tue 3"
+          rows={[
+            {
+              id: '2026-11-03',
+              label: 'Tue 3',
+              ranges: [
+                ['09:00', '13:00'],
+                ['12:00', '17:00'],
+              ],
+              error: 'These hours overlap.',
+            },
+          ]}
+          isSingleDay
+        />
+      </div>
+      <div>
+        <HoursEditor
+          {...args}
+          label="Hours on Wed 4"
+          rows={[{ id: '2026-11-04', label: 'Wed 4', ranges: [['09:00', '17:00']] }]}
+          isSingleDay
+          isDisabled
+        />
+      </div>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('alert')).toHaveTextContent('These hours overlap.');
+    const switches = canvas.getAllByRole('switch', { name: 'Working' });
+    await expect(switches[1]).toBeDisabled();
   },
 };
