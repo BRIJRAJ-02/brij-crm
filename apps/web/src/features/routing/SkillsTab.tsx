@@ -2,7 +2,7 @@
 // Purpose: Routing › Skills (spec 0037, AC-1382): the workspace's skills in groups, and who holds each.
 // Main task: add, rename or delete a skill (deleting asks first, and says where a rule still needs it), and give people skills.
 // Leaves out: using skills in a rule (the rule's dialog), fit links (Smart, L8), and the Round robin rows' own pickers.
-import { isDataError, type DataLayer, type MemberSummary, type RoutingSkill, type SkillGroup } from '@crm/data';
+import { isDataError, type DataLayer, type MemberView, type RoutingSkill, type SkillGroup } from '@crm/data';
 import { SKILL_GROUPS } from '@crm/data/forms';
 import { useRoutingSkills } from '@crm/data/react';
 import {
@@ -32,7 +32,8 @@ import { skillStrings as strings } from './skills-strings.ts';
 export interface SkillsTabProps {
   readonly data: DataLayer;
   readonly slug: string;
-  readonly members: readonly MemberSummary[];
+  /** The workspace's active members with their roles; guests take no bookings (AC-1432), so the People table leaves them out. */
+  readonly members: readonly MemberView[];
   readonly toasts: Toasts;
 }
 
@@ -58,6 +59,7 @@ export function SkillsTab({ data, slug, members, toasts }: SkillsTabProps) {
   const [editing, setEditing] = useState<Editing>();
   const [deleting, setDeleting] = useState<RoutingSkill | undefined>();
   const newRef = useRef<HTMLButtonElement>(null);
+  const people = useMemo(() => members.filter((member) => member.role !== 'guest'), [members]);
   if (state.status === 'error') {
     return (
       <EmptyState tone="error" title={strings.loadFailed} onRetry={() => held.reload()}>
@@ -133,7 +135,7 @@ export function SkillsTab({ data, slug, members, toasts }: SkillsTabProps) {
           <Table
             label={strings.peopleTable}
             columns={PEOPLE_COLUMNS}
-            rows={members}
+            rows={people}
             getRowId={(member) => member.id}
             renderCell={(member, column) =>
               column === 'member' ? (

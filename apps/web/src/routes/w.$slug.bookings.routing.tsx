@@ -1,4 +1,4 @@
-import { isDataError, type AttributeDefinition, type DataLayer, type MemberSummary } from '@crm/data';
+import { isDataError, type AttributeDefinition, type DataLayer, type MemberView } from '@crm/data';
 import { EmptyState, LoadingNow, PageColumn } from '@crm/ui';
 import { createFileRoute, useNavigate, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { RoutingPending, RoutingScreen, type RoutingSearch } from '../features/routing/RoutingScreen.tsx';
@@ -32,7 +32,7 @@ export const Route = createFileRoute('/w/$slug/bookings/routing')({
   loader: async ({
     context,
     params,
-  }): Promise<{ readonly members?: readonly MemberSummary[]; readonly stage?: AttributeDefinition }> => {
+  }): Promise<{ readonly members?: readonly MemberView[]; readonly stage?: AttributeDefinition }> => {
     try {
       const access = await context.data.access.mine(params.slug);
       if (!access.permissions.includes('routing.manage')) return {};

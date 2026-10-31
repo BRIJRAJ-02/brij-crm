@@ -7,6 +7,7 @@ import type {
   AttributeDefinition,
   DataLayer,
   MemberSummary,
+  MemberView,
   RoutingDecision,
   RoutingDecisionFilters,
   RoutingSurface,
@@ -66,7 +67,8 @@ export interface RoutingScreenProps {
   readonly data: DataLayer;
   readonly slug: string;
   readonly search: RoutingSearch;
-  readonly members: readonly MemberSummary[];
+  /** The workspace's active members with their roles: Skills leaves guests out of its People table. */
+  readonly members: readonly MemberView[];
   /** Deals' Stage field, for Won means; undefined when Deals has none. */
   readonly stage?: AttributeDefinition;
   readonly toasts: Toasts;
