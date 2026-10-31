@@ -5,6 +5,9 @@ import { useFormatSettings } from '../../provider/context.ts';
 import styles from './MonthTiles.module.css';
 import { strings } from './strings.ts';
 
+/** Where the sixth week starts in the month's 42 cells. */
+const SPARE_WEEK = 35;
+
 /** Props for MonthTiles. */
 export interface MonthTilesProps {
   /** The month shown, `YYYY-MM`. */
@@ -66,6 +69,8 @@ export function MonthTiles({
   if (shown.month !== month) setShown({ month, direction: month > shown.month ? 'forward' : 'back' });
   const cells = monthCells(month, locale, weekStart);
   const open = cells.filter((key): key is string => key !== undefined && openDays.has(key));
+  // The sixth week, when the month leaves it empty: held on a wide page, given back where the times stand under it.
+  const spareFrom = cells.slice(SPARE_WEEK).every((key) => key === undefined) ? SPARE_WEEK : cells.length;
   const tabbable =
     (focused !== undefined && open.includes(focused) ? focused : undefined) ??
     (value !== undefined && open.includes(value) ? value : undefined) ??
@@ -143,7 +148,14 @@ export function MonthTiles({
         }}
       >
         {cells.map((key, index) => {
-          if (key === undefined) return <span key={`blank-${String(index)}`} aria-hidden="true" />;
+          if (key === undefined)
+            return (
+              <span
+                key={`blank-${String(index)}`}
+                aria-hidden="true"
+                {...(index >= spareFrom ? { 'data-spare': '' } : {})}
+              />
+            );
           const labels = dayLabels(key, locale);
           const isOpen = openDays.has(key);
           const isToday = key === today;

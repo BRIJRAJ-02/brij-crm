@@ -160,8 +160,9 @@ export function ManagePage({ token, isWelcome, locale, now }: ManagePageProps) {
     body: details,
     location: whereOf(booking),
   }).toString()}`;
-  // The host is named in the summary above ("with Ada Lovelace"), so Who is the guest who booked.
-  const who = `${booking.visitorName} (${booking.visitorEmail})`;
+  // The host is named in the summary above ("with Ada Lovelace"), so Who is the guest who booked: their name, then their
+  // email on a line of its own, kept whole.
+  const who = { description: booking.visitorName, address: booking.visitorEmail };
   const changed = (next: PublicManagedBooking, kind: 'moved' | 'cancelled') => {
     setLoaded({ state: 'ready', booking: next });
     setNotice(kind);
@@ -216,7 +217,7 @@ export function ManagePage({ token, isWelcome, locale, now }: ManagePageProps) {
       // The summary leads (spec 0058, AC-19): what, when and who, from the booking already loaded.
       summary={{ what: booking.title, who: strings.withHost(booking.hostName) }}
       facts={[
-        { term: strings.who, description: who },
+        { term: strings.who, ...who },
         ...(booking.guests.length === 0
           ? []
           : [{ term: changeStrings.guestsTerm, description: booking.guests.join(', ') }]),

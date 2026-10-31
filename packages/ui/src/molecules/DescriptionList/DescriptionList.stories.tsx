@@ -65,6 +65,24 @@ export const Compact: Story = {
   },
 };
 
+/** A guest with `address`: the name, then the email on a line of its own, kept whole rather than broken at its hyphen. */
+export const Address: Story = {
+  args: {
+    items: [
+      { term: 'Who', description: 'Vera Visitor', address: 'vera-1c8a4539-long-alias@example.com' },
+      { term: 'Where', description: 'Video call. Ada Lovelace will send you the link.' },
+    ],
+  },
+  render: (args) => (
+    <Stage width="narrow">
+      <DescriptionList {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('vera-1c8a4539-long-alias@example.com')).toBeVisible();
+  },
+};
+
 /** A value with `copy`: its copy button after it, shown on hover or focus (always under a finger), copying the raw value. */
 export const Copy: Story = {
   render: () => (

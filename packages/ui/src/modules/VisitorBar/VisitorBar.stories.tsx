@@ -51,7 +51,7 @@ export const Match: Story = {
   play: async ({ canvas }) => {
     // Small and secondary, never the row's width: booking stays the page's one ask.
     const link = canvas.getByRole('button', { name: 'Connect your calendar' });
-    await expect(link).toHaveAttribute('data-variant', 'link');
+    await expect(link).toHaveAttribute('data-variant', 'ghost');
     await userEvent.click(link);
     const dialog = await screen.findByRole('dialog');
     await waitFor(() => expect(dialog).toBeVisible());

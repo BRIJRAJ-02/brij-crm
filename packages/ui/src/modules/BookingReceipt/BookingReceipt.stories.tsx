@@ -17,7 +17,7 @@ const meta = {
     relative: 'Tomorrow morning',
     summary: { what: 'Intro call', who: 'with Ada Lovelace' },
     facts: [
-      { term: 'Who', description: 'Grace Hopper (grace@example.com)' },
+      { term: 'Who', description: 'Grace Hopper', address: 'grace@example.com' },
       { term: 'Where', description: 'Video call' },
     ],
     joinUrl: 'https://meet.google.com/abc-defg-hij',

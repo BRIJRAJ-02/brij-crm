@@ -1,7 +1,7 @@
 /* A guest's changes under their booking, on the receipt card's rhythm: every
    band is padded --space-20 with --space-12 between its parts. The heading
    over one row of actions (the two changes as quiet toggles, Cancel booking
-   at the row's end), then the open change's panel as its own band. */
+   at the row's end; stacked on a phone), then the open change's panel as its own band. */
 @layer components {
   .root {
     display: flex;
@@ -31,7 +31,22 @@
 
   /* Cancelling is the rarest change and the only one that can't be undone: quiet, and apart at the row's end. */
   .end {
+    display: flex;
     margin-inline-start: auto;
+  }
+
+  /* On a phone the row can't hold all three, and Cancel booking wrapping alone to the end of a second row reads as
+     stray: the three stack instead, full width in the order they're needed, Cancel booking last. */
+  @container (width < 480px) {
+    .actions {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .end {
+      flex-direction: column;
+      margin-inline-start: 0;
+    }
   }
 
   .panel {

@@ -21,6 +21,8 @@ New. DatePicker's calendar picks any date in a small popover; a booking page's m
 />
 ```
 
+Every month holds six weeks, so paging never moves what stands beside it. Below 1024px, where BookingFrame stacks the times under the month, a month that leaves its sixth week empty gives that row back, rather than holding a tall gap over the times (spec 0058).
+
 Weekday names, the first day of the week and every label come from the provider's language. `focusesValue` focuses the chosen day once drawn, for Back from the details step.
 
 ## States
