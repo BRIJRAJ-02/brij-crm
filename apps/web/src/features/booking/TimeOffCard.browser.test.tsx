@@ -165,7 +165,10 @@ describe('Time off', () => {
     await dialog.getByRole('button', { name: 'Save' }).click();
     const inside = page.getByRole('dialog', { name: 'Time off saved' });
     // The meetings inside as a count, with Open Bookings for the list (spec 0058, AC-15).
-    await expect.element(inside.getByText('1 meeting in this time off').first()).toBeVisible();
+    await expect.element(inside.getByText('1 meeting in this time off')).toBeVisible();
+    // Said once, and focus waits on Done, the answer, not the title bar's close.
+    expect(inside.getByText('1 meeting in this time off').elements()).toHaveLength(1);
+    await expect.element(inside.getByRole('button', { name: 'Done' })).toHaveFocus();
     await expect.element(inside.getByRole('button', { name: 'Open Bookings' })).toBeVisible();
     expect(inside.getByText('Pat One · Check up').elements()).toHaveLength(0);
     expect(made.created).toHaveLength(1);
