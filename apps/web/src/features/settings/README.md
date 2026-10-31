@@ -216,3 +216,10 @@ A row in Profile's details card, right under the photo: SettingsRow and Switch (
 - Every write here waits for the server (definition writes are never optimistic): the button spins with its ongoing verb, a refusal lands on the field it names (`NAME_TAKEN` on the name, `SLUG_TAKEN` and a reserved API name on API name) or in the form's banner, and once a write lands the data layer reads the objects again and every page reloads, so the sidebar and this page show the change, as every other member's do.
 - Members open every page read only: no New object, meter, handles, Archive or SaveBar, one quiet Callout at the top of the body in the words every settings page shares ("Only owners and admins can change this."), fields locked with no reason repeated under them, and the row menu holds Open alone. The server refuses them 403 anyway.
 - States: while a page loads its header and rows hold their places (skeletons); a failed read shows an EmptyState with Retry in place of the page's body, and the navigation stays usable. An unknown object or tab says so inside the frame, with the way back to Objects.
+
+## Settings › Workspace › Webhooks (`/w/$slug/settings/webhooks`, WebhooksScreen)
+
+- Purpose: where a workspace's bookings and form submissions are sent, as signed webhooks (spec 0064, AC-6419 to AC-6425). Owners and admins only (`webhooks.manage`); nobody else sees the entry.
+- Main task: add an endpoint (an https address, a short description, the events as chips), copy its signing secret, shown once, then see whether deliveries arrive: Send test event and its inline result, the delivery log with Resend.
+- Leaves out: custom headers, filters per page or form, and webhooks for records and deals (later).
+- One endpoint opens as a wide Modal: its switch (shown at once, put back if refused), Rotate secret (asks first; the old one signs 24 hours more, then the new secret is shown once), the events with Save, the log (newest first, 25 a page) and Delete endpoint (asks first in a one line Modal). Where the server has no `WEBHOOK_SECRET_KEY` the page says webhooks aren't set up here.

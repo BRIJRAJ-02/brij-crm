@@ -47,6 +47,7 @@ import { Route as WSlugSettingsJobsRouteImport } from './routes/w.$slug.settings
 import { Route as WSlugSettingsMembersRouteImport } from './routes/w.$slug.settings.members.tsx'
 import { Route as WSlugSettingsSecurityRouteImport } from './routes/w.$slug.settings.security.tsx'
 import { Route as WSlugSettingsTrashRouteImport } from './routes/w.$slug.settings.trash.tsx'
+import { Route as WSlugSettingsWebhooksRouteImport } from './routes/w.$slug.settings.webhooks.tsx'
 import { Route as WSlugBookingsAvailabilityScheduleIdRouteImport } from './routes/w.$slug.bookings_.availability.$scheduleId.tsx'
 import { Route as WSlugCapturesFormsIndexRouteImport } from './routes/w.$slug.captures.forms.index.tsx'
 import { Route as WSlugCapturesLinksIndexRouteImport } from './routes/w.$slug.captures.links.index.tsx'
@@ -275,6 +276,11 @@ const WSlugSettingsSecurityRoute = WSlugSettingsSecurityRouteImport.update({
 const WSlugSettingsTrashRoute = WSlugSettingsTrashRouteImport.update({
   id: '/trash',
   path: '/trash',
+  getParentRoute: () => WSlugSettingsRoute,
+} as any)
+const WSlugSettingsWebhooksRoute = WSlugSettingsWebhooksRouteImport.update({
+  id: '/webhooks',
+  path: '/webhooks',
   getParentRoute: () => WSlugSettingsRoute,
 } as any)
 const WSlugBookingsAvailabilityScheduleIdRoute =
@@ -538,6 +544,7 @@ export interface FileRoutesByFullPath {
   '/w/$slug/settings/members': typeof WSlugSettingsMembersRoute
   '/w/$slug/settings/security': typeof WSlugSettingsSecurityRoute
   '/w/$slug/settings/trash': typeof WSlugSettingsTrashRoute
+  '/w/$slug/settings/webhooks': typeof WSlugSettingsWebhooksRoute
   '/w/$slug/bookings/': typeof WSlugBookingsIndexRoute
   '/w/$slug/captures/': typeof WSlugCapturesIndexRoute
   '/w/$slug/settings/': typeof WSlugSettingsIndexRoute
@@ -612,6 +619,7 @@ export interface FileRoutesByTo {
   '/w/$slug/settings/members': typeof WSlugSettingsMembersRoute
   '/w/$slug/settings/security': typeof WSlugSettingsSecurityRoute
   '/w/$slug/settings/trash': typeof WSlugSettingsTrashRoute
+  '/w/$slug/settings/webhooks': typeof WSlugSettingsWebhooksRoute
   '/w/$slug/bookings': typeof WSlugBookingsIndexRoute
   '/w/$slug/captures': typeof WSlugCapturesIndexRoute
   '/w/$slug/settings': typeof WSlugSettingsIndexRoute
@@ -691,6 +699,7 @@ export interface FileRoutesById {
   '/w/$slug/settings/members': typeof WSlugSettingsMembersRoute
   '/w/$slug/settings/security': typeof WSlugSettingsSecurityRoute
   '/w/$slug/settings/trash': typeof WSlugSettingsTrashRoute
+  '/w/$slug/settings/webhooks': typeof WSlugSettingsWebhooksRoute
   '/w/$slug/bookings/': typeof WSlugBookingsIndexRoute
   '/w/$slug/captures/': typeof WSlugCapturesIndexRoute
   '/w/$slug/settings/': typeof WSlugSettingsIndexRoute
@@ -771,6 +780,7 @@ export interface FileRouteTypes {
     | '/w/$slug/settings/members'
     | '/w/$slug/settings/security'
     | '/w/$slug/settings/trash'
+    | '/w/$slug/settings/webhooks'
     | '/w/$slug/bookings/'
     | '/w/$slug/captures/'
     | '/w/$slug/settings/'
@@ -845,6 +855,7 @@ export interface FileRouteTypes {
     | '/w/$slug/settings/members'
     | '/w/$slug/settings/security'
     | '/w/$slug/settings/trash'
+    | '/w/$slug/settings/webhooks'
     | '/w/$slug/bookings'
     | '/w/$slug/captures'
     | '/w/$slug/settings'
@@ -923,6 +934,7 @@ export interface FileRouteTypes {
     | '/w/$slug/settings/members'
     | '/w/$slug/settings/security'
     | '/w/$slug/settings/trash'
+    | '/w/$slug/settings/webhooks'
     | '/w/$slug/bookings/'
     | '/w/$slug/captures/'
     | '/w/$slug/settings/'
@@ -1247,6 +1259,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WSlugSettingsTrashRouteImport
       parentRoute: typeof WSlugSettingsRoute
     }
+    '/w/$slug/settings/webhooks': {
+      id: '/w/$slug/settings/webhooks'
+      path: '/webhooks'
+      fullPath: '/w/$slug/settings/webhooks'
+      preLoaderRoute: typeof WSlugSettingsWebhooksRouteImport
+      parentRoute: typeof WSlugSettingsRoute
+    }
     '/w/$slug/bookings_/availability/$scheduleId': {
       id: '/w/$slug/bookings_/availability/$scheduleId'
       path: '/bookings/availability/$scheduleId'
@@ -1561,6 +1580,7 @@ interface WSlugSettingsRouteChildren {
   WSlugSettingsMembersRoute: typeof WSlugSettingsMembersRoute
   WSlugSettingsSecurityRoute: typeof WSlugSettingsSecurityRoute
   WSlugSettingsTrashRoute: typeof WSlugSettingsTrashRoute
+  WSlugSettingsWebhooksRoute: typeof WSlugSettingsWebhooksRoute
   WSlugSettingsIndexRoute: typeof WSlugSettingsIndexRoute
   WSlugSettingsAccountCalendarsRoute: typeof WSlugSettingsAccountCalendarsRoute
   WSlugSettingsAccountNotificationsRoute: typeof WSlugSettingsAccountNotificationsRoute
@@ -1598,6 +1618,7 @@ const WSlugSettingsRouteChildren: WSlugSettingsRouteChildren = {
   WSlugSettingsMembersRoute: WSlugSettingsMembersRoute,
   WSlugSettingsSecurityRoute: WSlugSettingsSecurityRoute,
   WSlugSettingsTrashRoute: WSlugSettingsTrashRoute,
+  WSlugSettingsWebhooksRoute: WSlugSettingsWebhooksRoute,
   WSlugSettingsIndexRoute: WSlugSettingsIndexRoute,
   WSlugSettingsAccountCalendarsRoute: WSlugSettingsAccountCalendarsRoute,
   WSlugSettingsAccountNotificationsRoute:

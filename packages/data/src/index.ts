@@ -78,6 +78,12 @@ import type {
   RecordView,
   SessionLengthDays,
   WorkspaceSecurity,
+  WebhookDelivery,
+  WebhookDeliveryPage,
+  WebhookEndpoint,
+  WebhookEventType,
+  WebhookList,
+  WebhookWithSecret,
   ActivityPage,
   RelationshipView,
   Role,
@@ -432,6 +438,14 @@ export type {
   Permission,
   SessionLengthDays,
   WorkspaceSecurity,
+  WebhookDelivery,
+  WebhookDeliveryPage,
+  WebhookDeliveryState,
+  WebhookDeliveryType,
+  WebhookEndpoint,
+  WebhookEventType,
+  WebhookList,
+  WebhookWithSecret,
   ActivityPage,
   SecurityActivity,
   AuditChange,
@@ -4215,6 +4229,76 @@ export function createDataLayer({
       ): Promise<WorkspaceSecurity> => call((options) => api.workspaceSecurity.set({ workspace, ...change }, options)),
       signOutEveryone: (workspace: string): Promise<WorkspaceSecurity> =>
         call((options) => api.workspaceSecurity.signOutEveryone({ workspace }, options)),
+    },
+    /**
+     * Settings › Webhooks (spec 0064): a workspace's endpoints, owners and admins only. Settings, not CRM data, so no
+     * live event; every write waits for the server, since create and rotate answer the secret the screen shows once,
+     * and Send test event and Resend answer the delivery as the receiver took it.
+     */
+    webhooks: {
+      /** The endpoints, newest first; `available` false where the server has no sealing key. */
+      list: (workspace: string): Promise<WebhookList> => call((options) => api.webhooks.list({ workspace }, options)),
+      /** Adds an endpoint, answering its whole secret once. Refusals: `CONFIG_INVALID` on `url`, or at 10. */
+      create: (
+        workspace: string,
+        input: { readonly url: string; readonly description: string; readonly events: readonly WebhookEventType[] },
+      ): Promise<WebhookWithSecret> =>
+        call((options) =>
+          api.webhooks.create(
+            {
+              workspace,
+              url: input.url,
+              description: input.description,
+              events: [...input.events],
+              mutationId: mintId(),
+            },
+            options,
+          ),
+        ),
+      /** Changes an endpoint's address, description, events or switch. */
+      update: (
+        workspace: string,
+        endpointId: string,
+        change: {
+          readonly url?: string;
+          readonly description?: string;
+          readonly events?: readonly WebhookEventType[];
+          readonly status?: 'active' | 'off';
+        },
+      ): Promise<WebhookEndpoint> =>
+        call((options) =>
+          api.webhooks.update(
+            {
+              workspace,
+              endpointId,
+              ...(change.url === undefined ? {} : { url: change.url }),
+              ...(change.description === undefined ? {} : { description: change.description }),
+              ...(change.status === undefined ? {} : { status: change.status }),
+              ...(change.events === undefined ? {} : { events: [...change.events] }),
+              mutationId: mintId(),
+            },
+            options,
+          ),
+        ),
+      /** A new secret, the old one signing beside it for 24 hours; answers the new one once. */
+      rotateSecret: (workspace: string, endpointId: string): Promise<WebhookWithSecret> =>
+        call((options) => api.webhooks.rotateSecret({ workspace, endpointId, mutationId: mintId() }, options)),
+      /** Removes an endpoint and its log. */
+      remove: (workspace: string, endpointId: string): Promise<void> =>
+        call((options) => api.webhooks.delete({ workspace, endpointId, mutationId: mintId() }, options)).then(
+          () => undefined,
+        ),
+      /** Sends a `ping` now and answers how the receiver took it. `RATE_LIMITED` past 10 a minute. */
+      test: (workspace: string, endpointId: string): Promise<WebhookDelivery> =>
+        call((options) => api.webhooks.test({ workspace, endpointId, mutationId: mintId() }, options)),
+      /** One page of an endpoint's log, newest first. */
+      deliveries: (workspace: string, endpointId: string, cursor?: string): Promise<WebhookDeliveryPage> =>
+        call((options) =>
+          api.webhooks.deliveries({ workspace, endpointId, ...(cursor === undefined ? {} : { cursor }) }, options),
+        ),
+      /** Sends one delivery again now and answers how it went. */
+      resend: (workspace: string, deliveryId: string): Promise<WebhookDelivery> =>
+        call((options) => api.webhooks.resend({ workspace, deliveryId, mutationId: mintId() }, options)),
     },
     /**
      * Invitations (spec 0031): settings, not CRM data, so no live event. The

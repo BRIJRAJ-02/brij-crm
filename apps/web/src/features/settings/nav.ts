@@ -13,6 +13,7 @@ import { strings as members } from './members-strings.ts';
 import { strings as notifications } from './notifications-strings.ts';
 import { strings as schedulingAccess } from './scheduling-access-nav-strings.ts';
 import { strings as security } from './security-strings.ts';
+import { strings as webhooks } from './webhooks-strings.ts';
 import { strings as workspaceSecurity } from './workspace-security-strings.ts';
 import { strings } from './strings.ts';
 import { strings as workspace } from './workspace-strings.ts';
@@ -63,6 +64,7 @@ export type SettingsPageId =
   | 'general'
   | 'members'
   | 'workspace-security'
+  | 'webhooks'
   | 'objects'
   | 'jobs'
   | 'history'
@@ -71,6 +73,9 @@ export type SettingsPageId =
   | 'admin-users'
   | 'admin-pages'
   | 'admin-website';
+
+/** Settings › Workspace › Webhooks (spec 0064): where bookings and form submissions are sent, owners and admins. */
+export const webhooksHref = (slug: string) => `/w/${slug}/settings/webhooks`;
 
 /** Settings › Workspace › Security (spec 0033, milestone 4): the workspace's sign in rules, owners only. */
 export const workspaceSecurityHref = (slug: string) => `/w/${slug}/settings/security`;
@@ -104,7 +109,8 @@ export interface SettingsNavEntry {
     | 'chart-line'
     | 'calendar-days'
     | 'calendar-clock'
-    | 'globe';
+    | 'globe'
+    | 'webhook';
   /** A quiet word after the name. Every entry opens a page in Settings (20 Oct 2026; Trash too since 23 Oct 2026). */
   readonly meta?: string;
   /** A permission the page needs before the member may open it at all; absent, every member may. */
@@ -168,6 +174,14 @@ export function settingsNav(slug: string): readonly SettingsNavGroup[] {
           href: workspaceSecurityHref(slug),
           icon: 'lock',
           requires: 'security.manage',
+        },
+        // Webhooks (spec 0064): `webhooks.manage` only, so nobody else sees the entry at all.
+        {
+          id: 'webhooks',
+          label: webhooks.navLabel,
+          href: webhooksHref(slug),
+          icon: 'webhook',
+          requires: 'webhooks.manage',
         },
         { id: 'objects', label: strings.objects, href: objectsSettingsHref(slug), icon: 'box' },
         { id: 'jobs', label: jobs.title, href: jobsHref(slug), icon: 'list-checks' },
@@ -246,6 +260,7 @@ export function settingsPageOf(pathname: string): SettingsPageId | undefined {
   if (rest === 'history' || rest === 'history/changes' || rest === 'history/sign-ins') return 'history';
   if (rest === 'members') return 'members';
   if (rest === 'security') return 'workspace-security';
+  if (rest === 'webhooks') return 'webhooks';
   if (rest === 'trash') return 'trash';
   if (rest === 'admin') return 'admin-overview';
   if (rest === 'admin/users' || rest.startsWith('admin/users/')) return 'admin-users';

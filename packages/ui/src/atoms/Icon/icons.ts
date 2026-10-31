@@ -247,6 +247,7 @@ import {
   Wallet,
   Warehouse,
   WavesHorizontal,
+  Webhook,
   Wifi,
   Wrench,
   X,
@@ -497,6 +498,8 @@ export const icons = {
   wallet: Wallet,
   warehouse: Warehouse,
   'waves-horizontal': WavesHorizontal,
+  // Settings › Webhooks (spec 0064).
+  webhook: Webhook,
   wifi: Wifi,
   wrench: Wrench,
   x: X,

@@ -376,15 +376,16 @@ describe('across workspaces and in the audit log', () => {
     });
     const ping = await core.prepareWebhookTest(a.owner, key, { endpointId: made.endpoint.id });
     const endpointId = made.endpoint.id;
+    // Thunks, so each refusal is awaited as it is made and none goes unhandled.
     for (const call of [
-      core.updateWebhook(b.owner, deps, { endpointId, description: 'mine now' }),
-      core.rotateWebhookSecret(b.owner, deps, { endpointId }),
-      core.deleteWebhook(b.owner, { endpointId }),
-      core.listWebhookDeliveries(b.owner, { endpointId }),
-      core.prepareWebhookTest(b.owner, key, { endpointId }),
-      core.prepareWebhookResend(b.owner, key, { deliveryId: ping.deliveryId }),
+      () => core.updateWebhook(b.owner, deps, { endpointId, description: 'mine now' }),
+      () => core.rotateWebhookSecret(b.owner, deps, { endpointId }),
+      () => core.deleteWebhook(b.owner, { endpointId }),
+      () => core.listWebhookDeliveries(b.owner, { endpointId }),
+      () => core.prepareWebhookTest(b.owner, key, { endpointId }),
+      () => core.prepareWebhookResend(b.owner, key, { deliveryId: ping.deliveryId }),
     ]) {
-      expect(await refusalOf(call)).toMatchObject({ code: 'NOT_FOUND' });
+      expect(await refusalOf(call())).toMatchObject({ code: 'NOT_FOUND' });
     }
     // The queue function reads under the caller's workspace, and with none set it reads nothing.
     const queuedFromB = await db.withWorkspace(b.workspaceId, (tx) =>
