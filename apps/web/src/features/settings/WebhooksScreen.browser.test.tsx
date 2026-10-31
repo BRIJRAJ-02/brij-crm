@@ -196,6 +196,8 @@ describe('the endpoints (AC-6419)', () => {
     await expect.element(secret.getByText('whsec_shown_once')).toBeVisible();
     await expect.element(secret.getByRole('button', { name: 'Copy secret' })).toBeVisible();
     await secret.getByRole('button', { name: 'Done' }).click();
+    // Gone once its exit has run, and nowhere else on the page.
+    await expect.element(secret).not.toBeInTheDocument();
     expect(document.body.textContent).not.toContain('whsec_shown_once');
   });
 
@@ -232,7 +234,7 @@ describe('one endpoint (AC-6420, AC-6425)', () => {
     await expect.element(dialog.getByText('Ends in ab12')).toBeVisible();
     await expect.element(dialog.getByText(/Internal error/)).toBeVisible();
     await dialog.getByRole('button', { name: 'Send test event' }).click();
-    await expect.element(dialog.getByText('Delivered', { exact: true })).toBeVisible();
+    await expect.element(dialog.getByText('Delivered', { exact: true }).first()).toBeVisible();
     await dialog.getByRole('button', { name: 'Resend' }).first().click();
     expect(webhooks.resend).toHaveBeenCalledWith('acme', DELIVERY.id);
     for (const theme of THEMES) {
