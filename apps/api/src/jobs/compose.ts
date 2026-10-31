@@ -75,7 +75,7 @@ export interface JobTasks {
   /** One member's scheduling notice (spec 0037), as the system: it queues a `scheduling_changed` email. */
   readonly schedulingNotice: (payload: unknown) => Promise<void>;
   /** One workspace's queued automation runs (parity #53), each as the member its automation runs as; told how to queue its next call. */
-  readonly automation: (payload: unknown, again: (workspaceId: string) => Promise<void>) => Promise<void>;
+  readonly automation: (payload: unknown, again: (workspaceId: string, at?: Date) => Promise<void>) => Promise<void>;
   /**
    * Calendar health (spec 0037, AC-1310, AC-1311): one episode's email as the system, and the held sweep's one
    * Sentry warning (`CALENDAR_OUTAGE`, counts only).

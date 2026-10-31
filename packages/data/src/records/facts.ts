@@ -126,10 +126,12 @@ export function createRecordFactsStore({ api, now }: RecordFactsDeps): RecordFac
       getSnapshot: () => state,
       retain: () => {
         holders += 1;
+        // Held again after its last screen let go (a remount): it is the record's source again.
+        if (holders === 1) sources.set(key, facts);
         read();
         return () => {
           holders -= 1;
-          if (holders === 0) sources.delete(key);
+          if (holders === 0 && sources.get(key) === facts) sources.delete(key);
         };
       },
     };
@@ -141,7 +143,8 @@ export function createRecordFactsStore({ api, now }: RecordFactsDeps): RecordFac
       const held = sources.get(key);
       if (held !== undefined) return held;
       const prefix = `${workspace}:${recordId}:`;
-      const previous = [...sources.entries()].find(([each]) => each.startsWith(prefix))?.[1];
+      // The newest of the record's sources: what the strip shows now.
+      const previous = [...sources.entries()].filter(([each]) => each.startsWith(prefix)).at(-1)?.[1];
       const made = make(key, workspace, recordId, stageAttributeId, previous?.getSnapshot());
       sources.set(key, made);
       return made;

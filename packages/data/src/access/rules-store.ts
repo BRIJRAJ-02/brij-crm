@@ -140,14 +140,18 @@ export function createRulesStore({ get, put, watch, later = timer }: RulesStoreD
         getSnapshot: () => state,
         retain: () => {
           entry.holders += 1;
-          if (entry.holders === 1) stopWatching = watch?.(workspace);
+          if (entry.holders === 1) {
+            // Held again after its last screen let go (a remount): it is the object's source again.
+            entries.set(key, entry);
+            stopWatching = watch?.(workspace);
+          }
           entry.read();
           return () => {
             entry.holders -= 1;
             if (entry.holders > 0) return;
             stopWatching?.();
             stopWatching = undefined;
-            entries.delete(key);
+            if (entries.get(key) === entry) entries.delete(key);
           };
         },
         retry: () => {

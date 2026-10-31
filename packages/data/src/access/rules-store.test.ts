@@ -123,6 +123,18 @@ describe('the Access tab store', () => {
     expect(levelOf(source.getSnapshot().access)).toBe('none');
   });
 
+  it('stays the object’s source when a screen lets go and holds it again (a remount)', async () => {
+    const { store, answerGets } = setup();
+    const source = store.view('acme', 'deals', accessOf('write'));
+    source.retain()();
+    source.retain();
+    answerGets();
+    await flush();
+    await store.set('acme', 'deals', MEMBERS, { level: 'read', records: 'all' }, () => accessOf('read'));
+    expect(levelOf(source.getSnapshot().access)).toBe('read');
+    expect(store.view('acme', 'deals')).toBe(source);
+  });
+
   it('rejects a refusal and reads the object again', async () => {
     const refusal = dataError('FORBIDDEN', 'Only owners and admins can change access.');
     const { store, gets } = setup({ put: () => Promise.reject(refusal) });

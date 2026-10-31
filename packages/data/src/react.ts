@@ -274,6 +274,17 @@ export function useLatestActivityAt(feed: ActivityFeed): string | undefined {
 }
 
 /**
+ * The moment of the newest call or meeting logged in a record's feed (the CRM flow pass): what the stat strip keys
+ * its Last contacted read on, so a call just logged reads it again and an edit does not.
+ */
+export function useLatestLoggedContactAt(feed: ActivityFeed): string | undefined {
+  return useSyncExternalStore(
+    feed.subscribe,
+    () => feed.getSnapshot().entries.find((entry) => entry.kind === 'call' || entry.kind === 'logged_meeting')?.at,
+  );
+}
+
+/**
  * The trash (spec 0022): its rows, count, status and refusals, re-rendering
  * when they change. While the screen is mounted it holds the view, so it
  * settles live as records are deleted, restored or purged anywhere.

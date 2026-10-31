@@ -24,6 +24,7 @@ import { toFieldAttribute } from '@crm/data';
 import {
   useActivityStatus,
   useLatestActivityAt,
+  useLatestLoggedContactAt,
   useRecordFacts,
   useCommentCount,
   useLiveStatus,
@@ -443,6 +444,7 @@ function RecordScreen({
   const notesTotal = useNoteTotal(notes);
   const commentCount = useCommentCount(comments);
   const latestAt = useLatestActivityAt(recent);
+  const latestContactAt = useLatestLoggedContactAt(recent);
   const recentStatus = useActivityStatus(recent);
   // The stat strip says what the tabs don't (owner's call, 22 Oct): the last activity, the next meeting, and on a
   // record with a stage (a deal) its value and how long it has been in that stage. The tabs keep their own counts.
@@ -457,10 +459,9 @@ function RecordScreen({
     () => attributes.find((each) => each.apiSlug === 'value' && each.type === 'currency' && !each.isArchived),
     [attributes],
   );
-  // A stage change reads the facts afresh (the age restarts), and so does new activity: a call just logged is the
-  // last contact.
+  // A stage change reads the facts afresh (the age restarts), and so does a call or meeting logged: the last contact.
   const stageNow = stageAttribute === undefined ? undefined : state.record?.values[stageAttribute.id];
-  const stageKey = `${typeof stageNow === 'string' ? stageNow : ''}:${latestAt ?? ''}`;
+  const stageKey = `${typeof stageNow === 'string' ? stageNow : ''}:${latestContactAt ?? ''}`;
   const facts = useMemo(
     () => data.records.facts(slug, recordId, stageAttribute?.id, stageKey),
     [data, slug, recordId, stageAttribute?.id, stageKey],
