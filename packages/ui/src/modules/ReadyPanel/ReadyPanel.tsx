@@ -8,8 +8,11 @@ import { strings } from './strings.ts';
 
 /** Props for ReadyPanel. */
 export interface ReadyPanelProps {
-  /** The one heading, what now exists: "Your booking page is ready". */
-  readonly title: string;
+  /**
+   * The one heading, what now exists: "Your booking page is ready". Left out inside a Modal whose own title says it,
+   * so the dialog keeps one heading; the mark then sits beside `message`.
+   */
+  readonly title?: string;
   /** One short line under it, if it helps ("Anyone with the link can book"). */
   readonly message?: string;
   /** The public address: shown, copied, shared and drawn as the QR code. */
@@ -23,11 +26,16 @@ export interface ReadyPanelProps {
   /** The preview's name for screen readers. */
   readonly previewLabel?: string;
   /**
+   * `actual` (the default) draws the preview at its own size. `shrunk` lays it out at twice the slot and draws it at
+   * half (`scale-shrunk`) from its top, so a whole page's head (a booking page's name and title) fits the glimpse.
+   */
+  readonly previewScale?: 'actual' | 'shrunk';
+  /**
    * Share. Left out, the panel uses the browser's share sheet when it has one and shows no Share where it doesn't;
    * pass it to share some other way (the link page's Share modal).
    */
   readonly onShare?: () => void;
-  /** What the browser's share sheet titles the link with. Default: `title`. */
+  /** What the browser's share sheet titles the link with. Default: `title`, then the link. */
   readonly shareTitle?: string;
   /** More below the link and QR, one row: the three embed tiles after a form's first publish. */
   readonly children?: ReactNode;
@@ -55,6 +63,7 @@ export function ReadyPanel({
   qrLabel = strings.qrLabel,
   preview,
   previewLabel = strings.preview,
+  previewScale = 'actual',
   onShare,
   shareTitle,
   children,
@@ -71,18 +80,24 @@ export function ReadyPanel({
       return;
     }
     // A closed share sheet rejects; that is the person's choice, not a failure.
-    navigator.share({ title: shareTitle ?? title, url: link }).catch(() => undefined);
+    navigator.share({ title: shareTitle ?? title ?? link, url: link }).catch(() => undefined);
   };
+  // The address breaks at its last slash: the start (the host) and the end (the page) both stay in view, and only
+  // the middle gives way to an ellipsis when the field is short.
+  const cut = link.lastIndexOf('/', link.length - 2) + 1;
+  const hasTail = cut > link.indexOf('//') + 2 && cut < link.length;
   return (
-    <section className={styles.root} aria-labelledby={titleId}>
-      <div className={styles.head} data-probe="edge">
+    <section className={styles.root} {...(title === undefined ? {} : { 'aria-labelledby': titleId })}>
+      <div className={styles.head} data-probe="edge" data-untitled={title === undefined || undefined}>
         <span className={styles.check} role="img" aria-label={strings.done}>
           <Icon name="check" size="md" />
         </span>
         <div className={styles.titles}>
-          <h2 id={titleId} className={styles.title}>
-            {title}
-          </h2>
+          {title !== undefined && (
+            <h2 id={titleId} className={styles.title}>
+              {title}
+            </h2>
+          )}
           {message !== undefined && <p className={styles.message}>{message}</p>}
         </div>
       </div>
@@ -91,7 +106,14 @@ export function ReadyPanel({
       </span>
       <div className={styles.link} role="group" aria-labelledby={linkId} data-probe="edge row">
         <span ref={linkRef} className={styles.address}>
-          {link}
+          {hasTail ? (
+            <>
+              <span className={styles.addressStart}>{link.slice(0, cut)}</span>
+              <span className={styles.addressEnd}>{link.slice(cut)}</span>
+            </>
+          ) : (
+            <span className={styles.addressStart}>{link}</span>
+          )}
         </span>
         <CopyButton
           value={link}
@@ -114,8 +136,11 @@ export function ReadyPanel({
         {preview === undefined ? (
           <p className={styles.scan}>{strings.scan}</p>
         ) : (
-          <div className={styles.preview} role="group" aria-label={previewLabel}>
-            {preview}
+          <div className={styles.preview} role="group" aria-label={previewLabel} data-scale={previewScale}>
+            {/* A glimpse to look at: nothing in it takes focus, a press or a scroll. */}
+            <div className={styles.glimpse} inert>
+              {preview}
+            </div>
           </div>
         )}
       </div>
