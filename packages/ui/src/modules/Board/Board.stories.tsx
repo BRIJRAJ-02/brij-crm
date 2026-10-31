@@ -62,6 +62,10 @@ interface SampleProps {
   readonly canAddColumn?: boolean;
   /** The card whose record is open in the panel beside the board. */
   readonly activeId?: string;
+  /** A press or Enter on a card: its record's page. */
+  readonly onOpen?: (card: BoardCard) => void;
+  /** Each card's "Open in panel" button and Space on a card: the record beside the board. */
+  readonly onOpenPanel?: (card: BoardCard) => void;
 }
 
 /** The board holding its own cards, as the data layer would: a move rewrites the card's stage. */
@@ -78,6 +82,8 @@ function SampleBoard({
   startCollapsed = [],
   canAddColumn = false,
   activeId,
+  onOpen,
+  onOpenPanel,
 }: SampleProps) {
   const [cards, setCards] = useState(CARDS);
   const [showEmpty, setShowEmpty] = useState(startShowingEmpty);
@@ -106,6 +112,8 @@ function SampleBoard({
         {...(onRetry === undefined ? {} : { onRetry })}
         {...(onAddCard === undefined ? {} : { onAddCard })}
         {...(activeId === undefined ? {} : { activeId })}
+        {...(onOpen === undefined ? {} : { onOpen })}
+        {...(onOpenPanel === undefined ? {} : { onOpenPanel })}
         {...(canCollapse
           ? {
               collapsedIds: collapsed,
@@ -251,6 +259,30 @@ export const OpenCardAndComments: Story = {
     const other = canvas.getByRole('row', { name: new RegExp(first) });
     await expect(other.querySelector('[aria-current]')).toBeNull();
     await expect(other).toHaveTextContent('1 open comment thread');
+  },
+};
+
+/**
+ * A card opens as the table's name does: a press or Enter opens its page, and its hover "Open in panel" button or
+ * Space opens it beside the board. A drag past a few pixels moves the card and opens nothing.
+ */
+export const OpenPageOrPanel: Story = {
+  args: { onOpen: fn(), onOpenPanel: fn() },
+  play: async ({ args, canvas, userEvent }) => {
+    const name = String(sampleRowAt(0).values.name);
+    const card = canvas.getByRole('row', { name: new RegExp(name) });
+    await userEvent.click(within(card).getByText(name));
+    await expect(args.onOpen).toHaveBeenCalledTimes(1);
+    await expect(args.onOpenPanel).not.toHaveBeenCalled();
+    await userEvent.hover(card);
+    await userEvent.click(within(card).getByRole('button', { name: 'Open in panel' }));
+    await expect(args.onOpenPanel).toHaveBeenCalledTimes(1);
+    await expect(args.onOpen).toHaveBeenCalledTimes(1);
+    card.focus();
+    await userEvent.keyboard(' ');
+    await expect(args.onOpenPanel).toHaveBeenCalledTimes(2);
+    await userEvent.keyboard('{Enter}');
+    await expect(args.onOpen).toHaveBeenCalledTimes(2);
   },
 };
 

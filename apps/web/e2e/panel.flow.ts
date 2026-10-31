@@ -3,7 +3,8 @@
 // table, kept in `?record=` so a reload or a shared link reopens it; ↓ and ↑
 // step through the rows; an edit in the panel shows in the table at once; Esc
 // closes it and Open full page goes on to the record's page. A board's card
-// opens the same panel. A task stays a dialog, over the panel. The open row
+// opens as a name does: a press opens its page, its hover Open in panel the
+// same panel. A task stays a dialog, over the panel. The open row
 // (or card) is marked and a row with open comment threads shows their count;
 // ↓ goes on past the first 100 rows the table loads; a stage added from the
 // board sits before Won and Lost.
@@ -98,7 +99,7 @@ test.describe('the record panel', () => {
     await expect(panel).toBeVisible();
   });
 
-  test('a card on a board opens the same panel', async ({ page }) => {
+  test('a card on a board opens its page, and Open in panel the same panel', async ({ page }) => {
     test.setTimeout(180_000);
     const tag = randomUUID().slice(0, 8);
     const slug = `panelboard-${tag}`;
@@ -113,10 +114,17 @@ test.describe('the record panel', () => {
     await layout.getByRole('radio', { name: 'Board' }).click({ force: true });
     const board = page.getByRole('group', { name: 'Deals by Stage' });
     await expect(board).toBeVisible();
-    await board.getByRole('row', { name: /Apollo/ }).click();
+    const card = board.getByRole('row', { name: /Apollo/ });
+    await card.hover();
+    await card.getByRole('button', { name: 'Open in panel' }).click();
     await expect(page.getByRole('dialog', { name: 'Apollo' })).toBeVisible();
     await expect(page).toHaveURL(/[?&]record=[0-9a-f-]{36}/u);
     await checkScreen(page, 'panel-board');
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog', { name: 'Apollo' })).toBeHidden();
+    // A press on the card itself opens the record's full page, as a table's name does.
+    await card.click();
+    await expect(page).toHaveURL(/\/objects\/deals\/[0-9a-f-]{36}\/overview/u);
   });
   test('the open row is marked and kept in step, and a row with open comments shows their count', async ({ page }) => {
     test.setTimeout(180_000);
@@ -226,7 +234,8 @@ test.describe('the record panel', () => {
 
     // The open card is marked, and a comment on it puts its count on the card.
     const card = board.getByRole('row', { name: /Apollo/ });
-    await card.click();
+    await card.hover();
+    await card.getByRole('button', { name: 'Open in panel' }).click();
     const panel = page.getByRole('dialog', { name: 'Apollo' });
     await expect(panel).toBeVisible();
     await expect(card.locator('[aria-current="true"]')).toHaveCount(1);

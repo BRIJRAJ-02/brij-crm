@@ -23,7 +23,8 @@ New (spec 0003, the board). The board view (#21) and pipelines (#51) group recor
   onMove={({ cardId, toColumnId }) => setStage(cardId, toColumnId)}
   showEmptyColumns={showEmpty}
   onShowEmptyColumnsChange={setShowEmpty}
-  onOpen={(card) => openRecord(card.record)}
+  onOpen={(card) => openPage(card.record)}
+  onOpenPanel={(card) => openPanel(card.record)}
 />
 ```
 
@@ -42,7 +43,7 @@ New (spec 0003, the board). The board view (#21) and pipelines (#51) group recor
 - Empty columns hide while `showEmptyColumns` is false; a quiet "N hidden columns" after the last column brings them back. Hiding them is the screen's View settings choice (Show empty columns), not a button on the board (owner, 31 October 2026). While a card is moving, hidden empty columns come back, so there is always somewhere to drop it.
 - Layout (owner, 31 October 2026): the board is inset `space-12` from the bar above and `space-16` from the page's edges, and keeps the inset when scrolled sideways, so the first column is never cut. Every column is `size-board-column` wide and as tall as its cards, up to the board's height (then its cards scroll); an empty column is its head over a short dashed drop zone ("No cards"), not a full height slab. A column's count is the library's count pill (`Badge`, read as "3 cards"), and its "+" sits right after it, the collapse button at the head's end.
 - Cards: a 20px avatar and the bold name, then the view's card fields that hold a value (a board starts with three). The whole card drags by pointer; the grip, the keyboard's way, shows while the card is hovered or holds keyboard focus (always on touch). The column sets an inherited `--card-shown` on a hovered or focused card, which the card's grip reads.
-- Opening a card: a press or Enter on a card calls `onOpen` (the screen opens the panel beside the board). The table opens a record's full page from its name and the panel from Space or its hover button (owner, 31 October 2026); the board stays panel first for now, as an open question for the owner, so switching views keeps each view's own model.
+- Opening a card works as the table's name does (owner, 31 October 2026): a press or Enter on a card calls `onOpen` (the screen opens the record's full page), and with `onOpenPanel` each card gets an "Open in panel" button after its name, quiet until the card is hovered or holds focus (always shown on touch), and Space on a card calls it too. A press is a press with no movement: dragging past the few pixels a drag needs moves the card and opens nothing.
 - `status`: `loading` (three columns at the real columns' width and inset, each a head and two or three cards: the space is held from the first frame, and the column surfaces, cards and bars draw after the loading delay, so a fast load never flashes grey columns and a slow one lands in place), `error` (with Try again from `onRetry`), or `no-access`. No columns at all (an attribute with no options yet) shows an empty state.
 - Cards are keyed by their own key, so after a move focus follows the card to its new column.
 - Give it a slot with a height: columns scroll inside it, and the board scrolls sideways.
@@ -53,7 +54,7 @@ Default, add to a column (`onAddCard`), empty column (a short dashed drop zone),
 
 ## Keyboard
 
-Tab enters the first column; the up and down arrows move between cards, and Tab moves to the next column. Right arrow reaches a card's grip; Space or Enter picks the card up, the left and right arrows move it between columns (and on a reorderable board up and down between cards), Space or Enter drops it, and Esc puts it back, each step announced; focus comes back to the card where it landed. Enter on a card opens it. After the last column, "+ Add stage" takes Enter or Space; in its field Enter makes the column and Esc puts the button back. While lifted by keyboard, the column (or card) the moved card overlaps is the drop target, so the column it shows over is the one it drops in, an empty one too.
+Tab enters the first column; the up and down arrows move between cards, and Tab moves to the next column. Right arrow reaches a card's grip; Space or Enter picks the card up, the left and right arrows move it between columns (and on a reorderable board up and down between cards), Space or Enter drops it, and Esc puts it back, each step announced; focus comes back to the card where it landed. Enter on a card opens its page, and Space opens it in the panel (with `onOpenPanel`); Right arrow reaches its Open in panel button too. After the last column, "+ Add stage" takes Enter or Space; in its field Enter makes the column and Esc puts the button back. While lifted by keyboard, the column (or card) the moved card overlaps is the drop target, so the column it shows over is the one it drops in, an empty one too.
 
 ## Differences from the artifact
 

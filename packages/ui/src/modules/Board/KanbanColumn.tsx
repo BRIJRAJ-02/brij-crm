@@ -2,7 +2,7 @@
 // as a virtualised React Aria GridList. The column is a drop zone of the
 // library's drag wrapper, and each card a sortable item in it, moved by
 // pointer from anywhere on the card, or by keyboard from its grip.
-import { useEffect, useId, useMemo, useRef } from 'react';
+import { useEffect, useId, useMemo, useRef, type KeyboardEvent } from 'react';
 import { GridList, GridListItem, ListLayout, Virtualizer, type Key } from 'react-aria-components';
 import { Badge } from '../../atoms/Badge/Badge.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
@@ -39,7 +39,10 @@ export interface KanbanColumnProps {
   readonly isOver: boolean;
   /** A slim strip: the title down its length and the count, no cards (an empty "No <field>" column). */
   readonly isCollapsed?: boolean;
+  /** A press on a card, or Enter on it: its record's page (or the panel, where there is no `onOpenPanel`). */
   readonly onOpen?: (card: BoardCard) => void;
+  /** The record beside the board: each card's hover "Open in panel" button, and Space on a card. */
+  readonly onOpenPanel?: (card: BoardCard) => void;
   /** The card whose record is open beside the board: tinted, marked current, and scrolled into view when drawn. */
   readonly activeId?: string;
   /** The head's "+": add a card with this column's value. Absent, there is no button. */
@@ -59,6 +62,7 @@ function SortableCard({
   canMove,
   refusesDrop,
   isOpen,
+  onOpenPanel,
 }: {
   readonly id: string;
   readonly card: BoardCard;
@@ -68,6 +72,7 @@ function SortableCard({
   readonly refusesDrop: boolean;
   /** The card's record is open in the panel beside the board. */
   readonly isOpen: boolean;
+  readonly onOpenPanel?: ((card: BoardCard) => void) | undefined;
 }) {
   const isLocked = card.readOnlyReason !== undefined;
   const { bind, grip, onPointerDown } = useSortableItem(id, {
@@ -85,7 +90,18 @@ function SortableCard({
       onPointerDown={onPointerDown}
       aria-current={isOpen ? 'true' : undefined}
     >
-      <KanbanCard card={card} fields={fields} grip={canMove && !isLocked ? grip : undefined} />
+      <KanbanCard
+        card={card}
+        fields={fields}
+        grip={canMove && !isLocked ? grip : undefined}
+        onOpenPanel={
+          onOpenPanel === undefined
+            ? undefined
+            : () => {
+                onOpenPanel(card);
+              }
+        }
+      />
     </span>
   );
 }
@@ -105,6 +121,7 @@ export function KanbanColumn({
   isOver,
   isCollapsed = false,
   onOpen,
+  onOpenPanel,
   activeId,
   onAddCard,
   onCollapse,
@@ -144,9 +161,23 @@ export function KanbanColumn({
   // Folding or opening takes away the button pressed: focus goes to the one that takes its place.
   const collapseRef = useRef<HTMLButtonElement>(null);
   const expandRef = useRef<HTMLButtonElement>(null);
+  // Space on a card (its row holding focus, not a button inside it) opens the record beside the board, as Space on a
+  // table's name does; Enter and a press keep the card's own action, its page. Heard before the list's own keys.
+  const onKeyDownCapture = (event: KeyboardEvent<HTMLElement>) => {
+    if (onOpenPanel === undefined || event.key !== ' ') return;
+    const target = event.target;
+    if (!(target instanceof HTMLElement) || target.getAttribute('role') !== 'row') return;
+    const key = target.dataset.card;
+    const card = key === undefined ? undefined : cardAt(key);
+    if (card === undefined) return;
+    event.preventDefault();
+    event.stopPropagation();
+    onOpenPanel(card);
+  };
   return (
     <section
       ref={bindZone}
+      onKeyDownCapture={onKeyDownCapture}
       className={styles.root}
       aria-labelledby={titleId}
       data-empty={column.cards.count === 0 || undefined}
@@ -270,6 +301,7 @@ export function KanbanColumn({
                       canMove={canMove}
                       refusesDrop={refusal !== undefined}
                       isOpen={column.cards.getKey(card) === activeId}
+                      onOpenPanel={onOpenPanel}
                     />
                   </GridListItem>
                 );

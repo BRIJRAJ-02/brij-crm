@@ -1,9 +1,11 @@
-// What a board card shows: the record's avatar and name in bold, its handle
-// (shown on hover or focus; the whole card drags) or a lock that says why it
-// can't move, then the view's card fields through their one display.
+// What a board card shows: the record's avatar and name in bold, its "Open in
+// panel" button and its handle (both shown on hover or focus; the whole card
+// drags) or a lock that says why it can't move, then the view's card fields
+// through their one display.
 import { memo } from 'react';
 import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
 import { Badge } from '../../atoms/Badge/Badge.tsx';
+import { Button } from '../../atoms/Button/Button.tsx';
 import { DragHandle } from '../../atoms/DragHandle/DragHandle.tsx';
 import { LockReason } from '../../atoms/Tooltip/LockReason.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
@@ -21,6 +23,11 @@ export interface KanbanCardProps {
   readonly fields: readonly FieldAttribute[];
   /** The grip that moves it, when the board lets cards move and this one isn't locked. */
   readonly grip?: DragGrip | undefined;
+  /**
+   * Opens the record beside the board, where a press on the card opens its page (owner, 31 October 2026): an "Open
+   * in panel" button, shown on hover or focus, as the table's row header has.
+   */
+  readonly onOpenPanel?: (() => void) | undefined;
 }
 
 /**
@@ -29,7 +36,7 @@ export interface KanbanCardProps {
  * tooltip says why, reachable by keyboard, in place of its handle. Memoised:
  * a drag redraws the cards it passes over, not what they show.
  */
-export const KanbanCard = memo(function KanbanCard({ card, fields, grip }: KanbanCardProps) {
+export const KanbanCard = memo(function KanbanCard({ card, fields, grip, onOpenPanel }: KanbanCardProps) {
   const { record } = card;
   const shown = fields.filter((attribute) => !isEmptyValue(card.values[attribute.id]));
   return (
@@ -49,6 +56,18 @@ export const KanbanCard = memo(function KanbanCard({ card, fields, grip }: Kanba
           <Badge count={card.openThreads} icon="message-square" label={strings.openThreads(card.openThreads)} />
         )}
         {card.readOnlyReason !== undefined && <LockReason reason={card.readOnlyReason} />}
+        {/* Quiet until the card is hovered or holds focus, as the grip; Space on the card does the same. */}
+        {onOpenPanel !== undefined && (
+          <span className={styles.peek}>
+            <Button
+              variant="ghost"
+              size="sm"
+              icon="panel-right-open"
+              label={strings.openInPanel}
+              onPress={onOpenPanel}
+            />
+          </span>
+        )}
         {/* The whole card drags by pointer; the grip is the keyboard's way, shown on hover or focus only. */}
         {grip !== undefined && (
           <span className={styles.grip}>

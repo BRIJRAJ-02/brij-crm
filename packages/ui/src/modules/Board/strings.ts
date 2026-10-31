@@ -19,6 +19,8 @@ export const strings = {
   archivedRefuses: 'Archived. Cards can’t move here.',
   hiddenColumns: (count: string, plural: Intl.LDMLPluralRule) =>
     plural === 'one' ? `${count} hidden column` : `${count} hidden columns`,
+  /** A card's hover button that opens the record beside the board, as the table's row header has; Space does the same. */
+  openInPanel: 'Open in panel',
   /** The drag handle's name. */
   move: (name: string) => `Move ${name}`,
   /** What a screen reader hears as a card moves. */

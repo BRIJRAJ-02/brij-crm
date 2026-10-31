@@ -32,8 +32,13 @@ export interface BoardProps {
   readonly isReadOnly?: boolean;
   readonly showEmptyColumns: boolean;
   readonly onShowEmptyColumnsChange?: (show: boolean) => void;
-  /** Enter or a click on a card: open its record. */
+  /** Enter or a click on a card: open its record (its full page, where the board also has `onOpenPanel`). */
   readonly onOpen?: (card: BoardCard) => void;
+  /**
+   * Opens a card's record beside the board (owner, 31 October 2026): each card's "Open in panel" button, shown on
+   * hover or focus, and Space on a card. The table's row header works the same way.
+   */
+  readonly onOpenPanel?: (card: BoardCard) => void;
   /**
    * The card whose record is open in the panel beside the board (the CRM flow pass, 31 October 2026): it takes the
    * selected surface and `aria-current`, and scrolls into view when the open record changes.
@@ -103,6 +108,7 @@ export function Board({
   showEmptyColumns,
   onShowEmptyColumnsChange,
   onOpen,
+  onOpenPanel,
   activeId,
   onAddCard,
   onMovingChange,
@@ -273,6 +279,13 @@ export function Board({
               : {
                   onOpen: (card: BoardCard) => {
                     if (!isMovingRef.current) onOpen(card);
+                  },
+                })}
+            {...(onOpenPanel === undefined
+              ? {}
+              : {
+                  onOpenPanel: (card: BoardCard) => {
+                    if (!isMovingRef.current) onOpenPanel(card);
                   },
                 })}
           />

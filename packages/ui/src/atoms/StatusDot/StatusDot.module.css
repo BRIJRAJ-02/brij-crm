@@ -1,4 +1,4 @@
-/* StatusDot: an 8px dot in the status's dot-<hue>, then its label. The colour
+/* StatusDot: a dot (--size-dot) in the status's dot-<hue>, then its label. The colour
    is never the only cue: the label always shows. */
 @layer components {
   .root {
@@ -51,8 +51,8 @@
 
   .dot {
     flex: none;
-    inline-size: var(--space-8);
-    block-size: var(--space-8);
+    inline-size: var(--size-dot);
+    block-size: var(--size-dot);
     border-radius: var(--radius-full);
     background: var(--dot-gray);
   }

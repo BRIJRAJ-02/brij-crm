@@ -540,17 +540,21 @@ function BoardBody({
       {...(addColumn === undefined ? {} : { addColumn })}
       collapsedIds={collapsing.collapsedIds}
       onCollapsedChange={collapsing.onCollapsedChange}
-      // A card opens its record beside the board (AC-509), its full page one press on from the panel.
+      // A card opens as the table's name does (owner, 31 October 2026): a press or Enter opens its full page, and its
+      // hover "Open in panel" button or Space opens it beside the board (AC-509).
       onOpen={(card) => {
-        if (peek !== undefined) {
-          peek.open(card.id);
-          return;
-        }
         void navigate({
           to: '/w/$slug/objects/$object/$recordId/$tab',
           params: { slug, object: object.apiSlug, recordId: card.id, tab: 'overview' },
         });
       }}
+      {...(peek === undefined
+        ? {}
+        : {
+            onOpenPanel: (card: BoardCard) => {
+              peek.open(card.id);
+            },
+          })}
       {...(peek === undefined || peekRecordId === undefined
         ? {}
         : {
@@ -589,6 +593,7 @@ interface LoadedBoardProps {
   readonly onShowEmptyChange: (show: boolean) => void;
   readonly onAnnounce: (text: string) => void;
   readonly onOpen: (card: BoardCard) => void;
+  readonly onOpenPanel?: (card: BoardCard) => void;
   readonly onAddCard?: (columnId: string) => void;
   /** The record panel, given the cards either side of its record in the record's column. */
   readonly peekPanel?: (steps: PeekSteps | undefined, onLoadStep: PeekLoadStep) => ReactNode;
@@ -613,6 +618,7 @@ function LoadedBoard({
   onShowEmptyChange,
   onAnnounce,
   onOpen,
+  onOpenPanel,
   onAddCard,
   peekPanel,
   peekId,
@@ -769,6 +775,7 @@ function LoadedBoard({
         showEmptyColumns={showEmpty}
         onShowEmptyColumnsChange={onShowEmptyChange}
         onOpen={onOpen}
+        {...(onOpenPanel === undefined ? {} : { onOpenPanel })}
         {...(peekId === undefined ? {} : { activeId: peekId })}
         // Where the grouping field is read only, a "+" would set a value the member can't write.
         {...(onAddCard === undefined || plan.groupBy.readOnly !== undefined ? {} : { onAddCard })}

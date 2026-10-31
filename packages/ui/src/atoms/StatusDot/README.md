@@ -29,3 +29,4 @@ It takes no focus.
 ## Differences from the artifact
 
 - `hue` replaces `color`, and is required; `isArchived` is new.
+- The dot is `size-dot` (10px), one step up from the artifact's 8px (the owner, 31 October 2026), so a status reads at a glance in a dense table; it stays centred on the label's line in cells, tags, board column headers and selects.
