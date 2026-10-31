@@ -202,7 +202,7 @@ export function ListScreen(given: ListScreenProps) {
           (error: unknown) => {
             props.toasts.toast({
               tone: 'danger',
-              message: isDataError(error) ? error.message : viewStrings.actionFailed,
+              message: isDataError(error) ? error.message : sharedStrings.couldntDoThat,
             });
           },
         );
@@ -805,7 +805,14 @@ function ListTable(
         memberPicker={memberPicker}
         count={ticked.length}
         records={recordsWord(ticked.length, object)}
-        onApply={editRecords}
+        // One field a time here: a list's bulk edit sends one change.
+        isSingle
+        onApply={(choices) => {
+          const [choice] = choices;
+          return choice === undefined
+            ? Promise.resolve({ kind: 'done', updated: 0, unchanged: 0, refused: 0 } as const)
+            : editRecords(choice);
+        }}
       />
     </>
   );

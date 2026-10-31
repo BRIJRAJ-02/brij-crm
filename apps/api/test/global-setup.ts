@@ -12,7 +12,12 @@ export async function setup(project: TestProject): Promise<() => Promise<void>> 
   project.provide('drainDatabase', drain);
   project.provide('relayDatabase', relay);
   return async () => {
-    await Promise.all([dropTestDatabase(shared), dropTestDatabase(sleep), dropTestDatabase(drain), dropTestDatabase(relay)]);
+    await Promise.all([
+      dropTestDatabase(shared),
+      dropTestDatabase(sleep),
+      dropTestDatabase(drain),
+      dropTestDatabase(relay),
+    ]);
   };
 }
 

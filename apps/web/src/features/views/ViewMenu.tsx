@@ -298,7 +298,7 @@ export function useViewMenu({
                 icon: 'star',
                 ...(sharing.length === 0 ? { startsGroup: true } : {}),
                 run: () => {
-                  run(data.views.setDefault(slug, parentId, view.id), strings.isDefaultNow(view.name));
+                  run(data.views.setDefault(slug, parentId, view.id));
                 },
               })),
         ]
