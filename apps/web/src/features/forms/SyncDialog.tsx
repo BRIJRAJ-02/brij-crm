@@ -1,11 +1,11 @@
 // Brief
 // Purpose: Sync earlier submissions: apply the form's current filing to earlier submissions, after a filing change goes
 // live or from the editor's More menu (spec 0058, AC-14).
-// Main task: see the counts (new records, updates, unchanged, can't be synced), keep Only unfiled or pick All, and
+// Main task: read the one count line (new records, updates, already matching, can't be synced), keep Only unfiled or pick All, and
 // press the one button; it runs as a background job with progress and a summary toast.
 // Leaves out: choosing single submissions (Add to CRM does that), and undoing a sync.
 import { isDataError, type SyncPreview, type SyncScope } from '@crm/data';
-import { Button, Callout, EmptyState, Modal, SegmentedControl, Stats } from '@crm/ui';
+import { Button, Callout, EmptyState, Modal, SegmentedControl, Skeleton } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { strings } from './strings.ts';
@@ -24,8 +24,6 @@ export interface SyncDialogProps {
   /** The sync started: its job, to follow to its end. */
   readonly onStarted: (jobId: string, total: number) => void;
 }
-
-const number = new Intl.NumberFormat();
 
 /** The preview for one scope, read when the dialog opens or the scope changes. */
 type PreviewState =
@@ -77,9 +75,6 @@ export function SyncDialog({ slug, formId, reason, isOpen, onClose, onStarted }:
   // A scope just changed and its preview is on its way.
   const shown: PreviewState = state.scope === scope ? state : { status: 'loading', scope };
   const preview = shown.status === 'ready' ? shown.preview : undefined;
-  // The last counts read, so a scope switch holds the row's shape while the next ones load.
-  const [lastPreview, setLastPreview] = useState<SyncPreview | undefined>(undefined);
-  if (preview !== undefined && preview !== lastPreview) setLastPreview(preview);
 
   const start = () => {
     if (isStarting) return;
@@ -97,18 +92,6 @@ export function SyncDialog({ slug, formId, reason, isOpen, onClose, onStarted }:
       },
     );
   };
-
-  // Only what would happen: a count of none says nothing. While loading, the last counts hold the row's shape (all
-  // four before any are known), drawn as skeletons.
-  const counted = preview ?? lastPreview;
-  const counts = [
-    { id: 'creates', label: strings.syncCreates, count: counted?.creates ?? 1 },
-    { id: 'updates', label: strings.syncUpdates, count: counted?.updates ?? 1 },
-    { id: 'unchanged', label: strings.syncUnchanged, count: counted?.unchanged ?? 1 },
-    { id: 'failures', label: strings.syncFailures, count: counted?.failures ?? 1 },
-  ]
-    .filter((each) => each.count > 0)
-    .map((each) => ({ id: each.id, label: each.label, value: number.format(each.count) }));
 
   return (
     <Modal
@@ -180,8 +163,11 @@ export function SyncDialog({ slug, formId, reason, isOpen, onClose, onStarted }:
           {strings.syncNothingText}
         </EmptyState>
       ) : (
-        // The counts are the preview: read at a glance, the total on the button that starts it.
-        <Stats label={strings.syncPreview} items={counts} isLoading={shown.status === 'loading'} />
+        // The counts are the preview, in one line read at a glance; the total is on the button that starts it.
+        // A count of none is left out; while loading, a skeleton line holds the line's place.
+        <div aria-label={strings.syncPreview} role="group">
+          {preview === undefined ? <Skeleton lines={1} /> : strings.syncSummary(preview)}
+        </div>
       )}
       {preview?.capped === true && <p>{strings.syncCapped(preview.checked)}</p>}
       {failure !== undefined && (

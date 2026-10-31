@@ -1,4 +1,4 @@
-// Sync earlier submissions in Chromium (spec 0058, AC-14): Only unfiled is chosen on open, the preview is a row of
+// Sync earlier submissions in Chromium (spec 0058, AC-14): Only unfiled is chosen on open, the preview is one line of
 // counts, and there is one button, which names how many it syncs and starts that scope.
 import type { DataLayer, SyncPreview, SyncScope } from '@crm/data';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
@@ -65,11 +65,9 @@ describe('Sync earlier submissions (AC-14)', () => {
     const dialog = page.getByRole('dialog', { name: 'Sync earlier submissions?' });
     await expect.element(dialog.getByRole('radio', { name: 'Only unfiled' })).toBeChecked();
     const counts = dialog.getByRole('group', { name: 'What syncing would do' });
-    await expect.element(counts.getByText('New records')).toBeVisible();
-    await expect.element(counts.getByText('9')).toBeVisible();
-    await expect.element(counts.getByText('Records updated')).toBeVisible();
-    // A count of none says nothing.
-    expect(counts.getByText('Unchanged').query()).toBeNull();
+    // One count line; a count of none says nothing.
+    await expect.element(counts).toHaveTextContent('9 new records and 3 records updated.');
+    await expect.element(counts).not.toHaveTextContent('already match');
     // One button besides the way out, naming how many it syncs.
     const sync = dialog.getByRole('button', { name: /^Sync/ });
     await expect.element(sync).toHaveTextContent('Sync 12 submissions');
@@ -86,7 +84,9 @@ describe('Sync earlier submissions (AC-14)', () => {
     );
     const sync = page.getByRole('button', { name: 'Sync 42 submissions' });
     await expect.element(sync).toBeEnabled();
-    await expect.element(page.getByText('Can’t be synced')).toBeVisible();
+    await expect
+      .element(page.getByRole('group', { name: 'What syncing would do' }))
+      .toHaveTextContent('9 new records, 20 records updated, 11 already match, and 2 can’t be synced.');
     await expect.element(page.getByText('Any that can’t be synced stay as they are.')).toBeVisible();
     await userEvent.click(sync);
     expect(started).toEqual(['all']);

@@ -418,8 +418,8 @@ export const strings = {
       : `${count(done, 'submission', 'submissions')} synced; ${String(refused)} couldn’t be.`,
   // Sync earlier submissions (spec 0058, AC-14): one line, the scope, the counts, one button
   syncTitle: 'Sync earlier submissions?',
-  syncTextPublished: 'Save earlier submissions the new way too.',
-  syncTextMenu: 'Save earlier submissions the way the form saves now.',
+  syncTextPublished: 'File earlier submissions the new way too.',
+  syncTextMenu: 'File earlier submissions the way the form files now.',
   syncTextConnected: 'Add earlier submissions to the CRM too.',
   syncNothing: 'Nothing to sync',
   syncNothingText: 'Every earlier submission already follows the form.',
@@ -429,10 +429,25 @@ export const strings = {
   syncAll: 'All',
   /** The count preview's name for screen readers. */
   syncPreview: 'What syncing would do',
-  syncCreates: 'New records',
-  syncUpdates: 'Records updated',
-  syncUnchanged: 'Unchanged',
-  syncFailures: 'Can’t be synced',
+  /**
+   * The one count line (spec 0058, AC-14): what the sync would do, each part only when it isn't none, so a count
+   * never sits beside the button's own number as a puzzle ("Unchanged 2" by "Sync 2 submissions").
+   */
+  syncSummary: (counts: {
+    readonly creates: number;
+    readonly updates: number;
+    readonly unchanged: number;
+    readonly failures: number;
+  }) => {
+    const parts = [
+      counts.creates > 0 ? count(counts.creates, 'new record', 'new records') : undefined,
+      counts.updates > 0 ? count(counts.updates, 'record updated', 'records updated') : undefined,
+      counts.unchanged > 0 ? count(counts.unchanged, 'already matches', 'already match') : undefined,
+      counts.failures > 0 ? `${new Intl.NumberFormat().format(counts.failures)} can’t be synced` : undefined,
+    ].filter((part) => part !== undefined);
+    const line = new Intl.ListFormat('en', { type: 'conjunction' }).format(parts);
+    return `${line.charAt(0).toUpperCase()}${line.slice(1)}.`;
+  },
   syncCapped: (checked: number) => `Counts cover the newest ${new Intl.NumberFormat().format(checked)}.`,
   /** The one button, with the count it starts on: "Sync 42 submissions". */
   syncStart: (total: number) => `Sync ${count(total, 'submission', 'submissions')}`,

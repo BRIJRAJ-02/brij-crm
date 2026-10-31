@@ -473,7 +473,9 @@ export function WelcomeScreen({
                 title: titleFromUrl(url),
                 url,
               }))}
-              ghosts={PREVIEW_GHOSTS}
+              // Places for blocks only while the page is still being made (Your link). Once the links are saved the
+              // page is known, so Invite and Done show the real rows alone, never bars that read as loading.
+              ghosts={step === 'handle' ? PREVIEW_GHOSTS : 0}
             />
           ) : (
             <WorkspacePreview

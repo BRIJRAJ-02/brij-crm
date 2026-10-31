@@ -110,9 +110,17 @@ export interface LiveSwitchProps {
 }
 
 /**
- * The one Live or Private switch (spec 0058, AC-23). Its label stays "Live" in both states, so it reads as on or off,
- * never as a double negative; the line under the address says what Private means.
+ * The one Live or Private switch (spec 0058, AC-23). The word beside it is the state, "Live" when on and "Private"
+ * when off; its accessible name stays "Live", so a screen reader hears on or off, never a double negative. The line
+ * under the address says what Private means.
  */
 export function LiveSwitch({ live }: LiveSwitchProps) {
-  return <Switch label={strings.live} isSelected={live.isLive} onChange={live.setLive} />;
+  return (
+    <Switch
+      label={strings.live}
+      stateLabels={{ on: strings.live, off: strings.private }}
+      isSelected={live.isLive}
+      onChange={live.setLive}
+    />
+  );
 }

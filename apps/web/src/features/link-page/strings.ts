@@ -187,6 +187,8 @@ export const strings = {
    * so a screen reader hears "Live, switch, off" for a private page, never a double negative.
    */
   live: 'Live',
+  /** The word beside that switch while it is off: the state, shown to the eye only. */
+  private: 'Private',
   /** Under the address while the page is private: what that means, in one line, the same words everywhere. */
   privateLine: homeStrings.privateLine,
   /** The Share modal's way out of Private, beside that line. */

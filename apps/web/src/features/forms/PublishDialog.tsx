@@ -359,6 +359,8 @@ export function PublishDialog(props: PublishDialogProps) {
           message={strings.liveText}
           link={data.forms.hostedUrl(live.publicKey)}
           shareTitle={live.name}
+          // Done is the dialog's one primary; Copy steps down beside the link.
+          copyVariant="secondary"
         >
           <TileGrid
             variant="choice"
