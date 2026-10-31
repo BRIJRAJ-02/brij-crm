@@ -147,6 +147,51 @@ export interface AccessRules {
   readonly teamIds?: readonly string[];
   /** The active members of those teams, when the source read them. */
   readonly teamMemberIds?: readonly string[];
+  /**
+   * The workspace's computed attributes and the inputs each reads (spec 0015, AC-329): one is hidden from anyone who
+   * can't see one of its inputs, or their objects. Read only when some rule could hide something.
+   */
+  readonly computed?: readonly ComputedInputRule[];
+}
+
+/** One input of a computed attribute, as the strictest of inputs rule reads it. */
+export interface ComputedInputRule {
+  readonly computedId: string;
+  readonly computedObjectId: string;
+  readonly inputId: string;
+  readonly inputObjectId: string;
+  /** The computed attribute's kind (`lookup`, `rollup`, `formula`). */
+  readonly kind?: string;
+}
+
+/**
+ * Hides each computed attribute whose input the policy hides (strictest of inputs, spec 0015, AC-329): an input
+ * field that is hidden, or an input on an object at none; a lookup also across an object a record rule narrows (it
+ * would show a related record the member can't open; a rollup is an aggregate and stays). Chains are followed (a lookup of a hidden rollup is
+ * hidden too), at most 3 deep.
+ */
+function hideComputed(
+  computed: readonly ComputedInputRule[],
+  levelOf: (objectId: string) => ObjectLevel,
+  fields: Map<string, FieldLevel>,
+  /** Objects a record rule narrows: a lookup shows a related record's own value, so it is hidden across one. */
+  ruled: ReadonlySet<string>,
+): void {
+  for (let pass = 0; pass < 4; pass += 1) {
+    let changed = false;
+    for (const rule of computed) {
+      if (fields.get(rule.computedId) === 'hidden') continue;
+      const inputHidden =
+        levelOf(rule.inputObjectId) === 'none' ||
+        fields.get(rule.inputId) === 'hidden' ||
+        (rule.kind === 'lookup' && rule.inputObjectId !== rule.computedObjectId && ruled.has(rule.inputObjectId));
+      if (inputHidden && levelOf(rule.computedObjectId) !== 'none') {
+        fields.set(rule.computedId, 'hidden');
+        changed = true;
+      }
+    }
+    if (!changed) return;
+  }
 }
 
 /** No rules at all: every role writes every object and field, with no record rule. */
@@ -371,6 +416,9 @@ function memberPolicy(principal: MemberPrincipal, rules: AccessRules): DataPolic
       }
       if (kept !== undefined) records.set(objectId, Object.freeze({ kind: kept.kind, attributeId: kept.attributeId }));
     }
+  }
+  if (rules.computed !== undefined && rules.computed.length > 0) {
+    hideComputed(rules.computed, (objectId) => objects.get(objectId) ?? defaultLevel, fields, new Set(records.keys()));
   }
   return sealPolicy({
     defaultObject: defaultLevel,

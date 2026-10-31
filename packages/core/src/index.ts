@@ -229,6 +229,8 @@ export {
   type EditAttributeInput,
   type NewAttributeOption,
 } from './attributes/attributes.ts';
+// Computed attributes (spec 0015): the dialog's preview and the refill after a failed fill.
+export { previewComputed, refillComputed } from './computed/define.ts';
 // Lists and their entries (spec 0048).
 export {
   addListEntries,

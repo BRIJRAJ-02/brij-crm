@@ -1,7 +1,7 @@
 // `@crm/data/react`: the data layer's React binding (spec 0005). Screens read
 // a view and the live status through it, so they never subscribe to the store
 // themselves.
-import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { BoardStatus, BoardStore } from './records/board.ts';
 import type { DataError } from './errors.ts';
 import type { OperatorHeld } from './operator/store.ts';
@@ -33,7 +33,8 @@ import type {
   EmailUnsubscribeState,
   EmailUnsubscribeStore,
 } from './email-preferences.ts';
-import type { JobView, RoutingRule } from '@crm/contracts';
+import type { ComputedDefinitionInput, JobView, RoutingRule } from '@crm/contracts';
+import type { PreviewSource, PreviewState } from './computed/preview.ts';
 import type { JobsSnapshot, JobsView } from './jobs/store.ts';
 import type { SchedulesState, SchedulesView } from './schedules/store.ts';
 import type { PreferencesHeld, PreferencesState } from './preferences/store.ts';
@@ -655,3 +656,36 @@ export function useRecordEntries(source: RecordEntries): RecordEntriesState {
   useEffect(() => source.retain(), [source]);
   return useSyncExternalStore(source.subscribe, source.getSnapshot);
 }
+
+/**
+ * A computed attribute's preview for the attribute dialog (spec 0015): the dialog makes it once with
+ * `data.computed.preview(workspace, objectId)` while it shows a computed type, asks with each change, and reads
+ * its state here; it is let go of when the dialog closes or the object changes.
+ */
+export function useComputedPreview(
+  make: (() => PreviewSource) | undefined,
+  definition: ComputedDefinitionInput | undefined,
+): PreviewState & { readonly retry: () => void } {
+  // Made in an effect, so StrictMode's mount, clean up, mount makes a fresh one rather than reusing a disposed one.
+  const [source, setSource] = useState<PreviewSource | undefined>(undefined);
+  useEffect(() => {
+    const made = make?.();
+    // The preview is the outside system this follows: one per mount, let go on clean up.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSource(made);
+    return () => {
+      made?.dispose();
+    };
+  }, [make]);
+  useEffect(() => {
+    source?.ask(definition);
+  }, [source, definition]);
+  const state = useSyncExternalStore(
+    useCallback((listener: () => void) => source?.subscribe(listener) ?? (() => undefined), [source]),
+    () => source?.state() ?? IDLE_PREVIEW,
+  );
+  const retry = useCallback(() => source?.retry(), [source]);
+  return useMemo(() => ({ ...state, retry }), [state, retry]);
+}
+
+const IDLE_PREVIEW: PreviewState = Object.freeze({ status: 'idle' });

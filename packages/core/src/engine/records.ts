@@ -41,6 +41,7 @@ import {
 import { append, runWrite, type AfterWrite, type EntryRef, type ValueChange, type WriteContext } from './write.ts';
 import { inWorkspace } from '../access/run.ts';
 import { checkRecordRules, ruledAttributes } from '../validation/rules.ts';
+import { writeFormulas } from '../computed/formulas.ts';
 import { fieldReadOnlyReason, filterRecordView, isOpen, recordRule, type Access } from '../access/policy.ts';
 import {
   attributeLevel,
@@ -520,6 +521,8 @@ export async function insertRecord(context: WriteContext, input: RecordInput, kn
   // (up to 10 minutes is let through) would sort after later writes' versions, so those creates mint as any write
   // does, and their first values show as entries of their own.
   const versions = await writeAll(context, 'record', recordId, parsed, stampable ? recordId : undefined, hold);
+  // Its formulas, in the same save (spec 0015, AC-318).
+  await writeFormulas(context, { recordId, attributes, written: writtenIds(versions), isCreate: true });
   // The record's slot is counted now and taken at the write's end (spec 0059), so the counter row is the last
   // lock this write takes; a record past the limit is still refused here, on its own.
   if (known === undefined) {
@@ -683,6 +686,8 @@ async function updateOwner(
     if (entry !== undefined) context.record({ changedEntries: [entry] });
   }
   if (objectId === undefined) return { results, attributes };
+  // Its formulas whose inputs this write changed, in the same save (spec 0015, AC-318).
+  await writeFormulas(context, { recordId: ownerId, attributes, written: writtenIds(results), isCreate: false });
   // A person whose emails changed and whose Company is empty: filed under their company (spec 0059).
   const filedCompany = await fileCompany(
     context,

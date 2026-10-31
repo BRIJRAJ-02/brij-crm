@@ -85,6 +85,7 @@ describe('@crm/ui', () => {
       'FloatingBar',
       'Form',
       'FormatScope',
+      'FormulaEditor',
       'GRID_SHORTCUTS',
       'HUES',
       'HostedFormPreview',

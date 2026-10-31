@@ -1030,6 +1030,13 @@
       "when": 1795501200000,
       "tag": "0146_import_entry_changes",
       "breakpoints": true
+    },
+    {
+      "idx": 147,
+      "version": "7",
+      "when": 1795501300000,
+      "tag": "0147_computed_attributes",
+      "breakpoints": true
     }
   ]
 }

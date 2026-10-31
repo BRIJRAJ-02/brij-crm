@@ -25,6 +25,7 @@ import type {
   SyncStarted,
   AttributeDefinition,
   AttributeImpact,
+  ComputedDefinitionInput,
   TypeChangeCheck,
   TypeChangeTarget,
   BookAsHostInput,
@@ -132,6 +133,7 @@ import {
 } from './errors.ts';
 import type { FetchLike } from './fetch.ts';
 import { refusalFor, refusalSummary } from './refusals.ts';
+import { createPreview, type PreviewSource } from './computed/preview.ts';
 import { delivered } from './delivered.ts';
 import { stageChunks } from './imports/stage.ts';
 import type * as DayEdits from './bookings/team-day.ts';
@@ -199,6 +201,9 @@ export type {
 } from './scheduling/time-off.ts';
 export type { LimitsDraft, LimitsHeld, LimitsState, LimitsStore, MeetingLimits } from './scheduling/limits.ts';
 export type { LimitsAt } from '@crm/contracts';
+// Computed attributes (spec 0015): what the attribute dialog sends and the preview it shows.
+export type { AttributeComputed, ComputedDefinitionInput, ComputedPreview } from '@crm/contracts';
+export type { PreviewSource, PreviewState } from './computed/preview.ts';
 // Lists and their entries (spec 0048).
 export type { EntryTarget, EntryView, ListTemplate, ListView } from '@crm/contracts';
 export type {
@@ -1040,6 +1045,8 @@ export interface NewAttribute {
   readonly options?: readonly NewOption[];
   /** Its validation rules, in order (spec 0013, AC-252); at most 20. */
   readonly rules?: readonly ValidationRuleInput[];
+  /** A computed attribute (spec 0015): `type` is then ignored and the result type derived on the server. */
+  readonly computed?: ComputedDefinitionInput;
 }
 
 /** A status stage's outcome. */
@@ -1088,6 +1095,8 @@ export interface AttributeChanges {
   readonly defaultValue?: AttributeDefaultValue | null;
   /** Its validation rules, in order (spec 0013, AC-252): the list replaces the attribute's rules. */
   readonly rules?: readonly ValidationRuleInput[];
+  /** A computed attribute's new definition, of the same result type (spec 0015, AC-322). */
+  readonly computed?: ComputedDefinitionInput;
 }
 
 /**
@@ -5280,6 +5289,30 @@ export function createDataLayer({
           beforeRead(workspace).then(() => call((options) => api.access.mine({ workspace }, options))),
         ),
     },
+    computed: {
+      /**
+       * A computed attribute's preview for one dialog (spec 0015): `ask(definition)` with each change, sent 400 ms
+       * after the last, a newer ask cancelling the older; its state is `idle`, `loading` (the last answer kept),
+       * `ready` or `error` with `retry`. `dispose` when the dialog closes. Never cached: the values move with edits.
+       */
+      preview: (workspace: string, objectId: string): PreviewSource =>
+        createPreview({
+          send: (definition, signal) =>
+            beforeRead(workspace).then(() =>
+              call((options) => api.computed.preview({ workspace, objectId, definition }, options), signal),
+            ),
+        }),
+      /**
+       * Works a computed attribute out again after its fill failed (spec 0015, AC-334), waiting for the server as
+       * every attribute write does. Refusals: `CONFIG_INVALID` (not stopped by a failed fill), `FORBIDDEN`.
+       */
+      refill: (workspace: string, objectId: string, attributeId: string): Promise<{ attributeId: string }> =>
+        writeAttribute(
+          workspace,
+          (mutationId, options) => api.computed.refill({ workspace, attributeId, mutationId }, options),
+          () => [objectId],
+        ),
+    },
     attributes: {
       /** An object's live attributes in position order, system ones marked. Cached until a definition changes. */
       list: (workspace: string, objectId: string): Promise<AttributeDefinition[]> =>
@@ -5384,6 +5417,7 @@ export function createDataLayer({
                 ...(input.defaultValue === undefined ? {} : { defaultValue: input.defaultValue }),
                 ...(input.options === undefined ? {} : { options: input.options.map(optionInput) }),
                 ...(input.rules === undefined ? {} : { rules: [...input.rules] }),
+                ...(input.computed === undefined ? {} : { computed: input.computed }),
                 mutationId,
               },
               options,
