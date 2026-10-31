@@ -81,6 +81,8 @@ export interface SocialsCardProps {
    */
   readonly isShown?: boolean;
   readonly isLocked?: boolean;
+  /** The owner's name on someone else's page: the switch reads "Set by Bea" (spec 0037, AC-1273). */
+  readonly ownerName?: string | undefined;
   readonly onShownChange?: (isShown: boolean) => void;
 }
 
@@ -183,6 +185,7 @@ export function SocialsCard({
   isOwner,
   isShown,
   isLocked,
+  ownerName,
   onShownChange,
   onPreviewLinks,
 }: SocialsCardProps) {
@@ -192,7 +195,10 @@ export function SocialsCard({
   if (!isOwner) {
     return (
       <Card title={strings.title}>
-        <SettingsRow title={strings.shown} description={strings.notOwner}>
+        <SettingsRow
+          title={strings.shown}
+          description={ownerName === undefined ? strings.notOwner : strings.setBy(ownerName)}
+        >
           {onShownChange === undefined ? undefined : (
             <Switch label={strings.shown} isLabelHidden isSelected={isShown ?? false} isReadOnly />
           )}

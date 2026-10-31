@@ -56,7 +56,11 @@ function DeletePageConfirm({
   };
   return (
     <Modal
-      title={strings.deleteTitle(page.title)}
+      title={
+        page.ownerName === undefined
+          ? strings.deleteTitle(page.title)
+          : strings.deleteTitleFor(page.ownerName, page.title)
+      }
       variant="confirm"
       tone="danger"
       isOpen={isOpen}

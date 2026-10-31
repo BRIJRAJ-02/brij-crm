@@ -1016,6 +1016,7 @@ export function PageEditor({
                           isOwner={ownerMember === undefined}
                           isShown={draft.showSocials}
                           isLocked={isLocked}
+                          ownerName={page.ownerName}
                           onShownChange={(showSocials) => change({ showSocials })}
                         />
                       )}

@@ -1,4 +1,11 @@
 // Booking pages' copy for members (spec 0025, 0025-experience.md).
+
+/** A name's first word ("Bea" from "Bea Rao"), or the whole name when it has none. */
+const firstOf = (name: string) => {
+  const [first = ''] = name.trim().split(/\s+/);
+  return first === '' ? name : first;
+};
+
 export const strings = {
   // Captures › Links.
   linksTitle: 'Links',
@@ -57,10 +64,11 @@ export const strings = {
   },
   locationChip: { phone: 'Phone', address: 'In person', custom: 'Custom place' },
   emptyTitle: 'No booking pages yet',
-
   failedTitle: 'Booking pages didn’t load',
   failedText: 'Check your connection and try again.',
   deleteTitle: (title: string) => `Delete “${title}”?`,
+  /** Someone else's page (spec 0037, AC-1273): whose it is, said in the confirm. */
+  deleteTitleFor: (owner: string, title: string) => `Delete ${firstOf(owner)}’s “${title}”?`,
   deleteText: 'The link stops working, and this can’t be undone. Bookings already made stay.',
   deleteAction: 'Delete booking page',
   deletePage: 'Delete booking page',
@@ -298,6 +306,9 @@ export const strings = {
   followsDefault: 'Follows your default in Settings',
   ownersDefault: 'Owner’s default',
   ownersPick: 'A calendar the owner picked',
+  /** The same, on a page whose owner is named (spec 0037, AC-1273). */
+  defaultOf: (owner: string) => `${firstOf(owner)}’s default`,
+  pickOf: (owner: string) => `${firstOf(owner)}’s pick`,
   /**
    * The page's pick stopped taking bookings (or went): the page uses the owner's default, named when they have one,
    * until the pick can again or they choose another.
@@ -313,9 +324,9 @@ export const strings = {
   destinationFailed: 'Couldn’t load calendars. Reload the page to try again.',
   destinationOwnerOnly: 'Only the page’s owner sees their calendars.',
   /** Where someone else's page's events go, read only (spec 0037, AC-1273): only its owner chooses. */
-  setBy: (name: string) => `Set by ${name.trim().split(/\s+/)[0] ?? name}`,
+  setBy: (name: string) => `Set by ${firstOf(name)}`,
   /** The editor's header on someone else's page (spec 0037, AC-1273). */
-  editingFor: (name: string) => `Editing ${name.trim().split(/\s+/)[0] ?? name}’s page`,
+  editingFor: (name: string) => `${firstOf(name)}’s page`,
   destinationLoading: 'Loading calendars',
   noCalendarTitle: 'No calendar connected',
   connectCalendar: 'Connect calendar',
