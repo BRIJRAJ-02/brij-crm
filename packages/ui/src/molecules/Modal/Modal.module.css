@@ -317,6 +317,11 @@
     border-block-end-color: transparent;
   }
 
+  /* The peek's bar sets its own inset for the box, not the glyph, so its close keeps no optical offset. */
+  .root[data-variant='peek'] .close {
+    margin-inline-end: 0;
+  }
+
   .root[data-variant='peek'] .body {
     gap: var(--space-12);
     padding-block: var(--space-24) calc(3 * var(--space-32));
