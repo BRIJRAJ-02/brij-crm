@@ -191,6 +191,10 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   // Lead routing (spec 0043): the report checks its surface (the form's or page's own access) itself; the route and
   // the record facts it reads are pure. (A no show is marked through the booking's target: in the table.)
   'routingReport',
+  // Bookings › Routing (spec 0037, L6): each checks routing.manage itself, then reads only what the reader may see.
+  'routingOverview',
+  'routingDecisions',
+  'routingDecision',
   'decideRoute',
   'recordFactKeys',
   // The notifications email (spec 0038): the worker's task parts, run as the member the door entered for it, on

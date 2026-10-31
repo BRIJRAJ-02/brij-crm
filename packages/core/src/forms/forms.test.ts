@@ -1044,8 +1044,14 @@ describe('book a meeting after sending (AC-1055 to AC-1057)', () => {
     });
     expect(elsewhere).toMatchObject({ replayed: true, next: { kind: 'message', text: 'Thanks, Ada.' } });
     expect(signed).toHaveLength(2);
-    // Paused at send time: the form's own thank you, never a dead page.
-    await updateBookingPage(w.scope, { pageId: page.id, settings: { status: 'paused' } });
+    // Paused at send time: the form's own thank you, never a dead page. A person can't pause a page a published form
+    // sends people to (spec 0037, AC-1341: ROUTING_IN_USE), so the system pauses it, as a removed last host does.
+    expect(
+      (await refusalOf(updateBookingPage(w.scope, { pageId: page.id, settings: { status: 'paused' } })))[0]?.code,
+    ).toBe('ROUTING_IN_USE');
+    await w.query(
+      sql`update booking_pages set status = 'paused', paused_reason = 'host_removed' where id = ${page.id}::uuid`,
+    );
     const later = await submitForm(scope, registry, {
       formId: publicId,
       body: body({ name: 'Grace', email: 'grace@example.com' }),

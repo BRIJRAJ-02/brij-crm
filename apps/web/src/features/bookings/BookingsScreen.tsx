@@ -66,7 +66,6 @@ import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'rea
 import { offsetLabel, zoneDisplay } from '../../public/booking/time.ts';
 import { providerOf } from './provider.ts';
 import { useNow } from './useNow.ts';
-import { createPortal } from 'react-dom';
 import { availabilityHref, calendarsHref, newLinkOnlyPageHref } from '../booking/links.ts';
 import { TimeOffDialog } from '../booking/TimeOffDialog.tsx';
 import { linksHref } from '../captures/tabs.ts';
@@ -91,7 +90,7 @@ import { AwayReassignDialog } from './AwayReassignDialog.tsx';
 import { ReassignDialog } from './ReassignDialog.tsx';
 import { BookingDialog, useBookingActions, type BookingAsk, type HostBookingActions } from './BookingActions.tsx';
 import { strings } from './strings.ts';
-import { useBookingsToolbarSlot, type HostsChoice } from './toolbarSlot.ts';
+import type { HostsChoice } from './toolbarSlot.ts';
 import {
   addDays,
   bookingPieces,
@@ -1021,12 +1020,6 @@ export function RemoveBlockDialog({
       {words.text}
     </Modal>
   );
-}
-
-/** A tab's tools: at the end of the Bookings strip once the layout has drawn it, else at the top of the tab. */
-function Toolbar({ children }: { readonly children: ReactNode }) {
-  const slot = useBookingsToolbarSlot();
-  return slot === null ? <>{children}</> : createPortal(children, slot);
 }
 
 /** A drawn span to close, as the data layer takes it. */
@@ -2453,7 +2446,9 @@ export function BookingsListScreen({
   return (
     // The list fills the view and scrolls inside it, so its day bands stick and an empty list says so in its middle.
     <PageColumn align="fill">
-      <Toolbar>{bar}</Toolbar>
+      {/* Its own row above the list, not the strip's end: with Routing (and the Roster) beside them, the strip's seven
+          tabs and List's tools no longer fit one row at 1280 (spec 0037, AC-1447). */}
+      {bar}
       <CalendarsFrame
         isFill
         slug={slug}

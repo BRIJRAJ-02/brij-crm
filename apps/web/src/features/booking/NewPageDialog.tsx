@@ -109,7 +109,8 @@ export function NewPageDialog({
     }
   }
   const [id, setId] = useState(() => data.bookingPages.newId());
-  const [formId, setFormId] = useState(() => data.forms.newId());
+  // The Team link's form id, minted at its first Create and kept for a retry, so a retry makes one form.
+  const [formId, setFormId] = useState<string | undefined>(undefined);
   const [isBusy, setBusy] = useState(false);
   const [errors, setErrors] = useState<{ readonly title?: string; readonly custom?: string }>({});
   const [failure, setFailure] = useState<string | undefined>(undefined);
@@ -124,15 +125,17 @@ export function NewPageDialog({
     setErrors({});
     setFailure(undefined);
     setId(data.bookingPages.newId());
-    setFormId(data.forms.newId());
+    setFormId(undefined);
   };
   // The Team link (spec 0037, AC-1353): one form made at once, then its editor.
   const createTeamLink = () => {
     if (isBusy || onTeamLink === undefined) return;
     setBusy(true);
     setFailure(undefined);
+    const teamLinkId = formId ?? data.forms.newId();
+    setFormId(teamLinkId);
     data.forms
-      .create(slug, { id: formId, starter: 'team_link', ...(title.trim() === '' ? {} : { name: title.trim() }) })
+      .create(slug, { id: teamLinkId, starter: 'team_link', ...(title.trim() === '' ? {} : { name: title.trim() }) })
       .then(
         (form) => {
           setBusy(false);

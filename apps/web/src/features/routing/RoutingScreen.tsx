@@ -118,9 +118,9 @@ export function RoutingScreen({ data, slug, search, members, onSearch }: Routing
 }
 
 const OVERVIEW_COLUMNS: readonly TableColumn[] = [
-  { id: 'name', label: strings.name, isRowHeader: true, size: 'fill', isInline: true },
+  { id: 'name', label: strings.name, isRowHeader: true, isInline: true },
   { id: 'rules', label: strings.rules, align: 'end', size: 'fit' },
-  { id: 'fallback', label: strings.fallback },
+  { id: 'fallback', label: strings.fallback, isInline: true },
   {
     id: 'matched',
     label: strings.matched,
@@ -223,7 +223,7 @@ function Overview({
 const DECISION_COLUMNS: readonly TableColumn[] = [
   { id: 'when', label: strings.when, size: 'fit' },
   { id: 'surface', label: strings.surface },
-  { id: 'outcome', label: strings.outcome, isRowHeader: true, size: 'fill', isInline: true },
+  { id: 'outcome', label: strings.outcome, isRowHeader: true, isInline: true },
   { id: 'guest', label: strings.guest },
   { id: 'booking', label: strings.booking, isInline: true },
 ];
@@ -490,7 +490,7 @@ function Explanation({
       : [
           {
             term: strings.steps,
-            description: decision.steps.map((step) => strings.step(step)).join('. '),
+            description: decision.steps.map((step) => `${strings.step(step)}.`).join(' '),
           },
         ]),
     ...(decision.skipped.length === 0
