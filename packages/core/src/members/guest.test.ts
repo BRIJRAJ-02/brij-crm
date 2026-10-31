@@ -1,13 +1,15 @@
 // The guest role (spec 0031, slice 9, AC-828, AC-829; spec 0037, AC-1432), against a real Postgres as the app role:
 // a member made a guest leaves scheduling in the role change's own transaction, the confirm's counts say so
 // beforehand, a guest takes no seat, reads nobody's address, and can't be put back into a rotation.
+import { randomUUID } from 'node:crypto';
 import { sql } from 'drizzle-orm';
 import { afterAll, describe, expect, inject, it } from 'vitest';
 import { defaultAvailability, PERMISSIONS } from '@crm/contracts';
 import { createDatabase } from '@crm/db';
+import { testQuery } from '@crm/db/testing';
 import { saveDefaultHours } from '../availability/schedules.ts';
 import { audiences } from '../access/audiences.ts';
-import { systemScope } from '../access/door.ts';
+import { enterLinkPage, systemScope } from '../access/door.ts';
 import { createBookingPage, updateBookingPage } from '../booking/pages.ts';
 import { newId } from '../engine/ids.ts';
 import { createRotation, updateRotation } from '../rotation/rotations.ts';
@@ -15,7 +17,11 @@ import { grantDelegation } from '../scheduling/delegations.ts';
 import { createTask, listTasks } from '../tasks/tasks.ts';
 import { jobTestKit, refusalOf } from '../../test/jobs-kit.ts';
 import { inviteMembers, setInviteLink } from './invitations.ts';
+import { createWorkspace } from '../engine/workspaces.ts';
+import { readProfileItems } from '../profile/items.ts';
+import { testScope } from '../testing.ts';
 import { listMembers, previewGuest, setMemberRole } from './members.ts';
+import { updateMyMemberProfile } from './profile.ts';
 
 const { appUrl, ownerUrl } = inject('testDatabase');
 const db = createDatabase({ url: appUrl, applicationName: 'crm-guest-tests' });
@@ -66,6 +72,7 @@ describe('making a member a guest (AC-1432)', () => {
       rotations: 1,
       upcomingBookings: 0,
       delegations: 1,
+      hidesLinkPage: false,
     });
     // Only a holder of members.manage asks, before anything is read.
     expect(await refusalOf(previewGuest(w.halScope, { memberId: w.gus }))).toEqual({
@@ -93,6 +100,7 @@ describe('making a member a guest (AC-1432)', () => {
       rotations: 0,
       upcomingBookings: 0,
       delegations: 0,
+      hidesLinkPage: false,
     });
   });
 
@@ -231,5 +239,55 @@ describe('what a guest can never be or do (spec 0031, slice 9)', () => {
     expect(await setInviteLink(w.owner, { enabled: true, role: 'guest' })).toMatchObject({ role: 'guest' });
     expect(await setInviteLink(w.owner, { enabled: true, expiresInDays: 7 })).toMatchObject({ role: 'guest' });
     expect(await setInviteLink(w.owner, { enabled: true, role: 'member' })).toMatchObject({ role: 'member' });
+  });
+});
+
+describe('a guest’s link page (late trap #77)', () => {
+  it('hides once they are a guest, refuses their edits, and is back as it was when they are a member again', async () => {
+    // Ada, signed in with a link page live at her handle, and Bo, another owner who changes her role.
+    const userId = randomUUID();
+    await testQuery(ownerUrl, `insert into auth."user" (id, name, email) values ($1, 'Ada', $2)`, [
+      userId,
+      `${userId}@example.com`,
+    ]);
+    const created = await createWorkspace(db, {
+      name: 'Pages',
+      slug: `pages-${randomUUID().slice(0, 8)}`,
+      firstMember: { name: 'Ada', email: `${userId}@example.com`, userId },
+    });
+    const bo = newId();
+    await db.withWorkspace(created.workspaceId, (tx) =>
+      tx.execute(
+        sql`insert into members (workspace_id, id, name, email, role, created_by_type, updated_by_type) values (${created.workspaceId}, ${bo}, 'Bo', 'bo@example.com', 'owner', 'system', 'system')`,
+      ),
+    );
+    const scopeOf = (role: 'owner' | 'guest' | 'member') =>
+      testScope({
+        db,
+        workspaceId: created.workspaceId,
+        actor: { type: 'member', id: created.memberId },
+        role,
+        userId,
+      });
+    const boScope = testScope({
+      db,
+      workspaceId: created.workspaceId,
+      actor: { type: 'member', id: bo },
+      role: 'owner',
+    });
+    const handle = `ada-${randomUUID().slice(0, 8)}`;
+    await updateMyMemberProfile(scopeOf('owner'), { handle });
+    expect((await enterLinkPage({ db }, handle, { max: 21 })).owner.handle).toBe(handle);
+    expect(await previewGuest(boScope, { memberId: created.memberId })).toMatchObject({ hidesLinkPage: true });
+
+    await setMemberRole(boScope, { memberId: created.memberId, role: 'guest' });
+    expect(await refusalOf(enterLinkPage({ db }, handle, { max: 21 }))).toMatchObject({ code: 'NOT_FOUND' });
+    expect(await refusalOf(readProfileItems(scopeOf('guest')))).toEqual({
+      code: 'FORBIDDEN',
+      message: 'Guests don’t have a link page.',
+    });
+
+    await setMemberRole(boScope, { memberId: created.memberId, role: 'member' });
+    expect((await enterLinkPage({ db }, handle, { max: 21 })).owner.handle).toBe(handle);
   });
 });

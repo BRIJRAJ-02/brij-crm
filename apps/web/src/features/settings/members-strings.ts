@@ -65,6 +65,7 @@ export const strings = {
   guestRotations: (count: number) => `Leaves ${String(count)} round ${count === 1 ? 'robin' : 'robins'}`,
   guestBookings: (count: number) => `${String(count)} ${count === 1 ? 'booking needs' : 'bookings need'} a host`,
   guestUncounted: 'Couldn’t count what changes',
+  guestLinkPage: 'Link page hidden',
   guestDelegations: (count: number) => `${String(count)} scheduling ${count === 1 ? 'share' : 'shares'} removed`,
   removed: (name: string) => `${name} was removed from the workspace.`,
   /** Invite pressed with no role this person may invite as: the server lets only owners and admins invite. */

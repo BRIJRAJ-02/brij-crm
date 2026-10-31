@@ -323,6 +323,7 @@ export function MembersScreen({
           ...(preview.rotations > 0 ? [strings.guestRotations(preview.rotations)] : []),
           ...(preview.upcomingBookings > 0 ? [strings.guestBookings(preview.upcomingBookings)] : []),
           ...(preview.delegations > 0 ? [strings.guestDelegations(preview.delegations)] : []),
+          ...(preview.hidesLinkPage ? [strings.guestLinkPage] : []),
         ]);
       },
       () => {

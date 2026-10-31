@@ -6,10 +6,12 @@
 //   each of their upcoming bookings is flagged "Needs a host", a round robin one queued to be reseated (AC-749);
 // - their scheduling delegations go, both ways (a guest is never a delegate, AC-1255), with `access` rows.
 // - their calendars stay connected but stop filing meetings into the CRM (sync off), since a guest writes no records.
-// What stays: their records, tasks, teams and link page; access rules decide what they see from now.
+// - their link page hides (its rows kept, back as it was if they are a member again; migration 0142).
+// What stays: their records, tasks and teams; access rules decide what they see from now.
 import { sql } from 'drizzle-orm';
 import type { GuestPreview } from '@crm/contracts';
 import type { WorkspaceTx } from '@crm/db';
+import { publicProfilesOf } from '../booking/handles.ts';
 import { bookingPagesRemoval, pauseGuestPages } from '../booking/pages.ts';
 import type { WriteContext } from '../engine/write.ts';
 import { rotationsRemoval } from '../rotation/removal.ts';
@@ -45,8 +47,14 @@ export async function countBecomingGuest(
   memberId: string,
 ): Promise<GuestPreview> {
   const pages = (await bookingPagesRemoval.count?.(tx, workspaceId, memberId))?.pausedPages ?? 0;
-  const found = await tx.execute<{ rotations: number; bookings: number; delegations: number }>(sql`
+  const found = await tx.execute<{
+    rotations: number;
+    bookings: number;
+    delegations: number;
+    user_id: string | null;
+  }>(sql`
     select
+      (select user_id::text from members where workspace_id = ${workspaceId}::uuid and id = ${memberId}::uuid) as user_id,
       (select count(distinct rr.rotation_id)::int from rotation_roster rr
         join rotations r on r.workspace_id = rr.workspace_id and r.id = rr.rotation_id and r.deleted_at is null
         where rr.workspace_id = ${workspaceId}::uuid and rr.member_id = ${memberId}::uuid) as rotations,
@@ -62,10 +70,13 @@ export async function countBecomingGuest(
           and (d.delegate_member_id = ${memberId}::uuid or d.target_member_id = ${memberId}::uuid)) as delegations
   `);
   const row = found.rows[0];
+  // Their link page, while it is live: a guest's is hidden (kept) by `crm_workspace_member` (migration 0142).
+  const profile = (await publicProfilesOf(tx, workspaceId, [row?.user_id])).get(row?.user_id ?? '');
   return {
     pausedPages: pages,
     rotations: row?.rotations ?? 0,
     upcomingBookings: row?.bookings ?? 0,
     delegations: row?.delegations ?? 0,
+    hidesLinkPage: profile?.isShown === true,
   };
 }

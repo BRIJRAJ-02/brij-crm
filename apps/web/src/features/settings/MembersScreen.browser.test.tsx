@@ -203,7 +203,8 @@ function layerWith(answer: () => Promise<void>, startLink: InviteLinkView = LINK
           ownedForms: 0,
         }),
       // What making someone a guest stops (spec 0031, slice 9).
-      guestPreview: () => Promise.resolve({ pausedPages: 1, rotations: 2, upcomingBookings: 3, delegations: 0 }),
+      guestPreview: () =>
+        Promise.resolve({ pausedPages: 1, rotations: 2, upcomingBookings: 3, delegations: 0, hidesLinkPage: true }),
       list: () => Promise.resolve([ADA, LINUS]),
       remove: async () => {
         calls.remove += 1;
@@ -525,6 +526,7 @@ describe('changing roles', () => {
     await expect.element(confirm.getByText('1 page paused')).toBeVisible();
     await expect.element(confirm.getByText('Leaves 2 round robins')).toBeVisible();
     await expect.element(confirm.getByText('3 bookings need a host')).toBeVisible();
+    await expect.element(confirm.getByText('Link page hidden')).toBeVisible();
     await confirm.getByRole('button', { name: 'Cancel' }).click();
     expect(counted.calls.setRole).toBe(0);
   });

@@ -39,6 +39,7 @@ import type { JobRegistry } from '../jobs/registry.ts';
 import { REASSIGN_KIND } from './reassign.ts';
 import { countRemoval, runRemovalEffects } from './removal.ts';
 import { writeAudit, type AuditSource } from './audit.ts';
+import { ensureLinkPage } from '../booking/handles.ts';
 import { checkSeats, revokeUnvouched } from './invitations.ts';
 import { countBecomingGuest, leaveSchedulingAsGuest } from './guest.ts';
 
@@ -381,6 +382,7 @@ export async function setMemberRole(
       // A guest takes no seat (spec 0031, AC-809), so leaving the role takes one; becoming one leaves scheduling,
       // before the role is written, while the rotations still read them as a host (AC-1432).
       if (target.role === 'guest') await checkSeats(tx, scope, 1);
+      const leavesGuest = target.role === 'guest';
       if (role === 'guest') await leaveSchedulingAsGuest(context, target.id, options.source);
       await tx
         .update(members)
@@ -399,6 +401,15 @@ export async function setMemberRole(
         },
         options.source,
       );
+      // A guest made a member gets the link page every member has (a kept one comes back as it was; late trap #77).
+      if (leavesGuest && target.userId !== null) {
+        await ensureLinkPage(tx, {
+          userId: target.userId,
+          workspaceId: scope.workspaceId,
+          name: target.name,
+          email: target.email,
+        });
+      }
       // What they sent and can't send now opens nothing: revoked, and said (late trap: invitations died untold).
       const cancelled = await revokeUnvouched(tx, scope, target.id, role, options.source);
       // Everyone's member list reads them again, and the relay drops the workspace's audiences (spec 0007, AC-82).

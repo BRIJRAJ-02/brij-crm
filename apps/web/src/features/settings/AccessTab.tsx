@@ -275,8 +275,9 @@ export function AccessTab({ data, toasts, slug, object, access: initial, teams, 
           />
         );
       case 'records':
-        // Nothing to scope by without a Member field; nothing to scope when they can't see the object at all.
-        if (owner === undefined) return strings.scopes.all;
+        // Nothing to scope by without a Member field; nothing to scope when they can't see the object at all. Guests
+        // own no records and sit in no team's scope that means anything to them: all the object's, or nothing.
+        if (owner === undefined || (isGuest && standing.level !== 'none')) return strings.scopes.all;
         return standing.level === 'none' ? null : (
           <Select
             label={strings.recordsFor(who)}
