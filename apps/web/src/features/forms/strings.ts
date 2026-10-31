@@ -448,6 +448,9 @@ export const strings = {
     const line = new Intl.ListFormat('en', { type: 'conjunction' }).format(parts);
     return `${line.charAt(0).toUpperCase()}${line.slice(1)}.`;
   },
+  /** Every submission in scope already matches: said once, with no Sync beside it ("All 2 already match."). */
+  syncAllMatch: (n: number) =>
+    n === 1 ? 'It already matches.' : `All ${new Intl.NumberFormat().format(n)} already match.`,
   syncCapped: (checked: number) => `Counts cover the newest ${new Intl.NumberFormat().format(checked)}.`,
   /** The one button, with the count it starts on: "Sync 42 submissions". */
   syncStart: (total: number) => `Sync ${count(total, 'submission', 'submissions')}`,

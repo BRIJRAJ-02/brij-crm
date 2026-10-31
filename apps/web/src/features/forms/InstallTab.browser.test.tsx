@@ -1,6 +1,8 @@
 // A form's Install tab in Chromium (spec 0058, AC-11): the three ways a site shows the form are tiles, each with a
 // picture and a name, In the page chosen; picking one changes the snippet; the developer material (own HTML, allowed
 // sites, signed posts) waits behind one For developers disclosure, closed until opened.
+// The tokens, so the left edges measured below are the real ones.
+import '@crm/ui/styles.css';
 import type { DataLayer, FormDocument, FormView } from '@crm/data';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
@@ -92,5 +94,8 @@ describe('the Install tab (AC-11)', () => {
     await expect.element(page.getByText('Your own HTML')).toBeVisible();
     await expect.element(page.getByText('Allowed sites')).toBeVisible();
     await expect.element(page.getByText('Signed posts')).toBeVisible();
+    // Open, its cards share one left edge with the cards above it (AC-1): their titles sit at the same x.
+    const left = (text: string) => page.getByText(text, { exact: true }).element().getBoundingClientRect().left;
+    expect(left('Your own HTML')).toBe(left('Put it on your site'));
   });
 });

@@ -194,12 +194,12 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
             ],
           }
         : {})}
-      // An empty list offers New in its middle too: the same as the TopBar's.
+      // An empty list offers New in its middle too, as a secondary: the TopBar's New stays the one primary.
       {...(create?.create === undefined
         ? {}
         : {
             newAction: (
-              <Button variant="primary" icon="plus" onPress={create.create}>
+              <Button icon="plus" onPress={create.create}>
                 {strings.newPage}
               </Button>
             ),

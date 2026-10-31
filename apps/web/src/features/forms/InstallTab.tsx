@@ -12,6 +12,7 @@ import {
   Disclosure,
   Field,
   InfoTip,
+  SettingsStack,
   Switch,
   TileGrid,
   type ChoiceTile,
@@ -175,142 +176,145 @@ export function InstallTab({ slug, form, isReadOnly, onFormChange }: InstallTabP
           value={embed}
         />
       </Card>
-      <Disclosure title={strings.advancedTitle}>
-        <Card
-          title={strings.ownFormTitle}
-          actions={
-            <InfoTip label={strings.ownFormTitle} example={<>{strings.taggingConsent(code)}</>}>
-              {strings.taggingText}
-            </InfoTip>
-          }
-        >
-          <Field
-            label={strings.ownFormSnippet}
-            variant="copy"
-            isMultiline
-            copyLabel={strings.copyFormHtml}
-            value={own}
-          />
-        </Card>
-        <Card
-          title={strings.sitesTitle}
-          {...(form.allowedOrigins.length === 0 ? { description: strings.sitesEmpty } : {})}
-          actions={<InfoTip label={strings.sitesTitle}>{strings.sitesTip}</InfoTip>}
-          {...(isReadOnly
-            ? {}
-            : {
-                footer: (
-                  <Button icon="plus" isPending={saving === 'sites'} onPress={addSite}>
-                    {strings.siteAdd}
-                  </Button>
-                ),
-              })}
-        >
-          {form.allowedOrigins.length > 0 && (
-            <DescriptionList
-              items={form.allowedOrigins.map((origin) => ({
-                term: origin,
-                description: isReadOnly ? (
-                  ''
-                ) : (
-                  <Button
-                    icon="x"
-                    variant="ghost"
-                    label={strings.siteRemove(origin)}
-                    onPress={() => {
-                      if (saving === undefined) setRemoving(origin);
-                    }}
-                  />
-                ),
-              }))}
-            />
-          )}
-          {!isReadOnly && (
+      {/* A quiet fold at the foot, its cards flush with the cards above it (one left edge, AC-1), spaced as they are. */}
+      <Disclosure title={strings.advancedTitle} variant="quiet">
+        <SettingsStack variant="plain">
+          <Card
+            title={strings.ownFormTitle}
+            actions={
+              <InfoTip label={strings.ownFormTitle} example={<>{strings.taggingConsent(code)}</>}>
+                {strings.taggingText}
+              </InfoTip>
+            }
+          >
             <Field
-              label={strings.siteNew}
-              placeholder={strings.siteNewPlaceholder}
-              type="url"
-              inputMode="url"
-              value={site}
-              onChange={(text) => {
-                setSite(text);
-                setSiteError(undefined);
-              }}
-              onSubmit={addSite}
-              {...(siteError === undefined ? {} : { error: siteError })}
+              label={strings.ownFormSnippet}
+              variant="copy"
+              isMultiline
+              copyLabel={strings.copyFormHtml}
+              value={own}
             />
-          )}
-        </Card>
-        <Card
-          title={strings.signedTitle}
-          actions={
-            <InfoTip label={strings.signedTitle} example={<>{strings.signHowText(code)}</>}>
-              {strings.refuseUnsignedHint}
-            </InfoTip>
-          }
-          {...(form.signingSecret === undefined
-            ? {}
-            : {
-                // The secret's own actions, together under it: Reveal, then Rotate last.
-                footer: (
-                  <>
-                    <Button
-                      icon={isRevealed ? 'eye-off' : 'eye'}
-                      onPress={() => {
-                        setRevealed((shown) => !shown);
-                      }}
-                    >
-                      {isRevealed ? strings.secretHide : strings.secretReveal}
+          </Card>
+          <Card
+            title={strings.sitesTitle}
+            {...(form.allowedOrigins.length === 0 ? { description: strings.sitesEmpty } : {})}
+            actions={<InfoTip label={strings.sitesTitle}>{strings.sitesTip}</InfoTip>}
+            {...(isReadOnly
+              ? {}
+              : {
+                  footer: (
+                    <Button icon="plus" isPending={saving === 'sites'} onPress={addSite}>
+                      {strings.siteAdd}
                     </Button>
-                    {!isReadOnly && (
+                  ),
+                })}
+          >
+            {form.allowedOrigins.length > 0 && (
+              <DescriptionList
+                items={form.allowedOrigins.map((origin) => ({
+                  term: origin,
+                  description: isReadOnly ? (
+                    ''
+                  ) : (
+                    <Button
+                      icon="x"
+                      variant="ghost"
+                      label={strings.siteRemove(origin)}
+                      onPress={() => {
+                        if (saving === undefined) setRemoving(origin);
+                      }}
+                    />
+                  ),
+                }))}
+              />
+            )}
+            {!isReadOnly && (
+              <Field
+                label={strings.siteNew}
+                placeholder={strings.siteNewPlaceholder}
+                type="url"
+                inputMode="url"
+                value={site}
+                onChange={(text) => {
+                  setSite(text);
+                  setSiteError(undefined);
+                }}
+                onSubmit={addSite}
+                {...(siteError === undefined ? {} : { error: siteError })}
+              />
+            )}
+          </Card>
+          <Card
+            title={strings.signedTitle}
+            actions={
+              <InfoTip label={strings.signedTitle} example={<>{strings.signHowText(code)}</>}>
+                {strings.refuseUnsignedHint}
+              </InfoTip>
+            }
+            {...(form.signingSecret === undefined
+              ? {}
+              : {
+                  // The secret's own actions, together under it: Reveal, then Rotate last.
+                  footer: (
+                    <>
                       <Button
-                        icon="refresh-cw"
-                        variant="danger"
+                        icon={isRevealed ? 'eye-off' : 'eye'}
                         onPress={() => {
-                          setRotating(true);
+                          setRevealed((shown) => !shown);
                         }}
                       >
-                        {strings.secretRotate}
+                        {isRevealed ? strings.secretHide : strings.secretReveal}
                       </Button>
-                    )}
-                  </>
-                ),
-              })}
-        >
-          <Switch
-            label={strings.refuseUnsigned}
-            isSelected={form.requireSignature}
-            isReadOnly={isReadOnly}
-            onChange={(requireSignature) => {
-              if (saving !== undefined) return;
-              setSaving('unsigned');
-              data.forms.updateSettings(slug, form.id, { requireSignature }).then(
-                (view) => {
-                  setSaving(undefined);
-                  onFormChange(view);
-                  toasts.toast({
-                    tone: 'success',
-                    message: requireSignature ? strings.unsignedRefused : strings.unsignedAllowed,
-                  });
-                },
-                (error: unknown) => {
-                  setSaving(undefined);
-                  toasts.toast({ tone: 'danger', message: firstRefusal(error).message });
-                },
-              );
-            }}
-          />
-          {form.signingSecret !== undefined && (
-            <Field
-              label={strings.secret}
-              variant="copy"
-              type={isRevealed ? 'text' : 'password'}
-              copyLabel={strings.copySecret}
-              hint={strings.secretReason}
-              value={form.signingSecret}
+                      {!isReadOnly && (
+                        <Button
+                          icon="refresh-cw"
+                          variant="danger"
+                          onPress={() => {
+                            setRotating(true);
+                          }}
+                        >
+                          {strings.secretRotate}
+                        </Button>
+                      )}
+                    </>
+                  ),
+                })}
+          >
+            <Switch
+              label={strings.refuseUnsigned}
+              isSelected={form.requireSignature}
+              isReadOnly={isReadOnly}
+              onChange={(requireSignature) => {
+                if (saving !== undefined) return;
+                setSaving('unsigned');
+                data.forms.updateSettings(slug, form.id, { requireSignature }).then(
+                  (view) => {
+                    setSaving(undefined);
+                    onFormChange(view);
+                    toasts.toast({
+                      tone: 'success',
+                      message: requireSignature ? strings.unsignedRefused : strings.unsignedAllowed,
+                    });
+                  },
+                  (error: unknown) => {
+                    setSaving(undefined);
+                    toasts.toast({ tone: 'danger', message: firstRefusal(error).message });
+                  },
+                );
+              }}
             />
-          )}
-        </Card>
+            {form.signingSecret !== undefined && (
+              <Field
+                label={strings.secret}
+                variant="copy"
+                type={isRevealed ? 'text' : 'password'}
+                copyLabel={strings.copySecret}
+                hint={strings.secretReason}
+                value={form.signingSecret}
+              />
+            )}
+          </Card>
+        </SettingsStack>
       </Disclosure>
       <RemoveSiteDialog
         site={removing}
