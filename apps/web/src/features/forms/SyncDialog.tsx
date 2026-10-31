@@ -1,11 +1,11 @@
 // Brief
-// Purpose: Sync old records: apply the form's current mapping to earlier enquiries, after a mapping change goes live
-// or from Submissions' More menu.
-// Main task: see what would change (creates, updates, unchanged, failures), pick All or Only unfiled, and start it;
-// it runs as a background job with progress and a summary toast.
-// Leaves out: choosing single enquiries (Add to CRM does that), and undoing a sync.
+// Purpose: Sync earlier submissions: apply the form's current filing to earlier submissions, after a filing change goes
+// live or from the editor's More menu (spec 0058, AC-14).
+// Main task: see the counts (new records, updates, unchanged, can't be synced), keep Only unfiled or pick All, and
+// press the one button; it runs as a background job with progress and a summary toast.
+// Leaves out: choosing single submissions (Add to CRM does that), and undoing a sync.
 import { isDataError, type SyncPreview, type SyncScope } from '@crm/data';
-import { Button, Callout, DescriptionList, Modal, Radio, RadioGroup, Skeleton } from '@crm/ui';
+import { Button, Callout, EmptyState, Modal, SegmentedControl, Stats } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { strings } from './strings.ts';
@@ -33,9 +33,10 @@ type PreviewState =
   | { readonly status: 'ready'; readonly scope: SyncScope; readonly preview: SyncPreview }
   | { readonly status: 'error'; readonly scope: SyncScope; readonly message: string };
 
-/** "Apply to the 42 earlier enquiries?": the preview, the scope, and Start or Not now. */
+/** "Sync earlier submissions?": one line, Only unfiled or All, the counts, then Not now or "Sync 42 submissions". */
 export function SyncDialog({ slug, formId, reason, isOpen, onClose, onStarted }: SyncDialogProps) {
   const { data } = useRouteContext({ from: '__root__' });
+  // Only unfiled first: it never touches a record already made (the safer default, as HubSpot's resync offers).
   const [scope, setScope] = useState<SyncScope>('unfiled');
   const [state, setState] = useState<PreviewState>({ status: 'loading', scope: 'unfiled' });
   // One job id per opening, so a retried Start never starts a second sync.
@@ -76,6 +77,9 @@ export function SyncDialog({ slug, formId, reason, isOpen, onClose, onStarted }:
   // A scope just changed and its preview is on its way.
   const shown: PreviewState = state.scope === scope ? state : { status: 'loading', scope };
   const preview = shown.status === 'ready' ? shown.preview : undefined;
+  // The last counts read, so a scope switch holds the row's shape while the next ones load.
+  const [lastPreview, setLastPreview] = useState<SyncPreview | undefined>(undefined);
+  if (preview !== undefined && preview !== lastPreview) setLastPreview(preview);
 
   const start = () => {
     if (isStarting) return;
@@ -94,6 +98,18 @@ export function SyncDialog({ slug, formId, reason, isOpen, onClose, onStarted }:
     );
   };
 
+  // Only what would happen: a count of none says nothing. While loading, the last counts hold the row's shape (all
+  // four before any are known), drawn as skeletons.
+  const counted = preview ?? lastPreview;
+  const counts = [
+    { id: 'creates', label: strings.syncCreates, count: counted?.creates ?? 1 },
+    { id: 'updates', label: strings.syncUpdates, count: counted?.updates ?? 1 },
+    { id: 'unchanged', label: strings.syncUnchanged, count: counted?.unchanged ?? 1 },
+    { id: 'failures', label: strings.syncFailures, count: counted?.failures ?? 1 },
+  ]
+    .filter((each) => each.count > 0)
+    .map((each) => ({ id: each.id, label: each.label, value: number.format(each.count) }));
+
   return (
     <Modal
       title={strings.syncTitle}
@@ -102,6 +118,8 @@ export function SyncDialog({ slug, formId, reason, isOpen, onClose, onStarted }:
       onOpenChange={(open) => {
         if (!open) onClose();
       }}
+      // Said once, beside the one button, only when some would be left as they are.
+      {...(preview !== undefined && preview.failures > 0 ? { hint: strings.syncFailuresText } : {})}
       actions={
         <>
           <Button slot="close" isDisabled={isStarting}>
@@ -109,7 +127,11 @@ export function SyncDialog({ slug, formId, reason, isOpen, onClose, onStarted }:
           </Button>
           {preview?.total !== 0 && (
             <Button variant="primary" isPending={isStarting} isDisabled={preview === undefined} onPress={start}>
-              {isStarting ? strings.syncStarting : strings.syncStart}
+              {isStarting
+                ? strings.syncStarting
+                : preview === undefined
+                  ? strings.syncStartPlain
+                  : strings.syncStart(preview.total)}
             </Button>
           )}
         </>
@@ -122,26 +144,23 @@ export function SyncDialog({ slug, formId, reason, isOpen, onClose, onStarted }:
             ? strings.syncTextPublished
             : strings.syncTextMenu}
       </p>
-      <RadioGroup
+      <SegmentedControl
         label={strings.syncScope}
-        orientation="horizontal"
+        isLabelVisible
+        size="compact"
         isDisabled={isStarting}
+        segments={[
+          { value: 'unfiled', label: strings.syncUnfiled },
+          { value: 'all', label: strings.syncAll },
+        ]}
         value={scope}
         onChange={(value) => {
           if (value !== 'all' && value !== 'unfiled') return;
           setScope(value);
           setJobId(data.submissions.newId());
         }}
-      >
-        <Radio value="unfiled" description={strings.syncUnfiledText}>
-          {strings.syncUnfiled}
-        </Radio>
-        <Radio value="all" description={strings.syncAllText}>
-          {strings.syncAll}
-        </Radio>
-      </RadioGroup>
-      {shown.status === 'loading' && <Skeleton lines={4} />}
-      {shown.status === 'error' && (
+      />
+      {shown.status === 'error' ? (
         <Callout
           tone="danger"
           actions={
@@ -156,26 +175,15 @@ export function SyncDialog({ slug, formId, reason, isOpen, onClose, onStarted }:
         >
           {shown.message}
         </Callout>
+      ) : preview?.total === 0 ? (
+        <EmptyState layout="row" icon="circle-check" title={strings.syncNothing}>
+          {strings.syncNothingText}
+        </EmptyState>
+      ) : (
+        // The counts are the preview: read at a glance, the total on the button that starts it.
+        <Stats label={strings.syncPreview} items={counts} isLoading={shown.status === 'loading'} />
       )}
-      {preview?.total === 0 && <p>{strings.syncNothing}</p>}
-      {preview !== undefined && preview.total > 0 && (
-        <>
-          <p>{strings.syncInScope(preview.total)}</p>
-          {/* Only what would happen: a count of none says nothing. */}
-          <DescriptionList
-            items={[
-              { term: strings.syncCreates, count: preview.creates },
-              { term: strings.syncUpdates, count: preview.updates },
-              { term: strings.syncUnchanged, count: preview.unchanged },
-              { term: strings.syncFailures, count: preview.failures },
-            ]
-              .filter((each) => each.count > 0)
-              .map((each) => ({ term: each.term, description: number.format(each.count) }))}
-          />
-          {preview.failures > 0 && <p>{strings.syncFailuresText}</p>}
-          {preview.capped && <p>{strings.syncCapped(preview.checked)}</p>}
-        </>
-      )}
+      {preview?.capped === true && <p>{strings.syncCapped(preview.checked)}</p>}
       {failure !== undefined && (
         <Callout tone="danger" isAnnounced>
           {failure}

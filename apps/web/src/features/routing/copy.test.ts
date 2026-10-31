@@ -23,8 +23,9 @@ describe('routing and forms confirm words', () => {
     expect(forms.deleteTitle('Contact form')).toBe('Delete “Contact form”?');
   });
 
-  it('says the publish step’s button makes an object', () => {
-    expect(forms.buildObjectButton('Contact form', 4)).toBe('Make an object named “Contact form” with 4 attributes');
-    expect(forms.buildObjectButton('Untitled form', 1)).toBe('Make an object named “Untitled form” with 1 attribute');
+  it('says the publish step’s New object choice makes an object, and how many fields', () => {
+    expect(forms.buildObjectItem('Contact form')).toBe('New object “Contact form”');
+    expect(forms.buildObjectText(4)).toBe('4 fields from its questions');
+    expect(forms.buildObjectText(1)).toBe('1 field from its questions');
   });
 });
