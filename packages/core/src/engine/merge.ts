@@ -38,7 +38,7 @@ import { sql, type SQL } from 'drizzle-orm';
 import { MERGE_MAX_ITEMS, type MergeMoved, type MergeSide } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { sameItems, type ItemColumns, type StoredItem } from './columns.ts';
-import { checkId, newId, uuidList } from './ids.ts';
+import { canonicalId, checkId, isUuid, newId, uuidList } from './ids.ts';
 import { readRecords, type RecordView } from './records.ts';
 import { loadRelationships } from './relationships.ts';
 import { refuse } from './refusals.ts';
@@ -724,7 +724,10 @@ async function mergeIn(context: WriteContext, input: MergeInput & MergePair): Pr
   const counted = await countAttached(tx, mergeId);
   if (counted.total > MERGE_MAX_ITEMS) throw refuse('MERGE_TOO_LARGE', MERGE_TOO_LARGE_MESSAGE);
 
-  const picks = input.picks ?? {};
+  // Keys in any spelling: the attributes are compared lower case, as the database answers them.
+  const picks: Readonly<Record<string, MergeSide>> = Object.fromEntries(
+    Object.entries(input.picks ?? {}).flatMap(([id, side]) => (isUuid(id) ? [[canonicalId(id), side]] : [])),
+  );
   const { attributes, items, links, ends, farVisible, shownLinks } = await readPlanInputs(tx, scope.access, input);
   const moved: MergeMoved = { links: shownLinks, entries: counted.entries, items: counted.items, notes: counted.notes };
   const byId = new Map([...attributes.values()].map((attribute) => [attribute.id, attribute]));

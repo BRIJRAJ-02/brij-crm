@@ -168,6 +168,8 @@ export const Cards: Story = {
 
 /** A merge's side by side choice (spec 0049): each card a record's name over the value it holds, picked whole. */
 export const CardsWithValues: Story = {
+  // Cards already has its screenshot; this one proves the value's place in the hit area and its description.
+  parameters: { crm: { screenshot: false } },
   args: { label: 'Job title', defaultValue: 'keep' },
   render: (args) => (
     <Stage width="dialog">
@@ -195,6 +197,8 @@ export const CardsWithValues: Story = {
 
 /** The same, as the merge dialog draws it: each side's value through its field display, and off while it saves. */
 export const CardsWithFieldValues: Story = {
+  // Cards already has its screenshot; this one proves the value's place in the hit area and its description.
+  parameters: { crm: { screenshot: false } },
   args: { label: 'Description', defaultValue: 'keep', isDisabled: true },
   render: (args) => {
     const attribute = {

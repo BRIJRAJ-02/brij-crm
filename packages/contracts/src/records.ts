@@ -607,6 +607,12 @@ export const MergePreview = z.object({
 /** What a merge would do. */
 export type MergePreview = z.infer<typeof MergePreview>;
 
+/** The side picked per attribute shown (at most one per attribute a read names); keys canonicalised by core. */
+const PicksById = z.record(z.uuid(), MergeSide);
+const MergePicks = PicksById.refine((picks) => Object.keys(picks).length <= MAX_READ_ATTRIBUTES, {
+  error: `Pick at most ${String(MAX_READ_ATTRIBUTES)} attributes.`,
+}).default({});
+
 /**
  * A merge (spec 0049, AC-4910 to AC-4917): `picks` names the winning side of
  * each attribute the dialog showed (any other keeps the filled side, else
@@ -616,12 +622,7 @@ export type MergePreview = z.infer<typeof MergePreview>;
  * merged into the kept one by the same member and answers that merge again.
  */
 export const MergeRecordsInput = MergePreviewInput.extend({
-  picks: z
-    .record(z.uuid(), MergeSide)
-    .refine((picks) => Object.keys(picks).length <= MAX_READ_ATTRIBUTES, {
-      error: `Pick at most ${String(MAX_READ_ATTRIBUTES)} attributes.`,
-    })
-    .default({}),
+  picks: MergePicks,
   revisions: z.object({ keep: z.number().int().min(0), merge: z.number().int().min(0) }),
   mutationId: Uuid,
 }).refine((input) => input.keepId.toLowerCase() !== input.mergeId.toLowerCase(), {
