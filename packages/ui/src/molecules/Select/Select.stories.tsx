@@ -4,7 +4,8 @@ import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { InfoTip } from '../InfoTip/InfoTip.tsx';
-import { Select, type SelectItem, type SelectProps } from './Select.tsx';
+import { Select } from './SelectWithFaces.tsx';
+import type { SelectItem, SelectProps } from './Select.tsx';
 
 const STAGES: readonly SelectItem[] = [
   { id: 'lead', label: 'Lead', hue: 'gray' },

@@ -2,7 +2,8 @@ import { useEffect, useId, useRef, useState, type PointerEvent, type KeyboardEve
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { focusLater } from '../../lib/focus-later.ts';
 import styles from './DeferredSelect.module.css';
-import type { Select as SelectComponent, SelectItem, SelectProps } from './Select.tsx';
+import type { SelectItem, SelectProps } from './Select.tsx';
+import type { Select as SelectComponent } from './SelectWithFaces.tsx';
 
 /**
  * One option of a DeferredSelect: a plain one, its label and its `description`. The stand in draws only these, so an
@@ -48,7 +49,7 @@ export type DeferredSelectProps = Pick<
 export type SelectModule = { readonly Select: typeof SelectComponent };
 
 // Select's code (React Aria's Select, ListBox and Autocomplete, and its own styles) as its own chunk.
-const loadSelect = (): Promise<SelectModule> => import('./Select.tsx');
+const loadSelect = (): Promise<SelectModule> => import('./SelectWithFaces.tsx');
 
 /** Calls `start` once the page has loaded and the browser is idle; answers the cleanup. */
 function whenIdle(start: () => void): () => void {

@@ -9,7 +9,7 @@ import {
   type Country,
 } from '../../lib/countries.ts';
 import { useFormatSettings } from '../../provider/context.ts';
-import { Select, type SelectItem } from '../Select/Select.tsx';
+import { SelectBase, type SelectItem } from '../Select/Select.tsx';
 import styles from './CountryPicker.module.css';
 import { strings } from './strings.ts';
 
@@ -131,7 +131,7 @@ export function CountryPicker({
   // Each shared dial code's own country, worked out once per list rather than on every key of a search.
   const mains = useMemo(() => mainCountriesOf(countries), [countries]);
   return (
-    <Select
+    <SelectBase
       label={label}
       {...(labelAside === undefined ? {} : { labelAside })}
       isLabelHidden={isLabelHidden || variant === 'prefix'}

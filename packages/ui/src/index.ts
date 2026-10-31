@@ -187,7 +187,8 @@ export {
   type SegmentSize,
   type ThemeSwitchProps,
 } from './molecules/SegmentedControl/SegmentedControl.tsx';
-export { Select, type SelectItem, type SelectOptionStyle, type SelectProps } from './molecules/Select/Select.tsx';
+export { type SelectItem, type SelectOptionStyle, type SelectProps } from './molecules/Select/Select.tsx';
+export { Select } from './molecules/Select/SelectWithFaces.tsx';
 export {
   DeferredSelect,
   type DeferredSelectItem,
