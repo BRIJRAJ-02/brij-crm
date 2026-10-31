@@ -318,8 +318,6 @@ export function RoleScreen({
 
   const permissions = (
     <SettingsStack>
-      {!isCustom && <Callout>{strings.builtInLocked}</Callout>}
-      {isCustom && !canManage && <Callout>{sharedStrings.ownersAndAdminsOnly}</Callout>}
       {isOvertaken && <Callout tone="warning">{strings.overtaken}</Callout>}
       <SettingsSection title={strings.details}>
         <Card>
@@ -430,7 +428,15 @@ export function RoleScreen({
       title={role.label}
       crumbs={[{ id: 'roles', label: strings.back, href: rolesSettingsHref(slug) }]}
       hasTabs
-      {...(menu === undefined ? {} : { actions: menu })}
+      // Why the page can't change, as a lock in the header (the owner's less-text rule): a built in role, or a reader
+      // without `access.manage`.
+      {...(menu !== undefined
+        ? { actions: menu }
+        : !isCustom
+          ? { actions: <LockReason reason={strings.builtInLocked} /> }
+          : !canManage
+            ? { actions: <LockReason reason={sharedStrings.ownersAndAdminsOnly} /> }
+            : {})}
       footer={
         isEditable ? (
           <SaveBar

@@ -2,7 +2,7 @@
 // screens show, a page at a time, and the owner rules for changing a member's
 // role, removing them or leaving. Every change writes its audit row in its own
 // transaction. Everything goes through the scope the access door made.
-import { and, asc, count, eq, gt, ilike, ne, or, sql } from 'drizzle-orm';
+import { and, asc, count, eq, gt, ilike, inArray, ne, notInArray, or, sql } from 'drizzle-orm';
 import * as z from 'zod';
 import {
   LAST_OWNER_MESSAGE,
@@ -37,7 +37,7 @@ import { mySchedulingReach } from '../scheduling/visible.ts';
 import type { JobRegistry } from '../jobs/registry.ts';
 import { REASSIGN_KIND } from './reassign.ts';
 import { countRemoval, runRemovalEffects } from './removal.ts';
-import { writeAudit, type AuditSource } from './audit.ts';
+import { writeAudit, writeAudits, type AuditSource } from './audit.ts';
 import { ensureLinkPage } from '../booking/handles.ts';
 import { checkSeats, revokeUnvouched } from './invitations.ts';
 import { countBecomingGuest, leaveSchedulingAsGuest } from './guest.ts';
@@ -249,6 +249,21 @@ interface Acting {
  * doesn't know.
  */
 async function lockTarget(tx: WorkspaceTx, scope: EngineScope, memberId: string) {
+  const acting = await lockActing(tx, scope);
+  const [target] = await tx
+    .select({ ...VIEW_COLUMNS, userId: members.userId })
+    .from(members)
+    .where(and(eq(members.workspaceId, scope.workspaceId), eq(members.id, memberId), eq(members.status, 'active')))
+    .for('update');
+  if (target === undefined) throw refuse('NOT_FOUND', MEMBER_NOT_FOUND);
+  return { target: { ...target, role: storedRole(target.role) }, acting };
+}
+
+/**
+ * Locks the workspace's active owners and the acting member's own row, and answers the role they act with now
+ * (the door's answer for one who is no longer a member, or holds a role the code doesn't know).
+ */
+async function lockActing(tx: WorkspaceTx, scope: EngineScope): Promise<Acting> {
   await tx
     .select({ id: members.id })
     .from(members)
@@ -272,13 +287,7 @@ async function lockTarget(tx: WorkspaceTx, scope: EngineScope, memberId: string)
     if (self === undefined || !isRole(self.role)) throw refuse('NOT_FOUND', NOT_A_MEMBER);
     acting = { role: self.role };
   }
-  const [target] = await tx
-    .select({ ...VIEW_COLUMNS, userId: members.userId })
-    .from(members)
-    .where(and(eq(members.workspaceId, scope.workspaceId), eq(members.id, memberId), eq(members.status, 'active')))
-    .for('update');
-  if (target === undefined) throw refuse('NOT_FOUND', MEMBER_NOT_FOUND);
-  return { target: { ...target, role: storedRole(target.role) }, acting };
+  return acting;
 }
 
 /**
@@ -286,7 +295,8 @@ async function lockTarget(tx: WorkspaceTx, scope: EngineScope, memberId: string)
  * deleted workspace needs no owner (account deletion leaves one, spec 0033): its row is read `for share`, so a
  * restore committing meanwhile is waited for and seen, and a restore after this commits finds its owner gone.
  */
-async function keepAnOwner(tx: WorkspaceTx, scope: EngineScope, memberId: string): Promise<void> {
+async function keepAnOwner(tx: WorkspaceTx, scope: EngineScope, memberId: string | readonly string[]): Promise<void> {
+  const leaving = typeof memberId === 'string' ? [memberId] : memberId;
   const [workspace] = await tx
     .select({ deletedAt: workspaces.deletedAt })
     .from(workspaces)
@@ -301,7 +311,7 @@ async function keepAnOwner(tx: WorkspaceTx, scope: EngineScope, memberId: string
         eq(members.workspaceId, scope.workspaceId),
         eq(members.role, 'owner'),
         eq(members.status, 'active'),
-        ne(members.id, memberId),
+        notInArray(members.id, [...leaving]),
       ),
     )
     .limit(1);
@@ -494,8 +504,10 @@ export async function setMemberRole(
 
 /**
  * Change role for several people at once (spec 0037, AC-1242): one role for up to 100 members, each under the same
- * rules as `setMemberRole`, all in one transaction, so one refusal changes nobody. One audit row per member changed.
- * Answers how many changed and the invitations their new role cancelled.
+ * rules as `setMemberRole`, all in one transaction, so one refusal changes nobody. Batched: the owners, the actor and
+ * every target are locked once (targets in id order), the custom role names read once, one update, one audit insert
+ * (a row per member changed) and one reach read; only a guest leaving scheduling, a former guest's link page and the
+ * invitations each changed member sent run per person. Answers how many changed and the invitations cancelled.
  */
 export async function setMemberRoles(
   scope: EngineScope,
@@ -509,7 +521,7 @@ export async function setMemberRoles(
 ): Promise<SetRolesResult> {
   checkScope(scope);
   checkChangesRoles(scope, actingRole(scope));
-  const ids = [...new Set(input.memberIds.map((id) => checkId(id, MEMBER_NOT_FOUND)))];
+  const ids = [...new Set(input.memberIds.map((id) => checkId(id, MEMBER_NOT_FOUND)))].sort();
   if (ids.length === 0 || ids.length > SET_ROLES_MAX) {
     throw refuse('CONFIG_INVALID', `Change 1 to ${String(SET_ROLES_MAX)} people at once.`);
   }
@@ -519,16 +531,93 @@ export async function setMemberRoles(
     async (context) => {
       const { tx } = context;
       const next = await nextRoleOf(tx, scope.workspaceId, asked);
-      let changed = 0;
-      let cancelled = 0;
-      // In id order, so two changes over the same people take their row locks in the same order.
-      for (const memberId of [...ids].sort()) {
-        const { target, acting } = await lockTarget(tx, scope, memberId);
-        const done = await changeRole(context, acting, target, next, options.source);
-        if (done.changed) changed += 1;
-        cancelled += done.cancelled;
+      const acting = await lockActing(tx, scope);
+      checkChangesRoles(scope, acting.role);
+      const read = await tx
+        .select({ ...VIEW_COLUMNS, userId: members.userId })
+        .from(members)
+        .where(and(eq(members.workspaceId, scope.workspaceId), inArray(members.id, ids), eq(members.status, 'active')))
+        .orderBy(asc(members.id))
+        .for('update');
+      if (read.length !== ids.length) throw refuse('NOT_FOUND', MEMBER_NOT_FOUND);
+      const targets = read.map((row) => ({ ...row, role: storedRole(row.role) }));
+      for (const target of targets) checkOwnerRules(scope, acting, target, next.role);
+      const nextCustom = next.customRole?.id ?? null;
+      const changing = targets.filter((target) => target.role !== next.role || target.customRoleId !== nextCustom);
+      if (changing.length === 0) return { changed: 0 };
+      const leavingOwners = changing.filter((target) => target.role === 'owner').map((target) => target.id);
+      if (leavingOwners.length > 0) await keepAnOwner(tx, scope, leavingOwners);
+      // Guests take no seat (spec 0031, AC-809): each one leaving the role takes one, counted once for all.
+      const guestsLeaving = next.role === 'guest' ? [] : changing.filter((target) => target.role === 'guest');
+      await checkSeats(tx, scope, guestsLeaving.length);
+      if (next.role === 'guest') {
+        for (const target of changing) {
+          if (target.role !== 'guest') await leaveSchedulingAsGuest(context, target.id, options.source);
+        }
       }
-      return { changed, ...(cancelled > 0 ? { cancelledInvitations: cancelled } : {}) };
+      const customIds = [
+        ...new Set(changing.flatMap((target) => (target.customRoleId === null ? [] : [target.customRoleId]))),
+      ];
+      const names =
+        customIds.length === 0
+          ? new Map<string, string>()
+          : new Map(
+              (
+                await tx
+                  .select({ id: workspaceRoles.id, name: workspaceRoles.name })
+                  .from(workspaceRoles)
+                  .where(and(eq(workspaceRoles.workspaceId, scope.workspaceId), inArray(workspaceRoles.id, customIds)))
+              ).map((row) => [row.id, row.name]),
+            );
+      const changedIds = changing.map((target) => target.id);
+      await tx
+        .update(members)
+        .set({ role: next.role, customRoleId: nextCustom, ...touched(scope) })
+        .where(and(eq(members.workspaceId, scope.workspaceId), inArray(members.id, changedIds)));
+      await writeAudits(
+        tx,
+        scope.workspaceId,
+        scope.actor,
+        changing.map((target) => {
+          const wasName = target.customRoleId === null ? undefined : names.get(target.customRoleId);
+          return {
+            action: 'member.role_changed' as const,
+            targetType: 'member' as const,
+            targetId: target.id,
+            before: {
+              role: target.role,
+              ...(target.customRoleId === null ? {} : { customRoleId: target.customRoleId }),
+              ...(wasName === undefined ? {} : { customRoleName: wasName }),
+            },
+            after: {
+              role: next.role,
+              ...(next.customRole === undefined
+                ? {}
+                : { customRoleId: next.customRole.id, customRoleName: next.customRole.name }),
+            },
+          };
+        }),
+        options.source,
+      );
+      // A guest made a member gets the link page every member has (a kept one comes back as it was).
+      for (const target of guestsLeaving) {
+        if (target.userId !== null) {
+          await ensureLinkPage(tx, {
+            userId: target.userId,
+            workspaceId: scope.workspaceId,
+            name: target.name,
+            email: target.email,
+          });
+        }
+      }
+      // What they sent and can't send now opens nothing: one statement each, rows only for what goes.
+      let cancelled = 0;
+      for (const target of changing) {
+        cancelled += await revokeUnvouched(tx, scope, target.id, next.role, options.source);
+      }
+      const reached = await delegatesReachedBy(tx, scope.workspaceId, changedIds);
+      context.record({ members: changedIds, access: [...new Set([...changedIds, ...reached])] });
+      return { changed: changing.length, ...(cancelled > 0 ? { cancelledInvitations: cancelled } : {}) };
     },
     hooks,
   );

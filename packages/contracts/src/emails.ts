@@ -172,6 +172,8 @@ export type BookingCalendarRemovedEmail = z.infer<typeof BookingCalendarRemovedE
 export const MemberInviteEmail = z.strictObject({
   inviterName: Line,
   role: z.enum(['owner', 'admin', 'member', 'guest']),
+  /** A custom role's own name (spec 0037, J9), said in place of `role` ("as a Receptionist"). */
+  roleName: Line.optional(),
   /** The invitation's page, with its token. Drawn into the email and sent at once, never stored. */
   acceptPath: AppPath,
   expiresAt: Instant,

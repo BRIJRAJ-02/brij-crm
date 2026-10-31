@@ -305,6 +305,7 @@ async function viewsOf(tx: WorkspaceTx, workspaceId: string, ids?: readonly stri
       email: invitations.email,
       role: invitations.role,
       customRoleId: invitations.customRoleId,
+      customRoleName: workspaceRoles.name,
       invitedBy: inviter.name,
       invitedAt: invitations.createdAt,
       expiresAt: invitations.expiresAt,
@@ -314,6 +315,10 @@ async function viewsOf(tx: WorkspaceTx, workspaceId: string, ids?: readonly stri
     .leftJoin(
       inviter,
       and(eq(inviter.workspaceId, invitations.workspaceId), eq(inviter.id, invitations.updatedByMemberId)),
+    )
+    .leftJoin(
+      workspaceRoles,
+      and(eq(workspaceRoles.workspaceId, invitations.workspaceId), eq(workspaceRoles.id, invitations.customRoleId)),
     )
     .where(
       and(
@@ -332,6 +337,7 @@ async function viewsOf(tx: WorkspaceTx, workspaceId: string, ids?: readonly stri
     email: row.email ?? '',
     role: isRole(row.role) ? row.role : 'member',
     ...(row.customRoleId === null ? {} : { customRoleId: row.customRoleId }),
+    ...(row.customRoleName === null ? {} : { roleLabel: row.customRoleName }),
     invitedBy: row.invitedBy ?? '',
     invitedAt: new Date(row.invitedAt).toISOString(),
     expiresAt: new Date(row.expiresAt ?? row.invitedAt).toISOString(),

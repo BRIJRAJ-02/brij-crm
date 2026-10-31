@@ -30,11 +30,11 @@ import {
   BulkActionBar,
   Button,
   ButtonGroup,
-  Callout,
   Card,
   EmptyState,
   Field,
   InfoTip,
+  LockReason,
   Menu,
   MenuItem,
   MenuSeparator,
@@ -679,7 +679,7 @@ export function MembersScreen({
       case 'email':
         return invitation.email;
       case 'role':
-        return labelOf(invitation.role);
+        return invitation.roleLabel ?? labelOf(invitation.role);
       case 'invitedBy':
         return invitation.invitedBy;
       case 'expires':
@@ -806,6 +806,9 @@ export function MembersScreen({
       // What each role can do sits before it, for everyone: choosing a role, or reading one's own, starts there.
       actions={
         <>
+          {/* Who changes this page, as a lock in the header (the owner's less-text rule), never a box over the list.
+              A guest changes nothing here, and the read only table says so already. */}
+          {!canInvite && !isGuest && <LockReason reason={sharedStrings.ownersAndAdminsOnly} />}
           {hasGuide(roles.roles) && (
             <Button icon="shield-check" onPress={() => setGuideOpen(true)}>
               {strings.roleGuide}
@@ -903,8 +906,6 @@ export function MembersScreen({
         </Tabs>
       ) : (
         <>
-          {/* A guest changes nothing here, and the read only table says so already. */}
-          {!isGuest && <Callout>{sharedStrings.ownersAndAdminsOnly}</Callout>}
           {searchField}
           {membersList}
         </>
@@ -1022,6 +1023,7 @@ export function MembersPending() {
       // The bar's actions hold their places while the page loads.
       actions={
         <>
+          {!canInvite && <LockReason reason={sharedStrings.ownersAndAdminsOnly} />}
           <Button icon="shield-check" isDisabled>
             {strings.roleGuide}
           </Button>
@@ -1048,7 +1050,6 @@ export function MembersPending() {
         </Tabs>
       ) : (
         <>
-          <Callout>{sharedStrings.ownersAndAdminsOnly}</Callout>
           {searchField}
           {table}
         </>

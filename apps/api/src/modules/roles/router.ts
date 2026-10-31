@@ -74,7 +74,9 @@ export const rolesRouter = member.roles.router({
   ),
   move: member.roles.move.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
-      moveRole(context.scope, { roleId: input.roleId, position: input.position }, hooks),
+      moveRole(context.scope, { roleId: input.roleId, position: input.position }, hooks, {
+        source: sourceOf(context),
+      }),
     ),
   ),
 });

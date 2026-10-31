@@ -23,7 +23,7 @@ import { zoneDisplay } from '@crm/contracts/zones';
 import { schema } from '@crm/db';
 import type { EngineScope } from '../access/mint.ts';
 import { inWorkspace } from '../access/run.ts';
-import { rolesManagingEveryone } from '../access/scheduling.ts';
+import { holdersOf } from '../roles/held.ts';
 import { addedLaterOf, guestsOf } from './change.ts';
 import { buildBookingIcs } from './ics.ts';
 import { answerWords, storedBookingAnswers } from './questions.ts';
@@ -508,10 +508,9 @@ export async function prepareBookingMail(
       case 'needs_host': {
         // A booking whose host left with nobody free to take it (spec 0029, AC-749): the admins are told.
         if (row.needsHostAt === null) return { messages: [], invited: [], skipped: 'has a host' };
-        const admins = await tx
-          .select({ email: members.email })
-          .from(members)
-          .where(and(eq(members.status, 'active'), inArray(members.role, [...rolesManagingEveryone()])));
+        // Everyone who manages everyone's scheduling: owners and admins, and custom roles holding `schedule.manage`
+        // (spec 0037, J9), read by the permission they hold now.
+        const admins = await holdersOf(tx, scope.workspaceId, 'schedule.manage');
         return {
           messages: admins.map((admin) => ({
             to: admin.email,

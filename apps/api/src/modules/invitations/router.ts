@@ -82,6 +82,7 @@ function inviteEmail(
     {
       inviterName: sender.inviterName.trim() === '' ? NO_INVITER : sender.inviterName,
       role: each.invitation.role,
+      ...(each.invitation.roleLabel === undefined ? {} : { roleName: each.invitation.roleLabel }),
       acceptPath: `/invite/${each.token}`,
       expiresAt: each.invitation.expiresAt,
     },
