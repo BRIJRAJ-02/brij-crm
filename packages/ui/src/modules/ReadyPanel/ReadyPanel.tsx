@@ -111,7 +111,9 @@ export function ReadyPanel({
         <div className={styles.qr}>
           <QrCode value={link} label={qrLabel} size="sm" />
         </div>
-        {preview !== undefined && (
+        {preview === undefined ? (
+          <p className={styles.scan}>{strings.scan}</p>
+        ) : (
           <div className={styles.preview} role="group" aria-label={previewLabel}>
             {preview}
           </div>
