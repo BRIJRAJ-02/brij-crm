@@ -1264,6 +1264,21 @@ export function createDataLayer({
   // The workspace's teams (spec 0031, slice 8), for the app load; a live `members` event reads them again.
   let teams = new Map<string, Promise<TeamView[]>>();
   let access = new Map<string, Promise<MyAccess>>();
+  // Each workspace's logo version (spec 0060), as `access.mine` carries it and a logo save or removal changes it:
+  // the sidebar's head and the tab's icon follow it. Null is a workspace with no logo; absent is not read yet.
+  const logos = new Map<string, string | null>();
+  const logoListeners = new Set<() => void>();
+  const setLogo = (workspace: string, version: string | null) => {
+    if (logos.get(workspace) === version) return;
+    logos.set(workspace, version);
+    for (const listener of logoListeners) listener();
+  };
+  /** The person's access in a workspace, the logo version it carries noted on the way. */
+  const loadAccess = (workspace: string, options: { readonly signal?: AbortSignal }) =>
+    api.access.mine({ workspace }, options).then((mine) => {
+      setLogo(workspace, mine.workspaceLogo ?? null);
+      return mine;
+    });
   // The audit log a History screen holds, per workspace (spec 0046): opening it again while held answers this one.
   const auditLogs = new Map<string, AuditLog>();
   // The roles every role picker offers (spec 0037, AC-1439), per workspace, for the app load.
@@ -1364,6 +1379,7 @@ export function createDataLayer({
     members = new Map();
     teams = new Map();
     access = new Map();
+    logos.clear();
     auditLogs.clear();
     roles = new Map();
     attributes = new Map();
@@ -1839,7 +1855,7 @@ export function createDataLayer({
       call((options) => api.teams.list({ workspace }, options)).then((read) => read.teams),
     );
   const readAccess = (workspace: string) =>
-    cached(access, workspace, () => call((options) => api.access.mine({ workspace }, options)));
+    cached(access, workspace, () => call((options) => loadAccess(workspace, options)));
   /** Whether `memberIds` names the person, by the access this tab holds (unknown counts as named). */
   const namesMe = async (workspace: string, memberIds: readonly string[]): Promise<boolean> => {
     const mine = await access.get(workspace)?.catch(() => undefined);
@@ -3681,7 +3697,7 @@ export function createDataLayer({
           beforeRead,
           // The person's member id in the workspace (cached with their role), so their own saves raise no notice.
           memberOf: (workspace) =>
-            cached(access, workspace, () => call((options) => api.access.mine({ workspace }, options))).then(
+            cached(access, workspace, () => call((options) => loadAccess(workspace, options))).then(
               (mine) => mine.memberId,
               () => undefined,
             ),
@@ -5148,7 +5164,16 @@ export function createDataLayer({
     brand: {
       load: (): Promise<BrandStore> =>
         (brand ??= import('./brand/store.ts').then(({ openBrand }) =>
-          openBrand({ brand: api.brand, profile: api.profile, call, mintId, send: sendImage }),
+          openBrand({
+            brand: api.brand,
+            profile: api.profile,
+            call,
+            mintId,
+            send: sendImage,
+            onLogo: (workspace, version) => {
+              setLogo(workspace, version ?? null);
+            },
+          }),
         )),
     },
     /** Settings › Account › Profile (spec 0031, AC-821): the caller's own name and time zone in a workspace. */
@@ -5235,6 +5260,24 @@ export function createDataLayer({
           beforeRead(workspace).then(() => call((options) => api.roles.list({ workspace }, options))),
         ),
     },
+    /**
+     * The workspace's logo (spec 0060) for the sidebar's head and the tab's icon: its member route
+     * (`/api/brand/logo?workspace=&v=`) once `access.mine` has said there is one, kept in step with a logo saved
+     * or removed in Settings › Brand. No read of its own.
+     */
+    workspaceLogo: {
+      subscribe: (listener: () => void): (() => void) => {
+        logoListeners.add(listener);
+        return () => logoListeners.delete(listener);
+      },
+      /** The logo's address in `workspace`, or undefined when it has none or its access isn't read yet. */
+      src: (workspace: string): string | undefined => {
+        const version = logos.get(workspace);
+        return typeof version === 'string' && /^[0-9a-f]{12}$/.test(version)
+          ? `/api/brand/logo?${new URLSearchParams({ workspace, v: version }).toString()}`
+          : undefined;
+      },
+    },
     access: {
       /**
        * The person's own role, its label and their permissions in a workspace
@@ -5243,7 +5286,7 @@ export function createDataLayer({
        */
       mine: (workspace: string): Promise<MyAccess> =>
         cached(access, workspace, () =>
-          beforeRead(workspace).then(() => call((options) => api.access.mine({ workspace }, options))),
+          beforeRead(workspace).then(() => call((options) => loadAccess(workspace, options))),
         ),
     },
     attributes: {

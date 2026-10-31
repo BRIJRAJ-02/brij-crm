@@ -220,6 +220,8 @@ export function openBrand(given: {
   readonly send: ImageSend;
   /** The clock, in milliseconds; tests pass their own. */
   readonly now?: () => number;
+  /** A logo landed or was removed: the sidebar's head and the tab's icon follow it at once (undefined: none). */
+  readonly onLogo?: (workspace: string, version: string | undefined) => void;
 }) {
   const { call, send } = given;
   const now = given.now ?? Date.now;
@@ -300,6 +302,7 @@ export function openBrand(given: {
         (kit) => kit,
         async () => {
           const { version } = await send('/api/brand/logo', workspace, image);
+          given.onLogo?.(workspace, version);
           return (kit) => withField(kit, 'logo', version === undefined ? undefined : { version });
         },
       ),
@@ -309,6 +312,7 @@ export function openBrand(given: {
         (kit) => withField(kit, 'logo', undefined),
         async () => {
           await send('/api/brand/logo', workspace);
+          given.onLogo?.(workspace, undefined);
           return (kit) => withField(kit, 'logo', undefined);
         },
       ),

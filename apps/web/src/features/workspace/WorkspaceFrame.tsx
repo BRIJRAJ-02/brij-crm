@@ -13,7 +13,7 @@ import type {
   Permission,
   WorkspaceSummary,
 } from '@crm/data';
-import { useDueTasks, useInboxUnread, useNav } from '@crm/data/react';
+import { useDueTasks, useInboxUnread, useNav, useWorkspaceLogo } from '@crm/data/react';
 import {
   AppShell,
   AppShellContext,
@@ -45,6 +45,7 @@ import { WEEK_KEYS } from '../bookings/week-keys.ts';
 import { strings as commandStrings } from '../command/frame-strings.ts';
 import { strings as settingsStrings } from '../settings/strings.ts';
 import { CalendarBanner } from './CalendarBanner.tsx';
+import { useWorkspaceFavicon } from './favicon.ts';
 import { homeHref, newWorkspaceHref, settingsHomeHref, workspaceHref } from './objects.ts';
 import { keepRailHint, readRailHint } from './rail.ts';
 import { PAGE_LINKS, topEntries, universeOf, type SidebarPage } from './sidebar.ts';
@@ -218,6 +219,10 @@ export function WorkspaceFrame({
   const isOnCalendar = useLocation({
     select: (location) => currentPage === 'bookings' && CALENDAR_TAB.test(location.pathname),
   });
+  // The workspace's logo (spec 0060), from the access read this page already made: the sidebar's head and the tab's
+  // icon wear it, else the product's mark and icons.
+  const logo = useWorkspaceLogo(data.workspaceLogo, slug);
+  useWorkspaceFavicon(logo);
   const snapshot = useNav(isMissing ? NO_NAV : data.nav.source(slug));
   const nav = snapshot.status === 'ready' ? snapshot.nav : snapshot.status === 'error' ? DEFAULT_NAV : undefined;
   const universe = useMemo(() => universeOf(objects, nav ?? DEFAULT_NAV, lists), [objects, nav, lists]);
@@ -272,8 +277,15 @@ export function WorkspaceFrame({
       ) : (
         <Sidebar
           workspace={workspaceName ?? strings.product}
-          // Timefix's mark heads the sidebar, as in timefix (F29); the workspace's name stays the switcher's.
-          mark={<ProviderMark provider="timefix" size="lg" />}
+          // The workspace's own logo heads the sidebar when it has one (spec 0060), else Timefix's mark, as in
+          // timefix (F29); the workspace's name stays the switcher's.
+          mark={
+            logo === undefined ? (
+              <ProviderMark provider="timefix" size="lg" />
+            ) : (
+              <Avatar name={workspaceName ?? strings.product} src={logo} shape="square" size="sm" isDecorative />
+            )
+          }
           // Not known yet: skeletons, never the product's name as a stand in that then changes.
           isWorkspaceLoading={workspaceName === undefined && !isMissing}
           onQuickActions={() => {
@@ -394,6 +406,7 @@ export function WorkspaceFrame({
       permissions,
       isOperator,
       workspaceName,
+      logo,
       isMissing,
       commandMenu,
       isSigningOut,

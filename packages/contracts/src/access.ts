@@ -367,6 +367,15 @@ export const MyAccess = z.object({
       managesEveryone: z.boolean(),
     })
     .optional(),
+  /**
+   * The version of the workspace's logo (spec 0060), when it has one: the sidebar's head and the tab's icon read it at
+   * `/api/brand/logo?workspace=<slug>&v=<version>` (`memberLogoPath`). On this read because every workspace page
+   * makes it, so the logo costs no request of its own.
+   */
+  workspaceLogo: z
+    .string()
+    .regex(/^[0-9a-f]{12}$/)
+    .optional(),
 });
 /** The caller's own access in a workspace. */
 export type MyAccess = z.infer<typeof MyAccess>;

@@ -275,6 +275,27 @@ describe('the brand kit', () => {
     expect(forgotten.slice(before)).toEqual([[tag], [tag]]);
   });
 
+  it('names the logo’s version on the access read every workspace page makes, for any member (sidebar, favicon)', async () => {
+    const owner = await memberWithWorkspace(app);
+    const member = await joined(owner.workspace.id, 'member');
+    expect((await member.client.access.mine({ workspace: owner.slug })).workspaceLogo).toBeUndefined();
+    const uploaded = await send('/api/brand/logo', {
+      method: 'POST',
+      cookie: owner.cookie,
+      workspace: owner.slug,
+      type: 'image/jpeg',
+      body: JPEG,
+    });
+    const { version } = (await uploaded.json()) as { version: string };
+    expect((await member.client.access.mine({ workspace: owner.slug })).workspaceLogo).toBe(version);
+    // The member route serves it to them, privately; the favicon and the sidebar read exactly this address.
+    const logo = await send(`/api/brand/logo?workspace=${owner.slug}&v=${version}`, { cookie: member.cookie });
+    expect(logo.status).toBe(200);
+    expect(logo.headers.get('x-content-type-options')).toBe('nosniff');
+    await send('/api/brand/logo', { method: 'DELETE', cookie: owner.cookie, workspace: owner.slug });
+    expect((await member.client.access.mine({ workspace: owner.slug })).workspaceLogo).toBeUndefined();
+  });
+
   it('purges the workspace’s brand answers when a member saves their own accent, which a personal page wears (AC-14, AC-21)', async () => {
     const owner = await memberWithWorkspace(app);
     const tag = `brand:${owner.workspace.id}`;

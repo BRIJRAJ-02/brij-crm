@@ -638,3 +638,18 @@ export function useRecordEntries(source: RecordEntries): RecordEntriesState {
   useEffect(() => source.retain(), [source]);
   return useSyncExternalStore(source.subscribe, source.getSnapshot);
 }
+
+/** What `useWorkspaceLogo` reads: the data layer's `workspaceLogo`. */
+export interface WorkspaceLogoSource {
+  readonly subscribe: (listener: () => void) => () => void;
+  readonly src: (workspace: string) => string | undefined;
+}
+
+/**
+ * The workspace's logo address for the sidebar's head and the tab's icon (spec 0060), or undefined when it has
+ * none: from the access read every workspace page makes, kept in step with Settings › Brand.
+ */
+export function useWorkspaceLogo(source: WorkspaceLogoSource, workspace: string): string | undefined {
+  const read = useCallback(() => source.src(workspace), [source, workspace]);
+  return useSyncExternalStore(source.subscribe, read);
+}

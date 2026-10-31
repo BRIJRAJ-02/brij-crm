@@ -90,6 +90,21 @@ export async function getWorkspaceBrand(scope: EngineScope): Promise<WorkspaceBr
 }
 
 /**
+ * The version of the workspace's logo, or undefined when it has none: what `access.mine` carries so the sidebar and
+ * the tab's icon draw it with no read of their own. Any member, inside their own workspace's row level security.
+ */
+export async function workspaceLogoVersion(scope: EngineScope): Promise<string | undefined> {
+  checkScope(scope);
+  const [row] = await inWorkspace(scope, (tx) =>
+    tx
+      .select({ version: workspaceBrands.logoVersion })
+      .from(workspaceBrands)
+      .where(eq(workspaceBrands.workspaceId, scope.workspaceId)),
+  );
+  return typeof row?.version === 'string' ? row.version : undefined;
+}
+
+/**
  * Refuses FORBIDDEN unless the scope may change the brand kit (`workspace.manage`, owners and admins, AC-23). The
  * logo route asks this before it stores a single byte.
  */

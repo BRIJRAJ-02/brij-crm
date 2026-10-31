@@ -39,6 +39,7 @@ import { REASSIGN_KIND } from './reassign.ts';
 import { countRemoval, runRemovalEffects } from './removal.ts';
 import { writeAudit, type AuditSource } from './audit.ts';
 import { revokeUnvouched } from './invitations.ts';
+import { workspaceLogoVersion } from '../brand/brand.ts';
 
 const { members, workspaces } = schema;
 
@@ -185,7 +186,8 @@ export async function getMyAccess(scope: EngineScope): Promise<MyAccess> {
   checkScope(scope);
   const { principal, permissions } = scope.access;
   if (principal.kind !== 'member') throw new Error('Only a member has a role to show.');
-  const scheduling = await mySchedulingReach(scope);
+  // The workspace's logo version rides along (spec 0060): the sidebar and the tab's icon need no read of their own.
+  const [scheduling, workspaceLogo] = await Promise.all([mySchedulingReach(scope), workspaceLogoVersion(scope)]);
   return {
     memberId: principal.memberId,
     role: principal.role,
@@ -193,6 +195,7 @@ export async function getMyAccess(scope: EngineScope): Promise<MyAccess> {
     permissions: [...permissions],
     teamIds: [...principal.teamIds],
     ...(scheduling === undefined ? {} : { scheduling }),
+    ...(workspaceLogo === undefined ? {} : { workspaceLogo }),
   };
 }
 
