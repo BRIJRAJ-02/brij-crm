@@ -6,6 +6,7 @@ import { isDataError, type FormSummary } from '@crm/data';
 import { useCaptureList } from '@crm/data/react';
 import {
   Button,
+  ButtonLink,
   focusLater,
   Menu,
   MenuItem,
@@ -127,6 +128,13 @@ export function FormsScreen({ slug }: FormsScreenProps) {
       ...(isPublished ? { copyValue: data.forms.hostedUrl(form.publicKey) } : {}),
       actions: (
         <>
+          {/* A draft has no link to copy or open, so its foot said nothing to do: Edit is the next step, beside More
+              (the owner, 31 October 2026: "no idea what to do"). */}
+          {canManage && !isPublished && !isPending && (
+            <ButtonLink size="lg" icon="pencil" label={strings.editFormOf(form.name)} href={formHref(slug, form.id)}>
+              {strings.editDraft}
+            </ButtonLink>
+          )}
           {isLive && (
             <Tooltip content={strings.openInNewTab} isDisabled={isPending}>
               <Button

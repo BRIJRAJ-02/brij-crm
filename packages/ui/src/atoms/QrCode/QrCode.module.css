@@ -1,5 +1,6 @@
-/* QrCode: dark modules on a white ground in either theme (the code carries
-   data-theme="light", so its tokens are the light theme's), with the card's corners. With a
+/* QrCode: dark modules on a light ground in either theme (the code carries
+   data-theme="light", so its tokens are the light theme's), with the card's corners: white in a light app, a softer
+   grey in a dark one. With a
    column beside it, the code is size-column wide and the column sits beside it
    where the slot has room, under it where it doesn't. */
 @layer components {
@@ -49,5 +50,19 @@
     flex-direction: column;
     gap: var(--space-12);
     min-inline-size: 0;
+  }
+
+  /* In a dark app the white tile glared (owner, 31 October 2026, Home item 11): there the ground steps down to the
+     light theme's sunken grey, still far lighter than the modules, so it scans. A root selector, not a token: the
+     code's own data-theme="light" resets every token inside it, so only the page's theme can say it is dark. A saved
+     PNG is drawn on the light surface whatever the theme (the link page's qr-png.ts). */
+  :root[data-theme='dark'] .ground {
+    fill: var(--surface-sunken);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) .ground {
+      fill: var(--surface-sunken);
+    }
   }
 }

@@ -73,8 +73,9 @@ export function ShareLinkPageModal({
       }
     >
       <QrCode ref={codeRef} value={address} label={strings.qrLabel} size="fill" />
+      {/* A code explains itself: only whose page it opens is said (spec 0056, AC-5617). */}
       {isPublic ? (
-        <p>{workspaceName === undefined ? strings.scan : `${strings.inWorkspace(workspaceName)} ${strings.scan}`}</p>
+        workspaceName !== undefined && <p>{strings.inWorkspace(workspaceName)}</p>
       ) : (
         <Callout
           tone="warning"
