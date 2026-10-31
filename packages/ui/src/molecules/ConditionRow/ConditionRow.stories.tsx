@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent } from 'storybook/test';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { Field } from '../Field/Field.tsx';
-import { Select } from '../Select/Select.tsx';
+import { Select } from '../Select/SelectWithFaces.tsx';
 import { ConditionRow } from './ConditionRow.tsx';
 
 const questions = [

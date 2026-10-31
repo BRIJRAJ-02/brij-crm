@@ -20,7 +20,7 @@ import { Disclosure } from '../../molecules/Disclosure/Disclosure.tsx';
 import { Field } from '../../molecules/Field/Field.tsx';
 import { HuePicker } from '../../molecules/HuePicker/HuePicker.tsx';
 import { Menu, MenuItem, MenuSeparator, MenuTrigger } from '../../molecules/Menu/Menu.tsx';
-import { Select } from '../../molecules/Select/Select.tsx';
+import { Select } from '../../molecules/Select/SelectWithFaces.tsx';
 import styles from './OptionsEditor.module.css';
 import { strings } from './strings.ts';
 

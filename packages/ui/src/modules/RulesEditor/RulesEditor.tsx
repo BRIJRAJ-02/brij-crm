@@ -33,7 +33,7 @@ import { Disclosure } from '../../molecules/Disclosure/Disclosure.tsx';
 import { InfoTip } from '../../molecules/InfoTip/InfoTip.tsx';
 import { Field } from '../../molecules/Field/Field.tsx';
 import { Menu, MenuItem, MenuSeparator, MenuTrigger } from '../../molecules/Menu/Menu.tsx';
-import { Select } from '../../molecules/Select/Select.tsx';
+import { Select } from '../../molecules/Select/SelectWithFaces.tsx';
 import { FilterBuilder, type FilterBuilderProps } from '../FilterBuilder/FilterBuilder.tsx';
 import { newRule, ruleOf, type ListedKind, type RulesEditorRule } from './rules-model.ts';
 import styles from './RulesEditor.module.css';

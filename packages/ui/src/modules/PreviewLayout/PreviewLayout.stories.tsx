@@ -6,7 +6,7 @@ import { Button } from '../../atoms/Button/Button.tsx';
 import { Callout } from '../../molecules/Callout/Callout.tsx';
 import { Card } from '../../molecules/Card/Card.tsx';
 import { Field } from '../../molecules/Field/Field.tsx';
-import { Select } from '../../molecules/Select/Select.tsx';
+import { Select } from '../../molecules/Select/SelectWithFaces.tsx';
 import { TabPanel, Tabs } from '../../molecules/Tabs/Tabs.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { LinkPage } from '../LinkPage/LinkPage.tsx';
