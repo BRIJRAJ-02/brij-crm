@@ -451,12 +451,13 @@ describe('no CRM leak', () => {
     const w = await world();
     // Pat is a known customer: a person record with their email.
     const people = w.objects.people ?? '';
-    const emailAttribute = await w.query<{ id: string }>(
-      sql`select id::text from attributes where object_id = ${people}::uuid and api_slug = 'email_addresses'`,
+    const fields = await w.query<{ id: string; slug: string }>(
+      sql`select id::text, api_slug as slug from attributes where object_id = ${people}::uuid and api_slug in ('name', 'email_addresses')`,
     );
+    const field = (slug: string) => fields.find((row) => row.slug === slug)?.id ?? '';
     await createRecord(w.owner, {
       objectId: people,
-      values: { [emailAttribute[0]?.id ?? '']: ['pat@bigcustomer.example'] },
+      values: { [field('name')]: { firstName: 'Pat' }, [field('email_addresses')]: ['pat@bigcustomer.example'] },
     });
     const form = await publishedForm(w, [booksPage('enterprise', w.demo.id, 'Enterprise')], {
       kind: 'booking',
