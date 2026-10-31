@@ -53,8 +53,8 @@ export interface RecordPanelProps {
   readonly empty?: ReactNode;
   /**
    * A step is on its way: the next record is loading while this one stays. After the loading delay a thin
-   * progress line shows along the top of the body and the tabs dim a little, with no change of layout; a step
-   * that lands quickly shows nothing. Marks the body busy for screen readers.
+   * progress line shows along the top of the body, with no change of layout; a step that lands quickly shows
+   * nothing. Marks the body busy for screen readers.
    */
   readonly isStepping?: boolean;
 }
@@ -183,7 +183,7 @@ export function RecordPanel({
       }
     >
       {content ?? (
-        <div className={styles.body} data-stepping={showStepping || undefined} aria-busy={isStepping || undefined}>
+        <div className={styles.body} aria-busy={isStepping || undefined}>
           {showStepping && (
             <div className={styles.stepping}>
               <ProgressBar label={strings.loading} isLabelHidden isIndeterminate />

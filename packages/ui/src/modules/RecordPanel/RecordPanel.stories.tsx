@@ -198,6 +198,7 @@ export const StepThrough: Story = {
 
 /** ↓ and ↑ step through the list as Next and Previous do; inside the tabs the arrows stay the tabs'. */
 export const ArrowKeysStep: Story = {
+  args: { onOpenPage: fn() },
   parameters: { crm: { screenshot: false } },
   play: async ({ canvas, userEvent }) => {
     canvas.getByRole('button', { name: 'Open full page' }).focus();

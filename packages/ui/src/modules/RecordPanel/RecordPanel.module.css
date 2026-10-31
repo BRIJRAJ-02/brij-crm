@@ -33,11 +33,6 @@
     min-block-size: 0;
   }
 
-  /* The next record is on its way: the tabs a little dimmer. */
-  .body[data-stepping] .tabs {
-    opacity: var(--opacity-busy);
-  }
-
   .content {
     display: flex;
     flex-direction: column;
