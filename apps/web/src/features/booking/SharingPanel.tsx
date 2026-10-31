@@ -27,7 +27,10 @@ export interface SharingPerson {
   readonly id: string;
   readonly name: string;
   readonly email?: string;
-  /** Their role, when known: owners and admins edit everything already, so they are never offered. */
+  /**
+   * Their role, when known: owners and admins edit everything already, and guests can edit no page or rotation (the
+   * server refuses them), so none of them is offered.
+   */
   readonly role?: string;
 }
 
@@ -91,7 +94,9 @@ export function SharingPanel({
     return <EmptyState tone="error" layout="row" title={strings.failed} onRetry={() => view.reload()} />;
   }
   const held = new Set(editors.map((each) => each.id));
-  const addable = people.filter((person) => !held.has(person.id) && person.role !== 'owner' && person.role !== 'admin');
+  const addable = people.filter(
+    (person) => !held.has(person.id) && person.role !== 'owner' && person.role !== 'admin' && person.role !== 'guest',
+  );
   const isFull = editors.length >= EDITORS_MAX;
   return (
     <SettingsStack>
