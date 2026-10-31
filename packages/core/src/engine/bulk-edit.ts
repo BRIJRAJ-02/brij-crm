@@ -13,11 +13,12 @@
 // workspace counter row last, as every write takes it.
 import { sql } from 'drizzle-orm';
 import { applyOp, bulkExclusion, bulkOpsFor, holdsList, opTakesValue, type BulkOp } from '@crm/contracts/bulk-ops';
+import type { FiledCompany } from '@crm/contracts';
 import type { EngineRefusal } from '@crm/contracts/values';
 import type { WorkspaceTx } from '@crm/db';
 import { decodeValue, encodeValue, sameItems } from './columns.ts';
 import { checkId, uuidArray } from './ids.ts';
-import { updateRecord } from './records.ts';
+import { updateRecordFiling } from './records.ts';
 import { refuse } from './refusals.ts';
 import type { EngineScope } from './scope.ts';
 import { MAX_INLINE_RECORDS, TOO_MANY_INLINE } from './trash.ts';
@@ -48,7 +49,14 @@ export interface BulkEditInput {
  * result, so nothing was written), or refused with why.
  */
 export type BulkEditOutcome =
-  | { readonly recordId: string; readonly state: 'changed'; readonly before: unknown; readonly versionId: string }
+  | {
+      readonly recordId: string;
+      readonly state: 'changed';
+      readonly before: unknown;
+      readonly versionId: string;
+      /** The company the person's new email filed them under (spec 0059), which the browser's undo takes back. */
+      readonly filedCompany?: FiledCompany;
+    }
   | { readonly recordId: string; readonly state: 'unchanged' }
   | { readonly recordId: string; readonly state: 'refused'; readonly refusals: readonly EngineRefusal[] };
 
@@ -196,7 +204,7 @@ export async function updateManyIn(context: WriteContext, input: BulkEditInput):
       continue;
     }
     const written = await context.perRecord((child) =>
-      updateRecord(
+      updateRecordFiling(
         child,
         {
           recordId,
@@ -210,12 +218,19 @@ export async function updateManyIn(context: WriteContext, input: BulkEditInput):
       outcomes.set(recordId, { recordId, state: 'refused', refusals: written.refusals });
       continue;
     }
-    const versionId = written.value[attribute.id]?.versionId;
+    const versionId = written.value.results[attribute.id]?.versionId;
+    const filed = written.value.filedCompany;
     outcomes.set(
       recordId,
       versionId === undefined
         ? { recordId, state: 'unchanged' }
-        : { recordId, state: 'changed', before: current, versionId },
+        : {
+            recordId,
+            state: 'changed',
+            before: current,
+            versionId,
+            ...(filed === undefined ? {} : { filedCompany: filed }),
+          },
     );
   }
   return ids.map(
