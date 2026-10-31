@@ -13,6 +13,32 @@
 
 @layer components {
   .root {
+    /* The workspace's brand (spec 0060, AC-4, AC-5): the accent pair its stylesheet sets at the page's root, or an
+       app preview's `variables`, its light or dark half picked by the page's colour scheme. With no brand each name
+       falls back to the token it stands in for, so a page without one draws exactly as before. `--frame-none` is
+       the guaranteed invalid value, which makes a mix of a missing brand invalid so its reader falls back too. */
+    --frame-none: initial;
+    --frame-brand-accent: light-dark(
+      var(--brand-accent, var(--frame-none)),
+      var(--brand-accent-dark, var(--frame-none))
+    );
+    --frame-brand-on-accent: light-dark(
+      var(--brand-on-accent, var(--frame-none)),
+      var(--brand-on-accent-dark, var(--frame-none))
+    );
+    --frame-brand-link: light-dark(var(--brand-link, var(--frame-none)), var(--brand-link-dark, var(--frame-none)));
+    /* A tenth of the link colour over the surface: the link keeps 4.5:1 on it for any accent. */
+    --frame-brand-soft: color-mix(in oklab, var(--frame-brand-link) 10%, var(--surface));
+    --frame-brand-focus: 0 0 0 var(--border-width-thick) var(--frame-brand-accent);
+    --frame-accent: var(--frame-brand-accent, var(--accent));
+    --frame-accent-hover: var(--frame-brand-accent, var(--accent-hover));
+    --frame-on-accent: var(--frame-brand-on-accent, var(--on-accent));
+    --frame-link: var(--frame-brand-link, var(--link));
+    --frame-accent-soft: var(--frame-brand-soft, var(--accent-soft));
+    --frame-accent-border: var(--frame-brand-accent, var(--accent-border));
+    --frame-accent-line: var(--frame-brand-accent, var(--accent-line));
+    --frame-focus: var(--frame-brand-focus, var(--shadow-focus));
+
     box-sizing: border-box;
     display: flex;
     justify-content: center;
@@ -25,6 +51,17 @@
   }
 
   .layout {
+    /* Everything on the page reads the accent through the library's own names (the chosen day, Book, links, focus
+       rings), so the brand reaches each of them. One level in, where the names above were worked out. */
+    --accent: var(--frame-accent);
+    --accent-hover: var(--frame-accent-hover);
+    --on-accent: var(--frame-on-accent);
+    --link: var(--frame-link);
+    --accent-soft: var(--frame-accent-soft);
+    --accent-border: var(--frame-accent-border);
+    --accent-line: var(--frame-accent-line);
+    --shadow-focus: var(--frame-focus);
+
     display: flex;
     flex-direction: column;
     gap: var(--space-24);
@@ -45,6 +82,16 @@
     flex-direction: column;
     gap: var(--space-24);
     min-inline-size: 0;
+  }
+
+  /* The workspace's logo at the head of the rail (spec 0060, AC-4): a control's height, as wide as it needs up to a
+     column, never cropped or stretched. */
+  .brandLogo {
+    align-self: flex-start;
+    block-size: var(--size-input);
+    inline-size: auto;
+    max-inline-size: var(--size-column);
+    object-fit: contain;
   }
 
   /* No entrance on the rail or the card: the page's frame is the first thing
@@ -404,18 +451,12 @@
     outline: none;
   }
 
-  /* The foot (spec 0058, AC-26): one quiet line, "Powered by" and the wordmark, then the claim link, in the label
-     size. It never draws a box of its own: it sits at the foot, centred under a page's card, or at the rail's end on
-     the rail's own left edge, level with the card's foot. */
+  /* The foot: "Powered by" over the wordmark, then the claim link. */
   .foot {
     display: flex;
-    flex-wrap: wrap;
+    flex-direction: column;
     align-items: center;
-    justify-content: center;
-    gap: var(--space-4) var(--space-16);
-    padding-block: var(--space-8);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
+    gap: var(--space-8);
   }
 
   .foot[data-placement='rail'] {
@@ -423,22 +464,25 @@
   }
 
   .brand {
-    display: inline-flex;
+    display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: var(--space-6);
+    gap: var(--space-4);
     border-radius: var(--radius-xs);
-    color: var(--text-secondary);
+    color: inherit;
     text-decoration: none;
-    transition: color var(--duration-hover) var(--ease-hover);
   }
 
   .powered {
-    font: inherit;
+    color: var(--text-secondary);
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-kbd);
+    text-transform: uppercase;
   }
 
   .wordmark {
     display: block;
-    block-size: var(--size-icon-sm);
+    block-size: var(--space-20);
     inline-size: auto;
   }
 
@@ -472,7 +516,7 @@
     gap: var(--space-4);
     border-radius: var(--radius-xs);
     color: var(--text-secondary);
-    font: inherit;
+    font: var(--text-body);
     text-decoration: none;
     transition: color var(--duration-hover) var(--ease-hover);
   }
@@ -510,8 +554,21 @@
 
     .root:not([data-compact]) .foot[data-placement='rail'] {
       display: flex;
-      justify-content: flex-start;
-      padding-block-end: 0;
+      align-items: stretch;
+      padding: var(--space-12) var(--space-16);
+      border: var(--border-width-hairline) solid var(--border);
+      border-radius: var(--radius-lg);
+      background: var(--surface-raised);
+    }
+
+    .foot[data-placement='rail'] .brand {
+      align-items: flex-start;
+    }
+
+    .foot[data-placement='rail'] .claim {
+      justify-content: space-between;
+      padding-block-start: var(--space-8);
+      border-block-start: var(--border-width-hairline) solid var(--border-subtle);
     }
 
     .root:not([data-compact]) .foot[data-placement='page'] {
@@ -575,7 +632,6 @@
   }
 
   @media (hover: hover) and (pointer: fine) {
-    .brand:hover,
     .claim:hover {
       color: var(--text);
     }

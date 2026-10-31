@@ -62,6 +62,41 @@ export const PreviewRefused: Story = {
   },
 };
 
+/** The types as people name them (`typesText`), in the hint and the refusal, in place of the raw MIME types. */
+export const NamedTypes: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: {
+    label: 'Add your logo',
+    acceptedTypes: ['image/png', 'image/jpeg', 'image/webp'],
+    typesText: 'PNG, JPG or WebP',
+    maxSize: 4_000_000,
+  },
+  render: (args) => (
+    <Stage width="narrow">
+      <FileDrop {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('PNG, JPG or WebP · up to 4 MB', { exact: false })).toBeInTheDocument();
+    await expect(canvas.queryByText('image/png', { exact: false })).not.toBeInTheDocument();
+  },
+};
+
+/** Read only: the picture that is there, and nothing to press (a member's view of the workspace's logo). */
+export const ReadOnly: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { label: 'Logo', isReadOnly: true, preview: { src: PIXEL, alt: 'Your logo' } },
+  render: (args) => (
+    <Stage width="narrow">
+      <FileDrop {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByAltText('Your logo')).toBeInTheDocument();
+    await expect(canvas.queryByRole('button')).not.toBeInTheDocument();
+  },
+};
+
 /** Disabled. */
 export const Disabled: Story = {
   args: { isDisabled: true },

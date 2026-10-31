@@ -43,3 +43,8 @@ Loading, before the form has been read (`HostedForm.stories.tsx`). Book after se
 ## Keyboard
 
 Tab follows the questions. Enter in a single line field submits (Classic), continues (Steps, Conversational) or sends on the last step. The summary's links focus their questions. A step change moves focus to its first question and announces its place politely.
+
+## Brand kit
+
+A live form wears its workspace's kit (spec 0060, AC-4). `formBrand(form)` turns the read's `brand.logo` version into the logo's path on our own origin (`/api/public/forms/<key>/logo?v=`), drawn over the form at a control's height; the page's brand stylesheet brings the accent, which `FormGround` points the library's own names at inside the card, exactly as BookingFrame does, with every name falling back to its token. An app preview passes `brand` (`PageBrand`: a logo and the accent's `variables`) instead.
+

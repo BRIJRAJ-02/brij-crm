@@ -15,6 +15,7 @@ import { strings as jobs } from './jobs-strings.ts';
 import { strings as members } from './members-strings.ts';
 import { strings as notifications } from './notifications-strings.ts';
 import { strings as schedulingAccess } from './scheduling-access-nav-strings.ts';
+import { strings as brand } from './brand-strings.ts';
 import { strings as teams } from './teams-nav-strings.ts';
 import { strings as security } from './security-strings.ts';
 import { strings as workspaceSecurity } from './workspace-security-strings.ts';
@@ -55,6 +56,8 @@ export const profileHref = (slug: string) => `/w/${slug}/settings/account/profil
 /** Settings › Workspace › General (spec 0031, AC-822): the workspace's name, time zone and address, and its delete. */
 export const generalSettingsHref = (slug: string) => `/w/${slug}/settings/general`;
 
+/** Settings › Workspace › Brand (spec 0060, AC-1): the logo and colour its booking pages and forms wear. */
+export const brandSettingsHref = (slug: string) => `/w/${slug}/settings/brand`;
 /** Settings › Workspace › Automations (parity #53): what the workspace does for itself. */
 export const automationsHref = (slug: string) => `/w/${slug}/settings/automations`;
 
@@ -84,6 +87,7 @@ export type SettingsPageId =
   | 'notifications'
   | 'scheduling-access'
   | 'general'
+  | 'brand'
   | 'members'
   | 'teams'
   | 'workspace-security'
@@ -134,6 +138,7 @@ export interface SettingsNavEntry {
     | 'calendar-days'
     | 'calendar-clock'
     | 'globe'
+    | 'palette'
     | 'code';
   /** A quiet word after the name. Every entry opens a page in Settings (20 Oct 2026; Trash too since 23 Oct 2026). */
   readonly meta?: string;
@@ -194,6 +199,8 @@ export function settingsNav(slug: string): readonly SettingsNavGroup[] {
         // General, then Members (spec 0031, AC-832): every member may open both; what they may change is the server's
         // call.
         { id: 'general', label: workspace.generalTitle, href: generalSettingsHref(slug), icon: 'building' },
+        // Brand (spec 0060): every member reads it; owners and admins change it.
+        { id: 'brand', label: brand.navLabel, href: brandSettingsHref(slug), icon: 'palette' },
         { id: 'members', label: members.title, href: membersSettingsHref(slug), icon: 'users' },
         // Teams (spec 0031, slice 8, AC-832): every member reads them; changing them is for `teams.manage`.
         { id: 'teams', label: teams.title, href: teamsSettingsHref(slug), icon: 'users-round', notForGuests: true },
@@ -300,6 +307,7 @@ export function settingsPageOf(pathname: string): SettingsPageId | undefined {
   if (rest === 'account/profile') return 'profile';
   if (rest === 'account/preferences') return 'preferences';
   if (rest === 'general') return 'general';
+  if (rest === 'brand') return 'brand';
   if (rest === 'account/notifications') return 'notifications';
   if (rest === 'account/scheduling') return 'scheduling-access';
   if (rest === 'account/sign-in' || rest === 'account/security') return 'security';

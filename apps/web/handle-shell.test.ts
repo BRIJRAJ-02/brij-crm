@@ -11,10 +11,13 @@ import {
   partsOf,
   shellFor,
   withBoot,
+  withLook,
+  LOOK_LINK_ID,
   type ShellDeps,
   type ShellProfile,
 } from './handle-shell.ts';
 import { bootOf, BOOT_ID as PAGE_BOOT_ID } from './src/public/booking/boot.ts';
+import { LOOK_LINK_ID as PAGE_LOOK_LINK_ID } from './src/public/stylesheet.ts';
 
 const shell = readFileSync(path.join(import.meta.dirname, 'book.html'), 'utf8');
 
@@ -287,6 +290,66 @@ describe('the boot block (29 Oct 2026)', () => {
     });
     expect(outside).not.toContain('rel="preload" as="image"');
     expect(quoted).not.toContain('rel="preload" as="image"');
+  });
+});
+
+describe('the look in the head (spec 0060, AC-20, AC-21)', () => {
+  const fonts = {
+    sans: '/assets/Inter-Variable-latin-AbC123.woff2',
+    display: '/assets/InstrumentSerif-Regular-latin-dEf456.woff2',
+    mono: '/assets/JetBrainsMono-Variable-latin-x9.woff2',
+  };
+  const display = {
+    ...profile,
+    theme: { ...(profile.theme as object), font: 'display' },
+    look: { version: 'abcdef012345' },
+  };
+  const headOf = (html: string) => html.slice(0, html.indexOf('</head>'));
+
+  it('is the id the page finds again', () => {
+    expect(PAGE_LOOK_LINK_ID).toBe(LOOK_LINK_ID);
+  });
+
+  it('links the page’s own stylesheet on our api and preloads its pack’s heading face, and no other', async () => {
+    const { body } = await shellFor('/anish', deps({ readProfile: () => Promise.resolve(display), fonts }));
+    const head = headOf(body);
+    expect(head).toContain(
+      `<link rel="stylesheet" id="${LOOK_LINK_ID}" href="/api/public/handles/anish/look.css?v=abcdef012345">`,
+    );
+    expect(head).toContain(`<link rel="preload" href="${fonts.display}" as="font" type="font/woff2" crossorigin>`);
+    expect(head).not.toContain(fonts.mono);
+    // Nothing it fetches from another origin, and nothing inline.
+    const fetched = head.match(/<link[^>]+rel="(?:stylesheet|preload)"[^>]*>/g) ?? [];
+    expect(fetched.length).toBeGreaterThan(1);
+    expect(fetched.filter((link) => /href="(?:https?:)?\/\//.test(link))).toEqual([]);
+    expect(head).not.toMatch(/<style|style="/);
+  });
+
+  it('names a file once: Inter, which the build preloads already, is not preloaded again', () => {
+    const built = shell.replace('</head>', `<link rel="preload" href="${fonts.sans}" as="font" crossorigin></head>`);
+    const html = withLook(built, { ...profile, theme: { font: 'sans' } }, fonts);
+    expect(html.split(fonts.sans).length - 1).toBe(1);
+  });
+
+  it('writes no stylesheet for a page without one, nor for a malformed version or handle', () => {
+    expect(withLook(shell, profile, fonts)).not.toContain('look.css');
+    expect(withLook(shell, { ...display, look: { version: '"><b>' } }, fonts)).not.toContain('look.css');
+    expect(withLook(shell, { ...display, handle: 'a"b' }, fonts)).not.toContain('look.css');
+  });
+
+  it('preloads nothing for a font it has no built file for, nor a file outside the build', () => {
+    expect(withLook(shell, display, {})).not.toContain('as="font"');
+    expect(withLook(shell, display, { display: 'https://fonts.example/x.woff2' })).not.toContain('as="font"');
+  });
+
+  it('adds nothing to a booking page’s shell, a miss or an unknown handle', async () => {
+    const missed = await shellFor('/anish', deps({ readProfile: () => Promise.reject(new Error('down')), fonts }));
+    expect(missed.body).toBe(shell);
+    const page = await shellFor(
+      '/anish/intro',
+      deps({ readPage: () => Promise.resolve({ publicKey: 'k123', title: 'Intro' }), fonts }),
+    );
+    expect(page.body).not.toContain('look.css');
   });
 });
 

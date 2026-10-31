@@ -22,7 +22,7 @@ import { bodyLimit } from 'hono/body-limit';
 import { createActivityNoter } from './analytics/activity.ts';
 import { visitorKey } from './analytics/visitor.ts';
 import { createAllowlist } from './auth/allowlist.ts';
-import { AUTH_BASE_PATH, AUTH_ROUTES, type Auth } from './auth/auth.ts';
+import { AUTH_BASE_PATH, AUTH_ROUTES, type Auth, type AuthSession } from './auth/auth.ts';
 import { doorSession } from './auth/door-session.ts';
 import { createCalendarRoutes } from './calendar/routes.ts';
 import { createFreeDomains } from './calendar/free-domains.ts';
@@ -42,6 +42,8 @@ import { mountFormFiles } from './forms/uploads.ts';
 import { createFileStore, type FileStore } from './storage/blob.ts';
 import { createDiskFileStore } from './storage/disk.ts';
 import { createForgetPicture, mountMyPicture } from './me-picture.ts';
+import { mountBrandLogo } from './brand-logo.ts';
+import { mountLinkPageImages } from './link-page-images.ts';
 import { mountLogos } from './logos.ts';
 import { createCaptchaVerifier, type CaptchaVerifier } from './forms/recaptcha.ts';
 import { createTicketBook, mountTickets } from './forms/ticket.ts';
@@ -60,6 +62,8 @@ import type { Mailer } from './mail/mailer.ts';
 import { type Analytics, NO_ANALYTICS } from './monitoring/posthog.ts';
 import { captureFault, nameRequest, withRequestScope } from './monitoring/sentry.ts';
 import { mountPublicBooking } from './public/booking.ts';
+import { mountBrandCss } from './public/brand-css.ts';
+import { mountLook } from './public/look.ts';
 import { mountSiteHits, SITE_HIT_PATH } from './public/site.ts';
 import { createPictureFetch, createPictureLoader, type PictureFetch } from './public/picture.ts';
 import { createOutsideFetch, type OutsideFetch } from './public/outside.ts';
@@ -631,6 +635,10 @@ export function createApp({
     limiter: services.emailPreferenceLimiter ?? createMemoryLimiter(),
     ...(services.now === undefined ? {} : { now: services.now }),
   });
+  // What booking pages, forms and link pages wear of a brand (spec 0060): stylesheets, logos and photos from our own
+  // origin. Before the booking routes, so `/handles/<handle>/look.css` is never read as a page's slug.
+  mountBrandCss(app, { db, files: pictureFiles, limiter: createMemoryLimiter(), edgeCache });
+  mountLook(app, { db, files: pictureFiles, limiter: createMemoryLimiter(), auth, edgeCache });
   mountPublicBooking(app, {
     db,
     handoffKey: formsHandoffKey,
@@ -703,6 +711,18 @@ export function createApp({
     errorResponse,
   });
 
+  // A workspace's logo (owners and admins upload it) and a link page's cover and photo ground (its owner's), through
+  // the same member door the RPC opens (spec 0060, AC-2, AC-13, AC-23).
+  const imageRoutes = {
+    auth,
+    enter: (session: AuthSession, slug: string) =>
+      enterWorkspace({ db, identity, log, rules }, { userId: session.user.id, slug, session: doorSession(session) }),
+    files: pictureFiles,
+    limiter: createMemoryLimiter(),
+    errorResponse,
+  };
+  mountBrandLogo(app, { ...imageRoutes, edgeCache });
+  mountLinkPageImages(app, imageRoutes);
   // A company's logo from our own origin (spec 0059): a signed in person, a public host name, 300 a minute each.
   mountLogos(app, { auth, logos: logoFetch, limiter: createMemoryLimiter() });
 

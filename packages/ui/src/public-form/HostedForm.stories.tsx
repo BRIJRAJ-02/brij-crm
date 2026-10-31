@@ -360,3 +360,74 @@ export const ShowWhen: Story = {
     await waitFor(() => expect(canvas.queryByLabelText('Team size')).not.toBeInTheDocument());
   },
 };
+
+/** An orange brand, as `brandProperties(brandVariables({ accent: '#e8590c' }))` makes it (spec 0060, AC-7). */
+const ORANGE_BRAND = [
+  ['--brand-accent', '#e65708'],
+  ['--brand-on-accent', '#000000'],
+  ['--brand-link', '#b74300'],
+  ['--brand-accent-dark', '#e8590c'],
+  ['--brand-on-accent-dark', '#000000'],
+  ['--brand-link-dark', '#fd6c2b'],
+] as const;
+
+/**
+ * The workspace's brand kit on a form (spec 0060, AC-4): its logo over the headline and its accent on the button,
+ * a chosen option and the focus ring. Nothing else about the form changes.
+ */
+export const Branded: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { brand: { logo: { src: wordmark('#e8590c'), alt: 'Acme' }, variables: ORANGE_BRAND } },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('img', { name: 'Acme' })).toBeInTheDocument();
+    const send = canvas.getByRole('button', { name: 'Send' });
+    await expect(getComputedStyle(send).backgroundColor).toBe('rgb(230, 87, 8)');
+  },
+};
+
+/** The same kit on a dark form: its dark half, still readable on the button (AC-5). */
+export const BrandedDark: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: {
+    form: { ...LEAD, look: { colour: 'dark', corners: 'rounded' } },
+    brand: { logo: { src: wordmark('#e8590c'), alt: 'Acme' }, variables: ORANGE_BRAND },
+  },
+};
+
+/** A live form's read names its logo by version, and the form draws it from its own key's route (AC-4). */
+export const BrandFromRead: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { form: { ...LEAD, key: 'project-enquiry', brand: { logo: '0123456789ab' } } },
+  // Storybook serves no logo, so the picture fails and leaves the form; WebKit can get there before `play` starts.
+  // So every logo the form draws is noted as it lands, before the story renders, and read back below.
+  loaders: [
+    () => {
+      const drawn: { readonly src: string | null; readonly alt: string | null }[] = [];
+      const watch = new MutationObserver((changes) => {
+        for (const change of changes) {
+          for (const node of change.addedNodes) {
+            const images = node instanceof Element ? [node, ...node.querySelectorAll('img')] : [];
+            for (const image of images) {
+              if (image instanceof HTMLImageElement && image.getAttribute('src')?.startsWith('/api/public/forms/')) {
+                drawn.push({ src: image.getAttribute('src'), alt: image.getAttribute('alt') });
+              }
+            }
+          }
+        }
+      });
+      watch.observe(document.body, { childList: true, subtree: true });
+      return { drawn, watch };
+    },
+  ],
+  play: async ({ canvasElement, loaded }) => {
+    const { drawn, watch } = loaded as {
+      readonly drawn: readonly { readonly src: string | null; readonly alt: string | null }[];
+      readonly watch: MutationObserver;
+    };
+    await waitFor(() => expect(drawn.length).toBeGreaterThan(0));
+    watch.disconnect();
+    await expect(drawn[0]).toEqual({ src: '/api/public/forms/project-enquiry/logo?v=0123456789ab', alt: '' });
+    // A logo that fails leaves rather than drawing a broken picture.
+    await waitFor(() => expect(canvasElement.querySelector('img[src^="/api/public/forms/"]')).toBeNull());
+  },
+};

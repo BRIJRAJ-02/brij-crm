@@ -4,7 +4,9 @@
   "type": "module",
   "exports": {
     "./tokens.css": "./tokens.css",
-    "./tokens.json": "./tokens.json"
+    "./tokens.json": "./tokens.json",
+    "./packs.css": "./packs.css",
+    "./packs": "./src/packs.ts"
   },
   "scripts": {
     "build:tokens": "node scripts/generate.ts",

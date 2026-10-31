@@ -10,7 +10,8 @@ The design tokens: an exact copy of the token file from the design system artifa
 |---|---|
 | `tokens.json` | The artifact's `project/tokens.json`, copied as is. Never edited by hand |
 | `source.json` | Which artifact and published version `tokens.json` came from, and the date of the sync |
-| `fonts/` | Inter and JetBrains Mono (variable, Latin), from the artifact's `project/fonts/`, with the SIL Open Font License text in `LICENSE.md` |
+| `fonts/` | Inter and JetBrains Mono (variable, Latin), from the artifact's `project/fonts/`, and the six link page packs (Fontsource's Latin subsets), with the SIL Open Font License text in `LICENSE.md` |
+| `packs.css`, `src/packs.ts` | The link page's font packs (spec 0060, AC-12): six open licence faces (Host Grotesk, Fraunces, Newsreader, Bricolage Grotesque, Outfit, Instrument Serif), each with a metric matched local fallback, and the `--font-pack-*` families. Hand written, not generated: the faces are the link page's, not the design system's, so `tokens.json` never names them. `FONT_PACKS` (`@crm/tokens/packs`) names each pack's heading file for the shells' preload; `packs.test.ts` holds the CSS, the map and the contracts' `PAGE_FONTS` together. Imported by `LinkPage`, so only pages that draw a link page carry them, and a face is fetched only once text is drawn in it |
 | `tokens.css` | Generated and committed, all inside `@layer tokens`. Never edited by hand |
 | `src/grammar.ts` | The Zod schema of the artifact's token grammar (each family is a list of tokens, never a name to value map) |
 | `src/generate.ts` | `generateTokensCss()`: turns `tokens.json` into CSS, or refuses it with a coded error |
