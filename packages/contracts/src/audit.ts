@@ -246,6 +246,8 @@ export const AuditEntryView = z.discriminatedUnion('action', [
   ),
   entry(['workspace.deleted'], workspace, z.strictObject({ purgeAfter: At.optional() })),
   entry(['workspace.restored', 'workspace_security.signed_out_everyone'], workspace, NoParams),
+  /** An API key made, revoked or brought back (parity #34): its name then. */
+  entry(['api_key.created', 'api_key.revoked', 'api_key.restored'], workspace, z.strictObject({ name: z.string() })),
   /** Only the rules that changed are present; `sessionLengthDays: null` took the limit away. */
   entry(
     ['workspace_security.changed'],

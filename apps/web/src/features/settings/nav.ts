@@ -9,6 +9,7 @@ import { strings as listStrings } from '../lists/strings.ts';
 import { jobsHref, settingsHomeHref, trashHref } from '../workspace/objects.ts';
 import { historyHref } from './history-href.ts';
 import { strings as automations } from '../automations/strings.ts';
+import { strings as developer } from './developer-nav-strings.ts';
 import { strings as history } from './history-nav-strings.ts';
 import { strings as jobs } from './jobs-strings.ts';
 import { strings as members } from './members-strings.ts';
@@ -57,6 +58,9 @@ export const generalSettingsHref = (slug: string) => `/w/${slug}/settings/genera
 /** Settings › Workspace › Automations (parity #53): what the workspace does for itself. */
 export const automationsHref = (slug: string) => `/w/${slug}/settings/automations`;
 
+/** Settings › Workspace › Developer (parity #34): the workspace's API keys, for `api_keys.manage`. */
+export const developerHref = (slug: string) => `/w/${slug}/settings/developer`;
+
 /** Settings › Workspace › Members (spec 0031): who is in the workspace, roles and invitations. */
 export const membersSettingsHref = (slug: string) => `/w/${slug}/settings/members`;
 
@@ -87,6 +91,7 @@ export type SettingsPageId =
   | 'lists'
   | 'jobs'
   | 'automations'
+  | 'developer'
   | 'history'
   | 'trash'
   | 'admin-overview'
@@ -128,7 +133,8 @@ export interface SettingsNavEntry {
     | 'chart-line'
     | 'calendar-days'
     | 'calendar-clock'
-    | 'globe';
+    | 'globe'
+    | 'code';
   /** A quiet word after the name. Every entry opens a page in Settings (20 Oct 2026; Trash too since 23 Oct 2026). */
   readonly meta?: string;
   /** A permission the page needs before the member may open it at all; absent, every member may. */
@@ -206,6 +212,14 @@ export function settingsNav(slug: string): readonly SettingsNavGroup[] {
           icon: 'zap',
           requires: 'automations.manage',
         },
+        // Developer (parity #34): API keys, for `api_keys.manage` alone, so nobody else sees the entry at all.
+        {
+          id: 'developer',
+          label: developer.title,
+          href: developerHref(slug),
+          icon: 'code',
+          requires: 'api_keys.manage',
+        },
         { id: 'jobs', label: jobs.title, href: jobsHref(slug), icon: 'list-checks' },
         // History (spec 0046): every member opens it; Workspace changes inside it is for `audit.read` alone.
         { id: 'history', label: history.title, href: historyHref(slug), icon: 'clock' },
@@ -281,6 +295,7 @@ export function settingsPageOf(pathname: string): SettingsPageId | undefined {
   if (rest === 'lists' || rest.startsWith('lists/')) return 'lists';
   if (rest === 'jobs') return 'jobs';
   if (rest === 'automations') return 'automations';
+  if (rest === 'developer') return 'developer';
   if (rest === 'history' || rest === 'history/changes' || rest === 'history/sign-ins') return 'history';
   if (rest === 'members') return 'members';
   if (rest === 'teams') return 'teams';

@@ -453,20 +453,53 @@ export function roleAccess(principal: MemberPrincipal, rules: AccessRules = NO_R
  * among its scopes, never one that stays with people (`KEY_FORBIDDEN_PERMISSIONS`), and a data
  * level on every object, `write` with `data.write`, `read` with `data.read`,
  * else none. A scope the catalog doesn't list grants nothing.
+ *
+ * With `creator` (the member who made the key, as the door just entered them), the key is never wider than they are
+ * (parity #34): only the permissions they also hold, every object and field at the lower of the key's level and
+ * theirs, and an object a record rule narrows for them closed to the key, since a record rule matches a member and a
+ * key is none (fail closed).
  */
-export function keyAccess(keyId: string, scopes: readonly string[]): Access {
+export function keyAccess(keyId: string, scopes: readonly string[], creator?: Access): Access {
   const permissions = PERMISSION_NAMES.filter(
-    (permission) => scopes.includes(permission) && !KEY_FORBIDDEN_PERMISSIONS.includes(permission),
+    (permission) =>
+      scopes.includes(permission) &&
+      !KEY_FORBIDDEN_PERMISSIONS.includes(permission) &&
+      (creator === undefined || creator.permissions.includes(permission)),
   );
   const [read, write] = KEY_DATA_SCOPES;
   const level: ObjectLevel = scopes.includes(write) ? 'write' : scopes.includes(read) ? 'read' : 'none';
+  const principal = Object.freeze({ kind: 'api_key' as const, keyId, scopes: Object.freeze([...scopes]) });
+  if (creator === undefined) {
+    return Object.freeze({
+      principal,
+      permissions: Object.freeze(permissions),
+      data: sealPolicy({
+        defaultObject: level,
+        objects: frozenRecord([]),
+        fields: frozenRecord([]),
+        records: frozenRecord([]),
+      }),
+    });
+  }
+  const theirs = creator.data;
+  const lower = (a: ObjectLevel, b: ObjectLevel): ObjectLevel => (OBJECT_RANK[a] <= OBJECT_RANK[b] ? a : b);
+  const objectEntries: (readonly [string, ObjectLevel])[] = Object.entries(theirs.objects).map(
+    ([objectId, theirLevel]) => [objectId, lower(level, theirLevel)] as const,
+  );
+  // An object under a record rule for the creator is closed to the key, whatever its level (a later entry wins).
+  for (const objectId of Object.keys(theirs.records)) objectEntries.push([objectId, 'none'] as const);
+  const fieldCap = FIELD_OF_OBJECT[level];
   return Object.freeze({
-    principal: Object.freeze({ kind: 'api_key', keyId, scopes: Object.freeze([...scopes]) }),
+    principal,
     permissions: Object.freeze(permissions),
     data: sealPolicy({
-      defaultObject: level,
-      objects: frozenRecord([]),
-      fields: frozenRecord([]),
+      defaultObject: lower(level, theirs.defaultObject),
+      objects: frozenRecord(objectEntries),
+      fields: frozenRecord(
+        Object.entries(theirs.fields).map(
+          ([attributeId, theirLevel]) => [attributeId, stricterField(fieldCap, theirLevel)] as const,
+        ),
+      ),
       records: frozenRecord([]),
     }),
   });

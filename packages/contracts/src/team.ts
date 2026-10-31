@@ -124,6 +124,11 @@ export const AUDIT_ACTIONS = [
   // Automations (parity #53): made, changed, switched on or off, deleted or brought back. The target is the
   // automation; `after` holds `change` and the name its trigger's object had then (`tasks` for a task due one).
   'automation.changed',
+  // Settings › Developer (parity #34): an API key made, revoked or brought back in its Undo window. The target is the
+  // workspace; `after` holds the key's name, id and access (`read` or `write`).
+  'api_key.created',
+  'api_key.revoked',
+  'api_key.restored',
 ] as const;
 /** One action the audit log records. */
 export const AuditAction = z.enum(AUDIT_ACTIONS);

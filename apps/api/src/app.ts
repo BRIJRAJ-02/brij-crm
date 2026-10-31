@@ -75,6 +75,7 @@ import { createRealtimeTokens } from './realtime/tokens.ts';
 import { NO_WAKE, OVERDUE_WAKE_MS, throttleWake, type WakeRelay } from './realtime/wake.ts';
 import { operatorList } from './orpc.ts';
 import { router as appRouter } from './router.ts';
+import { mountPublicApi, V1_PREFIX } from './v1/rest.ts';
 import { createRpcHandler } from './rpc.ts';
 import type { RequestTiming } from './timing.ts';
 
@@ -415,6 +416,9 @@ export function createApp({
     if (SAFE_METHODS.has(c.req.method)) return next();
     // The forms' public writes check the hosted page's own origin; booking's stay on the app's (spec 0025).
     if (c.req.path.startsWith('/api/public/forms/')) return next();
+    // The public API (parity #34) reads no cookie, only a Bearer key, so a cross site write has nothing to ride on.
+    // Never mount a route that reads the session under /api/v1/: this line would let its writes past.
+    if (c.req.path.startsWith(V1_PREFIX)) return next();
     // The marketing site's beacon checks its own origins, SITE_ORIGINS (spec 0047, AC-1627).
     if (c.req.path === SITE_HIT_PATH && c.req.method === 'POST') return next();
     // Google's change notices carry no Origin: the channel's own token is their key (spec 0024, milestone 2).
@@ -509,6 +513,18 @@ export function createApp({
     });
     return matched ? c.newResponse(response.body, response) : c.notFound();
   }
+
+  // The public API (parity #34): records over REST for a workspace's API keys, through the same door and services.
+  mountPublicApi(app, {
+    db,
+    rules,
+    limiter: { consumeRateLimit: (key, rule, cost) => identity.consumeRateLimit(key, rule, cost) },
+    // Its own gate, 2 list reads per workspace at once: a sync script never takes the 6 the app's people read with.
+    readGate: createReadGate(2),
+    wakeRelay,
+    analytics,
+    keepAlive,
+  });
 
   // Connecting a calendar (spec 0024): the browser navigates both, so they are plain routes beside the RPC.
   app.get('/calendar/google/start', (c) => calendarRoutes.start(c));

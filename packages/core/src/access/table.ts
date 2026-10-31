@@ -417,6 +417,11 @@ export const ACCESS_TABLE = {
   deleteAutomation: { permission: 'automations.manage' },
   restoreAutomation: { permission: 'automations.manage' },
   listAutomationRuns: { permission: 'automations.manage' },
+  // API keys (parity #34): all of it needs api_keys.manage; a key's own requests go through `enterWithKey`.
+  listApiKeys: { permission: 'api_keys.manage' },
+  createApiKey: { permission: 'api_keys.manage' },
+  revokeApiKey: { permission: 'api_keys.manage' },
+  restoreApiKey: { permission: 'api_keys.manage' },
   // Forms (spec 0023): any member reads the forms on objects they can see; changing one, or acting on a
   // submission, needs forms.manage. A submission reads through its main record. The public form and submit take
   // only the scope the form's own public key made.

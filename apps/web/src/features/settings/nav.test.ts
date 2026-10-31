@@ -89,12 +89,19 @@ describe('visibleSettingsNav', () => {
     expect(visibleSettingsNav(settingsNav('acme'), ['booking.manage'])).toEqual(
       workspaceGroups.map((group) => ({
         ...group,
-        entries: group.entries.filter((entry) => entry.id !== 'workspace-security' && entry.id !== 'automations'),
+        entries: group.entries.filter(
+          (entry) => entry.id !== 'workspace-security' && entry.id !== 'automations' && entry.id !== 'developer',
+        ),
       })),
     );
     // Workspace › Security only for those who change sign in rules (spec 0033).
     expect(
-      visibleSettingsNav(settingsNav('acme'), ['booking.manage', 'security.manage', 'automations.manage']),
+      visibleSettingsNav(settingsNav('acme'), [
+        'booking.manage',
+        'security.manage',
+        'automations.manage',
+        'api_keys.manage',
+      ]),
     ).toEqual(workspaceGroups);
     // Calendars and Round robin are tabs of Bookings (25 October 2026), so neither is in here to lose.
     expect(visibleSettingsNav(settingsNav('acme'), []).map((group) => group.entries.map((entry) => entry.id))).toEqual([

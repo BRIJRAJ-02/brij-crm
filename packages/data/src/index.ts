@@ -289,6 +289,7 @@ import {
 } from './captures/list.ts';
 import type { Report as ReportView, ReportConfig } from '@crm/contracts';
 import type { RecordFileView } from '@crm/contracts';
+import type { ApiKey, ApiKeyAccess } from '@crm/contracts';
 import type { ReportPlan } from '@crm/contracts/reports';
 import { lazyFiguresSource, type ReportFiguresSource } from './reports/figures-source.ts';
 import type { NavOperation, NavUniverse } from '@crm/contracts/navigation';
@@ -722,6 +723,8 @@ export { purgeLeftOf, type PurgeLeftEntry } from './jobs/left.ts';
 export type { View, ViewColumn, ViewConfig, ViewKind, ViewLayout, ViewSummary, ViewVisibility } from '@crm/contracts';
 // Saved reports (the reports lane): a chart's definition, and the figures its plan works out.
 export type { Report as ReportView, ReportConfig, ReportGroupBy, ReportMeasure } from '@crm/contracts';
+// Settings › Developer (parity #34): an API key as the list shows it (never its secret), and what it may do.
+export type { ApiKey, ApiKeyAccess } from '@crm/contracts';
 export type { ReportFigures, ReportFiguresSource, ReportFiguresState, ReportPoint } from './reports/figures-source.ts';
 export {
   CREATED_AT_SLUG,
@@ -2648,6 +2651,11 @@ export function createDataLayer({
   // are settings with no change events of their own, so the list is read again when a screen holds it after a while.
   const reportLists = createCaptureList<ReportView>({
     read: (workspace) => call((options) => api.reports.list({ workspace }, options)).then((answer) => answer.reports),
+  });
+  // API keys (parity #34): one held list per workspace, patched by every key write below. Keys are settings with no
+  // change events of their own, so the list is read again when a screen holds it after a while.
+  const apiKeyLists = createCaptureList<ApiKey>({
+    read: (workspace) => call((options) => api.apiKeys.list({ workspace }, options)).then((answer) => answer.keys),
   });
   /** A question's calculations as the records layer holds them: a report's figures ask through it. */
   const aggregatesOf = (workspace: string, question: AggregateQuestion): AggregateSource =>
@@ -6457,6 +6465,42 @@ export function createDataLayer({
       /** Sets a booking page's own "Add events to" (`null`: the owner's default): at once, put back if refused. */
       setPageDestination: (workspace: string, pageId: string, calendarId: string | null): Promise<boolean> =>
         calendars.setPageDestination(workspace, pageId, calendarId),
+    },
+    apiKeys: {
+      /**
+       * The workspace's live API keys (parity #34) as the held list Settings › Developer shows (`useCaptureList`),
+       * newest first; every write here patches it. Read again when a screen holds it after a while away.
+       */
+      view: (workspace: string): CaptureListView<ApiKey> => apiKeyLists.view(workspace),
+      /** A new key's id: mint it once per Create key, and send the same one on a retry. */
+      newId: (): string => mintId(),
+      /**
+       * Makes a key and answers its whole value, which the server never gives again; the list gains the key once it
+       * lands (it can't be shown before the server made its secret). Rejects with the refusal.
+       */
+      create: (
+        workspace: string,
+        key: { readonly id: string; readonly name: string; readonly access: ApiKeyAccess },
+      ): Promise<{ readonly key: ApiKey; readonly token: string }> =>
+        apiKeyLists.write(workspace, {
+          send: () => call((options) => api.apiKeys.create({ workspace, ...key, mutationId: mintId() }, options)),
+          land: (items, made) => upsertFirst(made.key)(items),
+        }),
+      /** Revokes a key: gone from the list at once, back on a refusal. The screen's toast offers Undo (`restore`). */
+      revoke: (workspace: string, keyId: string): Promise<ApiKey> =>
+        apiKeyLists.write(workspace, {
+          send: () => call((options) => api.apiKeys.revoke({ workspace, keyId, mutationId: mintId() }, options)),
+          ...shownDrop(apiKeyLists.items(workspace), keyId),
+        }),
+      /** Brings a revoked key back within its Undo window; it rejoins the list once the server says so. */
+      restore: (workspace: string, keyId: string): Promise<ApiKey> =>
+        apiKeyLists.write(workspace, {
+          send: () => call((options) => api.apiKeys.restore({ workspace, keyId, mutationId: mintId() }, options)),
+          land: (items, back) =>
+            [...items.filter((each) => each.id !== back.id), back].sort((a, b) =>
+              b.createdAt.localeCompare(a.createdAt),
+            ),
+        }),
     },
     reports: {
       /**

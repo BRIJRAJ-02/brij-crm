@@ -165,6 +165,9 @@ const SENTENCES: SentenceTemplates = {
     return actor('changed the sign in rules');
   },
   'workspace_security.signed_out_everyone': () => actor('signed everyone out of the workspace'),
+  'api_key.created': (entry) => actor(`made the API key ${entry.params.name}`),
+  'api_key.revoked': (entry) => actor(`revoked the API key ${entry.params.name}`),
+  'api_key.restored': (entry) => actor(`brought back the API key ${entry.params.name}`),
   'rotation.adjusted': (entry, w) =>
     actor(
       `adjusted ${w.persons(entry.params.person)} count in ${w.thing(entry.target)} by ${units(entry.params.units)}`,

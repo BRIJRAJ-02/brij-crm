@@ -25,6 +25,11 @@ const READS: ReadonlySet<string> = new Set([
   // Automations (parity #53): the list and the run log.
   'automations.list',
   'automations.runs',
+  // API keys (parity 34): the list, and the key changes, which store no outbox row (each writes its audit row).
+  'apiKeys.list',
+  'apiKeys.create',
+  'apiKeys.revoke',
+  'apiKeys.restore',
   // Fails on purpose when switched on (spec 0010); it writes nothing either way.
   'system.testFault',
   'me.get',

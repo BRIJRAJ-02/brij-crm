@@ -19,6 +19,11 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   // until #24 stores them: the door's input, not a service.
   'enterWorkspace',
   'enterWithKey',
+  // A key's throttled last used touch (parity #34): the key's own row, after the door let it in.
+  'noteKeyUse',
+  // A key's shape, pure (parity 34).
+  'keyToken',
+  'parseKeyToken',
   'enterAsActor',
   'systemScope',
   'NO_RULE_SOURCE',

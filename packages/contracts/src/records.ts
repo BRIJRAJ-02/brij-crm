@@ -357,7 +357,7 @@ export const LastContacted = z.object({ at: Timestamp.optional() });
 export type LastContacted = z.infer<typeof LastContacted>;
 
 /** Values by attribute id, as a write gives them. */
-const ValuesById = z.record(z.uuid(), z.unknown());
+export const ValuesById = z.record(z.uuid(), z.unknown());
 
 /**
  * A new record: its object, a uuid v7 the browser mints (the retry key:
