@@ -11,6 +11,7 @@ export const strings = {
   addSort: 'Add sort',
   remove: (name: string) => `Remove the sort by ${name}`,
   move: (name: string) => `Move the sort by ${name}`,
-  noSorts: 'No sorts yet',
-  noSortsText: 'Newest records show first.',
+  /** Where nothing is sorted: the order that runs. */
+  noSorts: 'Newest records first',
+  system: 'System',
 } as const;

@@ -24,8 +24,7 @@ import {
   type FormRefusal,
   type ViewAction as ViewMenuAction,
 } from '@crm/ui';
-import { useNavigate, useRouteContext } from '@tanstack/react-router';
-import { trashHref } from '../workspace/objects.ts';
+import { useRouteContext } from '@tanstack/react-router';
 import { useId, useState, type ReactNode } from 'react';
 import { strings } from './strings.ts';
 
@@ -104,7 +103,6 @@ export function useViewMenu({
   // A view's parent as the views store holds it: its list, or its object.
   const parentId = listId ?? object.id;
   const { data, toasts } = useRouteContext({ from: '__root__' });
-  const navigate = useNavigate();
   const [isRenaming, setRenaming] = useState(false);
   const [isBusy, setBusy] = useState(false);
   // Make private ends everyone else's use of the view, so it asks first, as Delete does.
@@ -303,21 +301,9 @@ export function useViewMenu({
               })),
         ]
       : []),
-    // Deleted records wait in the trash (spec 0022); a delete's toast has room for Undo only, so the way there is here.
-    ...(listId === undefined
-      ? [
-          {
-            id: 'open-trash',
-            label: strings.openTrash,
-            icon: 'trash' as const,
-            startsGroup: true,
-            run: () => {
-              void navigate({ href: `${trashHref(slug)}?object=${encodeURIComponent(object.id)}` });
-            },
-          },
-        ]
-      : []),
-    ...entry(reasonFor('delete'), {
+    // Open trash moved to the object's own menu in the sidebar (owner item 52, 31 October 2026): the trash is the
+    // object's, not this view's. A Delete that can't run now is left out rather than shown with a sentence (item 53).
+    ...entry(reasonFor('delete') === undefined ? undefined : null, {
       id: 'delete',
       label: strings.deleteView,
       icon: 'trash',

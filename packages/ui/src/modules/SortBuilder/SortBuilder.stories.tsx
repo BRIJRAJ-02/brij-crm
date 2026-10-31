@@ -1,7 +1,7 @@
 import type { SortRule } from '@crm/contracts/values';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
-import { expect, fn, waitFor } from 'storybook/test';
+import { expect, fn, screen, waitFor } from 'storybook/test';
 import type { FieldAttribute } from '../../fields/types.ts';
 import { attributeOf } from '../../workbench/attributes.ts';
 import { hoverFresh, shownTooltip } from '../../workbench/pointer.ts';
@@ -120,11 +120,45 @@ export const FocusStays: Story = {
   },
 };
 
-/** No sorts yet: records show in the order they were added. */
+/** One sort: nothing to order it against, so no grip; the row sizes to its content. */
+export const OneSort: Story = {
+  args: { initial: [{ attributeId: 'name', direction: 'ascending' }] },
+  play: async ({ canvas }) => {
+    await expect(canvas.getAllByRole('row')).toHaveLength(1);
+    await expect(canvas.queryByRole('button', { name: /^Move the sort/ })).toBeNull();
+  },
+};
+
+/** System fields (Record ID, Created at) come last in the attribute menu, under System. */
+export const SystemLast: Story = {
+  args: { initial: [] },
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage>
+      <SortBuilder
+        attributes={[
+          attributeOf('text', 'Record ID', { isSystem: true }),
+          attributeOf('text', 'Name'),
+          attributeOf('timestamp', 'Created at', { isSystem: true }),
+        ]}
+        value={[]}
+        onChange={fn()}
+      />
+    </Stage>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Add sort' }));
+    const items = await screen.findAllByRole('menuitem');
+    await expect(items.map((item) => item.textContent)).toEqual(['Name', 'Record ID', 'Created at']);
+    await expect(screen.getByText('System')).toBeInTheDocument();
+  },
+};
+
+/** No sorts yet: one line saying the order that runs, then Add sort. */
 export const Empty: Story = {
   args: { initial: [] },
   play: async ({ canvas }) => {
-    await expect(canvas.getByText('No sorts yet')).toBeInTheDocument();
+    await expect(canvas.getByText('Newest records first')).toBeInTheDocument();
   },
 };
 

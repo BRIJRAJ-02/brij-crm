@@ -7,7 +7,10 @@ export const strings = {
   condition: (index: number) => `Filter ${String(index)}`,
   group: (index: number) => `Filter group ${String(index)}`,
   addFilter: 'Add filter',
-  addGroup: 'Add filter group',
+  /** The second, quieter add: a nested group of conditions. */
+  addGroup: 'Add group',
+  /** The heading over system attributes (Record ID, Created at) at the end of the attribute menu. */
+  system: 'System',
   removeFilter: 'Remove filter',
   removeGroup: 'Remove filter group',
   /** The top group's foot, at its end: every filter goes at once. */
@@ -41,7 +44,6 @@ export const strings = {
   ago: 'ago',
   amountRange: 'Enter a whole number from 1 to 999.',
   noFilters: 'No filters yet',
-  noFiltersText: 'Add a filter to narrow this view.',
   /** A group of conditions as one chip in the toolbar. */
   groupChip: (count: number) => (count === 1 ? '1 condition' : `${String(count)} conditions`),
   /** A condition whose attribute the view can't show. */

@@ -1,38 +1,18 @@
-/* ViewSettings: a label-strong title with the shown count, an optional
-   search, then size-nav-item rows: the drag handle, the type's icon, the
-   name and the switch at the end ("Always shown" on the locked row). A dragged row fades; the drop target takes
-   the inset ring. */
+/* ViewSettings: an optional header (Group by), a search pinned at the top,
+   then three sections space-16 apart, each a label-strong heading with its
+   count over size-nav-item rows: Shown (grip on hover, the type's icon, the
+   name, Hide), Hidden and System (icon, name, Show). The footer stays pinned
+   at the popover's foot over a hairline while the lists scroll. A dragged row
+   lifts; the drop target takes the inset ring. */
 @layer components {
   .root {
     display: flex;
     flex-direction: column;
-    gap: var(--space-8);
-    min-inline-size: 0;
+    gap: var(--space-12);
+    min-inline-size: calc(var(--size-menu) + var(--space-32));
   }
 
-  .head {
-    display: flex;
-    gap: var(--space-8);
-    align-items: baseline;
-    justify-content: space-between;
-  }
-
-  .label {
-    color: var(--text-secondary);
-    font: var(--text-label-strong);
-    letter-spacing: var(--tracking-label-strong);
-  }
-
-  .count,
-  .locked,
-  .empty {
-    color: var(--text-tertiary);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
-  }
-
-  /* The footer under the list: its action ("Add attribute"), apart from the rows. */
-  /* Above the list: a table's Group by, apart from the columns after a hairline. */
+  /* Above the lists: a table's Group by, apart from them after a hairline. */
   .lead {
     display: flex;
     flex-direction: column;
@@ -40,16 +20,70 @@
     border-block-end: var(--border-width-hairline) solid var(--border-subtle);
   }
 
-  .foot {
+  /* Pinned under the popover's top edge while the lists scroll. */
+  .search {
+    position: sticky;
+    z-index: var(--z-raised);
+    inset-block-start: calc(-1 * var(--popover-panel-inset));
+    margin-block-start: calc(-1 * var(--popover-panel-inset));
+    padding-block: var(--popover-panel-inset) var(--space-4);
+    background: var(--surface-raised);
+  }
+
+  .section {
     display: flex;
-    padding-block-start: var(--space-8);
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .section + .section {
+    margin-block-start: var(--space-4);
+  }
+
+  .head {
+    display: flex;
+    gap: var(--space-8);
+    align-items: baseline;
+    padding-inline: calc(var(--popover-text-inset) - var(--popover-panel-inset));
+  }
+
+  .label {
+    color: var(--text);
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label-strong);
+  }
+
+  .count,
+  .empty {
+    color: var(--text-tertiary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .empty {
+    padding-block: var(--space-8);
+    padding-inline: calc(var(--popover-text-inset) - var(--popover-panel-inset));
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
+  /* Pinned to the popover's foot over a hairline: Add attribute never scrolls out of reach. */
+  .foot {
+    position: sticky;
+    z-index: var(--z-raised);
+    inset-block-end: calc(-1 * var(--popover-panel-inset));
+    display: flex;
+    margin-block-end: calc(-1 * var(--popover-panel-inset));
+    margin-inline: calc(-1 * var(--popover-panel-inset));
+    padding: var(--space-4) var(--popover-panel-inset);
     border-block-start: var(--border-width-hairline) solid var(--border-subtle);
+    background: var(--surface-raised);
   }
 
   .list {
     display: flex;
     flex-direction: column;
-    gap: var(--border-width-hairline);
     border-radius: var(--radius-sm);
     outline: none;
   }
@@ -63,9 +97,15 @@
     gap: var(--space-8);
     align-items: center;
     block-size: var(--size-nav-item);
-    padding-inline: calc(var(--popover-text-inset) - var(--popover-panel-inset));
+    padding-inline: calc(var(--popover-text-inset) - var(--popover-panel-inset)) var(--space-2);
     border-radius: var(--radius-sm);
     outline: none;
+    transition: background-color var(--duration-hover) var(--ease-hover);
+  }
+
+  /* Shown rows keep their grip's room, so their icons line up whether or not the grip shows. */
+  .shownRow {
+    padding-inline-start: 0;
   }
 
   @media (hover: hover) and (pointer: fine) {
@@ -74,7 +114,13 @@
     }
   }
 
-  .row[data-focus-visible],
+  .row[data-focus-visible] {
+    box-shadow: var(--shadow-focus-inset);
+  }
+
+  .row[data-disabled] {
+    opacity: var(--opacity-disabled);
+  }
 
   /* The row being moved (the drag wrapper sets data-dragging): lifted above the rest, which slide out of its way. */
   .row[data-dragging] {
@@ -84,10 +130,42 @@
     box-shadow: var(--shadow-md);
   }
 
-  /* Where a locked row's handle would be (the handle's icon and padding), so names line up. */
-  .spacer {
+  /* The grip shows only where it can move a row, and only under the pointer or focus: a column of grips was noise. */
+  .grip {
+    display: inline-flex;
     flex: none;
+    justify-content: center;
+    /* The handle's icon and padding, held even when there is none, so names line up. */
     inline-size: calc(var(--size-icon-sm) + 2 * var(--space-2));
+    opacity: 0;
+    transition: opacity var(--duration-hover) var(--ease-hover);
+  }
+
+  .grip:not([data-can-move]) {
+    visibility: hidden;
+  }
+
+  .row[data-hovered] > .grip,
+  .row[data-focus-visible] > .grip,
+  .row:focus-within > .grip,
+  .row[data-dragging] > .grip {
+    opacity: 1;
+  }
+
+  /* No hover on a touch screen: the grips stay. */
+  @media (hover: none) {
+    .grip {
+      opacity: 1;
+    }
+  }
+
+  /* The lock on the name's row, where Hide sits on the others. */
+  .locked {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    inline-size: var(--size-control);
   }
 
   .name {
@@ -101,15 +179,20 @@
     white-space: nowrap;
   }
 
+  @media (prefers-reduced-motion: reduce) {
+    .row,
+    .grip {
+      transition: none;
+    }
+  }
+
   @media (forced-colors: active) {
     .list[data-focus-visible],
     .row[data-focus-visible] {
       outline: var(--border-width-thick) solid Highlight;
       outline-offset: calc(-1 * var(--border-width-thick));
     }
-  }
-  /* Lifted, in forced colours, where the shadow and surface are gone. */
-  @media (forced-colors: active) {
+
     .row[data-dragging] {
       outline: var(--border-width-thick) solid Highlight;
     }

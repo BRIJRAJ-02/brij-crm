@@ -36,7 +36,7 @@ import type { Hue } from '../../hue.ts';
 import { SortableList, useSortableItem } from '../../lib/drag/drag.tsx';
 import { safeHref } from '../../lib/safe-href.ts';
 import { Disclosure } from '../../molecules/Disclosure/Disclosure.tsx';
-import { MenuTrigger } from '../../molecules/Menu/Menu.tsx';
+import { ContextMenu, MenuTrigger } from '../../molecules/Menu/Menu.tsx';
 import { useKeyboardPlatform } from '../../provider/context.ts';
 import { useDelayedLoading } from '../../provider/useDelayedLoading.ts';
 import { AppShellContext } from '../AppShell/AppShell.tsx';
@@ -382,9 +382,9 @@ interface NavItemFace {
   /** Its key inside a `NavSection` that reorders (`onReorder`): what the move names. */
   readonly id?: string;
   /**
-   * The item's own menu (Hide from sidebar, Remove from favourites): a `Menu`
-   * opened by a quiet "More" button after the name, shown on hover or focus
-   * (spec 0034). Not on the rail.
+   * The item's own menu (an object's settings, Copy link, Hide from sidebar): a `Menu`
+   * opened by a quiet "More" button after the name, shown on hover or keyboard focus
+   * (spec 0034), and by a right click on the row. Not on the rail.
    */
   readonly menu?: ReactElement;
 }
@@ -492,11 +492,13 @@ function ItemRow({
   readonly menu: ReactElement | undefined;
 }) {
   const reorders = useContext(ReorderContext);
-  if (reorders && id !== undefined) return <SortableItemRow id={id} name={name} item={item} menu={menu} />;
+  // A right click on the row opens its menu too, at the pointer (owner item 90, as Attio's sidebar does).
+  const linked = menu === undefined ? item : <ContextMenu menu={menu}>{item}</ContextMenu>;
+  if (reorders && id !== undefined) return <SortableItemRow id={id} name={name} item={linked} menu={menu} />;
   if (menu === undefined) return item;
   return (
     <div className={styles.row}>
-      {item}
+      {linked}
       <span className={styles.rowActions}>
         <ItemMenu name={name} menu={menu} />
       </span>

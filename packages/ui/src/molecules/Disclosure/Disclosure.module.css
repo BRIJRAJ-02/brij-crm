@@ -47,7 +47,8 @@
 
     .actions[data-quiet]:has([aria-expanded='true'], [data-lifted]),
     .headingRow:hover > .actions[data-quiet],
-    .headingRow:focus-within > .actions[data-quiet] {
+    /* Keyboard focus only: a click on the label leaves focus there, and the actions stayed out for good. */
+    .headingRow:has(:focus-visible) > .actions[data-quiet] {
       opacity: 1;
     }
   }

@@ -513,18 +513,17 @@ function SearchBar() {
   );
 }
 
-/** Search at the Toolbar's end: a button that opens into a focused field; Esc clears it and folds it back. */
+/** Search beside Filter: a real field from the start, wider while focused or holding text; Esc clears it. */
 export const Search: Story = {
-  parameters: { crm: { screenshot: false } },
   render: () => <SearchBar />,
   play: async ({ canvas, userEvent }) => {
-    await userEvent.click(canvas.getByRole('button', { name: 'Search people' }));
-    const field = await waitFor(() => canvas.getByRole('searchbox', { name: 'Search people' }));
-    await waitFor(() => expect(field).toHaveFocus());
+    const field = canvas.getByRole('searchbox', { name: 'Search people' });
+    await expect(field).toHaveAttribute('placeholder', 'Search people');
+    await userEvent.click(field);
     await userEvent.keyboard('ada');
     await expect(canvas.getByText('Typed ada')).toBeInTheDocument();
     await userEvent.keyboard('{Escape}');
-    await waitFor(() => expect(canvas.getByRole('button', { name: 'Search people' })).toHaveFocus());
+    await expect(field).toHaveFocus();
     await expect(canvas.getByText('Typed')).toBeInTheDocument();
   },
 };

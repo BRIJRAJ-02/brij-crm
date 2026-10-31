@@ -16,7 +16,7 @@ New. The artifact draws each menu's surface itself and animates it in only. One 
 ```
 
 - Put a `Menu` or `ListBox` straight inside; give `label` for any other content, and it opens as a dialog with that name.
-- `width`: `content` (the default), `menu` (240px, or the trigger's width when wider), `list` (exactly that width, so long options wrap: Select's `optionDescription="below"`), `trigger` (at least the trigger's width and wider when an option needs it, so an option never wraps: a select), `panel` (`size-dialog`, never past the window, for a few SettingsRows with their controls at the end: the Members page's Scheduling access, spec 0037; why: at `list` width each row's level Select and Remove dropped under its name, so the rows read as broken; under the dialog's width, a phone, the popover meets the window and the rows stack their controls under the text, as SettingsRow does in any narrow column), `builder` (`size-dialog-wide`, never past the window, for a view's FilterBuilder or SortBuilder). Why `builder`: those size themselves by container query, so shrink to fit gave them no width at all and their fields collapsed (spec 0020's Toolbar).
+- `width`: `content` (the default), `menu` (240px, or the trigger's width when wider), `list` (exactly that width, so long options wrap: Select's `optionDescription="below"`), `trigger` (at least the trigger's width and wider when an option needs it, so an option never wraps: a select), `panel` (`size-dialog`, never past the window, for a few SettingsRows with their controls at the end: the Members page's Scheduling access, spec 0037; why: at `list` width each row's level Select and Remove dropped under its name, so the rows read as broken; under the dialog's width, a phone, the popover meets the window and the rows stack their controls under the text, as SettingsRow does in any narrow column), `builder` (`size-dialog-form` plus `size-column-min`, never past the window, for a view's FilterBuilder). Why `builder`: it sizes itself by container query, so shrink to fit gave it no width at all and its fields collapsed (spec 0020's Toolbar); it was `size-dialog-wide` until 31 October 2026 (owner item 46, rows stretched across it). The SortBuilder sizes to its content (`content`).
 - `placement` follows React Aria (`bottom start` by default) and flips when there is no room.
 - `triggerRef` anchors it to an element that isn't a React Aria trigger (a context menu's row).
 - What it holds knows it is in a popover (`InPopover`, a context): a Field or a Select there draws its focus with its accent border alone, no halo, since the popover's edge already frames it (the owner, 21 October 2026: a halo inside a grid cell's editor read as a second ring). Modal sets it back to false for what it holds.
@@ -33,7 +33,7 @@ Esc closes it and returns focus to the trigger. Focus stays inside while it is o
 ## Differences from the artifact
 
 - Not a card in the artifact; it takes over the surface `ws-menu` drew, with an exit animation.
-- Its gap to the trigger is a `space-4` margin on the placed side, so it comes from a token.
+- Its gap to the trigger is a `space-6` margin on the placed side, so it comes from a token, and it reads as a layer, never flush on the bar it opened from. Its edge is `border` (the surface role) under `shadow-md` (owner items 42 and 45, 31 October 2026). It is a flex column capped at React Aria's max height, so a long dialog scrolls inside and a pinned footer (View settings' Add attribute) stays in view.
 
 ## Insets
 

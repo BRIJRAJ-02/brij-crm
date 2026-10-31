@@ -13,7 +13,7 @@ import { SortableList, SortableRowGrip } from '../../lib/drag/drag.tsx';
 import { focusLater } from '../../lib/focus-later.ts';
 import { reorder } from '../../lib/reorder.ts';
 import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
-import { Menu, MenuItem, MenuTrigger, type MenuKey } from '../../molecules/Menu/Menu.tsx';
+import { Menu, MenuItem, MenuSection, MenuTrigger, type MenuKey } from '../../molecules/Menu/Menu.tsx';
 import styles from './SortBuilder.module.css';
 import { strings } from './strings.ts';
 
@@ -76,7 +76,7 @@ export function SortBuilder({ attributes, value, onChange, isReadOnly = false }:
     isReadOnly || value.length >= MAX_SORTS || unused.length === 0 ? null : (
       <span className={styles.adder} data-adder="">
         <MenuTrigger>
-          <Button variant="dashed" icon="plus">
+          <Button variant="ghost" icon="plus">
             {strings.addSort}
           </Button>
           <AttributeMenu attributes={unused} onAction={add} />
@@ -84,19 +84,20 @@ export function SortBuilder({ attributes, value, onChange, isReadOnly = false }:
       </span>
     );
   if (value.length === 0) {
+    // One quiet line saying the order that runs, then Add sort: no tile or paragraph in a small popover.
     return (
       <div ref={rootRef} className={styles.root}>
-        <EmptyState
-          title={strings.noSorts}
-          icon="arrow-down-wide-narrow"
-          {...(adder === null ? {} : { actions: adder })}
-        >
-          {strings.noSortsText}
-        </EmptyState>
+        <EmptyState title={strings.noSorts} icon="arrow-down-wide-narrow" layout="row" />
+        {adder}
       </div>
     );
   }
   const rows = value.map((rule, index) => ({ id: rule.attributeId, rule, index }));
+  // A grip only where there is an order to change: one sort has nothing to move past.
+  const isMovable = !isReadOnly && value.length > 1;
+  const listClass = [styles.list, isReadOnly ? styles.listReadOnly : isMovable ? styles.listMovable : undefined]
+    .filter(Boolean)
+    .join(' ');
   return (
     <div ref={rootRef} className={styles.root}>
       <SortableList
@@ -106,7 +107,7 @@ export function SortBuilder({ attributes, value, onChange, isReadOnly = false }:
           onChange(reorder(value, (rule) => rule.attributeId, new Set([move.id]), move.targetId, move.position));
         }}
       >
-        <GridList aria-label={strings.label} items={rows} className={styles.list}>
+        <GridList aria-label={strings.label} items={rows} className={listClass}>
           {({ rule, index }) => {
             const name = nameOf(rule.attributeId);
             const attribute = attributes.find((each) => each.id === rule.attributeId);
@@ -117,12 +118,8 @@ export function SortBuilder({ attributes, value, onChange, isReadOnly = false }:
               );
             };
             return (
-              <GridListItem
-                id={rule.attributeId}
-                textValue={name}
-                className={isReadOnly ? `${styles.row ?? ''} ${styles.readOnly ?? ''}` : styles.row}
-              >
-                {!isReadOnly && <SortableRowGrip id={rule.attributeId} label={strings.move(name)} />}
+              <GridListItem id={rule.attributeId} textValue={name} className={styles.row}>
+                {isMovable && <SortableRowGrip id={rule.attributeId} label={strings.move(name)} />}
                 <span className={styles.lead}>{index === 0 ? strings.sortBy : strings.thenBy}</span>
                 {isReadOnly ? (
                   <>
@@ -216,7 +213,7 @@ export function SortBuilder({ attributes, value, onChange, isReadOnly = false }:
 const directionLabel = (direction: 'ascending' | 'descending') =>
   direction === 'ascending' ? strings.ascending : strings.descending;
 
-/** A searchable menu of attributes, each with its type's icon. */
+/** A searchable menu of attributes, each with its type's icon: the object's own first, system fields after under System. */
 function AttributeMenu({
   attributes,
   onAction,
@@ -224,13 +221,21 @@ function AttributeMenu({
   readonly attributes: readonly FieldAttribute[];
   readonly onAction: (key: MenuKey) => void;
 }) {
+  const item = (attribute: FieldAttribute) => (
+    <MenuItem key={attribute.id} id={attribute.id} icon={iconOf(attribute)}>
+      {attribute.name}
+    </MenuItem>
+  );
+  const own = attributes.filter((attribute) => attribute.isSystem !== true);
+  const system = attributes.filter((attribute) => attribute.isSystem === true);
   return (
     <Menu label={strings.attributes} search={{ label: strings.searchAttributes }} onAction={onAction}>
-      {attributes.map((attribute) => (
-        <MenuItem key={attribute.id} id={attribute.id} icon={iconOf(attribute)}>
-          {attribute.name}
-        </MenuItem>
-      ))}
+      {own.map(item)}
+      {system.length > 0 && (
+        <MenuSection label={strings.system} isLabelHidden={own.length === 0}>
+          {system.map(item)}
+        </MenuSection>
+      )}
     </Menu>
   );
 }

@@ -1,7 +1,9 @@
-/* FilterBuilder: rows space-8 apart, each a lead column (Where, the and or or
-   switch, or the conjunction as text) and its controls wrapping at
-   space-8: the attribute at a fixed width and the operator at least the
-   direction's, as SortBuilder's rows are. A nested group sits in a surface-subtle box with a hairline. In a
+/* FilterBuilder: rows space-8 apart sharing one grid (each row a subgrid), a
+   lead column as wide as its widest lead (Where, the and or or switch, or the
+   conjunction as text) and the controls wrapping at space-8: the attribute
+   sized to its name between 7 and 10 size-chip, the operator to its words
+   from 5, each with the secondary edge and fill, so nothing stretches across
+   the popover (owner items 44 and 46, 31 October 2026). A nested group sits in a surface-subtle box with a hairline. In a
    slot narrower than bp-container-md, each row's lead sits above its
    controls. */
 @layer components {
@@ -16,15 +18,15 @@
   }
 
   .rows {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
     gap: var(--space-8);
   }
 
   .row {
     display: grid;
-    grid-template-columns: calc(4 * var(--size-chip)) minmax(0, 1fr);
-    gap: var(--space-8);
+    grid-column: 1 / -1;
+    grid-template-columns: subgrid;
     align-items: center;
   }
 
@@ -69,17 +71,18 @@
     min-inline-size: 0;
   }
 
-  /* A condition's attribute at SortBuilder's attribute width, so the rows line up; a long name is cut. */
+  /* A condition's attribute sized to its name, from 7 to 10 size-chip; a longer name is cut, whole in a tooltip. */
   .pick {
     display: flex;
-    inline-size: calc(10 * var(--size-chip));
-    max-inline-size: 100%;
+    inline-size: fit-content;
+    min-inline-size: calc(7 * var(--size-chip));
+    max-inline-size: min(100%, calc(10 * var(--size-chip)));
   }
 
-  /* The operator at least the direction's width; its words are never cut. */
+  /* The operator sized to its words, from 5 size-chip; its words are never cut. */
   .operatorPick {
     display: flex;
-    min-inline-size: calc(7 * var(--size-chip));
+    min-inline-size: calc(5 * var(--size-chip));
   }
 
   .attribute {
@@ -98,8 +101,11 @@
   }
 
   @container (width < 480px) {
-    .row {
+    .rows {
       grid-template-columns: minmax(0, 1fr);
+    }
+
+    .row {
       gap: var(--space-4);
     }
   }

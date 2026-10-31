@@ -2,7 +2,7 @@
 // page title, ViewBar with the view switcher and the view's actions, and
 // Toolbar with the sorts and filters that shape the view, and Save when the
 // view has unsaved changes.
-import { useRef, useState, type ReactNode, type Ref } from 'react';
+import type { ReactNode, Ref } from 'react';
 import { Toolbar as AriaToolbar } from 'react-aria-components';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
@@ -13,7 +13,6 @@ import type { Hue } from '../../hue.ts';
 import { Breadcrumbs, type Crumb } from '../../molecules/Breadcrumbs/Breadcrumbs.tsx';
 import { Field } from '../../molecules/Field/Field.tsx';
 import { FilterChip } from '../../molecules/FilterChip/FilterChip.tsx';
-import { focusLater } from '../../lib/focus-later.ts';
 import { SegmentedControl, type Segment } from '../../molecules/SegmentedControl/SegmentedControl.tsx';
 import {
   Menu,
@@ -130,7 +129,10 @@ export interface ViewAction {
   /** Why it can't run now, shown under it, the item disabled; only where the person could act after a change. */
   readonly reason?: string;
   readonly isDanger?: boolean;
-  /** Starts a group of its own after a hairline: Rename, Duplicate and Copy link; then sharing; then Delete. */
+  /**
+   * Kept for callers; the menu no longer draws a hairline for it: the view's actions are one group (owner item 51,
+   * 31 October 2026).
+   */
   readonly startsGroup?: boolean;
   /**
    * The action is a choice of states (Who can see it): a submenu of them, the current one checked. Choosing one
@@ -258,11 +260,13 @@ export function ViewBar(props: ViewBarProps) {
     else onViewChange(String(key));
   };
   const { loose, named } = sectionsOf(views);
+  // In the menu the check marks the current view, so a view's own icon shows only when it says something (a lock, an
+  // icon someone chose): a check and a grid on one row said the same thing twice (owner item 54).
   const item = (view: ViewChoice) => (
     <MenuItem
       key={view.id}
       id={view.id}
-      icon={choiceIcon(view)}
+      {...(view.isLocked === true || view.icon !== undefined ? { icon: choiceIcon(view) } : {})}
       {...(view.isLocked === true ? { meta: strings.locked } : {})}
       {...(view.isMovable === true && onMoveView !== undefined
         ? {
@@ -300,7 +304,8 @@ export function ViewBar(props: ViewBarProps) {
                 {section.views.map(item)}
               </MenuSection>
             ))}
-            {onCreateView !== undefined && <MenuSeparator />}
+            {/* Two groups (owner items 51 and 55): the views with Create view, then this view's actions, apart after
+                one hairline, with no heading of their own and no further dividers. */}
             {onCreateView !== undefined && (
               <MenuItem id={CREATE} icon="plus">
                 {strings.createView}
@@ -309,9 +314,8 @@ export function ViewBar(props: ViewBarProps) {
             {actions.length > 0 && <MenuSeparator />}
             {actions.length > 0 && (
               // The view's own actions are plain actions, never choices like the views above them.
-              <MenuSection label={strings.thisView} selectionMode="none">
-                {actions.flatMap((action, index) => [
-                  ...(action.startsGroup === true && index > 0 ? [<MenuSeparator key={`group-${action.id}`} />] : []),
+              <MenuSection label={strings.thisView} isLabelHidden selectionMode="none">
+                {actions.map((action) =>
                   action.choices === undefined ? (
                     <MenuItem
                       key={action.id}
@@ -344,7 +348,7 @@ export function ViewBar(props: ViewBarProps) {
                       </Menu>
                     </SubmenuTrigger>
                   ),
-                ])}
+                )}
               </MenuSection>
             )}
           </Menu>
@@ -391,7 +395,7 @@ export interface ToolbarProps {
   readonly children: ReactNode;
   /** Only while the view has unsaved changes: Discard changes (ghost), then Save (split primary). */
   readonly end?: ReactNode;
-  /** At the bar's end, before `end`: the view's search (`ToolbarSearch`). */
+  /** After the sorts and filters, before `end`: the view's search (`ToolbarSearch`). */
   readonly search?: ReactNode;
   /**
    * What the view's condition now matches, for screen readers only ("124
@@ -408,12 +412,8 @@ export function Toolbar({ label, children, end, search, status }: ToolbarProps) 
   return (
     <AriaToolbar className={styles.toolbar} aria-label={label}>
       {children}
-      {(end !== undefined || search !== undefined) && (
-        <div className={styles.end}>
-          {search}
-          {end}
-        </div>
-      )}
+      {search}
+      {end !== undefined && <div className={styles.end}>{end}</div>}
       <VisuallyHidden>
         <span role="status">{status ?? ''}</span>
       </VisuallyHidden>
@@ -443,9 +443,11 @@ export interface SortChipProps {
 
 /**
  * The toolbar's statement of the sort, in the filter chips' shape (spec 0020,
- * the owner's "filter and sort can be similar"): the direction's arrow and the
- * attribute, the direction in words, "+N" for the further sorts, and remove.
- * Every part opens the sort builder.
+ * the owner's "filter and sort can be similar"): one compact chip, the
+ * direction's arrow and the attribute ("↑ Record ID"), "+N" for the further
+ * sorts, and remove (owner item 40, 31 October 2026: the direction in words
+ * made it three boxes). Its name still says the direction. Every part opens
+ * the sort builder.
  */
 export function SortChip({ attribute, direction, more = 0, onPress, onRemove, ref, isDefault = false }: SortChipProps) {
   const press =
@@ -467,7 +469,6 @@ export function SortChip({ attribute, direction, more = 0, onPress, onRemove, re
     <FilterChip
       icon={direction === 'ascending' ? 'arrow-up-narrow-wide' : 'arrow-down-wide-narrow'}
       attribute={[attribute]}
-      operator={strings.directions[direction]}
       hasValue={more > 0}
       {...(more > 0 ? { value: strings.more(more) } : {})}
       label={strings.sortName(attribute, direction, more)}
@@ -489,29 +490,13 @@ export interface ToolbarSearchProps {
 }
 
 /**
- * A view's search at the Toolbar's end: a ghost search button that opens into a search field, focused. Esc clears
- * it and folds it back to the button, which takes focus; leaving it empty folds it too. Typed text keeps it open.
+ * A view's search beside Sort and Filter: a real search field from the start ("Search people", the outline and the
+ * magnifier), compact until it is focused or holds text, when it widens (owner item 50, 31 October 2026: a lone
+ * magnifier at the bar's far end read as nothing). Esc clears it.
  */
 export function ToolbarSearch({ label, value, onChange }: ToolbarSearchProps) {
-  const [isOpen, setOpen] = useState(false);
-  const button = useRef<HTMLButtonElement>(null);
-  const field = useRef<HTMLInputElement & HTMLTextAreaElement>(null);
-  if (!isOpen && value === '') {
-    return (
-      <Button
-        ref={button}
-        variant="ghost"
-        icon="search"
-        label={label}
-        onPress={() => {
-          setOpen(true);
-          focusLater(() => field.current);
-        }}
-      />
-    );
-  }
   return (
-    <span className={styles.search}>
+    <span className={styles.search} data-filled={value === '' ? undefined : ''}>
       <Field
         label={label}
         isLabelHidden
@@ -522,14 +507,8 @@ export function ToolbarSearch({ label, value, onChange }: ToolbarSearchProps) {
         value={value}
         autoComplete="off"
         onChange={onChange}
-        ref={field}
         onEscape={() => {
           onChange('');
-          setOpen(false);
-          focusLater(() => button.current);
-        }}
-        onBlur={() => {
-          if (value === '') setOpen(false);
         }}
       />
     </span>
