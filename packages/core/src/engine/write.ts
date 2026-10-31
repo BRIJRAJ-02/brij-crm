@@ -9,6 +9,7 @@ import { isRefusal, postgresError, refuse } from './refusals.ts';
 import type { Actor, EngineScope } from './scope.ts';
 import { inWorkspace } from '../access/run.ts';
 import type { RuleCache } from '../validation/rules.ts';
+import { planComputed } from '../computed/plan.ts';
 
 /** A record a write touched, with its object: the outbox groups a change by object. */
 export interface RecordRef {
@@ -121,6 +122,15 @@ export interface CommentChange {
 }
 
 /**
+ * A record whose attachments a write added, deleted or restored (#32, its
+ * Files tab), with its object, so the outbox stores one `files` row per object.
+ */
+export interface FileChange {
+  readonly recordId: string;
+  readonly objectId: string;
+}
+
+/**
  * Everything one write landed or made visible or invisible, as the hooks see
  * it. Records and entries that only appear or disappear (a record's entries
  * on its delete, the reference values pointing at it) are listed too, so a
@@ -172,6 +182,11 @@ export interface Change {
    * workspace is cut.
    */
   readonly access: readonly string[];
+  /**
+   * Objects whose access rules the write set (spec 0032): an `access` row even when it names no member (a team with
+   * nobody in it, a workspace with no Members), so another admin's open Access tab reads the object again.
+   */
+  readonly accessRules: readonly string[];
   /** Background jobs the write started, moved on or ended (spec 0008), each with its starter. */
   readonly jobs: readonly JobChange[];
   /** Saved views the write made, changed or deleted (spec 0020), private ones included. */
@@ -205,6 +220,8 @@ export interface Change {
   readonly notifications: readonly string[];
   /** Members whose own calendar connections or calendars the write changed: one `calendars` row names them. */
   readonly calendars: readonly string[];
+  /** Records whose attachments the write added, deleted or restored (#32): one `files` row per object. */
+  readonly files: readonly FileChange[];
 }
 
 /**
@@ -345,6 +362,7 @@ const LIST_KEYS = [
   'definitions',
   'members',
   'access',
+  'accessRules',
   'jobs',
   'views',
   'tasks',
@@ -357,6 +375,7 @@ const LIST_KEYS = [
   'comments',
   'notifications',
   'calendars',
+  'files',
 ] as const satisfies readonly (keyof ChangeLists)[];
 
 /**
@@ -479,6 +498,7 @@ export async function runWrite<T>(
           definitions: [] as DefinitionChange[],
           members: [] as string[],
           access: [] as string[],
+          accessRules: [] as string[],
           jobs: [] as JobChange[],
           views: [] as ViewChange[],
           tasks: [] as TaskChange[],
@@ -491,6 +511,7 @@ export async function runWrite<T>(
           comments: [] as CommentChange[],
           notifications: [] as string[],
           calendars: [] as string[],
+          files: [] as FileChange[],
         };
         // Record slots the write takes at its end; local to this attempt.
         let slots = 0;
@@ -523,6 +544,7 @@ export async function runWrite<T>(
             append(collected.definitions, part.definitions);
             append(collected.members, part.members);
             append(collected.access, part.access);
+            append(collected.accessRules, part.accessRules);
             append(collected.jobs, part.jobs);
             append(collected.views, part.views);
             append(collected.tasks, part.tasks);
@@ -535,6 +557,7 @@ export async function runWrite<T>(
             append(collected.comments, part.comments);
             append(collected.notifications, part.notifications);
             append(collected.calendars, part.calendars);
+            append(collected.files, part.files);
           },
           async perRecord(step) {
             const marks = LIST_KEYS.map((key) => collected[key].length);
@@ -553,6 +576,8 @@ export async function runWrite<T>(
           },
         };
         const result = await work(context);
+        // Computed attributes (spec 0015): the lookups and rollups this write's change feeds are queued in it.
+        await planComputed(context, collected);
         // The record slots the work counted, last of its locks, before the hooks number the change from the row.
         if (slots !== 0) await takeRecordSlots(tx, scope, slots);
         // The full change: the outbox hook caps its own copy with `capChange`, and the audit log names every record.
@@ -577,6 +602,7 @@ export async function runWrite<T>(
           definitions: [...collected.definitions],
           members: [...new Set(collected.members)],
           access: [...new Set(collected.access)],
+          accessRules: [...new Set(collected.accessRules)],
           // One entry per job: a slice's batches name the same job again.
           jobs: [...new Map(collected.jobs.map((job) => [job.jobId, job])).values()],
           // One entry per view: a write that touches a view twice names it once.
@@ -592,6 +618,7 @@ export async function runWrite<T>(
           comments: [...collected.comments],
           notifications: [...new Set(collected.notifications)],
           calendars: [...new Set(collected.calendars)],
+          files: [...collected.files],
         };
         for (const hook of hooks) await hook(change, tx);
         return { result, change };

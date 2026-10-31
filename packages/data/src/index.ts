@@ -26,6 +26,7 @@ import type {
   SyncStarted,
   AttributeDefinition,
   AttributeImpact,
+  ComputedDefinitionInput,
   TypeChangeCheck,
   TypeChangeTarget,
   BookAsHostInput,
@@ -126,6 +127,7 @@ import type { AuditLog } from './audit/log.ts';
 import { createAuth } from './auth/auth.ts';
 import { createTrashedLookups, type TrashedSource } from './records/trashed.ts';
 import { createRecordFactsStore, type RecordFacts } from './records/facts.ts';
+import { createRulesStore, type AccessRule, type ObjectAccessSource } from './access/rules-store.ts';
 import {
   type DataError,
   type DataFault,
@@ -137,6 +139,7 @@ import {
 } from './errors.ts';
 import type { FetchLike } from './fetch.ts';
 import { refusalFor, refusalSummary } from './refusals.ts';
+import { createPreview, type PreviewSource } from './computed/preview.ts';
 import { delivered } from './delivered.ts';
 import { stageChunks } from './imports/stage.ts';
 import type * as DayEdits from './bookings/team-day.ts';
@@ -218,6 +221,9 @@ export type {
 } from './scheduling/time-off.ts';
 export type { LimitsDraft, LimitsHeld, LimitsState, LimitsStore, MeetingLimits } from './scheduling/limits.ts';
 export type { LimitsAt } from '@crm/contracts';
+// Computed attributes (spec 0015): what the attribute dialog sends and the preview it shows.
+export type { AttributeComputed, ComputedDefinitionInput, ComputedPreview } from '@crm/contracts';
+export type { PreviewSource, PreviewState } from './computed/preview.ts';
 // Lists and their entries (spec 0048).
 export type { EntryTarget, EntryView, ListTemplate, ListView } from '@crm/contracts';
 export type {
@@ -274,6 +280,8 @@ export type {
   PreferencesState,
   WeekStart,
 } from './preferences/store.ts';
+import { createRegionStore, regionOf, type RegionHeld } from './workspace-region.ts';
+export type { RegionHeld, WorkspaceRegion } from './workspace-region.ts';
 import type { SchedulesView } from './schedules/store.ts';
 import { createPictureChoiceStore, type PictureChoiceHeld } from './profile/picture.ts';
 import type { LinkPageStore } from './link-page/store.ts';
@@ -300,6 +308,8 @@ import {
   type CaptureListView,
 } from './captures/list.ts';
 import type { Report as ReportView, ReportConfig } from '@crm/contracts';
+import type { RecordFileView } from '@crm/contracts';
+import type { ApiKey, ApiKeyAccess } from '@crm/contracts';
 import type { ReportPlan } from '@crm/contracts/reports';
 import { lazyFiguresSource, type ReportFiguresSource } from './reports/figures-source.ts';
 import type { NavOperation, NavUniverse } from '@crm/contracts/navigation';
@@ -319,6 +329,7 @@ import type { ActivityDraft, ActivityResult, NoteList, NoteSession, NotesStore }
 import type { Note as NoteWithBody } from '@crm/contracts';
 import type { CommentEmoji, CommentVersion, NotificationKind, NotificationStatus } from '@crm/contracts';
 import type { CommentsStore, NewComment, RecordComments } from './comments/store.ts';
+import type { FilesStore, RecordFilesSource } from './files/store.ts';
 import type {
   InboxFilter,
   InboxList,
@@ -596,6 +607,8 @@ export type {
 export type { LinkSection, LinkSectionState, LinkSectionStatus, SectionKey } from './links/sections.ts';
 /** How many related records an Overview card shows per side (spec 0017, AC-383). */
 export { RELATED_PREVIEW } from '@crm/contracts/activity-keys';
+// A record's files (#32): what the Files tab's picker takes, and whether a file opens in the tab.
+export { opensInline, RECORD_FILE_ACCEPT, RECORD_FILE_MAX_BYTES } from '@crm/contracts/file-limits';
 // The link page's look (spec 0054): the default and the named starting points are values the editor presses, not
 // only types, so they come through the one data layer like every other shape a screen uses.
 export { DEFAULT_PAGE_THEME, PAGE_THEME_PRESETS, sameTheme } from '@crm/contracts';
@@ -737,6 +750,8 @@ export { purgeLeftOf, type PurgeLeftEntry } from './jobs/left.ts';
 export type { View, ViewColumn, ViewConfig, ViewKind, ViewLayout, ViewSummary, ViewVisibility } from '@crm/contracts';
 // Saved reports (the reports lane): a chart's definition, and the figures its plan works out.
 export type { Report as ReportView, ReportConfig, ReportGroupBy, ReportMeasure } from '@crm/contracts';
+// Settings › Developer (parity #34): an API key as the list shows it (never its secret), and what it may do.
+export type { ApiKey, ApiKeyAccess } from '@crm/contracts';
 export type { ReportFigures, ReportFiguresSource, ReportFiguresState, ReportPoint } from './reports/figures-source.ts';
 export {
   CREATED_AT_SLUG,
@@ -828,6 +843,8 @@ export type {
   NoteSessionState,
 } from './notes/store.ts';
 export type { CommentsState, NewComment, RecordComments, ShownComment, ShownThread } from './comments/store.ts';
+export type { FilesState, RecordFilesSource, SendingFile } from './files/store.ts';
+export type { RecordFileView } from '@crm/contracts';
 export {
   bodySegments,
   COMMENT_EMOJI,
@@ -884,6 +901,7 @@ export { SEARCH_DELAY_MS, type RecordSearch, type RecordSearchState } from './re
 export type { BoardColumnState, BoardQuery, BoardState, BoardStatus, BoardStore } from './records/board.ts';
 export type { TrashedSource, TrashedState } from './records/trashed.ts';
 export type { NextMeeting, RecordFacts, RecordFactsState } from './records/facts.ts';
+export type { ObjectAccessSource, ObjectAccessState } from './access/rules-store.ts';
 export type { RowNote } from './records/view.ts';
 export type { PurgeSummary, RestoreSummary, TrashRow, TrashState, TrashStatus, TrashView } from './trash/store.ts';
 export { TRASH_NAME_COLUMN } from './trash/columns.ts';
@@ -1065,6 +1083,8 @@ export interface NewAttribute {
   readonly options?: readonly NewOption[];
   /** Its validation rules, in order (spec 0013, AC-252); at most 20. */
   readonly rules?: readonly ValidationRuleInput[];
+  /** A computed attribute (spec 0015): `type` is then ignored and the result type derived on the server. */
+  readonly computed?: ComputedDefinitionInput;
 }
 
 /** A status stage's outcome. */
@@ -1113,6 +1133,8 @@ export interface AttributeChanges {
   readonly defaultValue?: AttributeDefaultValue | null;
   /** Its validation rules, in order (spec 0013, AC-252): the list replaces the attribute's rules. */
   readonly rules?: readonly ValidationRuleInput[];
+  /** A computed attribute's new definition, of the same result type (spec 0015, AC-322). */
+  readonly computed?: ComputedDefinitionInput;
 }
 
 /**
@@ -1313,6 +1335,8 @@ export function createDataLayer({
   let notes: Promise<NotesStore> | undefined;
   // Comments (spec 0038), loaded with the first Comments tab.
   let comments: Promise<CommentsStore> | undefined;
+  // A record's files (#32), loaded with the first Files tab.
+  let files: Promise<FilesStore> | undefined;
   // The inbox's lists and settings (spec 0038), loaded with the inbox or the notification settings.
   let inbox: Promise<InboxStore> | undefined;
   // The operator console's reads (spec 0047), held per question for the app load.
@@ -1339,6 +1363,14 @@ export function createDataLayer({
   const trashedLookups = createTrashedLookups((workspace, recordId) =>
     call((options) => api.records.getTrashed({ workspace, recordId }, options)),
   );
+  // An object's access for its Access tab (spec 0032): one held source per object, live across admins.
+  const rulesStore = createRulesStore({
+    get: (workspace, objectId) =>
+      beforeRead(workspace).then(() => call((options) => api.accessRules.get({ workspace, objectId }, options))),
+    put: (workspace, objectId, subject, rule) =>
+      call((options) => api.accessRules.set({ workspace, objectId, subject, rule, mutationId: mintId() }, options)),
+    watch: (workspace) => watch(workspace),
+  });
   // A record's facts for its stat strip (13 Oct reference batch 4): its next meeting and its stage age.
   const recordFacts = createRecordFactsStore({
     api: {
@@ -1346,6 +1378,8 @@ export function createDataLayer({
         beforeRead(input.workspace).then(() => call((options) => api.calendar.meetings.forRecord(input, options))),
       stageSince: (input) =>
         beforeRead(input.workspace).then(() => call((options) => api.records.stageSince(input, options))),
+      lastContacted: (input) =>
+        beforeRead(input.workspace).then(() => call((options) => api.records.lastContacted(input, options))),
     },
     now: () => new Date().toISOString(),
   });
@@ -1427,6 +1461,9 @@ export function createDataLayer({
     void comments?.then((store) => {
       store.clear();
     });
+    void files?.then((store) => {
+      store.clear();
+    });
     void inbox?.then((store) => {
       store.clear();
     });
@@ -1445,7 +1482,9 @@ export function createDataLayer({
     editorLists.clear();
     schedules.clear();
     preferences.clear();
+    region.clear();
     accessLoaded?.clear();
+    rulesStore.clear();
     automationsLoaded?.clear();
     pictureChoice.clear();
     void linkPage?.then((made) => {
@@ -1896,6 +1935,10 @@ export function createDataLayer({
       void comments?.then((store) => {
         store.records(workspace, moved);
       });
+      // A trashed record's Files tab turns read only, and back.
+      void files?.then((store) => {
+        store.records(workspace, moved);
+      });
       spread(`inbox ${workspace}`, () => {
         unreadCounts.refresh(workspace);
         void inbox?.then((store) => {
@@ -2009,6 +2052,8 @@ export function createDataLayer({
     });
   });
   router.on('access', (workspace, event) => {
+    // Another admin's rule change (it names the members it covers, never the admins): a held Access tab reads again.
+    rulesStore.changed(workspace);
     // The person's access changed: everything held is read again under it (spec 0009, AC-146), and the live client
     // asks for its channel again, moving when the person's audience did (spec 0007, milestone 4; the relay's 4500
     // disconnect does the same, and whichever comes first asks once).
@@ -2097,6 +2142,12 @@ export function createDataLayer({
       void layer.commentsChanged(workspace, event.objectId, event.recordIds, event.coarse === true);
     });
   });
+  // A record's files (#32): the held records named read their files again.
+  router.on('files', (workspace, event) => {
+    void files?.then((store) => {
+      store.changed(workspace, event);
+    });
+  });
   // A member's notifications or settings changed (spec 0038, AC-1172, AC-1174, AC-1180): only the person's own
   // count, lists and settings read again; every other member's tab drops the event.
   router.on('notifications', (workspace, event) => {
@@ -2155,6 +2206,9 @@ export function createDataLayer({
       store.resync(workspace);
     });
     void comments?.then((store) => {
+      store.resync(workspace);
+    });
+    void files?.then((store) => {
       store.resync(workspace);
     });
     void inbox?.then((store) => {
@@ -2497,6 +2551,10 @@ export function createDataLayer({
     mintId,
     notify,
   });
+  // The workspace's default currency and country (Settings › Workspace › General), read when a screen holds it.
+  const region = createRegionStore({
+    read: (workspace) => beforeRead(workspace).then(() => call((options) => api.workspace.get({ workspace }, options))),
+  });
   // Settings › Account › Link page (spec 0051): the person's own blocks, the same in every workspace. Its store and
   // rules load with the first screen that asks, never in the first load; the store builds its calls from the
   // profile procedures and the one call path, in its own chunk.
@@ -2636,6 +2694,11 @@ export function createDataLayer({
   // are settings with no change events of their own, so the list is read again when a screen holds it after a while.
   const reportLists = createCaptureList<ReportView>({
     read: (workspace) => call((options) => api.reports.list({ workspace }, options)).then((answer) => answer.reports),
+  });
+  // API keys (parity #34): one held list per workspace, patched by every key write below. Keys are settings with no
+  // change events of their own, so the list is read again when a screen holds it after a while.
+  const apiKeyLists = createCaptureList<ApiKey>({
+    read: (workspace) => call((options) => api.apiKeys.list({ workspace }, options)).then((answer) => answer.keys),
   });
   /** A question's calculations as the records layer holds them: a report's figures ask through it. */
   const aggregatesOf = (workspace: string, question: AggregateQuestion): AggregateSource =>
@@ -3507,6 +3570,25 @@ export function createDataLayer({
     return notes;
   };
 
+  const filesStore = (): Promise<FilesStore> => {
+    files ??= import('./files/store.ts').then(({ createFilesStore, createRecordFileSender }) =>
+      createFilesStore({
+        api: {
+          list: (input) =>
+            beforeRead(input.workspace).then(() => call((options) => api.files.list({ ...input }, options))),
+          delete: (input) => call((options) => api.files.delete({ ...input }, options)),
+          restore: (input) => call((options) => api.files.restore({ ...input }, options)),
+          send: createRecordFileSender(origin),
+        },
+        mintId,
+        mutations,
+        notify,
+        watch,
+      }),
+    );
+    return files;
+  };
+
   const commentsStore = (): Promise<CommentsStore> => {
     comments ??= import('./comments/store.ts').then(({ createCommentsStore }) =>
       createCommentsStore({
@@ -3618,6 +3700,16 @@ export function createDataLayer({
               landed(
                 input.workspace,
                 call((options) => api.entries.setValues(input, options)),
+              ),
+            updateMany: (input) =>
+              landed(
+                input.workspace,
+                call((options) => api.entries.updateMany({ ...input, entryIds: [...input.entryIds] }, options)),
+              ),
+            setValuesBatch: (input) =>
+              landed(
+                input.workspace,
+                call((options) => api.entries.setValuesBatch({ ...input, items: [...input.items] }, options)),
               ),
             remove: (input) =>
               call((options) => api.entries.remove({ ...input, entryIds: [...input.entryIds] }, options)),
@@ -4460,11 +4552,14 @@ export function createDataLayer({
       /**
        * Moves a booking to a time its page offers (AC-640): at its new time at
        * once, back on a refusal (`SLOT_TAKEN` when the time just went,
-       * `LIMIT_REACHED` after 5 moves). The guest is emailed.
+       * `LIMIT_REACHED` after 5 moves). The guest is emailed. With `minutes` it
+       * takes a new length too (the week's drag on a booking's foot), at any
+       * free five minutes; a round robin booking refuses that (`CONFIG_INVALID`).
        */
-      move: async (workspace: string, bookingId: string, start: string): Promise<void> => {
+      move: async (workspace: string, bookingId: string, start: string, minutes?: number): Promise<void> => {
         const restore = bookingsLists.patchBooking(workspace, bookingId, (booking) => {
-          const length = Date.parse(booking.endsAt) - Date.parse(booking.startsAt);
+          const length =
+            minutes === undefined ? Date.parse(booking.endsAt) - Date.parse(booking.startsAt) : minutes * 60_000;
           return {
             ...booking,
             startsAt: start,
@@ -4473,7 +4568,12 @@ export function createDataLayer({
           };
         });
         try {
-          await call((options) => api.bookings.move({ workspace, bookingId, start, mutationId: mintId() }, options));
+          await call((options) =>
+            api.bookings.move(
+              { workspace, bookingId, start, ...(minutes === undefined ? {} : { minutes }), mutationId: mintId() },
+              options,
+            ),
+          );
         } catch (error) {
           restore();
           reloadBookings(workspace);
@@ -4481,9 +4581,23 @@ export function createDataLayer({
         }
         reloadBookings(workspace);
       },
-      /** Where a booking could move in a range: its page's times of its length, its own time free. */
-      moveSlots: (workspace: string, bookingId: string, from: string, to: string): Promise<PublicSlots> =>
-        call((options) => api.bookings.moveSlots({ workspace, bookingId, from, to }, options)),
+      /**
+       * Where a booking could move in a range: its page's times of its length, its own time free. With `minutes`, the
+       * free five minutes that fit that length instead (where it could be given that length).
+       */
+      moveSlots: (
+        workspace: string,
+        bookingId: string,
+        from: string,
+        to: string,
+        minutes?: number,
+      ): Promise<PublicSlots> =>
+        call((options) =>
+          api.bookings.moveSlots(
+            { workspace, bookingId, from, to, ...(minutes === undefined ? {} : { minutes }) },
+            options,
+          ),
+        ),
       /** The guest page's path for a booking (`/b/<key>/manage?t=…`), read only when asked: it is the guest's key. */
       guestLink: (workspace: string, bookingId: string): Promise<{ path: string }> =>
         call((options) => api.bookings.guestLink({ workspace, bookingId }, options)),
@@ -4998,6 +5112,23 @@ export function createDataLayer({
        */
       preview: (workspace: string, objectId: string, as: PreviewAs): Promise<AccessPreview> =>
         call((options) => api.accessRules.preview({ workspace, objectId, as }, options)),
+      /**
+       * The object's access as the Access tab holds it (`useObjectAccess`): read when first held, live while held (a
+       * rule another admin sets reads it again). `initial` is what the route read, shown at once.
+       */
+      view: (workspace: string, objectId: string, initial?: ObjectAccess): ObjectAccessSource =>
+        rulesStore.view(workspace, objectId, initial),
+      /**
+       * Sets one subject's access through the held source: `shown` turns what is shown into what the change should
+       * look like, at once; the answer replaces it, and a refusal reads the object again and rejects.
+       */
+      change: (
+        workspace: string,
+        objectId: string,
+        subject: RuleSubject,
+        rule: AccessRule,
+        shown: (current: ObjectAccess) => ObjectAccess,
+      ): Promise<SetObjectAccessResult> => rulesStore.set(workspace, objectId, subject, rule, shown),
     },
     /**
      * A workspace's sign in rules (spec 0033, milestone 4): settings, not CRM
@@ -5124,27 +5255,40 @@ export function createDataLayer({
       get: (workspace: string): Promise<WorkspaceSettings> =>
         call((options) => api.workspace.get({ workspace }, options)),
       /**
-       * Renames it, changes its time zone, or moves it to a new address (the
-       * answer's `slug`). Refusals: `FORBIDDEN`, `INPUT_INVALID`, `SLUG_TAKEN`
-       * (field `slug`). A new address drops what was cached under the old one
-       * and reads the person's workspaces again, so the switcher and every
-       * page take the new one; the old address still finds the workspace.
+       * Renames it, changes its time zone, its default currency or country
+       * (`null` takes one back to the language's region's), or moves it to a
+       * new address (the answer's `slug`). Refusals: `FORBIDDEN`,
+       * `INPUT_INVALID`, `SLUG_TAKEN` (field `slug`). A new address drops what
+       * was cached under the old one and reads the person's workspaces again,
+       * so the switcher and every page take the new one; the old address still
+       * finds the workspace. A saved currency or country reaches every page
+       * (`region`) at once.
        */
       async update(
         workspace: string,
-        change: { readonly name?: string; readonly timeZone?: string; readonly slug?: string },
+        change: {
+          readonly name?: string;
+          readonly timeZone?: string;
+          readonly slug?: string;
+          readonly currency?: string | null;
+          readonly country?: string | null;
+        },
       ): Promise<WorkspaceSettings> {
         const updated = await call((options) =>
           api.workspace.update({ workspace, ...change, mutationId: mintId() }, options),
         );
+        region.set(updated.slug, regionOf(updated));
         if (updated.slug !== workspace) {
           objects.delete(workspace);
           access.delete(workspace);
           members.delete(workspace);
+          region.drop(workspace);
         }
         if (change.name !== undefined || updated.slug !== workspace) me = undefined;
         return updated;
       },
+      /** The workspace's default currency and country, read when a screen holds it; absent keeps the language's region's. */
+      region: (workspace: string): RegionHeld => region.of(workspace),
       /** Deletes it, softly, for 30 days. Refusals: `FORBIDDEN`, `CONFIRM_MISMATCH`. */
       async delete(workspace: string, confirmName: string): Promise<DeletedWorkspace> {
         const deleted = await call((options) =>
@@ -5154,6 +5298,7 @@ export function createDataLayer({
         objects.delete(workspace);
         access.delete(workspace);
         members.delete(workspace);
+        region.drop(workspace);
         me = undefined;
         return deleted;
       },
@@ -5292,6 +5437,30 @@ export function createDataLayer({
           beforeRead(workspace).then(() => call((options) => api.access.mine({ workspace }, options))),
         ),
     },
+    computed: {
+      /**
+       * A computed attribute's preview for one dialog (spec 0015): `ask(definition)` with each change, sent 400 ms
+       * after the last, a newer ask cancelling the older; its state is `idle`, `loading` (the last answer kept),
+       * `ready` or `error` with `retry`. `dispose` when the dialog closes. Never cached: the values move with edits.
+       */
+      preview: (workspace: string, objectId: string): PreviewSource =>
+        createPreview({
+          send: (definition, signal) =>
+            beforeRead(workspace).then(() =>
+              call((options) => api.computed.preview({ workspace, objectId, definition }, options), signal),
+            ),
+        }),
+      /**
+       * Works a computed attribute out again after its fill failed (spec 0015, AC-334), waiting for the server as
+       * every attribute write does. Refusals: `CONFIG_INVALID` (not stopped by a failed fill), `FORBIDDEN`.
+       */
+      refill: (workspace: string, objectId: string, attributeId: string): Promise<{ attributeId: string }> =>
+        writeAttribute(
+          workspace,
+          (mutationId, options) => api.computed.refill({ workspace, attributeId, mutationId }, options),
+          () => [objectId],
+        ),
+    },
     attributes: {
       /** An object's live attributes in position order, system ones marked. Cached until a definition changes. */
       list: (workspace: string, objectId: string): Promise<AttributeDefinition[]> =>
@@ -5396,6 +5565,7 @@ export function createDataLayer({
                 ...(input.defaultValue === undefined ? {} : { defaultValue: input.defaultValue }),
                 ...(input.options === undefined ? {} : { options: input.options.map(optionInput) }),
                 ...(input.rules === undefined ? {} : { rules: [...input.rules] }),
+                ...(input.computed === undefined ? {} : { computed: input.computed }),
                 mutationId,
               },
               options,
@@ -6465,6 +6635,42 @@ export function createDataLayer({
       setPageDestination: (workspace: string, pageId: string, calendarId: string | null): Promise<boolean> =>
         calendars.setPageDestination(workspace, pageId, calendarId),
     },
+    apiKeys: {
+      /**
+       * The workspace's live API keys (parity #34) as the held list Settings › Developer shows (`useCaptureList`),
+       * newest first; every write here patches it. Read again when a screen holds it after a while away.
+       */
+      view: (workspace: string): CaptureListView<ApiKey> => apiKeyLists.view(workspace),
+      /** A new key's id: mint it once per Create key, and send the same one on a retry. */
+      newId: (): string => mintId(),
+      /**
+       * Makes a key and answers its whole value, which the server never gives again; the list gains the key once it
+       * lands (it can't be shown before the server made its secret). Rejects with the refusal.
+       */
+      create: (
+        workspace: string,
+        key: { readonly id: string; readonly name: string; readonly access: ApiKeyAccess },
+      ): Promise<{ readonly key: ApiKey; readonly token: string }> =>
+        apiKeyLists.write(workspace, {
+          send: () => call((options) => api.apiKeys.create({ workspace, ...key, mutationId: mintId() }, options)),
+          land: (items, made) => upsertFirst(made.key)(items),
+        }),
+      /** Revokes a key: gone from the list at once, back on a refusal. The screen's toast offers Undo (`restore`). */
+      revoke: (workspace: string, keyId: string): Promise<ApiKey> =>
+        apiKeyLists.write(workspace, {
+          send: () => call((options) => api.apiKeys.revoke({ workspace, keyId, mutationId: mintId() }, options)),
+          ...shownDrop(apiKeyLists.items(workspace), keyId),
+        }),
+      /** Brings a revoked key back within its Undo window; it rejoins the list once the server says so. */
+      restore: (workspace: string, keyId: string): Promise<ApiKey> =>
+        apiKeyLists.write(workspace, {
+          send: () => call((options) => api.apiKeys.restore({ workspace, keyId, mutationId: mintId() }, options)),
+          land: (items, back) =>
+            [...items.filter((each) => each.id !== back.id), back].sort((a, b) =>
+              b.createdAt.localeCompare(a.createdAt),
+            ),
+        }),
+    },
     reports: {
       /**
        * The workspace's saved reports (the reports lane) as the held list the Reports page shows
@@ -6989,9 +7195,31 @@ export function createDataLayer({
       newId: () => mintId(),
     },
     files: {
-      /** Where a stored file (a form's file answer) downloads from: the api checks the member and the file on each. */
-      downloadPath: (workspace: string, fileId: string): string =>
-        `/api/files/${encodeURIComponent(fileId)}?workspace=${encodeURIComponent(workspace)}`,
+      /**
+       * Where a stored file (a form's file answer, a cell's file, a Files tab file) downloads from: the api checks the
+       * member and the file on each. `inline` shows an image in the tab rather than saving it (`opensInline`).
+       */
+      downloadPath: (workspace: string, fileId: string, inline = false): string =>
+        `/api/files/${encodeURIComponent(fileId)}?workspace=${encodeURIComponent(workspace)}${inline ? '&inline=1' : ''}`,
+      /**
+       * A record's Files tab (#32): its files newest first, the ones this tab is sending, and whether the reader may
+       * add or delete, the same for every screen that asks; live while held. Read it through `useRecordFiles`.
+       */
+      forRecord: async (workspace: string, recordId: string): Promise<RecordFilesSource> =>
+        (await filesStore()).forRecord(workspace, recordId),
+      /** Sends files to a record, one after another, each shown at once with its progress or its refusal. */
+      upload: async (workspace: string, recordId: string, picked: readonly File[]): Promise<void> =>
+        (await filesStore()).upload(workspace, recordId, picked),
+      /** Takes a refused file's row away. */
+      dismiss: async (workspace: string, recordId: string, key: string): Promise<void> => {
+        (await filesStore()).dismiss(workspace, recordId, key);
+      },
+      /** Deletes a file at once (Undo is `restore`); a refusal puts it back with a toast. Answers whether it landed. */
+      remove: async (workspace: string, recordId: string, fileId: string): Promise<boolean> =>
+        (await filesStore()).remove(workspace, recordId, fileId),
+      /** Brings a deleted file back, shown at once: the delete toast's Undo. Answers whether it landed. */
+      restore: async (workspace: string, recordId: string, file: RecordFileView): Promise<boolean> =>
+        (await filesStore()).restore(workspace, recordId, file),
     },
     jobs: {
       /**

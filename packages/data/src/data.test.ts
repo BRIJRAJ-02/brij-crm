@@ -334,6 +334,10 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       update: os.reports.update.handler(() => notServed()),
       delete: os.reports.delete.handler(() => notServed()),
     },
+    computed: {
+      preview: os.computed.preview.handler(() => notServed()),
+      refill: os.computed.refill.handler(() => notServed()),
+    },
     attributes: {
       list: os.attributes.list.handler(() => behaviour.attributes()),
       create: os.attributes.create.handler(({ input }) => {
@@ -424,6 +428,8 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       addMany: os.entries.addMany.handler(notServed),
       forRecord: os.entries.forRecord.handler(notServed),
       setValues: os.entries.setValues.handler(notServed),
+      updateMany: os.entries.updateMany.handler(notServed),
+      setValuesBatch: os.entries.setValuesBatch.handler(notServed),
       remove: os.entries.remove.handler(notServed),
       restore: os.entries.restore.handler(notServed),
       addMatching: os.entries.addMatching.handler(notServed),
@@ -454,6 +460,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       activity: os.records.activity.handler(({ input }) => behaviour.activity(input.recordId, input.cursor)),
       getTrashed: os.records.getTrashed.handler(({ input }) => behaviour.trashed(input.recordId)),
       stageSince: os.records.stageSince.handler(() => ({})),
+      lastContacted: os.records.lastContacted.handler(() => ({})),
       duplicates: {
         check: os.records.duplicates.check.handler(notServed),
         list: os.records.duplicates.list.handler(notServed),
@@ -585,6 +592,12 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       restore: os.automations.restore.handler(notServed),
       runs: os.automations.runs.handler(notServed),
     },
+    apiKeys: {
+      list: os.apiKeys.list.handler(notServed),
+      create: os.apiKeys.create.handler(notServed),
+      revoke: os.apiKeys.revoke.handler(notServed),
+      restore: os.apiKeys.restore.handler(notServed),
+    },
     preferences: {
       get: os.preferences.get.handler(notServed),
       update: os.preferences.update.handler(notServed),
@@ -665,6 +678,12 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       resolve: os.comments.resolve.handler(notServed),
       react: os.comments.react.handler(notServed),
       versions: os.comments.versions.handler(notServed),
+    },
+    // A record's files (#32) are driven against their own fake in `files/store.test.ts`.
+    files: {
+      list: os.files.list.handler(notServed),
+      delete: os.files.delete.handler(notServed),
+      restore: os.files.restore.handler(notServed),
     },
     notifications: {
       list: os.notifications.list.handler(notServed),

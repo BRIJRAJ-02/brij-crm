@@ -8,6 +8,7 @@ import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDatabase, createIdentityStore, type Database, type IdentityStore } from '@crm/db';
 import { createTestUser, testQuery } from '@crm/db/testing';
 import { listAttributes } from '../engine/definitions.ts';
+import { keyToken, newKeySecret } from '../developer/tokens.ts';
 import { newId } from '../engine/ids.ts';
 import { isRefusal } from '../engine/refusals.ts';
 import { createUserWorkspace } from '../engine/workspaces.ts';
@@ -348,9 +349,12 @@ describe('systemScope and enterWithKey', () => {
     expect(scope.access.data.key).toBe('open');
   });
 
-  it('refuses every key until #34 stores them', async () => {
+  it('lets in no key that is malformed or not stored (parity #34)', async () => {
     const a = await userWithWorkspace();
-    expect(await refusalOf(enterWithKey({ db }, { workspaceId: a.workspace.id, keyId: newId() }))).toEqual(NOT_FOUND);
+    const deps = { db, rules: NO_RULE_SOURCE };
+    expect(await enterWithKey(deps, 'crm_nope')).toBeUndefined();
+    const unstored = keyToken({ workspaceId: a.workspace.id, keyId: newId(), secret: newKeySecret() });
+    expect(await enterWithKey(deps, unstored)).toBeUndefined();
   });
 });
 

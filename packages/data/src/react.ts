@@ -1,11 +1,13 @@
 // `@crm/data/react`: the data layer's React binding (spec 0005). Screens read
 // a view and the live status through it, so they never subscribe to the store
 // themselves.
-import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { BoardStatus, BoardStore } from './records/board.ts';
 import type { DataError } from './errors.ts';
+import type { FilesState, RecordFilesSource } from './files/store.ts';
 import type { OperatorHeld } from './operator/store.ts';
 import type { RecordFacts, RecordFactsState } from './records/facts.ts';
+import type { ObjectAccessSource, ObjectAccessState } from './access/rules-store.ts';
 import type { ActivityFeed, ActivityState } from './activity/feed.ts';
 import type { LinkSection, LinkSectionState } from './links/sections.ts';
 import type { AccountSecurityState, AccountSecurityView } from './account/security.ts';
@@ -32,10 +34,12 @@ import type {
   EmailUnsubscribeState,
   EmailUnsubscribeStore,
 } from './email-preferences.ts';
-import type { JobView, RoutingRule } from '@crm/contracts';
+import type { ComputedDefinitionInput, JobView, RoutingRule } from '@crm/contracts';
+import type { PreviewSource, PreviewState } from './computed/preview.ts';
 import type { JobsSnapshot, JobsView } from './jobs/store.ts';
 import type { SchedulesState, SchedulesView } from './schedules/store.ts';
 import type { PreferencesHeld, PreferencesState } from './preferences/store.ts';
+import type { RegionHeld, WorkspaceRegion } from './workspace-region.ts';
 import type { PictureChoiceHeld, PictureChoiceState } from './profile/picture.ts';
 import type { LinkPageHeld, LinkPageState } from './link-page/store.ts';
 import type { SocialLinksHeld, SocialLinksState } from './profile/socials.ts';
@@ -286,6 +290,17 @@ export function useLatestActivityAt(feed: ActivityFeed): string | undefined {
 }
 
 /**
+ * The moment of the newest call or meeting logged in a record's feed (the CRM flow pass): what the stat strip keys
+ * its Last contacted read on, so a call just logged reads it again and an edit does not.
+ */
+export function useLatestLoggedContactAt(feed: ActivityFeed): string | undefined {
+  return useSyncExternalStore(
+    feed.subscribe,
+    () => feed.getSnapshot().entries.find((entry) => entry.kind === 'call' || entry.kind === 'logged_meeting')?.at,
+  );
+}
+
+/**
  * The trash (spec 0022): its rows, count, status and refusals, re-rendering
  * when they change. While the screen is mounted it holds the view, so it
  * settles live as records are deleted, restored or purged anywhere.
@@ -480,6 +495,11 @@ export function useCalendarSettings(held: CalendarSettingsHeld): CalendarSetting
   return useRetained(held);
 }
 
+/** The workspace's default currency and country, read when first held; undefined until it arrives. */
+export function useWorkspaceRegion(held: RegionHeld): WorkspaceRegion | undefined {
+  return useRetained(held);
+}
+
 /** The member's own preferences in a workspace (Settings › Account › Preferences), read when first held. */
 export function usePreferences(held: PreferencesHeld): PreferencesState {
   return useRetained(held);
@@ -581,6 +601,25 @@ export function useDueTasks(source: DueTasksSource): DueTasksSnapshot {
 }
 
 /**
+ * A record's Files tab (#32), from `data.files.forRecord`: its files, the ones this tab is sending and whether the
+ * reader may change them, re-rendering when they change. Held while mounted, so it is live.
+ */
+export function useRecordFiles(files: RecordFilesSource): FilesState {
+  return useRetained(files);
+}
+
+/**
+ * Only a record's file count (the Files tab's label), re-rendering only when it moves. Holds the files while mounted.
+ */
+export function useRecordFileCount(files: RecordFilesSource): number | undefined {
+  useEffect(() => files.retain(), [files]);
+  return useSyncExternalStore(files.subscribe, () => {
+    const state = files.getSnapshot();
+    return state.status === 'ready' ? state.files.length : undefined;
+  });
+}
+
+/**
  * A record's threads (spec 0038): the Comments tab's open and resolved
  * threads and counts, re-rendering when they change. Held while the screen
  * is mounted, so it stays live.
@@ -629,6 +668,11 @@ export function useRecordFacts(facts: RecordFacts): RecordFactsState {
   return useRetained(facts);
 }
 
+/** An object's access for its Access tab (spec 0032), held while the tab shows it and live across admins. */
+export function useObjectAccess(source: ObjectAccessSource): ObjectAccessState {
+  return useRetained(source);
+}
+
 /** One held operator console read (spec 0047): its state, kept current while the screen shows it. */
 export function useOperator<T>(held: OperatorHeld<T>): T {
   return useSyncExternalStore(held.subscribe, held.getSnapshot, held.getSnapshot);
@@ -651,3 +695,36 @@ export function useRecordEntries(source: RecordEntries): RecordEntriesState {
   useEffect(() => source.retain(), [source]);
   return useSyncExternalStore(source.subscribe, source.getSnapshot);
 }
+
+/**
+ * A computed attribute's preview for the attribute dialog (spec 0015): the dialog makes it once with
+ * `data.computed.preview(workspace, objectId)` while it shows a computed type, asks with each change, and reads
+ * its state here; it is let go of when the dialog closes or the object changes.
+ */
+export function useComputedPreview(
+  make: (() => PreviewSource) | undefined,
+  definition: ComputedDefinitionInput | undefined,
+): PreviewState & { readonly retry: () => void } {
+  // Made in an effect, so StrictMode's mount, clean up, mount makes a fresh one rather than reusing a disposed one.
+  const [source, setSource] = useState<PreviewSource | undefined>(undefined);
+  useEffect(() => {
+    const made = make?.();
+    // The preview is the outside system this follows: one per mount, let go on clean up.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSource(made);
+    return () => {
+      made?.dispose();
+    };
+  }, [make]);
+  useEffect(() => {
+    source?.ask(definition);
+  }, [source, definition]);
+  const state = useSyncExternalStore(
+    useCallback((listener: () => void) => source?.subscribe(listener) ?? (() => undefined), [source]),
+    () => source?.state() ?? IDLE_PREVIEW,
+  );
+  const retry = useCallback(() => source?.retry(), [source]);
+  return useMemo(() => ({ ...state, retry }), [state, retry]);
+}
+
+const IDLE_PREVIEW: PreviewState = Object.freeze({ status: 'idle' });

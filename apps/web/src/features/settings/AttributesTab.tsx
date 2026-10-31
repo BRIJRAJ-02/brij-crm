@@ -146,6 +146,11 @@ function AttributeRules({ attribute }: { readonly attribute: AttributeDefinition
           <InfoTip label={strings.primary}>{strings.primaryHelp}</InfoTip>
         </>
       )}
+      {/* A computed attribute's kind, and "Not updating" while it has stopped (spec 0015). */}
+      {attribute.computed !== undefined && (
+        <Badge tone="accent" text={strings.computedKinds[attribute.computed.kind] ?? attribute.computed.kind} />
+      )}
+      {attribute.computed?.state === 'broken' && <Badge text={strings.notUpdating} />}
       {attribute.isRequired && <Badge text={strings.required} />}
       {attribute.isUnique && <Badge text={strings.unique} />}
       {(attribute.validation?.rules.length ?? 0) > 0 && (

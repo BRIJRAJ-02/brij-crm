@@ -51,6 +51,7 @@ import {
   type TextContext,
   Tooltip,
   TopBar,
+  useFormatSettings,
 } from '@crm/ui';
 import { useBlocker, useNavigate } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -303,6 +304,9 @@ export function ImportScreen({
   const byId = useMemo(() => new Map(attributes.map((attribute) => [attribute.id, attribute])), [attributes]);
   const locale = globalThis.navigator.languages[0] ?? 'en-US';
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  // The workspace's own currency and country (Settings › Workspace › General): where a "$" and a number with no
+  // country code start, when the attribute names none.
+  const { currency: workspaceCurrency, country: workspaceCountry } = useFormatSettings();
   // A date column's day and month order (chosen in Match columns), by column; unchosen, guessed from the file.
   const [dateOrders, setDateOrders] = useState<ReadonlyMap<number, DateOrder>>(new Map());
   /** Each column's values that read either way round (3/4/2025), read once per file. */
@@ -346,6 +350,8 @@ export function ImportScreen({
       attribute,
       members: actors,
       ...(parser === undefined ? {} : { phone: parser }),
+      ...(workspaceCurrency === undefined ? {} : { defaultCurrency: workspaceCurrency }),
+      ...(workspaceCountry === undefined ? {} : { defaultCountry: workspaceCountry }),
     });
   const context = contextFor(phone, dateLocales);
   const required = unmatchedRequired(attributes, targets);

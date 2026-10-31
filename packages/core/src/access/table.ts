@@ -119,6 +119,9 @@ export const ACCESS_TABLE = {
   moveAttribute: { permission: 'schema.manage' },
   archiveAttributes: { permission: 'schema.manage' },
   restoreAttributes: { permission: 'schema.manage' },
+  // Computed attributes (spec 0015, AC-330): the preview and the refill.
+  previewComputed: { permission: 'schema.manage' },
+  refillComputed: { permission: 'schema.manage' },
   defineOption: { permission: 'schema.manage' },
   updateOption: { permission: 'schema.manage' },
   // Settings' option writes (spec 0012, milestone 3).
@@ -257,6 +260,8 @@ export const ACCESS_TABLE = {
   getActivity: { data: 'read' },
   // 13 Oct reference batch 4: a record's stage age, read as its timeline is.
   getStageSince: { data: 'read' },
+  // A record's last contact (the CRM flow pass): read on the record, as its timeline.
+  getLastContacted: { data: 'read' },
   readTrashedRecord: { data: 'read' },
   // A record's own files (27 Oct 2026): keyed on the record, never on the submission a file came from, so a filed
   // file outlives its submission. The read refuses a record the member can't see and a field hidden from them; the
@@ -264,6 +269,13 @@ export const ACCESS_TABLE = {
   readRecordFile: { data: 'read' },
   prepareRecordFile: { data: 'write' },
   registerRecordFile: { data: 'write' },
+  // A record's Files tab (#32): listed by whoever may read the record; added, deleted and restored by whoever may
+  // change its object, on a live record.
+  listAttachments: { data: 'read' },
+  prepareAttachment: { data: 'write' },
+  registerAttachment: { data: 'write' },
+  deleteAttachment: { data: 'write' },
+  restoreAttachment: { data: 'write' },
   // The record picker's search (spec 0014): only records the reader may see.
   searchRecords: { data: 'read' },
   // Likely duplicates (spec 0049): read on the object to check and list; write to dismiss and restore a pair.
@@ -317,6 +329,9 @@ export const ACCESS_TABLE = {
   addListEntry: { data: 'write' },
   addListEntries: { data: 'write' },
   editEntry: { data: 'write' },
+  // A list field of many entries (AC-4826) and its undo: the list at write, then each entry through lockEntry.
+  editEntries: { data: 'write' },
+  setEntriesValues: { data: 'write' },
   removeEntries: { data: 'write' },
   restoreEntries: { data: 'write' },
   // Background jobs (spec 0008): the starter or jobs.manage; the test job needs jobs.manage.
@@ -428,6 +443,11 @@ export const ACCESS_TABLE = {
   deleteAutomation: { permission: 'automations.manage' },
   restoreAutomation: { permission: 'automations.manage' },
   listAutomationRuns: { permission: 'automations.manage' },
+  // API keys (parity #34): all of it needs api_keys.manage; a key's own requests go through `enterWithKey`.
+  listApiKeys: { permission: 'api_keys.manage' },
+  createApiKey: { permission: 'api_keys.manage' },
+  revokeApiKey: { permission: 'api_keys.manage' },
+  restoreApiKey: { permission: 'api_keys.manage' },
   // Forms (spec 0023): any member reads the forms on objects they can see; changing one, or acting on a
   // submission, needs forms.manage. A submission reads through its main record. The public form and submit take
   // only the scope the form's own public key made.

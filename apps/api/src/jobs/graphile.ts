@@ -209,7 +209,7 @@ export interface JobRunnersOptions {
    * Automations (parity #53): one workspace's queued runs (`runAutomationTask`), told how to queue its own next call.
    * With it, the light runner takes `crm_automation` and holds the hourly `crm_cron_automation_due` line.
    */
-  readonly automation?: (payload: unknown, again: (workspaceId: string) => Promise<void>) => Promise<void>;
+  readonly automation?: (payload: unknown, again: (workspaceId: string, at?: Date) => Promise<void>) => Promise<void>;
   /**
    * Calendar health (spec 0037, AC-1310, AC-1311): one episode's email (`runCalendarHealthEmailTask`), and who hears
    * a held sweep (Sentry's warning). With it, the light runner takes `crm_calendar_health_email` and holds the
@@ -702,11 +702,23 @@ export async function startJobRunners(options: JobRunnersOptions): Promise<JobRu
                 : {
                     [AUTOMATION_TASK]: counted(
                       (payload, helpers) =>
-                        automation(payload, async (workspaceId) => {
+                        automation(payload, async (workspaceId, at) => {
                           await helpers.addJob(
                             AUTOMATION_TASK,
                             { workspaceId },
-                            { jobKey: `crm-automation:${workspaceId}`, jobKeyMode: 'preserve_run_at', maxAttempts: 5 },
+                            at === undefined
+                              ? {
+                                  jobKey: `crm-automation:${workspaceId}`,
+                                  jobKeyMode: 'preserve_run_at',
+                                  maxAttempts: 5,
+                                }
+                              : // Its own key: the next write's call stays prompt, and this one waits for the stale run.
+                                {
+                                  jobKey: `crm-automation-stale:${workspaceId}`,
+                                  jobKeyMode: 'preserve_run_at',
+                                  runAt: at,
+                                  maxAttempts: 5,
+                                },
                           );
                         }),
                       inFlight,

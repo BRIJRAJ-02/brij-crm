@@ -13,11 +13,12 @@
 // workspace counter row last, as every write takes it.
 import { sql } from 'drizzle-orm';
 import { applyOp, bulkExclusion, bulkOpsFor, holdsList, opTakesValue, type BulkOp } from '@crm/contracts/bulk-ops';
+import type { FiledCompany } from '@crm/contracts';
 import type { EngineRefusal } from '@crm/contracts/values';
 import type { WorkspaceTx } from '@crm/db';
 import { decodeValue, encodeValue, sameItems } from './columns.ts';
 import { checkId, uuidArray } from './ids.ts';
-import { updateRecord } from './records.ts';
+import { updateRecordFiling } from './records.ts';
 import { refuse } from './refusals.ts';
 import type { EngineScope } from './scope.ts';
 import { MAX_INLINE_RECORDS, TOO_MANY_INLINE } from './trash.ts';
@@ -48,7 +49,14 @@ export interface BulkEditInput {
  * result, so nothing was written), or refused with why.
  */
 export type BulkEditOutcome =
-  | { readonly recordId: string; readonly state: 'changed'; readonly before: unknown; readonly versionId: string }
+  | {
+      readonly recordId: string;
+      readonly state: 'changed';
+      readonly before: unknown;
+      readonly versionId: string;
+      /** The company the person's new email filed them under (spec 0059), which the browser's undo takes back. */
+      readonly filedCompany?: FiledCompany;
+    }
   | { readonly recordId: string; readonly state: 'unchanged' }
   | { readonly recordId: string; readonly state: 'refused'; readonly refusals: readonly EngineRefusal[] };
 
@@ -102,13 +110,32 @@ export async function checkBulkEdit(
   const level = attribute === undefined || isOpen(scope.access) ? 'write' : attributeLevel(scope.access, attribute);
   if (attribute === undefined || level === 'hidden') throw refuse('NOT_FOUND', UNKNOWN_ATTRIBUTE);
   if (level === 'read') throw refuse('ATTRIBUTE_READ_ONLY', fieldReadOnlyReason(attribute.title), attribute.id);
+  return {
+    attribute,
+    value: checkBulkChange(attribute, attribute.id === (await primaryOf(tx, objectId)), change, count),
+  };
+}
+
+/**
+ * The attribute's own checks of a bulk edit (AC-529), shared by records and a
+ * list's entries: not excluded, an operation its type takes, Set on a unique
+ * attribute for at most one owner, Clear never on a required one (each 422
+ * `CONFIG_INVALID`), and the value by its type's schema
+ * (`ATTRIBUTE_VALUE_INVALID`). Answers the value, parsed.
+ */
+export function checkBulkChange(
+  attribute: AttributeDef,
+  isPrimary: boolean,
+  change: BulkEditChange,
+  count: number,
+): unknown {
   const rules = {
     type: attribute.type,
     isMulti: attribute.isMulti,
     isRequired: attribute.isRequired,
     isUnique: attribute.isUnique,
     isSystem: attribute.isSystem,
-    isPrimary: attribute.id === (await primaryOf(tx, objectId)),
+    isPrimary,
     isArchived: isArchivedNow(attribute),
   };
   if (bulkExclusion(rules) !== undefined) throw refuse('CONFIG_INVALID', BULK_EDIT_WORDS.excluded(attribute.title));
@@ -124,7 +151,7 @@ export async function checkBulkEdit(
   if (attribute.isUnique && change.op === 'set' && count > 1) {
     throw refuse('CONFIG_INVALID', BULK_EDIT_WORDS.unique(attribute.title), attribute.id);
   }
-  if (!opTakesValue(change.op)) return { attribute, value: null };
+  if (!opTakesValue(change.op)) return null;
   if (change.value === undefined || change.value === null) {
     // A checkbox's Set says checked or unchecked; anything else needs a value (Clear empties it).
     if (attribute.type !== 'checkbox')
@@ -135,7 +162,7 @@ export async function checkBulkEdit(
     holdsList(attribute) && !Array.isArray(change.value) && change.value !== undefined && change.value !== null
       ? [change.value]
       : change.value;
-  return { attribute, value: parseFor(attribute, given ?? (attribute.type === 'checkbox' ? false : null)) };
+  return parseFor(attribute, given ?? (attribute.type === 'checkbox' ? false : null));
 }
 
 /**
@@ -177,7 +204,7 @@ export async function updateManyIn(context: WriteContext, input: BulkEditInput):
       continue;
     }
     const written = await context.perRecord((child) =>
-      updateRecord(
+      updateRecordFiling(
         child,
         {
           recordId,
@@ -191,12 +218,19 @@ export async function updateManyIn(context: WriteContext, input: BulkEditInput):
       outcomes.set(recordId, { recordId, state: 'refused', refusals: written.refusals });
       continue;
     }
-    const versionId = written.value[attribute.id]?.versionId;
+    const versionId = written.value.results[attribute.id]?.versionId;
+    const filed = written.value.filedCompany;
     outcomes.set(
       recordId,
       versionId === undefined
         ? { recordId, state: 'unchanged' }
-        : { recordId, state: 'changed', before: current, versionId },
+        : {
+            recordId,
+            state: 'changed',
+            before: current,
+            versionId,
+            ...(filed === undefined ? {} : { filedCompany: filed }),
+          },
     );
   }
   return ids.map(

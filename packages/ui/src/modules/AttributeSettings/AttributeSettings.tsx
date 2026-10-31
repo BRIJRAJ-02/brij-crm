@@ -18,6 +18,7 @@ import {
   type PickerType,
 } from '@crm/contracts/values';
 import { ruleKindFits, ruleKindsFor } from '@crm/contracts/validation';
+import { COMPUTED_KINDS, type ComputedKind } from '@crm/contracts/computed';
 import { checkRuleSettings, type ConditionAttribute } from '@crm/contracts/values';
 import { Activity, useEffect, useId, useRef, useState, type Ref } from 'react';
 import { Button } from '../../atoms/Button/Button.tsx';
@@ -53,6 +54,7 @@ import {
   type RuleSettings,
   type RulesEditorRule,
 } from '../RulesEditor/RulesEditor.tsx';
+import { ComputedSettings, type AttributeSettingsComputed, type ComputedDraft } from './ComputedSettings.tsx';
 import { strings } from './strings.ts';
 
 /** An existing attribute as the dialog edits it. */
@@ -71,6 +73,12 @@ export interface AttributeSettingsAttribute {
   readonly options?: readonly OptionsEditorOption[];
   /** Its validation rules, in order (spec 0013). */
   readonly rules?: readonly RuleSettings[];
+  /** A computed attribute (spec 0015): its kind, its definition, and why it stopped updating. */
+  readonly computed?: {
+    readonly kind: ComputedKind;
+    readonly definition: ComputedDraft;
+    readonly brokenReason?: string;
+  };
 }
 
 /** The API names an object's attributes hold, for a new attribute's (see `apiNames`). */
@@ -95,7 +103,8 @@ export type AttributeSettingsField =
   | 'defaultValue'
   | 'config'
   | 'options'
-  | 'rules';
+  | 'rules'
+  | 'computed';
 
 /**
  * An existing attribute's options, written as they change (spec 0012,
@@ -135,6 +144,8 @@ export interface AttributeSettingsValues {
   readonly options: readonly OptionsEditorOption[];
   /** Its validation rules, in order, as the API takes them (spec 0013); `changed` names `rules` once touched. */
   readonly rules: readonly RuleSettings[];
+  /** A computed attribute's definition (spec 0015): `type` and every other setting but the name and description are then ignored. */
+  readonly computed?: ComputedDraft;
   readonly changed: readonly AttributeSettingsField[];
 }
 
@@ -239,6 +250,11 @@ export interface AttributeSettingsProps {
    */
   readonly requiredMeets?: { readonly label: string; readonly href: string };
   readonly uniqueMeets?: { readonly label: string; readonly href: string };
+  /**
+   * Lookup, Rollup and Formula (spec 0015): offered after Member while creating, and an existing computed
+   * attribute's settings, with the relationship sides, the formula's attributes and the preview. No entries when absent.
+   */
+  readonly computed?: AttributeSettingsComputed;
 }
 
 /** What the member editor's search answers (its list type is the field set's union of display shapes). */
@@ -246,6 +262,13 @@ type MemberSource = ReturnType<NonNullable<AttributeEditorProps['onSearch']>>;
 
 /** The key the picker offers Relationship under. */
 const RELATIONSHIP = 'relationship';
+
+/** The icon each computed kind shows in the picker, from icons the registry already holds. */
+const COMPUTED_ICONS: Readonly<Record<ComputedKind, 'link' | 'layers' | 'square-function'>> = {
+  lookup: 'link',
+  rollup: 'layers',
+  formula: 'square-function',
+};
 
 /** What the default is made of while the person edits it. */
 type DefaultKind = 'none' | 'static' | 'current_user' | 'offset';
@@ -345,6 +368,7 @@ export function AttributeSettings({
   onChangeType,
   requiredMeets,
   uniqueMeets,
+  computed,
 }: AttributeSettingsProps) {
   const formId = useId();
   const isReadOnly = readOnlyReason !== undefined;
@@ -436,6 +460,7 @@ export function AttributeSettings({
             changeTypeRef={changeTypeRef}
             requiredMeets={requiredMeets}
             uniqueMeets={uniqueMeets}
+            computed={computed}
           />
         </Activity>
       )}
@@ -473,6 +498,7 @@ interface AttributeFormProps {
   readonly changeTypeRef: Ref<HTMLButtonElement>;
   readonly requiredMeets: AttributeSettingsProps['requiredMeets'];
   readonly uniqueMeets: AttributeSettingsProps['uniqueMeets'];
+  readonly computed: AttributeSettingsComputed | undefined;
 }
 
 function AttributeForm({
@@ -503,16 +529,24 @@ function AttributeForm({
   changeTypeRef,
   requiredMeets,
   uniqueMeets,
+  computed,
 }: AttributeFormProps) {
   const isCreating = attribute === undefined;
   const isReadOnly = readOnlyReason !== undefined;
   const offered = PICKER_TYPES.filter((entry) => typeKeys === undefined || typeKeys.includes(entry.key));
   const [typeKey, setTypeKey] = useState(() =>
-    attribute === undefined
-      ? ((offered.find((each) => each.key === initialTypeKey) ?? offered[0])?.key ?? 'text')
-      : (pickerTypeOf(attribute.type, attribute.isMulti)?.key ?? attribute.type),
+    attribute?.computed !== undefined
+      ? attribute.computed.kind
+      : attribute === undefined
+        ? computed !== undefined && COMPUTED_KINDS.some((each) => each === initialTypeKey)
+          ? (initialTypeKey ?? 'text')
+          : ((offered.find((each) => each.key === initialTypeKey) ?? offered[0])?.key ?? 'text')
+        : (pickerTypeOf(attribute.type, attribute.isMulti)?.key ?? attribute.type),
   );
   const entry = PICKER_TYPES.find((each) => each.key === typeKey);
+  // Lookup, Rollup or Formula (spec 0015): an entry of its own, whose settings are its definition.
+  const computedKind = COMPUTED_KINDS.find((each) => each === typeKey);
+  const [computedDraft, setComputedDraft] = useState<ComputedDraft | undefined>(attribute?.computed?.definition);
   const type: AttributeType = entry?.type ?? attribute?.type ?? 'text';
   const [name, setName] = useState(attribute?.title ?? initialTitle ?? initialDraft?.title ?? '');
   const [description, setDescription] = useState(attribute?.description ?? '');
@@ -599,6 +633,13 @@ function AttributeForm({
       relationshipEntry?.onChoose({ title: name.trim() });
       return;
     }
+    const kind = COMPUTED_KINDS.find((each) => each === key);
+    if (kind !== undefined) {
+      setTypeKey(kind);
+      setComputedDraft(undefined);
+      touch('type');
+      return;
+    }
     if (applyType(key)) touch('type');
   };
 
@@ -636,8 +677,30 @@ function AttributeForm({
             }));
       }),
     ];
+    // A computed attribute is its definition: one still incomplete (a formula with a mistake) waits.
+    if (computedKind !== undefined && computedDraft === undefined) {
+      problems.push({ code: 'CONFIG_INVALID', message: strings.computedIncomplete, attributeId: 'computed' });
+    }
     setLocal(problems);
     if (problems.length > 0) return;
+    if (computedKind !== undefined && computedDraft !== undefined) {
+      onSubmit({
+        type,
+        isMulti: false,
+        title: name.trim(),
+        ...(freeSlug === undefined ? {} : { apiSlug: freeSlug }),
+        description: description.trim(),
+        isRequired: false,
+        isUnique: false,
+        defaultValue: undefined,
+        config: {},
+        options: [],
+        rules: [],
+        computed: computedDraft,
+        changed: [...changed, ...(isCreating ? [] : (['computed'] as const))],
+      });
+      return;
+    }
     const fallback = hasDefault ? defaultOf(draft, type) : undefined;
     onSubmit({
       type,
@@ -664,14 +727,29 @@ function AttributeForm({
   });
   // Creating: the offered entries, then Relationship when #15 gives it. Editing: the attribute's own type, which
   // may be one the picker doesn't offer (a personal name, a relationship).
+  // Lookup, Rollup and Formula sit right after Member (spec 0015, AC-312), for those who may make them.
+  const computedItems: readonly SelectItem[] =
+    computed === undefined
+      ? []
+      : COMPUTED_KINDS.map((kind) => ({ id: kind, label: strings[kind], icon: COMPUTED_ICONS[kind] }));
+  const memberAt = offered.findIndex((each) => each.key === 'member');
+  const splitAt = memberAt === -1 ? offered.length : memberAt + 1;
   const items: readonly SelectItem[] = isCreating
     ? [
-        ...offered.map(itemOf),
+        ...offered.slice(0, splitAt).map(itemOf),
+        ...computedItems,
+        ...offered.slice(splitAt).map(itemOf),
         ...(relationshipEntry === undefined
           ? []
           : [{ id: RELATIONSHIP, label: relationshipEntry.label, icon: fieldTypeOf('record_reference').icon }]),
       ]
-    : [entry === undefined ? { id: typeKey, label: typeLabelOf(type), icon: fieldTypeOf(type).icon } : itemOf(entry)];
+    : [
+        computedKind !== undefined
+          ? { id: computedKind, label: strings[computedKind], icon: COMPUTED_ICONS[computedKind] }
+          : entry === undefined
+            ? { id: typeKey, label: typeLabelOf(type), icon: fieldTypeOf(type).icon }
+            : itemOf(entry),
+      ];
   // The default's refusal shows on its editor when one is drawn, else above the settings.
   const defaultKinds = defaultKindsFor(type);
   const hasDefaultEditor =
@@ -685,6 +763,7 @@ function AttributeForm({
     'isUnique',
     'config',
     ...(takesOptions ? ['options'] : []),
+    ...(computedKind === undefined ? [] : ['computed']),
     ...(hasDefaultEditor ? ['defaultValue'] : []),
   ];
   const isRuleField = (field: string | undefined) => field === 'rules' || field?.startsWith('rules.') === true;
@@ -701,6 +780,7 @@ function AttributeForm({
   );
   const listError = shown.find((refusal) => refusal.attributeId === 'rules')?.message;
   const kinds = ruleKindsFor({ type, isMulti });
+  const typeHint = computedKind === undefined ? strings.typeHints[type] : strings.computedHints[computedKind];
   // More settings: closed on create; open on an edit that set any of them, and whenever one of them is refused.
   const [isMoreOpen, setMoreOpen] = useState(
     () =>
@@ -762,7 +842,7 @@ function AttributeForm({
         value={typeKey}
         onChange={chooseType}
         {...(isCreating ? {} : { isReadOnly: true })}
-        {...(isCreating && strings.typeHints[type] !== undefined ? { hint: strings.typeHints[type] } : {})}
+        {...(isCreating && typeHint !== undefined ? { hint: typeHint } : {})}
         {...(errorOf('type') === undefined ? {} : { error: errorOf('type') })}
       />
       {/* The way out of a wrong type, quiet, since most never need it: in place when the change is safe, else the
@@ -777,18 +857,33 @@ function AttributeForm({
           {strings.wrongType}
         </Button>
       )}
-      <TypeSettings
-        type={type}
-        config={config}
-        defaultCurrency={region.currency}
-        isReadOnly={isReadOnly}
-        error={errorOf('config')}
-        onChange={(next) => {
-          setConfig(next);
-          touch('config');
-        }}
-      />
-      {takesOptions && (
+      {computedKind !== undefined && computed !== undefined && (
+        <ComputedSettings
+          kind={computedKind}
+          computed={computed}
+          {...(attribute?.computed === undefined ? {} : { initial: attribute.computed.definition })}
+          {...(attribute?.computed?.brokenReason === undefined
+            ? {}
+            : { brokenReason: attribute.computed.brokenReason })}
+          isReadOnly={isReadOnly}
+          error={errorOf('computed')}
+          onChange={setComputedDraft}
+        />
+      )}
+      {computedKind === undefined && (
+        <TypeSettings
+          type={type}
+          config={config}
+          defaultCurrency={region.currency}
+          isReadOnly={isReadOnly}
+          error={errorOf('config')}
+          onChange={(next) => {
+            setConfig(next);
+            touch('config');
+          }}
+        />
+      )}
+      {computedKind === undefined && takesOptions && (
         <OptionsSetting
           isCreating={isCreating}
           kind={type === 'status' ? 'status' : 'select'}
@@ -834,103 +929,108 @@ function AttributeForm({
           }}
           {...(isReadOnly ? { isReadOnly } : {})}
         />
-        <Checkbox
-          label={strings.required}
-          isSelected={isRequired}
-          isReadOnly={isReadOnly}
-          onChange={(next) => {
-            setRequired(next);
-            touch('isRequired');
-          }}
-          {...(errorOf('isRequired') === undefined ? {} : { error: errorOf('isRequired') })}
-        />
-        {/* Ticked now on an attribute that wasn't required: the records it would meet, one press away. */}
-        {!isCreating && !attribute.isRequired && isRequired && requiredMeets !== undefined && (
-          <Link href={requiredMeets.href}>{requiredMeets.label}</Link>
-        )}
-        {allowsUnique && (
-          <Checkbox
-            label={strings.unique}
-            isSelected={isUnique}
-            isReadOnly={isReadOnly}
-            onChange={(next) => {
-              setUnique(next);
-              touch('isUnique');
-            }}
-            {...(errorOf('isUnique') === undefined ? {} : { error: errorOf('isUnique') })}
-          />
-        )}
-        {allowsUnique &&
-          !isCreating &&
-          !attribute.isUnique &&
-          isUnique &&
-          uniqueMeets !== undefined &&
-          !hasDuplicates && <Link href={uniqueMeets.href}>{uniqueMeets.label}</Link>}
-        {/* Refused for values records share: the way to them, so the switch isn't a dead end. */}
-        {allowsUnique && duplicatesLink !== undefined && hasDuplicates && (
-          <Link href={duplicatesLink.href}>{duplicatesLink.label}</Link>
-        )}
-        {allowsMultiple && (
-          <Checkbox
-            label={strings.allowMultiple}
-            // Its label says what it does; only once made does it need a word (it can't change).
-            {...(isCreating ? {} : { description: strings.allowMultipleLocked })}
-            isSelected={isMulti}
-            isReadOnly={isReadOnly || !isCreating}
-            onChange={(next) => {
-              setMulti(next);
-              // A default made for one value or several starts again.
-              setDraft(NO_DEFAULT);
-              touch('isMulti');
-            }}
-          />
-        )}
-        {hasDefault && (
-          <DefaultSetting
-            // Mounted afresh for each type and multiple setting, so its editor starts from the new shape.
-            key={`${typeKey}:${String(isMulti)}`}
-            type={type}
-            isMulti={isMulti}
-            draft={draft}
-            members={members}
-            options={options}
-            config={config}
-            isRequired={isRequired}
-            readOnlyReason={readOnlyReason}
-            error={errorOf('defaultValue')}
-            onChange={(next) => {
-              setDraft(next);
-              touch('defaultValue');
-            }}
-          />
-        )}
-        {(kinds.length > 0 || rules.length > 0) && (
+        {/* A computed attribute is worked out: Required, Unique, a default and rules have nothing to hold (AC-323). */}
+        {computedKind === undefined && (
           <>
-            <RulesEditor
-              label={strings.rules}
-              rules={rules}
-              kinds={kinds}
-              attribute={{ title: name, type }}
-              newId={ruleId}
+            <Checkbox
+              label={strings.required}
+              isSelected={isRequired}
               isReadOnly={isReadOnly}
-              // Creating, the rules go with Create attribute: the hint names Save, which only editing shows.
-              {...(isCreating ? {} : { hint: strings.rulesSaveOnSave })}
-              errors={ruleErrors}
               onChange={(next) => {
-                setRules(next);
-                touch('rules');
-                // A setting typed again lets go of the refusal made here; the server's stay until it answers again.
-                if (local.some((refusal) => isRuleField(refusal.attributeId))) {
-                  setLocal(local.filter((refusal) => !isRuleField(refusal.attributeId)));
-                }
+                setRequired(next);
+                touch('isRequired');
               }}
-              {...(ruleAttributes === undefined ? {} : { conditionAttributes: ruleAttributes })}
-              {...(ruleEditorProps === undefined ? {} : { editorProps: ruleEditorProps })}
+              {...(errorOf('isRequired') === undefined ? {} : { error: errorOf('isRequired') })}
             />
-            {listError !== undefined && <Callout tone="danger">{listError}</Callout>}
+            {/* Ticked now on an attribute that wasn't required: the records it would meet, one press away. */}
+            {!isCreating && !attribute.isRequired && isRequired && requiredMeets !== undefined && (
+              <Link href={requiredMeets.href}>{requiredMeets.label}</Link>
+            )}
+            {allowsUnique && (
+              <Checkbox
+                label={strings.unique}
+                isSelected={isUnique}
+                isReadOnly={isReadOnly}
+                onChange={(next) => {
+                  setUnique(next);
+                  touch('isUnique');
+                }}
+                {...(errorOf('isUnique') === undefined ? {} : { error: errorOf('isUnique') })}
+              />
+            )}
+            {allowsUnique &&
+              !isCreating &&
+              !attribute.isUnique &&
+              isUnique &&
+              uniqueMeets !== undefined &&
+              !hasDuplicates && <Link href={uniqueMeets.href}>{uniqueMeets.label}</Link>}
+            {/* Refused for values records share: the way to them, so the switch isn't a dead end. */}
+            {allowsUnique && duplicatesLink !== undefined && hasDuplicates && (
+              <Link href={duplicatesLink.href}>{duplicatesLink.label}</Link>
+            )}
+            {allowsMultiple && (
+              <Checkbox
+                label={strings.allowMultiple}
+                // Its label says what it does; only once made does it need a word (it can't change).
+                {...(isCreating ? {} : { description: strings.allowMultipleLocked })}
+                isSelected={isMulti}
+                isReadOnly={isReadOnly || !isCreating}
+                onChange={(next) => {
+                  setMulti(next);
+                  // A default made for one value or several starts again.
+                  setDraft(NO_DEFAULT);
+                  touch('isMulti');
+                }}
+              />
+            )}
+            {hasDefault && (
+              <DefaultSetting
+                // Mounted afresh for each type and multiple setting, so its editor starts from the new shape.
+                key={`${typeKey}:${String(isMulti)}`}
+                type={type}
+                isMulti={isMulti}
+                draft={draft}
+                members={members}
+                options={options}
+                config={config}
+                isRequired={isRequired}
+                readOnlyReason={readOnlyReason}
+                error={errorOf('defaultValue')}
+                onChange={(next) => {
+                  setDraft(next);
+                  touch('defaultValue');
+                }}
+              />
+            )}
+            {(kinds.length > 0 || rules.length > 0) && (
+              <>
+                <RulesEditor
+                  label={strings.rules}
+                  rules={rules}
+                  kinds={kinds}
+                  attribute={{ title: name, type }}
+                  newId={ruleId}
+                  isReadOnly={isReadOnly}
+                  // Creating, the rules go with Create attribute: the hint names Save, which only editing shows.
+                  {...(isCreating ? {} : { hint: strings.rulesSaveOnSave })}
+                  errors={ruleErrors}
+                  onChange={(next) => {
+                    setRules(next);
+                    touch('rules');
+                    // A setting typed again lets go of the refusal made here; the server's stay until it answers again.
+                    if (local.some((refusal) => isRuleField(refusal.attributeId))) {
+                      setLocal(local.filter((refusal) => !isRuleField(refusal.attributeId)));
+                    }
+                  }}
+                  {...(ruleAttributes === undefined ? {} : { conditionAttributes: ruleAttributes })}
+                  {...(ruleEditorProps === undefined ? {} : { editorProps: ruleEditorProps })}
+                />
+                {listError !== undefined && <Callout tone="danger">{listError}</Callout>}
+              </>
+            )}
+            {rulesNote !== undefined && <Callout>{rulesNote}</Callout>}
           </>
         )}
-        {rulesNote !== undefined && <Callout>{rulesNote}</Callout>}
       </Disclosure>
     </Form>
   );

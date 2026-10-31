@@ -188,6 +188,10 @@ const FIXTURES: Record<ListedAuditAction, readonly AuditRow[]> = {
     }),
   ],
   'workspace_security.signed_out_everyone': [row('workspace_security.signed_out_everyone', 'workspace', newId())],
+  // An API key made, revoked or brought back (parity #34): its name, never its secret.
+  'api_key.created': [row('api_key.created', 'workspace', newId(), { after: { name: 'Zapier', keyId: newId() } })],
+  'api_key.revoked': [row('api_key.revoked', 'workspace', newId(), { after: { name: 'Zapier', keyId: newId() } })],
+  'api_key.restored': [row('api_key.restored', 'workspace', newId(), { after: { name: 'Zapier', keyId: newId() } })],
   'rotation.adjusted': [
     row('rotation.adjusted', 'rotation', rotation, { after: { memberId: bea, units: 2, note: 'Holiday' } }),
   ],
@@ -296,6 +300,10 @@ const FIXTURES: Record<ListedAuditAction, readonly AuditRow[]> = {
     row('booking.changed_for', 'booking', booking, { after: { memberId: bea, change: 'made' } }),
   ],
   // As the call sites in teams.ts and rules.ts write them (target types `team` and `object`).
+  'automation.changed': [
+    row('automation.changed', 'automation', newId(), { after: { change: 'created', object: 'Deals' } }),
+    row('automation.changed', 'automation', newId(), { after: { change: 'disabled', object: 'tasks' } }),
+  ],
   'team.changed': [
     row('team.changed', 'team', newId(), { after: { change: 'created', name: 'Sales' } }),
     row('team.changed', 'team', newId(), { before: { name: 'Sales' }, after: { change: 'renamed', name: 'Revenue' } }),
@@ -472,6 +480,8 @@ describe('toEntryView, per action', () => {
   });
 
   it('says a team change and an access rule in the names stored then, with only the counts of people and fields', () => {
+    expect(only('automation.changed', 0).params).toEqual({ change: 'created', object: 'Deals' });
+    expect(only('automation.changed', 1).params).toEqual({ change: 'disabled', object: 'tasks' });
     expect(only('team.changed', 0).params).toEqual({ change: 'created', team: 'Sales', joined: 0, left: 0 });
     expect(only('team.changed', 1).params).toEqual({ change: 'renamed', team: 'Sales', joined: 0, left: 0 });
     expect(only('team.changed', 2).params).toEqual({ change: 'deleted', team: 'Revenue', joined: 0, left: 1 });

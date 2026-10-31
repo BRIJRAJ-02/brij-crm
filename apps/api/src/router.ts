@@ -1,5 +1,6 @@
 import { accessRouter } from './modules/access/router.ts';
 import { attributesRouter } from './modules/attributes/router.ts';
+import { computedRouter } from './modules/computed/router.ts';
 import { auditRouter } from './modules/audit/router.ts';
 import { calendarRouter } from './modules/calendar/router.ts';
 import { formsRouter } from './modules/forms/router.ts';
@@ -40,6 +41,7 @@ import { submissionsRouter } from './modules/submissions/router.ts';
 import { systemRouter } from './modules/system/router.ts';
 import { trashRouter } from './modules/trash/router.ts';
 import { commentsRouter } from './modules/comments/router.ts';
+import { filesRouter } from './modules/files/router.ts';
 import { notesRouter } from './modules/notes/router.ts';
 import { notificationsRouter } from './modules/notifications/router.ts';
 import { tasksRouter } from './modules/tasks/router.ts';
@@ -51,6 +53,7 @@ import { viewsRouter } from './modules/views/router.ts';
 import { workspacesRouter } from './modules/workspaces/router.ts';
 import { accountRouter } from './modules/account/router.ts';
 import { automationsRouter } from './modules/automations/router.ts';
+import { apiKeysRouter } from './modules/api-keys/router.ts';
 import { base } from './orpc.ts';
 
 // One module per feature under ./modules, each implementing its contract namespace.
@@ -62,6 +65,7 @@ export const router = base.router({
   workspaces: workspacesRouter,
   objects: objectsRouter,
   attributes: attributesRouter,
+  computed: computedRouter,
   options: optionsRouter,
   records: recordsRouter,
   lists: listsRouter,
@@ -84,6 +88,7 @@ export const router = base.router({
   realtime: realtimeRouter,
   jobs: jobsRouter,
   automations: automationsRouter,
+  apiKeys: apiKeysRouter,
   usage: usageRouter,
   views: viewsRouter,
   reports: reportsRouter,
@@ -91,6 +96,7 @@ export const router = base.router({
   tasks: tasksRouter,
   notes: notesRouter,
   comments: commentsRouter,
+  files: filesRouter,
   notifications: notificationsRouter,
   calendar: calendarRouter,
   home: homeRouter,

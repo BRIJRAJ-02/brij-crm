@@ -49,6 +49,7 @@ export const EVENT_KINDS = [
   'calendars',
   'time_off',
   'automations',
+  'files',
 ] as const satisfies readonly EventRow['kind'][];
 
 /** One member of an audience: who, and what they may do. */
@@ -382,6 +383,13 @@ export function filterEvent(audience: Audience, row: EventRow, facts: EventFacts
       const ruled = row.objectId === undefined ? restricted : recordRule({ data: policy }, row.objectId) !== undefined;
       if (!ruled) return row;
       return settle({ ...row, recordIds: [], threadIds: [], coarse: true }, true);
+    }
+    // A record's files (#32) follow their records as comments do.
+    case 'files': {
+      if (level(row.objectId) === 'none') return undefined;
+      const ruled = row.objectId === undefined ? restricted : recordRule({ data: policy }, row.objectId) !== undefined;
+      if (!ruled) return row;
+      return settle({ ...row, recordIds: [], coarse: true }, true);
     }
     // A member's notifications (spec 0038) name member ids and nothing else, the same exposure as a `members` event,
     // so every audience receives it and only that member's clients act on it.

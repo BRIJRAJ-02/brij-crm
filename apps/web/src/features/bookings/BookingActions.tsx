@@ -42,8 +42,10 @@ import { useNow } from './useNow.ts';
 /** What the card's changes call: the data layer's, bound to the workspace by the route. */
 export interface HostBookingActions {
   readonly cancel: (bookingId: string, reason: string) => Promise<void>;
-  readonly move: (bookingId: string, start: string) => Promise<void>;
-  readonly moveSlots: (bookingId: string, from: string, to: string) => Promise<PublicSlots>;
+  /** Moves a booking; with `minutes` (the week's drag on its foot) it takes a new length too. */
+  readonly move: (bookingId: string, start: string, minutes?: number) => Promise<void>;
+  /** The times a booking could move to in a range; with `minutes`, where it could be given that length. */
+  readonly moveSlots: (bookingId: string, from: string, to: string, minutes?: number) => Promise<PublicSlots>;
   readonly guestLink: (bookingId: string) => Promise<{ readonly path: string }>;
   /** Why a round robin booking went to its host (spec 0029, AC-742); none for a personal page's booking. */
   readonly assignments: (bookingId: string) => Promise<readonly BookingAssignment[]>;

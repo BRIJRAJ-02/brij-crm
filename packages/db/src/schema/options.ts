@@ -36,9 +36,19 @@ export const attributeOptions = pgTable(
     /** Status stages only: how long a record should sit here before it counts as stuck. */
     targetTimeInStage: interval('target_time_in_stage'),
     archivedAt: timestamptz('archived_at'),
+    /** A lookup's option (spec 0015): the related attribute's option it mirrors, kept in step in the same save. */
+    mirrorOf: uuid('mirror_of'),
     ...auditColumns(),
   },
   (t) => [
+    foreignKey({
+      name: 'attribute_options_mirror',
+      columns: [t.workspaceId, t.mirrorOf],
+      foreignColumns: [t.workspaceId, t.id],
+    }),
+    uniqueIndex('attribute_options_mirror_of')
+      .on(t.workspaceId, t.attributeId, t.mirrorOf)
+      .where(sql`${t.mirrorOf} is not null`),
     primaryKey({ name: 'attribute_options_pkey', columns: [t.workspaceId, t.id] }),
     foreignKey({
       name: 'attribute_options_attribute',

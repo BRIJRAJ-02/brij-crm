@@ -140,6 +140,7 @@ export {
   type DisclosureProps,
 } from './molecules/Disclosure/Disclosure.tsx';
 export { CountryPicker, type CountryPickerProps } from './molecules/CountryPicker/CountryPicker.tsx';
+export { CurrencyPicker, type CurrencyPickerProps } from './molecules/CurrencyPicker/CurrencyPicker.tsx';
 export { EmptyState, type EmptyStateProps, type EmptyStateTone } from './molecules/EmptyState/EmptyState.tsx';
 export { Field, type FieldProps, type FieldSize, type FieldSuggestions } from './molecules/Field/Field.tsx';
 export { FieldGroup, type FieldGroupProps } from './molecules/FieldGroup/FieldGroup.tsx';
@@ -273,6 +274,7 @@ export { SectionList, type SectionListProps, type SectionListSection } from './m
 export {
   WeekCalendar,
   type WeekCalendarBlock,
+  type WeekCalendarMove,
   type WeekCalendarSpan,
   type WeekCalendarDay,
   type WeekCalendarProps,
@@ -423,6 +425,19 @@ export {
   type AttributeSettingsProps,
   type AttributeSettingsValues,
 } from './modules/AttributeSettings/AttributeSettings.tsx';
+export type {
+  AttributeSettingsComputed,
+  ComputedDraft,
+  ComputedFarAttribute,
+  ComputedPreviewState,
+  ComputedSide,
+} from './modules/AttributeSettings/ComputedSettings.tsx';
+export {
+  FormulaEditor,
+  type FormulaCheck,
+  type FormulaEditorAttribute,
+  type FormulaEditorProps,
+} from './modules/FormulaEditor/FormulaEditor.tsx';
 export {
   typeChangeStep,
   type TypeChangePreview,

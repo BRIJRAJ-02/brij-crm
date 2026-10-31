@@ -121,6 +121,14 @@ export const AUDIT_ACTIONS = [
   'booking_page.changed_for',
   // Who is in a rotation changed (spec 0037, AC-1264): the target is the rotation; `after` lists who joined and left.
   'rotation.changed',
+  // Automations (parity #53): made, changed, switched on or off, deleted or brought back. The target is the
+  // automation; `after` holds `change` and the name its trigger's object had then (`tasks` for a task due one).
+  'automation.changed',
+  // Settings › Developer (parity #34): an API key made, revoked or brought back in its Undo window. The target is the
+  // workspace; `after` holds the key's name, id and access (`read` or `write`).
+  'api_key.created',
+  'api_key.revoked',
+  'api_key.restored',
   // Likely duplicates (spec 0049, AC-4908): a pair marked "Not a duplicate", and that undone. The target is the
   // newer record; `after` holds both record ids, never a value.
   'record.duplicate_dismissed',

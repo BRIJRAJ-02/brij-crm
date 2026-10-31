@@ -89,6 +89,34 @@ export async function syncNewSortKeys(
 }
 
 /**
+ * The set form of `syncSortKey` (spec 0015, the thin `syncSortKeys` of spec 0013): brings many owners' keys for one
+ * attribute in line with their current values in one statement, upserting each from item 0 and deleting the keys
+ * of owners whose value is cleared or gone. The caller holds the owners' row locks.
+ */
+export async function syncSortKeys(
+  tx: WorkspaceTx,
+  attribute: AttributeDef,
+  ownerIds: readonly string[],
+): Promise<void> {
+  if (!hasSortKey(attribute) || ownerIds.length === 0) return;
+  const owners = uuidArray(ownerIds);
+  await tx.execute(sql`
+    with source as (
+      select ${KEY_COLUMNS} from sort_key_sources where owner_id = any(${owners}) and attribute_id = ${attribute.id}
+    ), gone as (
+      delete from sort_keys where owner_id = any(${owners}) and attribute_id = ${attribute.id}
+        and owner_id not in (select owner_id from source)
+    )
+    insert into sort_keys (${KEY_COLUMNS}) select ${KEY_COLUMNS} from source
+    on conflict (workspace_id, owner_id, attribute_id) do update set
+      live = excluded.live, text_key = excluded.text_key, number_key = excluded.number_key,
+      code_key = excluded.code_key, date_key = excluded.date_key, time_key = excluded.time_key,
+      option_id = excluded.option_id, bool_key = excluded.bool_key
+    where ${CHANGED}
+  `);
+}
+
+/**
  * Marks a record's keys, and its entries' keys, as hidden (delete) or shown
  * again (restore). On restore, an entry's keys come back only if the entry
  * is still in its list.

@@ -197,7 +197,7 @@ export const bookingsRouter = member.bookings.router({
       moveBooking(
         hostTarget(context.scope, input.bookingId),
         { calendar: context.bookingCalendar, log },
-        { start: new Date(input.start) },
+        { start: new Date(input.start), ...(input.minutes === undefined ? {} : { minutes: input.minutes }) },
       ),
     ),
   ),
@@ -205,7 +205,11 @@ export const bookingsRouter = member.bookings.router({
     readMoveSlots(
       hostTarget(context.scope, input.bookingId),
       { calendar: context.bookingCalendar, log },
-      { from: new Date(input.from), to: new Date(input.to) },
+      {
+        from: new Date(input.from),
+        to: new Date(input.to),
+        ...(input.minutes === undefined ? {} : { minutes: input.minutes }),
+      },
     ),
   ),
   // Why a round robin booking went to its host (spec 0029, AC-742): its host and admins only.

@@ -975,3 +975,122 @@ export const ChangeTypeCheckFailed: Story = {
     await expect(within(dialog).getByRole('button', { name: 'Change type' })).toBeDisabled();
   },
 };
+
+/** What the computed kinds' stories offer (spec 0015): People's Company side, and Deals' attributes for a formula. */
+const COMPUTED: NonNullable<AttributeSettingsProps['computed']> = {
+  pluralName: 'People',
+  sides: [
+    {
+      id: '0199a6f2-0000-7000-8000-00000000c001',
+      title: 'Company',
+      holdsMany: false,
+      attributes: [
+        {
+          id: '0199a6f2-0000-7000-8000-00000000c101',
+          title: 'Industry',
+          type: 'select',
+          isMulti: false,
+          isSystem: false,
+          apiSlug: 'industry',
+          isArchived: false,
+        },
+        {
+          id: '0199a6f2-0000-7000-8000-00000000c102',
+          title: 'Employees',
+          type: 'number',
+          isMulti: false,
+          isSystem: false,
+          apiSlug: 'employees',
+          isArchived: false,
+        },
+      ],
+    },
+  ],
+  formulaAttributes: [
+    {
+      id: 'a1',
+      apiSlug: 'value',
+      title: 'Value',
+      type: 'currency',
+      isMulti: false,
+      isArchived: false,
+      defaultCurrency: 'USD',
+    },
+    { id: 'a2', apiSlug: 'probability', title: 'Probability', type: 'number', isMulti: false, isArchived: false },
+  ],
+  preview: {
+    status: 'ready',
+    result: {
+      resultType: { type: 'number', isMulti: false },
+      samples: [
+        {
+          record: { objectId: 'o', recordId: 'r1', name: 'Ada Lovelace', kind: 'person' },
+          value: '250',
+        },
+        {
+          record: { objectId: 'o', recordId: 'r2', name: 'Grace Hopper', kind: 'person' },
+          value: '1200',
+        },
+      ],
+    },
+  },
+  onRetryPreview: fn(),
+  onDraftChange: fn(),
+  onNewRelationship: fn(),
+};
+
+/** Lookup: one sentence, the first side and field picked, the preview under it. */
+export const ComputedLookup: Story = {
+  args: { computed: COMPUTED, initialTypeKey: 'lookup' },
+  play: async ({ userEvent }) => {
+    const dialog = await openDialog();
+    await userEvent.type(inDialog(dialog, 'Name'), 'Company size');
+    await expect(within(dialog).getByText('From')).toBeInTheDocument();
+    await expect(within(dialog).getByRole('grid', { name: 'Preview' })).toBeInTheDocument();
+  },
+};
+
+/** Rollup: "Count across Company", with Calculation first. */
+export const ComputedRollup: Story = {
+  args: { computed: COMPUTED, initialTypeKey: 'rollup' },
+};
+
+/** Formula: typed in the FormulaEditor, the check line under it. */
+export const ComputedFormula: Story = {
+  args: { computed: { ...COMPUTED, preview: { status: 'idle' } }, initialTypeKey: 'formula' },
+};
+
+/** No relationship to follow yet: the empty state offers one. */
+export const ComputedNoRelationships: Story = {
+  args: { computed: { ...COMPUTED, sides: [] }, initialTypeKey: 'lookup' },
+};
+
+/** The preview failed: an inline error with Try again. */
+export const ComputedPreviewFailed: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { computed: { ...COMPUTED, preview: { status: 'error' } }, initialTypeKey: 'rollup' },
+};
+
+/** An existing lookup that stopped updating: the reason, read in a danger Callout. */
+export const ComputedBroken: Story = {
+  args: {
+    computed: COMPUTED,
+    attribute: {
+      type: 'select',
+      isMulti: false,
+      title: 'Company industry',
+      apiSlug: 'company_industry',
+      isRequired: false,
+      isUnique: false,
+      computed: {
+        kind: 'lookup',
+        definition: {
+          kind: 'lookup',
+          via: '0199a6f2-0000-7000-8000-00000000c001',
+          target: '0199a6f2-0000-7000-8000-00000000c101',
+        },
+        brokenReason: 'Industry is archived.',
+      },
+    },
+  },
+};

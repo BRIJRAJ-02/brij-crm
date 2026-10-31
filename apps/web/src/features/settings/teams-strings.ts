@@ -105,6 +105,8 @@ export const strings = {
   previewSees: 'Sees',
   previewExit: 'Exit preview',
   previewFailed: 'That preview didn’t load.',
+  /** A failed preview's toast action: the same pick, read again. */
+  previewRetry: 'Try again',
   previewRecords: (count: number, atLeast: boolean) =>
     `${atLeast ? '10,000+' : String(count)} ${count === 1 && !atLeast ? 'record' : 'records'}`,
   previewFieldReadOnly: (title: string) => `${title} (read only)`,

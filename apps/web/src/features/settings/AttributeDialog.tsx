@@ -1,6 +1,7 @@
 // Brief
 // Purpose: create or edit one attribute of an object, from settings, the table's "+" header or a column's menu.
-// Main task: name it, pick one of the seventeen types, set its settings, options, rules and default, then Create or Save.
+// Main task: name it, pick one of the seventeen types (or Lookup, Rollup, Formula, spec 0015, built as one sentence
+// with a preview), set its settings, options, rules and default, then Create or Save.
 // Leaves out: type changes that could lose a value (Change type… offers only the safe ones, checked against every
 // value first; for the rest, Wrong type? archives it and starts a new one with its name); an existing attribute's
 // options save as they change; Relationship hands over to RelationshipSettings' step in the same Modal, and a
@@ -41,7 +42,7 @@ import {
   type RuleSettings,
 } from '@crm/ui';
 import { useMatch, useRouteContext } from '@tanstack/react-router';
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { strings } from './attribute-strings.ts';
 import { defaultArchivedNotice } from './default-notice.ts';
 import { emptyRecordsHref, recordsHref } from './impact-lines.ts';
@@ -50,6 +51,7 @@ import { NewObjectDialog } from './NewObjectDialog.tsx';
 import { formRefusals } from './refusals.ts';
 import { requiredWhenLine } from './required-when.ts';
 import { RelationshipDialog, useRelationshipCreate } from './RelationshipDialog.tsx';
+import { useComputedSettings } from './use-computed-settings.ts';
 
 /** The settings the server names on its refusals, as the dialog shows them. */
 const FIELDS = [
@@ -106,6 +108,9 @@ export interface AttributeDialogProps {
   readonly onCreate?: ((input: NewAttribute) => Promise<AttributeDefinition>) | undefined;
 }
 
+/** What a computed attribute whose fill failed says (spec 0015, AC-334): only then does Try again show. */
+const REFILL_ERROR = 'Working out values failed.';
+
 /** The picker's types, which a create takes. */
 const PICKER_KINDS: ReadonlySet<string> = new Set(PICKER_TYPES.map((entry) => entry.type));
 
@@ -126,6 +131,7 @@ function changesOf(values: AttributeSettingsValues): AttributeChanges {
     ...(changed.has('defaultValue') ? { defaultValue: values.defaultValue ?? null } : {}),
     ...(changed.has('config') ? { config: values.config } : {}),
     ...(changed.has('rules') ? { rules: values.rules } : {}),
+    ...(changed.has('computed') && values.computed !== undefined ? { computed: values.computed } : {}),
   };
 }
 
@@ -335,7 +341,11 @@ export function AttributeDialog({
   const readOnlyReason =
     attribute?.isSystem === true ? strings.systemReason(attribute.title) : canManage ? undefined : strings.memberReason;
   // The safe types it may become (none for the name, a system or archived one, or a type with no safe change).
-  const targets = attribute === undefined || readOnlyReason !== undefined ? [] : typeChangeTargets(attribute);
+  // A computed attribute's type follows its definition (spec 0015): none.
+  const targets =
+    attribute === undefined || readOnlyReason !== undefined || attribute.computed !== undefined
+      ? []
+      : typeChangeTargets(attribute);
   // A currency needs its code before a check means anything; the step fills in the workspace's at once.
   const checkKey =
     attribute === undefined ||
@@ -391,6 +401,37 @@ export function AttributeDialog({
     );
   };
 
+  // Lookup, Rollup and Formula (spec 0015): offered on an object's create for those who manage the schema (a list's
+  // own field takes none), and for an existing computed attribute's settings.
+  const isComputedOffered =
+    isOpen && canManage && (attribute === undefined ? onCreate === undefined : attribute.computed !== undefined);
+  // Kept from render to render, so the settings handed to the dialog only change when what they hold does.
+  const newRelationship = useCallback(() => {
+    setRelationshipDraft({ title: '' });
+  }, []);
+  const refillId =
+    attribute?.computed?.state === 'broken' && attribute.computed.error === REFILL_ERROR ? attribute.id : undefined;
+  const refill = useCallback(() => {
+    if (refillId === undefined) return;
+    data.computed.refill(slug, objectId, refillId).then(
+      () => undefined,
+      (error: unknown) => {
+        toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : sharedStrings.couldntDoThat });
+      },
+    );
+  }, [data, slug, objectId, refillId, toasts]);
+  const computed = useComputedSettings({
+    data,
+    slug,
+    objectId,
+    isOffered: isComputedOffered,
+    objectAttributes,
+    objects: workspaceObjects,
+    selfId: attribute?.id,
+    ...(attribute === undefined ? { onNewRelationship: newRelationship } : {}),
+    ...(refillId === undefined ? {} : { onRefill: refill }),
+  });
+
   // The options as the live list holds them, then the ones added and not yet listed.
   const listed = useMemo(() => (attribute?.options ?? []).map(editorOption), [attribute?.options]);
   const options = useMemo(
@@ -412,7 +453,8 @@ export function AttributeDialog({
             id,
             objectId,
             title: values.title,
-            type: pickerTypeOf(values.type),
+            // A computed attribute's type comes from its definition on the server (spec 0015).
+            type: values.computed === undefined ? pickerTypeOf(values.type) : 'text',
             isMulti: values.isMulti,
             ...(values.apiSlug === undefined ? {} : { apiSlug: values.apiSlug }),
             ...(values.description === '' ? {} : { description: values.description }),
@@ -422,6 +464,7 @@ export function AttributeDialog({
             ...(Object.keys(values.config).length === 0 ? {} : { config: values.config }),
             ...(values.options.length === 0 ? {} : { options: values.options.map(newOptionOf) }),
             ...(values.rules.length === 0 ? {} : { rules: values.rules }),
+            ...(values.computed === undefined ? {} : { computed: values.computed }),
           })
         : data.attributes.update(slug, attribute.id, changesOf(values));
     write.then(
@@ -602,6 +645,17 @@ export function AttributeDialog({
                 config: attribute.config,
                 ...(attribute.options === undefined ? {} : { options }),
                 rules: rulesOf(attribute),
+                ...(attribute.computed === undefined
+                  ? {}
+                  : {
+                      computed: {
+                        kind: attribute.computed.kind,
+                        definition: attribute.computed.definition,
+                        ...(attribute.computed.state === 'broken' && attribute.computed.error !== undefined
+                          ? { brokenReason: attribute.computed.error }
+                          : {}),
+                      },
+                    }),
               },
             })}
         members={displays}
@@ -686,6 +740,7 @@ export function AttributeDialog({
         // The writes read `openNow` only when the server answers, never while rendering.
         // eslint-disable-next-line react-hooks/refs
         {...(optionWrites === undefined ? {} : { optionWrites })}
+        {...(computed === undefined ? {} : { computed })}
         {...(readOnlyReason === undefined ? {} : { readOnlyReason })}
       />
       {relationshipDraft !== undefined && (

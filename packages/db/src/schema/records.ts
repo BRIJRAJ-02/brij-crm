@@ -556,7 +556,8 @@ export const recordFiles = pgTable(
       .notNull()
       .default(sql`gen_random_uuid()`),
     recordId: uuid('record_id').notNull(),
-    attributeId: uuid('attribute_id').notNull(),
+    /** The `file` cell holding it; null for an attachment on the record itself, its Files tab (migration 0152). */
+    attributeId: uuid('attribute_id'),
     /** Where the file lives in the store: `records/<workspace>/<record>/<id>.<ext>`. */
     pathname: text('pathname').notNull(),
     /** The file's name, made safe (`sanitiseFileName`). */
@@ -564,12 +565,20 @@ export const recordFiles = pgTable(
     size: integer('size').notNull(),
     contentType: text('content_type').notNull(),
     createdAt: timestamptz('created_at').notNull().defaultNow(),
+    /** The member who added it; null for cell files made before migration 0152 and for a form's filed copy. */
+    createdBy: uuid('created_by'),
+    /** An attachment deleted from the Files tab: kept 30 days for Undo, then the daily cleanup removes it. */
+    deletedAt: timestamptz('deleted_at'),
   },
   (t) => [
     primaryKey({ name: 'record_files_pkey', columns: [t.workspaceId, t.id] }),
     // The cleanup's sweep, oldest first, and a record's own files.
     index('record_files_by_age').on(t.workspaceId, t.createdAt),
     index('record_files_by_record').on(t.workspaceId, t.recordId, t.attributeId),
+    // The Files tab's list, a record's attachments newest first (migration 0152).
+    index('record_files_attachments')
+      .on(t.workspaceId, t.recordId, t.createdAt)
+      .where(sql`${t.attributeId} is null`),
     check('record_files_size', sql`${t.size} >= 0 and ${t.size} <= 10485760`),
   ],
 );

@@ -2,12 +2,16 @@
 // One folder per feature; the access door (spec 0005, thin #9) is `access/`.
 export { getSystemStatus, type SystemDeps } from './system/status.ts';
 export * from './engine/index.ts';
+// "Last contacted" on a record's page (the CRM flow pass): calls and meetings, logged or on the calendar.
+export { getLastContacted } from './records/last-contacted.ts';
 // A company's logo from our own origin (spec 0059): the address a record's picture names, and which domains may have one.
 export { companyLogoPath, isLogoDomain, LOGO_PATH } from './engine/logos.ts';
 export {
   enterDeletedWorkspace,
   enterPublicForm,
   enterWithKey,
+  noteKeyUse,
+  type KeyEntry,
   enterWorkspace,
   type DeletedEntry,
   NO_RULE_SOURCE,
@@ -140,6 +144,10 @@ export {
   setAutomationEnabled,
   updateAutomation,
 } from './automations/service.ts';
+// API keys (parity #34): Settings › Developer's list, make, revoke and Undo; the door's part is `enterWithKey`.
+export { createApiKey, listApiKeys, restoreApiKey, revokeApiKey } from './developer/keys.ts';
+// A key's shape (pure): the api's tests make one to prove an unknown or misplaced key opens nothing.
+export { keyToken, parseKeyToken } from './developer/tokens.ts';
 export { type AuditSource } from './members/audit.ts';
 // Settings › Workspace › General, the owner's delete and restore, and Account › Profile (spec 0031, slice 7).
 export {
@@ -227,6 +235,8 @@ export {
   type EditAttributeInput,
   type NewAttributeOption,
 } from './attributes/attributes.ts';
+// Computed attributes (spec 0015): the dialog's preview and the refill after a failed fill.
+export { previewComputed, refillComputed } from './computed/define.ts';
 // Lists and their entries (spec 0048).
 export {
   addListEntries,
@@ -234,6 +244,7 @@ export {
   archiveList,
   countEntries,
   createList,
+  editEntries,
   editEntry,
   entriesForRecord,
   entryMembership,
@@ -244,8 +255,11 @@ export {
   removeEntries,
   restoreEntries,
   restoreList,
+  setEntriesValues,
   updateList,
   type AddedEntries,
+  type EntryEditResult,
+  type EntryEditResults,
   type AddListEntryInput,
   type CreateListInput,
   type EditEntryInput,
@@ -321,6 +335,18 @@ export {
   type RecordFileStore,
   type RegisterRecordFile,
 } from './records/files.ts';
+export {
+  ATTACHMENT_REFUSALS,
+  deleteAttachment,
+  FILES_MEMBERS_ONLY,
+  FILES_NOT_WRITABLE,
+  listAttachments,
+  prepareAttachment,
+  registerAttachment,
+  restoreAttachment,
+  type AttachmentRefusal,
+  type RegisterAttachment,
+} from './records/attachments.ts';
 export {
   getView,
   listViews,

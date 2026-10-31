@@ -34,6 +34,7 @@ import {
 } from '@crm/contracts';
 import { publicSocialsOf } from '../booking/socials.ts';
 import type { EmailLink } from '../emails/preferences.ts';
+import { keySecretMatches, parseKeyToken } from '../developer/tokens.ts';
 import { requirePermission } from './check.ts';
 import { workspaceRules } from './stored-rules.ts';
 import { checkScope, mintFormBeside, mintPageBeside, mintScope, rescope, type EngineScope } from './mint.ts';
@@ -43,6 +44,7 @@ import {
   emailLinkAccess,
   formAccess,
   isRole,
+  keyAccess,
   NO_RULES,
   roleAccess,
   SYSTEM_ACCESS,
@@ -432,15 +434,69 @@ export async function memberScopeIn(
   return rescope(beside, { type: 'member', id: row.id }, access);
 }
 
+/** What the door answers for a key it let in: the key's scope, and when it was last used (for the throttled touch). */
+export interface KeyEntry {
+  readonly scope: EngineScope;
+  readonly keyId: string;
+  readonly lastUsedAt: Date | undefined;
+}
+
 /**
- * The scope for an API key (#34), which stores keys and builds their access
- * with `keyAccess`. No key exists yet, so every key is refused NOT_FOUND.
+ * The scope for an API key (parity #34; spec 0009, AC-148): the whole key as the caller sent it, or undefined for
+ * anything that isn't a live key here, the same for a malformed, unknown, revoked or wrong secret, a deleted
+ * workspace, and a creator who left or whose role the code doesn't know. The public half names the workspace and the
+ * key, so the key row is read under that workspace's row level security; its secret is compared with the stored
+ * SHA-256 in constant time. The access is `keyAccess` capped by the creator as they stand now (their current role and
+ * rules, read as `enterAsActor` would), and the actor is the key, so history names it.
  */
-export function enterWithKey(
-  _deps: { readonly db: Database },
-  _input: { readonly workspaceId: string; readonly keyId: string },
-): Promise<EngineScope> {
-  return Promise.reject(notFound());
+export async function enterWithKey(
+  deps: { readonly db: Database; readonly rules: RuleSource; readonly log?: DoorLog },
+  token: string,
+): Promise<KeyEntry | undefined> {
+  const parts = parseKeyToken(token);
+  if (parts === undefined) return undefined;
+  const { workspaceId, keyId, secret } = parts;
+  const [key] = await deps.db.withWorkspace(workspaceId, (tx) =>
+    tx
+      .select({
+        scopes: schema.apiKeys.scopes,
+        secretHash: schema.apiKeys.secretHash,
+        createdByMemberId: schema.apiKeys.createdByMemberId,
+        lastUsedAt: schema.apiKeys.lastUsedAt,
+      })
+      .from(schema.apiKeys)
+      .where(and(eq(schema.apiKeys.id, keyId), isNull(schema.apiKeys.revokedAt)))
+      .limit(1),
+  );
+  if (key === undefined || !keySecretMatches(secret, key.secretHash)) return undefined;
+  const found = await activeMember(deps.db, workspaceId, { memberId: key.createdByMemberId }, deps.rules);
+  if (found === undefined || !isRole(found.member.role)) return undefined;
+  const creator = memberScope(deps, workspaceId, found.member, found.rules);
+  // A creator who may no longer manage keys (demoted since) turns their keys off too.
+  if (!creator.access.permissions.includes('api_keys.manage')) return undefined;
+  const access = keyAccess(keyId, key.scopes, creator.access);
+  const scope = mintScope({ db: deps.db, workspaceId, actor: { type: 'api_key', id: keyId }, access });
+  return { scope, keyId, lastUsedAt: key.lastUsedAt === null ? undefined : new Date(key.lastUsedAt) };
+}
+
+/**
+ * Notes that a key was used (parity #34): `last_used_at` moves to now when it is older than a minute, so a busy key
+ * writes at most once a minute. Run after the answer, never inside the request's own write; a failure is the
+ * caller's to log and drop.
+ */
+export async function noteKeyUse(deps: { readonly db: Database }, entry: KeyEntry): Promise<void> {
+  if (entry.lastUsedAt !== undefined && Date.now() - entry.lastUsedAt.getTime() < 60_000) return;
+  await deps.db.withWorkspace(entry.scope.workspaceId, (tx) =>
+    tx
+      .update(schema.apiKeys)
+      .set({ lastUsedAt: sql`now()` })
+      .where(
+        and(
+          eq(schema.apiKeys.id, entry.keyId),
+          sql`(${schema.apiKeys.lastUsedAt} is null or ${schema.apiKeys.lastUsedAt} < now() - interval '1 minute')`,
+        ),
+      ),
+  );
 }
 
 /** The nil uuid: a workspace no row has, for the reads that find a form's or a booking page's workspace by a key. */

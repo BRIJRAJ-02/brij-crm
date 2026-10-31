@@ -343,8 +343,22 @@ export const StageSince = z.object({ since: Timestamp.optional() });
 /** When the record entered its current stage. */
 export type StageSince = z.infer<typeof StageSince>;
 
+/** A record whose last contact is read (its page's stat strip). */
+export const LastContactedInput = WorkspaceScoped.extend({ recordId: Uuid });
+/** A record whose last contact is read. */
+export type LastContactedInput = z.infer<typeof LastContactedInput>;
+
+/**
+ * When the record was last contacted, already past: a call logged on it (any outcome but no answer), a meeting logged
+ * on it (but cancelled or no show), or a calendar meeting it shows on that started and wasn't cancelled. Absent when
+ * never.
+ */
+export const LastContacted = z.object({ at: Timestamp.optional() });
+/** When the record was last contacted. */
+export type LastContacted = z.infer<typeof LastContacted>;
+
 /** Values by attribute id, as a write gives them. */
-const ValuesById = z.record(z.uuid(), z.unknown());
+export const ValuesById = z.record(z.uuid(), z.unknown());
 
 /**
  * A new record: its object, a uuid v7 the browser mints (the retry key:
@@ -709,6 +723,7 @@ export const recordsContract = {
   setValuesBatch: oc.input(SetValuesBatchInput).output(BatchResults),
   activity: oc.input(RecordActivityInput).output(RecordActivity),
   stageSince: oc.input(StageSinceInput).output(StageSince),
+  lastContacted: oc.input(LastContactedInput).output(LastContacted),
   getTrashed: oc.input(GetTrashedInput).output(TrashedRecord),
   search: oc.input(SearchRecordsInput).output(SearchResults),
   /** Likely duplicates (spec 0049). */

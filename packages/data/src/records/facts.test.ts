@@ -22,6 +22,7 @@ describe('record facts', () => {
         Promise.resolve({ items: [meeting('2026-10-23T09:00:00.000Z', '2026-10-23T09:30:00.000Z')] }),
       ),
       stageSince: vi.fn(() => Promise.resolve({ since: '2026-10-01T08:00:00.000Z' })),
+      lastContacted: vi.fn(() => Promise.resolve({ at: '2026-10-21T15:00:00.000Z' })),
     };
     const store = createRecordFactsStore({ api, now: () => '2026-10-22T12:00:00.000Z' });
     const facts = store.forRecord('acme', 'r1', 'stage');
@@ -32,6 +33,7 @@ describe('record facts', () => {
       status: 'ready',
       nextMeeting: { title: 'Renewal call', startsAt: '2026-10-23T09:00:00.000Z' },
       stageSince: '2026-10-01T08:00:00.000Z',
+      lastContacted: '2026-10-21T15:00:00.000Z',
     });
     expect(store.forRecord('acme', 'r1', 'stage')).toBe(facts);
     const again = facts.retain();
@@ -47,6 +49,7 @@ describe('record facts', () => {
         Promise.resolve({ items: [meeting('2026-10-20T09:00:00.000Z', '2026-10-20T09:30:00.000Z')] }),
       ),
       stageSince: vi.fn(() => Promise.resolve({})),
+      lastContacted: vi.fn(() => Promise.resolve({})),
     };
     const store = createRecordFactsStore({ api, now: () => '2026-10-22T12:00:00.000Z' });
     const facts = store.forRecord('acme', 'r2');
@@ -56,10 +59,31 @@ describe('record facts', () => {
     expect(api.stageSince).not.toHaveBeenCalled();
   });
 
+  it('reads again under a new key, showing what the record showed meanwhile', async () => {
+    let at = '2026-10-21T15:00:00.000Z';
+    const api: RecordFactsApi = {
+      meetings: () => Promise.resolve({ items: [] }),
+      stageSince: () => Promise.resolve({}),
+      lastContacted: vi.fn(() => Promise.resolve({ at })),
+    };
+    const store = createRecordFactsStore({ api, now: () => '2026-10-22T12:00:00.000Z' });
+    const first = store.forRecord('acme', 'r3', undefined, 'a');
+    const release = first.retain();
+    await flush();
+    at = '2026-10-22T11:00:00.000Z';
+    const next = store.forRecord('acme', 'r3', undefined, 'b');
+    expect(next.getSnapshot()).toEqual({ status: 'ready', lastContacted: '2026-10-21T15:00:00.000Z' });
+    next.retain();
+    release();
+    await flush();
+    expect(next.getSnapshot()).toEqual({ status: 'ready', lastContacted: '2026-10-22T11:00:00.000Z' });
+  });
+
   it('says it failed when its first read does', async () => {
     const api: RecordFactsApi = {
       meetings: () => Promise.reject(new Error('offline')),
       stageSince: () => Promise.resolve({}),
+      lastContacted: () => Promise.resolve({}),
     };
     const facts = createRecordFactsStore({ api, now: () => '2026-10-22T12:00:00.000Z' }).forRecord('acme', 'r3');
     facts.retain();

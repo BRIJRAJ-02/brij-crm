@@ -4,7 +4,16 @@
 // that lead with workspace_id (spec 0004).
 export { actorType, attributeType, systemColumn } from './common.ts';
 export { memberOnboarding, memberRole, memberStatus, members, workspaceCounters, workspaces } from './workspaces.ts';
-export { attributes, lists, objects, relationshipCardinality, relationships } from './definitions.ts';
+export {
+  attributes,
+  computedInputRole,
+  computedInputs,
+  computedState,
+  lists,
+  objects,
+  relationshipCardinality,
+  relationships,
+} from './definitions.ts';
 export { attributeOptions, optionOutcome } from './options.ts';
 export { outbox, outboxKind } from './outbox.ts';
 export { listEntries, recordFiles, recordLinks, records, sortKeys, values } from './records.ts';
@@ -59,4 +68,5 @@ export { memberBookingLimits, scheduleDelegations, schedulingEditors } from './s
 export { accessRules, recordRules, teamMembers, teams } from './teams.ts';
 export { routingDecisions } from './routing.ts';
 export { automationRuns, automations } from './automations.ts';
+export { apiKeys } from './developer.ts';
 export { importRowOutcome, importRows, imports, importStatus } from './imports.ts';

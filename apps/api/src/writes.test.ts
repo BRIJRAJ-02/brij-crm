@@ -25,6 +25,11 @@ const READS: ReadonlySet<string> = new Set([
   // Automations (parity #53): the list and the run log.
   'automations.list',
   'automations.runs',
+  // API keys (parity 34): the list, and the key changes, which store no outbox row (each writes its audit row).
+  'apiKeys.list',
+  'apiKeys.create',
+  'apiKeys.revoke',
+  'apiKeys.restore',
   // Fails on purpose when switched on (spec 0010); it writes nothing either way.
   'system.testFault',
   'me.get',
@@ -51,6 +56,8 @@ const READS: ReadonlySet<string> = new Set([
   'records.mergePreview',
   // What changing an attribute's type would do, read before the change (the field types lane).
   'attributes.checkTypeChange',
+  // A computed attribute's values for a few records, worked out before it is made (spec 0015): writes nothing.
+  'computed.preview',
   'members.list',
   // Teams (spec 0031, slice 8): the list every member reads.
   'teams.list',
@@ -117,6 +124,7 @@ const READS: ReadonlySet<string> = new Set([
   'records.activity',
   // How long a record has sat in its current stage (a status attribute's history): a read.
   'records.stageSince',
+  'records.lastContacted',
   'records.getTrashed',
   'records.search',
   'records.duplicates.check',
@@ -164,6 +172,8 @@ const READS: ReadonlySet<string> = new Set([
   'comments.list',
   'comments.get',
   'comments.versions',
+  // A record's Files tab (#32).
+  'files.list',
   'notifications.list',
   'notifications.count',
   'notifications.settings',
@@ -888,6 +898,55 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
       { kind: 'entries', list_id: made.listId, item_ids: [made.entryId], mutation_id: mutationId },
     ];
   },
+  'entries.updateMany': async (m, mutationId) => {
+    const made = await listWithEntry(m);
+    const attributeId = newId();
+    await m.client.attributes.create({
+      workspace: m.slug,
+      objectId: m.people.id,
+      listId: made.listId,
+      id: attributeId,
+      title: 'Note',
+      type: 'text',
+      mutationId: newId(),
+    });
+    await m.client.entries.updateMany({
+      workspace: m.slug,
+      listId: made.listId,
+      entryIds: [made.entryId],
+      edit: { attributeId, op: 'set', value: 'Call back' },
+      mutationId,
+    });
+    return [
+      ...listRows(m, made),
+      { kind: 'definitions', list_id: made.listId, attribute_ids: [attributeId] },
+      { kind: 'entries', list_id: made.listId, item_ids: [made.entryId], mutation_id: mutationId },
+    ];
+  },
+  'entries.setValuesBatch': async (m, mutationId) => {
+    const made = await listWithEntry(m);
+    const attributeId = newId();
+    await m.client.attributes.create({
+      workspace: m.slug,
+      objectId: m.people.id,
+      listId: made.listId,
+      id: attributeId,
+      title: 'Note',
+      type: 'text',
+      mutationId: newId(),
+    });
+    await m.client.entries.setValuesBatch({
+      workspace: m.slug,
+      listId: made.listId,
+      items: [{ entryId: made.entryId, values: { [attributeId]: { value: 'Call back' } } }],
+      mutationId,
+    });
+    return [
+      ...listRows(m, made),
+      { kind: 'definitions', list_id: made.listId, attribute_ids: [attributeId] },
+      { kind: 'entries', list_id: made.listId, item_ids: [made.entryId], mutation_id: mutationId },
+    ];
+  },
   'entries.remove': async (m, mutationId) => {
     const made = await listWithEntry(m);
     await m.client.entries.remove({ workspace: m.slug, entryIds: [made.entryId], mutationId });
@@ -1205,6 +1264,36 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
       mutationId,
     });
     return [{ kind: 'definitions', object_id: m.people.id, attribute_ids: [made.id], mutation_id: mutationId }];
+  },
+  // A computed attribute whose fill failed, worked out again (spec 0015, AC-334): its definition changes, and the
+  // fill it starts is the system's job.
+  'computed.refill': async (m, mutationId) => {
+    const sides = await m.client.attributes.list({ workspace: m.slug, objectId: m.companies.id });
+    const via = sides.find((each) => each.type === 'record_reference' && each.relationship !== undefined);
+    if (via === undefined) throw new Error('Companies has no relationship side.');
+    const madeWith = newId();
+    const made = await m.client.attributes.create({
+      workspace: m.slug,
+      objectId: m.companies.id,
+      id: newId(),
+      title: 'People count',
+      type: 'number',
+      computed: { kind: 'rollup', via: via.id, calc: 'count' },
+      mutationId: madeWith,
+    });
+    await testQuery(
+      ownerUrl,
+      `update attributes set computed_state = 'broken', computed_error = 'Working out values failed.' where id = $1`,
+      [made.id],
+    );
+    await m.client.computed.refill({ workspace: m.slug, attributeId: made.id, mutationId });
+    // Each write changes the definition and starts the attribute's fill job: its definitions row, then its jobs row.
+    return [
+      { kind: 'definitions', object_id: m.companies.id, attribute_ids: [made.id], mutation_id: madeWith },
+      { kind: 'jobs', mutation_id: madeWith },
+      { kind: 'definitions', object_id: m.companies.id, attribute_ids: [made.id], mutation_id: mutationId },
+      { kind: 'jobs', mutation_id: mutationId },
+    ];
   },
   // Attribute writes (spec 0012, milestone 2): one definitions row per object, naming the attributes changed.
   'attributes.update': async (m, mutationId) => {
@@ -2679,11 +2768,51 @@ Object.assign(WRITES, {
   },
 });
 
+/** A Files tab file on a new person of the member's, stored by hand (the owner role), deleted when `deleted`. */
+async function attachmentOn(
+  m: Member,
+  deleted: boolean,
+): Promise<{ readonly recordId: string; readonly fileId: string }> {
+  const recordId = await personFor(m);
+  const fileId = newId();
+  await testQuery(
+    ownerUrl,
+    `insert into record_files (workspace_id, id, record_id, pathname, name, size, content_type, deleted_at)
+     values ($1, $2, $3, $4, 'a.pdf', 3, 'application/pdf', ${deleted ? 'now()' : 'null'})`,
+    [m.workspace.id, fileId, recordId, `records/${m.workspace.id}/${recordId}/${fileId}.pdf`],
+  );
+  return { recordId, fileId };
+}
+
+// A record's Files tab (#32): one files row naming the object and the record.
+Object.assign(WRITES, {
+  'files.delete': async (m: Member, mutationId: string) => {
+    const { recordId, fileId } = await attachmentOn(m, false);
+    await m.client.files.delete({ workspace: m.slug, fileId, mutationId });
+    return [
+      { kind: 'records', record_ids: [recordId] },
+      { kind: 'files', object_id: m.people.id, record_ids: [recordId], mutation_id: mutationId },
+    ];
+  },
+  'files.restore': async (m: Member, mutationId: string) => {
+    const { recordId, fileId } = await attachmentOn(m, true);
+    await m.client.files.restore({ workspace: m.slug, fileId, mutationId });
+    return [
+      { kind: 'records', record_ids: [recordId] },
+      { kind: 'files', object_id: m.people.id, record_ids: [recordId], mutation_id: mutationId },
+    ];
+  },
+});
+
 /** How many writes (each one poke) a case in WRITES makes before and with its own. */
 const WRITES_MADE: Readonly<Record<string, number>> = {
+  // A computed attribute made first (spec 0015), then the refill.
+  'computed.refill': 2,
   // Lists (spec 0048): the list, its person and their entry first, then the case's own writes.
   'entries.add': 5,
   'entries.setValues': 5,
+  'entries.updateMany': 5,
+  'entries.setValuesBatch': 5,
   'entries.remove': 4,
   'entries.restore': 5,
   // A team made first, then the write (spec 0031, slice 8).
@@ -2748,6 +2877,8 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'notes.restore': 4,
   'notes.link': 4,
   'comments.create': 2,
+  'files.delete': 2,
+  'files.restore': 2,
   'comments.update': 3,
   'comments.delete': 3,
   'comments.resolve': 3,

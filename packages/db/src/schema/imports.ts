@@ -125,6 +125,11 @@ export const importRows = pgTable(
     made: jsonb('made'),
     /** The entry this row added to the import's list (spec 0048, AC-4833), which the import's undo takes out. */
     entryId: uuid('entry_id'),
+    /**
+     * `{ entryId, before, written }`: the list values this row changed on an entry already in an "Each record once"
+     * list (each attribute's value before the import, and the version it wrote), which the import's undo puts back.
+     */
+    entryChanges: jsonb('entry_changes'),
   },
   (t) => [
     primaryKey({ name: 'import_rows_pkey', columns: [t.workspaceId, t.importId, t.rowNumber] }),

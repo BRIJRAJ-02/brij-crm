@@ -318,9 +318,10 @@ describe('no scope is built in this app', () => {
 
   it('injects no rules outside tests: production reads the stored ones (specs 0009 and 0032, AC-841)', async () => {
     const root = fileURLToPath(new URL('.', import.meta.url));
-    // Only the app passes the services' source on, the request context carries it to the door, and the job runner
-    // hands its own to the worker's re-entry; rules.ts names the one source, and the server and the worker pass it.
-    const plumbing = new Set(['app.ts', 'orpc.ts', 'testing.ts', 'jobs/runner.ts', 'rules.ts']);
+    // Only the app passes the services' source on, the request context carries it to the door, the public API
+    // (parity #34) hands the app's to the key's door, and the job runner hands its own to the worker's re-entry;
+    // rules.ts names the one source, and the server and the worker pass it.
+    const plumbing = new Set(['app.ts', 'orpc.ts', 'v1/rest.ts', 'testing.ts', 'jobs/runner.ts', 'rules.ts']);
     const PASSERS = new Set(['server.ts', 'worker.ts', 'vercel/handler.ts', 'jobs/compose.ts']);
     const files = (await readdir(root, { recursive: true }))
       .filter((file) => file.endsWith('.ts') && !file.endsWith('.test.ts'))

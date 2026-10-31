@@ -7,7 +7,7 @@ A list is a working set of one object's records (a Sales pipeline over Deals); e
 | Screen                                              | Purpose                                  | Main task                                                                                                    | Leaves out                                                                                 |
 | --------------------------------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------ |
 | `NewListModal` (sidebar Lists' "+")                 | Make a list over an object               | Name, Of, Blank or Pipeline, then Create list; the list opens                                                | Icon and hue (the list tile, gray; Settings › Lists changes them), "Each record once" (on) |
-| `ListScreen` (`/w/$slug/lists/$list/views/$viewId`) | One list's entries as a table or a board | Add records, edit list fields in place, move cards between stages, take entries out with Undo                | Bulk Edit of the list's own fields (the bulk bar's Edit changes the records' fields)       |
+| `ListScreen` (`/w/$slug/lists/$list/views/$viewId`) | One list's entries as a table or a board | Add records, edit list fields in place, move cards between stages, take entries out with Undo                | Several fields in one bulk Edit (Edit changes one list or record field of the ticked rows) |
 | `AddEntryModal`                                     | Put one record in a list                 | Find the record (one already in an "Each record once" list says so), fill a required list field, Add to list | Optional fields (edited in the row), making a new record here                              |
 
 ## Decisions made here (owner delegated UX calls)
@@ -33,7 +33,7 @@ Milestones 3 and 4 (spec 0048):
 - Add to list is a Menu of the lists the member may write, not a searchable Combobox: a member's lists are few, and a Menu types ahead and shows "Already in" beside a list that holds the record.
 - The list's Toolbar (filter, sort, Save, Save as new view) is the object view's own `ViewToolbar`; the draft lives in the page, not the address, so a link doesn't carry it.
 - The record page's Lists section is left out when no list the member may read sits over the object.
-- Not built: the record panel opening from a row (AC-4812), bulk Edit of a list's own fields (AC-4826, partly).
+- Not built: the record panel opening from a row (AC-4812). Bulk Edit takes a list field (`entries.updateMany`, one Undo through `entries.setValuesBatch`) or a record field (`records.updateMany`), one field an Apply.
 
 The lists3 lane:
 

@@ -34,4 +34,12 @@ export const strings = {
   previousColumn: 'Previous person',
   nextColumn: 'Next person',
   drawHint: 'Press Enter to add time here, or drag across the day.',
+  /** Read with a block that moves: its keys, and nothing the eyes don't also have (the grip, the cursor). */
+  moveHint: 'Alt and arrow keys move it. Shift and Alt change its length.',
+  /** A block held at a new place, said as the keys put it there: "Wednesday 4 November, 10:15 AM – 10:45 AM". */
+  moveTo: (where: string) => `Moving to ${where}`,
+  /** The place a held block is over can't take it. */
+  moveRefused: (where: string) => `${where} isn’t free`,
+  /** A held block let go of where it began. */
+  moveCancelled: 'Put back',
 } as const;

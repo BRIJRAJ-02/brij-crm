@@ -28,6 +28,7 @@ export interface AuditEntry {
     | 'form'
     | 'booking_page'
     | 'team'
+    | 'automation'
     | 'object'
     | 'list'
     | 'record';

@@ -29,6 +29,7 @@ import {
   archiveList,
   countEntries,
   createList,
+  editEntries,
   editEntry,
   entriesForRecord,
   entryMembership,
@@ -39,6 +40,7 @@ import {
   removeEntries,
   restoreEntries,
   restoreList,
+  setEntriesValues,
   updateList,
 } from './lists.ts';
 
@@ -873,5 +875,123 @@ describe('record rules and other workspaces (AC-4836, AC-4838)', () => {
     expect(await refusalOf(entriesForRecord(mine.owner, { recordId: other.people }))).toMatchObject({
       code: 'NOT_FOUND',
     });
+  });
+});
+
+describe('a bulk edit of a list’s own fields (AC-4826)', () => {
+  it('sets a list field on many entries, answers before and written, and its undo keeps a cell changed since', async () => {
+    const world = await workspace();
+    const list = await createList(world.owner, {
+      id: newId(),
+      objectId: world.people,
+      name: 'Crew',
+      template: 'blank',
+    });
+    const other = await createList(world.owner, {
+      id: newId(),
+      objectId: world.people,
+      name: 'Else',
+      template: 'blank',
+    });
+    const note = await createAttribute(world.owner, {
+      objectId: world.people,
+      listId: list.id,
+      id: newId(),
+      title: 'Note',
+      type: 'text',
+    });
+    const ids: string[] = [];
+    for (const name of ['Ada', 'Bo', 'Cy']) {
+      const recordId = await world.person(name);
+      ids.push((await addListEntry(world.owner, { id: newId(), listId: list.id, recordId })).entry.id);
+    }
+    const [first = '', second = '', third = ''] = ids;
+    await editEntry(world.owner, { entryId: third, values: { [note.id]: { value: 'Hot' } } });
+    const elsewhere = (
+      await addListEntry(world.owner, { id: newId(), listId: other.id, recordId: await world.person('Di') })
+    ).entry.id;
+    const edit = { attributeId: note.id, op: 'set' as const, value: 'Hot' };
+    const answer = await editEntries(world.owner, { listId: list.id, entryIds: [...ids, elsewhere], edit });
+    expect(answer.results.map((result) => result.entry?.values[note.id] ?? result.refusals?.[0]?.code)).toEqual([
+      'Hot',
+      'Hot',
+      'Hot',
+      'NOT_FOUND',
+    ]);
+    // The third already held it: nothing written, no before.
+    expect(answer.results[2]).not.toHaveProperty('written');
+    expect(answer.results[0]).toMatchObject({ before: null });
+    expect(answer.records).toHaveLength(3);
+    // A retry changes nothing twice.
+    const again = await editEntries(world.owner, { listId: list.id, entryIds: ids, edit });
+    expect(again.results.every((result) => result.written === undefined)).toBe(true);
+    // Someone changes the second meanwhile: the undo puts the first back and keeps the second.
+    await editEntry(world.owner, { entryId: second, values: { [note.id]: { value: 'Cold' } } });
+    const undo = await setEntriesValues(world.owner, {
+      listId: list.id,
+      items: answer.results.flatMap((result) =>
+        result.written === undefined
+          ? []
+          : [{ entryId: result.entryId, values: { [note.id]: { value: null, ifVersionId: result.written[note.id] } } }],
+      ),
+    });
+    expect(undo.results.map((result) => result.refusals?.[0]?.code ?? 'ok')).toEqual(['ok', 'VERSION_CHANGED']);
+    const read = await readEntryPage(world.owner, [first, second]);
+    expect(read.entries.map((entry) => entry.values[note.id] ?? null)).toEqual([null, 'Cold']);
+  });
+
+  it('refuses a read only member, another list’s field, and a list from another workspace', async () => {
+    const world = await workspace();
+    const list = await createList(world.owner, {
+      id: newId(),
+      objectId: world.people,
+      name: 'Crew',
+      template: 'blank',
+    });
+    const note = await createAttribute(world.owner, {
+      objectId: world.people,
+      listId: list.id,
+      id: newId(),
+      title: 'Note',
+      type: 'text',
+    });
+    const entryId = (
+      await addListEntry(world.owner, { id: newId(), listId: list.id, recordId: await world.person('Ada') })
+    ).entry.id;
+    const reader = testScope({
+      db,
+      workspaceId: world.workspaceId,
+      actor: { type: 'member', id: world.bea.id },
+      role: 'member',
+      rules: {
+        levels: [
+          {
+            subject: { type: 'role' as const, role: 'member' },
+            target: { type: 'object' as const, objectId: world.people },
+            level: 'read',
+          },
+        ],
+        records: [],
+      },
+    });
+    const edit = { attributeId: note.id, op: 'set' as const, value: 'x' };
+    expect(await refusalOf(editEntries(reader, { listId: list.id, entryIds: [entryId], edit }))).toMatchObject({
+      code: 'FORBIDDEN',
+    });
+    const name = world.attribute('name', world.people);
+    expect(
+      await refusalOf(
+        editEntries(world.owner, { listId: list.id, entryIds: [entryId], edit: { ...edit, attributeId: name } }),
+      ),
+    ).toMatchObject({ code: 'NOT_FOUND' });
+    const other = await workspace();
+    expect(await refusalOf(editEntries(other.owner, { listId: list.id, entryIds: [entryId], edit }))).toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    expect(
+      await refusalOf(
+        setEntriesValues(other.owner, { listId: list.id, items: [{ entryId, values: { [note.id]: { value: 'x' } } }] }),
+      ),
+    ).toMatchObject({ code: 'NOT_FOUND' });
   });
 });

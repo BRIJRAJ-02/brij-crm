@@ -91,6 +91,7 @@ import { AwayReassignDialog } from './AwayReassignDialog.tsx';
 import { ReassignDialog } from './ReassignDialog.tsx';
 import { BookingDialog, useBookingActions, type BookingAsk, type HostBookingActions } from './BookingActions.tsx';
 import { strings } from './strings.ts';
+import { useBookingMove } from './useBookingMove.ts';
 import { useBookingsToolbarSlot, type HostsChoice } from './toolbarSlot.ts';
 import {
   addDays,
@@ -106,6 +107,7 @@ import {
   weekBounds,
   weekDays,
   weekOf,
+  weekRange,
 } from './week.ts';
 import { useFirstDay } from '../workspace/first-day.ts';
 import { WEEK_KEYS, weekKeyAction, type WeekKeyAction } from './week-keys.ts';
@@ -1037,6 +1039,8 @@ export type BlockPreview = Omit<TimeBlockOccurrence, 'key' | 'blockId'>;
 
 /** Nobody to act for: one empty list, so the cards' props stay the same between draws. */
 const NO_PEOPLE: readonly ForPerson[] = [];
+/** The bookings of a week that has not arrived: nothing to move yet. */
+const NO_BOOKINGS: readonly BookingListItem[] = [];
 
 /** Props for the calendar: its held week, the address, and what Filter offers. */
 export interface BookingsCalendarScreenProps {
@@ -1497,6 +1501,15 @@ function WeekView(props: BookingsCalendarScreenProps) {
       }
     />
   );
+  // Dragging a booking to another time or day, or its foot to change its length (Alt and the arrows from the keys).
+  const move = useBookingMove({
+    actions: props.actions,
+    bookings: state.status === 'ready' ? state.bookings : NO_BOOKINGS,
+    range: weekRange(search.week, timeZone),
+    zone: timeZone,
+    now,
+    onMoved: (landed) => setFocusDay(landed),
+  });
   const team = props.team;
   const held = team?.held;
   if (view === 'team' && team !== undefined && held !== undefined) {
@@ -1549,6 +1562,7 @@ function WeekView(props: BookingsCalendarScreenProps) {
             isLoading
             isFill
             view={view}
+            move={move}
             selectedDay={shownDay}
             onSelectDay={(day) => onSearch({ day })}
             zone={zone}
@@ -1746,6 +1760,7 @@ function WeekView(props: BookingsCalendarScreenProps) {
             days={weekDayItems(days, today, locale)}
             blocks={blocks}
             view={view}
+            move={move}
             {...(next === undefined
               ? {}
               : {

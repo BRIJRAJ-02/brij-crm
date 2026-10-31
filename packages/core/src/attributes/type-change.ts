@@ -53,7 +53,15 @@ import { baseLevel, compileFilter, type CompileContext } from '../engine/query/c
 import { isRefusal, refuse, refuseOn, writeConflict } from '../engine/refusals.ts';
 import { actorRow, type EngineScope } from '../engine/scope.ts';
 import { clearUniqueKeys, fillUniqueKeys, UNIQUE_TYPES, uniqueKeyOf } from '../engine/unique.ts';
-import { isArchivedNow, ITEM_COLUMNS, loadAttribute, loadAttributes, type AttributeDef } from '../engine/values.ts';
+import {
+  computedKindOf,
+  isArchivedNow,
+  ITEM_COLUMNS,
+  loadAttribute,
+  loadAttributes,
+  type AttributeDef,
+} from '../engine/values.ts';
+import { checkComputed } from '../computed/define.ts';
 import { runWrite, type AfterWrite, type WriteContext } from '../engine/write.ts';
 import { loadRules, writeRules } from '../validation/rules.ts';
 import { measurePattern } from '../validation/pattern.ts';
@@ -451,6 +459,14 @@ async function planChange(
     throw refuse('NOT_FOUND', WORDS.notFound, attribute.id);
   }
   if (attribute.objectId === null) throw refuse('TYPE_CHANGE_REFUSED', WORDS.onList, attribute.id);
+  // A computed attribute's type is what it reads (spec 0015, AC-322): a new definition changes it, never this.
+  if (computedKindOf(attribute) !== undefined) {
+    throw refuse(
+      'TYPE_CHANGE_REFUSED',
+      `${attribute.title} is worked out, so its type follows what it reads.`,
+      attribute.id,
+    );
+  }
   // It rewrites values in the caller's name: someone who may only read the object's records can't make it.
   if (lock && objectLevel(scope.access, attribute.objectId) === 'read') {
     throw refuse('FORBIDDEN', WORDS.readOnlyObject, attribute.id);
@@ -746,6 +762,8 @@ export async function changeAttributeType(
       recordDefinition(context, attribute, [...plan.keptRules.keys()]);
       // Every screen holding the column reads it again: its values changed shape with the type.
       if (attribute.objectId !== null) context.record({ coarseObjects: [attribute.objectId] });
+      // Computed attributes reading it stop if they can't use the new type, and work out again if they can (AC-327).
+      await checkComputed(context, [attribute.id], { refill: true });
       return { attributeId: attribute.id, objectId: attribute.objectId, listId: attribute.listId };
     },
     hooks,

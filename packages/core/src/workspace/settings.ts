@@ -63,6 +63,8 @@ const SETTINGS = {
   name: workspaces.name,
   slug: workspaces.slug,
   timeZone: workspaces.timeZone,
+  currency: workspaces.currency,
+  country: workspaces.country,
   logoUrl: workspaces.logoUrl,
 } as const;
 
@@ -71,6 +73,8 @@ function toSettings(row: {
   readonly name: string;
   readonly slug: string;
   readonly timeZone: string;
+  readonly currency: string | null;
+  readonly country: string | null;
   readonly logoUrl: string | null;
 }): WorkspaceSettings {
   return {
@@ -78,6 +82,8 @@ function toSettings(row: {
     name: row.name,
     slug: row.slug,
     timeZone: row.timeZone,
+    ...(row.currency === null ? {} : { currency: row.currency }),
+    ...(row.country === null ? {} : { country: row.country }),
     ...(row.logoUrl === null ? {} : { logoUrl: row.logoUrl }),
   };
 }
@@ -117,7 +123,7 @@ export interface UpdatedWorkspace {
  */
 export async function updateWorkspace(
   scope: EngineScope,
-  input: Pick<UpdateWorkspaceInput, 'name' | 'timeZone' | 'slug'>,
+  input: Pick<UpdateWorkspaceInput, 'name' | 'timeZone' | 'slug' | 'currency' | 'country'>,
   hooks: readonly AfterWrite[] = [],
   source: AuditSource = {},
 ): Promise<UpdatedWorkspace> {
@@ -151,6 +157,15 @@ export async function updateWorkspace(
         before.slug = now.slug;
         after.slug = input.slug;
       }
+      // `null` takes the default back to the language's region's; the same value again changes nothing.
+      if (input.currency !== undefined && input.currency !== now.currency) {
+        before.currency = now.currency;
+        after.currency = input.currency;
+      }
+      if (input.country !== undefined && input.country !== now.country) {
+        before.country = now.country;
+        after.country = input.country;
+      }
       if (Object.keys(after).length === 0) return { settings: toSettings(now), renamed: false };
       // The directory first: its claim is the one that sees every address any workspace ever held.
       if (input.slug !== undefined && after.slug !== undefined) await claimAddress(tx, input.slug);
@@ -160,6 +175,8 @@ export async function updateWorkspace(
           ...(name === undefined || after.name === undefined ? {} : { name }),
           ...(after.timeZone === undefined || input.timeZone === undefined ? {} : { timeZone: input.timeZone }),
           ...(after.slug === undefined || input.slug === undefined ? {} : { slug: input.slug }),
+          ...(after.currency === undefined || input.currency === undefined ? {} : { currency: input.currency }),
+          ...(after.country === undefined || input.country === undefined ? {} : { country: input.country }),
           ...touched(scope),
         })
         .where(eq(workspaces.id, scope.workspaceId))

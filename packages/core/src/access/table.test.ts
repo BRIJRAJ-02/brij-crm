@@ -19,6 +19,11 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   // until #24 stores them: the door's input, not a service.
   'enterWorkspace',
   'enterWithKey',
+  // A key's throttled last used touch (parity #34): the key's own row, after the door let it in.
+  'noteKeyUse',
+  // A key's shape, pure (parity 34).
+  'keyToken',
+  'parseKeyToken',
   'enterAsActor',
   'systemScope',
   'NO_RULE_SOURCE',
@@ -969,6 +974,10 @@ async function dataWorld() {
   await core.deleteRecord(owner, { recordId: trashedId });
   const { listId } = await core.defineList(owner, { objectId: people, apiSlug: 'crew', name: 'Crew' });
   const { entryId } = await core.addEntry(owner, { listId, recordId });
+  // A field on the list itself, for the list's many entry edit (AC-4826).
+  const entryNote = (
+    await core.createAttribute(owner, { objectId: people, listId, id: core.newId(), title: 'Note', type: 'text' })
+  ).id;
   const peopleView =
     (
       await db.withWorkspace(workspaceId, (tx) =>
@@ -1068,6 +1077,17 @@ async function dataWorld() {
             ${core.recordFilePath(workspaceId, recordId, recordFileId, '.pdf')}, 'cv.pdf', 1024, 'application/pdf')`,
     ),
   );
+  // A file on the person's Files tab (#32): a `record_files` row with no attribute, added by the owner.
+  const attachmentId = core.newId();
+  await db.withWorkspace(workspaceId, (tx) =>
+    tx.execute(
+      sql`insert into record_files (workspace_id, id, record_id, attribute_id, pathname, name, size, content_type,
+            created_by)
+          values (${workspaceId}::uuid, ${attachmentId}::uuid, ${recordId}::uuid, null,
+            ${core.recordFilePath(workspaceId, recordId, attachmentId, '.pdf')}, 'brief.pdf', 1024, 'application/pdf',
+            ${ownerId}::uuid)`,
+    ),
+  );
   // A report on People (the reports lane), so the walk has one the principal at none must not see.
   const reportId = (
     await core.createReport(owner, {
@@ -1088,6 +1108,7 @@ async function dataWorld() {
     fileId,
     resume,
     recordFileId,
+    attachmentId,
     name: attribute('name'),
     jobTitle: attribute('job_title'),
     company: attribute('company'),
@@ -1097,6 +1118,7 @@ async function dataWorld() {
     trashedId,
     listId,
     entryId,
+    entryNote,
     peopleView,
     taskId,
     noteId,
@@ -1298,6 +1320,7 @@ const DATA_CASES: Readonly<Record<string, DataCase>> = {
   ),
   entriesForRecord: refused('NOT_FOUND', (scope, world) => core.entriesForRecord(scope, { recordId: world.recordId })),
   getActivity: refused('NOT_FOUND', (scope, world) => core.getActivity(scope, { recordId: world.recordId })),
+  getLastContacted: refused('NOT_FOUND', (scope, world) => core.getLastContacted(scope, { recordId: world.recordId })),
   getStageSince: refused('NOT_FOUND', (scope, world) =>
     core.getStageSince(scope, { recordId: world.recordId, attributeId: world.stage }),
   ),
@@ -1318,6 +1341,28 @@ const DATA_CASES: Readonly<Record<string, DataCase>> = {
       size: 1,
       contentType: 'application/pdf',
     }),
+  ),
+  // A record's Files tab (#32): a reader who can't see the record finds nothing; one who may only read it adds,
+  // deletes and restores nothing.
+  listAttachments: refused('NOT_FOUND', (scope, world) => core.listAttachments(scope, { recordId: world.recordId })),
+  prepareAttachment: refused('FORBIDDEN', (scope, world) =>
+    core.prepareAttachment(scope, { recordId: world.recordId, size: 1 }),
+  ),
+  registerAttachment: refused('FORBIDDEN', (scope, world) =>
+    core.registerAttachment(scope, {
+      recordId: world.recordId,
+      fileId: core.newId(),
+      pathname: 'records/x/y/z.pdf',
+      name: 'brief.pdf',
+      size: 1,
+      contentType: 'application/pdf',
+    }),
+  ),
+  deleteAttachment: refused('FORBIDDEN', (scope, world) =>
+    core.deleteAttachment(scope, { fileId: world.attachmentId }),
+  ),
+  restoreAttachment: refused('FORBIDDEN', (scope, world) =>
+    core.restoreAttachment(scope, { fileId: world.attachmentId }),
   ),
   // Likely duplicates (spec 0049): an object the reader can't see is absent; one they only read can't dismiss.
   checkDuplicates: refused('NOT_FOUND', (scope, world) =>
@@ -1692,6 +1737,17 @@ const DATA_CASES: Readonly<Record<string, DataCase>> = {
     return core.undoEntriesJob(scope, registry, { id: core.newId(), jobId: started.id });
   }),
   editEntry: refused('FORBIDDEN', (scope, world) => core.editEntry(scope, { entryId: world.entryId, values: {} })),
+  // A list field of many entries (AC-4826): the list at write before the field or any entry is read.
+  editEntries: refused('FORBIDDEN', (scope, world) =>
+    core.editEntries(scope, {
+      listId: world.listId,
+      entryIds: [world.entryId],
+      edit: { attributeId: world.entryNote, op: 'clear' },
+    }),
+  ),
+  setEntriesValues: refused('FORBIDDEN', (scope, world) =>
+    core.setEntriesValues(scope, { listId: world.listId, items: [{ entryId: world.entryId, values: {} }] }),
+  ),
   // A batch answers per entry (AC-4818): each refused, the call itself answered.
   removeEntries: refused('FORBIDDEN', async (scope, world) =>
     entryOutcome(await core.removeEntries(scope, { entryIds: [world.entryId] })),

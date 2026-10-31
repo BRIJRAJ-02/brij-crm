@@ -1,8 +1,7 @@
 // Brief
 // Purpose: one list's entries (spec 0048, AC-4806 to AC-4821), as a table or a board, under the list's name and tile.
 // Main task: add records, edit the list's fields in place, move cards between stages, take entries out with Undo.
-// Leaves out: a row opening the record panel (rows open the record page), and bulk Edit of the list's own fields (they
-// change cell by cell; the bulk bar's Edit changes the records' fields).
+// Leaves out: a row opening the record panel (rows open the record page), and several fields in one bulk Edit.
 import {
   isDataError,
   isSortable,
@@ -520,7 +519,26 @@ function ListTable(
         if (failure !== undefined) bulkJob.say(refusalSummary(failure), 'danger');
       });
   };
-  // Bulk Edit (AC-4826): the ticked rows' records, through the object's bulk edit, with its Undo.
+  // Bulk Edit (AC-4826): a list field on the ticked entries, or a record field on their records, each with its Undo.
+  const bulkFields = useMemo(() => [...listFields, ...attributes], [attributes, listFields]);
+  const editEntries = async (choice: BulkEditChoice) => {
+    const definition = listFields.find((each) => each.id === choice.attributeId);
+    if (definition === undefined) return { kind: 'done', updated: 0, unchanged: 0, refused: 0 } as const;
+    const result = await entries.bulkEdit(slug, list, ticked, {
+      attributeId: definition.id,
+      title: definition.title,
+      type: definition.type,
+      isMulti: definition.isMulti,
+      op: choice.op,
+      ...(Object.hasOwn(choice, 'value') ? { value: choice.value } : {}),
+    });
+    const toast = bulkEditToast(result, object, (undoId) => {
+      runUndo(data, toasts, slug, undoId);
+    });
+    if (toast !== undefined) toasts.toast(toast);
+    if (result.kind === 'done') setEditing(false);
+    return result;
+  };
   const editRecords = async (choice: BulkEditChoice) => {
     const definition = attributes.find((each) => each.id === choice.attributeId);
     const recordIds = [...new Set(ticked.flatMap((id) => entries.rowOf(id)?.recordId ?? []))];
@@ -801,7 +819,7 @@ function ListTable(
         isOpen={isEditing}
         onOpenChange={setEditing}
         object={object}
-        attributes={attributes}
+        attributes={bulkFields}
         memberPicker={memberPicker}
         count={ticked.length}
         records={recordsWord(ticked.length, object)}
@@ -811,7 +829,9 @@ function ListTable(
           const [choice] = choices;
           return choice === undefined
             ? Promise.resolve({ kind: 'done', updated: 0, unchanged: 0, refused: 0 } as const)
-            : editRecords(choice);
+            : props.ownIds.has(choice.attributeId)
+              ? editEntries(choice)
+              : editRecords(choice);
         }}
       />
     </>

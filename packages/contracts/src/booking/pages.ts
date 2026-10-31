@@ -17,7 +17,13 @@ import {
 import { CANCEL_REASON_MAX, PublicSlots } from './public.ts';
 import { ScheduleHours } from './schedules.ts';
 import { BookingAssignment, BookingAssignmentsInput, ReassignBookingInput, ReassignedBooking } from './rotations.ts';
-import { BookingAvailability, BookingLocation, BookingPageSettings, TimeZoneName } from './settings.ts';
+import {
+  BookingAvailability,
+  BookingDuration,
+  BookingLocation,
+  BookingPageSettings,
+  TimeZoneName,
+} from './settings.ts';
 import { Uuid, uuidV7 } from '../values/ids.ts';
 import { RecordRefDisplay } from '../values/options.ts';
 import { RoutingRules } from '../forms/routing.ts';
@@ -443,19 +449,32 @@ export const CancelBookingInput = WorkspaceScoped.extend({
 /** Cancelling a booking. */
 export type CancelBookingInput = z.infer<typeof CancelBookingInput>;
 
-/** Moving a booking from Bookings (AC-640): to a time its page offers now. */
-export const MoveBookingInput = WorkspaceScoped.extend({ bookingId: Uuid, start: Timestamp, mutationId: Uuid });
+/**
+ * Moving a booking from Bookings (AC-640): to a time its page offers now. With `minutes` it changes length too (the
+ * week's drag on a booking's foot): then the start is any free five minutes, not the page's slot step. A round robin
+ * booking keeps its length.
+ */
+export const MoveBookingInput = WorkspaceScoped.extend({
+  bookingId: Uuid,
+  start: Timestamp,
+  minutes: BookingDuration.optional(),
+  mutationId: Uuid,
+});
 /** Moving a booking. */
 export type MoveBookingInput = z.infer<typeof MoveBookingInput>;
 
 /** The longest range one move slots read covers: 31 days. */
 export const MOVE_SLOTS_MAX_DAYS = 31;
 
-/** Where a booking could move in a range: its page's slots of its length, its own time free. */
+/**
+ * Where a booking could move in a range: its page's slots of its length, its own time free; with `minutes`, the
+ * free five minutes that fit that length instead (see `MoveBookingInput`).
+ */
 export const BookingMoveSlotsInput = WorkspaceScoped.extend({
   bookingId: Uuid,
   from: Timestamp,
   to: Timestamp,
+  minutes: BookingDuration.optional(),
 }).refine(
   ({ from, to }) => {
     const span = Date.parse(to) - Date.parse(from);

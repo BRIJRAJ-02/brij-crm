@@ -159,6 +159,8 @@ export const ApiRefusal = z.object({
   field: z.string().optional(),
   /** The rule a `VALIDATION_FAILED` refusal is about (spec 0013). */
   ruleId: z.string().optional(),
+  /** A formula refusal's character, counted from 0 (spec 0015, AC-317). */
+  position: z.number().int().min(0).optional(),
   /** The record a `UNIQUE_CONFLICT` value belongs to, when the writer may see it (spec 0049, AC-4905). */
   holder: z.object({ recordId: z.string(), objectId: z.string(), name: z.string() }).optional(),
 });

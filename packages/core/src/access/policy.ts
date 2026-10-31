@@ -147,6 +147,51 @@ export interface AccessRules {
   readonly teamIds?: readonly string[];
   /** The active members of those teams, when the source read them. */
   readonly teamMemberIds?: readonly string[];
+  /**
+   * The workspace's computed attributes and the inputs each reads (spec 0015, AC-329): one is hidden from anyone who
+   * can't see one of its inputs, or their objects. Read only when some rule could hide something.
+   */
+  readonly computed?: readonly ComputedInputRule[];
+}
+
+/** One input of a computed attribute, as the strictest of inputs rule reads it. */
+export interface ComputedInputRule {
+  readonly computedId: string;
+  readonly computedObjectId: string;
+  readonly inputId: string;
+  readonly inputObjectId: string;
+  /** The computed attribute's kind (`lookup`, `rollup`, `formula`). */
+  readonly kind?: string;
+}
+
+/**
+ * Hides each computed attribute whose input the policy hides (strictest of inputs, spec 0015, AC-329): an input
+ * field that is hidden, or an input on an object at none; a lookup also across an object a record rule narrows (it
+ * would show a related record the member can't open; a rollup is an aggregate and stays). Chains are followed (a lookup of a hidden rollup is
+ * hidden too), at most 3 deep.
+ */
+function hideComputed(
+  computed: readonly ComputedInputRule[],
+  levelOf: (objectId: string) => ObjectLevel,
+  fields: Map<string, FieldLevel>,
+  /** Objects a record rule narrows: a lookup shows a related record's own value, so it is hidden across one. */
+  ruled: ReadonlySet<string>,
+): void {
+  for (let pass = 0; pass < 4; pass += 1) {
+    let changed = false;
+    for (const rule of computed) {
+      if (fields.get(rule.computedId) === 'hidden') continue;
+      const inputHidden =
+        levelOf(rule.inputObjectId) === 'none' ||
+        fields.get(rule.inputId) === 'hidden' ||
+        (rule.kind === 'lookup' && rule.inputObjectId !== rule.computedObjectId && ruled.has(rule.inputObjectId));
+      if (inputHidden && levelOf(rule.computedObjectId) !== 'none') {
+        fields.set(rule.computedId, 'hidden');
+        changed = true;
+      }
+    }
+    if (!changed) return;
+  }
 }
 
 /** No rules at all: every role writes every object and field, with no record rule. */
@@ -382,6 +427,9 @@ function memberPolicy(principal: MemberPrincipal, rules: AccessRules): DataPolic
       if (kept !== undefined) records.set(objectId, Object.freeze({ kind: kept.kind, attributeId: kept.attributeId }));
     }
   }
+  if (rules.computed !== undefined && rules.computed.length > 0) {
+    hideComputed(rules.computed, (objectId) => objects.get(objectId) ?? defaultLevel, fields, new Set(records.keys()));
+  }
   return sealPolicy({
     defaultObject: defaultLevel,
     objects: frozenRecord(objects),
@@ -415,20 +463,53 @@ export function roleAccess(principal: MemberPrincipal, rules: AccessRules = NO_R
  * among its scopes, never one that stays with people (`KEY_FORBIDDEN_PERMISSIONS`), and a data
  * level on every object, `write` with `data.write`, `read` with `data.read`,
  * else none. A scope the catalog doesn't list grants nothing.
+ *
+ * With `creator` (the member who made the key, as the door just entered them), the key is never wider than they are
+ * (parity #34): only the permissions they also hold, every object and field at the lower of the key's level and
+ * theirs, and an object a record rule narrows for them closed to the key, since a record rule matches a member and a
+ * key is none (fail closed).
  */
-export function keyAccess(keyId: string, scopes: readonly string[]): Access {
+export function keyAccess(keyId: string, scopes: readonly string[], creator?: Access): Access {
   const permissions = PERMISSION_NAMES.filter(
-    (permission) => scopes.includes(permission) && !KEY_FORBIDDEN_PERMISSIONS.includes(permission),
+    (permission) =>
+      scopes.includes(permission) &&
+      !KEY_FORBIDDEN_PERMISSIONS.includes(permission) &&
+      (creator === undefined || creator.permissions.includes(permission)),
   );
   const [read, write] = KEY_DATA_SCOPES;
   const level: ObjectLevel = scopes.includes(write) ? 'write' : scopes.includes(read) ? 'read' : 'none';
+  const principal = Object.freeze({ kind: 'api_key' as const, keyId, scopes: Object.freeze([...scopes]) });
+  if (creator === undefined) {
+    return Object.freeze({
+      principal,
+      permissions: Object.freeze(permissions),
+      data: sealPolicy({
+        defaultObject: level,
+        objects: frozenRecord([]),
+        fields: frozenRecord([]),
+        records: frozenRecord([]),
+      }),
+    });
+  }
+  const theirs = creator.data;
+  const lower = (a: ObjectLevel, b: ObjectLevel): ObjectLevel => (OBJECT_RANK[a] <= OBJECT_RANK[b] ? a : b);
+  const objectEntries: (readonly [string, ObjectLevel])[] = Object.entries(theirs.objects).map(
+    ([objectId, theirLevel]) => [objectId, lower(level, theirLevel)] as const,
+  );
+  // An object under a record rule for the creator is closed to the key, whatever its level (a later entry wins).
+  for (const objectId of Object.keys(theirs.records)) objectEntries.push([objectId, 'none'] as const);
+  const fieldCap = FIELD_OF_OBJECT[level];
   return Object.freeze({
-    principal: Object.freeze({ kind: 'api_key', keyId, scopes: Object.freeze([...scopes]) }),
+    principal,
     permissions: Object.freeze(permissions),
     data: sealPolicy({
-      defaultObject: level,
-      objects: frozenRecord([]),
-      fields: frozenRecord([]),
+      defaultObject: lower(level, theirs.defaultObject),
+      objects: frozenRecord(objectEntries),
+      fields: frozenRecord(
+        Object.entries(theirs.fields).map(
+          ([attributeId, theirLevel]) => [attributeId, stricterField(fieldCap, theirLevel)] as const,
+        ),
+      ),
       records: frozenRecord([]),
     }),
   });

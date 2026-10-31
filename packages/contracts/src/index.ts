@@ -3,6 +3,7 @@ import { accessRulesContract } from './access-rules.ts';
 import { accountContract } from './account.ts';
 import { auditContract } from './audit.ts';
 import { attributesContract } from './attributes.ts';
+import { computedContract } from './computed.ts';
 import { bookingPagesContract, bookingsContract } from './booking/pages.ts';
 import { schedulesContract } from './booking/schedules.ts';
 import { timeOffContract } from './booking/time-off.ts';
@@ -16,12 +17,14 @@ import { bulkRecordsContract } from './bulk.ts';
 import { calendarContract } from './calendar.ts';
 import { homeContract } from './home.ts';
 import { commentsContract } from './comments.ts';
+import { filesContract } from './files.ts';
 import { formsContract, submissionsContract } from './forms/forms.ts';
 import { routingContract } from './forms/routing.ts';
 import { exportsContract, importsContract } from './imports.ts';
 import { entriesContract } from './entries.ts';
 import { listsContract } from './lists.ts';
 import { automationsContract } from './automations.ts';
+import { apiKeysContract } from './developer.ts';
 import { jobsContract } from './jobs.ts';
 import { meContract } from './me.ts';
 import { navContract } from './navigation.ts';
@@ -54,6 +57,7 @@ export * from './access-rules.ts';
 export * from './account.ts';
 export * from './activity.ts';
 export * from './attributes.ts';
+export * from './computed.ts';
 export * from './audit.ts';
 export * from './board-model.ts';
 export * from './duplicates.ts';
@@ -73,11 +77,13 @@ export * from './calendar.ts';
 export * from './home.ts';
 export * from './change-event.ts';
 export * from './comments.ts';
+export * from './files.ts';
 export * from './entries.ts';
 export * from './errors.ts';
 export * from './forms/index.ts';
 export * from './imports.ts';
 export * from './automations.ts';
+export * from './developer.ts';
 export * from './jobs.ts';
 export * from './lists.ts';
 export * from './scheduling.ts';
@@ -138,6 +144,8 @@ export const contract = {
   workspaceSecurity: workspaceSecurityContract,
   objects: objectsContract,
   attributes: attributesContract,
+  // Computed attributes (spec 0015): the preview, and the refill after a failed fill.
+  computed: computedContract,
   options: optionsContract,
   // Bulk actions (spec 0022) join the records namespace from their own file.
   records: { ...recordsContract, ...bulkRecordsContract },
@@ -160,6 +168,8 @@ export const contract = {
   scheduling: schedulingContract,
   realtime: realtimeContract,
   automations: automationsContract,
+  // Settings › Developer (parity #34): API keys for /api/v1.
+  apiKeys: apiKeysContract,
   jobs: jobsContract,
   usage: usageContract,
   views: viewsContract,
@@ -171,6 +181,8 @@ export const contract = {
   // Comments and the inbox (spec 0038).
   comments: commentsContract,
   notifications: notificationsContract,
+  // A record's files (#32): the Files tab's list, delete and its Undo.
+  files: filesContract,
   calendar: calendarContract,
   home: homeContract,
   forms: formsContract,
