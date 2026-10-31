@@ -29,6 +29,7 @@ import { notes } from './notes.ts';
 import { records } from './records.ts';
 import { tasks } from './tasks.ts';
 import { joinRequests } from './team.ts';
+import { webhookEndpoints } from './webhooks.ts';
 import { actorConstraints, members } from './workspaces.ts';
 
 /** Why a member was notified (spec 0038, decision 8). */
@@ -41,6 +42,7 @@ export const notificationKind = pgEnum('notification_kind', [
   'task_due',
   'automation',
   'scheduling_changed',
+  'webhook_off',
 ]);
 
 const actor = actorColumns('actor');
@@ -74,6 +76,8 @@ export const notifications = pgTable(
     automationId: uuid('automation_id'),
     automationRunId: uuid('automation_run_id'),
     dueTaskId: uuid('due_task_id'),
+    /** A webhook endpoint turned off after 3 days of failures (spec 0064, AC-6423): told to each owner and admin. */
+    webhookEndpointId: uuid('webhook_endpoint_id'),
     createdAt: timestamptz('created_at').notNull().defaultNow(),
     readAt: timestamptz('read_at'),
     doneAt: timestamptz('done_at'),
@@ -140,6 +144,9 @@ export const notifications = pgTable(
           and ${t.submissionId} is null and ${t.joinRequestId} is null)
         or (${t.kind}::text = 'scheduling_changed' and ${t.actorMemberId} is not null and ${t.recordId} is null
           and ${t.threadId} is null and ${t.commentId} is null and ${t.taskId} is null and ${t.noteId} is null
+          and ${t.submissionId} is null and ${t.joinRequestId} is null and ${t.automationId} is null)
+        or (${t.kind}::text = 'webhook_off' and ${t.webhookEndpointId} is not null and ${t.recordId} is null
+          and ${t.threadId} is null and ${t.commentId} is null and ${t.taskId} is null and ${t.noteId} is null
           and ${t.submissionId} is null and ${t.joinRequestId} is null and ${t.automationId} is null)`,
     ),
     foreignKey({
@@ -162,6 +169,14 @@ export const notifications = pgTable(
     index('notifications_by_due_task')
       .on(t.workspaceId, t.dueTaskId)
       .where(sql`${t.dueTaskId} is not null`),
+    foreignKey({
+      name: 'notifications_webhook_endpoint',
+      columns: [t.workspaceId, t.webhookEndpointId],
+      foreignColumns: [webhookEndpoints.workspaceId, webhookEndpoints.id],
+    }).onDelete('cascade'),
+    index('notifications_by_webhook_endpoint')
+      .on(t.workspaceId, t.webhookEndpointId)
+      .where(sql`${t.webhookEndpointId} is not null`),
     // One per recipient per comment, and per task (its assignment, which turns into its due day: migration 0135).
     uniqueIndex('notifications_one_per_comment')
       .on(t.workspaceId, t.memberId, t.commentId)
