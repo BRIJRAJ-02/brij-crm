@@ -125,7 +125,7 @@ export const DateDefault: Story = {
     await userEvent.clear(days);
     await userEvent.type(days, '9999');
     await userEvent.keyboard('{Meta>}{Enter}{/Meta}');
-    await waitFor(() => expect(dialog).toHaveTextContent('Give a whole number of days from 0 to 3,650.'));
+    await waitFor(() => expect(dialog).toHaveTextContent('A whole number, 0 to 3,650.'));
     await userEvent.clear(days);
     await userEvent.type(days, '7');
     await userEvent.keyboard('{Meta>}{Enter}{/Meta}');
@@ -226,7 +226,7 @@ export const ArchivedApiName: Story = {
     await userEvent.clear(inDialog(dialog, 'Name'));
     await userEvent.keyboard('Name');
     await userEvent.keyboard('{Meta>}{Enter}{/Meta}');
-    await waitFor(() => expect(dialog).toHaveTextContent('Another attribute here has this name. Pick another.'));
+    await waitFor(() => expect(dialog).toHaveTextContent('Name taken here. Pick another.'));
   },
 };
 
@@ -657,8 +657,8 @@ export const EditOptions: Story = {
   },
   play: async ({ userEvent }) => {
     const dialog = await openDialog();
-    await expect(dialog).toHaveTextContent('Changes to options save as you make them.');
-    await expect(dialog).toHaveTextContent('This option is archived. New records get Silver.');
+    await expect(dialog).toHaveTextContent('Options save as you go.');
+    await expect(dialog).toHaveTextContent('Archived. New records get Silver.');
     const silver = within(dialog).getByRole('textbox', { name: 'Option 1' });
     await userEvent.tripleClick(silver);
     await userEvent.keyboard('Steel{Enter}');
@@ -689,7 +689,7 @@ export const ArchivedDefault: Story = {
   parameters: { crm: { screenshot: false } },
   play: async () => {
     const dialog = await openDialog();
-    await expect(dialog).toHaveTextContent('This option is archived. New records get no value.');
+    await expect(dialog).toHaveTextContent('Archived. New records get no value.');
     await waitFor(() => expect(document.querySelector('[data-entering]')).toBeNull());
   },
 };
@@ -731,7 +731,7 @@ export const OptionRefusedKeepsCreate: Story = {
     await userEvent.click(within(dialog).getByRole('textbox', { name: 'New option' }));
     await userEvent.keyboard('Gold{Enter}gold');
     await userEvent.keyboard('{Meta>}{Enter}{/Meta}');
-    await waitFor(() => expect(dialog).toHaveTextContent('Fix the options marked above, then create the attribute.'));
+    await waitFor(() => expect(dialog).toHaveTextContent('Fix the options marked above.'));
     await expect(args.onSubmit).not.toHaveBeenCalled();
   },
 };

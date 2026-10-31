@@ -87,7 +87,7 @@ test('an owner adds, edits, moves, archives and restores attributes without setu
   const dialog = page.getByRole('dialog', { name: 'New attribute' });
   await dialog.getByLabel('Name', { exact: true }).fill('Code');
   await dialog.getByRole('button', { name: 'Create attribute' }).click();
-  await expect(dialog.getByText('Another attribute here has this name. Pick another.')).toBeVisible();
+  await expect(dialog.getByText('Name taken here. Pick another.')).toBeVisible();
   await checkScreen(page, 'attribute-refused');
   await dialog.getByRole('button', { name: 'Cancel' }).click();
   await expect(dialog).toBeHidden();
@@ -122,9 +122,16 @@ test('an owner adds, edits, moves, archives and restores attributes without setu
   await expect(page).not.toHaveURL(/\?attribute=/);
   await expect(page.getByRole('dialog')).toHaveCount(0);
 
-  // Move up from the row menu, said in a toast (AC-232).
-  await own.getByRole('button', { name: 'Actions for Account manager' }).click();
-  await page.getByRole('menuitem', { name: 'Move up' }).click();
+  // Move up from the keyboard on the row's grip (the row menu holds no Move up or down), said in a toast (AC-232).
+  const grip = own.getByRole('button', { name: 'Move Account manager' });
+  await grip.focus();
+  await page.keyboard.press('Space');
+  // The drag wrapper moves focus to its holder once the row lifts.
+  await expect(grip).not.toBeFocused({ timeout: 2_000 });
+  await page.waitForTimeout(100);
+  await page.keyboard.press('ArrowUp');
+  await page.waitForTimeout(100);
+  await page.keyboard.press('Space');
   await expect(page.getByText(/Account manager moved to/)).toBeVisible();
 
   // Archive asks first; the attribute moves to Archived, and Restore brings it back (AC-233).

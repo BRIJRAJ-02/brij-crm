@@ -40,5 +40,5 @@ The lists3 lane:
 - A list view has the object views' menu (`useViewMenu` with `listId`): Rename, Duplicate (opens the private copy), Copy link, who can see it, Set as default and Delete; Open trash is left out (a list has no trash).
 - Import (AC-4833) is spec 0040's page at `/w/$slug/lists/$list/import`, from the list's top bar and its empty state: the list's fields come first in the column picker as "<List>: <Field>", records are found only by one of their own unique fields, and each row adds its record (or updates its entry in an "Each record once" list). Undo takes out the entries it added; entry values it changed stay.
 - A card added from the record page shows at once and leaves on a refusal.
-- A list whose object is archived says so ("<Object> is archived. Restoring it brings this list back.") with no Restore.
+- A list whose object is archived says so ("Restore <Object> to bring it back.") with no Restore.
 - "Each record once" lost its hint (it repeated the label); a refusal stays under the switch until the next change.

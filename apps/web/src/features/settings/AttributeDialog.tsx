@@ -29,6 +29,7 @@ import {
 import {
   AttributeSettings,
   relationshipStep,
+  sharedStrings,
   typeChangeStep,
   type AttributeSettingsApiNames,
   type AttributeSettingsDraft,
@@ -187,7 +188,8 @@ function newOptionOf(option: OptionsEditorOption): NewOption {
 }
 
 /** The words a refused option write shows on its row. */
-const refusedWords = (error: unknown): string => (isDataError(error) ? refusalSummary(error) : strings.somethingWrong);
+const refusedWords = (error: unknown): string =>
+  isDataError(error) ? refusalSummary(error) : sharedStrings.couldntDoThat;
 
 /**
  * The connected AttributeSettings: one id minted per opening (a retry sends
@@ -320,7 +322,10 @@ export function AttributeDialog({
           (error: unknown) => {
             toasts.toast({
               tone: 'danger',
-              message: strings.restoreFailed(holder.title, isDataError(error) ? error.message : strings.somethingWrong),
+              message: strings.restoreFailed(
+                holder.title,
+                isDataError(error) ? error.message : sharedStrings.couldntDoThat,
+              ),
             });
           },
         );
@@ -379,7 +384,7 @@ export function AttributeDialog({
       },
       (error: unknown) => {
         setBusy(false);
-        setChangeError(isDataError(error) ? refusalSummary(error) : strings.somethingWrong);
+        setChangeError(isDataError(error) ? refusalSummary(error) : sharedStrings.couldntDoThat);
         // Something changed under the preview: read it again, so it shows what stops it now.
         setCheckRun((run) => run + 1);
       },

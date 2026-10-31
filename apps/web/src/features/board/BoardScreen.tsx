@@ -306,9 +306,8 @@ export function BoardScreen(props: BoardScreenProps) {
                   </>
                 }
               >
-                {canChangeSchema
-                  ? strings.groupArchivedText(outcome.title)
-                  : strings.groupArchivedTextReader(outcome.title)}
+                {/* The buttons say the ways out; a reader also hears who can restore it. */}
+                {canChangeSchema ? undefined : strings.groupArchivedTextReader}
               </EmptyState>
             ) : (
               <EmptyState icon="kanban" title={strings.tooManyTitle}>

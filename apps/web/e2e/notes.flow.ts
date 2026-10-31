@@ -100,7 +100,7 @@ test('notes on a record: write, list, timeline, a second browser, delete and und
   const live = process.env.FLOW_NO_LIVE !== '1';
   if (!live) await reader.reload();
   await expect(reader.getByRole('dialog').getByRole('textbox', { name: 'Note' })).toContainText('60 seats');
-  if (live) await expect(reader.getByText(/edited this note, so it now shows their version/)).toBeVisible();
+  if (live) await expect(reader.getByText(/edited this note. Showing theirs/)).toBeVisible();
   await other.close();
 
   // Delete from the window's menu is one click (Undo deletes never ask first): the note goes, with Undo, which

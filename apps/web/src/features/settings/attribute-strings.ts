@@ -37,7 +37,7 @@ export const strings = {
   /** Badges (AC-227). */
   primary: 'Primary',
   /** Primary's InfoTip in the Rules column. */
-  primaryHelp: 'The attribute that names each record. It shows as the record’s title in tables, links and search.',
+  primaryHelp: 'Names each record in tables, links and search.',
   required: 'Required',
   unique: 'Unique',
   /** How many validation rules an attribute holds (spec 0013). */
@@ -53,8 +53,6 @@ export const strings = {
   archivedByHidden: 'Links to an archived object',
   rowActions: (title: string) => `Actions for ${title}`,
   edit: 'Edit',
-  moveUp: 'Move up',
-  moveDown: 'Move down',
   archive: 'Archive',
   restore: 'Restore',
   restoring: 'Restoring',
@@ -72,7 +70,7 @@ export const strings = {
   both: (first: string, second: string) => `${first} and ${second}`,
   /** Why a dialog opened read only. */
   systemReason: (title: string) => `${title} is set by the system.`,
-  memberReason: 'Only workspace owners and admins can change attributes.',
+  memberReason: sharedStrings.ownersAndAdminsOnly,
   /** A relationship's Type cell: its far object and how many each record links to. */
   relationshipType: (plural: string, holdsOne: boolean) => `→ ${plural} · ${holdsOne ? 'one' : 'many'}`,
   /** The search above a long list of attributes, and what it says when nothing matches. */
@@ -85,8 +83,6 @@ export const strings = {
   objectCreated: (plural: string) => `${plural} created.`,
   loading: 'Loading attributes',
   loadFailed: 'Couldn’t load the attributes',
-  /** AttributeDialog still reads this key; it moves to `sharedStrings` with that dialog's own pass. */
-  somethingWrong: sharedStrings.couldntDoThat,
   /** The Change type step's link to the table filtered to the records whose values don't convert. */
   showRecords: (count: number) => (count === 1 ? 'Show the record' : `Show ${String(count)} records`),
   /** The archive confirm (spec 0012, screens). */

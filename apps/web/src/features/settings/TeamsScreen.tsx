@@ -236,7 +236,8 @@ export function TeamsScreen({ data, toasts, slug, teams, members, canManage }: T
     <SettingsPage title={strings.title} {...(canManage ? { actions: newTeam } : {})}>
       {teams.length === 0 ? (
         <EmptyState icon="users-round" title={strings.emptyTitle}>
-          {canManage ? strings.emptyText : strings.readerEmptyText}
+          {/* New team sits in the page head; a reader hears who makes them. */}
+          {canManage ? undefined : strings.readerEmptyText}
         </EmptyState>
       ) : (
         <>

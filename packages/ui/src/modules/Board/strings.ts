@@ -33,7 +33,7 @@ export const strings = {
   moving: (name: string) => `Moving ${name}`,
   loading: 'Loading the board',
   noColumns: 'Nothing to group by yet',
-  noColumnsBody: 'Add options to this attribute to make columns.',
+  noColumnsBody: 'Add an option to its field.',
   failed: 'The board didn’t load',
   noAccess: 'You can’t see this board',
   noAccessBody: 'Ask a workspace admin for access.',

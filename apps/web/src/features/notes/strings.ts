@@ -1,3 +1,5 @@
+import { sharedStrings } from '@crm/ui';
+
 /** The notes screens' copy (spec 0019, milestone 3). */
 export const strings = {
   notes: 'Notes',
@@ -5,8 +7,6 @@ export const strings = {
   untitled: 'Untitled note',
   /** The Notes tab with none yet. */
   noNotes: 'No notes yet',
-  /** The workspace's Notes page with none: where notes come from. */
-  noNotesBody: 'Notes written on a record show here.',
   /** The Notes page's list didn't load. */
   loadFailedList: 'Notes didn’t load',
   listLabel: 'Notes',
@@ -21,14 +21,14 @@ export const strings = {
   more: 'More actions',
   copyLink: 'Copy link',
   linkCopied: 'Link copied',
-  copyFailed: 'Couldn’t copy the link. Copy it from the address bar.',
+  copyFailed: sharedStrings.couldntCopy,
   deleteNote: 'Delete note',
   /** The More menu's way to link the note to other records (migration 0135), and the field that holds them. */
   linkRecord: 'Link record',
   linkedRecords: 'Linked records',
-  linkForbidden: 'You can’t link a note to a record you can’t change.',
-  linksFull: (max: number) => `A note links at most ${String(max)} records.`,
-  searchFailed: 'The search didn’t answer. Type again to try again.',
+  linkForbidden: 'You can’t link a record you can’t change.',
+  linksFull: (max: number) => `Up to ${String(max)} records.`,
+  searchFailed: 'Search failed. Type again.',
   noteDeleted: 'Note deleted',
   undo: 'Undo',
   notDeleted: 'The note wasn’t deleted.',
@@ -40,13 +40,13 @@ export const strings = {
   retry: 'Retry',
   loading: 'Loading the note',
   loadFailed: 'This note didn’t load.',
-  editorFailed: 'The editor didn’t load. Check your connection and try again.',
+  editorFailed: 'The editor didn’t load.',
   tryAgain: 'Try again',
-  unavailable: 'This note isn’t available. Its record may have been deleted, or you may not have access to it.',
-  readOnly: 'You can view this note but not change it.',
+  unavailable: 'This note isn’t available.',
+  readOnly: 'You can only view this note.',
   /** AC-443's notices. */
-  theirVersion: (name: string) => `${name} edited this note, so it now shows their version.`,
-  savedOverTheirs: (name: string) => `${name} edited this note at the same time. Your version was saved over theirs.`,
+  theirVersion: (name: string) => `${name} edited this note. Showing theirs.`,
+  savedOverTheirs: (name: string) => `${name} edited this too. Yours was saved over theirs.`,
   dismiss: 'Dismiss',
   formerMember: 'Former member',
   someone: 'Someone',
@@ -86,11 +86,11 @@ export const strings = {
   logging: 'Logging',
   save: 'Save',
   /** The When row's error for a time more than a day ahead. */
-  tooFar: 'Log what already happened. Meetings ahead belong in the calendar.',
+  tooFar: 'Only what already happened.',
   logFailed: 'This wasn’t logged.',
   saveFailed: 'This wasn’t saved.',
-  linksNotSaved: 'Logged, but the other records weren’t linked. Open it to link them.',
-  theirsOver: (name: string) => `${name} edited this at the same time. Yours was saved over theirs.`,
+  linksNotSaved: 'Logged. The other records weren’t linked.',
+  theirsOver: (name: string) => `${name} edited this too. Yours was saved over theirs.`,
   callDeleted: 'Call deleted',
   meetingDeleted: 'Meeting deleted',
   deleteActivity: 'Delete',

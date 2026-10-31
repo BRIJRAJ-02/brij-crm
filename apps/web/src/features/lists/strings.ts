@@ -3,7 +3,7 @@
 export const strings = {
   // The sidebar and the New list dialog (AC-4801 to AC-4805).
   newList: 'New list',
-  newListUnavailable: 'New list couldn’t open. Reload the page and try again.',
+  newListUnavailable: 'Couldn’t open. Reload and try again.',
   noLists: 'No lists yet',
   createList: 'Create list',
   creatingList: 'Creating…',
@@ -15,7 +15,7 @@ export const strings = {
   startWith: 'Start with',
   blank: 'Blank',
   pipeline: 'Pipeline',
-  noWritableObjects: 'You can’t change records of any object, so there is nothing to make a list of.',
+  noWritableObjects: 'You can’t change any object’s records.',
   createFailed: 'The list wasn’t made. Try again.',
   listMade: (name: string) => `${name} is ready`,
   hidden: (name: string) => `${name} hidden from the sidebar`,
@@ -30,11 +30,11 @@ export const strings = {
   empty: (plural: string) => `No ${plural.toLowerCase()} in this list yet.`,
   failed: 'The list didn’t load.',
   notFoundTitle: 'This list isn’t here',
-  notFoundText: 'It may have been archived, or you may not have access to it.',
+  notFoundText: 'It may be archived, or hidden from you.',
   addField: 'Add field',
   unnamed: (singular: string) => `Unnamed ${singular.toLowerCase()}`,
   fieldAdded: (title: string) => `${title} added`,
-  readOnly: (name: string) => `You can view ${name} but not change it.`,
+  readOnly: (name: string) => `You can only view ${name}.`,
 
   // Adding (AC-4813 to AC-4816).
   addTitle: (singular: string, list: string) => `Add ${singular.toLowerCase()} to ${list}`,
@@ -81,7 +81,7 @@ export const strings = {
   addFailed: 'Nothing was added. Try again.',
   addRecordTitle: (name: string, list: string) => `Add ${name} to ${list}`,
 
-  needsValues: (list: string) => `${list} needs a value first. Use Add to list on the page.`,
+  needsValues: (list: string) => `${list} needs a value. Use Add to list.`,
 
   // The column picker's two groups (AC-4807).
   listFieldsGroup: (list: string) => `${list} fields`,
@@ -106,7 +106,7 @@ export const strings = {
   saveFailed: 'The list wasn’t saved. Try again.',
   archive: 'Archive list',
   archiveTitle: (name: string) => `Archive ${name}?`,
-  archiveText: 'It leaves everyone’s sidebar. Its entries are kept, and it can be restored from Settings › Lists.',
+  archiveText: 'It leaves the sidebar. Entries are kept.',
   archiveAction: 'Archive',
   archivedToast: (name: string) => `${name} archived`,
   archiveFailed: 'The list wasn’t archived. Try again.',
@@ -116,12 +116,12 @@ export const strings = {
   archivedTitle: (name: string) => `${name} is archived`,
   archivedText: 'Its entries are kept.',
   // A list whose object is archived (AC-4832): it returns with the object.
-  objectArchivedText: (plural: string) => `${plural} is archived. Restoring it brings this list back.`,
+  objectArchivedText: (plural: string) => `Restore ${plural} to bring it back.`,
   onlyManagers: (maker: string | undefined) =>
     maker === undefined
       ? 'Only owners and admins can change this list.'
       : `Only ${maker}, owners and admins can change this list.`,
-  listAtLimit: 'This workspace has 500 lists, archived ones included, the most it can have.',
+  listAtLimit: '500 of 500 lists, archived ones included.',
   fieldLimit: 'Fields',
   menu: 'List menu',
   importList: 'Import',

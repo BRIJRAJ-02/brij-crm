@@ -1,4 +1,5 @@
 import type { ObjectAccessLevel, RecordScope, RuleRole } from '@crm/data';
+import { sharedStrings } from '@crm/ui';
 
 /** Settings › Workspace › Teams' copy (spec 0031, slice 8) and an object's Access tab (spec 0032). */
 export const strings = {
@@ -8,11 +9,10 @@ export const strings = {
   newTeam: 'New team',
   columns: { team: 'Team', people: 'People', actions: 'Actions' },
   emptyTitle: 'No teams yet',
-  emptyText: 'Teams share access to records.',
   noOne: 'No one yet',
   removeTeam: (name: string) => `Delete ${name}`,
   peopleIn: (team: string, count: number) => `${String(count)} ${count === 1 ? 'person' : 'people'} in ${team}`,
-  somethingWrong: 'Something went wrong. Try again.',
+  somethingWrong: sharedStrings.couldntDoThat,
   readerEmptyText: 'Owners and admins make teams.',
   /** The dialog. */
   createTitle: 'New team',
@@ -37,7 +37,7 @@ export const strings = {
   accessLoading: 'Loading access',
   accessFailed: 'Access didn’t load',
   noAccessTitle: 'Only owners and admins set access',
-  noAccessText: 'Ask one of them to change who sees these records.',
+  noAccessText: 'Ask one of them.',
   gridTitle: 'Who can do what',
   who: 'Who',
   canSee: 'Can see',
@@ -59,7 +59,7 @@ export const strings = {
   seeFor: (who: string) => `Can see, ${who}`,
   editFor: (who: string) => `Can edit, ${who}`,
   recordsFor: (who: string) => `Records for ${who}`,
-  needsField: 'Add a Member field to share records by who owns them.',
+  needsField: 'Needs a Member field, like Owner.',
   scopes: {
     all: 'All records',
     own: 'Their own',

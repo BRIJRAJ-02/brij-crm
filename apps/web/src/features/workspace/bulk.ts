@@ -4,7 +4,7 @@
 // Trash do the showing. Only the screens that use it load it; the undo of a
 // delete is in undo.ts, which the frame loads, and the job kinds in bulk-jobs.ts.
 import type { BulkEditResult, BulkOp, DeleteResult, JobView } from '@crm/data';
-import type { ToastContent } from '@crm/ui';
+import { sharedStrings, type ToastContent } from '@crm/ui';
 import { bulkActionOf } from './bulk-jobs.ts';
 import { lifecycleStrings, recordsWord, type ObjectNames } from './undo.ts';
 
@@ -36,7 +36,7 @@ export const bulkStrings = {
   /** An object the person may only read (spec 0009's words). */
   readOnly: (pluralName: string) => `You can view ${pluralName} but not change them.`,
   /** A selection past what one request changes (spec 0022, milestones 1 and 2). */
-  tooMany: 'Change at most 500 records in one request; more run as a background change.',
+  tooMany: 'At most 500 records at once.',
   /** "Delete 48 people?" (AC-525), danger tone. */
   confirmTitle: (records: string) => `Delete ${records}?`,
   confirmText: 'They stay in the trash for 30 days.',
@@ -46,11 +46,11 @@ export const bulkStrings = {
   /** Some went, some didn't: their rows say why (AC-525). */
   deletedSome: (records: string, refused: number) =>
     refused === 1
-      ? `Deleted ${records}. 1 wasn’t deleted; its row says why.`
-      : `Deleted ${records}. ${count(refused)} weren’t deleted; each row says why.`,
+      ? `Deleted ${records}. 1 wasn’t: see its row.`
+      : `Deleted ${records}. ${count(refused)} weren’t: see their rows.`,
   /** None went: one reason, or the count. */
-  noneDeleted: (records: string) => `${records} weren’t deleted. Each row says why.`,
-  somethingWrong: 'Something went wrong. Try again in a moment.',
+  noneDeleted: (records: string) => `${records} weren’t deleted. See their rows.`,
+  somethingWrong: sharedStrings.couldntDoThat,
   /** The bulk edit (AC-529, AC-530). */
   edit: 'Edit',
   editTitle: (records: string) => `Edit ${records}`,
@@ -65,9 +65,8 @@ export const bulkStrings = {
   fieldAt: (place: number) => `Field ${String(place)}`,
   change: 'Change',
   /** Change's InfoTip, for a field that holds several values. */
-  changeHelp:
-    'Add keeps what each record has and adds yours. Remove takes out only yours. Replace swaps everything for yours.',
-  changeExample: 'Add the tag VIP to 40 people and their other tags stay.',
+  changeHelp: 'Add keeps theirs. Remove takes out only yours. Replace swaps all for yours.',
+  changeExample: 'Add VIP: their other tags stay.',
   value: 'Value',
   ops: {
     set: 'Set',
@@ -79,8 +78,8 @@ export const bulkStrings = {
   checked: 'Checked',
   unchecked: 'Unchecked',
   /** AC-529: a unique attribute can't be Set on several records. */
-  uniqueRule: (title: string) => `${title} is unique, so several records can’t share one value.`,
-  noFields: (pluralName: string) => `${pluralName} have no fields you can change in bulk.`,
+  uniqueRule: (title: string) => `${title} is unique: records can’t share one.`,
+  noFields: (pluralName: string) => `No ${pluralName} fields to change in bulk.`,
   needsField: 'Choose a field to change.',
   needsValue: 'Give a value, or choose Clear.',
   /** A field Clear isn't offered for (a required one): only the value can be asked for. */
@@ -94,13 +93,11 @@ export const bulkStrings = {
   /** Some refused: their cells say why, as a delete's rows do (AC-530). */
   updatedSome: (records: string, refused: number) =>
     refused === 1
-      ? `Updated ${records}. 1 was refused; its cell says why.`
-      : `Updated ${records}. ${count(refused)} were refused; each cell says why.`,
+      ? `Updated ${records}. 1 refused: see its cell.`
+      : `Updated ${records}. ${count(refused)} refused: see their cells.`,
   noneUpdated: (refused: number) =>
-    refused === 1
-      ? '1 record was refused. Its cell says why.'
-      : `${count(refused)} records were refused. Each cell says why.`,
-  nothingChanged: 'Nothing changed: every record already held that value.',
+    refused === 1 ? '1 record refused. See its cell.' : `${count(refused)} records refused. See their cells.`,
+  nothingChanged: 'Nothing changed: they all had it.',
   /** Background changes (spec 0022, milestone 3): the bar, the confirm, the finish toast. */
   counting: 'Counting…',
   /** Counted and waiting for its confirm: the bar's full progress, beside Review. */
@@ -145,7 +142,7 @@ export const bulkStrings = {
   allMatchingRecords: (value: number, names: ObjectNames) =>
     `all ${count(value)}+ matching ${names.pluralName.toLowerCase()}`,
   confirmEditAction: (records: string) => `Update ${records}`,
-  tooManyIds: 'Select at most 10,000 records one by one, or select all matching.',
+  tooManyIds: 'At most 10,000 one by one. Select all matching instead.',
   tooManyExcept: 'You can leave out at most 1,000 records from all matching. Clear and select them one by one instead.',
   /** A background change that stopped part way (cancelled, or failed): how far it got, in the others' words. */
   stopped: {
@@ -169,13 +166,12 @@ export const bulkStrings = {
   deletedForever: (records: string) => `Deleted ${records} forever.`,
   viewDetails: 'View details',
   /** A job's refusals are listed on the Background jobs page (View details). */
-  refusedSeeDetails: (refused: number) =>
-    refused === 1 ? '1 was refused; the details say why.' : `${count(refused)} were refused; the details say why.`,
+  refusedSeeDetails: (refused: number) => (refused === 1 ? '1 refused.' : `${count(refused)} refused.`),
   /** What a purge left in the trash (spec 0022, AC-538 as amended), per object it may only read. */
   leftInTrash: (left: number, names: ObjectNames) =>
     left === 1
-      ? `1 ${names.singularName} record stays in the trash because you can view ${names.pluralName} but not change them.`
-      : `${count(left)} ${names.pluralName} records stay in the trash because you can view ${names.pluralName} but not change them.`,
+      ? `1 ${names.singularName} record stays in the trash: ${names.pluralName} are view only.`
+      : `${count(left)} ${names.pluralName} records stay in the trash: ${names.pluralName} are view only.`,
 } as const;
 
 /** Whether the bar offers Delete for a selection of `selected` records, or says it is too many. */

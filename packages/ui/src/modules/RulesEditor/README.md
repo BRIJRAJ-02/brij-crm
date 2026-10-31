@@ -18,7 +18,7 @@ New, for AttributeSettings' Validation section (spec 0013, milestone 1). Nothing
   editorProps={(attribute) => ({ onSearch })} // a condition's reference operands, as FilterBuilder takes them
   newId={mintId}
   onChange={setRules}
-  hint="Rules save when you press Save."
+  hint="Rules wait for Save."
   errors={{ 'rules.0.max': 'Text holds at most 500 characters.' }}
 />
 ```

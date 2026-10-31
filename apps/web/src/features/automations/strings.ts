@@ -53,7 +53,7 @@ export const strings = {
   runs: {
     label: 'Runs',
     columns: { when: 'When', automation: 'Automation', record: 'For', result: 'Result' },
-    empty: { title: 'No runs yet', text: 'They show here as they happen.' },
+    empty: { title: 'No runs yet' },
     status: { queued: 'Waiting', running: 'Running', done: 'Done', failed: 'Failed' },
     task: 'A task',
     recordGone: 'A record',

@@ -39,7 +39,6 @@ export const strings = {
   /** What a message names while a new attribute has no name yet. */
   untitled: 'This attribute',
   /** Under the group's label in a dialog: rules wait for its Save, unlike options. */
-  saveHint: 'Rules save when you press Save.',
   done: 'Done',
   /** A row's handle and menu, by its place and kind (its message can run to 200 characters). */
   move: (place: number, kind: string) => `Move rule ${String(place)}, ${kind}`,

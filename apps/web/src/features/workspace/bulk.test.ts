@@ -39,7 +39,7 @@ describe('the bulk bar', () => {
     many?.action?.onAction();
     expect(undone).toEqual(['u2']);
     expect(deleteToast({ kind: 'done', deleted: 46, refused: 2, undoId: 'u3' }, PEOPLE, onUndo)?.message).toBe(
-      'Deleted 46 people. 2 weren’t deleted; each row says why.',
+      'Deleted 46 people. 2 weren’t: see their rows.',
     );
     expect(
       deleteToast({ kind: 'done', deleted: 0, refused: 1, reason: 'That record does not exist.' }, PEOPLE, onUndo),
@@ -51,9 +51,7 @@ describe('the bulk bar', () => {
         onUndo,
       ),
     ).toEqual({ tone: 'danger', message: 'You can view People but not change them.' });
-    expect(deleteToast({ kind: 'too-many', limit: 500 }, PEOPLE, onUndo)?.message).toBe(
-      'Change at most 500 records in one request; more run as a background change.',
-    );
+    expect(deleteToast({ kind: 'too-many', limit: 500 }, PEOPLE, onUndo)?.message).toBe('At most 500 records at once.');
   });
 
   it('offers Retry for a passing failure only, and warns when rows were left behind', () => {
@@ -194,14 +192,13 @@ describe('a background change’s finish toast (spec 0022, AC-528, AC-531)', () 
     expect(
       bulkJobToast(bulkJob('succeeded', { kind: 'records.bulk_edit', done: 9998, refused: 2 }), PEOPLE, { onView })
         ?.message,
-    ).toBe('Updated 9,998 people. 2 were refused; the details say why.');
+    ).toBe('Updated 9,998 people. 2 refused.');
     const purge = bulkJobToast(bulkJob('succeeded', { kind: 'records.purge', done: 1200 }), RECORDS, { onView }, [
       { names: PEOPLE, count: 12 },
     ]);
     expect(purge).toMatchObject({
       tone: 'danger',
-      message:
-        'Deleted 1,200 records forever. 12 People records stay in the trash because you can view People but not change them.',
+      message: 'Deleted 1,200 records forever. 12 People records stay in the trash: People are view only.',
     });
   });
 });
@@ -221,7 +218,7 @@ describe('the bulk edit dialog’s rules (AC-529)', () => {
   it('says where a partly refused edit’s reasons are, and undoes it in its object’s words', () => {
     expect(
       bulkEditToast({ kind: 'done', updated: 46, unchanged: 0, refused: 2 }, PEOPLE, () => undefined)?.message,
-    ).toBe('Updated 46 people. 2 were refused; each cell says why.');
+    ).toBe('Updated 46 people. 2 refused: see their cells.');
     const undone = undoToast(
       {
         kind: 'undone',

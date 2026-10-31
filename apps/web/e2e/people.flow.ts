@@ -46,7 +46,7 @@ test.describe('the People table', () => {
     await addDialog.getByRole('button', { name: /Type$/ }).click();
     await page.getByRole('option', { name: 'Rating' }).click();
     await addDialog.getByRole('button', { name: 'Create attribute' }).click();
-    await expect(addDialog.getByText('Another attribute here has this name. Pick another.')).toBeVisible();
+    await expect(addDialog.getByText('Name taken here. Pick another.')).toBeVisible();
     await checkScreen(page, '3-add-attribute-taken');
     await addDialog.getByRole('button', { name: 'Cancel' }).click();
     await expect(addDialog).toBeHidden();

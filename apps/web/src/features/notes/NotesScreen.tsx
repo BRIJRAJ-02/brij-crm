@@ -56,7 +56,6 @@ export function NotesScreen({ slug, list, objects, members }: NotesScreenProps) 
             status={state.status === 'unavailable' ? 'no-access' : state.status}
             onRetry={list.retry}
             emptyTitle={strings.noNotes}
-            emptyBody={strings.noNotesBody}
             onAction={open}
           />
         ),

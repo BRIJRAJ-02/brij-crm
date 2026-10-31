@@ -237,11 +237,7 @@ function RunsTable({
   readonly slug: string;
 }) {
   if (runs.length === 0) {
-    return (
-      <EmptyState icon="zap" title={strings.runs.empty.title}>
-        {strings.runs.empty.text}
-      </EmptyState>
-    );
+    return <EmptyState icon="zap" title={strings.runs.empty.title} />;
   }
   return (
     <Table

@@ -188,7 +188,7 @@ test('a time more than a day ahead is refused before anything is sent, and a cal
   await dialog.getByRole('button', { name: /Date/ }).click();
   await page.getByRole('textbox', { name: /Type a date/ }).fill('in 2 weeks');
   await page.keyboard.press('Enter');
-  await expect(dialog.getByText('Log what already happened. Meetings ahead belong in the calendar.')).toBeVisible();
+  await expect(dialog.getByText('Only what already happened.')).toBeVisible();
   await expect(dialog.getByRole('button', { name: 'Log call' })).toBeDisabled();
   // Back to a day that happened: it can be logged, and linked to a second record.
   await dialog.getByRole('button', { name: /Date/ }).click();

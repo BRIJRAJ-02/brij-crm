@@ -42,9 +42,7 @@ describe('tasks as the list draws them (spec 0019)', () => {
       recordCount: 2,
     });
     expect(toTaskEntry(task, members).readOnlyReason).toBeUndefined();
-    expect(toTaskEntry({ ...task, canChange: false }, members).readOnlyReason).toBe(
-      'You can view this task but not change it.',
-    );
+    expect(toTaskEntry({ ...task, canChange: false }, members).readOnlyReason).toBe('You can only view this task.');
   });
 
   it('carries a capped count as a floor, and reads ?task= as a uuid or new only', () => {
