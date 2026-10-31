@@ -105,7 +105,8 @@ describe('record facts (AC-1603)', () => {
       `person.{${id}}`,
       `person.${id} `,
       `person.${id}0`,
-      `deal.${id}`,
+      // Deals are a fact source since spec 0037; any other object is not one.
+      `task.${id}`,
       `person.${id.replace('0e', 'zz')}`,
     ];
     for (const key of malformed) {
