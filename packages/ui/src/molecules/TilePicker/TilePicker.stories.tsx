@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
 import { expect, fn } from 'storybook/test';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
-import { TilePicker, type TileItem } from './TilePicker.tsx';
+import { TilePicker, type TileItem, type TilePickerProps } from './TilePicker.tsx';
 
 const ITEMS: readonly TileItem[] = [
   { id: 'text', label: 'Text', icon: 'type', hint: 'A line of words', group: 'Basic' },
@@ -24,24 +24,28 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
+/** The picker holding its own choice, as a form would. */
+function HeldPicker(props: TilePickerProps) {
+  const [value, setValue] = useState(props.value);
+  return (
+    <Stage width="dialog">
+      <TilePicker
+        {...props}
+        value={value}
+        onChange={(id) => {
+          setValue(id);
+          props.onChange(id);
+        }}
+      />
+    </Stage>
+  );
+}
+
 /** Every kind in sight under its heading; the arrow keys move and Enter picks. */
 export const Default: Story = {
   parameters: { crm: { preview: true } },
-  render: function Render(args) {
-    const [value, setValue] = useState(args.value);
-    return (
-      <Stage width="dialog">
-        <TilePicker
-          {...args}
-          value={value}
-          onChange={(id) => {
-            setValue(id);
-            args.onChange(id);
-          }}
-        />
-      </Stage>
-    );
-  },
+  // A component of its own, not hooks in `render`: the artifact's preview calls `render` as a plain function.
+  render: (args) => <HeldPicker {...args} />,
   play: async ({ canvas, userEvent, args }) => {
     // Each tile is an option named by its label alone, as a Select's option was.
     await expect(canvas.getByRole('option', { name: 'Text' })).toHaveAttribute('aria-selected', 'true');
