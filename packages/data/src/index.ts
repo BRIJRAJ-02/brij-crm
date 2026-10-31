@@ -25,6 +25,8 @@ import type {
   SyncStarted,
   AttributeDefinition,
   AttributeImpact,
+  TypeChangeCheck,
+  TypeChangeTarget,
   BookAsHostInput,
   LimitsAt,
   BookingAssignment,
@@ -41,6 +43,7 @@ import type {
   BulkAction,
   BulkEdit,
   BulkTarget,
+  EntryTarget,
   BookingAvailability,
   CreateTimeBlockInput,
   TimeBlockOccurrence,
@@ -73,8 +76,17 @@ import type {
   Me,
   MemberView,
   MyAccess,
+  AccessPreview,
+  FieldRules,
+  ObjectAccess,
+  ObjectAccessLevel,
   ObjectSummary,
+  PreviewAs,
+  RecordScope,
+  RuleSubject,
+  SetObjectAccessResult,
   SetRoleResult,
+  TeamView,
   RecordView,
   SessionLengthDays,
   WorkspaceSecurity,
@@ -160,6 +172,7 @@ import {
 } from './calendar/store.ts';
 import { lazySchedules } from './schedules/lazy.ts';
 import type { SchedulingAccessStore } from './scheduling/access.ts';
+import type { AutomationsHeld, AutomationsStore } from './automations/store.ts';
 export type {
   DelegationGrant,
   DelegationsHeld,
@@ -184,6 +197,26 @@ export type {
 } from './scheduling/time-off.ts';
 export type { LimitsDraft, LimitsHeld, LimitsState, LimitsStore, MeetingLimits } from './scheduling/limits.ts';
 export type { LimitsAt } from '@crm/contracts';
+// Lists and their entries (spec 0048).
+export type { EntryTarget, EntryView, ListTemplate, ListView } from '@crm/contracts';
+export type {
+  AddManyOutcome,
+  AddOutcome,
+  EntriesState,
+  EntriesStatus,
+  EntriesLayer,
+  EntriesView,
+  ListBoard,
+  ListBoardColumn,
+  ListBoardState,
+  ListRef,
+  ListRow,
+  RecordEntries,
+  RecordEntriesState,
+  RemoveOutcome,
+} from './lists/entries.ts';
+import type { EntriesLayer } from './lists/entries.ts';
+import type { ListTemplate, ListView } from '@crm/contracts';
 export type {
   CalendarHealthHeld,
   CalendarHealthState,
@@ -245,6 +278,9 @@ import {
   upsertFirst,
   type CaptureListView,
 } from './captures/list.ts';
+import type { Report as ReportView, ReportConfig } from '@crm/contracts';
+import type { ReportPlan } from '@crm/contracts/reports';
+import { lazyFiguresSource, type ReportFiguresSource } from './reports/figures-source.ts';
 import type { NavOperation, NavUniverse } from '@crm/contracts/navigation';
 import type { NavChangeOptions, NavSnapshot, NavSource, NavStore } from './navigation/store.ts';
 import { draftParam, isSameQuery, readDraft, type DraftQuery } from './views/draft.ts';
@@ -258,7 +294,8 @@ import {
 } from './views/store.ts';
 import type { NewTask, TaskChange, TaskList, TasksStore, TaskSubscription } from './tasks/store.ts';
 import { createDueTasks, type DueTasksSource } from './tasks/due.ts';
-import type { NoteList, NoteSession, NotesStore } from './notes/store.ts';
+import type { ActivityDraft, ActivityResult, NoteList, NoteSession, NotesStore } from './notes/store.ts';
+import type { Note as NoteWithBody } from '@crm/contracts';
 import type { CommentEmoji, CommentVersion, NotificationKind, NotificationStatus } from '@crm/contracts';
 import type { CommentsStore, NewComment, RecordComments } from './comments/store.ts';
 import type {
@@ -290,6 +327,7 @@ import type {
   CellChange,
   DeleteResult,
   EditOutcome,
+  FiledNotice,
   LinkCell,
   LinkChange,
   LinkOutcome,
@@ -395,6 +433,8 @@ export type {
   ValidationRuleView,
   AttributeDefinition,
   AttributeImpact,
+  TypeChangeCheck,
+  TypeChangeTarget,
   AttributeOption,
   AttributeRelationship,
   AttributeType,
@@ -430,6 +470,21 @@ export type {
   MembersPage,
   MemberView,
   MyAccess,
+  AccessImpact,
+  AccessPreview,
+  FieldRuleLevel,
+  FieldRules,
+  ObjectAccess,
+  ObjectAccessLevel,
+  OwnerAttribute,
+  PreviewAs,
+  RuleField,
+  SetObjectAccessResult,
+  RecordScope,
+  RuleRole,
+  RuleSubject,
+  SubjectAccess,
+  TeamView,
   NotificationKind,
   NotificationSettings,
   NotificationStatus,
@@ -603,6 +658,7 @@ export {
   WORKSPACE_PURGE_DAYS,
   type InviteLinkDays,
 } from '@crm/contracts/team-limits';
+export { typeChangeTargets, type TypeChangeKey } from '@crm/contracts/type-changes';
 export {
   freeHue,
   PICKER_TYPES,
@@ -650,6 +706,9 @@ export type {
 export type { JobsScope, JobsSnapshot, JobsView, TestJobSettings } from './jobs/store.ts';
 export { purgeLeftOf, type PurgeLeftEntry } from './jobs/left.ts';
 export type { View, ViewColumn, ViewConfig, ViewKind, ViewLayout, ViewSummary, ViewVisibility } from '@crm/contracts';
+// Saved reports (the reports lane): a chart's definition, and the figures its plan works out.
+export type { Report as ReportView, ReportConfig, ReportGroupBy, ReportMeasure } from '@crm/contracts';
+export type { ReportFigures, ReportFiguresSource, ReportFiguresState, ReportPoint } from './reports/figures-source.ts';
 export {
   CREATED_AT_SLUG,
   effectiveColumns,
@@ -697,9 +756,41 @@ export type {
   TaskSubscription,
   TaskSubscriptionState,
 } from './tasks/store.ts';
-export { TASK_COUNT_CAP, TASK_RECORDS_MAX, TASK_TITLE_MAX } from '@crm/contracts/task-limits';
-export { NOTE_TITLE_MAX, NOTE_TOO_LONG } from '@crm/contracts/note-limits';
+export { TASK_COUNT_CAP, TASK_DESCRIPTION_MAX, TASK_RECORDS_MAX, TASK_TITLE_MAX } from '@crm/contracts/task-limits';
+export {
+  ACTIVITY_AHEAD_MS,
+  ACTIVITY_DURATION_MAX,
+  CALL_OUTCOMES,
+  MEETING_OUTCOMES,
+  NOTE_RECORDS_MAX,
+  NOTE_TITLE_MAX,
+  NOTE_TOO_LONG,
+  outcomesFor,
+  richTextToPlain,
+  type NoteKind,
+  type NoteOutcome,
+} from '@crm/contracts/note-limits';
+export {
+  AUTOMATION_ACTIONS_MAX,
+  AUTOMATION_DUE_DAYS_MAX,
+  AUTOMATION_FAILURES_MAX,
+  AUTOMATION_MESSAGE_MAX,
+  AUTOMATION_RUNS_SHOWN,
+  AUTOMATION_TITLE_MAX,
+  AUTOMATIONS_MAX,
+} from '@crm/contracts/automation-limits';
 export type {
+  Automation,
+  AutomationAction,
+  AutomationDefinition,
+  AutomationRun,
+  AutomationTrigger,
+  AutomationWho,
+} from '@crm/contracts';
+export type { AutomationsHeld, AutomationsState } from './automations/store.ts';
+export type {
+  ActivityDraft,
+  ActivityResult,
   NoteList,
   NoteListState,
   NoteNotice,
@@ -746,10 +837,12 @@ export type {
   CellChange,
   DeleteResult,
   EditOutcome,
+  FiledNotice,
   LinkCell,
   LinkChange,
   LinkOutcome,
   RecordsView,
+  UnfileOutcome,
   ViewQuery,
   ViewReader,
   ViewState,
@@ -840,7 +933,9 @@ export type UndoResult =
   | (Extract<UndoOutcome, { kind: 'restored' }> & { readonly singularName: string; readonly pluralName: string })
   | Extract<UndoOutcome, { kind: 'uncreated' }>
   /** A delete past 500 undone as a restore job (spec 0022): its end raises the finish toast. */
-  | (Extract<UndoOutcome, { kind: 'restoring' }> & { readonly singularName: string; readonly pluralName: string });
+  | (Extract<UndoOutcome, { kind: 'restoring' }> & { readonly singularName: string; readonly pluralName: string })
+  /** A list's entry action undone (spec 0048): the toast's own sentence. */
+  | Extract<UndoOutcome, { kind: 'external' }>;
 
 /** What each API call carries to the link: where to report the answer's `Retry-After`, and that an answer came. */
 interface CallContext {
@@ -1064,6 +1159,12 @@ export interface DataLayerOptions {
    */
   readonly onReplaced?: (replaced: ReplacedValue) => void;
   /**
+   * A write of this tab filed people under their companies by their emails
+   * (spec 0059, AC-5920): the app raises "Linked to Acme" or "Added Acme and
+   * linked it" in its own words, with an Undo that takes back just the filing.
+   */
+  readonly onFiled?: (filed: FiledNotice) => void;
+  /**
    * A background job this browser started has ended while the app is open
    * (spec 0008, AC-119): the app raises its toast ("Done", "Done, 6
    * refused", "Failed", "Cancelled") with a link to the job.
@@ -1120,6 +1221,7 @@ export function createDataLayer({
   realtimeUrl,
   onDefinitionsChange = () => undefined,
   onReplaced = () => undefined,
+  onFiled = () => undefined,
   onJobFinished = () => undefined,
   loadLive = () => import('./live/live.ts'),
   report = () => undefined,
@@ -1147,6 +1249,8 @@ export function createDataLayer({
   let objects = new Map<string, Promise<ObjectSummary[]>>();
   let usage = new Map<string, Promise<Usage>>();
   let members = new Map<string, Promise<MemberView[]>>();
+  // The workspace's teams (spec 0031, slice 8), for the app load; a live `members` event reads them again.
+  let teams = new Map<string, Promise<TeamView[]>>();
   let access = new Map<string, Promise<MyAccess>>();
   // The audit log a History screen holds, per workspace (spec 0046): opening it again while held answers this one.
   const auditLogs = new Map<string, AuditLog>();
@@ -1157,6 +1261,11 @@ export function createDataLayer({
   let allAttributes = new Map<string, Promise<AttributeDefinition[]>>();
   // The records layer, loaded with the first screen that shows records.
   let records: Promise<RecordsLayer> | undefined;
+  // Lists (spec 0048): each workspace's lists, each list's own fields, and the entries layer, loaded with the first
+  // list screen.
+  let lists = new Map<string, Promise<ListView[]>>();
+  let listFields = new Map<string, Promise<AttributeDefinition[]>>();
+  let entriesLoading: Promise<EntriesLayer> | undefined;
   /** The records layer once loaded, so a screen's calculations source comes back at once (and the same each time). */
   let recordsLoaded: RecordsLayer | undefined;
   // Options a cell made, shown by their label until the attribute's own list holds them (spec 0012, AC-238).
@@ -1241,11 +1350,17 @@ export function createDataLayer({
     objects = new Map();
     usage = new Map();
     members = new Map();
+    teams = new Map();
     access = new Map();
     auditLogs.clear();
     roles = new Map();
     attributes = new Map();
     allAttributes = new Map();
+    lists = new Map();
+    listFields = new Map();
+    void entriesLoading?.then((layer) => {
+      layer.clear();
+    });
     heads = new Map();
     firstTokens = new Map();
     uncovered = new Set();
@@ -1293,9 +1408,11 @@ export function createDataLayer({
     bookingPageLists.clear();
     pageRules.clear();
     formLists.clear();
+    reportLists.clear();
     schedules.clear();
     preferences.clear();
     accessLoaded?.clear();
+    automationsLoaded?.clear();
     pictureChoice.clear();
     void linkPage?.then((made) => {
       made.clear();
@@ -1702,6 +1819,10 @@ export function createDataLayer({
     return all;
   };
   const readMembers = (workspace: string) => cached(members, workspace, () => allMembers(workspace));
+  const readTeams = (workspace: string) =>
+    cached(teams, workspace, () =>
+      call((options) => api.teams.list({ workspace }, options)).then((read) => read.teams),
+    );
   const readAccess = (workspace: string) =>
     cached(access, workspace, () => call((options) => api.access.mine({ workspace }, options)));
   /** Whether `memberIds` names the person, by the access this tab holds (unknown counts as named). */
@@ -1776,8 +1897,20 @@ export function createDataLayer({
     else tell();
   });
   router.on('definitions', (workspace, event) => {
-    // A list's own definitions: no screen holds lists yet.
-    if (event.listId !== undefined) return;
+    // A list made, renamed or archived, or its fields changed (spec 0048): its fields and the workspace's lists are
+    // read again, its open views settle, and the pages reload.
+    if (event.listId !== undefined) {
+      lists.delete(workspace);
+      listFields.delete(objectKey(workspace, event.listId));
+      const listId = event.listId;
+      void entriesLoading?.then((layer) => {
+        layer.reload(workspace, listId);
+      });
+      onDefinitionsChange();
+      return;
+    }
+    // An object made, archived or restored takes its lists with it (AC-4832).
+    if (event.attributeIds === undefined) lists.delete(workspace);
     // A side archived, hidden or renamed: the object's open related sections read again (or go, when nobody shows
     // them), spread a random moment so a whole team doesn't read in step.
     if (sections !== undefined) {
@@ -1825,7 +1958,11 @@ export function createDataLayer({
     accessLoaded?.forgetReach(workspace);
     // Every member's tab hears a role change at once: spread, and one read for a burst.
     spread(`members ${workspace}`, () => {
-      reloadIfChanged([refreshHeld(members, workspace, () => readMembers(workspace))]);
+      reloadIfChanged([
+        refreshHeld(members, workspace, () => readMembers(workspace)),
+        // Teams share the event (spec 0031, slice 8): a team made, renamed, filled or deleted names its people.
+        refreshHeld(teams, workspace, () => readTeams(workspace)),
+      ]);
     });
     // A role changed may be the person's own: their access is read again (the server checks every call anyway).
     void namesMe(workspace, event.memberIds).then((named) => {
@@ -1836,11 +1973,14 @@ export function createDataLayer({
     });
   });
   router.on('access', (workspace, event) => {
-    // The person's access changed: everything held is read again under it (spec 0009, AC-146; milestone 4 adds
-    // the new channel and the 4500 disconnect).
+    // The person's access changed: everything held is read again under it (spec 0009, AC-146), and the live client
+    // asks for its channel again, moving when the person's audience did (spec 0007, milestone 4; the relay's 4500
+    // disconnect does the same, and whichever comes first asks once).
     void namesMe(workspace, event.memberIds).then((named) => {
       if (!named) return;
       spread(`resync ${workspace}`, () => {
+        // Spread as the reads are, so a rule change naming a whole team doesn't ask the door in step.
+        void live?.then((loaded) => loaded.rejoin(workspace)).catch(() => undefined);
         access.delete(workspace);
         router.resync(workspace);
         // Whose scheduling they reach may have changed too (spec 0037, AC-1274): Bookings' lists and weeks and Home's
@@ -1889,6 +2029,10 @@ export function createDataLayer({
       100 + Math.round(random() * 300),
     );
   });
+  // An automation, or a run's outcome, changed (parity #53): the held list and log read again, once for a burst.
+  router.on('automations', (workspace) => {
+    automationsLoaded?.changed(workspace);
+  });
   router.on('jobs', (workspace, event) => {
     jobs.changed(workspace, event);
   });
@@ -1911,6 +2055,10 @@ export function createDataLayer({
   router.on('comments', (workspace, event) => {
     void comments?.then((store) => {
       store.changed(workspace, event);
+    });
+    // The rows and cards that show these records read their open thread count again.
+    void records?.then((layer) => {
+      void layer.commentsChanged(workspace, event.objectId, event.recordIds, event.coarse === true);
     });
   });
   // A member's notifications or settings changed (spec 0038, AC-1172, AC-1174, AC-1180): only the person's own
@@ -1942,10 +2090,21 @@ export function createDataLayer({
       feeds.changed(workspace, { objectId: '', recordIds: event.recordIds });
     });
   });
+  // A list's entries changed (spec 0048, AC-4839): the named entries held are read again, and the list's views settle.
+  router.on('entries', (workspace, event) => {
+    void entriesLoading?.then((layer) => {
+      layer.changed(workspace, event);
+    });
+  });
   router.onResync((workspace) => {
+    lists.delete(workspace);
+    void entriesLoading?.then((layer) => {
+      layer.reload(workspace);
+    });
     schedules.changed(workspace);
     accessLoaded?.teamWeek.changed(workspace);
     accessLoaded?.timeOff.changed(workspace);
+    automationsLoaded?.changed(workspace);
     jobs.resync(workspace);
     views.resync(workspace);
     navStore?.resync(workspace);
@@ -1980,6 +2139,7 @@ export function createDataLayer({
     objects.delete(workspace);
     usage.delete(workspace);
     members.delete(workspace);
+    teams.delete(workspace);
     dropAllAttributes(workspace);
     onDefinitionsChange();
   });
@@ -2221,6 +2381,44 @@ export function createDataLayer({
       });
       return accessLoaded;
     }));
+  // Automations (parity #53): the workspace's automations and run log, one held copy per workspace, loaded with the
+  // first screen that asks (`import()`), never in the first load. Its writes keep a mutation id this tab knows, so
+  // each one's single `automations` echo is skipped; any other event reads the list and the log again.
+  let automationsLoading: Promise<AutomationsStore> | undefined;
+  let automationsLoaded: AutomationsStore | undefined;
+  const loadAutomations = (): Promise<AutomationsStore> =>
+    (automationsLoading ??= import('./automations/store.ts').then(({ createAutomationsStore }) => {
+      const echoed = async <T>(send: (mutationId: string) => Promise<T>): Promise<T> => {
+        const mutationId = mintId();
+        mutations.sent(mutationId);
+        try {
+          const answer = await send(mutationId);
+          mutations.answered(mutationId, 1);
+          return answer;
+        } catch (error) {
+          mutations.forget(mutationId);
+          throw error;
+        }
+      };
+      const { automations: calls } = api;
+      automationsLoaded = createAutomationsStore({
+        api: {
+          list: (workspace) => beforeRead(workspace).then(() => call((options) => calls.list({ workspace }, options))),
+          runs: (workspace) => call((options) => calls.runs({ workspace }, options)),
+          create: (input) => echoed((mutationId) => call((options) => calls.create({ ...input, mutationId }, options))),
+          update: (input) => echoed((mutationId) => call((options) => calls.update({ ...input, mutationId }, options))),
+          setEnabled: (input) =>
+            echoed((mutationId) => call((options) => calls.setEnabled({ ...input, mutationId }, options))),
+          remove: (input) => echoed((mutationId) => call((options) => calls.remove({ ...input, mutationId }, options))),
+          restore: (input) =>
+            echoed((mutationId) => call((options) => calls.restore({ ...input, mutationId }, options))),
+        },
+        mintId,
+        notify,
+        watch,
+      });
+      return automationsLoaded;
+    }));
   // Settings › Account › Preferences: the member's own, one copy per workspace.
   const preferences = createPreferencesStore({
     api: {
@@ -2354,6 +2552,15 @@ export function createDataLayer({
     read: (workspace) =>
       call((options) => api.forms.list({ workspace, archived: false }, options)).then((page) => page.items),
   });
+  // Saved reports (the reports lane): one held list per workspace, patched by every report write below. Reports
+  // are settings with no change events of their own, so the list is read again when a screen holds it after a while.
+  const reportLists = createCaptureList<ReportView>({
+    read: (workspace) => call((options) => api.reports.list({ workspace }, options)).then((answer) => answer.reports),
+  });
+  /** A question's calculations as the records layer holds them: a report's figures ask through it. */
+  const aggregatesOf = (workspace: string, question: AggregateQuestion): AggregateSource =>
+    recordsLoaded?.aggregates(workspace, question) ??
+    lazyAggregateSource(recordsLayer().then((layer) => layer.aggregates(workspace, question)));
   /** A form write's answer as the list's row: the active list drops an archived form. */
   /** The three form writes Email signup makes, bound to this layer's client (`link-page/signup-form.ts`). */
   const signupWrites = {
@@ -2561,7 +2768,12 @@ export function createDataLayer({
 
   const recordsApi: RecordsApi = {
     query: (input, signal) =>
-      call((options) => api.records.query({ ...input, attributeIds: [...input.attributeIds] }, options), signal),
+      // A window's rows carry their open comment count, for the row's and the card's comment mark.
+      call(
+        (options) =>
+          api.records.query({ ...input, attributeIds: [...input.attributeIds], threadCounts: true }, options),
+        signal,
+      ),
     count: (input, signal) => call((options) => api.records.count(input, options), signal),
     groups: (input, signal) =>
       call(
@@ -2571,6 +2783,7 @@ export function createDataLayer({
               ...input,
               groupIds: [...input.groupIds],
               attributeIds: [...input.attributeIds],
+              threadCounts: true,
               ...(input.sorts === undefined ? {} : { sorts: [...input.sorts] }),
             },
             options,
@@ -2592,6 +2805,7 @@ export function createDataLayer({
             workspace: input.workspace,
             ids: [...input.ids],
             ...(input.attributeIds === undefined ? {} : { attributeIds: [...input.attributeIds] }),
+            ...(input.threadCounts === true ? { threadCounts: true } : {}),
           },
           options,
         ),
@@ -2817,6 +3031,7 @@ export function createDataLayer({
       const touched = [...new Set(objectsOf(answer))];
       mutations.answered(mutationId, Math.max(1, touched.length));
       usage.delete(workspace);
+      listFields.clear();
       for (const objectId of touched) {
         attributes.delete(objectKey(workspace, objectId));
         dropAllAttributes(workspace, objectId);
@@ -3174,6 +3389,17 @@ export function createDataLayer({
             ),
           delete: (input) => call((options) => api.notes.delete({ ...input }, options)),
           restore: (input) => call((options) => api.notes.restore({ ...input }, options)),
+          link: ({ addRecordIds, removeRecordIds, ...input }) =>
+            call((options) =>
+              api.notes.link(
+                {
+                  ...input,
+                  ...(addRecordIds === undefined ? {} : { addRecordIds: [...addRecordIds] }),
+                  ...(removeRecordIds === undefined ? {} : { removeRecordIds: [...removeRecordIds] }),
+                },
+                options,
+              ),
+            ),
         },
         mintId,
         mutations,
@@ -3198,6 +3424,11 @@ export function createDataLayer({
   const commentsStore = (): Promise<CommentsStore> => {
     comments ??= import('./comments/store.ts').then(({ createCommentsStore }) =>
       createCommentsStore({
+        onOpenCount: (_workspace, recordId, openCount) => {
+          void records?.then((layer) => {
+            layer.setOpenThreads(recordId, openCount);
+          });
+        },
         api: {
           list: (input) =>
             beforeRead(input.workspace).then(() => call((options) => api.comments.list({ ...input }, options))),
@@ -3239,6 +3470,126 @@ export function createDataLayer({
     return inbox;
   };
 
+  /** The lists layer (spec 0048), loaded with the first list screen, over the records layer's one store. */
+  const entriesLayer = (): Promise<EntriesLayer> => {
+    entriesLoading ??= Promise.all([import('./lists/entries.ts'), recordsLayer()]).then(
+      ([{ createEntriesLayer }, layer]) =>
+        createEntriesLayer({
+          api: {
+            query: (input, signal) =>
+              call(
+                (options) =>
+                  api.entries.query(
+                    {
+                      workspace: input.workspace,
+                      listId: input.listId,
+                      limit: input.limit,
+                      ...(input.cursor === undefined ? {} : { cursor: input.cursor }),
+                      ...(input.filter === undefined ? {} : { filter: input.filter }),
+                      ...(input.sorts === undefined ? {} : { sorts: [...input.sorts] }),
+                      attributeIds: [...input.attributeIds],
+                    },
+                    options,
+                  ),
+                signal,
+              ),
+            count: (input, signal) => call((options) => api.entries.count(input, options), signal),
+            groups: (input, signal) =>
+              call(
+                (options) =>
+                  api.entries.groups(
+                    {
+                      workspace: input.workspace,
+                      listId: input.listId,
+                      groupBy: input.groupBy,
+                      groupIds: [...input.groupIds],
+                      ...(input.filter === undefined ? {} : { filter: input.filter }),
+                      ...(input.sorts === undefined ? {} : { sorts: [...input.sorts] }),
+                      attributeIds: [...input.attributeIds],
+                    },
+                    options,
+                  ),
+                signal,
+              ),
+            get: (input) =>
+              call((options) => api.entries.get({ workspace: input.workspace, ids: [...input.ids] }, options)),
+            membership: (input) =>
+              call((options) => api.entries.membership({ ...input, recordIds: [...input.recordIds] }, options)),
+            add: (input) =>
+              landed(
+                input.workspace,
+                call((options) => api.entries.add(input, options)),
+              ),
+            addMany: (input) =>
+              landed(
+                input.workspace,
+                call((options) =>
+                  api.entries.addMany({ ...input, recordIds: [...input.recordIds], ids: [...input.ids] }, options),
+                ),
+              ),
+            forRecord: (input) => call((options) => api.entries.forRecord(input, options)),
+            setValues: (input) =>
+              landed(
+                input.workspace,
+                call((options) => api.entries.setValues(input, options)),
+              ),
+            remove: (input) =>
+              call((options) => api.entries.remove({ ...input, entryIds: [...input.entryIds] }, options)),
+            restore: (input) =>
+              call((options) => api.entries.restore({ ...input, entryIds: [...input.entryIds] }, options)),
+          },
+          records: {
+            receive: layer.shared.receive,
+            hold: layer.shared.hold,
+            release: layer.shared.release,
+            get: layer.shared.get,
+            subscribe: layer.shared.subscribe,
+            displaysOf: layer.shared.displaysOf,
+            onNames: layer.shared.onNames,
+            pushUndo: (workspace, entry) => {
+              layer.undo.push(workspace, entry);
+            },
+          },
+          notify,
+          mintId,
+          mutations,
+          watch,
+          refusalSummary,
+          timeZone: zoneOf,
+        }),
+    );
+    return entriesLoading;
+  };
+
+  /** A list write that waits for the server (spec 0048): its echo is skipped, so the lists are read again here. */
+  async function listWrite(
+    workspace: string,
+    send: (mutationId: string, options: CallOptions) => Promise<ListView>,
+  ): Promise<ListView> {
+    const mutationId = mintId();
+    mutations.sent(mutationId);
+    try {
+      const made = await call((options) => send(mutationId, options));
+      mutations.answered(mutationId, 1);
+      lists.delete(workspace);
+      listFields.clear();
+      onDefinitionsChange();
+      return made;
+    } catch (error) {
+      mutations.forget(mutationId);
+      throw toDataError(error);
+    }
+  }
+
+  /** The workspace's lists the member may read (spec 0048), archived ones too, cached until a list changes. */
+  function allLists(workspace: string): Promise<ListView[]> {
+    return cached(lists, workspace, () =>
+      beforeRead(workspace).then(() =>
+        call((options) => api.lists.list({ workspace, includeArchived: true }, options)),
+      ),
+    );
+  }
+
   const recordsLayer = (): Promise<RecordsLayer> => {
     records ??= import('./records/layer.ts')
       .then(({ createRecordsLayer }) =>
@@ -3259,6 +3610,7 @@ export function createDataLayer({
           onReplaced: (notice) => {
             void tellReplaced(notice);
           },
+          onFiled,
           describe: describeObject,
           definitionsOf,
           // Relative dates ("today", "this week") and rules resolve in the member's Preferences time zone.
@@ -3401,6 +3753,15 @@ export function createDataLayer({
      * put back with a toast if refused; `visible` answers the members in the caller's See reach. An `access` change
      * naming the member reads them all again.
      */
+    /**
+     * Settings › Automations (parity #53): the workspace's automations and newest runs, a held copy per workspace
+     * (`automations/store.ts`). `open` loads the store (its own chunk, never the first load) and hands the held copy;
+     * a route's loader awaits its `ready()`. Changes show at once and are put back with a toast if refused; a delete
+     * says Undo. A live `automations` event (a run finished, a switch off, another tab) reads it again.
+     */
+    automations: {
+      open: async (workspace: string): Promise<AutomationsHeld> => (await loadAutomations()).held(workspace),
+    },
     scheduling: {
       /** Loads the store (its own chunk, never the first load): a route's loader awaits it before its screen draws. */
       open: (): Promise<SchedulingAccessStore> => schedulingAccess(),
@@ -4107,6 +4468,170 @@ export function createDataLayer({
           { archives: true },
         ),
     },
+    lists: {
+      /** The workspace's live lists the member may read (spec 0048, AC-4804), oldest first, cached until one changes. */
+      list: (workspace: string): Promise<ListView[]> =>
+        allLists(workspace).then((all) => all.filter((each) => !each.isArchived)),
+      /** Every list the member may read, archived ones too (settings). */
+      all: allLists,
+      /** A new list's id: mint it once per dialog, and send the same one again on a retry. */
+      newId: () => mintId(),
+      /**
+       * Makes a list (AC-4801), waiting for the server: its echo is skipped, so the workspace's lists are read again
+       * here and the pages reload. Refusals: `CONFIG_INVALID` (a name another list holds, on `name`),
+       * `LIMIT_REACHED`, `FORBIDDEN`, `NOT_FOUND`.
+       */
+      create: async (
+        workspace: string,
+        input: {
+          readonly id: string;
+          readonly objectId: string;
+          readonly name: string;
+          readonly template: ListTemplate;
+        },
+      ): Promise<ListView> => {
+        const mutationId = mintId();
+        mutations.sent(mutationId);
+        try {
+          const made = await call((options) => api.lists.create({ workspace, ...input, mutationId }, options));
+          mutations.answered(mutationId, 1);
+          lists.delete(workspace);
+          onDefinitionsChange();
+          return made;
+        } catch (error) {
+          mutations.forget(mutationId);
+          throw toDataError(error);
+        }
+      },
+      /**
+       * Changes a list's name, tile or "Each record once" rule (AC-4829), waiting for the server: its managers only.
+       * Refusals: `FORBIDDEN` (naming who may), `CONFIG_INVALID` (a name another list holds, on `name`; a record in
+       * the list twice, on `allowsDuplicates`), `NOT_FOUND`.
+       */
+      update: (
+        workspace: string,
+        listId: string,
+        changes: {
+          readonly name?: string;
+          readonly icon?: ListView['icon'];
+          readonly hue?: ListView['hue'];
+          readonly allowsDuplicates?: boolean;
+        },
+      ): Promise<ListView> =>
+        listWrite(workspace, (mutationId, options) =>
+          api.lists.update({ workspace, listId, ...changes, mutationId }, options),
+        ),
+      /** Archives a list (AC-4831): it leaves the sidebar, pickers and record pages. */
+      archive: (workspace: string, listId: string): Promise<ListView> =>
+        listWrite(workspace, (mutationId, options) => api.lists.archive({ workspace, listId, mutationId }, options)),
+      /** Restores an archived list with its entries (AC-4831). */
+      restore: (workspace: string, listId: string): Promise<ListView> =>
+        listWrite(workspace, (mutationId, options) => api.lists.restore({ workspace, listId, mutationId }, options)),
+      /** A list's own fields (AC-4807): Added and Added by first, then those its managers made; cached until they change. */
+      fields: (workspace: string, list: { readonly id: string; readonly objectId: string }) =>
+        cached(listFields, objectKey(workspace, list.id), () =>
+          beforeRead(workspace).then(() =>
+            call((options) => api.attributes.list({ workspace, objectId: list.objectId, listId: list.id }, options)),
+          ),
+        ),
+      /** A list's fields with the archived ones too (Settings › Lists › Fields), read fresh each time. */
+      allFields: (workspace: string, list: { readonly id: string; readonly objectId: string }) =>
+        beforeRead(workspace).then(() =>
+          call((options) =>
+            api.attributes.list(
+              { workspace, objectId: list.objectId, listId: list.id, includeArchived: true },
+              options,
+            ),
+          ),
+        ),
+      /** A new list field (AC-4811), for the list's managers; waits for the server, then the fields are read again. */
+      createField: async (
+        workspace: string,
+        list: { readonly id: string; readonly objectId: string },
+        input: Omit<NewAttribute, 'objectId'>,
+      ): Promise<AttributeDefinition> => {
+        const mutationId = mintId();
+        mutations.sent(mutationId);
+        try {
+          const made = await call((options) =>
+            api.attributes.create(
+              {
+                workspace,
+                objectId: list.objectId,
+                listId: list.id,
+                id: input.id,
+                title: input.title,
+                type: input.type,
+                ...(input.isMulti === undefined ? {} : { isMulti: input.isMulti }),
+                ...(input.options === undefined ? {} : { options: input.options.map(optionInput) }),
+                mutationId,
+              },
+              options,
+            ),
+          );
+          mutations.answered(mutationId, 1);
+          listFields.delete(objectKey(workspace, list.id));
+          onDefinitionsChange();
+          return made;
+        } catch (error) {
+          mutations.forget(mutationId);
+          throw toDataError(error);
+        }
+      },
+      /** A list's entries and boards, and their writes (`src/lists/entries.ts`), loaded with the first list screen. */
+      entries: entriesLayer,
+      /**
+       * Starts a list's bulk change as a background job (spec 0048, AC-4817,
+       * AC-4825), as `records.startBulk` does: `add` takes records (more than
+       * 500 ticked, or every record an object view matches), `remove` entries
+       * (more than 500, or every entry a list view matches), and `undo` takes
+       * back a finished add or removal of this member's, with no confirm. Mint
+       * `id` once (`jobs.newId`). This browser follows the job and hears its
+       * end (`onJobFinished`). Rejects with a `DataError`, raising no toast.
+       */
+      startJob: async (
+        workspace: string,
+        input:
+          | { readonly kind: 'add'; readonly id: string; readonly listId: string; readonly target: BulkTarget }
+          | { readonly kind: 'remove'; readonly id: string; readonly listId: string; readonly target: EntryTarget }
+          | { readonly kind: 'undo'; readonly id: string; readonly jobId: string },
+      ): Promise<JobView> => {
+        const mutationId = mintId();
+        mutations.sent(mutationId);
+        try {
+          const job = await delivered(
+            () =>
+              call((options) =>
+                input.kind === 'add'
+                  ? api.entries.addMatching(
+                      {
+                        workspace,
+                        mutationId,
+                        id: input.id,
+                        listId: input.listId,
+                        target: input.target,
+                        timeZone: zoneOf(workspace),
+                      },
+                      options,
+                    )
+                  : input.kind === 'remove'
+                    ? api.entries.removeMatching(
+                        { workspace, mutationId, id: input.id, listId: input.listId, target: input.target },
+                        options,
+                      )
+                    : api.entries.undoJob({ workspace, mutationId, id: input.id, jobId: input.jobId }, options),
+              ),
+            resendAfter,
+          );
+          mutations.answered(mutationId, 1);
+          jobs.track(workspace, job);
+          return job;
+        } catch (error) {
+          mutations.forget(mutationId);
+          throw toDataError(error);
+        }
+      },
+    },
     usage: {
       /**
        * The workspace's usage of its limits (spec 0012, AC-243): the custom
@@ -4206,6 +4731,103 @@ export function createDataLayer({
         members.delete(workspace);
         access.delete(workspace);
       },
+    },
+    /**
+     * The workspace's teams (spec 0031, slice 8): flat groups of members that access rules name, by name, each with its
+     * people. Any member reads them. Cached for the app load; a live `members` event reads them again, so another
+     * admin's change shows here. Changes wait for the server (`teams.manage` and the name rules live there) and
+     * answer the team as it stands. Refusals: `FORBIDDEN`, `NAME_TAKEN` (on `name`), `NOT_FOUND`, `IN_USE` (a
+     * delete while a rule names the team), `LIMIT_REACHED`.
+     */
+    teams: {
+      list: (workspace: string): Promise<TeamView[]> => beforeRead(workspace).then(() => readTeams(workspace)),
+      /** Hears the workspace's changes while a teams screen is open, so another admin's change reads the list again. */
+      watch: (workspace: string): (() => void) => watch(workspace),
+      /** Makes a team, starting with `memberIds`. `id` is the caller's own, so an Undo of a delete brings the same team back. */
+      async create(
+        workspace: string,
+        team: { readonly id?: string; readonly name: string; readonly memberIds?: readonly string[] },
+      ): Promise<TeamView> {
+        const made = await call((options) =>
+          api.teams.create(
+            {
+              workspace,
+              id: team.id ?? mintId(),
+              name: team.name,
+              memberIds: [...(team.memberIds ?? [])],
+              mutationId: mintId(),
+            },
+            options,
+          ),
+        );
+        teams.delete(workspace);
+        return made;
+      },
+      async rename(workspace: string, teamId: string, name: string): Promise<TeamView> {
+        const renamed = await call((options) =>
+          api.teams.rename({ workspace, teamId, name, mutationId: mintId() }, options),
+        );
+        teams.delete(workspace);
+        return renamed;
+      },
+      /** Deletes a team and its memberships; refused `IN_USE` while an access rule names it. */
+      async delete(workspace: string, teamId: string): Promise<void> {
+        await call((options) => api.teams.delete({ workspace, teamId, mutationId: mintId() }, options));
+        teams.delete(workspace);
+      },
+      /** Adds people to a team and takes others out, in one change. The person's own access is read again after. */
+      async changeMembers(
+        workspace: string,
+        teamId: string,
+        change: { readonly add?: readonly string[]; readonly remove?: readonly string[] },
+      ): Promise<TeamView> {
+        const changed = await call((options) =>
+          api.teams.changeMembers(
+            {
+              workspace,
+              teamId,
+              add: [...(change.add ?? [])],
+              remove: [...(change.remove ?? [])],
+              mutationId: mintId(),
+            },
+            options,
+          ),
+        );
+        teams.delete(workspace);
+        access.delete(workspace);
+        return changed;
+      },
+    },
+    /**
+     * An object's access rules (spec 0032): what the Member role and each team may do with its records, for the
+     * object's Access tab. Settings, not CRM data: read fresh each time, no cache. `access.manage` (owners and
+     * admins) only; refusals `FORBIDDEN`, `NOT_FOUND`, `CONFIG_INVALID` (a record scope with no Member field to read).
+     */
+    accessRules: {
+      get: (workspace: string, objectId: string): Promise<ObjectAccess> =>
+        beforeRead(workspace).then(() => call((options) => api.accessRules.get({ workspace, objectId }, options))),
+      /**
+       * Sets one subject's access to the object; `null` clears it. `fields` replaces the subject's field rules; left
+       * out they stay. Answers the object's access as it stands and what the change took away from people who had it
+       * (how many, and the shared views and live forms naming a field they lost).
+       */
+      set: (
+        workspace: string,
+        objectId: string,
+        subject: RuleSubject,
+        rule: {
+          readonly level: ObjectAccessLevel;
+          readonly records: RecordScope;
+          readonly fields?: FieldRules;
+        } | null,
+      ): Promise<SetObjectAccessResult> =>
+        call((options) => api.accessRules.set({ workspace, objectId, subject, rule, mutationId: mintId() }, options)),
+      /**
+       * The object as a member, or someone in a team, would see it: read through the access door as them, never a
+       * write. For `access.manage`; read fresh each time.
+       */
+      preview: (workspace: string, objectId: string, as: PreviewAs): Promise<AccessPreview> =>
+        call((options) => api.accessRules.preview({ workspace, objectId, as }, options)),
     },
     /**
      * A workspace's sign in rules (spec 0033, milestone 4): settings, not CRM
@@ -4592,6 +5214,57 @@ export function createDataLayer({
        */
       impact: (workspace: string, attributeId: string): Promise<AttributeImpact> =>
         beforeRead(workspace).then(() => call((options) => api.attributes.impact({ workspace, attributeId }, options))),
+      /**
+       * What changing an attribute's type to `to` (a picker key) would do (the field types pass): how many values
+       * convert and how many can't, with records to show, what else changes and what stops it. Read each time a
+       * target is picked, never cached: the values move with every edit.
+       */
+      checkTypeChange: (
+        workspace: string,
+        attributeId: string,
+        to: TypeChangeTarget,
+        config?: Readonly<Record<string, unknown>>,
+      ): Promise<TypeChangeCheck> =>
+        beforeRead(workspace).then(() =>
+          call((options) =>
+            api.attributes.checkTypeChange(
+              { workspace, attributeId, to, ...(config === undefined ? {} : { config: { ...config } }) },
+              options,
+            ),
+          ),
+        ),
+      /**
+       * Changes an attribute's type in place and waits for the server, as every attribute write does: its values
+       * change shape with it, so the object's held records are read again once it lands (this tab's own coarse
+       * change never comes back to it). Refusals: `TYPE_CHANGE_REFUSED`, `CONFIG_INVALID` (on `config`),
+       * `FORBIDDEN`, `NOT_FOUND`.
+       */
+      changeType: (
+        workspace: string,
+        attributeId: string,
+        to: TypeChangeTarget,
+        config?: Readonly<Record<string, unknown>>,
+      ): Promise<AttributeDefinition> =>
+        writeAttribute(
+          workspace,
+          (mutationId, options) =>
+            api.attributes.changeType(
+              {
+                workspace,
+                attributeId,
+                to,
+                ...(config === undefined ? {} : { config: { ...config } }),
+                mutationId,
+              },
+              options,
+            ),
+          (changed) => [changed.objectId],
+          (changed) => {
+            void records?.then((layer) => {
+              layer.reload(workspace, changed.objectId);
+            });
+          },
+        ),
       /** A new attribute's id: mint it once per dialog, and send the same one again on a retry. */
       newId: () => mintId(),
       /**
@@ -5263,6 +5936,34 @@ export function createDataLayer({
       ): Promise<NoteSession> => (await notesStore()).open(workspace, input),
       /** A new note's id: mint it once when the window opens on a new note. */
       newId: (): string => mintId(),
+      /**
+       * Logs a call or meeting on a record (migration 0137): saved whole, waiting for the server; a refusal comes
+       * back as `failure` with nothing stored, for the dialog to say. Its lists and timelines take it once it lands.
+       */
+      logActivity: async (
+        workspace: string,
+        input: {
+          readonly noteId: string;
+          readonly recordId: string;
+          readonly draft: ActivityDraft;
+          readonly links: readonly LinkedRecordDisplay[];
+        },
+      ): Promise<ActivityResult> => (await notesStore()).logActivity(workspace, input),
+      /** Saves an edit of a logged call or meeting, from the version the dialog read. */
+      updateActivity: async (
+        workspace: string,
+        input: {
+          readonly noteId: string;
+          readonly recordId: string;
+          readonly baseVersion: number;
+          readonly draft: ActivityDraft;
+          readonly add: readonly LinkedRecordDisplay[];
+          readonly remove: readonly string[];
+        },
+      ): Promise<ActivityResult> => (await notesStore()).updateActivity(workspace, input),
+      /** One note with its body (a logged call's dialog opened to edit). Rejects with a DataError. */
+      read: async (workspace: string, noteId: string): Promise<NoteWithBody> =>
+        (await notesStore()).read(workspace, noteId),
       /** The app's way to open a note window again, for a failed save's toast ("Open note"). */
       setOpener: async (
         open: (workspace: string, objectId: string, recordId: string, noteId: string) => void,
@@ -5590,6 +6291,82 @@ export function createDataLayer({
       setPageDestination: (workspace: string, pageId: string, calendarId: string | null): Promise<boolean> =>
         calendars.setPageDestination(workspace, pageId, calendarId),
     },
+    reports: {
+      /**
+       * The workspace's saved reports (the reports lane) as the held list the Reports page shows
+       * (`useCaptureList`), oldest first: every write here patches it, so a save, a rename or a delete shows at once.
+       * The list is read again when a screen holds it after a while away; another tab's change shows then.
+       */
+      view: (workspace: string): CaptureListView<ReportView> => reportLists.view(workspace),
+      /** A new report id: mint it once, and send the same one on a retry (and for Undo after a delete). */
+      newId: (): string => mintId(),
+      /** Saves a report, shown in the list at once and gone again if the server says no (rejects with the refusal). */
+      create: (
+        workspace: string,
+        report: {
+          readonly id: string;
+          readonly objectId: string;
+          readonly name: string;
+          readonly config: ReportConfig;
+        },
+      ): Promise<ReportView> => {
+        const stamp = new Date(Date.now()).toISOString();
+        const shown: ReportView = { ...report, createdAt: stamp, updatedAt: stamp };
+        return reportLists.write(workspace, {
+          send: () => call((options) => api.reports.create({ workspace, ...report }, options)),
+          show: (items) => (items.some((each) => each.id === report.id) ? items : [...items, shown]),
+          undo: dropItem<ReportView>(report.id),
+          land: (items, made) =>
+            items.some((each) => each.id === made.id)
+              ? items.map((each) => (each.id === made.id ? made : each))
+              : [...items, made],
+        });
+      },
+      /** Renames a report or replaces its settings, shown at once and put back if the server says no. */
+      update: (
+        workspace: string,
+        reportId: string,
+        change: { readonly name?: string; readonly config?: ReportConfig },
+      ): Promise<ReportView> =>
+        reportLists.write(workspace, {
+          send: () =>
+            call((options) =>
+              api.reports.update(
+                {
+                  workspace,
+                  reportId,
+                  ...(change.name === undefined ? {} : { name: change.name }),
+                  ...(change.config === undefined ? {} : { config: change.config }),
+                },
+                options,
+              ),
+            ),
+          ...shownPatch(reportLists.items(workspace), reportId, (each) => ({
+            ...each,
+            ...(change.name === undefined ? {} : { name: change.name }),
+            ...(change.config === undefined ? {} : { config: change.config }),
+          })),
+          land: (items, made) => items.map((each) => (each.id === made.id ? made : each)),
+        }),
+      /** Deletes a report, gone from the list at once and back on a refusal (Undo makes it again under its id). */
+      remove: (workspace: string, reportId: string): Promise<{ readonly deleted: true }> =>
+        reportLists.write(workspace, {
+          send: () => call((options) => api.reports.delete({ workspace, reportId }, options)),
+          ...shownDrop(reportLists.items(workspace), reportId),
+        }),
+      /**
+       * A plan's figures (`planReport` in `@crm/contracts/reports`) as a source (`useReportFigures`): each question
+       * goes through the records layer's calculations (`records.aggregates`), so it is read through the access
+       * door and the read gate, shared with any screen asking the same, and read again 1.5 seconds after a change
+       * that may move it. The module that works the figures out loads with the first report.
+       */
+      figures: (workspace: string, plan: ReportPlan): ReportFiguresSource =>
+        lazyFiguresSource(
+          import('./reports/figures.ts').then((module) =>
+            module.createFiguresSource(plan, (question) => aggregatesOf(workspace, question)),
+          ),
+        ),
+    },
     forms: {
       /**
        * The workspace's forms on objects the member can see (spec 0023), newest
@@ -5835,6 +6612,8 @@ export function createDataLayer({
         input: {
           readonly id: string;
           readonly objectId: string;
+          /** Into one of the object's lists (spec 0048, AC-4833): each row adds or updates an entry there. */
+          readonly listId?: string;
           readonly fileName: string;
           readonly rowCount: number;
           readonly errorRows: number;
@@ -6128,7 +6907,9 @@ export function createDataLayer({
        * source for every screen, live while a screen retains it
        * (`useViewsList`).
        */
-      list: (workspace: string, objectId: string): ViewsListSource => views.list(workspace, objectId),
+      // With `listId`, one of the object's lists' views (spec 0048).
+      list: (workspace: string, objectId: string, listId?: string): ViewsListSource =>
+        views.list(workspace, objectId, listId),
       /** One view whole, the same source for every screen, live while retained (`useSavedView`). */
       get: (workspace: string, viewId: string): SavedViewSource => views.get(workspace, viewId),
       /**

@@ -105,7 +105,7 @@ describe('a deleted workspace’s page', () => {
     // workspace can't be restored by them afterwards.
     await expect.element(dialog.getByRole('textbox', { name: 'Type gone@acme.com to confirm' })).toBeVisible();
     await expect
-      .element(dialog.getByText('You won’t be able to restore Gone’s workspace after this.', { exact: false }))
+      .element(dialog.getByText('Gone’s workspace can’t be restored after this.', { exact: false }))
       .toBeVisible();
   });
 });

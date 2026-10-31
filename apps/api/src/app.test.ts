@@ -325,4 +325,9 @@ describe('redactedPath', () => {
     );
     expect(redactedPath('/api/rpc/records/list')).toBe('/api/rpc/records/list');
   });
+
+  it('keeps a company’s domain out of them, from its logo’s path (spec 0059)', () => {
+    expect(redactedPath('/api/logos/acme.com')).toBe('/api/logos/:domain');
+    expect(routeOf('/api/logos/stealth-co.io')).toBe('/api/logos/:domain');
+  });
 });

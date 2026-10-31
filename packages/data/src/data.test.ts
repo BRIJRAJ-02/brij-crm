@@ -328,6 +328,12 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
         sent.push(input);
       }),
     },
+    reports: {
+      list: os.reports.list.handler(() => notServed()),
+      create: os.reports.create.handler(() => notServed()),
+      update: os.reports.update.handler(() => notServed()),
+      delete: os.reports.delete.handler(() => notServed()),
+    },
     attributes: {
       list: os.attributes.list.handler(() => behaviour.attributes()),
       create: os.attributes.create.handler(({ input }) => {
@@ -349,6 +355,8 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
         return behaviour.attributeWrite();
       }),
       impact: os.attributes.impact.handler(() => notServed()),
+      checkTypeChange: os.attributes.checkTypeChange.handler(() => notServed()),
+      changeType: os.attributes.changeType.handler(() => notServed()),
       restore: os.attributes.restore.handler(({ input }) => {
         mutationIds.push(input.mutationId);
         return behaviour.attributeWrite();
@@ -397,6 +405,30 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
         sent.push(input);
         return behaviour.optionWrite();
       }),
+    },
+    // Lists (spec 0048): the lists layer has its own tests; these never call it.
+    lists: {
+      list: os.lists.list.handler(() => []),
+      create: os.lists.create.handler(notServed),
+      update: os.lists.update.handler(notServed),
+      archive: os.lists.archive.handler(notServed),
+      restore: os.lists.restore.handler(notServed),
+    },
+    entries: {
+      query: os.entries.query.handler(notServed),
+      count: os.entries.count.handler(notServed),
+      groups: os.entries.groups.handler(notServed),
+      get: os.entries.get.handler(notServed),
+      membership: os.entries.membership.handler(notServed),
+      add: os.entries.add.handler(notServed),
+      addMany: os.entries.addMany.handler(notServed),
+      forRecord: os.entries.forRecord.handler(notServed),
+      setValues: os.entries.setValues.handler(notServed),
+      remove: os.entries.remove.handler(notServed),
+      restore: os.entries.restore.handler(notServed),
+      addMatching: os.entries.addMatching.handler(notServed),
+      removeMatching: os.entries.removeMatching.handler(notServed),
+      undoJob: os.entries.undoJob.handler(notServed),
     },
     records: {
       query: os.records.query.handler(({ input }) => ({
@@ -464,6 +496,18 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       transferOwnership: os.members.transferOwnership.handler(notServed),
       visible: os.members.visible.handler(notServed),
     },
+    teams: {
+      list: os.teams.list.handler(notServed),
+      create: os.teams.create.handler(notServed),
+      rename: os.teams.rename.handler(notServed),
+      delete: os.teams.delete.handler(notServed),
+      changeMembers: os.teams.changeMembers.handler(notServed),
+    },
+    accessRules: {
+      get: os.accessRules.get.handler(notServed),
+      set: os.accessRules.set.handler(notServed),
+      preview: os.accessRules.preview.handler(notServed),
+    },
     workspaceSecurity: {
       get: os.workspaceSecurity.get.handler(() => behaviour.workspaceSecurityGet()),
       set: os.workspaceSecurity.set.handler(notServed),
@@ -522,6 +566,15 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       visit: os.recents.visit.handler(({ input }) => {
         sent.push(input);
       }),
+    },
+    automations: {
+      list: os.automations.list.handler(notServed),
+      create: os.automations.create.handler(notServed),
+      update: os.automations.update.handler(notServed),
+      setEnabled: os.automations.setEnabled.handler(notServed),
+      remove: os.automations.remove.handler(notServed),
+      restore: os.automations.restore.handler(notServed),
+      runs: os.automations.runs.handler(notServed),
     },
     preferences: {
       get: os.preferences.get.handler(notServed),
@@ -592,6 +645,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       list: os.notes.list.handler(notServed),
       delete: os.notes.delete.handler(notServed),
       restore: os.notes.restore.handler(notServed),
+      link: os.notes.link.handler(notServed),
     },
     comments: {
       list: os.comments.list.handler(notServed),
@@ -1819,7 +1873,7 @@ describe('live updates', () => {
     expect(lists()).toBe(before + 1);
   });
 
-  it('reads the objects again when an object itself changed, and nothing for a list (spec 0007, AC-81)', async () => {
+  it('reads the objects again when an object itself changed, and only the list itself for a list (spec 0007, AC-81)', async () => {
     let reads = 0;
     const { api, client, data, definitionChanges } = await liveLayer({
       objects: () => {
@@ -1829,15 +1883,16 @@ describe('live updates', () => {
     });
     await data.objects.list('acme');
     const before = count(api.calls, '/api/rpc/objects/list');
-    // A list's own definitions: no screen holds lists, nothing is read.
+    // A list's own definitions (spec 0048): its fields and the lists go and the pages reload, the objects are not read.
     client.channel().onPublication({ seq: 1, at: AT, kind: 'definitions', listId: TITLE.id, objectId: PEOPLE.id });
     await settled();
     expect(count(api.calls, '/api/rpc/objects/list')).toBe(before);
+    expect(definitionChanges()).toBe(1);
     // People renamed: an event naming the object and no attributes reads the objects again, and they differ.
     client.channel().onPublication({ seq: 2, at: AT, kind: 'definitions', objectId: PEOPLE.id });
     await settled();
     expect(count(api.calls, '/api/rpc/objects/list')).toBe(before + 1);
-    expect(definitionChanges()).toBe(1);
+    expect(definitionChanges()).toBe(2);
     expect((await data.objects.list('acme'))[0]?.pluralName).toBe('Contacts');
   });
 

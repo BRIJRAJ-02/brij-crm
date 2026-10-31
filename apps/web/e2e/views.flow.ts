@@ -115,7 +115,7 @@ test.describe('saved views', () => {
     await expect(dialog).toBeVisible();
     await expect(dialog).toContainText('changed this view’s filters since you started.');
     await checkScreen(reader, 'views-changed');
-    await dialog.getByRole('button', { name: 'Replace' }).click();
+    await dialog.getByRole('button', { name: 'Replace theirs' }).click();
     await expect(dialog).toBeHidden();
     await expect(reader).not.toHaveURL(/draft=/);
 

@@ -49,6 +49,24 @@
     white-space: nowrap;
   }
 
+  /* The collapse button: always there for touch and keyboard, quiet for a pointer until the head is hovered. */
+  .collapse {
+    display: flex;
+    flex: none;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .collapse {
+      opacity: 0;
+      transition: opacity var(--duration-hover) var(--ease-hover);
+    }
+
+    .collapse:focus-within,
+    .head:hover .collapse {
+      opacity: 1;
+    }
+  }
+
   .count {
     color: var(--text-tertiary);
     font: var(--text-label);
@@ -128,6 +146,11 @@
     box-shadow: var(--shadow-focus-inset);
   }
 
+  /* The card whose record is open in the panel beside the board. */
+  .card[data-open] {
+    background: var(--surface-selected);
+  }
+
   .card[data-dragging] {
     opacity: var(--opacity-busy);
   }
@@ -161,6 +184,7 @@
 
   @media (forced-colors: active) {
     .card[data-focus-visible],
+    .card[data-open],
     .cards[data-focus-visible],
     .root[data-over] {
       outline: var(--border-width-thick) solid Highlight;

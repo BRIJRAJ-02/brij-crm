@@ -190,6 +190,7 @@ export function createJobDrain(options: JobDrainOptions): JobDrain {
         schedulingNotice: tasks.schedulingNotice,
         // One webhook try at a time, on its own runner, so it never takes the turn's one light slot (spec 0064).
         ...(tasks.webhookDeliver === undefined ? {} : { webhookDeliver: tasks.webhookDeliver, webhookConcurrency: 1 }),
+        automation: tasks.automation,
         calendarHealth: tasks.calendarHealth,
         daily: tasks.daily(unrelayedSweep(queue)),
         ...(tasks.calendar === undefined ? {} : { calendar: tasks.calendar }),

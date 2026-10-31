@@ -95,6 +95,8 @@ export interface GridCellProps {
   readonly onToggle?: () => void;
   /** On the row header: the row's note (spec 0006, AC-56), drawn after the value and read with it. */
   readonly note?: 'new' | 'no-longer-matches';
+  /** On the row header: the record's open comment threads, a comment mark and count after the name. */
+  readonly comments?: number;
   /** On a row header with no name: what to call it ("Unnamed person"), drawn muted in place of the empty value. */
   readonly placeholder?: string;
   /** On the row header: the row's picture, before its name (initials from `name` while `src` is absent). */
@@ -132,6 +134,7 @@ export function GridCell({
   onOpen,
   onToggle,
   note,
+  comments,
   placeholder,
   avatar,
 }: GridCellProps) {
@@ -230,6 +233,13 @@ export function GridCell({
         </span>
       )}
       {content}
+      {comments !== undefined && isLoaded && mode === undefined && (
+        <span className={styles.comments}>
+          {/* Read apart from the name before it. */}
+          <VisuallyHidden>{strings.noteSeparator}</VisuallyHidden>
+          <Badge count={comments} icon="message-square" label={strings.openThreads(comments)} />
+        </span>
+      )}
       {note !== undefined && isLoaded && mode === undefined && (
         <span className={styles.note} data-note={note}>
           {/* Read apart from the name before it. */}

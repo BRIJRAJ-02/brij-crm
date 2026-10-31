@@ -5,7 +5,17 @@
 // import only in the worker entry, `apps/api/src/jobs/**`,
 // `apps/api/src/realtime/**` and `packages/core/scripts/**`.
 export { audiences } from './access/audiences.ts';
-export { enterAsActor, systemScope, type ActorDoorDeps } from './access/door.ts';
+export { enterAsActor, enterAsAutomation, systemScope, type ActorDoorDeps } from './access/door.ts';
+// Automations (parity #53): the worker's `crm_automation` task runs the queued runs as the member each runs as; the
+// due sweep queues the tasks that came due; the daily cleanup prunes old runs and long deleted automations.
+export {
+  derivedTaskId,
+  pruneAutomations,
+  queueDueAutomations,
+  runAutomationQueue,
+  type AutomationLog,
+  type AutomationRunDeps,
+} from './automations/run.ts';
 export { SYSTEM_ACTOR } from './engine/scope.ts';
 // The daily cleanup's fan out (spec 0008, milestone 3): lists every workspace and starts a system job in each.
 export {
@@ -22,8 +32,9 @@ export { purgeWorkspace, PURGE_BATCH, type PurgeDeps, type PurgeOutcome } from '
 export { viewFacts } from './views/facts.ts';
 export { taskFacts } from './tasks/facts.ts';
 export { meetingFacts } from './calendar/facts.ts';
-// Spec 0031, AC-817: whom an `access` row's removal cuts off the workspace's live channel.
-export { removedUserIds } from './members/facts.ts';
+// Spec 0031, AC-817: whom an `access` row's removal cuts off the workspace's live channel; spec 0007, AC-84: whom an
+// `access` row disconnects with 4500, so their browsers take a token for their new audience channel.
+export { memberUserIds, removedUserIds } from './members/facts.ts';
 export {
   POLL_INTERVAL_MS,
   syncConnection,

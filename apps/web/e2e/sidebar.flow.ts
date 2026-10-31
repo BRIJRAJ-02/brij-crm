@@ -206,7 +206,16 @@ test.describe('sidebar', () => {
     }).toPass({ timeout: 20_000 });
     if (LIVE) await expect(records(second).first()).toHaveText('Companies', { timeout: 10_000 });
 
-    // Records below Bookings and Captures from its menu.
+    // Records below Bookings and Captures from its menu: past Lists first (an owner sees it empty, with its New
+    // list, spec 0048), then past Scheduling.
+    await nav(page).getByRole('button', { name: 'Records options' }).click();
+    await page.getByRole('menuitem', { name: 'Move down' }).click();
+    await expect(
+      nav(page)
+        .locator('button')
+        .filter({ hasText: /^(Records|Lists)$/ })
+        .first(),
+    ).toHaveText('Lists');
     await nav(page).getByRole('button', { name: 'Records options' }).click();
     await page.getByRole('menuitem', { name: 'Move down' }).click();
     await expect(firstOf(page)).toHaveText('Bookings');

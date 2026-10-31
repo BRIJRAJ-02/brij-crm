@@ -18,6 +18,7 @@ import type { CaptureListState, CaptureListView } from './captures/list.ts';
 import type { HomeHeld, HomeMetricsState, HomeRecentsState, TeamTodayState } from './home/store.ts';
 import type { RoutingReportHeld, RoutingReportState } from './routing/reports.ts';
 import type { PageRulesHeld } from './routing/page-rules.ts';
+import type { AutomationsHeld, AutomationsState } from './automations/store.ts';
 import type {
   EmailPreferencesState,
   EmailPreferencesStore,
@@ -36,8 +37,17 @@ import type { NavSnapshot, NavSource } from './navigation/store.ts';
 import type { DueTasksSnapshot, DueTasksSource } from './tasks/due.ts';
 import type { PendingOptions } from './options.ts';
 import type { RecordsView, ViewReader, ViewState } from './records/layer.ts';
+import type {
+  EntriesState,
+  EntriesView,
+  ListBoard,
+  ListBoardState,
+  RecordEntries,
+  RecordEntriesState,
+} from './lists/entries.ts';
 import type { RecordState, RecordSubscription } from './records/one.ts';
 import type { AggregateSource, AggregateState } from './records/aggregate-source.ts';
+import type { ReportFiguresSource, ReportFiguresState } from './reports/figures-source.ts';
 import type { RecordSearch, RecordSearchState } from './records/search.ts';
 import type { TrashedSource, TrashedState } from './records/trashed.ts';
 import type { SavedViewSnapshot, SavedViewSource, ViewsListSnapshot, ViewsListSource } from './views/store.ts';
@@ -212,6 +222,15 @@ export function useAggregates(source: AggregateSource): AggregateState {
 }
 
 /**
+ * A report's figures (the reports lane, `data.reports.figures`): loading, error or the bars, points or number,
+ * re-rendering when they change. Held while the screen is mounted, so they read again after a change that may move
+ * them; the figures shown stay while a newer read is out.
+ */
+export function useReportFigures(source: ReportFiguresSource): ReportFiguresState {
+  return useRetained(source);
+}
+
+/**
  * One record's state (spec 0006, `records.one`; the record page, spec 0017):
  * the store's one body with pending edits on top, its status and its
  * refused values, re-rendering when it changes. While the screen is mounted
@@ -355,6 +374,11 @@ export function useBookingsCalendar(view: BookingsCalendarHeld): BookingsCalenda
  */
 export function useMeetings(list: MeetingsHeld): MeetingsState {
   return useRetained(list);
+}
+
+/** Settings › Automations (parity #53): the held list and run log, re-rendering as they change. Held while mounted. */
+export function useAutomations(held: AutomationsHeld): AutomationsState {
+  return useRetained(held);
 }
 
 /** Home's Team today (spec 0041), re-rendering when it is read again. Held while the screen is mounted. */
@@ -574,4 +598,22 @@ export function useRecordFacts(facts: RecordFacts): RecordFactsState {
 /** One held operator console read (spec 0047): its state, kept current while the screen shows it. */
 export function useOperator<T>(held: OperatorHeld<T>): T {
   return useSyncExternalStore(held.subscribe, held.getSnapshot, held.getSnapshot);
+}
+
+/** A list's rows (spec 0048), held while the screen shows them: the view lets go 30 seconds after it leaves. */
+export function useEntries(view: EntriesView): EntriesState {
+  useEffect(() => view.retain(), [view]);
+  return useSyncExternalStore(view.subscribe, view.getSnapshot);
+}
+
+/** A list board's columns (spec 0048, AC-4820), held while the screen shows them. */
+export function useListBoard(board: ListBoard): ListBoardState {
+  useEffect(() => board.retain(), [board]);
+  return useSyncExternalStore(board.subscribe, board.getSnapshot);
+}
+
+/** A record's entries for its page's Lists section (spec 0048, AC-4822), held while the section shows them. */
+export function useRecordEntries(source: RecordEntries): RecordEntriesState {
+  useEffect(() => source.retain(), [source]);
+  return useSyncExternalStore(source.subscribe, source.getSnapshot);
 }

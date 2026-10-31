@@ -1,7 +1,7 @@
 // Brief
 // Purpose: act on the rows ticked in an object's table, a few or every one the view matches (spec 0022, milestones 1 to 3).
 // Main task: tick rows (or "Select all N matching"), press Edit or Delete; up to 500 go at once, more are counted, reviewed and run in the background.
-// Leaves out: Add to list (#51), board cards (#21), several fields in one edit, and relationships (owner decision 3).
+// Leaves out: board cards (#21), several fields in one edit, and relationships (owner decision 3).
 import {
   refusalSummary,
   toFieldAttribute,
@@ -11,6 +11,7 @@ import {
   type DataError,
   type BulkEdit,
   type BulkTarget,
+  type ListView,
   type ObjectSummary,
   type RecordsView,
   type ViewQuery,
@@ -18,17 +19,21 @@ import {
 } from '@crm/data';
 import { AttributeDisplay, BulkActionBar, Button, Callout, Modal } from '@crm/ui';
 import { allMatching, noRows, selectedCount, type GridSelection } from '@crm/ui/grid';
-import { useRouteContext } from '@tanstack/react-router';
+import { useMatch, useRouteContext } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { AddToListMenu, listsToAddTo } from '../lists/AddToListMenu.tsx';
+import { strings as listStrings } from '../lists/strings.ts';
 import type { MemberPicker } from '../records/members.ts';
-import { BulkEditDialog, type BulkEditChoice } from './BulkEditDialog.tsx';
+import { BulkEditDialog, type BulkApplied, type BulkEditChoice } from './BulkEditDialog.tsx';
 import {
   BULK_EXCEPT_MAX,
   BULK_IDS_MAX,
+  BULK_INLINE_MAX,
   bulkPath,
   bulkStrings,
   deleteToast,
   bulkEditToast,
+  combineEditResults,
   recordsWord,
 } from './bulk.ts';
 import { runExport } from '../imports/export-run.ts';
@@ -233,6 +238,8 @@ export function useBulkActions({
   exportColumns,
 }: BulkActionsOptions): BulkActions {
   const { data, toasts } = useRouteContext({ from: '__root__' });
+  // The lists the member may read (spec 0048), from the workspace frame's route: Add to list offers those they may write.
+  const lists = useMatch({ from: '/w/$slug', shouldThrow: false, select: (match) => match.loaderData?.lists });
   const { selection, asOf } = ticked;
   const count = selectedCount(selection, total);
   // The ticked ids, copied once per selection, not on every render (a selection holds up to 10,000).
@@ -254,6 +261,8 @@ export function useBulkActions({
   });
   // The counted change's confirm, opened by Review: never by itself.
   const [isReviewing, setReviewing] = useState(false);
+  // The list a counted add goes into (spec 0048, AC-4825), named in its confirm.
+  const [jobList, setJobList] = useState<ListView | undefined>(undefined);
   if (isReviewing && !bulkJob.isCounted) setReviewing(false);
 
   const target = (): BulkTarget | undefined => {
@@ -311,32 +320,67 @@ export function useBulkActions({
   if (editing !== undefined && editing !== lastEdited) setLastEdited(editing);
   const definitionOf = (attributeId: string) => attributes.find((each) => each.id === attributeId);
 
-  const edit = async (recordIds: readonly string[], choice: BulkEditChoice, fromToast = false) => {
+  /** One field's bulk edit; a field archived or hidden while the dialog was open sends nothing. */
+  const sendOne = (recordIds: readonly string[], choice: BulkEditChoice, group: string): Promise<BulkEditResult> => {
     const definition = definitionOf(choice.attributeId);
-    // The field was archived or hidden while the dialog was open: nothing is sent.
     if (definition === undefined) {
-      return { kind: 'done', updated: 0, unchanged: 0, refused: 0 } satisfies BulkEditResult;
+      return Promise.resolve({ kind: 'done', updated: 0, unchanged: 0, refused: 0 });
     }
-    const result = await data.records.bulkEdit(slug, object.id, recordIds, {
+    return data.records.bulkEdit(slug, object.id, recordIds, {
       attributeId: definition.id,
       type: definition.type,
       isMulti: definition.isMulti,
       op: choice.op,
+      group,
       ...(Object.hasOwn(choice, 'value') ? { value: choice.value } : {}),
     });
+  };
+
+  /**
+   * The fields in order, one bulk edit each (the server's edit takes one field), stopping at the first refused
+   * whole: the edits before it landed. They share a group on the undo stack, so the toast's Undo and Cmd+Z take
+   * them all back as one step.
+   */
+  const sendInOrder = async (
+    recordIds: readonly string[],
+    choices: readonly BulkEditChoice[],
+    group: string,
+    sent: readonly BulkEditResult[] = [],
+  ): Promise<readonly BulkEditResult[]> => {
+    const [first, ...rest] = choices;
+    if (first === undefined) return sent;
+    const result = await sendOne(recordIds, first, group);
+    const all = [...sent, result];
+    return result.kind === 'done' ? sendInOrder(recordIds, rest, group, all) : all;
+  };
+
+  const edit = async (
+    recordIds: readonly string[],
+    choices: readonly BulkEditChoice[],
+    fromToast = false,
+    // A Retry from the toast carries on the same step, so one Undo still takes the whole Apply back.
+    group: string = data.records.newId(),
+  ): Promise<BulkApplied> => {
+    const results = await sendInOrder(recordIds, choices, group);
+    const landed = results.filter((each) => each.kind === 'done');
+    const stop = results.find((each) => each.kind !== 'done');
+    const { result } = combineEditResults(landed);
+    // One toast for every field that changed, its Undo taking them all back; a refusal of the whole edit before any
+    // landed is said where it was asked (the dialog), or here from a toast's Retry.
     const toast = bulkEditToast(
-      result,
+      stop !== undefined && landed.length === 0 ? stop : result,
       object,
       (undoId) => {
         runUndo(data, toasts, slug, undoId);
       },
       () => {
-        void edit(recordIds, choice, true);
+        // Again from the field that was refused: the ones before it landed.
+        void edit(recordIds, choices.slice(landed.length), true, group);
       },
       { fromToast },
     );
     if (toast !== undefined) raise(toast);
-    return result;
+    return stop === undefined ? result : { ...stop, landed: landed.length };
   };
 
   // The change a counted edit job will make, restated in its confirm (the dialog is gone by then): the field by id,
@@ -344,7 +388,10 @@ export function useBulkActions({
   const [jobChange, setJobChange] = useState<BulkEditChoice | undefined>(undefined);
 
   /** An edit too big for one request starts a job; a refusal to start shows in the dialog that asked. */
-  const editAsJob = async (choice: BulkEditChoice): Promise<BulkEditResult> => {
+  const editAsJob = async (choices: readonly BulkEditChoice[]): Promise<BulkEditResult> => {
+    // A job takes one field: the dialog offers one there (isSingle).
+    const [choice] = choices;
+    if (choice === undefined) return { kind: 'done', updated: 0, unchanged: 0, refused: 0 };
     setJobChange(choice);
     const failure = await start('edit', {
       attributeId: choice.attributeId,
@@ -386,6 +433,41 @@ export function useBulkActions({
       </Button>
     ) : undefined;
 
+  // Add to list (spec 0048, AC-4825): up to 500 ticked rows in one request with Undo; more, or all matching, a
+  // counted job confirmed here, whose finish toast has Undo.
+  const writableLists = listsToAddTo(lists ?? [], object.id);
+  const isManyToAdd = selection.kind === 'all-matching' || ids.length > BULK_INLINE_MAX;
+  const addToList =
+    (selection.kind === 'all-matching' || ids.length > 0) && writableLists.length > 0 ? (
+      <AddToListMenu
+        data={data}
+        toasts={toasts}
+        slug={slug}
+        object={object}
+        lists={writableLists}
+        recordIds={ids}
+        onAdded={ticked.clear}
+        {...(isManyToAdd
+          ? {
+              onChooseMany: (list: ListView) => {
+                const on = target();
+                if (on === undefined) return;
+                setJobList(list);
+                void bulkJob
+                  .startWith(`add:${list.id}:${JSON.stringify(on)}`, (id) =>
+                    data.lists.startJob(slug, { kind: 'add', id, listId: list.id, target: on }),
+                  )
+                  .then((failure) => {
+                    if (failure !== undefined) bulkJob.say(refusalSummary(failure), 'danger');
+                  });
+              },
+            }
+          : {})}
+      >
+        <Button icon="list">{listStrings.addToListMenu}</Button>
+      </AddToListMenu>
+    ) : undefined;
+
   const { note, progress, isRunning } = bulkJob;
   // Up while rows are ticked, a change runs or a note shows; then it plays its exit before the grid gives back its room.
   const isWanted = count > 0 || isRunning || note !== undefined;
@@ -420,6 +502,7 @@ export function useBulkActions({
       >
         {bulkStrings.edit}
       </Button>
+      {addToList}
       {exportButton}
       <Button
         variant="danger"
@@ -477,8 +560,11 @@ export function useBulkActions({
   if (bulkJob.isCounted && counted !== lastCounted) setLastCounted(counted);
   const jobWords = recordsWord(lastCounted, object);
   const isEditJob = bulkJob.action === 'edit';
+  // Adding to a list is undone from its finish toast, so its confirm is a plain one, not a danger one.
+  const isAddJob = bulkJob.action === 'listAdd';
   const changed = jobChange === undefined ? undefined : definitionOf(jobChange.attributeId);
   const editShown = editing ?? lastEdited;
+  const isInlineEdit = editShown.ids.length > 0 && editShown.ids.length === editShown.count && path === 'inline';
   const dialog = (
     <>
       <BulkEditDialog
@@ -495,20 +581,24 @@ export function useBulkActions({
             ? bulkStrings.allMatchingRecords(editShown.count, object)
             : recordsWord(editShown.count, object)
         }
-        onApply={(choice) =>
-          editShown.ids.length > 0 && editShown.ids.length === editShown.count && path === 'inline'
-            ? edit(editShown.ids, choice)
-            : editAsJob(choice)
-        }
+        // Up to 500 ticked go at once, several fields in one Apply; past that a background job takes one field.
+        isSingle={!isInlineEdit}
+        onApply={(choices) => (isInlineEdit ? edit(editShown.ids, choices) : editAsJob(choices))}
       />
       {/*
         A counted background change, opened by Review (AC-528, AC-531): the exact number, and for an edit the value
         it writes. Declining cancels it (nothing was changed); either way focus goes on to the bar, which keeps it.
       */}
       <Modal
-        title={isEditJob ? bulkStrings.confirmEditTitle(jobWords) : bulkStrings.confirmTitle(jobWords)}
+        title={
+          isAddJob
+            ? listStrings.confirmAddTitle(jobWords, jobList?.name ?? '')
+            : isEditJob
+              ? bulkStrings.confirmEditTitle(jobWords)
+              : bulkStrings.confirmTitle(jobWords)
+        }
         variant="confirm"
-        tone="danger"
+        {...(isAddJob ? {} : { tone: 'danger' as const })}
         isOpen={isReviewing && bulkJob.isCounted}
         onOpenChange={(isOpen) => {
           if (isOpen) return;
@@ -519,8 +609,8 @@ export function useBulkActions({
           <>
             <Button slot="close">{bulkStrings.cancel}</Button>
             <Button
-              variant="danger-solid"
-              icon={isEditJob ? 'pencil' : 'trash'}
+              variant={isAddJob ? 'primary' : 'danger-solid'}
+              icon={isAddJob ? 'list' : isEditJob ? 'pencil' : 'trash'}
               onPress={() => {
                 setReviewing(false);
                 // The selection clears once the job runs on its snapshot; the bar stays with its progress.
@@ -528,12 +618,18 @@ export function useBulkActions({
                 bulkJob.confirm();
               }}
             >
-              {isEditJob ? bulkStrings.confirmEditAction(jobWords) : bulkStrings.confirmAction(jobWords)}
+              {isAddJob
+                ? listStrings.confirmAddAction
+                : isEditJob
+                  ? bulkStrings.confirmEditAction(jobWords)
+                  : bulkStrings.confirmAction(jobWords)}
             </Button>
           </>
         }
       >
-        {isEditJob ? (
+        {isAddJob ? (
+          listStrings.confirmAddText
+        ) : isEditJob ? (
           <>
             {jobChange !== undefined && changed !== undefined && (
               <EditChange definition={changed} change={jobChange} members={memberPicker.displays} />

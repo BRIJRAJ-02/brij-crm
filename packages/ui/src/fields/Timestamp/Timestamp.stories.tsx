@@ -41,3 +41,38 @@ export const Editor: Story = {
     await expect(canvas.queryByRole('textbox')).toBeNull();
   },
 };
+
+/**
+ * A date and time someone sets (the field types pass, 31 October 2026): the day (Now first among its quick picks)
+ * and the time of day, in the stories’ London time (11:30 UTC is 12:30 there).
+ */
+export const EditorDateAndTime: Story = {
+  args: {
+    attribute: { ...sample.attribute, name: 'Follow up', isReadOnly: false },
+    value: sample.value as never,
+  },
+  render: (args) => (
+    <Stage width="narrow">
+      <AttributeEditor {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('group', { name: 'Follow up' })).toBeInTheDocument();
+    await expect(canvas.getAllByText('Follow up time').length).toBeGreaterThan(0);
+    await expect(canvas.getAllByText(/12:30/).length).toBeGreaterThan(0);
+  },
+};
+
+/** No day yet: the time waits, showing its placeholder, until a day is chosen. */
+export const EditorEmpty: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { attribute: { ...sample.attribute, name: 'Follow up', isReadOnly: false }, value: null },
+  render: (args) => (
+    <Stage width="narrow">
+      <AttributeEditor {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('button', { name: /Follow up time/ })).toBeDisabled();
+  },
+};

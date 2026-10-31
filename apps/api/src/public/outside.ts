@@ -46,6 +46,11 @@ export interface OutsideOptions {
    * named, and an optional rule is one the next caller forgets (the security review, 25 October 2026).
    */
   readonly allow: (url: URL) => boolean;
+  /**
+   * A deadline the caller shares across several reads (an icon's page and its image), so the whole of them keeps to
+   * one bound; this read ends at it or at its own timeout, whichever comes first.
+   */
+  readonly signal?: AbortSignal;
 }
 
 /** Reads one outside address under every bound above. Never throws. */
@@ -80,6 +85,21 @@ async function readCapped(response: Response, max: number): Promise<Uint8Array |
   return Buffer.concat(chunks, size);
 }
 
+/** Settles as `timeout` once `signal` aborts (at once if it has), so a wait can be raced against a deadline. */
+function whenAborted(signal: AbortSignal): Promise<'timeout'> {
+  return new Promise((resolve) => {
+    if (signal.aborted) resolve('timeout');
+    else
+      signal.addEventListener(
+        'abort',
+        () => {
+          resolve('timeout');
+        },
+        { once: true },
+      );
+  });
+}
+
 /** What a host resolves to. Injected so the rule can be tested without a resolver. */
 export type Lookup = (hostname: string) => Promise<readonly string[]>;
 
@@ -108,21 +128,38 @@ export function createOutsideFetch(
   const timeoutMs = options.timeoutMs ?? OUTSIDE_TIMEOUT_MS;
   const ceiling = options.maxBytes ?? OUTSIDE_MAX_BYTES;
 
-  const reachable = async (url: URL, allow: (url: URL) => boolean): Promise<boolean> => {
+  /**
+   * Whether `url` may be opened, or `timeout` when the deadline passes first: a lookup that hangs (a dead name
+   * server) holds the read no longer than its bound, though the lookup itself can't be called off.
+   */
+  const reachable = async (
+    url: URL,
+    allow: (url: URL) => boolean,
+    signal: AbortSignal,
+  ): Promise<boolean | 'timeout'> => {
     if (!isFetchableUrl(url)) return false;
     if (!allow(url)) return false;
-    const addresses = await lookup(url.hostname).catch(() => []);
+    const addresses = await Promise.race([
+      lookup(url.hostname).catch((): readonly string[] => []),
+      whenAborted(signal),
+    ]);
+    if (addresses === 'timeout') return 'timeout';
     return addresses.length > 0 && !addresses.some((address) => isRefusedAddress(address));
   };
 
   return async (start, wanted) => {
-    const signal = AbortSignal.timeout(timeoutMs);
+    const own = AbortSignal.timeout(timeoutMs);
+    const signal = wanted.signal === undefined ? own : AbortSignal.any([own, wanted.signal]);
     const maxBytes = Math.min(wanted.maxBytes ?? ceiling, ceiling);
     const accept = wanted.accept ?? [];
     try {
       let url = start;
       for (let hop = 0; hop <= OUTSIDE_REDIRECTS; hop += 1) {
-        if (!(await reachable(url, wanted.allow))) return miss(hop === 0 ? 'url' : 'redirect');
+        // A shared deadline already spent: no lookup and no connection.
+        if (signal.aborted) return miss('timeout');
+        const reach = await reachable(url, wanted.allow, signal);
+        if (reach === 'timeout') return miss('timeout');
+        if (!reach) return miss(hop === 0 ? 'url' : 'redirect');
         const response = await send(url, {
           redirect: 'manual',
           signal,

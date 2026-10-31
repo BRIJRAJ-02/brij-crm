@@ -229,8 +229,17 @@ export interface Auth {
    * 0033): a new session keeps it. Refusals leave as `{ code, message }`.
    */
   handle(request: Request, clientIp: string | undefined, origin?: string, geo?: Geo): Promise<Response>;
-  /** The session the request's cookie names, or undefined when there is none or it expired. */
-  session(headers: Headers, clientIp: string | undefined): Promise<AuthSession | undefined>;
+  /**
+   * The session the request's cookie names, or undefined when there is none or it expired. With `renew: false` the
+   * session is only read: a day old one is not extended, so no cookie is due. For an answer a shared cache keeps
+   * (a company's logo, spec 0059), which must never carry a cookie: one renewed there would be dropped, and the
+   * browser's cookie would run out while the session it names lived on.
+   */
+  session(
+    headers: Headers,
+    clientIp: string | undefined,
+    options?: { readonly renew?: boolean },
+  ): Promise<AuthSession | undefined>;
   /**
    * Checks an app code, or uses up a backup code, for a step up (spec 0033,
    * AC-896). False for a wrong code or no two factor; never throws for one.
@@ -1192,10 +1201,11 @@ export function createAuth({
       return authErrorResponse(await stripTokens(answered), new URL(checked.url).pathname.slice(AUTH_BASE_PATH.length));
     },
 
-    async session(headers, clientIp) {
+    async session(headers, clientIp, options) {
       const { headers: answered, response } = await auth.api.getSession({
         headers: forwardedHeaders(headers, clientIp),
         returnHeaders: true,
+        ...(options?.renew === false ? { query: { disableRefresh: true } } : {}),
       });
       if (response === null) return undefined;
       const { id, name, email, emailVerified, image } = response.user;

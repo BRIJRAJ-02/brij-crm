@@ -4,9 +4,8 @@
 // open dialog; Cmd+, (Ctrl+,) opens Settings (spec 0026) on the same terms.
 // One listener on the document while the frame is mounted.
 import type { DataLayer } from '@crm/data';
-import { useKeyboardPlatform, type Toasts } from '@crm/ui';
+import { sharedStrings, type Toasts, useKeyboardPlatform } from '@crm/ui';
 import { useEffect } from 'react';
-import { strings } from './strings.ts';
 import { belongsElsewhere, isHelpKey, isSettingsKey, isUndoKey, undoToast, type KeyTarget } from './undo.ts';
 
 /**
@@ -26,7 +25,7 @@ export function runUndo(data: DataLayer, toasts: Toasts, slug: string, only?: st
     },
     // A refused write already raised its own toast in the data layer; this is the layer failing to load.
     () => {
-      toasts.toast({ tone: 'danger', message: strings.somethingWrong });
+      toasts.toast({ tone: 'danger', message: sharedStrings.couldntDoThat });
     },
   );
 }

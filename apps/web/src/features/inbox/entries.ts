@@ -64,6 +64,8 @@ export function targetOf(
   if (view.noteId !== undefined) {
     return { kind: 'href', href: `${recordHref(slug, objectSlug, view.record.recordId, 'notes')}?note=${view.noteId}` };
   }
+  // An automation's notice opens the record itself.
+  if (view.kind === 'automation') return { kind: 'href', href: recordHref(slug, objectSlug, view.record.recordId) };
   const page = recordHref(slug, objectSlug, view.record.recordId, 'comments');
   return { kind: 'href', href: view.threadId === undefined ? page : `${page}?thread=${view.threadId}` };
 }

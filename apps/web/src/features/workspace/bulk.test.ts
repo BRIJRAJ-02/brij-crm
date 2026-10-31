@@ -5,6 +5,7 @@ import type { JobView, RecordsView } from '@crm/data';
 import {
   bulkEditToast,
   bulkJobToast,
+  combineEditResults,
   deleteOffer,
   deleteToast,
   jobProgress,
@@ -38,7 +39,7 @@ describe('the bulk bar', () => {
     many?.action?.onAction();
     expect(undone).toEqual(['u2']);
     expect(deleteToast({ kind: 'done', deleted: 46, refused: 2, undoId: 'u3' }, PEOPLE, onUndo)?.message).toBe(
-      'Deleted 46 people. 2 weren’t deleted; each row says why.',
+      'Deleted 46 people. 2 weren’t: see their rows.',
     );
     expect(
       deleteToast({ kind: 'done', deleted: 0, refused: 1, reason: 'That record does not exist.' }, PEOPLE, onUndo),
@@ -50,9 +51,7 @@ describe('the bulk bar', () => {
         onUndo,
       ),
     ).toEqual({ tone: 'danger', message: 'You can view People but not change them.' });
-    expect(deleteToast({ kind: 'too-many', limit: 500 }, PEOPLE, onUndo)?.message).toBe(
-      'Change at most 500 records in one request; more run as a background change.',
-    );
+    expect(deleteToast({ kind: 'too-many', limit: 500 }, PEOPLE, onUndo)?.message).toBe('At most 500 records at once.');
   });
 
   it('offers Retry for a passing failure only, and warns when rows were left behind', () => {
@@ -135,6 +134,29 @@ describe('a background change in the bar (spec 0022, AC-528)', () => {
 
 describe('a background change’s finish toast (spec 0022, AC-528, AC-531)', () => {
   const onView = () => undefined;
+  it('says what a list’s bulk add or removal did, with Undo, and a restore with none (spec 0048)', () => {
+    const onUndo = () => undefined;
+    const added = bulkJobToast(bulkJob('succeeded', { kind: 'entries.bulk_add', total: 600, done: 600 }), PEOPLE, {
+      onView,
+      onUndo,
+    });
+    expect(added).toMatchObject({
+      tone: 'success',
+      message: 'Added 600 people to the list.',
+      action: { label: 'Undo' },
+    });
+    const removed = bulkJobToast(bulkJob('succeeded', { kind: 'entries.bulk_remove', total: 600, done: 600 }), PEOPLE, {
+      onView,
+      onUndo,
+    });
+    expect(removed).toMatchObject({ message: 'Removed 600 entries from the list.', action: { label: 'Undo' } });
+    const back = bulkJobToast(bulkJob('succeeded', { kind: 'entries.bulk_restore', total: 1, done: 1 }), PEOPLE, {
+      onView,
+      onUndo,
+    });
+    expect(back).toMatchObject({ message: 'Brought back 1 entry.', action: { label: 'View details' } });
+  });
+
   it('says nothing for a change that ended before it touched anything', () => {
     // A declined confirm, or Cancel while counting.
     expect(bulkJobToast(bulkJob('cancelled'), PEOPLE, { onView })).toBeUndefined();
@@ -170,14 +192,13 @@ describe('a background change’s finish toast (spec 0022, AC-528, AC-531)', () 
     expect(
       bulkJobToast(bulkJob('succeeded', { kind: 'records.bulk_edit', done: 9998, refused: 2 }), PEOPLE, { onView })
         ?.message,
-    ).toBe('Updated 9,998 people. 2 were refused; the details say why.');
+    ).toBe('Updated 9,998 people. 2 refused.');
     const purge = bulkJobToast(bulkJob('succeeded', { kind: 'records.purge', done: 1200 }), RECORDS, { onView }, [
       { names: PEOPLE, count: 12 },
     ]);
     expect(purge).toMatchObject({
       tone: 'danger',
-      message:
-        'Deleted 1,200 records forever. 12 People records stay in the trash because you can view People but not change them.',
+      message: 'Deleted 1,200 records forever. 12 People records stay in the trash: People are view only.',
     });
   });
 });
@@ -197,7 +218,7 @@ describe('the bulk edit dialog’s rules (AC-529)', () => {
   it('says where a partly refused edit’s reasons are, and undoes it in its object’s words', () => {
     expect(
       bulkEditToast({ kind: 'done', updated: 46, unchanged: 0, refused: 2 }, PEOPLE, () => undefined)?.message,
-    ).toBe('Updated 46 people. 2 were refused; each cell says why.');
+    ).toBe('Updated 46 people. 2 refused: see their cells.');
     const undone = undoToast(
       {
         kind: 'undone',
@@ -239,5 +260,32 @@ describe('ticked rows across a new question', () => {
     expect(carrySelection(held, after, 'view-2', 'f1').dropped).toBe(0);
     const none = { ...held, selection: { kind: 'some' as const, ids: new Set<string>() } };
     expect(carrySelection(none, after, 'view-1', 'f2').dropped).toBe(0);
+  });
+});
+
+describe('combineEditResults', () => {
+  const done = (updated: number, undoId?: string, refused = 0) => ({
+    kind: 'done' as const,
+    updated,
+    unchanged: 0,
+    refused,
+    ...(undoId === undefined ? {} : { undoId }),
+  });
+
+  it('says one outcome for several fields: the most records touched, every undo id oldest first', () => {
+    const { result, undoIds } = combineEditResults([done(3, 'u1'), done(5, 'u2', 1)]);
+    expect(result).toEqual({ kind: 'done', updated: 5, unchanged: 0, refused: 1, undoId: 'u2' });
+    expect(undoIds).toEqual(['u1', 'u2']);
+  });
+
+  it('lets a failure stand for the whole, keeping the undo of what landed before it', () => {
+    const failed = { kind: 'failed' as const, error: dataError('FORBIDDEN', 'No.') };
+    const { result, undoIds } = combineEditResults([done(2, 'u1'), failed]);
+    expect(result).toBe(failed);
+    expect(undoIds).toEqual(['u1']);
+  });
+
+  it('has nothing to undo when nothing changed', () => {
+    expect(combineEditResults([done(0), done(0)]).undoIds).toEqual([]);
   });
 });

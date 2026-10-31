@@ -12,7 +12,7 @@ export const strings = {
 
   // Who can see or manage your scheduling.
   overMe: 'Who can see or manage your scheduling',
-  overMeDescription: 'They see your hours, time off and bookings. With Manage they can change them and book for you.',
+  overMeDescription: 'Manage can also change and book for you.',
   addSomeone: 'Add someone',
   ownersAndAdmins: 'Workspace owners and admins',
   ownersAndAdminsSource: 'Through their role',
@@ -20,23 +20,22 @@ export const strings = {
   theyAdded: 'They added you',
   addedBy: (name: string) => `${name} added`,
   addedByAdmin: 'Added by an admin',
-  nobodyOverMe: 'Nobody else yet. Add an assistant or a colleague who covers for you.',
+  nobodyOverMe: 'Nobody else yet.',
 
   // Whose scheduling you can see or manage.
   mine: 'Whose scheduling you can see or manage',
-  mineDescription: 'Beyond your own. Pick them in Availability’s Viewing menu, and in Book someone in and Block time.',
+  mineDescription: 'Beyond your own. Pick them in Availability.',
   everyone: 'Everyone',
   everyoneFromRole: (role: string) => `Through your ${role} role`,
   onlyYours: 'Only your own',
-  onlyYoursText: 'When someone lets you see or manage their scheduling, they show here.',
 
   // Levels.
   level: 'Access',
   levelFor: (name: string) => `Access for ${name}`,
   see: 'See',
   manage: 'Manage',
-  seeDescription: 'Hours, time off and bookings, read only. Guest emails and answers stay hidden.',
-  manageDescription: 'Change hours and time off, block time, and book, move or cancel meetings.',
+  seeDescription: 'Read only. Guest details stay hidden.',
+  manageDescription: 'Change hours, block time, book and cancel.',
   remove: 'Remove',
   removeFor: (name: string) => `Remove ${name}’s access`,
 
@@ -44,23 +43,21 @@ export const strings = {
   addTitle: 'Add someone',
   person: 'Person',
   personPlaceholder: 'Choose a teammate',
-  nobodyToAdd: 'Everyone in the workspace can already see your scheduling.',
+  nobodyToAdd: 'Everyone already has access.',
   add: 'Add',
   cancel: 'Cancel',
-  /** A member whose hours are set by others can't pass the right to change them (decision 9, AC-1255). */
-  hoursStaySet:
-    'They can book and block time for you, but can’t change your hours: those are set by the people who manage your scheduling.',
+  /** A member whose hours are set by others can't pass the right to change them (decision 9, AC-1255): Manage's line says so. */
+  manageNoHours: 'Book and block time. Hours stay managed.',
   added: (name: string, level: 'view' | 'manage') => `${name} can now ${levelWord(level)} your scheduling.`,
   changed: (name: string, level: 'view' | 'manage') => `${name} can now ${levelWord(level)} your scheduling.`,
 
   // Take access back (AC-1445): the consequence in plain words.
   removeTitle: (name: string) => `Remove ${name}’s access?`,
   removeOverMe: (name: string, level: 'view' | 'manage') =>
-    `${name} will no longer be able to ${levelWord(level)} your scheduling.`,
-  removeMine: (whose: string, level: 'view' | 'manage') =>
-    `You will no longer be able to ${levelWord(level)} ${whose} scheduling.`,
+    `${name} can no longer ${levelWord(level)} your scheduling.`,
+  removeMine: (whose: string, level: 'view' | 'manage') => `You can no longer ${levelWord(level)} ${whose} scheduling.`,
   removeOver: (delegate: string, whose: string, level: 'view' | 'manage') =>
-    `${delegate} will no longer be able to ${levelWord(level)} ${whose} scheduling.`,
+    `${delegate} can no longer ${levelWord(level)} ${whose} scheduling.`,
   giveUpTitle: (whose: string) => `Give up your access to ${whose} scheduling?`,
   removeAction: 'Remove access',
   keep: 'Keep access',
@@ -79,8 +76,7 @@ export const strings = {
   seesOnly: (words: string) => `Sees ${words}`,
   everyoneLower: 'everyone',
   formerMember: 'Former member',
-  roleOwnOnly: 'Their role reaches only their own scheduling. Give them more below.',
-  roleOwn: 'Their role reaches only their own scheduling. These reach further.',
+  roleOwn: 'Reaches only their own.',
   cellFailed: 'Couldn’t load',
   cellFailedFor: (name: string) => `Scheduling access for ${name} didn’t load. Try again`,
   /** The popover's Give access row: whose access it gives, so it never reads as the other way round. */

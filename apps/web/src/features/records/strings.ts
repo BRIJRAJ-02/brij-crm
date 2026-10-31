@@ -1,3 +1,5 @@
+import { sharedStrings } from '@crm/ui';
+
 /** The record page's copy (spec 0017). The side panel (milestone 4) shares `recordUnavailable`. */
 export const strings = {
   /** A search result held on a far side that holds one (spec 0014): picking it moves it here. */
@@ -7,14 +9,14 @@ export const strings = {
   /** A record that doesn't exist and one the person may not see read the same (AC-376, AC-384). */
   recordUnavailable: 'This record isn’t available',
   /** Under it: what to do next. */
-  recordUnavailableText: 'It may have been deleted, or you may not have access to it.',
+  recordUnavailableText: 'It may be deleted, or you don’t have access.',
   backTo: (pluralName: string) => `Back to ${pluralName}`,
   /** A record in the trash, opened read only (AC-376). */
   wasDeleted: (singularName: string) => `This ${singularName.toLowerCase()} was deleted.`,
   /** Deleted, or access lost, while the page was open (AC-376). */
   noLongerAvailable: (singularName: string) => `This ${singularName.toLowerCase()} is no longer available.`,
   loadFailed: 'Couldn’t load this record',
-  loadFailedText: 'Something went wrong. Try again in a moment.',
+  loadFailedText: sharedStrings.couldntDoThat,
   loading: 'Loading',
   /** What the tabs switch between, for screen readers. */
   tabs: 'Record',
@@ -25,6 +27,7 @@ export const strings = {
   filterAll: 'All activity',
   filterChanges: 'Changes',
   filterNotes: 'Notes',
+  filterCalls: 'Calls',
   filterTasks: 'Tasks',
   filterComments: 'Comments',
   filterMeetings: 'Meetings',
@@ -46,17 +49,16 @@ export const strings = {
   restore: 'Restore',
   restoring: 'Restoring…',
   restored: (name: string) => `Restored ${name}.`,
-  restoreFailed: 'Couldn’t restore it. Try again in a moment.',
+  restoreFailed: 'Couldn’t restore it. Try again.',
   /** The header's More menu: Copy link, and Delete for someone who may change the object. */
   more: 'More actions',
   deleteRecord: (singularName: string) => `Delete ${singularName.toLowerCase()}`,
   /** Delete's confirm: the question, what happens, and the verb. */
   /** A record on an object the person may only read: a Badge in the header, and why on its lock. */
   viewOnly: 'View only',
-  viewOnlyReason: (pluralName: string) => `You can view ${pluralName} but not edit them. Ask an admin.`,
+  viewOnlyReason: (pluralName: string) => `${pluralName} are view only. Ask an admin.`,
   copyLink: 'Copy link',
   linkCopied: 'Link copied',
-  copyFailed: 'Couldn’t copy the link. Copy it from the address bar.',
   unnamed: (singularName: string) => `Unnamed ${singularName.toLowerCase()}`,
   /** A meeting's attendee added as a person (spec 0024, AC-609). */
   addedPerson: (name: string) => `${name} added as a person`,
@@ -74,7 +76,7 @@ export const strings = {
   createdLinked: (name: string) => `Created ${name}.`,
   /** A picker's "Create …" refused: nothing was made or linked. */
   notCreated: (name: string, reason: string) => `Couldn’t create ${name}. ${reason}`,
-  tryAgain: 'Try again in a moment.',
+  tryAgain: 'Try again.',
   /** A Related card's "View all" with the side's total, and said in full. */
   viewAllRelated: (count: string) => `View all ${count}`,
   viewAllRelatedLabel: (count: string, noun: string, side: string) => `View all ${count} ${noun} in ${side}`,

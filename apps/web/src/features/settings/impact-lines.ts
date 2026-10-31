@@ -35,3 +35,19 @@ export function emptyRecordsHref(tableHref: string, attributeId: string): string
   });
   return draft === undefined ? tableHref : `${tableHref}?draft=${draft}`;
 }
+
+/**
+ * The object's table filtered to these records by their Record ID (the Change type step's records whose values
+ * don't convert): at most 100, as a filter's list takes. The table itself when the filter can't be written.
+ */
+export function recordsHref(tableHref: string, recordIdAttributeId: string, recordIds: readonly string[]): string {
+  if (recordIds.length === 0) return tableHref;
+  const draft = draftParam({
+    filter: {
+      conjunction: 'and',
+      conditions: [{ attributeId: recordIdAttributeId, operator: 'is_any_of', values: recordIds.slice(0, 100) }],
+    },
+    sorts: [],
+  });
+  return draft === undefined ? tableHref : `${tableHref}?draft=${draft}`;
+}

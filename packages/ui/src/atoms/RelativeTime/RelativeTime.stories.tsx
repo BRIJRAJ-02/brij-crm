@@ -50,3 +50,22 @@ export const Ranges: Story = {
     await expect(canvas.getByText('Sep 20, 2026')).toBeInTheDocument();
   },
 };
+
+/**
+ * `variant="moment"` (the field types pass): a date and time someone set, as the Date and time field shows it.
+ * Today's reads "Today" and its time; further away, the exact day and time. The stories' language is en-US.
+ */
+export const Moment: Story = {
+  render: () => (
+    <Stage direction="column">
+      <RelativeTime variant="moment" value="2026-10-08T11:30:00.000Z" />
+      <RelativeTime variant="moment" value="2026-10-09T08:00:00.000Z" />
+      <RelativeTime variant="moment" value="2026-09-20T09:00:00.000Z" />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText(/^Today 12:30\sPM$/)).toBeInTheDocument();
+    await expect(canvas.getByText(/^Tomorrow 9:00\sAM$/)).toBeInTheDocument();
+    await expect(canvas.getByText(/^Sep 20, 2026, 10:00\sAM$/)).toBeInTheDocument();
+  },
+};

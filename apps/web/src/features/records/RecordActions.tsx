@@ -4,7 +4,7 @@
 // path (one `records.deleteMany`), then back to the object's table with the
 // Undo toast; a refusal stays on the page, said in a danger toast.
 import type { ObjectSummary } from '@crm/data';
-import { Button, Menu, MenuItem, MenuSeparator, MenuTrigger, Tooltip } from '@crm/ui';
+import { Button, Menu, MenuItem, MenuSeparator, MenuTrigger, sharedStrings, Tooltip } from '@crm/ui';
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { bulkStrings, deleteToast } from '../workspace/bulk.ts';
 import { objectHref } from '../workspace/objects.ts';
@@ -33,7 +33,7 @@ export function RecordActions({ slug, object, recordId, pageLink, canDelete }: R
         toasts.toast({ tone: 'success', message: strings.linkCopied });
       },
       () => {
-        toasts.toast({ tone: 'danger', message: strings.copyFailed });
+        toasts.toast({ tone: 'danger', message: sharedStrings.couldntCopy });
       },
     );
   };

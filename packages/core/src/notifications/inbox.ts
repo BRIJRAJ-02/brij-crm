@@ -95,6 +95,11 @@ interface NotificationRow extends Record<string, unknown> {
   readonly join_request_id: string | null;
   /** An open join request's name (null once it was decided). */
   readonly join_name: string | null;
+  /** An automation's notice (parity #53): its automation, the first notify message it holds, and a due task. */
+  readonly automation_id: string | null;
+  readonly automation_message: string | null;
+  readonly due_task_id: string | null;
+  readonly due_title: string | null;
   readonly body: string | null;
   /** A note mention's note title, while the note is live (null when it is in the trash or gone). */
   readonly note_title: string | null;
@@ -106,14 +111,18 @@ const NOTIFICATION_COLUMNS = sql`n.id::text as id, n.kind, n.actor_type, n.actor
   ${millis('n.created_at')} as created_at, ${millis('n.read_at')} as read_at, ${millis('n.done_at')} as done_at,
   n.record_id::text as record_id, n.thread_id::text as thread_id, n.comment_id::text as comment_id,
   n.task_id::text as task_id, n.note_id::text as note_id, n.submission_id::text as submission_id,
-  n.join_request_id::text as join_request_id, jr.name as join_name, c.body, nt.title as note_title`;
+  n.join_request_id::text as join_request_id, jr.name as join_name, n.automation_id::text as automation_id,
+  jsonb_path_query_first(au.actions, '$[*] ? (@.kind == "notify").message') #>> '{}' as automation_message,
+  n.due_task_id::text as due_task_id, dtk.title as due_title, c.body, nt.title as note_title`;
 
 /** The comment a notification is about, joined when it is live (a deleted one's notifications are gone already). */
 const COMMENT_JOIN = sql`left join comments c on c.workspace_id = n.workspace_id and c.id = n.comment_id
   and c.deleted_at is null
   left join notes nt on nt.workspace_id = n.workspace_id and nt.id = n.note_id and nt.deleted_at is null
   left join join_requests jr on jr.workspace_id = n.workspace_id and jr.id = n.join_request_id
-    and jr.status = 'open'`;
+    and jr.status = 'open'
+  left join automations au on au.workspace_id = n.workspace_id and au.id = n.automation_id and au.deleted_at is null
+  left join tasks dtk on dtk.workspace_id = n.workspace_id and dtk.id = n.due_task_id and dtk.deleted_at is null`;
 
 /**
  * The rows among `rows` the reader may see, as views, in order (AC-1166): a
@@ -129,7 +138,7 @@ async function visibleViews(
   const recordIds = rows.flatMap((row) => (row.task_id === null && row.record_id !== null ? [row.record_id] : []));
   const submissionIds = rows.flatMap((row) => (row.submission_id === null ? [] : [row.submission_id]));
   const submissions = await submissionNotices(tx, scope, submissionIds);
-  const taskIds = rows.flatMap((row) => (row.task_id === null ? [] : [row.task_id]));
+  const taskIds = rows.flatMap((row) => [row.task_id, row.due_task_id].flatMap((id) => (id === null ? [] : [id])));
   const records: ReadonlyMap<string, RecordRefDisplay> =
     recordIds.length === 0 ? new Map() : await linkedDisplays(tx, scope.access, recordIds);
   const tasks = new Map(
@@ -144,6 +153,24 @@ async function visibleViews(
       ...(row.read_at === null ? {} : { readAt: row.read_at }),
       ...(row.done_at === null ? {} : { doneAt: row.done_at }),
     };
+    if (row.automation_id !== null) {
+      // An automation's notice: shown while the automation lives, its record reads for the reader and its due task
+      // exists. The words are the automation's own (its first notify message), else the due task's title.
+      const record = row.record_id === null ? undefined : records.get(row.record_id);
+      // A due task shows only while the task rule lets the reader see it (the title is the task's).
+      const dueTask = row.due_task_id === null ? undefined : tasks.get(row.due_task_id);
+      const gone =
+        (row.record_id !== null && record === undefined) || (row.due_task_id !== null && dueTask === undefined);
+      if (gone || (row.automation_message === null && dueTask === undefined && record === undefined)) return [];
+      return [
+        {
+          ...base,
+          ...(record === undefined ? {} : { record }),
+          ...(row.due_task_id === null ? {} : { taskId: row.due_task_id }),
+          excerpt: excerptOf(row.automation_message ?? dueTask?.title ?? '', NOTIFICATION_EXCERPT),
+        },
+      ];
+    }
     if (row.join_request_id !== null) {
       // Someone asks to join: shown while the request is open and the reader may still approve it.
       if (row.join_name === null || !can(scope.access, 'members.invite')) return [];
@@ -632,11 +659,11 @@ export async function unemailedNotifications(
     // unemailed here was waiting for a digest since turned off, or its own email was refused, so it goes in this one.
     const kinds: NotificationKind[] = (
       options.digest
-        ? (['mention', 'reply', 'task_assigned', 'form_submission'] as const)
+        ? (['mention', 'reply', 'task_assigned', 'task_due', 'form_submission'] as const)
         : [
             ...(settings.emailMentions ? (['mention'] as const) : []),
             ...(settings.emailReplies ? (['reply'] as const) : []),
-            ...(settings.emailAssignments ? (['task_assigned'] as const) : []),
+            ...(settings.emailAssignments ? (['task_assigned', 'task_due'] as const) : []),
             ...(settings.digest ? [] : (['form_submission'] as const)),
           ]
     ).filter((kind) => kind !== 'mention' || mentionsOn);

@@ -20,25 +20,18 @@ export const strings = {
   workspaceSection: 'For everyone in the workspace',
   /** Calendar sync isn't set up on this deployment. */
   offTitle: 'Calendar sync is off',
-  offText: 'Connecting calendars isn’t available here yet. Your booking pages still use your hours.',
+  offText: 'Booking pages still use your hours.',
+  /** Under the title, two provider buttons: the picture of what to do, so no sentence of why. */
   emptyTitle: 'No calendar connected',
-  emptyText: 'Connect your calendar so bookings avoid your busy times and your meetings show on the people you meet.',
   failedTitle: 'Couldn’t load your calendars',
   failedText: 'Try again in a moment.',
   /** How many accounts may be connected, when the limit is reached. */
-  limitReached: (max: string) => `You’ve connected ${max} accounts, the most you can. Disconnect one to add another.`,
-  /** The one word of help on the page: where bookings go, across accounts. */
-  defaultHelpLabel: 'Where bookings go',
-  defaultHelp:
-    'New bookings from your booking pages go on this calendar. A booking page can pick another one in its editor.',
-  defaultHelpExample:
-    'With Google and Outlook connected, bookings go on this one calendar. Busy times from every calendar with Check for conflicts on are kept free.',
+  limitReached: (max: string) => `Limit of ${max} accounts. Disconnect one to add another.`,
   calendarsGroup: 'Calendars',
-  /** Where new bookings go (the member's destination), one Select across every account. */
+  /** Where new bookings go (the member's destination), one Select across every account: the label is the whole help. */
   addBookingsTo: 'Add bookings to',
-  addBookingsHelp: 'New bookings from your booking pages go on this calendar.',
   chooseCalendar: 'Choose a calendar',
-  noWritable: 'None of your calendars can take bookings. Connect one you can add events to.',
+  noWritable: 'No calendar can take bookings. Connect one you can add events to.',
   calendarsLoadingShort: 'Loading calendars',
   calendarsFailedAll: 'Couldn’t load your calendars. Try again below.',
   logsBadge: 'Logs to CRM',
@@ -64,23 +57,21 @@ export const strings = {
   colour: (name: string) => `${name} colour`,
   /** The quiet toasts a switch raises once saved, each with Undo. */
   saved: {
-    checkConflicts: (name: string, on: boolean) =>
-      on ? `${name} is checked for conflicts` : `${name} is no longer checked for conflicts`,
-    showInWeek: (name: string, on: boolean) => (on ? `${name} shows on your week` : `${name} is hidden from your week`),
-    sync: (name: string, on: boolean) =>
-      on ? `${name}’s meetings are logged to the CRM` : `${name}’s meetings are no longer logged to the CRM`,
+    checkConflicts: (name: string, on: boolean) => (on ? `Checking ${name} for conflicts` : `Not checking ${name}`),
+    showInWeek: (name: string, on: boolean) => (on ? `${name} on your week` : `${name} off your week`),
+    sync: (name: string, on: boolean) => (on ? `Logging ${name} to the CRM` : `Not logging ${name}`),
   },
-  colourSaved: (name: string) => `${name}’s colour changed`,
-  defaultSaved: (name: string) => `New bookings now go to ${name}`,
+  colourSaved: 'Colour changed',
+  defaultSaved: (name: string) => `Bookings go to ${name}`,
   /** After a change leaves a calendar not in use: it stays on its row until the person leaves, then never shows. */
-  noLongerListed: (saved: string, name: string) => `${saved}. ${name} won’t be listed once you leave this page.`,
-  sharingSaved: (account: string) => `What teammates see of ${account}’s meetings changed`,
+  noLongerListed: (saved: string) => `${saved}. Gone from this list next visit.`,
+  sharingSaved: (sharing: 'shared' | 'private') =>
+    sharing === 'private' ? 'Teammates see busy only' : 'Teammates see full details',
   undo: 'Undo',
   /** New bookings moved off a calendar the provider removed (AC-1005). */
   fellBackTitle: 'Where bookings go changed',
-  fellBackText: (now: string, was: string) => `New bookings now go to ${now}. ${was} stopped taking them.`,
-  fellBackNone: (was: string) =>
-    `${was} stopped taking bookings and no other calendar can take them. Pick a calendar under Add bookings to.`,
+  fellBackText: (now: string, was: string) => `Now ${now}. ${was} stopped taking bookings.`,
+  fellBackNone: (was: string) => `${was} stopped taking bookings. Pick another under Add bookings to.`,
   /** A connection's "···" menu. */
   rowActions: (account: string) => `Actions for ${account}`,
   status: {
@@ -92,7 +83,7 @@ export const strings = {
   } satisfies Record<CalendarStatus, string>,
   synced: 'Synced',
   notSyncedYet: 'Not synced yet',
-  /** What teammates see of an account's meetings (the owner asked what Shared and Private meant, 22 Oct 2026). */
+  /** What teammates see of an account's meetings (the owner asked what Shared and Private meant, 22 Oct 2026): the two choices carry their own help, so no tip. */
   sharingLabel: 'Teammates see',
   shared: 'Full details',
   private: 'Busy only',
@@ -100,24 +91,19 @@ export const strings = {
     shared: 'Title, attendees and link',
     private: 'Shown as “Private meeting” with the time',
   },
-  sharingInfo:
-    'Controls what other members of this workspace see of meetings from this calendar account, on their calendar and in Bookings. You always see everything.',
   reconnect: 'Reconnect',
   /** Local development only: Google's notices can't reach a laptop, so sync waits for the 15 minute poll. */
   syncNow: 'Sync now',
   disconnect: 'Disconnect',
   /** The confirm names the calendar it ends (the owner's rule for every confirm, 21 October 2026). */
   disconnectTitle: (account: string) => `Disconnect ${account}?`,
-  disconnectText: 'Its meetings leave your records and its busy times stop blocking your booking pages.',
+  disconnectText: 'Its meetings leave your records. Its busy times stop blocking bookings.',
   disconnected: (account: string) => `Disconnected ${account}.`,
   cancel: 'Cancel',
   disconnecting: 'Disconnecting',
-  disconnectFailed: 'That didn’t disconnect. Try again in a moment.',
-  /** The workspace setting, for owners and admins (AC-609). */
+  disconnectFailed: 'Couldn’t disconnect. Try again.',
+  /** The workspace setting, for owners and admins (AC-609): the example is the whole help. */
   createPeople: 'Add people from meetings',
-  createPeopleHelp: 'Applies to every member’s synced meetings.',
-  createPeopleInfo:
-    'A guest who isn’t in Timefix yet becomes a person, linked to the company with their email’s domain.',
   createPeopleExample: 'A meeting with ana@acme.com adds Ana to People, linked to Acme if a company has acme.com.',
   /** Closes the note about how connecting went. */
   dismiss: 'Dismiss',
@@ -126,28 +112,24 @@ export const strings = {
     connected: {
       tone: 'success',
       title: 'Calendar connected',
-      text: 'Your meetings are syncing. They show on records within a few minutes.',
+      text: 'Meetings show on records in a few minutes.',
     },
-    denied: {
-      tone: 'info',
-      title: 'Calendar not connected',
-      text: 'You didn’t give Timefix access. Connect again whenever you like.',
-    },
+    denied: { tone: 'info', title: 'Calendar not connected', text: 'Access wasn’t given.' },
     scope: {
       tone: 'warning',
       title: 'Calendar not connected',
-      text: 'Timefix needs to see your events and when you’re busy. Connect again and leave both boxes ticked.',
+      text: 'Both boxes need a tick. Connect again.',
     },
-    limit: { tone: 'warning', title: 'Calendar not connected', text: 'You’ve connected the most accounts you can.' },
+    limit: { tone: 'warning', title: 'Calendar not connected', text: 'Account limit reached.' },
     off: {
       tone: 'info',
       title: 'Calendar sync is off',
-      text: 'Connecting calendars isn’t available here yet. Your booking pages still use your hours.',
+      text: 'Booking pages still use your hours.',
     },
     failed: {
       tone: 'danger',
       title: 'Calendar not connected',
-      text: 'Something went wrong on the way back from your calendar. Try again.',
+      text: 'Couldn’t connect. Try again.',
     },
   } as const satisfies Record<ConnectResult, unknown>,
 } as const;

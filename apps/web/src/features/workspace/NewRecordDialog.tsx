@@ -17,12 +17,13 @@ import {
   AttributeEditor,
   Button,
   Disclosure,
+  type FieldActions,
   FieldActionsContext,
   Form,
-  Modal,
-  Switch,
-  type FieldActions,
   type FormRefusal,
+  Modal,
+  sharedStrings,
+  Switch,
 } from '@crm/ui';
 import { usePendingOptions } from '@crm/data/react';
 import { useParams, useRouteContext } from '@tanstack/react-router';
@@ -132,7 +133,7 @@ function refusalsOf(
   editors: readonly AttributeDefinition[],
 ): { readonly byAttribute: ReadonlyMap<string, string>; readonly other: readonly FormRefusal[] } {
   if (!isDataError(error)) {
-    return { byAttribute: new Map(), other: [{ code: 'INTERNAL', message: strings.somethingWrong }] };
+    return { byAttribute: new Map(), other: [{ code: 'INTERNAL', message: sharedStrings.couldntDoThat }] };
   }
   // Refused as a whole (a limit, a lost connection): above the fields.
   const own = editors.flatMap((editor) => {

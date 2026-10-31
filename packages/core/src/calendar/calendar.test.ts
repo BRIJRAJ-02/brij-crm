@@ -249,8 +249,9 @@ describe('connecting (AC-597, AC-599, AC-600)', () => {
 describe('syncing (AC-601, AC-603 to AC-607, AC-610)', () => {
   it('syncs the window in full, matches attendees, links people and companies, and stores one outbox row a batch', async () => {
     const w = await world();
-    const bea = await w.person('Bea', ['bea@globex.com']);
+    // Globex first: Bea's work email then links her to it rather than filing a new Globex (spec 0059).
     const globex = await w.company('Globex', ['globex.com']);
+    const bea = await w.person('Bea', ['bea@globex.com']);
     const connection = await w.connect(w.ownerId, 'ada@acme.dev');
     w.fake.put(
       'ada@acme.dev',
@@ -437,12 +438,12 @@ describe('syncing (AC-601, AC-603 to AC-607, AC-610)', () => {
 describe('privacy (AC-611, AC-612) and reads (AC-608)', () => {
   it('shows a private connection’s meetings in full to their holder only, and coarse in the facts', async () => {
     const w = await world();
-    const bea = await w.person('Bea', ['bea@globex.com']);
+    const bea = await w.person('Bea', ['bea@globex.example']);
     const connection = await w.connect(w.ownerId, 'ada@acme.dev');
-    w.fake.put('ada@acme.dev', meeting('secret', day(2), [self('ada@acme.dev'), guest('bea@globex.com')]));
+    w.fake.put('ada@acme.dev', meeting('secret', day(2), [self('ada@acme.dev'), guest('bea@globex.example')]));
     w.fake.put(
       'ada@acme.dev',
-      meeting('marked', day(3), [self('ada@acme.dev'), guest('bea@globex.com')], { isPrivate: true }),
+      meeting('marked', day(3), [self('ada@acme.dev'), guest('bea@globex.example')], { isPrivate: true }),
     );
     await w.sync(connection.id);
     const seen = async (memberId: string) =>
@@ -537,17 +538,17 @@ const soleAccount = (name: string) => `${name}-${newId().slice(-12)}@acme.dev`;
 describe('disconnecting (AC-599) and removing a member (AC-614)', () => {
   it('removes the tokens with the connection and the meetings only it held, keeping shared ones', async () => {
     const w = await world();
-    const bea = await w.person('Bea', ['bea@globex.com']);
+    const bea = await w.person('Bea', ['bea@globex.example']);
     const ada = await w.connect(w.ownerId, 'ada@acme.dev');
     const other = await w.connect(w.ownerId, 'ada@gmail.com');
     // An account no other test's workspace holds: its grant is revoked only when nothing else holds it.
     const beas = soleAccount('bea');
     const cal = await w.connect(w.bea, beas);
-    w.fake.put('ada@acme.dev', meeting('only-ada', day(2), [self('ada@acme.dev'), guest('bea@globex.com')]));
-    w.fake.put('ada@acme.dev', meeting('shared', day(3), [self('ada@acme.dev'), guest('bea@globex.com')]));
+    w.fake.put('ada@acme.dev', meeting('only-ada', day(2), [self('ada@acme.dev'), guest('bea@globex.example')]));
+    w.fake.put('ada@acme.dev', meeting('shared', day(3), [self('ada@acme.dev'), guest('bea@globex.example')]));
     w.fake.put(
       beas,
-      meeting('shared-b', day(3), [self(beas), guest('bea@globex.com')], { icalUid: 'shared@google.com' }),
+      meeting('shared-b', day(3), [self(beas), guest('bea@globex.example')], { icalUid: 'shared@google.com' }),
     );
     await w.sync(ada.id);
     await w.sync(cal.id);

@@ -4,7 +4,7 @@
 // completed (with Undo), and My tasks' empty state offers New task; and a note is deleted in one click with Undo.
 import { randomUUID } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
-import { addPerson, newWorkspace } from './people.ts';
+import { addPerson, newWorkspace, openFullPage } from './people.ts';
 
 const RECORD_URL = /\/w\/[^/]+\/objects\/people\/([0-9a-f-]{36})\/overview$/;
 
@@ -27,6 +27,7 @@ async function withGrace(page: Page, prefix: string): Promise<{ readonly slug: s
     .getByRole('rowheader', { name: /Grace Hopper/ })
     .getByText('Grace Hopper')
     .click();
+  await openFullPage(page);
   await expect(page).toHaveURL(RECORD_URL);
   const id = RECORD_URL.exec(page.url())?.[1] ?? '';
   return { slug, recordPath: `/w/${slug}/objects/people/${id}` };

@@ -32,20 +32,21 @@ import {
   Field,
   InfoTip,
   Menu,
-  Modal,
   MenuItem,
   MenuSeparator,
   MenuTrigger,
+  Modal,
   RelativeTime,
   Select,
   SettingsSection,
   SettingsStack,
+  sharedStrings,
   Table,
-  TabPanel,
-  TruncatedText,
-  Tabs,
   type TableColumn,
+  TabPanel,
+  Tabs,
   type Toasts,
+  TruncatedText,
 } from '@crm/ui';
 import { useRouter } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
@@ -142,7 +143,7 @@ const INVITATION_COLUMNS: readonly TableColumn[] = [
 const SEARCH_WAIT_MS = 250;
 
 /** The message a refusal shows, in the server's words when it gave any. */
-const messageOf = (error: unknown) => (isDataError(error) ? error.message : strings.somethingWrong);
+const messageOf = (error: unknown) => (isDataError(error) ? error.message : sharedStrings.couldntDoThat);
 
 /** The Members page: Members and Joining tabs, the Invite dialog and the confirms. */
 export function MembersScreen({
@@ -697,7 +698,7 @@ export function MembersScreen({
         </Tabs>
       ) : (
         <>
-          <Callout>{strings.readOnlyNote}</Callout>
+          <Callout>{sharedStrings.ownersAndAdminsOnly}</Callout>
           {searchField}
           {membersList}
         </>
@@ -824,7 +825,7 @@ export function MembersPending() {
         </Tabs>
       ) : (
         <>
-          <Callout>{strings.readOnlyNote}</Callout>
+          <Callout>{sharedStrings.ownersAndAdminsOnly}</Callout>
           {searchField}
           {table}
         </>

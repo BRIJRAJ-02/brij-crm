@@ -28,8 +28,7 @@ import { limitsOf } from '../engine/limits.ts';
 import { checkViewQuery } from '../engine/query/page.ts';
 import { postgresError, refuse, refuseOn } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
-import { loadAttributes } from '../engine/values.ts';
-import { runWrite, type AfterWrite, type WriteContext } from '../engine/write.ts';
+import { runWrite, type AfterWrite, type ViewChange, type WriteContext } from '../engine/write.ts';
 import type { RemovalEffect } from '../members/removal-effect.ts';
 import { requirePermission } from '../access/check.ts';
 import { fieldLevel } from '../access/policy.ts';
@@ -39,16 +38,21 @@ import { deleteViewRecents } from '../search/recents.ts';
 import {
   configOf,
   callerOf,
+  checkViewList,
   listViews,
   memberOf,
+  parentAttributes,
+  parentIdOf,
   readView,
   VIEW_LOCKED,
   VIEW_NOT_FOUND,
+  viewChange,
   viewOf,
+  type ViewParent,
   type ViewRow,
 } from './views.ts';
 
-const { memberViewState, members, objects, views } = schema;
+const { lists, memberViewState, members, objects, views } = schema;
 
 /**
  * Takes a share lock on the caller's own member row and refuses when they are
@@ -68,24 +72,41 @@ async function stillMember(tx: WorkspaceTx, scope: EngineScope, memberId: string
 /** A view row as the reads give it, on an object. */
 type ObjectViewRow = ViewRow & { readonly objectId: string };
 
-/** The object a view write is about, read under its row lock: its plural name and its default view. */
-interface LockedObject {
+/**
+ * The object (or list, spec 0048) a view write is about, read under its row
+ * lock: the id its views are grouped by, its object and list, the name a
+ * refusal uses, and its default view.
+ */
+interface LockedObject extends ViewParent {
   readonly id: string;
   readonly pluralName: string;
   readonly defaultViewId: string | null;
 }
 
 /**
- * Takes the object's row lock for the rest of the write (creates, moves,
- * visibility changes and the default take turns on it), or `NOT_FOUND` for
- * an object that doesn't exist, is archived, or the caller can't see.
+ * Takes the parent's row lock for the rest of the write (creates, moves,
+ * visibility changes and the default take turns on it): the list's for a
+ * list's view, else the object's. `NOT_FOUND` for one that doesn't exist, is
+ * archived, or the caller can't see.
  */
 async function lockObject(
   tx: WorkspaceTx,
   scope: EngineScope,
   objectId: string,
   message: string,
+  listId: string | null = null,
 ): Promise<LockedObject> {
+  if (listId !== null) {
+    const list = await checkViewList(tx, scope, listId, message);
+    if (list.objectId !== objectId) throw refuse('NOT_FOUND', message);
+    const [locked] = await tx
+      .select({ defaultViewId: lists.defaultViewId })
+      .from(lists)
+      .where(and(eq(lists.workspaceId, scope.workspaceId), eq(lists.id, listId)))
+      .for('no key update');
+    if (locked === undefined) throw refuse('NOT_FOUND', message);
+    return { id: list.id, objectId, listId, pluralName: list.name, defaultViewId: locked.defaultViewId };
+  }
   const [row] = await tx
     .select({
       id: objects.id,
@@ -99,7 +120,7 @@ async function lockObject(
     .for('no key update');
   if (row === undefined || row.archivedAt !== null) throw refuse('NOT_FOUND', message);
   await checkObject(tx, scope.access, row.id, 'read', message);
-  return row;
+  return { id: row.id, objectId: row.id, listId: null, pluralName: row.pluralName, defaultViewId: row.defaultViewId };
 }
 
 /** The view rules' reason for an action, worded as the refusal the API answers. */
@@ -209,13 +230,14 @@ async function nextPosition(
   return row?.last === null || row?.last === undefined ? (visibility === 'workspace' ? 1 : 0) : row.last + 1;
 }
 
-/** The ids of the object's attributes this caller sees, live ones only unless `archived` too. */
+/** The ids of the parent's attributes this caller sees (a list's own and its object's), live and any. */
 async function visibleAttributeIds(
   tx: WorkspaceTx,
   scope: EngineScope,
-  objectId: string,
+  parent: ViewParent,
 ): Promise<{ readonly live: ReadonlySet<string>; readonly any: ReadonlySet<string> }> {
-  const all = [...(await loadAttributes(tx, objectId)).values()].filter(
+  const { objectId } = parent;
+  const all = [...(await parentAttributes(tx, parent)).values()].filter(
     (attribute) => fieldLevel(scope.access, { id: attribute.id, objectId }) !== 'hidden',
   );
   return {
@@ -250,11 +272,11 @@ function checkLayoutIds(
 async function checkBoard(
   tx: WorkspaceTx,
   scope: EngineScope,
-  objectId: string,
+  parent: ViewParent,
   board: BoardSettings | undefined,
 ): Promise<void> {
   if (board === undefined) return;
-  const problem = boardConfigProblem(board, await boardAttributes(tx, scope, objectId));
+  const problem = boardConfigProblem(board, await boardAttributes(tx, scope, parent));
   if (problem !== undefined) throw refuse('CONFIG_INVALID', problem);
 }
 
@@ -262,11 +284,11 @@ async function checkBoard(
 async function checkGroupBy(
   tx: WorkspaceTx,
   scope: EngineScope,
-  objectId: string,
+  parent: ViewParent,
   groupBy: string | null | undefined,
 ): Promise<void> {
   if (typeof groupBy !== 'string') return;
-  const attribute = (await boardAttributes(tx, scope, objectId)).find((each) => each.id === groupBy.toLowerCase());
+  const attribute = (await boardAttributes(tx, scope, parent)).find((each) => each.id === groupBy.toLowerCase());
   if (attribute === undefined || !isGroupable(attribute)) {
     throw refuse('CONFIG_INVALID', 'Tables group by a status, a single select, a checkbox or a member field.');
   }
@@ -276,12 +298,12 @@ async function checkGroupBy(
 async function checkCalcs(
   tx: WorkspaceTx,
   scope: EngineScope,
-  objectId: string,
+  parent: ViewParent,
   columns: readonly { readonly attributeId: string; readonly calc?: AggregateFn | undefined }[],
 ): Promise<void> {
   const calculated = columns.filter((column) => column.calc !== undefined);
   if (calculated.length === 0) return;
-  const types = new Map((await boardAttributes(tx, scope, objectId)).map((each) => [each.id, each.type]));
+  const types = new Map((await boardAttributes(tx, scope, parent)).map((each) => [each.id, each.type]));
   for (const column of calculated) {
     const type = types.get(column.attributeId.toLowerCase());
     if (type === undefined || column.calc === undefined || !aggregatesFor(type).includes(column.calc)) {
@@ -290,13 +312,14 @@ async function checkCalcs(
   }
 }
 
-/** The object's attributes the caller sees, as the board rules read them. */
-async function boardAttributes(tx: WorkspaceTx, scope: EngineScope, objectId: string): Promise<BoardAttribute[]> {
+/** The parent's attributes the caller sees (a list's own and its object's), as the board rules read them. */
+async function boardAttributes(tx: WorkspaceTx, scope: EngineScope, parent: ViewParent): Promise<BoardAttribute[]> {
+  const { objectId } = parent;
   const [object] = await tx
     .select({ primaryAttributeId: objects.primaryAttributeId })
     .from(objects)
     .where(and(eq(objects.workspaceId, scope.workspaceId), eq(objects.id, objectId)));
-  return [...(await loadAttributes(tx, objectId)).values()]
+  return [...(await parentAttributes(tx, parent)).values()]
     .filter((attribute) => fieldLevel(scope.access, { id: attribute.id, objectId }) !== 'hidden')
     .map((attribute) => ({
       id: attribute.id,
@@ -334,8 +357,16 @@ function checkSize(config: ViewConfig): void {
   }
 }
 
-/** An object's plural name, for a refusal's words. */
-async function pluralOf(tx: WorkspaceTx, scope: EngineScope, objectId: string): Promise<string> {
+/** An object's plural name (a list's name, for its views), for a refusal's words. */
+async function pluralOf(tx: WorkspaceTx, scope: EngineScope, parent: ViewParent): Promise<string> {
+  if (parent.listId !== null) {
+    const [list] = await tx
+      .select({ name: lists.name })
+      .from(lists)
+      .where(and(eq(lists.workspaceId, scope.workspaceId), eq(lists.id, parent.listId)));
+    return list?.name ?? 'this list';
+  }
+  const { objectId } = parent;
   const [object] = await tx
     .select({ pluralName: objects.pluralName })
     .from(objects)
@@ -352,6 +383,8 @@ export interface CreateViewInput {
   /** The UUID v7 the browser minted once per dialog: the retry key. */
   readonly id: string;
   readonly objectId: string;
+  /** A view of one of the object's lists (spec 0048). */
+  readonly listId?: string | undefined;
   readonly name: string;
   readonly kind: ViewKind;
   readonly visibility: ViewVisibility;
@@ -374,6 +407,7 @@ export async function createView(
 ): Promise<View> {
   const caller = memberOf(scope);
   const objectId = checkId(input.objectId, 'That object does not exist.');
+  const listId = input.listId === undefined ? null : checkId(input.listId, 'That list does not exist.');
   if (!isUuidV7(input.id)) throw refuse('CONFIG_INVALID', 'The view id must be a UUID v7.');
   const id = input.id.toLowerCase();
   const name = input.name.trim();
@@ -389,26 +423,32 @@ export async function createView(
     scope,
     async (context) => {
       const { tx } = context;
-      const object = await lockObject(tx, scope, objectId, 'That object does not exist.');
+      const object = await lockObject(
+        tx,
+        scope,
+        objectId,
+        listId === null ? 'That object does not exist.' : 'That list does not exist.',
+        listId,
+      );
       // A replay is found under the object's lock, before the count would see it twice.
       const [earlier] = await tx
-        .select({ objectId: views.objectId, creatorMemberId: views.creatorMemberId, createdById: views.createdById })
+        .select({ parentId: views.parentId, creatorMemberId: views.creatorMemberId, createdById: views.createdById })
         .from(views)
         .where(and(eq(views.workspaceId, scope.workspaceId), eq(views.id, id)));
       if (earlier !== undefined) {
-        const isOwnTry = earlier.objectId === object.id && earlier.createdById === (scope.actor.id ?? null);
+        const isOwnTry = earlier.parentId === object.id && earlier.createdById === (scope.actor.id ?? null);
         if (!isOwnTry) throw refuse('ID_TAKEN', 'A view with that id already exists.');
         return { view: await reread(tx, scope, id), replayed: true };
       }
-      const visible = await visibleAttributeIds(tx, scope, object.id);
+      const visible = await visibleAttributeIds(tx, scope, object);
       checkLayoutIds(config.data, visible.any, object.pluralName);
-      await checkBoard(tx, scope, object.id, config.data.board);
-      await checkGroupBy(tx, scope, object.id, config.data.groupBy);
-      await checkCalcs(tx, scope, object.id, config.data.columns);
+      await checkBoard(tx, scope, object, config.data.board);
+      await checkGroupBy(tx, scope, object, config.data.groupBy);
+      await checkCalcs(tx, scope, object, config.data.columns);
       const filter =
         config.data.filter === undefined || config.data.filter.conditions.length === 0 ? undefined : config.data.filter;
       await checkViewQuery(tx, scope, {
-        objectId: object.id,
+        ...(object.listId === null ? { objectId: object.objectId } : { listId: object.listId }),
         ...(filter === undefined ? {} : { filter }),
         sorts: config.data.sorts,
       });
@@ -423,7 +463,7 @@ export async function createView(
         tx.insert(views).values({
           workspaceId: scope.workspaceId,
           id,
-          objectId: object.id,
+          ...(object.listId === null ? { objectId: object.objectId } : { listId: object.listId }),
           name,
           kind: input.kind,
           visibility: input.visibility,
@@ -440,7 +480,7 @@ export async function createView(
           updatedByMemberId: by.updatedByMemberId,
         }),
       );
-      context.record({ views: [{ viewId: id, objectId: object.id }] });
+      context.record({ views: [viewChange(id, object)] });
       return { view: await reread(tx, scope, id), replayed: false };
     },
     hooks,
@@ -478,7 +518,7 @@ export async function updateView(
     async (context) => {
       const { tx } = context;
       const found = await readView(tx, scope, viewId, false);
-      const object = await lockObject(tx, scope, found.objectId, VIEW_NOT_FOUND);
+      const object = await lockObject(tx, scope, found.objectId, VIEW_NOT_FOUND, found.listId);
       const row = await readView(tx, scope, viewId, true);
       const changes: { name?: string; visibility?: ViewVisibility; position?: number } = {};
       if (name !== undefined && name !== row.name) {
@@ -497,7 +537,7 @@ export async function updateView(
           .set({ ...changes, version: sql`${views.version} + 1`, ...touched(scope) })
           .where(and(eq(views.workspaceId, scope.workspaceId), eq(views.id, row.id))),
       );
-      context.record({ views: [{ viewId: row.id, objectId: row.objectId }] });
+      context.record({ views: [viewChange(row.id, row)] });
       return reread(tx, scope, row.id);
     },
     hooks,
@@ -526,12 +566,12 @@ export async function setViewLayout(
       const row = await readView(tx, scope, viewId, true);
       check(scope, 'edit', row);
       const layout = canonicalLayout(input.layout);
-      const visible = await visibleAttributeIds(tx, scope, row.objectId);
-      const pluralName = await pluralOf(tx, scope, row.objectId);
+      const visible = await visibleAttributeIds(tx, scope, row);
+      const pluralName = await pluralOf(tx, scope, row);
       checkLayoutIds(layout, visible.any, pluralName);
-      await checkBoard(tx, scope, row.objectId, layout.board);
-      await checkGroupBy(tx, scope, row.objectId, layout.groupBy);
-      await checkCalcs(tx, scope, row.objectId, layout.columns);
+      await checkBoard(tx, scope, row, layout.board);
+      await checkGroupBy(tx, scope, row, layout.groupBy);
+      await checkCalcs(tx, scope, row, layout.columns);
       const stored = configOf(row.config);
       const merged = mergeLayout(stored.columns, layout, visible.live);
       const board =
@@ -577,7 +617,7 @@ export async function setViewLayout(
           })
           .where(and(eq(views.workspaceId, scope.workspaceId), eq(views.id, row.id))),
       );
-      context.record({ views: [{ viewId: row.id, objectId: row.objectId }] });
+      context.record({ views: [viewChange(row.id, row)] });
       return reread(tx, scope, row.id);
     },
     hooks,
@@ -597,15 +637,15 @@ export async function moveView(
   hooks: readonly AfterWrite[] = [],
 ): Promise<ViewSummary[]> {
   const viewId = checkId(input.viewId, VIEW_NOT_FOUND);
-  const { result: objectId } = await runWrite(
+  const { result: parent } = await runWrite(
     scope,
     async (context) => {
       const { tx } = context;
       const found = await readView(tx, scope, viewId, false);
-      const object = await lockObject(tx, scope, found.objectId, VIEW_NOT_FOUND);
+      const object = await lockObject(tx, scope, found.objectId, VIEW_NOT_FOUND, found.listId);
       const row = await readView(tx, scope, viewId, true);
       // The default view always sits first: moving it changes nothing.
-      if (row.id === object.defaultViewId) return object.id;
+      if (row.id === object.defaultViewId) return object;
       check(scope, 'move', row, object.pluralName);
       const group = (
         await tx
@@ -616,9 +656,9 @@ export async function moveView(
       ).filter((each) => each.id !== object.defaultViewId);
       const at = group.findIndex((each) => each.id === row.id);
       const other = group[input.direction === 'up' ? at - 1 : at + 1];
-      if (at === -1 || other === undefined) return object.id;
+      if (at === -1 || other === undefined) return object;
       const mine = group[at];
-      if (mine === undefined) return object.id;
+      if (mine === undefined) return object;
       // The two swap positions. Only when they share one (rows seeded alike) is the group numbered afresh, in one
       // statement, so a move costs two row writes however long the group is.
       const moves: { readonly id: string; readonly position: number }[] =
@@ -647,12 +687,12 @@ export async function moveView(
         from (values ${values}) as moved(id, position)
         where ${views.workspaceId} = ${scope.workspaceId} and ${views.id} = moved.id`);
       const changed = [mine.id, other.id];
-      context.record({ views: changed.map((id) => ({ viewId: id, objectId: object.id })) });
-      return object.id;
+      context.record({ views: changed.map((id) => viewChange(id, object)) });
+      return object;
     },
     hooks,
   );
-  return [...(await listViews(scope, objectId)).views];
+  return [...(await listViews(scope, parent.objectId, parent.listId ?? undefined)).views];
 }
 
 /**
@@ -684,7 +724,7 @@ export async function setViewLocked(
           ...touched(scope),
         })
         .where(and(eq(views.workspaceId, scope.workspaceId), eq(views.id, row.id)));
-      context.record({ views: [{ viewId: row.id, objectId: row.objectId }] });
+      context.record({ views: [viewChange(row.id, row)] });
       return reread(tx, scope, row.id);
     },
     hooks,
@@ -700,24 +740,32 @@ export async function setViewLocked(
  */
 export async function setDefaultView(
   scope: EngineScope,
-  input: { readonly objectId: string; readonly viewId: string },
+  input: { readonly objectId: string; readonly listId?: string | undefined; readonly viewId: string },
   hooks: readonly AfterWrite[] = [],
 ): Promise<ViewSummary[]> {
   requirePermission(scope, 'views.manage');
   const objectId = checkId(input.objectId, VIEW_NOT_FOUND);
+  const listId = input.listId === undefined ? null : checkId(input.listId, VIEW_NOT_FOUND);
   const viewId = checkId(input.viewId, VIEW_NOT_FOUND);
   await runWrite(
     scope,
     async (context) => {
       const { tx } = context;
-      const object = await lockObject(tx, scope, objectId, VIEW_NOT_FOUND);
+      const object = await lockObject(tx, scope, objectId, VIEW_NOT_FOUND, listId);
       const row = await readView(tx, scope, viewId, true);
-      if (row.objectId !== object.id) throw refuse('NOT_FOUND', VIEW_NOT_FOUND);
+      if (row.objectId !== object.objectId || row.listId !== object.listId) throw refuse('NOT_FOUND', VIEW_NOT_FOUND);
       if (!check(scope, 'setDefault', row, object.pluralName)) return;
-      await tx
-        .update(objects)
-        .set({ defaultViewId: row.id })
-        .where(and(eq(objects.workspaceId, scope.workspaceId), eq(objects.id, object.id)));
+      if (object.listId !== null) {
+        await tx
+          .update(lists)
+          .set({ defaultViewId: row.id })
+          .where(and(eq(lists.workspaceId, scope.workspaceId), eq(lists.id, object.listId)));
+      } else {
+        await tx
+          .update(objects)
+          .set({ defaultViewId: row.id })
+          .where(and(eq(objects.workspaceId, scope.workspaceId), eq(objects.id, object.id)));
+      }
       const touchedIds = [row.id, ...(object.defaultViewId === null ? [] : [object.defaultViewId])];
       for (const id of touchedIds) {
         await tx
@@ -725,11 +773,11 @@ export async function setDefaultView(
           .set({ version: sql`${views.version} + 1`, ...touched(scope) })
           .where(and(eq(views.workspaceId, scope.workspaceId), eq(views.id, id)));
       }
-      context.record({ views: touchedIds.map((id) => ({ viewId: id, objectId: object.id })) });
+      context.record({ views: touchedIds.map((id) => viewChange(id, object)) });
     },
     hooks,
   );
-  return [...(await listViews(scope, objectId)).views];
+  return [...(await listViews(scope, objectId, listId ?? undefined)).views];
 }
 
 /**
@@ -750,13 +798,13 @@ export async function deleteView(
       const { tx } = context;
       // The object first, then the view (the one lock order): a default set meanwhile is seen, never a stale one.
       const found = await readView(tx, scope, viewId, false);
-      const object = await lockObject(tx, scope, found.objectId, VIEW_NOT_FOUND);
+      const object = await lockObject(tx, scope, found.objectId, VIEW_NOT_FOUND, found.listId);
       const row = await readView(tx, scope, viewId, true);
       check(scope, 'delete', row, object.pluralName);
       await tx.delete(views).where(and(eq(views.workspaceId, scope.workspaceId), eq(views.id, row.id)));
       // It leaves everyone's recent items too (spec 0039, AC-1092).
       await deleteViewRecents(tx, scope, row.id);
-      context.record({ views: [{ viewId: row.id, objectId: row.objectId }] });
+      context.record({ views: [viewChange(row.id, row)] });
     },
     hooks,
   );
@@ -778,7 +826,7 @@ export async function markViewOpened(scope: EngineScope, input: { readonly viewI
     await stillMember(tx, scope, caller);
     await tx
       .insert(memberViewState)
-      .values({ workspaceId: scope.workspaceId, memberId: caller, parentId: row.objectId, viewId: row.id })
+      .values({ workspaceId: scope.workspaceId, memberId: caller, parentId: parentIdOf(row), viewId: row.id })
       .onConflictDoUpdate({
         target: [memberViewState.workspaceId, memberViewState.memberId, memberViewState.parentId],
         set: { viewId: row.id, openedAt: sql`now()` },
@@ -806,9 +854,13 @@ export async function deleteMemberViews(context: WriteContext, memberId: string)
         eq(views.visibility, 'private'),
       ),
     )
-    .returning({ id: views.id, objectId: views.objectId });
-  const onObjects = deleted.flatMap((row) =>
-    row.objectId === null ? [] : [{ viewId: row.id, objectId: row.objectId }],
+    .returning({ id: views.id, objectId: views.objectId, listId: views.listId });
+  const onObjects = deleted.flatMap((row): ViewChange[] =>
+    row.objectId !== null
+      ? [{ viewId: row.id, objectId: row.objectId }]
+      : row.listId !== null
+        ? [{ viewId: row.id, listId: row.listId }]
+        : [],
   );
   if (onObjects.length > 0) context.record({ views: onObjects });
 }

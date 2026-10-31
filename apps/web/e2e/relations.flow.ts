@@ -187,10 +187,11 @@ test.describe('relations', () => {
     const edit = page.getByRole('dialog', { name: 'Edit relationship' });
     await expect(edit).toBeVisible();
     await expect(edit.getByRole('radio')).toHaveCount(0);
-    await expect(edit.getByLabel('How records link', { exact: true })).toHaveValue(
-      'Each company has many people, each person has many companies',
-    );
-    await expect(edit).toContainText('The objects and how records link can’t change once the relationship exists.');
+    // The two objects' cards say each side's answer in words (the CRM flow pass, 31 October 2026).
+    const shape = edit.getByRole('group', { name: 'How records link' });
+    await expect(shape).toContainText('Each company has many people');
+    await expect(shape).toContainText('Each person has many companies');
+    await expect(edit).toContainText('Fixed once created.');
     await edit.getByLabel('Name on Companies', { exact: true }).fill('Backers');
     await edit.getByLabel('Name on People', { exact: true }).fill('Holdings');
     await checkScreen(page, 'relations-edit');

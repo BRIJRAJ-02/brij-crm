@@ -12,7 +12,8 @@ export { jobItems, jobItemState, jobLane, jobs, jobStatus } from './jobs.ts';
 export { workspaceMilestones } from './milestones.ts';
 export { validationRuleKind, validationRules } from './validation.ts';
 export { memberViewState, viewKind, views, viewVisibility } from './views.ts';
-export { notes } from './notes.ts';
+export { noteRecords, notes } from './notes.ts';
+export { REPORT_CONFIG_MAX_BYTES, reports } from './reports.ts';
 export { memberNavPrefs, NAV_ITEMS_MAX } from './navigation.ts';
 export { taskRecords, tasks } from './tasks.ts';
 export { memberRecents } from './search.ts';
@@ -54,6 +55,8 @@ export { auditEvents, invitations, joinRequests, workspaceDomains, workspaceSecu
 export { emailPreferences, emails, emailStatus } from './emails.ts';
 export { bookingPageRotations, rotationAssignments, rotationMembers, rotationRoster, rotations } from './rotation.ts';
 export { memberBookingLimits, scheduleDelegations } from './scheduling.ts';
+export { accessRules, recordRules, teamMembers, teams } from './teams.ts';
 export { routingDecisions } from './routing.ts';
+export { automationRuns, automations } from './automations.ts';
 export { importRowOutcome, importRows, imports, importStatus } from './imports.ts';
 export { webhookDeliveries, webhookEndpoints } from './webhooks.ts';

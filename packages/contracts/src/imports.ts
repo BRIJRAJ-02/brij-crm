@@ -71,6 +71,8 @@ export type ImportSettings = z.infer<typeof ImportSettings>;
 export const CreateImportInput = WorkspaceScoped.extend({
   id: uuidV7('The import id must be a UUID v7.'),
   objectId: Uuid,
+  /** A list of the object's (spec 0048, AC-4833): each row then adds (or, once only, updates) an entry in it. */
+  listId: Uuid.optional(),
   fileName: z.string().trim().min(1).max(255),
   rowCount: z.number().int().min(1).max(TRANSFER_LIMITS.importRows),
   errorRows: z.number().int().min(0).max(TRANSFER_LIMITS.importRows),
@@ -200,6 +202,8 @@ export type ImportCounts = z.infer<typeof ImportCounts>;
 export const ImportView = z.object({
   id: Uuid,
   objectId: Uuid,
+  /** The list its rows went into as entries (spec 0048, AC-4833). */
+  listId: Uuid.optional(),
   fileName: z.string(),
   rowCount: z.number().int().min(0),
   errorRows: z.number().int().min(0),

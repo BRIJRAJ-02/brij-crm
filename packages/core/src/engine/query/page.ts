@@ -92,6 +92,8 @@ export type PageQuery = ViewSource &
     readonly limit?: number;
     /** Only these attributes' values, plus the primary (spec 0006, AC-55); every attribute when absent. */
     readonly attributeIds?: readonly string[];
+    /** Add each record's open comment threads (`openThreads`): one more statement for the page. */
+    readonly threadCounts?: boolean;
   };
 
 /** One page: records in order (for a list, its entries in order and their records), and the cursor for the next. */
@@ -264,7 +266,7 @@ async function prepare(
 export async function checkViewQuery(
   tx: WorkspaceTx,
   scope: EngineScope,
-  query: { readonly objectId: string; readonly filter?: FilterGroup; readonly sorts: SortRules },
+  query: ViewSource & { readonly filter?: FilterGroup; readonly sorts: SortRules },
 ): Promise<void> {
   const { context, level } = await prepare(tx, scope, query, false);
   compileFilter(context, level, query.filter);
@@ -1084,6 +1086,7 @@ export async function readPage(
     visibleAlready: true,
     // Malformed ids name nothing; ids of another object's attributes are ignored by the read.
     ...(query.attributeIds === undefined ? {} : { attributeIds: query.attributeIds.filter(isUuid).map(canonicalId) }),
+    ...(query.threadCounts === true ? { threadCounts: true as const } : {}),
   });
   const page: Page = !isList
     ? { records }
@@ -1611,7 +1614,8 @@ export async function countsWhole(
 export async function matchingIdsIn(
   tx: WorkspaceTx,
   scope: EngineScope,
-  query: { readonly objectId: string; readonly filter?: FilterGroup } & QueryClock,
+  /** An object's records, or a list's entries (spec 0048: their ids, the entries' own Added for `asOf`). */
+  query: ViewSource & { readonly filter?: FilterGroup } & QueryClock,
   page: {
     readonly after: string | undefined;
     readonly limit: number;
@@ -1698,7 +1702,7 @@ export async function orderedIdsIn(
 export async function checkMatching(
   tx: WorkspaceTx,
   scope: EngineScope,
-  query: { readonly objectId: string; readonly filter?: FilterGroup } & QueryClock,
+  query: ViewSource & { readonly filter?: FilterGroup } & QueryClock,
 ): Promise<void> {
   const { context, level } = await prepare(tx, scope, query, false);
   compileFilter(context, level, query.filter);

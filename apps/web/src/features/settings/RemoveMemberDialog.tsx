@@ -1,11 +1,21 @@
 // Brief
 // Purpose: ask before removing someone (spec 0031, AC-816), saying what their removal does: the booking pages that
 // pause, the calendars disconnected, the open tasks and records that name them.
-// Main task: read what happens (two lines, the rest behind Show more), see their open tasks and records go to the
+// Main task: read what happens (one line, then a small table of counts), see their open tasks and records go to the
 // person removing them (or pick another, or keep them), then Remove member.
 // Leaves out: the removal's rules (the server's), the hand over's progress (Background jobs) and the toast (the page's).
 import { isDataError, type DataLayer, type MemberView, type RemovalPreview } from '@crm/data';
-import { Avatar, Button, Callout, Disclosure, Modal, Select, Skeleton, useDelayedLoading } from '@crm/ui';
+import {
+  Avatar,
+  Button,
+  Callout,
+  DescriptionList,
+  Modal,
+  Select,
+  sharedStrings,
+  Skeleton,
+  useDelayedLoading,
+} from '@crm/ui';
 import { useEffect, useState } from 'react';
 import { strings } from './members-strings.ts';
 
@@ -30,10 +40,9 @@ type Read =
   | { readonly status: 'failed' };
 
 /**
- * A danger Modal like every confirm on the Members page (Cancel with ESC
- * first, the verb last, busy while it runs, a refusal inside), which also
- * reads what the removal will do and, when open tasks or records name them,
- * offers a person to hand those to.
+ * A danger confirm like every one on the Members page (the question, one line, Cancel with ESC first, the verb
+ * last, busy while it runs, a refusal inside), which also reads what the removal will do as a small table of
+ * counts and, when open tasks or records name them, offers a person to hand those to.
  */
 export function RemoveMemberDialog({
   data,
@@ -115,18 +124,17 @@ function Asked({
       },
       (error: unknown) => {
         setBusy(false);
-        setFailure(isDataError(error) ? error.message : strings.somethingWrong);
+        setFailure(isDataError(error) ? error.message : sharedStrings.couldntDoThat);
       },
     );
   };
 
-  // Two sentences said; the rest folded, so the question stays short.
-  const effects = read.status === 'ready' ? strings.removalEffects(read.preview) : [];
-  const said = effects.slice(0, 2).join(' ');
-  const more = effects.slice(2).join(' ');
+  // What changes, as a small table of counts: nothing to read through, and nothing folded.
+  const rows = read.status === 'ready' ? strings.removalRows(read.preview) : [];
   return (
     <Modal
       title={strings.removeTitle(member.name, workspaceName)}
+      variant="confirm"
       tone="danger"
       isOpen={isOpen}
       isBusy={isBusy}
@@ -151,12 +159,7 @@ function Asked({
       {read.status === 'ready' && read.preview.requiredDefaults > 0 && (
         <Callout tone="warning">{strings.requiredDefaultsLost(read.preview.requiredDefaults)}</Callout>
       )}
-      {said !== '' && <p>{said}</p>}
-      {more !== '' && (
-        <Disclosure title={strings.showMoreEffects} variant="quiet">
-          <p>{more}</p>
-        </Disclosure>
-      )}
+      {rows.length > 0 && <DescriptionList items={rows.map((row) => ({ term: row.term, description: row.value }))} />}
       {read.status === 'ready' && read.preview.openTasks + read.preview.records > 0 && (
         <Select
           label={strings.handTo}

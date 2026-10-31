@@ -23,6 +23,7 @@ export const importsRouter = member.imports.router({
         {
           id: input.id,
           objectId: input.objectId,
+          ...(input.listId === undefined ? {} : { listId: input.listId }),
           fileName: input.fileName,
           rowCount: input.rowCount,
           errorRows: input.errorRows,

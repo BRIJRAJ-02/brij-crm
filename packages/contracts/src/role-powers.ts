@@ -31,6 +31,7 @@ export const PERMISSION_POWERS: Record<Permission, string> = {
   'access.manage': 'Change who sees what',
   'schema.manage': 'Change objects and fields',
   'views.manage': 'Lock views and change locked ones',
+  'lists.manage': 'Make lists and pipelines',
   'records.purge': 'Delete records forever',
   'records.export': 'Export records',
   'forms.manage': 'Build, publish and pause forms',
@@ -67,7 +68,7 @@ export interface PermissionArea {
  */
 export const PERMISSION_AREAS: readonly PermissionArea[] = [
   { id: 'records', title: 'Records', permissions: ['records.export', 'records.purge'] },
-  { id: 'schema', title: 'Objects and fields', permissions: ['schema.manage', 'views.manage'] },
+  { id: 'schema', title: 'Objects and fields', permissions: ['schema.manage', 'views.manage', 'lists.manage'] },
   { id: 'capture', title: 'Forms and booking', permissions: ['forms.manage', 'booking.manage', 'booking.admin'] },
   {
     id: 'scheduling',

@@ -29,6 +29,7 @@ import { Button } from '../../atoms/Button/Button.tsx';
 import { CheckboxMark } from '../../atoms/Checkbox/Checkbox.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
+import { LockReason } from '../../atoms/Tooltip/LockReason.tsx';
 import { AnchoredTooltip, Tooltip, TOOLTIP_DELAY_MS } from '../../atoms/Tooltip/Tooltip.tsx';
 import { Menu, MenuItem, MenuSection, MenuTrigger } from '../../molecules/Menu/Menu.tsx';
 import { SharedTooltipContext } from '../../atoms/TruncatedText/TruncatedText.tsx';
@@ -193,6 +194,18 @@ export interface DataGridProps<Row> {
   readonly isCellKnown?: (row: Row, columnId: string) => boolean;
   /** Notes on rows, by row key: drawn after the row header's value, and read with it. */
   readonly rowNotes?: ReadonlyMap<string, RowNote>;
+  /**
+   * The row whose record is open beside the grid (the record panel, 31 October 2026): that row is tinted and marked
+   * `aria-current`, and scrolled into view when it changes (only if it is out of view). `activeIndex` is its row
+   * while the screen holds it, so the grid can scroll to a row it hasn't drawn.
+   */
+  readonly activeId?: string;
+  readonly activeIndex?: number;
+  /**
+   * A row's open comment threads: a comment mark with the count after the name in its row header, read with it
+   * ("Ada Lovelace, 2 open comment threads"). Nothing for 0 or undefined.
+   */
+  readonly commentCount?: (row: Row) => number | undefined;
   /** A cell editor opened (true) or closed (false): a screen holds back reordering its rows meanwhile. */
   readonly onEditingChange?: (isEditing: boolean) => void;
   /**
@@ -216,6 +229,12 @@ export interface DataGridProps<Row> {
   readonly addColumnItems?: readonly AddColumnItem[];
   /** One of `addColumnItems` was chosen. */
   readonly onAddColumnItem?: (id: string) => void;
+  /**
+   * Why "New attribute…" is off (the object is at its attribute limit, the field types pass): the "+" becomes a
+   * LockReason saying it when there is nothing hidden to show, else its menu keeps the hidden columns and shows New
+   * attribute… disabled with the reason under it. Absent, it is on.
+   */
+  readonly addColumnLock?: string;
   /**
    * Items a column's menu adds after its own (spec 0012: Edit attribute,
    * Archive attribute), per column; none for a column it answers none for.
@@ -367,11 +386,15 @@ export function DataGrid<Row>({
   focusRow,
   isCellKnown,
   rowNotes,
+  activeId,
+  activeIndex,
+  commentCount,
   onEditingChange,
   onAddColumn,
   addColumnLabel = strings.addColumn,
   addColumnItems,
   onAddColumnItem,
+  addColumnLock,
   columnActions: columnActionsOf,
   focusColumn,
 }: DataGridProps<Row>) {
@@ -709,6 +732,20 @@ export function DataGrid<Row>({
   useLayoutEffect(() => {
     goToLatest.current = goTo;
   });
+  // The open record's row comes into view when the open record changes (or once its row is known), and only when
+  // it is out of view, so opening a row that shows doesn't move the table.
+  const scrollToActive = useRef<() => void>(() => undefined);
+  useLayoutEffect(() => {
+    scrollToActive.current = () => {
+      if (activeIndex === undefined || activeIndex < 0 || activeIndex >= count) return;
+      virtualizer.scrollToIndex(lines.lineOf(activeIndex), { align: 'auto' });
+    };
+  });
+  const hasActiveIndex = activeIndex !== undefined;
+  useEffect(() => {
+    if (activeId === undefined || !hasActiveIndex) return;
+    scrollToActive.current();
+  }, [activeId, hasActiveIndex]);
   useEffect(() => {
     if (focusRow === undefined) return;
     let frames = 0;
@@ -1160,7 +1197,7 @@ export function DataGrid<Row>({
         event.preventDefault();
         if (focus.col >= colCount) {
           if (addColumnItems !== undefined && addColumnItems.length > 0) setAddMenuOpen(true);
-          else onAddColumn?.();
+          else if (addColumnLock === undefined) onAddColumn?.();
         } else if (column === undefined) toggleScreen();
         else setMenuFor(column.id);
       }
@@ -1460,9 +1497,10 @@ export function DataGrid<Row>({
             },
             isMenuOpen: isAddMenuOpen,
             onMenuOpenChange: setAddMenuOpen,
+            lock: addColumnLock,
           }
         : undefined,
-    [hasAdd, colCount, addColumnLabel, isAddFocused, addColumnItems, isAddMenuOpen],
+    [hasAdd, colCount, addColumnLabel, isAddFocused, addColumnItems, isAddMenuOpen, addColumnLock],
   );
   const headerHandlers = useMemo<HeaderHandlers>(
     () => ({
@@ -1595,6 +1633,8 @@ export function DataGrid<Row>({
     const rowData = rows.getItem(row);
     const id = rowData === undefined ? undefined : rows.getKey(rowData);
     const isSelected = id !== undefined && isRowSelected(currentSelection, id);
+    const isOpen = id !== undefined && id === activeId;
+    const comments = rowData === undefined ? undefined : commentCount?.(rowData);
     const named = rowData === undefined ? undefined : nameOf(rowData);
     const name = rowData === undefined ? strings.loadingRow : (named ?? untitled);
     // A known row header with no name says so, muted, in place of an empty cell.
@@ -1605,8 +1645,10 @@ export function DataGrid<Row>({
         role="row"
         aria-rowindex={item.index + 2}
         aria-selected={isSelected}
+        aria-current={isOpen ? 'true' : undefined}
         className={styles.row}
         data-selected={isSelected || undefined}
+        data-open={isOpen || undefined}
         data-editing={editing?.row === row || undefined}
         style={{ '--row-offset': `${String(item.start - HEADER - rowShift)}px` }}
       >
@@ -1659,6 +1701,7 @@ export function DataGrid<Row>({
               {...(each.column.id === rowHeader && id !== undefined && rowNotes?.get(id) !== undefined
                 ? { note: rowNotes.get(id) }
                 : {})}
+              {...(each.column.id === rowHeader && comments !== undefined && comments > 0 ? { comments } : {})}
               isFocused={isFocusedAt(row, place.col)}
               isActive={isWithin && isFocusedAt(row, place.col)}
               isInRange={isInRange(range, row, place.col)}
@@ -1871,11 +1914,7 @@ export function DataGrid<Row>({
           {footerRow}
         </div>
         {/* With no rows the header stays, so the columns and their menus do too. */}
-        {isEmpty && (
-          <div className={styles.state}>
-            {emptyState ?? <EmptyState title={strings.empty}>{strings.emptyText}</EmptyState>}
-          </div>
-        )}
+        {isEmpty && <div className={styles.state}>{emptyState ?? <EmptyState title={strings.empty} />}</div>}
         {tip !== undefined && (isWithin || tip.via === 'hover') && (
           <AnchoredTooltip
             key={tip.key}
@@ -1970,6 +2009,25 @@ const NEW_COLUMN = '__new_column';
 export interface AddColumnItem {
   readonly id: string;
   readonly label: string;
+  /**
+   * The heading of the group the item sits under ("Deals fields"); items with the same one that follow each other
+   * share a section. None: the item stands alone, as before.
+   */
+  readonly group?: string;
+}
+
+/** The hidden columns the "+" menu offers, in runs under their group's heading (items with no group stand alone). */
+function groupedItems(items: readonly AddColumnItem[]): readonly {
+  readonly label: string | undefined;
+  readonly items: readonly AddColumnItem[];
+}[] {
+  const runs: { label: string | undefined; items: AddColumnItem[] }[] = [];
+  for (const item of items) {
+    const last = runs.at(-1);
+    if (last !== undefined && last.label === item.group && item.group !== undefined) last.items.push(item);
+    else runs.push({ label: item.group, items: [item] });
+  }
+  return runs;
 }
 
 /** The "+" header after the last column. */
@@ -1983,6 +2041,8 @@ interface AddColumnHeader {
   readonly onItem: (id: string) => void;
   readonly isMenuOpen: boolean;
   readonly onMenuOpenChange: (isOpen: boolean) => void;
+  /** Why New attribute is off, when it is. */
+  readonly lock: string | undefined;
 }
 
 /** The header row: the checkbox for the rows on screen, then a header per drawn column. Memoised, so a scroll step skips it. */
@@ -2006,6 +2066,7 @@ const GridHeader = memo(function GridHeader({
   addColumn,
   hideColumnLocks,
 }: GridHeaderProps) {
+  const lockId = useId();
   const runOf = (id: string) => layout.columns.findIndex((each) => each.id === id) < layout.pinnedCount;
   const canMove = (id: string, direction: -1 | 1) => moveColumn(layout, id, direction) !== layout;
   // Where a dragged column would land: the header it is over, and which side (nothing lands before the row header).
@@ -2092,8 +2153,17 @@ const GridHeader = memo(function GridHeader({
             data-cell={keyOf(-1, addColumn.col)}
             data-focused={addColumn.isFocused || undefined}
             tabIndex={addColumn.isFocused ? 0 : -1}
+            // At the limit, the header itself says why when the grid's keys reach it, as a read only cell does.
+            {...(addColumn.lock === undefined ? {} : { 'aria-describedby': lockId })}
           >
-            {addColumn.items.length === 0 ? (
+            {addColumn.lock !== undefined && (
+              <span id={lockId} hidden data-tip="">
+                {addColumn.lock}
+              </span>
+            )}
+            {addColumn.items.length === 0 && addColumn.lock !== undefined ? (
+              <LockReason reason={addColumn.lock} />
+            ) : addColumn.items.length === 0 ? (
               <Tooltip content={addColumn.label}>
                 <Button variant="ghost" icon="plus" label={addColumn.label} onPress={addColumn.onPress} />
               </Tooltip>
@@ -2103,18 +2173,35 @@ const GridHeader = memo(function GridHeader({
                 <Menu
                   label={addColumn.label}
                   onAction={(key) => {
-                    if (key === NEW_COLUMN) addColumn.onPress();
-                    else addColumn.onItem(String(key));
+                    if (key === NEW_COLUMN) {
+                      if (addColumn.lock === undefined) addColumn.onPress();
+                    } else addColumn.onItem(String(key));
                   }}
                 >
-                  {addColumn.items.map((item) => (
-                    <MenuItem key={item.id} id={item.id} icon="eye">
-                      {item.label}
-                    </MenuItem>
-                  ))}
+                  {groupedItems(addColumn.items).map((group) =>
+                    group.label === undefined ? (
+                      group.items.map((item) => (
+                        <MenuItem key={item.id} id={item.id} icon="eye">
+                          {item.label}
+                        </MenuItem>
+                      ))
+                    ) : (
+                      <MenuSection key={group.label} label={group.label}>
+                        {group.items.map((item) => (
+                          <MenuItem key={item.id} id={item.id} icon="eye">
+                            {item.label}
+                          </MenuItem>
+                        ))}
+                      </MenuSection>
+                    ),
+                  )}
                   {/* Pinned at the foot, so a long list of hidden attributes never scrolls it away. */}
                   <MenuSection label={strings.newColumnItem} isPinned>
-                    <MenuItem id={NEW_COLUMN} icon="plus">
+                    <MenuItem
+                      id={NEW_COLUMN}
+                      icon="plus"
+                      {...(addColumn.lock === undefined ? {} : { isDisabled: true, description: addColumn.lock })}
+                    >
                       {strings.newColumnItem}
                     </MenuItem>
                   </MenuSection>

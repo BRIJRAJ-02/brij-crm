@@ -15,6 +15,7 @@ import {
   Select,
   SettingsRow,
   SettingsSection,
+  sharedStrings,
   Skeleton,
   type Toasts,
 } from '@crm/ui';
@@ -97,7 +98,7 @@ export function GeneralScreen({
   const zones = useMemo(() => zoneItems(settings.timeZone, new Date()), [settings.timeZone]);
   const link = `${origin}/w/${settings.slug}`;
   const fail = (error: unknown) => {
-    toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : strings.somethingWrong });
+    toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : sharedStrings.couldntDoThat });
   };
   // The settings as shown now, a quick first check for an Undo pressed later; and the last saved toast, which a newer
   // save closes as it starts, so several changes leave one toast and no older Undo is left to press (Q99), as
@@ -136,7 +137,7 @@ export function GeneralScreen({
               // way counts as newer.
               onAction: () => {
                 const stale = () => {
-                  toasts.toast({ tone: 'info', message: strings.undoStale(undo.what) });
+                  toasts.toast({ tone: 'info', message: strings.undoStale });
                 };
                 if (undo.isBusy() || !undo.isStill(shown.current)) {
                   stale();

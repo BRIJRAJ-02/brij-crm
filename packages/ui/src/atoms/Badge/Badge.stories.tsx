@@ -64,6 +64,20 @@ export const States: Story = {
   },
 };
 
+/** `icon`: a glyph before the count, a comment mark with the open threads on a row or card; the label says what it counts. */
+export const WithIcon: Story = {
+  render: () => (
+    <Stage>
+      <Badge count={1} icon="message-square" label="open comment thread" />
+      <Badge count={12} icon="message-square" label="open comment threads" />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('open comment thread')).toBeInTheDocument();
+    await expect(canvas.getByText('12')).toBeVisible();
+  },
+};
+
 /** `isWhole`: a label too short to cut ("You") never shrinks, so the name beside it truncates instead. */
 export const Whole: Story = {
   parameters: { crm: { screenshot: false } },

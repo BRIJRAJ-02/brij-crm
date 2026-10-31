@@ -1,0 +1,45 @@
+/* Sentence: a lead word, then words and inline controls that wrap like text. */
+@layer components {
+  .root {
+    container-type: inline-size;
+    display: grid;
+    grid-template-columns: var(--size-toolbar) minmax(0, 1fr) var(--size-control);
+    gap: var(--space-8);
+    align-items: start;
+  }
+
+  .lead {
+    padding-block: var(--space-4);
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+    text-align: end;
+  }
+
+  .words {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    column-gap: var(--space-6);
+    row-gap: var(--space-4);
+    min-inline-size: 0;
+    color: var(--text);
+    font: var(--text-body);
+  }
+
+  .end {
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  @container (inline-size < 480px) {
+    .root {
+      grid-template-columns: minmax(0, 1fr) var(--size-control);
+    }
+
+    .lead {
+      grid-column: 1 / -1;
+      text-align: start;
+    }
+  }
+}

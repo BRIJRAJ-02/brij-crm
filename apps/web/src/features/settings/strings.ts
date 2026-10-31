@@ -1,3 +1,5 @@
+import { sharedStrings } from '@crm/ui';
+
 /** Settings' copy (spec 0012): the frame, Objects, the new object dialog, an object's tabs and the archive confirm. */
 export const strings = {
   settings: 'Settings',
@@ -44,16 +46,14 @@ export const strings = {
   archived: 'Archived',
   archivedObjects: 'Archived objects',
   noLiveObjects: 'No live objects',
-  noLiveObjectsText: 'Restore one below or create a new one.',
-  noLiveObjectsMemberText: 'A workspace owner or admin can restore one or create a new one.',
+  /** Only a member who can't add one needs a line; the page's New object is the way on for the rest. */
+  noLiveObjectsMemberText: 'Ask an owner or admin.',
   moving: 'Moving',
   /** A failed move, archive or restore: what failed, then why in the server's words. */
   moveFailed: (plural: string, why: string) => `Couldn’t move ${plural}. ${why}`,
   restoreFailed: (plural: string, why: string) => `Couldn’t restore ${plural}. ${why}`,
-  readOnlyNote: 'Only owners and admins can change this.',
   loadFailed: 'Couldn’t load the objects',
   loadFailedObject: 'Couldn’t load this object',
-  somethingWrong: 'Something went wrong. Try again in a moment.',
   /** The new object dialog and the Configuration tab. */
   singularName: 'Singular name',
   /** The New object dialog's single flow: the name, the guesses that follow it and the inline attributes. */
@@ -75,8 +75,8 @@ export const strings = {
   attributeRepeated: 'Already in the list.',
   pluralName: 'Plural name',
   apiName: 'API name',
-  apiNameHint: 'Used in the API and in links. It can’t change once the object is made.',
-  apiNameLocked: 'API names never change, so links and integrations keep working.',
+  apiNameHint: 'Can’t change later.',
+  apiNameLocked: 'Can’t change later.',
   objectId: 'Object ID',
   objectIdReason: 'Set by the system.',
   copyApiName: 'Copy API name',
@@ -128,23 +128,22 @@ export const strings = {
   recordNameUnavailable: "Couldn't load this object's attributes. Reload to choose one.",
   recordNameChanged: (plural: string, title: string) => `${plural} are now named by ${title}.`,
   recordNameFailed: (why: string) => `Couldn't change the name attribute. ${why}`,
-  recordNameUndoStale: 'The name attribute changed again since, so nothing was undone.',
+  recordNameUndoStale: sharedStrings.undoStale,
   dangerArchive: (plural: string) => `Archive ${plural}`,
-  dangerArchiveText: 'It leaves the sidebar and every picker. Its records, values and history are kept.',
+  dangerArchiveText: 'Hidden from the sidebar. Records are kept.',
   dangerRestore: (plural: string) => `Restore ${plural}`,
-  dangerRestoreText: 'It comes back to the sidebar at its old place, with everything it held.',
+  dangerRestoreText: 'Back in the sidebar, as it was.',
   /** The archive confirm (spec 0012, screens). */
   confirmTitle: (plural: string) => `Archive ${plural}?`,
   confirmText: (records: string, count: number, atLeast: boolean) =>
     atLeast
-      ? `It leaves the sidebar and its records, at least ${records} of them, are kept. Relationship fields that point to it are hidden until you restore it.`
+      ? `Hidden from the sidebar. At least ${records} records are kept.`
       : count === 0
-        ? 'It leaves the sidebar. It holds no records yet. Relationship fields that point to it are hidden until you restore it.'
+        ? 'Hidden from the sidebar. It holds no records.'
         : count === 1
-          ? 'It leaves the sidebar and its 1 record is kept. Relationship fields that point to it are hidden until you restore it.'
-          : `It leaves the sidebar and its ${records} records are kept. Relationship fields that point to it are hidden until you restore it.`,
-  confirmCounting:
-    'It leaves the sidebar and its records are kept. Relationship fields that point to it are hidden until you restore it.',
+          ? 'Hidden from the sidebar. Its 1 record is kept.'
+          : `Hidden from the sidebar. Its ${records} records are kept.`,
+  confirmCounting: 'Hidden from the sidebar. Its records are kept.',
   archiving: 'Archiving',
   archivedToast: (plural: string) => `${plural} archived.`,
   restoredToast: (plural: string) => `${plural} restored.`,
@@ -153,7 +152,6 @@ export const strings = {
   /** An address in settings that names nothing. */
   missingTitle: 'Page not found',
   missingText: 'There’s nothing at this address.',
-  checkAddress: 'Check the address for a typo, or go back to settings.',
   backToSettings: 'Back to settings',
   backToObjects: 'Back to Objects',
 } as const;

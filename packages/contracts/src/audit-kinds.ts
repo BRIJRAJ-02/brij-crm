@@ -23,6 +23,8 @@ export const AUDIT_KINDS = {
     'workspace.ownership_transferred',
     'account.deleted',
     'member.profile_updated',
+    // Teams (spec 0031): made, renamed, filled or deleted.
+    'team.changed',
   ],
   joining: [
     'invitation.created',
@@ -36,10 +38,20 @@ export const AUDIT_KINDS = {
     'join_request.approved',
     'join_request.declined',
   ],
-  workspace: ['workspace.updated', 'workspace.deleted', 'workspace.restored'],
+  workspace: [
+    'workspace.updated',
+    'workspace.deleted',
+    'workspace.restored',
+    'list.created',
+    'list.updated',
+    'list.archived',
+    'list.restored',
+  ],
+  // Who may see and edit an object's records (spec 0032) is a security setting, and so are webhooks (spec 0064).
   security: [
     'workspace_security.changed',
     'workspace_security.signed_out_everyone',
+    'access.rule_set',
     'webhook.created',
     'webhook.updated',
     'webhook.secret_rotated',
@@ -83,6 +95,8 @@ export const AUDIT_KINDS = {
 export const AUDIT_NOT_LISTED = [
   'member.preferences_changed',
   'booking_page.profile_reordered',
+  // An admin looked at an object as someone else would see it (spec 0032, AC-858): stored, a look changes nothing.
+  'access.previewed',
 ] as const satisfies readonly AuditAction[];
 
 /** An action Workspace changes lists: every catalog action outside `AUDIT_NOT_LISTED`. */

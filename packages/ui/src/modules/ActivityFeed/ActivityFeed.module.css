@@ -279,6 +279,19 @@
     color: var(--text-secondary);
   }
 
+  /* A logged call or meeting: its outcome tag and length on one line above the start of its notes. */
+  .facts {
+    display: flex;
+    gap: var(--space-8);
+    align-items: center;
+  }
+
+  .duration {
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
   .excerpt {
     display: -webkit-box;
     overflow: hidden;

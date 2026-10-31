@@ -10,6 +10,7 @@ import { formsExport } from '../../forms/export.ts';
 import { formsFile, formsSync } from '../../forms/filing.ts';
 import { formsProcess } from '../../forms/process.ts';
 import { bulkKinds } from '../../bulk/kinds.ts';
+import { entryJobKinds } from '../../lists/jobs.ts';
 import { reassignKind } from '../../members/reassign.ts';
 import { recordsImport } from '../../imports/kind.ts';
 import { recordsImportUndo } from '../../imports/undo.ts';
@@ -60,6 +61,7 @@ export function jobKinds(options: JobKindsOptions): JobRegistry {
     formsSync(options.files),
     formsExport(),
     ...(bulkKinds() as readonly AnyKind[]),
+    ...(entryJobKinds() as readonly AnyKind[]),
     reassignKind(),
     recordsImport(options.rules),
     recordsImportUndo(),

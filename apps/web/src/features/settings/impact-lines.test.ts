@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { emptyRecordsHref, usedByLine } from './impact-lines.ts';
+import { emptyRecordsHref, recordsHref, usedByLine } from './impact-lines.ts';
 
 const VIEW = '11111111-1111-4111-8111-111111111111';
 const FORM = '22222222-2222-4222-8222-222222222222';
@@ -31,5 +31,21 @@ describe('emptyRecordsHref', () => {
     expect(href.startsWith('/w/acme/objects/deals?draft=')).toBe(true);
     const text = href.slice(href.indexOf('=') + 1);
     expect(Buffer.from(text, 'base64url').toString('utf8')).toContain('is_empty');
+  });
+});
+
+describe('recordsHref', () => {
+  const RECORD = '44444444-4444-4444-8444-444444444444';
+
+  it('opens the table filtered to the records by their Record ID', () => {
+    const href = recordsHref('/w/acme/objects/deals', ATTRIBUTE, [RECORD]);
+    expect(href.startsWith('/w/acme/objects/deals?draft=')).toBe(true);
+    const text = Buffer.from(href.slice(href.indexOf('=') + 1), 'base64url').toString('utf8');
+    expect(text).toContain('is_any_of');
+    expect(text).toContain(RECORD);
+  });
+
+  it('is the table alone with no records', () => {
+    expect(recordsHref('/w/acme/objects/deals', ATTRIBUTE, [])).toBe('/w/acme/objects/deals');
   });
 });

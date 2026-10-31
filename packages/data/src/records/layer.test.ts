@@ -16,6 +16,7 @@ import {
   type CreateRecordInput,
   type DeleteManyInput,
   type DeleteManyResults,
+  type FiledCompany,
   type RecordView,
   type RestoreBatchInput,
   type RestoreBatchResults,
@@ -35,6 +36,7 @@ import {
   createRecordsLayer,
   MAX_BATCH_RECORDS,
   RECORD_WORDS,
+  type FiledNotice,
   type RecordsApi,
   type RecordsView,
   type ReplacedNotice,
@@ -109,9 +111,13 @@ function fakeApi() {
   const queries: Pending<QueryCall, readonly RecordView[] | { records: readonly RecordView[]; nextCursor?: string }>[] =
     [];
   const counts: Pending<CountCall, number | { count: number; atLeast: boolean }>[] = [];
-  const creates: Pending<CreateRecordInput, RecordView>[] = [];
+  // A create's answer may carry the company its email filed the person under (spec 0059).
+  const creates: Pending<CreateRecordInput, RecordView & { readonly filedCompany?: FiledCompany }>[] = [];
   // A test may say what the write itself made (`written`); by default, each value it sent at the answer's version.
-  const edits: Pending<SetValuesInput, RecordView & { readonly written?: Record<string, string> }>[] = [];
+  const edits: Pending<
+    SetValuesInput,
+    RecordView & { readonly written?: Record<string, string>; readonly filedCompany?: FiledCompany }
+  >[] = [];
   const batches: Pending<SetValuesBatchInput, BatchResults>[] = [];
   const gets: Pending<readonly string[], RecordView[]>[] = [];
   const deletes: Pending<DeleteManyInput, DeleteManyResults['results']>[] = [];
@@ -225,6 +231,7 @@ function setup(
   options: {
     readonly describe?: Parameters<typeof createRecordsLayer>[0]['describe'];
     readonly definitionsOf?: Parameters<typeof createRecordsLayer>[0]['definitionsOf'];
+    readonly onFiled?: (notice: FiledNotice) => void;
   } = {},
 ) {
   const server = fakeApi();
@@ -272,6 +279,7 @@ function setup(
     },
     memberOf: () => Promise.resolve(ME),
     onReplaced: (notice) => replaced.push(notice),
+    ...(options.onFiled === undefined ? {} : { onFiled: options.onFiled }),
   });
   const frame = () => {
     for (const flush of frames.splice(0)) flush();
@@ -898,6 +906,18 @@ describe('editing a cell', () => {
     expect(notices[0]?.message).toBe(RECORD_WORDS.recordGone);
     // Its block loads again, since the rows after it moved up.
     expect(queries).toHaveLength(2);
+  });
+
+  it('drops a record its own rule now hides, and says what the server said as news, not a failure (AC-848)', async () => {
+    const { layer, view, edits, frame, notices } = await readyView();
+    void layer.setValues(WS, [change('Paris')]);
+    await settle();
+    const said = "Saved. It's owned by Grace Hopper, so you can no longer see it.";
+    edits[0]?.fail(dataError('RECORD_OUT_OF_SCOPE', said));
+    await settle();
+    frame();
+    expect(view.getSnapshot().source.getItem(1)).toBeUndefined();
+    expect(notices).toEqual([{ tone: 'success', message: said }]);
   });
 
   it('names a cell read with no version as never set, and leaves out one never read', async () => {
@@ -2032,6 +2052,89 @@ describe('bulk edit (spec 0022, AC-530, AC-540)', () => {
     expect(await undone).toMatchObject({ kind: 'undone', action: 'bulk', cells: 2, undone: 2 });
   });
 
+  it('undoes the fields of one Apply together: one press takes them all back, newest first', async () => {
+    const { layer, bulkEdits, batches, frame } = await readyView();
+    const group = 'apply-1';
+    const ids = [idAt(0), idAt(1)];
+    const first = layer.bulkEdit(WS, PEOPLE, ids, {
+      attributeId: CITY,
+      type: 'text',
+      isMulti: false,
+      op: 'set',
+      value: 'Paris',
+      group,
+    });
+    frame();
+    await settle();
+    bulkEdits[0]?.answer([
+      { recordId: idAt(0), record: edited(0, 'Paris', 4), written: { [CITY]: version(4) }, before: 'London' },
+      { recordId: idAt(1), record: edited(1, 'Paris', 5), written: { [CITY]: version(5) }, before: 'Leeds' },
+    ]);
+    await first;
+    const second = layer.bulkEdit(WS, PEOPLE, ids, {
+      attributeId: NAME,
+      type: 'text',
+      isMulti: false,
+      op: 'set',
+      value: 'Pia',
+      group,
+    });
+    frame();
+    await settle();
+    const both = (name: string, nameAt: number, cityAt: number) =>
+      [0, 1].map((row) =>
+        rowOf(
+          idAt(row),
+          { [NAME]: name, [CITY]: 'Paris' },
+          { [CITY]: version(cityAt + row), [NAME]: version(nameAt + row) },
+          nameAt + row,
+        ),
+      );
+    bulkEdits[1]?.answer(
+      both('Pia', 6, 4).map((record, row) => ({
+        recordId: idAt(row),
+        record,
+        written: { [NAME]: version(6 + row) },
+        before: `P${String(row)}`,
+      })),
+    );
+    await second;
+    const undone = layer.undo.run(WS);
+    await settle();
+    // The newest field goes back first.
+    expect(batches[0]?.input.items).toEqual([
+      { recordId: idAt(0), values: { [NAME]: { value: 'P0', ifVersionId: version(6) } } },
+      { recordId: idAt(1), values: { [NAME]: { value: 'P1', ifVersionId: version(7) } } },
+    ]);
+    batches[0]?.answer({
+      results: [0, 1].map((row) => ({
+        recordId: idAt(row),
+        record: rowOf(
+          idAt(row),
+          { [NAME]: `P${String(row)}`, [CITY]: 'Paris' },
+          { [CITY]: version(4 + row), [NAME]: version(8 + row) },
+          8 + row,
+        ),
+      })),
+      echoes: 1,
+    });
+    await settle();
+    expect(batches[1]?.input.items).toEqual([
+      { recordId: idAt(0), values: { [CITY]: { value: 'London', ifVersionId: version(4) } } },
+      { recordId: idAt(1), values: { [CITY]: { value: 'Leeds', ifVersionId: version(5) } } },
+    ]);
+    batches[1]?.answer({
+      results: [
+        { recordId: idAt(0), record: edited(0, 'London', 10) },
+        { recordId: idAt(1), record: edited(1, 'Leeds', 11) },
+      ],
+      echoes: 1,
+    });
+    expect(await undone).toMatchObject({ kind: 'undone', action: 'bulk', cells: 2, undone: 4 });
+    // One press took the whole Apply: nothing is left under it.
+    expect(await layer.undo.run(WS)).toEqual({ kind: 'nothing' });
+  });
+
   it('rolls a refused record back with its cell marked, and a retry that changed nothing pushes no undo', async () => {
     const { layer, view, bulkEdits, frame } = await readyView();
     const editing = layer.bulkEdit(WS, PEOPLE, [idAt(0), idAt(1)], {
@@ -3096,5 +3199,143 @@ describe('a view’s calculations (the CRM flow pass)', () => {
     expect(source.getSnapshot().answers?.get(`${ME}|${AMOUNT}:sum`)).toEqual({ amounts: [{ value: '2' }] });
     expect(source.getSnapshot().answers?.get(`|${AMOUNT}:sum`)).toEqual({ amounts: [{ value: '1' }] });
     release();
+  });
+});
+
+describe('a company a write filed the person under (spec 0059, AC-5920)', () => {
+  const COMPANIES = '0199a6f2-0000-7000-8000-00000000000b';
+  const COMPANY = 'attr-company';
+  const ACME = idAt(8000);
+  const filedCompany = (made: boolean): FiledCompany => ({
+    objectId: COMPANIES,
+    recordId: ACME,
+    name: 'Acme',
+    made,
+    attributeId: COMPANY,
+    linkVersionId: version(7),
+  });
+  const acme = { objectId: COMPANIES, recordId: ACME };
+
+  it('says so after a create, and its Undo clears the link and trashes the company made, keeping the create', async () => {
+    const filed: FiledNotice[] = [];
+    const { layer, creates, edits, deletes } = await readyView({ onFiled: (notice) => filed.push(notice) });
+    const id = idAt(7000);
+    const making = layer.create(WS, PEOPLE, { [NAME]: 'Jane' }, id);
+    await settle();
+    creates[0]?.answer({ ...rowOf(id, { [NAME]: 'Jane', [COMPANY]: acme }), filedCompany: filedCompany(true) });
+    await making;
+    expect(filed.map((each) => each.companies)).toEqual([[{ name: 'Acme', made: true }]]);
+    const undoing = filed[0]?.undo();
+    await settle();
+    expect(edits[0]?.input).toMatchObject({
+      recordId: id,
+      values: { [COMPANY]: { value: null, ifVersionId: version(7) } },
+    });
+    edits[0]?.answer({
+      ...rowOf(id, { [NAME]: 'Jane', [COMPANY]: null }, { [COMPANY]: version(8) }),
+      written: { [COMPANY]: version(8) },
+    });
+    await settle();
+    expect(deletes[0]?.input).toMatchObject({ objectId: COMPANIES, recordIds: [ACME], unlinkedOnly: true });
+    deletes[0]?.answer([{ recordId: ACME, state: 'deleted' }]);
+    expect(await undoing).toEqual({
+      kind: 'unfiled',
+      name: 'Acme',
+      unlinked: 1,
+      kept: 0,
+      trashed: 1,
+      inUse: 0,
+      failed: 0,
+    });
+    // The create is still on the stack, without its filing: Cmd+Z trashes the person alone.
+    expect(layer.undo.depth(WS)).toBe(1);
+    const undone = layer.undo.run(WS);
+    await settle();
+    expect(deletes[1]?.input).toMatchObject({ objectId: PEOPLE, recordIds: [id] });
+    deletes[1]?.answer([{ recordId: id, state: 'deleted' }]);
+    expect(await undone).toMatchObject({ kind: 'uncreated', deleted: true });
+    await settle();
+    expect(deletes).toHaveLength(2);
+    // Gone with its action: the toast's Undo does nothing more.
+    expect(await filed[0]?.undo()).toEqual({ kind: 'gone' });
+  });
+
+  it('undoes the filing with its create on Cmd+Z, keeping a company something links to now', async () => {
+    const { layer, creates, deletes } = await readyView();
+    const id = idAt(7001);
+    const making = layer.create(WS, PEOPLE, { [NAME]: 'Jo' }, id);
+    await settle();
+    creates[0]?.answer({ ...rowOf(id, { [NAME]: 'Jo', [COMPANY]: acme }), filedCompany: filedCompany(true) });
+    await making;
+    const undone = layer.undo.run(WS);
+    await settle();
+    expect(deletes[0]?.input).toMatchObject({ objectId: PEOPLE, recordIds: [id] });
+    deletes[0]?.answer([{ recordId: id, state: 'deleted' }]);
+    await settle();
+    expect(deletes[1]?.input).toMatchObject({ objectId: COMPANIES, recordIds: [ACME], unlinkedOnly: true });
+    deletes[1]?.answer([
+      {
+        recordId: ACME,
+        state: 'refused',
+        refusal: { code: 'IN_USE', message: 'Other records link to it now, so it was kept.' },
+      },
+    ]);
+    expect(await undone).toMatchObject({ kind: 'uncreated', deleted: true });
+  });
+
+  it('puts Company back with the edited cells on Cmd+Z, in one write, and counts only the edit', async () => {
+    const filed: FiledNotice[] = [];
+    const { layer, edits, deletes } = await readyView({ onFiled: (notice) => filed.push(notice) });
+    void layer.setValues(WS, [{ rowId: idAt(1), columnId: CITY, value: 'Paris' }]);
+    await settle();
+    edits[0]?.answer({
+      ...rowOf(idAt(1), { [NAME]: 'P1', [CITY]: 'Paris', [COMPANY]: acme }, { [CITY]: version(2) }, 2),
+      filedCompany: filedCompany(false),
+    });
+    await settle();
+    expect(filed.map((each) => each.companies)).toEqual([[{ name: 'Acme', made: false }]]);
+    const undone = layer.undo.run(WS);
+    await settle();
+    expect(edits[1]?.input.values).toEqual({
+      [CITY]: { value: 'London', ifVersionId: version(2) },
+      [COMPANY]: { value: null, ifVersionId: version(7) },
+    });
+    // Putting an old email back never files the person again.
+    expect(edits[1]?.input.noFiling).toBe(true);
+    edits[1]?.answer({
+      ...rowOf(idAt(1), { [NAME]: 'P1', [CITY]: 'London', [COMPANY]: null }, { [CITY]: version(3) }, 3),
+      written: { [CITY]: version(3), [COMPANY]: version(3) },
+    });
+    expect(await undone).toMatchObject({ kind: 'undone', cells: 1, undone: 1, kept: 0, failed: 0 });
+    // A company it only linked is never trashed.
+    await settle();
+    expect(deletes).toHaveLength(0);
+  });
+
+  it('keeps a link whose Company changed since, and trashes nothing', async () => {
+    const filed: FiledNotice[] = [];
+    const { layer, creates, edits, deletes } = await readyView({ onFiled: (notice) => filed.push(notice) });
+    const id = idAt(7002);
+    const making = layer.create(WS, PEOPLE, { [NAME]: 'Max' }, id);
+    await settle();
+    creates[0]?.answer({ ...rowOf(id, { [NAME]: 'Max', [COMPANY]: acme }), filedCompany: filedCompany(true) });
+    await making;
+    const undoing = filed[0]?.undo();
+    await settle();
+    edits[0]?.fail(
+      dataError('VERSION_CHANGED', 'Company changed.', {
+        refusals: [{ code: 'VERSION_CHANGED', message: 'Company changed.', attributeId: COMPANY }],
+      }),
+    );
+    expect(await undoing).toEqual({
+      kind: 'unfiled',
+      name: 'Acme',
+      unlinked: 0,
+      kept: 1,
+      trashed: 0,
+      inUse: 0,
+      failed: 0,
+    });
+    expect(deletes).toHaveLength(0);
   });
 });

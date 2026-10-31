@@ -67,6 +67,8 @@ interface SampleProps {
   readonly withEmptyAction?: boolean;
   /** Each note carries its record, as the workspace's Notes page shows them. */
   readonly withRecords?: boolean;
+  /** The first two are a logged call and meeting. */
+  readonly withActivities?: boolean;
 }
 
 /** The list in a fixed height slot, as the Notes tab holds it. */
@@ -81,13 +83,42 @@ function SampleNotes({
   withToolbar = false,
   withEmptyAction = false,
   withRecords = false,
+  withActivities = false,
 }: SampleProps) {
-  const sample = withRecords
-    ? sampleNotes().map((note, index) => {
-        const record = SAMPLE_COMPANIES[index % SAMPLE_COMPANIES.length];
-        return record === undefined ? note : { ...note, record };
+  const sample = withActivities
+    ? sampleNotes().map((note, index): NoteListItem => {
+        if (index === 0) {
+          return {
+            ...note,
+            title: '',
+            activity: {
+              kind: 'call',
+              occurredAt: '2026-10-07T09:00:00.000Z',
+              duration: '30 min',
+              outcome: { label: 'Connected', hue: 'green' },
+            },
+          };
+        }
+        if (index === 1) {
+          return {
+            ...note,
+            title: '',
+            excerpt: '',
+            activity: {
+              kind: 'meeting',
+              occurredAt: '2026-10-06T14:00:00.000Z',
+              outcome: { label: 'No show', hue: 'red' },
+            },
+          };
+        }
+        return note;
       })
-    : sampleNotes();
+    : withRecords
+      ? sampleNotes().map((note, index) => {
+          const record = SAMPLE_COMPANIES[index % SAMPLE_COMPANIES.length];
+          return record === undefined ? note : { ...note, record };
+        })
+      : sampleNotes();
   const notes = isLong
     ? longSource(onRangeChange ?? (() => undefined))
     : arraySource(isEmpty ? [] : sample, (note) => note.id);
@@ -125,6 +156,17 @@ export const Default: Story = {
     await expect(canvas.getAllByText('Edited', { exact: false })).toHaveLength(3);
     await userEvent.click(canvas.getByText('Security review'));
     await expect(args.onAction).toHaveBeenCalledWith('n2');
+  },
+};
+
+/** A logged call and meeting: the phone or people icon, the kind as its name, an outcome tag, and when and how long. */
+export const WithActivities: Story = {
+  args: { withActivities: true },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Call')).toBeInTheDocument();
+    await expect(canvas.getByText('Meeting')).toBeInTheDocument();
+    await expect(canvas.getByText('Connected')).toBeInTheDocument();
+    await expect(canvas.getByText('No show')).toBeInTheDocument();
   },
 };
 

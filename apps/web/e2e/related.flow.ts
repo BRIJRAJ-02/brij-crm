@@ -7,7 +7,7 @@
 // AC-377, AC-383).
 import { randomUUID } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
-import { addPerson, newWorkspace, signInAgain } from './people.ts';
+import { addPerson, newWorkspace, openFullPage, signInAgain } from './people.ts';
 
 /** How long a change may take to show in the other browser (AC-377 says 1 second; the flow allows for a busy machine). */
 const LIVE_MS = 5_000;
@@ -62,6 +62,7 @@ test('a company’s Team: added and removed from its page, with Undo, live in a 
   await dialog.getByRole('button', { name: 'Create' }).click();
   await expect(dialog).toBeHidden();
   await page.getByRole('rowheader', { name: /Acme/ }).getByText('Acme').click();
+  await openFullPage(page);
   await expect(page).toHaveURL(COMPANY_URL);
   const companyPath = new URL(page.url()).pathname;
 

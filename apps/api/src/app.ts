@@ -41,6 +41,7 @@ import { mountFormFiles } from './forms/uploads.ts';
 import { createFileStore, type FileStore } from './storage/blob.ts';
 import { createDiskFileStore } from './storage/disk.ts';
 import { createForgetPicture, mountMyPicture } from './me-picture.ts';
+import { mountLogos } from './logos.ts';
 import { createCaptchaVerifier, type CaptchaVerifier } from './forms/recaptcha.ts';
 import { createTicketBook, mountTickets } from './forms/ticket.ts';
 import { bookingLinkKey } from './booking-link.ts';
@@ -132,9 +133,12 @@ const RUNS_ON = (work: Promise<unknown>): void => {
   void work.catch(() => undefined);
 };
 
-/** A path as logs and error reports may hold it: a guest's manage token (their key to a booking) stands as `:token`. */
+/**
+ * A path as logs and error reports may hold it: a guest's manage token (their key to a booking) stands as `:token`,
+ * and a company's domain in its logo's path (a workspace's data, spec 0059) as `:domain`.
+ */
 export function redactedPath(path: string): string {
-  return path.replace(/(\/public\/booking\/manage\/)[^/]+/, '$1:token');
+  return path.replace(/(\/public\/booking\/manage\/)[^/]+/, '$1:token').replace(/^(\/api\/logos\/)[^/]+/, '$1:domain');
 }
 
 /** The route an error report names: a sign in route by its Better Auth path (`auth /sign-in/email-otp`), else the path. */
@@ -207,6 +211,8 @@ export interface AppServices {
   readonly pictureFetch?: PictureFetch;
   /** Fetches a link block's site icon (26 Oct 2026): the real one unless a test passes its own. */
   readonly faviconFetch?: FaviconFetch;
+  /** Fetches a company's logo, the site's icon sized for one (spec 0059): the real one unless a test passes its own. */
+  readonly logoFetch?: FaviconFetch;
   /** The clock the public booking routes read, for tests. */
   readonly now?: () => Date;
   /** Where invitation emails go (spec 0031): the server's mailer; absent, every send fails and is reported unsent. */
@@ -344,6 +350,8 @@ export function createApp({
   const forgetPicture = createForgetPicture(identity, pictureFiles);
   // A link block's own site icon (26 Oct 2026), for the public link page.
   const faviconFetch = services.faviconFetch ?? createFaviconFetch();
+  // A company's logo (spec 0059): the same fetch, the head's icon sized for a logo first.
+  const logoFetch = services.logoFetch ?? createFaviconFetch({ prefer: 'logo' });
   // The key every booking's guest page token derives from, shared with the worker's emails.
   const linkKey = bookingLinkKey(env);
   const calendarRoutes = createCalendarRoutes({
@@ -686,6 +694,9 @@ export function createApp({
     limiter: createMemoryLimiter(),
     errorResponse,
   });
+
+  // A company's logo from our own origin (spec 0059): a signed in person, a public host name, 300 a minute each.
+  mountLogos(app, { auth, logos: logoFetch, limiter: createMemoryLimiter() });
 
   // The caller's own link page as an Apple Wallet pass (26 Oct 2026). It lives under `public/` because it reads a
   // handle through the public booking door, which only that folder may open; the route itself is private.

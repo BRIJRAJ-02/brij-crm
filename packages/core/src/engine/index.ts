@@ -40,7 +40,9 @@ export {
   removeEntry,
   restoreEntry,
   type EntryInput,
+  type EntryOutcome,
   type EntryView,
+  type InsertedList,
   type ListInput,
 } from './lists.ts';
 export {

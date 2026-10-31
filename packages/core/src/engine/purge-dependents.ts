@@ -54,8 +54,11 @@ export const PURGE_DEPENDENTS: readonly PurgeDependent[] = Object.freeze([
       return (await tx.execute(sql`delete from task_records where record_id = any(${ids})`)).rowCount ?? 0;
     },
   },
-  // The records' notes, deleted ones too, go with them (spec 0019, AC-446); notes' foreign key refuses a removal
-  // that skipped this.
+  // A note linked to the records from another record loses those links and lives on there (migration 0135); the
+  // link's foreign key refuses a removal that skipped this.
+  removing('note_records', (ids) => sql`delete from note_records where record_id = any(${ids})`),
+  // The records' own notes, deleted ones too, go with them, their links to other records too (spec 0019, AC-446);
+  // notes' foreign key refuses a removal that skipped this.
   removing('notes', (ids) => sql`delete from notes where record_id = any(${ids})`),
   // The records' comments go with them, their versions and reactions by cascade, and the notifications about them
   // first, since a notification's record has no foreign key action (spec 0038, AC-1160).

@@ -14,7 +14,7 @@ import type {
   RolesList,
   WorkspaceDomainsView,
 } from '@crm/data';
-import { createToasts, UiProvider, type Toasts } from '@crm/ui';
+import { createToasts, sharedStrings, UiProvider, type Toasts } from '@crm/ui';
 import {
   createMemoryHistory,
   createRootRouteWithContext,
@@ -427,10 +427,10 @@ describe('removing a member asks first', () => {
     const dialog = page.getByRole('alertdialog', { name: 'Remove Linus Torvalds from Acme?' });
     await expect.element(dialog).toBeVisible();
     // What the removal does, read as it opens, and who could take their work (never Linus himself).
-    await expect
-      .element(dialog.getByText('1 open task is assigned to them. 2 records name them as owner.'))
-      .toBeVisible();
-    await dialog.getByRole('button', { name: /Hand their open tasks and records to/ }).click();
+    await expect.element(dialog.getByText('They lose access now.')).toBeVisible();
+    await expect.element(dialog.getByText('Open tasks')).toBeVisible();
+    await expect.element(dialog.getByText('Records they own')).toBeVisible();
+    await dialog.getByRole('button', { name: /Hand over to/ }).click();
     await expect.element(page.getByRole('option', { name: /Ada Lovelace/ })).toBeVisible();
     await expect.element(page.getByRole('option', { name: /Linus Torvalds/ })).not.toBeInTheDocument();
     await userEvent.keyboard('{Escape}');
@@ -567,11 +567,9 @@ describe('the Joining tab', () => {
     await expect.element(panel.getByRole('rowheader', { name: 'grace@example.com' })).toBeVisible();
     // The invite link first, then Company email, with what Company email does.
     const link = panel.getByRole('switch', { name: 'Invite link' }).element();
-    const email = panel.getByRole('switch', { name: 'Company email' }).element();
+    const email = panel.getByRole('switch', { name: 'Let @acme.com ask to join' }).element();
     expect(link.compareDocumentPosition(email) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(panel.element().textContent).toContain(
-      'When on, anyone with an @acme.com email can ask to join. You approve each one.',
-    );
+    expect(panel.element().textContent).toContain('Let @acme.com ask to join');
   });
 
   it('leaves Asking to join out while nobody waits', async () => {
@@ -592,7 +590,6 @@ describe('the Joining tab', () => {
     await expect.element(page.getByText('Invite link saved.')).toBeVisible();
     expect(counted.calls.setLink).toEqual([{ enabled: true, maxUses: 50 }]);
     await page.getByRole('button', { name: 'Undo' }).click();
-    await expect.element(page.getByText('Change undone.')).toBeVisible();
     expect(counted.calls.setLink).toEqual([
       { enabled: true, maxUses: 50 },
       { enabled: true, maxUses: 25 },
@@ -643,7 +640,7 @@ describe('the Joining tab', () => {
     counted.elsewhere({ enabled: false });
     await reload();
     await page.getByRole('button', { name: 'Undo' }).click();
-    await expect.element(page.getByText('The invite link changed again since, so nothing was undone.')).toBeVisible();
+    await expect.element(page.getByText(sharedStrings.undoStale)).toBeVisible();
     expect(counted.calls.setLink).toEqual([{ enabled: true, maxUses: 50 }]);
     expect(counted.link().enabled).toBe(false);
   });

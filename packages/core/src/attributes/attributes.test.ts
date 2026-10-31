@@ -434,14 +434,15 @@ describe('permission (AC-242)', () => {
     const made = await createAttribute(scope, { objectId: people, id: newId(), title: 'Nickname', type: 'text' });
     const member = await memberIn(scope, 'member');
     const before = (await definitionRows(scope)).length;
+    // One at a time: started together, a later refusal settles before anything awaits it.
     const calls = [
-      createAttribute(member, { objectId: people, id: newId(), title: 'Other', type: 'text' }, hooks()),
-      editAttribute(member, { attributeId: made.id, title: 'Nick' }, hooks()),
-      moveAttribute(member, { attributeId: made.id, position: 0 }, hooks()),
-      archiveAttributes(member, { attributeId: made.id }, hooks()),
-      restoreAttributes(member, { attributeId: made.id }, hooks()),
+      () => createAttribute(member, { objectId: people, id: newId(), title: 'Other', type: 'text' }, hooks()),
+      () => editAttribute(member, { attributeId: made.id, title: 'Nick' }, hooks()),
+      () => moveAttribute(member, { attributeId: made.id, position: 0 }, hooks()),
+      () => archiveAttributes(member, { attributeId: made.id }, hooks()),
+      () => restoreAttributes(member, { attributeId: made.id }, hooks()),
     ];
-    for (const call of calls) expect(await refusalOf(call)).toMatchObject({ code: 'FORBIDDEN' });
+    for (const call of calls) expect(await refusalOf(call())).toMatchObject({ code: 'FORBIDDEN' });
     expect((await definitionRows(scope)).length).toBe(before);
   });
 });

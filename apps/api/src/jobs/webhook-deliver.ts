@@ -1,5 +1,5 @@
 // Webhook deliveries (spec 0064, AC-6421, AC-6423, AC-6424): the one place a webhook leaves for a receiver, and the
-// worker's `crm_webhook_deliver` task, which `crm_enqueue_webhook_delivery` queues (migration 0135) in the transaction
+// worker's `crm_webhook_deliver` task, which `crm_enqueue_webhook_delivery` queues (migration 0142) in the transaction
 // of the write the event describes. The sender is a POST of the stored body with the event's headers and its
 // signature, under these bounds, all here rather than at each caller:
 // - the address passes core's rules again at send time (https, port 443, a host name), and every address its host
