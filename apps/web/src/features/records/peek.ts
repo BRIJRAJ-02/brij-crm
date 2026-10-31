@@ -10,6 +10,7 @@ import type {
   NoteList,
   ObjectSummary,
   RecordComments,
+  RecordFilesSource,
   RecordSubscription,
   TaskList,
 } from '@crm/data';
@@ -31,6 +32,7 @@ export interface PeekSources {
   readonly open: TaskList;
   readonly notes: NoteList;
   readonly comments: RecordComments;
+  readonly files: RecordFilesSource;
 }
 
 /** Opens one record's subscriptions for the panel, as the record page's route does for its page. */
@@ -44,7 +46,7 @@ export async function openPeek(
   const shown = detailAttributes(attributes);
   const [objects, access] = await Promise.all([data.objects.list(slug), data.access.mine(slug).catch(() => undefined)]);
   const sides = relatedSides(attributes, objects);
-  const [record, feed, open, notes, comments, sections] = await Promise.all([
+  const [record, feed, open, notes, comments, files, sections] = await Promise.all([
     data.records.one(
       slug,
       recordId,
@@ -54,6 +56,7 @@ export async function openPeek(
     data.tasks.forRecord(slug, recordId, 'open', object.id),
     data.notes.forRecord(slug, recordId, object.id),
     data.comments.forRecord(slug, recordId),
+    data.files.forRecord(slug, recordId),
     Promise.all(
       sides.map((side) =>
         data.links.section(slug, {
@@ -85,5 +88,6 @@ export async function openPeek(
     open,
     notes,
     comments,
+    files,
   };
 }

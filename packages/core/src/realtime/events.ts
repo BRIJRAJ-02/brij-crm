@@ -107,6 +107,8 @@ export function outboxEvent(row: OutboxRow): EventRow | undefined {
         threadIds: copy(row.itemIds),
         ...coarse,
       };
+    case 'files':
+      return { ...place, kind: 'files', ...objectId, recordIds: copy(row.recordIds), ...coarse };
     case 'notifications':
       return { ...place, kind: 'notifications', memberIds: copy(row.itemIds) };
     case 'members':

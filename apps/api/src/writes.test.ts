@@ -160,6 +160,8 @@ const READS: ReadonlySet<string> = new Set([
   'comments.list',
   'comments.get',
   'comments.versions',
+  // A record's Files tab (#32).
+  'files.list',
   'notifications.list',
   'notifications.count',
   'notifications.settings',
@@ -2677,6 +2679,42 @@ Object.assign(WRITES, {
   },
 });
 
+/** A Files tab file on a new person of the member's, stored by hand (the owner role), deleted when `deleted`. */
+async function attachmentOn(
+  m: Member,
+  deleted: boolean,
+): Promise<{ readonly recordId: string; readonly fileId: string }> {
+  const recordId = await personFor(m);
+  const fileId = newId();
+  await testQuery(
+    ownerUrl,
+    `insert into record_files (workspace_id, id, record_id, pathname, name, size, content_type, deleted_at)
+     values ($1, $2, $3, $4, 'a.pdf', 3, 'application/pdf', ${deleted ? 'now()' : 'null'})`,
+    [m.workspace.id, fileId, recordId, `records/${m.workspace.id}/${recordId}/${fileId}.pdf`],
+  );
+  return { recordId, fileId };
+}
+
+// A record's Files tab (#32): one files row naming the object and the record.
+Object.assign(WRITES, {
+  'files.delete': async (m: Member, mutationId: string) => {
+    const { recordId, fileId } = await attachmentOn(m, false);
+    await m.client.files.delete({ workspace: m.slug, fileId, mutationId });
+    return [
+      { kind: 'records', record_ids: [recordId] },
+      { kind: 'files', object_id: m.people.id, record_ids: [recordId], mutation_id: mutationId },
+    ];
+  },
+  'files.restore': async (m: Member, mutationId: string) => {
+    const { recordId, fileId } = await attachmentOn(m, true);
+    await m.client.files.restore({ workspace: m.slug, fileId, mutationId });
+    return [
+      { kind: 'records', record_ids: [recordId] },
+      { kind: 'files', object_id: m.people.id, record_ids: [recordId], mutation_id: mutationId },
+    ];
+  },
+});
+
 /** How many writes (each one poke) a case in WRITES makes before and with its own. */
 const WRITES_MADE: Readonly<Record<string, number>> = {
   // Lists (spec 0048): the list, its person and their entry first, then the case's own writes.
@@ -2745,6 +2783,8 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'notes.restore': 4,
   'notes.link': 4,
   'comments.create': 2,
+  'files.delete': 2,
+  'files.restore': 2,
   'comments.update': 3,
   'comments.delete': 3,
   'comments.resolve': 3,

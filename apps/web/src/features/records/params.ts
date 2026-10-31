@@ -7,7 +7,7 @@
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** The record page's tabs, by their address (`tasks` joined with #19 milestone 1, `notes` joins with its milestone 3). */
-export const RECORD_TABS = ['overview', 'activity', 'notes', 'tasks', 'comments'] as const;
+export const RECORD_TABS = ['overview', 'activity', 'notes', 'tasks', 'comments', 'files'] as const;
 /** One of the record page's tabs. */
 export type RecordTab = (typeof RECORD_TABS)[number];
 
@@ -41,7 +41,7 @@ export function isThreadParam(value: unknown): value is string {
  * The record panel's tabs (the peek beside a table or board, spec 0017 AC-384): Details first, then the page's own
  * tabs but Overview, which the full page keeps.
  */
-export const PEEK_TABS = ['details', 'activity', 'notes', 'tasks', 'comments'] as const;
+export const PEEK_TABS = ['details', 'activity', 'notes', 'tasks', 'comments', 'files'] as const;
 /** One of the record panel's tabs. */
 export type PeekTab = (typeof PEEK_TABS)[number];
 

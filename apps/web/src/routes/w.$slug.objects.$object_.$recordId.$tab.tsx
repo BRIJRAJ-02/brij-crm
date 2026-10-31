@@ -108,10 +108,11 @@ export const Route = createFileRoute('/w/$slug/objects/$object_/$recordId/$tab')
           open: undefined,
           notes: undefined,
           comments: undefined,
+          files: undefined,
         },
       };
     }
-    const [record, feed, recent, open, notes, comments, sections, listSection] = await Promise.all([
+    const [record, feed, recent, open, notes, comments, files, sections, listSection] = await Promise.all([
       context.data.records.one(
         params.slug,
         params.recordId,
@@ -124,6 +125,8 @@ export const Route = createFileRoute('/w/$slug/objects/$object_/$recordId/$tab')
       context.data.notes.forRecord(params.slug, params.recordId, object.id),
       // Comments (spec 0038): the store loads in its own chunk, and the tab's count arrives with the page.
       context.data.comments.forRecord(params.slug, params.recordId),
+      // A record's files (#32): the store loads in its own chunk, and the tab's count arrives with the page.
+      context.data.files.forRecord(params.slug, params.recordId),
       // The related sections (spec 0017, milestone 3): one source per side, its first page read now.
       Promise.all(
         sides.map((side) =>
@@ -171,6 +174,7 @@ export const Route = createFileRoute('/w/$slug/objects/$object_/$recordId/$tab')
         open,
         notes,
         comments,
+        files,
         listSection,
       },
     };

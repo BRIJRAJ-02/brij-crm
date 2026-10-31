@@ -1037,6 +1037,13 @@
       "when": 1795501300000,
       "tag": "0147_computed_attributes",
       "breakpoints": true
+    },
+    {
+      "idx": 148,
+      "version": "7",
+      "when": 1795501400000,
+      "tag": "0148_record_attachments",
+      "breakpoints": true
     }
   ]
 }

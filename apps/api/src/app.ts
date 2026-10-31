@@ -553,6 +553,7 @@ export function createApp({
     auth,
     enter: (session, slug) =>
       enterWorkspace({ db, identity, log, rules }, { userId: session.user.id, slug, session: doorSession(session) }),
+    wakeRelay,
   });
   // The form to booking hand off (spec 0023 AC-1057): one key, signing on the form's side and reading on the page's.
   const formsHandoffKey = handoffKey(env.BETTER_AUTH_SECRET);
