@@ -56,6 +56,12 @@ export const Match: Story = {
     const dialog = await screen.findByRole('dialog');
     await waitFor(() => expect(dialog).toBeVisible());
     await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    // Focus comes back to the link, which opens its tooltip; the shot is of the row at rest, not a tooltip
+    // clipped by the frame.
+    await userEvent.unhover(link);
+    link.blur();
+    await waitFor(() => expect(screen.queryByRole('tooltip')).toBeNull());
   },
 };
 
