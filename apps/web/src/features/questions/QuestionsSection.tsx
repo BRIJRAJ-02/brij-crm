@@ -5,6 +5,7 @@
 import type { AnswerType, FormAttributeChoice, FormQuestion } from '@crm/data';
 import {
   ANSWER_TYPES,
+  BOOKING_ANSWER_TYPES,
   CHOICE_TYPES,
   FORM_CHOICES_MAX,
   FORM_STEP_TITLE_MAX,
@@ -84,6 +85,14 @@ const TYPE_ICONS = {
   yes_no: 'toggle-right',
   country: 'globe',
   file: 'upload',
+  date: 'calendar',
+  time: 'clock',
+  datetime: 'calendar-clock',
+  rating: 'star',
+  scale: 'sliders-horizontal',
+  multi_select: 'list-checks',
+  address: 'map-pin',
+  hidden: 'eye-off',
 } as const satisfies Record<AnswerType, IconName>;
 
 /** Props for the questions section. */
@@ -151,6 +160,9 @@ const TYPE_ITEMS = ANSWER_TYPES.map((type) => ({
   label: strings.answerTypes[type],
   icon: TYPE_ICONS[type],
 }));
+
+/** A booking page's answer types (spec 0063, AC-6311): the ones it had, until a later spec opens the new ones to it. */
+const BOOKING_TYPE_ITEMS = TYPE_ITEMS.filter((item) => BOOKING_ANSWER_TYPES.includes(item.id));
 
 /** The questions: a header with the count and Add a question, then the cards. */
 export function QuestionsSection(props: QuestionsSectionProps) {
@@ -469,6 +481,7 @@ export function QuestionsSection(props: QuestionsSectionProps) {
         return (
           <QuestionEditor
             question={question}
+            typeItems={props.keptWith === 'booking' ? BOOKING_TYPE_ITEMS : TYPE_ITEMS}
             questions={questions}
             attributes={attributes}
             isFiling={objectName !== undefined}
@@ -494,7 +507,8 @@ export function QuestionsSection(props: QuestionsSectionProps) {
       }}
       renderFooterStart={(id) => {
         const question = questions.find((each) => each.id === id);
-        if (question === undefined) return null;
+        // A hidden question has nothing a visitor could answer (spec 0063): it is never one they must.
+        if (question === undefined || question.answerType === 'hidden') return null;
         return (
           <Checkbox
             label={strings.mustAnswer}
@@ -577,6 +591,8 @@ export function QuestionsSection(props: QuestionsSectionProps) {
 /** Props for one open question. */
 interface QuestionEditorProps {
   readonly question: FormQuestion;
+  /** The answer types it may take: a booking page's are fewer (spec 0063, AC-6311). */
+  readonly typeItems: typeof TYPE_ITEMS;
   readonly questions: Questions;
   readonly attributes: readonly FormAttributeChoice[];
   /** The form adds submissions to the CRM, so Where it goes shows; a form that keeps them only files nothing. */
@@ -605,6 +621,7 @@ interface QuestionEditorProps {
 /** One question open: Question, Answer type, Choices, Placeholder, Where it goes, Visitors must answer. */
 function QuestionEditor({
   question,
+  typeItems,
   questions,
   attributes,
   isFiling,
@@ -662,7 +679,7 @@ function QuestionEditor({
       />
       <Select
         label={strings.answerType}
-        items={TYPE_ITEMS}
+        items={typeItems}
         value={question.answerType}
         isReadOnly={isReadOnly || isLocked}
         onChange={(type) => {
@@ -680,6 +697,7 @@ function QuestionEditor({
           }}
         />
       )}
+      <TypeOptions question={question} isReadOnly={isReadOnly} onChange={onChange} />
       {!NO_PLACEHOLDER_TYPES.includes(question.answerType) && (
         <Field
           label={strings.placeholder}
@@ -867,6 +885,164 @@ function ChoicesEditor({ choices, isReadOnly, onChange, onInvalidChange }: Choic
       }}
     />
   );
+}
+
+/** Props for a question's type options. */
+interface TypeOptionsProps {
+  readonly question: FormQuestion;
+  readonly isReadOnly: boolean;
+  readonly onChange: (change: QuestionChange) => void;
+}
+
+/** A whole number typed in a field, or undefined when blank or not one. */
+function wholeOf(text: string): number | undefined {
+  const value = Number(text.trim());
+  return text.trim() === '' || !Number.isInteger(value) || value < 1 ? undefined : value;
+}
+
+/**
+ * What a question's type sets beyond its words and choices (spec 0063, AC-6307): a date's earliest and latest day,
+ * a scale's ends and their words, a multi select's least and most picks and its Other, a hidden question's value
+ * when the link brings none. Nothing for the other types.
+ */
+function TypeOptions({ question, isReadOnly, onChange }: TypeOptionsProps) {
+  const options = question.options ?? {};
+  switch (question.answerType) {
+    case 'date':
+      return (
+        <SettingsRow title={strings.dateRange} description={strings.dateRangeHint}>
+          <Field
+            label={strings.earliest}
+            isLabelHidden
+            temporal={{ type: 'date', max: options.latest }}
+            value={options.earliest ?? ''}
+            isReadOnly={isReadOnly}
+            onChange={(earliest) => {
+              onChange({ options: { earliest } });
+            }}
+          />
+          <Field
+            label={strings.latest}
+            isLabelHidden
+            temporal={{ type: 'date', min: options.earliest }}
+            value={options.latest ?? ''}
+            isReadOnly={isReadOnly}
+            onChange={(latest) => {
+              onChange({ options: { latest } });
+            }}
+          />
+        </SettingsRow>
+      );
+    case 'scale':
+      return (
+        <>
+          <SettingsRow title={strings.scaleRange}>
+            <Select
+              label={strings.scaleFrom}
+              isLabelHidden
+              size="sm"
+              items={[
+                { id: '0', label: '0' },
+                { id: '1', label: '1' },
+              ]}
+              value={String(options.from ?? 0)}
+              isReadOnly={isReadOnly}
+              onChange={(from) => {
+                if (from === '0' || from === '1') onChange({ options: { from: from === '0' ? 0 : 1 } });
+              }}
+            />
+            <Select
+              label={strings.scaleTo}
+              isLabelHidden
+              size="sm"
+              items={[
+                { id: '5', label: '5' },
+                { id: '7', label: '7' },
+                { id: '10', label: '10' },
+              ]}
+              value={String(options.to ?? 10)}
+              isReadOnly={isReadOnly}
+              onChange={(to) => {
+                if (to === '5' || to === '7' || to === '10')
+                  onChange({ options: { to: to === '5' ? 5 : to === '7' ? 7 : 10 } });
+              }}
+            />
+          </SettingsRow>
+          <Field
+            label={strings.lowLabel}
+            placeholder={strings.lowLabelPlaceholder}
+            value={options.lowLabel ?? ''}
+            maxLength={40}
+            isReadOnly={isReadOnly}
+            onChange={(lowLabel) => {
+              onChange({ options: { lowLabel } });
+            }}
+          />
+          <Field
+            label={strings.highLabel}
+            placeholder={strings.highLabelPlaceholder}
+            value={options.highLabel ?? ''}
+            maxLength={40}
+            isReadOnly={isReadOnly}
+            onChange={(highLabel) => {
+              onChange({ options: { highLabel } });
+            }}
+          />
+        </>
+      );
+    case 'multi_select':
+      return (
+        <>
+          <SettingsRow title={strings.picks} description={strings.picksHint}>
+            <Field
+              label={strings.leastPicks}
+              isLabelHidden
+              inputMode="numeric"
+              placeholder={strings.anyPicks}
+              value={options.min === undefined ? '' : String(options.min)}
+              isReadOnly={isReadOnly}
+              onChange={(text) => {
+                onChange({ options: { min: wholeOf(text) } });
+              }}
+            />
+            <Field
+              label={strings.mostPicks}
+              isLabelHidden
+              inputMode="numeric"
+              placeholder={strings.anyPicks}
+              value={options.max === undefined ? '' : String(options.max)}
+              isReadOnly={isReadOnly}
+              onChange={(text) => {
+                onChange({ options: { max: wholeOf(text) } });
+              }}
+            />
+          </SettingsRow>
+          <Checkbox
+            label={strings.offerOther}
+            isSelected={options.other === true}
+            isReadOnly={isReadOnly}
+            onChange={(other) => {
+              onChange({ options: { other: other ? true : undefined } });
+            }}
+          />
+        </>
+      );
+    case 'hidden':
+      return (
+        <Field
+          label={strings.hiddenDefault}
+          hint={strings.hiddenDefaultHint(question.key)}
+          value={options.default ?? ''}
+          maxLength={200}
+          isReadOnly={isReadOnly}
+          onChange={(text) => {
+            onChange({ options: { default: text } });
+          }}
+        />
+      );
+    default:
+      return null;
+  }
 }
 
 /** Props for a Show when: a question's, or a step's (spec 0063). */

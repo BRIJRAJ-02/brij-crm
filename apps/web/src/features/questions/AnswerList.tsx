@@ -5,21 +5,14 @@
 import type { SubmissionAnswer } from '@crm/data';
 import { AttributeDisplay, DescriptionList } from '@crm/ui';
 import type { ReactNode } from 'react';
+import { answerWords } from '@crm/data/forms';
 import { FileValue, PhoneValue } from '@crm/contracts/values';
 import { strings } from './strings.ts';
 
-/** An answer as words: text, Yes or No, a phone's number, a file's name. Never markup: a visitor typed it. */
+/** An answer as words: text, Yes or No, a phone's number, a file's name, and the newer shapes. Never markup. */
 export function answerText(answer: Pick<SubmissionAnswer, 'value'>): string {
-  const { value } = answer;
-  // A stored file is read by its own shape, not by the question's type, so this stays a value reader.
-  const file = FileValue.safeParse(value);
-  if (file.success) return file.data.name;
-  if (typeof value === 'boolean') return value ? strings.yes : strings.no;
-  if (typeof value === 'string') return value;
-  if (typeof value === 'object' && value !== null && typeof (value as { number?: unknown }).number === 'string') {
-    return (value as { number: string }).number;
-  }
-  return '';
+  // The shared reading (spec 0063): a file's name, a phone's number, the picks, an address, a date and time.
+  return answerWords(answer.value, { yes: strings.yes, no: strings.no });
 }
 
 /** Whether an answer holds a stored file (by its value's shape, as `answerText` reads it). */

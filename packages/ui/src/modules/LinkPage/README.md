@@ -28,7 +28,6 @@ Why the letter tile isn't an Avatar: an Avatar is a person (initials from a name
 
 `LinkPageTile` with no block is the tile's loading form (a Skeleton filling its place), which the page's loading blocks and the editor's loading rows (LinkList's `leadingLoading`) both draw, so the tile's size lives in this module alone.
 
-
 ## Writing
 
 A `text` block is the person's own words rather than a row (spec 0052, AC-5206): its title as a small heading when it has one, the body under it with its line breaks kept, in the page's reading measure, with no frame and nothing to press. It breaks out of the list of pressable rows, so a run of rows is one `ul` and a piece of writing is prose between the lists: a list item that is not a link would read as one to a screen reader.

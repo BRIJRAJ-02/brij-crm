@@ -13,12 +13,15 @@ const [rows, setRows] = useState(() => [createInviteRow('member')]);
 <InviteRows
   rows={rows}
   onChange={setRows}
-  roles={[{ id: 'admin', label: 'Admin' }, { id: 'member', label: 'Member' }]}
+  roles={[
+    { id: 'admin', label: 'Admin' },
+    { id: 'member', label: 'Member' },
+  ]}
   rolesInfo={<InfoTip label="Role">What each role can do.</InfoTip>}
   errors={{ [rows[0].id]: 'Enter a valid email address.' }}
   max={20}
   onSubmit={send}
-/>
+/>;
 ```
 
 - Controlled: the screen holds the rows (`createInviteRow(roleId?, email?)` makes one with a random id) and judges the addresses; `errors` puts a row's problem under its email.

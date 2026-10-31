@@ -129,7 +129,7 @@ function conditionProblem(
       ? 'reads a question that is no longer on the form'
       : `reads ${named(later)}, which comes after it`;
   }
-  if (NUMBER_OPS.includes(condition.op) && question.answerType !== 'number') {
+  if (NUMBER_OPS.includes(condition.op) && !['number', 'rating', 'scale'].includes(question.answerType)) {
     return `compares ${named(question)} as a number, but it isn’t a number question`;
   }
   if (

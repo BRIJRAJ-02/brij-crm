@@ -3,7 +3,7 @@
 // it on a website (in the page, a popup, or a corner button, picked as tiles), then the developer material, closed.
 // Main task: press Copy link, or pick how it shows and copy its snippet. Nothing else needs touching for it to work.
 // Leaves out: a QR code and analytics; the booking page's own embed lives with the booking page.
-import type { FormView } from '@crm/data';
+import type { FormQuestion, FormView } from '@crm/data';
 import {
   Button,
   Card,
@@ -14,6 +14,7 @@ import {
   InfoTip,
   SettingsStack,
   Switch,
+  Table,
   TileGrid,
   type ChoiceTile,
 } from '@crm/ui';
@@ -58,6 +59,18 @@ export function siteOrigin(typed: string): { readonly origin?: string; readonly 
   const secure = url.protocol === 'https:' || (url.protocol === 'http:' && LOCAL_HOSTS.has(url.hostname));
   if (!secure || url.username !== '' || url.password !== '') return { problem: strings.siteNotHttps };
   return { origin: url.origin };
+}
+
+/**
+ * A link that fills the form's first question (spec 0063, AC-6309): `?key=value`, a hidden question first when the
+ * form has one, since setting one is what a prefill link is mostly for.
+ */
+export function prefillExample(link: string, questions: readonly FormQuestion[]): string {
+  const first = questions.find((question) => question.answerType === 'hidden') ?? questions[0];
+  if (first === undefined) return link;
+  const value =
+    first.answerType === 'email' ? 'ada@example.com' : first.answerType === 'hidden' ? 'spring-campaign' : 'Ada';
+  return `${link}?${encodeURIComponent(first.key)}=${encodeURIComponent(value)}`;
 }
 
 /** Share, Put it on your site (the embed tiles and the snippet), then For developers, closed: own HTML, sites, secret. */
@@ -179,6 +192,40 @@ export function InstallTab({ slug, form, isReadOnly, onFormChange }: InstallTabP
       {/* A quiet fold at the foot, its cards flush with the cards above it (one left edge, AC-1), spaced as they are. */}
       <Disclosure title={strings.advancedTitle} variant="quiet">
         <SettingsStack variant="plain">
+          {/* Prefill (spec 0063, AC-6309): a link that fills a question, and every question's key to fill. */}
+          {shown.questions.length > 0 && (
+            <Card
+              title={strings.prefillTitle}
+              actions={<InfoTip label={strings.prefillTitle}>{strings.prefillTip}</InfoTip>}
+            >
+              <Field
+                label={strings.prefillExample}
+                variant="copy"
+                copyLabel={strings.copyPrefill}
+                value={prefillExample(link, shown.questions)}
+              />
+              <Table
+                label={strings.prefillKeys}
+                columns={[
+                  { id: 'question', label: strings.prefillQuestion, isRowHeader: true },
+                  { id: 'key', label: strings.prefillKey },
+                ]}
+                rows={shown.questions}
+                getRowId={(question) => question.id}
+                renderCell={(question, column) =>
+                  column === 'question' ? (
+                    question.label.trim() === '' ? (
+                      question.key
+                    ) : (
+                      question.label
+                    )
+                  ) : (
+                    <Code>{question.key}</Code>
+                  )
+                }
+              />
+            </Card>
+          )}
           <Card
             title={strings.ownFormTitle}
             actions={

@@ -2,7 +2,7 @@
 // an embed it can name a host for, posts its height to that origin and never
 // to `*`, and keeps its embed when it goes on to a booking page.
 import { describe, expect, it, vi } from 'vitest';
-import { contextFromFrame, contextOfPage, hiddenOf } from './context.ts';
+import { contextFromFrame, contextOfPage, hiddenOf, prefillOf } from './context.ts';
 import { embedOf, framedUrl, reportHeight, type FrameMessage } from './frame.ts';
 
 const search = (params: Record<string, string>) => `?${new URLSearchParams(params).toString()}`;
@@ -101,5 +101,12 @@ describe('where a submission came from, as the frame sends it', () => {
       referrer: 'https://acme.com/',
       utm_source: 'mail',
     });
+  });
+});
+
+describe('the answers a link starts a form with (spec 0063, AC-6309)', () => {
+  it('reads each key, a repeated key as a list, keeps UTM tags and leaves the page’s own parameters out', () => {
+    const params = new URLSearchParams('email=ada@acme.com&plan=unknown&utm_campaign=x&team=a&team=b&embed=1&ctx=z');
+    expect(prefillOf(params)).toEqual({ email: 'ada@acme.com', plan: 'unknown', utm_campaign: 'x', team: ['a', 'b'] });
   });
 });

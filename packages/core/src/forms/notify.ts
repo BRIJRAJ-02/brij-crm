@@ -9,9 +9,8 @@
 // the email.
 import { sql } from 'drizzle-orm';
 import { EmailAddress, EmailTimeZone, type EmailRow, type FormSubmissionEmail } from '@crm/contracts/emails';
-import type { FormDocument, SubmissionAnswer } from '@crm/contracts';
+import { answerWords as wordsOf, type FormDocument, type SubmissionAnswer } from '@crm/contracts';
 import type { WorkspaceTx } from '@crm/db';
-import { FileValue } from '@crm/contracts/values';
 import { memberScopeIn, type RuleSource } from '../access/door.ts';
 import { isRefusal } from '../engine/refusals.ts';
 import type { WriteContext } from '../engine/write.ts';
@@ -25,18 +24,9 @@ import { loadForm, loadVersions } from './shared.ts';
 /** The most answers one notice lists (the email's own limit). */
 const MAX_ANSWERS = 60;
 
-/** An answer as words: text, Yes or No, a phone's number, a file's name; empty when it has none. */
+/** An answer as words (`answerWords` in contracts): the email notice reads every shape as the panel does. */
 export function answerWords(value: unknown): string {
-  const file = FileValue.safeParse(value);
-  if (file.success) return file.data.name;
-  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
-  if (typeof value === 'string') return value.trim();
-  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
-  if (Array.isArray(value)) return value.filter((item): item is string => typeof item === 'string').join(', ');
-  if (typeof value === 'object' && value !== null && typeof (value as { number?: unknown }).number === 'string') {
-    return (value as { number: string }).number;
-  }
-  return '';
+  return wordsOf(value);
 }
 
 /** The answers as an email's rows: labelled, each cut to what a row holds, the empty ones left out. */

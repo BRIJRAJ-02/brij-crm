@@ -13,7 +13,13 @@ New. A role picker offered a name and one sentence, so someone choosing a role f
   label="What an Admin can do"
   summary="Everyone can see and change records, and make notes, tasks and comments."
   areas={[
-    { id: 'capture', title: 'Forms and booking', standing: 'some', held: ['Make booking pages'], withheld: ['Change other people’s booking pages'] },
+    {
+      id: 'capture',
+      title: 'Forms and booking',
+      standing: 'some',
+      held: ['Make booking pages'],
+      withheld: ['Change other people’s booking pages'],
+    },
   ]}
 />
 ```

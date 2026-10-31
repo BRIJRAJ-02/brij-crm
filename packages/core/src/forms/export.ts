@@ -13,6 +13,7 @@
 import { and, desc, eq, inArray, lt, lte, or, sql, type SQL } from 'drizzle-orm';
 import * as z from 'zod';
 import {
+  answerWords,
   CSV_BOM,
   csvLine,
   EXPORT_ROWS_MAX,
@@ -368,18 +369,17 @@ async function columnsOf(tx: WorkspaceTx, scope: EngineScope, formId: string): P
   return [...seen.values()];
 }
 
-/** An answer as a cell: text as itself, yes or no, a phone's number, several values joined. */
+/** An answer as a cell: text as itself, yes or no, a number, several values joined, the rest as their words. */
 function cellOf(value: unknown): string | number | boolean | undefined {
   if (value === null || value === undefined) return undefined;
   if (typeof value === 'string' || typeof value === 'number') return value;
   if (typeof value === 'boolean') return value ? 'Yes' : 'No';
   if (Array.isArray(value)) return value.map((each) => String(cellOf(each) ?? '')).join(', ');
   if (typeof value === 'object' && 'number' in value && typeof value.number === 'string') return value.number;
-  // A file is its name: its address needs a signed in member, so it is opened from the submission, not the file.
-  if (typeof value === 'object' && 'fileId' in value && 'name' in value && typeof value.name === 'string') {
-    return value.name;
-  }
-  return JSON.stringify(value);
+  // A file is its name (its address needs a signed in member); a multi select, an address and a date and time read
+  // as the panel reads them (spec 0063).
+  const words = answerWords(value);
+  return words === '' ? JSON.stringify(value) : words;
 }
 
 /** The header line. */

@@ -44,7 +44,10 @@ A person's public profile, `/<handle>`, the Cal.com profile the owner pointed at
 Why a variant here rather than a new module: it is the booking pages' own page, so it keeps their background, centred column, card and foot, which live in this folder. The column is wider than BookingMessage's so a row's title and chips fit.
 
 ```tsx
-<BookingProfile person={{ name: 'Ada Lovelace', id: 'ada', bio: 'Product at Acme.' }} claimHref={claimPageHref('booking_profile')}>
+<BookingProfile
+  person={{ name: 'Ada Lovelace', id: 'ada', bio: 'Product at Acme.' }}
+  claimHref={claimPageHref('booking_profile')}
+>
   <BookingProfileSection title="Sales">
     <LinkList label="Sales" searchLabel="Search" isToolbarHidden rows={rows} onOpen={open} />
   </BookingProfileSection>

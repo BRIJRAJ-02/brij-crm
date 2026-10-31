@@ -50,6 +50,21 @@ export const PublicQuestion = z.object({
   showWhen: PublicShowWhen.optional(),
   placeholder: z.string().optional(),
   required: z.boolean(),
+  /** What its type sets (spec 0063): a date's range, a scale's ends and words, a multi select's picks and Other. */
+  options: z
+    .object({
+      earliest: z.string().optional(),
+      latest: z.string().optional(),
+      from: z.number().optional(),
+      to: z.number().optional(),
+      lowLabel: z.string().optional(),
+      highLabel: z.string().optional(),
+      min: z.number().optional(),
+      max: z.number().optional(),
+      other: z.boolean().optional(),
+      default: z.string().optional(),
+    })
+    .optional(),
 });
 /** One question as the visitor's page renders it. */
 export type PublicQuestion = z.infer<typeof PublicQuestion>;

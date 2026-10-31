@@ -3,6 +3,7 @@
 // publish check, the dialling codes, the presets and the visitor's words. The
 // public shapes come as types only, so the hosted page's bundle stays small.
 export * from './answer-types.ts';
+export * from './answer-words.ts';
 export * from './check.ts';
 export * from './dial-codes.ts';
 export * from './email-hint.ts';

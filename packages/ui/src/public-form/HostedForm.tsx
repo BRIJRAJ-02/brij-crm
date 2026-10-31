@@ -22,6 +22,7 @@ import {
   type HostedFormMode,
   type HostedSubmission,
   type HostedSubmitOutcome,
+  type PrefillValue,
 } from './use-hosted-form.ts';
 
 export { FormLoading, FormMessage } from './FormParts.tsx';
@@ -35,10 +36,11 @@ export interface HostedFormProps {
   readonly countryGuess?: string;
   /**
    * Answers to start with, by question key, from the page's address (or the
-   * site's, through an embed): text questions take the words, a dropdown or
-   * choice takes one of its choices or its key. Anything else is ignored.
+   * site's, through an embed): text and hidden questions take the words, a
+   * dropdown or choice one of its choices or its key, a multi select each of a
+   * repeated key's (`prefillAnswer`). Anything that doesn't fit is ignored.
    */
-  readonly prefill?: Readonly<Record<string, string>>;
+  readonly prefill?: Readonly<Record<string, PrefillValue>>;
   /** Sends the answers. Without it the answers are checked and the thank you shows, but nothing is sent. */
   readonly onSubmit?: (submission: HostedSubmission) => Promise<HostedSubmitOutcome>;
   /** Sends a file for a file question (#32), reporting progress; without it the file question is disabled. */
@@ -121,7 +123,8 @@ export function HostedForm({
           }}
         >
           {form.questions
-            .filter((question) => state.shown.has(question.key))
+            // A hidden question has nothing to draw (spec 0063): it is answered by the link or its default.
+            .filter((question) => state.shown.has(question.key) && question.answerType !== 'hidden')
             .map((question) => (
               <QuestionSlot key={`${String(state.round)}-${question.key}`} question={question} state={state}>
                 <Question

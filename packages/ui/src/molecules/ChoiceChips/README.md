@@ -24,6 +24,8 @@ New. The experience note shows durations as chips, more than one allowed. Segmen
 - `error` shows under the chips and describes the group.
 - `end` puts a control after the last chip, in the same wrapping row and outside the group: a booking page's "+ Custom" length, a dashed Button that opens a Popover. The group's `isDisabled` doesn't reach it: the caller disables or leaves out `end` with the group (the editor leaves it out while read only). Why: adding a choice isn't choosing one, so it can't be a chip in the group, and a full width field under the chips for a rarely used length took a row and a help line of its own (the owner, 22 October 2026).
 
+- `ends` names what the first and last chips mean, under the row at its two ends ("Not likely", "Very likely"), and describes the group: a hosted form's Scale (spec 0063). `isLabelHidden` keeps the label for screen readers only, where a larger heading shows it (one at a time). Why here: a scale is a short run of single choice chips, which this already is; only its end words are new.
+
 ## States
 
 Unselected, selected, hover, pressed, focus, disabled, with an error.

@@ -13,7 +13,7 @@ import '@crm/ui/styles.css';
 import { createPublicFormClient, loadCaptcha } from '@crm/data/public-form';
 import { mountFormLoading, mountFormMessage, mountHostedForm, type HostedSubmitOutcome } from '@crm/ui/public-form';
 import { guessCountry } from './country.ts';
-import { contextFromFrame, contextOfPage, hiddenOf } from './context.ts';
+import { contextFromFrame, contextOfPage, hiddenOf, prefillOf } from './context.ts';
 import { closeOnEscape, embedOf, framedUrl, isOwnBookingPath, reportHeight, type PostToHost } from './frame.ts';
 
 const found = document.querySelector<HTMLElement>('[data-app-root]');
@@ -34,9 +34,7 @@ const postToHost: PostToHost = (message, targetOrigin) => {
 };
 // Escape closes the script's dialog from the first moment, even before the form has loaded.
 if (embed !== undefined) closeOnEscape(embed, postToHost, window);
-/** The address's parameters the embed script and the page use themselves: never a question's prefill. */
-const RESERVED = new Set(['embed', 'mode', 'fid', 'host', 'ctx', 'page', 'referrer', 'from']);
-const prefill = Object.fromEntries([...params].filter(([key]) => !RESERVED.has(key) && !key.startsWith('utm_')));
+const prefill = prefillOf(params);
 const address = decodeURIComponent(window.location.pathname.replace(/^\/f\//, '').split('/')[0] ?? '');
 // Inside a site's frame the form is not a page of ours: it has no ground, so the tinted one its shell names
 // comes off before anything paints into it.

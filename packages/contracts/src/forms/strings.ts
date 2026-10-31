@@ -95,6 +95,27 @@ export interface FormStrings {
   readonly ok: string;
   /** Under a long answer one at a time, where Enter goes on (spec 0063, AC-6305). */
   readonly newLine: string;
+  // The new answer types (spec 0063, AC-6307).
+  readonly date: string;
+  readonly dateFrom: (day: string) => string;
+  readonly dateUntil: (day: string) => string;
+  readonly time: string;
+  readonly datetime: string;
+  readonly pickAtLeast: (count: number) => string;
+  readonly pickAtMost: (count: number) => string;
+  /** The Other choice of a multi select, and its box. */
+  readonly other: string;
+  readonly otherLabel: string;
+  readonly otherMissing: string;
+  readonly addressLine1: string;
+  readonly addressLine2: string;
+  readonly addressCity: string;
+  readonly addressRegion: string;
+  readonly addressPostcode: string;
+  readonly addressCountry: string;
+  readonly address: string;
+  /** A rating's or scale's choice, read with its number: "4 out of 5". */
+  readonly outOf: (value: number, top: number) => string;
 }
 
 const EN: FormStrings = {
@@ -160,6 +181,24 @@ const EN: FormStrings = {
   next: 'Continue',
   ok: 'OK',
   newLine: 'Shift + Enter for a new line',
+  date: 'Enter a date.',
+  dateFrom: (day) => `Pick ${day} or later.`,
+  dateUntil: (day) => `Pick ${day} or earlier.`,
+  time: 'Enter a time, such as 14:30.',
+  datetime: 'Enter a date and a time.',
+  pickAtLeast: (count) => (count === 1 ? 'Pick at least one.' : `Pick at least ${String(count)}.`),
+  pickAtMost: (count) => (count === 1 ? 'Pick one only.' : `Pick at most ${String(count)}.`),
+  other: 'Other',
+  otherLabel: 'Other, in your words',
+  otherMissing: 'Say what Other is, or untick it.',
+  addressLine1: 'Street',
+  addressLine2: 'Apartment, suite or floor',
+  addressCity: 'City',
+  addressRegion: 'State or region',
+  addressPostcode: 'Postcode',
+  addressCountry: 'Country',
+  address: 'Enter the address: at least the street or the city.',
+  outOf: (value, top) => `${String(value)} out of ${String(top)}`,
 };
 
 const CATALOGUE: Readonly<Record<FormLanguage, Partial<FormStrings>>> = {

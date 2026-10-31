@@ -22,12 +22,40 @@ export const ANSWER_TYPES = [
   'yes_no',
   'country',
   'file',
+  // Spec 0063, batch one (AC-6307).
+  'date',
+  'time',
+  'datetime',
+  'rating',
+  'scale',
+  'multi_select',
+  'address',
+  'hidden',
 ] as const;
 /** One answer type. */
 export type AnswerType = (typeof ANSWER_TYPES)[number];
 
-/** The types answered by picking one of the question's own choices. */
-export const CHOICE_TYPES: readonly AnswerType[] = ['dropdown', 'choice'];
+/** The types answered by picking from the question's own choices. */
+export const CHOICE_TYPES: readonly AnswerType[] = ['dropdown', 'choice', 'multi_select'];
+
+/**
+ * The types a booking page's questions may take (spec 0063, AC-6311): those it had before the new types arrived,
+ * which only the form builder offers until a later spec opens them to booking pages.
+ */
+export const BOOKING_ANSWER_TYPES: readonly AnswerType[] = [
+  'short_text',
+  'long_text',
+  'email',
+  'phone',
+  'website',
+  'number',
+  'dropdown',
+  'choice',
+  'checkbox',
+  'yes_no',
+  'country',
+  'file',
+];
 
 /** The types answered yes or no (a boolean). */
 export const BOOLEAN_TYPES: readonly AnswerType[] = ['checkbox', 'yes_no'];
@@ -40,6 +68,14 @@ export const NO_PLACEHOLDER_TYPES: readonly AnswerType[] = [
   'yes_no',
   'country',
   'file',
+  'date',
+  'time',
+  'datetime',
+  'rating',
+  'scale',
+  'multi_select',
+  'address',
+  'hidden',
 ];
 
 /** The attribute types each answer type may be filed onto (spec 0023, Answer types). */
@@ -57,6 +93,17 @@ export const FILES_ONTO: Readonly<Record<AnswerType, readonly AttributeType[]>> 
   yes_no: ['checkbox'],
   country: ['text', 'select'],
   file: ['file'],
+  date: ['date'],
+  // A time of day as `HH:MM`: no attribute holds one, so it files as text.
+  time: ['text'],
+  // In the visitor's time zone, which stays with the answer on the submission.
+  datetime: ['timestamp'],
+  rating: ['rating', 'number'],
+  scale: ['number'],
+  // The several choices picked; what Other's box says stays on the submission (AC-6310).
+  multi_select: ['select'],
+  address: ['location'],
+  hidden: ['text', 'select', 'number'],
 };
 
 /** Whether an answer of `answerType` may be filed onto an attribute of `attributeType` (AC-658). */
@@ -70,7 +117,7 @@ export function isAnswerType(value: unknown): value is AnswerType {
 }
 
 /** The most questions one form holds. */
-export const FORM_QUESTIONS_MAX = 30;
+export const FORM_QUESTIONS_MAX = 50;
 
 /** The most choices one choice question holds. */
 export const FORM_CHOICES_MAX = 40;

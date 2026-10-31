@@ -23,7 +23,7 @@ import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import {
   bookingPicturePath,
   checkAnswers,
-  type FileAnswer,
+  type CheckedAnswer,
   type PhoneAnswer,
   PROFILE_PAGE_SIZE,
   linkIconPath,
@@ -669,12 +669,13 @@ function checkDuration(page: PageRecord, duration: number): void {
  * booking keeps the rest instead of storing an upload id nothing downstream reads.
  */
 function withoutFiles(
-  answers: Readonly<Record<string, string | boolean | FileAnswer | PhoneAnswer>>,
+  answers: Readonly<Record<string, CheckedAnswer>>,
 ): Readonly<Record<string, string | boolean | PhoneAnswer>> {
   const kept: Record<string, string | boolean | PhoneAnswer> = {};
   for (const [key, value] of Object.entries(answers)) {
-    if (typeof value === 'object' && 'fileId' in value) continue;
-    kept[key] = value;
+    // A booking page asks only the types it had before spec 0063 (AC-6311): text, yes or no, and a phone are kept.
+    if (typeof value === 'string' || typeof value === 'boolean') kept[key] = value;
+    else if (typeof value === 'object' && 'number' in value && 'country' in value) kept[key] = value;
   }
   return kept;
 }

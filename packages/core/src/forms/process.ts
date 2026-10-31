@@ -146,8 +146,45 @@ function valueFor(
   switch (attribute.type) {
     case 'personal_name':
       return typeof answer === 'string' ? { value: personalName(answer) } : { refused: 'That isn’t a name.' };
+    // A rating's or a scale's number (spec 0063): a number field holds it as text, as every decimal is held.
+    case 'number':
+      return { value: typeof answer === 'number' ? String(answer) : answer };
+    // A date and time files its moment; the visitor's time zone stays with the submission.
+    case 'timestamp': {
+      const at = typeof answer === 'object' && answer !== null ? (answer as { readonly at?: unknown }).at : undefined;
+      return typeof at === 'string' ? { value: at } : { refused: 'That isn’t a date and time.' };
+    }
+    case 'location': {
+      if (typeof answer !== 'object' || answer === null) return { refused: 'That isn’t an address.' };
+      const parts = answer as Readonly<Record<string, unknown>>;
+      const part = (name: string) => (typeof parts[name] === 'string' ? { [name]: parts[name] } : {});
+      return {
+        value: {
+          ...part('line1'),
+          ...part('line2'),
+          ...(typeof parts.city === 'string' ? { locality: parts.city } : {}),
+          ...part('region'),
+          ...part('postcode'),
+          ...(typeof parts.country === 'string' ? { countryCode: parts.country } : {}),
+        },
+      };
+    }
     case 'select':
     case 'status': {
+      // A multi select's picks (spec 0063): each by its option, onto a field that holds several. Other's words stay
+      // with the submission (AC-6310).
+      const picked = typeof answer === 'object' && answer !== null ? (answer as { picked?: unknown }).picked : undefined;
+      if (Array.isArray(picked)) {
+        if (!attribute.isMulti) return { refused: `${attribute.title} holds one choice, and several were picked.` };
+        const known = options.get(attribute.id) ?? [];
+        const ids: string[] = [];
+        for (const each of picked) {
+          const option = known.find((one) => one.label.trim().toLowerCase() === String(each).trim().toLowerCase());
+          if (option === undefined) return { refused: `${attribute.title} has no option called “${String(each)}”.` };
+          ids.push(option.id);
+        }
+        return { value: ids };
+      }
       const label = typeof answer === 'string' ? answer.trim().toLowerCase() : '';
       const option = (options.get(attribute.id) ?? []).find((each) => each.label.trim().toLowerCase() === label);
       if (option === undefined) return { refused: `${attribute.title} has no option called “${String(answer)}”.` };

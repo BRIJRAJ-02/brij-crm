@@ -49,7 +49,7 @@ export interface HostedFormSettings {
   readonly mode: HostedFormMode;
   readonly countryGuess?: string | undefined;
   /** Answers to start with, by question key (HostedFormProps' `prefill`). */
-  readonly prefill?: Readonly<Record<string, string>> | undefined;
+  readonly prefill?: Readonly<Record<string, PrefillValue>> | undefined;
   readonly onSubmit?: ((submission: HostedSubmission) => Promise<HostedSubmitOutcome>) | undefined;
   readonly onRedirect?: ((url: string) => void) | undefined;
   /** Sends a file for a file question (#32); without it the file question is drawn and disabled. */
@@ -130,19 +130,61 @@ export interface HostedFormRefs {
 }
 
 /** The types a prefill's words fill as they are. */
-const PREFILLED_AS_TEXT: ReadonlySet<string> = new Set(['short_text', 'long_text', 'email', 'website', 'number']);
+const PREFILLED_AS_TEXT: ReadonlySet<string> = new Set([
+  'short_text',
+  'long_text',
+  'email',
+  'website',
+  'number',
+  'hidden',
+]);
 
-/** A question's start from a prefill: the words for text, a choice by its words or its key; undefined otherwise. */
-export function prefillAnswer(question: PublicQuestion, given: string | undefined): string | undefined {
-  if (given === undefined) return undefined;
-  const words = given.trim().slice(0, 500);
-  if (words === '') return undefined;
-  if (PREFILLED_AS_TEXT.has(question.answerType)) return words;
-  if (question.answerType !== 'dropdown' && question.answerType !== 'choice') return undefined;
+/** A prefill's value as the page reads it: a key's words, or several for a key the address repeats. */
+export type PrefillValue = string | readonly string[];
+
+/** A choice by its words or its key, as the question's own words; undefined when it names none. */
+function choiceOf(question: PublicQuestion, given: string): string | undefined {
   const choices = question.choices ?? [];
-  if (choices.includes(words)) return words;
-  const at = (question.choiceKeys ?? []).indexOf(words);
+  if (choices.includes(given)) return given;
+  const at = (question.choiceKeys ?? []).indexOf(given);
   return at === -1 ? undefined : choices[at];
+}
+
+/**
+ * A question's start from a prefill (spec 0023; spec 0063, AC-6309): the words for text and a hidden question, a
+ * choice by its words or its key, a real day for a date, `HH:MM` for a time, a number in range for a rating or a
+ * scale, and each of a repeated key's choices for a multi select. Anything that doesn't fit is ignored, never an
+ * error: a link is untrusted, and the answer check runs on it again as on any answer.
+ */
+export function prefillAnswer(question: PublicQuestion, given: PrefillValue | undefined): unknown {
+  if (given === undefined) return undefined;
+  const all = (typeof given === 'string' ? [given] : given)
+    .map((each) => each.trim().slice(0, 500))
+    .filter((each) => each !== '');
+  const [words] = all;
+  if (words === undefined) return undefined;
+  if (PREFILLED_AS_TEXT.has(question.answerType)) return words;
+  switch (question.answerType) {
+    case 'dropdown':
+    case 'choice':
+      return choiceOf(question, words);
+    case 'multi_select': {
+      const picked = [...new Set(all.flatMap((each) => choiceOf(question, each) ?? []))];
+      return picked.length === 0 ? undefined : { picked };
+    }
+    case 'date':
+    case 'time': {
+      const checked = checkAnswers({ language: 'en', questions: [question] }, { [question.key]: words });
+      return checked.ok ? checked.answers[question.key] : undefined;
+    }
+    case 'rating':
+    case 'scale': {
+      const checked = checkAnswers({ language: 'en', questions: [question] }, { [question.key]: words });
+      return checked.ok ? checked.answers[question.key] : undefined;
+    }
+    default:
+      return undefined;
+  }
 }
 
 /** The answers a form starts with: the guessed country for a country question, and the prefill's answers. */
@@ -150,12 +192,16 @@ function firstAnswers(
   form: PublicForm,
   countryGuess: string | undefined,
   countryNames: ReadonlyMap<string, string>,
-  prefill: Readonly<Record<string, string>> | undefined,
+  prefill: Readonly<Record<string, PrefillValue>> | undefined,
 ): Answers {
   return Object.fromEntries(
-    form.questions.flatMap((question) => {
+    form.questions.flatMap((question): [string, unknown][] => {
       const given = prefillAnswer(question, prefill?.[question.key]);
       if (given !== undefined) return [[question.key, given]];
+      // A hidden question the link leaves out takes its default (AC-6309).
+      if (question.answerType === 'hidden' && question.options?.default !== undefined) {
+        return [[question.key, question.options.default]];
+      }
       return question.answerType === 'country' && countryGuess !== undefined && countryNames.has(countryGuess)
         ? [[question.key, countryNames.get(countryGuess)]]
         : [];

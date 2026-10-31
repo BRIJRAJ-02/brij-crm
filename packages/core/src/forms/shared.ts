@@ -296,6 +296,7 @@ export function publicQuestionOf(question: FormQuestion): PublicQuestion {
     ...(question.placeholder === undefined || question.placeholder === '' ? {} : { placeholder: question.placeholder }),
     required: question.required,
     ...(question.showWhen === undefined ? {} : { showWhen: question.showWhen }),
+    ...(question.options === undefined ? {} : { options: question.options }),
   };
 }
 

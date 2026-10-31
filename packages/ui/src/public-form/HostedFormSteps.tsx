@@ -106,13 +106,14 @@ export function HostedFormSteps({
   const { words, preview } = state;
   const layout: StepsLayout = form.layout === 'conversational' ? 'conversational' : 'steps';
   const byKey = new Map(form.questions.map((question) => [question.key, question]));
-  const groups = state.path.steps.map((shown) => ({
-    title: shown.title,
-    questions: shown.keys.flatMap((key) => {
+  // A hidden question has nothing to draw (spec 0063), so a step of hidden questions alone is no step to show.
+  const groups = state.path.steps.flatMap((shown) => {
+    const questions = shown.keys.flatMap((key) => {
       const question = byKey.get(key);
-      return question === undefined ? [] : [question];
-    }),
-  }));
+      return question === undefined || question.answerType === 'hidden' ? [] : [question];
+    });
+    return questions.length === 0 ? [] : [{ title: shown.title, questions }];
+  });
   // Send another starts again from the first step.
   if (state.round !== round) {
     setRound(state.round);

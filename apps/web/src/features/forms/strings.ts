@@ -96,6 +96,15 @@ export const strings = {
   /** Publish refused while a Settings field is incomplete: which card, then what it needs. */
   publishGap: (what: string) => `After sending needs a web address. ${what}`,
   publishGapButton: (what: string) => `Text needs the button’s words. ${what}`,
+  // Prefill (spec 0063, AC-6309)
+  prefillTitle: 'Prefill link',
+  prefillTip:
+    'Add ?key=value to the link to fill a question before the visitor opens it, or to set a hidden one. Repeat a key for several picks.',
+  prefillExample: 'Example',
+  copyPrefill: 'Copy prefill link',
+  prefillKeys: 'Question keys',
+  prefillQuestion: 'Question',
+  prefillKey: 'Key',
   // Layout (spec 0063)
   layoutTitle: 'Layout',
   layoutClassic: 'Classic',

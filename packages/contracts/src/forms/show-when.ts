@@ -60,7 +60,9 @@ function textsOf(value: unknown): readonly string[] {
     return trimmed === '' ? [] : [trimmed];
   }
   if (typeof value === 'object') {
-    const { number } = value as { readonly number?: unknown };
+    // A multi select reads as the choices picked (spec 0063); a phone as its number.
+    const { number, picked } = value as { readonly number?: unknown; readonly picked?: unknown };
+    if (Array.isArray(picked)) return textsOf(picked);
     return typeof number === 'string' ? textsOf(number) : [];
   }
   return [];

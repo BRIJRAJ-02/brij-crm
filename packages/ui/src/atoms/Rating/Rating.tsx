@@ -1,5 +1,6 @@
 import type { KeyboardEvent, MouseEvent } from 'react';
-import { RadioButton, RadioField, RadioGroup } from 'react-aria-components';
+import { FieldError, RadioButton, RadioField, RadioGroup } from 'react-aria-components';
+import { FieldLabel } from '../FieldLabel/FieldLabel.tsx';
 import { Icon } from '../Icon/Icon.tsx';
 import { strings } from './strings.ts';
 import styles from './Rating.module.css';
@@ -28,6 +29,16 @@ export interface RatingProps {
    * keeps its ring.
    */
   readonly variant?: 'default' | 'cell';
+  /**
+   * A form's question (a hosted form's Rating, spec 0063): the label shown over the stars as a radio group's
+   * question is (with its "(optional)"), the stars a size up for a visitor's finger, and an error under them that
+   * the group is described by. Left out, the label names the stars only, as in a cell or a panel.
+   */
+  readonly field?: {
+    readonly aside?: string | undefined;
+    readonly error?: string | undefined;
+    readonly isLabelHidden?: boolean;
+  };
 }
 
 /**
@@ -42,6 +53,7 @@ export function Rating({
   isReadOnly = false,
   isDisabled = false,
   variant = 'default',
+  field,
 }: RatingProps) {
   const current = value ?? defaultValue ?? null;
   if (isReadOnly) {
@@ -67,28 +79,39 @@ export function Rating({
     if (event.key === 'Delete' || event.key === 'Backspace') onChange?.(null);
   };
 
+  const stars = STARS.map((star) => (
+    <RadioField key={star} value={String(star)} aria-label={strings.stars(star)} className={styles.field}>
+      <RadioButton className={styles.choice} data-on={current !== null && star <= current ? '' : undefined}>
+        <Icon name="star" size={field === undefined ? 'sm' : 'md'} isFilled />
+      </RadioButton>
+    </RadioField>
+  ));
+
   return (
     // Clicks and keys bubble here from the stars; the group itself stays the radio group.
     // eslint-disable-next-line jsx-a11y-x/no-static-element-interactions
     <span className={styles.wrap} onClickCapture={clearIfCurrent} onKeyDown={clearOnDelete}>
       <RadioGroup
-        className={styles.root}
+        className={field === undefined ? styles.root : styles.form}
         data-variant={variant}
-        aria-label={label}
+        {...(field === undefined || field.isLabelHidden === true ? { 'aria-label': label } : {})}
         orientation="horizontal"
         isDisabled={isDisabled}
+        isInvalid={field?.error !== undefined}
         value={current === null ? null : String(current)}
         onChange={(next) => {
           onChange?.(Number(next));
         }}
       >
-        {STARS.map((star) => (
-          <RadioField key={star} value={String(star)} aria-label={strings.stars(star)} className={styles.field}>
-            <RadioButton className={styles.choice} data-on={current !== null && star <= current ? '' : undefined}>
-              <Icon name="star" size="sm" isFilled />
-            </RadioButton>
-          </RadioField>
-        ))}
+        {field === undefined ? (
+          stars
+        ) : (
+          <>
+            {field.isLabelHidden !== true && <FieldLabel label={label} aside={field.aside} tone="strong" />}
+            <span className={styles.root}>{stars}</span>
+            <FieldError className={styles.error}>{field.error}</FieldError>
+          </>
+        )}
       </RadioGroup>
     </span>
   );

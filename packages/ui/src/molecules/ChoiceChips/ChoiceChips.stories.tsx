@@ -104,3 +104,22 @@ export const WithEndDisabled: Story = {
     await expect(canvas.getByRole('button', { name: 'Custom' })).toBeDisabled();
   },
 };
+
+/** A scale (a hosted form's, spec 0063): one choice, its end words under the row, which describe the group. */
+export const WithEnds: Story = {
+  render: (args) => (
+    <Stage width="narrow">
+      <ChoiceChips
+        {...args}
+        label="How likely are you to recommend us?"
+        isSingle
+        choices={Array.from({ length: 11 }, (_, at) => ({ id: String(at), label: String(at) }))}
+        selected={['9']}
+        ends={{ start: 'Not likely', end: 'Very likely' }}
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('radiogroup')).toHaveAccessibleDescription('Not likely Very likely');
+  },
+};

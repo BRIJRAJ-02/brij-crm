@@ -1,6 +1,7 @@
 import { useId, type ReactNode } from 'react';
 import { ToggleButtonGroup, type Key } from 'react-aria-components';
 import { ToggleButton } from '../../atoms/Button/Button.tsx';
+import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import styles from './ChoiceChips.module.css';
 
 /** One choice. */
@@ -26,6 +27,13 @@ export interface ChoiceChipsProps {
    * which opens a Popover): it adds a choice rather than being one.
    */
   readonly end?: ReactNode;
+  /**
+   * What the first and last chips mean, under the row at its two ends ("Not likely", "Very likely"): a hosted form's
+   * Scale (spec 0063). The group is described by them, so a screen reader hears them with the choices.
+   */
+  readonly ends?: { readonly start?: string | undefined; readonly end?: string | undefined };
+  /** Keeps the label for screen readers only, where a larger heading above shows it (one at a time). */
+  readonly isLabelHidden?: boolean;
 }
 
 /**
@@ -42,19 +50,30 @@ export function ChoiceChips({
   error,
   isDisabled = false,
   end,
+  ends,
+  isLabelHidden = false,
 }: ChoiceChipsProps) {
   const labelId = useId();
   const errorId = useId();
+  const endsId = useId();
+  const hasEnds = ends !== undefined && (ends.start !== undefined || ends.end !== undefined);
+  const describedBy = [...(hasEnds ? [endsId] : []), ...(error === undefined ? [] : [errorId])].join(' ');
   return (
     <div className={styles.root} data-disabled={isDisabled || undefined}>
-      <span id={labelId} className={styles.label}>
-        {label}
-      </span>
+      {isLabelHidden ? (
+        <VisuallyHidden>
+          <span id={labelId}>{label}</span>
+        </VisuallyHidden>
+      ) : (
+        <span id={labelId} className={styles.label}>
+          {label}
+        </span>
+      )}
       <div className={styles.row}>
         <ToggleButtonGroup
           className={styles.chips}
           aria-labelledby={labelId}
-          {...(error === undefined ? {} : { 'aria-describedby': errorId })}
+          {...(describedBy === '' ? {} : { 'aria-describedby': describedBy })}
           selectionMode={isSingle ? 'single' : 'multiple'}
           selectedKeys={selected}
           isDisabled={isDisabled}
@@ -71,6 +90,12 @@ export function ChoiceChips({
         </ToggleButtonGroup>
         {end}
       </div>
+      {hasEnds && (
+        <p id={endsId} className={styles.ends}>
+          <span>{ends.start}</span>
+          <span>{ends.end}</span>
+        </p>
+      )}
       {error !== undefined && (
         <p id={errorId} className={styles.error}>
           {error}

@@ -11,6 +11,8 @@ import {
 
 export {
   ANSWER_TYPES,
+  answerWords,
+  BOOKING_ANSWER_TYPES,
   CHOICE_TYPES,
   choiceKeysOf,
   FILES_ONTO,
@@ -83,6 +85,7 @@ export function previewOf(
         : { placeholder: question.placeholder }),
       required: question.required,
       ...(question.showWhen === undefined ? {} : { showWhen: question.showWhen }),
+      ...(question.options === undefined ? {} : { options: question.options }),
     })),
     // As the server's `layoutOf`: nothing for Classic, the steps only with Steps.
     ...(document.layout === 'classic' ? {} : { layout: document.layout }),

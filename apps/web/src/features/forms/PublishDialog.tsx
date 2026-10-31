@@ -26,7 +26,7 @@ import {
 } from './draft.ts';
 import { createPlannedAttributes } from '../questions/attributes.ts';
 import { emailToMakeUnique, readyMatch, type ReadyMatch } from './match.ts';
-import { planNewAttributes } from '../questions/questions.ts';
+import { plannedType, planNewAttributes } from '../questions/questions.ts';
 import { EMBED_TILES } from './InstallTab.tsx';
 import { firstRefusal } from './refusals.ts';
 import { embedSnippet, type EmbedMode } from './snippets.ts';
@@ -50,24 +50,11 @@ export interface PublishDialogProps {
   readonly onClose: () => void;
 }
 
-/** The attribute type a question becomes when an object is built from the form. */
-const BUILT_TYPE: Readonly<Record<AnswerType, 'text' | 'email' | 'phone' | 'url' | 'number' | 'select' | 'checkbox'>> =
-  {
-    short_text: 'text',
-    long_text: 'text',
-    email: 'email',
-    phone: 'phone',
-    website: 'url',
-    number: 'number',
-    dropdown: 'select',
-    choice: 'select',
-    checkbox: 'checkbox',
-    yes_no: 'checkbox',
-    country: 'text',
-    // A file answer only files onto a file attribute, and the picker makes none, so a file question is left out of
-    // a built object entirely rather than given a text attribute it can never be filed on (27 October 2026).
-    file: 'text',
-  };
+/**
+ * The attribute type a question becomes when an object is built from the form: its planned type (`plannedType`), or
+ * none for an answer no field we make can hold (a file, a date and time), which stays with the submission.
+ */
+const builtType = (answerType: AnswerType) => plannedType(answerType);
 
 /** Save to's choice that builds an object out of the form as Publish starts, and its last: keep submissions only. */
 const BUILD = 'build';
@@ -200,14 +187,16 @@ export function PublishDialog(props: PublishDialogProps) {
     });
     const made = new Map<string, string>();
     for (const question of draft.questions) {
-      if (question.answerType === 'file') continue;
+      const type = builtType(question.answerType);
+      if (type === undefined) continue;
       const attribute = await data.attributes.create(slug, {
         id: data.attributes.newId(),
         objectId: object.id,
         title: question.label === '' ? question.key : question.label,
-        type: BUILT_TYPE[question.answerType],
+        type,
         ...(question.answerType === 'email' ? { isUnique: true } : {}),
-        ...(BUILT_TYPE[question.answerType] === 'select'
+        ...(question.answerType === 'multi_select' ? { isMulti: true } : {}),
+        ...(type === 'select'
           ? {
               options: (question.choices ?? [])
                 .filter((choice) => choice.trim() !== '')
@@ -415,7 +404,7 @@ export function PublishDialog(props: PublishDialogProps) {
             icon: 'plus' as const,
             // What it will really make: a file question gets no attribute, so it is not counted.
             description: strings.buildObjectText(
-              draft.questions.filter((question) => question.answerType !== 'file').length,
+              draft.questions.filter((question) => builtType(question.answerType) !== undefined).length,
             ),
           },
         ]
@@ -563,7 +552,7 @@ function SavedAs({
           {
             id: CREATE,
             label: plannedTitle ?? creatableTitle,
-            icon: iconOf({ type: BUILT_TYPE[question.answerType] }),
+            icon: iconOf({ type: builtType(question.answerType) ?? 'text' }),
             badge: strings.newField,
           },
         ]),

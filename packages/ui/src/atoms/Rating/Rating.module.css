@@ -79,4 +79,21 @@
       outline: none;
     }
   }
+
+  /* A form's question (field): the label over the stars, the error under them, as a radio group's question. */
+  .form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .error {
+    color: var(--danger);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .error:empty {
+    display: none;
+  }
 }

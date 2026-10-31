@@ -78,3 +78,21 @@ export const ReadOnly: Story = {
 export const Disabled: Story = {
   args: { value: 2, isDisabled: true },
 };
+
+/** A form's question (field, spec 0063): the label over the stars with its "(optional)", and an error under them. */
+export const AsFormQuestion: Story = {
+  render: (args) => (
+    <Stage>
+      <Rating
+        {...args}
+        label="How well do we fit?"
+        value={null}
+        field={{ aside: '(optional)', error: 'Pick one of the choices.' }}
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const group = canvas.getByRole('radiogroup', { name: 'How well do we fit? (optional)' });
+    await expect(group).toHaveAccessibleDescription('Pick one of the choices.');
+  },
+};

@@ -126,6 +126,65 @@ export const EveryType: Story = {
   args: { form: EVERY_TYPE },
 };
 
+/** Spec 0063's first batch, filled: a date, a time, a rating, a scale with its end words, a multi select with Other open, an address. */
+const NEW_TYPES = {
+  ...LEAD,
+  key: 'new-types',
+  headline: 'Book your onboarding',
+  questions: [
+    {
+      id: 'start',
+      key: 'start',
+      label: 'Start date',
+      answerType: 'date',
+      required: true,
+      options: { earliest: '2026-11-01' },
+    },
+    { id: 'slot', key: 'slot', label: 'Best time to call', answerType: 'time', required: false },
+    { id: 'fit', key: 'fit', label: 'How well do we fit?', answerType: 'rating', required: true },
+    {
+      id: 'nps',
+      key: 'nps',
+      label: 'How likely are you to recommend us?',
+      answerType: 'scale',
+      required: true,
+      options: { from: 0, to: 10, lowLabel: 'Not likely', highLabel: 'Very likely' },
+    },
+    {
+      id: 'teams',
+      key: 'teams',
+      label: 'Which teams will use it?',
+      answerType: 'multi_select',
+      choices: ['Sales', 'Support', 'Marketing'],
+      required: true,
+      options: { other: true },
+    },
+    { id: 'office', key: 'office', label: 'Office address', answerType: 'address', required: false },
+    { id: 'source', key: 'utm_campaign', label: 'Campaign', answerType: 'hidden', required: false },
+  ],
+} satisfies PublicForm;
+
+/** The new answer types (spec 0063, AC-6307), each with the library's own control; the hidden one draws nothing. */
+export const NewTypes: Story = {
+  args: { form: NEW_TYPES, prefill: { teams: ['Sales', 'Nope'], nps: '9' } },
+  play: async ({ canvas, userEvent }) => {
+    await expect(canvas.getByLabelText('Start date')).toHaveAttribute('type', 'date');
+    await expect(canvas.getByLabelText('Start date')).toHaveAttribute('min', '2026-11-01');
+    // The rating and the scale are radio groups named by their question, the scale's end words read with it.
+    await expect(canvas.getByRole('radiogroup', { name: 'How well do we fit?' })).toBeInTheDocument();
+    const scale = canvas.getByRole('radiogroup', { name: 'How likely are you to recommend us?' });
+    await expect(scale).toHaveAccessibleDescription('Not likely Very likely');
+    // The link's answers: a scale's number and a multi select's pick by its words (one it lacks ignored).
+    await expect(canvas.getByRole('radio', { name: '9' })).toBeChecked();
+    await expect(canvas.getByRole('button', { name: 'Sales' })).toHaveAttribute('aria-pressed', 'true');
+    // Other opens its box.
+    await userEvent.click(canvas.getByRole('button', { name: 'Other' }));
+    await expect(canvas.getByLabelText('Other, in your words')).toBeInTheDocument();
+    await expect(canvas.getByRole('group', { name: 'Office address (optional)' })).toBeInTheDocument();
+    await expect(canvas.queryByText('Campaign')).not.toBeInTheDocument();
+  },
+};
+
 /** Inside a site's frame: an h2 at heading size, no card, no ground. */
 export const Embed: Story = {
   args: { mode: 'embed' },

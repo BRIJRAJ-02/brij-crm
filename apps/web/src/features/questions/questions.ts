@@ -106,6 +106,8 @@ export interface QuestionChange {
   readonly kept?: boolean;
   /** Show when (spec 0043): new conditions, or null to always show it. */
   readonly showWhen?: FormQuestion['showWhen'] | null;
+  /** What its type sets (spec 0063), merged over what it had: a part set to undefined is cleared. */
+  readonly options?: Partial<NonNullable<FormQuestion['options']>>;
 }
 
 /**
@@ -131,7 +133,13 @@ export function changeQuestion(
       }
       return question;
     }
-    const { filedOn, showWhen: shownWhen, kept: wasKept, ...rest } = question;
+    const { filedOn, showWhen: shownWhen, kept: wasKept, options: hadOptions, ...rest } = question;
+    const merged = Object.fromEntries(
+      Object.entries({ ...hadOptions, ...change.options }).filter(
+        ([, value]: [string, unknown]) => value !== undefined && value !== '',
+      ),
+    );
+    const options = Object.keys(merged).length === 0 ? undefined : (merged as NonNullable<FormQuestion['options']>);
     const showWhen = change.showWhen === null ? undefined : (change.showWhen ?? shownWhen);
     const label = change.label ?? question.label;
     const answerType = change.answerType ?? question.answerType;
@@ -170,6 +178,7 @@ export function changeQuestion(
       ...(filing === undefined ? {} : { filedOn: { objectRole: 'main' as const, attributeId: filing } }),
       ...(kept ? { kept: true as const } : {}),
       ...(showWhen === undefined ? {} : { showWhen }),
+      ...(options === undefined ? {} : { options }),
     };
   });
   return renamedKeys(questions, changed).reduce((list, [from, to]) => renameShowWhen(list, from, to), changed);
@@ -262,7 +271,9 @@ export function fileByLabel(questions: Questions, attributes: readonly FormAttri
 export interface PlannedAttribute {
   readonly questionId: string;
   readonly title: string;
-  readonly type: 'text' | 'email' | 'phone' | 'url' | 'number' | 'select' | 'checkbox';
+  readonly type: PlannedType;
+  /** A multi select's field holds several choices (spec 0063). */
+  readonly isMulti?: boolean;
   /** A select's options, from the question's own choices. */
   readonly choices: readonly string[];
   /**
@@ -272,8 +283,15 @@ export interface PlannedAttribute {
   readonly isUnique?: boolean;
 }
 
-/** The attribute type a question's answer type makes: the first fit in `FILES_ONTO`, a select for choices. */
-function plannedType(answerType: AnswerType): PlannedAttribute['type'] {
+/** The attribute types a question can be given on Save or Publish. */
+export type PlannedType =
+  'text' | 'email' | 'phone' | 'url' | 'number' | 'select' | 'checkbox' | 'date' | 'rating' | 'location';
+
+/**
+ * The attribute type a question's answer type makes: the first fit in `FILES_ONTO`, a select for choices; none for an
+ * answer only a field nobody can make holds (a file, a date and time's timestamp), which stays with the submission.
+ */
+export function plannedType(answerType: AnswerType): PlannedType | undefined {
   const first = FILES_ONTO[answerType][0];
   switch (first) {
     case 'email':
@@ -282,9 +300,14 @@ function plannedType(answerType: AnswerType): PlannedAttribute['type'] {
     case 'number':
     case 'select':
     case 'checkbox':
-      return first;
+    case 'date':
+    case 'rating':
+    case 'location':
+    case 'text':
+    case 'personal_name':
+      return first === 'personal_name' ? 'text' : first;
     default:
-      return 'text';
+      return undefined;
   }
 }
 
@@ -322,11 +345,10 @@ export function planNewAttributes(
   const plans: PlannedAttribute[] = [];
   for (const question of questions) {
     const label = question.label.trim();
-    if (question.filedOn !== undefined || question.kept === true || label === '' || question.answerType === 'file')
-      continue;
+    const type = plannedType(question.answerType);
+    if (question.filedOn !== undefined || question.kept === true || label === '' || type === undefined) continue;
     const title = freeTitle(label, taken);
     taken.add(title.toLowerCase());
-    const type = plannedType(question.answerType);
     const isMatch = type === 'email' && needsMatch;
     if (isMatch) needsMatch = false;
     plans.push({
@@ -337,6 +359,7 @@ export function planNewAttributes(
         ? (question.choices ?? []).filter((choice) => choice.trim() !== '')
         : [],
       ...(isMatch ? { isUnique: true } : {}),
+      ...(question.answerType === 'multi_select' ? { isMulti: true } : {}),
     });
   }
   return plans;

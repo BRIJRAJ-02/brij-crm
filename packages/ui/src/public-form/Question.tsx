@@ -1,5 +1,8 @@
 import { LONG_ANSWER_MAX, SHORT_ANSWER_MAX, toE164, type FormStrings, type PublicQuestion } from '@crm/contracts/forms';
 import { Checkbox } from '../atoms/Checkbox/Checkbox.tsx';
+import { Rating } from '../atoms/Rating/Rating.tsx';
+import { ChoiceChips } from '../molecules/ChoiceChips/ChoiceChips.tsx';
+import { AddressQuestion, type AddressDraft } from './AddressQuestion.tsx';
 import { Radio, RadioGroup } from '../atoms/Radio/Radio.tsx';
 import { Switch } from '../atoms/Switch/Switch.tsx';
 import { CountryPicker } from '../molecules/CountryPicker/CountryPicker.tsx';
@@ -46,8 +49,29 @@ export function answerOf(question: PublicQuestion, value: unknown): unknown {
     return { number: toE164(phone.country, phone.national), country: phone.country };
   }
   if (question.answerType === 'checkbox' || question.answerType === 'yes_no') return value === true;
+  // A date and time is the moment the visitor's own clock reads it as, with their zone (spec 0063).
+  if (question.answerType === 'datetime') {
+    if (typeof value !== 'string' || value === '') return undefined;
+    const moment = new Date(value);
+    return Number.isNaN(moment.getTime())
+      ? value
+      : { at: moment.toISOString(), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone };
+  }
+  if (question.answerType === 'rating' || question.answerType === 'scale' || question.answerType === 'multi_select') {
+    return value;
+  }
+  if (question.answerType === 'address') return value;
   return value ?? '';
 }
+
+/** A multi select as the page holds it: the choices picked, and Other's words while Other is ticked. */
+export interface MultiDraft {
+  readonly picked: readonly string[];
+  readonly other?: string;
+}
+
+/** The chip that stands for Other: never a choice's own words, which an id this shape can't be. */
+const OTHER = '\u0000other';
 
 /** What the browser may fill a short text question with, guessed from its key: a name, a company, a job title. */
 function autoCompleteOf(key: string): string | undefined {
@@ -191,6 +215,102 @@ export function Question({
         />
       );
     }
+    case 'date':
+    case 'time':
+    case 'datetime':
+      return (
+        <Field
+          {...labelProps}
+          name={question.key}
+          value={text}
+          onChange={onChange}
+          temporal={{
+            type: question.answerType === 'datetime' ? 'datetime-local' : question.answerType,
+            min: question.answerType === 'date' ? question.options?.earliest : undefined,
+            max: question.answerType === 'date' ? question.options?.latest : undefined,
+          }}
+          {...errorProps}
+        />
+      );
+    case 'rating':
+      return (
+        <Rating
+          label={label}
+          value={typeof value === 'number' ? value : null}
+          onChange={(next) => onChange(next ?? undefined)}
+          field={{ aside, error, isLabelHidden }}
+        />
+      );
+    case 'scale': {
+      const from = question.options?.from ?? 0;
+      const to = question.options?.to ?? 10;
+      return (
+        <ChoiceChips
+          label={aside === undefined ? label : `${label} ${aside}`}
+          isLabelHidden={isLabelHidden}
+          isSingle
+          choices={Array.from({ length: to - from + 1 }, (_, index) => ({
+            id: String(from + index),
+            label: String(from + index),
+          }))}
+          selected={typeof value === 'number' ? [String(value)] : []}
+          onChange={(picked) => onChange(picked[0] === undefined ? undefined : Number(picked[0]))}
+          ends={{ start: question.options?.lowLabel, end: question.options?.highLabel }}
+          {...errorProps}
+        />
+      );
+    }
+    case 'multi_select': {
+      const draft = (value as MultiDraft | undefined) ?? { picked: [] };
+      const allowsOther = question.options?.other === true;
+      return (
+        <>
+          <ChoiceChips
+            label={aside === undefined ? label : `${label} ${aside}`}
+            isLabelHidden={isLabelHidden}
+            choices={[
+              ...(question.choices ?? []).map((choice) => ({ id: choice, label: choice })),
+              ...(allowsOther ? [{ id: OTHER, label: words.other }] : []),
+            ]}
+            selected={[...draft.picked, ...(draft.other === undefined ? [] : [OTHER])]}
+            onChange={(picked) => {
+              const choices = picked.filter((each) => each !== OTHER);
+              const other = picked.includes(OTHER) ? (draft.other ?? '') : undefined;
+              onChange({ picked: choices, ...(other === undefined ? {} : { other }) });
+            }}
+            // The problem shows once: under Other's box while it is open, else under the chips.
+            {...(draft.other === undefined ? errorProps : {})}
+          />
+          {draft.other !== undefined && (
+            <Field
+              label={words.otherLabel}
+              name={`${question.key}.other`}
+              value={draft.other}
+              maxLength={SHORT_ANSWER_MAX}
+              onChange={(other) => onChange({ picked: draft.picked, other })}
+              {...errorProps}
+            />
+          )}
+        </>
+      );
+    }
+    case 'address':
+      return (
+        <AddressQuestion
+          questionKey={question.key}
+          label={label}
+          aside={aside}
+          isLabelHidden={isLabelHidden}
+          words={words}
+          value={value as AddressDraft | undefined}
+          error={error}
+          countryGuess={countryGuess}
+          onChange={onChange}
+        />
+      );
+    // A hidden question has no control (AC-6307): the link, or its default, answers it.
+    case 'hidden':
+      return null;
     case 'file':
       return (
         <Suspense fallback={<Skeleton shape="block" />}>

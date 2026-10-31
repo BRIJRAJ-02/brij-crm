@@ -21,7 +21,7 @@ export interface CheckedForm {
   readonly steps?: readonly PathStep[] | undefined;
   readonly questions: readonly Pick<
     PublicQuestion,
-    'key' | 'answerType' | 'required' | 'choices' | 'choiceKeys' | 'showWhen'
+    'key' | 'answerType' | 'required' | 'choices' | 'choiceKeys' | 'showWhen' | 'options'
   >[];
 }
 
@@ -36,10 +36,39 @@ export interface PhoneAnswer {
   readonly country: string;
 }
 
+/** A multi select's answer (spec 0063): the choices picked, by their words, and what Other's box says. */
+export interface MultiAnswer {
+  readonly picked: readonly string[];
+  readonly other?: string;
+}
+
+/** An address's answer (spec 0063): each part as typed, the country as its two letter code. */
+export interface AddressAnswer {
+  readonly line1?: string;
+  readonly line2?: string;
+  readonly city?: string;
+  readonly region?: string;
+  readonly postcode?: string;
+  readonly country?: string;
+}
+
+/** A date and time's answer (spec 0063): the moment in UTC, and the visitor's time zone it was given in. */
+export interface DateTimeAnswer {
+  readonly at: string;
+  readonly timeZone: string;
+}
+
+/** One answer in its canonical shape. */
+export type CheckedAnswer =
+  string | number | boolean | PhoneAnswer | FileAnswer | MultiAnswer | AddressAnswer | DateTimeAnswer;
+
 /** The outcome: the answers in their canonical shapes, by key, or each failing question's message by key. */
 export type AnswerCheck =
-  | { readonly ok: true; readonly answers: Readonly<Record<string, string | boolean | PhoneAnswer | FileAnswer>> }
+  | { readonly ok: true; readonly answers: Readonly<Record<string, CheckedAnswer>> }
   | { readonly ok: false; readonly fields: Readonly<Record<string, string>> };
+
+/** The parts of an address answer, in the order they are read. */
+export const ADDRESS_PARTS = ['line1', 'line2', 'city', 'region', 'postcode', 'country'] as const;
 
 const EMAIL = /^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$/;
 const NUMBER = /^-?\d+(\.\d+)?$/;
@@ -72,9 +101,20 @@ export function websiteOf(text: string): string | undefined {
 export function isBlank(value: unknown): boolean {
   if (value === undefined || value === null) return true;
   if (typeof value === 'string') return value.trim() === '';
+  if (Array.isArray(value)) return value.every((each) => isBlank(each));
   if (typeof value === 'object') {
     // A file answer is held as the upload it names.
     if (typeof (value as { readonly fileId?: unknown }).fileId === 'string') return false;
+    // A multi select: nothing picked and no Other ticked (an Other ticked with an empty box is an answer to refuse).
+    if ('picked' in value) {
+      const { picked, other } = value as { readonly picked?: unknown; readonly other?: unknown };
+      return (Array.isArray(picked) ? picked.length === 0 : true) && typeof other !== 'string';
+    }
+    if ('at' in value) return isBlank((value as { readonly at?: unknown }).at);
+    // An address: its parts (a phone, which also names a country, is read below by its number).
+    if (!('number' in value) && ADDRESS_PARTS.some((part) => part in value)) {
+      return ADDRESS_PARTS.every((part) => isBlank((value as Readonly<Record<string, unknown>>)[part]));
+    }
     const { number, country } = value as { readonly number?: unknown; readonly country?: unknown };
     if (typeof number !== 'string') return true;
     const code = typeof country === 'string' ? DIAL_CODES.get(country) : undefined;
@@ -92,6 +132,98 @@ function text(value: unknown, max: number, words: FormStrings): { value?: string
   return trimmed.length > max ? { error: words.tooLong } : { value: trimmed };
 }
 
+/** True for a real calendar day written `YYYY-MM-DD`. */
+function isDay(text: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return false;
+  const [year, month, day] = text.split('-').map(Number);
+  const date = new Date(Date.UTC(year ?? 0, (month ?? 1) - 1, day ?? 1));
+  return date.toISOString().slice(0, 10) === text;
+}
+
+/** A time zone's name the platform knows, or undefined. */
+function zoneOf(value: unknown): string | undefined {
+  if (typeof value !== 'string' || value.length > 64 || !/^[A-Za-z_]+(\/[A-Za-z0-9_+-]+)*$/.test(value)) {
+    return undefined;
+  }
+  try {
+    // Known to the platform; kept as the visitor's browser named it (Asia/Kolkata, not its older alias).
+    new Intl.DateTimeFormat('en', { timeZone: value }).format(0);
+    return value;
+  } catch {
+    return undefined;
+  }
+}
+
+/** A date and time: the moment (an ISO time with its offset) and the zone it was given in, UTC when none came. */
+function dateTimeOf(raw: unknown, words: FormStrings): { value?: DateTimeAnswer; error?: string } {
+  const given =
+    typeof raw === 'string' ? { at: raw, timeZone: 'UTC' } : typeof raw === 'object' && raw !== null ? raw : {};
+  const { at, timeZone } = given as { readonly at?: unknown; readonly timeZone?: unknown };
+  // An offset is required: a moment with none would be read in the server's zone, not the visitor's.
+  if (typeof at !== 'string' || at.length > 40 || !/(Z|[+-]\d{2}:\d{2})$/.test(at.trim()))
+    return { error: words.datetime };
+  const moment = Date.parse(at.trim());
+  const zone = zoneOf(timeZone ?? 'UTC');
+  if (!Number.isFinite(moment) || zone === undefined) return { error: words.datetime };
+  return { value: { at: new Date(moment).toISOString(), timeZone: zone } };
+}
+
+/** A multi select: each pick one of the question's choices (by its words or its key), Other's words, the counts. */
+function multiOf(
+  raw: unknown,
+  choices: readonly string[] | undefined,
+  choiceKeys: readonly string[] | undefined,
+  options: Partial<NonNullable<PublicQuestion['options']>>,
+  words: FormStrings,
+): { value?: MultiAnswer; error?: string } {
+  const given =
+    typeof raw === 'string' ? { picked: [raw] } : Array.isArray(raw) ? { picked: raw } : ((raw as object | null) ?? {});
+  const { picked, other } = given as { readonly picked?: unknown; readonly other?: unknown };
+  if (!Array.isArray(picked) || picked.length > FORM_PICKS_MAX) return { error: words.pickOption };
+  const labels: string[] = [];
+  for (const each of picked) {
+    if (typeof each !== 'string') return { error: words.pickOption };
+    const value = each.trim();
+    const at = (choiceKeys ?? []).indexOf(value);
+    const label = (choices ?? []).includes(value) ? value : at === -1 ? undefined : choices?.[at];
+    if (label === undefined) return { error: words.pickOption };
+    if (!labels.includes(label)) labels.push(label);
+  }
+  let said: string | undefined;
+  if (typeof other === 'string' && options.other === true) {
+    const typed = text(other, SHORT_ANSWER_MAX, words);
+    if (typed.value === undefined) return { error: typed.error ?? words.tooLong };
+    if (typed.value === '') return { error: words.otherMissing };
+    said = typed.value;
+  }
+  const count = labels.length + (said === undefined ? 0 : 1);
+  if (count === 0) return { error: words.pickOption };
+  if (options.min !== undefined && count < options.min) return { error: words.pickAtLeast(options.min) };
+  if (options.max !== undefined && count > options.max) return { error: words.pickAtMost(options.max) };
+  return { value: { picked: labels, ...(said === undefined ? {} : { other: said }) } };
+}
+
+/** An address: each part as text, the country as a two letter code, at least the street or the city. */
+function addressOf(raw: unknown, words: FormStrings): { value?: AddressAnswer; error?: string } {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return { error: words.address };
+  const parts: Record<string, string> = {};
+  for (const part of ADDRESS_PARTS) {
+    const value: unknown = (raw as Readonly<Record<string, unknown>>)[part];
+    if (value === undefined || value === null) continue;
+    if (typeof value !== 'string' || value.trim().length > SHORT_ANSWER_MAX) return { error: words.address };
+    if (value.trim() !== '') parts[part] = value.trim();
+  }
+  if (parts.country !== undefined) {
+    if (!/^[A-Za-z]{2}$/.test(parts.country)) return { error: words.country };
+    parts.country = parts.country.toUpperCase();
+  }
+  if (parts.line1 === undefined && parts.city === undefined) return { error: words.address };
+  return { value: parts };
+}
+
+/** The most choices a multi select answer may name. */
+const FORM_PICKS_MAX = 40;
+
 /** One answer, checked and made canonical; `error` when it can't be taken. */
 function checkOne(
   answerType: AnswerType,
@@ -99,8 +231,38 @@ function checkOne(
   choiceKeys: readonly string[] | undefined,
   raw: unknown,
   words: FormStrings,
-): { value?: string | boolean | PhoneAnswer | FileAnswer; error?: string } {
+  options: Partial<NonNullable<PublicQuestion['options']>> = {},
+): { value?: CheckedAnswer; error?: string } {
   switch (answerType) {
+    case 'date': {
+      const day = typeof raw === 'string' ? raw.trim() : '';
+      if (!isDay(day)) return { error: words.date };
+      if (options.earliest !== undefined && day < options.earliest) return { error: words.dateFrom(options.earliest) };
+      if (options.latest !== undefined && day > options.latest) return { error: words.dateUntil(options.latest) };
+      return { value: day };
+    }
+    case 'time': {
+      const match = typeof raw === 'string' ? /^(\d{1,2}):(\d{2})$/.exec(raw.trim()) : null;
+      const hours = Number(match?.[1]);
+      const minutes = Number(match?.[2]);
+      if (match === null || hours > 23 || minutes > 59) return { error: words.time };
+      return { value: `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}` };
+    }
+    case 'datetime':
+      return dateTimeOf(raw, words);
+    case 'rating':
+    case 'scale': {
+      const from = answerType === 'rating' ? 1 : (options.from ?? 0);
+      const to = answerType === 'rating' ? 5 : (options.to ?? 10);
+      const value = typeof raw === 'number' ? raw : typeof raw === 'string' && raw.trim() !== '' ? Number(raw) : NaN;
+      return Number.isInteger(value) && value >= from && value <= to ? { value } : { error: words.pickOption };
+    }
+    case 'multi_select':
+      return multiOf(raw, choices, choiceKeys, options, words);
+    case 'address':
+      return addressOf(raw, words);
+    case 'hidden':
+      return text(typeof raw === 'number' ? String(raw) : raw, SHORT_ANSWER_MAX, words);
     case 'short_text':
       return typeof raw === 'string' && /[\r\n]/.test(raw.trim())
         ? { error: words.tooLong }
@@ -183,7 +345,7 @@ export function checkAnswers(
   options: { readonly absentNotAsked?: boolean } = {},
 ): AnswerCheck {
   const words = formStrings(form.language);
-  const values: Record<string, string | boolean | PhoneAnswer | FileAnswer> = {};
+  const values: Record<string, CheckedAnswer> = {};
   const fields: Record<string, string> = {};
   const byKey = new Map(form.questions.map((question) => [question.key, question]));
   // In the form's order, step by step (spec 0063, AC-6314): a step whose Show when fails over the answers kept
@@ -192,7 +354,11 @@ export function checkAnswers(
     // A question whose Show when doesn't hold over the answers kept so far is skipped: never required, never kept.
     if (!matchesShowWhen(question.showWhen, values)) return;
     if (options.absentNotAsked === true && !Object.hasOwn(answers, question.key)) return;
-    const raw = Object.hasOwn(answers, question.key) ? answers[question.key] : undefined;
+    const given = Object.hasOwn(answers, question.key) ? answers[question.key] : undefined;
+    // A hidden question takes the link's value, else its default (AC-6309), and is never refused for being empty:
+    // a visitor can't see it to answer it.
+    const raw = question.answerType === 'hidden' && isBlank(given) ? question.options?.default : given;
+    if (question.answerType === 'hidden' && isBlank(raw)) return;
     if (question.answerType === 'checkbox' || question.answerType === 'yes_no') {
       const ticked = raw === true || raw === 'yes' || raw === 'true';
       if (question.answerType === 'checkbox' && question.required && !ticked)
@@ -204,7 +370,14 @@ export function checkAnswers(
       if (question.required) fields[question.key] = words.required;
       return;
     }
-    const checked = checkOne(question.answerType, question.choices, choiceKeysOf(question), raw, words);
+    const checked = checkOne(
+      question.answerType,
+      question.choices,
+      choiceKeysOf(question),
+      raw,
+      words,
+      question.options ?? {},
+    );
     if (checked.error !== undefined) fields[question.key] = checked.error;
     else if (checked.value !== undefined) values[question.key] = checked.value;
   };
