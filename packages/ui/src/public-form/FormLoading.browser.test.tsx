@@ -121,3 +121,10 @@ it('keeps a Classic form out of the step layouts’ chunk', () => {
   expect(host.querySelector('[aria-busy="true"]')).toBeNull();
   expect(host.querySelector('[role="progressbar"]')).toBeNull();
 });
+
+it('draws a neutral first shape before the read: no card, no look of its own (AC-6306)', () => {
+  drawn = mountFormLoading(host, 'page', 'unknown');
+  expect(host.querySelector('[aria-busy="true"][data-frame="open"]')).not.toBeNull();
+  expect(host.querySelector('[data-frame="card"]')).toBeNull();
+  expect(host.querySelector('[data-theme]')).toBeNull();
+});

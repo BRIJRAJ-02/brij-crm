@@ -342,9 +342,8 @@ export function QuestionsSection(props: QuestionsSectionProps) {
               ...(step.showWhen === undefined
                 ? {}
                 : {
-                    condition: routingStrings.shownWhen(
-                      conditionsLine(step.showWhen, questionFacts(questionsBefore(flow, step.id))),
-                    ),
+                    // Named by every question, so one that comes after the step reads by its label, not as removed.
+                    condition: routingStrings.shownWhen(conditionsLine(step.showWhen, questionFacts(questions))),
                   }),
               hasProblem: stepProblem?.stepId === step.id,
             },
@@ -380,15 +379,20 @@ export function QuestionsSection(props: QuestionsSectionProps) {
   return (
     <QuestionList
       label={strings.questions}
+      // With Steps, Add a step beside Add a question where there is room; it is always in the menu as well.
+      {...(breaks?.layout === 'steps' && !isReadOnly
+        ? {
+            wideActions: (
+              <Button variant="ghost" icon="layers" onPress={addBreak}>
+                {strings.addStep}
+              </Button>
+            ),
+          }
+        : {})}
       actions={
         <>
           {!isReadOnly && (
             <>
-              {breaks?.layout === 'steps' && (
-                <Button variant="ghost" icon="layers" onPress={addBreak}>
-                  {strings.addStep}
-                </Button>
-              )}
               {isFull ? (
                 // Off at the most a form holds, and says so on hover and focus.
                 <Tooltip content={tooMany}>
@@ -410,8 +414,12 @@ export function QuestionsSection(props: QuestionsSectionProps) {
                     if (key === 'step') addBreak();
                   }}
                 >
-                  {breaks !== undefined && breaks.layout !== 'steps' && (
-                    <MenuItem id="step" icon="layers" description={strings.stepsOnlyMenu}>
+                  {breaks !== undefined && (
+                    <MenuItem
+                      id="step"
+                      icon="layers"
+                      {...(breaks.layout === 'steps' ? {} : { description: strings.stepsOnlyMenu })}
+                    >
                       {strings.addStep}
                     </MenuItem>
                   )}
@@ -1155,6 +1163,8 @@ function StepEditor({ step, earlier, isReadOnly, isJustAdded, problem, onChange 
   }, [isJustAdded]);
   return (
     <>
+      {/* A refusal is about the step (empty, or its Show when), not its title: said over the editor. */}
+      {problem !== undefined && <Callout tone="danger">{problem}</Callout>}
       <Field
         ref={titleRef}
         label={strings.stepTitle}
@@ -1165,7 +1175,6 @@ function StepEditor({ step, earlier, isReadOnly, isJustAdded, problem, onChange 
         onChange={(title) => {
           onChange({ title });
         }}
-        {...(problem === undefined ? {} : { error: problem })}
       />
       <ShowWhenEditor
         showWhen={step.showWhen}

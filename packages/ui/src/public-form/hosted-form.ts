@@ -84,7 +84,7 @@ export type FormMessageKind = 'missing' | 'failed';
 export function mountFormLoading(
   root: HTMLElement,
   mode: HostedFormMode,
-  layout: FormLayout = 'classic',
+  layout: FormLayout | 'unknown' = 'classic',
 ): HostedFormHandle {
   const view = mount(root);
   view.draw(createElement(FormLoading, { mode, words: formStrings('en'), layout }));

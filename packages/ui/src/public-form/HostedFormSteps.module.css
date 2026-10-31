@@ -6,7 +6,7 @@
    question: steps are mostly reached by Enter, and keyboard steps never wait.
    One at a time, a question reached by pointer fades and rises a little into
    place (spec 0063): transform and opacity only, taking input from its first
-   frame, a fade alone under reduced motion, and none when reached by key. */
+   frame, and at once under reduced motion or when reached by key. */
 @layer components {
   .line {
     margin-block-end: var(--space-32);
@@ -49,16 +49,10 @@
     }
   }
 
-  @keyframes question-fade {
-    from {
-      opacity: 0;
-    }
-  }
-
-  /* Reduced motion keeps the fade and drops the rise. */
+  /* Reduced motion: the next question is there at once (spec 0063 Motion, spec 0058 AC-2). */
   @media (prefers-reduced-motion: reduce) {
     .form[data-layout='conversational'][data-moved] {
-      animation-name: question-fade;
+      animation: none;
     }
   }
 

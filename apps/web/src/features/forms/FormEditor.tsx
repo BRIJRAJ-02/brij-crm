@@ -230,15 +230,40 @@ export function FormEditor(props: FormEditorProps) {
   const preview = useMemo(() => previewOf(draft, { key: form.publicKey }), [draft, form.publicKey]);
   // The question or divider last opened: Steps and One at a time preview the step it is in (spec 0063).
   const [previewRow, setPreviewRow] = useState<string | undefined>(undefined);
-  const previewStep = useMemo(() => {
-    if (previewRow === undefined || preview.layout === undefined) return undefined;
-    const steps = pathOf(preview, {}).steps;
+  // The edited question's or divider's step, shown even when its Show when hides it from a visitor who has answered
+  // nothing yet: its conditions (the step's, and its questions') are lifted in the preview only.
+  const shownPreview = useMemo(() => {
+    if (previewRow === undefined || preview.layout === undefined) return { form: preview, step: undefined };
     const stepId = previewRow.startsWith('step:') ? previewRow.slice('step:'.length) : undefined;
     const key = draft.questions.find((question) => question.id === previewRow)?.key;
-    const at = steps.findIndex((step) =>
-      stepId === undefined ? key !== undefined && step.keys.includes(key) : step.id === stepId,
+    const steps = preview.steps ?? [];
+    const target =
+      preview.layout === 'steps'
+        ? steps.find((step) => (stepId === undefined ? key !== undefined && step.keys.includes(key) : step.id === stepId))
+        : undefined;
+    const lifted = new Set(target?.keys ?? (key === undefined ? [] : [key]));
+    const form = {
+      ...preview,
+      questions: preview.questions.map((question) => {
+        if (!lifted.has(question.key)) return question;
+        const { showWhen: _lifted, ...rest } = question;
+        return rest;
+      }),
+      ...(preview.steps === undefined
+        ? {}
+        : {
+            steps: preview.steps.map((step) => {
+              if (step !== target) return step;
+              const { showWhen: _lifted, ...rest } = step;
+              return rest;
+            }),
+          }),
+    };
+    const path = pathOf(form, {}).steps;
+    const at = path.findIndex((step) =>
+      target !== undefined ? step.keys.some((each) => target.keys.includes(each)) : key !== undefined && step.keys.includes(key),
     );
-    return at === -1 ? undefined : at;
+    return { form, step: at === -1 ? undefined : at };
   }, [previewRow, preview, draft.questions]);
 
   // Gives each unfiled, labelled question an attribute on the target object, with no prompt: files the question
@@ -703,7 +728,12 @@ export function FormEditor(props: FormEditorProps) {
       footer={settings.footer}
       {...(current === 'form'
         ? {
-            preview: <HostedFormPreview form={preview} {...(previewStep === undefined ? {} : { step: previewStep })} />,
+            preview: (
+              <HostedFormPreview
+                form={shownPreview.form}
+                {...(shownPreview.step === undefined ? {} : { step: shownPreview.step })}
+              />
+            ),
             previewControls: (
               <>
                 <Select

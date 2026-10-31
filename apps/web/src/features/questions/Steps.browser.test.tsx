@@ -116,6 +116,7 @@ describe('New step dividers (AC-6303)', () => {
   it('adds one, titles it, and removes it with Undo', async () => {
     await open('steps');
     await expect.element(page.getByText('Add a step under Questions to split the form.')).toBeVisible();
+    // Wide enough for Add a step beside Add a question.
     await userEvent.click(page.getByRole('button', { name: 'Add a step' }));
     // The new divider opens at the end with its title focused.
     const title = page.getByRole('textbox', { name: 'Step title' });
@@ -140,5 +141,27 @@ describe('New step dividers (AC-6303)', () => {
     await open('classic', [{ id: 's2', title: 'More', startsAt: 'size' }]);
     await expect.element(page.getByText(/1 question · Shows with Steps/)).toBeVisible();
     expect(page.getByRole('button', { name: 'Add a step' }).query()).toBeNull();
+  });
+});
+
+describe('the questions header at a phone’s width (spec 0058, AC-1)', () => {
+  it('keeps Add a question and the menu on screen, with Add a step in the menu, and no sideways scroll', async () => {
+    await page.viewport(390, 844);
+    try {
+      await open('steps', [{ id: 's2', startsAt: 'company' }]);
+      const add = page.getByRole('button', { name: 'Add a question' }).element();
+      const more = page.getByRole('button', { name: 'More question actions' }).element();
+      for (const each of [add, more]) {
+        const box = each.getBoundingClientRect();
+        expect(box.right).toBeLessThanOrEqual(390);
+        expect(box.width).toBeGreaterThan(0);
+      }
+      expect(page.getByRole('button', { name: 'Add a step' }).query()).toBeNull();
+      expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(390);
+      await userEvent.click(page.getByRole('button', { name: 'More question actions' }));
+      await expect.element(page.getByRole('menuitem', { name: 'Add a step' })).toBeVisible();
+    } finally {
+      await page.viewport(1280, 900);
+    }
   });
 });

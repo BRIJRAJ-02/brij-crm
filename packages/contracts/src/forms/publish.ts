@@ -333,9 +333,11 @@ function stepsProblem(input: PublishInput): PublishProblem | undefined {
   for (const [index, step] of resolved.entries()) {
     const name = stepNamed(step.title, index);
     if (step.id !== undefined && step.keys.length === 0) {
+      // Named as the editor names it: an empty step is no step a visitor counts, so it has no number.
+      const empty = step.title === undefined ? 'A new step' : `The step “${step.title}”`;
       return {
         code: 'STEP_EMPTY',
-        message: `${name} has no questions. Move a question under it, or remove the step.`,
+        message: `${empty} has no questions. Move a question under it, or remove the step.`,
         stepId: step.id,
       };
     }

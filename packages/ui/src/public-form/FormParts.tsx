@@ -396,16 +396,19 @@ export function FormLoading({
 }: {
   readonly mode: HostedFormMode;
   readonly words: FormStrings;
-  readonly layout?: FormLayout;
+  readonly layout?: FormLayout | 'unknown';
 }) {
-  const isOpen = layout === 'conversational';
-  const questions = layout === 'classic' ? LOADING_QUESTIONS : isOpen ? 1 : LOADING_QUESTIONS - 1;
+  // Before the form is read its layout is unknown: the shape draws no card, which only Classic and Steps have, so a
+  // One at a time form never loses one (spec 0063, AC-6306). Its colours follow the visitor's own light or dark
+  // setting until the form's look arrives.
+  const isOpen = layout === 'conversational' || layout === 'unknown';
+  const questions = layout === 'classic' || layout === 'unknown' ? LOADING_QUESTIONS : isOpen ? 1 : LOADING_QUESTIONS - 1;
   return (
     <FormGround mode={mode} kind={isOpen ? 'open' : 'card'} isLoading>
       <VisuallyHidden>
         <p>{words.loading}</p>
       </VisuallyHidden>
-      {isOpen && (
+      {layout === 'conversational' && (
         <div className={styles.loadingLine}>
           <Skeleton shape="line" width="full" />
         </div>
@@ -424,7 +427,7 @@ export function FormLoading({
           <Skeleton shape="line" width="full" />
         </div>
       )}
-      <div className={styles.questions} data-layout={layout}>
+      <div className={styles.questions} data-layout={layout === 'unknown' ? 'classic' : layout}>
         {Array.from({ length: questions }, (_, index) => (
           <div key={index} className={styles.question}>
             <Skeleton shape="text" width={isOpen ? 'long' : 'short'} />

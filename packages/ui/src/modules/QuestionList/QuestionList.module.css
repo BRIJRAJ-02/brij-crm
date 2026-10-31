@@ -38,6 +38,17 @@
     margin-inline-start: auto;
   }
 
+  /* What only a wide list shows in its header (wideActions): a phone keeps one primary and the menu. */
+  .wide {
+    display: contents;
+  }
+
+  @container (width < 480px) {
+    .wide {
+      display: none;
+    }
+  }
+
   /* An open card's last row, under a hairline: a closing choice (Required)
      at its start, Duplicate and Delete at its end, on one line. */
   .footer {

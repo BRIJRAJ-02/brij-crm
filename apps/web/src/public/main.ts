@@ -44,7 +44,9 @@ const client = createPublicFormClient();
 // and the button's. A visitor's first paint is then the page rather than a blank window, and the words land in
 // the places already set out for them. It is taken down in the same frame the real view goes up, so the page
 // never shows both and never shows neither.
-const loading = mountFormLoading(root, mode);
+// Its layout and look are not known until the read answers, so the shape is the neutral one (no card, the visitor's
+// own light or dark): nothing it draws is taken away when a One at a time or a dark form arrives (spec 0063, AC-6306).
+const loading = mountFormLoading(root, mode, 'unknown');
 // The loading card has a height of its own, so a site's frame is sized to it at once rather than clipping it
 // until the form arrives.
 let stopHeight = postHeight(root.lastElementChild);

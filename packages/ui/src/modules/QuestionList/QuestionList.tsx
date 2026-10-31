@@ -50,6 +50,12 @@ export interface QuestionListProps {
   readonly label: string;
   /** The section header's end: Add a question and its menu. */
   readonly actions?: ReactNode;
+  /**
+   * Actions shown before `actions` only where the list is wide enough (480px and up): a secondary button whose
+   * action the caller's menu in `actions` also holds (a form's Add a step), so a phone keeps one primary and the
+   * menu, and nothing is pushed off the row.
+   */
+  readonly wideActions?: ReactNode;
   /** An open card's footer, at its end: Duplicate and Delete. */
   readonly renderFooter?: (id: string) => ReactNode;
   /** An open card's footer, at its start, on the same row: a choice that closes the editor, such as Required. */
@@ -82,6 +88,7 @@ export function QuestionList({
   renderOpen,
   onMove,
   actions,
+  wideActions,
   renderFooter,
   renderFooterStart,
 }: QuestionListProps) {
@@ -100,7 +107,12 @@ export function QuestionList({
         </h2>
         {/* Questions only: a step break is not one more question. */}
         <Badge count={items.filter((item) => item.kind !== 'step').length} label={label} />
-        {actions !== undefined && <span className={styles.actions}>{actions}</span>}
+        {(actions !== undefined || wideActions !== undefined) && (
+          <span className={styles.actions}>
+            {wideActions !== undefined && <span className={styles.wide}>{wideActions}</span>}
+            {actions}
+          </span>
+        )}
       </header>
       <SortableList
         ids={items.map((item) => item.id)}

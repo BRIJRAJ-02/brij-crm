@@ -197,7 +197,7 @@ describe('publishProblem on steps (AC-6312)', () => {
   it('refuses a step with no questions, naming it', () => {
     expect(check([{ id: 's2', title: 'Your plans', startsAt: 'q3' }, { id: 's3' }])).toEqual({
       code: 'STEP_EMPTY',
-      message: 'Step 3 has no questions. Move a question under it, or remove the step.',
+      message: 'A new step has no questions. Move a question under it, or remove the step.',
       stepId: 's3',
     });
   });

@@ -1123,3 +1123,42 @@ describe('book a meeting after sending (AC-1055 to AC-1057)', () => {
     expect(visitorOf({ questions }, {})).toEqual({});
   });
 });
+
+describe('a visitor mid fill when the form is published again (spec 0063, AC-6302, AC-6314)', () => {
+  it('checks and keeps the answers by the version they filled in, Steps with a skipped step, after v2 goes Classic', async () => {
+    const w = await workspace();
+    // v1: Steps, with a step (seats) shown only for big teams.
+    const v1 = await liveForm(w, (document) => ({
+      ...document,
+      layout: 'steps',
+      questions: [
+        ...document.questions,
+        question({ id: 'size', key: 'size', label: 'Team size', answerType: 'choice', choices: ['Small', 'Big'] }),
+        question({ id: 'seats', key: 'seats', label: 'Seats', answerType: 'number', required: true }),
+      ],
+      steps: [{ id: 'big', startsAt: 'seats', showWhen: { join: 'all', rules: [{ key: 'size', op: 'is', value: 'Big' }] } }],
+    }));
+    // v2: Classic, so the step's Show when no longer counts and Seats is asked of everyone.
+    const draft = await getForm(w.scope, { formId: v1.id });
+    const saved = await saveFormDraft(w.scope, {
+      formId: v1.id,
+      document: { ...draft.draft, layout: 'classic' },
+      expectedRevision: draft.revision,
+    });
+    const v2 = await publishForm(w.scope, { formId: v1.id, expectedRevision: saved.revision });
+    expect(v2.liveVersionNumber).toBe(2);
+    const answers = { name: 'Ada Lovelace', email: 'ada@example.com', size: 'Small', seats: '999' };
+    // Filled on v1: taken, Seats (off v1's path) dropped.
+    await submit(v1.publicKey, body(answers, { versionNumber: 1 }));
+    // The same answers with no version, or one the form never published, are checked against v2: Seats is asked.
+    expect(await refusalOf(submit(v1.publicKey, body({ ...answers, seats: '' }, { versionNumber: 7 })))).toEqual([
+      expect.objectContaining({ field: 'seats' }),
+    ]);
+    const [stored] = await submissionIds(w, v1.id);
+    if (stored === undefined) throw new Error('No submission.');
+    const view = await getSubmission(w.scope, { submissionId: stored.id });
+    const kept = view.answers.map((answer) => answer.key);
+    expect(kept).toContain('size');
+    expect(kept).not.toContain('seats');
+  });
+});
