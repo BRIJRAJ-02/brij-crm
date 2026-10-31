@@ -137,8 +137,13 @@ export async function GET(request) {
   }
 
   // Filed under the page's handles, so its Live or Private switch deletes this card from the edge at once (spec
-  // 0058, AC-23). A failed tag leaves only the card's short s-maxage, which bounds it anyway.
-  await addCacheTag([...cardCacheTags(handle, profile)]).catch(() => undefined);
+  // 0058, AC-23). A failed tag leaves only the card's short s-maxage, which bounds it anyway. The runtime's addCacheTag
+  // may answer no promise at all, or throw, so it is awaited inside a try, never chained with `.catch`.
+  try {
+    await addCacheTag([...cardCacheTags(handle, profile)]);
+  } catch {
+    // The short s-maxage bounds an untagged card anyway.
+  }
 
   // The pass's band (the owner, 26 October 2026). It is drawn from the same profile, but never from a chosen
   // share image: that picture is made to be cropped by whatever reads it, and a band 375 × 144 would crop it to
