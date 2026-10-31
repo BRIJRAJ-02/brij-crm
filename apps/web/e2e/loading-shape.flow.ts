@@ -19,6 +19,8 @@ interface Screen {
   readonly start: (workspace: SwitchingWorkspace) => string;
   /** What the person clicks: a link, a tab or a row. */
   readonly target: (page: Page) => Locator;
+  /** A step before the timed one, on the page the move starts from: opening the record panel the target sits in. */
+  readonly prepare?: (page: Page) => Promise<void>;
 }
 
 const sidebar = (name: string) => (page: Page) => page.getByRole('navigation').getByRole('link', { name, exact: true });
@@ -32,14 +34,19 @@ const at =
 
 const ALL_SCREENS: readonly Screen[] = [
   { name: 'records', start: at('tasks'), target: sidebar('People') },
+  // A row's name opens the record panel over the table (spec 0017 milestone 4), so the full page is reached from
+  // the panel's Open full page.
   {
     name: 'record overview',
     start: at('objects/people'),
-    target: (page) =>
-      page
+    prepare: async (page) => {
+      await page
         .getByRole('rowheader', { name: /Grace Hopper/ })
         .first()
-        .getByText('Grace Hopper'),
+        .getByText('Grace Hopper')
+        .click();
+    },
+    target: (page) => page.getByRole('button', { name: 'Open full page' }),
   },
   {
     name: 'record activity',
@@ -141,6 +148,7 @@ test('every screen’s loading state stands where its loaded page will', async (
   for (const screen of SCREENS) {
     // A fresh app each time, on the page the move starts from, so the screen's own data isn't held yet.
     await page.goto(screen.start(workspace));
+    await screen.prepare?.(page);
     // The page the move starts from has drawn what is clicked, before any call is held.
     const target = screen.target(page);
     await target.waitFor({ timeout: 60_000 });
