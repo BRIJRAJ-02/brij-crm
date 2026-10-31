@@ -60,8 +60,10 @@ export interface FormStrings {
   readonly questionsHidden: string;
   /** A question with no label yet, in the builder's preview. */
   readonly untitledQuestion: string;
-  /** Under every form until branding removal arrives as a plan flag (AC-577). */
-  readonly madeWith: string;
+  /** The words before the Timefix wordmark under every form, which nothing takes off (spec 0058, AC-26). */
+  readonly poweredBy: string;
+  /** The wordmark's name, read after "Powered by". */
+  readonly product: string;
   /** The dial code picker's name with the country picked: "Country code, United States". */
   readonly dialCodeOf: (country: string) => string;
   /** Above the button after a submit that found problems: "2 answers need a look". */
@@ -140,7 +142,8 @@ const EN: FormStrings = {
   questionsShown: 'Your answer added a question below.',
   questionsHidden: 'Your answer removed a question that no longer applies.',
   untitledQuestion: 'Untitled question',
-  madeWith: 'Made with Timefix',
+  poweredBy: 'Powered by',
+  product: 'Timefix',
   dialCodeOf: (country) => `Country code, ${country}`,
   needsALook: (count) => (count === 1 ? '1 answer needs a look' : `${String(count)} answers need a look`),
   didYouMean: (email) => `Did you mean ${email}?`,

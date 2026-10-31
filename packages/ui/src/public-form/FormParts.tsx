@@ -330,7 +330,7 @@ export const TIMEFIX_LOGO: ProductLogo = {
   dark: '/brand/timefix-wordmark-dark.png',
 };
 
-/** The quiet foot under every view: the captcha's notice when there is one, then the Timefix wordmark. */
+/** The quiet foot under every view: the captcha's notice when there is one, then "Powered by" and the Timefix wordmark. */
 export function FormFoot({
   form,
   mode,
@@ -351,10 +351,11 @@ export function FormFoot({
         rel="noopener noreferrer"
         {...(mode === 'embed' ? { target: '_blank' } : {})}
       >
+        <span>{state.words.poweredBy}</span>
         <img
           className={styles.wordmark}
           src={form.look.colour === 'dark' ? logo.dark : logo.light}
-          alt={state.words.madeWith}
+          alt={state.words.product}
         />
       </a>
     </footer>

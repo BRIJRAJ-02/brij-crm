@@ -202,7 +202,8 @@
     margin-block-start: var(--space-8);
   }
 
-  /* Under the card: the captcha's notice, then the Timefix wordmark, quiet until pointed at. */
+  /* Under the card: the captcha's notice, then "Powered by" and the Timefix wordmark, quiet until pointed at, like
+     the booking foot (spec 0058, AC-26). */
   .foot {
     display: flex;
     flex-direction: column;
@@ -233,15 +234,19 @@
 
   .brand {
     display: inline-flex;
+    align-items: center;
+    gap: var(--space-6);
     border-radius: var(--radius-xs);
-    opacity: var(--opacity-busy);
-    transition: opacity var(--duration-hover) var(--ease-hover);
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+    text-decoration: none;
+    transition: color var(--duration-hover) var(--ease-hover);
   }
 
   .brand:focus-visible {
     outline: var(--border-width-thick) solid var(--accent-line);
     outline-offset: var(--space-2);
-    opacity: 1;
   }
 
   .wordmark {
@@ -252,7 +257,7 @@
 
   @media (hover: hover) and (pointer: fine) {
     .brand:hover {
-      opacity: 1;
+      color: var(--text);
     }
   }
 
