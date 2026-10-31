@@ -702,9 +702,10 @@ export async function fileAnswers(context: WriteContext, input: FileInput): Prom
     }
   }
 
-  // The rotation's ledger row, once the lead is theirs: given now, or counted to the owner it kept (AC-755).
+  // The rotation's ledger row, once the lead is theirs: given now, counted to the owner it kept (AC-755), or to an away
+  // owner's stand in, who takes the lead while the record keeps its owner (spec 0037, AC-1284).
   const pick = chosen.pick;
-  const counted = pick !== undefined && (gaveOwner || pick.reason === 'owner');
+  const counted = pick !== undefined && (gaveOwner || pick.reason === 'owner' || pick.reason === 'standin');
   if (counted) {
     await recordLeadOwner(tx, writer.scope, pick, { recordId, formId: form.id, submissionId: input.submissionId });
   }

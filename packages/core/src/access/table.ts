@@ -69,7 +69,14 @@ export type AccessEntry =
    * owner; over an admin only by an owner); the delegate may remove their own; someone else's answer as absent.
    * `listDelegations` with `everyone: true` is `members.manage` alone (403 FORBIDDEN; the Members page's column).
    */
-  | { readonly delegation: true };
+  | { readonly delegation: true }
+  /**
+   * A page or rotation by its editors (spec 0037, AC-1331, AC-1340): `booking.manage` first (403 `FORBIDDEN`), then
+   * `booking.admin` or an editor of that rotation or page (`resource`: the one the input's `resourceType` names); a
+   * member who is in the rotation but doesn't edit it is 403 `FORBIDDEN`, anyone else meets it as absent. Adding a
+   * person also needs Manage over them (`ADD_MEMBER_FORBIDDEN`).
+   */
+  | { readonly editor: 'booking_page' | 'rotation' | 'resource' };
 
 /** Every exported service that takes a scope, and what it checks. */
 export const ACCESS_TABLE = {
@@ -466,7 +473,8 @@ export const ACCESS_TABLE = {
   // making, changing and deleting them is booking.admin's (AC-751). A booking's assignments: its host or an admin.
   listRotations: { bookingPages: true },
   createRotation: { permission: 'booking.admin' },
-  updateRotation: { permission: 'booking.admin' },
+  // Changing a rotation (AC-1337): booking.admin or its editors; adding someone needs Manage over them (AC-1340).
+  updateRotation: { editor: 'rotation' },
   deleteRotation: { permission: 'booking.admin' },
   bookingAssignments: { bookingPages: true },
   // Reassigning a seat (AC-748, AC-1337): booking.manage, then Manage over the current and the new host.
@@ -475,9 +483,12 @@ export const ACCESS_TABLE = {
   rotationDistribution: { bookingPages: true },
   // A member's upcoming bookings in a rotation handed on (AC-750): Manage over them and every member it could hand to.
   reassignUpcoming: { scheduling: 'manage' },
-  // Count adjustments (AC-1329): booking.admin's until rotation editors arrive (J14).
-  adjustCount: { permission: 'booking.admin' },
-  undoAdjustment: { permission: 'booking.admin' },
+  // Count adjustments (AC-1329): booking.admin and the rotation's editors.
+  adjustCount: { editor: 'rotation' },
+  undoAdjustment: { editor: 'rotation' },
+  // Sharing (spec 0037, AC-1331): whoever may change the page or rotation lists its editors; only booking.admin sets them.
+  listEditors: { editor: 'resource' },
+  setEditors: { permission: 'booking.admin' },
   // Scheduling access (spec 0037, J1): delegations, and the members in See reach (`members.visible`, AC-1261).
   listDelegations: { delegation: true },
   grantDelegation: { delegation: true },

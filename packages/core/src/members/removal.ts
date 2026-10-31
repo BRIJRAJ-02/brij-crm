@@ -16,6 +16,7 @@ import { notificationsRemoval } from '../notifications/inbox.ts';
 import { rotationsRemoval } from '../rotation/removal.ts';
 import { delegationsRemoval } from '../scheduling/delegations.ts';
 import { limitsRemoval } from '../scheduling/limits.ts';
+import { editorsRemoval } from '../scheduling/editors.ts';
 import { recentsRemoval } from '../search/recents.ts';
 import { viewsRemoval } from '../views/manage.ts';
 import type { AuditSource } from './audit.ts';
@@ -117,6 +118,8 @@ export const REMOVAL_EFFECTS: readonly RemovalEffect[] = [
   delegationsRemoval,
   // Spec 0037, AC-814 widened: their meeting limits.
   limitsRemoval,
+  // Spec 0037, AC-1331: the pages and rotations they edited.
+  editorsRemoval,
 ];
 
 /**

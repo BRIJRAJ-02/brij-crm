@@ -298,6 +298,9 @@ const FIXTURES: Record<ListedAuditAction, readonly AuditRow[]> = {
   'rotation.changed': [
     row('rotation.changed', 'rotation', rotation, { after: { name: 'Sales', added: [bea], removed: [] } }),
   ],
+  'editors.changed': [
+    row('editors.changed', 'rotation', rotation, { after: { name: 'Sales', added: [bea], removed: [] } }),
+  ],
 };
 
 const view = (each: AuditRow): AuditEntryView => {
@@ -466,6 +469,8 @@ describe('toEntryView, per action', () => {
     });
     expect(only('booking_page.changed_for').params).toEqual({ page: 'Intro call', deleted: false });
     expect(only('rotation.changed').params).toEqual({ added: 1, removed: 0 });
+    expect(only('editors.changed').params).toEqual({ added: 1, removed: 0 });
+    expect(only('editors.changed').target).toMatchObject({ type: 'rotation', id: rotation });
     const unknown = row('schedule.changed', 'member', bea, { after: { memberId: bea, kind: 'rebuilt' } });
     expect(toEntryView(unknown, names)).toBeUndefined();
   });
