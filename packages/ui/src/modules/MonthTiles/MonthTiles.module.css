@@ -58,21 +58,23 @@
     animation: month-fade var(--duration-move) var(--ease-out) both;
   }
 
-  /* Below the booking page's two pane width the times stand under the month, not beside it, so a month that leaves
-     its sixth week empty gives that row back rather than holding a tall gap over the times (spec 0058). The width is
-     BookingFrame's, where its panes go side by side. */
-  @media (width < 1024px) {
-    .grid > [data-spare] {
-      display: none;
-    }
-  }
-
   .grid[data-direction='forward'] {
     animation-name: month-forward;
   }
 
   .grid[data-direction='back'] {
     animation-name: month-back;
+  }
+
+  /* A neighbouring month's date in the six weeks: smaller and quieter than a closed day, and never a control. */
+  .outside {
+    display: grid;
+    place-items: center;
+    aspect-ratio: 1;
+    color: var(--text-tertiary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+    font-variant-numeric: tabular-nums;
   }
 
   .day {
