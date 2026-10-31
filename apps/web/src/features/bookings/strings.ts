@@ -274,8 +274,8 @@ export const strings = {
   notInCrmToastMs: 12_000,
   /** Booked, but the guest's records couldn't be made: the reason, so it can be fixed (late trap #71). */
   bookedNotInCrm: (name: string, reason: string) => `Booked with ${name}, but they weren’t added to the CRM. ${reason}`,
-  /** New meeting without a calendar (Q57; one line, copy handoff 31 Oct 2026): the guest is still emailed. */
-  noCalendar: 'Guest emailed only. No calendar event or video link.',
+  /** New meeting without a calendar (Q57): Email's hint, since the guest is still emailed (polish, 31 Oct 2026). */
+  noCalendar: 'Emailed only, no calendar event or video link.',
   holdThisTime: 'Reserve for link only pages',
   holdFor: 'For',
   anyPrivatePage: 'Any link only page',

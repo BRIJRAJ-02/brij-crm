@@ -6,7 +6,7 @@ import { Button } from '../../atoms/Button/Button.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { Field } from '../Field/Field.tsx';
 import { Modal, ModalTrigger } from '../Modal/Modal.tsx';
-import { Form, type FormRefusal, type FormValues } from './Form.tsx';
+import { Form, FormRow, type FormRefusal, type FormValues } from './Form.tsx';
 
 /** The welcome screen's fields are named by attribute: a refusal's `attributeId` is the field's name. */
 const byAttribute = (refusal: FormRefusal) => refusal.attributeId;
@@ -544,5 +544,27 @@ export const TwoColumnsNarrow: Story = {
     const name = canvas.getByRole('textbox', { name: 'Workspace name' }).getBoundingClientRect();
     const slug = canvas.getByRole('textbox', { name: 'Web address' }).getBoundingClientRect();
     await expect(slug.top).toBeGreaterThan(name.top);
+  },
+};
+
+/** A row of two short fields in a dialog's column (New meeting's From and To): side by side, each with its label. */
+export const ShortFieldsInARow: Story = {
+  args: { submitLabel: 'Book it', busyLabel: 'Booking' },
+  render: (args) => (
+    <Stage width="dialog">
+      <Form {...args}>
+        <Field label="With" name="name" defaultValue="Grace Hopper" />
+        <FormRow>
+          <Field label="From" name="from" defaultValue="9:00 AM" />
+          <Field label="To" name="to" defaultValue="9:30 AM" hint="Times in Kolkata time (GMT+5:30)" />
+        </FormRow>
+      </Form>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const from = canvas.getByRole('textbox', { name: 'From' }).getBoundingClientRect();
+    const to = canvas.getByRole('textbox', { name: 'To' }).getBoundingClientRect();
+    await expect(to.top).toBe(from.top);
+    await expect(to.left).toBeGreaterThan(from.right);
   },
 };

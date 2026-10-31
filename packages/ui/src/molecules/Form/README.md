@@ -52,10 +52,11 @@ New (spec 0005, pulled forward from spec 0003's milestone 4). Sign in, verify, t
 - It checks nothing itself and the browser's checks are off: a module or screen says what is wrong in the library's words, as a refusal (SignInForm turns its "Enter your email address." into one) or a Field `error`.
 - `label` names the form for screen readers when no heading near it does.
 - `columns={2}` lays the fields out two to a row, each at least `size-column-wide`, and one to a row when the form is too narrow for two: a settings form across a full width page (an object's names, look and IDs in Settings), so no field stretches across the whole page. The refusal above the fields and the submit span the row. Why a variant and not a layout around the Form: the fields are the Form's own children, and the banner and submit it draws have to span the columns, which only the Form can arrange. Leave it out in a dialog or a sign in card, where one field to a row reads best.
+- `FormRow` puts two or three short fields that read as one side by side inside the form's single column: New meeting's From and To (31 October 2026). They share the width `space-12` apart, each at least `size-column-narrow`, and stack when the column is narrower than that; each keeps its own label, hint and refusal. Why a part of Form and not a new component: it is the form's own column layout for one row, as `columns={2}` is for the whole form, and the app holds no CSS of its own. Use it for a pair of short values (a start and an end), never to fit long fields into less height.
 
 ## States
 
-Idle, field refused (on the field, in its hint's place, which reads as invalid, until its value changes, and then not again until the next answer), form refused (Callout above the fields, also for a refusal mapped to a field the form lacks), busy (the submit spins, refusals hidden), disabled (the submit is off), another way to go on (under the submit), in a Modal (the submit in its footer), two columns (wide and narrow).
+Idle, field refused (on the field, in its hint's place, which reads as invalid, until its value changes, and then not again until the next answer), form refused (Callout above the fields, also for a refusal mapped to a field the form lacks), busy (the submit spins, refusals hidden), disabled (the submit is off), another way to go on (under the submit), in a Modal (the submit in its footer), two columns (wide and narrow), a row of two short fields side by side (FormRow).
 
 ## Keyboard
 
