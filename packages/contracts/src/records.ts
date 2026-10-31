@@ -711,9 +711,9 @@ export const recordsContract = {
   stageSince: oc.input(StageSinceInput).output(StageSince),
   getTrashed: oc.input(GetTrashedInput).output(TrashedRecord),
   search: oc.input(SearchRecordsInput).output(SearchResults),
+  /** Likely duplicates (spec 0049). */
+  duplicates: duplicatesContract,
   // Merging two records (spec 0049): a read only preview for the dialog, then the merge itself.
   mergePreview: oc.input(MergePreviewInput).output(MergePreview),
   merge: oc.input(MergeRecordsInput).output(MergedRecord),
-  /** Likely duplicates (spec 0049). */
-  duplicates: duplicatesContract,
 };

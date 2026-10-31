@@ -2,15 +2,16 @@
 // Purpose: one list of an object's likely duplicates, to clean them up (spec 0049, AC-4907 to AC-4909).
 // Main task: read each pair and its reason, then Merge it or mark it Not a duplicate (Undo in the toast).
 // Leaves out: fuzzy matches, and pairs whose other record the reader can't see (absent, never locked). No Merge for
-// a reader who can't change the object, nor until the merge dialog lands (`launch.ts`).
-import type { DuplicatePair, DuplicatePairsList, ObjectSummary } from '@crm/data';
+// a reader who can't change the object. Merge opens the merge dialog on the pair; once it lands the pair is gone.
+import type { AttributeDefinition, DuplicatePair, DuplicatePairsList, MemberSummary, ObjectSummary } from '@crm/data';
 import { pairKey } from '@crm/data';
 import { useDuplicatePairs } from '@crm/data/react';
 import { Button, Callout, EmptyState, Link, PageColumn, RecordChip, Table, TopBar } from '@crm/ui';
 import { recordHref } from '../records/details.ts';
 import { objectHref } from '../workspace/objects.ts';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
-import { mergeFor } from './launch.ts';
+import { focusTitle } from '../navigation/focus-title.ts';
+import { useMergeDialog } from './merge/index.ts';
 import { duplicatesHref } from './paths.ts';
 import { strings } from './strings.ts';
 import { useDismiss } from './useDismiss.ts';
@@ -23,6 +24,9 @@ export interface DuplicatesScreenProps {
   readonly recordId?: string;
   /** The pairs, from `data.records.duplicates.pairs`, made by the route for this visit. */
   readonly pairs: DuplicatePairsList;
+  /** The object's attributes and the members, for the merge dialog's values. */
+  readonly attributes: readonly AttributeDefinition[];
+  readonly members: readonly MemberSummary[];
 }
 
 const COLUMNS = [
@@ -33,10 +37,23 @@ const COLUMNS = [
 ];
 
 /** The page: every pair, 50 at a time, newest record first, with its states. */
-export function DuplicatesScreen({ slug, object, recordId, pairs }: DuplicatesScreenProps) {
+export function DuplicatesScreen({ slug, object, recordId, pairs, attributes, members }: DuplicatesScreenProps) {
   const state = useDuplicatePairs(pairs);
   const dismiss = useDismiss(pairs);
-  const launch = mergeFor(object.access);
+  // Merge (AC-4907, AC-4910): the merge dialog on the pair; once it lands the merged record is gone, so the pairs
+  // are read again and the pair drops out.
+  const merging = useMergeDialog({
+    slug,
+    object,
+    attributes,
+    members,
+    onMerged: () => {
+      pairs.retry();
+      focusTitle();
+    },
+    onCancel: focusTitle,
+  });
+  // Merge and Not a duplicate both need write on the object (AC-4909, AC-4919); the server checks the rest.
   const mayDismiss = object.access === 'write';
   const chip = (display: DuplicatePair['a']) => (
     <RecordChip
@@ -106,7 +123,7 @@ export function DuplicatesScreen({ slug, object, recordId, pairs }: DuplicatesSc
       )}
       <Table
         label={strings.tableLabel}
-        columns={launch !== undefined || mayDismiss ? COLUMNS : COLUMNS.filter((column) => column.id !== 'actions')}
+        columns={mayDismiss ? COLUMNS : COLUMNS.filter((column) => column.id !== 'actions')}
         rows={state.pairs}
         getRowId={pairKey}
         isLoading={state.status === 'loading'}
@@ -117,16 +134,11 @@ export function DuplicatesScreen({ slug, object, recordId, pairs }: DuplicatesSc
           if (columnId === 'reason') return strings.reason[pair.reason];
           return (
             <>
-              {launch !== undefined && (
+              {mayDismiss && (
                 <Button
                   variant="secondary"
                   onPress={() => {
-                    launch({
-                      slug,
-                      objectId: object.id,
-                      recordIds: [pair.a.recordId, pair.b.recordId],
-                      onMerged: pairs.retry,
-                    });
+                    merging.open([pair.a.recordId, pair.b.recordId]);
                   }}
                 >
                   {strings.merge}
@@ -158,5 +170,10 @@ export function DuplicatesScreen({ slug, object, recordId, pairs }: DuplicatesSc
       )}
     </PageColumn>
   );
-  return <WorkspacePage currentObject={object.apiSlug} page={{ topBar, body }} />;
+  return (
+    <>
+      <WorkspacePage currentObject={object.apiSlug} page={{ topBar, body }} />
+      {merging.dialog}
+    </>
+  );
 }

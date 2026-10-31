@@ -1,4 +1,4 @@
-import type { AttributeDefinition, RecordView } from '@crm/data';
+import type { AttributeDefinition, MemberSummary, ObjectSummary, RecordView } from '@crm/data';
 import { useRouteContext } from '@tanstack/react-router';
 import { useEffect, useMemo, useState } from 'react';
 import { DuplicateBanner } from './DuplicateBanner.tsx';
@@ -7,14 +7,10 @@ import { DUPLICATE_CHECK_DELAY_MS, matchedValues } from './matched.ts';
 /** Props for a record page's duplicate banner. */
 export interface RecordDuplicateBannerProps {
   readonly slug: string;
-  readonly object: {
-    readonly id: string;
-    readonly apiSlug: string;
-    readonly access: string;
-    readonly standardKey?: string;
-  };
+  readonly object: ObjectSummary;
   readonly record: RecordView;
   readonly attributes: readonly AttributeDefinition[];
+  readonly members: readonly MemberSummary[];
 }
 
 /**
@@ -22,7 +18,7 @@ export interface RecordDuplicateBannerProps {
  * email, domain, a person's Company), so an edit on the page that makes it look like another record says so there
  * (AC-4904's check on the record page).
  */
-export function RecordDuplicateBanner({ slug, object, record, attributes }: RecordDuplicateBannerProps) {
+export function RecordDuplicateBanner({ slug, object, record, attributes, members }: RecordDuplicateBannerProps) {
   const { data } = useRouteContext({ from: '__root__' });
   const now = JSON.stringify(matchedValues(attributes, record.values, object.standardKey));
   const [asked, setAsked] = useState(now);
@@ -41,5 +37,14 @@ export function RecordDuplicateBanner({ slug, object, record, attributes }: Reco
     [data, slug, object.id, record.id, asked],
   );
   const { pairs } = held;
-  return <DuplicateBanner slug={slug} object={object} recordId={record.id} pairs={pairs} />;
+  return (
+    <DuplicateBanner
+      slug={slug}
+      object={object}
+      recordId={record.id}
+      pairs={pairs}
+      attributes={attributes}
+      members={members}
+    />
+  );
 }

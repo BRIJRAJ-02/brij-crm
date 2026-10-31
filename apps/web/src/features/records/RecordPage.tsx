@@ -923,7 +923,9 @@ function RecordScreen({
     );
   } else {
     // Likely duplicates (spec 0049, AC-4906): nothing shows until a pair arrives.
-    notice = <RecordDuplicateBanner slug={slug} object={object} record={shown} attributes={attributes} />;
+    notice = (
+      <RecordDuplicateBanner slug={slug} object={object} record={shown} attributes={attributes} members={members} />
+    );
   }
 
   return (
