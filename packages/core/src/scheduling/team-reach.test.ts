@@ -121,6 +121,22 @@ describe('a team delegation (AC-1254)', () => {
     expect((await listDelegations(w.owner, { everyone: true })).delegations).toHaveLength(1);
   });
 
+  it('sends no grant email yet, so a team grant is never told as one over everyone', async () => {
+    const w = await world(['member', 'member']);
+    const [priya = '', bea = ''] = w.ids;
+    const sales = await createTeam(w.owner, { name: 'Sales', memberIds: [bea] }, hooks());
+    const input = { delegateMemberId: priya, target: { type: 'team' as const, teamId: sales.id } };
+    await grantDelegation(w.owner, { ...input, level: 'view' }, hooks());
+    // A level change too: the same rule.
+    await grantDelegation(w.owner, { ...input, level: 'manage' }, hooks());
+    const sent = await testQuery<{ kind: string }>(
+      ownerUrl,
+      `select kind from emails where workspace_id = $1 and kind = 'scheduling_access_given'`,
+      [w.workspaceId],
+    );
+    expect(sent).toEqual([]);
+  });
+
   it('is a manager’s to give: a member is FORBIDDEN, an unknown team NOT_FOUND, another workspace’s too', async () => {
     const w = await world(['member']);
     const [priya = ''] = w.ids;
