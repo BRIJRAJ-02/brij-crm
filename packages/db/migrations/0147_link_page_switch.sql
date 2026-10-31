@@ -1,5 +1,5 @@
 -- The link page's Live or Private switch (spec 0058, AC-23, 31 Oct 2026; the owner: "rest take industry standard
--- decisions"). Renumbered 0145, after main's 0144, when the lanes merged.
+-- decisions"). Renumbered 0147, after main's 0146, when the lanes merged.
 --
 -- What changes:
 -- * A handle its owner claims (first run or Settings › Profile) is live at once, as on Linktree. The app calls
@@ -175,7 +175,7 @@ begin
       or not has_function_privilege('crm_app', one, 'EXECUTE')
       or has_function_privilege('crm_identity', one, 'EXECUTE')
       or has_function_privilege('public', one, 'EXECUTE') then
-      raise exception '0145_link_page_switch: % is not crm_handle''s definer for crm_app alone', one;
+      raise exception '0147_link_page_switch: % is not crm_handle''s definer for crm_app alone', one;
     end if;
   end loop;
 end

@@ -558,6 +558,7 @@ export {
   leaveWorkspace,
   listMembers,
   listRoles,
+  previewGuest,
   previewRemoval,
   removeMember,
   setMemberRole,
@@ -735,6 +736,8 @@ export { createRotation, deleteRotation, listRotations, updateRotation } from '.
 export { bookingAssignments } from './rotation/assignments.ts';
 export { reassignBooking, reassignUpcoming, type Reseated } from './rotation/reassign.ts';
 export { adjustCount, rotationDistribution, undoAdjustment } from './rotation/distribution.ts';
+// Page and rotation editors (spec 0037, AC-1331): Sharing.
+export { listEditors, setEditors } from './scheduling/editors.ts';
 // Lead routing (spec 0043): deciding a route, a surface's report.
 export { decideRoute, recordFactKeys, type RouteDecision } from './routing/decide.ts';
 export { routingReport } from './routing/report.ts';

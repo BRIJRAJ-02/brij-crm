@@ -1057,7 +1057,7 @@ export async function enterOwnedPages(
 
 /**
  * The signed in person's own id from a member scope the door made (spec 0051): their link page is their account's,
- * never a workspace's. Anyone else (a key, a form, the system) is FORBIDDEN.
+ * never a workspace's. Anyone else (a key, a form, the system, a guest) is FORBIDDEN.
  */
 export function ownUserId(scope: EngineScope): string {
   checkScope(scope);
@@ -1065,6 +1065,8 @@ export function ownUserId(scope: EngineScope): string {
   if (principal.kind !== 'member' || principal.userId === undefined) {
     throw refuse('FORBIDDEN', 'Only a signed in person has a link page.');
   }
+  // A guest has no link page (spec 0031, slice 9): one kept from before they were a guest waits, hidden, unchanged.
+  if (principal.role === 'guest') throw refuse('FORBIDDEN', 'Guests don’t have a link page.');
   return principal.userId;
 }
 

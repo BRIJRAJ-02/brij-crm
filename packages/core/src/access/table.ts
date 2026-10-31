@@ -81,7 +81,14 @@ export type AccessEntry =
    * anyone else who can read it gets 403 `FORBIDDEN` naming who may ("Only <maker>, owners and admins can change
    * this list.").
    */
-  | { readonly listMaker: true };
+  | { readonly listMaker: true }
+  /**
+   * A page or rotation by its editors (spec 0037, AC-1331, AC-1340): `booking.manage` first (403 `FORBIDDEN`), then
+   * `booking.admin` or an editor of that rotation or page (`resource`: the one the input's `resourceType` names); a
+   * member who is in the rotation but doesn't edit it is 403 `FORBIDDEN`, anyone else meets it as absent. Adding a
+   * person also needs Manage over them (`ADD_MEMBER_FORBIDDEN`).
+   */
+  | { readonly editor: 'booking_page' | 'rotation' | 'resource' };
 
 /** Every exported service that takes a scope, and what it checks. */
 export const ACCESS_TABLE = {
@@ -139,6 +146,8 @@ export const ACCESS_TABLE = {
   removeMember: { ownerRules: true },
   // Spec 0031, AC-816: the remove dialog's counts, for `members.manage` or about oneself.
   previewRemoval: { ownerRules: true },
+  // Spec 0031, slice 9: the guest dialog's counts, for holders of `members.manage` only (they alone change roles).
+  previewGuest: { permission: 'members.manage' },
   // Spec 0031: leaving is the removal on oneself, open to any member; the only owner is refused LAST_OWNER.
   leaveWorkspace: { anyMember: true },
   // Spec 0031, AC-813: an owner hands the workspace on; anyone else is refused.
@@ -532,7 +541,8 @@ export const ACCESS_TABLE = {
   // making, changing and deleting them is booking.admin's (AC-751). A booking's assignments: its host or an admin.
   listRotations: { bookingPages: true },
   createRotation: { permission: 'booking.admin' },
-  updateRotation: { permission: 'booking.admin' },
+  // Changing a rotation (AC-1337): booking.admin or its editors; adding someone needs Manage over them (AC-1340).
+  updateRotation: { editor: 'rotation' },
   deleteRotation: { permission: 'booking.admin' },
   bookingAssignments: { bookingPages: true },
   // Reassigning a seat (AC-748, AC-1337): booking.manage, then Manage over the current and the new host.
@@ -541,9 +551,12 @@ export const ACCESS_TABLE = {
   rotationDistribution: { bookingPages: true },
   // A member's upcoming bookings in a rotation handed on (AC-750): Manage over them and every member it could hand to.
   reassignUpcoming: { scheduling: 'manage' },
-  // Count adjustments (AC-1329): booking.admin's until rotation editors arrive (J14).
-  adjustCount: { permission: 'booking.admin' },
-  undoAdjustment: { permission: 'booking.admin' },
+  // Count adjustments (AC-1329): booking.admin and the rotation's editors.
+  adjustCount: { editor: 'rotation' },
+  undoAdjustment: { editor: 'rotation' },
+  // Sharing (spec 0037, AC-1331): whoever may change the page or rotation lists its editors; only booking.admin sets them.
+  listEditors: { editor: 'resource' },
+  setEditors: { permission: 'booking.admin' },
   // Scheduling access (spec 0037, J1): delegations, and the members in See reach (`members.visible`, AC-1261).
   listDelegations: { delegation: true },
   grantDelegation: { delegation: true },

@@ -2,7 +2,9 @@
 // AC-1329, AC-1330). The tab reads the window's ledger in three grouped
 // queries (counts and adjustments by member, reasons by member, the last 12
 // weeks by member and week), never a row per booking. A member sees their own
-// row; `booking.admin` everyone's. An adjustment is a ledger row (`source` and
+// row and the rows of those in their See reach; `booking.admin` and the
+// rotation's editors everyone's, and adjust (spec 0037, AC-1329, AC-1330). An
+// adjustment is a ledger row (`source` and
 // `reason` `adjustment`, `units` the number) written under the rotation's lock,
 // so a pick in flight sees it or not, never half; undoing voids it. Both are
 // audited.
@@ -19,12 +21,15 @@ import { schema, type WorkspaceTx } from '@crm/db';
 import { requirePermission } from '../access/check.ts';
 import type { EngineScope } from '../access/mint.ts';
 import { can } from '../access/policy.ts';
+import { canActFor, schedulingReach } from '../access/scheduling.ts';
+import { editedBy } from '../scheduling/editor-rows.ts';
 import { inWorkspace } from '../access/run.ts';
 import { refuse } from '../engine/refusals.ts';
 import { actorRow } from '../engine/scope.ts';
 import { writeAudit } from '../members/audit.ts';
 import { lockRotation, windowStart } from './ledger.ts';
 import { keepRosterRow, rosterCalibration } from './roster.ts';
+import { mayChangeRotation } from './rotations.ts';
 
 const { members, rotationAssignments, rotationRoster, rotations } = schema;
 /** Whoever made an adjustment. */
@@ -129,8 +134,8 @@ function adjustmentOf(row: {
 /**
  * The Distribution tab (AC-1330): each member's count in the window (calibration and adjustments included), their
  * fair share by weight among the members switched on, the difference, the window's adjustments, how they got their
- * meetings, and the last 12 weeks. `booking.admin` sees every row; a member of the rotation only their own; anyone
- * else NOT_FOUND.
+ * meetings, and the last 12 weeks. `booking.admin` and the rotation's editors see every row and the fair shares; a
+ * member of the rotation their own and those of the members in their See reach (AC-1330); anyone else NOT_FOUND.
  */
 export async function rotationDistribution(
   scope: EngineScope,
@@ -138,10 +143,10 @@ export async function rotationDistribution(
   now: Date = new Date(),
 ): Promise<RotationDistribution> {
   requirePermission(scope, 'booking.manage');
-  const everyone = can(scope.access, 'booking.admin');
   const me = memberOf(scope);
   return inWorkspace(scope, async (tx) => {
     const rotation = await liveRotation(tx, input.rotationId);
+    const everyone = can(scope.access, 'booking.admin') || (await editedBy(tx, scope, 'rotation')).has(rotation.id);
     // Through `rotation_roster`: "Everyone on the roster" holds every active member who isn't a guest.
     const pool = await tx
       .select({
@@ -161,6 +166,11 @@ export async function rotationDistribution(
       .where(eq(rotationRoster.rotationId, rotation.id))
       .orderBy(asc(rotationRoster.position), asc(members.name));
     if (!everyone && !pool.some((member) => member.memberId === me)) throw refuse('NOT_FOUND', MISSING);
+    // A member's own row, and the rows of those they may See (AC-1330): one reach read, only for them.
+    const reach = everyone ? undefined : await schedulingReach(tx, scope);
+    const seesOthers = everyone || (reach !== undefined && (reach.all !== undefined || reach.members.size > 0));
+    const shows = (memberId: string) =>
+      everyone || memberId === me || (reach !== undefined && canActFor(reach, memberId, 'view'));
     const since = windowStart(now, rotation.windowDays);
     const ids = pool.map((member) => member.memberId);
     const counted =
@@ -223,7 +233,7 @@ export async function rotationDistribution(
     const total = on.reduce((sum, member) => sum + countOf(member.memberId), 0);
     const weights = on.reduce((sum, member) => sum + member.weight, 0);
     const rows: DistributionRow[] = pool
-      .filter((member) => everyone || member.memberId === me)
+      .filter((member) => shows(member.memberId))
       .map((member) => {
         const count = countOf(member.memberId);
         const fairShare = member.isOn && weights > 0 ? (total * member.weight) / weights : 0;
@@ -256,26 +266,30 @@ export async function rotationDistribution(
       windowDays: rotation.windowDays,
       weekStarts,
       rows,
-      adjustments: await adjustmentsOf(tx, rotation.id, everyone ? undefined : me),
+      // Everyone's for a reader who sees others' rows, then only the rows they see (AC-1330); else their own.
+      adjustments: (await adjustmentsOf(tx, rotation.id, seesOthers ? undefined : me)).filter((each) =>
+        shows(each.memberId),
+      ),
       canAdjust: everyone,
     };
   });
 }
 
 /**
- * Adjusts a member's count in a rotation (AC-1329): `booking.admin` (the rotation's editors join with spec 0037's
- * J14), for a member of the rotation, by -20 to +20 (never 0) with a note. Under the rotation's lock; audited.
+ * Adjusts a member's count in a rotation (AC-1329): `booking.admin` or one of the rotation's editors, for a member of
+ * the rotation, by -20 to +20 (never 0) with a note. Under the rotation's lock; audited.
  */
 export async function adjustCount(
   scope: EngineScope,
   input: Pick<AdjustCountInput, 'rotationId' | 'memberId' | 'units' | 'note'>,
 ): Promise<RotationAdjustment> {
-  requirePermission(scope, 'booking.admin');
+  requirePermission(scope, 'booking.manage');
   if (!Number.isInteger(input.units) || input.units === 0 || Math.abs(input.units) > 20) {
     throw refuse('CONFIG_INVALID', 'Adjust by a whole number from -20 to 20, never 0.');
   }
   return inWorkspace(scope, async (tx) => {
     const rotation = await liveRotation(tx, input.rotationId);
+    await mayChangeRotation(tx, scope, rotation.id);
     await lockRotation(tx, scope.workspaceId, rotation.id);
     const [pooled] = await tx
       .select({ memberId: rotationRoster.memberId })
@@ -316,14 +330,18 @@ export async function adjustCount(
   });
 }
 
-/** Undoes an adjustment (AC-1329): voided, so it stops counting; `booking.admin`; audited. Undoing twice is a no-op. */
+/**
+ * Undoes an adjustment (AC-1329): voided, so it stops counting; `booking.admin` or one of the rotation's editors;
+ * audited. Undoing twice is a no-op.
+ */
 export async function undoAdjustment(
   scope: EngineScope,
   input: { readonly rotationId: string; readonly adjustmentId: string },
 ): Promise<RotationAdjustment> {
-  requirePermission(scope, 'booking.admin');
+  requirePermission(scope, 'booking.manage');
   return inWorkspace(scope, async (tx) => {
     const rotation = await liveRotation(tx, input.rotationId);
+    await mayChangeRotation(tx, scope, rotation.id);
     await lockRotation(tx, scope.workspaceId, rotation.id);
     const by = actorRow(scope.actor);
     const [undone] = await tx

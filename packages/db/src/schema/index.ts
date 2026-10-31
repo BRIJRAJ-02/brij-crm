@@ -54,7 +54,7 @@ export { exportChunks, exports } from './exports.ts';
 export { auditEvents, invitations, joinRequests, workspaceDomains, workspaceSecurity } from './team.ts';
 export { emailPreferences, emails, emailStatus } from './emails.ts';
 export { bookingPageRotations, rotationAssignments, rotationMembers, rotationRoster, rotations } from './rotation.ts';
-export { memberBookingLimits, scheduleDelegations } from './scheduling.ts';
+export { memberBookingLimits, scheduleDelegations, schedulingEditors } from './scheduling.ts';
 export { accessRules, recordRules, teamMembers, teams } from './teams.ts';
 export { routingDecisions } from './routing.ts';
 export { automationRuns, automations } from './automations.ts';

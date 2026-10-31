@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { canRemove, grantableRoles, invitableRoles, parseEmails } from './members.ts';
+import { canRemove, grantableRoles, invitableRoles, parseEmails, takesAccess } from './members.ts';
 
 describe('grantableRoles (spec 0031, AC-811)', () => {
   it('lets an owner give any role, an admin move people below owner, and a member nothing', () => {
-    expect(grantableRoles('owner', 'owner')).toEqual(['owner', 'admin', 'member']);
-    expect(grantableRoles('admin', 'member')).toEqual(['admin', 'member']);
+    expect(grantableRoles('owner', 'owner')).toEqual(['owner', 'admin', 'member', 'guest']);
+    expect(grantableRoles('admin', 'member')).toEqual(['admin', 'member', 'guest']);
+    expect(grantableRoles('admin', 'guest')).toEqual(['admin', 'member', 'guest']);
     expect(grantableRoles('admin', 'owner')).toEqual([]);
     expect(grantableRoles('member', 'member')).toEqual([]);
+    expect(grantableRoles('guest', 'member')).toEqual([]);
     expect(grantableRoles(undefined, 'member')).toEqual([]);
   });
 
@@ -21,9 +23,20 @@ describe('grantableRoles (spec 0031, AC-811)', () => {
 
 describe('invitableRoles (spec 0031, AC-803)', () => {
   it('lets only an owner invite an owner, and a member nobody', () => {
-    expect(invitableRoles('owner')).toEqual(['owner', 'admin', 'member']);
-    expect(invitableRoles('admin')).toEqual(['admin', 'member']);
+    expect(invitableRoles('owner')).toEqual(['owner', 'admin', 'member', 'guest']);
+    expect(invitableRoles('admin')).toEqual(['admin', 'member', 'guest']);
     expect(invitableRoles('member')).toEqual([]);
+    expect(invitableRoles('guest')).toEqual([]);
+  });
+});
+
+describe('takesAccess (a role change that asks first)', () => {
+  it('asks for every step down, guest included, and never for a step up', () => {
+    expect(takesAccess('admin', 'member')).toBe(true);
+    expect(takesAccess('member', 'guest')).toBe(true);
+    expect(takesAccess('owner', 'guest')).toBe(true);
+    expect(takesAccess('guest', 'member')).toBe(false);
+    expect(takesAccess('member', 'admin')).toBe(false);
   });
 });
 

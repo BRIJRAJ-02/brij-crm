@@ -48,7 +48,7 @@ async function workspace() {
     firstMember: { name: 'Ada Host', email: 'ada@example.com' },
   });
   const owner = testScope({ db, workspaceId: created.workspaceId, actor: { type: 'member', id: created.memberId } });
-  const addMember = async (name: string, role: 'admin' | 'member', jobTitle?: string) => {
+  const addMember = async (name: string, role: 'admin' | 'member' | 'guest', jobTitle?: string) => {
     const id = newId();
     await db.withWorkspace(created.workspaceId, (tx) =>
       tx.execute(
@@ -265,6 +265,18 @@ describe('Team day', () => {
     const day = await readTeamDay(admin, { ...input, memberIds: [memberOf(stranger), theirs.memberId] }, { now: NOW });
     expect(day.columns).toEqual([]);
     expect(day.bookings).toEqual([]);
+  });
+
+  it('gives a guest no column, even to an admin who names them (spec 0031, slice 9)', async () => {
+    const w = await workspace();
+    const grace = await w.addMember('Grace', 'member');
+    const gus = await w.addMember('Gus', 'guest');
+    const admin = await w.addMember('Barbara', 'admin');
+    const day = await readTeamDay(admin, input, { now: NOW });
+    expect(day.columns.map((column) => column.memberId)).toContain(memberOf(grace));
+    expect(day.columns.map((column) => column.memberId)).not.toContain(memberOf(gus));
+    const asked = await readTeamDay(admin, { ...input, memberIds: [memberOf(gus)] }, { now: NOW });
+    expect(asked.columns).toEqual([]);
   });
 });
 

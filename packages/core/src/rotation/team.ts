@@ -42,6 +42,9 @@ const { bookingPageRotations, members, rotationRoster, rotations } = schema;
 /** The roles that may take bookings from a rotation: guests never (spec 0037, AC-729 narrowed); unknown roles fail closed. */
 export const ROTATION_ROLES: readonly string[] = ['owner', 'admin', 'member'];
 
+/** What naming a guest as a host or in a rotation answers (spec 0037, AC-1432, `MEMBER_INVALID`). */
+export const GUESTS_CANT_HOST = 'Guests can’t take bookings.';
+
 /** The most fixed hosts, rotations and hosts in all on one round robin page (spec 0037, AC-1319). */
 export const TEAM_LIMITS = { fixed: 7, rotations: 3, hosts: 8 } as const;
 

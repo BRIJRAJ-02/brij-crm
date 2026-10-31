@@ -491,6 +491,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       }),
       setRole: os.members.setRole.handler(notServed),
       removalPreview: os.members.removalPreview.handler(notServed),
+      guestPreview: os.members.guestPreview.handler(notServed),
       remove: os.members.remove.handler(notServed),
       leave: os.members.leave.handler(notServed),
       transferOwnership: os.members.transferOwnership.handler(notServed),
@@ -829,6 +830,10 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       undoAdjustment: os.rotations.undoAdjustment.handler(notServed),
       reassignUpcoming: os.rotations.reassignUpcoming.handler(notServed),
       delete: os.rotations.delete.handler(notServed),
+    },
+    editors: {
+      list: os.editors.list.handler(notServed),
+      set: os.editors.set.handler(notServed),
     },
     nav: {
       get: os.nav.get.handler(notServed),

@@ -81,7 +81,7 @@ export const memberStatus = pgEnum('member_status', ['active', 'removed']);
  * catalog in `@crm/contracts`. A live workspace always keeps one active owner
  * (`members_keep_an_owner`, migration 0022).
  */
-export const memberRole = pgEnum('member_role', ['owner', 'admin', 'member']);
+export const memberRole = pgEnum('member_role', ['owner', 'admin', 'member', 'guest']);
 
 /** A person in a workspace. `user_id` is the signed in identity (`auth.user`), set for everyone who signs in. */
 export const members = pgTable(

@@ -9,6 +9,7 @@ import { schema } from '@crm/db';
 import { requirePermission } from '../access/check.ts';
 import type { EngineScope } from '../access/mint.ts';
 import { canActFor, managesPageOf, schedulingReach } from '../access/scheduling.ts';
+import { editedBy } from '../scheduling/editor-rows.ts';
 import { inWorkspace } from '../access/run.ts';
 import { refuse } from '../engine/refusals.ts';
 import { pageManagerColumn } from '../booking/seen.ts';
@@ -48,7 +49,7 @@ export async function bookingAssignments(
   return inWorkspace(scope, async (tx) => {
     const [booking] = await tx
       // A workspace link's maker manages nothing by it (`pageManagerColumn`).
-      .select({ hostMemberId: bookings.hostMemberId, ownerMemberId: pageManagerColumn })
+      .select({ hostMemberId: bookings.hostMemberId, pageId: bookings.pageId, ownerMemberId: pageManagerColumn })
       .from(bookings)
       .innerJoin(
         bookingPages,
@@ -56,8 +57,11 @@ export async function bookingAssignments(
       )
       .where(eq(bookings.id, input.bookingId));
     const reach = await schedulingReach(tx, scope);
-    // The page's managers act on its bookings (decision 12); anyone else needs See over its host.
-    const manages = booking !== undefined && managesPageOf(booking, scope.access);
+    // The page's managers act on its bookings (decision 12), its editors among them (spec 0037, AC-1331); anyone else
+    // needs See over its host.
+    const manages =
+      booking !== undefined &&
+      (managesPageOf(booking, scope.access) || (await editedBy(tx, scope, 'booking_page')).has(booking.pageId));
     if (booking === undefined || (!manages && !canActFor(reach, booking.hostMemberId, 'view'))) {
       throw refuse('NOT_FOUND', 'That booking doesn’t exist, or isn’t yours.');
     }

@@ -25,6 +25,8 @@ const BOOKING_ADMIN: Readonly<Record<string, string>> = {
   'packages/core/src/rotation/rotations.ts': 'rotations are things (AC-751)',
   'packages/core/src/rotation/distribution.ts': 'a rotation’s distribution: a thing',
   'packages/core/src/routing/report.ts': 'routing reports over pages and forms: things',
+  'packages/core/src/scheduling/editor-rows.ts': 'a page’s or rotation’s editors (spec 0037, AC-1331): things',
+  'packages/core/src/scheduling/editors.ts': 'who edits a page or a rotation, set by booking.admin: things',
 };
 
 async function sourceFiles(dir: string): Promise<string[]> {
