@@ -11,6 +11,7 @@ import {
   check,
   foreignKey,
   index,
+  integer,
   jsonb,
   pgTable,
   primaryKey,
@@ -19,7 +20,8 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 import { bookingPages, bookings } from './booking.ts';
-import { id, timestamptz, workspaceId } from './common.ts';
+import { auditColumns, id, timestamptz, workspaceId } from './common.ts';
+import { actorConstraints, members } from './workspaces.ts';
 
 /** One routing decision: the surface, the rule that matched (none: the fallback), its tag and where it sent the lead. */
 export const routingDecisions = pgTable(
@@ -81,6 +83,92 @@ export const routingDecisions = pgTable(
       .where(sql`${t.surfaceKind} = 'booking_page'`),
     check('routing_decisions_surface', sql`${t.surfaceKind} in ('form', 'booking_page')`),
     check('routing_decisions_submission', sql`(${t.surfaceKind} = 'form') = (${t.submissionId} is not null)`),
-    check('routing_decisions_hosts', sql`${t.hosts} is null or cardinality(${t.hosts}) between 1 and 8`),
+    // Named hosts are 1 to 8; members with skills (spec 0037, AC-1356) up to a whole roster.
+    check('routing_decisions_hosts', sql`${t.hosts} is null or cardinality(${t.hosts}) between 1 and 200`),
+  ],
+);
+
+/**
+ * What every routed surface shares (spec 0037, AC-1351): one row per workspace, made by the first setting stored; a
+ * workspace without it reads the defaults. L7 adds Won means; L8 and L9 add their columns.
+ */
+export const routingSettings = pgTable(
+  'routing_settings',
+  {
+    workspaceId: workspaceId(),
+    /** Won means (AC-1385): `{ attributeId, optionIds[] }`, the Deals stage and the stages that count as won. */
+    wonStage: jsonb('won_stage'),
+    ...auditColumns(),
+  },
+  (t) => [
+    primaryKey({ name: 'routing_settings_pkey', columns: [t.workspaceId] }),
+    ...actorConstraints('routing_settings', 'created_by', t.workspaceId, {
+      type: t.createdByType,
+      id: t.createdById,
+      memberId: t.createdByMemberId,
+    }),
+    ...actorConstraints('routing_settings', 'updated_by', t.workspaceId, {
+      type: t.updatedByType,
+      id: t.updatedById,
+      memberId: t.updatedByMemberId,
+    }),
+  ],
+);
+
+/** One skill (spec 0037, AC-1382): a name in a group, at most 100 a workspace (core). */
+export const routingSkills = pgTable(
+  'routing_skills',
+  {
+    workspaceId: workspaceId(),
+    id: id(),
+    /** `language`, `region`, `segment`, `product` or `other`. */
+    skillGroup: text('skill_group').notNull(),
+    name: text('name').notNull(),
+    /** Its place in its group. */
+    position: integer('position').notNull().default(0),
+    ...auditColumns(),
+  },
+  (t) => [
+    primaryKey({ name: 'routing_skills_pkey', columns: [t.workspaceId, t.id] }),
+    // One name per group, ignoring case.
+    uniqueIndex('routing_skills_name').on(t.workspaceId, t.skillGroup, sql`lower(${t.name})`),
+    check('routing_skills_group', sql`${t.skillGroup} in ('language', 'region', 'segment', 'product', 'other')`),
+    check('routing_skills_name_length', sql`char_length(${t.name}) between 1 and 40`),
+    ...actorConstraints('routing_skills', 'created_by', t.workspaceId, {
+      type: t.createdByType,
+      id: t.createdById,
+      memberId: t.createdByMemberId,
+    }),
+    ...actorConstraints('routing_skills', 'updated_by', t.workspaceId, {
+      type: t.updatedByType,
+      id: t.updatedById,
+      memberId: t.updatedByMemberId,
+    }),
+  ],
+);
+
+/** A member holds a skill (AC-1382). A skill's deletion takes its rows; a member's removal deletes theirs (AC-1440). */
+export const memberSkills = pgTable(
+  'member_skills',
+  {
+    workspaceId: workspaceId(),
+    memberId: uuid('member_id').notNull(),
+    skillId: uuid('skill_id').notNull(),
+    createdAt: timestamptz('created_at').notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ name: 'member_skills_pkey', columns: [t.workspaceId, t.memberId, t.skillId] }),
+    foreignKey({
+      name: 'member_skills_member',
+      columns: [t.workspaceId, t.memberId],
+      foreignColumns: [members.workspaceId, members.id],
+    }),
+    foreignKey({
+      name: 'member_skills_skill',
+      columns: [t.workspaceId, t.skillId],
+      foreignColumns: [routingSkills.workspaceId, routingSkills.id],
+    }).onDelete('cascade'),
+    // Who holds a skill: a host route's members, and a skill's deletion.
+    index('member_skills_by_skill').on(t.workspaceId, t.skillId),
   ],
 );

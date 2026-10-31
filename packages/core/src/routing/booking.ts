@@ -13,6 +13,7 @@ import type { Team } from '../rotation/team.ts';
 import { decideRoute, recordFactKeys } from './decide.ts';
 import { recordFacts, type RecordFactObjects } from './facts.ts';
 import { submissionDecision } from './forms.ts';
+import { routeHostIds } from './hosts.ts';
 
 const { routingDecisions } = schema;
 
@@ -109,9 +110,12 @@ export async function routeBooking(
     ...(decision.qualified === undefined ? {} : { qualified: decision.qualified }),
     skipped: decision.skipped,
   };
+  // Named hosts, or the members holding the required skills (spec 0037, AC-1356): none holding them, none narrowed.
+  const hosts =
+    decision.route?.kind === 'hosts' ? await routeHostIds(tx, input.page.id, decision.route.hosts) : undefined;
   return {
     ...handed,
-    ...(decision.route?.kind === 'hosts' ? { hosts: new Set(decision.route.hosts) } : {}),
+    ...(hosts === undefined ? {} : { hosts: new Set(hosts) }),
     page,
   };
 }

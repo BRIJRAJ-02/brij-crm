@@ -466,6 +466,9 @@ export function toEntryView(row: AuditRow, names: AuditNames): AuditEntryView | 
     }
     case 'workspace.restored':
     case 'workspace_security.signed_out_everyone':
+    case 'routing.settings_changed':
+    case 'routing.skills_changed':
+    case 'routing.tested':
       return { ...base, action, target: workspace, params: {}, changes: [] };
     case 'api_key.created':
     case 'api_key.revoked':

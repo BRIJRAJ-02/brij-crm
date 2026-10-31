@@ -15,6 +15,7 @@ import {
 } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { decideRoute } from './decide.ts';
+import { routeHostIds } from './hosts.ts';
 
 const { routingDecisions } = schema;
 
@@ -50,6 +51,8 @@ export async function routeSubmission(tx: WorkspaceTx, input: SubmissionRouting)
     { routes: FORM_ROUTES, unreadable },
   );
   const route = decision.route;
+  // Named hosts, or the members of the page's rotations holding the required skills (spec 0037, AC-1356).
+  const hosts = route?.kind === 'book' ? await routeHostIds(tx, route.bookingPageId, route.hosts) : undefined;
   const stored = await tx
     .insert(routingDecisions)
     .values({
@@ -61,7 +64,7 @@ export async function routeSubmission(tx: WorkspaceTx, input: SubmissionRouting)
       skipped: [...decision.skipped],
       submissionId: input.submissionId,
       routedPageId: route?.kind === 'book' ? route.bookingPageId : null,
-      hosts: route?.kind === 'book' && route.hosts !== undefined ? [...route.hosts] : null,
+      hosts: hosts === undefined ? null : [...hosts],
     })
     .onConflictDoNothing()
     .returning({ id: routingDecisions.id });

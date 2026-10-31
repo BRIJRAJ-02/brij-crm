@@ -5,19 +5,20 @@
 // the page. The evaluator is `matchesShowWhen` (`show-when.ts`, no Zod).
 import { oc } from '@orpc/contract';
 import * as z from 'zod';
-import { CONDITION_OPS, CONDITIONS_MAX, isHiddenFact, NUMBER_OPS, RECORD_FACT, VALUELESS_OPS } from './show-when.ts';
+import { CONDITION_OPS, CONDITIONS_MAX, isHiddenFact, isRecordFact, NUMBER_OPS, VALUELESS_OPS } from './show-when.ts';
 import { QUESTION_KEY } from './answer-types.ts';
 import { Uuid, uuidWith } from '../values/ids.ts';
 import { WorkspaceScoped } from '../workspaces.ts';
 
 /**
- * A condition's fact key: a question key, `person.<attributeId>` / `company.<attributeId>`, or one of the visit's
+ * A condition's fact key: a question key, `person.<attributeId>` / `company.<attributeId>` / `deal.<attributeId>`,
+ * `crm.known`, or one of the visit's
  * hidden fields (`hidden.utm_source`). Which of them a surface may read is the publish and save checks' call.
  */
 export const FactKey = z
   .string()
   .max(80)
-  .refine((key) => QUESTION_KEY.test(key) || RECORD_FACT.test(key) || isHiddenFact(key), {
+  .refine((key) => QUESTION_KEY.test(key) || isRecordFact(key) || isHiddenFact(key), {
     error: 'Pick a question or a field.',
   });
 
@@ -64,11 +65,44 @@ export const ROUTING_RULES_MAX = 20;
 /** At most this many hosts a route narrows to (AC-1604, AC-1608). */
 export const ROUTE_HOSTS_MAX = 8;
 
-/** Some members of a team page's rotations: one is a specific host. */
-export const RouteHosts = z
+/** At most this many skills a host route requires (spec 0037, AC-1356). */
+export const REQUIRED_SKILLS_MAX = 3;
+
+/** Some members of a team page's rotations, by name: one is a specific host. */
+export const NamedHosts = z
   .array(Uuid)
   .min(1, { error: 'Pick at least one person.' })
   .max(ROUTE_HOSTS_MAX, { error: `Pick at most ${String(ROUTE_HOSTS_MAX)} people.` });
+
+/**
+ * The members of the page's rotations holding every one of 1 to 3 skills (spec 0037, AC-1356). When none of them is
+ * free at the slot, the whole rotation picks: the one `ifNoneFree` there is, kept so a later choice can join it.
+ */
+export const RequiredSkills = z.strictObject({
+  requireSkillIds: z
+    .array(Uuid)
+    .min(1, { error: 'Pick at least one skill.' })
+    .max(REQUIRED_SKILLS_MAX, { error: `Pick at most ${String(REQUIRED_SKILLS_MAX)} skills.` })
+    .refine((ids) => new Set(ids).size === ids.length, { error: 'Pick each skill once.' }),
+  ifNoneFree: z.literal('whole_rotation'),
+});
+/** Members with skills. */
+export type RequiredSkills = z.infer<typeof RequiredSkills>;
+
+/** Who a route narrows to: named members, or the members with some skills. */
+export const RouteHosts = z.union([NamedHosts, RequiredSkills]);
+/** Who a route narrows to. */
+export type RouteHosts = z.infer<typeof RouteHosts>;
+
+/** The named members of a route's hosts, or undefined when it names skills (or nobody). */
+export function namedHosts(hosts: RouteHosts | undefined): readonly string[] | undefined {
+  return Array.isArray(hosts) ? hosts : undefined;
+}
+
+/** The skills a route's hosts require, or undefined when it names people (or nobody). */
+export function requiredSkills(hosts: RouteHosts | undefined): readonly string[] | undefined {
+  return hosts === undefined || Array.isArray(hosts) ? undefined : hosts.requireSkillIds;
+}
 
 /** An https address a rule sends visitors to (http only for localhost, for local testing). */
 const RouteUrl = z
@@ -313,8 +347,9 @@ export type RoutingDecisionInput = z.infer<typeof RoutingDecisionInput>;
 /**
  * Lead routing's procedures (spec 0043; spec 0037 L6): the per rule report for a surface's editors, and for holders
  * of `routing.manage` the Overview and the Decisions log across every surface. Rules are saved with their form or page.
+ * Skills, settings and Test (L7) join it in `routing-shared.ts`.
  */
-export const routingContract = {
+export const routingLogContract = {
   report: oc.input(RoutingReportInput).output(RoutingReport),
   overview: oc.input(WorkspaceScoped).output(RoutingOverview),
   decisions: oc.input(RoutingDecisionsInput).output(RoutingDecisionPage),

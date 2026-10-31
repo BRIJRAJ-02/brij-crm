@@ -19,7 +19,7 @@ import { homeContract } from './home.ts';
 import { commentsContract } from './comments.ts';
 import { filesContract } from './files.ts';
 import { formsContract, submissionsContract } from './forms/forms.ts';
-import { routingContract } from './forms/routing.ts';
+import { routingContract } from './forms/routing-shared.ts';
 import { exportsContract, importsContract } from './imports.ts';
 import { entriesContract } from './entries.ts';
 import { listsContract } from './lists.ts';
