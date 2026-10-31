@@ -27,6 +27,7 @@ import {
   addProfileImage,
   archiveProfileItem,
   profileInsightsCsv,
+  readOwnProfileImage,
   readProfileCounts,
   readQrStyle,
   saveProfileItem,
@@ -208,6 +209,14 @@ describe('a picture’s address (AC-6129)', () => {
     expect(await refusalOf(enterLinkImage({ db }, bob.handle, id))).toMatchObject({ code: 'NOT_FOUND' });
     await archiveProfileItem(ada.scope, { id: block.id, archived: true });
     expect(await refusalOf(enterLinkImage({ db }, ada.handle, id))).toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('never answers the share QR’s centre picture to a visitor: only its owner’s editor draws it', async () => {
+    const ada = await person('Ada');
+    const id = await picture(ada);
+    await saveQrStyle(ada.scope, { picture: { from: 'upload', image: id } });
+    expect(await refusalOf(enterLinkImage({ db }, ada.handle, id))).toMatchObject({ code: 'NOT_FOUND' });
+    expect(await readOwnProfileImage(ada.scope, id)).toMatchObject({ type: 'image/png' });
   });
 
   it('is refused to the app login directly, as every link page table is', async () => {

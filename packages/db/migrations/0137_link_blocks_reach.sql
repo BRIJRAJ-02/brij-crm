@@ -831,8 +831,10 @@ begin atomic
     and public.crm_workspace_member(crm_profile_image_of.owner, crm_profile_image_of.workspace);
 end;
 --> statement-breakpoint
--- A picture a visitor may load (AC-6129): only while a live block of that page, inside its window, names it; or the
--- page's share QR names it as its centre (the QR is drawn from the page's own address, so its picture is public too). Anything else, an id from another person's page included, is no row.
+-- A picture a visitor may load (AC-6129): only while a live block of that page, inside its window, names it. Anything
+-- else is no row: an id from another person's page, and the share QR's centre picture, which only its owner's editor
+-- draws (through `crm_profile_image_of`), so it never becomes public by being on the QR, whether the page is Live or
+-- Private. The caller's door (`shownOwner`) already answers nothing for a Private page to anyone but its owner.
 create function crm_profile_image_public(owner uuid, workspace uuid, image uuid)
   returns table (path text, content_type text, width integer, height integer)
   language sql
@@ -846,15 +848,11 @@ begin atomic
   where m.id = crm_profile_image_public.image and m.user_id = crm_profile_image_public.owner
     and m.workspace_id = crm_profile_image_public.workspace
     and public.crm_workspace_member(crm_profile_image_public.owner, crm_profile_image_public.workspace)
-    and (exists (
+    and exists (
       select 1 from public.crm_profile_items_public(crm_profile_image_public.owner, crm_profile_image_public.workspace,
         0::smallint, null::uuid, 61) i
       where m.id in (select w.image from public.crm_profile_item_images(i.data) w(image))
-    ) or exists (
-      select 1 from auth.public_profiles p
-      where p.user_id = m.user_id and p.workspace_id = m.workspace_id
-        and p.qr_style -> 'picture' ->> 'image' = m.id::text
-    ));
+    );
 end;
 --> statement-breakpoint
 -- Pictures no block of their page uses, live or archived, nor its share QR, made more than a day ago: the daily
