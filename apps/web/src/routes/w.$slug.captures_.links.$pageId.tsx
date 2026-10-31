@@ -61,9 +61,12 @@ export const Route = createFileRoute('/w/$slug/captures_/links/$pageId')({
           .catch(() => undefined);
       }
       // A round robin page's Hosts card: the members it can seat, and the rotations it can book from.
+      // A guest is never offered as a host: guests take no bookings (spec 0031, slice 9).
       const people =
         page.kind === 'round_robin'
-          ? (await Promise.all([context.data.members.list(params.slug), context.data.rotations.held(params.slug)]))[0]
+          ? (
+              await Promise.all([context.data.members.list(params.slug), context.data.rotations.held(params.slug)])
+            )[0].filter((person) => person.role !== 'guest')
           : undefined;
       // Sharing's picker (spec 0037, AC-1331), for an admin: the members who aren't admins, but the page's owner, who
       // edits it already. Read beside the page above; a failed read leaves none.

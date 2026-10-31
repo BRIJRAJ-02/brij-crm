@@ -41,4 +41,14 @@ describe('visibleOf', () => {
     expect(answer.find((each) => each.id === ME)).toMatchObject({ canManage: true, canChangeHours: false });
     expect(answer.find((each) => each.id === BEA)).toMatchObject({ canManage: true, canChangeHours: true });
   });
+
+  it('never lists a guest, even to a manager over everyone, but the caller themself (spec 0031, slice 9)', () => {
+    const GUS = '0190f0f0-0000-7000-8000-000000000005';
+    const withGuest = [...rows, { id: GUS, name: 'Gus', role: 'guest' }];
+    const everyone: SchedulingReach = { self: ME, all: 'manage', members: new Map(), hoursSeenOnly: new Set() };
+    expect(visibleOf(withGuest, everyone, ME, true).map((each) => each.id)).toEqual([ME, BEA, CY, OWEN]);
+    // A guest reading their own list still finds themself first, so `slice(1)` stays the others.
+    const own: SchedulingReach = { self: GUS, all: undefined, members: new Map(), hoursSeenOnly: new Set() };
+    expect(visibleOf(withGuest, own, GUS, false).map((each) => each.id)).toEqual([GUS]);
+  });
 });
