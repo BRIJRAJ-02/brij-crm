@@ -108,7 +108,8 @@ describe('What can Priya do (AC-1243)', () => {
   };
   const names: Readonly<Record<string, string>> = { priya: 'Priya', bea: 'Bea', sam: 'Sam' };
   const nameOf = (id: string) => names[id];
-  const grant = (delegate: string, target: string | 'everyone', level: 'view' | 'manage'): DelegationView => ({
+  /** A delegation to `delegate` over `target`: a member's id, or `everyone`. */
+  const grant = (delegate: string, target: string, level: 'view' | 'manage'): DelegationView => ({
     id: `${delegate}-${target}`,
     delegateMemberId: delegate,
     target: target === 'everyone' ? { type: 'everyone' } : { type: 'member', memberId: target },

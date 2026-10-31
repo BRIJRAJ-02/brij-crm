@@ -181,11 +181,11 @@ describe('holding a role (AC-1233 to AC-1235)', () => {
     const scope = await w.entered(priya);
     expect(scope.access.principal).toMatchObject({ kind: 'member', role: 'member', customRoleId: role.id });
     expect([...scope.access.permissions].sort()).toEqual(['booking.manage', 'schedule.manage']);
+    const colleague = await w.add('Sam');
     const mine = await getMyAccess(scope);
     expect(mine).toMatchObject({ role: 'member', roleLabel: 'Receptionist', customRoleId: role.id });
     // Their schedule.manage reaches everyone on the Member role, never the owner (decision 7).
     expect(mine.scheduling).toMatchObject({ managesOthers: true, managesEveryone: false });
-    const colleague = await w.add('Sam');
     const reach = await db.withWorkspace(w.workspaceId, (tx) => schedulingReach(tx, scope));
     expect(canActFor(reach, colleague, 'manage')).toBe(true);
     expect(canActFor(reach, w.memberId, 'view')).toBe(false);

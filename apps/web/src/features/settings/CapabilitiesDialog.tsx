@@ -176,7 +176,7 @@ function Lines({
   if (state.status === 'loading') return <Skeleton width="long" />;
   // Never a reach worked out from delegations that weren't read.
   if (state.status === 'error') return <Callout tone="danger">{strings.capabilities.unread}</Callout>;
-  const delegations: readonly DelegationView[] = state.status === 'ready' ? state.delegations : [];
+  const delegations: readonly DelegationView[] = state.delegations;
   const nameOf: NameOf = (id) => members.find((each) => each.id === id)?.name;
   const held = delegations.filter((each) => each.delegateMemberId === member.id);
   return (
