@@ -22,6 +22,9 @@ import { addressKey, asksFor, nothingHere, stylesheetResponse, uncached } from '
 import { BOOKING_LIMITS, type PublicLimiter } from './limits.ts';
 import { PRIVATE_PICTURE_CACHE_CONTROL, pictureResponse } from './picture.ts';
 
+/** How long a shown page's look stylesheet and photos are kept: an hour, purged by the page's cache tag. */
+export const LOOK_CACHE_CONTROL = 'public, max-age=3600, s-maxage=3600';
+
 /** What the routes need: the database, the private store, a limiter, sign in (an owner's private page) and the edge. */
 export interface LookDeps {
   readonly db: Database;
@@ -89,8 +92,10 @@ export function mountLook(app: Hono<{ Variables: Variables }>, deps: LookDeps): 
     if (found instanceof Response) return found;
     if (!asksFor(c, found.look.answer?.version)) return nothingHere();
     const answer = stylesheetResponse(lookStylesheet(found.look, found.owner.handle));
-    // A private page's look is its owner's alone: their browser keeps it, never the edge.
-    if (!found.owner.isShown) answer.headers.set('cache-control', PRIVATE_PICTURE_CACHE_CONTROL);
+    // An hour, as its photos: unlike a booking page's brand stylesheet (five minutes, no tag), this answer is filed
+    // under the page's cache tag, so its Private switch purges it at once. A private page's look is its owner's
+    // alone: their browser keeps it, never the edge.
+    answer.headers.set('cache-control', found.owner.isShown ? LOOK_CACHE_CONTROL : PRIVATE_PICTURE_CACHE_CONTROL);
     return answer;
   });
 
@@ -105,10 +110,7 @@ export function mountLook(app: Hono<{ Variables: Variables }>, deps: LookDeps): 
         log.warn('look.image.missed', { requestId: c.get('requestId'), slot });
         return nothingHere();
       }
-      return pictureResponse(
-        loaded,
-        found.owner.isShown ? 'public, max-age=3600, s-maxage=3600' : PRIVATE_PICTURE_CACHE_CONTROL,
-      );
+      return pictureResponse(loaded, found.owner.isShown ? LOOK_CACHE_CONTROL : PRIVATE_PICTURE_CACHE_CONTROL);
     });
   }
 }

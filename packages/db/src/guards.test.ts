@@ -308,9 +308,9 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_save_picture_hidden', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       // A plpgsql body: it checks the workspace and the membership, and raises PROFILE_MISSING (spec 0060).
       { name: 'crm_save_profile_accent', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
-      { name: 'crm_save_profile_indexable', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       // A plpgsql body: as crm_save_profile_accent, and answers the path it replaced (spec 0060).
       { name: 'crm_save_profile_image', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
+      { name: 'crm_save_profile_indexable', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       // A plpgsql body: it raises PROFILE_ITEM_LIMIT, PROFILE_ITEM_DATA and PROFILE_ITEM_MISSING.
       { name: 'crm_save_profile_item', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       // A plpgsql body: it raises PROFILE_MISSING for a person who has no page to share.
