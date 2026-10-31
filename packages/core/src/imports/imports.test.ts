@@ -1053,3 +1053,29 @@ describe('importing into a list (spec 0048, AC-4833)', () => {
     ).toMatchObject({ code: 'CONFIG_INVALID' });
   });
 });
+
+describe('an import files people under their companies (spec 0059, AC-5916)', () => {
+  it('links rows at one new domain to one company it makes, counts it, and its undo takes the company back', async () => {
+    const w = await world();
+    const companiesOf = () =>
+      testQuery<{ id: string; deleted: boolean; linked: number }>(
+        ownerUrl,
+        `select r.id::text, r.deleted_at is not null as deleted,
+           (select count(*)::int from record_links l where l.active_until is null
+             and (l.from_record_id = r.id or l.to_record_id = r.id)) as linked
+         from records r join objects o on o.id = r.object_id
+         where r.workspace_id = $1 and o.standard_key = 'companies'`,
+        [w.workspaceId],
+      );
+    const { id, view } = await runImport(w, w.owner, w.settings(), [
+      w.row(2, 'Cy', 'cy@umbrella.io'),
+      w.row(3, 'Dot', 'dot@eu.umbrella.io'),
+      w.row(4, 'Eve', 'eve@gmail.com'),
+    ]);
+    expect(view.counts).toMatchObject({ created: 3, refused: 0 });
+    expect(await companiesOf()).toEqual([{ id: expect.any(String) as string, deleted: false, linked: 2 }]);
+    const undoing = await undoImport(w.owner, registry, id, [outboxHook()]);
+    expect((await drive(runnerFor(registry), w.workspaceId, undoing.undoJobId ?? '')).at(-1)).toBe('succeeded');
+    expect((await companiesOf()).map((each) => each.deleted)).toEqual([true]);
+  });
+});

@@ -4,6 +4,7 @@
 // audit hook; a hook that throws rolls the whole write back.
 import type { WorkspaceTx } from '@crm/db';
 import type { EngineRefusal } from '@crm/contracts/values';
+import { takeRecordSlots } from './limits.ts';
 import { isRefusal, postgresError, refuse } from './refusals.ts';
 import type { Actor, EngineScope } from './scope.ts';
 import { inWorkspace } from '../access/run.ts';
@@ -410,6 +411,15 @@ export interface WriteContext {
   perRecord<T>(
     work: (context: WriteContext) => Promise<T>,
   ): Promise<{ ok: true; value: T } | { ok: false; refusals: readonly EngineRefusal[] }>;
+  /**
+   * Counts `amount` live record slots the write takes at its end, in one `takeRecordSlots` after `work` (spec
+   * 0059): the workspace counter row is then the last lock every write takes, so it is never part of a lock cycle
+   * (a person's company filing takes a domain lock mid write), and it is held only for the end of the write. A
+   * savepoint's refusal gives back what it counted.
+   */
+  deferSlots(amount: number): void;
+  /** The slots counted so far, for a record's own room check beside the live count (`checkRecordRoom`). */
+  deferredSlots(): number;
 }
 
 /**
@@ -482,9 +492,15 @@ export async function runWrite<T>(
           notifications: [] as string[],
           calendars: [] as string[],
         };
+        // Record slots the write takes at its end; local to this attempt.
+        let slots = 0;
         const context: WriteContext = {
           tx,
           scope,
+          deferSlots(amount) {
+            slots += amount;
+          },
+          deferredSlots: () => slots,
           activeMembers: new Set<string>(),
           rules: new Map<string, RuleCache>(),
           record(part) {
@@ -522,6 +538,7 @@ export async function runWrite<T>(
           },
           async perRecord(step) {
             const marks = LIST_KEYS.map((key) => collected[key].length);
+            const slotsBefore = slots;
             try {
               const value = await tx.transaction((savepoint) => step({ ...context, tx: savepoint }));
               return { ok: true, value };
@@ -530,11 +547,14 @@ export async function runWrite<T>(
               LIST_KEYS.forEach((key, index) => {
                 collected[key].length = marks[index] ?? 0;
               });
+              slots = slotsBefore;
               return { ok: false, refusals: error.refusals };
             }
           },
         };
         const result = await work(context);
+        // The record slots the work counted, last of its locks, before the hooks number the change from the row.
+        if (slots !== 0) await takeRecordSlots(tx, scope, slots);
         // The full change: the outbox hook caps its own copy with `capChange`, and the audit log names every record.
         const change: Change = {
           kind,

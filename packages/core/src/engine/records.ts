@@ -3,6 +3,7 @@
 // runs inside withWorkspace().
 import { and, asc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
 import { schema, type WorkspaceTx } from '@crm/db';
+import type { FiledCompany } from '@crm/contracts';
 import {
   AttributeDefault,
   defaultKindsFor,
@@ -11,10 +12,12 @@ import {
   type Hue,
   type RecordRefDisplay,
 } from '@crm/contracts/values';
-import { takeRecordSlots } from './limits.ts';
+import { fileCompany, type FilingSlots, type FilingWrites } from './filing.ts';
+import { checkRecordRoom } from './limits.ts';
 import { decodeValue, encodeValue, sameItems } from './columns.ts';
 import { openThreadCounts } from '../comments/counts.ts';
 import { canonicalId, canonicalKeys, checkId, isUuid, isUuidV7 } from './ids.ts';
+import { companyLogoPath } from './logos.ts';
 import { isRefusal, postgresError, refuse, refuseAll, versionChangedMessage } from './refusals.ts';
 import { actorRow, type Actor, type EngineScope } from './scope.ts';
 import { resolveNewOptions } from './new-option.ts';
@@ -363,6 +366,12 @@ export interface InsertKnown {
   readonly attributes: ReadonlyMap<string, AttributeDef>;
   /** The caller takes the batch's record slots itself, last, with `takeRecordSlots`. */
   readonly countsSlots: true;
+  /**
+   * How many more records the batch may make beside this one: a person's company filing (spec 0059) makes a
+   * company only within it, and the caller counts one from the answer's `filedCompany.made`. None when absent, so
+   * filing only links a company that exists.
+   */
+  readonly fileRoom?: number;
 }
 
 /** Creates a record with its first values, defaults filled in and required ones checked (AC-1, AC-2, AC-11, AC-13, AC-16). */
@@ -446,11 +455,11 @@ function creatorOwns(
 
 /**
  * Creates one record inside a write (shared by single creates and batches).
- * Its record slot is taken last, after the record and its values are
- * written, as every write takes the workspace counter row last: the row is
- * held only for the end of the transaction, and a create never holds it
- * while it waits on another write's unique value. A full workspace refuses
- * there, and the refusal rolls the record and its values back.
+ * Its record slot is counted with the write's (`deferSlots`) and taken at
+ * the write's end, as every write takes the workspace counter row last: the
+ * row is held only for the end of the transaction, and a create never holds
+ * it while it waits on another write's unique value or a company filing's
+ * domain lock. A full workspace refuses the record here, with its values.
  */
 export async function insertRecord(context: WriteContext, input: RecordInput, known?: InsertKnown) {
   const { tx, scope } = context;
@@ -511,10 +520,38 @@ export async function insertRecord(context: WriteContext, input: RecordInput, kn
   // (up to 10 minutes is let through) would sort after later writes' versions, so those creates mint as any write
   // does, and their first values show as entries of their own.
   const versions = await writeAll(context, 'record', recordId, parsed, stampable ? recordId : undefined, hold);
-  if (known === undefined) await takeRecordSlots(tx, scope, 1);
+  // The record's slot is counted now and taken at the write's end (spec 0059), so the counter row is the last
+  // lock this write takes; a record past the limit is still refused here, on its own.
+  if (known === undefined) {
+    await checkRecordRoom(tx, scope, context.deferredSlots() + 1);
+    context.deferSlots(1);
+  }
+  // A person's company from their email (spec 0059).
+  const filedCompany = await fileCompany(
+    context,
+    {
+      personId: recordId,
+      objectId,
+      attributes,
+      written: writtenIds(versions),
+      slots: known === undefined ? 'deferred' : { room: known.fileRoom ?? 0 },
+    },
+    FILING_WRITES,
+  );
   // The object's attributes go back too, so a read back after the write doesn't load them again.
-  return { recordId, versions, objectId, attributes };
+  return { recordId, versions, objectId, attributes, ...(filedCompany === undefined ? {} : { filedCompany }) };
 }
+
+/** The attributes a write gave a new version. */
+function writtenIds(results: Readonly<Record<string, AttributeResult>>): ReadonlySet<string> {
+  return new Set(Object.entries(results).flatMap(([id, result]) => (result.versionId === undefined ? [] : [id])));
+}
+
+/** The writes a company filing makes (spec 0059), handed to it so `filing.ts` never imports this file. */
+const FILING_WRITES: FilingWrites = {
+  insert: (context, input, known) => insertRecord(context, input, known),
+  update: (context, input) => updateRecord(context, input),
+};
 
 /** Sets values on a record, or on a list entry, all or none (AC-3, AC-6, AC-12, AC-13). */
 export async function setValues(
@@ -594,10 +631,14 @@ async function updateOwner(
    * partly holds never replaces the whole one.
    */
   deltasOnly = false,
+  /** How a company the person's filing makes is counted (spec 0059): its slot taken at once, unless a batch says. */
+  slots: FilingSlots = 'deferred',
 ): Promise<{
   results: Record<string, AttributeResult>;
   objectId?: string;
   attributes: ReadonlyMap<string, AttributeDef>;
+  /** The company a person's email filed them under (spec 0059); absent when nothing was filed. */
+  filedCompany?: FiledCompany;
 }> {
   const { tx } = context;
   const { ownerKind, ownerId, objectId, entry, attributes } = await lockOwner(tx, input, context.scope.access, visible);
@@ -641,7 +682,16 @@ async function updateOwner(
     // The entry's own values changed: its list's screens read it again (spec 0007, AC-80).
     if (entry !== undefined) context.record({ changedEntries: [entry] });
   }
-  return objectId === undefined ? { results, attributes } : { results, objectId, attributes };
+  if (objectId === undefined) return { results, attributes };
+  // A person whose emails changed and whose Company is empty: filed under their company (spec 0059).
+  const filedCompany = await fileCompany(
+    context,
+    { personId: ownerId, objectId, attributes, written: writtenIds(results), slots },
+    FILING_WRITES,
+  );
+  return filedCompany === undefined
+    ? { results, objectId, attributes }
+    : { results, objectId, attributes, filedCompany };
 }
 
 /**
@@ -729,6 +779,19 @@ export async function updateRecord(
 }
 
 /**
+ * `updateRecord` for a batch that counts its own record slots (an import, spec 0040): a company the person's
+ * filing makes (spec 0059) fits in `room` and takes no slot, and the answer's `filedCompany` says so.
+ */
+export async function updateRecordInBatch(
+  context: WriteContext,
+  input: RecordValues,
+  room: number,
+): Promise<{ readonly results: Record<string, AttributeResult>; readonly filedCompany?: FiledCompany }> {
+  const { results, filedCompany } = await updateOwner(context, input, undefined, false, false, { room });
+  return filedCompany === undefined ? { results } : { results, filedCompany };
+}
+
+/**
  * The batch's records the principal may see under a record rule, found in one
  * read per ruled object before the batch starts, so each record's lock doesn't
  * ask again (spec 0009). Nothing is read under the open policy.
@@ -764,27 +827,47 @@ export async function setRecordValues(
   scope: EngineScope,
   input: RecordValues,
   hooks: readonly AfterWrite[] = [],
-  /** Refuse a side that holds many, as the API's `records.setValues` does (spec 0014, AC-294). */
-  options: { readonly deltasOnly?: boolean } = {},
+  /**
+   * Refuse a side that holds many, as the API's `records.setValues` does (spec 0014, AC-294); with `noFiling`, an
+   * undo's write, file no company (spec 0059).
+   */
+  options: { readonly deltasOnly?: boolean; readonly noFiling?: boolean } = {},
 ): Promise<{
   readonly results: Record<string, AttributeResult>;
   readonly attributesByObject: ReadonlyMap<string, ReadonlyMap<string, AttributeDef>>;
+  /** The company the person's email filed them under (spec 0059); absent when nothing was filed. */
+  readonly filedCompany?: FiledCompany;
 }> {
   const { result } = await runWrite(
     scope,
-    (context) => updateOwner(context, input, undefined, true, options.deltasOnly === true),
+    (context) =>
+      updateOwner(
+        context,
+        input,
+        undefined,
+        true,
+        options.deltasOnly === true,
+        options.noFiling === true ? 'off' : 'deferred',
+      ),
     hooks,
   );
-  const { objectId } = result;
+  const { objectId, filedCompany } = result;
   return {
     results: result.results,
     attributesByObject: objectId === undefined ? new Map() : new Map([[objectId, result.attributes]]),
+    ...(filedCompany === undefined ? {} : { filedCompany }),
   };
 }
 
 /** One record's outcome in a batch. */
 export type BatchResult =
-  | { readonly recordId: string; readonly ok: true; readonly results: Record<string, AttributeResult> }
+  | {
+      readonly recordId: string;
+      readonly ok: true;
+      readonly results: Record<string, AttributeResult>;
+      /** The company the person's email filed them under (spec 0059); absent when nothing was filed. */
+      readonly filedCompany?: FiledCompany;
+    }
   | { readonly recordId: string; readonly ok: false; readonly refusals: readonly EngineRefusal[] };
 
 /** The most records one batch may change. */
@@ -812,7 +895,12 @@ export async function setValuesBatch(
  */
 export async function setRecordValuesBatch(
   scope: EngineScope,
-  input: { readonly items: readonly RecordValues[]; readonly timeZone?: string },
+  input: {
+    readonly items: readonly RecordValues[];
+    readonly timeZone?: string;
+    /** An undo's write: it files no company (spec 0059). */
+    readonly noFiling?: boolean;
+  },
   hooks: readonly AfterWrite[] = [],
 ): Promise<{
   readonly outcomes: readonly BatchResult[];
@@ -831,15 +919,28 @@ export async function setRecordValuesBatch(
       const visible = await batchVisible(context, input.items);
       for (const item of input.items) {
         const outcome = await context.perRecord((child) =>
-          updateOwner(child, input.timeZone === undefined ? item : { ...item, timeZone: input.timeZone }, visible),
+          updateOwner(
+            child,
+            input.timeZone === undefined ? item : { ...item, timeZone: input.timeZone },
+            visible,
+            false,
+            false,
+            input.noFiling === true ? 'off' : 'deferred',
+          ),
         );
         const recordId = canonicalId(item.recordId);
         if (outcome.ok && outcome.value.objectId !== undefined) {
           attributesByObject.set(outcome.value.objectId, outcome.value.attributes);
         }
+        const filed = outcome.ok ? outcome.value.filedCompany : undefined;
         outcomes.push(
           outcome.ok
-            ? { recordId, ok: true, results: outcome.value.results }
+            ? {
+                recordId,
+                ok: true,
+                results: outcome.value.results,
+                ...(filed === undefined ? {} : { filedCompany: filed }),
+              }
             : { recordId, ok: false, refusals: outcome.refusals },
         );
       }
@@ -890,6 +991,42 @@ export function bucketItems<T extends { readonly ownerId: string; readonly attri
     list.push(item);
   }
   return (ownerId, attributeId) => byOwner.get(ownerId)?.get(attributeId) ?? [];
+}
+
+/**
+ * Each Companies object's Domains attribute, by object id, where the reader may see it (spec 0059, AC-5907): the
+ * standard object's live `domains`, found by api slug and type as filing finds it. A workspace that archived or
+ * retyped it, a custom object, and a reader a field rule hides it from all get no logo.
+ */
+function logoAttributesOf(
+  objectRows: readonly { readonly id: string; readonly standardKey: string | null }[],
+  attributesByObject: ReadonlyMap<string, ReadonlyMap<string, AttributeDef>>,
+  access: Access,
+): ReadonlyMap<string, string> {
+  const found = new Map<string, string>();
+  for (const object of objectRows) {
+    if (object.standardKey !== 'companies') continue;
+    const domains = [...(attributesByObject.get(object.id)?.values() ?? [])].find(
+      (attribute) =>
+        attribute.apiSlug === 'domains' &&
+        attribute.type === 'domain' &&
+        !isArchivedNow(attribute) &&
+        attributeVisible(access, attribute),
+    );
+    if (domains !== undefined) found.set(object.id, domains.id);
+  }
+  return found;
+}
+
+/** A company's logo address from its Domains items: the value shown first (the lowest position), when it can have one. */
+function logoOf(
+  items: readonly { readonly position: number; readonly textValue: string | null }[],
+): string | undefined {
+  const first = items.reduce<(typeof items)[number] | undefined>(
+    (lowest, item) => (lowest === undefined || item.position < lowest.position ? item : lowest),
+    undefined,
+  );
+  return first === undefined || first.textValue === null ? undefined : companyLogoPath(first.textValue);
 }
 
 /** What a read of records may be given: the attributes wanted, and attributes already loaded. */
@@ -1000,10 +1137,14 @@ export async function readRecords(
   // The record's name needs its primary attribute, even when the caller asked for other attributes only.
   const primaryIds = objectRows.flatMap((row) => (row.primaryAttributeId === null ? [] : [row.primaryAttributeId]));
   const wanted = input.attributeIds === undefined ? undefined : [...input.attributeIds, ...primaryIds];
+  // A company's picture is its logo, named by its first Domains value (spec 0059, AC-5901), so Domains is read in the
+  // same statement as the name, even by a caller that asked for no attributes. Only where the reader may see Domains:
+  // hidden means absent, and the logo's address would carry the domain (AC-5907).
+  const logoAttributes = logoAttributesOf(objectRows, attributesByObject, access);
   const items = await currentItems(
     tx,
     rows.map((row) => row.id),
-    wanted,
+    wanted === undefined ? undefined : [...wanted, ...logoAttributes.values()],
     { withCleared: true },
   );
   // The attributes a read returns: those asked for and the primary (spec 0006, AC-55), or every one.
@@ -1096,11 +1237,14 @@ export async function readRecords(
       const primary = primaryDef !== undefined && attributeVisible(access, primaryDef) ? primaryDef : undefined;
       const name = primary === undefined ? '' : nameOf(decodeValue(primary.type, false, primaryItems));
       const hue = object === undefined ? undefined : hueOf(object.hue);
+      const logoAttribute = logoAttributes.get(row.objectId);
+      const imageSrc = logoAttribute === undefined ? undefined : logoOf(itemsOf(row.id, logoAttribute));
       const display: RecordRefDisplay = {
         objectId: row.objectId,
         recordId: row.id,
         name: name === '' ? `Unnamed ${(object?.singularName ?? 'record').toLowerCase()}` : name,
         kind: object?.standardKey === 'people' ? 'person' : object?.standardKey === 'companies' ? 'company' : 'other',
+        ...(imageSrc === undefined ? {} : { imageSrc }),
         ...(hue === undefined ? {} : { hue }),
       };
       // The four system fields at the top level follow their attributes' field rules, as `values` does.

@@ -321,6 +321,7 @@ import type {
   CellChange,
   DeleteResult,
   EditOutcome,
+  FiledNotice,
   LinkCell,
   LinkChange,
   LinkOutcome,
@@ -822,10 +823,12 @@ export type {
   CellChange,
   DeleteResult,
   EditOutcome,
+  FiledNotice,
   LinkCell,
   LinkChange,
   LinkOutcome,
   RecordsView,
+  UnfileOutcome,
   ViewQuery,
   ViewReader,
   ViewState,
@@ -1142,6 +1145,12 @@ export interface DataLayerOptions {
    */
   readonly onReplaced?: (replaced: ReplacedValue) => void;
   /**
+   * A write of this tab filed people under their companies by their emails
+   * (spec 0059, AC-5920): the app raises "Linked to Acme" or "Added Acme and
+   * linked it" in its own words, with an Undo that takes back just the filing.
+   */
+  readonly onFiled?: (filed: FiledNotice) => void;
+  /**
    * A background job this browser started has ended while the app is open
    * (spec 0008, AC-119): the app raises its toast ("Done", "Done, 6
    * refused", "Failed", "Cancelled") with a link to the job.
@@ -1198,6 +1207,7 @@ export function createDataLayer({
   realtimeUrl,
   onDefinitionsChange = () => undefined,
   onReplaced = () => undefined,
+  onFiled = () => undefined,
   onJobFinished = () => undefined,
   loadLive = () => import('./live/live.ts'),
   report = () => undefined,
@@ -3586,6 +3596,7 @@ export function createDataLayer({
           onReplaced: (notice) => {
             void tellReplaced(notice);
           },
+          onFiled,
           describe: describeObject,
           definitionsOf,
           // Relative dates ("today", "this week") and rules resolve in the member's Preferences time zone.

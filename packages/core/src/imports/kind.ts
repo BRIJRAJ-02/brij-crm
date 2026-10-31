@@ -14,7 +14,7 @@
 // entry's values; the entry it added is kept on the row for the undo.
 import { and, eq, sql } from 'drizzle-orm';
 import * as z from 'zod';
-import { ImportSettings, type EngineRefusal } from '@crm/contracts';
+import { ImportSettings, type EngineRefusal, type FiledCompany } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { canonicalId } from '../engine/ids.ts';
 import { checkObject } from '../access/visibility.ts';
@@ -22,7 +22,7 @@ import { memberScopeIn, type RuleSource } from '../access/door.ts';
 import { objectLevel } from '../access/policy.ts';
 import { queueImportFinished } from '../emails/queue.ts';
 import { limitsOf, takeRecordSlots } from '../engine/limits.ts';
-import { insertRecord, readRecords, updateRecord } from '../engine/records.ts';
+import { insertRecord, readRecords, updateRecord, updateRecordInBatch } from '../engine/records.ts';
 import { addEntryIn, checkWritableList } from '../engine/lists.ts';
 import { isRefusal, refuse } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
@@ -321,7 +321,13 @@ async function importRow(
   plan: ImportPlan,
   row: StagedRow,
   batch: BatchState,
-): Promise<{ readonly result: RowResult; readonly stored: StoredOutcome; readonly made: ReadonlyMap<string, Made> }> {
+): Promise<{
+  readonly result: RowResult;
+  readonly stored: StoredOutcome;
+  readonly made: ReadonlyMap<string, Made>;
+  /** A company the person's filing made (spec 0059): the batch counts it, and the import's undo takes it back. */
+  readonly filed?: Made;
+}> {
   const { tx, scope } = context;
   const { settings } = plan;
   const matchId =
@@ -377,24 +383,31 @@ async function importRow(
     const created = await insertRecord(
       context,
       { objectId: plan.objectId, values: Object.fromEntries(values) },
-      { attributes: plan.attributes, countsSlots: true },
+      // What room the batch has beside this row's records: a company the person's filing makes fits in it.
+      { attributes: plan.attributes, countsSlots: true, fileRoom: batch.room - made.size - 1 },
     );
+    const filed = madeByFiling(created.filedCompany);
     // The versions the create wrote, kept as an update's are: the undo reads them to tell a record nobody has
-    // touched since from one that has been worked on, and never trashes the second.
-    const wrote = Object.fromEntries(
-      Object.entries(created.versions).flatMap(([id, result]) =>
-        result.versionId === undefined ? [] : [[id, result.versionId]],
+    // touched since from one that has been worked on, and never trashes the second. Its company link is the row's
+    // own write too (spec 0059).
+    const wrote = {
+      ...Object.fromEntries(
+        Object.entries(created.versions).flatMap(([id, result]) =>
+          result.versionId === undefined ? [] : [[id, result.versionId]],
+        ),
       ),
-    );
+      ...linkWritten(created.filedCompany),
+    };
     return {
       result: { outcome: 'created', ...(note === undefined ? {} : { note }) },
       stored: {
-        ...base,
+        ...withFiled(base, filed),
         outcome: 'created',
         record_id: created.recordId,
         ...(Object.keys(wrote).length === 0 ? {} : { written: wrote }),
       },
       made,
+      ...(filed === undefined ? {} : { filed }),
     };
   }
 
@@ -418,16 +431,27 @@ async function importRow(
     before[attributeId] = versionId === undefined ? { value: held } : { value: held, versionId };
   }
   if (Object.keys(next).length === 0) return skipped;
-  const results = await updateRecord(context, { recordId: matchId, values: next });
-  const written = Object.fromEntries(
-    Object.entries(results).flatMap(([id, result]) => (result.versionId === undefined ? [] : [[id, result.versionId]])),
+  const { results, filedCompany } = await updateRecordInBatch(
+    context,
+    { recordId: matchId, values: next },
+    batch.room - made.size,
   );
+  const filed = madeByFiling(filedCompany);
+  const written = {
+    ...Object.fromEntries(
+      Object.entries(results).flatMap(([id, result]) =>
+        result.versionId === undefined ? [] : [[id, result.versionId]],
+      ),
+    ),
+    ...linkWritten(filedCompany),
+  };
   if (Object.keys(written).length === 0) return skipped;
   const kept = Object.fromEntries(Object.entries(before).filter(([id]) => Object.hasOwn(written, id)));
   return {
     result: { outcome: 'updated', ...(note === undefined ? {} : { note }) },
-    stored: { ...base, outcome: 'updated', record_id: matchId, before: kept, written },
+    stored: { ...withFiled(base, filed), outcome: 'updated', record_id: matchId, before: kept, written },
     made,
+    ...(filed === undefined ? {} : { filed }),
   };
 }
 
@@ -454,7 +478,7 @@ async function importRowInto(
   plan: ImportPlan,
   row: StagedRow,
   batch: BatchState,
-): Promise<{ readonly result: RowResult; readonly stored: StoredOutcome; readonly made: ReadonlyMap<string, Made> }> {
+): ReturnType<typeof importRow> {
   const done = await importRow(context, plan, row, batch);
   const recordId = done.stored.record_id;
   if (plan.listId === undefined || recordId === undefined) return done;
@@ -471,7 +495,23 @@ async function importRowInto(
     result: { ...done.result, outcome: changed },
     stored: { ...done.stored, outcome: changed, ...(entry.existing ? {} : { entry_id: entry.entryId }) },
     made: done.made,
+    ...(done.filed === undefined ? {} : { filed: done.filed }),
   };
+}
+
+/** The company a row's filing made, when it made one (spec 0059); one it only linked is no row's to take back. */
+function madeByFiling(filed: FiledCompany | undefined): Made | undefined {
+  return filed?.made === true ? { objectId: filed.objectId, recordId: filed.recordId } : undefined;
+}
+
+/** The Company link a row's filing wrote, by attribute, as the row's own written versions (spec 0059). */
+function linkWritten(filed: FiledCompany | undefined): Record<string, string> {
+  return filed === undefined ? {} : { [filed.attributeId]: filed.linkVersionId };
+}
+
+/** A row's stored far records with the company its filing made added, so the import's undo takes it back too. */
+function withFiled(base: Omit<StoredOutcome, 'outcome'>, filed: Made | undefined): Omit<StoredOutcome, 'outcome'> {
+  return filed === undefined ? base : { ...base, made: [...(base.made ?? []), filed] };
 }
 
 /** Stores the batch's outcomes in one statement (each row by its number). */
@@ -691,6 +731,11 @@ export function recordsImport(rules?: RuleSource): KindDefinition<ImportJobParam
             const names = batch.resolved.get(attributeId) ?? new Map<string, Resolved>();
             names.set(key.slice(split + 1), { ok: true, ...link });
             batch.resolved.set(attributeId, names);
+            batch.room -= 1;
+            batch.created += 1;
+          }
+          // A company the row's filing made (spec 0059) counts against the record limit as a far record does.
+          if (result.value.filed !== undefined) {
             batch.room -= 1;
             batch.created += 1;
           }

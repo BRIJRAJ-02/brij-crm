@@ -191,7 +191,12 @@ export const recordsRouter = member.records.router({
           hooks,
         ),
       );
-      return { ...result.record, written: result.written, echoes };
+      return {
+        ...result.record,
+        written: result.written,
+        ...(result.filedCompany === undefined ? {} : { filedCompany: result.filedCompany }),
+        echoes,
+      };
     } catch (error) {
       throw withInputFields(error, { ID_TAKEN: 'id' });
     }
@@ -204,18 +209,28 @@ export const recordsRouter = member.records.router({
           recordId: input.recordId,
           values: input.values,
           ...(input.timeZone === undefined ? {} : { timeZone: input.timeZone }),
+          ...(input.noFiling === true ? { noFiling: true } : {}),
         },
         hooks,
       ),
     );
-    return { ...result.record, written: result.written, echoes };
+    return {
+      ...result.record,
+      written: result.written,
+      ...(result.filedCompany === undefined ? {} : { filedCompany: result.filedCompany }),
+      echoes,
+    };
   }),
   // One write for up to 500 records (spec 0006, AC-50): 200 with each record's outcome.
   setValuesBatch: member.records.setValuesBatch.handler(async ({ context, input }) => {
     const { result, echoes } = await commitCounted(context, { mutationId: input.mutationId }, (hooks) =>
       editRecords(
         context.scope,
-        { items: input.items, ...(input.timeZone === undefined ? {} : { timeZone: input.timeZone }) },
+        {
+          items: input.items,
+          ...(input.timeZone === undefined ? {} : { timeZone: input.timeZone }),
+          ...(input.noFiling === true ? { noFiling: true } : {}),
+        },
         hooks,
       ),
     );
@@ -226,7 +241,12 @@ export const recordsRouter = member.records.router({
     const { result, echoes } = await commitCounted(context, { mutationId: input.mutationId }, (hooks) =>
       deleteRecords(
         context.scope,
-        { objectId: input.objectId, recordIds: input.recordIds, batchId: input.batchId },
+        {
+          objectId: input.objectId,
+          recordIds: input.recordIds,
+          batchId: input.batchId,
+          ...(input.unlinkedOnly === true ? { unlinkedOnly: true } : {}),
+        },
         hooks,
       ),
     );

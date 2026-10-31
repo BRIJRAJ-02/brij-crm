@@ -79,6 +79,18 @@ Fill in company and person details automatically from a domain or email address.
 **Done when:** a new company with a domain gets its logo, description, industry, size, location and social links filled in; people get job title and profiles where available; enriched values never overwrite what a person typed; enrichment counts against the plan.
 Taken out of the plan by you on 23 October 2026 (it needs a paid provider).
 
+### 67. Company logos and company from email domain · in-progress
+The free part of enrichment: a company shows its own site's icon, and a person with a work email is linked to the company holding that domain, made when none does. From the owner's 30 October 2026 parity list.
+**Done when:** a company with a domain shows its site's icon everywhere its picture shows, served from our own address; a person written by any path with a work email and no Company is linked to the company holding the domain, or a new one named from it; free mail domains never do this; a Company someone set is never replaced; the app offers Undo.
+Spec [0059](../specs/0059-company-logos-email-domain/index.md)
+- [x] Design it (spec): `/architect company logos and company from email domain`
+- [ ] Build it: `/develop company logos and company from email domain`
+  - [ ] Milestone 1: filing in the engine for every write path, with its answer field, AC-5911 to AC-5919
+  - [ ] Milestone 2: Undo and live updates in the app, AC-5920, AC-5921
+  - [ ] Milestone 3: the logo route and company pictures, AC-5901 to AC-5907
+- [ ] Verify it: `/check verify company logos and company from email domain`
+- [ ] Test it: `/test company logos and company from email domain`
+
 ## Slice 15: Forms, Slack and Zapier
 
 ### 48. Forms · GA · in-progress

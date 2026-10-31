@@ -40,15 +40,15 @@ async function person(m: Member, firstName: string, email: string): Promise<stri
 describe('search.query', () => {
   it('finds a person by name and by email, and the default view by name', async () => {
     const m = await memberWithWorkspace(app);
-    const grace = await person(m, 'Grace', 'grace@navy.mil');
+    const grace = await person(m, 'Grace', 'grace@navy.example');
     const byName = await m.client.search.query({ workspace: m.slug, query: 'grace' });
     expect(byName.records).toHaveLength(1);
     expect(byName.records[0]).toMatchObject({
       ref: { recordId: grace, name: 'Grace' },
-      detail: 'grace@navy.mil',
+      detail: 'grace@navy.example',
       match: 'prefix',
     });
-    const byEmail = await m.client.search.query({ workspace: m.slug, query: 'navy.mil' });
+    const byEmail = await m.client.search.query({ workspace: m.slug, query: 'navy.example' });
     expect(byEmail.records.map((hit) => hit.ref.recordId)).toEqual([grace]);
     const views = await m.client.search.query({ workspace: m.slug, query: 'all people' });
     expect(views.views).toEqual([expect.objectContaining({ name: 'All People', isDefault: true })]);
@@ -69,7 +69,7 @@ describe('search.query', () => {
 describe('recents', () => {
   it('keeps what a member opened, newest first, and only for them', async () => {
     const m = await memberWithWorkspace(app);
-    const grace = await person(m, 'Grace', 'grace@navy.mil');
+    const grace = await person(m, 'Grace', 'grace@navy.example');
     const [view] = (await m.client.views.list({ workspace: m.slug, objectId: m.people.id })).views;
     const viewId = view?.id ?? '';
     await m.client.recents.visit({ workspace: m.slug, kind: 'view', id: viewId });

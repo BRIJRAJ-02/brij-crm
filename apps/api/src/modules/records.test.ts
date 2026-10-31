@@ -40,6 +40,7 @@ async function createPerson(m: Member, first: string, email?: string, id = newId
   const {
     echoes: _echoes,
     written: _written,
+    filedCompany: _filedCompany,
     ...record
   } = await m.client.records.create({
     workspace: m.slug,
@@ -245,6 +246,92 @@ describe('records.create', () => {
       code: 'NOT_FOUND',
       status: 404,
     });
+  });
+});
+
+describe('company from email domain on a write (spec 0059, AC-5916, AC-5920)', () => {
+  it('links a new person to the company their work email names, made when none holds it, and answers it', async () => {
+    const m = await memberWithWorkspace(app);
+    const made = await m.client.records.create({
+      workspace: m.slug,
+      objectId: m.people.id,
+      id: newId(),
+      values: {
+        [m.attribute('name')]: { firstName: 'Jane' },
+        [m.attribute('email_addresses')]: ['jane@initech.com'],
+      },
+      mutationId: newId(),
+    });
+    expect(made.filedCompany).toMatchObject({
+      objectId: m.companies.id,
+      name: 'Initech',
+      made: true,
+      attributeId: m.attribute('company'),
+    });
+    // The person's own answer already shows the link, and the write's events carry the company too.
+    expect(made.values[m.attribute('company')]).toMatchObject({
+      objectId: m.companies.id,
+      recordId: made.filedCompany?.recordId,
+    });
+    expect(made.echoes).toBe(2);
+
+    const edited = await m.client.records.create({
+      workspace: m.slug,
+      objectId: m.people.id,
+      id: newId(),
+      values: { [m.attribute('name')]: { firstName: 'Sam' }, [m.attribute('email_addresses')]: ['sam@gmail.com'] },
+      mutationId: newId(),
+    });
+    expect(edited.filedCompany).toBeUndefined();
+    const moved = await m.client.records.setValues({
+      workspace: m.slug,
+      recordId: edited.id,
+      values: { [m.attribute('email_addresses')]: { value: ['sam@eu.initech.com'] } },
+      mutationId: newId(),
+    });
+    expect(moved.filedCompany).toMatchObject({ recordId: made.filedCompany?.recordId, made: false });
+  });
+
+  it('moves a filed company to the trash only while nothing links to it (unlinkedOnly)', async () => {
+    const m = await memberWithWorkspace(app);
+    const made = await m.client.records.create({
+      workspace: m.slug,
+      objectId: m.people.id,
+      id: newId(),
+      values: { [m.attribute('name')]: { firstName: 'Jo' }, [m.attribute('email_addresses')]: ['jo@hooli.com'] },
+      mutationId: newId(),
+    });
+    const company = made.filedCompany?.recordId ?? '';
+    const kept = await m.client.records.deleteMany({
+      workspace: m.slug,
+      objectId: m.companies.id,
+      recordIds: [company],
+      batchId: newId(),
+      mutationId: newId(),
+      unlinkedOnly: true,
+    });
+    expect(kept.results).toEqual([
+      {
+        recordId: company,
+        state: 'refused',
+        refusal: { code: 'IN_USE', message: 'Other records link to it now, so it was kept.' },
+      },
+    ]);
+    await m.client.records.setValues({
+      workspace: m.slug,
+      recordId: made.id,
+      values: { [m.attribute('company')]: { value: null, ifVersionId: made.filedCompany?.linkVersionId ?? '' } },
+      mutationId: newId(),
+    });
+    const gone = await m.client.records.deleteMany({
+      workspace: m.slug,
+      objectId: m.companies.id,
+      recordIds: [company],
+      batchId: newId(),
+      mutationId: newId(),
+      unlinkedOnly: true,
+    });
+    expect(gone.results).toEqual([{ recordId: company, state: 'deleted' }]);
   });
 });
 

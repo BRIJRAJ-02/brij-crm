@@ -3,7 +3,14 @@
 // it), and setting values, each write answering the fresh record. Every read
 // and write goes through the scope the access door made.
 import { and, eq, isNotNull } from 'drizzle-orm';
-import type { BatchRecordResult, RecordPage, RecordView, TrashedRecord, UpdateOutcome } from '@crm/contracts';
+import type {
+  BatchRecordResult,
+  FiledCompany,
+  RecordPage,
+  RecordView,
+  TrashedRecord,
+  UpdateOutcome,
+} from '@crm/contracts';
 import type { FilterGroup, SortRules } from '@crm/contracts/values';
 import { schema } from '@crm/db';
 import { updateMany, type BulkEditInput } from '../engine/bulk-edit.ts';
@@ -148,6 +155,8 @@ export async function readTrashedRecord(scope: EngineScope, recordId: string): P
 export interface WrittenView {
   readonly record: RecordView;
   readonly written: Readonly<Record<string, string>>;
+  /** The company the person's email filed them under in this write (spec 0059); absent when nothing was filed. */
+  readonly filedCompany?: FiledCompany;
 }
 
 /** The versions a write made, by attribute id; an unchanged attribute is left out. */
@@ -217,7 +226,7 @@ export async function addRecord(
     throw inputInvalid('id', CLOCK_SKEW_MESSAGE);
   }
   try {
-    const { recordId, objectId, attributes, versions } = await createRecord(
+    const { recordId, objectId, attributes, versions, filedCompany } = await createRecord(
       scope,
       {
         objectId: input.objectId,
@@ -231,6 +240,7 @@ export async function addRecord(
       return {
         record: await freshRecord(scope, recordId, new Map([[objectId, attributes]])),
         written: writtenOf(versions),
+        ...(filedCompany === undefined ? {} : { filedCompany }),
       };
     } catch (error) {
       // Made with an owner outside the maker's scope (spec 0032, AC-848): it exists, and its maker can't see it.
@@ -285,6 +295,8 @@ export interface EditRecordInput {
   readonly values: Readonly<Record<string, ValueInput>>;
   /** The writer's time zone, for a rule's relative dates (spec 0013); UTC when absent. */
   readonly timeZone?: string | undefined;
+  /** An undo putting old values back: it files no company (spec 0059). */
+  readonly noFiling?: boolean | undefined;
 }
 
 /**
@@ -300,7 +312,7 @@ export async function editRecord(
   input: EditRecordInput,
   hooks: readonly AfterWrite[] = [],
 ): Promise<WrittenView> {
-  const { attributesByObject, results } = await setRecordValues(
+  const { attributesByObject, results, filedCompany } = await setRecordValues(
     scope,
     {
       recordId: input.recordId,
@@ -308,11 +320,15 @@ export async function editRecord(
       ...(input.timeZone === undefined ? {} : { timeZone: input.timeZone }),
     },
     hooks,
-    { deltasOnly: true },
+    { deltasOnly: true, ...(input.noFiling === true ? { noFiling: true } : {}) },
   );
   const recordId = canonicalId(input.recordId);
   try {
-    return { record: await freshRecord(scope, recordId, attributesByObject), written: writtenOf(results) };
+    return {
+      record: await freshRecord(scope, recordId, attributesByObject),
+      written: writtenOf(results),
+      ...(filedCompany === undefined ? {} : { filedCompany }),
+    };
   } catch (error) {
     // The write committed, but a record rule now hides the record from its writer (spec 0032, AC-848): say so, once.
     if (isRefusal(error) && error.refusal.code === 'RECORD_DELETED') {
@@ -332,6 +348,8 @@ export interface EditRecordsInput {
   readonly items: readonly EditRecordInput[];
   /** The writer's time zone, for every record's rules (spec 0013); UTC when absent. */
   readonly timeZone?: string | undefined;
+  /** An undo putting old values back: it files no company (spec 0059). */
+  readonly noFiling?: boolean | undefined;
 }
 
 /** What a record that landed and then went to the trash before its read back answers. */
@@ -353,7 +371,11 @@ export async function editRecords(
 ): Promise<BatchRecordResult[]> {
   const { outcomes, attributesByObject } = await setRecordValuesBatch(
     scope,
-    { items: input.items, ...(input.timeZone === undefined ? {} : { timeZone: input.timeZone }) },
+    {
+      items: input.items,
+      ...(input.timeZone === undefined ? {} : { timeZone: input.timeZone }),
+      ...(input.noFiling === true ? { noFiling: true } : {}),
+    },
     hooks,
   );
   const landed = [...new Set(outcomes.flatMap((outcome) => (outcome.ok ? [outcome.recordId] : [])))];
@@ -373,7 +395,14 @@ export async function editRecords(
         };
       }
       const record = byId.get(outcome.recordId);
-      if (record !== undefined) return { recordId: outcome.recordId, record, written: writtenOf(outcome.results) };
+      if (record !== undefined) {
+        return {
+          recordId: outcome.recordId,
+          record,
+          written: writtenOf(outcome.results),
+          ...(outcome.filedCompany === undefined ? {} : { filedCompany: outcome.filedCompany }),
+        };
+      }
       // Landed, then out of the writer's sight by their own record rule (spec 0032, AC-848), or in the trash.
       const sent = input.items.find((item) => canonicalId(item.recordId) === outcome.recordId);
       const message = await outOfScopeMessage(scope, outcome.recordId, attributeIdsOf(sent?.values ?? {}));
