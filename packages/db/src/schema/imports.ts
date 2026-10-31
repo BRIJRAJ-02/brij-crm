@@ -20,7 +20,7 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 import { timestamptz, workspaceId } from './common.ts';
-import { objects } from './definitions.ts';
+import { lists, objects } from './definitions.ts';
 import { members, workspaces } from './workspaces.ts';
 
 /** Where an import is: rows still arriving, its job started, or taken back. */
@@ -44,6 +44,8 @@ export const imports = pgTable(
     /** The browser's uuid v7: the idempotent create key, and the trash batch id its undo deletes with. */
     id: uuid('id').notNull(),
     objectId: uuid('object_id').notNull(),
+    /** The list the rows go into as entries (spec 0048, AC-4833), or null for a plain import into the object. */
+    listId: uuid('list_id'),
     fileName: text('file_name').notNull(),
     /** The file's data rows, and how many the browser set aside as unreadable. */
     rowCount: integer('row_count').notNull(),
@@ -70,6 +72,11 @@ export const imports = pgTable(
       foreignColumns: [objects.workspaceId, objects.id],
     }).onDelete('cascade'),
     foreignKey({
+      name: 'imports_list',
+      columns: [t.workspaceId, t.listId],
+      foreignColumns: [lists.workspaceId, lists.id],
+    }).onDelete('cascade'),
+    foreignKey({
       name: 'imports_created_by',
       columns: [t.workspaceId, t.createdByMemberId],
       foreignColumns: [members.workspaceId, members.id],
@@ -81,6 +88,9 @@ export const imports = pgTable(
     // The cascades from an object or a member.
     index('imports_by_object').on(t.workspaceId, t.objectId),
     index('imports_by_member').on(t.workspaceId, t.createdByMemberId),
+    index('imports_by_list')
+      .on(t.workspaceId, t.listId)
+      .where(sql`${t.listId} is not null`),
   ],
 );
 
@@ -113,6 +123,8 @@ export const importRows = pgTable(
     written: jsonb('written'),
     /** `[{ objectId, recordId }]`: far records this row's relation names made (`createMissing`), trashed by undo. */
     made: jsonb('made'),
+    /** The entry this row added to the import's list (spec 0048, AC-4833), which the import's undo takes out. */
+    entryId: uuid('entry_id'),
   },
   (t) => [
     primaryKey({ name: 'import_rows_pkey', columns: [t.workspaceId, t.importId, t.rowNumber] }),

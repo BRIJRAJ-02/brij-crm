@@ -19,11 +19,12 @@ import {
 } from '@crm/contracts/values';
 import { ruleKindFits, ruleKindsFor } from '@crm/contracts/validation';
 import { checkRuleSettings, type ConditionAttribute } from '@crm/contracts/values';
-import { useId, useRef, useState } from 'react';
+import { Activity, useEffect, useId, useRef, useState, type Ref } from 'react';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { CopyButton } from '../../atoms/Button/CopyButton.tsx';
 import { Checkbox } from '../../atoms/Checkbox/Checkbox.tsx';
 import { Link } from '../../atoms/Link/Link.tsx';
+import { focusLater } from '../../lib/focus-later.ts';
 import { Radio, RadioGroup } from '../../atoms/Radio/Radio.tsx';
 import { AttributeEditor, type AttributeEditorProps } from '../../fields/AttributeEditor.tsx';
 import { fieldTypeOf, typeLabelOf } from '../../fields/registry.ts';
@@ -149,7 +150,7 @@ export interface AttributeSettingsProps {
   readonly onOpenChange: (isOpen: boolean) => void;
   /** The attribute to edit; a new one is made when absent. */
   readonly attribute?: AttributeSettingsAttribute;
-  /** The picker's entries offered on create, by key (`PICKER_TYPES`), in the picker's order; all sixteen when absent. */
+  /** The picker's entries offered on create, by key (`PICKER_TYPES`), in the picker's order; all seventeen when absent. */
   readonly typeKeys?: readonly string[];
   /** On create, the picker's entry chosen at the start (`select` where a board needs one); the first offered when absent. */
   readonly initialTypeKey?: string;
@@ -227,6 +228,12 @@ export interface AttributeSettingsProps {
    */
   readonly onRecreate?: () => void;
   /**
+   * Editing: "Change type" under the type (the field types pass, 31 October 2026), for a type with a safe change
+   * (`typeChangeTargets`). The screen answers with `typeChangeStep` as the `step`. Shown in place of
+   * `onRecreate`'s link, which stays for the types with no safe change. None when absent.
+   */
+  readonly onChangeType?: () => void;
+  /**
    * Editing: what ticking Required or Unique would meet (flow pass, 30 October 2026), each `{ label, href }` linking
    * to the records ("12 records are empty", "3 values are shared"), shown under its box once ticked. None when absent.
    */
@@ -287,7 +294,8 @@ const OWN_LABELS: Readonly<Record<string, string>> = {
   link: strings.link,
   phone: strings.phone,
 };
-const pickerLabel = (entry: PickerType) => OWN_LABELS[entry.key] ?? typeLabelOf(entry.type);
+/** A picker entry's name: the picker's own label where it has one (Multi select, Link, Phone), else the type's. */
+export const pickerLabel = (entry: PickerType) => OWN_LABELS[entry.key] ?? typeLabelOf(entry.type);
 
 /** The settings that land on Form fields by name; the rest are drawn with their own `error`. */
 const FORM_FIELDS: ReadonlySet<string> = new Set(['title', 'apiSlug', 'description', 'offsetDays']);
@@ -334,6 +342,7 @@ export function AttributeSettings({
   step,
   onArchive,
   onRecreate,
+  onChangeType,
   requiredMeets,
   uniqueMeets,
 }: AttributeSettingsProps) {
@@ -342,6 +351,14 @@ export function AttributeSettings({
   const title = attribute === undefined ? strings.newTitle : isReadOnly ? strings.viewTitle : strings.editTitle;
   const archive =
     step === undefined && attribute !== undefined && !isReadOnly && onArchive !== undefined ? onArchive : undefined;
+  // Back from an edit's step puts focus on what opened it, "Change type…", as the step goes.
+  const changeTypeRef = useRef<HTMLButtonElement>(null);
+  const isStepShown = step !== undefined;
+  const wasStepShown = useRef(isStepShown);
+  useEffect(() => {
+    if (wasStepShown.current && !isStepShown && attribute !== undefined) focusLater(() => changeTypeRef.current);
+    wasStepShown.current = isStepShown;
+  }, [isStepShown, attribute]);
   return (
     <Modal
       title={step?.title ?? title}
@@ -384,38 +401,43 @@ export function AttributeSettings({
         )
       }
     >
-      {step !== undefined ? (
-        step.body
-      ) : (
-        <AttributeForm
-          // An edit that turns into a create in the same opening (Archive and recreate) starts a fresh form.
-          key={attribute === undefined ? 'create' : 'edit'}
-          formId={formId}
-          label={title}
-          attribute={attribute}
-          typeKeys={typeKeys}
-          initialTypeKey={initialTypeKey}
-          initialDraft={initialDraft}
-          initialTitle={initialTitle}
-          relationshipEntry={relationshipEntry}
-          members={members}
-          isBusy={isBusy}
-          refusals={refusals}
-          onSubmit={onSubmit}
-          readOnlyReason={readOnlyReason}
-          newOptionId={newOptionId}
-          optionsLimit={optionsLimit}
-          optionWrites={optionWrites}
-          ruleAttributes={ruleAttributes}
-          ruleEditorProps={ruleEditorProps}
-          newRuleId={newRuleId}
-          rulesNote={rulesNote}
-          apiNames={apiNames}
-          duplicatesLink={duplicatesLink}
-          onRecreate={isReadOnly ? undefined : onRecreate}
-          requiredMeets={requiredMeets}
-          uniqueMeets={uniqueMeets}
-        />
+      {step?.body}
+      {/* An edit's form stays alive behind a step (Change type), hidden, so Back finds what was typed; a create's
+          step (Relationship) replaces it, as before, and Back starts it again with the name. */}
+      {(step === undefined || attribute !== undefined) && (
+        <Activity mode={step === undefined ? 'visible' : 'hidden'}>
+          <AttributeForm
+            // An edit that turns into a create in the same opening (Archive and recreate) starts a fresh form.
+            key={attribute === undefined ? 'create' : 'edit'}
+            formId={formId}
+            label={title}
+            attribute={attribute}
+            typeKeys={typeKeys}
+            initialTypeKey={initialTypeKey}
+            initialDraft={initialDraft}
+            initialTitle={initialTitle}
+            relationshipEntry={relationshipEntry}
+            members={members}
+            isBusy={isBusy}
+            refusals={refusals}
+            onSubmit={onSubmit}
+            readOnlyReason={readOnlyReason}
+            newOptionId={newOptionId}
+            optionsLimit={optionsLimit}
+            optionWrites={optionWrites}
+            ruleAttributes={ruleAttributes}
+            ruleEditorProps={ruleEditorProps}
+            newRuleId={newRuleId}
+            rulesNote={rulesNote}
+            apiNames={apiNames}
+            duplicatesLink={duplicatesLink}
+            onRecreate={isReadOnly ? undefined : onRecreate}
+            onChangeType={isReadOnly ? undefined : onChangeType}
+            changeTypeRef={changeTypeRef}
+            requiredMeets={requiredMeets}
+            uniqueMeets={uniqueMeets}
+          />
+        </Activity>
       )}
     </Modal>
   );
@@ -446,6 +468,9 @@ interface AttributeFormProps {
   readonly apiNames: AttributeSettingsApiNames | undefined;
   readonly duplicatesLink: AttributeSettingsProps['duplicatesLink'];
   readonly onRecreate: (() => void) | undefined;
+  readonly onChangeType: (() => void) | undefined;
+  /** "Change type…", for focus to return to from the step. */
+  readonly changeTypeRef: Ref<HTMLButtonElement>;
   readonly requiredMeets: AttributeSettingsProps['requiredMeets'];
   readonly uniqueMeets: AttributeSettingsProps['uniqueMeets'];
 }
@@ -474,6 +499,8 @@ function AttributeForm({
   apiNames,
   duplicatesLink,
   onRecreate,
+  onChangeType,
+  changeTypeRef,
   requiredMeets,
   uniqueMeets,
 }: AttributeFormProps) {
@@ -738,8 +765,14 @@ function AttributeForm({
         {...(isCreating && strings.typeHints[type] !== undefined ? { hint: strings.typeHints[type] } : {})}
         {...(errorOf('type') === undefined ? {} : { error: errorOf('type') })}
       />
-      {/* A type never changes in place: the way out of a wrong one, quiet, since most never need it. */}
-      {!isCreating && onRecreate !== undefined && (
+      {/* The way out of a wrong type, quiet, since most never need it: in place when the change is safe, else the
+          old way (archive it and start a new one with its name). */}
+      {!isCreating && onChangeType !== undefined && (
+        <Button ref={changeTypeRef} variant="link" isDisabled={isBusy} onPress={onChangeType}>
+          {strings.changeTypeLink}
+        </Button>
+      )}
+      {!isCreating && onChangeType === undefined && onRecreate !== undefined && (
         <Button variant="link" isDisabled={isBusy} onPress={onRecreate}>
           {strings.wrongType}
         </Button>
@@ -1167,7 +1200,7 @@ interface TypeSettingsProps {
  * currency to start); a phone's default country, for numbers typed without
  * their code (the workspace's when none). Nothing for the other types.
  */
-function TypeSettings({ type, config, defaultCurrency, isReadOnly, error, onChange }: TypeSettingsProps) {
+export function TypeSettings({ type, config, defaultCurrency, isReadOnly, error, onChange }: TypeSettingsProps) {
   const { locale } = useFormatSettings();
   if (type === 'number') {
     const decimals = typeof config.decimals === 'number' ? String(config.decimals) : 'auto';

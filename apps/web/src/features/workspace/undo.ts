@@ -106,6 +106,8 @@ const ANY_RECORDS: ObjectNames = { singularName: 'record', pluralName: 'records'
  */
 export function undoToast(result: UndoResult, names: ObjectNames = ANY_RECORDS): ToastContent | undefined {
   if (result.kind === 'nothing') return { tone: 'success', message: strings.nothingToUndo };
+  // A list's entry action undone (spec 0048): its store words it.
+  if (result.kind === 'external') return { tone: result.tone, message: result.message };
   // A delete or a create undone (spec 0022, AC-526, AC-541).
   if (result.kind === 'restored' || result.kind === 'restoring' || result.kind === 'uncreated') {
     return lifecycleUndoToast(result);

@@ -18,13 +18,13 @@ New, for AttributeSettings' Validation section (spec 0013, milestone 1). Nothing
   editorProps={(attribute) => ({ onSearch })} // a condition's reference operands, as FilterBuilder takes them
   newId={mintId}
   onChange={setRules}
-  hint="Rules save when you press Save."
+  hint="Rules wait for Save."
   errors={{ 'rules.0.max': 'Text holds at most 500 characters.' }}
 />
 ```
 
 - Presentational: the rules come in, every change goes out as the whole list (`onChange`), and the dialog sends it with Save. `ruleOf(rule)` turns a row into the settings the API takes (bounds as numbers or decimals, lists split on commas, empty ones left out); `editorRuleOf(settings)` goes the other way.
-- Each row reads as the message its rule gives when broken: its own message when it has one, else the generated one from `@crm/contracts/validation` (`generatedMessage`, with " when <summary>" after a condition), so the person reads exactly what a refused save will say. A rule whose settings aren't finished reads "Not set up yet. Fill in its settings, or delete it." under its kind's name. The kind's name sits above it.
+- Each row reads as the message its rule gives when broken: its own message when it has one, else the generated one from `@crm/contracts/validation` (`generatedMessage`, with " when <summary>" after a condition), so the person reads exactly what a refused save will say. A rule whose settings aren't finished reads "Not set up yet." under its kind's name. The kind's name sits above it.
 - A row opens in place (Enter on it, or Edit in its menu): the kind's settings (two bounds for a length, a count or a range; a format with its text or pattern and Ignore case; allow or block and the domains; countries; currencies; a date range's earliest and latest, each none, a date or days from today), the Error message, marked (optional) (one line that wraps, up to 200 characters, with a counter; its hint says when it shows and that an empty one shows the sentence above), and "Only use this rule when…", a Disclosure holding FilterBuilder on `conditionAttributes` with no `relatedAttributes`, so no condition can follow a relationship. Done closes it. A new rule from Add rule opens with its first setting focused.
 - Rows move by drag, by keyboard on the handle (Space or Enter lifts, the arrows move, Space or Enter drops, through the library's drag wrapper), or Move up and Move down in the row's menu, which says where the rule went. Delete takes it out, and focus goes to the next rule's menu, or Add rule.
 - `errors` are keyed as the server names them, `rules.<index>.<setting>`: a refused setting shows on its field, and refusals arriving open their first rule. A closed row with a refusal shows it under its message.

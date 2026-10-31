@@ -7,7 +7,14 @@
 // So is whether their picture shows on their public pages (owner ask A124,
 // 23 Oct 2026), read and set through `booking/picture-choice.ts`, and their social links (25 Oct 2026), through
 // `booking/socials.ts`.
-import { BIO_MAX, handleProblem, profileSharePath, type MyProfile, type UpdateMyProfileInput } from '@crm/contracts';
+import {
+  BIO_MAX,
+  JOB_TITLE_MAX,
+  handleProblem,
+  profileSharePath,
+  type MyProfile,
+  type UpdateMyProfileInput,
+} from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { and, eq } from 'drizzle-orm';
 import { checkScope } from '../access/mint.ts';
@@ -74,6 +81,7 @@ async function readProfile(
       name: members.name,
       email: members.email,
       timeZone: members.timeZone,
+      jobTitle: members.jobTitle,
       avatarUrl: members.avatarUrl,
       workspaceTimeZone: workspaces.timeZone,
       workspaceName: workspaces.name,
@@ -110,6 +118,7 @@ async function readProfile(
     workspaceName: row.workspaceName,
     ...(others.length === 0 ? {} : { otherLinkPages: others }),
     ...(row.timeZone === null ? {} : { timeZone: row.timeZone }),
+    ...(row.jobTitle === null ? {} : { jobTitle: row.jobTitle }),
     ...(image === undefined ? {} : { image }),
     ...(extras.google === undefined ? {} : { google: extras.google }),
     ...(held === undefined ? {} : { handle: held.handle }),
@@ -144,7 +153,10 @@ export async function getMyProfile(scope: EngineScope, extras: ProfileExtras = {
  */
 export async function updateMyMemberProfile(
   scope: EngineScope,
-  input: Pick<UpdateMyProfileInput, 'name' | 'timeZone' | 'handle' | 'bio' | 'pictureHidden' | 'socials'> = {},
+  input: Pick<
+    UpdateMyProfileInput,
+    'name' | 'timeZone' | 'jobTitle' | 'handle' | 'bio' | 'pictureHidden' | 'socials'
+  > = {},
   extras: ProfileExtras = {},
   hooks: readonly AfterWrite[] = [],
   source: AuditSource = {},
@@ -169,6 +181,20 @@ export async function updateMyMemberProfile(
       if (zone !== undefined && zone !== (now.timeZone ?? null)) {
         before.timeZone = now.timeZone ?? null;
         after.timeZone = zone;
+      }
+      // Their job title (spec 0037, AC-1441): a label in this workspace, empty clears it.
+      const title =
+        input.jobTitle === undefined ? undefined : input.jobTitle.trim() === '' ? null : input.jobTitle.trim();
+      if (title !== undefined && title !== null && (title.length > JOB_TITLE_MAX || /[\r\n]/.test(title))) {
+        throw refuseOn(
+          'CONFIG_INVALID',
+          `Keep the job title to one line of ${String(JOB_TITLE_MAX)} characters.`,
+          'jobTitle',
+        );
+      }
+      if (title !== undefined && title !== (now.jobTitle ?? null)) {
+        before.jobTitle = now.jobTitle ?? null;
+        after.jobTitle = title;
       }
       // The handle and bio: the person's, in schema auth. An old handle keeps finding them.
       const wanted = input.handle?.trim().toLowerCase();
@@ -230,12 +256,13 @@ export async function updateMyMemberProfile(
         return { ...now, isPublic: await showLinkPage(tx, claimant, scope.workspaceId) };
       }
       if (claimant !== undefined) await showLinkPage(tx, claimant, scope.workspaceId);
-      if (after.name !== undefined || 'timeZone' in after) {
+      if (after.name !== undefined || 'timeZone' in after || 'jobTitle' in after) {
         await tx
           .update(members)
           .set({
             ...(name === undefined || after.name === undefined ? {} : { name }),
             ...('timeZone' in after ? { timeZone: zone ?? null } : {}),
+            ...('jobTitle' in after ? { jobTitle: title ?? null } : {}),
             ...touched(scope),
           })
           .where(and(eq(members.workspaceId, scope.workspaceId), eq(members.id, memberId)));

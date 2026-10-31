@@ -18,7 +18,10 @@ export const realtimeRouter = authed.realtime.router({
     token: signer(context.realtime).connection(context.user.id),
   })),
   subscriptionToken: member.realtime.subscriptionToken.handler(async ({ context }) => {
-    const signed = signer(context.realtime).subscription(context.user.id, context.scope.workspaceId);
+    // The caller's own audience channel (spec 0007, milestone 4): the key comes from the policy the door sealed,
+    // so a browser can never ask for another audience's channel.
+    const { scope } = context;
+    const signed = signer(context.realtime).subscription(context.user.id, scope.workspaceId, scope.access.data.key);
     return { ...signed, head: await workspaceHead(context.scope) };
   }),
   // Its own place in the read gate: at most 6 catch ups in flight per workspace per process, beside the reads.

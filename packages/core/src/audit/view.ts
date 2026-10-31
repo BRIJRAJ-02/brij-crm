@@ -40,6 +40,8 @@ export interface AuditMemberName {
 export interface AuditThingName {
   readonly name: string;
   readonly isGone: boolean;
+  /** A list the reader can't read (spec 0048): named by no name, and its changes left out. */
+  readonly isHidden?: boolean;
 }
 
 /** Every name a page mentions, by id, from the one names statement. A missing id was purged or never existed. */
@@ -51,6 +53,7 @@ export interface AuditNames {
   readonly forms: ReadonlyMap<string, AuditThingName>;
   readonly bookingPages: ReadonlyMap<string, AuditThingName>;
   readonly bookings: ReadonlyMap<string, { readonly pageTitle: string; readonly startsAt: string }>;
+  readonly lists: ReadonlyMap<string, AuditThingName>;
 }
 
 /** The ids a page's names statement looks up, each list distinct and every id a uuid. */
@@ -62,6 +65,7 @@ export interface AuditNameIds {
   readonly forms: readonly string[];
   readonly bookingPages: readonly string[];
   readonly bookings: readonly string[];
+  readonly lists: readonly string[];
 }
 
 type Bag = Readonly<Record<string, unknown>>;
@@ -98,6 +102,7 @@ export function auditNameIds(rows: readonly AuditRow[]): AuditNameIds {
     forms: new Set<string>(),
     bookingPages: new Set<string>(),
     bookings: new Set<string>(),
+    lists: new Set<string>(),
   };
   const add = (set: Set<string>, value: unknown) => {
     const id = uuidOf(value);
@@ -129,6 +134,9 @@ export function auditNameIds(rows: readonly AuditRow[]): AuditNameIds {
       case 'booking':
         add(sets.bookings, row.targetId);
         break;
+      case 'list':
+        add(sets.lists, row.targetId);
+        break;
       default:
         break;
     }
@@ -156,6 +164,7 @@ export function auditNameIds(rows: readonly AuditRow[]): AuditNameIds {
     forms: [...sets.forms],
     bookingPages: [...sets.bookingPages],
     bookings: [...sets.bookings],
+    lists: [...sets.lists],
   };
 }
 
@@ -203,7 +212,10 @@ export function toEntryView(row: AuditRow, names: AuditNames): AuditEntryView | 
     const name = targetId === undefined ? undefined : names.joinRequests.get(targetId);
     return { type: 'join_request' as const, id: targetId ?? row.id, ...(name === undefined ? {} : { name }) };
   };
-  const thing = <T extends 'rotation' | 'form' | 'booking_page'>(type: T, map: ReadonlyMap<string, AuditThingName>) => {
+  const thing = <T extends 'rotation' | 'form' | 'booking_page' | 'list'>(
+    type: T,
+    map: ReadonlyMap<string, AuditThingName>,
+  ) => {
     const found = targetId === undefined ? undefined : map.get(targetId);
     return {
       type,
@@ -386,7 +398,7 @@ export function toEntryView(row: AuditRow, names: AuditNames): AuditEntryView | 
       return { ...base, action, target: memberTarget(), params: {}, changes: [] };
     case 'member.profile_updated': {
       const target = memberTarget();
-      const known = (['name', 'timeZone', 'handle', 'bio', 'socials'] as const).filter(
+      const known = (['name', 'timeZone', 'jobTitle', 'handle', 'bio', 'socials'] as const).filter(
         (field) => has(after, field) || has(before, field),
       );
       // A deleted account's own values went with it (AC-4610): the fields stay named, their values don't.
@@ -618,6 +630,93 @@ export function toEntryView(row: AuditRow, names: AuditNames): AuditEntryView | 
         action,
         target: bookingTarget(),
         params: { host: person(after.memberId), change: made },
+        changes: [],
+      };
+    }
+    case 'team.changed': {
+      const kind = after.change;
+      if (kind !== 'created' && kind !== 'renamed' && kind !== 'deleted' && kind !== 'members') {
+        return undefined;
+      }
+      // A rename names the team as it was called then; the others carry the name they had (a delete, only in `before`).
+      const team = text(after.name) ?? text(before.name) ?? '';
+      return {
+        ...base,
+        action,
+        target: workspace,
+        params: {
+          change: kind,
+          team: kind === 'renamed' ? (text(before.name) ?? team) : team,
+          joined: Array.isArray(after.joined) ? after.joined.length : 0,
+          left: Array.isArray(after.left) ? after.left.length : 0,
+        },
+        changes: kind === 'renamed' ? change('name', plain(before.name), plain(after.name)) : [],
+      };
+    }
+    case 'access.rule_set': {
+      const level = after.level;
+      const records = after.records;
+      if (level !== 'none' && level !== 'read' && level !== 'write') return undefined;
+      if (records !== 'all' && records !== 'own' && records !== 'team') return undefined;
+      const subject = text(after.subject);
+      const who = subject === 'team' ? (text(after.team) ?? 'a team') : subject === 'guest' ? 'Guests' : 'Members';
+      return {
+        ...base,
+        action,
+        target: workspace,
+        params: {
+          object: text(after.object) ?? 'an object',
+          who,
+          level,
+          records,
+          fields: Object.keys(bag(after.fields)).length,
+          isDefault: after.isDefault === true,
+        },
+        changes: [],
+      };
+    }
+    case 'list.created':
+    case 'list.archived':
+    case 'list.restored':
+    case 'list.updated': {
+      const found = targetId === undefined ? undefined : names.lists.get(targetId);
+      // A list the reader can't read is "a list": no name, and no names in its changes.
+      if (found?.isHidden === true) {
+        return {
+          ...base,
+          action,
+          target: { type: 'list', id: targetId ?? row.id, isGone: false },
+          params: {},
+          changes: [],
+        };
+      }
+      return {
+        ...base,
+        action,
+        target: thing('list', names.lists),
+        params: {},
+        changes: action === 'list.updated' ? change('name', plain(before.name), plain(after.name)) : [],
+      };
+    }
+    case 'booking_page.changed_for': {
+      // Whose page and its title; the fields that changed stay in the row (the owner's notice lists them).
+      const title = text(after.title) ?? text(before.title);
+      if (title === undefined) return undefined;
+      return {
+        ...base,
+        action,
+        target: memberTarget(),
+        params: { page: title, deleted: after.deleted === true },
+        changes: [],
+      };
+    }
+    case 'rotation.changed': {
+      const many = (value: unknown) => (Array.isArray(value) ? value.length : 0);
+      return {
+        ...base,
+        action,
+        target: thing('rotation', names.rotations),
+        params: { added: many(after.added), removed: many(after.removed) },
         changes: [],
       };
     }

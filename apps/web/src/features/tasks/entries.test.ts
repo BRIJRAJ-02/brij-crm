@@ -10,6 +10,7 @@ const members = [{ id: 'm1', name: 'Grace Hopper', email: 'grace@example.com' }]
 const task: TaskView = {
   id: '0199a6f2-0000-7000-8000-000000000001',
   title: 'Call back',
+  description: '',
   isDone: false,
   dueOn: '2026-10-20',
   assigneeMemberId: 'm1',
@@ -41,9 +42,7 @@ describe('tasks as the list draws them (spec 0019)', () => {
       recordCount: 2,
     });
     expect(toTaskEntry(task, members).readOnlyReason).toBeUndefined();
-    expect(toTaskEntry({ ...task, canChange: false }, members).readOnlyReason).toBe(
-      'You can view this task but not change it.',
-    );
+    expect(toTaskEntry({ ...task, canChange: false }, members).readOnlyReason).toBe('You can only view this task.');
   });
 
   it('carries a capped count as a floor, and reads ?task= as a uuid or new only', () => {

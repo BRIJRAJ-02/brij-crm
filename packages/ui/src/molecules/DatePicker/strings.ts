@@ -9,6 +9,8 @@ export const strings = {
   /** The title's name: it opens the year's months. */
   chooseMonth: (month: string) => `${month}, choose a month`,
   today: 'Today',
+  /** A date and time's first quick pick: this moment. */
+  now: 'Now',
   tomorrow: 'Tomorrow',
   nextWeek: 'Next week',
   endOfMonth: 'End of month',

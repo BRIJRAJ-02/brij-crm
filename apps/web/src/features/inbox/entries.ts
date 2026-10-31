@@ -5,6 +5,7 @@
 import type { MemberSummary, NotificationView } from '@crm/data';
 import type { NotificationItem } from '@crm/ui';
 import { actorDisplay } from '../notes/entries.ts';
+import { availabilityHref } from '../booking/links.ts';
 import { formHref } from '../forms/paths.ts';
 import { recordHref } from '../records/details.ts';
 import { membersSettingsHref } from '../settings/nav.ts';
@@ -42,7 +43,10 @@ export function toNotificationItem(view: NotificationView, members: readonly Mem
   };
 }
 
-/** Where pressing a notification goes: its comment's thread, its note's window, its task's dialog, or its submission. */
+/**
+ * Where pressing a notification goes: its comment's thread, its note's window, its task's dialog, its submission,
+ * or the reader's own Availability.
+ */
 export type NotificationTarget =
   { readonly kind: 'href'; readonly href: string } | { readonly kind: 'task'; readonly taskId: string } | undefined;
 
@@ -55,6 +59,8 @@ export function targetOf(
   if (view.taskId !== undefined) return { kind: 'task', taskId: view.taskId };
   // Members opens on Joining while someone waits, where Approve and Decline are.
   if (view.joinRequestId !== undefined) return { kind: 'href', href: membersSettingsHref(slug) };
+  // Someone changed the reader's scheduling (spec 0037, AC-1264): their hours, where the change shows.
+  if (view.kind === 'scheduling_changed') return { kind: 'href', href: availabilityHref(slug) };
   if (view.submissionId !== undefined && view.formId !== undefined) {
     return { kind: 'href', href: formHref(slug, view.formId, 'submissions', view.submissionId) };
   }
@@ -64,6 +70,8 @@ export function targetOf(
   if (view.noteId !== undefined) {
     return { kind: 'href', href: `${recordHref(slug, objectSlug, view.record.recordId, 'notes')}?note=${view.noteId}` };
   }
+  // An automation's notice opens the record itself.
+  if (view.kind === 'automation') return { kind: 'href', href: recordHref(slug, objectSlug, view.record.recordId) };
   const page = recordHref(slug, objectSlug, view.record.recordId, 'comments');
   return { kind: 'href', href: view.threadId === undefined ? page : `${page}?thread=${view.threadId}` };
 }

@@ -157,6 +157,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
     `);
     expect(definers.rows).toEqual([
       { name: 'crm_archive_profile_item', owner: 'crm_handle' },
+      // The workspaces holding an enabled task due automation, ids only (parity #53, migration 0140).
+      { name: 'crm_automation_due_workspaces', owner: 'crm_sweep' },
       { name: 'crm_booking_by_token', owner: 'crm_booking_lookup' },
       { name: 'crm_booking_owner_pages', owner: 'crm_booking_lookup' },
       { name: 'crm_booking_owner_slugs', owner: 'crm_booking_lookup' },
@@ -170,6 +172,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_count_item_press', owner: 'crm_handle' },
       { name: 'crm_count_profile_view', owner: 'crm_handle' },
       { name: 'crm_delete_profile_item', owner: 'crm_handle' },
+      // The workspace's automation task (parity #53, migration 0140).
+      { name: 'crm_enqueue_automation', owner: 'crm_queue' },
       { name: 'crm_enqueue_booking_mail', owner: 'crm_queue' },
       { name: 'crm_enqueue_calendar_sync', owner: 'crm_queue' },
       { name: 'crm_enqueue_email', owner: 'crm_queue' },
@@ -224,7 +228,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_save_social_links', owner: 'crm_handle' },
       { name: 'crm_search_similar', owner: 'crm_search' },
       { name: 'crm_search_text', owner: 'crm_search' },
-      // The link page's Live or Private switch (spec 0058, AC-23, migration 0135).
+      // The link page's Live or Private switch (spec 0058, AC-23, migration 0145).
       { name: 'crm_set_public_profile_live', owner: 'crm_handle' },
       // Private until its owner acts (27 Oct 2026, migration 0116).
       { name: 'crm_show_public_profile', owner: 'crm_handle' },
@@ -250,6 +254,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
     expect(hardening.rows).toEqual([
       // A plpgsql body: it raises PROFILE_ITEM_LIMIT and the one heading, one page rules on a restore.
       { name: 'crm_archive_profile_item', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
+      { name: 'crm_automation_due_workspaces', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_booking_by_token', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_booking_owner_pages', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_booking_owner_slugs', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
@@ -264,6 +269,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_count_profile_view', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       // A plpgsql body: it answers whether the block was the owner's, and closes the gap it left.
       { name: 'crm_delete_profile_item', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
+      { name: 'crm_enqueue_automation', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_enqueue_booking_mail', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_enqueue_calendar_sync', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_enqueue_email', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
@@ -390,6 +396,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_enqueue_email',
         'crm_enqueue_notification_email',
         'crm_enqueue_scheduling_notice',
+        'crm_enqueue_automation',
       ],
       [
         'crm_enqueue_job(uuid, timestamp with time zone)',
@@ -398,18 +405,25 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         'crm_enqueue_email(uuid)',
         'crm_enqueue_notification_email(uuid)',
         'crm_enqueue_scheduling_notice(uuid, uuid)',
+        'crm_enqueue_automation()',
       ],
-      ['app', 'app', 'app', 'app', 'app', 'app'],
+      ['app', 'app', 'app', 'app', 'app', 'app', 'app'],
     ],
     [
       'crm_sweep',
-      ['crm_workspace_ids', 'crm_notification_digests_due', 'crm_calendar_health_candidates'],
+      [
+        'crm_workspace_ids',
+        'crm_notification_digests_due',
+        'crm_calendar_health_candidates',
+        'crm_automation_due_workspaces',
+      ],
       [
         'crm_workspace_ids(uuid, integer)',
         'crm_notification_digests_due(uuid, uuid, integer)',
         'crm_calendar_health_candidates(integer)',
+        'crm_automation_due_workspaces(uuid, integer)',
       ],
-      ['worker', 'worker', 'worker'],
+      ['worker', 'worker', 'worker', 'worker'],
     ],
     [
       'crm_purge',
@@ -521,11 +535,11 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         // A link page made for every membership (26 Oct 2026, migration 0116).
         'crm_ensure_public_profile',
         'crm_show_public_profile',
-        // The link page's Live or Private switch (spec 0058, AC-23, migration 0135).
+        // The link page's Live or Private switch (spec 0058, AC-23, migration 0145).
         'crm_set_public_profile_live',
         // A deleted account's handles freed after their 90 days (migration 0126).
         'crm_sweep_released_handles',
-        // The link page's own accent and photos (spec 0060, migration 0136): read for its look stylesheet and its
+        // The link page's own accent and photos (spec 0060, migration 0146): read for its look stylesheet and its
         // image routes, and set from its owner's Design panel.
         'crm_profile_look',
         'crm_save_profile_accent',
@@ -980,7 +994,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
   });
 
   describe('crm_workspace_ids (spec 0008, milestone 3, AC-112, AC-115)', () => {
-    it('gives crm_sweep select on workspaces.id and deleted_at, the digest’s columns and the calendar health sweep’s, and nothing else', async () => {
+    it('gives crm_sweep select on workspaces.id and deleted_at, the digest’s columns, the calendar health sweep’s and the automations sweep’s, and nothing else', async () => {
       // From the catalog, by every route, as for crm_relay: no table privilege, two column grants, no role.
       const tables = await owner.query<{ table: string }>(`
         select n.nspname || '.' || c.relname as table
@@ -997,6 +1011,11 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         where a.grantee = 'crm_sweep'::regrole order by 1
       `);
       expect(columns.rows).toEqual([
+        // The automations sweep's (parity #53, migration 0140).
+        { column: 'automations.deleted_at', privilege: 'SELECT' },
+        { column: 'automations.enabled', privilege: 'SELECT' },
+        { column: 'automations.trigger_kind', privilege: 'SELECT' },
+        { column: 'automations.workspace_id', privilege: 'SELECT' },
         // The calendar health sweep's (spec 0037, migration 0134).
         { column: 'calendar_connections.health_broken_at', privilege: 'SELECT' },
         { column: 'calendar_connections.health_notified_at', privilege: 'SELECT' },
@@ -1430,6 +1449,54 @@ describe('isolation', () => {
     await expect(
       db.withWorkspace(a.workspaceId, (tx) => tx.execute(sql`delete from records where id = ${inA.recordId}`)),
     ).rejects.toMatchObject({ cause: { code: '23503', constraint: 'notes_record' } });
+    // A note's links (migration 0135): its own workspace's only, and never to another workspace's record.
+    await db.withWorkspace(a.workspaceId, (tx) =>
+      tx.execute(
+        sql`insert into note_records (workspace_id, note_id, record_id, position, created_by_type) values (${a.workspaceId}, ${inA.noteId}, ${inA.recordId}, 0, 'system')`,
+      ),
+    );
+    const linksFromB = await db.withWorkspace(b.workspaceId, (tx) =>
+      tx.execute<{ note_id: string }>(sql`select note_id from note_records`),
+    );
+    expect(linksFromB.rows).toEqual([]);
+    await expect(
+      db.withWorkspace(a.workspaceId, (tx) =>
+        tx.execute(
+          sql`insert into note_records (workspace_id, note_id, record_id, position, created_by_type) values (${a.workspaceId}, ${inA.noteId}, ${inB.recordId}, 1, 'system')`,
+        ),
+      ),
+    ).rejects.toMatchObject({ cause: { code: '23503', constraint: 'note_records_record' } });
+    // A call or meeting logged on a record (migration 0137): its kind, duration and outcome are held by the database.
+    const logged = (columns: string) =>
+      db.withWorkspace(a.workspaceId, (tx) =>
+        tx.execute(
+          sql.raw(`update notes set ${columns} where workspace_id = '${a.workspaceId}' and id = '${inA.noteId}'`),
+        ),
+      );
+    await expect(logged(`kind = 'webinar'`)).rejects.toMatchObject({
+      cause: { code: '23514', constraint: 'notes_kind' },
+    });
+    await expect(logged(`duration_minutes = 30`)).rejects.toMatchObject({
+      cause: { code: '23514', constraint: 'notes_duration' },
+    });
+    await expect(logged(`outcome = 'connected'`)).rejects.toMatchObject({
+      cause: { code: '23514', constraint: 'notes_outcome' },
+    });
+    await expect(logged(`kind = 'call', duration_minutes = 1441`)).rejects.toMatchObject({
+      cause: { code: '23514', constraint: 'notes_duration' },
+    });
+    await expect(logged(`kind = 'call', outcome = 'held'`)).rejects.toMatchObject({
+      cause: { code: '23514', constraint: 'notes_outcome' },
+    });
+    await expect(logged(`kind = 'meeting', outcome = 'connected'`)).rejects.toMatchObject({
+      cause: { code: '23514', constraint: 'notes_outcome' },
+    });
+    await logged(`kind = 'meeting', duration_minutes = 60, outcome = 'no_show'`);
+    // Another workspace reads none of it.
+    const seenFromB = await db.withWorkspace(b.workspaceId, (tx) =>
+      tx.execute<{ kind: string }>(sql`select kind from notes where kind <> 'note'`),
+    );
+    expect(seenFromB.rows).toEqual([]);
   });
 
   it("reads none of another workspace's comments or notifications, and refuses either on its record (spec 0038, AC-1182)", async () => {
@@ -2211,12 +2278,12 @@ describe('the auth schema: global identity, outside row level security (spec 000
       // Letting an old handle go into the hold to make room at the cap (late trap #76, migration 0124): the person
       // cleared, and only through crm_make_handle_room.
       'auth.public_handles.user_id UPDATE',
-      // The page's own accent pair and photos (spec 0060, migration 0136): eight columns, and only through
+      // The page's own accent pair and photos (spec 0060, migration 0146): eight columns, and only through
       // crm_save_profile_accent and crm_save_profile_image. These lines are the whole of what that spec widened.
       'auth.public_profiles.accent UPDATE',
       'auth.public_profiles.accent_dark UPDATE',
       'auth.public_profiles.bio UPDATE',
-      // When the page became its owner's choice (spec 0058, AC-23, migration 0135): only through
+      // When the page became its owner's choice (spec 0058, AC-23, migration 0145): only through
       // crm_show_public_profile and crm_set_public_profile_live.
       'auth.public_profiles.claimed_at UPDATE',
       'auth.public_profiles.cover_path UPDATE',

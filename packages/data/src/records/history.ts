@@ -69,6 +69,21 @@ export interface UndoCell {
 /** What one action was, for the toast that names it: one cell, a paste, a range clear, or a bulk edit (spec 0022). */
 export type UndoKind = 'cell' | 'paste' | 'clear' | 'bulk';
 
+/**
+ * A company a person's write filed them under by their email (spec 0059,
+ * AC-5920): the person's Company cell and the version the link carries, the
+ * company, and whether the write made it. Undoing it clears the cell while it
+ * still holds that link, and moves a company the write made to the trash
+ * while nothing else links to it.
+ */
+export interface FiledLink {
+  readonly recordId: string;
+  readonly attributeId: string;
+  readonly linkVersionId: string;
+  readonly company: { readonly objectId: string; readonly recordId: string; readonly name: string };
+  readonly made: boolean;
+}
+
 /** One edit on the undo stack: its kind, its object, and every cell of it that landed. */
 export interface CellsEntry {
   /** The action's own id (its write's mutation id): a toast's Undo names it, so it undoes that action or nothing. */
@@ -76,6 +91,13 @@ export interface CellsEntry {
   readonly kind: UndoKind;
   readonly objectId: string;
   readonly cells: readonly UndoCell[];
+  /**
+   * A bulk edit's group (the CRM flow pass, 31 October 2026): the edits of one Apply, one per field, share it, and
+   * Cmd+Z takes them back together, as the toast's Undo does.
+   */
+  readonly group?: string;
+  /** Companies the edit filed people under (spec 0059): undoing the edit undoes them too. */
+  readonly filed?: readonly FiledLink[];
 }
 
 /**
@@ -100,6 +122,8 @@ export interface CreateEntry {
   readonly objectId: string;
   readonly recordId: string;
   readonly recordName: string;
+  /** The company the create filed the person under (spec 0059): undoing the create undoes it too. */
+  readonly filed?: FiledLink;
 }
 
 /** One link delta an undo sends (spec 0014): add a far record on a side, or remove one. */
@@ -138,16 +162,47 @@ export interface LinksEntry {
   readonly inverse: LinkStep;
 }
 
-/** One user action on the undo stack: an edit of cells, a delete, a create, or a link delta. */
-export type UndoEntry = CellsEntry | DeleteEntry | CreateEntry | LinksEntry;
+/**
+ * An action another store of the layer undoes itself (spec 0048: a list
+ * entry's cell, an entry removed or added): undoing it runs `run`, which
+ * answers the toast's sentence. On the same stack as the records' actions, so
+ * Cmd+Z undoes the newest whichever store made it.
+ */
+export interface ExternalEntry {
+  readonly id: string;
+  readonly kind: 'external';
+  readonly objectId: string;
+  readonly run: () => Promise<{ readonly message: string; readonly tone: 'success' | 'danger' }>;
+}
+
+/** One user action on the undo stack: an edit of cells, a delete, a create, a link delta, or another store's. */
+export type UndoEntry = CellsEntry | DeleteEntry | CreateEntry | LinksEntry | ExternalEntry;
 
 /** Whether an entry is an edit of cells (a cell, a paste or a range clear). */
 export function isCellsEntry(entry: UndoEntry): entry is CellsEntry {
-  return entry.kind !== 'delete' && entry.kind !== 'create' && entry.kind !== 'links';
+  return entry.kind !== 'delete' && entry.kind !== 'create' && entry.kind !== 'links' && entry.kind !== 'external';
 }
 
 /** How many cells an entry holds against the stack's budget: a delete, a create or a link delta counts as one. */
-const sizeOf = (entry: UndoEntry): number => (isCellsEntry(entry) ? entry.cells.length : 1);
+const sizeOf = (entry: UndoEntry): number =>
+  isCellsEntry(entry) ? entry.cells.length + (entry.filed?.length ?? 0) : 1;
+
+/** The companies an entry filed people under (spec 0059), whatever its kind. */
+export function filedOf(entry: UndoEntry): readonly FiledLink[] {
+  if (entry.kind === 'create') return entry.filed === undefined ? [] : [entry.filed];
+  return isCellsEntry(entry) ? (entry.filed ?? []) : [];
+}
+
+/** The entry with its filings left out (spec 0059): what stays on the stack once a toast's Undo took them back. */
+export function withoutFiled(entry: UndoEntry): UndoEntry {
+  if (entry.kind === 'create') {
+    const { filed: _filed, ...rest } = entry;
+    return rest;
+  }
+  if (!isCellsEntry(entry)) return entry;
+  const { filed: _filed, ...rest } = entry;
+  return rest;
+}
 
 /** A tab's undo stack, one per workspace, `depth` (50) entries each; the oldest goes first. */
 export interface UndoStack {
@@ -156,8 +211,17 @@ export interface UndoStack {
   readonly pop: (workspace: string) => UndoEntry | undefined;
   /** The newest entry, left on the stack. */
   readonly top: (workspace: string) => UndoEntry | undefined;
+  /**
+   * Takes the edits of one group off the top of the stack, newest first: the entries just under the one popped that
+   * share its `group` (the rest of one Apply's fields). Stops at the first entry of another group.
+   */
+  readonly popGroup: (workspace: string, group: string) => readonly CellsEntry[];
   /** Takes the entry with this id off the stack, wherever it sits (a delete job undone from its toast). */
   readonly drop: (workspace: string, id: string) => void;
+  /** The entry with this id, wherever it sits, left on the stack; undefined when it is gone. */
+  readonly find: (workspace: string, id: string) => UndoEntry | undefined;
+  /** Puts `entry` in the place of the entry with its id, wherever it sits (a filing taken back from its toast). */
+  readonly replace: (workspace: string, entry: UndoEntry) => void;
   /**
    * Cells an undo just put back, by `${recordId}:${attributeId}:${from}` to
    * the version it wrote: an older entry that wrote `from` there (the version
@@ -174,7 +238,7 @@ export function createUndoStack(depth: number = UNDO_DEPTH, cellBudget: number =
   const stacks = new Map<string, readonly UndoEntry[]>();
   return {
     push: (workspace, entry) => {
-      if (isCellsEntry(entry) && entry.cells.length === 0) return;
+      if (isCellsEntry(entry) && entry.cells.length === 0 && (entry.filed ?? []).length === 0) return;
       let stack = [...(stacks.get(workspace) ?? []), entry];
       if (stack.length > depth) stack = stack.slice(stack.length - depth);
       // Bounded by cells too, so 50 pastes of 500 rows never hold their old values for the session.
@@ -190,19 +254,37 @@ export function createUndoStack(depth: number = UNDO_DEPTH, cellBudget: number =
       const stack = stacks.get(workspace);
       if (stack === undefined || handOver.size === 0) return;
       const now = (cell: UndoCell) => handOver.get(`${cell.recordId}:${cell.attributeId}:${cell.writtenVersionId}`);
+      // A filed link the undo wrote over is handed on the same way (spec 0059), so a later press still takes it back.
+      const nowFiled = (link: FiledLink) => handOver.get(`${link.recordId}:${link.attributeId}:${link.linkVersionId}`);
+      const handed = (link: FiledLink): FiledLink => {
+        const to = nowFiled(link);
+        return to === undefined ? link : { ...link, linkVersionId: to };
+      };
       stacks.set(
         workspace,
-        stack.map((entry) =>
-          isCellsEntry(entry) && entry.cells.some((cell) => now(cell) !== undefined)
-            ? {
-                ...entry,
-                cells: entry.cells.map((cell) => {
-                  const to = now(cell);
-                  return to === undefined ? cell : { ...cell, writtenVersionId: to };
-                }),
-              }
-            : entry,
-        ),
+        stack.map((entry) => {
+          if (entry.kind === 'create') {
+            return entry.filed === undefined || nowFiled(entry.filed) === undefined
+              ? entry
+              : { ...entry, filed: handed(entry.filed) };
+          }
+          if (!isCellsEntry(entry)) return entry;
+          const filed = entry.filed ?? [];
+          if (
+            !entry.cells.some((cell) => now(cell) !== undefined) &&
+            !filed.some((link) => nowFiled(link) !== undefined)
+          ) {
+            return entry;
+          }
+          return {
+            ...entry,
+            cells: entry.cells.map((cell) => {
+              const to = now(cell);
+              return to === undefined ? cell : { ...cell, writtenVersionId: to };
+            }),
+            ...(entry.filed === undefined ? {} : { filed: entry.filed.map(handed) }),
+          };
+        }),
       );
     },
     pop: (workspace) => {
@@ -212,12 +294,32 @@ export function createUndoStack(depth: number = UNDO_DEPTH, cellBudget: number =
       return top;
     },
     top: (workspace) => stacks.get(workspace)?.at(-1),
+    popGroup: (workspace, group) => {
+      const stack = stacks.get(workspace) ?? [];
+      const taken: CellsEntry[] = [];
+      for (let at = stack.length - 1; at >= 0; at -= 1) {
+        const entry = stack[at];
+        if (entry === undefined || !isCellsEntry(entry) || entry.group !== group) break;
+        taken.push(entry);
+      }
+      if (taken.length > 0) stacks.set(workspace, stack.slice(0, stack.length - taken.length));
+      return taken;
+    },
     drop: (workspace, id) => {
       const stack = stacks.get(workspace);
       if (stack === undefined || !stack.some((entry) => entry.id === id)) return;
       stacks.set(
         workspace,
         stack.filter((entry) => entry.id !== id),
+      );
+    },
+    find: (workspace, id) => stacks.get(workspace)?.find((entry) => entry.id === id),
+    replace: (workspace, entry) => {
+      const stack = stacks.get(workspace);
+      if (stack === undefined || !stack.some((each) => each.id === entry.id)) return;
+      stacks.set(
+        workspace,
+        stack.map((each) => (each.id === entry.id ? entry : each)),
       );
     },
     size: (workspace) => stacks.get(workspace)?.length ?? 0,

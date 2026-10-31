@@ -108,13 +108,13 @@ describe('the undo toast', () => {
     );
     expect(undoToast(undone({ action: 'clear', cells: 6, undone: 6 }))?.message).toBe('Undid the clear of 6 cells.');
     expect(undoToast(undone({ action: 'paste', cells: 40, undone: 38, kept: 2 }))?.message).toBe(
-      'Undid the paste into 40 cells. 2 cells were changed since, so they were kept.',
+      'Undid the paste into 40 cells. Kept 2 newer edits.',
     );
-    expect(undoToast(undone({ undone: 0, kept: 1 }))?.message).toBe('1 cell was changed since, so it was kept.');
+    expect(undoToast(undone({ undone: 0, kept: 1 }))?.message).toBe('Kept 1 newer edit.');
     expect(undoToast({ kind: 'nothing' })?.message).toBe('Nothing to undo.');
     expect(undoToast({ kind: 'stale' })).toMatchObject({
       tone: 'danger',
-      message: expect.stringMatching(/wasn’t undone/) as string,
+      message: expect.stringMatching(/Not undone/) as string,
     });
     expect(undoToast(undone({ action: 'paste', cells: 1500, undone: 1500 }))?.message).toBe(
       `Undid the paste into ${new Intl.NumberFormat().format(1500)} cells.`,
@@ -139,7 +139,7 @@ describe('the edit toast (AC-48, AC-50)', () => {
     expect(editToast({ kind: 'done', cells: 6, landed: 0 }, 'paste', onUndo)).toBeUndefined();
     expect(editToast({ kind: 'too-many', limit: 500 }, 'paste', onUndo)).toEqual({
       tone: 'danger',
-      message: 'Nothing was pasted. Paste into at most 500 records at once.',
+      message: 'Paste at most 500 records.',
     });
     expect(editToast({ kind: 'too-big' }, 'paste', onUndo)?.tone).toBe('danger');
     expect(isClear([null, [], null])).toBe(true);

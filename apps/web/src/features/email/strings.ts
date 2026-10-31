@@ -18,14 +18,12 @@ export const strings = {
   always: 'Emails about signing in, your account and your bookings always come.',
   refused: 'That change didn’t save, so it’s back as it was.',
   goneTitle: 'This link has expired',
-  goneText:
-    'Links in emails stop working after a year, or once you leave the workspace. The next email you get has a new one.',
+  goneText: 'The next email has a new link.',
   unsubscribeTitle: 'Unsubscribe',
   unsubscribeAsk: 'Stop getting emails like the one this link came in?',
   unsubscribe: 'Unsubscribe',
   unsubscribing: 'Unsubscribing',
   unsubscribeFailed: 'That didn’t go through',
   unsubscribedTitle: 'You’re unsubscribed',
-  otherChoices:
-    'Your other email choices stay as they are. To change them, use the Email preferences link at the bottom of any of these emails.',
+  otherChoices: 'Your other email choices stay as they are.',
 } as const;

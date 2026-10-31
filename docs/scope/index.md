@@ -96,6 +96,7 @@ Build order is the order of the rows below (a feature added later takes the next
 | 65 | Lead routing | Slice 12 | [Integrations](integrations.md) | done |
 | 66 | Team calendar | Slice 12 | [Integrations](integrations.md) | planned |
 | 47 | Enrichment | Slice 14 | [Integrations](integrations.md) | dropped |
+| 67 | Company logos and company from email domain | Slice 14 | [Integrations](integrations.md) | in-progress |
 | 48 | Forms | Slice 15 | [Integrations](integrations.md) | in-progress |
 | 49 | Slack and Zapier | Slice 15 | [Integrations](integrations.md) | planned |
 | 50 | CRM connectors | Slice 16 | [Integrations](integrations.md) | planned |

@@ -22,6 +22,9 @@ const { ownerUrl } = inject('testDatabase');
 /** The procedures that change nothing. Every other procedure is a write, and must be in WRITES below. */
 const READS: ReadonlySet<string> = new Set([
   'system.status',
+  // Automations (parity #53): the list and the run log.
+  'automations.list',
+  'automations.runs',
   // Fails on purpose when switched on (spec 0010); it writes nothing either way.
   'system.testFault',
   'me.get',
@@ -44,7 +47,15 @@ const READS: ReadonlySet<string> = new Set([
   'attributes.list',
   // What an attribute's change would touch, read before the change (the flow pass).
   'attributes.impact',
+  // What changing an attribute's type would do, read before the change (the field types lane).
+  'attributes.checkTypeChange',
   'members.list',
+  // Teams (spec 0031, slice 8): the list every member reads.
+  'teams.list',
+  // An object's access, as its Access tab reads it (spec 0032).
+  'accessRules.get',
+  // Preview as (spec 0032, AC-858): reads as someone else through the policy; its one write is an audit row, no outbox.
+  'accessRules.preview',
   // Invitations (spec 0031): the open list, and the invitation page's look (no session).
   'invitations.list',
   'invitations.peek',
@@ -89,6 +100,14 @@ const READS: ReadonlySet<string> = new Set([
   'members.visible',
   'records.query',
   'records.count',
+  // Lists and their entries (spec 0048).
+  'lists.list',
+  'entries.query',
+  'entries.count',
+  'entries.groups',
+  'entries.get',
+  'entries.membership',
+  'entries.forRecord',
   'records.objectCounts',
   'records.groups',
   // A column's calculation (the CRM flow pass): a read.
@@ -118,6 +137,12 @@ const READS: ReadonlySet<string> = new Set([
   'views.get',
   // The one view write with no outbox row (spec 0020, AC-488): the member's own last opened view.
   'views.markOpened',
+  // Saved reports (the reports lane): a chart's definition holds no records, so its writes store no outbox row, as
+  // `views.markOpened` stores none; another tab reads the list again when it opens it. The service tests prove them.
+  'reports.list',
+  'reports.create',
+  'reports.update',
+  'reports.delete',
   // The command menu (spec 0039): its search, and the member's own recent items (no outbox row, like markOpened).
   'search.query',
   'recents.list',
@@ -163,6 +188,7 @@ const READS: ReadonlySet<string> = new Set([
   'bookings.listAll',
   'bookings.meetings',
   'bookings.calendar',
+  'bookings.teamDay',
   'home.teamToday',
   'home.metrics',
   'bookings.hours',
@@ -235,6 +261,7 @@ function paths(tree: unknown, prefix: readonly string[] = []): string[] {
 interface OutboxRow {
   readonly kind: string;
   readonly object_id: string;
+  readonly list_id: string | null;
   readonly record_ids: string[];
   readonly attribute_ids: string[];
   readonly item_ids: string[];
@@ -244,7 +271,7 @@ interface OutboxRow {
 async function outboxOf(workspaceId: string): Promise<OutboxRow[]> {
   return testQuery<OutboxRow & Record<string, unknown>>(
     ownerUrl,
-    'select kind, object_id, record_ids, attribute_ids, item_ids, mutation_id from outbox where workspace_id = $1 order by seq',
+    'select kind, object_id, list_id, record_ids, attribute_ids, item_ids, mutation_id from outbox where workspace_id = $1 order by seq',
     [workspaceId],
   );
 }
@@ -493,6 +520,40 @@ async function hostBooking(m: Member): Promise<string> {
   });
   return bookingId;
 }
+
+/**
+ * A Blank list over People with one person in it, made through the API: three writes (the list, the person, the
+ * entry), each with its own outbox row, before the case's.
+ */
+async function listWithEntry(m: Member): Promise<{ listId: string; recordId: string; entryId: string }> {
+  const listId = newId();
+  await m.client.lists.create({
+    workspace: m.slug,
+    id: listId,
+    objectId: m.people.id,
+    name: 'Crew',
+    template: 'blank',
+    mutationId: newId(),
+  });
+  const recordId = newId();
+  await m.client.records.create({
+    workspace: m.slug,
+    objectId: m.people.id,
+    id: recordId,
+    values: { [m.attribute('name')]: { firstName: 'Ada' } },
+    mutationId: newId(),
+  });
+  const entryId = newId();
+  await m.client.entries.add({ workspace: m.slug, id: entryId, listId, recordId, mutationId: newId() });
+  return { listId, recordId, entryId };
+}
+
+/** The three rows `listWithEntry` stores: the list's definitions, the person, the entry. */
+const listRows = (m: Member, made: { listId: string; recordId: string; entryId: string }) => [
+  { kind: 'definitions', list_id: made.listId },
+  { kind: 'records', object_id: m.people.id, record_ids: [made.recordId] },
+  { kind: 'entries', list_id: made.listId, item_ids: [made.entryId], record_ids: [made.recordId] },
+];
 
 /** A shared view on People, made through the API (its own write and outbox row before the case's). */
 async function sharedViewOf(m: Member, name = 'Pipeline'): Promise<string> {
@@ -778,6 +839,164 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     // Its events would go to a workspace nobody can be subscribed to yet: none, in the new workspace or this one.
     return [];
   },
+  // Lists (spec 0048): a new list stores one definitions row naming it; each entry write one entries row.
+  'lists.create': async (m, mutationId) => {
+    const id = newId();
+    await m.client.lists.create({
+      workspace: m.slug,
+      id,
+      objectId: m.people.id,
+      name: 'Hiring',
+      template: 'pipeline',
+      mutationId,
+    });
+    return [{ kind: 'definitions', list_id: id, mutation_id: mutationId }];
+  },
+  'entries.add': async (m, mutationId) => {
+    const made = await listWithEntry(m);
+    const recordId = newId();
+    await m.client.records.create({
+      workspace: m.slug,
+      objectId: m.people.id,
+      id: recordId,
+      values: { [m.attribute('name')]: { firstName: 'Bo' } },
+      mutationId: newId(),
+    });
+    const id = newId();
+    await m.client.entries.add({ workspace: m.slug, id, listId: made.listId, recordId, mutationId });
+    return [
+      ...listRows(m, made),
+      { kind: 'records', object_id: m.people.id, record_ids: [recordId] },
+      { kind: 'entries', list_id: made.listId, item_ids: [id], record_ids: [recordId], mutation_id: mutationId },
+    ];
+  },
+  'entries.setValues': async (m, mutationId) => {
+    const made = await listWithEntry(m);
+    const attributeId = newId();
+    await m.client.attributes.create({
+      workspace: m.slug,
+      objectId: m.people.id,
+      listId: made.listId,
+      id: attributeId,
+      title: 'Note',
+      type: 'text',
+      mutationId: newId(),
+    });
+    await m.client.entries.setValues({
+      workspace: m.slug,
+      entryId: made.entryId,
+      values: { [attributeId]: { value: 'Call back' } },
+      mutationId,
+    });
+    return [
+      ...listRows(m, made),
+      { kind: 'definitions', list_id: made.listId, attribute_ids: [attributeId] },
+      { kind: 'entries', list_id: made.listId, item_ids: [made.entryId], mutation_id: mutationId },
+    ];
+  },
+  'entries.remove': async (m, mutationId) => {
+    const made = await listWithEntry(m);
+    await m.client.entries.remove({ workspace: m.slug, entryIds: [made.entryId], mutationId });
+    return [
+      ...listRows(m, made),
+      { kind: 'entries', list_id: made.listId, item_ids: [made.entryId], mutation_id: mutationId },
+    ];
+  },
+  'entries.restore': async (m, mutationId) => {
+    const made = await listWithEntry(m);
+    await m.client.entries.remove({ workspace: m.slug, entryIds: [made.entryId], mutationId: newId() });
+    await m.client.entries.restore({ workspace: m.slug, entryIds: [made.entryId], mutationId });
+    return [
+      ...listRows(m, made),
+      { kind: 'entries', list_id: made.listId, item_ids: [made.entryId] },
+      { kind: 'entries', list_id: made.listId, item_ids: [made.entryId], mutation_id: mutationId },
+    ];
+  },
+  'lists.update': async (m, mutationId) => {
+    const made = await listWithEntry(m);
+    await m.client.lists.update({ workspace: m.slug, listId: made.listId, name: 'Talent', mutationId });
+    return [...listRows(m, made), { kind: 'definitions', list_id: made.listId, mutation_id: mutationId }];
+  },
+  'lists.archive': async (m, mutationId) => {
+    const made = await listWithEntry(m);
+    await m.client.lists.archive({ workspace: m.slug, listId: made.listId, mutationId });
+    return [...listRows(m, made), { kind: 'definitions', list_id: made.listId, mutation_id: mutationId }];
+  },
+  'lists.restore': async (m, mutationId) => {
+    const made = await listWithEntry(m);
+    await m.client.lists.archive({ workspace: m.slug, listId: made.listId, mutationId: newId() });
+    await m.client.lists.restore({ workspace: m.slug, listId: made.listId, mutationId });
+    return [
+      ...listRows(m, made),
+      { kind: 'definitions', list_id: made.listId },
+      { kind: 'definitions', list_id: made.listId, mutation_id: mutationId },
+    ];
+  },
+  'entries.addMany': async (m, mutationId) => {
+    const made = await listWithEntry(m);
+    const recordId = newId();
+    await m.client.records.create({
+      workspace: m.slug,
+      objectId: m.people.id,
+      id: recordId,
+      values: { [m.attribute('name')]: { firstName: 'Bo' } },
+      mutationId: newId(),
+    });
+    const id = newId();
+    await m.client.entries.addMany({
+      workspace: m.slug,
+      listId: made.listId,
+      recordIds: [recordId],
+      ids: [id],
+      mutationId,
+    });
+    return [
+      ...listRows(m, made),
+      { kind: 'records', object_id: m.people.id, record_ids: [recordId] },
+      { kind: 'entries', list_id: made.listId, item_ids: [id], record_ids: [recordId], mutation_id: mutationId },
+    ];
+  },
+  // A list's bulk jobs (AC-4817, AC-4825): each start stores one jobs row.
+  'entries.addMatching': async (m, mutationId) => {
+    const made = await listWithEntry(m);
+    const job = await m.client.entries.addMatching({
+      workspace: m.slug,
+      id: newId(),
+      listId: made.listId,
+      target: { kind: 'ids', objectId: m.people.id, recordIds: [made.recordId] },
+      mutationId,
+    });
+    return [...listRows(m, made), { kind: 'jobs', item_ids: [job.id], mutation_id: mutationId }];
+  },
+  'entries.removeMatching': async (m, mutationId) => {
+    const made = await listWithEntry(m);
+    const job = await m.client.entries.removeMatching({
+      workspace: m.slug,
+      id: newId(),
+      listId: made.listId,
+      target: { kind: 'ids', entryIds: [made.entryId] },
+      mutationId,
+    });
+    return [...listRows(m, made), { kind: 'jobs', item_ids: [job.id], mutation_id: mutationId }];
+  },
+  'entries.undoJob': async (m, mutationId) => {
+    const made = await listWithEntry(m);
+    const started = await m.client.entries.removeMatching({
+      workspace: m.slug,
+      id: newId(),
+      listId: made.listId,
+      target: { kind: 'ids', entryIds: [made.entryId] },
+      mutationId: newId(),
+    });
+    // Only a finished change is undone: this one is ended by hand, as its run would.
+    await testQuery(ownerUrl, `update jobs set status = 'succeeded', finished_at = now() where id = $1`, [started.id]);
+    const job = await m.client.entries.undoJob({ workspace: m.slug, id: newId(), jobId: started.id, mutationId });
+    return [
+      ...listRows(m, made),
+      { kind: 'jobs', item_ids: [started.id] },
+      { kind: 'jobs', item_ids: [job.id], mutation_id: mutationId },
+    ];
+  },
   'records.create': async (m, mutationId) => {
     const id = newId();
     await m.client.records.create({
@@ -964,6 +1183,15 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
         mutation_id: mutationId,
       }))
       .sort((a, b) => a.object_id.localeCompare(b.object_id));
+  },
+  // A type change: the column's values change shape, so the object's records read again (coarse), and its definition.
+  'attributes.changeType': async (m, mutationId) => {
+    const attributeId = m.attribute('job_title');
+    await m.client.attributes.changeType({ workspace: m.slug, attributeId, to: 'long_text', mutationId });
+    return [
+      { kind: 'records', object_id: m.people.id, mutation_id: mutationId },
+      { kind: 'definitions', object_id: m.people.id, attribute_ids: [attributeId], mutation_id: mutationId },
+    ];
   },
   'attributes.restore': async (m, mutationId) => {
     const attributeId = m.attribute('job_title');
@@ -1332,6 +1560,39 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
       { kind: 'notes', item_ids: [note.id] },
       { kind: 'notes', item_ids: [note.id] },
       { kind: 'notes', object_id: m.people.id, item_ids: [note.id], record_ids: [record.id], mutation_id: mutationId },
+    ];
+  },
+  // A note's links (migration 0135): one notes row per object, naming every record linked before or after.
+  'notes.link': async (m, mutationId) => {
+    const made = async (firstName: string) =>
+      m.client.records.create({
+        workspace: m.slug,
+        objectId: m.people.id,
+        id: newId(),
+        values: { [m.attribute('name')]: { firstName } },
+        mutationId: newId(),
+      });
+    const home = await made('Ada');
+    const other = await made('Bea');
+    const { note } = await m.client.notes.save({
+      workspace: m.slug,
+      id: newId(),
+      recordId: home.id,
+      title: 'Both',
+      mutationId: newId(),
+    });
+    await m.client.notes.link({ workspace: m.slug, noteId: note.id, addRecordIds: [other.id], mutationId });
+    return [
+      { kind: 'records', record_ids: [home.id] },
+      { kind: 'records', record_ids: [other.id] },
+      { kind: 'notes', item_ids: [note.id] },
+      {
+        kind: 'notes',
+        object_id: m.people.id,
+        item_ids: [note.id],
+        record_ids: [home.id, other.id].sort(),
+        mutation_id: mutationId,
+      },
     ];
   },
   // Calendar sync (spec 0024): a sharing change names the connection's meetings and their records; so does a
@@ -2298,9 +2559,89 @@ Object.assign(WRITES, {
   },
 });
 
+// Automations (parity #53): one `automations` row naming nothing, whatever the write changed.
+const DUE_DEFINITION = {
+  trigger: { kind: 'task_due' as const },
+  actions: [{ kind: 'notify' as const, who: { kind: 'owner' as const }, message: 'Due' }],
+};
+Object.assign(WRITES, {
+  'automations.create': async (m: Member, mutationId: string) => {
+    await m.client.automations.create({ workspace: m.slug, id: newId(), definition: DUE_DEFINITION, mutationId });
+    return [{ kind: 'automations', mutation_id: mutationId }];
+  },
+  'automations.update': async (m: Member, mutationId: string) => {
+    const made = await m.client.automations.create({
+      workspace: m.slug,
+      id: newId(),
+      definition: DUE_DEFINITION,
+      mutationId: newId(),
+    });
+    await m.client.automations.update({
+      workspace: m.slug,
+      automationId: made.id,
+      definition: DUE_DEFINITION,
+      mutationId,
+    });
+    return [{ kind: 'automations' }, { kind: 'automations', mutation_id: mutationId }];
+  },
+  'automations.setEnabled': async (m: Member, mutationId: string) => {
+    const made = await m.client.automations.create({
+      workspace: m.slug,
+      id: newId(),
+      definition: DUE_DEFINITION,
+      mutationId: newId(),
+    });
+    await m.client.automations.setEnabled({ workspace: m.slug, automationId: made.id, enabled: false, mutationId });
+    return [{ kind: 'automations' }, { kind: 'automations', mutation_id: mutationId }];
+  },
+  'automations.remove': async (m: Member, mutationId: string) => {
+    const made = await m.client.automations.create({
+      workspace: m.slug,
+      id: newId(),
+      definition: DUE_DEFINITION,
+      mutationId: newId(),
+    });
+    await m.client.automations.remove({ workspace: m.slug, automationId: made.id, mutationId });
+    return [{ kind: 'automations' }, { kind: 'automations', mutation_id: mutationId }];
+  },
+  'automations.restore': async (m: Member, mutationId: string) => {
+    const made = await m.client.automations.create({
+      workspace: m.slug,
+      id: newId(),
+      definition: DUE_DEFINITION,
+      mutationId: newId(),
+    });
+    await m.client.automations.remove({ workspace: m.slug, automationId: made.id, mutationId: newId() });
+    await m.client.automations.restore({ workspace: m.slug, automationId: made.id, mutationId });
+    return [{ kind: 'automations' }, { kind: 'automations' }, { kind: 'automations', mutation_id: mutationId }];
+  },
+});
+
 /** How many writes (each one poke) a case in WRITES makes before and with its own. */
 const WRITES_MADE: Readonly<Record<string, number>> = {
+  // Lists (spec 0048): the list, its person and their entry first, then the case's own writes.
+  'entries.add': 5,
+  'entries.setValues': 5,
+  'entries.remove': 4,
+  'entries.restore': 5,
+  // A team made first, then the write (spec 0031, slice 8).
+  // A teammate invited and accepted first, then the write.
+  'accessRules.set': 3,
+  'teams.rename': 2,
+  'teams.delete': 2,
+  'teams.changeMembers': 2,
+  'lists.update': 4,
+  'lists.archive': 4,
+  'lists.restore': 5,
+  'entries.addMany': 5,
+  'entries.addMatching': 4,
+  'entries.removeMatching': 4,
+  'entries.undoJob': 5,
   // Imports (spec 0040): the import made (and its rows staged) first, then the write.
+  'automations.update': 2,
+  'automations.setEnabled': 2,
+  'automations.remove': 2,
+  'automations.restore': 3,
   'imports.stage': 2,
   'imports.start': 3,
   'imports.undo': 5,
@@ -2340,6 +2681,7 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'notes.save': 2,
   'notes.delete': 3,
   'notes.restore': 4,
+  'notes.link': 4,
   'comments.create': 2,
   'comments.update': 3,
   'comments.delete': 3,
@@ -2416,6 +2758,55 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'submissions.retry': 3,
   'submissions.delete': 3,
 };
+
+// Teams (spec 0031, slice 8): every team write stores a `members` row (everyone's team list reads again), naming the
+// people it changed and the writer; a change of people also stores the `access` row (their access, AC-825).
+Object.assign(WRITES, {
+  'teams.create': async (m: Member, mutationId: string) => {
+    const me = (await m.client.access.mine({ workspace: m.slug })).memberId;
+    await m.client.teams.create({ workspace: m.slug, name: 'Sales', mutationId });
+    return [{ kind: 'members', item_ids: [me], mutation_id: mutationId }];
+  },
+  'teams.rename': async (m: Member, mutationId: string) => {
+    const me = (await m.client.access.mine({ workspace: m.slug })).memberId;
+    const team = await m.client.teams.create({ workspace: m.slug, name: 'Sales', mutationId: newId() });
+    await m.client.teams.rename({ workspace: m.slug, teamId: team.id, name: 'Revenue', mutationId });
+    return [{ kind: 'members' }, { kind: 'members', item_ids: [me], mutation_id: mutationId }];
+  },
+  'teams.delete': async (m: Member, mutationId: string) => {
+    const me = (await m.client.access.mine({ workspace: m.slug })).memberId;
+    const team = await m.client.teams.create({ workspace: m.slug, name: 'Sales', mutationId: newId() });
+    await m.client.teams.delete({ workspace: m.slug, teamId: team.id, mutationId });
+    return [{ kind: 'members' }, { kind: 'members', item_ids: [me], mutation_id: mutationId }];
+  },
+  'teams.changeMembers': async (m: Member, mutationId: string) => {
+    const me = (await m.client.access.mine({ workspace: m.slug })).memberId;
+    const team = await m.client.teams.create({ workspace: m.slug, name: 'Sales', mutationId: newId() });
+    await m.client.teams.changeMembers({ workspace: m.slug, teamId: team.id, add: [me], mutationId });
+    return [
+      { kind: 'members' },
+      { kind: 'members', item_ids: [me], mutation_id: mutationId },
+      { kind: 'access', item_ids: [me], mutation_id: mutationId },
+    ];
+  },
+});
+
+// Access rules (spec 0032, AC-852): a rule change stores one `access` row naming the members the subject covers (a
+// team with no one in it covers nobody, so a team's first rule stores none).
+Object.assign(WRITES, {
+  'accessRules.set': async (m: Member, mutationId: string) => {
+    const mate = await teammate(m);
+    // The Member role stops seeing People: its one member (the teammate) reads their access again.
+    await m.client.accessRules.set({
+      workspace: m.slug,
+      objectId: m.people.id,
+      subject: { type: 'role', role: 'member' },
+      rule: { level: 'none', records: 'all' },
+      mutationId,
+    });
+    return [{ kind: 'members' }, { kind: 'access', item_ids: [mate.memberId], mutation_id: mutationId }];
+  },
+});
 
 describe('the one write path', () => {
   it('knows every procedure in the contract as a read or a write', () => {

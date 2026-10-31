@@ -34,6 +34,7 @@ import {
   listMeetings,
   listWorkspaceBookings,
   readBookingsCalendar,
+  readTeamDay,
   reorderProfilePages,
   readDefaultHours,
   removeTimeBlock,
@@ -119,6 +120,16 @@ export const bookingsRouter = member.bookings.router({
   // Bookings' week: the bookings in a range and the reader's own calendar events beside them.
   calendar: member.bookings.calendar.handler(({ context, input }) =>
     readBookingsCalendar(context.scope, { from: input.from, to: input.to, hosts: input.hosts }),
+  ),
+  // The Team day (spec 0030, as spec 0037 amends it): one column per member in the reader's See reach.
+  teamDay: member.bookings.teamDay.handler(({ context, input }) =>
+    readTeamDay(context.scope, {
+      day: input.day,
+      timeZone: input.timeZone,
+      ...(input.memberIds === undefined ? {} : { memberIds: input.memberIds }),
+      ...(input.withBookings === undefined ? {} : { withBookings: input.withBookings }),
+      ...(input.order === undefined ? {} : { order: input.order }),
+    }),
   ),
   // The member's default schedule's hours (spec 0035; `schedules.*` is the full surface).
   hours: member.bookings.hours.handler(({ context, input }) =>

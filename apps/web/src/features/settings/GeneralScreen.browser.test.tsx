@@ -11,7 +11,7 @@
 // The library's stylesheet first, as main.tsx loads it, so what axe measures is the app's.
 import '@crm/ui/styles.css';
 import { dataError, type DataLayer, type WorkspaceSettings } from '@crm/data';
-import { createToasts, type ToastContent, type Toasts } from '@crm/ui';
+import { createToasts, sharedStrings, type ToastContent, type Toasts } from '@crm/ui';
 import type { RouterHistory } from '@tanstack/react-router';
 import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -189,7 +189,7 @@ describe('the name', () => {
     await expect.element(page.getByText(strings.nameChanged)).toBeVisible();
     // The first rename's Undo, pressed as if its toast had stayed: the server holds Acme C, so nothing is sent.
     raised.find((each) => each.message === strings.nameChanged)?.action?.onAction();
-    await expect.element(page.getByText(strings.undoStale('name'))).toBeVisible();
+    await expect.element(page.getByText(strings.undoStale)).toBeVisible();
     expect(update).toHaveBeenCalledTimes(2);
     await expect.element(nameField()).toHaveValue('Acme C');
   });
@@ -202,7 +202,7 @@ describe('the name', () => {
     await expect.element(page.getByText(strings.nameChanged)).toBeVisible();
     write({ name: 'Acme Other' });
     await userEvent.click(page.getByRole('button', { name: strings.undo }));
-    await expect.element(page.getByText(strings.undoStale('name'))).toBeVisible();
+    await expect.element(page.getByText(strings.undoStale)).toBeVisible();
     expect(update).toHaveBeenCalledTimes(1);
   });
 
@@ -254,7 +254,7 @@ describe('the name', () => {
     await userEvent.clear(nameField());
     await userEvent.type(nameField(), 'Acme Labs');
     await userEvent.tab();
-    await expect.element(page.getByText(strings.somethingWrong)).toBeVisible();
+    await expect.element(page.getByText(sharedStrings.couldntDoThat)).toBeVisible();
     await expect.element(page.getByText(strings.nameNotSaved)).toBeVisible();
     await expect.element(nameField()).toHaveValue('Acme Labs');
   });
@@ -290,13 +290,13 @@ describe('the web address', () => {
     await expect.element(dialog.getByText(strings.addressTaken, { exact: true })).toBeVisible();
     await expect.element(change).toBeDisabled();
     // No "moves to" an address it can't move to.
-    expect(dialog.getByText(strings.moveText('acme', TAKEN)).elements()).toEqual([]);
-    await expect.element(dialog.getByText(strings.moveTextAny('acme'))).toBeVisible();
+    expect(dialog.getByText(strings.moveFromTo('acme', TAKEN)).elements()).toEqual([]);
+    await expect.element(dialog.getByText(strings.oldLinksWork)).toBeVisible();
 
     await userEvent.clear(field);
     await userEvent.type(field, 'acme-labs');
     await expect.element(dialog.getByText(strings.addressFree, { exact: true })).toBeVisible();
-    await expect.element(dialog.getByText(strings.moveText('acme', 'acme-labs'))).toBeVisible();
+    await expect.element(dialog.getByText(strings.moveFromTo('acme', 'acme-labs'))).toBeVisible();
     await expect.element(change).toBeEnabled();
     await userEvent.click(change);
     await vi.waitFor(() => {
@@ -341,7 +341,7 @@ describe('the web address', () => {
     // Announced, and focus on Close rather than lost from the now disabled Change address.
     const warning = dialog.getByRole('status').filter({ hasText: strings.movedReload('acme-labs') });
     await expect.element(warning).toBeVisible();
-    expect(dialog.getByText(strings.somethingWrong).elements()).toEqual([]);
+    expect(dialog.getByText(sharedStrings.couldntDoThat).elements()).toEqual([]);
     await expect.element(change).toBeDisabled();
     // The footer's Close, which has words; the title bar's has only its icon.
     const close = dialog.getByRole('button', { name: strings.close, exact: true }).filter({ hasText: strings.close });

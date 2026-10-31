@@ -4,10 +4,11 @@
 // Leaves out: any assistant or AI (the owner's call), and anything a section can't read for this member.
 import type { InvitationView, MemberView, ObjectSummary, Permission, TaskList as TaskListSource } from '@crm/data';
 import { usePreferences } from '@crm/data/react';
-import { PageColumn, SectionBar, TileGrid, TopBar, focusLater, useFormatSettings } from '@crm/ui';
+import { ButtonLink, PageColumn, SectionBar, TileGrid, TopBar, focusLater, useFormatSettings } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useMemo } from 'react';
 import { useNow } from '../bookings/useNow.ts';
+import { reportsHref } from '../reports/search.ts';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { dayPartOf, firstNameOf, hourIn } from './greeting.ts';
 import { sectionRuns, visibleSections, withHidden, type HomeContext, type HomeSection } from './registry.ts';
@@ -66,7 +67,13 @@ export function HomeScreen(props: HomeScreenProps) {
     <WorkspacePage
       currentPage="home"
       page={{
-        topBar: <TopBar title={strings.home} icon="house" />,
+        topBar: (
+          <TopBar title={strings.home} icon="house">
+            <ButtonLink variant="secondary" icon="chart-bar" href={reportsHref(slug)}>
+              {strings.reports}
+            </ButtonLink>
+          </TopBar>
+        ),
         body: (
           <PageColumn>
             <Greeting name={firstNameOf(me?.name)} />

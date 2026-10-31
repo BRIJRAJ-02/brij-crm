@@ -16,7 +16,7 @@ Ported from the artifact's EmptyState card. Every component's empty, error and l
 <EmptyState tone="locked" title="You can't see this list">Ask a workspace admin for access.</EmptyState>
 ```
 
-- `title` is one line; `children` say what to do next, or why.
+- `title` is one line; `children` say what to do next, or why, and are left out when the title and the actions already say it (the default since 31 October 2026: "No people yet" with New person and Import CSV needs no "People you add show here." under it). A body earns its place only by naming a step the button does not, or by saying why there is no button.
 - `error` shows "Try again" when given `onRetry`, and is announced as an alert. `empty` and `locked` are announced politely.
 - `icon` overrides the tone's icon (inbox, triangle alert, lock).
 - `layout="fill"` is the block grown to its slot's height, centred in it. Why a variant: Bookings › List with nothing in it floated a small block at the top of a tall empty area (the owner, 22 October 2026); a view that is empty and owns the whole area says so in its middle.

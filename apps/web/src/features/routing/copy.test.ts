@@ -10,12 +10,8 @@ describe('routing and forms confirm words', () => {
     expect(strings.removeTitle(0, 'Enterprise')).toBe('Remove “Enterprise”?');
     expect(strings.removeTitle(1, undefined)).toBe('Remove rule 2?');
     expect(strings.removeTitle(1, '')).toBe('Remove rule 2?');
-    expect(strings.removeText('form')).toBe(
-      'Leads it would have matched go to the next rule, or After sending applies.',
-    );
-    expect(strings.removeText('page')).toBe(
-      'Leads it would have matched go to the next rule, or the whole rotation shares them.',
-    );
+    expect(strings.removeText('form')).toBe('Its leads go to the next rule, or After sending.');
+    expect(strings.removeText('page')).toBe('Its leads go to the next rule, or the whole rotation.');
     expect(strings.removeText('form')).not.toMatch(/fallback/);
   });
 

@@ -90,6 +90,7 @@ export const OBJECT_ICONS = [
   'megaphone',
   'presentation',
   'kanban',
+  'list',
   'list-checks',
   'list-todo',
   'target',

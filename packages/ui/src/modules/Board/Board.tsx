@@ -14,7 +14,9 @@ import { useDelayedLoading } from '../../provider/useDelayedLoading.ts';
 import styles from './Board.module.css';
 import { KanbanCardOverlay, KanbanColumn, refusalOf } from './KanbanColumn.tsx';
 import { strings } from './strings.ts';
-import type { BoardCard, BoardColumn, BoardMove } from './types.ts';
+import { Field } from '../../molecules/Field/Field.tsx';
+import { Spinner } from '../../atoms/Spinner/Spinner.tsx';
+import type { BoardAddColumn, BoardCard, BoardColumn, BoardMove } from './types.ts';
 
 /** Props for Board. */
 export interface BoardProps {
@@ -34,12 +36,23 @@ export interface BoardProps {
   /** Enter or a click on a card: open its record. */
   readonly onOpen?: (card: BoardCard) => void;
   /**
+   * The card whose record is open in the panel beside the board (the CRM flow pass, 31 October 2026): it takes the
+   * selected surface and `aria-current`, and scrolls into view when the open record changes.
+   */
+  readonly activeId?: string;
+  /**
    * The "+" on each column's head: add a record with that column's value. Leave it out where the viewer may not
    * create; a collapsed strip and a column that refuses cards show no "+".
    */
   readonly onAddCard?: (columnId: string) => void;
   /** A card was picked up (true) or dropped or put back (false): the screen holds its columns still meanwhile. */
   readonly onMovingChange?: (isMoving: boolean) => void;
+  /** The columns the viewer folded into strips (kept by the screen, per view). */
+  readonly collapsedIds?: ReadonlySet<string>;
+  /** A column folded or opened: each column's head gets a collapse button, and a folded strip an expand one. */
+  readonly onCollapsedChange?: (columnId: string, isCollapsed: boolean) => void;
+  /** "+ Add stage" at the board's end, for someone who may add options to the grouping field. */
+  readonly addColumn?: BoardAddColumn;
   /** `loading` (skeleton columns after the loading delay), `error`, or `no-access`. */
   readonly status?: LoadStatus;
   /** Try again, when `status` is `error`. */
@@ -89,8 +102,12 @@ export function Board({
   showEmptyColumns,
   onShowEmptyColumnsChange,
   onOpen,
+  activeId,
   onAddCard,
   onMovingChange,
+  collapsedIds,
+  onCollapsedChange,
+  addColumn,
   status = 'ready',
   onRetry,
 }: BoardProps) {
@@ -103,6 +120,9 @@ export function Board({
   const [hasHeld, setHasHeld] = useState<ReadonlySet<string>>(() => new Set());
   const holding = columns.filter((column) => column.count > 0 && !hasHeld.has(column.id));
   if (holding.length > 0) setHasHeld(new Set([...hasHeld, ...holding.map((column) => column.id)]));
+  // Stages made here from "+ Add stage", by name: each shows while empty, so a new stage never vanishes into the
+  // hidden empty columns the moment it is made.
+  const [added, setAdded] = useState<ReadonlySet<string>>(() => new Set());
   // A press that ends a drag never opens the card it dropped.
   const isMovingRef = useRef(false);
   if (status === 'error') {
@@ -131,7 +151,7 @@ export function Board({
       </div>
     );
   }
-  if (columns.length === 0) {
+  if (columns.length === 0 && addColumn === undefined) {
     return (
       <EmptyState icon="kanban" title={strings.noColumns}>
         {strings.noColumnsBody}
@@ -141,10 +161,13 @@ export function Board({
   // An archived option shows only while it still has cards. Other empty columns follow the
   // setting, and show while a card is moving, so there is always somewhere to drop it.
   const isMoving = draggingFrom !== undefined;
+  const isAdded = (column: BoardColumn) => added.has(column.title.toLowerCase());
   const visible = columns.filter((column) =>
-    column.count > 0 ? true : column.isArchived !== true && (showEmptyColumns || isMoving),
+    column.count > 0 ? true : column.isArchived !== true && (showEmptyColumns || isMoving || isAdded(column)),
   );
-  const hiddenEmpty = columns.filter((column) => column.count === 0 && column.isArchived !== true).length;
+  const hiddenEmpty = columns.filter(
+    (column) => column.count === 0 && column.isArchived !== true && !isAdded(column),
+  ).length;
   const number = memoIntl(`plain:${locale}`, () => new Intl.NumberFormat(locale)).format(hiddenEmpty);
   const plural = memoIntl(`plural:${locale}`, () => new Intl.PluralRules(locale)).select(hiddenEmpty);
   const titleOf = (id: string | undefined) => columns.find((column) => column.id === id)?.title ?? '';
@@ -226,8 +249,26 @@ export function Board({
             isOver={overGroup === column.id}
             // A strip stays a strip while a card moves (it takes the drop as it is, so no column shifts under the
             // pointer), and one that has held cards on this board stays wide when its last card leaves.
-            isCollapsed={column.isCollapsedWhenEmpty === true && column.count === 0 && !hasHeld.has(column.id)}
+            isCollapsed={
+              collapsedIds?.has(column.id) === true ||
+              (column.isCollapsedWhenEmpty === true && column.count === 0 && !hasHeld.has(column.id))
+            }
+            {...(onCollapsedChange === undefined
+              ? {}
+              : {
+                  onCollapse: () => {
+                    onCollapsedChange(column.id, true);
+                  },
+                  ...(collapsedIds?.has(column.id) === true
+                    ? {
+                        onExpand: () => {
+                          onCollapsedChange(column.id, false);
+                        },
+                      }
+                    : {}),
+                })}
             {...(onAddCard === undefined || isMoving ? {} : { onAddCard: () => onAddCard(column.id) })}
+            {...(activeId === undefined ? {} : { activeId })}
             {...(onOpen === undefined
               ? {}
               : {
@@ -237,6 +278,15 @@ export function Board({
                 })}
           />
         ))}
+        {/* Where a new stage goes: after the last one, in a column's own width. Never while a card moves. */}
+        {addColumn !== undefined && !isMoving && (
+          <AddColumn
+            add={addColumn}
+            onAdded={(title) => {
+              setAdded((was) => new Set([...was, title.toLowerCase()]));
+            }}
+          />
+        )}
         {onShowEmptyColumnsChange !== undefined && hiddenEmpty > 0 && !isMoving && (
           <span className={styles.hidden}>
             {showEmptyColumns ? (
@@ -264,5 +314,92 @@ export function Board({
         )}
       </div>
     </DragArea>
+  );
+}
+
+/**
+ * "+ Add stage" at the board's end: a dashed button that turns into a name field in place. Enter makes the column
+ * and clears the field for the next one; Esc, or leaving it empty, puts the button back. A refused name stays in the
+ * field, and the screen says why.
+ */
+function AddColumn({
+  add,
+  onAdded,
+}: {
+  readonly add: BoardAddColumn;
+  /** The stage was made, under this name. */
+  readonly onAdded: (title: string) => void;
+}) {
+  const [isTyping, setTyping] = useState(false);
+  const [name, setName] = useState('');
+  const [isPending, setPending] = useState(false);
+  const [error, setError] = useState<string | undefined>(undefined);
+  // Put away with Esc: the button comes back with focus, so the keyboard never lands on the page.
+  const [wasPutAway, setPutAway] = useState(false);
+  const submit = () => {
+    const title = name.trim();
+    if (title === '' || isPending) return;
+    setPending(true);
+    setError(undefined);
+    add.onAdd(title).then(
+      (refused) => {
+        setPending(false);
+        if (refused === undefined) {
+          setName('');
+          onAdded(title);
+        } else setError(refused);
+      },
+      () => {
+        setPending(false);
+        setError(strings.addFailed);
+      },
+    );
+  };
+  return (
+    <div className={styles.add}>
+      {isTyping ? (
+        <Field
+          label={strings.newColumnName(add.label)}
+          isLabelHidden
+          size="sm"
+          placeholder={add.label}
+          value={name}
+          maxLength={100}
+          // eslint-disable-next-line jsx-a11y-x/no-autofocus
+          autoFocus
+          // Read only rather than disabled while it is made, so focus stays for the next name.
+          isReadOnly={isPending}
+          {...(isPending ? { suffix: <Spinner size="sm" label={strings.adding} /> } : {})}
+          {...(error === undefined ? {} : { error })}
+          onChange={(next) => {
+            setName(next);
+            setError(undefined);
+          }}
+          onSubmit={submit}
+          onEscape={() => {
+            setName('');
+            setError(undefined);
+            setTyping(false);
+            setPutAway(true);
+          }}
+          onBlur={() => {
+            if (name.trim() === '' && !isPending) setTyping(false);
+          }}
+        />
+      ) : (
+        <Button
+          variant="dashed"
+          icon="plus"
+          isFullWidth
+          // eslint-disable-next-line jsx-a11y-x/no-autofocus
+          autoFocus={wasPutAway}
+          onPress={() => {
+            setTyping(true);
+          }}
+        >
+          {add.label}
+        </Button>
+      )}
+    </div>
   );
 }

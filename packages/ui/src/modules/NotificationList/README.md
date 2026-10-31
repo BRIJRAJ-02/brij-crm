@@ -23,7 +23,7 @@ New (spec 0038, the inventory's NotificationInbox). No list in the library marks
 />
 ```
 
-- An item is `{ id, kind, actor, createdAt, isRead, isDone, record?, isNote?, formName?, excerpt }`; the sentence comes from the kind ("Ada Lovelace mentioned you", "replied in a thread", "assigned you a task"), and a form's new submission (`form_submission`, spec 0023) is named by its form instead of its actor: "Contact us got a new submission", with the record it filed as the chip and no excerpt. An actor that isn't a member (a form, the system) shows its mark from RecordChip's `ACTOR_ICONS` on Avatar's soft gray square, not initials, so it never reads as a person.
+- An item is `{ id, kind, actor, createdAt, isRead, isDone, record?, isNote?, formName?, excerpt }`; the sentence comes from the kind ("Ada Lovelace mentioned you", "replied in a thread", "assigned you a task", and the system's "Your task is due today" on a task's due day, which names nobody), and a form's new submission (`form_submission`, spec 0023) is named by its form instead of its actor: "Contact us got a new submission", with the record it filed as the chip and no excerpt. A scheduling change someone else made (`scheduling_changed`, spec 0037) reads "Grace Hopper changed your scheduling", with no chip or excerpt. An actor that isn't a member (a form, the system) shows its mark from RecordChip's `ACTOR_ICONS` on Avatar's soft gray square, not initials, so it never reads as a person.
 - Unread rows show the accent dot and a bolder sentence, and read "Unread" first to a screen reader.
 - The order is the screen's (newest first). A row still loading draws a skeleton and tells the source it is on screen, which loads the next 50.
 
@@ -31,7 +31,7 @@ New (spec 0038, the inventory's NotificationInbox). No list in the library marks
 
 ## States
 
-Unread, read, done, loading (skeleton rows), empty (in the screen's words, with an optional `emptyBody` line saying what lands here, and its actions), failed with Try again, and no access.
+Unread, read, done, loading (skeleton rows), empty (in the screen's words, with its actions, and no line under the title: an empty inbox says "You’re all caught up" and nothing more), failed with Try again, and no access.
 
 ## Keyboard
 

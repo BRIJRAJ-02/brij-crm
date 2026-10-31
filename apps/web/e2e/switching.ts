@@ -5,6 +5,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { expect, type BrowserContext, type CDPSession, type Locator, type Page, type Route } from '@playwright/test';
+import { openFullPage } from './people.ts';
 
 /** What one switch looked like. */
 export interface Switch {
@@ -248,6 +249,7 @@ export async function switchingWorkspace(
     .first()
     .getByText('Grace Hopper')
     .click();
+  await openFullPage(page);
   await expect(page).toHaveURL(/\/objects\/people\/[0-9a-f-]{36}\/overview$/, { timeout: 30_000 });
   const recordId = /\/people\/([0-9a-f-]{36})\//.exec(page.url())?.[1] ?? '';
   await page.goto(`/w/${slug}/captures/links`);

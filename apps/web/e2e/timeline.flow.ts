@@ -6,7 +6,7 @@
 // ending with the creation. axe in light and dark on the Activity tab.
 import { randomBytes, randomUUID } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
-import { addPerson, checkScreen, newWorkspace, signInAgain } from './people.ts';
+import { addPerson, checkScreen, newWorkspace, openFullPage, signInAgain } from './people.ts';
 
 const RECORD_URL = /\/w\/[^/]+\/objects\/people\/([0-9a-f-]{36})\/overview$/;
 /** AC-381: a change shows on an open timeline within a second. */
@@ -59,6 +59,7 @@ test('the timeline shows changes and links, live, and pages as it scrolls', asyn
     .getByRole('rowheader', { name: /Grace Hopper/ })
     .getByText('Grace Hopper')
     .click();
+  await openFullPage(page);
   await expect(page).toHaveURL(RECORD_URL);
   const graceId = RECORD_URL.exec(page.url())?.[1] ?? '';
   const isNarrow = info.project.name === '375';

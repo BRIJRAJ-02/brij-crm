@@ -4,6 +4,7 @@
 // audit hook; a hook that throws rolls the whole write back.
 import type { WorkspaceTx } from '@crm/db';
 import type { EngineRefusal } from '@crm/contracts/values';
+import { takeRecordSlots } from './limits.ts';
 import { isRefusal, postgresError, refuse } from './refusals.ts';
 import type { Actor, EngineScope } from './scope.ts';
 import { inWorkspace } from '../access/run.ts';
@@ -92,6 +93,11 @@ export interface NoteChange {
   readonly recordId: string;
   /** The record's object: the row names it, so the event reaches only those who may see the object. */
   readonly objectId: string;
+  /**
+   * A record the note links besides its own (migration 0135): its row names the record, never the note, since only
+   * the note's own record decides who may know of it.
+   */
+  readonly linked?: boolean;
 }
 
 /**
@@ -183,6 +189,8 @@ export interface Change {
    * Team week, Availability and Bookings' Host away flags read again in every tab. Never published by id.
    */
   readonly timeOff: readonly string[];
+  /** Automations whose definition or run outcomes the write changed (parity #53): one `automations` outbox row. */
+  readonly automations: readonly string[];
   /**
    * The background job whose batch made this write (spec 0022, milestone 3):
    * the outbox stores it in `outbox.job_id`, never published, and its
@@ -344,6 +352,7 @@ const LIST_KEYS = [
   'meetings',
   'schedules',
   'timeOff',
+  'automations',
   'nav',
   'comments',
   'notifications',
@@ -402,6 +411,15 @@ export interface WriteContext {
   perRecord<T>(
     work: (context: WriteContext) => Promise<T>,
   ): Promise<{ ok: true; value: T } | { ok: false; refusals: readonly EngineRefusal[] }>;
+  /**
+   * Counts `amount` live record slots the write takes at its end, in one `takeRecordSlots` after `work` (spec
+   * 0059): the workspace counter row is then the last lock every write takes, so it is never part of a lock cycle
+   * (a person's company filing takes a domain lock mid write), and it is held only for the end of the write. A
+   * savepoint's refusal gives back what it counted.
+   */
+  deferSlots(amount: number): void;
+  /** The slots counted so far, for a record's own room check beside the live count (`checkRecordRoom`). */
+  deferredSlots(): number;
 }
 
 /**
@@ -468,14 +486,21 @@ export async function runWrite<T>(
           meetings: [] as MeetingChange[],
           schedules: [] as string[],
           timeOff: [] as string[],
+          automations: [] as string[],
           nav: [] as string[],
           comments: [] as CommentChange[],
           notifications: [] as string[],
           calendars: [] as string[],
         };
+        // Record slots the write takes at its end; local to this attempt.
+        let slots = 0;
         const context: WriteContext = {
           tx,
           scope,
+          deferSlots(amount) {
+            slots += amount;
+          },
+          deferredSlots: () => slots,
           activeMembers: new Set<string>(),
           rules: new Map<string, RuleCache>(),
           record(part) {
@@ -505,6 +530,7 @@ export async function runWrite<T>(
             append(collected.meetings, part.meetings);
             append(collected.schedules, part.schedules);
             append(collected.timeOff, part.timeOff);
+            append(collected.automations, part.automations);
             append(collected.nav, part.nav);
             append(collected.comments, part.comments);
             append(collected.notifications, part.notifications);
@@ -512,6 +538,7 @@ export async function runWrite<T>(
           },
           async perRecord(step) {
             const marks = LIST_KEYS.map((key) => collected[key].length);
+            const slotsBefore = slots;
             try {
               const value = await tx.transaction((savepoint) => step({ ...context, tx: savepoint }));
               return { ok: true, value };
@@ -520,11 +547,14 @@ export async function runWrite<T>(
               LIST_KEYS.forEach((key, index) => {
                 collected[key].length = marks[index] ?? 0;
               });
+              slots = slotsBefore;
               return { ok: false, refusals: error.refusals };
             }
           },
         };
         const result = await work(context);
+        // The record slots the work counted, last of its locks, before the hooks number the change from the row.
+        if (slots !== 0) await takeRecordSlots(tx, scope, slots);
         // The full change: the outbox hook caps its own copy with `capChange`, and the audit log names every record.
         const change: Change = {
           kind,
@@ -556,6 +586,7 @@ export async function runWrite<T>(
           meetings: [...collected.meetings],
           schedules: [...new Set(collected.schedules)],
           timeOff: [...new Set(collected.timeOff)],
+          automations: [...new Set(collected.automations)],
           ...(options.jobId === undefined ? {} : { jobId: options.jobId }),
           nav: [...new Set(collected.nav)],
           comments: [...collected.comments],

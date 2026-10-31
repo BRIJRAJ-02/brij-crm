@@ -100,6 +100,11 @@ export interface CommentsDeps {
   readonly random?: () => number;
   /** The clock, for a sending comment's time. */
   readonly now?: () => Date;
+  /**
+   * A record's open thread count moved (this tab's own comment, a thread resolved, reopened or deleted, or the
+   * count read): the table row and board card showing the record say so at once.
+   */
+  readonly onOpenCount?: (workspace: string, recordId: string, openCount: number) => void;
 }
 
 /** A comment as a screen shows it: the server's, or one of this tab's still sending. */
@@ -286,8 +291,12 @@ export function createCommentsStore(deps: CommentsDeps): CommentsStore {
     for (const listener of entry.listeners) listener();
   };
   const set = (entry: Held, state: CommentsState) => {
+    const before = entry.state;
     entry.state = state;
     announce(entry);
+    if (state.status === 'ready' && (before.status !== 'ready' || before.openCount !== state.openCount)) {
+      deps.onOpenCount?.(entry.workspace, entry.recordId, state.openCount);
+    }
   };
   const ofWorkspace = (workspace: string) => [...held.values()].filter((entry) => entry.workspace === workspace);
 

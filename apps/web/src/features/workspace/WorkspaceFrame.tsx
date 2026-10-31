@@ -1,9 +1,10 @@
 // Brief
 // Purpose: the frame every page inside a workspace sits in: the sidebar beside the page (inside Settings, the settings sidebar).
-// Main task: move between Home, the member's sections (Records, then Scheduling) in their own order, and Tasks; fold, reorder or hide, or fold the whole sidebar, kept for the member on every device (spec 0034); open Settings (⌘,), the shortcuts (?) and sign out; undo (⌘Z).
-// Leaves out: the workspace menu's contents (spec 0031), Quick actions (the command menu), Inbox, Lists and Invite teammates (features still to come), starring (spec 0034's milestone 3), and the theme (Settings › Preferences).
+// Main task: move between Home, the member's sections (Records, Lists, then Scheduling) in their own order, and Tasks; fold, reorder or hide, or fold the whole sidebar, kept for the member on every device (spec 0034); make a list from Lists' "+" (spec 0048); open Settings (⌘,), the shortcuts (?) and sign out; undo (⌘Z).
+// Leaves out: the workspace menu's contents (spec 0031), Quick actions (the command menu), Inbox and Invite teammates (features still to come), starring (spec 0034's milestone 3), and the theme (Settings › Preferences).
 import type {
   DataLayer,
+  ListView,
   NavSnapshot,
   NavSource,
   NavState,
@@ -33,6 +34,8 @@ import {
 } from '@crm/ui';
 import { useLocation, useNavigate } from '@tanstack/react-router';
 import { LazyCustomiseSidebarDialog } from './LazyCustomiseSidebarDialog.tsx';
+import { LazyNewListModal } from '../lists/LazyNewListModal.tsx';
+import { listHref } from '../lists/paths.ts';
 import { Suspense, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { settingsNav, visibleSettingsNav, type SettingsPageId } from '../settings/nav.ts';
 import { useToday } from '../tasks/day.ts';
@@ -49,6 +52,7 @@ import { itemMenu, SidebarSections } from './SidebarSections.tsx';
 import { LeaveDialog } from './LeaveDialog.tsx';
 import { SignOutDialog } from './SignOutDialog.tsx';
 import { strings } from './strings.ts';
+import { strings as listStrings } from '../lists/strings.ts';
 import { belongsElsewhere, isRailKey, RAIL_KEYS, SETTINGS_KEYS, UNDO_KEYS, type KeyTarget } from './undo.ts';
 import { useUndoShortcut } from './useUndoShortcut.ts';
 
@@ -66,7 +70,7 @@ const DEFAULT_NAV: NavState = {
   version: 0,
   favourites: [],
   top: ['tasks', 'notes'],
-  scheduling: ['bookings', 'roster', 'captures'],
+  scheduling: ['bookings', 'captures'],
 };
 
 /** Nothing read, ever: one snapshot, so React sees no change. */
@@ -109,6 +113,8 @@ export interface WorkspaceFrameProps {
   readonly workspaces?: readonly WorkspaceSummary[];
   /** Its objects; undefined while they load, so the Records section shows skeleton rows. */
   readonly objects?: readonly ObjectSummary[];
+  /** The lists the person may read (spec 0048), live ones, oldest first: the sidebar's Lists. */
+  readonly lists?: readonly ListView[];
   /** The workspace doesn't exist, isn't the person's, or failed to load: no Records section at all. */
   readonly isMissing?: boolean;
   /** The `apiSlug` of the object whose page is open. */
@@ -148,6 +154,7 @@ export function WorkspaceFrame({
   roleLabel,
   isOwner = false,
   objects,
+  lists,
   isMissing = false,
   currentObject,
   currentPage,
@@ -213,7 +220,15 @@ export function WorkspaceFrame({
   });
   const snapshot = useNav(isMissing ? NO_NAV : data.nav.source(slug));
   const nav = snapshot.status === 'ready' ? snapshot.nav : snapshot.status === 'error' ? DEFAULT_NAV : undefined;
-  const universe = useMemo(() => universeOf(objects, nav ?? DEFAULT_NAV), [objects, nav]);
+  const universe = useMemo(() => universeOf(objects, nav ?? DEFAULT_NAV, lists), [objects, nav, lists]);
+  // New list (spec 0048, AC-4801): the "+" on the sidebar's Lists, for whoever may make one. Loaded when first opened.
+  const canMakeLists = permissions?.includes('lists.manage') === true;
+  const [isMakingList, setMakingList] = useState(false);
+  const [hasMadeList, setHasMadeList] = useState(false);
+  const openNewList = useCallback(() => {
+    setHasMadeList(true);
+    setMakingList(true);
+  }, []);
   const isRail = nav?.rail ?? readRailHint(slug);
   const keptRail = snapshot.status === 'ready' ? snapshot.nav.rail : undefined;
   useEffect(() => {
@@ -349,6 +364,8 @@ export function WorkspaceFrame({
                 nav={nav}
                 universe={universe}
                 objects={objects}
+                lists={lists ?? []}
+                {...(canMakeLists ? { onNewList: openNewList } : {})}
                 {...(currentObject === undefined ? {} : { currentObject })}
                 {...(currentPage === undefined ? {} : { currentPage })}
                 toasts={toasts}
@@ -392,6 +409,9 @@ export function WorkspaceFrame({
       data,
       universe,
       objects,
+      lists,
+      canMakeLists,
+      openNewList,
       openCustomise,
       toasts,
     ],
@@ -432,6 +452,25 @@ export function WorkspaceFrame({
             setConfirmingSignOut(false);
           }}
         />
+        {hasMadeList && (
+          <Suspense fallback={null}>
+            <LazyNewListModal
+              data={data}
+              slug={slug}
+              isOpen={isMakingList}
+              objects={(objects ?? []).filter((object) => !object.isArchived && object.access === 'write')}
+              objectId={(objects ?? []).find((object) => object.apiSlug === currentObject)?.id}
+              onClose={() => {
+                setMakingList(false);
+              }}
+              onMade={(list) => {
+                setMakingList(false);
+                toasts.toast({ tone: 'success', message: listStrings.listMade(list.name) });
+                void navigate({ href: listHref(slug, list) });
+              }}
+            />
+          </Suspense>
+        )}
         {hasCustomised && nav !== undefined && (
           <Suspense fallback={null}>
             <LazyCustomiseSidebarDialog
@@ -439,6 +478,7 @@ export function WorkspaceFrame({
               slug={slug}
               nav={nav}
               objects={objects}
+              lists={lists}
               isOpen={isCustomising}
               onOpenChange={setCustomising}
             />

@@ -55,7 +55,14 @@ export {
 export { imageTypeOf, type ImageType } from './booking/image-type.ts';
 
 // A link block's own icon from our own origin (26 Oct 2026): what may be fetched for one, and nothing else.
-export { declaredIcon, faviconSources, faviconVersion, isFaviconSite, FAVICON_PATH } from './booking/favicon.ts';
+export {
+  declaredIcon,
+  faviconSources,
+  faviconVersion,
+  isFaviconSite,
+  FAVICON_PATH,
+  type IconPick,
+} from './booking/favicon.ts';
 
 // Whether a path parameter is an id at all, so a public route turns away what the door would only refuse.
 export { isUuid } from './engine/ids.ts';

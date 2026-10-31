@@ -20,6 +20,7 @@ import {
   type MyAccess,
   type Role,
   type RolesList,
+  type TeamView,
 } from '@crm/data';
 import {
   Avatar,
@@ -32,20 +33,21 @@ import {
   Field,
   InfoTip,
   Menu,
-  Modal,
   MenuItem,
   MenuSeparator,
   MenuTrigger,
+  Modal,
   RelativeTime,
   Select,
   SettingsSection,
   SettingsStack,
+  sharedStrings,
   Table,
-  TabPanel,
-  TruncatedText,
-  Tabs,
   type TableColumn,
+  TabPanel,
+  Tabs,
   type Toasts,
+  TruncatedText,
 } from '@crm/ui';
 import { useRouter } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
@@ -95,6 +97,8 @@ export interface MembersScreenProps {
   readonly access: MyAccess;
   /** The roles every role picker offers (`roles.list`, spec 0037, AC-1439), most power first. */
   readonly roles: RolesList;
+  /** The workspace's teams, for team delegations in the Scheduling access column (undefined: not read). */
+  readonly teams?: readonly TeamView[] | undefined;
 }
 
 const MEMBER_COLUMNS: readonly TableColumn[] = [
@@ -142,7 +146,7 @@ const INVITATION_COLUMNS: readonly TableColumn[] = [
 const SEARCH_WAIT_MS = 250;
 
 /** The message a refusal shows, in the server's words when it gave any. */
-const messageOf = (error: unknown) => (isDataError(error) ? error.message : strings.somethingWrong);
+const messageOf = (error: unknown) => (isDataError(error) ? error.message : sharedStrings.couldntDoThat);
 
 /** The Members page: Members and Joining tabs, the Invite dialog and the confirms. */
 export function MembersScreen({
@@ -159,6 +163,7 @@ export function MembersScreen({
   domains,
   access,
   roles,
+  teams,
 }: MembersScreenProps) {
   const router = useRouter();
   // Owners and admins see who has two factor sign in (spec 0033, AC-895): decided by access, so it never slides in.
@@ -389,7 +394,16 @@ export function MembersScreen({
       case 'twoFactor':
         return member.twoFactor === true ? strings.twoFactorOn : strings.twoFactorOff;
       case 'scheduling':
-        return <SchedulingAccessCell data={data} toasts={toasts} slug={slug} me={access.memberId} member={member} />;
+        return (
+          <SchedulingAccessCell
+            data={data}
+            toasts={toasts}
+            slug={slug}
+            me={access.memberId}
+            member={member}
+            teams={teams}
+          />
+        );
       case 'calendar':
         return <CalendarHealthChip state={health.get(member.id)} name={member.name} />;
       case 'joined':
@@ -697,7 +711,7 @@ export function MembersScreen({
         </Tabs>
       ) : (
         <>
-          <Callout>{strings.readOnlyNote}</Callout>
+          <Callout>{sharedStrings.ownersAndAdminsOnly}</Callout>
           {searchField}
           {membersList}
         </>
@@ -824,7 +838,7 @@ export function MembersPending() {
         </Tabs>
       ) : (
         <>
-          <Callout>{strings.readOnlyNote}</Callout>
+          <Callout>{sharedStrings.ownersAndAdminsOnly}</Callout>
           {searchField}
           {table}
         </>

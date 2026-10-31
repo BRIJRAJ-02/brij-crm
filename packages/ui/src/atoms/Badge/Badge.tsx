@@ -1,6 +1,8 @@
 import type { Hue } from '../../hue.ts';
 import { memoIntl } from '../../lib/intl-memo.ts';
 import { useFormatSettings } from '../../provider/context.ts';
+import { Icon } from '../Icon/Icon.tsx';
+import type { IconName } from '../Icon/icons.ts';
 import { VisuallyHidden } from '../VisuallyHidden/VisuallyHidden.tsx';
 import styles from './Badge.module.css';
 import { strings } from './strings.ts';
@@ -26,6 +28,11 @@ export type BadgeProps = BadgeBase &
         readonly max?: number;
         /** The count is a floor, not the total (a capped count, "10,000+"). */
         readonly isAtLeast?: boolean;
+        /**
+         * A glyph before the count, saying what is counted at a glance: a comment mark on a row or card with open
+         * threads. Pair it with `label`, which the glyph (hidden from screen readers) leaves to say what it counts.
+         */
+        readonly icon?: IconName;
         readonly text?: never;
         readonly dot?: never;
         readonly isWhole?: never;
@@ -45,6 +52,7 @@ export type BadgeProps = BadgeBase &
         readonly count?: never;
         readonly max?: never;
         readonly isAtLeast?: never;
+        readonly icon?: never;
       }
   );
 
@@ -67,8 +75,10 @@ export function Badge(props: BadgeProps) {
       data-text={props.text === undefined ? undefined : ''}
       data-whole={props.isWhole === true || undefined}
       data-size={size === 'chip' ? 'chip' : undefined}
+      data-icon={props.icon === undefined ? undefined : ''}
     >
       {props.dot !== undefined && <span className={styles.dot} data-hue={props.dot} aria-hidden="true" />}
+      {props.icon !== undefined && <Icon name={props.icon} size="xs" />}
       {props.text === undefined ? shown : <span className={styles.text}>{shown}</span>}
       {label !== undefined && <VisuallyHidden> {label}</VisuallyHidden>}
     </span>

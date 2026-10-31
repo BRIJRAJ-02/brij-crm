@@ -14,7 +14,7 @@ const tree = readFileSync(new URL('../../routeTree.gen.ts', import.meta.url), 'u
 const fullPaths = new Set([...tree.matchAll(/fullPath: '([^']+)'/g)].map((match) => match[1]));
 /**
  * Whether an address the sidebar links to (with `$slug`) is a route, with or without the trailing slash. A query is a
- * view of its route (the Roster is Availability's `?view=team`, spec 0037).
+ * view of its route.
  */
 const isRoute = (link: string) => {
   const href = link.split('?')[0] ?? link;
@@ -46,7 +46,8 @@ describe('the sidebar’s routes (AC-944)', () => {
   it('draws one Bookings row and one Captures row, as round 6 did (the owner, 22 October 2026)', () => {
     // Link page leads: it is the surface a member opens most, and it answered inside Settings › Account › Profile
     // until 25 October 2026 (the owner). The inbox follows: a mention or an assignment lands there (spec 0038).
-    expect(Object.keys(PAGE_LINKS)).toEqual(['linkPage', 'inbox', 'tasks', 'notes', 'bookings', 'roster', 'captures']);
+    // The Roster is a Bookings tab (31 October 2026), never a row of its own.
+    expect(Object.keys(PAGE_LINKS)).toEqual(['linkPage', 'inbox', 'tasks', 'notes', 'bookings', 'captures']);
     expect(PAGE_LINKS.linkPage?.href('acme')).toBe('/w/acme/link-page');
     expect(PAGE_LINKS.inbox?.href('acme')).toBe('/w/acme/inbox');
     expect(PAGE_LINKS.bookings?.href('acme')).toBe('/w/acme/bookings/calendar');
@@ -161,6 +162,27 @@ describe('the sections the sidebar draws (AC-921, AC-928, AC-931)', () => {
     expect(sections.map((section) => [section.key, section.isFolded])).toEqual([
       ['scheduling', true],
       ['records', false],
+    ]);
+  });
+
+  // Spec 0048 (AC-4801, AC-4804): the readable live lists, oldest first; empty, Lists shows only to a list maker.
+  it('draws Lists with the live lists, and empty only for someone who may make one', () => {
+    const nav = navOf();
+    const lists = [
+      { id: '0192f0c8-0000-7000-8000-00000000a001', isArchived: false },
+      { id: '0192f0c8-0000-7000-8000-00000000a002', isArchived: true },
+    ];
+    const sections = drawnSections(nav, universeOf(OBJECTS, nav, lists));
+    expect(sections.map((section) => section.key)).toEqual(['records', 'lists', 'scheduling']);
+    expect(sections[1]?.entries.map((entry) => entry.id)).toEqual([lists[0]?.id]);
+    expect(drawnSections(nav, universeOf(OBJECTS, nav)).map((section) => section.key)).toEqual([
+      'records',
+      'scheduling',
+    ]);
+    expect(drawnSections(nav, universeOf(OBJECTS, nav), true).map((section) => section.key)).toEqual([
+      'records',
+      'lists',
+      'scheduling',
     ]);
   });
 

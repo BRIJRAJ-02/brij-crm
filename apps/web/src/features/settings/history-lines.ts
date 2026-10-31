@@ -75,7 +75,13 @@ function wordsFor(format: HistoryFormat): SentenceWords {
       target.isGone || target.pageTitle === undefined || target.startsAt === undefined
         ? strings.gone.booking
         : strings.bookingOn(target.pageTitle, format.dayTime(target.startsAt)),
-    thing: (target) => (target.isGone || target.name === undefined ? strings.gone[target.type] : target.name),
+    thing: (target) =>
+      target.isGone || target.name === undefined
+        ? // A list the reader can't read is named by no name, and isn't gone (spec 0048).
+          target.type === 'list' && !target.isGone
+          ? strings.someList
+          : strings.gone[target.type]
+        : target.name,
     day: format.day,
     list: listOf,
   };

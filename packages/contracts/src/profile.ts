@@ -26,6 +26,21 @@ export const MemberName = z.string().trim().min(1, 'Enter your name.').max(80, '
 /** A member's name in a workspace. */
 export type MemberName = z.infer<typeof MemberName>;
 
+/** The most characters a job title takes (spec 0037, AC-1441). */
+export const JOB_TITLE_MAX = 60;
+
+/**
+ * A member's job title in a workspace (spec 0037, AC-1441): one line, up to 60 characters; empty clears it. A label
+ * on the Team day and the order it can take, never read by any access check.
+ */
+export const JobTitle = z
+  .string()
+  .trim()
+  .max(JOB_TITLE_MAX, `Keep the job title to ${String(JOB_TITLE_MAX)} characters.`)
+  .regex(/^[^\r\n]*$/, { error: 'Keep the job title to one line.' });
+/** A member's job title. */
+export type JobTitle = z.infer<typeof JobTitle>;
+
 /**
  * A person's handle (22 Oct 2026): their public profile at `/<handle>`, each booking page at `/<handle>/<slug>`.
  * Lowercase letters, numbers and single hyphens, 3 to 40, and not a word kept for the app; unique everywhere.
@@ -103,6 +118,8 @@ export const MyProfile = z.object({
   name: z.string(),
   email: z.string(),
   timeZone: z.string().optional(),
+  /** Their job title in this workspace (spec 0037, AC-1441); absent when they set none. */
+  jobTitle: z.string().optional(),
   workspaceTimeZone: z.string(),
   /** Their account's Google picture as our own origin serves it (`/api/me/picture?v=`, 23 Oct 2026), never Google's URL. */
   image: z.string().optional(),
@@ -194,6 +211,8 @@ export type SetShareImageInput = z.infer<typeof SetShareImageInput>;
 export const UpdateMyProfileInput = WorkspaceScoped.extend({
   name: MemberName.optional(),
   timeZone: TimeZoneName.nullable().optional(),
+  /** Their job title; empty clears it (spec 0037, AC-1441). */
+  jobTitle: JobTitle.optional(),
   /** A new handle: the old one keeps working, moving to this one. */
   handle: PublicHandle.optional(),
   bio: PublicBio.optional(),

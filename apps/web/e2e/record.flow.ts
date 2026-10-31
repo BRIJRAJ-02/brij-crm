@@ -4,7 +4,7 @@
 // keep the tab on reload, and the unavailable state for an id that names
 // nothing. axe in light and dark on each screen.
 import { expect, test } from '@playwright/test';
-import { addPerson, checkScreen, newWorkspace } from './people.ts';
+import { addPerson, checkScreen, newWorkspace, openFullPage } from './people.ts';
 
 const RECORD_URL = /\/w\/[^/]+\/objects\/people\/([0-9a-f-]{36})\/overview$/;
 
@@ -19,6 +19,7 @@ test('a record opens from the table, edits in place, and keeps its tab', async (
     .getByRole('rowheader', { name: /Grace Hopper/ })
     .getByText('Grace Hopper')
     .click();
+  await openFullPage(page);
   await expect(page).toHaveURL(RECORD_URL);
   const recordId = RECORD_URL.exec(page.url())?.[1] ?? '';
   await expect(page).toHaveTitle('Grace Hopper · Timefix');

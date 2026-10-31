@@ -4,7 +4,7 @@
 // meanwhile); and the Notes and Tasks tabs start from their empty states.
 import { randomUUID } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
-import { addPerson, newWorkspace } from './people.ts';
+import { addPerson, newWorkspace, openFullPage } from './people.ts';
 
 /** The record's page address, from the toast's Open after it was made. */
 async function openFromToast(page: Page, name: string): Promise<string> {
@@ -13,6 +13,8 @@ async function openFromToast(page: Page, name: string): Promise<string> {
     .or(page.getByRole('status'))
     .filter({ hasText: `${name} created` });
   await toast.getByRole('button', { name: 'Open' }).click();
+  // Open shows it beside the table, as a row's name does; its full page is one press on.
+  await openFullPage(page);
   await expect(page).toHaveURL(/\/objects\/people\/[0-9a-f-]{36}\/overview$/);
   await expect(page.getByRole('heading', { level: 2, name })).toBeVisible();
   return new URL(page.url()).pathname;

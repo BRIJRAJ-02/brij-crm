@@ -37,7 +37,7 @@ export const MAX_READ_ATTRIBUTES = 250;
  * object's are ignored, not refused, so they reveal nothing. Absent reads
  * every attribute.
  */
-const ReadAttributeIds = z
+export const ReadAttributeIds = z
   .array(Uuid)
   .max(MAX_READ_ATTRIBUTES, `Read at most ${String(MAX_READ_ATTRIBUTES)} attributes at once.`);
 
@@ -48,7 +48,7 @@ const ReadAttributeIds = z
  * so two blocks never disagree about "today". The server's clock and UTC
  * when absent; an unknown zone is refused `FILTER_INVALID`.
  */
-const QueryClock = {
+export const QueryClock = {
   // Postgres has no year 0: a clock in 0000 would fail in the database rather than as an input problem.
   now: Timestamp.refine((value) => !value.startsWith('0000'), {
     error: 'Give a time from the year 0001 on.',
@@ -61,7 +61,7 @@ const QueryClock = {
  * ("today", "in the last 7 days") resolve where the person is (spec 0013).
  * UTC when absent; an unknown zone reads as UTC.
  */
-const WriteTimeZone = z.string().min(1).max(64).optional();
+export const WriteTimeZone = z.string().min(1).max(64).optional();
 
 /** The most records one `records.setValuesBatch` changes (spec 0006, AC-50); more is refused 422 `CONFIG_INVALID`. */
 export const MAX_BATCH_RECORDS = 500;
@@ -102,6 +102,11 @@ export const RecordView = z.object({
   values: z.record(z.string(), z.unknown()),
   versions: z.record(z.string(), Uuid),
   linkTotals: z.record(z.string(), z.number().int().min(0)),
+  /**
+   * The record's open comment threads (the count a table row and a board card show), on a read that asked for them
+   * with `threadCounts`; 0 when none. Absent on every other read, which a client's copy keeps its count through.
+   */
+  openThreads: z.number().int().min(0).optional(),
 });
 /** A record as a screen holds it. */
 export type RecordView = z.infer<typeof RecordView>;
@@ -128,6 +133,8 @@ export const QueryRecordsInput = WorkspaceScoped.extend({
   filter: FilterGroup.optional(),
   sorts: SortRules.optional(),
   attributeIds: ReadAttributeIds.optional(),
+  /** Add each record's open comment threads (`openThreads`): one more statement for the window. */
+  threadCounts: z.boolean().optional(),
   ...QueryClock,
 }).refine((input) => input.position === undefined || input.cursor === undefined, {
   error: 'Give a position or a cursor, not both.',
@@ -204,6 +211,8 @@ export const RecordGroupsInput = WorkspaceScoped.extend({
     .max(BOARD_MAX_GROUP_LIMIT, `Ask for at most ${String(BOARD_MAX_GROUP_LIMIT)} cards a column.`)
     .optional(),
   probeArchived: z.boolean().optional(),
+  /** Add each card's open comment threads (`openThreads`): one more statement a column. */
+  threadCounts: z.boolean().optional(),
   ...QueryClock,
 });
 /** The first cards of a board's columns. */
@@ -317,6 +326,8 @@ export type RecordAggregateGroups = z.infer<typeof RecordAggregateGroups>;
 export const GetRecordsInput = WorkspaceScoped.extend({
   ids: z.array(Uuid).max(MAX_GET_IDS, `Read at most ${String(MAX_GET_IDS)} records at once.`),
   attributeIds: ReadAttributeIds.optional(),
+  /** Add each record's open comment threads (`openThreads`). */
+  threadCounts: z.boolean().optional(),
 });
 /** Records by id. */
 export type GetRecordsInput = z.infer<typeof GetRecordsInput>;
@@ -381,9 +392,32 @@ export const SetValuesInput = WorkspaceScoped.extend({
   values: z.record(z.uuid(), ValueChangeInput),
   timeZone: WriteTimeZone,
   mutationId: Uuid,
+  /**
+   * An undo putting old values back (spec 0059): it files no company, so
+   * undoing an email change never links the person again.
+   */
+  noFiling: z.boolean().optional(),
 });
 /** New values for one record. */
 export type SetValuesInput = z.infer<typeof SetValuesInput>;
+
+/**
+ * The company a person's write linked them to by their email's domain (spec
+ * 0059, AC-5920): the company (`made` when this write created it), its name
+ * as the writer may read it (empty when its name field is hidden from them),
+ * the person's Company attribute, and the version the link carries, which an
+ * undo names as `ifVersionId` so it never clears a Company someone set since.
+ */
+export const FiledCompany = z.object({
+  objectId: Uuid,
+  recordId: Uuid,
+  name: z.string(),
+  made: z.boolean(),
+  attributeId: Uuid,
+  linkVersionId: Uuid,
+});
+/** The company a person's write linked them to. */
+export type FiledCompany = z.infer<typeof FiledCompany>;
 
 /**
  * A record a write answers: fresh, plus `echoes`, how many change events
@@ -400,6 +434,8 @@ export const WrittenRecord = RecordView.extend({
    * between), so it is what the tab can call its own (spec 0006).
    */
   written: z.record(z.uuid(), Uuid),
+  /** The company this write linked the person to (spec 0059); absent when it filed nothing. */
+  filedCompany: FiledCompany.optional(),
 });
 /** A record a write answers, with its echo count. */
 export type WrittenRecord = z.infer<typeof WrittenRecord>;
@@ -422,6 +458,8 @@ export const SetValuesBatchInput = WorkspaceScoped.extend({
   items: z.array(BatchItem).max(MAX_BATCH_RECORDS * 2, `Change at most ${String(MAX_BATCH_RECORDS)} records at once.`),
   timeZone: WriteTimeZone,
   mutationId: Uuid,
+  /** An undo putting old values back (spec 0059): it files no company, as `SetValuesInput.noFiling`. */
+  noFiling: z.boolean().optional(),
 });
 /** New values for many records. */
 export type SetValuesBatchInput = z.infer<typeof SetValuesBatchInput>;
@@ -437,6 +475,8 @@ export const BatchRecordResult = z.object({
   record: RecordView.optional(),
   /** With `record`: the version this write made for each attribute it changed (as `WrittenRecord.written`). */
   written: z.record(z.uuid(), Uuid).optional(),
+  /** With `record`: the company this write linked the person to (spec 0059), as `WrittenRecord.filedCompany`. */
+  filedCompany: FiledCompany.optional(),
   refusals: z.array(ApiRefusal).optional(),
 });
 /** One record's outcome in a batch. */

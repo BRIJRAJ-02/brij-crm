@@ -2,13 +2,15 @@
 // link to a tab without loading it.
 
 /**
- * Bookings' tabs, in their order: the week calendar, the list, the member's own hours, the groups a booking is
+ * Bookings' tabs, in their order (spec 0037, AC-1447): the week calendar, the list, the team's week (the Roster, a tab
+ * of its own from 31 October 2026, the owner's ask, where it had been Availability's Team view behind a Mine | Team
+ * switch; shown only to whoever sees someone else's scheduling, `rosterIsShown` in booking/links.ts), the member's own hours, the groups a booking is
  * shared out between, and the calendars it reads. The last two came up out of Settings › Scheduling (25 October
  * 2026): they are what somebody setting up bookings does next, not workspace housekeeping, and a person who had
  * not connected a calendar had no reason to go looking three levels into Settings for the one thing that makes
  * every other tab work.
  */
-export const BOOKINGS_TABS = ['calendar', 'list', 'availability', 'round-robin', 'calendars'] as const;
+export const BOOKINGS_TABS = ['calendar', 'list', 'roster', 'availability', 'round-robin', 'calendars'] as const;
 
 /** One of Bookings' tabs. */
 export type BookingsPageTab = (typeof BOOKINGS_TABS)[number];

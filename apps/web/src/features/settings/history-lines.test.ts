@@ -299,6 +299,26 @@ const SENTENCES: readonly (readonly [AuditEntryView, string])[] = [
     'Ada Lovelace changed who is emailed Contact us’s new submissions',
   ],
   [
+    { ...base, action: 'list.created', target: { type: 'list', id: ID, name: 'Sales', isGone: false }, params: {} },
+    'Ada Lovelace made the list Sales',
+  ],
+  [
+    { ...base, action: 'list.updated', target: { type: 'list', id: ID, name: 'Sales', isGone: false }, params: {} },
+    'Ada Lovelace changed the list Sales',
+  ],
+  [
+    { ...base, action: 'list.archived', target: { type: 'list', id: ID, name: 'Sales', isGone: false }, params: {} },
+    'Ada Lovelace archived the list Sales',
+  ],
+  [
+    { ...base, action: 'list.restored', target: { type: 'list', id: ID, isGone: true }, params: {} },
+    'Ada Lovelace restored the list a deleted list',
+  ],
+  [
+    { ...base, action: 'list.archived', target: { type: 'list', id: ID, isGone: false }, params: {} },
+    'Ada Lovelace archived the list a list',
+  ],
+  [
     { ...base, action: 'booking.no_show', target: booking, params: {} },
     'Ada Lovelace marked Intro call on dayTime(2026-10-24T09:30) as a no show',
   ],
@@ -330,7 +350,7 @@ const SENTENCES: readonly (readonly [AuditEntryView, string])[] = [
       target: member(bea),
       params: { level: 'manage', from: 'view', over: gone },
     },
-    'Ada Lovelace changed what Bea Rao can do with a deleted user’s scheduling to manage it',
+    'Ada Lovelace now lets Bea Rao manage a deleted user’s scheduling',
   ],
   [
     { ...base, action: 'delegation.revoked', target: member(bea), params: { level: 'view' } },
@@ -392,6 +412,87 @@ const SENTENCES: readonly (readonly [AuditEntryView, string])[] = [
   [
     { ...base, action: 'booking.changed_for', target: booking, params: { host: bea, change: 'made' } },
     'Ada Lovelace booked Intro call on dayTime(2026-10-24T09:30) for Bea Rao',
+  ],
+  [
+    {
+      ...base,
+      action: 'team.changed',
+      target: workspace,
+      params: { change: 'created', team: 'Sales', joined: 2, left: 0 },
+    },
+    'Ada Lovelace made the Sales team',
+  ],
+  [
+    {
+      ...base,
+      action: 'team.changed',
+      target: workspace,
+      params: { change: 'renamed', team: 'Sales', joined: 0, left: 0 },
+      changes: [{ field: 'name', after: { kind: 'text', text: 'Revenue' } }],
+    },
+    'Ada Lovelace renamed the Sales team to Revenue',
+  ],
+  [
+    {
+      ...base,
+      action: 'team.changed',
+      target: workspace,
+      params: { change: 'deleted', team: 'Sales', joined: 0, left: 3 },
+    },
+    'Ada Lovelace deleted the Sales team',
+  ],
+  [
+    {
+      ...base,
+      action: 'team.changed',
+      target: workspace,
+      params: { change: 'members', team: 'Sales', joined: 1, left: 2 },
+    },
+    'Ada Lovelace changed who is in the Sales team',
+  ],
+  [
+    {
+      ...base,
+      action: 'access.rule_set',
+      target: workspace,
+      params: { object: 'Deals', who: 'Sales', level: 'write', records: 'own', fields: 2, isDefault: false },
+    },
+    'Ada Lovelace changed access to Deals: Sales can edit, their own only, 2 fields limited',
+  ],
+  [
+    {
+      ...base,
+      action: 'access.rule_set',
+      target: workspace,
+      params: { object: 'Deals', who: 'Members', level: 'none', records: 'all', fields: 0, isDefault: false },
+    },
+    'Ada Lovelace changed access to Deals: Members can’t see',
+  ],
+  [
+    {
+      ...base,
+      action: 'access.rule_set',
+      target: workspace,
+      params: { object: 'Deals', who: 'Members', level: 'write', records: 'all', fields: 0, isDefault: true },
+    },
+    'Ada Lovelace set Members back to the default access to Deals',
+  ],
+  [
+    {
+      ...base,
+      action: 'booking_page.changed_for',
+      target: member(bea),
+      params: { page: 'Intro call', deleted: false },
+    },
+    'Ada Lovelace changed Bea Rao’s “Intro call” page',
+  ],
+  [
+    { ...base, action: 'booking_page.changed_for', target: member(bea), params: { page: 'Intro call', deleted: true } },
+    'Ada Lovelace deleted Bea Rao’s “Intro call” page',
+  ],
+  [
+    { ...base, action: 'rotation.changed', target: rotation, params: { added: 1, removed: 0 } },
+    'Ada Lovelace changed who is in Sales',
   ],
 ];
 

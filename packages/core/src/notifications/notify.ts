@@ -9,15 +9,20 @@
 // kind get the email task queued (`crm_enqueue_notification_email`, 5 minutes
 // on, one waiting row per member). A form's new submission (spec 0023, AC-568)
 // is written by the processing job through `notifySubmission`, which emails it
-// itself, with its answers, or leaves it for the member's daily digest.
+// itself, with its answers, or leaves it for the member's daily digest. A task
+// due today (migration 0135) is written by the daily cleanup through
+// `notifyTasksDue`, once per assignee and task, and emailed as an assignment is.
 import { sql, type SQL } from 'drizzle-orm';
 import type { NotificationKind } from '@crm/contracts';
 import type { WorkspaceTx } from '@crm/db';
 import { uuidList } from '../engine/ids.ts';
 import type { WriteContext } from '../engine/write.ts';
 
-/** The kinds a member's switches email after a notification (a form's submission and a join request each have their own email). */
-type SwitchedKind = Exclude<NotificationKind, 'form_submission' | 'join_request'>;
+/**
+ * The kinds a member's switches email after a notification (a form's submission, a join request and a scheduling
+ * change each have their own email; an automation's notice is in app only).
+ */
+type SwitchedKind = Exclude<NotificationKind, 'form_submission' | 'join_request' | 'automation' | 'scheduling_changed'>;
 
 /** The settings column that says whether a kind is emailed. */
 // A join request has its own email (`requestToJoin`'s notice), so it never queues this one.
@@ -25,6 +30,8 @@ const EMAIL_COLUMN: Readonly<Record<SwitchedKind, string>> = {
   mention: 'email_mentions',
   reply: 'email_replies',
   task_assigned: 'email_assignments',
+  // A due day is about a task the member was given: the same switch as the assignment.
+  task_due: 'email_assignments',
 };
 
 /** The actor's columns as a notification stores them. */
@@ -217,7 +224,7 @@ export async function notifyTaskAssigned(
         ${actor.memberId}::uuid, ${taskId}::uuid
       from members m where m.id = ${assignee}::uuid and m.status = 'active'
       on conflict (workspace_id, member_id, task_id) where task_id is not null do update
-        set created_at = now(), read_at = null, done_at = null, emailed_at = null,
+        set kind = excluded.kind, created_at = now(), read_at = null, done_at = null, emailed_at = null,
           actor_type = excluded.actor_type, actor_id = excluded.actor_id, actor_member_id = excluded.actor_member_id
       returning member_id::text as member_id
     `);
@@ -226,6 +233,68 @@ export async function notifyTaskAssigned(
     await queueEmail(context, recipients, 'task_assigned');
   }
   if (changed.length > 0) context.record({ notifications: changed });
+}
+
+/** One batch of `notifyTasksDue`: how many tasks it looked at, the last one's id (the next batch's start), who heard. */
+export interface TasksDueBatch {
+  readonly picked: number;
+  readonly last?: string;
+  readonly notified: number;
+}
+
+/**
+ * Tasks due today (migration 0135): for at most `limit` open, live tasks due
+ * on `day` (`YYYY-MM-DD`, the cleanup's UTC day) with an active assignee,
+ * after the id `after` in id order, a `task_due` notification to the
+ * assignee, from the system. A member holds one notification per task, so
+ * their assignment notice turns into the due one, unread at the top again
+ * (done ones come back to the inbox); one already told of this day is left
+ * alone, so a second run of the day writes nothing, and a task moved to a
+ * later day is told again then. Their inboxes hear of it, and the email task
+ * is queued for those who get assignment emails. The inbox shows it only
+ * while the task rule lets the assignee see the task, which it always does.
+ */
+export async function notifyTasksDue(
+  context: WriteContext,
+  input: { readonly day: string; readonly after?: string; readonly limit: number },
+): Promise<TasksDueBatch> {
+  const { workspaceId } = context.scope;
+  const found = await context.tx.execute<{ picked: number; last: string | null; members: string[] | null }>(sql`
+    with picked as (
+      select t.id, t.assignee_member_id from tasks t
+      where t.workspace_id = ${workspaceId}::uuid and t.deleted_at is null and not t.is_done
+        and t.due_on = ${input.day}::date and t.assignee_member_id is not null
+        ${input.after === undefined ? sql`` : sql`and t.id > ${input.after}::uuid`}
+      order by t.id
+      limit ${input.limit}
+    ),
+    made as (
+      insert into notifications (workspace_id, member_id, kind, actor_type, task_id)
+      select ${workspaceId}::uuid, p.assignee_member_id, 'task_due', 'system', p.id
+      from picked p
+      join members m on m.workspace_id = ${workspaceId}::uuid and m.id = p.assignee_member_id and m.status = 'active'
+      on conflict (workspace_id, member_id, task_id) where task_id is not null do update
+        set kind = excluded.kind, created_at = now(), read_at = null, done_at = null, emailed_at = null,
+          actor_type = excluded.actor_type, actor_id = null, actor_member_id = null
+        where notifications.kind::text <> 'task_due'
+          or notifications.created_at < (${input.day}::date)::timestamp at time zone 'UTC'
+      returning member_id
+    )
+    select (select count(*)::int from picked) as picked,
+      (select p.id::text from picked p order by p.id desc limit 1) as last,
+      (select array_agg(distinct made.member_id::text) from made) as members
+  `);
+  const row = found.rows[0];
+  const recipients = row?.members ?? [];
+  if (recipients.length > 0) {
+    context.record({ notifications: recipients });
+    await queueEmail(context, recipients, 'task_due');
+  }
+  return {
+    picked: row?.picked ?? 0,
+    ...(row?.last === null || row?.last === undefined ? {} : { last: row.last }),
+    notified: recipients.length,
+  };
 }
 
 /**
@@ -270,4 +339,30 @@ export async function withdrawSubmissionNotices(context: WriteContext, which: SQ
   `);
   const members = [...new Set(gone.rows.map((row) => row.member_id))];
   if (members.length > 0) context.record({ notifications: members });
+}
+
+/**
+ * Someone changed a member's scheduling (spec 0037, AC-1264): one `scheduling_changed` notification in the member's
+ * inbox naming only the actor, written by the scheduling notice in the transaction that queued its email, once per
+ * email (the caller calls it only for an email it newly queued). An active member only, never the actor themself. A
+ * member who takes the daily digest gets it there (not yet emailed); anyone else had the email already, so the row is
+ * marked emailed now and no notifications email repeats it. Answers whether a row was written, so the caller names
+ * the member in its `notifications` outbox row and their open inbox shows it.
+ */
+export async function notifySchedulingChanged(
+  tx: WorkspaceTx,
+  input: { readonly workspaceId: string; readonly memberId: string; readonly actorMemberId: string },
+): Promise<boolean> {
+  if (input.memberId === input.actorMemberId) return false;
+  const made = await tx.execute<{ id: string }>(sql`
+    insert into notifications (workspace_id, member_id, kind, actor_type, actor_id, actor_member_id, emailed_at)
+    select ${input.workspaceId}::uuid, m.id, 'scheduling_changed', 'member', ${input.actorMemberId}::uuid,
+      ${input.actorMemberId}::uuid,
+      case when coalesce((select s.digest from notification_settings s where s.member_id = m.id), false)
+        then null else now() end
+    from members m
+    where m.workspace_id = ${input.workspaceId}::uuid and m.id = ${input.memberId}::uuid and m.status = 'active'
+    returning id::text as id
+  `);
+  return made.rows.length > 0;
 }

@@ -1,0 +1,132 @@
+import type { ObjectAccessLevel, RecordScope, RuleRole } from '@crm/data';
+import { sharedStrings } from '@crm/ui';
+import { strings as accessStrings } from './scheduling-access-strings.ts';
+
+/** Settings › Workspace › Teams' copy (spec 0031, slice 8) and an object's Access tab (spec 0032). */
+export const strings = {
+  title: 'Teams',
+  loading: 'Loading teams',
+  failedTitle: 'Teams didn’t load',
+  newTeam: 'New team',
+  columns: { team: 'Team', people: 'People', actions: 'Actions' },
+  emptyTitle: 'No teams yet',
+  noOne: 'No one yet',
+  removeTeam: (name: string) => `Delete ${name}`,
+  peopleIn: (team: string, count: number) => `${String(count)} ${count === 1 ? 'person' : 'people'} in ${team}`,
+  somethingWrong: sharedStrings.couldntDoThat,
+  readerEmptyText: 'Owners and admins make teams.',
+  /** The dialog. */
+  createTitle: 'New team',
+  editTitle: (name: string) => `Edit ${name}`,
+  name: 'Name',
+  namePlaceholder: 'Sales',
+  nameMissing: 'Give the team a name.',
+  members: 'People',
+  membersPlaceholder: 'Add people',
+  create: 'Create team',
+  creating: 'Creating team',
+  save: 'Save',
+  saving: 'Saving',
+  cancel: 'Cancel',
+  created: (name: string) => `${name} created.`,
+  saved: (name: string) => `${name} saved.`,
+  deleted: (name: string) => `${name} deleted.`,
+  undo: 'Undo',
+  restored: (name: string) => `${name} is back.`,
+  /** The confirm when scheduling access names the team (spec 0037, AC-1269). */
+  deleteTitle: (name: string) => `Delete ${name}?`,
+  deleteTeam: 'Delete team',
+  keepTeam: 'Keep team',
+  loseScheduling: (people: number, level: 'view' | 'manage' | 'both', team: string) =>
+    `${String(people)} ${people === 1 ? 'person loses' : 'people lose'} access to ${
+      level === 'manage' ? 'manage' : level === 'view' ? 'see' : 'see or manage'
+    } ${accessStrings.teamPossessive(team)} scheduling.`,
+  /** The same confirm when who loses access couldn't be read: the delete still takes it. */
+  loseSchedulingUnknown: (team: string) => `Scheduling access over ${team} goes with it.`,
+  /** An object's Access tab. */
+  accessTab: 'Access',
+  accessLoading: 'Loading access',
+  accessFailed: 'Access didn’t load',
+  noAccessTitle: 'Only owners and admins set access',
+  noAccessText: 'Ask one of them.',
+  gridTitle: 'Who can do what',
+  who: 'Who',
+  canSee: 'Can see',
+  canEdit: 'Can edit',
+  records: 'Records',
+  actions: 'Actions',
+  ownersAndAdmins: 'Owners and admins',
+  ownersAndAdminsTip: 'They always see and edit everything.',
+  /** Each role a rule can be about, as a group of people; a role added to the roles list fails here until named. */
+  roleGroups: { member: 'Members' } as const satisfies Record<RuleRole, string>,
+  addTeam: 'Add team',
+  makeTeam: 'Make a team first',
+  removeRow: (name: string) => `Remove ${name}`,
+  teamRemoved: (name: string) => `${name} access removed.`,
+  teamAdded: (name: string) => `${name} added.`,
+  changed: 'Access changed.',
+  addField: 'Add one',
+  fixedFor: (what: string) => `${what}, owners and admins`,
+  seeFor: (who: string) => `Can see, ${who}`,
+  editFor: (who: string) => `Can edit, ${who}`,
+  recordsFor: (who: string) => `Records for ${who}`,
+  needsField: 'Their own needs a Member field, like Owner.',
+  scopes: {
+    all: 'All records',
+    own: 'Their own',
+    team: 'Their team’s',
+  } as const satisfies Record<RecordScope, string>,
+  /** Under a scope's name: which field it reads, "Owner is them". */
+  scopeWhere: (field: string, scope: 'own' | 'team') =>
+    scope === 'own' ? `${field} is them` : `${field} is on their team`,
+  ruleFailed: 'That didn’t save.',
+  /** Fields (spec 0032, AC-846, AC-856): which fields a subject sees or changes. */
+  fieldsTitle: 'Fields',
+  fieldsFor: 'For',
+  fieldsLimited: 'limited',
+  fieldColumn: 'Field',
+  accessColumn: 'Access',
+  fieldFor: (field: string, who: string) => `${field} for ${who}`,
+  fieldStates: { visible: 'Visible', read: 'Read only', hidden: 'Hidden' } as const,
+  /** A subject who can't see the object has no fields to rule. */
+  fieldsNone: (who: string, object: string) => `${who} can’t see ${object}.`,
+  fieldsChanged: 'Fields changed.',
+  /** What a change took away from people who had it (AC-850): a chip row, and Undo. */
+  lessTitle: 'Less access',
+  lessPeople: (count: number) => `${String(count)} ${count === 1 ? 'person' : 'people'}`,
+  lessViews: (count: number) => `${String(count)} shared ${count === 1 ? 'view' : 'views'}`,
+  lessForms: (count: number) => `${String(count)} ${count === 1 ? 'form' : 'forms'}`,
+  /** Preview as (AC-858). */
+  previewAs: 'Preview as',
+  previewMembers: 'People',
+  previewTeams: 'Teams',
+  previewTitle: (name: string) => `Previewing as ${name}`,
+  previewSees: 'Sees',
+  previewExit: 'Exit preview',
+  previewFailed: 'That preview didn’t load.',
+  previewRecords: (count: number, atLeast: boolean) =>
+    `${atLeast ? '10,000+' : String(count)} ${count === 1 && !atLeast ? 'record' : 'records'}`,
+  previewFieldReadOnly: (title: string) => `${title} (read only)`,
+  previewFields: (count: number) => `${String(count)} ${count === 1 ? 'field' : 'fields'}`,
+  previewLevel: { none: 'Can’t see', read: 'Can view', write: 'Can edit' } as const satisfies Record<
+    ObjectAccessLevel,
+    string
+  >,
+  previewLoading: 'Loading preview',
+  /** A team delete an access rule refused: the toast's way to the blocking object. */
+  openAccess: 'Open access',
+  /** The one line that says the result, in pieces (access-summary.ts joins them). */
+  summary: {
+    everyone: (object: string) => `Everyone can edit ${object}.`,
+    verbs: { none: 'can’t see', read: 'can view', write: 'can edit' } as const satisfies Record<
+      ObjectAccessLevel,
+      string
+    >,
+    members: 'Members',
+    otherMembers: 'Other members',
+    them: 'them',
+    and: 'and',
+    own: (object: string) => `their own ${object.toLowerCase()}`,
+    team: (object: string) => `their team’s ${object.toLowerCase()}`,
+  },
+} as const;

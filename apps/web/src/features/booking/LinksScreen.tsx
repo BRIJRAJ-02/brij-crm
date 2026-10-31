@@ -1,5 +1,5 @@
 // Brief
-// Purpose: Captures › Links (spec 0025, 0025-experience.md, AC-645): the member's booking pages as cards (an admin sees everyone's), the same cards as Forms; the workspace's own links (30 Oct 2026) in a Workspace group first.
+// Purpose: Captures › Links (spec 0025, 0025-experience.md, AC-645): the member's booking pages as cards, the same cards as Forms; the workspace's own links (30 Oct 2026) in a Workspace group first, then the reader's own, then each colleague whose scheduling they Manage (an admin: everyone) under their name (spec 0037, AC-1273).
 // Main task: open a page, copy its link, or make a new one in the dialog and land in its editor.
 // Leaves out: editing a page (its editor), forms (their own tab) and the bookings list (Bookings).
 import { isDataError, type BookingPageView, type DataLayer } from '@crm/data';
@@ -15,9 +15,40 @@ import { DeletePageDialog } from './DeletePageDialog.tsx';
 import { pageEditorHref, publicBookingPath, publicBookingUrl, type PageTab } from './links.ts';
 import { strings } from './strings.ts';
 
-/** The groups' ids: the workspace's own links, and members' pages. */
+/** The groups' ids: the workspace's own links, the reader's own pages, and one per colleague (`member:<id>`). */
 const WORKSPACE_GROUP = 'workspace';
-const MEMBERS_GROUP = 'members';
+const MINE_GROUP = 'mine';
+const memberGroup = (memberId: string) => `member:${memberId}`;
+
+/** A page's group: the workspace's, someone else's by their name (AC-1273), or the reader's own. */
+const groupOf = (page: BookingPageView) =>
+  page.scope === 'workspace'
+    ? WORKSPACE_GROUP
+    : page.ownerName === undefined
+      ? MINE_GROUP
+      : memberGroup(page.ownerMemberId);
+
+/**
+ * The list's groups, once it holds more than the reader's own: Workspace, then Your pages, then each colleague by
+ * name (AC-1273). Undefined while every page is the reader's own, so a lone list draws no heading.
+ */
+function groupsOf(pages: readonly BookingPageView[]) {
+  const people = new Map<string, string>();
+  for (const page of pages) {
+    if (page.scope === 'member' && page.ownerName !== undefined) people.set(page.ownerMemberId, page.ownerName);
+  }
+  const hasWorkspace = pages.some((page) => page.scope === 'workspace');
+  if (!hasWorkspace && people.size === 0) return undefined;
+  return [
+    ...(hasWorkspace
+      ? [{ id: WORKSPACE_GROUP, label: strings.workspaceGroup, description: strings.workspaceGroupLine }]
+      : []),
+    { id: MINE_GROUP, label: people.size === 0 ? strings.membersGroup : strings.yourGroup },
+    ...[...people]
+      .sort(([, left], [, right]) => left.localeCompare(right))
+      .map(([memberId, name]) => ({ id: memberGroup(memberId), label: name })),
+  ];
+}
 
 /** Props for the list: the data layer, whose held list of pages the route loaded. */
 export interface LinksScreenProps {
@@ -92,7 +123,7 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
     const isViewOnly = page.scope === 'workspace' && !page.canChange;
     return {
       id: page.id,
-      groupId: page.scope === 'workspace' ? WORKSPACE_GROUP : MEMBERS_GROUP,
+      groupId: groupOf(page),
       title: page.title,
       ...(isViewOnly ? {} : { href: pageEditorHref(slug, page.id) }),
       // Pages have no colour of their own yet: the card takes a stable one from the page's id.
@@ -161,9 +192,12 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
                   if (key === 'delete') setDeleting(page);
                 }}
               >
-                <MenuItem id="duplicate" icon="copy">
-                  {strings.duplicate}
-                </MenuItem>
+                {/* A copy is the reader's own page: offered on their own and the workspace's, not a colleague's. */}
+                {page.ownerName === undefined && (
+                  <MenuItem id="duplicate" icon="copy">
+                    {strings.duplicate}
+                  </MenuItem>
+                )}
                 <MenuItem id="hours" icon="clock">
                   {strings.hours}
                 </MenuItem>
@@ -178,23 +212,16 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
       ),
     };
   });
-  // Grouped only once the workspace has a link of its own: the workspace's first, then everyone else's.
-  const hasWorkspaceLinks = pages.some((page) => page.scope === 'workspace');
+  // Grouped only once the list holds more than the reader's own pages.
+  const groups = groupsOf(pages);
   return (
     <CapturesList
       label={strings.listLabel}
       searchLabel={strings.searchPages}
       status={list.status}
       cards={cards}
-      {...(hasWorkspaceLinks
-        ? {
-            groups: [
-              { id: WORKSPACE_GROUP, label: strings.workspaceGroup, description: strings.workspaceGroupLine },
-              { id: MEMBERS_GROUP, label: strings.membersGroup },
-            ],
-          }
-        : {})}
-      // An empty list offers New in its middle too, as a secondary: the TopBar's New stays the one primary.
+      {...(groups === undefined ? {} : { groups })}
+      // An empty list offers New in its middle too: the same as the TopBar's.
       {...(create?.create === undefined
         ? {}
         : {
@@ -204,7 +231,7 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
               </Button>
             ),
           })}
-      empty={{ title: strings.emptyTitle, text: strings.emptyText, icon: 'calendar-clock' }}
+      empty={{ title: strings.emptyTitle, icon: 'calendar-clock' }}
       errorTitle={strings.failedTitle}
       onRetry={() => {
         data.bookingPages.view(slug).reload();
@@ -222,7 +249,7 @@ export function LinksPending() {
       searchLabel={strings.searchPages}
       status="loading"
       cards={[]}
-      empty={{ title: strings.emptyTitle, text: strings.emptyText, icon: 'calendar-clock' }}
+      empty={{ title: strings.emptyTitle, icon: 'calendar-clock' }}
       errorTitle={strings.failedTitle}
       onRetry={() => undefined}
     />

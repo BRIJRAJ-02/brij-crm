@@ -5,20 +5,11 @@
 import type { NavEntry, NavPage, NavPrefs, NavSectionKey, NavState, NavUniverse, ObjectSummary } from '@crm/data';
 import { navKey, sectionItems, sectionOrder } from '@crm/data/navigation';
 import type { IconName } from '@crm/ui';
-import {
-  bookingsHref,
-  capturesHref,
-  inboxHref,
-  linkPageHref,
-  navObjects,
-  notesHref,
-  rosterHref,
-  tasksHref,
-} from './objects.ts';
+import { bookingsHref, capturesHref, inboxHref, linkPageHref, navObjects, notesHref, tasksHref } from './objects.ts';
 import { strings } from './strings.ts';
 
 /** A page the sidebar marks current that isn't an object's: Tasks, Bookings and Captures (the trash is in Settings). */
-export type SidebarPage = 'home' | 'linkPage' | 'inbox' | 'tasks' | 'notes' | 'bookings' | 'roster' | 'captures';
+export type SidebarPage = 'home' | 'linkPage' | 'inbox' | 'tasks' | 'notes' | 'bookings' | 'captures';
 
 /** One page the sidebar links to: its name, its icon and its address. */
 export interface SidebarPageLink {
@@ -41,7 +32,6 @@ export const PAGE_LINKS: { readonly [Page in NavPage]?: SidebarPageLink } = {
   tasks: { label: strings.tasks, icon: 'square-check', href: tasksHref },
   notes: { label: strings.notes, icon: 'notebook', href: notesHref },
   bookings: { label: strings.bookings, icon: 'calendar-days', href: bookingsHref },
-  roster: { label: strings.roster, icon: 'users', href: rosterHref },
   captures: { label: strings.captures, icon: 'link', href: capturesHref },
 };
 
@@ -64,11 +54,16 @@ export const prefsOf = (nav: NavState): NavPrefs => ({
  * What the member's sidebar may show (the same universe the server's rule indexes into): their live objects in
  * the workspace's order, the pages they have, and the favourites the server resolved for them.
  */
-export function universeOf(objects: readonly ObjectSummary[] | undefined, nav: NavState): NavUniverse {
+export function universeOf(
+  objects: readonly ObjectSummary[] | undefined,
+  nav: NavState,
+  lists: readonly { readonly id: string; readonly isArchived: boolean }[] = [],
+): NavUniverse {
   return {
     top: nav.top,
     records: objects === undefined ? [] : navObjects(objects).map((object) => object.id),
-    lists: [],
+    // The live lists the member may read (spec 0048, AC-4804), oldest first.
+    lists: lists.filter((list) => !list.isArchived).map((list) => list.id),
     scheduling: nav.scheduling,
     favourites: new Set(nav.favourites.map(navKey)),
   };
@@ -88,12 +83,13 @@ export interface DrawnSection {
  * Favourites is never drawn (owner, 30 October 2026: "remove favourites"): the server still keeps and resolves a
  * member's stars, so drawing the section again brings them back as they were.
  */
-export function drawnSections(nav: NavState, universe: NavUniverse): DrawnSection[] {
+export function drawnSections(nav: NavState, universe: NavUniverse, canMakeLists = false): DrawnSection[] {
   const prefs = prefsOf(nav);
   return sectionOrder(prefs).flatMap((key): DrawnSection[] => {
     const entries = sectionItems(prefs, universe, key);
     if (key === 'favourites') return [];
-    if (key !== 'records' && entries.length === 0) return [];
+    // Lists shows empty to whoever may make one, so its "+" is where the first list is made (spec 0048, AC-4801).
+    if (key !== 'records' && entries.length === 0 && !(key === 'lists' && canMakeLists)) return [];
     return [{ key, title: SECTION_TITLES[key], entries, isFolded: prefs.sections.folded.includes(key) }];
   });
 }

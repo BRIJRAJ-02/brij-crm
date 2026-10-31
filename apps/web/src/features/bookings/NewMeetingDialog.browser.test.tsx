@@ -166,7 +166,7 @@ describe('New meeting', () => {
 
   it('says nobody is invited yet before the fields, and keeps their zone with who it is with', async () => {
     await open();
-    const note = page.getByText(/With no calendar connected/).element();
+    const note = page.getByText(/No calendar connected/).element();
     const name = page.getByRole('textbox', { name: 'With' }).element();
     const email = page.getByRole('textbox', { name: 'Email' }).element();
     const zone = page.getByRole('button', { name: /Their time zone/ }).element();
@@ -272,10 +272,15 @@ describe('New meeting', () => {
 
   it('refuses an 11th guest in the field, keeping what was typed', async () => {
     await open();
-    await userEvent.click(page.getByRole('textbox', { name: 'Also invite' }));
-    for (let index = 0; index < 10; index += 1) await userEvent.keyboard(`g${String(index)}@navy.example{Enter}`);
+    const field = page.getByRole('textbox', { name: 'Also invite' });
+    // Each address filled at once, then Enter: typing 11 addresses key by key outran the test's time on a busy CI.
+    for (let index = 0; index < 10; index += 1) {
+      await userEvent.fill(field, `g${String(index)}@navy.example`);
+      await userEvent.keyboard('{Enter}');
+    }
     expect(page.getByRole('list', { name: 'Also invite' }).getByRole('listitem').elements()).toHaveLength(10);
-    await userEvent.keyboard('one.more@navy.example{Enter}');
+    await userEvent.fill(field, 'one.more@navy.example');
+    await userEvent.keyboard('{Enter}');
     await expect.element(page.getByText('Up to 10 guests.')).toBeVisible();
     await expect.element(page.getByRole('textbox', { name: 'Also invite' })).toHaveValue('one.more@navy.example');
     expect(page.getByRole('list', { name: 'Also invite' }).getByRole('listitem').elements()).toHaveLength(10);
@@ -361,9 +366,7 @@ describe('New meeting', () => {
     await userEvent.click(page.getByRole('button', { name: /For$/ }));
     await userEvent.click(page.getByRole('option', { name: 'Sam' }));
     const warning = page.getByRole('status').filter({ hasText: 'Sam is at their limit of 5 meetings that day.' });
-    await expect
-      .element(warning)
-      .toHaveTextContent('Sam is at their limit of 5 meetings that day. Booking anyway goes over it.');
+    await expect.element(warning).toHaveTextContent('Sam is at their limit of 5 meetings that day.');
     expect(limitsAt).toHaveBeenLastCalledWith({ memberId: sam, at: '2026-10-23T09:30:00.000Z' });
     // Book it still books.
     await userEvent.fill(page.getByRole('textbox', { name: 'With' }), 'Ada');
@@ -377,8 +380,7 @@ describe('New meeting', () => {
       Promise.resolve({ day: { limit: 4, count: 6 }, week: { limit: 20, count: 20 } }),
     );
     await open({ limitsAt });
-    const words =
-      'You’re past your limit of 4 meetings that day and at your limit of 20 meetings that week. Booking anyway goes over both.';
+    const words = 'You’re past your limit of 4 meetings that day and at your limit of 20 meetings that week.';
     const warning = page.getByRole('status').filter({ hasText: 'past your limit' });
     await expect.element(warning).toHaveTextContent(words);
     const shown = warning.element();

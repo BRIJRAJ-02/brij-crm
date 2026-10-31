@@ -6,7 +6,7 @@
 // preload and the lists measuring again when the fonts finish loading (useFontsSettled).
 import { randomUUID } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
-import { addPerson, newWorkspace } from './people.ts';
+import { addPerson, newWorkspace, openFullPage } from './people.ts';
 
 const RECORD_URL = /\/w\/[^/]+\/objects\/people\/([0-9a-f-]{36})\/overview$/;
 
@@ -57,6 +57,7 @@ test('a record’s notes never overlap when Inter arrives after they are drawn',
     .getByRole('rowheader', { name: /Grace Hopper/ })
     .getByText('Grace Hopper')
     .click();
+  await openFullPage(page);
   await expect(page).toHaveURL(RECORD_URL);
   const recordId = RECORD_URL.exec(page.url())?.[1] ?? '';
   // Twenty notes whose excerpts run, three characters at a time, from inside a line to past it, so some wrap to a

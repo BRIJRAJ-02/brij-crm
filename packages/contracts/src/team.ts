@@ -101,6 +101,26 @@ export const AUDIT_ACTIONS = [
   'calendar.reconnect_asked',
   // A booking made, moved or cancelled by someone other than its host: the target is the booking, `memberId` the host.
   'booking.changed_for',
+  // Teams (spec 0031, AC-824): a team made, renamed or deleted, or its people changed. The target is the team; `after`
+  // holds `change`, the team's name and, for people, who joined and who left. Stored; History lists it later.
+  'team.changed',
+  // Access rules (spec 0032, AC-852): one subject's access to one object set or cleared. The target is the object;
+  // `before` and `after` hold the subject, its level, its record scope and its field rules by field name.
+  'access.rule_set',
+  // "Preview as" (spec 0032, AC-858): an admin looked at an object as a member or a team would see it. The target is
+  // that member or team; `after` holds the object and the name. Stored, never listed (a look changes nothing).
+  'access.previewed',
+  // Lists (spec 0048): made, renamed or otherwise changed (its tile, Each record once), archived and restored. The
+  // target is the list; `before` and `after` hold its name.
+  'list.created',
+  'list.updated',
+  'list.archived',
+  'list.restored',
+  // A personal booking page changed or deleted by anyone but its owner (spec 0037, AC-1263): the target is the owner;
+  // `before` and `after` hold the page's id and title and the fields that changed.
+  'booking_page.changed_for',
+  // Who is in a rotation changed (spec 0037, AC-1264): the target is the rotation; `after` lists who joined and left.
+  'rotation.changed',
 ] as const;
 /** One action the audit log records. */
 export const AuditAction = z.enum(AUDIT_ACTIONS);

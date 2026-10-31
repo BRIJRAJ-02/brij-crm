@@ -185,9 +185,7 @@ export function SettingsMissing({ backTo = 'objects' }: { readonly backTo?: 'obj
             {isObject ? strings.backToObjects : strings.backToSettings}
           </Link>
         }
-      >
-        {strings.checkAddress}
-      </EmptyState>
+      />
     </SettingsPage>
   );
 }

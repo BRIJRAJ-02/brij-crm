@@ -3,7 +3,7 @@
 // Main task: read the count, then Archive <plural> (or Cancel); the object leaves every sidebar once the server agrees.
 // Leaves out: deleting anything; archiving is reversible from the Archived section or the object's page.
 import { isDataError, type DataLayer, type ObjectSummary } from '@crm/data';
-import { Button, Callout, Modal } from '@crm/ui';
+import { Button, Callout, Modal, sharedStrings } from '@crm/ui';
 import { useEffect, useState } from 'react';
 import { strings } from './strings.ts';
 
@@ -66,7 +66,7 @@ function ArchiveConfirm({
       },
       (error: unknown) => {
         setBusy(false);
-        setFailure(isDataError(error) ? error.message : strings.somethingWrong);
+        setFailure(isDataError(error) ? error.message : sharedStrings.couldntDoThat);
       },
     );
   };

@@ -198,7 +198,9 @@ export function createAggregateStore({
           entry.holders += 1;
           entry.cancelDrop?.();
           entry.cancelDrop = undefined;
-          if (entry.stale && entry.controller === undefined && entry.cancelTimer === undefined) read(entry);
+          // One that failed reads again when it is held again (a report's Try again), as a stale one does.
+          const failed = entry.state.status === 'error';
+          if ((entry.stale || failed) && entry.controller === undefined && entry.cancelTimer === undefined) read(entry);
           let released = false;
           return () => {
             if (released) return;

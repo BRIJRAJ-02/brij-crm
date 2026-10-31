@@ -11,6 +11,38 @@ export const NOTE_CONTENT_MAX_BYTES = 200 * 1024;
 /** The longest plain text copy of a note the server keeps, in characters. */
 export const NOTE_TEXT_MAX = 100_000;
 
+/** The most records one note links, its own record included (migration 0135). */
+export const NOTE_RECORDS_MAX = 20;
+
+/** What a note is: a plain note, or a call or a meeting logged on a record (migration 0137), for life. */
+export const NOTE_KINDS = ['note', 'call', 'meeting'] as const;
+/** What a note is. */
+export type NoteKind = (typeof NOTE_KINDS)[number];
+
+/** How a logged call went, in the order the dialog shows them. */
+export const CALL_OUTCOMES = ['connected', 'no_answer', 'left_message'] as const;
+/** How a logged meeting went, in the order the dialog shows them. */
+export const MEETING_OUTCOMES = ['held', 'cancelled', 'no_show'] as const;
+/** How a logged call or meeting went. */
+export type NoteOutcome = (typeof CALL_OUTCOMES)[number] | (typeof MEETING_OUTCOMES)[number];
+
+/** The outcomes a kind takes: those of a call, those of a meeting, none for a plain note. */
+export function outcomesFor(kind: NoteKind): readonly NoteOutcome[] {
+  return kind === 'call' ? CALL_OUTCOMES : kind === 'meeting' ? MEETING_OUTCOMES : [];
+}
+
+/** The longest logged duration, in minutes: a day. */
+export const ACTIVITY_DURATION_MAX = 1440;
+
+/** How far past now a logged call or meeting may be dated: a day (the calendar owns what is ahead). */
+export const ACTIVITY_AHEAD_MS = 24 * 60 * 60 * 1000;
+
+/** What a moment too far ahead answers, on `occurredAt`. */
+export const ACTIVITY_TOO_FAR = 'Log what already happened. Meetings ahead belong in the calendar.';
+
+/** What a kind that changes, or details on a plain note, answer. */
+export const ACTIVITY_KIND_FIXED = 'A call or meeting can’t change what it is.';
+
 /** A page of notes when the caller names no limit. */
 export const NOTE_PAGE = 20;
 

@@ -1,4 +1,5 @@
 import type { RemovalPreview } from '@crm/data';
+import { sharedStrings } from '@crm/ui';
 
 /** Settings › Workspace › Members' copy (spec 0031). */
 export const strings = {
@@ -46,8 +47,6 @@ export const strings = {
   roleChanged: (name: string, role: string) =>
     `${name} is now ${role === 'Admin' || role === 'Owner' ? 'an' : 'a'} ${role}.`,
   removed: (name: string) => `${name} was removed from the workspace.`,
-  /** The one read only note, the same words on every settings page (cross page note 1). */
-  readOnlyNote: 'Only owners and admins can change this.',
   /** Invite pressed with no role this person may invite as: the server lets only owners and admins invite. */
   inviteForbidden: 'Only workspace owners and admins can invite people or change roles.',
   noInvitations: 'No pending invitations',
@@ -71,47 +70,33 @@ export const strings = {
   /** The confirm's way out when its verb is itself a Cancel: never two buttons called Cancel (as Jobs' Keep job). */
   keepInvitation: 'Keep invitation',
   removeTitle: (name: string, workspace: string) => `Remove ${name} from ${workspace}?`,
-  removeText: 'They lose access at once, and their work stays.',
+  removeText: 'They lose access now.',
   removeAction: 'Remove member',
   removedHandingOn: (name: string, to: string) =>
     `${name} was removed. Their open tasks and records are moving to ${to}, shown in Background jobs.`,
-  removalEffects: (counts: RemovalPreview) =>
+  /**
+   * What the removal changes, as rows of a small table (31 October 2026: counts are a table, never a paragraph):
+   * what it touches, then how many. A row appears only when its count is above zero.
+   */
+  removalRows: (counts: RemovalPreview) =>
     [
-      counts.openTasks > 0
-        ? `${String(counts.openTasks)} open ${counts.openTasks === 1 ? 'task is' : 'tasks are'} assigned to them.`
-        : '',
-      counts.records > 0
-        ? `${String(counts.records)} ${counts.records === 1 ? 'record names' : 'records name'} them as owner.`
-        : '',
-      counts.pausedPages > 0
-        ? `${String(counts.pausedPages)} booking ${counts.pausedPages === 1 ? 'page pauses' : 'pages pause'}, with nobody left to host.`
-        : '',
-      counts.calendars > 0
-        ? `${String(counts.calendars)} calendar ${counts.calendars === 1 ? 'connection is' : 'connections are'} disconnected.`
-        : '',
-      counts.defaults > 0
-        ? `${String(counts.defaults)} ${counts.defaults === 1 ? 'field uses them as its default, and loses it' : 'fields use them as their default, and lose it'}.`
-        : '',
-      counts.ownedForms > 0
-        ? counts.ownedForms === 1
-          ? '1 form names them as owner of new records, which then get no owner. Pick another in its Settings tab.'
-          : `${String(counts.ownedForms)} forms name them as owner of new records, which then get no owner. Pick another in each form’s Settings tab.`
-        : '',
-      counts.invitations > 0
-        ? counts.invitations === 1
-          ? 'An invitation they sent is cancelled. Invite them again from Invite people if you still want them.'
-          : `${String(counts.invitations)} invitations they sent are cancelled. Invite any you still want again from Invite people.`
-        : '',
-    ].filter((sentence) => sentence !== ''),
-  /** The removal's effects past the first two, folded. */
-  showMoreEffects: 'Show more',
+      { term: 'Open tasks', count: counts.openTasks },
+      { term: 'Records they own', count: counts.records },
+      { term: 'Booking pages that pause', count: counts.pausedPages },
+      { term: 'Calendars disconnected', count: counts.calendars },
+      { term: 'Defaults cleared', count: counts.defaults },
+      { term: 'Forms left without an owner', count: counts.ownedForms },
+      { term: 'Invitations cancelled', count: counts.invitations },
+    ]
+      .filter((row) => row.count > 0)
+      .map((row) => ({ term: row.term, value: row.count.toLocaleString('en') })),
   /** The removal's one effect that stops other people's work, apart in a warning (late trap #70). */
   requiredDefaultsLost: (count: number) =>
     count === 1
-      ? 'A required field will have no default. Give it one in its object’s settings, or forms and booking pages can’t add records there.'
-      : `${String(count)} required fields will have no default. Give them one in their objects’ settings, or forms and booking pages can’t add records there.`,
+      ? 'A required field loses its default. Forms and booking pages can’t add records there.'
+      : `${String(count)} required fields lose their default. Forms and booking pages can’t add records there.`,
   previewFailed: 'We couldn’t check what else this changes. You can still remove them.',
-  handTo: 'Hand their open tasks and records to',
+  handTo: 'Hand over to',
   handToNobody: 'Keep them as they are',
   handToSearch: 'Search members',
   transferTitle: (name: string, workspace: string) => `Make ${name} the owner of ${workspace}?`,
@@ -119,15 +104,14 @@ export const strings = {
   transferAction: 'Transfer ownership',
   failedTitle: 'Couldn’t load the members',
   failedText: 'Check your connection, then try again.',
-  somethingWrong: 'Something went wrong. Try again in a moment.',
   // The invite link card (spec 0031, AC-818).
   linkTitle: 'Invite link',
   /** The Invite dialog's foot: the workspace's link, turned on as a Member link when it is off (with Undo). */
   copyInviteLink: 'Copy invite link',
-  inviteLinkCopied: 'Invite link copied.',
-  inviteLinkOnCopied: 'Invite link turned on and copied. Anyone with it joins as a member.',
-  inviteLinkCopyFailed: 'Couldn’t copy the link. Copy it from Members › Joining instead.',
-  inviteLinkSpent: 'The invite link has run out. Reset it or raise its limit in Members › Joining.',
+  inviteLinkCopied: 'Link copied.',
+  inviteLinkOnCopied: 'Link on and copied.',
+  inviteLinkCopyFailed: sharedStrings.couldntCopy,
+  inviteLinkSpent: 'The invite link has run out. Reset it in Members › Joining.',
   linkDescription: 'Anyone with the link can join as a member.',
   linkField: 'Link',
   linkCopy: 'Copy link',
@@ -149,42 +133,39 @@ export const strings = {
   linkSpent: 'This link has expired or reached its limit, so change it or reset it.',
   linkReset: 'Reset link',
   linkResetTitle: 'Reset the invite link?',
-  linkResetText: 'The current link stops working at once, and a new one replaces it. Its settings stay.',
+  linkResetText: 'The old link stops working.',
   linkResetAction: 'Reset link',
   linkWasReset: 'The invite link was reset.',
   linkOffTitle: 'Turn off the invite link?',
-  linkOffText: 'The link stops working at once. Turning it on again makes a new one.',
+  linkOffText: 'The link stops working.',
   linkOffAction: 'Turn off link',
   linkTurnedOff: 'The invite link is off.',
   /** Expires or Most uses changed (the save rule): Undo puts the previous value back. */
   linkSaved: 'Invite link saved.',
   undo: 'Undo',
-  undone: 'Change undone.',
   /** An Undo pressed after the link changed again (here or by another admin): it leaves the newer value alone. */
-  undoStale: 'The invite link changed again since, so nothing was undone.',
+  undoStale: sharedStrings.undoStale,
   // Domain join (spec 0031, AC-819, AC-820).
   domainTitle: 'Company email',
-  domainOff: (domain: string) => `When on, anyone with an @${domain} email can ask to join. You approve each one.`,
-  /** The server's rule: only the reader's own verified email's domain, and never a public mail domain. */
-  domainInfo: 'Only the domain of your own verified email can be used. Public mail like Gmail can’t.',
-  domainOn: (domain: string) => `People at @${domain} can ask to join. You approve each one.`,
+  /** The row's title once the reader's domain is known: the switch is for this domain alone. */
+  domainRowTitle: (domain: string) => `Let @${domain} ask to join`,
   domainTurnedOn: (domain: string) => `People at @${domain} can now ask to join.`,
   domainSaving: (domain: string) => `Turning on for @${domain}`,
-  domainPublic: 'Your address is at a public mail domain, so it can’t be used.',
+  domainPublic: 'Public mail domains can’t be used.',
   domainUnverified: 'Verify your email address to use its domain.',
   requested: 'Requested',
   approve: 'Approve',
   decline: 'Decline',
   approved: (name: string) => `${name} joined the workspace.`,
   declineTitle: (name: string) => `Decline ${name}’s request?`,
-  declineText: 'They won’t be told, and their request stays open on their side.',
+  declineText: 'They won’t be told.',
   declineAction: 'Decline request',
   declined: (name: string) => `Declined ${name}’s request.`,
   approveFor: (name: string) => `Approve ${name}`,
   declineFor: (name: string) => `Decline ${name}`,
   requestActions: (name: string) => `Answer ${name}’s request`,
   domainOffTitle: 'Turn off company email?',
-  domainOffText: (domain: string) => `People at @${domain} can no longer ask, and open requests from them close.`,
+  domainOffText: (domain: string) => `People at @${domain} can no longer ask. Open requests close.`,
   domainOffAction: 'Turn off company email',
   domainTurnedOff: 'Company email is off.',
   // Help beside labels that don't say it all (the owner's Settings sweep, 21 October 2026).
@@ -208,7 +189,9 @@ export const strings = {
   partlySent: (count: number, reason: string) =>
     `${count === 1 ? '1 address is' : `${count} addresses are`} done and off the list. The rest weren’t sent: ${reason} Invite again to retry them.`,
   pasteTooMany: (count: number) => `Added the first ${count}. Invite the rest in the next batch.`,
-  sentTo: (list: string) => `Invited ${list}. They get an email with a link to join.`,
+  sentTo: (list: string) => `Invited ${list}.`,
+  /** The toast after a clean send, when the dialog closes. */
+  invitedToast: (count: number) => (count === 1 ? 'Invited 1 person' : `Invited ${String(count)} people`),
   alreadyMembers: (list: string) => `Already members: ${list}.`,
   inviteMore: 'Invite more',
   done: 'Done',

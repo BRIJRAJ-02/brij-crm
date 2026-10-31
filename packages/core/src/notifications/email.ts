@@ -37,9 +37,11 @@ export type PreparedNotificationEmail =
 /** The sentence an email gives a notification, as the inbox says it. */
 function sentenceOf(view: NotificationView, actor: string): string {
   if (view.kind === 'form_submission') return `New submission to ${view.formName ?? 'a form'}`;
+  if (view.kind === 'scheduling_changed') return `${actor} changed your scheduling`;
   if (view.kind === 'mention' && view.noteId !== undefined) return `${actor} mentioned you in a note`;
   if (view.kind === 'mention') return `${actor} mentioned you`;
   if (view.kind === 'reply') return `${actor} replied in a thread`;
+  if (view.kind === 'task_due') return 'A task is due today';
   return `${actor} assigned you a task`;
 }
 
@@ -108,6 +110,7 @@ export async function prepareNotificationEmail(
     const actor = view.actor.type === 'member' && view.actor.id !== null ? nameOf(view.actor.id) : 'Someone';
     let path: string;
     if (view.taskId !== undefined) path = `${base}/inbox?task=${view.taskId}`;
+    else if (view.kind === 'scheduling_changed') path = `${base}/bookings/availability`;
     else if (view.submissionId !== undefined && view.formId !== undefined) {
       path = `${base}/captures/forms/${view.formId}?tab=submissions&submission=${view.submissionId}`;
     } else {

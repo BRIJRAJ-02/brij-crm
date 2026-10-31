@@ -19,6 +19,8 @@ interface Screen {
   readonly start: (workspace: SwitchingWorkspace) => string;
   /** What the person clicks: a link, a tab or a row. */
   readonly target: (page: Page) => Locator;
+  /** A step before the timed one, on the page the move starts from: opening the record panel the target sits in. */
+  readonly prepare?: (page: Page) => Promise<void>;
 }
 
 const sidebar = (name: string) => (page: Page) => page.getByRole('navigation').getByRole('link', { name, exact: true });
@@ -32,14 +34,19 @@ const at =
 
 const ALL_SCREENS: readonly Screen[] = [
   { name: 'records', start: at('tasks'), target: sidebar('People') },
+  // A row's name opens the record panel over the table (spec 0017 milestone 4), so the full page is reached from
+  // the panel's Open full page.
   {
     name: 'record overview',
     start: at('objects/people'),
-    target: (page) =>
-      page
+    prepare: async (page) => {
+      await page
         .getByRole('rowheader', { name: /Grace Hopper/ })
         .first()
-        .getByText('Grace Hopper'),
+        .getByText('Grace Hopper')
+        .click();
+    },
+    target: (page) => page.getByRole('button', { name: 'Open full page' }),
   },
   {
     name: 'record activity',
@@ -61,6 +68,8 @@ const ALL_SCREENS: readonly Screen[] = [
   { name: 'bookings availability', start: at('bookings/calendar'), target: tab('Availability') },
   // Calendars and Round robin came up out of Settings into Bookings (25 October 2026), so they are walked as the
   // tabs they are; each draws its body inside the frame the tab strip already holds.
+  // The Roster, a tab of its own from 31 October 2026: its week's bar and the grid's skeleton rows.
+  { name: 'bookings roster', start: at('bookings/calendar'), target: tab('Roster') },
   { name: 'bookings round robin', start: at('bookings/calendar'), target: tab('Round robin') },
   { name: 'bookings calendars', start: at('bookings/calendar'), target: tab('Calendars') },
   { name: 'captures links', start: at('tasks'), target: sidebar('Captures') },
@@ -83,6 +92,14 @@ const ALL_SCREENS: readonly Screen[] = [
     name: 'settings object configuration',
     start: at('settings/objects/people/attributes'),
     target: tab('Configuration'),
+  },
+  // Teams (spec 0031) and an object's Access tab (spec 0032): the list's rows, and the summary line, the grid and the
+  // Fields fold where they land.
+  { name: 'settings teams', start: at('settings/account/preferences'), target: sidebar('Teams') },
+  {
+    name: 'settings object access',
+    start: at('settings/objects/people/attributes'),
+    target: tab('Access'),
   },
   { name: 'settings jobs', start: at('settings/account/preferences'), target: sidebar('Background jobs') },
   // History (spec 0046): the owner's Workspace changes, its tabs and the table's skeleton rows where the rows land.
@@ -133,6 +150,7 @@ test('every screen’s loading state stands where its loaded page will', async (
   for (const screen of SCREENS) {
     // A fresh app each time, on the page the move starts from, so the screen's own data isn't held yet.
     await page.goto(screen.start(workspace));
+    await screen.prepare?.(page);
     // The page the move starts from has drawn what is clicked, before any call is held.
     const target = screen.target(page);
     await target.waitFor({ timeout: 60_000 });

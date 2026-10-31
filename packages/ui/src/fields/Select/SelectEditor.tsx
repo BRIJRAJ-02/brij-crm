@@ -64,8 +64,12 @@ export function SelectEditor({
     const items = options.map((option) => ({
       id: option.id,
       label: option.label,
-      hue: option.hue,
       isArchived: option.archived,
+      face: (
+        <Tag hue={option.hue} isArchived={option.archived}>
+          {option.label}
+        </Tag>
+      ),
     }));
     return (
       <Select

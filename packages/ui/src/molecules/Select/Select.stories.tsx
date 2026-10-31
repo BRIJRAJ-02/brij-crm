@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
+import { Tag } from '../../atoms/Tag/Tag.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { InfoTip } from '../InfoTip/InfoTip.tsx';
 import { Select } from './SelectWithFaces.tsx';
@@ -196,8 +197,8 @@ export const Styles: Story = {
         optionStyle="tag"
         defaultValue="enterprise"
         items={[
-          { id: 'smb', label: 'SMB', hue: 'sky' },
-          { id: 'enterprise', label: 'Enterprise', hue: 'blue' },
+          { id: 'smb', label: 'SMB', face: <Tag hue="sky">SMB</Tag> },
+          { id: 'enterprise', label: 'Enterprise', face: <Tag hue="blue">Enterprise</Tag> },
         ]}
       />
       <Select

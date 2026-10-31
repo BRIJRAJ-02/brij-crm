@@ -5,7 +5,7 @@
 // The first Card of Members › Joining › Other ways to join, Company email's after it.
 // Leaves out: guests (slice 9), email domains (the row after it), and who joined (the Members tab).
 import { INVITE_LINK_DAYS, isDataError, type DataLayer, type InviteLinkDays, type InviteLinkView } from '@crm/data';
-import { Button, Callout, Disclosure, Field, Select, SettingsRow, Switch, type Toasts } from '@crm/ui';
+import { Button, Callout, Disclosure, Field, Select, SettingsRow, sharedStrings, Switch, type Toasts } from '@crm/ui';
 import { useEffect, useRef, useState } from 'react';
 import { UNDO_MS } from '../tasks/undo-delete.ts';
 import type { MemberQuestion } from './MemberConfirm.tsx';
@@ -80,17 +80,15 @@ export function InviteLinkRows({ data, slug, link, ask, onChanged, toasts, onFai
     [toasts],
   );
   const failed = (error: unknown) => {
-    onFailed(isDataError(error) ? error.message : strings.somethingWrong);
+    onFailed(isDataError(error) ? error.message : sharedStrings.couldntDoThat);
   };
   /** Puts a limit back as it was before the change whose Undo was pressed. */
   const undo = (what: Busy, before: LinkChange) => {
     setBusy(what);
     data.invitations
       .setLink(slug, before)
-      .then(onChanged)
-      .then(() => {
-        toasts.toast(savedToast(strings.undone));
-      }, failed)
+      // The limit reads as it was again: no toast says so (31 October 2026).
+      .then(onChanged, failed)
       .finally(() => {
         setBusy(undefined);
       });

@@ -46,7 +46,7 @@ const STATUSES: readonly { readonly value: MyTasksStatus; readonly label: string
 /** What an empty list says, by filter and status. */
 function emptyOf(filter: TaskMine, status: MyTasksStatus): { readonly title: string; readonly body?: string } {
   if (status === 'done') return { title: strings.noCompletedTasks };
-  if (filter === 'assigned') return { title: strings.emptyAssigned, body: strings.emptyAssignedBody };
+  if (filter === 'assigned') return { title: strings.emptyAssigned };
   return { title: filter === 'created' ? strings.emptyCreated : strings.emptyAll };
 }
 

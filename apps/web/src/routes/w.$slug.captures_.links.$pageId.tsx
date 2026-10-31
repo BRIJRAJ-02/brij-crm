@@ -48,7 +48,9 @@ export const Route = createFileRoute('/w/$slug/captures_/links/$pageId')({
       ]);
       const isMine = page.ownerMemberId === mine.memberId;
       const ownerMember = isMine ? undefined : page.ownerMemberId;
-      const mayRead = isMine || mine.permissions.includes('booking.admin');
+      // A colleague's page the reader may change is one whose owner's scheduling they Manage (spec 0037, AC-1273),
+      // so their schedules are the reader's to read too.
+      const mayRead = isMine || mine.permissions.includes('booking.admin') || page.canChange;
       if (mayRead && !isMine) {
         await context.data.schedules
           .view(params.slug, ownerMember, memberZone(context.data, params.slug))

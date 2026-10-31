@@ -135,9 +135,9 @@
     object-fit: cover;
   }
 
-  /* The big sizes' picture fades in over its initials once loaded (Avatar.tsx's FADES_IN). A fade, never a move,
-     so reduced motion keeps it as it is. */
-  /* Waiting, the initials show; a picture already in the browser's cache skips straight to shown, no fade. */
+  /* Waiting, at every size, the initials show and the picture is held back; a picture already in the browser's
+     cache skips straight to shown. The big sizes' picture then fades in over its initials (Avatar.tsx's FADES_IN);
+     the small ones show it at once. A fade, never a move, so reduced motion keeps it as it is. */
   .image[data-fade='waiting'] {
     opacity: 0;
   }

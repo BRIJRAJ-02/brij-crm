@@ -64,7 +64,9 @@ async function createView(page: Page, current: string, name: string, everyone: b
   if (!everyone) return;
   await openSwitcher(page, name);
   await chooseWho(page, 'Everyone');
-  await expect(page.getByText(`${name} is shared with everyone.`)).toBeVisible();
+  // No toast says it (31 October 2026): the menu closes and the view stays on the bar.
+  await expect(page.getByRole('menuitem', { name: 'Who can see it' })).toBeHidden();
+  await expect(viewBarSwitcher(page, name)).toBeVisible();
 }
 
 /** Flips one column's switch in View settings, then closes it. */
@@ -150,7 +152,7 @@ test.describe('saved views: many views and their layout', () => {
     await chooseWho(ada, 'Everyone, only admins edit');
     await expect(ada.getByText('Locked by Ada Lovelace.')).toBeVisible();
     if (!LIVE) await bea.reload();
-    await expect(bea.getByText('Locked by Ada Lovelace. Your changes here aren’t saved.')).toBeVisible({
+    await expect(bea.getByText('Locked by Ada Lovelace. Changes aren’t saved.')).toBeVisible({
       timeout: 10_000,
     });
     await toggleColumn(bea, 'Job title');

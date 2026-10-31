@@ -43,6 +43,15 @@ function sampleItems(): readonly NotificationItem[] {
       excerpt: 'Call Globex about the security review',
     },
     {
+      id: 'n3b',
+      kind: 'task_due',
+      actor: { type: 'system', id: null, name: 'System' },
+      createdAt: '2026-10-07T08:45:00.000Z',
+      isRead: false,
+      isDone: false,
+      excerpt: 'Send Globex the renewal quote',
+    },
+    {
       id: 'n4',
       kind: 'form_submission',
       actor: { type: 'form', id: null, name: 'Contact us' },
@@ -63,6 +72,8 @@ interface SampleProps {
   readonly onMark?: (id: string, mark: NotificationMark) => void;
   readonly onRetry?: () => void;
   readonly isFiltered?: boolean;
+  /** Adds a scheduling change someone made (spec 0037, AC-1264). */
+  readonly withScheduling?: boolean;
 }
 
 /** The inbox in a fixed height slot, marking rows as the screen would. */
@@ -73,8 +84,22 @@ function SampleInbox({
   onMark,
   onRetry,
   isFiltered = false,
+  withScheduling = false,
 }: SampleProps) {
-  const [items, setItems] = useState(isEmpty ? [] : sampleItems());
+  const [items, setItems] = useState(() => {
+    if (isEmpty) return [];
+    if (!withScheduling) return sampleItems();
+    const scheduling: NotificationItem = {
+      id: 'n5',
+      kind: 'scheduling_changed',
+      actor: GRACE ?? { type: 'system', id: null, name: 'System' },
+      createdAt: '2026-10-08T14:25:00.000Z',
+      isRead: false,
+      isDone: false,
+      excerpt: '',
+    };
+    return [scheduling, ...sampleItems()];
+  });
   const source = arraySource(items, (item) => item.id);
   return (
     <Stage height="grid">
@@ -106,9 +131,7 @@ function SampleInbox({
               emptyIcon: 'list-filter' as const,
               emptyActions: <Button>Clear filters</Button>,
             }
-          : {
-              emptyBody: 'Mentions, replies to your threads, tasks assigned to you and new form submissions show here.',
-            })}
+          : {})}
       />
     </Stage>
   );
@@ -133,6 +156,17 @@ export const Default: Story = {
     await expect(canvas.getByText('Contact us got a new submission')).toBeInTheDocument();
     await userEvent.click(canvas.getByText('Alan Turing replied in a thread'));
     await expect(args.onAction).toHaveBeenCalledWith('n2');
+  },
+};
+
+/** Someone else changed the reader's scheduling (spec 0037, AC-1264): the actor's sentence, no chip or excerpt. */
+export const SchedulingChanged: Story = {
+  args: { withScheduling: true, onAction: fn() },
+  // The row is Default's, with another sentence.
+  parameters: { crm: { screenshot: false } },
+  play: async ({ args, canvas, userEvent }) => {
+    await userEvent.click(canvas.getByText('Grace Hopper changed your scheduling'));
+    await expect(args.onAction).toHaveBeenCalledWith('n5');
   },
 };
 
@@ -174,7 +208,6 @@ export const Empty: Story = {
   args: { isEmpty: true },
   play: async ({ canvas }) => {
     await expect(canvas.getByText('You’re all caught up.')).toBeInTheDocument();
-    await expect(canvas.getByText(/new form submissions show here/)).toBeInTheDocument();
   },
 };
 
