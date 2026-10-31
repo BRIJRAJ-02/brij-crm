@@ -2,6 +2,8 @@ import type { PublicForm } from '@crm/contracts/forms';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, userEvent, waitFor } from 'storybook/test';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
+import { TileGrid } from '../../molecules/TileGrid/TileGrid.tsx';
+import { FormLayoutThumbnail } from './FormLayoutThumbnail.tsx';
 import { HostedFormPreview } from './HostedFormPreview.tsx';
 
 const CONTACT: PublicForm = {
@@ -99,4 +101,50 @@ export const AsPage: Story = {
 export const Paused: Story = {
   args: { form: { ...CONTACT, status: 'paused', questions: [] }, mode: 'page' },
   parameters: { crm: { screenshot: false } },
+};
+
+/** The preview in Steps (spec 0063): the first step, its progress line and Continue, as the visitor gets it. */
+export const InSteps: Story = {
+  args: {
+    form: {
+      ...CONTACT,
+      layout: 'steps',
+      steps: [
+        { keys: ['name', 'email', 'phone'] },
+        { id: 'more', title: 'About your project', keys: ['country', 'budget', 'message', 'updates'] },
+      ],
+    },
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('progressbar', { hidden: true, name: 'Step 1 of 2' })).toBeInTheDocument();
+  },
+};
+
+/** The preview one question at a time: the first question, large, with no card. */
+export const OneAtATime: Story = {
+  args: { form: { ...CONTACT, layout: 'conversational' } },
+};
+
+/**
+ * The three layouts in miniature (FormLayoutThumbnail), as the editor's Layout tiles draw them: Classic, Steps and
+ * One at a time, Steps chosen.
+ */
+export const LayoutTiles: Story = {
+  render: () => (
+    <Stage width="narrow">
+      <TileGrid
+        variant="choice"
+        label="Layout"
+        value="steps"
+        tiles={[
+          { id: 'classic', name: 'Classic', thumbnail: <FormLayoutThumbnail layout="classic" /> },
+          { id: 'steps', name: 'Steps', thumbnail: <FormLayoutThumbnail layout="steps" /> },
+          { id: 'conversational', name: 'One at a time', thumbnail: <FormLayoutThumbnail layout="conversational" /> },
+        ]}
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('radio', { name: 'Steps' })).toBeChecked();
+  },
 };

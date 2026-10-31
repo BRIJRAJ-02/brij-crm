@@ -3,7 +3,7 @@ import { checkAnswers, type CheckedForm } from './check.ts';
 import { FormDocument, stepsOf, type FormDocumentInput } from './document.ts';
 import { stepsOfBreaks } from './breaks.ts';
 import { groupsOf, pathOf, type PathForm } from './path.ts';
-import { publishProblem, type PublishAttribute } from './publish.ts';
+import { publishProblem, recordFactProblem, type PublishAttribute } from './publish.ts';
 
 const PEOPLE = '0199f0a0-0000-7000-8000-00000000000b';
 const EMAIL = '0199f0a0-0000-7000-8000-00000000000e';
@@ -222,5 +222,21 @@ describe('publishProblem on steps (AC-6312)', () => {
   it('passes a Steps form whose steps stand, and never checks the breaks of another layout', () => {
     expect(check([{ id: 's2', title: 'Your plans', startsAt: 'q3' }])).toBeUndefined();
     expect(check([{ id: 's3' }], 'classic')).toBeUndefined();
+  });
+});
+
+describe('recordFactProblem on steps', () => {
+  it('refuses a step’s Show when over a record field, which a form never reads', () => {
+    expect(
+      recordFactProblem({
+        questions: [],
+        steps: [
+          {
+            id: 's2',
+            showWhen: { join: 'all', rules: [{ key: `person.${EMAIL}`, op: 'is_answered' }] },
+          },
+        ],
+      })?.stepId,
+    ).toBe('s2');
   });
 });

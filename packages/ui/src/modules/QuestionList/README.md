@@ -27,10 +27,12 @@ Each question is a hairline card, space-8 apart (owner feedback F27, 20 October 
 - `hasProblem` marks the question a publish refused (the danger edge, and "Needs a fix" by its title); the caller keeps it open until it is fixed.
 - Without `onMove` the list is read only and shows no handles.
 - **A question with no type of its own** (a link page's FAQ, spec 0052): leave `typeLabel`, `typeIcon` and `isRequired` out and give `note` instead, the start of its answer on the second line. The row then begins with its grip rather than a type tile, and a row with neither a type nor a note keeps one line. Why a variant and not a new list: this is the same thing (a card, closed until opened, that reorders by its handle, holding whatever editor the caller renders); only the summary's parts differ, and the form builder's own summary is unchanged.
+- **A break between steps** (`kind: 'step'`, spec 0063): the form builder's New step dividers, in the same list so they drag like a question. Drawn on the ground (`surface-subtle`) with a dashed edge and a shorter head, its label the step's place and title ("Step 2 · Your company") and its note what the step holds. Why a variant and not a second list: a break moves among the questions, by the same handle and keys, and its place in the order is what it means; a list of its own could not put it between two questions.
 - An open question ends in a footer line under a hairline: `renderFooter` puts its actions (Duplicate, Delete) at its end, and `renderFooterStart` a closing choice at its start on the same line (the form builder's "Visitors must answer"). Why a slot: the actions alone sat in an empty corner under the last field (owner feedback F27, 20 October 2026).
 
 ## States
 
+- A step break (`kind: 'step'`), closed and open, in the list among questions.
 - Closed (the default), open (the head selected, its editor under a hairline, then its footer row: a choice at the start, Duplicate and Delete at the end), refused (`hasProblem`: the danger edge and "Needs a fix"), hover (the head filled), keyboard focus (the handle in the tile's place at once, the inset ring), untitled ("Untitled question", muted), dragging (faded, with the drop line), and read only (no handles).
 - No questions: the header alone, with its count at 0 and its actions.
 

@@ -96,6 +96,16 @@ export const strings = {
   /** Publish refused while a Settings field is incomplete: which card, then what it needs. */
   publishGap: (what: string) => `After sending needs a web address. ${what}`,
   publishGapButton: (what: string) => `Text needs the button’s words. ${what}`,
+  // Layout (spec 0063)
+  layoutTitle: 'Layout',
+  layoutClassic: 'Classic',
+  layoutClassicHint: 'Every question on one page.',
+  layoutSteps: 'Steps',
+  layoutStepsHint: 'Questions in groups, with Back and Continue.',
+  layoutOneAtATime: 'One at a time',
+  layoutOneAtATimeHint: 'One question per screen. Enter goes on.',
+  /** Under the tiles when Steps has no divider yet. */
+  layoutAddStep: 'Add a step under Questions to split the form.',
   colour: 'Colour',
   light: 'Light form',
   dark: 'Dark form',

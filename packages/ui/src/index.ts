@@ -442,6 +442,10 @@ export {
   type FilterEditorProps,
 } from './modules/FilterBuilder/FilterBuilder.tsx';
 export { completeFilters, conditionOn, countFilters } from './modules/FilterBuilder/filter-model.ts';
+export {
+  FormLayoutThumbnail,
+  type FormLayoutThumbnailProps,
+} from './modules/HostedFormPreview/FormLayoutThumbnail.tsx';
 export { HostedFormPreview, type HostedFormPreviewProps } from './modules/HostedFormPreview/HostedFormPreview.tsx';
 export {
   OptionsEditor,

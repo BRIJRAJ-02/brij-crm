@@ -11,6 +11,11 @@ import { strings } from './strings.ts';
 /** One question as its closed card shows it. */
 export interface QuestionListItem {
   readonly id: string;
+  /**
+   * `step` draws a break between steps rather than a question (spec 0063, AC-6303): on the ground, with a dashed
+   * edge, so the list reads as groups of question cards. It opens, moves and is announced as a question is.
+   */
+  readonly kind?: 'question' | 'step';
   /** The question; empty shows "Untitled question", muted. */
   readonly label: string;
   /**
@@ -125,6 +130,7 @@ export function QuestionList({
                 id={item.id}
                 textValue={name}
                 className={styles.row}
+                data-kind={item.kind === 'step' ? 'step' : undefined}
                 data-open={isOpen || undefined}
                 data-problem={item.hasProblem === true || undefined}
               >

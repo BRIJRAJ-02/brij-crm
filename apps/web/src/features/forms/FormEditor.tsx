@@ -1,7 +1,7 @@
 // Brief
 // Purpose: one form's editor (spec 0023, 0023-experience.md, Builder): its questions beside a live preview, and Settings (what happens after sending, routing, the owner) from the start; Install and Submissions once published.
 // Main task: shape the draft (saved quietly as you go), publish it, and share it.
-// Leaves out: steps and routing, round robin (#58), booking (#59), file questions (#32), analytics.
+// Leaves out: jumps and endings (spec 0063 slice 5), round robin (#58), booking (#59), analytics.
 import {
   isDataError,
   type FormDocument,
@@ -47,8 +47,10 @@ import {
   sameDocument,
   savableDraft,
   statusOf,
+  withFlow,
   withQuestions,
 } from './draft.ts';
+import { LayoutCard } from './LayoutCard.tsx';
 import { InstallTab } from './InstallTab.tsx';
 import { formHref, formPreviewHref, formsHref, FORM_TABS, type FormTab } from './paths.ts';
 import { PublishDialog } from './PublishDialog.tsx';
@@ -197,7 +199,9 @@ export function FormEditor(props: FormEditorProps) {
       document: draft,
       attributes: publishAttributesOf(target),
     });
-    return still?.code === problem.code && still.questionId === problem.questionId ? problem : undefined;
+    return still?.code === problem.code && still.questionId === problem.questionId && still.stepId === problem.stepId
+      ? problem
+      : undefined;
   }, [draft, problem, form.name, form.publicKey, target]);
 
   const apply = (view: FormView) => {
@@ -630,8 +634,24 @@ export function FormEditor(props: FormEditorProps) {
                 }}
               />
             )}
+            <LayoutCard
+              layout={draft.layout}
+              hasSteps={draft.steps.length > 0}
+              isReadOnly={!canManage}
+              onChange={(layout) => {
+                setDraft((before) => ({ ...before, layout }));
+              }}
+            />
             <QuestionsSection
               {...(props.question === undefined ? {} : { focusQuestionId: props.question })}
+              steps={{
+                steps: draft.steps,
+                layout: draft.layout,
+                onChange: (update) => {
+                  setDraft((before) => withFlow(before, update({ questions: before.questions, steps: before.steps })));
+                },
+                ...(shown?.stepId === undefined ? {} : { problem: { stepId: shown.stepId, message: shown.message } }),
+              }}
               questions={draft.questions}
               onChange={(update) => {
                 setDraft((before) => withQuestions(before, update(before.questions)));

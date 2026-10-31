@@ -51,7 +51,17 @@ interface SampleProps {
   readonly width?: 'narrow-fill' | 'fill';
   /** No questions yet: the header alone. */
   readonly isEmpty?: boolean;
+  /** A break between steps after the email (spec 0063). */
+  readonly withStep?: boolean;
 }
+
+/** A New step divider: the step's place and title, and what it holds. */
+const STEP: QuestionListItem = {
+  id: 'step:company',
+  kind: 'step',
+  label: 'Step 2 · Your company',
+  note: '2 questions',
+};
 
 /** The list holding its own order and open questions, as the form builder does. */
 function SampleQuestions({
@@ -60,13 +70,16 @@ function SampleQuestions({
   withProblem = false,
   width = 'fill',
   isEmpty = false,
+  withStep = false,
 }: SampleProps) {
-  const [items, setItems] = useState(
+  const [items, setItems] = useState<readonly QuestionListItem[]>(
     isEmpty
       ? []
       : withProblem
         ? QUESTIONS.map((item) => (item.id === 'new' ? { ...item, hasProblem: true } : item))
-        : QUESTIONS,
+        : withStep
+          ? [...QUESTIONS.slice(0, 2), STEP, ...QUESTIONS.slice(2)]
+          : QUESTIONS,
   );
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set(initialOpen));
   return (
@@ -253,4 +266,20 @@ export const WithoutTypes: Story = {
     await expect(canvas.getByText('Untitled question')).toBeVisible();
     await expect(canvas.getAllByRole('row')).toHaveLength(3);
   },
+};
+
+/** A break between steps (kind step, spec 0063): on the ground with a dashed edge, among the question cards. */
+export const WithStep: Story = {
+  render: () => <SampleQuestions withStep />,
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('button', { name: /^Step 2 · Your company/ })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
+  },
+};
+
+/** A step break open: what the caller renders (its title), as a question's editor shows. */
+export const StepOpen: Story = {
+  render: () => <SampleQuestions withStep initialOpen={['step:company']} />,
 };

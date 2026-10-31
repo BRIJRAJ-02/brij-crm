@@ -17,6 +17,18 @@ New. The builder must show exactly what goes live (spec 0023, `0023-experience.m
 - `page` checks the answers as the server would and shows the thank you, but sends nothing.
 - The look is the form's own (`look.colour`, `look.corners`), whatever the app's theme.
 
+- The layout is the form's own (`layout`, spec 0063): Classic draws `HostedForm`, Steps and One at a time `HostedFormSteps`; a change of layout starts the preview again from its first step.
+
+## FormLayoutThumbnail
+
+A form's layout in miniature, for the editor's Layout tiles (TileGrid's `choice` variant, spec 0063 AC-6302): Classic as a small card of three fields over its button, Steps as a card with a progress line, two fields and Back beside Continue, and One at a time as one larger question and its OK, with no card.
+
+```tsx
+<TileGrid variant="choice" label="Layout" value={layout} tiles={[{ id: 'steps', name: 'Steps', thumbnail: <FormLayoutThumbnail layout="steps" /> }]} />
+```
+
+Why here and new: a choice tile takes a Lucide mark or a thumbnail, and no mark draws a form's layout (each new mark would also cost every page's first load, `packages/ui/AGENTS.md`). LinkPageThumbnail draws a link page's look, not a form's shape, and Skeleton is a loading state, not a picture. It lives beside the preview because it pictures the same thing: the form a visitor gets. It is shapes only, in tokens, still, inert and hidden from screen readers (the tile's name says which layout). States: the three layouts, in light and dark (`HostedFormPreview.stories.tsx`, Layout tiles).
+
 ## States and keyboard
 
 - `preview`: nothing in it is reachable; the note is read once.

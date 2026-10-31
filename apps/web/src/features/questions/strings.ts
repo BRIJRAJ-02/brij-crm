@@ -50,6 +50,23 @@ export const strings = {
   undo: 'Undo',
   filedLine: (objectName: string, title: string) => `${objectName} › ${title}`,
   goneAttribute: 'An attribute that no longer exists',
+  // A form's New step dividers (spec 0063)
+  addStep: 'Add a step',
+  /** A divider's name: its step's place, then its title when it has one ("Step 2 · Your company"). */
+  stepName: (number: number, title?: string) =>
+    title === undefined || title.trim() === '' ? `Step ${String(number)}` : `Step ${String(number)} · ${title.trim()}`,
+  stepHolds: (count: number) =>
+    count === 0 ? 'No questions yet' : count === 1 ? '1 question' : `${String(count)} questions`,
+  /** On a divider outside the Steps layout: it is kept, and only Steps draws it. */
+  stepsOnly: 'Shows with Steps',
+  separator: ' · ',
+  stepTitle: 'Step title',
+  stepTitlePlaceholder: 'About your company',
+  stepShowWhenHint: 'Show this step only when earlier answers match. Its answers are not kept when it is skipped.',
+  stepNoEarlier: 'Add a question before this step to show it by an answer.',
+  stepReadsLater: 'A condition reads a question that is no longer before this step. Pick another, or remove it.',
+  removeStep: 'Remove step',
+  stepRemoved: (name: string) => `Removed ${name}. Its questions joined the step above.`,
   answerTypes: {
     short_text: 'Short text',
     long_text: 'Long text',

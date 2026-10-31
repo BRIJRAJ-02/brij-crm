@@ -429,7 +429,10 @@ export function publishProblem(input: PublishInput): PublishProblem | undefined 
  * condition would show them a field's id and the value it looks for, even a field hidden from them.
  */
 export function recordFactProblem(
-  document: Pick<FormDocument, 'questions'> & { readonly routing?: FormDocument['routing'] },
+  document: Pick<FormDocument, 'questions'> & {
+    readonly routing?: FormDocument['routing'];
+    readonly steps?: FormDocument['steps'];
+  },
 ): PublishProblem | undefined {
   const readsField = (showWhen: ShowWhen | undefined) =>
     (showWhen?.rules ?? []).some((condition) => isRecordFact(condition.key));
@@ -439,6 +442,17 @@ export function recordFactProblem(
       code: 'SHOW_WHEN_INVALID',
       message: showWhenMessage(question, READS_RECORD_FIELD),
       questionId: question.id,
+    };
+  }
+  // A step's Show when too (spec 0063): it is stored in the same draft every member reads.
+  const steps = document.steps ?? [];
+  const stepAt = steps.findIndex((each) => readsField(each.showWhen));
+  const step = steps[stepAt];
+  if (step !== undefined) {
+    return {
+      code: 'SHOW_WHEN_INVALID',
+      message: `A step ${READS_RECORD_FIELD}. Change its Show when.`,
+      stepId: step.id,
     };
   }
   const rules = document.routing?.rules ?? [];

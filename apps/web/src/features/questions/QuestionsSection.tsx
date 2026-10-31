@@ -3,7 +3,16 @@
 // Main task: add, word, type, file, require, duplicate, delete (with Undo) and reorder the questions.
 // Leaves out: saving (each editor saves as it goes), the look and the words around the questions.
 import type { AnswerType, FormAttributeChoice, FormQuestion } from '@crm/data';
-import { ANSWER_TYPES, CHOICE_TYPES, FORM_CHOICES_MAX, NO_PLACEHOLDER_TYPES, QUESTION_PRESETS } from '@crm/data/forms';
+import {
+  ANSWER_TYPES,
+  CHOICE_TYPES,
+  FORM_CHOICES_MAX,
+  FORM_STEP_TITLE_MAX,
+  NO_PLACEHOLDER_TYPES,
+  QUESTION_PRESETS,
+  type FormLayout,
+  type FormStep,
+} from '@crm/data/forms';
 import {
   Button,
   Callout,
@@ -44,6 +53,18 @@ import {
   type QuestionChange,
   type Questions,
 } from './questions.ts';
+import {
+  addStep,
+  changeStep,
+  itemsOf,
+  moveItem,
+  questionsBefore,
+  removeStep,
+  restoreStep,
+  stepPlaces,
+  type Flow,
+  type StepChange,
+} from './steps.ts';
 import { strings } from './strings.ts';
 import { ConditionsEditor, firstConditions } from '../routing/ConditionsEditor.tsx';
 import { conditionsLine, questionFacts, storedShowWhen } from '../routing/facts.ts';
@@ -97,7 +118,26 @@ export interface QuestionsSectionProps {
   /** Whether the member may add attributes: an unfiled question is then filed onto a new one when the form is published. */
   readonly canCreate?: boolean;
   readonly isReadOnly: boolean;
+  /**
+   * A form's New step dividers (spec 0063, AC-6303), in the list among the questions: given, the list draws them,
+   * moves questions and dividers together through `onChange`, and offers Add a step. A booking page has none.
+   */
+  readonly steps?: StepsProps;
 }
+
+/** A form's step dividers, as the questions section draws and changes them. */
+export interface StepsProps {
+  readonly steps: readonly FormStep[];
+  readonly layout: FormLayout;
+  /** A change to the questions and dividers together, as a function of what it applies to. */
+  readonly onChange: (update: (before: Flow) => Flow) => void;
+  /** The divider a publish refused, and why: kept open, with the error under its title. */
+  readonly problem?: { readonly stepId: string; readonly message: string };
+}
+
+/** A divider's row id in the list: apart from the questions' ids, which share their pattern. */
+const STEP_ROW = 'step:';
+const stepOfRow = (rowId: string) => (rowId.startsWith(STEP_ROW) ? rowId.slice(STEP_ROW.length) : undefined);
 
 /** Where it goes' two choices that are not a field: a new field made on Save, and the answer kept off the CRM. */
 const CREATE = 'create';
@@ -138,9 +178,17 @@ export function QuestionsSection(props: QuestionsSectionProps) {
   };
 
   // A question a publish refused is open, and stays open until it is fixed.
+  const breaks = props.steps;
+  const stepProblem = breaks?.problem;
   const openIds = useMemo(
-    () => new Set([...open, ...refused, ...(problem === undefined ? [] : [problem.questionId])]),
-    [open, refused, problem],
+    () =>
+      new Set([
+        ...open,
+        ...refused,
+        ...(problem === undefined ? [] : [problem.questionId]),
+        ...(stepProblem === undefined ? [] : [`${STEP_ROW}${stepProblem.stepId}`]),
+      ]),
+    [open, refused, problem, stepProblem],
   );
 
   // Unfiled questions the publish will give an attribute: each says so until it exists.
@@ -224,7 +272,7 @@ export function QuestionsSection(props: QuestionsSectionProps) {
     });
   };
 
-  const items: readonly QuestionListItem[] = questions.map((question) => ({
+  const questionItems: readonly QuestionListItem[] = questions.map((question) => ({
     id: question.id,
     label: question.label,
     typeLabel: strings.answerTypes[question.answerType],
@@ -254,6 +302,64 @@ export function QuestionsSection(props: QuestionsSectionProps) {
         }),
     hasProblem: problem?.questionId === question.id || refused.has(question.id),
   }));
+  // With dividers, each in its place among the questions (spec 0063): a step's place and title, what it holds, its
+  // Show when, and outside Steps a quiet note that only Steps draws it.
+  const flow: Flow | undefined = breaks === undefined ? undefined : { questions, steps: breaks.steps };
+  const places = flow === undefined ? new Map<string, { number: number; count: number }>() : stepPlaces(flow);
+  const items: readonly QuestionListItem[] =
+    flow === undefined || breaks === undefined
+      ? questionItems
+      : itemsOf(flow).flatMap((item): QuestionListItem[] => {
+          if (item.kind === 'question') return questionItems.filter((each) => each.id === item.id);
+          const step = breaks.steps.find((each) => each.id === item.id);
+          if (step === undefined) return [];
+          const place = places.get(step.id) ?? { number: 1, count: 0 };
+          return [
+            {
+              id: `${STEP_ROW}${step.id}`,
+              kind: 'step',
+              label: strings.stepName(place.number, step.title),
+              typeIcon: 'layers',
+              note: [strings.stepHolds(place.count), ...(breaks.layout === 'steps' ? [] : [strings.stepsOnly])].join(
+                strings.separator,
+              ),
+              ...(step.showWhen === undefined
+                ? {}
+                : {
+                    condition: routingStrings.shownWhen(
+                      conditionsLine(step.showWhen, questionFacts(questionsBefore(flow, step.id))),
+                    ),
+                  }),
+              hasProblem: stepProblem?.stepId === step.id,
+            },
+          ];
+        });
+
+  const addBreak = () => {
+    if (breaks === undefined) return;
+    const id = newId();
+    breaks.onChange((before) => addStep(before, id));
+    opened(`${STEP_ROW}${id}`);
+  };
+
+  const removeBreak = (stepId: string) => {
+    if (breaks === undefined || flow === undefined) return;
+    const step = breaks.steps.find((each) => each.id === stepId);
+    if (step === undefined) return;
+    const name = strings.stepName(places.get(stepId)?.number ?? 1, step.title);
+    const index = breaks.steps.indexOf(step);
+    breaks.onChange((before) => removeStep(before, stepId).flow);
+    toasts.toast({
+      tone: 'info',
+      message: strings.stepRemoved(name),
+      action: {
+        label: strings.undo,
+        onAction: () => {
+          breaks.onChange((before) => restoreStep(before, step, index));
+        },
+      },
+    });
+  };
 
   return (
     <QuestionList
@@ -262,6 +368,11 @@ export function QuestionsSection(props: QuestionsSectionProps) {
         <>
           {!isReadOnly && (
             <>
+              {breaks?.layout === 'steps' && (
+                <Button variant="ghost" icon="layers" onPress={addBreak}>
+                  {strings.addStep}
+                </Button>
+              )}
               {isFull ? (
                 // Off at the most a form holds, and says so on hover and focus.
                 <Tooltip content={tooMany}>
@@ -280,8 +391,14 @@ export function QuestionsSection(props: QuestionsSectionProps) {
                   label={strings.questionMenu}
                   onAction={(key) => {
                     if (key === 'close') setOpen(new Set(problem === undefined ? [] : [problem.questionId]));
+                    if (key === 'step') addBreak();
                   }}
                 >
+                  {breaks !== undefined && breaks.layout !== 'steps' && (
+                    <MenuItem id="step" icon="layers" description={strings.stepsOnly}>
+                      {strings.addStep}
+                    </MenuItem>
+                  )}
                   <SubmenuTrigger>
                     <MenuItem icon="list-plus" isDisabled={isFull} {...(isFull ? { description: tooMany } : {})}>
                       {strings.addFromPresets}
@@ -316,8 +433,8 @@ export function QuestionsSection(props: QuestionsSectionProps) {
       items={items}
       openIds={openIds}
       onOpenChange={(id, isOpen) => {
-        // The question a publish refused stays open until it is fixed.
-        if (!isOpen && problem?.questionId === id) return;
+        // The question or divider a publish refused stays open until it is fixed.
+        if (!isOpen && (problem?.questionId === id || `${STEP_ROW}${stepProblem?.stepId ?? ''}` === id)) return;
         setOpen((before) => {
           const next = new Set(before);
           if (isOpen) next.add(id);
@@ -326,6 +443,23 @@ export function QuestionsSection(props: QuestionsSectionProps) {
         });
       }}
       renderOpen={(id) => {
+        const stepId = stepOfRow(id);
+        if (stepId !== undefined) {
+          const step = breaks?.steps.find((each) => each.id === stepId);
+          if (step === undefined || breaks === undefined || flow === undefined) return null;
+          return (
+            <StepEditor
+              step={step}
+              earlier={questionsBefore(flow, stepId)}
+              isReadOnly={isReadOnly}
+              isJustAdded={justAdded === id || stepProblem?.stepId === stepId}
+              {...(stepProblem?.stepId === stepId ? { problem: stepProblem.message } : {})}
+              onChange={(change) => {
+                breaks.onChange((before) => changeStep(before, stepId, change));
+              }}
+            />
+          );
+        }
         const question = questions.find((each) => each.id === id);
         if (question === undefined) return null;
         return (
@@ -369,6 +503,22 @@ export function QuestionsSection(props: QuestionsSectionProps) {
         );
       }}
       renderFooter={(id) => {
+        const stepId = stepOfRow(id);
+        if (stepId !== undefined) {
+          return isReadOnly ? null : (
+            <Tooltip content={strings.removeStep}>
+              <Button
+                variant="ghost-danger"
+                size="lg"
+                icon="trash"
+                label={strings.removeStep}
+                onPress={() => {
+                  removeBreak(stepId);
+                }}
+              />
+            </Tooltip>
+          );
+        }
         const question = questions.find((each) => each.id === id);
         if (question === undefined || isReadOnly) return null;
         return (
@@ -408,6 +558,11 @@ export function QuestionsSection(props: QuestionsSectionProps) {
         ? {}
         : {
             onMove: (id: string, index: number) => {
+              // With dividers, a move is among questions and dividers together: a question crossing one changes step.
+              if (breaks !== undefined) {
+                breaks.onChange((before) => moveItem(before, stepOfRow(id) ?? id, index));
+                return;
+              }
               onChange((before) => moveQuestion(before, id, index));
             },
           })}
@@ -534,7 +689,18 @@ function QuestionEditor({
         />
       )}
       {!isLocked && (
-        <ShowWhenEditor question={question} questions={questions} isReadOnly={isReadOnly} onChange={onChange} />
+        <ShowWhenEditor
+          showWhen={question.showWhen}
+          earlier={questions.slice(
+            0,
+            questions.findIndex((each) => each.id === question.id),
+          )}
+          words={QUESTION_SHOW_WHEN}
+          isReadOnly={isReadOnly}
+          onChange={(showWhen) => {
+            onChange({ showWhen });
+          }}
+        />
       )}
       {isFiling && (
         <Select
@@ -699,26 +865,37 @@ function ChoicesEditor({ choices, isReadOnly, onChange, onInvalidChange }: Choic
   );
 }
 
-/** Props for a question's Show when. */
+/** Props for a Show when: a question's, or a step's (spec 0063). */
 interface ShowWhenEditorProps {
-  readonly question: FormQuestion;
-  readonly questions: Questions;
+  readonly showWhen: FormQuestion['showWhen'];
+  /** The questions before it: what its conditions may read. */
+  readonly earlier: readonly FormQuestion[];
+  readonly words: { readonly hint: string; readonly noEarlier: string; readonly readsLater: string };
   readonly isReadOnly: boolean;
-  readonly onChange: (change: QuestionChange) => void;
+  /** New conditions, or null to always show it. */
+  readonly onChange: (showWhen: FormQuestion['showWhen'] | null) => void;
 }
 
+/** The Show when words of a question. */
+const QUESTION_SHOW_WHEN = {
+  hint: routingStrings.showWhenHint,
+  noEarlier: routingStrings.noEarlier,
+  readsLater: routingStrings.readsLater,
+} as const;
+
+/** The Show when words of a step. */
+const STEP_SHOW_WHEN = {
+  hint: strings.stepShowWhenHint,
+  noEarlier: strings.stepNoEarlier,
+  readsLater: strings.stepReadsLater,
+} as const;
+
 /**
- * Show when (spec 0043, AC-1615): off, a line saying the question always shows and Add a condition; on, its
- * conditions over the questions before it, and Always show it. A form's first question has nothing to read.
+ * Show when (spec 0043, AC-1615; a step's, spec 0063 AC-6312): off, a line saying it always shows and Add a
+ * condition; on, its conditions over the questions before it, and Always show it. Nothing before it, nothing to read.
  */
-function ShowWhenEditor({ question, questions, isReadOnly, onChange }: ShowWhenEditorProps) {
-  const earlier = questionFacts(
-    questions.slice(
-      0,
-      questions.findIndex((each) => each.id === question.id),
-    ),
-  );
-  const { showWhen } = question;
+function ShowWhenEditor({ showWhen, earlier: before, words, isReadOnly, onChange }: ShowWhenEditorProps) {
+  const earlier = questionFacts(before);
   // Turning Show when on or off swaps what is drawn: focus follows to the first condition, or to Add a condition.
   const addRef = useRef<HTMLButtonElement>(null);
   const firstRef = useRef<HTMLButtonElement>(null);
@@ -726,7 +903,7 @@ function ShowWhenEditor({ question, questions, isReadOnly, onChange }: ShowWhenE
     return (
       <SettingsRow
         title={routingStrings.showWhen}
-        description={earlier.length === 0 ? routingStrings.noEarlier : routingStrings.alwaysShown}
+        description={earlier.length === 0 ? words.noEarlier : routingStrings.alwaysShown}
       >
         {!isReadOnly && (
           <Button
@@ -735,7 +912,7 @@ function ShowWhenEditor({ question, questions, isReadOnly, onChange }: ShowWhenE
             icon="plus"
             isDisabled={earlier.length === 0}
             onPress={() => {
-              onChange({ showWhen: storedShowWhen(firstConditions(earlier)) });
+              onChange(storedShowWhen(firstConditions(earlier)));
               focusLater(() => firstRef.current);
             }}
           >
@@ -745,25 +922,25 @@ function ShowWhenEditor({ question, questions, isReadOnly, onChange }: ShowWhenE
       </SettingsRow>
     );
   }
-  // A question moved above one its Show when reads: said here, as publish would refuse it.
+  // Moved above what its Show when reads: said here, as publish would refuse it.
   const readsLater = showWhen.rules.some((condition) => !earlier.some((fact) => fact.key === condition.key));
   return (
-    <SettingsSection title={routingStrings.showWhen} description={routingStrings.showWhenHint}>
-      {readsLater && <Callout tone="danger">{routingStrings.readsLater}</Callout>}
+    <SettingsSection title={routingStrings.showWhen} description={words.hint}>
+      {readsLater && <Callout tone="danger">{words.readsLater}</Callout>}
       <ConditionsEditor
         value={showWhen}
         facts={earlier}
         factLabel={routingStrings.question}
         isReadOnly={isReadOnly}
         firstRef={firstRef}
-        onChange={(next) => onChange({ showWhen: storedShowWhen(next) })}
+        onChange={(next) => onChange(storedShowWhen(next))}
       />
       {!isReadOnly && (
         <Button
           variant="ghost"
           icon="x"
           onPress={() => {
-            onChange({ showWhen: null });
+            onChange(null);
             focusLater(() => addRef.current);
           }}
         >
@@ -771,5 +948,54 @@ function ShowWhenEditor({ question, questions, isReadOnly, onChange }: ShowWhenE
         </Button>
       )}
     </SettingsSection>
+  );
+}
+
+/** Props for one open step divider. */
+interface StepEditorProps {
+  readonly step: FormStep;
+  readonly earlier: readonly FormQuestion[];
+  readonly isReadOnly: boolean;
+  /** Just added: its title takes focus, and the divider comes into view. */
+  readonly isJustAdded: boolean;
+  readonly problem?: string;
+  readonly onChange: (change: StepChange) => void;
+}
+
+/** One step divider open (spec 0063, AC-6303, AC-6312): its title, then its Show when over the questions before it. */
+function StepEditor({ step, earlier, isReadOnly, isJustAdded, problem, onChange }: StepEditorProps) {
+  const titleRef = useRef<HTMLInputElement & HTMLTextAreaElement>(null);
+  useEffect(() => {
+    if (!isJustAdded) return;
+    const input = titleRef.current;
+    if (input === null) return;
+    input.focus({ preventScroll: true });
+    const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    input.scrollIntoView({ behavior: still ? 'auto' : 'smooth', block: 'center' });
+  }, [isJustAdded]);
+  return (
+    <>
+      <Field
+        ref={titleRef}
+        label={strings.stepTitle}
+        placeholder={strings.stepTitlePlaceholder}
+        value={step.title ?? ''}
+        maxLength={FORM_STEP_TITLE_MAX}
+        isReadOnly={isReadOnly}
+        onChange={(title) => {
+          onChange({ title });
+        }}
+        {...(problem === undefined ? {} : { error: problem })}
+      />
+      <ShowWhenEditor
+        showWhen={step.showWhen}
+        earlier={earlier}
+        words={STEP_SHOW_WHEN}
+        isReadOnly={isReadOnly}
+        onChange={(showWhen) => {
+          onChange({ showWhen });
+        }}
+      />
+    </>
   );
 }
