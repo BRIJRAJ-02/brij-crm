@@ -303,6 +303,12 @@ const SENTENCES: readonly (readonly [AuditEntryView, string])[] = [
     'Ada Lovelace changed the routing rules of Intro call',
   ],
   [
+    { ...base, action: 'routing.settings_changed', target: workspace, params: {} },
+    'Ada Lovelace changed the routing settings',
+  ],
+  [{ ...base, action: 'routing.skills_changed', target: workspace, params: {} }, 'Ada Lovelace changed routing skills'],
+  [{ ...base, action: 'routing.tested', target: workspace, params: {} }, 'Ada Lovelace tested routing'],
+  [
     { ...base, action: 'form.owner_changed', target: form, params: {} },
     'Ada Lovelace changed who gets Contact us’s leads',
   ],
