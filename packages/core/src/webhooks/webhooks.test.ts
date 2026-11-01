@@ -313,6 +313,37 @@ describe('delivering (AC-6423, AC-6425)', () => {
     expect(await loadWebhookDelivery(system, key, { deliveryId })).toEqual({ kind: 'skip', reason: 'done' });
   });
 
+  it('queues the next try from inside the running job, so a retry is never dropped', async () => {
+    // The next try is queued under the same job key as the one running, with `replace`. If Graphile treated that as
+    // a repeat of a locked job and dropped it, every retry in production would vanish silently while this file's
+    // backoff walk still passed, because that walk records its tries outside any locked job (performance review,
+    // 1 November). So the job row is locked here first, as the worker holds it while the task runs.
+    const { system, deliveryId, workspaceId } = await oneDelivery();
+    const loaded = await loadWebhookDelivery(system, key, { deliveryId });
+    if (loaded.kind !== 'send') throw new Error('It was skipped.');
+    const jobKey = `crm-webhook:${workspaceId}:${deliveryId}`;
+    const locked = await testQuery<{ id: string }>(
+      ownerUrl,
+      `update graphile_worker._private_jobs set locked_at = now(), locked_by = 'the-test'
+       where key = $1 returning id::text as id`,
+      [jobKey],
+    );
+    expect(locked).toHaveLength(1);
+
+    const finished = await finishWebhookDelivery(system, loaded.send, failed, { random: () => 0.5 });
+    expect(finished.delivery.state).toBe('failed');
+    // One row waiting under that key, unlocked and due at the first backoff step: the next try, not the one held.
+    const rows = await testQuery<{ locked_at: Date | null; run_at: Date }>(
+      ownerUrl,
+      `select j.locked_at, j.run_at from graphile_worker._private_jobs j where j.key = $1`,
+      [jobKey],
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.locked_at).toBeNull();
+    const wait = ((rows[0]?.run_at.getTime() ?? 0) - Date.now()) / 1000;
+    expect(wait).toBeGreaterThan(30);
+  });
+
   it('records a delivered one with its status, time and the first 1 KB of the answer', async () => {
     const { system, deliveryId, owner, endpointId } = await oneDelivery();
     const loaded = await loadWebhookDelivery(system, key, { deliveryId });

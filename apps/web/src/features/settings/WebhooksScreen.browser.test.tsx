@@ -111,9 +111,13 @@ function layerWith(overrides: Partial<DataLayer['webhooks']> = {}) {
     ...overrides,
   };
   const layer = {
+    // The frame around the screen reads these (spec 0034): its sidebar, logo, Tasks badge and Inbox badge, all
+    // still loading. A source the frame reads and this fake leaves out throws inside the frame, not the screen.
     calendar: { view: () => stillLoading },
     nav: { source: () => stillLoading, change: () => undefined },
+    workspaceLogo: { subscribe: () => () => undefined, src: () => undefined },
     tasks: { due: () => stillLoading },
+    inbox: { unread: () => stillLoading },
     webhooks,
   };
   return { layer: layer as unknown as DataLayer, webhooks };
@@ -188,7 +192,9 @@ describe('the endpoints (AC-6419)', () => {
     mounted?.host.remove();
     mounted = undefined;
     await renderScreen(layer, { available: false, endpoints: [] });
-    await expect.element(page.getByText('Webhooks aren’t set up here yet')).toBeVisible();
+    // Paused rather than broken, with the variable named, since the person who can fix it runs the server.
+    await expect.element(page.getByText('Webhooks are paused')).toBeVisible();
+    expect(document.body.textContent).toContain('WEBHOOK_SECRET_KEY');
     expect(page.getByRole('button', { name: 'Add endpoint' }).elements()).toHaveLength(0);
   });
 
@@ -270,5 +276,73 @@ describe('one endpoint (AC-6420, AC-6425)', () => {
     await confirm.getByRole('button', { name: 'Delete endpoint' }).click();
     expect(webhooks.remove).toHaveBeenCalledWith('acme', ENDPOINT.id);
     await userEvent.keyboard('{Escape}');
+  });
+});
+
+describe('screenshots', () => {
+  /**
+   * The webhook screens in light and dark, for the lane's own eyes before it lands. Off unless
+   * `VITE_WEBHOOK_SHOTS=1`, as the other screens' shot tests are, so CI never draws them.
+   */
+  it.runIf(import.meta.env.VITE_WEBHOOK_SHOTS === '1')('saves each webhook screen, light and dark', async () => {
+    const dir = 'webhook-shots';
+    const clear = () => {
+      act(() => {
+        mounted?.root.unmount();
+      });
+      mounted?.host.remove();
+      mounted = undefined;
+      resetTheme();
+    };
+    await page.viewport(1280, 900);
+    for (const theme of THEMES) {
+      // The list with an endpoint, one off after failing, and one the reader switched off.
+      const { layer } = layerWith();
+      await renderScreen(layer, {
+        available: true,
+        endpoints: [
+          ENDPOINT,
+          { ...ENDPOINT, id: `${ENDPOINT.id.slice(0, -1)}2`, url: 'https://hooks.zapier.example/catch/1', description: 'Make', status: 'off', offReason: 'failing' },
+          { ...ENDPOINT, id: `${ENDPOINT.id.slice(0, -1)}3`, url: 'https://n8n.example.com/webhook/x', description: 'n8n', status: 'off', offReason: 'turned_off' },
+        ],
+      });
+      applyTheme(theme);
+      await page.screenshot({ path: `${dir}/list-${theme}.png` });
+      clear();
+
+      // The empty state.
+      const empty = layerWith();
+      await renderScreen(empty.layer, { available: true, endpoints: [] });
+      applyTheme(theme);
+      await page.screenshot({ path: `${dir}/empty-${theme}.png` });
+      clear();
+
+      // Paused: no signing key on this server, with the variable named.
+      const paused = layerWith();
+      await renderScreen(paused.layer, { available: false, endpoints: [] });
+      applyTheme(theme);
+      await page.screenshot({ path: `${dir}/paused-${theme}.png` });
+      clear();
+
+      // One endpoint's panel, with its delivery log.
+      const open = layerWith();
+      await renderScreen(open.layer, { available: true, endpoints: [ENDPOINT] });
+      await page.getByRole('rowheader', { name: /Zapier/ }).click();
+      await expect.element(page.getByRole('dialog')).toBeVisible();
+      applyTheme(theme);
+      await page.screenshot({ path: `${dir}/panel-${theme}.png` });
+      await userEvent.keyboard('{Escape}');
+      clear();
+
+      // Add endpoint, with its event chips.
+      const adding = layerWith();
+      await renderScreen(adding.layer, { available: true, endpoints: [] });
+      await page.getByRole('button', { name: 'Add endpoint' }).first().click();
+      await expect.element(page.getByRole('dialog', { name: 'Add endpoint' })).toBeVisible();
+      applyTheme(theme);
+      await page.screenshot({ path: `${dir}/add-${theme}.png` });
+      await userEvent.keyboard('{Escape}');
+      clear();
+    }
   });
 });

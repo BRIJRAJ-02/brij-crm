@@ -80,12 +80,16 @@ describe('the connection the sender opens (AC-6424)', () => {
     // The lookup is there, and it is pinned: whatever the connection asks, it only ever gets a checked address.
     const pinned = options.lookup;
     if (pinned === undefined) throw new Error('The connection was opened with no lookup, so a DNS change reaches it.');
+    // `LookupFunction` is overloaded on `all`, so it is read here through one plain shape instead.
+    type Asking = (
+      hostname: string,
+      options: { readonly family: 0 | 4 | 6; readonly all: boolean },
+      callback: (error: Error | null, ...rest: unknown[]) => void,
+    ) => void;
+    const ask = pinned as unknown as Asking;
     const asked = (family: 0 | 4 | 6, all: boolean) =>
       new Promise<unknown>((resolve) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- the resolver's callback is overloaded
-        (pinned as any)('hooks.example.com', { family, all }, (error: unknown, ...rest: unknown[]) =>
-          resolve(error ?? rest),
-        );
+        ask('hooks.example.com', { family, all }, (error, ...rest) => resolve(error ?? rest));
       });
     expect(await asked(0, true)).toEqual([
       [

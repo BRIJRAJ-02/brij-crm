@@ -9,28 +9,65 @@ import { WEBHOOK_DATA, type WebhookEventType } from '@crm/contracts';
 import type { WorkspaceTx } from '@crm/db';
 import { sql } from 'drizzle-orm';
 import { newId } from '../engine/ids.ts';
-import { bookingWebhookData, emailAnswer, formWebhookData, signupHandle, webhookEnvelope } from './payloads.ts';
+import {
+  bookingWebhookData,
+  bookingWebhookDataMany,
+  emailAnswer,
+  formWebhookData,
+  signupHandle,
+  webhookEnvelope,
+} from './payloads.ts';
 
 /** What queueing did: how many deliveries it stored (0 with no subscribed endpoint). */
 export interface QueuedWebhook {
   readonly deliveries: number;
 }
 
+/**
+ * The most deliveries an endpoint that is already failing may have waiting before new events stop being stored for
+ * it. A receiver that answers nothing is tried at most once per 10 second timeout, serialised on its own queue, so a
+ * busy workspace's events arrive faster than its tries are made and the waiting set would grow for the whole 3 days
+ * before the endpoint switches off (performance review, 1 November). Past this, an event is simply not stored for
+ * that endpoint: everything the receiver missed is in the other endpoints' logs and in the CRM itself, and the
+ * endpoint is on its way to being turned off anyway.
+ */
+export const WEBHOOK_PENDING_MAX = 1_000;
+
 /** A subscribed endpoint, as the queue reads it. */
 interface Subscriber extends Record<string, unknown> {
   readonly id: string;
   readonly workspace_id: string;
   readonly events: readonly string[];
+  /** Whether it is in a failing spell, so its first try waits a minute and its backlog is capped. */
+  readonly failing: boolean;
+  /** How many of its deliveries are still owed a try; only counted while it is failing. */
+  readonly waiting: number;
 }
 
-/** The workspace's active endpoints that want any of `types`: one read, through row level security. */
+/**
+ * The workspace's active endpoints that want any of `types`: one read, through row level security, over at most 10
+ * rows. A failing endpoint's waiting deliveries are counted in the same statement, through
+ * `webhook_deliveries_log`'s leading columns; a healthy one counts nothing.
+ */
 async function subscribers(tx: WorkspaceTx, types: readonly WebhookEventType[]): Promise<readonly Subscriber[]> {
   const found = await tx.execute<Subscriber>(sql`
-    select id, workspace_id, events from webhook_endpoints
-    where status = 'active' and events && ${`{${types.join(',')}}`}::text[]
+    select e.id, e.workspace_id, e.events, e.failing_since is not null as failing,
+      case when e.failing_since is null then 0 else (
+        select count(*) from webhook_deliveries d
+        where d.workspace_id = e.workspace_id and d.endpoint_id = e.id and d.state in ('pending', 'failed')
+      ) end::int as waiting
+    from webhook_endpoints e
+    where e.status = 'active' and e.events && ${`{${types.join(',')}}`}::text[]
   `);
   return found.rows;
 }
+
+/** The endpoints of `endpoints` that want `type` and still have room for another delivery. */
+const takers = (endpoints: readonly Subscriber[], type: WebhookEventType): readonly Subscriber[] =>
+  endpoints.filter(
+    (endpoint) =>
+      endpoint.events.includes(type) && (!endpoint.failing || endpoint.waiting < WEBHOOK_PENDING_MAX),
+  );
 
 /** Stores and queues one event for the endpoints given that want `type`. */
 async function store(
@@ -40,7 +77,7 @@ async function store(
   data: unknown,
   now: Date,
 ): Promise<QueuedWebhook> {
-  const wanting = endpoints.filter((endpoint) => endpoint.events.includes(type));
+  const wanting = takers(endpoints, type);
   // Row level security gave only this workspace's endpoints, so they all name it.
   const workspaceId = wanting[0]?.workspace_id;
   if (workspaceId === undefined || data === undefined) return { deliveries: 0 };
@@ -61,6 +98,33 @@ async function store(
   `);
   if (queued.rows.some((row) => !row.queued)) throw new Error('A webhook delivery could not be queued.');
   return { deliveries: queued.rows.length };
+}
+
+/**
+ * Stores one delivery per event per endpoint, and queues each, in one statement: the events cross joined with the
+ * endpoints that want them. Answers how many it stored.
+ */
+async function storeMany(
+  tx: WorkspaceTx,
+  wanting: readonly Subscriber[],
+  type: WebhookEventType,
+  events: readonly { readonly eventId: string; readonly envelope: unknown }[],
+): Promise<number> {
+  const rows = JSON.stringify(events.map((each) => ({ id: each.eventId, body: each.envelope })));
+  const queued = await tx.execute<{ queued: boolean }>(sql`
+    with made as (
+      insert into webhook_deliveries (workspace_id, endpoint_id, event_id, event_type, payload, next_attempt_at)
+      select e.workspace_id, e.id, (ev.value ->> 'id')::uuid, ${type}, ev.value -> 'body',
+        case when e.failing_since is not null then now() + interval '1 minute' end
+      from webhook_endpoints e,
+        jsonb_array_elements(${rows}::jsonb) as ev(value)
+      where e.id = any (${`{${wanting.map((endpoint) => endpoint.id).join(',')}}`}::uuid[])
+      returning id
+    )
+    select crm_enqueue_webhook_delivery(id) as queued from made
+  `);
+  if (queued.rows.some((row) => !row.queued)) throw new Error('A webhook delivery could not be queued.');
+  return queued.rows.length;
 }
 
 /**
@@ -87,20 +151,39 @@ export function queueBookingWebhook(
   return queueWebhookEvent(tx, type, () => bookingWebhookData(tx, bookingId));
 }
 
-/** The same event for several bookings (a sync that cancels many): one endpoint read for all of them. */
+/**
+ * The same event for several bookings (a sync that cancels many): three statements for the whole batch however many
+ * bookings it holds, never one read and one insert each. The endpoints are read once, every booking's data in one
+ * statement, and every delivery stored and queued in one more: a provider hiccup that cancels hundreds of bookings
+ * would otherwise hold its transaction's locks through a thousand round trips (performance review, 1 November).
+ */
 export async function queueBookingWebhooks(
   tx: WorkspaceTx,
   type: Extract<WebhookEventType, `booking.${string}`>,
   bookingIds: readonly string[],
+  now: Date = new Date(),
 ): Promise<QueuedWebhook> {
   if (bookingIds.length === 0) return { deliveries: 0 };
   const endpoints = await subscribers(tx, [type]);
-  if (endpoints.length === 0) return { deliveries: 0 };
-  let deliveries = 0;
+  const wanting = takers(endpoints, type);
+  if (wanting.length === 0) return { deliveries: 0 };
+  const data = await bookingWebhookDataMany(tx, bookingIds);
+  const events: { eventId: string; envelope: unknown }[] = [];
   for (const bookingId of bookingIds) {
-    deliveries += (await store(tx, endpoints, type, await bookingWebhookData(tx, bookingId), new Date())).deliveries;
+    const one = data.get(bookingId);
+    if (one === undefined || !WEBHOOK_DATA[type].safeParse(one).success) continue;
+    const eventId = newId(now.getTime());
+    const envelope = webhookEnvelope({
+      eventId,
+      type,
+      createdAt: now.toISOString(),
+      workspaceId: wanting[0]?.workspace_id ?? '',
+      data: one,
+    });
+    if (envelope !== undefined) events.push({ eventId, envelope });
   }
-  return { deliveries };
+  if (events.length === 0) return { deliveries: 0 };
+  return { deliveries: await storeMany(tx, wanting, type, events) };
 }
 
 /**
@@ -117,7 +200,7 @@ export async function queueFormWebhooks(
   if (endpoints.length === 0) return { deliveries: 0 };
   const data = await formWebhookData(tx, input.submissionId);
   const submitted = await store(tx, endpoints, 'form.submitted', data, now);
-  const wantsSignup = endpoints.some((endpoint) => endpoint.events.includes('link_page.signup'));
+  const wantsSignup = takers(endpoints, 'link_page.signup').length > 0;
   const email = data === undefined ? undefined : emailAnswer(data.answers);
   const handle =
     !wantsSignup || email === undefined

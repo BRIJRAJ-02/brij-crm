@@ -287,13 +287,18 @@ export async function deleteWebhook(
  * delivery finished and sends nothing, so cancelling needs no reach into the job queue. Answers how many it gave up.
  */
 export async function cancelQueuedDeliveries(tx: WorkspaceTx, where: SQL): Promise<number> {
-  const given = await tx.execute<{ id: string }>(sql`
-    update webhook_deliveries set state = 'gave_up', next_attempt_at = null,
-      failure = coalesce(failure, 'cancelled')
-    where state in ('pending', 'failed') and event_type <> 'ping' and (${where})
-    returning id
+  // Counted in the database, never by shipping the ids back: an endpoint that failed for 3 days can have a very
+  // large pending set, and this runs inside the transaction that records a delivery (performance review, 1 November).
+  const given = await tx.execute<{ count: number }>(sql`
+    with given as (
+      update webhook_deliveries set state = 'gave_up', next_attempt_at = null,
+        failure = coalesce(failure, 'cancelled')
+      where state in ('pending', 'failed') and event_type <> 'ping' and (${where})
+      returning 1
+    )
+    select count(*)::int as count from given
   `);
-  return given.rows.length;
+  return given.rows[0]?.count ?? 0;
 }
 
 interface DeliveryRow extends Record<string, unknown> {

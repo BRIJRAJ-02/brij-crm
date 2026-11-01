@@ -63,6 +63,9 @@ const ADD_FORM = 'webhook-add';
 /** The most endpoints a workspace may have (AC-6419). */
 const ENDPOINTS_MAX = 10;
 
+/** The most delivery rows the panel holds at once, however many pages are loaded. */
+const LOG_HELD = 300;
+
 /** A refusal's own words, or the plain fallback. */
 const refusalOf = (failure: unknown): string =>
   isDataError(failure) && failure.code !== 'INTERNAL' ? failure.message : strings.saveFailed;
@@ -121,7 +124,6 @@ export function WebhooksScreen({ data, toasts, slug, initial }: WebhooksScreenPr
         <EmptyState icon="plug" title={strings.unavailableTitle}>
           {strings.unavailableBefore}
           <Code>{strings.unavailableKey}</Code>
-          {strings.unavailableAfter}
         </EmptyState>
       </SettingsPage>
     );
@@ -389,7 +391,12 @@ function EndpointDialog({
     setLogFailed(false);
     try {
       const page = await data.webhooks.deliveries(slug, endpoint.id, after);
-      setLog((held) => (after === undefined ? page.deliveries : [...(held ?? []), ...page.deliveries]));
+      // The newest LOG_HELD are kept however often Load more is pressed: the log keeps 30 days, and a busy
+      // endpoint's rows are not virtualised, so holding every one of them mounted is what would slow the panel
+      // (performance review, 1 November).
+      setLog((held) =>
+        after === undefined ? page.deliveries : [...(held ?? []), ...page.deliveries].slice(0, LOG_HELD),
+      );
       setCursor(page.nextCursor);
     } catch {
       setLogFailed(true);
@@ -720,18 +727,22 @@ function EndpointDialog({
             }}
           />
         )}
-        {cursor !== undefined && (
-          <Button
-            variant="ghost"
-            isPending={loadingMore}
-            onPress={() => {
-              setLoadingMore(true);
-              void readLog(cursor).finally(() => setLoadingMore(false));
-            }}
-          >
-            {strings.more}
-          </Button>
-        )}
+        {cursor !== undefined &&
+          ((log?.length ?? 0) < LOG_HELD ? (
+            <Button
+              variant="ghost"
+              isPending={loadingMore}
+              onPress={() => {
+                setLoadingMore(true);
+                void readLog(cursor).finally(() => setLoadingMore(false));
+              }}
+            >
+              {strings.more}
+            </Button>
+          ) : (
+            // The panel holds the newest LOG_HELD rows, so Load more stops here rather than appearing to do nothing.
+            <Callout tone="info">{strings.logCapped(LOG_HELD)}</Callout>
+          ))}
       </SettingsSection>
     </Modal>
   );

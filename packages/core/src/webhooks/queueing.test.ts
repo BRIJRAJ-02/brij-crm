@@ -20,7 +20,7 @@ import type { WebhookEventType } from '@crm/contracts';
 import { testQuery } from '@crm/db/testing';
 import * as core from '../index.ts';
 import { testScope } from '../testing.ts';
-import { queueBookingWebhooks, queueFormWebhooks, queueWebhookEvent } from './queue.ts';
+import { queueBookingWebhooks, queueFormWebhooks, queueWebhookEvent, WEBHOOK_PENDING_MAX } from './queue.ts';
 import { systemScope } from '../access/door.ts';
 import { loadWebhookDelivery } from './deliver.ts';
 import { decodeWebhookKey } from './signing.ts';
@@ -297,6 +297,45 @@ describe('cancelling queued deliveries (AC-6422, AC-6423)', () => {
     await core.updateWebhook(owner, deps, { endpointId: first, status: 'off' });
     const states = (await deliveriesIn(workspaceId)).map((row) => row.state).sort();
     expect(states).toEqual(['gave_up', 'pending']);
+  });
+});
+
+describe('a failing endpoint’s backlog is capped (performance review, 1 November)', () => {
+  it('stops storing for an endpoint in a failing spell once WEBHOOK_PENDING_MAX wait, and starts again when it recovers', async () => {
+    const { workspaceId, owner } = await workspace();
+    const endpointId = await endpoint(owner);
+    // A failing spell with its waiting set already at the cap. A receiver answering nothing is tried once per 10
+    // second timeout on its own queue, so arrivals outrun tries and the set would otherwise grow for 3 days.
+    await testQuery(ownerUrl, `update webhook_endpoints set failing_since = now() - interval '1 hour' where id = $1`, [
+      endpointId,
+    ]);
+    await testQuery(
+      ownerUrl,
+      `insert into webhook_deliveries (workspace_id, endpoint_id, event_id, event_type, payload, state)
+       select $1::uuid, $2::uuid, uuidv7(), 'form.submitted', '{}'::jsonb, 'pending'
+       from generate_series(1, $3::int)`,
+      [workspaceId, endpointId, WEBHOOK_PENDING_MAX],
+    );
+    expect(await db.withWorkspace(workspaceId, (tx) => queueIn(tx))).toEqual({ deliveries: 0 });
+
+    // One below the cap, and it stores again: the cap holds the set, it does not turn the endpoint off.
+    await testQuery(
+      ownerUrl,
+      `delete from webhook_deliveries where id in (
+         select id from webhook_deliveries where workspace_id = $1 and endpoint_id = $2 limit 1)`,
+      [workspaceId, endpointId],
+    );
+    expect(await db.withWorkspace(workspaceId, (tx) => queueIn(tx))).toEqual({ deliveries: 1 });
+  });
+
+  it('counts nothing for an endpoint that is not failing, however many deliveries it has', async () => {
+    const { workspaceId, owner } = await workspace();
+    await endpoint(owner);
+    // No failing spell, so the waiting count is not read at all and the cap never applies.
+    for (let index = 0; index < 3; index += 1) {
+      expect(await db.withWorkspace(workspaceId, (tx) => queueIn(tx))).toEqual({ deliveries: 1 });
+    }
+    expect(await deliveriesIn(workspaceId)).toHaveLength(3);
   });
 });
 

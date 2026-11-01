@@ -70,20 +70,8 @@ interface BookingRow extends Record<string, unknown> {
   readonly answers: unknown;
 }
 
-/** A booking event's data, read now in the write's transaction, or undefined when the booking isn't there. */
-export async function bookingWebhookData(tx: WorkspaceTx, bookingId: string): Promise<WebhookBookingData | undefined> {
-  const found = await tx.execute<BookingRow>(sql`
-    select b.id, b.page_id, p.title as page_title, p.location, m.name as host_name, m.email as host_email,
-      to_char(b.starts_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as starts_at,
-      to_char(b.ends_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as ends_at,
-      b.visitor_time_zone, b.status, b.no_show_at is not null as no_show, b.visitor_name, b.visitor_email, b.answers
-    from bookings b
-    join booking_pages p on p.workspace_id = b.workspace_id and p.id = b.page_id
-    left join members m on m.workspace_id = b.workspace_id and m.id = b.host_member_id
-    where b.id = ${bookingId}::uuid
-  `);
-  const row = found.rows[0];
-  if (row === undefined) return undefined;
+/** One read's row as a booking event's data. */
+function toBookingData(row: BookingRow): WebhookBookingData {
   const location =
     typeof row.location === 'object' && row.location !== null && 'type' in row.location
       ? String(row.location.type)
@@ -100,6 +88,45 @@ export async function bookingWebhookData(tx: WorkspaceTx, bookingId: string): Pr
     invitee: { name: row.visitor_name, email: row.visitor_email },
     answers: bookingAnswers(row.answers),
   };
+}
+
+/** The columns a booking event's data is read from. */
+const BOOKING_COLUMNS = sql`
+  b.id, b.page_id, p.title as page_title, p.location, m.name as host_name, m.email as host_email,
+  to_char(b.starts_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as starts_at,
+  to_char(b.ends_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as ends_at,
+  b.visitor_time_zone, b.status, b.no_show_at is not null as no_show, b.visitor_name, b.visitor_email, b.answers`;
+
+/**
+ * Several bookings' data in one read, by id, for a sync that cancels many at once (performance review, 1 November:
+ * one statement for the batch, never one per booking). A booking that isn't there is simply absent from the map.
+ */
+export async function bookingWebhookDataMany(
+  tx: WorkspaceTx,
+  bookingIds: readonly string[],
+): Promise<ReadonlyMap<string, WebhookBookingData>> {
+  if (bookingIds.length === 0) return new Map();
+  const found = await tx.execute<BookingRow>(sql`
+    select ${BOOKING_COLUMNS}
+    from bookings b
+    join booking_pages p on p.workspace_id = b.workspace_id and p.id = b.page_id
+    left join members m on m.workspace_id = b.workspace_id and m.id = b.host_member_id
+    where b.id = any (${`{${bookingIds.join(',')}}`}::uuid[])
+  `);
+  return new Map(found.rows.map((row) => [row.id, toBookingData(row)]));
+}
+
+/** A booking event's data, read now in the write's transaction, or undefined when the booking isn't there. */
+export async function bookingWebhookData(tx: WorkspaceTx, bookingId: string): Promise<WebhookBookingData | undefined> {
+  const found = await tx.execute<BookingRow>(sql`
+    select ${BOOKING_COLUMNS}
+    from bookings b
+    join booking_pages p on p.workspace_id = b.workspace_id and p.id = b.page_id
+    left join members m on m.workspace_id = b.workspace_id and m.id = b.host_member_id
+    where b.id = ${bookingId}::uuid
+  `);
+  const row = found.rows[0];
+  return row === undefined ? undefined : toBookingData(row);
 }
 
 /** The source fields a payload carries from a submission's stored context. */

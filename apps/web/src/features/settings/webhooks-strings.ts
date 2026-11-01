@@ -34,9 +34,13 @@ export const strings = {
    * queued and nothing is sent. The variable is named, since the person who can fix it is whoever runs the server.
    */
   unavailableTitle: 'Webhooks are paused',
-  unavailableBefore: 'Nothing is queued or sent until this server has its signing secret, so no event ever leaves unsigned. Whoever runs the server sets ',
+  /**
+   * The code chip ends the line, with no punctuation after it: the chip carries its own inline padding, so a comma
+   * or a full stop behind it floated a space away from the name (shots, 1 November).
+   */
+  unavailableBefore:
+    'Nothing is queued or sent until this server has its signing secret, so no event ever leaves unsigned. It works straight away once the server sets',
   unavailableKey: 'WEBHOOK_SECRET_KEY',
-  unavailableAfter: ', and this page works straight away.',
   failedTitle: 'Webhooks didn’t load',
   failedText: 'Try again in a moment.',
   columnEndpoint: 'Endpoint',
@@ -95,6 +99,8 @@ export const strings = {
     config: 'Not sent: this server can’t open the signing secret. Rotate it, or ask whoever runs the server.',
   } as const,
   log: 'Deliveries',
+  /** Where the panel is holding as many rows as it keeps; the log itself still has 30 days. */
+  logCapped: (count: number) => `Showing the newest ${String(count)}. The log keeps 30 days.`,
   logEmpty: 'Nothing sent yet',
   logFailedTitle: 'Deliveries didn’t load',
   logEmptyText: 'Events show here as they’re sent. The log keeps 30 days.',
