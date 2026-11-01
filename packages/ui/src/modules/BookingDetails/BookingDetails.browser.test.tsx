@@ -158,6 +158,21 @@ describe('guests as chips', () => {
     expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ guests: ['grace@example.com'] }));
   });
 
+  it('carries an address once when it is taken twice, whichever takes it first', async () => {
+    const onSubmit = details({ kind: 'done' });
+    await userEvent.fill(nameBox(), 'Ada Lovelace');
+    await userEvent.fill(emailBox(), 'ada@example.com');
+    await userEvent.click(page.getByRole('button', { name: 'Add guests' }));
+    await userEvent.type(guestsBox(), 'grace@example.com{Enter}');
+    await expect.poll(chips).toEqual(['grace@example.com']);
+    // The same address again, still in the field: submit takes it and the blur after it takes it again.
+    await userEvent.type(guestsBox(), 'Grace@example.com');
+    await userEvent.click(page.getByRole('button', { name: 'Confirm booking' }));
+    await expect.poll(() => onSubmit.mock.calls.length).toBe(1);
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ guests: ['grace@example.com'] }));
+    await expect.poll(chips).toEqual(['grace@example.com']);
+  });
+
   it('takes an address on Enter without booking, and on leaving the field', async () => {
     const onSubmit = details({ kind: 'done' });
     await userEvent.click(page.getByRole('button', { name: 'Add guests' }));

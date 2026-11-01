@@ -441,8 +441,9 @@ export function BookingDetails({
             onBlur={() => {
               if (guestDraft.trim() === '') return;
               const draft = guestDraft;
-              // The chip is made just after the blur's own task, so a press on Confirm (whose button takes focus as
-              // the press ends) lands its click before the chip moves anything under the pointer.
+              // Layout only, never correctness: submit takes the draft itself, and taking an address already a chip
+              // does nothing, so whichever runs first the booking carries each guest once. Waiting a task just keeps
+              // the chip from moving Confirm under the pointer mid click.
               globalThis.setTimeout(() => takeGuests(draft), 0);
             }}
             {...(errors.guests === undefined
