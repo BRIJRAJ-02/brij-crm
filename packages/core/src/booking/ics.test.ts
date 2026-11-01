@@ -40,7 +40,10 @@ describe('buildBookingIcs', () => {
     expect(prop(ics(), 'DTSTART')).toBe('20260910T130000Z');
     expect(prop(ics(), 'DTEND')).toBe('20260910T133000Z');
     expect(prop(ics(), 'DTSTAMP')).toBe('20260901T080000Z');
-    const fallBack = DateTime.fromISO('2027-11-07T01:00:00', { zone: 'America/New_York' }).toJSDate();
+    // 01:00 happens twice in New York that morning, and Luxon picks whichever of the two the machine's own
+    // offset points at today, so the local reading would flip with the seasons. Name the instant instead:
+    // this is the first 01:00, still on summer time.
+    const fallBack = DateTime.fromISO('2027-11-07T05:00:00Z').setZone('America/New_York').toJSDate();
     const body = ics({ start: fallBack, end: new Date(fallBack.getTime() + 3_600_000) });
     expect([prop(body, 'DTSTART'), prop(body, 'DTEND')]).toEqual(['20271107T050000Z', '20271107T060000Z']);
   });
