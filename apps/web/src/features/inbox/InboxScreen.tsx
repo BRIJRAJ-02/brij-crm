@@ -54,7 +54,7 @@ const KINDS: readonly { readonly value: 'all' | InboxKind; readonly label: strin
   { value: 'assignments', label: strings.assignments, icon: 'user-check' },
   { value: 'due', label: strings.dueToday, icon: 'calendar-clock' },
   { value: 'submissions', label: strings.submissions, icon: 'clipboard-list' },
-  { value: 'following', label: strings.following, icon: 'bell' },
+  { value: 'following', label: strings.following, icon: 'eye' },
 ];
 
 /** The list's notifications as NotificationList's rows, each mapped once while the members stay, loading more near the end. */

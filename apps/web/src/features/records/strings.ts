@@ -71,7 +71,7 @@ export const strings = {
   /** The header's bell (collaboration): its name, and its tooltip off and on. */
   follow: 'Follow',
   followHint: 'Follow changes in your inbox',
-  following: 'Following',
+  unfollowHint: 'Following. Press to stop',
   /** The More menu's Rename: the name is the header, so it is no longer a row in Details (owner, 31 Oct). */
   rename: 'Rename',
   cancel: 'Cancel',

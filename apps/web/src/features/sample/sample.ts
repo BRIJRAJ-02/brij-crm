@@ -16,7 +16,7 @@ export const SAMPLE_OBJECTS: ReadonlySet<string> = new Set(['people', 'companies
 export async function addSampleData(data: DataLayer, toasts: Toasts, slug: string): Promise<boolean> {
   try {
     await data.sampleData.add(slug);
-    toasts.toast({ tone: 'success', message: strings.adding });
+    toasts.toast({ tone: 'info', message: strings.adding });
     return true;
   } catch (error) {
     toasts.toast({ tone: 'danger', message: failureOf(error) });

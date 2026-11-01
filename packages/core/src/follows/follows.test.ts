@@ -3,6 +3,7 @@
 // access applied when the inbox is read. `summarizeActivity` is pure and tested first.
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
+import { mentionToken } from '@crm/contracts';
 import { createDatabase, type Database } from '@crm/db';
 import { createComment } from '../comments/comments.ts';
 import { newId } from '../engine/ids.ts';
@@ -193,10 +194,50 @@ describe('following a record', () => {
     expect(await w.inbox(w.as(w.bea, w.attribute('job_title')))).toEqual([]);
   });
 
-  it('refuses a record the caller cannot read, as one that does not exist', async () => {
+  it('refuses a record the caller cannot read, as one that does not exist, and writes nothing', async () => {
     const w = await world();
-    await expect(getFollow(w.ada, { recordId: newId() })).rejects.toMatchObject({
-      refusals: [{ code: 'NOT_FOUND' }],
+    const missing = await getFollow(w.ada, { recordId: newId() }).catch((error: unknown) => error);
+    expect(missing).toMatchObject({ refusals: [{ code: 'NOT_FOUND' }] });
+    // A real record on an object hidden from Bea answers the same, for a read and a follow alike.
+    const id = await w.person();
+    const hidden = testScope({
+      db,
+      workspaceId: w.workspaceId,
+      actor: { type: 'member', id: w.bea },
+      role: 'member',
+      rules: {
+        levels: [
+          {
+            subject: { type: 'role', role: 'member' },
+            target: { type: 'object', objectId: w.peopleId },
+            level: 'none',
+          },
+        ],
+        records: [],
+      },
     });
+    const read = await getFollow(hidden, { recordId: id }).catch((error: unknown) => error);
+    const set = await setFollow(hidden, { recordId: id, following: true }).catch((error: unknown) => error);
+    expect(read).toMatchObject({ message: (missing as Error).message, refusals: [{ code: 'NOT_FOUND' }] });
+    expect(set).toMatchObject({ message: (missing as Error).message, refusals: [{ code: 'NOT_FOUND' }] });
+    const rows = await w.run<{ n: number }>(
+      sql`select count(*)::int as n from record_follows where member_id = ${w.bea}::uuid`,
+    );
+    expect(rows[0]?.n).toBe(0);
+  });
+
+  it('tells a mentioned follower once, by the mention, and a merge never moves the notice', async () => {
+    const w = await world();
+    const id = await w.person();
+    const bea = w.as(w.bea);
+    await createComment(bea, { id: newId(), recordId: id, body: `Over to ${mentionToken(w.adaId)}` });
+    expect(await w.inbox(w.ada)).toEqual([]);
+    await editRecord(bea, { recordId: id, values: { [w.attribute('job_title')]: { value: 'CTO' } } });
+    const [first] = await w.inbox(w.ada);
+    await editRecord(bea, { recordId: id, values: { [w.attribute('name')]: { value: { firstName: 'Ada' } } } });
+    const [merged, ...rest] = await w.inbox(w.ada);
+    expect(rest).toEqual([]);
+    expect(merged?.activity?.fields).toBe(2);
+    expect(merged?.createdAt).toBe(first?.createdAt);
   });
 });

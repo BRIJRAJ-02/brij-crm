@@ -35,8 +35,11 @@ export interface FollowedChange {
 /** A notice merges the same actor's later changes while it is unread and younger than this. */
 export const FOLLOW_BURST_MINUTES = 10;
 
-/** A write touching more records than this (a bulk batch) tells no follower: one notice per record would flood. */
-export const FOLLOW_NOTICE_RECORDS_MAX = 500;
+/**
+ * A write touching more records than this tells no follower: a bulk change by hand (one notice per record would
+ * flood). A job's batch (a bulk edit, an import, sample data) tells nobody however small.
+ */
+export const FOLLOW_NOTICE_RECORDS_MAX = 50;
 
 /** What one record's notice adds: the attributes changed, and how many notes, comments and tasks done. */
 export interface ActivitySummary {
@@ -101,8 +104,9 @@ async function autoFollow(context: WriteContext, change: FollowedChange): Promis
   if (actor.type === 'member' && actor.id !== null) {
     for (const record of change.createdRecords) pairs.push([record.recordId, actor.id]);
   }
-  // Member fields this write set (an owner made or changed): the members they name now follow the record.
-  const set = change.values.filter((value) => value.ownerKind === 'record');
+  // Member fields this write set (an owner made or changed): the members they name now follow the record. The
+  // system's writes (recomputes of computed values, which never name an owner) skip the read.
+  const set = actor.type === 'system' ? [] : change.values.filter((value) => value.ownerKind === 'record');
   if (set.length > 0) {
     const named = await tx.execute<{ record_id: string; member_id: string }>(sql`
       select distinct v.owner_id::text as record_id, v.actor_member_id::text as member_id
@@ -119,8 +123,16 @@ async function autoFollow(context: WriteContext, change: FollowedChange): Promis
   await follow(tx, scope.workspaceId, pairs);
 }
 
-/** Tells each follower of the records `summaries` names, but the actor, in one statement; answers who heard. */
-async function tellFollowers(context: WriteContext, summaries: readonly ActivitySummary[]): Promise<string[]> {
+/**
+ * Tells each follower of the records `summaries` names, but the actor and anyone `skip` names (the write told them
+ * already, a mention), in one statement; answers who heard. A merge adds to the counts and leaves the notice's
+ * time and place as they were, so a change the follower may not see never moves it up or makes it read as new.
+ */
+async function tellFollowers(
+  context: WriteContext,
+  summaries: readonly ActivitySummary[],
+  skip: readonly string[],
+): Promise<string[]> {
   const { tx, scope } = context;
   const { actor } = scope;
   const memberId = actor.type === 'member' ? actor.id : null;
@@ -145,6 +157,7 @@ async function tellFollowers(context: WriteContext, summaries: readonly Activity
       join members m on m.workspace_id = f.workspace_id and m.id = f.member_id and m.status = 'active'
       left join notification_settings s on s.workspace_id = f.workspace_id and s.member_id = f.member_id
       where coalesce(s.follow_notices, true) and f.member_id is distinct from ${memberId}::uuid
+        and not (f.member_id = any(${uuidList(skip)}))
     ),
     merged as (
       update notifications n set
@@ -156,8 +169,7 @@ async function tellFollowers(context: WriteContext, summaries: readonly Activity
           'notes', coalesce((n.activity ->> 'notes')::int, 0) + t.notes,
           'comments', coalesce((n.activity ->> 'comments')::int, 0) + t.comments,
           'tasks', coalesce((n.activity ->> 'tasks')::int, 0) + t.tasks
-        ),
-        created_at = now()
+        )
       from targets t
       where n.workspace_id = ${scope.workspaceId}::uuid and n.record_id = t.record_id and n.member_id = t.member_id
         and n.kind = 'record_activity' and n.read_at is null and n.done_at is null
@@ -187,15 +199,23 @@ async function tellFollowers(context: WriteContext, summaries: readonly Activity
  * whose inboxes hear of them through the write's `notifications` outbox row. Costs nothing for a write that made no
  * record, set no value and did nothing on a record.
  */
-export async function followUp(context: WriteContext, change: FollowedChange): Promise<void> {
+export async function followUp(
+  context: WriteContext,
+  change: FollowedChange & {
+    /** Members the write notified already (a mention, a reply): its follow notice would say it twice. */
+    readonly notifications: readonly string[];
+  },
+  options: { readonly jobId?: string } = {},
+): Promise<void> {
   if (change.createdRecords.length === 0 && change.values.length === 0 && change.activity.length === 0) return;
   await autoFollow(context, change);
-  if (context.scope.actor.type === 'system') return;
+  if (context.scope.actor.type === 'system' || options.jobId !== undefined) return;
   const summaries = summarizeActivity(change).filter(
     (each) => each.fields.length > 0 || each.notes > 0 || each.comments > 0 || each.tasks > 0,
   );
   if (summaries.length === 0 || summaries.length > FOLLOW_NOTICE_RECORDS_MAX) return;
-  const told = await tellFollowers(context, summaries);
+  // A merge into a notice already there is told only for the record's own counts; it never moves the notice.
+  const told = await tellFollowers(context, summaries, [...new Set(change.notifications)]);
   if (told.length > 0) context.record({ notifications: told });
 }
 

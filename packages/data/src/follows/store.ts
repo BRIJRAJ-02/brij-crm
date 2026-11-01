@@ -18,6 +18,8 @@ export interface FollowHeld {
   readonly subscribe: (listener: () => void) => () => void;
   readonly getSnapshot: () => FollowSnapshot;
   readonly retain: () => () => void;
+  /** Follows or unfollows at once; put back with a toast when refused. Answers whether it landed. */
+  readonly toggle: (following: boolean) => Promise<boolean>;
 }
 
 /** What the store calls on the API. */
@@ -38,7 +40,7 @@ export interface FollowsDeps {
   readonly notify: (notice: Notice) => void;
 }
 
-/** The most records whose follow the store keeps; the oldest held one goes first past it. */
+/** The most records whose follow the store keeps; past it the least recently held one nobody shows goes first. */
 export const FOLLOWS_KEPT = 200;
 
 /** Every record's follow the member has looked at, per workspace. */
@@ -76,6 +78,7 @@ export function createFollowsStore(deps: FollowsDeps) {
         return () => listeners.delete(listener);
       },
       getSnapshot: () => state,
+      isShown: () => listeners.size > 0,
       retain() {
         // Read again each time a header holds it, so another device's toggle shows on the next visit.
         read();
@@ -102,11 +105,17 @@ export function createFollowsStore(deps: FollowsDeps) {
   const of = (workspace: string, recordId: string) => {
     const key = `${workspace}:${recordId}`;
     const found = held.get(key);
-    if (found !== undefined) return found;
-    // Bounded: a long session opens many records, and an old one is read again when it comes back.
+    if (found !== undefined) {
+      // Touched: it moves to the newest end, so the oldest is the least recently used.
+      held.delete(key);
+      held.set(key, found);
+      return found;
+    }
+    // Bounded: a long session opens many records, and an old one is read again when it comes back. One a bell
+    // still shows is never dropped, so its toggle always reaches the copy on screen.
     if (held.size >= FOLLOWS_KEPT) {
-      const [oldest] = held.keys();
-      if (oldest !== undefined) held.delete(oldest);
+      const idle = [...held].find(([, entry]) => !entry.isShown());
+      if (idle !== undefined) held.delete(idle[0]);
     }
     const created = make(workspace, recordId);
     held.set(key, created);

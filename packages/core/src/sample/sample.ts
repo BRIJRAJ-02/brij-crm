@@ -383,6 +383,9 @@ export async function removeSampleData(
         order by r.id
       `);
       if (live.rows.length === 0) throw refuse('NOT_FOUND', SAMPLE_NONE);
+      // A batch id an earlier delete used would join the two, and that delete's Undo would bring these back too.
+      const used = await tx.execute(sql`select 1 from records where deleted_batch_id = ${batchId}::uuid limit 1`);
+      if (used.rows.length > 0) throw refuse('ID_TAKEN', 'That batch id is taken. Try again.');
       const byObject = new Map<string, string[]>();
       for (const row of live.rows) byObject.set(row.object_id, [...(byObject.get(row.object_id) ?? []), row.record_id]);
       const deleted: string[] = [];
@@ -402,6 +405,10 @@ export async function removeSampleData(
             deleted_by_member_id = ${actor.type === 'member' ? actor.id : null}::uuid
           from sample_data s
           where s.task_id = t.id and t.deleted_at is null
+            -- Only a task whose every record went with this remove: one someone linked to a real record stays.
+            and not exists (
+              select 1 from task_records l where l.task_id = t.id and not (l.record_id = any(${uuidList(deleted)}))
+            )
           returning t.id
         ),
         marked as (

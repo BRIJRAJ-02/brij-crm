@@ -5,12 +5,14 @@ export const strings = {
   title: 'Notifications',
   /** The Inbox card (collaboration): which in app notices come, beside the ones that always do. */
   inbox: 'Inbox',
+  /** Under the Inbox heading: what always arrives (AC-1179), beside the one switch. */
+  inboxDescription: 'Mentions, replies and tasks always arrive here.',
   followed: 'Records you follow',
   /** The switch's InfoTip: what it covers, in one line. */
-  followedInfo: 'Changes others make to records you created, own or follow.',
+  followedInfo: 'You follow records you create or own. Changes others make show here.',
   email: 'Email',
   /** Under the Email heading: the inbox is always on (AC-1179), said where it's seen. */
-  emailDescription: 'Always in your Inbox. Choose what is also emailed.',
+  emailDescription: 'Choose what is also emailed.',
   mentions: 'Mentions',
   replies: 'Replies',
   assignments: 'Task assignments',

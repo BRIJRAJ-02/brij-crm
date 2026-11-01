@@ -340,7 +340,7 @@ import type {
 } from './inbox/store.ts';
 import { createUnreadCounts, type UnreadSource } from './inbox/unread.ts';
 import type { FollowHeld, FollowsStore } from './follows/store.ts';
-import type { SampleDataState } from '@crm/contracts';
+import type { SampleHeld, SampleStore } from './sample/store.ts';
 import type { createLive, Granted, Live, LiveStatus } from './live/live.ts';
 import { createMutationLog } from './live/mutations.ts';
 import { createLiveRouter } from './live/router.ts';
@@ -868,6 +868,7 @@ export type {
 } from './inbox/store.ts';
 export { UNREAD_PAST_CAP, type UnreadSource } from './inbox/unread.ts';
 export type { FollowHeld, FollowSnapshot } from './follows/store.ts';
+export type { SampleHeld, SampleSnapshot } from './sample/store.ts';
 export type { SampleDataState } from '@crm/contracts';
 export {
   isEditableHere,
@@ -1347,6 +1348,8 @@ export function createDataLayer({
   let inbox: Promise<InboxStore> | undefined;
   // Record follows (collaboration), loaded with the first record header.
   let follows: Promise<FollowsStore> | undefined;
+  // Sample data's state (one button), loaded with the first screen that offers it.
+  let sample: Promise<SampleStore> | undefined;
   // The operator console's reads (spec 0047), held per question for the app load.
   const operatorStore = createOperatorStore({
     overview: (period) => call((options) => api.operator.overview({ period }, options)),
@@ -1450,6 +1453,9 @@ export function createDataLayer({
     jobs.clear();
     views.clear();
     void follows?.then((store) => {
+      store.clear();
+    });
+    void sample?.then((store) => {
       store.clear();
     });
     navStore?.clear();
@@ -2342,6 +2348,11 @@ export function createDataLayer({
         void records?.then((layer) => {
           layer.reload(workspace, job.kind === SAMPLE_DATA_JOB ? undefined : objectId);
         });
+        if (job.kind === SAMPLE_DATA_JOB) {
+          void sample?.then((store) => {
+            store.refresh(workspace);
+          });
+        }
         trashMoved(workspace);
       }
       // A delete job this tab started goes on its undo stack as one delete of its batch (the job's id), so Cmd+Z
@@ -3641,6 +3652,19 @@ export function createDataLayer({
       }),
     );
     return follows;
+  };
+
+  const sampleStore = (): Promise<SampleStore> => {
+    sample ??= import('./sample/store.ts').then(({ createSampleStore }) =>
+      createSampleStore({ get: (workspace) => call((options) => api.sampleData.get({ workspace }, options)) }),
+    );
+    return sample;
+  };
+  /** Sample data's held state reads again, for every screen showing it. */
+  const sampleMoved = (workspace: string): void => {
+    void sample?.then((store) => {
+      store.refresh(workspace);
+    });
   };
 
   const inboxStore = (): Promise<InboxStore> => {
@@ -6399,15 +6423,18 @@ export function createDataLayer({
         (await followsStore()).set(workspace, recordId, following),
     },
     sampleData: {
-      /** Whether the workspace has sample data, the job adding it, and whether the member may manage it. */
-      get: (workspace: string): Promise<SampleDataState> =>
-        call((options) => api.sampleData.get({ workspace }, options)),
+      /**
+       * Whether the workspace has sample data, the job adding it, and whether the member may manage it, held: read
+       * again after an add, a remove, its Undo and the job's end. Read it through `useSampleData`.
+       */
+      view: async (workspace: string): Promise<SampleHeld> => (await sampleStore()).of(workspace),
       /**
        * Adds sample data (and the Sales template): answers once the job started, then follows it, so the tables
        * read again and `onJobFinished` hears its end. Rejects with a `DataError`.
        */
       add: async (workspace: string): Promise<void> => {
         const { jobId } = await call((options) => api.sampleData.add({ workspace, mutationId: mintId() }, options));
+        sampleMoved(workspace);
         void followJob(workspace, jobId);
       },
       /** Moves every sample record to the trash as one batch; answers it, for Undo. Rejects with a `DataError`. */
@@ -6420,6 +6447,7 @@ export function createDataLayer({
           layer.reload(workspace);
         });
         trashMoved(workspace);
+        sampleMoved(workspace);
         return { batchId, records: moved.records };
       },
       /** Brings a remove's batch back. Rejects with a `DataError`. */
@@ -6429,6 +6457,7 @@ export function createDataLayer({
           layer.reload(workspace);
         });
         trashMoved(workspace);
+        sampleMoved(workspace);
       },
     },
     inbox: {

@@ -117,7 +117,7 @@ describe('someone changed a record the reader follows', () => {
     });
     expect(targetOf('acme', changed, slugs)).toEqual({
       kind: 'href',
-      href: `/w/acme/objects/companies/${ID}/overview`,
+      href: `/w/acme/objects/companies/${ID}/activity`,
     });
     expect(notificationKind('following')).toBe('record_activity');
     expect(inboxSearch({ kind: 'following' })).toEqual({ kind: 'following' });

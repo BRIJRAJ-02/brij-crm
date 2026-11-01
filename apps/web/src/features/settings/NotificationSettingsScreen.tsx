@@ -31,15 +31,22 @@ export function stillShown(shown: NotificationSettings | undefined, change: Noti
   return switches.every((key) => change[key] === undefined || change[key] === shown[key]);
 }
 
-/** The page while the settings load: the Email card, busy. */
+/** The page while the settings load: the Inbox and Email cards, busy, in the loaded page's shape. */
 export function NotificationSettingsLoading() {
   return (
-    <SettingsSection title={strings.email} description={strings.emailDescription}>
-      <Card isBusy>
-        <Skeleton width="long" />
-        <Skeleton width="medium" />
-      </Card>
-    </SettingsSection>
+    <>
+      <SettingsSection title={strings.inbox} description={strings.inboxDescription}>
+        <Card isBusy>
+          <Skeleton width="long" />
+        </Card>
+      </SettingsSection>
+      <SettingsSection title={strings.email} description={strings.emailDescription}>
+        <Card isBusy>
+          <Skeleton width="long" />
+          <Skeleton width="medium" />
+        </Card>
+      </SettingsSection>
+    </>
   );
 }
 
@@ -89,7 +96,7 @@ export function NotificationSettingsScreen({ slug, settings }: NotificationSetti
   let email;
   if (state.status === 'error') {
     email = (
-      <SettingsSection title={strings.email}>
+      <SettingsSection title={strings.title}>
         <EmptyState tone="error" title={strings.loadFailed} onRetry={settings.retry}>
           {state.error?.message}
         </EmptyState>
@@ -102,7 +109,7 @@ export function NotificationSettingsScreen({ slug, settings }: NotificationSetti
     email = (
       <>
         {/* What reaches the inbox beyond what always does: changes to records they follow (collaboration). */}
-        <SettingsSection title={strings.inbox}>
+        <SettingsSection title={strings.inbox} description={strings.inboxDescription}>
           <Card>
             <SettingsRow
               title={strings.followed}

@@ -586,7 +586,7 @@ export async function runWrite<T>(
         // Computed attributes (spec 0015): the lookups and rollups this write's change feeds are queued in it.
         await planComputed(context, collected);
         // Following (collaboration): the follows the write implies, and its followers' notices, in its transaction.
-        await followUp(context, collected);
+        await followUp(context, collected, options);
         // The record slots the work counted, last of its locks, before the hooks number the change from the row.
         if (slots !== 0) await takeRecordSlots(tx, scope, slots);
         // The full change: the outbox hook caps its own copy with `capChange`, and the audit log names every record.

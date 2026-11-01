@@ -15,3 +15,4 @@ Spec 0038: the person's notifications in a workspace. The sidebar's Inbox item a
 - Pressing a row (or Enter) marks it read and opens its comment's thread on the record's Comments tab (`?thread=`), or an assignment's task dialog over the inbox (`?task=`). The row's menu and its keys (`U`, `E`) mark it; "Mark all as read" marks the tab and kind shown.
 - `UnreadTitle` (mounted by the workspace route) keeps the unread count on the root element's `data-unread`, and the title follows it: "(3) People · Timefix".
 - Every string is in `strings.ts`.
+- A record the person follows (collaboration) reads as counts from the actor ("Grace Hopper changed 3 fields", with the record's chip), one row per burst, and opens the record's Activity tab; the kind menu's Following shows only those.

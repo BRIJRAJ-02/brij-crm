@@ -74,6 +74,7 @@ interface SampleProps {
   readonly isFiltered?: boolean;
   /** Adds a scheduling change someone made (spec 0037, AC-1264). */
   readonly withScheduling?: boolean;
+  readonly withFollowed?: boolean;
 }
 
 /** The inbox in a fixed height slot, marking rows as the screen would. */
@@ -85,10 +86,11 @@ function SampleInbox({
   onRetry,
   isFiltered = false,
   withScheduling = false,
+  withFollowed = false,
 }: SampleProps) {
   const [items, setItems] = useState(() => {
     if (isEmpty) return [];
-    if (!withScheduling) return sampleItems();
+    if (!withScheduling && !withFollowed) return sampleItems();
     const scheduling: NotificationItem = {
       id: 'n5',
       kind: 'scheduling_changed',
@@ -110,7 +112,7 @@ function SampleInbox({
       activity: { fields: 3, notes: 0, comments: 0, tasks: 0 },
       excerpt: '',
     };
-    return [scheduling, followed, ...sampleItems()];
+    return [...(withScheduling ? [scheduling] : []), ...(withFollowed ? [followed] : []), ...sampleItems()];
   });
   const source = arraySource(items, (item) => item.id);
   return (
@@ -171,10 +173,7 @@ export const Default: Story = {
   },
 };
 
-/**
- * Someone else changed the reader's scheduling (spec 0037, AC-1264): the actor's sentence, no chip or excerpt; and a
- * record they follow, counted ("changed 3 fields") with its chip.
- */
+/** Someone else changed the reader's scheduling (spec 0037, AC-1264): the actor's sentence, no chip or excerpt. */
 export const SchedulingChanged: Story = {
   args: { withScheduling: true, onAction: fn() },
   // The row is Default's, with another sentence.
@@ -182,7 +181,15 @@ export const SchedulingChanged: Story = {
   play: async ({ args, canvas, userEvent }) => {
     await userEvent.click(canvas.getByText('Grace Hopper changed your scheduling'));
     await expect(args.onAction).toHaveBeenCalledWith('n5');
-    // A followed record's changes: counted, never quoted, with the record's chip.
+  },
+};
+
+/** A record the reader follows (collaboration): its changes counted, never quoted, with the record's chip. */
+export const FollowedRecord: Story = {
+  args: { withFollowed: true, onAction: fn() },
+  // The row is Default's, with another sentence.
+  parameters: { crm: { screenshot: false } },
+  play: async ({ args, canvas, userEvent }) => {
     await userEvent.click(canvas.getByText('Grace Hopper changed 3 fields'));
     await expect(args.onAction).toHaveBeenCalledWith('n6');
   },

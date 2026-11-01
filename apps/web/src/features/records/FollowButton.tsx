@@ -15,14 +15,13 @@ export interface FollowButtonProps {
   readonly recordId: string;
 }
 
-/** The bell once the record's follow is held: pressed while following, quiet while it loads, gone if it failed. */
-function Bell({ slug, recordId, held }: FollowButtonProps & { readonly held: FollowHeld }) {
-  const { data } = useRouteContext({ from: '__root__' });
+/** The bell once the record's follow is held: pressed while following, disabled while it loads or if it failed. */
+function Bell({ held }: { readonly held: FollowHeld }) {
   const state = useFollow(held);
-  if (state.status === 'error') return null;
+  if (state.status === 'error') return <Placeholder />;
   const following = state.status === 'ready' && state.following;
   return (
-    <Tooltip content={following ? strings.following : strings.followHint}>
+    <Tooltip content={following ? strings.unfollowHint : strings.followHint}>
       <ToggleButton
         variant="ghost"
         icon="bell"
@@ -30,9 +29,18 @@ function Bell({ slug, recordId, held }: FollowButtonProps & { readonly held: Fol
         isSelected={following}
         isDisabled={state.status === 'loading'}
         onChange={(next) => {
-          void data.follows.set(slug, recordId, next);
+          void held.toggle(next);
         }}
       />
+    </Tooltip>
+  );
+}
+
+/** The bell before its follow is read, or when the read failed: in its place, disabled, saying what it is for. */
+function Placeholder() {
+  return (
+    <Tooltip content={strings.followHint}>
+      <ToggleButton variant="ghost" icon="bell" label={strings.follow} isDisabled />
     </Tooltip>
   );
 }
@@ -56,8 +64,5 @@ export function FollowButton({ slug, recordId }: FollowButtonProps) {
       isLive = false;
     };
   }, [data, slug, recordId]);
-  if (held === undefined) {
-    return <ToggleButton variant="ghost" icon="bell" label={strings.follow} isDisabled />;
-  }
-  return <Bell slug={slug} recordId={recordId} held={held} />;
+  return held === undefined ? <Placeholder /> : <Bell held={held} />;
 }

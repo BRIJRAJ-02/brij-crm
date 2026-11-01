@@ -51,6 +51,9 @@ describe('sample data', () => {
       message: SAMPLE_FORBIDDEN,
     });
     expect(await getSampleData(w.member)).toMatchObject({ present: false, canManage: false });
+    for (const call of [removeSampleData, undoRemoveSampleData]) {
+      expect(await refusalOf(call(w.member, { batchId: newId() }))).toMatchObject({ code: 'FORBIDDEN' });
+    }
 
     const started = await addSampleData(w.admin, registry);
     expect(await getSampleData(w.admin)).toMatchObject({ present: false, canManage: true, jobId: started.jobId });
