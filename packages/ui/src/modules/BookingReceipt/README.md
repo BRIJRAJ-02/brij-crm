@@ -24,7 +24,7 @@ Confirmed (welcome or not), cancelled, past.
 
 ## Motion
 
-The card rises in and the check pops out of a soft blur. Reduced motion fades the card and shows the check at once.
+The heading and its warm line rise out of a soft blur one after the other, then the card rises in and the check pops out of a blur. Reduced motion fades the card and shows the check at once.
 
 ## Keyboard
 

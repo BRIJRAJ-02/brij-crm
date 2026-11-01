@@ -6,6 +6,10 @@
        eases to this scale while held. Set here, not in tokens.css (generated from the artifact, where it stays 1 for
        the app), because this module only ever mounts on the public pages. */
     --scale-press: 0.97;
+    /* The blur the heading rises out of (transitions.dev's texts reveal, 3px), a literal because the token set has no
+       blur yet: the artifact owes a motion blur token. */
+    /* stylelint-disable-next-line unit-disallowed-list -- a value waiting on the artifact's blur token, not a borrowed one */
+    --reveal-blur: 3px;
 
     box-sizing: border-box;
     display: flex;
@@ -70,10 +74,13 @@
     color: var(--tag-gray-text);
   }
 
+  /* The heading and its warm line rise out of a soft blur one after the other, then the card (transitions.dev's texts
+     reveal), so the page reads top down once as it arrives. */
   .title {
     margin: 0;
     font: var(--text-heading);
     letter-spacing: var(--tracking-heading);
+    animation: text-rise var(--duration-modal) var(--ease-out) backwards;
   }
 
   .title:focus {
@@ -83,6 +90,7 @@
   .lead {
     margin: 0;
     color: var(--text-secondary);
+    animation: text-rise var(--duration-modal) var(--ease-out) calc(var(--duration-hover) / 2) backwards;
   }
 
   .card {
@@ -250,6 +258,19 @@
 
     .mark {
       animation: none;
+    }
+
+    .title,
+    .lead {
+      animation-name: receipt-fade;
+    }
+  }
+
+  @keyframes text-rise {
+    from {
+      opacity: 0;
+      translate: 0 var(--space-8);
+      filter: blur(var(--reveal-blur));
     }
   }
 

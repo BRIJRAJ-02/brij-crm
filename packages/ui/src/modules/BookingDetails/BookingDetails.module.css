@@ -56,6 +56,23 @@
     outline-offset: var(--border-width-hairline);
   }
 
+  /* A field's own wrapper, so a refused Confirm can shake the field it found wrong: twice side to side, small, then
+     still. Two names for one shake, so the next refusal replays it. */
+  .shaker,
+  .guests {
+    min-inline-size: 0;
+  }
+
+  .shaker[data-shake='even'],
+  .guests[data-shake='even'] {
+    animation: shake-even calc(var(--duration-move) * 2) var(--ease-out);
+  }
+
+  .shaker[data-shake='odd'],
+  .guests[data-shake='odd'] {
+    animation: shake-odd calc(var(--duration-move) * 2) var(--ease-out);
+  }
+
   .guests {
     display: flex;
     flex-direction: column;
@@ -148,6 +165,41 @@
   @media (prefers-reduced-motion: reduce) {
     .chip {
       animation-name: line-in;
+    }
+
+    .shaker[data-shake],
+    .guests[data-shake] {
+      animation: none;
+    }
+  }
+
+  @keyframes shake-even {
+    20% {
+      translate: calc(-1 * var(--space-6)) 0;
+    }
+    40% {
+      translate: var(--space-6) 0;
+    }
+    60% {
+      translate: calc(-1 * var(--space-4)) 0;
+    }
+    80% {
+      translate: var(--space-4) 0;
+    }
+  }
+
+  @keyframes shake-odd {
+    20% {
+      translate: calc(-1 * var(--space-6)) 0;
+    }
+    40% {
+      translate: var(--space-6) 0;
+    }
+    60% {
+      translate: calc(-1 * var(--space-4)) 0;
+    }
+    80% {
+      translate: var(--space-4) 0;
     }
   }
 

@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect } from 'storybook/test';
+import { settleAnimations } from '../../workbench/animations.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { timefixLinkTags, timefixTags } from '../../workbench/timefix-links.ts';
 import { BookingReceipt } from './BookingReceipt.tsx';
@@ -42,6 +43,8 @@ export const Welcome: Story = {
   ),
   play: async ({ canvas, canvasElement }) => {
     await expect(canvas.getByRole('heading', { name: 'You’re booked' })).toHaveFocus();
+    // The heading and its line rise in: let them land before reading them.
+    await settleAnimations();
     await expect(canvas.getByText('Ada Lovelace will see you then.')).toBeVisible();
     // The summary leads (spec 0058, AC-19): what and who over the time, and the one action right with it.
     const card = canvas.getByRole('article', { name: 'Confirmed' });

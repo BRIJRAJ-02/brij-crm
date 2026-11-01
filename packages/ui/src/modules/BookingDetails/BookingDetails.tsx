@@ -163,6 +163,13 @@ export function BookingDetails({
   const shown = questions.length === 0 ? new Set<string>() : visibleQuestions(questions, given);
   const showing = questions.filter((question) => shown.has(question.key));
   const [errors, setErrors] = useState<Readonly<Record<string, string>>>({});
+  // Each refused Confirm shakes the fields it found wrong once (transitions.dev's error state shake). The round flips
+  // between two names so the same field shakes again on the next refusal.
+  const [shake, setShake] = useState<{ readonly round: number; readonly fields: ReadonlySet<string> }>({
+    round: 0,
+    fields: new Set(),
+  });
+  const shakeOf = (field: string) => (shake.fields.has(field) ? (shake.round % 2 === 0 ? 'even' : 'odd') : undefined);
   const [line, setLine] = useState('');
   const [isBusy, setBusy] = useState(false);
   const [bookingAs, setBookingAs] = useState(
@@ -245,6 +252,10 @@ export function BookingDetails({
   };
   const showErrors = (found: Readonly<Record<string, string>>) => {
     setErrors(found);
+    setShake((current) => ({
+      round: current.round + 1,
+      fields: new Set(Object.keys(found).map((field) => (field.startsWith('guest-') ? 'guests' : field))),
+    }));
     const first = [
       'name',
       'email',
@@ -341,36 +352,40 @@ export function BookingDetails({
           </button>
         </p>
       )}
-      <Field
-        label={strings.name}
-        name="name"
-        autoComplete="name"
-        maxLength={200}
-        isRequired
-        value={name}
-        onChange={(next) => {
-          setName(next);
-          clear('name');
-        }}
-        {...(errors.name === undefined ? {} : { error: errors.name })}
-      />
-      <Field
-        label={strings.email}
-        name="email"
-        type="email"
-        autoComplete="email"
-        placeholder={strings.emailPlaceholder}
-        maxLength={254}
-        isRequired
-        value={email}
-        onChange={(next) => {
-          setEmail(next);
-          clear('email');
-        }}
-        {...(errors.email === undefined ? {} : { error: errors.email })}
-      />
+      <div className={styles.shaker} data-shake={shakeOf('name')}>
+        <Field
+          label={strings.name}
+          name="name"
+          autoComplete="name"
+          maxLength={200}
+          isRequired
+          value={name}
+          onChange={(next) => {
+            setName(next);
+            clear('name');
+          }}
+          {...(errors.name === undefined ? {} : { error: errors.name })}
+        />
+      </div>
+      <div className={styles.shaker} data-shake={shakeOf('email')}>
+        <Field
+          label={strings.email}
+          name="email"
+          type="email"
+          autoComplete="email"
+          placeholder={strings.emailPlaceholder}
+          maxLength={254}
+          isRequired
+          value={email}
+          onChange={(next) => {
+            setEmail(next);
+            clear('email');
+          }}
+          {...(errors.email === undefined ? {} : { error: errors.email })}
+        />
+      </div>
       {isAddingGuests || guests.length > 0 ? (
-        <div className={styles.guests}>
+        <div className={styles.guests} data-shake={shakeOf('guests')}>
           {guests.length > 0 && (
             <ul className={styles.chips} aria-label={strings.guestsList}>
               {guests.map((guest, index) => (
@@ -455,20 +470,22 @@ export function BookingDetails({
         </div>
       )}
       {needsPhone && (
-        <Field
-          label={strings.phone}
-          name="phone"
-          type="tel"
-          autoComplete="tel"
-          maxLength={40}
-          isRequired
-          value={phone}
-          onChange={(next) => {
-            setPhone(next);
-            clear('phone');
-          }}
-          {...(errors.phone === undefined ? {} : { error: errors.phone })}
-        />
+        <div className={styles.shaker} data-shake={shakeOf('phone')}>
+          <Field
+            label={strings.phone}
+            name="phone"
+            type="tel"
+            autoComplete="tel"
+            maxLength={40}
+            isRequired
+            value={phone}
+            onChange={(next) => {
+              setPhone(next);
+              clear('phone');
+            }}
+            {...(errors.phone === undefined ? {} : { error: errors.phone })}
+          />
+        </div>
       )}
       <Field
         label={strings.note}
