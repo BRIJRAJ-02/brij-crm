@@ -24,6 +24,7 @@ import type { RecordRefDisplay } from '@crm/contracts/values';
 import { schema, type WorkspaceTx } from '@crm/db';
 import * as z from 'zod';
 import { checkId } from '../engine/ids.ts';
+import { queueFormWebhooks } from '../webhooks/queue.ts';
 import { readRecords } from '../engine/records.ts';
 import { loadAttributesById } from '../engine/values.ts';
 import { inputInvalid, refuse } from '../engine/refusals.ts';
@@ -490,6 +491,9 @@ async function lockedSubmission(tx: WorkspaceTx, scope: EngineScope, submissionI
       id: formSubmissions.id,
       state: formSubmissions.state,
       verdict: sql<string | null>`${formSubmissions.spam}->>'verdict'`,
+      formId: formSubmissions.formId,
+      // The page its visitor came from, as it was stored: `link_page.signup` reads it (spec 0064, AC-6426).
+      referrer: sql<string | null>`${formSubmissions.context}->>'referrer'`,
     })
     .from(formSubmissions)
     .where(eq(formSubmissions.id, id))
@@ -506,6 +510,12 @@ async function requeue(
   from: SubmissionState,
   wrong: string,
   hooks: readonly AfterWrite[],
+  /**
+   * Whether this move is the first time the submission counts as received, so subscribed endpoints hear of it now
+   * (spec 0064, AC-6422). True for a release from spam, which was never taken as received and so never fired
+   * `form.submitted`; false for a retry of a failed one, which fired it when it arrived and must not fire twice.
+   */
+  firstAcceptance: boolean,
 ): Promise<SubmissionView> {
   requirePermission(scope, 'forms.manage');
   const { result } = await runWrite(
@@ -519,6 +529,13 @@ async function requeue(
         .set({ state: 'received', failure: null, updatedAt: sql`now()` })
         .where(eq(formSubmissions.id, row.id));
       await startJob(context, registry, { kind: FORMS_PROCESS, params: { submissionId: row.id } });
+      if (firstAcceptance) {
+        await queueFormWebhooks(tx, {
+          submissionId: row.id,
+          formId: row.formId,
+          referrer: row.referrer ?? undefined,
+        });
+      }
       return viewIn(tx, scope, row.id);
     },
     hooks,
@@ -534,6 +551,7 @@ export async function releaseSubmission(
   hooks: readonly AfterWrite[] = [],
 ): Promise<SubmissionView> {
   requirePermission(scope, 'forms.manage');
+  // Released from spam: it was never taken as received, so this is when `form.submitted` fires (AC-6422).
   return requeue(
     scope,
     registry,
@@ -541,6 +559,7 @@ export async function releaseSubmission(
     'spam',
     'Only a submission marked as spam can be released.',
     hooks,
+    true,
   );
 }
 
@@ -614,7 +633,16 @@ export async function resolveSubmission(
           updatedAt: sql`now()`,
         })
         .where(eq(formSubmissions.id, row.id));
-      if (notSpam) await startJob(context, registry, { kind: FORMS_PROCESS, params: { submissionId: row.id } });
+      if (notSpam) {
+        await startJob(context, registry, { kind: FORMS_PROCESS, params: { submissionId: row.id } });
+        // Held in Needs review, it was never taken as received, so this is when subscribed endpoints hear of it
+        // (spec 0064, AC-6422). Settled as spam, nothing is sent.
+        await queueFormWebhooks(tx, {
+          submissionId: row.id,
+          formId: row.formId,
+          referrer: row.referrer ?? undefined,
+        });
+      }
       return viewIn(tx, scope, row.id);
     },
     hooks,
@@ -630,7 +658,8 @@ export async function retrySubmission(
   hooks: readonly AfterWrite[] = [],
 ): Promise<SubmissionView> {
   requirePermission(scope, 'forms.manage');
-  return requeue(scope, registry, input.submissionId, 'failed', 'Only a failed submission can be retried.', hooks);
+  // A failed one was received when it arrived and fired `form.submitted` then, so a retry fires nothing (AC-6422).
+  return requeue(scope, registry, input.submissionId, 'failed', 'Only a failed submission can be retried.', hooks, false);
 }
 
 /** Deletes a submission (AC-575): its answers go; the records it created stay. */

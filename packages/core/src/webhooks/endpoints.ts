@@ -23,7 +23,7 @@ import { writeAudit } from '../members/audit.ts';
 import { isUuid } from '../engine/ids.ts';
 import { inputInvalid, refuse, refuseOn } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
-import { WEBHOOK_URL_MESSAGES, webhookUrlProblem, type WebhookUrlProblem } from './addresses.ts';
+import { hostOf, WEBHOOK_URL_MESSAGES, webhookUrlProblem, type WebhookUrlProblem } from './addresses.ts';
 import { newWebhookSecret, sealSecret, secretHint, type WebhookKey } from './signing.ts';
 
 /** What the endpoint services need: the sealing key, and the resolved address check (the network's half). */
@@ -133,9 +133,6 @@ export function checkWebhooksAccess(scope: EngineScope): Promise<void> {
   return Promise.resolve().then(() => requirePermission(scope, 'webhooks.manage'));
 }
 
-/** An endpoint's host, the one part of its address the audit log and an email may name. */
-export const hostOf = (url: string): string => (URL.canParse(url) ? new URL(url).host : '');
-
 /** One audit row for an endpoint (spec 0064): the host only, never the path, which can hold a receiver's token. */
 export function auditWebhook(
   tx: WorkspaceTx,
@@ -218,6 +215,19 @@ export async function updateWebhook(
     );
     const row = changed.rows[0];
     if (row === undefined) throw refuse('NOT_FOUND', ENDPOINT_NOT_FOUND);
+    // Nothing waiting is sent to an endpoint that was just switched off, or for an event it no longer wants: the
+    // rule is judged here, when the endpoint changes, not days later when a retry wakes. Turning one back on revives
+    // nothing, so a switch never flushes a backlog, and unticking an event stops its payloads reaching a receiver
+    // that is no longer meant to see them.
+    if (input.status === 'off') {
+      await cancelQueuedDeliveries(tx, sql`endpoint_id = ${input.endpointId}::uuid`);
+    } else if (input.events !== undefined) {
+      await cancelQueuedDeliveries(
+        tx,
+        sql`endpoint_id = ${input.endpointId}::uuid
+          and not (event_type = any (${`{${input.events.join(',')}}`}::text[]))`,
+      );
+    }
     await auditWebhook(tx, scope, 'webhook.updated', row.url);
     return readEndpoint(tx, input.endpointId);
   });
@@ -269,6 +279,23 @@ export async function deleteWebhook(
   });
 }
 
+/**
+ * Gives up every delivery still owed a try that `where` picks, in the caller's transaction (AC-6422, AC-6423): the
+ * rule is that a delivery is only ever sent to an endpoint that is on and still subscribed to its event, judged when
+ * the endpoint changes rather than days later when a retry wakes. A ping is left alone: it belongs to the person who
+ * pressed Send test event, not to a subscription. The queue row stays; when it wakes, `loadWebhookDelivery` finds the
+ * delivery finished and sends nothing, so cancelling needs no reach into the job queue. Answers how many it gave up.
+ */
+export async function cancelQueuedDeliveries(tx: WorkspaceTx, where: SQL): Promise<number> {
+  const given = await tx.execute<{ id: string }>(sql`
+    update webhook_deliveries set state = 'gave_up', next_attempt_at = null,
+      failure = coalesce(failure, 'cancelled')
+    where state in ('pending', 'failed') and event_type <> 'ping' and (${where})
+    returning id
+  `);
+  return given.rows.length;
+}
+
 interface DeliveryRow extends Record<string, unknown> {
   readonly id: string;
   readonly event_id: string;
@@ -292,7 +319,7 @@ export const deliveryColumns = sql`
   created_at::text as created_text, ${iso(sql`sent_at`)} as sent_at
 `;
 
-const FAILURES = new Set(['address', 'timeout', 'network', 'redirect', 'status', 'too_large']);
+const FAILURES = new Set(['address', 'timeout', 'network', 'redirect', 'status', 'too_large', 'cancelled']);
 
 /** A row as the contract's delivery. */
 export function toDelivery(row: DeliveryRow): WebhookDelivery {

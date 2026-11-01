@@ -300,7 +300,7 @@ describe('delivering (AC-6423, AC-6425)', () => {
       const loaded = await loadWebhookDelivery(system, key, { deliveryId });
       if (loaded.kind !== 'send') throw new Error(`Try ${String(attempt)} was skipped.`);
       expect(loaded.send.attempt).toBe(attempt);
-      const finished = await finishWebhookDelivery(system, loaded.send, failed, () => 0.5);
+      const finished = await finishWebhookDelivery(system, loaded.send, failed, { random: () => 0.5 });
       if (attempt < 8) {
         expect(finished.delivery.state).toBe('failed');
         const due = (await queued(deliveryId))[0]?.run_at;

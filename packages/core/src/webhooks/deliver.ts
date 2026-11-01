@@ -14,10 +14,19 @@ import { requirePermission } from '../access/check.ts';
 import { checkScope } from '../access/mint.ts';
 import { inWorkspace } from '../access/run.ts';
 import { queueWebhookEndpointOff } from '../emails/queue.ts';
+import { notifyWebhookOff } from '../notifications/notify.ts';
 import { isUuid, newId } from '../engine/ids.ts';
 import { refuse } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
-import { auditWebhook, deliveryColumns, ENDPOINT_NOT_FOUND, hostOf, toDelivery } from './endpoints.ts';
+import { runWrite, type AfterWrite } from '../engine/write.ts';
+import { hostOf } from './addresses.ts';
+import {
+  auditWebhook,
+  cancelQueuedDeliveries,
+  deliveryColumns,
+  ENDPOINT_NOT_FOUND,
+  toDelivery,
+} from './endpoints.ts';
 import { webhookEnvelope } from './payloads.ts';
 import { openSecret, type WebhookKey } from './signing.ts';
 
@@ -160,7 +169,12 @@ async function recordTry(
   scope: EngineScope,
   send: WebhookSend,
   result: WebhookSendResult,
-  options: { readonly retry: boolean; readonly random?: () => number },
+  options: {
+    readonly retry: boolean;
+    readonly random?: () => number;
+    /** Notes whose inbox the turning off changed, so the write's `notifications` outbox row names them. */
+    readonly record?: (part: { readonly notifications: readonly string[] }) => void;
+  },
 ): Promise<WebhookFinished> {
   const delay = result.ok || !options.retry ? undefined : retryDelaySeconds(send.attempt, options.random);
   const state = result.ok ? 'sent' : !options.retry ? 'failed' : delay === undefined ? 'gave_up' : 'failed';
@@ -213,12 +227,17 @@ async function recordTry(
       if (turned?.off === true) {
         endpointOff = true;
         await auditWebhook(tx, scope, 'webhook.turned_off', turned.url);
-        await tellAdmins(tx, {
+        // Nothing waiting is sent to an endpoint that is off (AC-6423): its queued tries are given up here, in this
+        // same transaction, so turning it back on never flushes three days of stale events.
+        await cancelQueuedDeliveries(tx, sql`endpoint_id = ${send.endpointId}::uuid`);
+        const told = await tellAdmins(tx, {
+          workspaceId: scope.workspaceId,
           endpointId: send.endpointId,
           spellMillis: turned.spell_ms,
           slug: turned.slug,
           url: turned.url,
         });
+        if (told.length > 0) options.record?.({ notifications: told });
       }
     }
   }
@@ -229,11 +248,22 @@ async function recordTry(
 /** The endpoint as an email may name it: its host only, since Zapier, Make and n8n keep their token in the path. */
 const endpointLine = (url: string): string => hostOf(url).slice(0, 200) || 'Your webhook endpoint';
 
-/** Emails each active owner and admin that an endpoint turned off (AC-6423). */
+/**
+ * Tells each active owner and admin that an endpoint turned off (AC-6423), both ways: the `webhook_endpoint_off`
+ * email, keyed by the endpoint and the spell so a retried try queues the same email once, and one `webhook_off`
+ * notice in their inbox. Both are written in the transaction that turned the endpoint off, so an endpoint is never
+ * off without its people being told. Answers the members whose inbox changed.
+ */
 async function tellAdmins(
   tx: WorkspaceTx,
-  input: { readonly endpointId: string; readonly spellMillis: string; readonly slug: string; readonly url: string },
-): Promise<void> {
+  input: {
+    readonly workspaceId: string;
+    readonly endpointId: string;
+    readonly spellMillis: string;
+    readonly slug: string;
+    readonly url: string;
+  },
+): Promise<readonly string[]> {
   const admins = await tx.execute<{ id: string }>(
     sql`select id from members where status = 'active' and role in ('owner', 'admin') order by id`,
   );
@@ -248,20 +278,33 @@ async function tellAdmins(
       },
     });
   }
+  return notifyWebhookOff(tx, { workspaceId: input.workspaceId, endpointId: input.endpointId });
 }
 
-/** Records how a queued delivery's try went (the worker's task): sent, the next try queued, or given up. */
+/**
+ * Records how a queued delivery's try went (the worker's task): sent, the next try queued, or given up. A try that
+ * turns the endpoint off writes each owner's and admin's notice in the same transaction, so `hooks` carries the
+ * write's `notifications` outbox row and their open inboxes hear of it at once.
+ */
 export async function finishWebhookDelivery(
   scope: EngineScope,
   send: WebhookSend,
   result: WebhookSendResult,
-  random?: () => number,
+  options: { readonly random?: () => number; readonly hooks?: readonly AfterWrite[] } = {},
 ): Promise<WebhookFinished> {
   checkScope(scope);
   if (scope.access.principal.kind !== 'system') throw new Error('Only the system records queued webhooks.');
-  return inWorkspace(scope, (tx) =>
-    recordTry(tx, scope, send, result, { retry: true, ...(random === undefined ? {} : { random }) }),
+  const { result: finished } = await runWrite(
+    scope,
+    (context) =>
+      recordTry(context.tx, scope, send, result, {
+        retry: true,
+        record: (part) => context.record(part),
+        ...(options.random === undefined ? {} : { random: options.random }),
+      }),
+    options.hooks ?? [],
   );
+  return finished;
 }
 
 /**

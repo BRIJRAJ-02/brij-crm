@@ -141,7 +141,7 @@ export const WebhookDelivery = z.strictObject({
   /** The first 1 KB of what the receiver answered, as text. */
   responseExcerpt: z.string().optional(),
   /** Why nothing came back: the address was refused, it timed out, the network failed, or it redirected. */
-  failure: z.enum(['address', 'timeout', 'network', 'redirect', 'status', 'too_large']).optional(),
+  failure: z.enum(['address', 'timeout', 'network', 'redirect', 'status', 'too_large', 'cancelled']).optional(),
   nextAttemptAt: z.iso.datetime().optional(),
   createdAt: z.iso.datetime(),
   sentAt: z.iso.datetime().optional(),

@@ -85,6 +85,7 @@ export const strings = {
     redirect: 'Redirects aren’t followed.',
     status: 'The server refused it.',
     too_large: 'Too large to send.',
+    cancelled: 'Not sent: the endpoint was off or no longer wanted this event.',
   } as const,
   log: 'Deliveries',
   logEmpty: 'Nothing sent yet',

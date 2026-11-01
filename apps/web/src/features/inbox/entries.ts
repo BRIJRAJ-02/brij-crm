@@ -8,7 +8,7 @@ import { actorDisplay } from '../notes/entries.ts';
 import { availabilityHref } from '../booking/links.ts';
 import { formHref } from '../forms/paths.ts';
 import { recordHref } from '../records/details.ts';
-import { membersSettingsHref } from '../settings/nav.ts';
+import { membersSettingsHref, webhooksHref } from '../settings/nav.ts';
 import { strings } from './strings.ts';
 
 /** One notification as NotificationList's row. */
@@ -61,6 +61,8 @@ export function targetOf(
   if (view.joinRequestId !== undefined) return { kind: 'href', href: membersSettingsHref(slug) };
   // Someone changed the reader's scheduling (spec 0037, AC-1264): their hours, where the change shows.
   if (view.kind === 'scheduling_changed') return { kind: 'href', href: availabilityHref(slug) };
+  // A webhook endpoint turned off (spec 0064, AC-6423): Settings › Webhooks, where the one switch turns it back on.
+  if (view.kind === 'webhook_off') return { kind: 'href', href: webhooksHref(slug) };
   if (view.submissionId !== undefined && view.formId !== undefined) {
     return { kind: 'href', href: formHref(slug, view.formId, 'submissions', view.submissionId) };
   }

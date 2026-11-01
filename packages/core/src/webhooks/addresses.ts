@@ -42,3 +42,6 @@ export function webhookUrlProblem(text: string): WebhookUrlProblem | undefined {
 export function resolvedProblem(addresses: readonly string[]): 'address' | undefined {
   return addresses.length > 0 && !addresses.some((address) => isRefusedAddress(address)) ? undefined : 'address';
 }
+
+/** An endpoint's host, the one part of its address the audit log, an email and an inbox notice may name. */
+export const hostOf = (url: string): string => (URL.canParse(url) ? new URL(url).host : '');

@@ -25,6 +25,7 @@ import {
   type WebhookUrlProblem,
 } from '@crm/core';
 import { finishWebhookDelivery, loadWebhookDelivery, type systemScope } from '@crm/core/system';
+import { outboxHook } from '@crm/core';
 import { WEBHOOK_EXCERPT_MAX } from '@crm/contracts';
 import * as z from 'zod';
 
@@ -54,10 +55,16 @@ export const WEBHOOK_DNS_TIMEOUT_MS = 2_000;
  */
 const resolveAll: WebhookLookup = async (hostname) => {
   const resolver = new dns.Resolver({ timeout: WEBHOOK_DNS_TIMEOUT_MS, tries: 1 });
-  const [v4, v6] = await Promise.all([
-    resolver.resolve4(hostname).catch((): string[] => []),
-    resolver.resolve6(hostname).catch((): string[] => []),
-  ]);
+  // Each family is awaited in its own try: a `.catch` chained on a vendor's return value is what took production
+  // down on 31 October, so nothing here chains one.
+  const one = async (read: () => Promise<string[]>): Promise<string[]> => {
+    try {
+      return await read();
+    } catch {
+      return [];
+    }
+  };
+  const [v4, v6] = await Promise.all([one(() => resolver.resolve4(hostname)), one(() => resolver.resolve6(hostname))]);
   return [
     ...v4.map((address): LookupAddress => ({ address, family: 4 })),
     ...v6.map((address): LookupAddress => ({ address, family: 6 })),
@@ -67,12 +74,21 @@ const resolveAll: WebhookLookup = async (hostname) => {
 /** Sends one delivery and says how it went. Never throws. */
 export type WebhookSender = (send: WebhookSend) => Promise<WebhookSendResult>;
 
+/** Every checked address a host resolves to, awaited in a try: nothing is chained on the resolver's promise. */
+async function resolvedOf(lookup: WebhookLookup, hostname: string): Promise<readonly LookupAddress[]> {
+  try {
+    return await lookup(hostname);
+  } catch {
+    return [];
+  }
+}
+
 /** The resolved half of the address rule, for an endpoint being added or changed (AC-6424). */
 export function createHostCheck(
   lookup: WebhookLookup = resolveAll,
 ): (url: URL) => Promise<WebhookUrlProblem | undefined> {
   return async (url) => {
-    const found = await lookup(url.hostname).catch((): readonly LookupAddress[] => []);
+    const found = await resolvedOf(lookup, url.hostname);
     return resolvedProblem(found.map((each) => each.address));
   };
 }
@@ -123,7 +139,7 @@ export function createWebhookSender(options: WebhookSenderOptions = {}): Webhook
     const refused = (failure: 'address'): WebhookSendResult => ({ ok: false, ms: elapsed(), failure });
     if (webhookUrlProblem(send.url) !== undefined) return refused('address');
     const url = new URL(send.url);
-    const found = await lookup(url.hostname).catch((): readonly LookupAddress[] => []);
+    const found = await resolvedOf(lookup, url.hostname);
     if (resolvedProblem(found.map((each) => each.address)) !== undefined) return refused('address');
     const headers = webhookHeaders(send, Math.floor(now() / 1000));
     return new Promise<WebhookSendResult>((resolve) => {
@@ -215,7 +231,9 @@ export async function runWebhookDelivery(deps: WebhookDeliverDeps, payload: unkn
     return;
   }
   const result = await deps.send(loaded.send);
-  const finished = await finishWebhookDelivery(scope, loaded.send, result);
+  // The hook stores the write's outbox rows: a try that turns the endpoint off tells each owner's and admin's
+  // open inbox of its `webhook_off` notice (AC-6423).
+  const finished = await finishWebhookDelivery(scope, loaded.send, result, { hooks: [outboxHook()] });
   deps.log[result.ok ? 'info' : 'warn']('webhooks.delivery', {
     workspaceId,
     endpointId: loaded.send.endpointId,

@@ -38,7 +38,8 @@ export type NotificationItemKind =
   | 'form_submission'
   | 'join_request'
   | 'automation'
-  | 'scheduling_changed';
+  | 'scheduling_changed'
+  | 'webhook_off';
 
 /** One notification, as the inbox shows it. */
 export interface NotificationItem {
@@ -186,9 +187,12 @@ export function NotificationList({
     const sentence =
       item.kind === 'form_submission'
         ? strings.submission(item.formName ?? strings.someForm)
-        : item.isNote === true
-          ? strings.mentionInNote(item.actor.name)
-          : strings.sentence[item.kind](item.actor.name);
+        : // A webhook endpoint that turned off leads with the endpoint, not with who acted: nobody did (spec 0064).
+          item.kind === 'webhook_off'
+          ? strings.webhookOff(item.excerpt === '' ? strings.someEndpoint : item.excerpt)
+          : item.isNote === true
+            ? strings.mentionInNote(item.actor.name)
+            : strings.sentence[item.kind](item.actor.name);
     return (
       <GridListItem
         id={row.id}

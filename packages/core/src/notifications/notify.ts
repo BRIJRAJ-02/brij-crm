@@ -22,7 +22,10 @@ import type { WriteContext } from '../engine/write.ts';
  * The kinds a member's switches email after a notification (a form's submission, a join request and a scheduling
  * change each have their own email; an automation's notice is in app only).
  */
-type SwitchedKind = Exclude<NotificationKind, 'form_submission' | 'join_request' | 'automation' | 'scheduling_changed'>;
+type SwitchedKind = Exclude<
+  NotificationKind,
+  'form_submission' | 'join_request' | 'automation' | 'scheduling_changed' | 'webhook_off'
+>;
 
 /** The settings column that says whether a kind is emailed. */
 // A join request has its own email (`requestToJoin`'s notice), so it never queues this one.
@@ -365,4 +368,27 @@ export async function notifySchedulingChanged(
     returning id::text as id
   `);
   return made.rows.length > 0;
+}
+
+/**
+ * A webhook endpoint turned off after 3 days of failed deliveries (spec 0064, AC-6423): one `webhook_off`
+ * notification in each active owner's and admin's inbox, written by `recordTry` in the transaction that turned the
+ * endpoint off, so the switch and the notice commit together. The actor is the system: nobody turned it off. Each
+ * recipient already has the `webhook_endpoint_off` email queued beside this row, so it is marked emailed now and no
+ * notifications email or digest repeats it. The notice names the endpoint by id only; the inbox read joins it for the
+ * host, and shows it only to a reader who still holds `webhooks.manage`. Answers the members whose inbox changed, so
+ * the caller names them in its `notifications` outbox row.
+ */
+export async function notifyWebhookOff(
+  tx: WorkspaceTx,
+  input: { readonly workspaceId: string; readonly endpointId: string },
+): Promise<readonly string[]> {
+  const made = await tx.execute<{ member_id: string }>(sql`
+    insert into notifications (workspace_id, member_id, kind, actor_type, webhook_endpoint_id, emailed_at)
+    select ${input.workspaceId}::uuid, m.id, 'webhook_off', 'system', ${input.endpointId}::uuid, now()
+    from members m
+    where m.workspace_id = ${input.workspaceId}::uuid and m.status = 'active' and m.role in ('owner', 'admin')
+    returning member_id::text as member_id
+  `);
+  return made.rows.map((row) => row.member_id);
 }

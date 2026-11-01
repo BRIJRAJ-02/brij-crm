@@ -126,6 +126,7 @@ export interface RequestContext extends ResponseHeadersPluginContext {
    * 503 `API_UNAVAILABLE`.
    */
   webhooks: WebhookServices | undefined;
+  /**
    * The outside read for a link page's pictures and media (spec 0061, AC-6128): the same bounds, its connection
    * pinned to an address it checked (no DNS rebinding), since a link's own site is behind no allow list.
    */
