@@ -5,7 +5,7 @@
 // nothing here touches the network.
 import { createElement, useMemo, type ReactNode } from 'react';
 import { UiProvider } from '../provider/UiProvider.tsx';
-import { createToasts } from '../provider/toasts.tsx';
+import { createToasts, type Toasts } from '../provider/toasts.tsx';
 
 export { Avatar } from '../atoms/Avatar/Avatar.tsx';
 /** The tagged www.timefix.com links on every public page: "Powered by Timefix" (shared with the hosted form) and "Claim your free page". */
@@ -15,6 +15,8 @@ export { Button, ButtonLink } from '../atoms/Button/Button.tsx';
 export { CopyButton } from '../atoms/Button/CopyButton.tsx';
 /** A public page's own toasts (BookingProvider makes them): a link page's Share says when it copied instead. */
 export { useToasts } from '../provider/context.ts';
+/** A page's own toast queue, made once by its entry and handed to every BookingProvider it mounts (a new version's Reload). */
+export { createToasts, type Toasts } from '../provider/toasts.tsx';
 export { Skeleton } from '../atoms/Skeleton/Skeleton.tsx';
 /** Inside it a loading state draws at once: a public page's first paint is already its loading state, so there is nothing for a skeleton to flash in front of. */
 export { LoadingNow } from '../provider/LoadingNow.tsx';
@@ -46,6 +48,7 @@ export {
   type BookingFact,
   type BookingHost,
   type BookingTeam,
+  type PageBrand,
 } from '../modules/BookingFrame/BookingFrame.tsx';
 export { BookingReceipt, type BookingReceiptState } from '../modules/BookingReceipt/BookingReceipt.tsx';
 export { BookingChanges, type CancelOutcome, type GuestsOutcome } from '../modules/BookingChanges/BookingChanges.tsx';
@@ -53,7 +56,13 @@ export { DayStrip } from '../modules/DayStrip/DayStrip.tsx';
 /** A profile's booking links (22 Oct 2026): the rows Captures › Links draws, the whole row opening the page. */
 export { LinkList, LinkListToolbar, type LinkRow } from '../modules/LinkList/LinkList.tsx';
 /** The link page at `/<handle>` (spec 0051): the person, their blocks in their order, the foot. */
-export { LinkPage, type LinkPageBlock, type LinkPagePerson } from '../modules/LinkPage/LinkPage.tsx';
+export {
+  LinkPage,
+  type LinkPageBlock,
+  type LinkPagePerson,
+  type LinkPagePhotos,
+  type PageLook,
+} from '../modules/LinkPage/LinkPage.tsx';
 export { MonthTiles } from '../modules/MonthTiles/MonthTiles.tsx';
 export { SlotList, type Slot } from '../modules/SlotList/SlotList.tsx';
 export { VisitorBar, type VisitorBarCalendar } from '../modules/VisitorBar/VisitorBar.tsx';
@@ -70,12 +79,14 @@ export interface BookingProviderProps {
   readonly locale: string;
   /** The zone times are shown in. */
   readonly timeZone: string;
+  /** The page's toast queue, when its entry raises toasts of its own; without one the provider makes its own. */
+  readonly toasts?: Toasts;
   readonly children: ReactNode;
 }
 
 /** The library's provider for a page outside the app: the visitor's language and zone, full page navigation, its own toasts. */
-export function BookingProvider({ locale, timeZone, children }: BookingProviderProps) {
-  const toasts = useMemo(() => createToasts(), []);
+export function BookingProvider({ locale, timeZone, toasts: given, children }: BookingProviderProps) {
+  const toasts = useMemo(() => given ?? createToasts(), [given]);
   return createElement(UiProvider, {
     locale,
     timeZone,

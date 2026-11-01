@@ -60,7 +60,10 @@ export interface FormStrings {
   readonly questionsHidden: string;
   /** A question with no label yet, in the builder's preview. */
   readonly untitledQuestion: string;
-  /** The words before the Timefix wordmark under every form, which nothing takes off (spec 0058, AC-26). */
+  /**
+   * The words before the Timefix wordmark under every form (spec 0058, AC-26), as on a link page and a booking page
+   * (spec 0060, AC-19). Nothing takes it off until branding removal arrives as a plan flag (AC-577).
+   */
   readonly poweredBy: string;
   /** The wordmark's name, read after "Powered by". */
   readonly product: string;

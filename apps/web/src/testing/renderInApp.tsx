@@ -63,6 +63,8 @@ export async function renderInApp(
   const layer = {
     calendar: { view: () => calendarView },
     nav: { source: () => stillLoading, change: () => undefined },
+    // No logo unless a test gives one (spec 0060): the frame's head and the tab's icon read it.
+    workspaceLogo: { subscribe: () => () => undefined, src: () => undefined },
     ...data,
     tasks: { due: () => stillLoading, ...data.tasks },
   } as unknown as DataLayer;

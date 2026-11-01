@@ -15,6 +15,23 @@ import { ACCESS_TABLE, type AccessEntry } from './table.ts';
 
 /** Exported functions that take no scope: the door, pure helpers, the bootstrap (which mints its own) and the runner. */
 const NO_SCOPE: ReadonlySet<string> = new Set([
+  // Where a workspace's logo and a link page's photos are kept (spec 0060): pure, a path from ids.
+  'brandLogoFolder',
+  'pageImageFolder',
+  // Link page blocks and reach (spec 0061): pure, a share link read into a provider and id, the addresses built back
+  // from them, a picture's bytes checked and cleaned, a page's own tags read, a view's facts, a block's window.
+  'parseMediaLink',
+  'mediaInfoSource',
+  'isMediaInfoHost',
+  'isMediaPosterHost',
+  'readOembed',
+  'cleanTitle',
+  'checkProfileImage',
+  'readPageMeta',
+  'profileImageStorePath',
+  'deviceFact',
+  'zonedToUtc',
+  'windowOf',
   // The door and its entries mint scopes; they don't take one. NO_RULE_SOURCE is what the door reads rules from
   // until #24 stores them: the door's input, not a service.
   'enterWorkspace',
@@ -341,7 +358,9 @@ describe('the walk: a principal without the access is refused', () => {
 
   it.each(byPermission)('%s refuses a member without %o, FORBIDDEN with the catalog sentence', async (name, entry) => {
     const { scope } = await memberOf('member');
-    expect(await refusalOf(service(name)(scope, {}))).toEqual({
+    // Called inside a promise, so a check that refuses at once (`requireBrandEditor`, which the logo route asks before
+    // it reads a byte) is read the same way as a service that refuses after its first await.
+    expect(await refusalOf(Promise.resolve().then(() => service(name)(scope, {})))).toEqual({
       code: 'FORBIDDEN',
       message: PERMISSIONS[entry.permission].message,
     });
@@ -481,11 +500,45 @@ describe('the walk: a principal without the access is refused', () => {
         // The look of a page names no block and no page, so it can only ever be the caller's own (spec 0054).
         // Bea has claimed no handle, so there is no public profile of theirs to put a look on: NOT_FOUND, with
         // the others below, rather than a look saved against nothing.
-        saveProfileTheme: { ground: 'ink', hue: 'green', mode: 'dark', shape: 'pill', fill: 'solid', font: 'mono' },
+        saveProfileTheme: {
+          ground: 'ink',
+          hue: 'green',
+          mode: 'dark',
+          shape: 'pill',
+          fill: 'solid',
+          font: 'mono',
+          gradient: 'dawn',
+          pattern: 'dots',
+          header: 'centred',
+          avatar: 'circle',
+        },
+        // The page's accent and photos (spec 0060) name nothing either, and Bea has no page: NOT_FOUND too.
+        saveProfileAccent: { accent: '#1f5fd6', accentDark: null },
+        saveProfileImage: { slot: 'cover' },
         // Whether search engines may show the page names nothing either, and Bea has no page: NOT_FOUND too.
         setProfileIndexable: false,
         // An import of nothing: what it would land is Bea's own, so it answers Bea's page and holds none of Ada's.
         importProfileLinks: { id: core.newId(), source: 'https://linktr.ee/bea', rows: [], skipped: [] },
+        // Spec 0061: a picture kept for Bea's page, which she hasn't got (NOT_FOUND); the reads below answer her own.
+        addProfileImage: (() => {
+          const id = core.newId();
+          return {
+            id,
+            kind: 'upload',
+            path: `link-page/${bea}/${workspaceId}/${id}.png`,
+            type: 'image/png',
+            bytes: 10,
+            width: 1,
+            height: 1,
+          };
+        })(),
+        readOwnProfileImage: core.newId(),
+        readOwnLinkAddress: theirs.id,
+        saveQrStyle: { colour: '#1f2937' },
+        profileInsightsCsv: (() => {
+          const today = new Date().toISOString().slice(0, 10);
+          return { from: today, to: today };
+        })(),
       };
       expect(await refusalOf(service(name)(key, inputs[name]))).toMatchObject({ code: 'FORBIDDEN' });
       const outcome = await service(name)(beaScope, inputs[name]).then(
@@ -497,7 +550,12 @@ describe('the walk: a principal without the access is refused', () => {
         name === 'listProfilePageChoices' ||
         name === 'listProfileFormChoices' ||
         name === 'readProfileCounts' ||
-        name === 'importProfileLinks'
+        name === 'readProfileLook' ||
+        name === 'importProfileLinks' ||
+        name === 'readOwnProfileImage' ||
+        name === 'readOwnLinkAddress' ||
+        name === 'readQrStyle' ||
+        name === 'profileInsightsCsv'
       ) {
         // The reads answer Bea's own page, which holds nothing of Ada's: a refusal would say the wrong thing.
         expect(JSON.stringify(outcome)).not.toContain(theirs.id);

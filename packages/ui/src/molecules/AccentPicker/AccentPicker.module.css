@@ -1,0 +1,157 @@
+/* AccentPicker (spec 0060, AC-3, AC-6): the default, the quick picks and Any colour as one row of swatches the size
+   of HuePicker's, the hex under them on the same left edge, and the guard's one line when it moved the colour. A
+   swatch's colour is the one value handed in (`--swatch`, a checked hex); everything else is tokens. */
+@layer components {
+  .root {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-8);
+  }
+
+  /* The swatches, then Any colour at the end of the same row, on the same gap. */
+  .row {
+    position: relative;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-6);
+  }
+
+  /* On a phone (the page's container under 480px), where the default, the nine picks and Any colour (11 swatches,
+     280px) no longer fit one line: rows of six and five, Any colour ending the second, rather than one swatch
+     wrapping alone (31 Oct 2026). Wider, they keep one row. The ten radios wrap at six, four on the second row; Any
+     colour steps back two columns from beside the group's box to sit right after them. */
+  @container (inline-size < 480px) {
+    .swatches {
+      max-inline-size: calc(6 * var(--size-tile) + 5 * var(--space-6));
+    }
+
+    .row {
+      align-items: flex-end;
+    }
+
+    .swatch[data-any] {
+      margin-inline-start: calc(-2 * (var(--size-tile) + var(--space-6)));
+    }
+  }
+
+  .swatches {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-6);
+  }
+
+  .label {
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .field {
+    display: inline-flex;
+  }
+
+  .swatch {
+    display: inline-grid;
+    place-items: center;
+    inline-size: var(--size-tile);
+    block-size: var(--size-tile);
+    border: var(--border-width-hairline) solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--swatch, var(--accent));
+    color: var(--swatch-mark, var(--on-accent));
+    outline: none;
+  }
+
+  /* The default draws the colour it stands for, and Any colour an empty square with a plus until it holds one. */
+  .swatch[data-any] {
+    background: var(--swatch, var(--surface-raised));
+    color: var(--text-secondary);
+  }
+
+  .swatch[data-any][data-selected] {
+    color: var(--swatch-mark, var(--on-accent));
+  }
+
+  .swatch[data-selected] {
+    box-shadow: var(--shadow-focus);
+  }
+
+  .swatch[data-focus-visible] {
+    outline: var(--border-width-thick) solid var(--accent);
+    outline-offset: var(--border-width-thick);
+  }
+
+  .swatch[data-disabled] {
+    opacity: var(--opacity-disabled);
+  }
+
+  /* The system picker: there to be opened, never seen. It sits under Any colour at the row's end, so the browser's
+     window opens there, beside the swatches, rather than over the row's label. */
+  .native {
+    position: absolute;
+    inset-block-start: 100%;
+    inset-inline-end: 0;
+    inline-size: var(--border-width-hairline);
+    block-size: var(--border-width-hairline);
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .hex {
+    inline-size: var(--size-column-narrow);
+  }
+
+  /* The guard's line (AC-6): the two colours it draws, then the one sentence, on the swatches' left edge. */
+  .note {
+    display: flex;
+    align-items: center;
+    gap: var(--space-6);
+    margin: 0;
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .drawn {
+    flex: none;
+    inline-size: var(--size-icon);
+    block-size: var(--size-icon);
+    border: var(--border-width-hairline) solid var(--border);
+    border-radius: var(--radius-xs);
+    background: var(--swatch, transparent);
+  }
+
+  /* Read only: the colour as text beside its swatch, on the row's left edge. The default with no colour of its own
+     draws the product's accent. */
+  .current {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    margin: 0;
+    color: var(--text);
+    font: var(--text-body);
+  }
+
+  .current > .drawn {
+    inline-size: var(--size-tile);
+    block-size: var(--size-tile);
+    border-radius: var(--radius-sm);
+  }
+
+  .drawn[data-default] {
+    background: var(--accent);
+  }
+
+  .drawn + .drawn {
+    margin-inline-start: calc(var(--space-4) * -1);
+  }
+
+  @media (forced-colors: active) {
+    .swatch {
+      border-color: CanvasText;
+    }
+  }
+}

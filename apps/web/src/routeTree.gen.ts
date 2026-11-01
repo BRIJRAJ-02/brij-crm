@@ -45,6 +45,7 @@ import { Route as WSlugListsListRouteImport } from './routes/w.$slug.lists.$list
 import { Route as WSlugObjectsObjectRouteImport } from './routes/w.$slug.objects.$object.tsx'
 import { Route as WSlugSettingsIndexRouteImport } from './routes/w.$slug.settings.index.tsx'
 import { Route as WSlugSettingsAutomationsRouteImport } from './routes/w.$slug.settings.automations.tsx'
+import { Route as WSlugSettingsBrandRouteImport } from './routes/w.$slug.settings.brand.tsx'
 import { Route as WSlugSettingsCalendarRouteImport } from './routes/w.$slug.settings.calendar.tsx'
 import { Route as WSlugSettingsDeveloperRouteImport } from './routes/w.$slug.settings.developer.tsx'
 import { Route as WSlugSettingsGeneralRouteImport } from './routes/w.$slug.settings.general.tsx'
@@ -280,6 +281,11 @@ const WSlugSettingsAutomationsRoute =
     path: '/automations',
     getParentRoute: () => WSlugSettingsRoute,
   } as any)
+const WSlugSettingsBrandRoute = WSlugSettingsBrandRouteImport.update({
+  id: '/brand',
+  path: '/brand',
+  getParentRoute: () => WSlugSettingsRoute,
+} as any)
 const WSlugSettingsCalendarRoute = WSlugSettingsCalendarRouteImport.update({
   id: '/calendar',
   path: '/calendar',
@@ -613,6 +619,7 @@ export interface FileRoutesByFullPath {
   '/w/$slug/lists/$list': typeof WSlugListsListRoute
   '/w/$slug/objects/$object': typeof WSlugObjectsObjectRoute
   '/w/$slug/settings/automations': typeof WSlugSettingsAutomationsRoute
+  '/w/$slug/settings/brand': typeof WSlugSettingsBrandRoute
   '/w/$slug/settings/calendar': typeof WSlugSettingsCalendarRoute
   '/w/$slug/settings/developer': typeof WSlugSettingsDeveloperRoute
   '/w/$slug/settings/general': typeof WSlugSettingsGeneralRoute
@@ -699,6 +706,7 @@ export interface FileRoutesByTo {
   '/w/$slug/lists/$list': typeof WSlugListsListRoute
   '/w/$slug/objects/$object': typeof WSlugObjectsObjectRoute
   '/w/$slug/settings/automations': typeof WSlugSettingsAutomationsRoute
+  '/w/$slug/settings/brand': typeof WSlugSettingsBrandRoute
   '/w/$slug/settings/calendar': typeof WSlugSettingsCalendarRoute
   '/w/$slug/settings/developer': typeof WSlugSettingsDeveloperRoute
   '/w/$slug/settings/general': typeof WSlugSettingsGeneralRoute
@@ -790,6 +798,7 @@ export interface FileRoutesById {
   '/w/$slug/lists/$list': typeof WSlugListsListRoute
   '/w/$slug/objects/$object': typeof WSlugObjectsObjectRoute
   '/w/$slug/settings/automations': typeof WSlugSettingsAutomationsRoute
+  '/w/$slug/settings/brand': typeof WSlugSettingsBrandRoute
   '/w/$slug/settings/calendar': typeof WSlugSettingsCalendarRoute
   '/w/$slug/settings/developer': typeof WSlugSettingsDeveloperRoute
   '/w/$slug/settings/general': typeof WSlugSettingsGeneralRoute
@@ -882,6 +891,7 @@ export interface FileRouteTypes {
     | '/w/$slug/lists/$list'
     | '/w/$slug/objects/$object'
     | '/w/$slug/settings/automations'
+    | '/w/$slug/settings/brand'
     | '/w/$slug/settings/calendar'
     | '/w/$slug/settings/developer'
     | '/w/$slug/settings/general'
@@ -968,6 +978,7 @@ export interface FileRouteTypes {
     | '/w/$slug/lists/$list'
     | '/w/$slug/objects/$object'
     | '/w/$slug/settings/automations'
+    | '/w/$slug/settings/brand'
     | '/w/$slug/settings/calendar'
     | '/w/$slug/settings/developer'
     | '/w/$slug/settings/general'
@@ -1058,6 +1069,7 @@ export interface FileRouteTypes {
     | '/w/$slug/lists/$list'
     | '/w/$slug/objects/$object'
     | '/w/$slug/settings/automations'
+    | '/w/$slug/settings/brand'
     | '/w/$slug/settings/calendar'
     | '/w/$slug/settings/developer'
     | '/w/$slug/settings/general'
@@ -1380,6 +1392,13 @@ declare module '@tanstack/react-router' {
       path: '/automations'
       fullPath: '/w/$slug/settings/automations'
       preLoaderRoute: typeof WSlugSettingsAutomationsRouteImport
+      parentRoute: typeof WSlugSettingsRoute
+    }
+    '/w/$slug/settings/brand': {
+      id: '/w/$slug/settings/brand'
+      path: '/brand'
+      fullPath: '/w/$slug/settings/brand'
+      preLoaderRoute: typeof WSlugSettingsBrandRouteImport
       parentRoute: typeof WSlugSettingsRoute
     }
     '/w/$slug/settings/calendar': {
@@ -1791,6 +1810,7 @@ const WSlugCapturesRouteWithChildren = WSlugCapturesRoute._addFileChildren(
 
 interface WSlugSettingsRouteChildren {
   WSlugSettingsAutomationsRoute: typeof WSlugSettingsAutomationsRoute
+  WSlugSettingsBrandRoute: typeof WSlugSettingsBrandRoute
   WSlugSettingsCalendarRoute: typeof WSlugSettingsCalendarRoute
   WSlugSettingsDeveloperRoute: typeof WSlugSettingsDeveloperRoute
   WSlugSettingsGeneralRoute: typeof WSlugSettingsGeneralRoute
@@ -1834,6 +1854,7 @@ interface WSlugSettingsRouteChildren {
 
 const WSlugSettingsRouteChildren: WSlugSettingsRouteChildren = {
   WSlugSettingsAutomationsRoute: WSlugSettingsAutomationsRoute,
+  WSlugSettingsBrandRoute: WSlugSettingsBrandRoute,
   WSlugSettingsCalendarRoute: WSlugSettingsCalendarRoute,
   WSlugSettingsDeveloperRoute: WSlugSettingsDeveloperRoute,
   WSlugSettingsGeneralRoute: WSlugSettingsGeneralRoute,

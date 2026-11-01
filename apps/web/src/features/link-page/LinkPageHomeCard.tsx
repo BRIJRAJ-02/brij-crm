@@ -1,19 +1,18 @@
 // Brief
 // Purpose: Home's "Your link page" card (spec 0051, AC-5121 to AC-5123): the QR code that opens the person's page.
-// Main task: show the page to someone (scan the code, Copy link, Open), or save the code as a PNG to print; and the
-// same Live or Private switch the link page screen has (spec 0058, AC-23), with one line saying what Private means.
+// Main task: show the page to someone (scan the code, Copy link, Open); and the same Live or Private switch the
+// link page screen has (spec 0058, AC-23), with one line saying what Private means.
 // Leaves out: editing the page (Edit opens the editor) and its figures (phase 3). A page with no handle is claimed on
 // the link page screen, never in Profile (AC-8). Loaded with its own chunk, so neither it nor the QR library is in
 // the app's first load.
 import type { DataLayer, MyProfile } from '@crm/data';
-import { Button, ButtonLink, Card, CopyButton, EmptyState, QrCode, Skeleton } from '@crm/ui';
+import { ButtonGroup, ButtonLink, Card, CopyButton, EmptyState, QrCode, Skeleton } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { publicProfileUrl } from '../booking/links.ts';
 import { homeStrings as strings } from './home-strings.ts';
 import { linkPageHref } from './nav-strings.ts';
 import { LiveSwitch, useLinkPageLive, useWalletLink } from './private-page.tsx';
-import { ShareLinkPageModal } from './ShareLinkPageModal.tsx';
 
 /** Props for the card. */
 export interface LinkPageHomeCardProps {
@@ -52,7 +51,7 @@ function useProfile(data: DataLayer, slug: string) {
   };
 }
 
-/** Your link page: its QR code, its address, Copy link, Open, and the code large in a Modal to save. */
+/** Your link page: its QR code, its address, Copy link and Open. */
 export function LinkPageHomeCard({ slug }: LinkPageHomeCardProps) {
   const { data } = useRouteContext({ from: '__root__' });
   const { read, retry } = useProfile(data, slug);
@@ -89,7 +88,7 @@ export function LinkPageHomeCard({ slug }: LinkPageHomeCardProps) {
   return <ReadyCard data={data} slug={slug} profile={read.profile} handle={handle} />;
 }
 
-/** The card once there is a page: the switch, the code, Copy link, Open, Show QR code and the wallet. */
+/** The card once there is a page: the switch and Edit, then the code with its address, Copy link and Open. */
 function ReadyCard({
   data,
   slug,
@@ -102,14 +101,20 @@ function ReadyCard({
   readonly handle: string;
 }) {
   const live = useLinkPageLive(data, slug, profile.isPublic);
-  const [isShowing, setShowing] = useState(false);
   const wallet = useWalletLink(data, slug, live.isLive);
   const address = publicProfileUrl(handle);
   const shown = address.replace(/^https?:\/\//, '');
+  // One card, no footer strip: the code, its address and the two ways to hand it out sit together, Copy link the one
+  // primary (the owner, 31 October 2026: Home items 6 to 10). A code explains itself, so no line says how to scan it,
+  // and the code is already on show, so there is no Show QR code; the link page screen keeps Download and Share.
   return (
     <Card
       title={strings.title}
-      {...(profile.workspaceName === undefined ? {} : { description: strings.inWorkspace(profile.workspaceName) })}
+      // Which workspace's page the code opens, only for someone with a page in another workspace too (spec 0056,
+      // AC-5617): with one workspace the line only said the title again (the owner, 31 October 2026, Home item 6).
+      {...(profile.workspaceName === undefined || (profile.otherLinkPages?.length ?? 0) === 0
+        ? {}
+        : { description: strings.inWorkspace(profile.workspaceName) })}
       actions={
         <>
           <LiveSwitch live={live} />
@@ -118,39 +123,31 @@ function ReadyCard({
           </ButtonLink>
         </>
       }
-      footer={
-        <>
-          <CopyButton value={address} label={strings.copyLink} announcement={strings.copied} />
-          <ButtonLink href={address} isExternal icon="arrow-up-right">
-            {strings.open}
-          </ButtonLink>
-          <Button icon="qr-code" onPress={() => setShowing(true)}>
-            {strings.showQr}
-          </Button>
-          {wallet !== undefined && (
-            <ButtonLink href={wallet} isExternal icon="wallet">
-              {strings.addToWallet}
-            </ButtonLink>
-          )}
-        </>
-      }
     >
       <QrCode value={address} label={strings.qrLabel} size="sm">
         <p>
           <strong>{shown}</strong>
         </p>
-        {/* A code explains itself; a private page says the one thing it can't. */}
+        {/* A private page says the one thing it can't do. */}
         {!live.isLive && <p>{strings.privateLine}</p>}
+        <ButtonGroup label={strings.shareLabel} layout="row">
+          {/* A private page's link opens for nobody, so Copy link is only the primary while it is Live. */}
+          <CopyButton
+            value={address}
+            label={strings.copyLink}
+            announcement={strings.copied}
+            variant={live.isLive ? 'primary' : 'secondary'}
+          />
+          <ButtonLink href={address} isExternal icon="arrow-up-right">
+            {strings.open}
+          </ButtonLink>
+          {wallet !== undefined && (
+            <ButtonLink href={wallet} isExternal icon="wallet">
+              {strings.addToWallet}
+            </ButtonLink>
+          )}
+        </ButtonGroup>
       </QrCode>
-      <ShareLinkPageModal
-        address={address}
-        handle={handle}
-        workspaceName={profile.workspaceName}
-        isPublic={live.isLive}
-        onGoLive={() => live.setLive(true)}
-        isOpen={isShowing}
-        onClose={() => setShowing(false)}
-      />
     </Card>
   );
 }

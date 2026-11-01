@@ -2,14 +2,15 @@
 
 export const homeStrings = {
   title: 'Your link page',
-  /** The one quiet line under the title: the page of the workspace they are in (spec 0056, AC-5617). */
-  inWorkspace: (name: string) => `Your link page in ${name}.`,
+  /** Under the title only when they have a page in another workspace too: whose page the code opens (AC-5617). */
+  inWorkspace: (name: string) => `In ${name}.`,
+  /** The card's sharing buttons, read as one group. */
+  shareLabel: 'Share your link page',
   qrLabel: 'QR code for your link page',
   copyLink: 'Copy link',
   copied: 'Link copied',
   open: 'Open',
   edit: 'Edit',
-  showQr: 'Show QR code',
   /** Saves the page to the person's own wallet, so they can show its code without opening the app. */
   addToWallet: 'Add to Wallet',
   /** Under the code while the page is private (spec 0058, AC-23); the switch beside Edit is the link page's own. */

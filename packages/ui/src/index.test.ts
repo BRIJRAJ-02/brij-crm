@@ -12,6 +12,7 @@ describe('@crm/ui', () => {
 
   it('exports exactly the components, the provider, the toast factory and the shared helpers', () => {
     expect(Object.keys(ui).sort()).toEqual([
+      'AccentPicker',
       'ActivityFeed',
       'AppShell',
       'AppShellContext',
@@ -106,6 +107,7 @@ describe('@crm/ui', () => {
       'LinkListRowOrder',
       'LinkListToolbar',
       'LinkPage',
+      'LinkPageHold',
       'LinkPageThumbnail',
       'LinkPageTile',
       'LoadingNow',

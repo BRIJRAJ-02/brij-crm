@@ -24,4 +24,56 @@ export const strings = {
   inside: (count: number) => (count === 1 ? '1 link inside' : `${String(count)} links inside`),
   /** A site icon names nothing a reader needs: the title beside it already says where the link goes. */
   siteIconAlt: '',
+  /** A link's thumbnail (spec 0061, AC-6101) is decoration too: the title beside or under it names the link. */
+  thumbAlt: '',
+  /** The banner's landmark name (AC-6112). */
+  banner: 'Announcement',
+  /** The banner's close button (AC-6112): it goes for this visit. */
+  closeBanner: 'Close banner',
+  /** The socials row block, for screen readers (AC-6104). */
+  socials: 'Social links',
+  /** The media facade's button (AC-6106), named for what it plays. */
+  play: (title: string) => `Play ${title}`,
+  /** Under a media block's title, before anything loads from the provider (AC-6106). */
+  playsFrom: (provider: string) => `Plays from ${provider}`,
+  /** A media block that can't play here: its player's address was refused, or its code couldn't load. */
+  cantPlay: 'Can’t play here',
+  /** Each provider's own name, for "Plays from YouTube": `MEDIA_PROVIDER_NAMES` in the contracts, repeated here. */
+  providers: {
+    youtube: 'YouTube',
+    vimeo: 'Vimeo',
+    spotify: 'Spotify',
+    soundcloud: 'SoundCloud',
+    applemusic: 'Apple Music',
+  },
+  /** A picture that is a link, named by its alt text and where it opens. */
+  linkedPicture: (alt: string) => `${alt} (opens in a new tab)`,
+  /** A gallery's pictures, for screen readers (AC-6109). */
+  gallery: 'Pictures',
+  /** A gallery picture's button: it opens the picture large. */
+  openPicture: (alt: string) => `${alt}, open large`,
+  /** The gallery row's buttons on wide screens, and the viewer's. */
+  previous: 'Previous picture',
+  next: 'Next picture',
+  /** The viewer's place in the gallery, beside its title: "2 of 5". */
+  pictureOf: (at: number, of: number) => `${String(at)} of ${String(of)}`,
+  /** A next times block (AC-6110). */
+  moreTimes: 'More times',
+  noTimes: 'No open times in the next two weeks',
+  timesLoading: 'Loading open times…',
+  /** Under a next times block's title: the length its chips are for. */
+  minutes: (minutes: number) => `${String(minutes)} min`,
+  /** The times' list, for screen readers. */
+  times: (title: string) => `Next open times for ${title}`,
+  /** The notice sheet (AC-6113): its two answers. The question itself is `profileNoticeSentence`, from the caller. */
+  noticeContinue: 'Continue',
+  noticeBack: 'Go back',
+  /** What each notice says, as `profileNoticeSentence` in the contracts writes it, repeated here. */
+  notices: {
+    sensitive: 'This link may show sensitive content.',
+    '18': 'You need to be 18 or older to open this.',
+    '21': 'You need to be 21 or older to open this.',
+  },
+  /** Read after a link that asks first: pressing it opens a notice, not the link. */
+  asksFirst: '(asks before it opens)',
 } as const;

@@ -9,10 +9,14 @@ export {
   enterBookingByToken,
   enterBookingPage,
   countItemPress,
+  countProfileBooking,
   countProfileView,
   enterContactCard,
   enterLinkBlocks,
+  enterLinkImage,
   enterLinkPage,
+  enterTimesBlock,
+  listSitemapHandles,
   enterShareImage,
   findHandleOwner,
   readHandleOffer,
@@ -37,6 +41,7 @@ export {
   readPagePicture,
   readProfilePicture,
   readPublicSlots,
+  readTimesPage,
   type IcsOrigin,
   type PublicBookingDeps,
   type PublicPictureDeps,
@@ -90,3 +95,31 @@ export { addGuests, cancelBooking, guestTarget, moveBooking, readMoveSlots, remo
 // An email's preferences link (the emails lane): its token read, the member's narrow scope, and their choices.
 export { enterEmailLink } from './access/door.ts';
 export { readEmailLinkToken, readEmailPreferences, setEmailPreference } from './emails/preferences.ts';
+
+// What the public pages wear of a brand (spec 0060): a booking page's, a form's and a link page's accent, photos and
+// logo, and the small stylesheets that carry the accent.
+export {
+  brandStylesheet,
+  LOOK_IMAGE_PROPERTIES,
+  lookStylesheet,
+  readBookingBrand,
+  readFormBrand,
+  readHandleLook,
+  type LookImage,
+  type PageBrand,
+  type PageLook,
+} from './brand/public.ts';
+
+// Link page blocks and reach (spec 0061): media links read into a provider and id and every address built back from
+// them; a view's four facts; a picture's checks and its metadata taken out; a page's own `og:` picture and title.
+export {
+  isMediaInfoHost,
+  isMediaPosterHost,
+  mediaInfoSource,
+  readOembed,
+  cleanTitle,
+  MEDIA_FRAME_ORIGINS,
+} from './profile/embeds.ts';
+export { viewFacts, type ViewFacts } from './profile/sources.ts';
+export { checkProfileImage, readPageMeta, profileImageStorePath, type CheckedImage } from './profile/images.ts';
+export { isShownAt } from './profile/schedule.ts';

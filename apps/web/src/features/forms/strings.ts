@@ -33,6 +33,10 @@ export const strings = {
   submissionCount: (n: number) => count(n, 'submission', 'submissions'),
   noSubmissionsYet: 'No submissions yet',
   publishToShare: 'Publish it to start taking submissions',
+  /** A draft card's one action: back into its builder to finish it and publish. */
+  editDraft: 'Edit',
+  /** Its accessible name: which draft it opens, the visible word first. */
+  editFormOf: (name: string) => `Edit ${name}`,
   openForm: (name: string) => `Open ${name} in a new tab`,
   searchForms: 'Search forms',
   addressPending: '/f/…',
@@ -132,10 +136,8 @@ export const strings = {
   ownFormThanks: 'Thank you. That is with us.',
 
   // Settings tab
-  nameHint: 'Only your team sees it.',
   nameRequired: 'Give the form a name.',
   addressChanged: 'Address changed. Old links still open the form.',
-  draftNameText: 'Only your team sees it. The address comes with the first publish.',
   headline: 'Headline',
   headlineDefault: 'Fill this in and we will come back to you',
   subheadingOptional: 'Subheading',

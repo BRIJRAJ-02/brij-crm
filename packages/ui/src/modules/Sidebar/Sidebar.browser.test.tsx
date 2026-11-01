@@ -158,3 +158,53 @@ describe('a sidebar drag', () => {
     expect(grip('Deals')).toHaveFocus();
   });
 });
+
+// The workspace's own logo at the head (spec 0060): one upload in Settings › Brand heads the switcher.
+describe('the workspace logo at the head', () => {
+  /** A wordmark four times as wide as it is tall, as a data address the library's image check lets through. */
+  const wordmark = `data:image/svg+xml,${encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="240" height="60"><rect width="240" height="60" fill="#e5484d"/></svg>',
+  )}`;
+
+  const head = (logo: string | undefined, isWorkspaceLoading = false) => (
+    <Sidebar
+      workspace="Northwind"
+      mark={<span data-testid="product-mark" />}
+      {...(logo === undefined ? {} : { logo })}
+      isWorkspaceLoading={isWorkspaceLoading}
+    >
+      <NavItem icon="bell" href="/notifications">
+        Notifications
+      </NavItem>
+    </Sidebar>
+  );
+
+  it('draws the logo in place of the product mark, whole inside its square, and the mark again once it goes', async () => {
+    await import('../../styles/index.css');
+    const { again } = await render(head(wordmark));
+    const picture = document.querySelector<HTMLImageElement>('nav img');
+    expect(picture?.getAttribute('src')).toBe(wordmark);
+    expect(document.querySelector('[data-testid="product-mark"]')).toBeNull();
+    await vi.waitFor(() => {
+      expect(picture?.naturalWidth).toBeGreaterThan(0);
+    });
+    if (picture === null) throw new Error('no logo drawn');
+    // Contained, never cropped: the letterboxed picture keeps its 4:1 shape inside a square box.
+    expect(getComputedStyle(picture).objectFit).toBe('contain');
+    const box = picture.getBoundingClientRect();
+    expect(Math.round(box.width)).toBe(Math.round(box.height));
+    await vi.waitFor(() => {
+      expect(getComputedStyle(picture.parentElement ?? picture).outlineStyle).toBe('solid');
+    });
+    // Removed in Brand: the product's mark heads it again.
+    again(head(undefined));
+    expect(document.querySelector('nav img')).toBeNull();
+    expect(document.querySelector('[data-testid="product-mark"]')).not.toBeNull();
+  });
+
+  it('shows no logo while the workspace is still loading, only the skeleton', async () => {
+    await render(head(wordmark, true));
+    expect(document.querySelector('nav img')).toBeNull();
+    expect(document.querySelector('nav [aria-busy="true"]')).not.toBeNull();
+  });
+});

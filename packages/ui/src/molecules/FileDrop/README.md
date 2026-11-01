@@ -15,6 +15,8 @@ New. Imports (#30) and file attributes (#32) take files the same way, and say up
 - `acceptedTypes` takes MIME types or extensions; `maxSize` is in bytes and shows as "up to 50 MB". Up to three types are listed under the hint beside the size; with more (a record's Files takes twelve), the line shows the size only and the types are named in the refusal of a file it won't take, so the zone never reads as a wall of extensions (the owner, 31 October 2026, less text).
 - A file of the wrong type or over the size is refused with a sentence on what to do; `onFiles` only gets files that pass.
 - `allowsMultiple` takes several at once; otherwise the first.
+- `isReadOnly` draws only the picture that is there (`preview`), at a control's height, with nothing to press: a member's view of the workspace's logo. With no preview it draws nothing, and the screen says so.
+- `typesText` names the accepted types as people say them ("PNG, JPG or WebP") in the hint and the refusal, where the raw `acceptedTypes` would read `image/png, image/jpeg`.
 - `wrongTypeText(fileName)` lets the screen say something better than "Choose .csv" for a type it can name (the import page: an Excel file, and how to save it as CSV); answering undefined keeps the built in sentence.
 
 - `variant="button"` (27 October 2026) is the browse button alone, `label` its words, with `isPending` while what was picked is on its way: for a picker beside the thing it changes, first run's avatar, where a drop area would draw the picture a second time. Same type and size checks, same refusal line under it. Why a variant, not a new component: it is FileDrop's own FileTrigger and checks with the drop area taken away; a second file picker would have checked files a second way.

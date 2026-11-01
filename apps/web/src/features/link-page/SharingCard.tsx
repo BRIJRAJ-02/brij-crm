@@ -50,6 +50,7 @@ export function SharingCard({ indexable, onChange, shareImage, onShareImage, ref
       <FileDrop
         label={shareImage === undefined ? strings.shareImageDrop : strings.shareImage}
         acceptedTypes={SHARE_IMAGE_TYPES}
+        typesText={strings.shareImageTypes}
         maxSize={SHARE_IMAGE_MAX_BYTES}
         {...(shareImage === undefined ? {} : { preview: { src: shareImage, alt: strings.shareImageAlt } })}
         onFiles={(files) => {

@@ -92,6 +92,7 @@ export function testServices(
     files?: FileStore;
     /** The one outside read (spec 0055): a fixed page unless given, so no test ever reaches the network. */
     outsideFetch?: OutsideFetch;
+    linkPageFetch?: OutsideFetch;
   } = {},
 ): AppServices {
   const db = options.db ?? unreachableDatabase();
@@ -121,6 +122,8 @@ export function testServices(
     ...(options.signedOut === undefined ? {} : { signedOut: options.signedOut }),
     ...(options.files === undefined ? {} : { files: options.files }),
     outsideFetch: options.outsideFetch ?? testOutsideFetch(),
+    // A link page's pictures and media (spec 0061): a page with no picture, so no test reads the network.
+    linkPageFetch: options.linkPageFetch ?? testOutsideFetch(),
   };
 }
 

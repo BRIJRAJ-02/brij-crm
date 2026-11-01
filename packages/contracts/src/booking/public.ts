@@ -7,7 +7,8 @@ import * as z from 'zod';
 import { Timestamp } from '../values/attribute-values.ts';
 import { BookingDefaultView, BookingDuration, TimeZoneName } from './settings.ts';
 import { Uuid } from '../values/ids.ts';
-import { PageTheme } from './page-theme.ts';
+import { PageTheme, PublicLook } from './page-theme.ts';
+import { PublicBrand } from '../workspace-brand.ts';
 import { PublicProfileItem } from './link-page.ts';
 import { SOCIAL_LINK_NETWORKS } from '../values/social-networks.ts';
 import { PublicQuestion } from '../forms/public.ts';
@@ -89,6 +90,12 @@ export const PublicBookingPage = z.object({
    * choices, required, show when), never where an answer is filed. Absent on a page that asks none (AC-5704).
    */
   questions: z.array(PublicQuestion).optional(),
+  /**
+   * The brand it wears (spec 0060, AC-4, AC-14): the versions `brandStylesheetPath('booking', …)` and
+   * `brandLogoPath('booking', …)` take. A personal page wears its owner's own accent when they set one, else the
+   * workspace's, and a team page the workspace's. Absent when it wears the product's own accent and no logo.
+   */
+  brand: PublicBrand.optional(),
 });
 /** The page's facts. */
 export type PublicBookingPage = z.infer<typeof PublicBookingPage>;
@@ -174,6 +181,11 @@ export const PublicProfile = z.object({
    * absent when its owner has set none and the card is drawn. The card function reads this with the profile.
    */
   shareImage: z.string().optional(),
+  /**
+   * The page's own stylesheet and photos (spec 0060, AC-14): the versions `lookStylesheetPath` and `lookImagePath`
+   * take. Absent when the page draws the product's accent and no photo.
+   */
+  look: PublicLook.optional(),
   /** The cursor of the next page, while there is one. */
   next: z.string().optional(),
 });
@@ -336,6 +348,15 @@ export const PublicBookInput = z.object({
    * page's questions as they are at booking time, anything else dropped.
    */
   answers: z.record(z.string().max(40), z.unknown()).optional(),
+  /**
+   * The link page the visitor booked from (spec 0061, AC-6119): only its handle, which the server checks names a page
+   * holding this booking page as a live block, and counts one booking that day. Nothing of it is stored on the
+   * booking; a `via` that doesn't check out is ignored, never refused. `.catch` so a bad one never fails a booking.
+   */
+  via: z
+    .object({ handle: z.string().max(40) })
+    .optional()
+    .catch(undefined),
 });
 /** A visitor's booking. */
 export type PublicBookInput = z.infer<typeof PublicBookInput>;

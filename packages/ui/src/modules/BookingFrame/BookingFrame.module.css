@@ -13,6 +13,32 @@
 
 @layer components {
   .root {
+    /* The workspace's brand (spec 0060, AC-4, AC-5): the accent pair its stylesheet sets at the page's root, or an
+       app preview's `variables`, its light or dark half picked by the page's colour scheme. With no brand each name
+       falls back to the token it stands in for, so a page without one draws exactly as before. `--frame-none` is
+       the guaranteed invalid value, which makes a mix of a missing brand invalid so its reader falls back too. */
+    --frame-none: initial;
+    --frame-brand-accent: light-dark(
+      var(--brand-accent, var(--frame-none)),
+      var(--brand-accent-dark, var(--frame-none))
+    );
+    --frame-brand-on-accent: light-dark(
+      var(--brand-on-accent, var(--frame-none)),
+      var(--brand-on-accent-dark, var(--frame-none))
+    );
+    --frame-brand-link: light-dark(var(--brand-link, var(--frame-none)), var(--brand-link-dark, var(--frame-none)));
+    /* A tenth of the link colour over the surface: the link keeps 4.5:1 on it for any accent. */
+    --frame-brand-soft: color-mix(in oklab, var(--frame-brand-link) 10%, var(--surface));
+    --frame-brand-focus: 0 0 0 var(--border-width-thick) var(--frame-brand-accent);
+    --frame-accent: var(--frame-brand-accent, var(--accent));
+    --frame-accent-hover: var(--frame-brand-accent, var(--accent-hover));
+    --frame-on-accent: var(--frame-brand-on-accent, var(--on-accent));
+    --frame-link: var(--frame-brand-link, var(--link));
+    --frame-accent-soft: var(--frame-brand-soft, var(--accent-soft));
+    --frame-accent-border: var(--frame-brand-accent, var(--accent-border));
+    --frame-accent-line: var(--frame-brand-accent, var(--accent-line));
+    --frame-focus: var(--frame-brand-focus, var(--shadow-focus));
+
     box-sizing: border-box;
     display: flex;
     justify-content: center;
@@ -25,6 +51,17 @@
   }
 
   .layout {
+    /* Everything on the page reads the accent through the library's own names (the chosen day, Book, links, focus
+       rings), so the brand reaches each of them. One level in, where the names above were worked out. */
+    --accent: var(--frame-accent);
+    --accent-hover: var(--frame-accent-hover);
+    --on-accent: var(--frame-on-accent);
+    --link: var(--frame-link);
+    --accent-soft: var(--frame-accent-soft);
+    --accent-border: var(--frame-accent-border);
+    --accent-line: var(--frame-accent-line);
+    --shadow-focus: var(--frame-focus);
+
     display: flex;
     flex-direction: column;
     gap: var(--space-24);
@@ -45,6 +82,16 @@
     flex-direction: column;
     gap: var(--space-24);
     min-inline-size: 0;
+  }
+
+  /* The workspace's logo at the head of the rail (spec 0060, AC-4): a control's height, as wide as it needs up to a
+     column, never cropped or stretched. */
+  .brandLogo {
+    align-self: flex-start;
+    block-size: var(--size-input);
+    inline-size: auto;
+    max-inline-size: var(--size-column);
+    object-fit: contain;
   }
 
   /* No entrance on the rail or the card: the page's frame is the first thing

@@ -12,7 +12,6 @@ import {
   EmptyState,
   Field,
   Form,
-  LinkPage,
   Modal,
   QuestionList,
   PhoneField,
@@ -27,6 +26,7 @@ import { createContext, useContext, useEffect, useId, useMemo, useRef, useState,
 import { createPortal } from 'react-dom';
 import { formsHref } from '../captures/tabs.ts';
 import { linksHref } from '../booking/links.ts';
+import { DraftPage } from './draft-look.tsx';
 import { contactHref, contactWords, pageFacts, type BlockEditorProps, type EditorChrome } from './registry.tsx';
 import { ICON_WORDS, strings } from './strings.ts';
 
@@ -275,7 +275,7 @@ export function LinkEditor({
       onClose={onClose}
       {...(chrome === undefined ? {} : { chrome })}
       preview={
-        <LinkPage
+        <DraftPage
           layout="blocks"
           caption={strings.howItLooks}
           blocks={[
@@ -390,7 +390,7 @@ export function HeadingEditor({ item, items, linkPage, chrome, onSubmit, onClose
       onClose={onClose}
       {...(chrome === undefined ? {} : { chrome })}
       preview={
-        <LinkPage
+        <DraftPage
           layout="blocks"
           caption={strings.howItLooks}
           blocks={[
@@ -513,7 +513,7 @@ export function SignupEditor({ slug, items, linkPage, chrome, onSubmit, onClose 
       onClose={onClose}
       {...(chrome === undefined ? {} : { chrome })}
       preview={
-        <LinkPage
+        <DraftPage
           layout="blocks"
           caption={strings.howItLooks}
           blocks={[{ kind: 'form', id: 'draft', title: rowLabel, href: '/f/draft' }]}
@@ -600,7 +600,7 @@ export function TestimonialEditor({ item, items, linkPage, chrome, onSubmit, onC
       onClose={onClose}
       {...(chrome === undefined ? {} : { chrome })}
       preview={
-        <LinkPage
+        <DraftPage
           layout="blocks"
           caption={strings.howItLooks}
           blocks={[
@@ -698,7 +698,7 @@ export function TextEditor({ item, items, linkPage, chrome, onSubmit, onClose }:
       onClose={onClose}
       {...(chrome === undefined ? {} : { chrome })}
       preview={
-        <LinkPage
+        <DraftPage
           layout="blocks"
           caption={strings.howItLooks}
           blocks={[
@@ -829,7 +829,7 @@ export function FaqEditor({ item, items, linkPage, chrome, onSubmit, onClose }: 
       onClose={onClose}
       {...(chrome === undefined ? {} : { chrome })}
       preview={
-        <LinkPage
+        <DraftPage
           layout="blocks"
           caption={strings.howItLooks}
           blocks={[
@@ -1113,7 +1113,7 @@ export function ContactEditor({
       onClose={onClose}
       {...(chrome === undefined ? {} : { chrome })}
       preview={
-        <LinkPage
+        <DraftPage
           layout="blocks"
           caption={strings.howItLooks}
           blocks={[
@@ -1477,7 +1477,7 @@ export function FormChooser({ slug, item, items, linkPage, chrome, onSubmit, onC
       canSubmit={choices.status === 'ready' && (editing !== undefined || choices.choices.length > 0)}
       preview={
         label.trim() === '' ? undefined : (
-          <LinkPage
+          <DraftPage
             layout="blocks"
             caption={strings.howItLooks}
             blocks={[{ kind: 'form', id: editing?.id ?? 'draft', title: label.trim(), href: '/f/preview' }]}
