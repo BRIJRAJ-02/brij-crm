@@ -1,0 +1,69 @@
+/* GuestChips: the guests a booking takes, as chips that wrap: each address with its initial and a remove button, on
+   the tag grey. No chip of this kind exists elsewhere: Tag has no remove, and FilterChip is a filter's three parts. */
+@layer components {
+  .root {
+    /* The blur a new chip resolves out of (transitions.dev's 2px), a literal until the artifact has a blur token. */
+    /* stylelint-disable-next-line unit-disallowed-list -- a value waiting on the artifact's blur token, not a borrowed one */
+    --chip-blur: 2px;
+
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-6);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  /* A chip arrives out of a soft blur where the words were typed, so the address reads as becoming the chip. */
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-4);
+    min-inline-size: 0;
+    max-inline-size: 100%;
+    padding-inline: var(--space-2);
+    border: var(--border-width-hairline) solid var(--tag-gray-border);
+    border-radius: var(--radius-full);
+    background: var(--tag-gray-bg);
+    color: var(--tag-gray-text);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    animation: chip-in var(--duration-move) var(--ease-out) backwards;
+  }
+
+  /* A chip with no remove keeps its end padding. */
+  .chip:not([data-removable]) {
+    padding-inline-end: var(--space-8);
+  }
+
+  /* A guest the server turned down: the danger edge, with the field's error saying why. */
+  .chip[data-invalid] {
+    border-color: var(--danger);
+  }
+
+  .text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .chip {
+      animation-name: chip-fade;
+    }
+  }
+
+  @keyframes chip-in {
+    from {
+      opacity: 0;
+      translate: 0 var(--space-4);
+      filter: blur(var(--chip-blur));
+    }
+  }
+
+  @keyframes chip-fade {
+    from {
+      opacity: 0;
+    }
+  }
+}

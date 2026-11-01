@@ -38,3 +38,5 @@ Tab through the fields, Add guests, each guest's Remove, the note, the page's qu
 Not in the artifact.
 
 Booked: a `done` outcome may carry `next`. Confirm then reads Booked with a tick for one `--duration-move` before `next` runs (the page opens the receipt there), so the visitor sees the booking land (the owner, 1 November 2026). Without `next`, the page has already moved on.
+
+The chips are GuestChips (2 November 2026), shared with the manage page's guests.

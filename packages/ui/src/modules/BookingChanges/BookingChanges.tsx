@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
-import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { focusLater } from '../../lib/focus-later.ts';
+import { GuestChips } from '../../molecules/GuestChips/GuestChips.tsx';
 import { Callout } from '../../molecules/Callout/Callout.tsx';
 import { Field } from '../../molecules/Field/Field.tsx';
 import { Modal } from '../../molecules/Modal/Modal.tsx';
@@ -226,27 +226,21 @@ function GuestsPanel({
           </span>
         </span>
       </div>
-      {guests.length > 0 && (
-        <ul className={styles.list} aria-labelledby={titleId}>
-          {guests.map((guest) => (
-            <li key={guest} className={styles.guest}>
-              <Avatar name={guest} size="sm" isDecorative />
-              <span className={styles.email}>{guest}</span>
-              <Button
-                variant="ghost"
-                icon="x"
-                label={strings.remove(guest)}
-                onPress={() => {
-                  setStatus('');
-                  setError('');
-                  setFailure('');
-                  setConfirming(guest);
-                }}
-              />
-            </li>
-          ))}
-        </ul>
-      )}
+      {/* The same chips the booking form adds guests with (the owner, 2 November 2026): one look for adding and
+          removing guests everywhere. Remove still asks first. */}
+      <GuestChips
+        guests={guests}
+        label={strings.guests}
+        removeLabel={strings.remove}
+        onRemove={(index) => {
+          const guest = guests[index];
+          if (guest === undefined) return;
+          setStatus('');
+          setError('');
+          setFailure('');
+          setConfirming(guest);
+        }}
+      />
       {isFull ? (
         <p className={styles.text}>{strings.full(maxGuests)}</p>
       ) : (

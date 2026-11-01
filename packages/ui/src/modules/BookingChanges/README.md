@@ -31,3 +31,5 @@ Tab reaches Move, Guests and Cancel booking; Move and Guests are read as expande
 ## Differences from the artifact
 
 Not in the artifact.
+
+Guests are GuestChips (2 November 2026), the same chips the booking form adds guests with, so adding and removing guests looks one way everywhere. Each chip's remove still asks first, in the remove dialog.

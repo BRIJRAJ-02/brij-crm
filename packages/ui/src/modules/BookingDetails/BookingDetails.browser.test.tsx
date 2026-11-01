@@ -135,8 +135,11 @@ describe('a refusal on a field the form shows (unchanged)', () => {
 });
 
 const guestsBox = () => page.getByRole('textbox', { name: /^Guests/ });
+// Each chip's address, without its avatar's initial.
 const chips = () =>
-  [...document.querySelectorAll('ul[aria-label="Guests to invite"] > li')].map((item) => item.textContent);
+  [...document.querySelectorAll('ul[aria-label="Guests to invite"] > li .ws-guest-chips-text')].map(
+    (item) => item.textContent,
+  );
 const chip = (email: string) => {
   const found = [...document.querySelectorAll('ul[aria-label="Guests to invite"] > li')].find((item) =>
     item.textContent.includes(email),

@@ -10,6 +10,7 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
+import { GuestChips } from '../../molecules/GuestChips/GuestChips.tsx';
 import { countriesIn } from '../../lib/countries.ts';
 import { Field } from '../../molecules/Field/Field.tsx';
 import { answerOf, focusQuestion, Question } from '../../public-form/Question.tsx';
@@ -437,26 +438,15 @@ export function BookingDetails({
           // Opened by Add guests, it grows into place; guests a visitor came back with are simply there.
           data-opening={isAddingGuests || undefined}
         >
-          {guests.length > 0 && (
-            <ul className={styles.chips} aria-label={strings.guestsList}>
-              {guests.map((guest, index) => (
-                <li
-                  key={guest}
-                  className={styles.chip}
-                  data-invalid={errors[`guest-${String(index)}`] === undefined ? undefined : ''}
-                >
-                  <span className={styles.chipText}>{guest}</span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    icon="x"
-                    label={strings.removeGuest(guest)}
-                    onPress={() => removeGuest(index)}
-                  />
-                </li>
-              ))}
-            </ul>
-          )}
+          <GuestChips
+            guests={guests}
+            label={strings.guestsList}
+            removeLabel={strings.removeGuest}
+            onRemove={removeGuest}
+            invalid={
+              new Set(guests.flatMap((_, index) => (errors[`guest-${String(index)}`] === undefined ? [] : [index])))
+            }
+          />
           <Field
             label={strings.guests}
             name="guests"
