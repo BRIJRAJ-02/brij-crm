@@ -81,19 +81,16 @@ test('an owner adds, edits, moves, archives and restores attributes without setu
 
   // A name a live attribute goes by is refused on the name, before anything is sent (AC-245; the API name is made
   // from it, with no field of its own since 30 October 2026).
+  // The creates' toasts go first: on a phone the last one would sit over the dialog's footer, and an open dialog
+  // holds its timer (as does a pointer resting on the toast, so it moves off first).
+  await page.mouse.move(0, 0);
+  await expect(page.locator('[data-tone="success"][role="alertdialog"]')).toHaveCount(0, { timeout: 20_000 });
   await page.getByRole('button', { name: 'New attribute' }).click();
   const dialog = page.getByRole('dialog', { name: 'New attribute' });
   await dialog.getByLabel('Name', { exact: true }).fill('Code');
   await dialog.getByRole('button', { name: 'Create attribute' }).click();
   await expect(dialog.getByText('Name taken here. Pick another.')).toBeVisible();
   await checkScreen(page, 'attribute-refused');
-  // On a phone the last create's toast sits over the dialog's footer, its timer held while the dialog is open:
-  // dismiss it first, as a person would.
-  const toast = page.locator('[data-tone="success"][role="alertdialog"]');
-  for (let left = await toast.count(); left > 0; left -= 1) {
-    await toast.first().getByRole('button', { name: 'Dismiss' }).click();
-    await expect(toast).toHaveCount(left - 1);
-  }
   await dialog.getByRole('button', { name: 'Cancel' }).click();
   await expect(dialog).toBeHidden();
 
