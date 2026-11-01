@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
 import { renderInApp, type InApp } from '../../testing/renderInApp.tsx';
 import { NotificationSettingsScreen } from './NotificationSettingsScreen.tsx';
+import { strings } from './notifications-strings.ts';
 
 let shown: InApp | undefined;
 
@@ -82,7 +83,10 @@ async function press(control: ReturnType<typeof page.getByRole>) {
 describe('Notifications', () => {
   it('names each switch plainly, with one InfoTip on the digest', async () => {
     await render();
-    await expect.element(page.getByText('Always in your Inbox. Choose what is also emailed.')).toBeVisible();
+    // The Inbox and Email cards each say their own line (the follows lane split them); read from the strings, so
+    // the copy and the check can't drift apart.
+    await expect.element(page.getByText(strings.inboxDescription)).toBeVisible();
+    await expect.element(page.getByText(strings.emailDescription)).toBeVisible();
     for (const [name, tip] of [['Daily digest', 'One email at 8am with what’s unread.']] as const) {
       await page.getByRole('button', { name: `About ${name}` }).click();
       await expect.element(page.getByText(tip)).toBeVisible();

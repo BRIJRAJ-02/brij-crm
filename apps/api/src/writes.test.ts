@@ -2272,6 +2272,11 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     });
     return [{ kind: 'jobs', mutation_id: mutationId }];
   },
+  // The whole workspace as a file (the data io lane): the export row and its job, in the owner's one write.
+  'exports.startWorkspace': async (m, mutationId) => {
+    await m.client.exports.startWorkspace({ workspace: m.slug, id: newId(), mutationId });
+    return [{ kind: 'jobs', mutation_id: mutationId }];
+  },
   // Background jobs (spec 0008): one jobs row per write, naming the job.
   'jobs.startTest': async (m, mutationId) => {
     const job = await m.client.jobs.startTest({ workspace: m.slug, id: newId(), items: 3, mutationId });

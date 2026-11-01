@@ -135,6 +135,8 @@ describe('automations and their runs', () => {
         'form_submission',
         'join_request',
         'mention',
+        // A followed record's activity (the follows lane, migration 0158).
+        'record_activity',
         'reply',
         'scheduling_changed',
         'task_assigned',

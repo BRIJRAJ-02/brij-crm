@@ -130,7 +130,8 @@ describe('a save over a value its author never saw (spec 0006, AC-45, AC-46)', (
     });
     expect(beas.values[title]).toBe('Engineer');
     const rows = await outboxOf(m.workspace.id);
-    expect(rows.at(-1)).toEqual({
+    // The record's own row, not the last one: a follower's notice (the follows lane) queues its row after it.
+    expect(rows.filter((row) => row.kind === 'records').at(-1)).toEqual({
       kind: 'records',
       record_ids: [person.id],
       mutation_id: mutationId,
