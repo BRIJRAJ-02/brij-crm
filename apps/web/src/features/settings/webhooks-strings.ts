@@ -29,8 +29,14 @@ export const strings = {
   atLimit: 'You have 10 endpoints, the most a workspace can have.',
   emptyTitle: 'No endpoints yet',
   emptyText: 'Add one to send events to Zapier, Make, n8n or your own server.',
-  unavailableTitle: 'Webhooks aren’t set up here yet',
-  unavailableText: 'Check back soon.',
+  /**
+   * Where this server has no signing secret (spec 0064): webhooks are off rather than unsigned, so nothing is
+   * queued and nothing is sent. The variable is named, since the person who can fix it is whoever runs the server.
+   */
+  unavailableTitle: 'Webhooks are paused',
+  unavailableBefore: 'Nothing is queued or sent until this server has its signing secret, so no event ever leaves unsigned. Whoever runs the server sets ',
+  unavailableKey: 'WEBHOOK_SECRET_KEY',
+  unavailableAfter: ', and this page works straight away.',
   failedTitle: 'Webhooks didn’t load',
   failedText: 'Try again in a moment.',
   columnEndpoint: 'Endpoint',

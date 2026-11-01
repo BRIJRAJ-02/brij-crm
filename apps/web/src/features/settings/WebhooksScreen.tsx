@@ -119,7 +119,9 @@ export function WebhooksScreen({ data, toasts, slug, initial }: WebhooksScreenPr
     return (
       <SettingsPage title={strings.title} titleRef={titleRef}>
         <EmptyState icon="plug" title={strings.unavailableTitle}>
-          {strings.unavailableText}
+          {strings.unavailableBefore}
+          <Code>{strings.unavailableKey}</Code>
+          {strings.unavailableAfter}
         </EmptyState>
       </SettingsPage>
     );

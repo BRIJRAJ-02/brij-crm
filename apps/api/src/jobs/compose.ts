@@ -280,7 +280,14 @@ export function composeJobTasks(options: JobTasksOptions): JobTasks {
               payload,
             );
         })();
-  if (webhookDeliver === undefined) log.info('webhooks.off', { reason: 'WEBHOOK_SECRET_KEY is not set' });
+  // One line at boot, not one per attempt: with no key nothing is queued and nothing is sent, so there is no
+  // backlog to drain and nothing unsigned ever leaves. Setting the key and restarting is the only step (spec 0064).
+  if (webhookDeliver === undefined) {
+    log.info('webhooks.off', {
+      reason: 'WEBHOOK_SECRET_KEY is not set',
+      effect: 'no webhook is queued or sent; set the key and restart to turn them on',
+    });
+  }
 
   return {
     registry,

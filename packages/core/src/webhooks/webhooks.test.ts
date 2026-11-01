@@ -347,8 +347,22 @@ describe('delivering (AC-6423, AC-6425)', () => {
       [workspaceId],
     );
     expect(emails).toHaveLength(1);
-    // Its waiting try finds it off and gives up.
-    expect(await loadWebhookDelivery(system, key, { deliveryId })).toEqual({ kind: 'skip', reason: 'off' });
+    // Its waiting try was given up in the transaction that turned the endpoint off, so nothing stale is left to
+    // flush when it is switched back on, and the queue row finds it finished.
+    expect(await loadWebhookDelivery(system, key, { deliveryId })).toEqual({ kind: 'skip', reason: 'done' });
+    // Each active owner and admin has the in app notice beside the email (AC-6423).
+    const notices = await testQuery<{ member_id: string; kind: string; webhook_endpoint_id: string }>(
+      ownerUrl,
+      `select member_id::text, kind::text as kind, webhook_endpoint_id::text as webhook_endpoint_id
+       from notifications where workspace_id = $1 and kind::text = 'webhook_off'`,
+      [workspaceId],
+    );
+    expect(notices).toHaveLength(1);
+    expect(notices[0]).toMatchObject({ webhook_endpoint_id: endpointId });
+    // The reader sees it as the inbox draws it: the host only, never the endpoint's path.
+    const inbox = await core.listNotifications(owner, { status: 'inbox' });
+    const notice = inbox.items.find((item) => item.kind === 'webhook_off');
+    expect(notice).toMatchObject({ webhookEndpointId: endpointId, excerpt: 'a.example.com' });
     const on = await core.updateWebhook(owner, deps, { endpointId, status: 'active' });
     expect(on).toMatchObject({ status: 'active' });
     expect(on.offReason).toBeUndefined();

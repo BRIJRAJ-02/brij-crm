@@ -5,7 +5,10 @@
 // (match, fill or always, choices by label, refused values skipped, one
 // person for two racing submissions), its timeline entry, and the
 // submissions screen's reads and actions.
+import { randomBytes } from 'node:crypto';
 import { sql } from 'drizzle-orm';
+import { createWebhook } from '../webhooks/endpoints.ts';
+import { decodeWebhookKey } from '../webhooks/signing.ts';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import type { FormDocument, FormQuestion, SubmitBody } from '@crm/contracts';
 import { createDatabase, type Database } from '@crm/db';
@@ -897,6 +900,68 @@ describe('processing a submission (AC-557, AC-558, AC-561, AC-562, AC-564, AC-56
     expect(await refusalOf(retrySubmission(w.scope, registry, { submissionId: submission.id }))).toMatchObject([
       { code: 'FORM_STATE' },
     ]);
+  });
+});
+
+describe('a submission taken as received fires form.submitted (spec 0064, AC-6422)', () => {
+  const webhookDeps = { key: decodeWebhookKey(randomBytes(32).toString('base64')), checkHost: () => Promise.resolve(undefined) };
+
+  /** The `form.submitted` deliveries queued in the workspace, oldest first. */
+  const fired = (w: Awaited<ReturnType<typeof workspace>>) =>
+    w.query<{ event_type: string }>(
+      sql`select event_type from webhook_deliveries where event_type = 'form.submitted' order by created_at, id`,
+    );
+
+  it('fires once when a held one is accepted, and never twice for the same submission', async () => {
+    const w = await workspace();
+    await createWebhook(w.scope, webhookDeps, {
+      url: 'https://hooks.example.com/forms',
+      description: '',
+      events: ['form.submitted'],
+    });
+    const live = await liveForm(w);
+
+    // A clean one is received as it arrives, so it fires there.
+    await submit(live.publicKey, body({ name: 'Ada', email: 'ada@example.com' }));
+    expect(await fired(w)).toHaveLength(1);
+
+    // One held in Needs review never counted as received, so it fires only when it is resolved as not spam.
+    await submit(live.publicKey, body({ name: 'Xkcdqwrt', email: 'one@mailinator.com' }));
+    const held = (await submissionIds(w, live.id)).find((each) => each.state === 'needs_review');
+    if (held === undefined) throw new Error('Nothing was held for review.');
+    expect(await fired(w)).toHaveLength(1);
+    await resolveSubmission(w.scope, registry, { submissionId: held.id, resolution: { kind: 'not_spam' } });
+    expect(await fired(w)).toHaveLength(2);
+
+    // Marked as spam and released: it fires again, since the release is the first time this one is received.
+    await markSubmissionSpam(w.scope, { submissionId: held.id });
+    expect(await fired(w)).toHaveLength(2);
+    await releaseSubmission(w.scope, registry, { submissionId: held.id });
+    expect(await fired(w)).toHaveLength(3);
+  });
+
+  it('fires nothing when a held one is settled as spam, and nothing on a retry', async () => {
+    const w = await workspace();
+    await createWebhook(w.scope, webhookDeps, {
+      url: 'https://hooks.example.com/forms',
+      description: '',
+      events: ['form.submitted'],
+    });
+    const live = await liveForm(w);
+    await submit(live.publicKey, body({ name: 'Bcdfghj', email: 'two@mailinator.com' }));
+    const held = (await submissionIds(w, live.id)).find((each) => each.state === 'needs_review');
+    if (held === undefined) throw new Error('Nothing was held for review.');
+    await resolveSubmission(w.scope, registry, { submissionId: held.id, resolution: { kind: 'spam' } });
+    expect(await fired(w)).toEqual([]);
+
+    // A failed one fired when it arrived, so its retry must not fire a second time for the same submission.
+    await submit(live.publicKey, body({ name: 'Ada', email: 'ada@example.com' }));
+    const clean = (await submissionIds(w, live.id)).find((each) => each.state === 'received');
+    if (clean === undefined) throw new Error('Nothing was received.');
+    expect(await fired(w)).toHaveLength(1);
+    await w.query(sql`update form_submissions set state = 'failed' where id = ${clean.id}`);
+    await retrySubmission(w.scope, registry, { submissionId: clean.id });
+    expect(await fired(w)).toHaveLength(1);
   });
 });
 
