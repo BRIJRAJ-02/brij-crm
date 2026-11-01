@@ -102,7 +102,12 @@ export function BookingReceipt({
         <header className={styles.head}>
           <span className={styles.avatar}>
             <Avatar name={hostName} size="lg" isDecorative {...(hostImage === undefined ? {} : { src: hostImage })} />
-            <span className={styles.mark} data-state={state} aria-hidden="true">
+            <span
+              className={styles.mark}
+              data-state={state}
+              data-welcome={(isLive && isWelcome) || undefined}
+              aria-hidden="true"
+            >
               <Icon name={state === 'confirmed' ? 'check' : state === 'cancelled' ? 'x' : 'clock'} size="xs" />
             </span>
           </span>

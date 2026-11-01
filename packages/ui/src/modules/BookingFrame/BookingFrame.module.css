@@ -203,6 +203,12 @@
     animation: fact-in var(--reveal-duration) var(--ease-in-out);
   }
 
+  /* Loading to content (stageshow's loading): the host's block resolves in where its skeleton stood, so the page
+     fills in rather than swapping. */
+  .identity[data-arrived] {
+    animation: fact-in var(--reveal-duration) var(--ease-in-out) backwards;
+  }
+
   .factBody {
     min-inline-size: 0;
     overflow-wrap: anywhere;

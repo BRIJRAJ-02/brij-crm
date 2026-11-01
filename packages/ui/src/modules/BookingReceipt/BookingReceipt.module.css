@@ -86,6 +86,31 @@
     animation: mark-pop var(--reveal-duration) var(--ease-out) var(--duration-hover) both;
   }
 
+  /* Right after booking, the tick sends two soft rings out across the avatar as it lands, one after the other: the
+     page's one moment of celebration (the owner, 2 November 2026: magical moments), quiet enough to read as a pulse,
+     never confetti. */
+  .mark[data-welcome] {
+    /* How far a ring travels, in the mark's own sizes: out past the avatar's edge. No scale token reaches past 1. */
+    --ring-reach: 3;
+  }
+
+  .mark[data-welcome]::before,
+  .mark[data-welcome]::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border: var(--border-width-thick) solid var(--tag-green-text);
+    border-radius: var(--radius-full);
+    opacity: 0;
+    animation: mark-ring calc(var(--reveal-duration) * 2) var(--ease-out)
+      calc(var(--reveal-duration) + var(--duration-hover));
+    pointer-events: none;
+  }
+
+  .mark[data-welcome]::after {
+    animation-delay: calc(var(--reveal-duration) * 1.5 + var(--duration-hover));
+  }
+
   .mark[data-state='cancelled'] {
     background: var(--tag-red-bg);
     color: var(--tag-red-text);
@@ -298,7 +323,9 @@
       animation-name: receipt-fade;
     }
 
-    .mark {
+    .mark,
+    .mark[data-welcome]::before,
+    .mark[data-welcome]::after {
       animation: none;
     }
 
@@ -326,6 +353,17 @@
   @keyframes receipt-fade {
     from {
       opacity: 0;
+    }
+  }
+
+  @keyframes mark-ring {
+    from {
+      opacity: var(--opacity-pulse);
+    }
+
+    to {
+      opacity: 0;
+      scale: var(--ring-reach);
     }
   }
 

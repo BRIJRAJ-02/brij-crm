@@ -233,8 +233,10 @@ export function BookingChat({
             autoComplete="off"
           />
         </div>
+        {/* Quiet while there is nothing to send, the accent once there is (ai-chat's composer): a faded blue button
+            read as broken (the owner, 2 November 2026: the chat box looked weird). */}
         <Button
-          variant="primary"
+          variant={draft.trim() === '' ? 'ghost' : 'primary'}
           size="lg"
           icon="arrow-up"
           label={strings.send}

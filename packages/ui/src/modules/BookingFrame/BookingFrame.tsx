@@ -165,6 +165,9 @@ export function BookingFrame({
   // details step) is drawn anew and resolves in.
   const [firstFacts] = useState(() => new Set(facts.map(factKey)));
   const [firstHeading] = useState(heading);
+  // A page that opened on its skeleton: when the host arrives, their block resolves in top down rather than
+  // swapping in at once (loading to content). A page that opened with its facts is simply there.
+  const [openedLoading] = useState(isLoading);
   const isCovered = cover !== undefined;
   const isCardCovered = isCovered && coverPlace === 'card';
   const claim = claimHref === undefined ? {} : { claimHref };
@@ -219,7 +222,7 @@ export function BookingFrame({
               </ul>
             </div>
           ) : (
-            <div className={styles.identity}>
+            <div className={styles.identity} data-arrived={openedLoading || undefined}>
               {host.team === undefined ? (
                 <Avatar
                   name={host.name}

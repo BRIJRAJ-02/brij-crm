@@ -208,8 +208,17 @@ export function BookingDetails({
   const headingId = useId();
   const trapId = useId();
   const heading = useRef<HTMLHeadingElement>(null);
-  // The step's heading takes focus as it arrives: no field grabs it, so a phone keeps its keyboard down.
-  useEffect(() => heading.current?.focus(), []);
+  // The first empty field takes focus as the step arrives, so a visitor at a keyboard just types (the owner,
+  // 2 November 2026); under a finger the heading takes it instead, so a phone keeps its keyboard down until a field is
+  // tapped.
+  useEffect(() => {
+    const first = globalThis.matchMedia('(pointer: fine)').matches
+      ? [...(form.current?.querySelectorAll<HTMLInputElement>('input[name="name"], input[name="email"]') ?? [])].find(
+          (input) => input.value === '',
+        )
+      : undefined;
+    (first ?? heading.current)?.focus();
+  }, []);
   const focusField = (field: string) =>
     globalThis.requestAnimationFrame(() => form.current?.querySelector<HTMLElement>(`[name="${field}"]`)?.focus());
 

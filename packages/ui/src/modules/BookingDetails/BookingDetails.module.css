@@ -15,6 +15,7 @@
     --panel-duration: 480ms;
 
     display: flex;
+    flex: 1;
     flex-direction: column;
     gap: var(--space-16);
     inline-size: 100%;
@@ -159,7 +160,10 @@
     animation: line-in var(--duration-move) var(--ease-out) both;
   }
 
+  /* Back and Confirm sit at the card's foot, where Book sat on the step before (as Cal.com keeps them), so the card
+     keeps the month's size, nothing on the page shifts, and the press moves from Book to Confirm in one place. */
   .actions {
+    margin-block-start: auto;
     display: flex;
     align-items: center;
     justify-content: flex-end;

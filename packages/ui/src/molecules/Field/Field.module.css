@@ -97,6 +97,17 @@
     resize: none;
   }
 
+  /* A phone zooms the page into a field whose text is under 16px (iOS Safari), so under a finger every field's text
+     is 16px and the page stays put as it is tapped (the owner, 2 November 2026). */
+  @media (pointer: coarse) {
+    .input {
+      /* stylelint-disable-next-line unit-disallowed-list -- the size iOS needs to not zoom; no text token is 16px */
+      --touch-text: 16px;
+
+      font-size: var(--touch-text);
+    }
+  }
+
   .input::placeholder {
     color: var(--text-tertiary);
   }

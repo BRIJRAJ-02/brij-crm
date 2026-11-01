@@ -24,7 +24,8 @@ export const Default: Story = {
     </Stage>
   ),
   play: async ({ canvas, args }) => {
-    await expect(canvas.getByRole('heading', { name: 'Your details' })).toHaveFocus();
+    // At a pointer, the first empty field takes focus as the step arrives.
+    await expect(canvas.getByRole('textbox', { name: /Your name/ })).toHaveFocus();
     await userEvent.click(canvas.getByRole('button', { name: 'Confirm booking' }));
     await expect(canvas.getByText('Give your name.')).toBeInTheDocument();
     await waitFor(() => expect(canvas.getByRole('textbox', { name: /Your name/ })).toHaveFocus());
