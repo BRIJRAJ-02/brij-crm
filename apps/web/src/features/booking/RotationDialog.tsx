@@ -138,6 +138,9 @@ export function RotationDialog({
     rotation?.members.find((member) => member.memberId === memberId)?.name ??
     memberId;
 
+  // Who may host, by id: one lookup per row, not a search of the whole list on every keystroke.
+  const hostIds = new Set(people.map((person) => person.id));
+
   const change = (memberId: string, patch: Partial<Draft>) =>
     setMembers((current) => current.map((member) => (member.memberId === memberId ? { ...member, ...patch } : member)));
   const left: SelectItem[] = people
@@ -153,16 +156,30 @@ export function RotationDialog({
   const isSameTeam = isFollowing && source === rotation?.followsTeamId;
   const isSettingsOnly = isRoster || isSameTeam;
   // Who a newly picked team brings, as far as this screen knows: its people who can host (guests never).
-  const teamHosts = (followed?.memberIds ?? []).filter((memberId) => people.some((person) => person.id === memberId));
+  const teamIds = new Set(followed?.memberIds ?? []);
+  const teamHosts = [...teamIds].filter((memberId) => hostIds.has(memberId));
   const isThin = isFollowing && (isSameTeam ? members.length : teamHosts.length) < 2;
+  // The Members choice is an admin's, for any group but Everyone on the roster.
+  const hasMembersChoice = !isRoster && teams.length > 0;
+  // What a group following the workspace or a team holds, in a line: who is on, or who a newly picked team brings.
+  const followNote = isThin
+    ? undefined
+    : isSettingsOnly
+      ? // Without the Members choice (an editor), the line names the team the group follows.
+        isSameTeam && !hasMembersChoice
+        ? strings.followsCount(followedName, members.filter((member) => member.isOn).length, members.length)
+        : strings.rosterNote(members.filter((member) => member.isOn).length, members.length)
+      : isFollowing
+        ? strings.followsTeamLine(followedName)
+        : undefined;
   // Who a save takes out: anyone not in a newly followed team, or anyone removed from a picked list.
   const removed = isSettingsOnly
     ? []
     : (rotation?.members ?? []).filter((member) =>
-        isFollowing
-          ? !(followed?.memberIds ?? []).includes(member.memberId)
-          : !members.some((each) => each.memberId === member.memberId),
+        isFollowing ? !teamIds.has(member.memberId) : !members.some((each) => each.memberId === member.memberId),
       );
+  // Past 20 shows at once (a team's people kept on switching back to people you pick); too few once Save was tried.
+  const isTooMany = !isRoster && !isFollowing && members.length > 20;
   const countError =
     isRoster || isFollowing
       ? undefined
@@ -195,7 +212,9 @@ export function RotationDialog({
     setTried(true);
     const trimmed = name.trim();
     setNameError(trimmed === '' ? strings.nameRequired : undefined);
-    const weights = members.map((member) => weightOf(member.weight));
+    // A newly followed team saves no rows: the hidden table's weights aren't checked.
+    const isSendingRows = !isFollowing || isSameTeam;
+    const weights = (isSendingRows ? members : []).map((member) => weightOf(member.weight));
     if (trimmed === '' || countError !== undefined || weights.some((weight) => weight === undefined)) return;
     if (rotation !== undefined && removed.length > 0 && !isConfirming) {
       setConfirming(true);
@@ -492,31 +511,44 @@ export function RotationDialog({
               if (value === 'owner' || value === 'last_host' || value === 'none') setReturning(value);
             }}
           />
-          {!isRoster && teams.length > 0 && (
+          {hasMembersChoice && (
             <Select
               label={strings.membersFrom}
               items={[
                 { id: CHOSEN, label: strings.chosenPeople },
-                ...teams.map((team) => ({ id: team.id, label: team.name, description: strings.followsTeamHint })),
+                ...teams.map((team) => ({
+                  id: team.id,
+                  label: team.name,
+                  // How many can host, so a thin team shows before it is picked.
+                  description: strings.peopleCount(team.memberIds.filter((memberId) => hostIds.has(memberId)).length),
+                })),
+                // The team it follows, read before it went from the list: still named, so the field never shows blank.
+                ...(rotation?.followsTeamId !== undefined && !teams.some((team) => team.id === rotation.followsTeamId)
+                  ? [{ id: rotation.followsTeamId, label: rotation.followsTeamName ?? '' }]
+                  : []),
               ]}
               value={source}
+              // Who a followed team brings, as a plain line under the choice; only the warning gets a box.
+              {...(followNote === undefined ? {} : { hint: followNote })}
               onChange={(value) => {
                 if (value === null) return;
                 setSource(value);
                 setFailure(undefined);
+                // What shows always matches what a save sends: drafts made for another choice start again from the saved
+                // group (a new group keeps the people picked so far).
+                if (rotation !== undefined) setMembers(rotation.members.map(draftOf));
               }}
             />
           )}
-          {isRoster || isSameTeam ? (
-            <Callout tone={isThin ? 'warning' : 'info'}>
-              {isThin
-                ? strings.needsTwo
-                : strings.rosterNote(members.filter((member) => member.isOn).length, members.length)}
-            </Callout>
-          ) : isFollowing ? (
-            <Callout tone={isThin ? 'warning' : 'info'}>
-              {isThin ? strings.needsTwo : strings.followsTeamLine(followedName)}
-            </Callout>
+          {isRoster || isFollowing ? (
+            isThin ? (
+              <Callout tone="warning" isAnnounced>
+                {strings.needsTwo}
+              </Callout>
+            ) : (
+              // Without the Members choice (Everyone on the roster, an editor), the line keeps its own place.
+              !hasMembersChoice && followNote !== undefined && <Callout tone="info">{followNote}</Callout>
+            )
           ) : (
             <Select
               label={strings.addMember}
@@ -527,7 +559,7 @@ export function RotationDialog({
               value={null}
               // Who can join, in plain words (SS-R1): a link here would open the reader's own hours, not a teammate's.
               hint={strings.membersHint(members.length)}
-              {...(hasTried && countError !== undefined ? { error: countError } : {})}
+              {...((hasTried || isTooMany) && countError !== undefined ? { error: countError } : {})}
               onChange={(memberId) => {
                 if (memberId === null) return;
                 setMembers((current) => [

@@ -175,8 +175,13 @@ export async function eligibleMembers(
     )
     .orderBy(asc(rotationRoster.position), asc(members.name), asc(rotationRoster.memberId));
   // A rotation following a team with fewer than 2 people offers no times (spec 0037, AC-1327).
-  const thin = await thinFollowers(tx, rotationIds);
-  for (const { rotationId, ...member } of rows) if (!thin.has(rotationId)) found.get(rotationId)?.push(member);
+  for (const { rotationId, ...member } of rows) found.get(rotationId)?.push(member);
+  // Only a rotation with at most one eligible can be thin, so the usual read asks nothing more.
+  const thin = await thinFollowers(
+    tx,
+    rotationIds.filter((id) => (found.get(id)?.length ?? 0) <= 1),
+  );
+  for (const id of thin) found.set(id, []);
   return found;
 }
 

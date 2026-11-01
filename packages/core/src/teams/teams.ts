@@ -21,7 +21,7 @@ import { actorRow } from '../engine/scope.ts';
 import { runWrite, type AfterWrite, type WriteContext } from '../engine/write.ts';
 import { writeAudit, type AuditSource } from '../members/audit.ts';
 import type { RemovalEffect } from '../members/removal-effect.ts';
-import { dropTeamLeavers, rotationsFollowing } from '../rotation/follow-team.ts';
+import { dropTeamLeavers, lockTeamFollowers, rotationsFollowing } from '../rotation/follow-team.ts';
 import { deleteTeamDelegations } from '../scheduling/delegations.ts';
 import { membersAffectedByTeamChange, membersOfTeams } from './reach.ts';
 
@@ -167,6 +167,20 @@ async function applyMembers(
             .onConflictDoNothing()
             .returning({ memberId: teamMembers.memberId })
         ).map((row) => row.memberId);
+  // The rotations following the team are locked before anyone's team row goes (AC-1442), as a removal takes them.
+  // The writer's own member row comes first (key share, what the audit row's foreign key takes later anyway): a
+  // removal holds the owners' rows `for update` before its rotation locks, so taking it after them would close a cycle.
+  if (removing.length > 0) {
+    const writerIds = writer(scope);
+    if (writerIds.length > 0) {
+      await tx
+        .select({ id: members.id })
+        .from(members)
+        .where(and(eq(members.workspaceId, scope.workspaceId), inArray(members.id, [...writerIds])))
+        .for('key share');
+    }
+    await lockTeamFollowers(tx, teamId);
+  }
   const left =
     removing.length === 0
       ? []

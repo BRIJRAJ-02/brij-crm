@@ -20,7 +20,8 @@ export const FOLLOWING_MIN = 2;
 export const FOLLOW_FORBIDDEN = 'Only an admin can make a group follow a team.';
 
 /**
- * The team a rotation is to follow, its row held `for key share` until the change commits, so a delete of the team
+ * The team a rotation is to follow, its row held `for key share` until the change commits (after the rotation's own
+ * row lock `for no key update`, which a team's delete never conflicts with: its restrict check takes only key share), so a delete of the team
  * waits for it and then finds the rotation (`TEAM_IN_USE`); a team gone meanwhile is refused on `followsTeamId`.
  * Taken before the rotation's advisory lock, in the order `changeTeamMembers` takes the team's and then its rotations'.
  */
@@ -38,20 +39,27 @@ export async function teamToFollow(
 }
 
 /**
- * A team's leavers drop out of every rotation following it (AC-1442): their own settings for those rotations are
- * deleted in one statement, in the membership change's transaction, under each rotation's lock (in id order, after
- * the team's row lock), so a pick in flight finishes first and a rejoiner starts at the pool's average. Their
- * bookings stay theirs. Nothing for a joiner: the roster reads them at once.
+ * Takes the locks of every live rotation following `teamId`, in id order, before a membership change deletes anyone's
+ * `team_members` row (after the team's row lock): the order a member's removal takes them too (rotation locks, then
+ * their team rows), so the two never wait on each other in a cycle, and a pick in flight finishes first.
  */
-export async function dropTeamLeavers(tx: WorkspaceTx, teamId: string, left: readonly string[]): Promise<void> {
-  if (left.length === 0) return;
+export async function lockTeamFollowers(tx: WorkspaceTx, teamId: string): Promise<void> {
   const following = await tx
     .select({ id: rotations.id, workspaceId: rotations.workspaceId })
     .from(rotations)
     .where(and(eq(rotations.follows, 'team'), eq(rotations.followsTeamId, teamId), isNull(rotations.deletedAt)))
     .orderBy(asc(rotations.id));
-  if (following.length === 0) return;
   for (const rotation of following) await lockRotation(tx, rotation.workspaceId, rotation.id);
+}
+
+/**
+ * A team's leavers drop out of every rotation following it (AC-1442): their own settings for those rotations are
+ * deleted in one statement, in the membership change's transaction, under the locks `lockTeamFollowers` took, so a
+ * rejoiner starts at the pool's average. Their bookings stay theirs. Nothing for a joiner: the roster reads them at
+ * once.
+ */
+export async function dropTeamLeavers(tx: WorkspaceTx, teamId: string, left: readonly string[]): Promise<void> {
+  if (left.length === 0) return;
   await tx.execute(sql`
     delete from rotation_members rm
     using rotations r
@@ -73,7 +81,8 @@ export async function rotationsFollowing(tx: WorkspaceTx, teamId: string): Promi
 
 /**
  * Of `rotationIds`, the rotations following a team with fewer than `FOLLOWING_MIN` members on the roster (on or off):
- * they offer no times (AC-1327). One grouped read, and none at all when no id given follows a team.
+ * they offer no times (AC-1327). One grouped read; `eligibleMembers` asks only about rotations with at most one
+ * member eligible, since a thin rotation can't have more.
  */
 export async function thinFollowers(tx: WorkspaceTx, rotationIds: readonly string[]): Promise<ReadonlySet<string>> {
   if (rotationIds.length === 0) return new Set();

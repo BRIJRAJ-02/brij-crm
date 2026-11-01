@@ -586,9 +586,30 @@ export async function updateRotation(
         checkMemberCount(input.members);
         await replaceMembers(tx, scope, row, input.members, now);
       }
-      await checkStillBooks(tx, row.id);
     }
+    // A live page behind it must still offer times: after new members, or after it follows another team or none.
+    if (input.members !== undefined || follow !== undefined) await checkStillBooks(tx, row.id);
+    if (follow !== undefined) await followChanged(tx, scope, current, row);
     return firstOf(await viewsOf(tx, scope, [row], now));
+  });
+}
+
+/**
+ * What a rotation follows changed (AC-1327): one `rotation.changed` row with the team before and after, even when
+ * nobody joined or left by it, since from then on the team's members decide who takes its bookings.
+ */
+async function followChanged(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  before: RotationRow,
+  after: RotationRow,
+): Promise<void> {
+  await writeAudit(tx, scope.workspaceId, scope.actor, {
+    action: 'rotation.changed',
+    targetType: 'rotation',
+    targetId: after.id,
+    before: { name: before.name, follows: before.follows, followsTeamId: before.followsTeamId },
+    after: { name: after.name, follows: after.follows, followsTeamId: after.followsTeamId },
   });
 }
 

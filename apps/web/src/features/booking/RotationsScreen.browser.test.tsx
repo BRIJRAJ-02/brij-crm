@@ -563,6 +563,91 @@ describe('a group that follows a team (spec 0037, AC-1327)', () => {
     });
   });
 
+  it('turns a team’s group back into people you pick, sending the people and no team', async () => {
+    const data = layerWith([FOLLOWING]);
+    shown = await renderInApp(
+      () => (
+        <RotationDialog
+          data={data}
+          slug="acme"
+          people={[ADA, MAYA]}
+          teams={[SALES_TEAM, SUPPORT_TEAM]}
+          rotation={FOLLOWING}
+          isOpen
+          onClose={() => undefined}
+          onSaved={() => undefined}
+        />
+      ),
+      { data, pattern: '/w/$slug/settings/scheduling/round-robin', at: '/w/acme/settings/scheduling/round-robin' },
+    );
+    await userEvent.click(page.getByRole('button', { name: /^Sales/ }));
+    await userEvent.click(page.getByRole('option', { name: new RegExp(`^${strings.chosenPeople}`) }));
+    await expect.element(page.getByRole('button', { name: strings.remove(MAYA.name), exact: true })).toBeVisible();
+    await userEvent.click(page.getByRole('button', { name: strings.save, exact: true }));
+    expect(data.rotations.update).toHaveBeenLastCalledWith('acme', FOLLOWING.id, {
+      settings: { name: 'Sales', strategy: 'fair', windowDays: 30, evenGap: 3, returning: 'owner' },
+      followsTeamId: null,
+      members: [ADA, MAYA].map((person) => ({
+        memberId: person.id,
+        weight: 100,
+        priority: 2,
+        dailyCap: null,
+        weeklyCap: null,
+        isOn: true,
+      })),
+    });
+  });
+
+  it('says at once that a team of more than 20 is too many for people you pick', async () => {
+    const many = Array.from({ length: 22 }, (_, index) => ({
+      ...FOLLOWING.members[0],
+      memberId: `0199a6f2-0000-7000-8000-0000000001${String(index).padStart(2, '0')}`,
+      name: `Rep ${String(index)}`,
+    })) as RotationView['members'];
+    const big: RotationView = { ...FOLLOWING, members: many };
+    const data = layerWith([big]);
+    shown = await renderInApp(
+      () => (
+        <RotationDialog
+          data={data}
+          slug="acme"
+          people={[ADA, MAYA]}
+          teams={[SALES_TEAM, SUPPORT_TEAM]}
+          rotation={big}
+          isOpen
+          onClose={() => undefined}
+          onSaved={() => undefined}
+        />
+      ),
+      { data, pattern: '/w/$slug/settings/scheduling/round-robin', at: '/w/acme/settings/scheduling/round-robin' },
+    );
+    await userEvent.click(page.getByRole('button', { name: /^Sales/ }));
+    await userEvent.click(page.getByRole('option', { name: new RegExp(`^${strings.chosenPeople}`) }));
+    await expect.element(page.getByText(strings.tooMany)).toBeVisible();
+    await userEvent.click(page.getByRole('button', { name: strings.save, exact: true }));
+    expect(data.rotations.update).not.toHaveBeenCalled();
+  });
+
+  it('names the team for an editor, who has no Members choice', async () => {
+    const data = layerWith([FOLLOWING]);
+    shown = await renderInApp(
+      () => (
+        <RotationDialog
+          data={data}
+          slug="acme"
+          people={[ADA, MAYA]}
+          rotation={FOLLOWING}
+          isOpen
+          onClose={() => undefined}
+          onSaved={() => undefined}
+        />
+      ),
+      { data, pattern: '/w/$slug/settings/scheduling/round-robin', at: '/w/acme/settings/scheduling/round-robin' },
+    );
+    await expect.element(page.getByText(strings.followsCount('Sales', 2, 2))).toBeVisible();
+    expect(page.getByRole('button', { name: /^Sales/ }).elements()).toEqual([]);
+  });
+
   it('asks before a new team leaves someone out', async () => {
     const data = layerWith([FOLLOWING]);
     shown = await renderInApp(

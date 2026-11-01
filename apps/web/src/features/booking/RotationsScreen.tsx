@@ -320,9 +320,9 @@ export function RotationsScreen({ data, slug, people, canManage, teams = [], inF
               description={
                 rotation.follows === 'everyone'
                   ? strings.rosterSummary(rotation.members.filter((member) => member.isOn).length, rotation.pages)
-                  : rotation.follows === 'team'
+                  : rotation.follows === 'team' && rotation.followsTeamName !== undefined
                     ? strings.teamSummary(
-                        rotation.followsTeamName ?? '',
+                        rotation.followsTeamName,
                         rotation.members.filter((member) => member.isOn).length,
                         rotation.pages,
                       )

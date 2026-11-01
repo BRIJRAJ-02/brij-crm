@@ -191,7 +191,9 @@ export const strings = {
   // A group that follows a team (spec 0037, AC-1327).
   membersFrom: 'Members',
   chosenPeople: 'People you pick',
-  followsTeamHint: 'Follows the team',
+  peopleCount: (count: number) => (count === 1 ? '1 person' : `${String(count)} people`),
+  /** An editor's line for a group following a team (no Members choice): which team, and who is on. */
+  followsCount: (team: string, on: number, all: number) => `Follows ${team}. ${String(on)} of ${String(all)} on.`,
   followsTeamLine: (team: string) => `Everyone in ${team}, including people who join later.`,
   needsTwo: 'Needs 2 people',
   teamSummary: (team: string, on: number, pages: number) =>

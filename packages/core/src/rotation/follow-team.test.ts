@@ -12,12 +12,14 @@ import { createDatabase, type Database } from '@crm/db';
 import { enterBookingPage } from '../access/door.ts';
 import type { EngineScope } from '../access/mint.ts';
 import { saveDefaultHours } from '../availability/schedules.ts';
+import { setEditors } from '../scheduling/editors.ts';
 import type { BookingCalendar } from '../booking/calendar.ts';
 import { createBookingPage } from '../booking/pages.ts';
 import { bookPublicSlot, readPublicSlots } from '../booking/public.ts';
 import { newId } from '../engine/ids.ts';
 import { isRefusal } from '../engine/refusals.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
+import { removeMember } from '../members/members.ts';
 import { changeTeamMembers, createTeam, deleteTeam } from '../teams/teams.ts';
 import { rescope, testScope } from '../testing.ts';
 import { createRotation, deleteRotation, listRotations, updateRotation } from './rotations.ts';
@@ -267,6 +269,87 @@ describe('a rotation that follows a team (AC-1327)', () => {
     ).toMatchObject({ code: 'CONFIG_INVALID', field: 'followsTeamId' });
   });
 
+  it('refuses an editor following, or unfollowing, a team, and lets their save of the same team through', async () => {
+    const w = await workspace();
+    const sam = await w.addMember('Sam Lee');
+    const kim = await w.addMember('Kim Park');
+    const eve = await w.addMember('Eve Editor');
+    const sales = await team(w, 'Sales', [sam.id, kim.id]);
+    const support = await team(w, 'Support', [sam.id, kim.id]);
+    const editor = rescope(w.owner, { actor: { type: 'member', id: eve.id }, role: 'member' });
+    const pooled = (memberId: string) => ({
+      memberId,
+      weight: 100,
+      priority: 2,
+      dailyCap: null,
+      weeklyCap: null,
+      isOn: true,
+    });
+    const chosen = await createRotation(
+      w.owner,
+      { id: newId(), settings: SETTINGS, members: [pooled(sam.id), pooled(kim.id)] },
+      NOW,
+    );
+    const { rotation: followingSales } = await following(w, sales.id, 'Inbound');
+    for (const rotation of [chosen, followingSales]) {
+      await setEditors(w.owner, { resourceType: 'rotation', resourceId: rotation.id, memberIds: [eve.id] });
+    }
+    const rowsBefore = await storedRows(w, chosen.id);
+    expect(
+      await refusalOf(updateRotation(editor, { rotationId: chosen.id, settings: {}, followsTeamId: sales.id }, NOW)),
+    ).toMatchObject({ code: 'FORBIDDEN', field: 'followsTeamId' });
+    expect((await viewOf(w.owner, chosen.id)).follows).toBeUndefined();
+    expect(await storedRows(w, chosen.id)).toEqual(rowsBefore);
+    expect(
+      await refusalOf(
+        updateRotation(editor, { rotationId: followingSales.id, settings: {}, followsTeamId: support.id }, NOW),
+      ),
+    ).toMatchObject({ code: 'FORBIDDEN' });
+    expect(
+      await refusalOf(
+        updateRotation(
+          editor,
+          {
+            rotationId: followingSales.id,
+            settings: {},
+            followsTeamId: null,
+            members: [pooled(sam.id), pooled(kim.id)],
+          },
+          NOW,
+        ),
+      ),
+    ).toMatchObject({ code: 'FORBIDDEN' });
+    expect((await viewOf(w.owner, followingSales.id)).followsTeamId).toBe(sales.id);
+    // Sending the team it already follows is no change: a rename by the editor saves.
+    const renamed = await updateRotation(
+      editor,
+      { rotationId: followingSales.id, settings: { name: 'Inbound sales' }, followsTeamId: sales.id },
+      NOW,
+    );
+    expect(renamed).toMatchObject({ name: 'Inbound sales', followsTeamId: sales.id });
+  });
+
+  it('refuses following a team of one behind a live page, and audits a switch even when nobody moves', async () => {
+    const w = await workspace();
+    const sam = await w.addMember('Sam Lee');
+    const kim = await w.addMember('Kim Park');
+    const sales = await team(w, 'Sales', [sam.id, kim.id]);
+    const solo = await team(w, 'Solo', [sam.id]);
+    const twin = await team(w, 'Twin', [sam.id, kim.id]);
+    const { rotation } = await following(w, sales.id);
+    expect(
+      await refusalOf(updateRotation(w.owner, { rotationId: rotation.id, settings: {}, followsTeamId: solo.id }, NOW)),
+    ).toMatchObject({ code: 'IN_USE' });
+    await updateRotation(w.owner, { rotationId: rotation.id, settings: {}, followsTeamId: twin.id }, NOW);
+    const audited = await db.withWorkspace(w.workspaceId, (tx) =>
+      tx.execute<{ after: { followsTeamId?: string } }>(
+        sql`select after from audit_events where action = 'rotation.changed' and target_id = ${rotation.id}
+          and after ? 'followsTeamId' order by at desc limit 1`,
+      ),
+    );
+    expect(audited.rows[0]?.after.followsTeamId).toBe(twin.id);
+  });
+
   it('turns a rotation of chosen people into one following a team, and back, keeping the stayers’ settings', async () => {
     const w = await workspace();
     const sam = await w.addMember('Sam Lee');
@@ -421,6 +504,29 @@ describe('a team change moves a following rotation with no write but a leaver’
       priority: 2,
       count: average,
     });
+  });
+});
+
+describe('a team change beside a member’s removal (AC-1442)', () => {
+  it('takes the locks in one order, so leaving the team while being removed never deadlocks', async () => {
+    const w = await workspace();
+    const people = await Promise.all(['A', 'B', 'C', 'D', 'E', 'F'].map((name) => w.addMember(`Rep ${name}`)));
+    const ids = people.map((person) => person.id);
+    const sales = await team(w, 'Sales', ids);
+    await following(w, sales.id, 'Inbound');
+    await following(w, sales.id, 'Outbound');
+    const settled = await Promise.allSettled(
+      ids
+        .slice(0, 4)
+        .flatMap((memberId) => [
+          changeTeamMembers(w.owner, { teamId: sales.id, remove: [memberId] }),
+          removeMember(w.owner, { memberId }),
+        ]),
+    );
+    for (const each of settled) {
+      if (each.status === 'rejected') expect(String((each.reason as { code?: string }).code)).not.toBe('40P01');
+    }
+    expect(settled.flatMap((each) => (each.status === 'rejected' ? [String(each.reason)] : []))).toEqual([]);
   });
 });
 

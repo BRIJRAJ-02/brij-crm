@@ -20,7 +20,8 @@ export const Route = createFileRoute('/w/$slug/bookings/round-robin')({
       const [people, teams] = await Promise.all([
         context.data.members.list(params.slug),
         // The teams a group may follow (spec 0037, AC-1327): only an admin picks one.
-        canManage ? context.data.teams.list(params.slug) : Promise.resolve([]),
+        // Optional: a failed read leaves the choice out rather than the tab.
+        canManage ? context.data.teams.list(params.slug).catch(() => []) : Promise.resolve([]),
         context.data.rotations.view(params.slug).ready(),
       ]);
       // A guest is never offered as a member of a group or as its editor: guests take no bookings (spec 0031, slice 9).

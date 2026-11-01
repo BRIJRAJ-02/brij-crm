@@ -114,9 +114,14 @@ export async function keepRosterRows(
 ): Promise<void> {
   if (memberIds.length === 0) return;
   const [rotation] = await tx
-    .execute<{ follows: string | null; window_days: number; stored: string[] }>(
+    .execute<{ follows: string | null; window_days: number; stored: string[]; unstored: boolean }>(
       sql`
     select r.follows, r.window_days,
+      -- A team's rotation stores everyone switched on: is anyone not stored yet? (Usually not, so no roster read.)
+      r.follows = 'team' and exists (
+        select 1 from rotation_roster rr where rr.workspace_id = r.workspace_id and rr.rotation_id = r.id
+          and rr.is_on and not rr.stored
+      ) as unstored,
       array(
         select m.member_id::text from rotation_members m
         where m.workspace_id = r.workspace_id and m.rotation_id = r.id and m.member_id = any(${uuidArray(memberIds)})
@@ -129,7 +134,7 @@ export async function keepRosterRows(
   const stored = new Set(rotation.stored);
   const isTeam = rotation.follows === 'team';
   const wanted = new Set(memberIds.filter((id) => !stored.has(id)));
-  if (wanted.size === 0 && !isTeam) return;
+  if (wanted.size === 0 && !(isTeam && rotation.unstored)) return;
   const roster = await tx
     .select({
       memberId: rotationRoster.memberId,
