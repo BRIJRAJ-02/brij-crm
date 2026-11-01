@@ -49,10 +49,22 @@
     gap: var(--space-4);
   }
 
+  /* Two even rows on a narrow form: half the points (rounded up) in each, the first row the longer. */
   @container (inline-size < 480px) {
-    .root[data-scale='long'] .chips {
-      grid-template-columns: repeat(6, minmax(0, 1fr));
+    .root[data-columns] .chips {
       grid-auto-flow: row;
+    }
+
+    .root[data-columns='4'] .chips {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .root[data-columns='5'] .chips {
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+
+    .root[data-columns='6'] .chips {
+      grid-template-columns: repeat(6, minmax(0, 1fr));
     }
   }
 

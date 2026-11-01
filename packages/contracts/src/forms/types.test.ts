@@ -165,6 +165,13 @@ describe('batch two: signature and ranking (spec 0063, AC-6307, AC-6310)', () =>
     expect(one(ranking, ['Linear', 'Linear', 'Slack'])).toEqual(refusal);
     expect(one(ranking, ['Linear', 'Slack', 'Jira'])).toEqual(refusal);
     expect(one(ranking, 'Linear')).toEqual(refusal);
+    // A blank choice's key names no choice the visitor saw.
+    const blank: CheckedForm['questions'][number] = {
+      ...ranking,
+      choices: ['Slack', '', 'Linear'],
+      choiceKeys: ['slack', 'gap', 'linear'],
+    };
+    expect(one(blank, ['gap', 'Slack'])).toEqual(refusal);
   });
 
   it('asks a required ranking left untouched, and leaves an optional one out', () => {

@@ -9,6 +9,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from 'react';
 import { DragHandle } from '../atoms/DragHandle/DragHandle.tsx';
+import { VisuallyHidden } from '../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { FieldGroup } from '../molecules/FieldGroup/FieldGroup.tsx';
 import styles from './RankingQuestion.module.css';
 
@@ -61,6 +62,7 @@ export function RankingQuestion({ questionKey, label, words, choices, value, err
   // The visitor's order while it still names exactly the form's choices; else the form's own.
   const order = held.length === offered.length && held.every((each) => offered.includes(each)) ? held : offered;
   const count = order.length;
+  const isAnswered = order === held;
   const [lift, setLift] = useState<Lift | undefined>(undefined);
   const [said, setSaid] = useState('');
   const helpId = useId();
@@ -73,6 +75,27 @@ export function RankingQuestion({ questionKey, label, words, choices, value, err
     refocus.current = undefined;
     list.current?.querySelector<HTMLElement>(`[data-ranking-row="${CSS.escape(id)}"] button`)?.focus();
   });
+  // Rows glide from where they were to where they are after an order changes; at once under reduced motion.
+  const places = useRef(new Map<string, number>());
+  useLayoutEffect(() => {
+    const box = list.current;
+    if (box === null) return;
+    const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const style = getComputedStyle(box);
+    const duration = Number.parseFloat(style.getPropertyValue('--duration-move'));
+    const easing = style.getPropertyValue('--ease-in-out').trim();
+    for (const row of box.querySelectorAll<HTMLElement>('[data-ranking-row]')) {
+      const id = row.dataset.rankingRow ?? '';
+      const top = row.offsetTop;
+      const before = places.current.get(id);
+      places.current.set(id, top);
+      if (still || before === undefined || before === top || !Number.isFinite(duration)) continue;
+      row.animate([{ transform: `translateY(${String(before - top)}px)` }, { transform: 'none' }], {
+        duration,
+        ...(easing === '' ? {} : { easing }),
+      });
+    }
+  }, [order]);
   // A pointer drag that outlives the question ends with it.
   const dragEnd = useRef<(() => void) | undefined>(undefined);
   useEffect(
@@ -84,12 +107,8 @@ export function RankingQuestion({ questionKey, label, words, choices, value, err
 
   const drop = (id: string, to: number) => {
     setLift(undefined);
-    const from = order.indexOf(id);
-    if (from === to) {
-      setSaid(words.moveDropped(id, from + 1, count));
-      return;
-    }
-    refocus.current = id;
+    // A drop where it was still answers: the visitor has looked at the order and kept it.
+    if (order.indexOf(id) !== to) refocus.current = id;
     onChange(moved(order, id, to));
     setSaid(words.moveDropped(id, to + 1, count));
   };
@@ -136,8 +155,12 @@ export function RankingQuestion({ questionKey, label, words, choices, value, err
     event.preventDefault();
     let to = order.indexOf(id);
     setLift({ id, to });
+    // Middles as measured at the grab, kept against the page, so a scroll during the drag still lands right.
+    const scrolled = window.scrollY;
     const move = (moving: PointerEvent) => {
-      to = dropAt(middles, id, moving.clientY);
+      const next = dropAt(middles, id, moving.clientY + window.scrollY - scrolled);
+      if (next === to) return;
+      to = next;
       setLift({ id, to });
     };
     const stop = () => {
@@ -198,21 +221,17 @@ export function RankingQuestion({ questionKey, label, words, choices, value, err
                 },
               }}
             />
-            <span className={styles.place} aria-hidden="true">
+            <span className={styles.place} data-answered={isAnswered || undefined} aria-hidden="true">
               {index + 1}
             </span>
             <span>{choice}</span>
           </li>
         ))}
       </ol>
-      {/* Read, never seen. Not VisuallyHidden: its React Aria focus code, imported by this chunk alone, split the
-          app's shared chunks and cost the app's first load about 1 kB (31 October 2026). */}
-      <span id={helpId} className={styles.spoken}>
-        {words.moveHelp}
-      </span>
-      <span aria-live="assertive" className={styles.spoken}>
-        {said}
-      </span>
+      <VisuallyHidden id={helpId}>{words.moveHelp}</VisuallyHidden>
+      <VisuallyHidden>
+        <span aria-live="polite">{said}</span>
+      </VisuallyHidden>
     </FieldGroup>
   );
 }

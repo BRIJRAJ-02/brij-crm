@@ -1,5 +1,5 @@
 import type { FormStrings } from '@crm/contracts/forms';
-import { useEffect, useRef, useState, type PointerEvent } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent } from 'react';
 import { Button } from '../atoms/Button/Button.tsx';
 import { VisuallyHidden } from '../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { Field } from '../molecules/Field/Field.tsx';
@@ -102,6 +102,23 @@ function paint(
   }
 }
 
+/** What a pad holds: its strokes, or the name typed instead. */
+interface PadContent {
+  readonly strokes: readonly Stroke[];
+  readonly typed: string | undefined;
+}
+
+/** Paints the pad in the page's own text colour, at the screen's density. */
+function repaintPad(canvas: HTMLCanvasElement | null, content: PadContent): void {
+  if (canvas === null) return;
+  const ratio = window.devicePixelRatio || 1;
+  const width = Math.round(canvas.clientWidth * ratio);
+  const height = Math.round(canvas.clientHeight * ratio);
+  if (canvas.width !== width) canvas.width = width;
+  if (canvas.height !== height) canvas.height = height;
+  paint(canvas, width, height, content, getComputedStyle(canvas).color);
+}
+
 /** The PNG of the strokes or the typed name, ink on paper, ready to send. */
 async function pictureOf(content: {
   readonly strokes: readonly Stroke[];
@@ -119,8 +136,9 @@ async function pictureOf(content: {
 
 /**
  * A hosted form's Signature question (spec 0063, AC-6307, AC-6308): a pad drawn on with a pointer, or a name typed
- * instead and set in a script face, so nobody needs a pointer to sign. What shows is what is kept: a PNG of the ink
- * on paper, sent once the visitor pauses (the form waits for it before going on). Clear starts again.
+ * instead and set in a script face, so nobody needs a pointer to sign. What shows is what is kept, in the page's ink:
+ * the picture sent is the same strokes or name, ink on paper, sent once the visitor pauses (the form waits for it
+ * before going on). A failure shows under the pad; signing again sends again. Clear starts again.
  */
 export function SignatureQuestion({
   questionKey,
@@ -135,40 +153,49 @@ export function SignatureQuestion({
   const [strokes, setStrokes] = useState<readonly Stroke[]>([]);
   const [typed, setTyped] = useState<string | undefined>(undefined);
   const [said, setSaid] = useState('');
+  // Why the last picture didn't go: shown under the pad as the question's error, and read.
+  const [failure, setFailure] = useState<string | undefined>(undefined);
   const pad = useRef<HTMLCanvasElement>(null);
   const drawing = useRef<[number, number][] | undefined>(undefined);
   // The newest change: an upload answered after a later change is stale, and is taken back.
   const round = useRef(0);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const sent = useRef<string | undefined>(held?.fileId);
+  // A picture waiting out its pause: on unmount it is dropped, and the form must not stay waiting for it.
+  const waiting = useRef(false);
   const isDisabled = files === undefined;
   const isTyping = typed !== undefined;
-  const isEmpty = isTyping ? typed.trim() === '' : strokes.length === 0;
+  // Signed on an earlier visit to this step: the answer is held, though this pad drew nothing yet.
+  const isKept = held !== undefined && !isTyping && strokes.length === 0;
+  const isEmpty = isTyping ? typed.trim() === '' : strokes.length === 0 && !isKept;
 
-  // The pad draws in the page's own text colour, at the screen's density, again whenever its size changes.
+  // What the pad shows, read by the painter: the strokes kept, the one being drawn, or the typed name.
+  const content = useRef<PadContent>({ strokes: [], typed: undefined });
+  useLayoutEffect(() => {
+    content.current = { strokes, typed };
+    repaintPad(pad.current, content.current);
+  }, [strokes, typed]);
+  // Again whenever its size changes (one observer for the pad's life).
   useEffect(() => {
     const canvas = pad.current;
     if (canvas === null) return;
-    const draw = () => {
-      const ratio = window.devicePixelRatio || 1;
-      const width = canvas.clientWidth * ratio;
-      const height = canvas.clientHeight * ratio;
-      if (canvas.width !== Math.round(width)) canvas.width = Math.round(width);
-      if (canvas.height !== Math.round(height)) canvas.height = Math.round(height);
-      paint(canvas, canvas.width, canvas.height, { strokes, typed }, getComputedStyle(canvas).color);
-    };
-    draw();
-    const observer = new ResizeObserver(draw);
+    const observer = new ResizeObserver(() => {
+      repaintPad(canvas, content.current);
+    });
     observer.observe(canvas);
     return () => {
       observer.disconnect();
     };
-  }, [strokes, typed]);
+  }, []);
 
   useEffect(
     () => () => {
       clearTimeout(timer.current);
+      // Left (Back, or hidden by an answer) before its pause ended: nothing is going, so nothing holds the form.
+      if (waiting.current) files?.setBusy(questionKey, false);
     },
+    // Only on leaving: the handlers and the key stay the question's own.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
 
@@ -178,7 +205,10 @@ export function SignatureQuestion({
     round.current += 1;
     const mine = round.current;
     clearTimeout(timer.current);
-    onChange(undefined);
+    waiting.current = false;
+    setFailure(undefined);
+    setSaid('');
+    if (value !== undefined) onChange(undefined);
     const empty = next.typed === undefined ? next.strokes.length === 0 : next.typed.trim() === '';
     const previous = sent.current;
     if (previous !== undefined) {
@@ -190,13 +220,15 @@ export function SignatureQuestion({
       return;
     }
     files.setBusy(questionKey, true);
+    waiting.current = true;
     timer.current = setTimeout(() => {
+      waiting.current = false;
       void (async () => {
         const picture = await pictureOf(next);
         if (mine !== round.current) return;
         if (picture === undefined) {
           files.setBusy(questionKey, false);
-          setSaid(words.fileFailed);
+          setFailure(words.fileFailed);
           return;
         }
         const outcome = await files.upload(picture, () => undefined);
@@ -209,9 +241,10 @@ export function SignatureQuestion({
         if (outcome.kind === 'done') {
           sent.current = outcome.file.fileId;
           onChange(outcome.file);
+          setSaid(words.signed);
           return;
         }
-        setSaid(
+        setFailure(
           outcome.kind === 'rejected'
             ? outcome.message
             : outcome.kind === 'limited'
@@ -224,6 +257,15 @@ export function SignatureQuestion({
     }, SETTLE_MS);
   };
 
+  const finish = () => {
+    const stroke = drawing.current;
+    if (stroke === undefined) return;
+    drawing.current = undefined;
+    const next = [...strokes, [...stroke]];
+    setStrokes(next);
+    changed({ strokes: next, typed: undefined });
+  };
+
   const pointAt = (event: PointerEvent<HTMLCanvasElement>): [number, number] => {
     const box = event.currentTarget.getBoundingClientRect();
     const x = (event.clientX - box.left) / Math.max(1, box.width);
@@ -234,13 +276,15 @@ export function SignatureQuestion({
   return (
     <FieldGroup
       label={label}
-      {...(error === undefined ? {} : { error })}
+      {...((error ?? failure) === undefined ? {} : { error: error ?? failure })}
       {...(isDisabled ? { hint: words.signaturePreview } : {})}
     >
       <div className={styles.root} data-question-signature={questionKey}>
         {isTyping && (
           <Field
             label={words.typedName}
+            // The question's own label is above; the pad below shows the name as it will be kept.
+            isLabelHidden
             name={`${questionKey}.typed`}
             value={typed}
             maxLength={80}
@@ -261,34 +305,29 @@ export function SignatureQuestion({
             data-typed={isTyping || undefined}
             data-disabled={isDisabled || undefined}
             role="img"
-            aria-label={isTyping ? typed.trim() || words.signHere : words.signHere}
+            aria-label={isTyping ? typed.trim() || words.signHere : isKept ? words.signed : words.signHere}
             onPointerDown={(event) => {
               if (isDisabled || isTyping || event.button !== 0) return;
               event.currentTarget.setPointerCapture(event.pointerId);
               drawing.current = [pointAt(event)];
-              setStrokes((current) => [...current, drawing.current ?? []]);
+              content.current = { strokes: [...strokes, drawing.current], typed: undefined };
+              repaintPad(pad.current, content.current);
             }}
             onPointerMove={(event) => {
               const stroke = drawing.current;
               if (stroke === undefined) return;
+              // Drawn straight onto the pad while the pointer moves; React hears of the stroke when it ends.
               stroke.push(pointAt(event));
-              setStrokes((current) => [...current.slice(0, -1), [...stroke]]);
+              content.current = { strokes: [...strokes, stroke], typed: undefined };
+              repaintPad(pad.current, content.current);
             }}
-            onPointerUp={() => {
-              const stroke = drawing.current;
-              if (stroke === undefined) return;
-              drawing.current = undefined;
-              const next = [...strokes.slice(0, -1), [...stroke]];
-              setStrokes(next);
-              changed({ strokes: next, typed: undefined });
-            }}
-            onPointerCancel={() => {
-              drawing.current = undefined;
-            }}
+            onPointerUp={finish}
+            // A system gesture or palm rejection ends the stroke as lifting would, so what shows is what is kept.
+            onPointerCancel={finish}
           />
-          {isEmpty && !isTyping && (
+          {(isEmpty || isKept) && !isTyping && (
             <span className={styles.placeholder} aria-hidden="true">
-              {words.signPlaceholder}
+              {isKept ? words.signed : words.signPlaceholder}
             </span>
           )}
         </div>

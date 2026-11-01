@@ -41,7 +41,6 @@
   }
 
   .pad[data-disabled] {
-    cursor: not-allowed;
     opacity: var(--opacity-disabled);
   }
 

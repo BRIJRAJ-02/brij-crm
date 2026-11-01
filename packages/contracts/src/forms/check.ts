@@ -236,14 +236,15 @@ function rankingOf(
   words: FormStrings,
 ): { value?: RankingAnswer; error?: string } {
   const offered = (choices ?? []).filter((choice) => choice.trim() !== '');
-  if (!Array.isArray(raw) || raw.length !== offered.length) return { error: words.rankAll };
+  if (!Array.isArray(raw) || offered.length === 0 || raw.length !== offered.length) return { error: words.rankAll };
   const order: string[] = [];
   for (const each of raw) {
     if (typeof each !== 'string') return { error: words.rankAll };
     const value = each.trim();
     const at = (choiceKeys ?? []).indexOf(value);
     const label = offered.includes(value) ? value : at === -1 ? undefined : choices?.[at];
-    if (label === undefined || order.includes(label)) return { error: words.rankAll };
+    // A blank choice's key names no choice the visitor was shown.
+    if (label === undefined || !offered.includes(label) || order.includes(label)) return { error: words.rankAll };
     order.push(label);
   }
   return { value: order };

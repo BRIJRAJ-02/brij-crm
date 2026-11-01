@@ -494,6 +494,8 @@ export function useHostedForm({
             remove: onRemoveUpload ?? (() => Promise.resolve()),
             setBusy: (key, isBusy) => {
               setBusy((current) => {
+                // Unchanged, the same set: a signature typed key by key says busy on every key.
+                if (current.has(key) === isBusy) return current;
                 const next = new Set(current);
                 if (isBusy) next.add(key);
                 else next.delete(key);

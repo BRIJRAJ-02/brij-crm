@@ -118,4 +118,63 @@ describe('signature and ranking (spec 0063, AC-6307, AC-6308)', () => {
     window.dispatchEvent(new PointerEvent('pointerup', { clientX: x, clientY: (first?.top ?? 0) + 2, pointerId: 1 }));
     await expect.poll(() => host.querySelector('[data-ranking-row]')?.textContent).toBe('1Support');
   });
+
+  it('lets a visitor go Back mid pause and still send, and shows the kept signature on return', async () => {
+    const uploads: File[] = [];
+    const sent: HostedSubmission[] = [];
+    drawn = mountHostedForm(
+      host,
+      {
+        ...FORM,
+        layout: 'steps',
+        steps: [
+          { id: 'one', keys: ['rank'] },
+          { id: 'two', keys: ['sign'] },
+        ],
+      },
+      {
+        mode: 'page',
+        onUpload: (file) => {
+          uploads.push(file);
+          return Promise.resolve({
+            kind: 'done',
+            file: {
+              fileId: '01a19070-abed-72aa-bda5-e28af82c31e3',
+              name: file.name,
+              size: file.size,
+              contentType: file.type,
+            },
+          });
+        },
+        onRemoveUpload: () => Promise.resolve(),
+        onSubmit: (submission) => {
+          sent.push(submission);
+          return Promise.resolve({ kind: 'done', next: { kind: 'message', text: '' } });
+        },
+      },
+    );
+    // Keeping the shown order answers: pick a row up and put it down where it was.
+    const price = page.getByRole('button', { name: 'Move Price' });
+    await expect.element(price).toBeVisible();
+    (price.element() as HTMLElement).focus();
+    await userEvent.keyboard(' ');
+    await userEvent.keyboard(' ');
+    await userEvent.click(page.getByRole('button', { name: 'Continue' }));
+    // Type a name, then go Back before the pause ends: nothing is sent, and nothing holds the form.
+    await userEvent.click(page.getByRole('button', { name: 'Type your name instead' }));
+    await userEvent.keyboard('Ada');
+    await userEvent.click(page.getByRole('button', { name: 'Back' }));
+    await userEvent.click(page.getByRole('button', { name: 'Continue' }));
+    expect(uploads.length).toBe(0);
+    await userEvent.click(page.getByRole('button', { name: 'Type your name instead' }));
+    await userEvent.keyboard('Ada Lovelace');
+    await expect.poll(() => uploads.length, { timeout: 3_000 }).toBe(1);
+    // Back and on again: the pad says it is signed, and Send goes.
+    await userEvent.click(page.getByRole('button', { name: 'Back' }));
+    await userEvent.click(page.getByRole('button', { name: 'Continue' }));
+    await expect.element(page.getByRole('img', { name: 'Signed' })).toBeVisible();
+    await userEvent.click(page.getByRole('button', { name: 'Send' }));
+    await expect.poll(() => sent.length).toBe(1);
+    expect(sent[0]?.answers).toMatchObject({ rank: ['Price', 'Speed', 'Support'] });
+  });
 });

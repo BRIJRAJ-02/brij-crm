@@ -41,8 +41,11 @@ function asksForFile(document: FormDocument): boolean {
   return document.questions.some((question) => UPLOAD_ANSWER_TYPES.includes(question.answerType));
 }
 
-/** The form's live document when it is live and asks for a file; otherwise the refusal that says why. */
-async function liveFileForm(tx: WorkspaceTx, formId: string): Promise<void> {
+/**
+ * The form's live document when it is live and asks for a file or a signature; otherwise the refusal that says why.
+ * `signatureOnly` when its only upload question is a signature, so the door takes only a signature's PNG.
+ */
+async function liveFileForm(tx: WorkspaceTx, formId: string): Promise<{ readonly signatureOnly: boolean }> {
   const form = await loadForm(tx, formId);
   if (form === undefined || form.liveVersionId === null || form.status === 'draft' || form.status === 'archived') {
     throw refuse('NOT_FOUND', 'That form does not exist.');
@@ -50,6 +53,7 @@ async function liveFileForm(tx: WorkspaceTx, formId: string): Promise<void> {
   if (form.status !== 'live') throw refuse('FORM_CLOSED', 'This form isn’t taking enquiries right now.');
   const live = (await loadVersions(tx, [form.liveVersionId])).get(form.liveVersionId);
   if (live === undefined || !asksForFile(live.document)) throw refuse('NOT_FOUND', NOT_TAKING_FILES);
+  return { signatureOnly: !live.document.questions.some((question) => question.answerType === 'file') };
 }
 
 /** Whether the public scope's form is the one `scope` was made for (the public door names exactly one form). */
@@ -62,17 +66,23 @@ function ownForm(scope: EngineScope, formId: string): void {
 
 /**
  * Whether a visitor may upload to this form now: it is live and asks for a file, and holds fewer than
- * `UPLOADS_OPEN_PER_FORM` unattached uploads. `busy` is a rate limit's answer; anything else is a refusal.
+ * `UPLOADS_OPEN_PER_FORM` unattached uploads. `busy` is a rate limit's answer; `signature` means it asks only for a
+ * signature, so the caller takes nothing but a PNG under `SIGNATURE_UPLOAD.maxBytes` (spec 0063); anything else is a
+ * refusal.
  */
-export async function prepareUpload(scope: EngineScope, input: { readonly formId: string }): Promise<'ok' | 'busy'> {
+export async function prepareUpload(
+  scope: EngineScope,
+  input: { readonly formId: string },
+): Promise<'ok' | 'signature' | 'busy'> {
   ownForm(scope, input.formId);
   return inWorkspace(scope, async (tx) => {
-    await liveFileForm(tx, input.formId);
+    const { signatureOnly } = await liveFileForm(tx, input.formId);
     const [open] = await tx
       .select({ count: sql<number>`count(*)::int` })
       .from(formUploads)
       .where(and(eq(formUploads.formId, input.formId), isNull(formUploads.submissionId)));
-    return (open?.count ?? 0) >= UPLOADS_OPEN_PER_FORM ? 'busy' : 'ok';
+    if ((open?.count ?? 0) >= UPLOADS_OPEN_PER_FORM) return 'busy';
+    return signatureOnly ? 'signature' : 'ok';
   });
 }
 

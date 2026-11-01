@@ -28,6 +28,7 @@
   /* The row picked up, by pointer or key. */
   .row[data-lifted] {
     border-color: var(--accent-line);
+    background: var(--surface-hover);
     box-shadow: var(--shadow-control);
   }
 
@@ -50,21 +51,16 @@
     inset-block-end: calc(-1 * var(--space-4));
   }
 
+  /* Quiet until the visitor has made the order theirs. */
   .place {
     min-inline-size: var(--space-16);
-    color: var(--text-secondary);
+    color: var(--text-tertiary);
     font: var(--text-label-strong);
     letter-spacing: var(--tracking-label);
     font-variant-numeric: tabular-nums;
   }
 
-  /* What a screen reader hears about moving a row, and each move said aloud: in the page, taking no space. */
-  .spoken {
-    position: absolute;
-    inline-size: var(--border-width-hairline);
-    block-size: var(--border-width-hairline);
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
+  .place[data-answered] {
+    color: var(--text-secondary);
   }
 }

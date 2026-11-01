@@ -69,7 +69,9 @@ export function ChoiceChips({
     <div
       className={styles.root}
       data-disabled={isDisabled || undefined}
-      data-scale={ends === undefined ? undefined : choices.length > 7 ? 'long' : 'short'}
+      // A scale is any run with `ends`, its words given or not; past 7 points it may fold into two rows.
+      data-scale={ends === undefined ? undefined : 'scale'}
+      data-columns={ends !== undefined && choices.length > 7 ? Math.ceil(choices.length / 2) : undefined}
     >
       {isLabelHidden ? (
         <VisuallyHidden>

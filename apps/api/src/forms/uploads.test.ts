@@ -252,13 +252,14 @@ describe('form uploads', () => {
   });
 
   // Spec 0063, batch two: a signature is an upload too, but only the PNG a page draws, under 300 kB.
-  it('takes a signature as a drawn PNG, and refuses any other upload as one', async () => {
+  it('takes a signature as a drawn PNG, and refuses any other upload or id as one', async () => {
     const { live } = await formWithFile({ id: 'sign', key: 'sign', label: 'Sign here', answerType: 'signature' });
     const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
     const drawn = (await (await upload(live.publicKey, png, 'image/png', 'signature.png')).json()) as {
       fileId: string;
     };
-    const pdf = (await (await upload(live.publicKey, PDF)).json()) as { fileId: string };
+    // The door takes nothing else from a form that asks only for a signature.
+    expect((await upload(live.publicKey, PDF)).status).toBe(400);
     const signed = (fileId: string) => ({
       idempotencyKey: newId(),
       versionNumber: 1,
@@ -266,7 +267,7 @@ describe('form uploads', () => {
       hidden: {},
       fillMs: 8_000,
     });
-    expect((await submit(live.publicKey, signed(pdf.fileId))).status).toBe(422);
+    expect((await submit(live.publicKey, signed(newId()))).status).toBe(422);
     expect((await submit(live.publicKey, signed(drawn.fileId))).status).toBe(200);
   });
 });
