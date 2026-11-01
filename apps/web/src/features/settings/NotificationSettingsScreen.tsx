@@ -1,8 +1,8 @@
 // Brief
-// Purpose: Settings › Account › Notifications (spec 0038): what reaches this person by email from this workspace.
-// Main task: turn each kind of email, and the daily digest, on or off; each switch saves at once, then says so in a
-// toast with Undo.
-// Leaves out: the in app inbox (always on, said under the Email heading), other workspaces' settings, push notifications.
+// Purpose: Settings › Account › Notifications (spec 0038): what reaches this person from this workspace.
+// Main task: turn records they follow in the inbox, each kind of email, and the daily digest on or off; each switch
+// saves at once, then says so in a toast with Undo.
+// Leaves out: the rest of the inbox (always on, said under the Email heading), other workspaces, push notifications.
 import type { InboxSettings, NotificationSettings, NotificationSettingsChange } from '@crm/data';
 import { useNotificationSettings } from '@crm/data/react';
 import { Card, EmptyState, InfoTip, Skeleton, SettingsRow, SettingsSection, Switch } from '@crm/ui';
@@ -27,7 +27,7 @@ const KINDS: readonly Kind[] = [
 /** True while `shown` still has every switch `change` set: an Undo for an older change does nothing. */
 export function stillShown(shown: NotificationSettings | undefined, change: NotificationSettingsChange): boolean {
   if (shown === undefined) return false;
-  const switches = ['emailMentions', 'emailReplies', 'emailAssignments', 'digest'] as const;
+  const switches = ['emailMentions', 'emailReplies', 'emailAssignments', 'digest', 'followedRecords'] as const;
   return switches.every((key) => change[key] === undefined || change[key] === shown[key]);
 }
 
@@ -100,40 +100,60 @@ export function NotificationSettingsScreen({ slug, settings }: NotificationSetti
   } else {
     const shown = state.settings;
     email = (
-      // A section like every other settings page's: the heading above the card, and the inbox's promise said
-      // in a line rather than hidden in a tip.
-      <SettingsSection title={strings.email} description={strings.emailDescription}>
-        <Card>
-          {KINDS.map((kind) => (
-            <SettingsRow key={kind.key} title={kind.title}>
+      <>
+        {/* What reaches the inbox beyond what always does: changes to records they follow (collaboration). */}
+        <SettingsSection title={strings.inbox}>
+          <Card>
+            <SettingsRow
+              title={strings.followed}
+              meta={<InfoTip label={strings.followed}>{strings.followedInfo}</InfoTip>}
+            >
               <Switch
-                label={kind.title}
+                label={strings.followed}
                 isLabelHidden
-                isSelected={shown[kind.key]}
+                isSelected={shown.followedRecords}
                 onChange={(isSelected) => {
-                  save({ [kind.key]: isSelected }, { [kind.key]: !isSelected });
+                  save({ followedRecords: isSelected }, { followedRecords: !isSelected });
                 }}
               />
             </SettingsRow>
-          ))}
-          <SettingsRow title={strings.digest} meta={<InfoTip label={strings.digest}>{strings.digestInfo}</InfoTip>}>
-            <Switch
-              label={strings.digest}
-              isLabelHidden
-              isSelected={shown.digest}
-              onChange={(isSelected) => {
-                // The digest comes at 8 in the morning in the time zone this browser has now. Undo after turning it
-                // off puts it back on in the zone it had.
-                const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-                save(
-                  isSelected ? { digest: true, timeZone: zone } : { digest: false },
-                  isSelected ? { digest: false } : { digest: true, timeZone: shown.timeZone ?? zone },
-                );
-              }}
-            />
-          </SettingsRow>
-        </Card>
-      </SettingsSection>
+          </Card>
+        </SettingsSection>
+        {/* A section like every other settings page's: the heading above the card, and the inbox's promise said in
+            a line rather than hidden in a tip. */}
+        <SettingsSection title={strings.email} description={strings.emailDescription}>
+          <Card>
+            {KINDS.map((kind) => (
+              <SettingsRow key={kind.key} title={kind.title}>
+                <Switch
+                  label={kind.title}
+                  isLabelHidden
+                  isSelected={shown[kind.key]}
+                  onChange={(isSelected) => {
+                    save({ [kind.key]: isSelected }, { [kind.key]: !isSelected });
+                  }}
+                />
+              </SettingsRow>
+            ))}
+            <SettingsRow title={strings.digest} meta={<InfoTip label={strings.digest}>{strings.digestInfo}</InfoTip>}>
+              <Switch
+                label={strings.digest}
+                isLabelHidden
+                isSelected={shown.digest}
+                onChange={(isSelected) => {
+                  // The digest comes at 8 in the morning in the time zone this browser has now. Undo after turning it
+                  // off puts it back on in the zone it had.
+                  const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                  save(
+                    isSelected ? { digest: true, timeZone: zone } : { digest: false },
+                    isSelected ? { digest: false } : { digest: true, timeZone: shown.timeZone ?? zone },
+                  );
+                }}
+              />
+            </SettingsRow>
+          </Card>
+        </SettingsSection>
+      </>
     );
   }
 

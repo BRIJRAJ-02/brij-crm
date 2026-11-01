@@ -1,6 +1,6 @@
 // Brief
 // Purpose: everything that needs the person in this workspace, on `/w/$slug/inbox`: mentions, replies, tasks given to them
-// or due today, and new submissions to the forms they're told about.
+// or due today, new submissions to the forms they're told about, and changes to records they follow.
 // Main task: open each new one where it lives (the comment's thread, the task), and clear the inbox as they go.
 // Leaves out: email and digest settings (Settings › Account › Notifications), other people's notifications, search.
 import type { InboxList, MemberSummary, NotificationView, ObjectSummary } from '@crm/data';
@@ -54,6 +54,7 @@ const KINDS: readonly { readonly value: 'all' | InboxKind; readonly label: strin
   { value: 'assignments', label: strings.assignments, icon: 'user-check' },
   { value: 'due', label: strings.dueToday, icon: 'calendar-clock' },
   { value: 'submissions', label: strings.submissions, icon: 'clipboard-list' },
+  { value: 'following', label: strings.following, icon: 'bell' },
 ];
 
 /** The list's notifications as NotificationList's rows, each mapped once while the members stay, loading more near the end. */

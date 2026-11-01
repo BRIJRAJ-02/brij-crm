@@ -27,7 +27,10 @@ import { Menu, MenuItem, MenuTrigger } from '../../molecules/Menu/Menu.tsx';
 import { useDelayedLoading } from '../../provider/useDelayedLoading.ts';
 import { CommentText } from '../CommentThread/CommentThread.tsx';
 import styles from './NotificationList.module.css';
+import { activitySentence, type NotificationActivity } from './activity.ts';
 import { strings } from './strings.ts';
+
+export type { NotificationActivity } from './activity.ts';
 
 /** Why a member was notified. */
 export type NotificationItemKind =
@@ -38,7 +41,8 @@ export type NotificationItemKind =
   | 'form_submission'
   | 'join_request'
   | 'automation'
-  | 'scheduling_changed';
+  | 'scheduling_changed'
+  | 'record_activity';
 
 /** One notification, as the inbox shows it. */
 export interface NotificationItem {
@@ -56,6 +60,8 @@ export interface NotificationItem {
   readonly isNote?: boolean;
   /** A form's new submission: the form's name, which its sentence names ("New submission to Contact us"). */
   readonly formName?: string;
+  /** A followed record's activity: its sentence counts it ("Ada changed 3 fields"). */
+  readonly activity?: NotificationActivity;
   /** The comment's start (mention tokens kept), or the task's title. */
   readonly excerpt: string;
 }
@@ -186,9 +192,11 @@ export function NotificationList({
     const sentence =
       item.kind === 'form_submission'
         ? strings.submission(item.formName ?? strings.someForm)
-        : item.isNote === true
-          ? strings.mentionInNote(item.actor.name)
-          : strings.sentence[item.kind](item.actor.name);
+        : item.activity !== undefined
+          ? activitySentence(item.actor.name, item.activity)
+          : item.isNote === true
+            ? strings.mentionInNote(item.actor.name)
+            : strings.sentence[item.kind](item.actor.name);
     return (
       <GridListItem
         id={row.id}

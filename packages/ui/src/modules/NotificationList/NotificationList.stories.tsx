@@ -98,7 +98,19 @@ function SampleInbox({
       isDone: false,
       excerpt: '',
     };
-    return [scheduling, ...sampleItems()];
+    // A record the reader follows (collaboration): counts only, its record as the chip.
+    const followed: NotificationItem = {
+      id: 'n6',
+      kind: 'record_activity',
+      actor: GRACE ?? { type: 'system', id: null, name: 'System' },
+      createdAt: '2026-10-08T14:20:00.000Z',
+      isRead: false,
+      isDone: false,
+      record: { objectId: 'o-companies', recordId: 'r-acme', name: 'Acme', kind: 'company' },
+      activity: { fields: 3, notes: 0, comments: 0, tasks: 0 },
+      excerpt: '',
+    };
+    return [scheduling, followed, ...sampleItems()];
   });
   const source = arraySource(items, (item) => item.id);
   return (
@@ -159,7 +171,10 @@ export const Default: Story = {
   },
 };
 
-/** Someone else changed the reader's scheduling (spec 0037, AC-1264): the actor's sentence, no chip or excerpt. */
+/**
+ * Someone else changed the reader's scheduling (spec 0037, AC-1264): the actor's sentence, no chip or excerpt; and a
+ * record they follow, counted ("changed 3 fields") with its chip.
+ */
 export const SchedulingChanged: Story = {
   args: { withScheduling: true, onAction: fn() },
   // The row is Default's, with another sentence.
@@ -167,6 +182,9 @@ export const SchedulingChanged: Story = {
   play: async ({ args, canvas, userEvent }) => {
     await userEvent.click(canvas.getByText('Grace Hopper changed your scheduling'));
     await expect(args.onAction).toHaveBeenCalledWith('n5');
+    // A followed record's changes: counted, never quoted, with the record's chip.
+    await userEvent.click(canvas.getByText('Grace Hopper changed 3 fields'));
+    await expect(args.onAction).toHaveBeenCalledWith('n6');
   },
 };
 

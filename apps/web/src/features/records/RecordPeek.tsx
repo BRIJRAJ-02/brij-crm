@@ -403,6 +403,7 @@ function LoadedPeek(
   const facts = summaryFacts(display.name, sources.attributes, shown, state.referenceDisplays);
   const quick = {
     ...contactOf(sources.attributes, shown),
+    ...(isLost ? {} : { follow: { slug, recordId } }),
     ...(canEdit
       ? {
           onLog: () => {

@@ -98,3 +98,28 @@ describe('someone changed the reader’s scheduling (spec 0037, AC-1264)', () =>
     expect(targetOf('acme', changed, slugs)).toEqual({ kind: 'href', href: '/w/acme/bookings/availability' });
   });
 });
+
+describe('someone changed a record the reader follows', () => {
+  const changed: NotificationView = {
+    id: ID,
+    kind: 'record_activity',
+    actor: { type: 'member', id: OBJECT },
+    createdAt: '2026-10-31T09:00:00.000Z',
+    record: { objectId: OBJECT, recordId: ID, name: 'Acme', kind: 'company' },
+    activity: { fields: 3, notes: 0, comments: 0, tasks: 0 },
+    excerpt: '',
+  };
+
+  it('carries its counts to the row, opens the record, and has its own filter', () => {
+    expect(toNotificationItem(changed, [])).toMatchObject({
+      kind: 'record_activity',
+      activity: { fields: 3, notes: 0, comments: 0, tasks: 0 },
+    });
+    expect(targetOf('acme', changed, slugs)).toEqual({
+      kind: 'href',
+      href: `/w/acme/objects/companies/${ID}/overview`,
+    });
+    expect(notificationKind('following')).toBe('record_activity');
+    expect(inboxSearch({ kind: 'following' })).toEqual({ kind: 'following' });
+  });
+});

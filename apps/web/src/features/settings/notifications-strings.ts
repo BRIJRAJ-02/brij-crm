@@ -3,6 +3,11 @@
 /** Settings › Account › Notifications: the page's copy (AC-1179). Short labels; the help sits in InfoTips. */
 export const strings = {
   title: 'Notifications',
+  /** The Inbox card (collaboration): which in app notices come, beside the ones that always do. */
+  inbox: 'Inbox',
+  followed: 'Records you follow',
+  /** The switch's InfoTip: what it covers, in one line. */
+  followedInfo: 'Changes others make to records you created, own or follow.',
   email: 'Email',
   /** Under the Email heading: the inbox is always on (AC-1179), said where it's seen. */
   emailDescription: 'Always in your Inbox. Choose what is also emailed.',

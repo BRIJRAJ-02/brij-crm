@@ -65,6 +65,8 @@ import { strings } from './strings.ts';
 import { editToast, isClear } from './undo.ts';
 import { runUndo } from './useUndoShortcut.ts';
 import { useCan, WorkspacePage } from './WorkspacePage.tsx';
+import { addSampleData, SAMPLE_OBJECTS } from '../sample/sample.ts';
+import { strings as sampleStrings } from '../sample/strings.ts';
 
 /** Props for the records screen: what the object's route loaded through the data layer. */
 export interface RecordsScreenProps {
@@ -423,6 +425,9 @@ export function RecordsScreen({
   const [focusColumn, setFocusColumn] = useState<{ readonly id: string } | undefined>(undefined);
   // Only owners and admins change the schema (spec 0009, AC-136); the server refuses anyone else on its own.
   const canChangeSchema = useCan('schema.manage');
+  // An empty People, Companies or Deals offers sample data to owners and admins (one button, no questions).
+  const offersSample = canChangeSchema && SAMPLE_OBJECTS.has(object.standardKey ?? '');
+  const [isAddingSample, setAddingSample] = useState(false);
   // Rows tick only for someone who can act on them: edit, delete, add to a list, or export. A guest viewing a shared
   // object can do none of these, so the grid offers no ticks and no select all (spec 0031, slice 9).
   const canExport = useCan('records.export');
@@ -819,6 +824,22 @@ export function RecordsScreen({
                                 <ButtonLink icon="upload" href={importHref(slug, object)}>
                                   {importStrings.menuItem}
                                 </ButtonLink>
+                              )}
+                              {offersSample && (
+                                <Button
+                                  variant="ghost"
+                                  icon="database"
+                                  isPending={isAddingSample}
+                                  onPress={() => {
+                                    setAddingSample(true);
+                                    void addSampleData(data, toasts, slug).then((started) => {
+                                      // Started, the button stays busy until the rows arrive and the table fills.
+                                      if (!started) setAddingSample(false);
+                                    });
+                                  }}
+                                >
+                                  {sampleStrings.add}
+                                </Button>
                               )}
                             </>
                           ),

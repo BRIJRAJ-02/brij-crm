@@ -978,6 +978,7 @@ function RecordScreen({
                   {/* Quick actions: reach the person, or log what happened, without leaving the header. */}
                   <RecordQuickActions
                     {...contact}
+                    {...(isTrashed || isLost ? {} : { follow: { slug, recordId } })}
                     {...(canAddTasks
                       ? {
                           onLog: () => {

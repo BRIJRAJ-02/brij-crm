@@ -14,6 +14,8 @@ export const strings = {
   /** Tasks of theirs due today (migration 0135). */
   dueToday: 'Due today',
   submissions: 'Form submissions',
+  /** Changes to records the person follows (collaboration). */
+  following: 'Following',
   /** A submission's form whose name didn't come with it. */
   someForm: 'A form',
   unreadOnly: 'Unread only',
