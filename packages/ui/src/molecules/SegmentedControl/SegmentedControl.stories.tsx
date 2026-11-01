@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
 import { expect, fn } from 'storybook/test';
+import { settleAnimations } from '../../workbench/animations.ts';
 import { hoverFresh, shownTooltip } from '../../workbench/pointer.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { fakeThemeController } from '../../workbench/theme.ts';
@@ -198,6 +199,9 @@ export const ColourDots: Story = {
     const work = canvas.getByRole('radio', { name: 'Work' }).closest('label');
     const mail = canvas.getByRole('radio', { name: 'brijraj@stealth.design' }).closest('label');
     await expect(work?.getBoundingClientRect().width ?? 0).toBeLessThan(mail?.getBoundingClientRect().width ?? 0);
+    // The thumb slides to the segment chosen: settled, so the screenshot reads where it lands, not a frame of
+    // its travel (184 pixels differed between runs before this).
+    await settleAnimations();
   },
 };
 

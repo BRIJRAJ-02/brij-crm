@@ -429,6 +429,8 @@ export const GalleryGrid: Story = {
       Math.round(first.getBoundingClientRect().height),
     );
     await picturesDrawn(canvasElement);
+    // The tiles fade in as their pictures land: settled, so the screenshot reads them at full strength.
+    await settleAnimations();
   },
 };
 
