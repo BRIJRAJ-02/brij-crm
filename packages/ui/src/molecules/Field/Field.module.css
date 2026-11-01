@@ -224,6 +224,10 @@
     color: var(--danger);
     font: var(--text-label);
     letter-spacing: var(--tracking-label);
+    /* An error fades in on the field that caused it, as the edge turns red; it goes when the field is fixed. The
+       element stays while the field is invalid, so a message that replaces another changes in place, with no
+       second fade (the story ErrorChangesInPlace). */
+    animation: field-error-in var(--duration-move) var(--ease-out) backwards;
   }
 
   /* In a grid cell: on a raised surface under the cell, over the rows below,
@@ -380,6 +384,19 @@
 
     .root[data-variant='cell'] .box:focus-within {
       outline: none;
+    }
+  }
+
+  /* Asked for less motion, the error is simply there with its red edge. */
+  @media (prefers-reduced-motion: reduce) {
+    .error {
+      animation: none;
+    }
+  }
+
+  @keyframes field-error-in {
+    from {
+      opacity: 0;
     }
   }
 }
