@@ -15,7 +15,6 @@ import { hintPage, writeParentSessionHint } from './features/auth/parent-hint.ts
 import { signInHref } from './features/auth/redirect.ts';
 import { createFocusRecovery, focusFirstLoad, focusPage, isSamePage } from './features/navigation/focus.ts';
 import { PRELOAD_DELAY_MS, startIntentPreload } from './features/navigation/preload.ts';
-import { strings as sampleStrings } from './features/sample/strings.ts';
 import { followPageTitle } from './features/navigation/title.ts';
 import { rememberPlace, safeSessionStorage } from './features/settings/back.ts';
 import { importSummaryHref } from './features/imports/paths.ts';
@@ -168,9 +167,20 @@ const data = createDataLayer({
     }
     // Sample data (one button): its end says it is in, and the pages read again (Deals' stages, its Pipeline board).
     if (job.kind === 'workspace.sample_data') {
-      toasts.toast(
-        job.status === 'succeeded' ? { tone: 'success', message: sampleStrings.added } : jobFinishedToast(job, onView),
-      );
+      // Its one word loads only now, as the bulk ones do: a line nobody reads until a job ends belongs in no first
+      // load (`.size-limit.js`). Should that load fail, the plain job toast still says how it ended.
+      if (job.status === 'succeeded') {
+        void import('./features/sample/strings.ts').then(
+          ({ strings }) => {
+            toasts.toast({ tone: 'success', message: strings.added });
+          },
+          () => {
+            toasts.toast(jobFinishedToast(job, onView));
+          },
+        );
+      } else {
+        toasts.toast(jobFinishedToast(job, onView));
+      }
       void router.invalidate();
       return;
     }
