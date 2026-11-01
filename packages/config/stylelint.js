@@ -14,6 +14,8 @@ import { SYSTEM_COLORS, systemColors } from './stylelint/system-colors.js';
 // Absolute, so Stylelint gives the same answer run from any folder. Read by
 // path, since @crm/tokens already depends on this package.
 const TOKENS_CSS = path.resolve(import.meta.dirname, '../tokens/tokens.css');
+// The link page's font pack families (spec 0060), beside the tokens they sit with.
+const PACKS_CSS = path.resolve(import.meta.dirname, '../tokens/packs.css');
 // The library's base layer defines the few shared custom properties built from tokens (the overlay padding scale).
 const BASE_CSS = path.resolve(import.meta.dirname, '../ui/src/styles/base.css');
 // The marketing site's shared custom properties (its gutters, frame and bar), built from tokens the same way.
@@ -95,7 +97,7 @@ export const stylelintConfig = {
       TOKEN_PROPERTIES,
       { ignoreValues: IGNORED_VALUES, message: 'Expected a token (var(--name)) for "${value}" of "${property}".' },
     ],
-    'csstools/value-no-unknown-custom-properties': [true, { importFrom: [TOKENS_CSS, BASE_CSS, SITE_CSS] }],
+    'csstools/value-no-unknown-custom-properties': [true, { importFrom: [TOKENS_CSS, PACKS_CSS, BASE_CSS, SITE_CSS] }],
     'crm/breakpoint-tokens': true,
     'crm/system-colors': true,
     'declaration-no-important': true,

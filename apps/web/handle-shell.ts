@@ -7,7 +7,14 @@
 // in any way at all, answers the plain shell rather than an error. And nothing is read off the request but its
 // path, so one handle has one answer for everybody and the edge can cache it (AC-5504).
 import { linkPageCacheTags } from '@crm/contracts/handles';
-import { BRAND_DESCRIPTION, withMeta, type MetaLook, type MetaSource } from './handle-meta.ts';
+import {
+  BRAND_DESCRIPTION,
+  withMeta,
+  withPageFacts,
+  type MetaLook,
+  type MetaSource,
+  type PageFacts,
+} from './handle-meta.ts';
 import { HANDLE_PATH } from './public-paths.ts';
 
 /** How long the profile read may take before the plain shell goes out instead (AC-5503). */
@@ -58,6 +65,47 @@ export interface ShellProfile {
   readonly theme?: unknown;
   readonly indexable?: unknown;
   readonly version?: unknown;
+  /** The versions of the page's own stylesheet and photos (spec 0060, `PublicLook`). */
+  readonly look?: unknown;
+  /** The person's social links, as the profile read answers them (spec 0061, AC-6121). */
+  readonly socials?: unknown;
+  /** The page's first blocks, as the profile read answers them (spec 0061, AC-6122). */
+  readonly items?: unknown;
+}
+
+/**
+ * What structured data and crawler text say of a page (spec 0061, AC-6121, AC-6122), read from the profile answer
+ * and trusted in nothing: the social links' web addresses, and the live links' titles and web addresses in order,
+ * leaving out every link behind a notice. The picture only when the answer has one, on our own origin.
+ */
+export function pageFactsOf(profile: ShellProfile, name: string, url: string, origin: string): PageFacts {
+  const list = (value: unknown): readonly unknown[] => (Array.isArray(value) ? (value as readonly unknown[]) : []);
+  const field = (entry: unknown, key: string): string | undefined =>
+    typeof entry === 'object' && entry !== null && key in entry
+      ? text((entry as Record<string, unknown>)[key])
+      : undefined;
+  const web = (address: string | undefined) =>
+    address !== undefined && /^https?:\/\/[^\s]+$/i.test(address) ? address : undefined;
+  const sameAs = list(profile.socials).flatMap((entry) => {
+    const href = web(field(entry, 'href'));
+    return href === undefined ? [] : [href];
+  });
+  const links = list(profile.items).flatMap((entry) => {
+    if (field(entry, 'kind') !== 'link' || field(entry, 'notice') !== undefined) return [];
+    const title = field(entry, 'title');
+    const address = web(field(entry, 'url'));
+    return title === undefined || address === undefined ? [] : [{ title, url: address }];
+  });
+  const image = text(profile.image);
+  const bio = text(profile.bio);
+  return {
+    name,
+    url,
+    sameAs,
+    links,
+    ...(bio === undefined ? {} : { bio }),
+    ...(image !== undefined && image.startsWith('/api/public/') ? { image: `${origin}${image}` } : {}),
+  };
 }
 
 /** A string, or undefined for anything else: a read's answer is parsed here, never trusted by its type. */
@@ -128,6 +176,50 @@ export function withBoot(shell: string, boot: ShellBoot): string {
   return `${shell.slice(0, headEnd)}${block}${shell.slice(headEnd)}`;
 }
 
+/** The id of the page's own stylesheet link, which the public bundle finds again (`wearStylesheet` in public/). */
+export const LOOK_LINK_ID = 'crm-look';
+
+/** A look's version and a font file's built path, as the shell will write them into an attribute. */
+const LOOK_VERSION = /^[0-9a-f]{12}$/;
+const LOOK_HANDLE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const FONT_FILE = /^\/assets\/[\w.-]+\.woff2$/;
+
+/**
+ * The link page's own look in its head (spec 0060, AC-20, AC-21): its stylesheet on our own api (the accent pair and
+ * any photo, `look.css?v=`), and a preload for its pack's heading face, by the built name the build handed over, so
+ * the name draws in its own face from the start. Inter is preloaded by the build on every public page already, so a
+ * file the shell names once is never named twice. Anything malformed writes nothing: the page draws its look from
+ * the shared stylesheet either way, in the product's accent.
+ */
+export function withLook(shell: string, profile: ShellProfile, fonts: Readonly<Record<string, string>> = {}): string {
+  const headEnd = shell.indexOf('</head>');
+  if (headEnd < 0) return shell;
+  const handle = text(profile.handle);
+  const look =
+    typeof profile.look === 'object' && profile.look !== null ? (profile.look as Record<string, unknown>) : {};
+  const version = text(look.version);
+  const theme =
+    typeof profile.theme === 'object' && profile.theme !== null ? (profile.theme as Record<string, unknown>) : {};
+  const font = text(theme.font);
+  const links: string[] = [];
+  if (
+    font !== undefined &&
+    Object.hasOwn(fonts, font) &&
+    FONT_FILE.test(fonts[font] ?? '') &&
+    !shell.includes(`href="${fonts[font] ?? ''}"`)
+  ) {
+    links.push(`    <link rel="preload" href="${fonts[font] ?? ''}" as="font" type="font/woff2" crossorigin>\n`);
+  }
+  if (handle !== undefined && LOOK_HANDLE.test(handle) && handle.length <= 40 && version !== undefined) {
+    if (LOOK_VERSION.test(version)) {
+      links.push(
+        `    <link rel="stylesheet" id="${LOOK_LINK_ID}" href="/api/public/handles/${handle}/look.css?v=${version}">\n`,
+      );
+    }
+  }
+  return links.length === 0 ? shell : `${shell.slice(0, headEnd)}${links.join('')}${shell.slice(headEnd)}`;
+}
+
 /** What the shell was built from, which the answer's own header reports so a miss is visible in production. */
 export type ShellOutcome = 'profile' | 'page' | 'unknown' | 'missed';
 
@@ -162,6 +254,11 @@ export interface ShellDeps {
    * shows a broken preview, which is worse than the small one.
    */
   readonly cardOrigin?: string;
+  /**
+   * The built path of each font pack's heading face, keyed by the `font` a look stores (spec 0060, AC-21): written
+   * by the build from `FONT_PACKS` in `@crm/tokens/packs`, so the preload names the file the stylesheet fetches.
+   */
+  readonly fonts?: Readonly<Record<string, string>>;
   /** The time now, in milliseconds: when a profile was read, so the page can tell an old shell's copy. */
   readonly now?: () => number;
   /** Where a miss is reported. */
@@ -217,8 +314,15 @@ export async function shellFor(pathname: string, deps: ShellDeps): Promise<Shell
     ...(bio === undefined ? {} : { description: bio }),
     ...(look === undefined ? {} : { look }),
   };
+  // Structured data on an indexable page, and the page as text for a crawler that runs no script (spec 0061).
+  const facts = pageFactsOf(profile, source.name, source.canonical, deps.origin);
+  const described = withPageFacts(withMeta(deps.shell, source), facts, source.indexable);
   return {
-    body: withBoot(withMeta(deps.shell, source), { kind: 'profile', profile, readAt: (deps.now ?? Date.now)() }),
+    body: withBoot(withLook(described, { ...profile, handle }, deps.fonts), {
+      kind: 'profile',
+      profile,
+      readAt: (deps.now ?? Date.now)(),
+    }),
     status: 200,
     outcome: 'profile',
     tags: linkPageCacheTags(parts.handle, handle),

@@ -6,6 +6,21 @@ import type { PublicProfileItem } from '@crm/data/booking';
 import type { LinkPageBlock } from '@crm/ui/public-booking';
 import { strings } from './strings.ts';
 
+/** The parts a look's path takes, as the api makes them (`lookStylesheetPath` in contracts). */
+const LOOK_VERSION = /^[0-9a-f]{12}$/;
+const LOOK_HANDLE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+/**
+ * A link page's own stylesheet (spec 0060, AC-14), or undefined when it has none or a part is malformed. Here, not
+ * beside `wearStylesheet`, so the booking page and the form never carry it.
+ */
+export function lookHref(handle: string, version: string | undefined): string | undefined {
+  if (version === undefined || !LOOK_VERSION.test(version) || !LOOK_HANDLE.test(handle) || handle.length > 40) {
+    return undefined;
+  }
+  return `/api/public/handles/${handle}/look.css?v=${version}`;
+}
+
 /** The blocks of one page of a profile, in order, as LinkPage draws them. A contact card shows its full name. */
 export function blocksOf(handle: string, items: readonly PublicProfileItem[]): readonly LinkPageBlock[] {
   return items.flatMap((item): LinkPageBlock[] => {

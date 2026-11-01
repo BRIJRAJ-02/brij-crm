@@ -3,6 +3,7 @@
 // themselves.
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { BoardStatus, BoardStore } from './records/board.ts';
+import type { BrandHeld, BrandHeldState } from './brand/store.ts';
 import type { DataError } from './errors.ts';
 import type { FilesState, RecordFilesSource } from './files/store.ts';
 import type { OperatorHeld } from './operator/store.ts';
@@ -540,6 +541,11 @@ export function useLinkPage(held: LinkPageHeld): LinkPageState {
   return useRetained(held);
 }
 
+/** The brand kit or a link page's own colour and photos (spec 0060), held while the screen shows it. */
+export function useBrand<Value>(held: BrandHeld<BrandHeldState<Value>>): BrandHeldState<Value> {
+  return useRetained(held);
+}
+
 /** Whether the person's picture shows on their public pages (Settings › Account › Profile), read when first held. */
 export function usePictureChoice(held: PictureChoiceHeld): PictureChoiceState {
   return useRetained(held);
@@ -750,3 +756,18 @@ export function useComputedPreview(
 }
 
 const IDLE_PREVIEW: PreviewState = Object.freeze({ status: 'idle' });
+
+/** What `useWorkspaceLogo` reads: the data layer's `workspaceLogo`. */
+export interface WorkspaceLogoSource {
+  readonly subscribe: (listener: () => void) => () => void;
+  readonly src: (workspace: string) => string | undefined;
+}
+
+/**
+ * The workspace's logo address for the sidebar's head and the tab's icon (spec 0060), or undefined when it has
+ * none: from the access read every workspace page makes, kept in step with Settings › Brand.
+ */
+export function useWorkspaceLogo(source: WorkspaceLogoSource, workspace: string): string | undefined {
+  const read = useCallback(() => source.src(workspace), [source, workspace]);
+  return useSyncExternalStore(source.subscribe, read);
+}

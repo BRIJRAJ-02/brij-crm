@@ -10,9 +10,14 @@ function standalone(svg: SVGSVGElement, size: number): string {
   const copy = svg.cloneNode(true);
   if (!(copy instanceof SVGSVGElement)) throw new Error('The QR code is not an SVG.');
   const shapes = svg.querySelectorAll('rect, path');
+  // The ground is the light theme's surface whatever the app's theme: in a dark app the code on screen sits on a
+  // softer grey so it doesn't glare, but the saved code prints on the light surface (AC-5122). The SVG carries the light theme.
+  const white = getComputedStyle(svg).getPropertyValue('--surface').trim();
   copy.querySelectorAll('rect, path').forEach((shape, index) => {
     const drawn = shapes[index];
-    if (drawn !== undefined) shape.setAttribute('fill', getComputedStyle(drawn).fill);
+    if (drawn !== undefined) {
+      shape.setAttribute('fill', shape.tagName === 'rect' && white !== '' ? white : getComputedStyle(drawn).fill);
+    }
     shape.removeAttribute('class');
   });
   copy.removeAttribute('class');

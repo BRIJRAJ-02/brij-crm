@@ -72,6 +72,11 @@
     border-radius: var(--radius-md);
   }
 
+  /* A link page's rounded face (spec 0060, AC-13): the largest square takes the card corner. */
+  .root[data-shape='square'][data-size='hero'] {
+    border-radius: var(--radius-xl);
+  }
+
   .root[data-hue='gray'] {
     background: var(--tag-gray-bg);
     color: var(--tag-gray-text);
@@ -138,6 +143,27 @@
     inline-size: 100%;
     block-size: 100%;
     object-fit: cover;
+  }
+
+  /* A workspace's logo (spec 0060): the whole picture inside the tile, a hair (space-2) in from its edge, so a wide
+     wordmark is letterboxed rather than cut. */
+  .root[data-fit='contain'] > .image {
+    box-sizing: border-box;
+    padding: var(--space-2);
+    object-fit: contain;
+  }
+
+  /* With its picture, loaded or still on the way, it sits on a light plate in both themes, a hairline round it, so
+     the head never flashes from a dark tile to a light one; the plate waits empty (the letter held back, since no
+     theme's ink is sure to read on it, and the name sits beside it). Logos are mostly dark ink on nothing, which
+     would vanish on the dark sidebar, and a plate that changed with the theme would change the logo's colours with
+     it. on-accent is the product's near white, the same in light and dark. A picture that failed has no image, so
+     its letter shows on the tile's own hue. */
+  .root[data-fit='contain']:has(> .image) {
+    outline: var(--border-width-hairline) solid var(--border);
+    outline-offset: calc(-1 * var(--border-width-hairline));
+    background: var(--on-accent);
+    color: transparent;
   }
 
   /* Waiting, at every size, the initials show and the picture is held back; a picture already in the browser's

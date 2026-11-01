@@ -1,5 +1,5 @@
 /* Card: a raised surface with a hairline and radius-lg; a header with the
-   title and its actions, the body, and a footer on surface-subtle. */
+   title and its actions, the body, and a footer on the card's own surface under a hairline. */
 @layer components {
   .root {
     display: flex;
@@ -142,8 +142,9 @@
     gap: var(--space-8);
     padding-block: var(--space-8);
     padding-inline: var(--space-12);
+    /* The card's own surface, only the hairline above: on surface-subtle the strip sat darker than a dark card and
+       split it in two (the owner, 31 October 2026, Home item 10). */
     border-block-start: var(--border-width-hairline) solid var(--border-subtle);
-    background: var(--surface-subtle);
   }
 
   /* The small page card: size-panel at most, for a page whose task is one

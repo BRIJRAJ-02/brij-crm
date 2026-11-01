@@ -3,10 +3,13 @@
 // and the currency and country new money and phone fields start in.
 // Main task: rename it (saved when the field is left or on Enter, with Undo), change its address (its own dialog), or
 // pick its time zone, currency or country (saved at once, with Undo); owners can delete it.
-// Leaves out: a Save bar and a leave check (each change saves on its own), the logo (no row until upload arrives with #32), and members (their own page).
+// Leaves out: a Save bar and a leave check (each change saves on its own), the logo upload (Brand holds it, spec 0060; a row here links there), and members (their own page).
 import { isDataError, type DataLayer, type WorkspaceSettings } from '@crm/data';
+import { useWorkspaceLogo } from '@crm/data/react';
 import {
+  Avatar,
   Button,
+  ButtonLink,
   Callout,
   Card,
   CopyButton,
@@ -27,6 +30,7 @@ import { zoneItems, zoneLabel, zoneMatches } from '../booking/hours.ts';
 import { ChangeAddressDialog } from './ChangeAddressDialog.tsx';
 import { DeleteWorkspaceDialog } from './DeleteWorkspaceDialog.tsx';
 import { nameCommit } from './general-form.ts';
+import { brandSettingsHref } from './nav.ts';
 import { useCan, useMyAccess } from '../workspace/WorkspacePage.tsx';
 import { SettingsPage } from './SettingsPage.tsx';
 import { strings } from './workspace-strings.ts';
@@ -86,6 +90,8 @@ export function GeneralScreen({
   // The name as typed, until the page reads the saved one back; left undefined, the field shows what is saved.
   const [nameDraft, setNameDraft] = useState<string | undefined>(undefined);
   const name = nameDraft ?? settings.name;
+  // The workspace's logo, as the sidebar's head wears it (spec 0060): no read of its own.
+  const logo = useWorkspaceLogo(data.workspaceLogo, slug);
   const [nameError, setNameError] = useState<string | undefined>(undefined);
   // The name on its way, so Enter and then leaving the field send it once.
   const sending = useRef<string | undefined>(undefined);
@@ -338,6 +344,24 @@ export function GeneralScreen({
               {...(nameError === undefined ? {} : { error: nameError })}
             />
           </SettingsRow>
+          {/* Where a workspace's logo is looked for; it is set in Brand, beside the colour, so this row only links
+              there (spec 0060): one upload drives the sidebar's head and the tab's icon. */}
+          <SettingsRow
+            title={strings.logo}
+            description={mayManage ? strings.logoText : strings.logoTextReadOnly}
+            // The logo itself, as the sidebar's head draws it, when the workspace has one.
+            {...(logo === undefined
+              ? {}
+              : {
+                  leading: (
+                    <Avatar name={strings.logoAlt} src={logo} fit="contain" shape="square" size="md" isDecorative />
+                  ),
+                })}
+          >
+            <ButtonLink href={brandSettingsHref(slug)} icon="palette">
+              {strings.openBrand}
+            </ButtonLink>
+          </SettingsRow>
           <SettingsRow
             title={strings.webAddress}
             // The whole link under the row's title, with its copy; changing it is rare and moves everyone, so it
@@ -483,6 +507,11 @@ export function GeneralPending() {
         <Card isBusy>
           <SettingsRow title={strings.name} control="field">
             <Skeleton shape="field" />
+          </SettingsRow>
+          <SettingsRow title={strings.logo} description={strings.logoText}>
+            <Button icon="palette" isDisabled>
+              {strings.openBrand}
+            </Button>
           </SettingsRow>
           <SettingsRow title={strings.webAddress} description={<Skeleton width="long" />}>
             {mayManage && (

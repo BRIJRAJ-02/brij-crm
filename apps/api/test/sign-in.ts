@@ -1,6 +1,7 @@
 // Test helpers for signing in for real: the app on a test database, codes
 // sent to Mailpit and read back through its API (`GET /api/v1/messages`, then
 // `GET /api/v1/message/{id}`), and an oRPC client carrying the session cookie.
+import type { EdgeCache } from '../src/edge-cache.ts';
 import type { FileStore } from '../src/storage/blob.ts';
 import { randomInt, randomUUID } from 'node:crypto';
 import type { JobRegistry, RuleSource } from '@crm/core';
@@ -64,6 +65,7 @@ export function signInApp(
     calendar?: CalendarServices;
     signedOut?: SignedOutNotice;
     files?: FileStore;
+    edgeCache?: EdgeCache;
   } = {},
 ) {
   const env = testEnv(overrides);
@@ -81,7 +83,11 @@ export function signInApp(
     ...(options.signedOut ? { signedOut: options.signedOut } : {}),
     ...(options.files ? { files: options.files } : {}),
   });
-  return { app: createApp({ services, env, ...(options.router ? { router: options.router } : {}) }), services };
+  const withEdge = options.edgeCache ? { ...services, edgeCache: options.edgeCache } : services;
+  return {
+    app: createApp({ services: withEdge, env, ...(options.router ? { router: options.router } : {}) }),
+    services,
+  };
 }
 
 type App = ReturnType<typeof signInApp>['app'];

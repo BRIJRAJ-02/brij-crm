@@ -63,8 +63,18 @@ const literal = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
  * import this file), and middleware.test.ts keeps the two equal.
  */
 export const PUBLIC_HOST_PATH = new RegExp(
-  `^(?:/(?:b|f|embed|assets|brand)/.*|/api/public(?:/.*)?|/(?:${TOP_LEVEL_FILES.map(literal).join('|')})|/${HANDLE_SEGMENT}(?:/${SLUG_SEGMENT})?/?)$`,
+  `^(?:/(?:b|f|embed|assets|brand)/.*|/api/public(?:/.*)?|/(?:${TOP_LEVEL_FILES.map(literal).join('|')})|/(?:robots\\.txt|sitemap-handles\\.xml)|/${HANDLE_SEGMENT}(?:/${SLUG_SEGMENT})?/?)$`,
 );
+
+/**
+ * The crawl files the public origin answers from the API (spec 0061, AC-6123): `/robots.txt` and the handles'
+ * sitemap, each a public API path. middleware.ts holds the same map written out, and middleware.test.ts keeps them
+ * equal.
+ */
+export const CRAWL_FILES: Readonly<Record<string, string>> = {
+  '/robots.txt': '/api/public/robots.txt',
+  '/sitemap-handles.xml': '/api/public/sitemap-handles.xml',
+};
 
 /** Whether `pathname` belongs on the public booking origin's host. */
 export function servedOnPublicHost(pathname: string): boolean {

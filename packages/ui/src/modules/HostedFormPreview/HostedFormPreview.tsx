@@ -1,6 +1,7 @@
 import type { PublicForm } from '@crm/contracts/forms';
 import { HostedForm } from '../../public-form/HostedForm.tsx';
 import type { ProductLogo } from '../AuthLayout/AuthLayout.tsx';
+import type { PageBrand } from '../BookingFrame/BookingFrame.tsx';
 import styles from './HostedFormPreview.module.css';
 
 /** Props for HostedFormPreview. */
@@ -16,6 +17,8 @@ export interface HostedFormPreviewProps {
   readonly mode?: 'preview' | 'page';
   /** The Timefix wordmark under the form; defaults to the web app's own files, as on the hosted page. */
   readonly logo?: ProductLogo;
+  /** A brand kit to wear in place of the one the form's read names (Settings › Brand's preview, spec 0060). */
+  readonly brand?: PageBrand;
 }
 
 /**
@@ -23,11 +26,17 @@ export interface HostedFormPreviewProps {
  * the builder shows exactly what goes live: the same tree, the same controls.
  * It sits on the form's own ground, which fills whatever height it is given.
  */
-export function HostedFormPreview({ form, mode = 'preview', logo }: HostedFormPreviewProps) {
+export function HostedFormPreview({ form, mode = 'preview', logo, brand }: HostedFormPreviewProps) {
   // The ground in the form's own look, so a short form's colour fills the phone to its foot (spec 0058).
   return (
     <div className={styles.ground} data-theme={form.look.colour}>
-      <HostedForm key={mode} form={form} mode={mode} {...(logo === undefined ? {} : { logo })} />
+      <HostedForm
+        key={mode}
+        form={form}
+        mode={mode}
+        {...(logo === undefined ? {} : { logo })}
+        {...(brand === undefined ? {} : { brand })}
+      />
     </div>
   );
 }

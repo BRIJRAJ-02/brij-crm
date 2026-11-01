@@ -42,6 +42,7 @@ import { ensureLinkPage } from '../booking/handles.ts';
 import { checkSeats, revokeUnvouched } from './invitations.ts';
 import { countBecomingGuest, leaveSchedulingAsGuest } from './guest.ts';
 import { readCustomRole } from '../roles/roles.ts';
+import { workspaceLogoVersion } from '../brand/brand.ts';
 
 const { members, workspaceRoles, workspaces } = schema;
 
@@ -185,11 +186,13 @@ export async function getMyAccess(scope: EngineScope): Promise<MyAccess> {
   const { principal, permissions } = scope.access;
   if (principal.kind !== 'member') throw new Error('Only a member has a role to show.');
   const { customRoleId } = principal;
-  const [scheduling, custom] = await Promise.all([
+  // The workspace's logo version rides along (spec 0060): the sidebar and the tab's icon need no read of their own.
+  const [scheduling, custom, workspaceLogo] = await Promise.all([
     mySchedulingReach(scope),
     customRoleId === undefined
       ? Promise.resolve(undefined)
       : inWorkspace(scope, (tx) => readCustomRole(tx, scope.workspaceId, customRoleId, undefined)),
+    workspaceLogoVersion(scope),
   ]);
   return {
     memberId: principal.memberId,
@@ -199,6 +202,7 @@ export async function getMyAccess(scope: EngineScope): Promise<MyAccess> {
     ...(customRoleId === undefined ? {} : { customRoleId }),
     teamIds: [...principal.teamIds],
     ...(scheduling === undefined ? {} : { scheduling }),
+    ...(workspaceLogo === undefined ? {} : { workspaceLogo }),
   };
 }
 

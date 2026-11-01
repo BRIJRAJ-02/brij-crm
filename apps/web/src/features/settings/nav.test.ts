@@ -22,6 +22,7 @@ describe('settingsNav', () => {
       ['Profile', 'Preferences', 'Sign in and devices', 'Notifications', 'Scheduling access'],
       [
         'General',
+        'Brand',
         'Members',
         'Teams',
         'Roles',
@@ -46,6 +47,8 @@ describe('settingsNav', () => {
       notifications: '/w/acme/settings/account/notifications',
       'scheduling-access': '/w/acme/settings/account/scheduling',
       general: '/w/acme/settings/general',
+      // The brand kit (spec 0060): every member reads it, owners and admins change it.
+      brand: '/w/acme/settings/brand',
       security: '/w/acme/settings/account/sign-in',
       members: '/w/acme/settings/members',
       teams: '/w/acme/settings/teams',
@@ -110,7 +113,7 @@ describe('visibleSettingsNav', () => {
     // Calendars and Round robin are tabs of Bookings (25 October 2026), so neither is in here to lose.
     expect(visibleSettingsNav(settingsNav('acme'), []).map((group) => group.entries.map((entry) => entry.id))).toEqual([
       ['profile', 'preferences', 'security', 'notifications', 'scheduling-access'],
-      ['general', 'members', 'teams', 'roles', 'objects', 'lists', 'jobs', 'history', 'trash'],
+      ['general', 'brand', 'members', 'teams', 'roles', 'objects', 'lists', 'jobs', 'history', 'trash'],
     ]);
   });
 
@@ -167,6 +170,7 @@ describe('settingsPageOf', () => {
     expect(settingsPageOf('/w/acme/settings/account/preferences')).toBe('preferences');
     expect(settingsPageOf('/w/acme/settings/account/profile')).toBe('profile');
     expect(settingsPageOf('/w/acme/settings/general')).toBe('general');
+    expect(settingsPageOf('/w/acme/settings/brand')).toBe('brand');
     expect(settingsPageOf('/w/acme/settings/account/sign-in')).toBe('security');
     // The old address still marks the page while it redirects.
     expect(settingsPageOf('/w/acme/settings/account/security')).toBe('security');

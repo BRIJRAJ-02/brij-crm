@@ -1,17 +1,21 @@
 import {
+  FORM_SLUG,
   HONEYPOT_IGNORE_ATTRIBUTES,
   HONEYPOT_INPUT_NAME,
   type FormStrings,
   type PublicForm,
   type PublicQuestion,
 } from '@crm/contracts/forms';
-import type { ReactNode, Ref } from 'react';
+import { useState, type ReactNode, type Ref } from 'react';
 import { Button } from '../atoms/Button/Button.tsx';
 import { Icon } from '../atoms/Icon/Icon.tsx';
 import { Link } from '../atoms/Link/Link.tsx';
 import { Skeleton } from '../atoms/Skeleton/Skeleton.tsx';
 import { VisuallyHidden } from '../atoms/VisuallyHidden/VisuallyHidden.tsx';
+import { usePageVariables } from '../lib/page-variables.ts';
 import { poweredByHref } from '../lib/powered-by.ts';
+import { safeImageSrc } from '../lib/safe-image-src.ts';
+import type { PageBrand } from '../modules/BookingFrame/BookingFrame.tsx';
 import { Callout } from '../molecules/Callout/Callout.tsx';
 import type { ProductLogo } from '../modules/AuthLayout/AuthLayout.tsx';
 import styles from './FormParts.module.css';
@@ -34,6 +38,7 @@ export function FormGround({
   mode,
   kind = 'card',
   look,
+  brand,
   isLoading = false,
   container,
   previewNote,
@@ -43,6 +48,8 @@ export function FormGround({
   readonly mode: HostedFormMode;
   readonly kind?: FormFrameKind;
   readonly look?: PublicForm['look'];
+  /** The workspace's brand kit (spec 0060, AC-4): its logo over the form, and an app preview's accent. */
+  readonly brand?: PageBrand;
   readonly isLoading?: boolean;
   readonly container?: Ref<HTMLDivElement>;
   /** Read to screen readers before an inert preview. */
@@ -50,6 +57,11 @@ export function FormGround({
   readonly foot?: ReactNode;
   readonly children: ReactNode;
 }) {
+  const variables = usePageVariables(brand?.variables);
+  // A logo that fails (a stale version, a removed file) leaves the form rather than drawing a broken picture.
+  const [failedLogo, setFailedLogo] = useState<string | undefined>(undefined);
+  const logoSrc = brand?.logo === undefined ? undefined : safeImageSrc(brand.logo.src);
+  const logo = logoSrc === failedLogo ? undefined : logoSrc;
   return (
     <div ref={container}>
       {previewNote !== undefined && (
@@ -58,6 +70,7 @@ export function FormGround({
         </VisuallyHidden>
       )}
       <div
+        ref={variables}
         className={styles.root}
         data-theme={look?.colour}
         data-corners={look?.corners}
@@ -66,11 +79,44 @@ export function FormGround({
         {...(isLoading ? { 'aria-busy': true } : {})}
         {...(mode === 'preview' ? { inert: true } : {})}
       >
-        <div className={styles.card}>{children}</div>
+        <div className={styles.card}>
+          {/* The workspace's own logo over the form (spec 0060, AC-4). */}
+          {logo !== undefined && brand?.logo !== undefined && (
+            <img
+              className={styles.brandLogo}
+              src={logo}
+              alt={brand.logo.alt}
+              decoding="async"
+              onError={() => {
+                setFailedLogo(logo);
+              }}
+            />
+          )}
+          {children}
+        </div>
         {foot}
       </div>
     </div>
   );
+}
+
+/** An image version, as the brand routes take it; the form's key is its address (`FORM_SLUG`), as its door takes it. */
+const IMAGE_VERSION = /^[0-9a-f]{12}$/;
+
+/**
+ * The brand a live form wears, from what its read says (spec 0060, AC-4): its workspace's logo on our own origin,
+ * `/api/public/forms/<key>/logo?v=<version>`. Its accent needs nothing here, since the page's brand stylesheet sets
+ * it. The logo is decoration beside the form's own headline, so it reads as nothing.
+ */
+export function formBrand(form: PublicForm): PageBrand | undefined {
+  const version = form.brand?.logo;
+  if (version === undefined || !FORM_SLUG.test(form.key) || !IMAGE_VERSION.test(version)) return undefined;
+  return { logo: { src: `/api/public/forms/${form.key}/logo?v=${version}`, alt: '' } };
+}
+
+/** `brand` as an optional prop, left off when there is none. */
+function withBrand(brand: PageBrand | undefined): { readonly brand?: PageBrand } {
+  return brand === undefined ? {} : { brand };
 }
 
 /**
@@ -82,6 +128,7 @@ export function FormFrame({
   form,
   mode,
   kind = 'card',
+  brand,
   container,
   previewNote,
   foot,
@@ -90,6 +137,8 @@ export function FormFrame({
   readonly form: PublicForm;
   readonly mode: HostedFormMode;
   readonly kind?: FormFrameKind;
+  /** Overrides the brand the form's own `brand` names (an app preview): see `formBrand`. */
+  readonly brand?: PageBrand;
   readonly container?: Ref<HTMLDivElement>;
   /** Read to screen readers before an inert preview. */
   readonly previewNote?: string;
@@ -101,6 +150,7 @@ export function FormFrame({
       mode={mode}
       kind={kind}
       look={form.look}
+      {...withBrand(brand ?? formBrand(form))}
       {...(container === undefined ? {} : { container })}
       {...(previewNote === undefined ? {} : { previewNote })}
       {...(foot === undefined ? {} : { foot })}

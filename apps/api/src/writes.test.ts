@@ -81,6 +81,10 @@ const READS: ReadonlySet<string> = new Set([
   // Slice 7: Workspace › General, Account › Profile, and a deleted workspace as its owner sees it.
   'workspace.get',
   'profile.get',
+  // The link page's own accent and photos (spec 0060): a read of schema auth through a definer.
+  'profile.look',
+  // A workspace's brand kit (spec 0060): reading it.
+  'brand.get',
   // The link page (spec 0051): the caller's own blocks, and the booking pages they may place.
   'profile.items',
   'profile.counts',
@@ -89,6 +93,8 @@ const READS: ReadonlySet<string> = new Set([
   'profile.formChoices',
   // Add to Wallet (spec 0055): the address to save their own page from, made and never stored.
   'profile.walletLink',
+  // The share QR's style (spec 0061, AC-6124): a read of schema auth through a definer.
+  'profile.qrStyle',
   'deletedWorkspace.deleted',
   'access.mine',
   // Settings › History's Workspace changes (spec 0046).
@@ -752,6 +758,17 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     });
     return [{ kind: 'members', item_ids: [me.memberId] }];
   },
+  // The link page's own accent pair (spec 0060, AC-14): columns in schema auth, no outbox row of its own.
+  'profile.saveAccent': async (m, mutationId) => {
+    const me = await m.client.profile.update({ workspace: m.slug, handle: freeHandle(), mutationId: newId() });
+    await m.client.profile.saveAccent({ workspace: m.slug, accent: '#1f5fd6', accentDark: null, mutationId });
+    return [{ kind: 'members', item_ids: [me.memberId] }];
+  },
+  // A workspace's brand kit (spec 0060): no record changes, so no change event; the pages read it on their next load.
+  'brand.save': async (m, mutationId) => {
+    await m.client.brand.save({ workspace: m.slug, accent: '#1f5fd6', accentDark: null, mutationId });
+    return [];
+  },
   'profile.setIndexable': async (m, mutationId) => {
     const me = await m.client.profile.update({ workspace: m.slug, handle: freeHandle(), mutationId: newId() });
     await m.client.profile.setIndexable({ workspace: m.slug, indexable: false, mutationId });
@@ -789,6 +806,26 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     return [];
   },
   // The link page's blocks (spec 0051) live in schema auth: no tenant change, so no outbox row.
+  // The share QR's style (spec 0061, AC-6124): one column in schema auth, no outbox row of its own.
+  'profile.saveQrStyle': async (m, mutationId) => {
+    const me = await m.client.profile.update({ workspace: m.slug, handle: freeHandle(), mutationId: newId() });
+    await m.client.profile.saveQrStyle({ workspace: m.slug, style: { colour: '#1f2937' }, mutationId });
+    return [{ kind: 'members', item_ids: [me.memberId] }];
+  },
+  // "Use the site's picture" (spec 0061, AC-6101): the test page names none, so nothing is kept and nothing changes.
+  'profile.fetchThumbnail': async (m, mutationId) => {
+    const me = await m.client.profile.update({ workspace: m.slug, handle: freeHandle(), mutationId: newId() });
+    const link = await m.client.profile.saveItem({
+      workspace: m.slug,
+      id: newId(),
+      block: { kind: 'link', title: 'Site', url: 'https://example.com' },
+      mutationId: newId(),
+    });
+    expect(await m.client.profile.fetchThumbnail({ workspace: m.slug, id: link.id, mutationId })).toEqual({
+      none: true,
+    });
+    return [{ kind: 'members', item_ids: [me.memberId] }];
+  },
   'profile.saveItem': async (m, mutationId) => {
     await m.client.profile.saveItem({
       workspace: m.slug,
@@ -2997,6 +3034,9 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'bookingPages.delete': 2,
   'bookingPages.reorderProfile': 2,
   'profile.saveTheme': 2,
+  'profile.saveQrStyle': 2,
+  'profile.fetchThumbnail': 3,
+  'profile.saveAccent': 2,
   'profile.setIndexable': 2,
   'profile.show': 2,
   'profile.setShareImage': 2,
