@@ -27,6 +27,9 @@ const READS: ReadonlySet<string> = new Set([
   'automations.runs',
   // API keys (parity 34): the list, and the key changes, which store no outbox row (each writes its audit row).
   'apiKeys.list',
+  // Following a record and sample data's state: reads.
+  'follows.get',
+  'sampleData.get',
   'apiKeys.create',
   'apiKeys.revoke',
   'apiKeys.restore',
@@ -2745,6 +2748,58 @@ Object.assign(WRITES, {
     await m.client.notifications.setSettings({ workspace: m.slug, emailReplies: true, mutationId });
     return [{ kind: 'notifications', record_ids: [], mutation_id: mutationId }];
   },
+  // Following a record: the member's own row, which no other screen shows, so no event.
+  'follows.set': async (m: Member, mutationId: string) => {
+    const id = await personFor(m);
+    await m.client.follows.set({ workspace: m.slug, recordId: id, following: false, mutationId });
+    return [{ kind: 'records', record_ids: [id] }];
+  },
+  // Sample data: the Sales template's stage changes (In progress renamed, Proposal and Negotiation made and moved)
+  // and its Pipeline board, then the job, all in the one call.
+  'sampleData.add': async (m: Member, mutationId: string) => {
+    const objects = await m.client.objects.list({ workspace: m.slug });
+    const deals = objects.find((object) => object.standardKey === 'deals');
+    if (deals === undefined) throw new Error('No Deals.');
+    await m.client.sampleData.add({ workspace: m.slug, mutationId });
+    const stage = { kind: 'definitions', object_id: deals.id, mutation_id: mutationId };
+    return [
+      stage,
+      stage,
+      stage,
+      stage,
+      stage,
+      { kind: 'views', object_id: deals.id, mutation_id: mutationId },
+      { kind: 'jobs', mutation_id: mutationId },
+    ];
+  },
+  // Removing sample data: its records to the trash in one write (a person marked sample by hand here).
+  'sampleData.remove': async (m: Member, mutationId: string) => {
+    const id = await personFor(m);
+    await testQuery(ownerUrl, 'insert into sample_data (workspace_id, record_id) values ($1, $2)', [
+      m.workspace.id,
+      id,
+    ]);
+    await m.client.sampleData.remove({ workspace: m.slug, batchId: newId(), mutationId });
+    return [
+      { kind: 'records', object_id: m.people.id, record_ids: [id] },
+      { kind: 'records', object_id: m.people.id, record_ids: [id], mutation_id: mutationId },
+    ];
+  },
+  'sampleData.undoRemove': async (m: Member, mutationId: string) => {
+    const id = await personFor(m);
+    await testQuery(ownerUrl, 'insert into sample_data (workspace_id, record_id) values ($1, $2)', [
+      m.workspace.id,
+      id,
+    ]);
+    const batchId = newId();
+    await m.client.sampleData.remove({ workspace: m.slug, batchId, mutationId: newId() });
+    await m.client.sampleData.undoRemove({ workspace: m.slug, batchId, mutationId });
+    return [
+      { kind: 'records', object_id: m.people.id, record_ids: [id] },
+      { kind: 'records', object_id: m.people.id, record_ids: [id] },
+      { kind: 'records', object_id: m.people.id, record_ids: [id], mutation_id: mutationId },
+    ];
+  },
 });
 
 // Automations (parity #53): one `automations` row naming nothing, whatever the write changed.
@@ -2897,6 +2952,10 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'records.setValues': 2,
   'records.setValuesBatch': 3,
   'records.deleteMany': 2,
+  // A person made first (and removed first, for the Undo), then the write.
+  'follows.set': 2,
+  'sampleData.remove': 2,
+  'sampleData.undoRemove': 3,
   'records.merge': 3,
   'records.restoreBatch': 3,
   'records.updateMany': 2,

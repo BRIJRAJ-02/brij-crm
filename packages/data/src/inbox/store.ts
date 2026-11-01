@@ -72,6 +72,8 @@ export interface NotificationSettingsChange {
   readonly emailReplies?: boolean;
   readonly emailAssignments?: boolean;
   readonly digest?: boolean;
+  /** Notices about records the member follows, in the inbox. */
+  readonly followedRecords?: boolean;
   readonly timeZone?: string;
 }
 

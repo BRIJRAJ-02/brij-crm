@@ -52,7 +52,7 @@ import { canonicalId, checkId, isUuid, isUuidV7, uuidArray, uuidList } from '../
 import { readRecords } from '../engine/records.ts';
 import { inputInvalid, refuse, refuseOn } from '../engine/refusals.ts';
 import type { Actor, EngineScope } from '../engine/scope.ts';
-import { runWrite, type AfterWrite, type NoteChange } from '../engine/write.ts';
+import { runWrite, type AfterWrite, type NoteChange, type WriteContext } from '../engine/write.ts';
 import { notifyNoteMentions } from '../notifications/notify.ts';
 import { checkLinkable, linkedDisplays } from '../tasks/tasks.ts';
 import { checkScope } from '../access/mint.ts';
@@ -353,158 +353,163 @@ export async function saveNote(
   hooks: readonly AfterWrite[] = [],
 ): Promise<SaveNoteResult> {
   checkScope(scope);
+  const { result } = await runWrite(scope, (context) => saveNoteIn(context, input), hooks);
+  return result;
+}
+
+/**
+ * `saveNote` inside a write the caller holds (sample data's job, which writes many records, notes and tasks in one
+ * batch): the same checks, the same rows, the same change recorded.
+ */
+export async function saveNoteIn(context: WriteContext, input: SaveNoteInput): Promise<SaveNoteResult> {
+  const { scope } = context;
   if (!isUuidV7(input.id)) throw inputInvalid('id', 'The note id must be a UUID v7.');
   const id = canonicalId(input.id);
   const recordId = checkId(input.recordId, UNKNOWN_RECORD);
   const title = input.title === undefined ? undefined : checkTitle(input.title);
   const content = input.content === undefined ? undefined : checkContent(input.content);
   if (input.kind !== undefined && !NOTE_KINDS.includes(input.kind)) throw inputInvalid('kind', ACTIVITY_KIND_FIXED);
-  const { result } = await runWrite(
-    scope,
-    async (context): Promise<SaveNoteResult> => {
-      const { tx } = context;
-      const actor = scope.actor;
-      const memberId = actor.type === 'member' ? actor.id : null;
-      /** A later save of a stored note (or a first save another try of the same note stored first). */
-      const saveExisting = async (
-        stored: NonNullable<Awaited<ReturnType<typeof noteRow>>>,
-      ): Promise<SaveNoteResult> => {
-        const home: NoteLink = { recordId: stored.record_id, objectId: stored.object_id };
-        // Seen first, so a note the writer can't see never says which records it links.
-        if (stored.deleted || !stored.record_live) throw refuse('NOT_FOUND', UNKNOWN_NOTE);
-        if (!(await recordVisible(tx, scope.access, stored.object_id, home.recordId))) {
-          throw refuse('NOT_FOUND', UNKNOWN_NOTE);
+  const { tx } = context;
+  const actor = scope.actor;
+  const memberId = actor.type === 'member' ? actor.id : null;
+  /** A later save of a stored note (or a first save another try of the same note stored first). */
+  const saveExisting = async (stored: NonNullable<Awaited<ReturnType<typeof noteRow>>>): Promise<SaveNoteResult> => {
+    const home: NoteLink = { recordId: stored.record_id, objectId: stored.object_id };
+    // Seen first, so a note the writer can't see never says which records it links.
+    if (stored.deleted || !stored.record_live) throw refuse('NOT_FOUND', UNKNOWN_NOTE);
+    if (!(await recordVisible(tx, scope.access, stored.object_id, home.recordId))) {
+      throw refuse('NOT_FOUND', UNKNOWN_NOTE);
+    }
+    // Saved from its own record's page, or from the page of a record it links (migration 0135).
+    if (stored.record_id !== recordId) {
+      const linked = await tx.execute(
+        sql`select 1 from note_records where note_id = ${id}::uuid and record_id = ${recordId}::uuid`,
+      );
+      if (linked.rows.length === 0) throw refuse('ID_TAKEN', 'A note with that id already exists.');
+    }
+    if (!canWrite(scope.access, stored.object_id)) throw refuse('FORBIDDEN', NOTE_READ_ONLY);
+    // The kind is for life, and only a call or meeting has details (seen and changeable first, so a note the
+    // writer can't see never says what it is).
+    if (input.kind !== undefined && input.kind !== stored.kind) throw inputInvalid('kind', ACTIVITY_KIND_FIXED);
+    const details = checkDetails(stored.kind, input);
+    await checkNotAhead(tx, details.occurredAt);
+    const changes = await tx.execute<{
+      title_changed: boolean;
+      content_changed: boolean;
+      occurred_changed: boolean;
+      duration_changed: boolean;
+      outcome_changed: boolean;
+      content: unknown;
+    }>(sql`
+      select ${title === undefined ? sql`false` : sql`title <> ${title}`} as title_changed,
+        ${content === undefined ? sql`false` : sql`content <> ${JSON.stringify(content)}::jsonb`} as content_changed,
+        ${details.occurredAt === undefined ? sql`false` : sql`date_trunc('milliseconds', occurred_at) <> ${details.occurredAt}::timestamptz`} as occurred_changed,
+        ${details.durationMinutes === undefined ? sql`false` : sql`duration_minutes is distinct from ${details.durationMinutes}::smallint`} as duration_changed,
+        ${details.outcome === undefined ? sql`false` : sql`outcome is distinct from ${details.outcome}::text`} as outcome_changed,
+        content
+      from notes where id = ${id}::uuid
+    `);
+    const changed = changes.rows[0];
+    if (
+      changed === undefined ||
+      (!changed.title_changed &&
+        !changed.content_changed &&
+        !changed.occurred_changed &&
+        !changed.duration_changed &&
+        !changed.outcome_changed)
+    ) {
+      return { note: summaryOf(stored, scope.access) };
+    }
+    await tx.execute(sql`
+      update notes set
+        ${changed.title_changed && title !== undefined ? sql`title = ${title},` : sql``}
+        ${changed.occurred_changed && details.occurredAt !== undefined ? sql`occurred_at = ${details.occurredAt}::timestamptz,` : sql``}
+        ${changed.duration_changed && details.durationMinutes !== undefined ? sql`duration_minutes = ${details.durationMinutes}::smallint,` : sql``}
+        ${changed.outcome_changed && details.outcome !== undefined ? sql`outcome = ${details.outcome}::text,` : sql``}
+        ${
+          changed.content_changed && content !== undefined
+            ? sql`content = ${JSON.stringify(content)}::jsonb, content_text = ${richTextToPlain(content)},`
+            : sql``
         }
-        // Saved from its own record's page, or from the page of a record it links (migration 0135).
-        if (stored.record_id !== recordId) {
-          const linked = await tx.execute(
-            sql`select 1 from note_records where note_id = ${id}::uuid and record_id = ${recordId}::uuid`,
-          );
-          if (linked.rows.length === 0) throw refuse('ID_TAKEN', 'A note with that id already exists.');
-        }
-        if (!canWrite(scope.access, stored.object_id)) throw refuse('FORBIDDEN', NOTE_READ_ONLY);
-        // The kind is for life, and only a call or meeting has details (seen and changeable first, so a note the
-        // writer can't see never says what it is).
-        if (input.kind !== undefined && input.kind !== stored.kind) throw inputInvalid('kind', ACTIVITY_KIND_FIXED);
-        const details = checkDetails(stored.kind, input);
-        await checkNotAhead(tx, details.occurredAt);
-        const changes = await tx.execute<{
-          title_changed: boolean;
-          content_changed: boolean;
-          occurred_changed: boolean;
-          duration_changed: boolean;
-          outcome_changed: boolean;
-          content: unknown;
-        }>(sql`
-          select ${title === undefined ? sql`false` : sql`title <> ${title}`} as title_changed,
-            ${content === undefined ? sql`false` : sql`content <> ${JSON.stringify(content)}::jsonb`} as content_changed,
-            ${details.occurredAt === undefined ? sql`false` : sql`date_trunc('milliseconds', occurred_at) <> ${details.occurredAt}::timestamptz`} as occurred_changed,
-            ${details.durationMinutes === undefined ? sql`false` : sql`duration_minutes is distinct from ${details.durationMinutes}::smallint`} as duration_changed,
-            ${details.outcome === undefined ? sql`false` : sql`outcome is distinct from ${details.outcome}::text`} as outcome_changed,
-            content
-          from notes where id = ${id}::uuid
-        `);
-        const changed = changes.rows[0];
-        if (
-          changed === undefined ||
-          (!changed.title_changed &&
-            !changed.content_changed &&
-            !changed.occurred_changed &&
-            !changed.duration_changed &&
-            !changed.outcome_changed)
-        ) {
-          return { note: summaryOf(stored, scope.access) };
-        }
-        await tx.execute(sql`
-          update notes set
-            ${changed.title_changed && title !== undefined ? sql`title = ${title},` : sql``}
-            ${changed.occurred_changed && details.occurredAt !== undefined ? sql`occurred_at = ${details.occurredAt}::timestamptz,` : sql``}
-            ${changed.duration_changed && details.durationMinutes !== undefined ? sql`duration_minutes = ${details.durationMinutes}::smallint,` : sql``}
-            ${changed.outcome_changed && details.outcome !== undefined ? sql`outcome = ${details.outcome}::text,` : sql``}
-            ${
-              changed.content_changed && content !== undefined
-                ? sql`content = ${JSON.stringify(content)}::jsonb, content_text = ${richTextToPlain(content)},`
-                : sql``
-            }
-            version = version + 1, updated_at = now(), updated_by_type = ${actor.type},
-            updated_by_id = ${actor.id}::uuid, updated_by_member_id = ${memberId}::uuid
-          where id = ${id}::uuid
-        `);
-        await ensureOwnLink(tx, id);
-        context.record({ notes: changesOf(id, await noteLinks(tx, id, home)) });
-        // Mentions the save added are notified, ones it removed taken back (spec 0038).
-        if (changed.content_changed && content !== undefined) {
-          await notifyNoteMentions(context, {
-            noteId: id,
-            recordId: home.recordId,
-            before: mentionedIn(changed.content),
-            after: mentionedIn(content),
-          });
-        }
-        const saved = await noteRow(tx, id);
-        if (saved === undefined) throw new Error('A note just written could not be read back.');
-        // Whose save this one replaced: never the writer's own (a retry, or two of their tabs), only someone else's.
-        const ownLast = stored.updated_by_type === actor.type && stored.updated_by_id === actor.id;
-        const overwrote =
-          !ownLast && input.baseVersion !== undefined && input.baseVersion !== stored.version
-            ? { by: actorOf(stored.updated_by_type, stored.updated_by_id), at: stored.updated_at }
-            : undefined;
-        return { note: summaryOf(saved, scope.access), ...(overwrote === undefined ? {} : { overwrote }) };
-      };
-      const existing = await noteRow(tx, id, true);
-      if (existing === undefined) {
-        // A new note: its record live, visible and changeable, locked against a purge (never against an edit).
-        const record = await liveRecord(tx, recordId, 'key share');
-        if (record === undefined || record.trashed) throw refuse('NOT_FOUND', UNKNOWN_RECORD);
-        if (!(await recordVisible(tx, scope.access, record.objectId, recordId))) {
-          throw refuse('NOT_FOUND', UNKNOWN_RECORD);
-        }
-        if (!canWrite(scope.access, record.objectId)) throw refuse('FORBIDDEN', NOTE_READ_ONLY);
-        const body = content ?? EMPTY_DOC;
-        const text = richTextToPlain(body);
-        const kind = input.kind ?? 'note';
-        // A plain note needs a title or text; a logged call or meeting is its type, time and outcome, text or none.
-        if (kind === 'note' && (title ?? '').trim() === '' && text.trim() === '') {
-          throw refuseOn('CONFIG_INVALID', NOTE_EMPTY, 'content');
-        }
-        const details = checkDetails(kind, input);
-        await checkNotAhead(tx, details.occurredAt);
-        const inserted = await tx.execute(sql`
-          insert into notes (workspace_id, id, record_id, title, content, content_text, kind, occurred_at,
-            duration_minutes, outcome,
-            created_by_type, created_by_id, created_by_member_id, updated_by_type, updated_by_id, updated_by_member_id)
-          values (${scope.workspaceId}::uuid, ${id}::uuid, ${recordId}::uuid, ${title ?? ''}, ${JSON.stringify(body)}::jsonb,
-            ${text}, ${kind}, coalesce(${details.occurredAt ?? null}::timestamptz, now()),
-            ${details.durationMinutes ?? null}::smallint, ${details.outcome ?? null}::text,
-            ${actor.type}, ${actor.id}::uuid, ${memberId}::uuid, ${actor.type}, ${actor.id}::uuid, ${memberId}::uuid)
-          on conflict (workspace_id, id) do nothing
-        `);
-        // Another try of this first save (a retry after a lost answer) committed meanwhile: read it, with its lock,
-        // and carry on as a later save, which answers the same note and writes nothing when nothing changed.
-        if (inserted.rowCount === 0) {
-          const raced = await noteRow(tx, id, true);
-          if (raced === undefined) throw new Error('A note that refused its insert could not be read.');
-          return saveExisting(raced);
-        }
-        // Its own record is its first link (migration 0135), made at the note's own moment.
-        await tx.execute(sql`
-          insert into note_records (workspace_id, note_id, record_id, position, created_by_type, created_by_id,
-            created_by_member_id)
-          values (${scope.workspaceId}::uuid, ${id}::uuid, ${recordId}::uuid, 0, ${actor.type}, ${actor.id}::uuid,
-            ${memberId}::uuid)
-          on conflict do nothing
-        `);
-        context.record({ notes: [{ noteId: id, recordId, objectId: record.objectId }] });
-        await notifyNoteMentions(context, { noteId: id, recordId, before: [], after: mentionedIn(body) });
-        const made = await noteRow(tx, id);
-        if (made === undefined) throw new Error('A note just written could not be read back.');
-        return { note: summaryOf(made, scope.access) };
-      }
-      return saveExisting(existing);
-    },
-    hooks,
-  );
-  return result;
+        version = version + 1, updated_at = now(), updated_by_type = ${actor.type},
+        updated_by_id = ${actor.id}::uuid, updated_by_member_id = ${memberId}::uuid
+      where id = ${id}::uuid
+    `);
+    await ensureOwnLink(tx, id);
+    context.record({ notes: changesOf(id, await noteLinks(tx, id, home)) });
+    // Mentions the save added are notified, ones it removed taken back (spec 0038).
+    if (changed.content_changed && content !== undefined) {
+      await notifyNoteMentions(context, {
+        noteId: id,
+        recordId: home.recordId,
+        before: mentionedIn(changed.content),
+        after: mentionedIn(content),
+      });
+    }
+    const saved = await noteRow(tx, id);
+    if (saved === undefined) throw new Error('A note just written could not be read back.');
+    // Whose save this one replaced: never the writer's own (a retry, or two of their tabs), only someone else's.
+    const ownLast = stored.updated_by_type === actor.type && stored.updated_by_id === actor.id;
+    const overwrote =
+      !ownLast && input.baseVersion !== undefined && input.baseVersion !== stored.version
+        ? { by: actorOf(stored.updated_by_type, stored.updated_by_id), at: stored.updated_at }
+        : undefined;
+    return { note: summaryOf(saved, scope.access), ...(overwrote === undefined ? {} : { overwrote }) };
+  };
+  const existing = await noteRow(tx, id, true);
+  if (existing === undefined) {
+    // A new note: its record live, visible and changeable, locked against a purge (never against an edit).
+    const record = await liveRecord(tx, recordId, 'key share');
+    if (record === undefined || record.trashed) throw refuse('NOT_FOUND', UNKNOWN_RECORD);
+    if (!(await recordVisible(tx, scope.access, record.objectId, recordId))) {
+      throw refuse('NOT_FOUND', UNKNOWN_RECORD);
+    }
+    if (!canWrite(scope.access, record.objectId)) throw refuse('FORBIDDEN', NOTE_READ_ONLY);
+    const body = content ?? EMPTY_DOC;
+    const text = richTextToPlain(body);
+    const kind = input.kind ?? 'note';
+    // A plain note needs a title or text; a logged call or meeting is its type, time and outcome, text or none.
+    if (kind === 'note' && (title ?? '').trim() === '' && text.trim() === '') {
+      throw refuseOn('CONFIG_INVALID', NOTE_EMPTY, 'content');
+    }
+    const details = checkDetails(kind, input);
+    await checkNotAhead(tx, details.occurredAt);
+    const inserted = await tx.execute(sql`
+      insert into notes (workspace_id, id, record_id, title, content, content_text, kind, occurred_at,
+        duration_minutes, outcome,
+        created_by_type, created_by_id, created_by_member_id, updated_by_type, updated_by_id, updated_by_member_id)
+      values (${scope.workspaceId}::uuid, ${id}::uuid, ${recordId}::uuid, ${title ?? ''}, ${JSON.stringify(body)}::jsonb,
+        ${text}, ${kind}, coalesce(${details.occurredAt ?? null}::timestamptz, now()),
+        ${details.durationMinutes ?? null}::smallint, ${details.outcome ?? null}::text,
+        ${actor.type}, ${actor.id}::uuid, ${memberId}::uuid, ${actor.type}, ${actor.id}::uuid, ${memberId}::uuid)
+      on conflict (workspace_id, id) do nothing
+    `);
+    // Another try of this first save (a retry after a lost answer) committed meanwhile: read it, with its lock,
+    // and carry on as a later save, which answers the same note and writes nothing when nothing changed.
+    if (inserted.rowCount === 0) {
+      const raced = await noteRow(tx, id, true);
+      if (raced === undefined) throw new Error('A note that refused its insert could not be read.');
+      return saveExisting(raced);
+    }
+    // Its own record is its first link (migration 0135), made at the note's own moment.
+    await tx.execute(sql`
+      insert into note_records (workspace_id, note_id, record_id, position, created_by_type, created_by_id,
+        created_by_member_id)
+      values (${scope.workspaceId}::uuid, ${id}::uuid, ${recordId}::uuid, 0, ${actor.type}, ${actor.id}::uuid,
+        ${memberId}::uuid)
+      on conflict do nothing
+    `);
+    // Its record's followers hear of a new note (collaboration); later saves of it don't tell them again.
+    context.record({
+      notes: [{ noteId: id, recordId, objectId: record.objectId }],
+      activity: [{ recordId, kind: 'note' }],
+    });
+    await notifyNoteMentions(context, { noteId: id, recordId, before: [], after: mentionedIn(body) });
+    const made = await noteRow(tx, id);
+    if (made === undefined) throw new Error('A note just written could not be read back.');
+    return { note: summaryOf(made, scope.access) };
+  }
+  return saveExisting(existing);
 }
 
 /** A live note the reader may see, with its body (`notes.get`); anything else is `NOT_FOUND`. */

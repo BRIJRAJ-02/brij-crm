@@ -1,11 +1,13 @@
 // Brief
 // Purpose: a record at a glance under its name, in the panel and on the page (owner, 31 Oct): who it is and how to reach it.
-// Main task: read the key facts (job title, company, email, phone) and act at once: Email, Call, Log activity, Add task.
+// Main task: read the key facts (job title, company, email, phone) and act at once: Email, Call, Follow, Log activity,
+// Add task.
 // Leaves out: every other attribute (Details holds them), and any fact with nothing in it.
 import { toFieldAttribute, type AttributeDefinition, type NameState, type RecordRef, type RecordView } from '@crm/data';
 import { AttributeDisplay, Button, ButtonLink, iconOf, RecordFacts, Tooltip, type RecordFact } from '@crm/ui';
 import { isFilled, refsOf } from './details.ts';
 import { displayOf } from './RecordDetails.tsx';
+import { FollowButton } from './FollowButton.tsx';
 import { strings } from './strings.ts';
 
 /** At most this many facts, so the line stays one glance long. */
@@ -131,19 +133,21 @@ export interface RecordQuickActionsProps {
   readonly onLog?: () => void;
   /** Opens a new task linked to the record; left out where the person can't add to it. */
   readonly onTask?: () => void;
+  /** The record to follow (collaboration); left out for a record that is gone. */
+  readonly follow?: { readonly slug: string; readonly recordId: string };
 }
 
 /** Whether the quick actions have anything to show. */
-export const hasQuickActions = ({ email, phone, onLog, onTask }: RecordQuickActionsProps): boolean =>
-  email !== undefined || phone !== undefined || onLog !== undefined || onTask !== undefined;
+export const hasQuickActions = ({ email, phone, onLog, onTask, follow }: RecordQuickActionsProps): boolean =>
+  email !== undefined || phone !== undefined || onLog !== undefined || onTask !== undefined || follow !== undefined;
 
 /**
  * The record's quick actions: Email and Call as quiet icon buttons when it has an address or a number (they open
- * the mail app and the phone, the address in their tooltip), then Log activity and Add a task, the record's two
- * things to do, when the person may add to it. The one place each lives on the panel and the page.
+ * the mail app and the phone, the address in their tooltip), the Follow bell, then Log activity and Add a task, the
+ * record's two things to do, when the person may add to it. The one place each lives on the panel and the page.
  */
 export function RecordQuickActions(props: RecordQuickActionsProps) {
-  const { email, phone, onLog, onTask } = props;
+  const { email, phone, onLog, onTask, follow } = props;
   if (!hasQuickActions(props)) return null;
   return (
     <>
@@ -157,6 +161,7 @@ export function RecordQuickActions(props: RecordQuickActionsProps) {
           <ButtonLink variant="ghost" icon="phone" href={`tel:${phone}`} label={strings.callNumber(phone)} />
         </Tooltip>
       )}
+      {follow !== undefined && <FollowButton key={follow.recordId} slug={follow.slug} recordId={follow.recordId} />}
       {onLog !== undefined && (
         <Button variant="secondary" icon="pen" onPress={onLog}>
           {strings.logActivity}

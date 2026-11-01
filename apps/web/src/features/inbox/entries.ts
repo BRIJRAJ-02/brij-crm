@@ -39,6 +39,7 @@ export function toNotificationItem(view: NotificationView, members: readonly Mem
     ...(view.record === undefined ? {} : { record: view.record }),
     ...(view.noteId === undefined ? {} : { isNote: true }),
     ...(view.formName === undefined ? {} : { formName: view.formName }),
+    ...(view.activity === undefined ? {} : { activity: view.activity }),
     excerpt: view.excerpt,
   };
 }
@@ -69,6 +70,10 @@ export function targetOf(
   if (objectSlug === undefined) return undefined;
   if (view.noteId !== undefined) {
     return { kind: 'href', href: `${recordHref(slug, objectSlug, view.record.recordId, 'notes')}?note=${view.noteId}` };
+  }
+  // A followed record's changes open its Activity, where they show.
+  if (view.kind === 'record_activity') {
+    return { kind: 'href', href: recordHref(slug, objectSlug, view.record.recordId, 'activity') };
   }
   // An automation's notice opens the record itself.
   if (view.kind === 'automation') return { kind: 'href', href: recordHref(slug, objectSlug, view.record.recordId) };

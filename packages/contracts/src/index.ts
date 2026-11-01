@@ -45,6 +45,7 @@ import { trashContract } from './trash.ts';
 import { notesContract } from './notes.ts';
 import { tasksContract } from './tasks.ts';
 import { usageContract } from './usage.ts';
+import { followsContract, sampleDataContract } from './follows.ts';
 import { reportsContract } from './reports.ts';
 import { viewsContract } from './views.ts';
 import { workspacesContract } from './workspaces.ts';
@@ -113,6 +114,7 @@ export * from './preferences.ts';
 export * from './team.ts';
 export * from './teams.ts';
 export * from './usage.ts';
+export * from './follows.ts';
 export * from './view-model.ts';
 export * from './reports.ts';
 export * from './views.ts';
@@ -217,4 +219,7 @@ export const contract = {
   audit: auditContract,
   imports: importsContract,
   exports: exportsContract,
+  // Following a record (collaboration), and a workspace's sample data with the Sales template.
+  follows: followsContract,
+  sampleData: sampleDataContract,
 };

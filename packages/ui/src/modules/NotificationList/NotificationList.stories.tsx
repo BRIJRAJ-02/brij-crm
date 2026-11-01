@@ -74,6 +74,7 @@ interface SampleProps {
   readonly isFiltered?: boolean;
   /** Adds a scheduling change someone made (spec 0037, AC-1264). */
   readonly withScheduling?: boolean;
+  readonly withFollowed?: boolean;
 }
 
 /** The inbox in a fixed height slot, marking rows as the screen would. */
@@ -85,10 +86,11 @@ function SampleInbox({
   onRetry,
   isFiltered = false,
   withScheduling = false,
+  withFollowed = false,
 }: SampleProps) {
   const [items, setItems] = useState(() => {
     if (isEmpty) return [];
-    if (!withScheduling) return sampleItems();
+    if (!withScheduling && !withFollowed) return sampleItems();
     const scheduling: NotificationItem = {
       id: 'n5',
       kind: 'scheduling_changed',
@@ -98,7 +100,19 @@ function SampleInbox({
       isDone: false,
       excerpt: '',
     };
-    return [scheduling, ...sampleItems()];
+    // A record the reader follows (collaboration): counts only, its record as the chip.
+    const followed: NotificationItem = {
+      id: 'n6',
+      kind: 'record_activity',
+      actor: GRACE ?? { type: 'system', id: null, name: 'System' },
+      createdAt: '2026-10-08T14:20:00.000Z',
+      isRead: false,
+      isDone: false,
+      record: { objectId: 'o-companies', recordId: 'r-acme', name: 'Acme', kind: 'company' },
+      activity: { fields: 3, notes: 0, comments: 0, tasks: 0 },
+      excerpt: '',
+    };
+    return [...(withScheduling ? [scheduling] : []), ...(withFollowed ? [followed] : []), ...sampleItems()];
   });
   const source = arraySource(items, (item) => item.id);
   return (
@@ -167,6 +181,17 @@ export const SchedulingChanged: Story = {
   play: async ({ args, canvas, userEvent }) => {
     await userEvent.click(canvas.getByText('Grace Hopper changed your scheduling'));
     await expect(args.onAction).toHaveBeenCalledWith('n5');
+  },
+};
+
+/** A record the reader follows (collaboration): its changes counted, never quoted, with the record's chip. */
+export const FollowedRecord: Story = {
+  args: { withFollowed: true, onAction: fn() },
+  // The row is Default's, with another sentence.
+  parameters: { crm: { screenshot: false } },
+  play: async ({ args, canvas, userEvent }) => {
+    await userEvent.click(canvas.getByText('Grace Hopper changed 3 fields'));
+    await expect(args.onAction).toHaveBeenCalledWith('n6');
   },
 };
 

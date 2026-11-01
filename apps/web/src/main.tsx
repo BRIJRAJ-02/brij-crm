@@ -15,6 +15,7 @@ import { hintPage, writeParentSessionHint } from './features/auth/parent-hint.ts
 import { signInHref } from './features/auth/redirect.ts';
 import { createFocusRecovery, focusFirstLoad, focusPage, isSamePage } from './features/navigation/focus.ts';
 import { PRELOAD_DELAY_MS, startIntentPreload } from './features/navigation/preload.ts';
+import { strings as sampleStrings } from './features/sample/strings.ts';
 import { followPageTitle } from './features/navigation/title.ts';
 import { rememberPlace, safeSessionStorage } from './features/settings/back.ts';
 import { importSummaryHref } from './features/imports/paths.ts';
@@ -163,6 +164,14 @@ const data = createDataLayer({
           toast(jobFinishedToast(job, onView));
         },
       );
+      return;
+    }
+    // Sample data (one button): its end says it is in, and the pages read again (Deals' stages, its Pipeline board).
+    if (job.kind === 'workspace.sample_data') {
+      toasts.toast(
+        job.status === 'succeeded' ? { tone: 'success', message: sampleStrings.added } : jobFinishedToast(job, onView),
+      );
+      void router.invalidate();
       return;
     }
     // A records export (spec 0040, AC-1131): its end offers the file. One this tab started has its own toast,

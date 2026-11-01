@@ -6,6 +6,8 @@ import type { BoardStatus, BoardStore } from './records/board.ts';
 import type { BrandHeld, BrandHeldState } from './brand/store.ts';
 import type { DataError } from './errors.ts';
 import type { FilesState, RecordFilesSource } from './files/store.ts';
+import type { FollowHeld, FollowSnapshot } from './follows/store.ts';
+import type { SampleHeld, SampleSnapshot } from './sample/store.ts';
 import type { OperatorHeld } from './operator/store.ts';
 import type { RecordFacts, RecordFactsState } from './records/facts.ts';
 import type { ObjectAccessSource, ObjectAccessState } from './access/rules-store.ts';
@@ -498,6 +500,16 @@ export function useCalendarSettings(held: CalendarSettingsHeld): CalendarSetting
 
 /** The workspace's default currency and country, read when first held; undefined until it arrives. */
 export function useWorkspaceRegion(held: RegionHeld): WorkspaceRegion | undefined {
+  return useRetained(held);
+}
+
+/** A workspace's sample data state (one button), read when first held and again as it moves. */
+export function useSampleData(held: SampleHeld): SampleSnapshot {
+  return useRetained(held);
+}
+
+/** Whether the member follows a record (its header's Follow), read when first held. */
+export function useFollow(held: FollowHeld): FollowSnapshot {
   return useRetained(held);
 }
 

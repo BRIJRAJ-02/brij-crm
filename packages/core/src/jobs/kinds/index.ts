@@ -17,6 +17,7 @@ import { recordsImportUndo } from '../../imports/undo.ts';
 import { recordsExport } from '../../exports/records.ts';
 import { workspaceExport, type WorkspaceExportStore } from '../../exports/workspace.ts';
 import { computedKinds } from '../../computed/jobs.ts';
+import { sampleDataKind } from '../../sample/sample.ts';
 
 /** What the kinds a process runs depend on: where it runs, and (for the test kind) how it waits. */
 export interface JobKindsOptions {
@@ -72,6 +73,7 @@ export function jobKinds(options: JobKindsOptions): JobRegistry {
     recordsExport(),
     workspaceExport(options.exportFiles),
     ...computedKinds(),
+    sampleDataKind() as AnyKind,
     ...tests,
     ...(options.extra ?? []),
   ]);

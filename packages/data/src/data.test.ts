@@ -811,6 +811,16 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       get: os.exports.get.handler(notServed),
       startWorkspace: os.exports.startWorkspace.handler(notServed),
     },
+    follows: {
+      get: os.follows.get.handler(notServed),
+      set: os.follows.set.handler(notServed),
+    },
+    sampleData: {
+      get: os.sampleData.get.handler(notServed),
+      add: os.sampleData.add.handler(notServed),
+      remove: os.sampleData.remove.handler(notServed),
+      undoRemove: os.sampleData.undoRemove.handler(notServed),
+    },
     bookingPages: {
       list: os.bookingPages.list.handler(notServed),
       get: os.bookingPages.get.handler(({ input }) => behaviour.bookingPagesGet(input.pageId)),

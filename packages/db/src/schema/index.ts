@@ -29,6 +29,7 @@ export { memberRecents } from './search.ts';
 export { recordDuplicateDismissals } from './duplicates.ts';
 export { commentReactions, comments, commentVersions } from './comments.ts';
 export { notificationKind, notifications, notificationSettings } from './notifications.ts';
+export { recordFollows, sampleData } from './follows.ts';
 export { memberPreferences } from './preferences.ts';
 export { workspaceBrands } from './brand.ts';
 export {

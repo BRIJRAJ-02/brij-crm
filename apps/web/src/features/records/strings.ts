@@ -68,6 +68,10 @@ export const strings = {
   callNumber: (number: string) => `Call ${number}`,
   logActivity: 'Log activity',
   addTask: 'Add a task',
+  /** The header's bell (collaboration): its name, and its tooltip off and on. */
+  follow: 'Follow',
+  followHint: 'Follow changes in your inbox',
+  unfollowHint: 'Following. Press to stop',
   /** The More menu's Rename: the name is the header, so it is no longer a row in Details (owner, 31 Oct). */
   rename: 'Rename',
   cancel: 'Cancel',

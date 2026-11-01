@@ -17,6 +17,23 @@ export const strings = {
     automation: (actor: string) => `${actor} notified you`,
     /** Someone else changed the reader's hours, time off, limits, pages or rotations (spec 0037, AC-1264). */
     scheduling_changed: (actor: string) => `${actor} changed your scheduling`,
+    /** A record the reader follows, when its counts didn't come with it; the record's chip follows the sentence. */
+    record_activity: (actor: string) => `${actor} changed`,
+  },
+  /**
+   * Someone changed a record the reader follows, its chip after the sentence: "Ada changed 3 fields", "Ada added a
+   * note", or for a mix "Ada made 4 changes".
+   */
+  activity: {
+    fields: (actor: string, count: number) =>
+      count === 1 ? `${actor} changed a field` : `${actor} changed ${String(count)} fields`,
+    notes: (actor: string, count: number) =>
+      count === 1 ? `${actor} added a note` : `${actor} added ${String(count)} notes`,
+    comments: (actor: string, count: number) =>
+      count === 1 ? `${actor} commented` : `${actor} left ${String(count)} comments`,
+    tasks: (actor: string, count: number) =>
+      count === 1 ? `${actor} completed a task` : `${actor} completed ${String(count)} tasks`,
+    mixed: (actor: string, count: number) => `${actor} made ${String(count)} changes`,
   },
   /** A form's new submission, its form first as the other rows lead with who acted: "Contact us got a new submission". */
   submission: (form: string) => `${form} got a new submission`,

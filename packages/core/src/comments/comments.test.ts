@@ -470,6 +470,7 @@ describe('the inbox (AC-1169 to AC-1171, AC-1179, AC-1181)', () => {
       emailReplies: false,
       emailAssignments: true,
       digest: false,
+      followedRecords: true,
       version: 0,
     });
     expect(await refusalOf(setNotificationSettings(bea, { digest: true }))).toMatchObject({
@@ -486,6 +487,7 @@ describe('the inbox (AC-1169 to AC-1171, AC-1179, AC-1181)', () => {
       emailReplies: true,
       emailAssignments: true,
       digest: true,
+      followedRecords: true,
       timeZone: 'Asia/Kolkata',
       version: 1,
     });

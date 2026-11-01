@@ -27,6 +27,7 @@ function store(refuse = false) {
       emailReplies: false,
       emailAssignments: true,
       digest: false,
+      followedRecords: true,
       timeZone: 'Europe/London',
       version: 1,
     },
