@@ -112,9 +112,13 @@ export function webhookHeaders(send: WebhookSend, unixSeconds: number): Record<s
 export function pinnedLookup(checked: readonly LookupAddress[]): LookupFunction {
   const ordered = [...checked].sort((a, b) => a.family - b.family);
   return (_hostname, options, callback) => {
-    const [first] = ordered;
+    // A connection that asks for one family gets only that family, never an address of the other labelled wrongly
+    // (security review, 1 November). Asked for either (0 or unset), it gets them all, IPv4 first.
+    const family = options.family === 4 || options.family === 6 ? options.family : undefined;
+    const wanted = family === undefined ? ordered : ordered.filter((each) => each.family === family);
+    const [first] = wanted;
     if (first === undefined) callback(new Error('No checked address.'), '');
-    else if (options.all === true) callback(null, ordered);
+    else if (options.all === true) callback(null, wanted);
     else callback(null, first.address, first.family);
   };
 }
@@ -168,15 +172,26 @@ export function createWebhookSender(options: WebhookSenderOptions = {}): Webhook
           const status = response.statusCode ?? 0;
           const chunks: Buffer[] = [];
           let size = 0;
+          // Whether the answer arrived whole: `end`, or the excerpt cap reached, after which the rest is dropped on
+          // purpose. A socket that closes mid body is a failure, not a delivery (security review, 1 November).
+          let whole = false;
           const done = () => {
             const excerpt = Buffer.concat(chunks).toString('utf8').slice(0, WEBHOOK_EXCERPT_MAX);
-            const ok = status >= 200 && status < 300;
+            const ok = whole && status >= 200 && status < 300;
             finish({
               ok,
               status,
               ms: elapsed(),
               ...(excerpt === '' ? {} : { excerpt }),
-              ...(ok ? {} : { failure: status >= 300 && status < 400 ? ('redirect' as const) : ('status' as const) }),
+              ...(ok
+                ? {}
+                : {
+                    failure: !whole
+                      ? ('network' as const)
+                      : status >= 300 && status < 400
+                        ? ('redirect' as const)
+                        : ('status' as const),
+                  }),
             });
           };
           response.on('data', (chunk: Buffer) => {
@@ -185,11 +200,15 @@ export function createWebhookSender(options: WebhookSenderOptions = {}): Webhook
             size += chunk.length;
             // The rest of the answer is never read: the excerpt is all the log keeps.
             if (size >= WEBHOOK_EXCERPT_MAX) {
+              whole = true;
               done();
               response.destroy();
             }
           });
-          response.on('end', done);
+          response.on('end', () => {
+            whole = true;
+            done();
+          });
           response.on('error', done);
           response.on('close', done);
         },
@@ -210,6 +229,7 @@ export interface WebhookDeliverDeps {
   readonly log: {
     info(message: string, fields?: Record<string, unknown>): void;
     warn(message: string, fields?: Record<string, unknown>): void;
+    error(message: string, fields?: Record<string, unknown>): void;
   };
 }
 
@@ -228,6 +248,19 @@ export async function runWebhookDelivery(deps: WebhookDeliverDeps, payload: unkn
   const loaded = await loadWebhookDelivery(scope, deps.key, { deliveryId });
   if (loaded.kind === 'skip') {
     deps.log.info('webhooks.delivery.skipped', { workspaceId, deliveryId, reason: loaded.reason });
+    return;
+  }
+  // A delivery whose secret this server's key cannot open is recorded as an ordinary failed try rather than left
+  // pending: the backoff runs, and 3 days of it turns the endpoint off and tells its admins. Nothing is sent.
+  if (loaded.kind === 'unsendable') {
+    deps.log.error('webhooks.secret_unreadable', {
+      workspaceId,
+      endpointId: loaded.send.endpointId,
+      reason: 'the stored secret did not open under WEBHOOK_SECRET_KEY',
+    });
+    await finishWebhookDelivery(scope, loaded.send, { ok: false, ms: 0, failure: loaded.failure }, {
+      hooks: [outboxHook()],
+    });
     return;
   }
   const result = await deps.send(loaded.send);

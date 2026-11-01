@@ -42,6 +42,12 @@ export const WEBHOOK_LOG_DAYS = 30;
 export const WEBHOOK_ROTATION_OVERLAP_HOURS = 24;
 /** The most test events and resends per endpoint per minute (the API table). */
 export const WEBHOOK_SENDS_PER_MINUTE = 10;
+/**
+ * The most test events and resends a whole workspace may make in a minute. Each one is an outgoing request made from
+ * the request, so without this an admin with 10 endpoints could hold 100 ten second sends open at once and use our
+ * egress address as a fetch oracle at that rate (security review, 1 November).
+ */
+export const WEBHOOK_SENDS_PER_WORKSPACE_MINUTE = 20;
 /** How many deliveries one page of the log holds. */
 export const WEBHOOK_DELIVERIES_PAGE = 25;
 
@@ -141,7 +147,9 @@ export const WebhookDelivery = z.strictObject({
   /** The first 1 KB of what the receiver answered, as text. */
   responseExcerpt: z.string().optional(),
   /** Why nothing came back: the address was refused, it timed out, the network failed, or it redirected. */
-  failure: z.enum(['address', 'timeout', 'network', 'redirect', 'status', 'too_large', 'cancelled']).optional(),
+  failure: z
+    .enum(['address', 'timeout', 'network', 'redirect', 'status', 'too_large', 'cancelled', 'config'])
+    .optional(),
   nextAttemptAt: z.iso.datetime().optional(),
   createdAt: z.iso.datetime(),
   sentAt: z.iso.datetime().optional(),

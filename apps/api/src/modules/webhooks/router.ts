@@ -10,7 +10,7 @@ import {
   rotateWebhookSecret,
   updateWebhook,
 } from '@crm/core';
-import { WEBHOOK_SENDS_PER_MINUTE } from '@crm/contracts';
+import { WEBHOOK_SENDS_PER_MINUTE, WEBHOOK_SENDS_PER_WORKSPACE_MINUTE } from '@crm/contracts';
 import { apiError } from '../../errors.ts';
 import { commitWrite } from '../../hooks.ts';
 import { member, type RequestContext, type WebhookServices } from '../../orpc.ts';
@@ -30,8 +30,17 @@ function servicesOf(context: Pick<RequestContext, 'webhooks'>): WebhookServices 
   return context.webhooks;
 }
 
-/** Counts one test or resend against the endpoint's minute (the API table): 429 RATE_LIMITED past 10. */
+/**
+ * Counts one test or resend against the endpoint's minute and the workspace's (the API table): 429 RATE_LIMITED past
+ * either. The workspace's cap is what stops ten endpoints together holding a hundred outgoing sends open.
+ */
 async function limitSends(context: Pick<RequestContext, 'limiter'>, workspaceId: string, endpointId: string) {
+  const whole = await context.limiter.consumeRateLimit(`webhook-send:${workspaceId}`, {
+    window: 60,
+    max: WEBHOOK_SENDS_PER_WORKSPACE_MINUTE,
+  });
+  if (!whole.allowed)
+    throw apiError('RATE_LIMITED', 'That’s a lot of sends at once. Wait a minute, then try again.');
   const decision = await context.limiter.consumeRateLimit(`webhook-send:${workspaceId}:${endpointId}`, {
     window: 60,
     max: WEBHOOK_SENDS_PER_MINUTE,

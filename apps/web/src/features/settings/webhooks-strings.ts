@@ -92,6 +92,7 @@ export const strings = {
     status: 'The server refused it.',
     too_large: 'Too large to send.',
     cancelled: 'Not sent: the endpoint was off or no longer wanted this event.',
+    config: 'Not sent: this server can’t open the signing secret. Rotate it, or ask whoever runs the server.',
   } as const,
   log: 'Deliveries',
   logEmpty: 'Nothing sent yet',

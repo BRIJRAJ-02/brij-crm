@@ -100,12 +100,21 @@ async function planOf(tx: WorkspaceTx, key: WebhookKey, workspaceId: string, del
   const row = found.rows[0];
   if (row === undefined) return undefined;
   const binding = { workspaceId, endpointId: row.endpoint_id };
-  const secrets = [
-    openSecret(key, row.secret_sealed, binding),
-    ...(row.previous_live && row.previous_secret_sealed !== null
-      ? [openSecret(key, row.previous_secret_sealed, binding)]
-      : []),
-  ];
+  // A secret this key cannot open (the key was changed or removed after the endpoint was made) must not wedge the
+  // delivery: it answers no secrets, and the caller records an ordinary failed try, so the backoff and the 3 day
+  // turning off run and the workspace's admins are told (security review, 1 November). `signatureHeader` refuses an
+  // empty list, so a delivery that got here can never be sent unsigned.
+  let secrets: readonly string[];
+  try {
+    secrets = [
+      openSecret(key, row.secret_sealed, binding),
+      ...(row.previous_live && row.previous_secret_sealed !== null
+        ? [openSecret(key, row.previous_secret_sealed, binding)]
+        : []),
+    ];
+  } catch {
+    secrets = [];
+  }
   const send: WebhookSend = {
     deliveryId: row.id,
     endpointId: row.endpoint_id,
@@ -119,9 +128,13 @@ async function planOf(tx: WorkspaceTx, key: WebhookKey, workspaceId: string, del
   return { row, send };
 }
 
-/** What the task does with a queued delivery: send it, or nothing (gone, done, or its endpoint is off). */
+/**
+ * What the task does with a queued delivery: send it, record it as a try that could not be made (its secret does not
+ * open under this server's key), or nothing (gone, done, or its endpoint is off).
+ */
 export type WebhookLoad =
   | { readonly kind: 'send'; readonly send: WebhookSend }
+  | { readonly kind: 'unsendable'; readonly send: WebhookSend; readonly failure: 'config' }
   | { readonly kind: 'skip'; readonly reason: 'gone' | 'done' | 'off' };
 
 /** The system's read of one queued delivery (the worker's task). An endpoint turned off gives its waiting ones up. */
@@ -143,6 +156,7 @@ export async function loadWebhookDelivery(
       );
       return { kind: 'skip', reason: 'off' };
     }
+    if (plan.send.secrets.length === 0) return { kind: 'unsendable', send: plan.send, failure: 'config' };
     return { kind: 'send', send: plan.send };
   });
 }
@@ -177,7 +191,19 @@ async function recordTry(
   },
 ): Promise<WebhookFinished> {
   const delay = result.ok || !options.retry ? undefined : retryDelaySeconds(send.attempt, options.random);
-  const state = result.ok ? 'sent' : !options.retry ? 'failed' : delay === undefined ? 'gave_up' : 'failed';
+  // A send made from the request (a test or a resend) never queues a try of its own. A failed resend of a delivery
+  // that had already given up stays given up, rather than reading as though another try were coming (security
+  // review, 1 November); anything else it failed stays `failed`, with whatever try still waits.
+  const gaveUpAlready = !options.retry && !result.ok && send.attempt > WEBHOOK_BACKOFF_SECONDS.length + 1;
+  const state = result.ok
+    ? 'sent'
+    : !options.retry
+      ? gaveUpAlready
+        ? 'gave_up'
+        : 'failed'
+      : delay === undefined
+        ? 'gave_up'
+        : 'failed';
   const updated = await tx.execute<Parameters<typeof toDelivery>[0]>(sql`
     update webhook_deliveries set attempt = ${send.attempt}, state = ${state},
       response_status = ${result.status ?? null}, response_ms = ${Math.max(0, Math.round(result.ms))},
