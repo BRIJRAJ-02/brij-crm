@@ -6,7 +6,7 @@
   .root {
     /* A panel opening, transitions.dev's 400ms (the owner, 2 November 2026), a literal until the artifact has it. */
     /* stylelint-disable-next-line unit-disallowed-list -- transitions.dev's timing for this usage, until the artifact carries it */
-    --panel-duration: 400ms;
+    --panel-duration: 480ms;
 
     display: flex;
     flex-direction: column;

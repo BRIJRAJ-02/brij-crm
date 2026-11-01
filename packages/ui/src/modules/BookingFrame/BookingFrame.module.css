@@ -42,14 +42,29 @@
        only): every Button, time and day in here eases to 0.97 while held, and a changed label (Book, Confirm)
        resolves in. The app keeps the tokens' 1 and no swap. */
     --scale-press: 0.97;
-    /* transitions.dev's timings for this page (the owner, 2 November 2026): a text swap 150ms, a page slide 250ms,
-       a text reveal 500ms. Literals on this page's root until the artifact carries them as tokens. */
-    /* stylelint-disable-next-line unit-disallowed-list -- transitions.dev's timing for this usage, until the artifact carries it */
-    --label-swap: 150ms;
-    /* stylelint-disable-next-line unit-disallowed-list -- transitions.dev's timing for this usage, until the artifact carries it */
-    --slide-duration: 250ms;
-    /* stylelint-disable-next-line unit-disallowed-list -- transitions.dev's timing for this usage, until the artifact carries it */
-    --reveal-duration: 500ms;
+    /* A calmer pace for this page (the owner, 2 November 2026: "a bit slower, too fast, smoother"): the library's
+       motion tokens run about half as long again in here, so every part on the page (the view switch's thumb, the
+       times, the days, the month, Book) eases rather than snaps, while the app keeps the tokens' own pace. The
+       page's own moments sit on transitions.dev's scale, a step slower: a label swap, a step's slide, a reveal.
+       Literals until the artifact carries a public page pace. */
+    /* stylelint-disable-next-line unit-disallowed-list -- this page's calmer pace, until the artifact carries it */
+    --duration-hover: 180ms;
+    /* stylelint-disable-next-line unit-disallowed-list -- this page's calmer pace, until the artifact carries it */
+    --duration-press: 220ms;
+    /* stylelint-disable-next-line unit-disallowed-list -- this page's calmer pace, until the artifact carries it */
+    --duration-exit: 200ms;
+    /* stylelint-disable-next-line unit-disallowed-list -- this page's calmer pace, until the artifact carries it */
+    --duration-popover: 280ms;
+    /* stylelint-disable-next-line unit-disallowed-list -- this page's calmer pace, until the artifact carries it */
+    --duration-move: 340ms;
+    /* stylelint-disable-next-line unit-disallowed-list -- this page's calmer pace, until the artifact carries it */
+    --duration-modal: 380ms;
+    /* stylelint-disable-next-line unit-disallowed-list -- this page's calmer pace, until the artifact carries it */
+    --label-swap: 260ms;
+    /* stylelint-disable-next-line unit-disallowed-list -- this page's calmer pace, until the artifact carries it */
+    --slide-duration: 420ms;
+    /* stylelint-disable-next-line unit-disallowed-list -- this page's calmer pace, until the artifact carries it */
+    --reveal-duration: 600ms;
     /* The blur a step, a heading and a new fact resolve out of (transitions.dev's page slide and text reveal), a
        literal until the artifact has a blur token. */
     /* stylelint-disable-next-line unit-disallowed-list -- a value waiting on the artifact's blur token, not a borrowed one */

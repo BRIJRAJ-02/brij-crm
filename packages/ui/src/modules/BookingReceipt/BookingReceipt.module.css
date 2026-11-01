@@ -13,9 +13,9 @@
     /* transitions.dev's timings (the owner, 2 November 2026): a text reveal and the success check 500ms, a panel
        opening 400ms. Literals until the artifact carries them as tokens. */
     /* stylelint-disable-next-line unit-disallowed-list -- transitions.dev's timing for this usage, until the artifact carries it */
-    --reveal-duration: 500ms;
+    --reveal-duration: 600ms;
     /* stylelint-disable-next-line unit-disallowed-list -- transitions.dev's timing for this usage, until the artifact carries it */
-    --panel-duration: 400ms;
+    --panel-duration: 480ms;
 
     box-sizing: border-box;
     display: flex;

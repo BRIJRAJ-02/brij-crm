@@ -15,6 +15,10 @@
        set has no blur yet: the artifact owes a motion blur token. */
     /* stylelint-disable-next-line unit-disallowed-list -- a value waiting on the artifact's blur token, not a borrowed one */
     --stream-blur: 1px;
+    /* One word's beat as a reply writes itself: 40ms, about 25 words a second (stageshow's ai-chat), quick enough to
+       feel live and slow enough to read along (the owner, 2 November 2026: the chat was too fast to use). */
+    /* stylelint-disable-next-line unit-disallowed-list -- a reading pace, no motion token stands for it */
+    --stream-step: 40ms;
 
     display: flex;
     flex: 1;
@@ -47,11 +51,16 @@
     flex-direction: column;
     align-items: flex-start;
     gap: var(--space-8);
-    animation: line-in var(--duration-popover) var(--ease-out) both;
+    /* A new line opens in the thread with its own height (stageshow's ai-chat and ai-cards: a drop reveal), so the
+       thread moves up as one rather than jumping a line at a time. */
+    interpolate-size: allow-keywords;
+    animation: line-drop var(--duration-modal) var(--ease-out) backwards;
   }
 
+  /* What the visitor sends rises out of the composer it was typed in (stageshow's messages). */
   .line[data-role='visitor'] {
     align-items: flex-end;
+    animation-name: line-sent;
   }
 
   .bubble {
@@ -71,19 +80,20 @@
     background: var(--accent-soft);
   }
 
-  /* A reply writes itself: each word resolves a beat after the one before (Written in BookingChat.tsx), the whole
-     reply inside about 300ms (40 words at most are staggered), so it never slows the step down. */
+  /* A reply writes itself: each word resolves a beat after the one before (Written in BookingChat.tsx), about 25
+     words a second; past 40 words the rest arrive together, so a long reply never keeps the visitor waiting. */
   .word {
     animation: word-in var(--duration-move) var(--ease-out) backwards;
-    animation-delay: calc(var(--word, 0) * var(--duration-hover) / 16);
+    animation-delay: calc(var(--word, 0) * var(--stream-step));
   }
 
   /* What the reply offers (its times, its suggestions) arrives once its words have: the answer first, then the
      choices, as a person would say it and then point. */
   .offers,
   .suggestions {
-    animation: line-in var(--duration-popover) var(--ease-out) backwards;
-    animation-delay: calc(var(--words, 0) * var(--duration-hover) / 16 + var(--duration-hover));
+    interpolate-size: allow-keywords;
+    animation: line-drop var(--duration-modal) var(--ease-out) backwards;
+    animation-delay: calc(var(--words, 0) * var(--stream-step) + var(--duration-popover));
   }
 
   /* Each day's times start a group of their own: as far under the reply as the reply sits under the card's heading. */
@@ -171,7 +181,8 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .line {
+    .line,
+    .line[data-role='visitor'] {
       animation-name: line-fade;
     }
 
@@ -193,10 +204,33 @@
     }
   }
 
-  @keyframes line-in {
+  @keyframes line-drop {
     from {
+      overflow: clip;
+      min-block-size: 0;
+      block-size: 0;
       opacity: 0;
-      translate: 0 var(--space-4);
+      translate: 0 calc(-1 * var(--space-4));
+    }
+
+    to {
+      overflow: clip;
+      min-block-size: 0;
+    }
+  }
+
+  @keyframes line-sent {
+    from {
+      overflow: clip;
+      min-block-size: 0;
+      block-size: 0;
+      opacity: 0;
+      translate: 0 var(--space-8);
+    }
+
+    to {
+      overflow: clip;
+      min-block-size: 0;
     }
   }
 
