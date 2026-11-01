@@ -3,6 +3,7 @@
 // then sees through the door. The Member role loses Companies and the Sales team gets it back; a member limited to
 // their own records owns what they make and sees only that; a team scope shows teammates' records; owners and admins
 // are never restricted; nothing crosses from one workspace to another, one role to another, or one team to another.
+import { readFileSync } from 'node:fs';
 import { sql } from 'drizzle-orm';
 import type { Role } from '@crm/contracts';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
@@ -23,7 +24,7 @@ import { changeTeamMembers, createTeam } from '../teams/teams.ts';
 import { testScope } from '../testing.ts';
 import { audiences } from './audiences.ts';
 import { enterAsActor, systemScope } from './door.ts';
-import { objectLevel, OPEN_KEY } from './policy.ts';
+import { fieldLevel, objectLevel, OPEN_KEY } from './policy.ts';
 import { previewAccess } from './preview.ts';
 import { getObjectAccess, setObjectAccess } from './rules.ts';
 import { storedRules } from './stored-rules.ts';
@@ -930,5 +931,60 @@ describe('a custom role as a rule subject (spec 0037, AC-1230)', () => {
       [w.workspaceId, role.id, w.companies],
     );
     expect(objectLevel((await w.enter(ada)).access, w.companies)).toBe('none');
+  });
+});
+
+describe('the backfill of migration 0162 (AC-1230)', () => {
+  /** The migration's own backfill statements, read from the file, so the test can never drift from what ships. */
+  const backfill = (): readonly string[] => {
+    const text = readFileSync(new URL('../../../db/migrations/0162_custom_role_rules.sql', import.meta.url), 'utf8');
+    const after = text.slice(text.indexOf('set local row_security = off'));
+    return after
+      .split('--> statement-breakpoint')
+      .map((statement) => statement.trim())
+      .filter((statement) => statement.startsWith('insert into'));
+  };
+
+  it('gives every role made before the rules Member had, whatever it started from', async () => {
+    const w = await world();
+    const ada = await w.add('Ada');
+    const bea = await w.add('Bea');
+    const description = w.attribute('description');
+    // A workspace as it stands the day the migration runs: Member limited, and roles with no rules of their own.
+    await setObjectAccess(w.owner, {
+      objectId: w.companies,
+      subject: MEMBER,
+      rule: { level: 'read', records: 'all', fields: { [description]: 'hidden' } },
+    });
+    const first = await newRole(w.owner, 'Sales');
+    const copy = await newRole(w.owner, 'Sales copy');
+    // As they were before this release: no rules of their own, one started from the other.
+    await testQuery(
+      ownerUrl,
+      `delete from access_rules where workspace_id = $1 and subject_custom_role_id is not null`,
+      [w.workspaceId],
+    );
+    await testQuery(ownerUrl, `update workspace_roles set started_from = $2 where workspace_id = $1 and id = $3`, [
+      w.workspaceId,
+      first.id,
+      copy.id,
+    ]);
+    await setMemberRole(w.owner, { memberId: ada, customRoleId: first.id });
+    await setMemberRole(w.owner, { memberId: bea, customRoleId: copy.id });
+    for (const statement of backfill()) await testQuery(ownerUrl, statement, []);
+    // Both hold Member's rules as they stood, the one started from another role included.
+    for (const memberId of [ada, bea]) {
+      const scope = await w.enter(memberId);
+      expect(objectLevel(scope.access, w.companies)).toBe('read');
+      expect(fieldLevel(scope.access, { id: description, objectId: w.companies })).toBe('hidden');
+    }
+    // And running it again writes nothing twice.
+    for (const statement of backfill()) await testQuery(ownerUrl, statement, []);
+    const rows = await testQuery<{ n: string }>(
+      ownerUrl,
+      `select count(*)::text as n from access_rules where workspace_id = $1 and subject_custom_role_id = $2`,
+      [w.workspaceId, copy.id],
+    );
+    expect(rows[0]?.n).toBe('2');
   });
 });

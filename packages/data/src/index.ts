@@ -2162,6 +2162,9 @@ export function createDataLayer({
       ]);
       // A Roster narrowed to a team reads its rows again (spec 0037, AC-1289).
       accessLoaded?.teamWeek.teamsChanged(workspace);
+      // A held Access tab lists the custom roles as its subjects (spec 0037, AC-1230), so a role made, renamed,
+      // copied or deleted changes its rows even when nobody holds that role and no `access` row names anyone.
+      rulesStore.changed(workspace);
     });
     // A role changed may be the person's own: their access is read again (the server checks every call anyway).
     void namesMe(workspace, event.memberIds).then((named) => {

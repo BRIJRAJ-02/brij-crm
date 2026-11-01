@@ -190,6 +190,8 @@ async function attributeNamed(tx: WorkspaceTx, workspaceId: string, id: string):
   return found;
 }
 
+const LEVEL_RANK: Readonly<Record<string, number>> = { none: 0, hidden: 0, read: 1, write: 2 };
+
 /** A custom role as a rule subject: its name and the data access that is both its default and its ceiling. */
 interface RoleSubjectRow {
   readonly id: string;
@@ -288,14 +290,18 @@ async function readAccess(tx: WorkspaceTx, workspaceId: string, objectId: string
     ),
     people: people.byRole.get(role) ?? 0,
   }));
-  // Each custom role after the built in ones (AC-1230): its data access is what it gets where no rule names it.
+  // Each custom role after the built in ones (AC-1230): its data access is what it gets where no rule names it, and
+  // the ceiling on what a rule gives it (AC-1229), so the grid never shows an edit the door would read as view.
   for (const role of roles) {
+    const ceiling = customRoleLevel(role.defaultObjectLevel);
+    const standing = shown(
+      storedOf((row) => row.customRoleId === role.id),
+      ceiling,
+    );
     subjects.push({
+      ...standing,
+      level: (LEVEL_RANK[standing.level] ?? 0) > (LEVEL_RANK[ceiling] ?? 0) ? ceiling : standing.level,
       subject: { type: 'custom_role', roleId: role.id },
-      ...shown(
-        storedOf((row) => row.customRoleId === role.id),
-        customRoleLevel(role.defaultObjectLevel),
-      ),
       people: people.byCustomRole.get(role.id) ?? 0,
       label: role.name,
     });
@@ -434,8 +440,6 @@ function rowsOf(
 /** Whether a rule row is about this subject. */
 const aboutSubject = (rowSubject: LevelRule['subject'], subject: RuleSubject): boolean =>
   rowSubject.type === subject.type && keyOf(rowSubject) === keyOf(subject);
-
-const LEVEL_RANK: Readonly<Record<string, number>> = { none: 0, hidden: 0, read: 1, write: 2 };
 
 /** How many records a policy reaches on an object, for comparing before and after: all over a team's over one's own. */
 const reachOf = (access: Access, objectId: string): number => {

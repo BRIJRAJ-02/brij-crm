@@ -23,7 +23,11 @@ export const roleOf = (subject: RuleSubject): string | undefined =>
 
 /** The key a subject is held under. */
 export const keyOf = (subject: RuleSubject): string =>
-  subject.type === 'role' ? `role:${subject.role}` : subject.type === 'custom_role' ? subject.roleId : subject.teamId;
+  subject.type === 'role'
+    ? `role:${subject.role}`
+    : subject.type === 'custom_role'
+      ? `custom_role:${subject.roleId}`
+      : subject.teamId;
 
 /**
  * What the grid shows at once for a change, before the server answers: the subject's new standing, a role at its
@@ -39,8 +43,9 @@ export function expected(
 ): ObjectAccess {
   const found = access.subjects.find((each) => keyOf(each.subject) === keyOf(subject));
   const people = found?.people ?? 0;
-  // What the subject gets with no rule: the server says, so a role added to the roles list needs nothing here.
-  const defaultLevel = found?.defaultLevel ?? (subject.type === 'team' ? 'none' : 'write');
+  // The server says what a subject gets with no rule, so a role added to the roles list needs nothing here; a
+  // custom role's is its data access, which is never assumed to be write (spec 0037, AC-1229).
+  const defaultLevel = found?.defaultLevel ?? (subject.type === 'role' ? 'write' : 'none');
   // Field rules: those given, else the ones it has; clearing the rule clears them too.
   const fields: FieldRules = rule === null ? {} : (rule.fields ?? found?.fields ?? {});
   const next: SubjectAccess | undefined =

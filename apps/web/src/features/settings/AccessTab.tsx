@@ -270,22 +270,13 @@ export function AccessTab({ data, toasts, slug, object, access: initial, teams, 
     const isReadOnlyRole = isRole && standing.defaultLevel !== 'write';
     switch (column) {
       case 'who':
-        if (isRole) {
-          return (
-            <>
-              {who}
-              <Badge size="chip" text={strings.appliesTo(standing.people)} label={strings.appliesToLabel(who)} />
-              {isReadOnlyRole && <InfoTip label={who}>{strings.readOnlyRoleTip}</InfoTip>}
-            </>
-          );
-        }
-        return isGuest ? (
+        // Every row that covers people says how many, so an absent chip reads as nobody rather than as a difference.
+        return (
           <>
             {who}
-            <InfoTip label={who}>{strings.guestsTip}</InfoTip>
+            {standing.people > 0 && <Badge size="chip" text={strings.appliesTo(standing.people)} />}
+            {isGuest && <InfoTip label={who}>{strings.guestsTip}</InfoTip>}
           </>
-        ) : (
-          who
         );
       case 'see':
         // A team in the grid sees by being in it; taking its access away is its X, the one way out.
@@ -301,14 +292,22 @@ export function AccessTab({ data, toasts, slug, object, access: initial, teams, 
           />
         );
       case 'edit':
-        return (
+        // A read only role's reason sits beside the box it explains, not in the row's name, where it would read as
+        // being about the role itself.
+        return isReadOnlyRole ? (
+          <>
+            <Checkbox label={strings.editFor(who)} isLabelHidden isSelected={false} isDisabled />
+            <InfoTip label={strings.editFor(who)} size="md">
+              {strings.readOnlyRoleTip}
+            </InfoTip>
+          </>
+        ) : (
           <Checkbox
             label={strings.editFor(who)}
             isLabelHidden
             isSelected={standing.level === 'write'}
-            // A guest views at most, and so does a read only role: the server refuses edit for both, so the box
-            // never offers it.
-            isDisabled={isGuest || isReadOnlyRole}
+            // A guest views at most: the server refuses edit for them, so the box never offers it.
+            isDisabled={isGuest}
             onChange={(isSelected) => {
               change(standing, { level: isSelected ? 'write' : 'read' });
             }}

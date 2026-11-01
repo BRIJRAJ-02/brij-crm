@@ -60,10 +60,9 @@ export const strings = {
   /** Each role a rule can be about, as a group of people; a role added to the roles list fails here until named. */
   roleGroups: { member: 'Members', guest: 'Guests' } as const satisfies Record<RuleRole, string>,
   guestsTip: 'Guests can view, never edit.',
-  /** A custom role as a rule subject (spec 0037, AC-1230): how many people hold it, and why it can't be given edit. */
+  /** How many people a row covers (spec 0037, AC-1230), and why a read only role can't be given edit. */
   appliesTo: (count: number) => `${String(count)} ${count === 1 ? 'person' : 'people'}`,
-  appliesToLabel: (name: string) => `with ${name}`,
-  readOnlyRoleTip: 'This role can view records, never edit. Change its data access on its own page.',
+  readOnlyRoleTip: 'Can view only. Change this on the role’s page.',
   addTeam: 'Add team',
   makeTeam: 'Make a team first',
   removeRow: (name: string) => `Remove ${name}`,
@@ -101,6 +100,8 @@ export const strings = {
   lessPeople: (count: number) => `${String(count)} ${count === 1 ? 'person' : 'people'}`,
   lessViews: (count: number) => `${String(count)} shared ${count === 1 ? 'view' : 'views'}`,
   lessForms: (count: number) => `${String(count)} ${count === 1 ? 'form' : 'forms'}`,
+  /** The tail of a summary that would otherwise name every role (AC-1230): "and 4 other roles". */
+  otherRoles: (count: number) => `and ${String(count)} other ${count === 1 ? 'role' : 'roles'}`,
   /** Preview as (AC-858). */
   previewAs: 'Preview as',
   previewMembers: 'People',

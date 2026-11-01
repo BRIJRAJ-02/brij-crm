@@ -29,6 +29,9 @@ export interface SummaryInput {
   readonly guest?: SummaryStanding;
 }
 
+/** How many groups of custom roles the line names before it counts the rest (AC-1230). */
+const ROLE_SENTENCES_MAX = 2;
+
 const LEVEL_RANK: Readonly<Record<ObjectAccessLevel, number>> = { none: 0, read: 1, write: 2 };
 /** A broader scope shows more records: a team's over one's own. */
 const SCOPE_RANK: Readonly<Record<RecordScope, number>> = { own: 0, team: 1, all: 2 };
@@ -68,11 +71,20 @@ export function summarizeAccess({ object, role, teams, guest, roles = [] }: Summ
     group.names.push(each.name);
     byStanding.set(key, group);
   }
-  const forRoles = [...byStanding.values()].map(({ standing, names }) =>
-    standing.level === 'none'
-      ? `${listOf(names)} ${strings.summary.verbs.none} ${object}`
-      : `${listOf(names)} ${strings.summary.verbs[standing.level]} ${recordsOf(standing.records, object)}`,
-  );
+  // A workspace may hold 20 roles and this line is announced on every change, so it names two groups and counts
+  // the rest; the grid itself says what each role may do.
+  const roleGroups = [...byStanding.values()];
+  const left = roleGroups.slice(ROLE_SENTENCES_MAX).reduce((count, group) => count + group.names.length, 0);
+  const forRoles = [
+    ...roleGroups
+      .slice(0, ROLE_SENTENCES_MAX)
+      .map(({ standing, names }) =>
+        standing.level === 'none'
+          ? `${listOf(names)} ${strings.summary.verbs.none} ${object}`
+          : `${listOf(names)} ${strings.summary.verbs[standing.level]} ${recordsOf(standing.records, object)}`,
+      ),
+    ...(left > 0 ? [strings.otherRoles(left)] : []),
+  ];
   // Guests see nothing by default, so they are said only when a rule shares the object with them: one sentence.
   const forGuests =
     guest === undefined || guest.level === 'none'

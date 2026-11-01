@@ -584,8 +584,8 @@ export async function duplicateRole(
  * Deletes a custom role (spec 0037, AC-1238), moving its people and open invitations to `moveTo`: Member, or another
  * custom role (anything else 422 `MOVE_TO_INVALID`). In one transaction: the holders and invitations move, the default
  * falls back to Member when it was this role, the role goes, the positions close up, one `role.deleted` audit row
- * (how many moved, and where) and one `access` row naming the people moved. (A custom role's access rules arrive
- * with spec 0037 J10, which deletes them here too.)
+ * (how many moved, and where) and one `access` row naming the people moved. (The role's own access and record
+ * rules go with its row, by their `on delete cascade`, AC-1230.)
  */
 export async function deleteRole(
   scope: EngineScope,

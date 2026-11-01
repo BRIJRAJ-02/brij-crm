@@ -9,8 +9,15 @@
 -- index on each is replaced to include the new column, so two roles' rules on one object never collide.
 --
 -- Then the backfill AC-1230 asks for: every custom role made before this migration takes a copy of the rules its
--- "Start from" has at this moment (`started_from`: a custom role's id, else Member, which `viewer` sits on too, and
--- a role deleted since falls back to Member). A workspace that never had rules copies nothing.
+-- "Start from" has at this moment. On this day no role can have rules of its own (the column holding them is made
+-- here), so every "Start from" resolves to Member, whatever `started_from` says: `member` and the `viewer` preset
+-- are Member, a role deleted since falls back to Member (AC-1230), and a role started from another role has only
+-- what that role has, which is Member's. So the copy is Member's rules to every role, which is the narrowest
+-- reading and the one that makes sure no custom role misses a Member rule that existed when rules began. A
+-- workspace that never had rules copies nothing.
+--
+-- No `access` outbox row goes with it: a relay running across the deploy keeps its cached audiences until its next
+-- drop, and the deploy restarts it.
 set local lock_timeout = '5s';
 --> statement-breakpoint
 ALTER TABLE "access_rules" ADD COLUMN "subject_custom_role_id" uuid;--> statement-breakpoint
@@ -32,9 +39,8 @@ CREATE UNIQUE INDEX "record_rules_one" ON "record_rules" USING btree ("workspace
 CREATE INDEX "access_rules_by_custom_role" ON "access_rules" USING btree ("workspace_id","subject_custom_role_id") WHERE "access_rules"."subject_custom_role_id" is not null;--> statement-breakpoint
 CREATE INDEX "record_rules_by_custom_role" ON "record_rules" USING btree ("workspace_id","subject_custom_role_id") WHERE "record_rules"."subject_custom_role_id" is not null;--> statement-breakpoint
 -- Hand written from here: AC-1230's backfill.
--- Each custom role takes a copy of the object and field rules of what it started from, then of its record rules.
--- `started_from` is a custom role's id where one still exists, else Member (`member`, `viewer`, or a role deleted
--- since). A role that already has rules of its own (none can, on the day this runs) is left alone.
+-- Each custom role takes a copy of Member's object and field rules, then of Member's record rules. A role that
+-- already has rules of its own (none can, on the day this runs) is left alone.
 -- Row security off: the owner bypasses it, and a role it would filter fails here rather than backfilling nothing.
 set local row_security = off;
 --> statement-breakpoint
@@ -44,12 +50,7 @@ select r.workspace_id, 'custom_role', r.id, source.object_id, source.attribute_i
     'system', null, null, 'system', null, null
   from workspace_roles r
   join access_rules source on source.workspace_id = r.workspace_id
-    and case
-      when exists (select 1 from workspace_roles f
-        where f.workspace_id = r.workspace_id and f.id::text = r.started_from)
-      then source.subject_custom_role_id::text = r.started_from
-      else source.subject_type = 'role' and source.subject_role = 'member'
-    end
+    and source.subject_type = 'role' and source.subject_role = 'member'
   where not exists (select 1 from access_rules mine
     where mine.workspace_id = r.workspace_id and mine.subject_custom_role_id = r.id);
 --> statement-breakpoint
@@ -59,11 +60,6 @@ select r.workspace_id, 'custom_role', r.id, source.object_id, source.kind, sourc
     'system', null, null, 'system', null, null
   from workspace_roles r
   join record_rules source on source.workspace_id = r.workspace_id
-    and case
-      when exists (select 1 from workspace_roles f
-        where f.workspace_id = r.workspace_id and f.id::text = r.started_from)
-      then source.subject_custom_role_id::text = r.started_from
-      else source.subject_type = 'role' and source.subject_role = 'member'
-    end
+    and source.subject_type = 'role' and source.subject_role = 'member'
   where not exists (select 1 from record_rules mine
     where mine.workspace_id = r.workspace_id and mine.subject_custom_role_id = r.id);

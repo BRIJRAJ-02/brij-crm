@@ -127,6 +127,7 @@ describe('custom roles on the Access tab (spec 0037, AC-1230)', () => {
       .map((cell) => cell.textContent);
     expect(who[0]).toContain('Owners and admins');
     expect(who[1]).toContain('Members');
+    expect(who[1]).toContain('4 people');
     expect(who[2]).toContain('Guests');
     expect(who[3]).toContain('Receptionist');
     expect(who[3]).toContain('3 people');
@@ -137,6 +138,10 @@ describe('custom roles on the Access tab (spec 0037, AC-1230)', () => {
   it('never offers edit to a read only role, and sends a role’s change under its own subject', async () => {
     const sent = await renderTab();
     await expect.element(page.getByRole('checkbox', { name: 'Can edit, Viewer' })).toBeDisabled();
+    // The reason sits beside the box it explains, not in the row's name.
+    await page.getByRole('button', { name: 'About Can edit, Viewer' }).click();
+    await expect.element(page.getByText(/Can view only/)).toBeVisible();
+    await userEvent.keyboard('{Escape}');
     // The box drawn over the input takes the pointer, so the press goes to the label it sits in.
     const box = page.getByRole('checkbox', { name: 'Can edit, Receptionist' }).element();
     await userEvent.click(box.closest('label') ?? box);

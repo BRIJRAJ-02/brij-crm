@@ -1,7 +1,8 @@
 // Teams and access rules (specs 0031 slice 8 and 0032; custom role subjects from spec 0037, AC-1230): `teams` and
-// who is in them, then the rules that name a built in role, a custom role or a team and say what it may do with an object, a field of it, or which of its records. The rules are text on
-// purpose (`level`, `kind`, `subject_role`), as `schedule_delegations` keeps its levels: a value written by a newer
-// deploy reads as nothing after a rollback, so the code fails closed instead of the database refusing the row.
+// who is in them, then the rules that name a built in role, a custom role or a team and say what it may do with an
+// object, a field of it, or which of its records. The rules are text on purpose (`level`, `kind`, `subject_role`),
+// as `schedule_delegations` keeps its levels: a value written by a newer deploy reads as nothing after a rollback,
+// so the code fails closed instead of the database refusing the row.
 import { sql } from 'drizzle-orm';
 import { check, foreignKey, index, pgTable, primaryKey, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { actorColumns, auditColumns, id, timestamptz, workspaceId } from './common.ts';

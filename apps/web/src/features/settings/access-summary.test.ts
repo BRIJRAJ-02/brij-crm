@@ -125,3 +125,21 @@ describe('custom roles in the line (spec 0037, AC-1230)', () => {
     ).toBe('Members can view Deals. Viewer and Contractor can’t see Deals.');
   });
 });
+
+describe('many custom roles in the line (AC-1230)', () => {
+  it('names two groups and counts the rest, so the announcement stays short', () => {
+    expect(
+      summarizeAccess({
+        object: 'Deals',
+        role: DEFAULT,
+        teams: [],
+        roles: [
+          { name: 'Viewer', level: 'read', records: 'all' },
+          { name: 'Contractor', level: 'none', records: 'all' },
+          { name: 'Temp', level: 'read', records: 'own' },
+          { name: 'Auditor', level: 'read', records: 'team' },
+        ],
+      }),
+    ).toBe('Members can edit Deals. Viewer can view Deals. Contractor can’t see Deals. and 2 other roles.');
+  });
+});
