@@ -741,6 +741,7 @@ export {
   getExport,
   startSubmissionsExport,
   UNKNOWN_EXPORT,
+  type ExportFile,
   type ExportRecord,
 } from './forms/export.ts';
 export {
@@ -827,7 +828,24 @@ export { recordsImport } from './imports/kind.ts';
 /** The import's undo kind (spec 0040): created records to the trash, changed values back unless edited since. */
 export { recordsImportUndo } from './imports/undo.ts';
 /** Records exports (spec 0040): a view's records as CSV, on the submissions export's rows, chunks and download. */
-export { getRecordsExport, recordsExport, startRecordsExport, type RecordsExportRecord } from './exports/records.ts';
+export {
+  getRecordsExport,
+  recordsExport,
+  startRecordsExport,
+  type RecordsExportRecord,
+  type RecordsFormat,
+} from './exports/records.ts';
+/** Excel workbooks (lane wip/crm-dataio): the records export's `xlsx` rows, and the download's streamed workbook. */
+export { sheetName, xlsxStream } from './exports/xlsx.ts';
+/** The owner's full workspace export (lane wip/crm-dataio): start it, and its job kind. */
+export {
+  startWorkspaceExport,
+  workspaceExport,
+  WORKSPACE_EXPORT,
+  WORKSPACE_EXPORT_RUNNING,
+  type WorkspaceExportRecord,
+  type WorkspaceExportStore,
+} from './exports/workspace.ts';
 // The operator console (spec 0047): the super admin's read only analytics, behind the api's operator gate.
 export {
   operatorOverview,

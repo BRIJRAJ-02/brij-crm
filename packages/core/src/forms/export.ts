@@ -26,7 +26,7 @@ import { checkId } from '../engine/ids.ts';
 import { isRefusal, refuse } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import { runWrite, type AfterWrite, type WriteContext } from '../engine/write.ts';
-import { can, fieldLevel, type Access } from '../access/policy.ts';
+import { can, fieldLevel, OPEN_KEY, type Access } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
 import { defineKind, MAX_ATTEMPTS, type KindDefinition, type StepOutcome } from '../jobs/registry.ts';
 import type { JobRegistry } from '../jobs/registry.ts';
@@ -148,6 +148,7 @@ const EXPORT_COLUMNS = {
   selection: exports.selection,
   createdByMemberId: exports.createdByMemberId,
   policyKey: exports.policyKey,
+  storagePath: exports.storagePath,
   expiresAt: sql<string>`to_char(${exports.expiresAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`,
 };
 
@@ -191,8 +192,17 @@ export async function ownExport(tx: WorkspaceTx, scope: EngineScope, exportId: s
   if (row === undefined || row.policyKey !== exportAccessKey(scope.access)) {
     throw refuse('NOT_FOUND', UNKNOWN_EXPORT);
   }
+  // A workspace export (lane wip/crm-dataio): only while its starter is still an owner with the open policy.
+  if (row.source === 'workspace') {
+    if (!can(scope.access, 'workspace.export') || scope.access.data.key !== OPEN_KEY) {
+      throw refuse('NOT_FOUND', UNKNOWN_EXPORT);
+    }
+    return row;
+  }
   // A records export (spec 0040): its object live and still readable.
   if (row.source === 'records' && row.objectId !== null) {
+    // A role that lost the export permission loses its files too.
+    if (!can(scope.access, 'records.export')) throw refuse('NOT_FOUND', UNKNOWN_EXPORT);
     await checkRecordsSource(tx, scope, row.objectId);
     return row;
   }
@@ -237,7 +247,7 @@ export async function startSubmissionsExport(
       // Exports still kept, leaving out any whose job failed or was cancelled: those never give a file.
       const kept = await tx.execute<{ n: number }>(sql`
         select count(*)::int as n from exports e
-        where e.created_by_member_id = ${me} and e.expires_at > now()
+        where e.created_by_member_id = ${me} and e.expires_at > now() and e.source <> 'workspace'
           and not exists (
             select 1 from jobs j
             where j.workspace_id = e.workspace_id and j.id = e.job_id and j.status in ('failed', 'cancelled')
@@ -289,23 +299,34 @@ export async function getExport(scope: EngineScope, input: { readonly exportId: 
   });
 }
 
+/** A finished export's file: its name, its chunks, its format, and (a workspace export) where its zip is stored. */
+export interface ExportFile {
+  readonly fileName: string;
+  readonly parts: number;
+  readonly format: 'csv' | 'xlsx' | 'zip';
+  readonly storagePath?: string;
+}
+
 /**
  * A finished export the caller started, for its download: the file's name
  * and how many chunks it holds. NOT_FOUND for anyone else, an expired one, or
  * one still being written.
  */
-export async function exportFile(
-  scope: EngineScope,
-  input: { readonly exportId: string },
-): Promise<{ readonly fileName: string; readonly parts: number }> {
+export async function exportFile(scope: EngineScope, input: { readonly exportId: string }): Promise<ExportFile> {
   return inWorkspace(scope, async (tx) => {
     const row = await ownExport(tx, scope, input.exportId);
     if (row.rowCount === null) throw refuse('NOT_FOUND', 'This export is still being written. Try again shortly.');
+    // A workspace export's file is a zip in the file store, never in chunks.
+    if (row.source === 'workspace') {
+      if (row.storagePath === null) throw refuse('NOT_FOUND', UNKNOWN_EXPORT);
+      return { fileName: row.fileName, parts: 0, format: 'zip', storagePath: row.storagePath };
+    }
     const [count] = await tx
       .select({ parts: sql<number>`count(*)::int` })
       .from(exportChunks)
       .where(eq(exportChunks.exportId, row.id));
-    return { fileName: row.fileName, parts: count?.parts ?? 0 };
+    const format = (row.selection as { readonly format?: unknown } | null)?.format === 'xlsx' ? 'xlsx' : 'csv';
+    return { fileName: row.fileName, parts: count?.parts ?? 0, format };
   });
 }
 

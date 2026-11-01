@@ -188,6 +188,8 @@ const FIXTURES: Record<ListedAuditAction, readonly AuditRow[]> = {
     }),
   ],
   'workspace_security.signed_out_everyone': [row('workspace_security.signed_out_everyone', 'workspace', newId())],
+  // Everything exported at once (lane wip/crm-dataio): the export's id, nothing more.
+  'workspace.exported': [row('workspace.exported', 'workspace', newId(), { after: { exportId: newId() } })],
   // An API key made, revoked or brought back (parity #34): its name, never its secret.
   'api_key.created': [row('api_key.created', 'workspace', newId(), { after: { name: 'Zapier', keyId: newId() } })],
   'api_key.revoked': [row('api_key.revoked', 'workspace', newId(), { after: { name: 'Zapier', keyId: newId() } })],

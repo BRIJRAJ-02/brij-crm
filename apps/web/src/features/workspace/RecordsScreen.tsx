@@ -807,7 +807,7 @@ export function RecordsScreen({
                     title={strings.emptyTitle(object.pluralName)}
                     icon={object.icon}
                     // The top bar's New person is the one primary on the page. An empty object is where a list
-                    // gets brought in, so Import CSV (otherwise in the view's menu) stands beside it.
+                    // gets brought in, so Import (otherwise in the view's menu) stands beside it.
                     {...(object.access === 'write'
                       ? {
                           actions: (

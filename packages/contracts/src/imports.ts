@@ -290,6 +290,8 @@ export const StartExportInput = WorkspaceScoped.extend({
     .max(BULK_IDS_MAX, `Export at most ${BULK_IDS_MAX.toLocaleString('en')} selected records at a time.`)
     .optional(),
   timeZone: z.string().min(1).max(64),
+  /** The file's format: CSV unless an Excel workbook is asked for (lane wip/crm-dataio). */
+  format: z.enum(['csv', 'xlsx']).optional(),
   mutationId: Uuid,
 });
 /** An export to start. */
@@ -335,6 +337,31 @@ export const importsContract = {
   duplicates: oc.input(ImportDuplicatesInput).output(ImportDuplicates),
 };
 
+/** A full workspace export to start (owners only): `id` is the browser's uuid v7, the retry key. */
+export const StartWorkspaceExportInput = WorkspaceScoped.extend({
+  id: uuidV7('The export id must be a UUID v7.'),
+  mutationId: Uuid,
+});
+/** A full workspace export to start. */
+export type StartWorkspaceExportInput = z.infer<typeof StartWorkspaceExportInput>;
+
+/**
+ * A full workspace export as its starter sees it: its file's name, its job
+ * (follow it through `jobs`), the rows written and the zip's size once ready,
+ * when the file goes, and where to download it once the job succeeded.
+ */
+export const WorkspaceExportView = z.object({
+  id: Uuid,
+  fileName: z.string(),
+  jobId: Uuid,
+  rowCount: z.number().int().min(0).optional(),
+  byteCount: z.number().int().min(0).optional(),
+  expiresAt: z.iso.datetime({ offset: true }),
+  downloadPath: z.string(),
+});
+/** A full workspace export. */
+export type WorkspaceExportView = z.infer<typeof WorkspaceExportView>;
+
 /**
  * Exports, on the member door. `start` needs read on the object (and the
  * view); `EXPORT_TOO_LARGE` past 100,000 rows. `get` is the starter's only.
@@ -343,4 +370,9 @@ export const importsContract = {
 export const exportsContract = {
   start: oc.input(StartExportInput).output(RecordsExportView),
   get: oc.input(ExportIdInput).output(RecordsExportView),
+  /**
+   * The full workspace export (lane wip/crm-dataio): `workspace.export` (owners) only, `FORBIDDEN` otherwise;
+   * `LIMIT_REACHED` while another is running. Its zip downloads from the same route, for 24 hours.
+   */
+  startWorkspace: oc.input(StartWorkspaceExportInput).output(WorkspaceExportView),
 };

@@ -126,6 +126,8 @@ export const AUDIT_ACTIONS = [
   'automation.changed',
   // Settings › Developer (parity #34): an API key made, revoked or brought back in its Undo window. The target is the
   // workspace; `after` holds the key's name, id and access (`read` or `write`).
+  // A full workspace export started (lane wip/crm-dataio): the target is the workspace; `after` holds the export id.
+  'workspace.exported',
   'api_key.created',
   'api_key.revoked',
   'api_key.restored',

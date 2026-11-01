@@ -25,6 +25,7 @@
     "@orpc/contract": "catalog:",
     "better-auth": "catalog:",
     "centrifuge": "catalog:",
+    "fflate": "catalog:",
     "re2js": "catalog:",
     "react": "catalog:"
   },

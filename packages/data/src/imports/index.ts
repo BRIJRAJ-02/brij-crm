@@ -1,5 +1,5 @@
 // `@crm/data/imports` (spec 0040): what the import page loads with itself,
-// outside the first load: the CSV reader, the CSV writer (the error rows
+// outside the first load: the CSV reader, the Excel reader (which the page runs in its worker), the CSV writer (the error rows
 // file) and the import limits. Pure; no network.
 export {
   CSV_LIMITS,
@@ -15,6 +15,16 @@ export {
   type CsvSeparator,
   type CsvTable,
 } from './csv.ts';
+/** The Excel reader (lane wip/crm-dataio): a workbook's sheet as the CSV reader's table; run in a Web Worker. */
+export {
+  isXlsxName,
+  readXlsx,
+  readXlsxFile,
+  XLSX_LIMITS,
+  type XlsxLimits,
+  type XlsxResult,
+  type XlsxSheet,
+} from './xlsx.ts';
 /** CSV writing (RFC 4180, the formula guard): the error rows file the import page saves. */
 export { CSV_BOM, csvLine, unguardCell } from '@crm/contracts/csv';
 /** The import and export limits the server holds the page to. */

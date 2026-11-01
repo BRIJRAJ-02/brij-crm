@@ -47,6 +47,7 @@ function GeneralRoute() {
       settings={screen.settings}
       mayManage={permissions.includes('workspace.manage')}
       mayDelete={permissions.includes('workspace.delete')}
+      mayExport={permissions.includes('workspace.export')}
       origin={window.location.origin}
       onChanged={() => router.invalidate()}
       onMoved={async (moved) => {

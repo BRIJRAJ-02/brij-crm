@@ -2,12 +2,15 @@
 // `GET /api/exports/:exportId/download?workspace=<slug>`, a plain route the
 // browser navigates to with its session cookie. The member door decides who
 // is asking; only the member who started the export, while it is kept, gets
-// the file, streamed chunk by chunk (`text/csv; charset=utf-8`, an
+// the file, streamed chunk by chunk (`text/csv; charset=utf-8`; an Excel
+// export's rows wrapped into a workbook as they stream; a workspace export's
+// zip read from the private file store), an
 // attachment, never cached, never sniffed). Anyone else gets the same 404, so
 // the route never says whether an export exists.
-import { exportFile, exportPart, isRefusal } from '@crm/core';
+import { exportFile, exportPart, isRefusal, xlsxStream } from '@crm/core';
 import type { Context, Env, Hono } from 'hono';
 import type { Auth, AuthSession } from '../auth/auth.ts';
+import type { FileStore } from '../storage/blob.ts';
 import { errorFields, log } from '../log.ts';
 
 /** The member door, as the RPC's `member` base opens it. */
@@ -17,7 +20,16 @@ type Enter = (session: AuthSession, slug: string) => Promise<Parameters<typeof e
 export interface ExportRouteDeps {
   readonly auth: Auth;
   readonly enter: Enter;
+  /** Where a workspace export's zip is kept (lane wip/crm-dataio); without one that download is a 404. */
+  readonly files?: FileStore | undefined;
 }
+
+/** What each format is served as. */
+const CONTENT_TYPES = {
+  csv: 'text/csv; charset=utf-8',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  zip: 'application/zip',
+} as const;
 
 const NOT_FOUND = { code: 'NOT_FOUND', message: 'This export doesn’t exist, or it has expired. Export again.' };
 
@@ -46,8 +58,39 @@ export function mountExports<E extends Env & { Variables: { clientIp: string | u
     try {
       const scope = await deps.enter(session, slug);
       const file = await exportFile(scope, { exportId });
+      const headers = {
+        'content-type': CONTENT_TYPES[file.format],
+        'content-disposition': disposition(file.fileName),
+        'cache-control': 'private, no-store',
+        'x-content-type-options': 'nosniff',
+      };
+      // A workspace export (lane wip/crm-dataio): its zip from the private store, through the api, never a URL.
+      if (file.format === 'zip') {
+        const stored = file.storagePath === undefined ? undefined : await deps.files?.get(file.storagePath);
+        if (stored === undefined) return c.json(NOT_FOUND, 404);
+        return c.body(stored.stream, 200, { ...headers, 'content-length': String(stored.size) });
+      }
       let part = 0;
       const encoder = new TextEncoder();
+      // The chunks in order; an Excel export's are its sheet's rows, wrapped into the workbook as they stream.
+      const nextPart = async (): Promise<string | undefined> => {
+        if (part >= file.parts) return undefined;
+        const text = await exportPart(scope, { exportId, part });
+        part += 1;
+        return text;
+      };
+      if (file.format === 'xlsx') {
+        const sheet = file.fileName.replace(/ - \d{4}-\d{2}-\d{2}\.xlsx$/u, '').replace(/\.xlsx$/u, '');
+        const workbook = xlsxStream(sheet, async () => {
+          try {
+            return await nextPart();
+          } catch (error) {
+            log.error('export.download_failed', { requestId: c.get('requestId'), ...errorFields(error) });
+            throw error;
+          }
+        });
+        return c.body(workbook, 200, headers);
+      }
       const body = new ReadableStream<Uint8Array>({
         async pull(controller) {
           if (part >= file.parts) {
@@ -64,12 +107,7 @@ export function mountExports<E extends Env & { Variables: { clientIp: string | u
         },
       });
       // Through the context, so a refreshed session cookie set above goes with the file.
-      return c.body(body, 200, {
-        'content-type': 'text/csv; charset=utf-8',
-        'content-disposition': disposition(file.fileName),
-        'cache-control': 'private, no-store',
-        'x-content-type-options': 'nosniff',
-      });
+      return c.body(body, 200, headers);
     } catch (error) {
       if (isRefusal(error)) return c.json(NOT_FOUND, 404);
       throw error;

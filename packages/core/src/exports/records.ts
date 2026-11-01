@@ -13,7 +13,9 @@
 // `exportCell` does (the text the importer reads back), formula guarded where
 // the type can hold text. More than 100,000 matching rows is refused before
 // anything starts. The file starts with a UTF-8 BOM, once, in its header chunk
-// (part 0), so Excel reads it as UTF-8.
+// (part 0), so Excel reads it as UTF-8. The `xlsx` format (lane wip/crm-dataio)
+// is the same job, checks and reads: its chunks hold SpreadsheetML rows instead
+// (`xlsx.ts`), which the download wraps into a workbook as it streams.
 import { and, eq, gt, inArray, sql } from 'drizzle-orm';
 import * as z from 'zod';
 import {
@@ -29,7 +31,7 @@ import {
   type ExportNames,
 } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
-import { fieldLevel } from '../access/policy.ts';
+import { can, fieldLevel } from '../access/policy.ts';
 import { canonicalId, checkId, isUuid } from '../engine/ids.ts';
 import { countIn, orderedIdsIn } from '../engine/query/page.ts';
 import { readRecords } from '../engine/records.ts';
@@ -51,6 +53,7 @@ import type { JobRegistry } from '../jobs/registry.ts';
 import { insertItems, startJob } from '../jobs/service.ts';
 import { readView } from '../views/views.ts';
 import { appendChunk, checkRecordsSource, UNKNOWN_RECORDS_EXPORT, writeHeader } from './chunks.ts';
+import { xlsxCell, xlsxHeader, xlsxKind, xlsxRow } from './xlsx.ts';
 
 const { attributeOptions, exportChunks, exports, members, objects } = schema;
 
@@ -70,6 +73,8 @@ export const RecordsSelection = z.object({
   recordIds: z.array(z.uuid()).optional(),
   timeZone: z.string(),
   now: z.string(),
+  /** The file's format: CSV (and every export written before Excel arrived), or an Excel workbook. */
+  format: z.enum(['csv', 'xlsx']).default('csv'),
 });
 /** What a records export reads. */
 export type RecordsSelection = z.infer<typeof RecordsSelection>;
@@ -88,15 +93,23 @@ export interface RecordsExportRecord {
 export const tooLarge = (count: string, pluralName: string): string =>
   `This view has ${count} ${pluralName.toLowerCase()}. Export at most ${TRANSFER_LIMITS.exportRows.toLocaleString('en')} at a time; narrow the filter.`;
 
-/** A file name with nothing a file system or a header refuses: "<Object> - <View> - <YYYY-MM-DD>.csv". */
-export function recordsFileName(pluralName: string, viewName: string, day: string): string {
+/** A records export's file format. */
+export type RecordsFormat = 'csv' | 'xlsx';
+
+/** A file name with nothing a file system or a header refuses: "<Object> - <View> - <YYYY-MM-DD>.csv" (or `.xlsx`). */
+export function recordsFileName(
+  pluralName: string,
+  viewName: string,
+  day: string,
+  format: RecordsFormat = 'csv',
+): string {
   const safe = (text: string, fallback: string) =>
     text
       .replace(/[\\/:*?"<>|\p{Cc}\p{Cf}]+/gu, ' ')
       .replace(/\s+/gu, ' ')
       .trim()
       .slice(0, 60) || fallback;
-  return `${safe(pluralName, 'Records')} - ${safe(viewName, 'View')} - ${day}.csv`;
+  return `${safe(pluralName, 'Records')} - ${safe(viewName, 'View')} - ${day}.${format}`;
 }
 
 /** The member who acts, or a refusal: exports belong to a member. */
@@ -165,10 +178,15 @@ export async function startRecordsExport(
     readonly attributeIds: readonly string[];
     readonly recordIds?: readonly string[];
     readonly timeZone: string;
+    /** CSV unless asked for an Excel workbook. */
+    readonly format?: RecordsFormat;
   },
   hooks: readonly AfterWrite[] = [],
 ): Promise<RecordsExportRecord> {
   const me = memberIdOf(scope);
+  // The role's export permission (a guest has none), checked before any input is read, whatever the format.
+  if (!can(scope.access, 'records.export')) throw refuse('FORBIDDEN', 'Your role can’t export records.');
+  const format: RecordsFormat = input.format ?? 'csv';
   const exportId = checkId(input.id, UNKNOWN_RECORDS_EXPORT);
   const objectId = checkId(input.objectId, 'That object does not exist.');
   // Malformed ids name nothing; each id once, in the order asked.
@@ -197,7 +215,7 @@ export async function startRecordsExport(
       await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`exports:${me}`}, 0))`);
       const kept = await tx.execute<{ n: number }>(sql`
         select count(*)::int as n from exports e
-        where e.created_by_member_id = ${me} and e.expires_at > now()
+        where e.created_by_member_id = ${me} and e.expires_at > now() and e.source <> 'workspace'
           and not exists (
             select 1 from jobs j
             where j.workspace_id = e.workspace_id and j.id = e.job_id and j.status in ('failed', 'cancelled')
@@ -217,6 +235,7 @@ export async function startRecordsExport(
         ...(picked === undefined ? {} : { recordIds: picked }),
         timeZone: input.timeZone,
         now,
+        format,
       });
       if (!asked.success)
         throw refuse('FILTER_INVALID', 'That view’s filter or sorts can’t be read. Check them and export again.');
@@ -262,6 +281,7 @@ export async function startRecordsExport(
             object?.pluralName ?? 'Records',
             picked !== undefined ? 'Selected' : (view?.name ?? 'Unsaved view'),
             clock.rows[0]?.day ?? 'today',
+            format,
           ),
           jobId,
           createdByMemberId: me,
@@ -395,8 +415,8 @@ async function nextIds(
   return taken.rows.map((row) => ({ position: row.position, id: row.item_id })).sort((a, b) => a.position - b.position);
 }
 
-/** Option labels, member names and linked records' names for one page's cells. */
-async function namesFor(
+/** Option labels, member names and linked records' names for one page's cells (the workspace export's too). */
+export async function namesFor(
   tx: WorkspaceTx,
   scope: EngineScope,
   columns: readonly AttributeDef[],
@@ -477,7 +497,8 @@ async function exportStep(
   const objectId = held.objectId;
   const { principal } = scope.access;
   if (principal.kind !== 'member' || principal.memberId !== held.createdByMemberId) return gone;
-  if (held.policyKey !== exportAccessKey(scope.access)) {
+  // A role that lost the export permission mid run stops, as one under other access does.
+  if (held.policyKey !== exportAccessKey(scope.access) || !can(scope.access, 'records.export')) {
     return {
       finished: true,
       failed: { code: 'FORBIDDEN', message: 'Your access changed while this export was being written. Export again.' },
@@ -497,7 +518,10 @@ async function exportStep(
       .from(objects)
       .where(eq(objects.id, objectId));
     const columns = exportColumns(scope, attributes, object?.primaryAttributeId ?? null, selection.attributeIds);
-    const header = CSV_BOM + csvJoin(columns.map((column) => csvCell(column.title)));
+    const header =
+      selection.format === 'xlsx'
+        ? xlsxHeader(columns.map((column) => column.title))
+        : CSV_BOM + csvJoin(columns.map((column) => csvCell(column.title)));
     // A file begun under the old cursor checkpoint (a deploy mid export) starts again whole: none of its chunks stay.
     await tx.delete(exportChunks).where(and(eq(exportChunks.exportId, exportId), gt(exportChunks.part, 0)));
     const cursor = await writeHeader(tx, scope.workspaceId, exportId, header);
@@ -535,16 +559,18 @@ async function exportStep(
     columns,
     records.map((record) => record.values),
   );
+  // The same text a CSV cell holds, as a workbook's cell: inline text is never a formula, so it needs no guard.
+  const isXlsx = selection.format === 'xlsx';
   const text = records
-    .map((record) =>
-      csvJoin(
-        at.columns.map((id) => {
-          const attribute = attributes.get(id);
-          if (attribute === undefined) return '';
-          return csvCell(exportCell(attribute, record.values[id], names), guardsType(attribute.type));
-        }),
-      ),
-    )
+    .map((record) => {
+      const cells = at.columns.map((id) => {
+        const attribute = attributes.get(id);
+        if (attribute === undefined) return isXlsx ? xlsxCell('', 'text') : '';
+        const value = exportCell(attribute, record.values[id], names);
+        return isXlsx ? xlsxCell(value, xlsxKind(attribute.type)) : csvCell(value, guardsType(attribute.type));
+      });
+      return isXlsx ? xlsxRow(cells) : csvJoin(cells);
+    })
     .join('');
   const rows = at.rows + records.length;
   if (rows > TRANSFER_LIMITS.exportRows || at.bytes + Buffer.byteLength(text) > EXPORT_BYTES_MAX) return GREW;

@@ -4,6 +4,8 @@
 /** What the toast says when an export's file is ready, and its action. */
 export const exportToast = {
   ready: (fileName: string) => `${fileName} is ready`,
+  /** A full workspace export finished (lane wip/crm-dataio): the in-app notice, no email. */
+  workspaceReady: 'Your workspace export is ready',
   download: 'Download',
 } as const;
 

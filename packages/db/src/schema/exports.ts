@@ -3,7 +3,9 @@
 // started, and its CSV text in chunks
 // beside it, kept until `expires_at` (7 days) and deleted by the daily
 // cleanup. Files live in Postgres until R2 (#32) arrives. Only the member who
-// started an export reads it.
+// started an export reads it. A full workspace export (`source = 'workspace'`,
+// lane wip/crm-dataio) writes its files' text in the same chunks, then zips
+// them into the private file store at `storage_path` and drops the chunks.
 import { sql } from 'drizzle-orm';
 import { check, foreignKey, index, integer, jsonb, pgTable, primaryKey, text, uuid } from 'drizzle-orm/pg-core';
 import { id, timestamptz, workspaceId } from './common.ts';
@@ -21,7 +23,10 @@ export const exports = pgTable(
   {
     workspaceId: workspaceId(),
     id: id(),
-    /** `form_submissions` (a form's submissions) or `records` (an object's records, as a view showed them). */
+    /**
+     * `form_submissions` (a form's submissions), `records` (an object's records, as a view showed them) or
+     * `workspace` (everything, an owner's full export).
+     */
     source: text('source').notNull(),
     formId: uuid('form_id'),
     /** A records export's object, and the saved view it started from (none for an unsaved one). */
@@ -32,6 +37,8 @@ export const exports = pgTable(
     jobId: uuid('job_id').notNull(),
     rowCount: integer('row_count'),
     byteCount: integer('byte_count'),
+    /** A workspace export's zip in the private file store; set at its start, the file there once `row_count` is. */
+    storagePath: text('storage_path'),
     createdByMemberId: uuid('created_by_member_id').notNull(),
     /**
      * The starter's access when it started (core's `exportAccessKey`: their data policy, whether they manage
@@ -65,7 +72,8 @@ export const exports = pgTable(
     index('exports_by_member').on(t.workspaceId, t.createdByMemberId, t.expiresAt),
     index('exports_by_form').on(t.workspaceId, t.formId),
     index('exports_by_object').on(t.workspaceId, t.objectId),
-    check('exports_source', sql`${t.source} in ('form_submissions', 'records')`),
+    check('exports_source', sql`${t.source} in ('form_submissions', 'records', 'workspace')`),
+    check('exports_workspace_source', sql`(${t.source} = 'workspace') = (${t.storagePath} is not null)`),
     check('exports_form_source', sql`(${t.source} = 'form_submissions') = (${t.formId} is not null)`),
     check('exports_records_source', sql`(${t.source} = 'records') = (${t.objectId} is not null)`),
   ],

@@ -28,6 +28,7 @@
     "@crm/contracts": "workspace:*",
     "@crm/db": "workspace:*",
     "drizzle-orm": "catalog:",
+    "fflate": "catalog:",
     "libphonenumber-js": "catalog:",
     "luxon": "catalog:",
     "re2js": "catalog:",

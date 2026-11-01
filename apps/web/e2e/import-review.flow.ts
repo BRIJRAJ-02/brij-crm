@@ -112,7 +112,7 @@ test.describe('import: review values and the preview', () => {
     ).toBeVisible();
   });
 
-  test('New attribute opens the attribute dialog prefilled, and an Excel file says how to save as CSV', async ({
+  test('New attribute opens the attribute dialog prefilled, and a file that only claims to be a workbook says so', async ({
     page,
   }) => {
     test.setTimeout(180_000);
@@ -128,7 +128,7 @@ test.describe('import: review values and the preview', () => {
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     );
     await expect(
-      page.getByText('Excel file? In Excel choose File › Save as › CSV UTF-8, then drop it here.'),
+      page.getByText('This file isn’t a workbook we can read. Save it again as .xlsx or CSV.'),
     ).toBeVisible();
 
     await upload(page, 'people.csv', 'First name,Tier\nAda,Gold\nBob,Silver\nCy,Gold\n');

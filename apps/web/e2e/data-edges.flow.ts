@@ -47,7 +47,7 @@ test.describe('the data journey’s edges', () => {
     await page.goto(`/w/${slug}/objects/people`);
     await page.getByRole('button', { name: 'Import / Export' }).click();
     await expect(page.getByRole('menuitem', { name: 'Import people' })).toBeVisible();
-    await page.getByRole('menuitem', { name: /^Export view \(\d+ columns?\)/u }).click();
+    await page.getByRole('menuitem', { name: /^Export to CSV/u }).click();
     // One toast: working, then the file.
     await expect(page.getByRole('button', { name: 'Download' })).toBeVisible({ timeout: 30_000 });
     await expect(page.getByText(/^Exporting /u)).toBeHidden();
@@ -147,12 +147,15 @@ test.describe('the data journey’s edges', () => {
     await addPerson(page, 'Bea', 'Stone', `bea-${tag}@acme.com`);
     await expect(grid.getByRole('rowheader', { name: /Bea Stone/u })).toBeVisible();
 
-    // The view bar's export says how many columns it writes; People's default view hides some, offered apart.
+    // The view bar's export offers Excel and CSV, says how many columns it writes; People's default view hides some,
+    // offered apart as All columns (a submenu of the two formats).
     await page.getByRole('button', { name: 'Import / Export' }).click();
-    const shown = page.getByRole('menuitem', { name: /^Export view \((\d+) columns?\)/u });
+    const shown = page.getByRole('menuitem', { name: /^Export to Excel/u });
     await expect(shown).toBeVisible();
     await expect(shown).toBeEnabled();
-    await expect(page.getByRole('menuitem', { name: /^Export all columns \(\d+\)/u })).toBeVisible();
+    await expect(page.getByText(/^Export · \d+ columns?$/u)).toBeVisible();
+    await expect(page.getByRole('menuitem', { name: /^Export to CSV/u })).toBeVisible();
+    await expect(page.getByRole('menuitem', { name: /^All columns \(\d+\)/u })).toBeVisible();
     await page.keyboard.press('Escape');
 
     // Two ticked rows: Export 2 selected, one toast that turns into Download.

@@ -24,13 +24,14 @@ export const CSV_LIMITS: CsvLimits = {
 /** A separator a file may use. */
 export type CsvSeparator = ',' | ';' | '\t';
 
-/** A file read: its headers (an empty one named "Column N"), its data rows, the separator and the encoding found. */
+/** A file read (or a workbook's sheet): its headers (an empty one named "Column N"), its data rows, the separator and the encoding found. */
 export interface CsvTable {
   readonly headers: readonly string[];
   /** Each data row's cells, as many as the headers (short rows padded with empty cells). */
   readonly rows: readonly (readonly string[])[];
-  readonly separator: CsvSeparator;
-  readonly encoding: 'utf-8' | 'windows-1252';
+  /** The separator and encoding found; absent for a workbook's sheet (`xlsx.ts`). */
+  readonly separator?: CsvSeparator;
+  readonly encoding?: 'utf-8' | 'windows-1252';
 }
 
 /** Why a file can't be imported, with the numbers the screen words it with. */
@@ -42,7 +43,9 @@ export type CsvRefusal =
   /** No header row, or no data row under it. */
   | { readonly reason: 'empty' }
   /** A quoted field never closed: the file ends inside quotes. */
-  | { readonly reason: 'quote'; readonly row: number };
+  | { readonly reason: 'quote'; readonly row: number }
+  /** A workbook that isn't one we can read (`xlsx.ts`): not a zip, or no workbook in it. */
+  | { readonly reason: 'broken' };
 
 /** A file read, or why not. */
 export type CsvResult = { readonly ok: true; readonly table: CsvTable } | ({ readonly ok: false } & CsvRefusal);

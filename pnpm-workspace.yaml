@@ -59,6 +59,8 @@ catalog:
   eslint: 10.11.0
   eslint-plugin-jsx-a11y-x: 0.2.0
   eslint-plugin-react-hooks: 7.1.1
+  # Zip and deflate (lane wip/crm-dataio): reading and writing .xlsx, and the full workspace export zip.
+  fflate: 0.8.3
   free-email-domains: 1.15.2
   globals: 17.13.0
   graphile-worker: 0.18.0

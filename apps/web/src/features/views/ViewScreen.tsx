@@ -532,8 +532,8 @@ export function ViewScreen(props: ViewScreenProps) {
   // Export CSV (spec 0040, AC-1130, AC-1131): the view as it stands, its unsaved filter and sorts included, its visible
   // columns in order; one toast shows it working, then turns into Download (or Try again).
   const exporting = useRef(false);
-  // `withHidden` (Export all columns) writes the layout's hidden columns too, in the layout's order.
-  const exportView = (withHidden = false) => {
+  // `withHidden` (All columns) writes the layout's hidden columns too, in the layout's order; `format` is CSV or Excel.
+  const exportView = (withHidden = false, format: 'csv' | 'xlsx' = 'csv') => {
     // One export per press: a second press while the first is on its way starts nothing.
     if (exporting.current) return;
     exporting.current = true;
@@ -553,6 +553,7 @@ export function ViewScreen(props: ViewScreenProps) {
         ...(query.filter === undefined ? {} : { filter: query.filter }),
         sorts: query.sorts,
         attributeIds: layout.columns.filter((column) => withHidden || !column.isHidden).map((column) => column.id),
+        format,
       },
     ).finally(() => {
       exporting.current = false;

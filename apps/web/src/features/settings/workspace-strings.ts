@@ -1,6 +1,12 @@
 import { sharedStrings } from '@crm/ui';
 import type { GooglePhotoResult } from './google-photo-result.ts';
 
+/** A file's size in words: "840 KB", "12.4 MB". */
+const size = (bytes: number): string =>
+  bytes < 1024 * 1024
+    ? `${String(Math.max(1, Math.round(bytes / 1024)))} KB`
+    : `${(bytes / (1024 * 1024)).toLocaleString(undefined, { maximumFractionDigits: 1 })} MB`;
+
 /** Settings › Workspace › General and Account › Profile copy (spec 0031, slice 7). */
 export const strings = {
   // Workspace › General.
@@ -70,6 +76,25 @@ export const strings = {
   failedText: 'Check your connection, then try again.',
   // The danger zone (owners only).
   danger: 'Danger zone',
+  // Your data: the full workspace export (lane wip/crm-dataio).
+  yourData: 'Your data',
+  exportEverything: 'Export everything',
+  exportEverythingText: 'Every record, list, note, task and comment, as one zip.',
+  export: 'Export',
+  exportAgain: 'Export again',
+  download: 'Download',
+  exportingRows: (rows: number) => (rows === 0 ? 'Starting…' : `Exporting… ${rows.toLocaleString()} rows`),
+  exportReady: (bytes: number | undefined, hours: number) =>
+    `${bytes === undefined ? 'Ready' : `Ready · ${size(bytes)}`} · deleted in ${hours === 1 ? '1 hour' : `${String(hours)} hours`}`,
+  exportEnded: (why: string | undefined) =>
+    why === undefined ? 'The last export failed.' : `The last export failed. ${why}`,
+  exportFailed: 'The export couldn’t start. Try again.',
+  cancelExport: 'Cancel export',
+  cancelFailed: 'The export couldn’t be stopped. Try again.',
+  cancelExportTitle: 'Stop the export?',
+  cancelExportText: 'Nothing is kept. You can export again any time.',
+  keepExporting: 'Keep exporting',
+  stopExport: 'Stop export',
   /** Profile's first section: the picture, name and sign in email. */
   detailsSection: 'Your details',
   deleteRow: 'Delete workspace',

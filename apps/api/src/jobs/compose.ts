@@ -3,7 +3,10 @@
 // booking emails (spec 0025) and the daily cleanup. The worker process and the
 // api's job drain on Vercel (spec 0045) both build their runners from this, so
 // a job runs the same way wherever it runs.
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { createFileStore } from '../storage/blob.ts';
+import { createDiskFileStore } from '../storage/disk.ts';
 import { connectedCalendar, jobKinds, NO_CALENDAR, type JobRegistry, type QueueRows, type Runner } from '@crm/core';
 import { purgeWorkspace, runDailyCleanup, syncConnection, systemScope } from '@crm/core/system';
 import type { CalendarSyncInput, CalendarSyncOutcome, DailyCleanupInput, DailyCleanupReport } from '@crm/core/system';
@@ -97,11 +100,15 @@ export function composeJobTasks(options: JobTasksOptions): JobTasks {
   // (27 Oct 2026), filing copies a file answer's bytes into the record's own home, and a purged workspace's files go
   // with it (late trap #84), all with the same store; without the store token those wait and a file isn't filed.
   const store = env.BLOB_READ_WRITE_TOKEN === undefined ? undefined : createFileStore(env.BLOB_READ_WRITE_TOKEN);
+  const exportFiles =
+    store ?? (env.APP_ENV === 'local' ? createDiskFileStore(join(tmpdir(), 'crm-local-files')) : undefined);
   const registry = jobKinds({
     environment: env.APP_ENV,
     rules: APP_RULES,
     ...(options.queue === undefined ? {} : { queue: options.queue }),
     ...(store === undefined ? {} : { uploads: store, files: store }),
+    // A full workspace export's zip (lane wip/crm-dataio): the private store, or a laptop's disk, as the api reads it.
+    ...(exportFiles === undefined ? {} : { exportFiles }),
   });
   const runner = createJobRunner({
     db,

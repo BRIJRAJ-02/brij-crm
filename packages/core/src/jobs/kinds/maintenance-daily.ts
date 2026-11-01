@@ -32,7 +32,8 @@
 // 4. `jobs`: jobs finished more than 30 days ago, their items first.
 // 5. `requeue`: an unfinished job that should be running but has no queue
 //    row (a lost row) is queued again, and only then (AC-112's rule).
-// 6. `exports`: export files past their 7 days (spec 0023), chunks and all.
+// 6. `exports`: export files past their 7 days (spec 0023), chunks and all; a workspace export's zip (a day,
+//    lane wip/crm-dataio) leaves the blob store first, and waits where the host has no store.
 // 7. `imports` (spec 0040, AC-1145): an import's staged rows and outcomes once
 //    its undo window has closed, and imports never started after 24 hours.
 // 8. `uploads` (#32): files visitors uploaded to forms that no submission took within a day, or whose
@@ -632,15 +633,32 @@ async function requeue(
 /** How many expired export files one batch deletes: each cascades to its chunks, so a batch stays small. */
 const EXPORTS_BATCH = 20;
 
-/** Phase 6: export files past their expiry, `EXPORTS_BATCH` at a time, their chunks with them (the foreign key cascades). */
-async function expiredExports(context: WriteContext, at: Checkpoint): Promise<StepOutcome> {
-  const gone = await context.tx.execute(sql`
-    delete from exports where id in (
-      select id from exports where expires_at < now() order by expires_at limit ${EXPORTS_BATCH}
-    )`);
+/**
+ * Phase 6: export files past their expiry, `EXPORTS_BATCH` at a time, their chunks with them (the foreign key
+ * cascades). A workspace export's zip goes from the store first, in the same transaction: a store that fails rolls
+ * the rows back and the job retries. Without a store those rows wait, and the rest go.
+ */
+async function expiredExports(
+  context: WriteContext,
+  at: Checkpoint,
+  store: UploadStore | undefined,
+): Promise<StepOutcome> {
+  const due = await context.tx.execute<{ id: string; storage_path: string | null }>(sql`
+    select id::text, storage_path from exports
+    where expires_at < now() ${store === undefined ? sql`and storage_path is null` : sql``}
+    order by expires_at limit ${EXPORTS_BATCH}`);
+  const stored = due.rows.flatMap((row) => (row.storage_path === null ? [] : [row.storage_path]));
+  if (store !== undefined && stored.length > 0) await store.remove(stored);
+  const ids = due.rows.map((row) => row.id);
+  const gone =
+    ids.length === 0
+      ? { rowCount: 0 }
+      : await context.tx.execute(
+          sql`delete from exports where id in (select jsonb_array_elements_text(${JSON.stringify(ids)}::jsonb)::uuid)`,
+        );
   const removed = gone.rowCount ?? 0;
   const totals = plus(at.totals, { exports: removed });
-  return outcome(removed === EXPORTS_BATCH ? { ...at, totals } : nextPhase(at, totals), at, totals, removed);
+  return outcome(due.rows.length === EXPORTS_BATCH ? { ...at, totals } : nextPhase(at, totals), at, totals, removed);
 }
 
 /** How long an import never started is kept (AC-1145). */
@@ -844,7 +862,7 @@ export function maintenanceDaily(queue?: QueueRows, uploads?: UploadStore): Kind
         case 'requeue':
           return requeue(context, at, limit, queue);
         case 'exports':
-          return expiredExports(context, at);
+          return expiredExports(context, at, uploads);
         case 'imports':
           return oldImports(context, at, limit);
         case 'uploads':

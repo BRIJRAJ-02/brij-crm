@@ -1,8 +1,8 @@
 // Brief
 // Purpose: bring a spreadsheet of records into one object, or one of its lists (spec 0048, AC-4833), seeing what each
 // row will do before anything changes.
-// Main task: choose a CSV, check where its columns go, settle any value that won't read, read the preview, start.
-// Leaves out: making far records of more than one object for a relation column, and file types other than CSV.
+// Main task: choose a CSV or Excel file (picking its sheet when it has several), check where its columns go, settle any value that won't read, read the preview, start.
+// Leaves out: making far records of more than one object for a relation column, and old Excel (.xls, .xlsm) files.
 import {
   isDataError,
   toActorDisplays,
@@ -17,7 +17,16 @@ import {
   type DuplicatePair,
   type ObjectSummary,
 } from '@crm/data';
-import { CSV_BOM, csvLine, readCsvFile, TRANSFER_LIMITS, type CsvResult, type CsvTable } from '@crm/data/imports';
+import {
+  CSV_BOM,
+  csvLine,
+  isXlsxName,
+  readCsvFile,
+  TRANSFER_LIMITS,
+  type CsvResult,
+  type CsvTable,
+  type XlsxResult,
+} from '@crm/data/imports';
 import {
   AttributeDisplay,
   Button,
@@ -74,6 +83,7 @@ import { columnNames, missingOptions, suggestAttribute } from './missing.ts';
 import { importSummaryHref } from './paths.ts';
 import { listHref } from '../lists/paths.ts';
 import { RecentImports } from './RecentImports.tsx';
+import { readWorkbook } from './xlsx-read.ts';
 import {
   applyLabels,
   cellGroups,
@@ -151,7 +161,7 @@ const SAMPLES_SHOWN = 3;
 const SAMPLE_READ = 50;
 const PAGE_SIZES = [25, 50, 100] as const;
 /** The file types the upload takes, by extension (FileDrop matches on it, and says them plainly). */
-const FILE_TYPES = ['.csv', '.tsv', '.txt'] as const;
+const FILE_TYPES = ['.csv', '.xlsx', '.tsv', '.txt'] as const;
 /** The picker's key for each type a column suggests, where the two differ. */
 const PICKER_KEYS: Readonly<Record<string, string>> = { url: 'link' };
 
@@ -160,6 +170,8 @@ interface Loaded {
   readonly name: string;
   readonly table: CsvTable;
   readonly samples: readonly (readonly string[])[];
+  /** A workbook's file, its sheets' names and the one read: another sheet reads the file again. */
+  readonly workbook?: { readonly file: File; readonly sheets: readonly string[]; readonly sheet: number };
 }
 
 /** A notice on the preview: why the start failed, or that it was stopped. */
@@ -183,12 +195,14 @@ function refusalText(result: Exclude<CsvResult, { ok: true }>): string {
       return strings.refusals.empty;
     case 'quote':
       return strings.refusals.quote(result.row);
+    case 'broken':
+      return strings.refusals.broken;
   }
 }
 
-/** An Excel file's refusal: how to save it as CSV; any other type keeps FileDrop's own sentence. */
+/** An old or macro Excel file's refusal: how to save it as .xlsx; any other type keeps FileDrop's own sentence. */
 const excelRefusal = (fileName: string): string | undefined =>
-  /\.(xlsx|xlsm|xls)$/iu.test(fileName) ? strings.refusals.excel : undefined;
+  /\.(xlsm|xls|xlsb)$/iu.test(fileName) ? strings.refusals.excel : undefined;
 
 /** A column's first few values that aren't empty. */
 function samplesOf(table: CsvTable, column: number, size: number): readonly string[] {
@@ -422,21 +436,35 @@ export function ImportScreen({
     setMatches(undefined);
   };
 
-  const choose = async (files: readonly File[]) => {
+  // A file chosen, or (`sheet`) another sheet of the workbook on Match columns, which says a refusal there.
+  const choose = async (files: readonly File[], sheet?: number) => {
     const [file] = files;
     if (file === undefined || isReading) return;
     setReading(true);
     setUploadError(undefined);
+    setColumnsError(undefined);
+    // Another sheet's refusal names it, so it's clear which one didn't read.
+    const sheetName = sheet === undefined ? undefined : loaded?.workbook?.sheets[sheet];
+    const refused = (message: string) => {
+      if (sheet === undefined) setUploadError(message);
+      else setColumnsError(sheetName === undefined ? message : strings.sheetRefused(sheetName, message));
+    };
     try {
       const needsPhone = choices.some((choice) => choice.attribute.type === 'phone');
+      // A workbook is read off the page's thread, in its own worker (`xlsx-read.ts`).
       const [read, library] = await Promise.all([
-        readCsvFile(file),
+        isXlsxName(file.name) ? readWorkbook(file, sheet) : readCsvFile(file),
         needsPhone ? loadPhoneLibrary().catch(() => undefined) : Promise.resolve(undefined),
       ]);
       if (!read.ok) {
-        setUploadError(read.reason === 'type' ? (excelRefusal(file.name) ?? refusalText(read)) : refusalText(read));
+        refused(read.reason === 'type' ? (excelRefusal(file.name) ?? refusalText(read)) : refusalText(read));
         return;
       }
+      const sheets = 'sheets' in read ? (read as XlsxResult).sheets : [];
+      const workbook =
+        sheets.length > 1
+          ? { file, sheets: sheets.map((each) => each.name), sheet: (read as XlsxResult).sheet }
+          : undefined;
       const parser = library === undefined ? undefined : createPhoneParser(library);
       const reader = contextFor(parser);
       const { table } = read;
@@ -454,7 +482,12 @@ export function ImportScreen({
         );
       });
       setPhone(parser);
-      setLoaded({ name: file.name, table, samples: samples.map((each) => each.slice(0, SAMPLES_SHOWN)) });
+      setLoaded({
+        name: file.name,
+        table,
+        samples: samples.map((each) => each.slice(0, SAMPLES_SHOWN)),
+        ...(workbook === undefined ? {} : { workbook }),
+      });
       setTargets(proposed);
       setDateOrders(new Map());
       setLabelChoices(new Map());
@@ -464,7 +497,7 @@ export function ImportScreen({
       resetRead();
       setStep('columns');
     } catch {
-      setUploadError(strings.refusals.failed);
+      refused(strings.refusals.failed);
     } finally {
       setReading(false);
     }
@@ -886,6 +919,10 @@ export function ImportScreen({
             setOnNoMatch(isOnly ? 'skip' : 'create');
           }}
           checked={checked}
+          isReading={isReading}
+          onSheet={(sheet) => {
+            if (loaded.workbook !== undefined) void choose([loaded.workbook.file], sheet);
+          }}
           onBack={() => {
             setLoaded(undefined);
             resetRead();
@@ -1204,6 +1241,10 @@ interface ColumnsStepProps {
   readonly onUpdateOnly: (isOnly: boolean) => void;
   /** Rows read so far on the way on, while Continue reads them. */
   readonly checked: number | undefined;
+  /** A workbook's sheet being read again. */
+  readonly isReading: boolean;
+  /** Reads another sheet of the workbook (its index in `loaded.workbook.sheets`). */
+  readonly onSheet: (sheet: number) => void;
   readonly onBack: () => void;
   readonly onContinue: () => void;
 }
@@ -1240,6 +1281,8 @@ function ColumnsStep({
   isCreating,
   onUpdateOnly,
   checked,
+  isReading,
+  onSheet,
   onBack,
   onContinue,
 }: ColumnsStepProps) {
@@ -1279,6 +1322,26 @@ function ColumnsStep({
     <Card
       title={strings.fileSummary(loaded.name, loaded.table.rows.length)}
       description={strings.columnsCount(matched, headers.length)}
+      // Another sheet being read: the card says so until its columns replace these.
+      isBusy={isReading}
+      // A workbook of several sheets: which one imports, the first with data chosen for them.
+      {...(loaded.workbook === undefined
+        ? {}
+        : {
+            actions: (
+              <Select
+                label={strings.sheet}
+                isLabelHidden
+                size="sm"
+                items={loaded.workbook.sheets.map((name, index) => ({ id: String(index), label: name }))}
+                value={String(loaded.workbook.sheet)}
+                isDisabled={isReading || checked !== undefined}
+                onChange={(id) => {
+                  if (id !== null && Number(id) !== loaded.workbook?.sheet) onSheet(Number(id));
+                }}
+              />
+            ),
+          })}
       footer={
         <>
           <Button onPress={onBack}>{strings.chooseAnother}</Button>

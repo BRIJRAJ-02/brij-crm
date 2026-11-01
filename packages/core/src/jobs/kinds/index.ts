@@ -15,6 +15,7 @@ import { reassignKind } from '../../members/reassign.ts';
 import { recordsImport } from '../../imports/kind.ts';
 import { recordsImportUndo } from '../../imports/undo.ts';
 import { recordsExport } from '../../exports/records.ts';
+import { workspaceExport, type WorkspaceExportStore } from '../../exports/workspace.ts';
 import { computedKinds } from '../../computed/jobs.ts';
 
 /** What the kinds a process runs depend on: where it runs, and (for the test kind) how it waits. */
@@ -35,6 +36,8 @@ export interface JobKindsOptions {
    * owns them (27 Oct 2026); without it a file answer isn't filed and says so.
    */
   readonly files?: RecordFileStore;
+  /** The blob store a full workspace export's zip goes into (lane wip/crm-dataio); without it that job fails at its end. */
+  readonly exportFiles?: WorkspaceExportStore;
   /**
    * The access rules a member is read with when a job cuts what it tells them (a form's submission notice, an
    * import's result):
@@ -67,6 +70,7 @@ export function jobKinds(options: JobKindsOptions): JobRegistry {
     recordsImport(options.rules),
     recordsImportUndo(),
     recordsExport(),
+    workspaceExport(options.exportFiles),
     ...computedKinds(),
     ...tests,
     ...(options.extra ?? []),
