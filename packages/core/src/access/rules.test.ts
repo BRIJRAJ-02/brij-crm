@@ -17,6 +17,8 @@ import { isRefusal } from '../engine/refusals.ts';
 import { createRecord, getRecords, setValues } from '../engine/records.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
 import { editRecord } from '../records/records.ts';
+import { setMemberRole } from '../members/members.ts';
+import { createRole, deleteRole } from '../roles/roles.ts';
 import { changeTeamMembers, createTeam } from '../teams/teams.ts';
 import { testScope } from '../testing.ts';
 import { audiences } from './audiences.ts';
@@ -48,6 +50,14 @@ const GUESTS_NONE = {
   people: 0,
 } as const;
 const team = (teamId: string) => ({ type: 'team', teamId }) as const;
+
+/** A custom role, as the Roles screen makes one (spec 0037): it starts with a copy of what it started from. */
+const newRole = (
+  owner: Parameters<typeof createRole>[0],
+  name: string,
+  dataAccess: 'write' | 'read' = 'write',
+  startFrom: 'member' | 'viewer' = 'member',
+) => createRole(owner, { id: newId(), name, permissions: [], dataAccess, startFrom });
 
 let made = 0;
 /** A workspace: Olga the owner, and Companies with its Name and Owner. */
@@ -807,5 +817,118 @@ describe('Preview as (AC-858)', () => {
     expect(
       await refusalOf(previewAccess(w.owner, { objectId: other.companies, as: { type: 'member', memberId: ada } })),
     ).toMatchObject({ code: 'NOT_FOUND' });
+  });
+});
+
+describe('a custom role as a rule subject (spec 0037, AC-1230)', () => {
+  const roleSubject = (roleId: string) => ({ type: 'custom_role', roleId }) as const;
+
+  it('lists each role after Member and Guest, with its name, its people and its data access as its default', async () => {
+    const w = await world();
+    const ada = await w.add('Ada');
+    const role = await newRole(w.owner, 'Receptionist');
+    const viewer = await newRole(w.owner, 'Viewer', 'read', 'viewer');
+    await setMemberRole(w.owner, { memberId: ada, customRoleId: role.id });
+    const access = await getObjectAccess(w.owner, { objectId: w.companies });
+    expect(access.subjects.map((each) => each.subject)).toEqual([
+      MEMBER,
+      GUEST,
+      roleSubject(role.id),
+      roleSubject(viewer.id),
+    ]);
+    // Ada is counted under her own role, no longer under Members.
+    expect(access.subjects[0]).toMatchObject({ people: 0 });
+    expect(access.subjects[2]).toMatchObject({
+      label: 'Receptionist',
+      people: 1,
+      level: 'write',
+      defaultLevel: 'write',
+      isDefault: true,
+    });
+    expect(access.subjects[3]).toMatchObject({ label: 'Viewer', people: 0, level: 'read', defaultLevel: 'read' });
+  });
+
+  it('reaches its holders alone, Preview as shows the role’s view, and a team still grants', async () => {
+    const w = await world();
+    const ada = await w.add('Ada');
+    const bea = await w.add('Bea');
+    const role = await newRole(w.owner, 'Receptionist');
+    await setMemberRole(w.owner, { memberId: ada, customRoleId: role.id });
+    const set = await setObjectAccess(w.owner, {
+      objectId: w.companies,
+      subject: roleSubject(role.id),
+      rule: { level: 'none', records: 'all' },
+    });
+    expect(set.impact.people).toBe(1);
+    expect(objectLevel((await w.enter(ada)).access, w.companies)).toBe('none');
+    expect(objectLevel((await w.enter(bea)).access, w.companies)).toBe('write');
+    expect(
+      await previewAccess(w.owner, { objectId: w.companies, as: { type: 'member', memberId: ada } }),
+    ).toMatchObject({ name: 'Ada', level: 'none' });
+    // A team grants over the role's own rule: most open wins (AC-1248).
+    const sales = await createTeam(w.owner, { name: 'Sales', memberIds: [ada] });
+    await setObjectAccess(w.owner, {
+      objectId: w.companies,
+      subject: team(sales.id),
+      rule: { level: 'read', records: 'all' },
+    });
+    expect(objectLevel((await w.enter(ada)).access, w.companies)).toBe('read');
+    // The rule goes with the role, so Ada is a Member again, under Member's own default.
+    await deleteRole(w.owner, { roleId: role.id, moveTo: 'member' });
+    const left = await testQuery<{ n: string }>(
+      ownerUrl,
+      `select count(*)::text as n from access_rules where workspace_id = $1 and subject_custom_role_id = $2`,
+      [w.workspaceId, role.id],
+    );
+    expect(left[0]?.n).toBe('0');
+    expect(objectLevel((await w.enter(ada)).access, w.companies)).toBe('write');
+  });
+
+  it('never lets a Read only role write, through its own rule or one stored by hand (AC-1229)', async () => {
+    const w = await world();
+    const vera = await w.add('Vera');
+    const viewer = await newRole(w.owner, 'Viewer', 'read', 'viewer');
+    await setMemberRole(w.owner, { memberId: vera, customRoleId: viewer.id });
+    expect(
+      await refusalOf(
+        setObjectAccess(w.owner, {
+          objectId: w.companies,
+          subject: roleSubject(viewer.id),
+          rule: { level: 'write', records: 'all' },
+        }),
+      ),
+    ).toMatchObject({ code: 'CONFIG_INVALID' });
+    await testQuery(
+      ownerUrl,
+      `insert into access_rules (workspace_id, subject_type, subject_custom_role_id, object_id, level, created_by_type, updated_by_type)
+       values ($1, 'custom_role', $2, $3, 'write', 'system', 'system')`,
+      [w.workspaceId, viewer.id, w.companies],
+    );
+    expect(objectLevel((await w.enter(vera)).access, w.companies)).toBe('read');
+  });
+
+  it('fails closed on a level it can’t read, and keeps one workspace’s roles out of another’s', async () => {
+    const w = await world();
+    const other = await world();
+    const ada = await w.add('Ada');
+    const role = await newRole(w.owner, 'Receptionist');
+    await setMemberRole(w.owner, { memberId: ada, customRoleId: role.id });
+    const theirs = await newRole(other.owner, 'Theirs');
+    expect(
+      await refusalOf(
+        setObjectAccess(w.owner, {
+          objectId: w.companies,
+          subject: roleSubject(theirs.id),
+          rule: { level: 'none', records: 'all' },
+        }),
+      ),
+    ).toMatchObject({ code: 'NOT_FOUND' });
+    await testQuery(
+      ownerUrl,
+      `insert into access_rules (workspace_id, subject_type, subject_custom_role_id, object_id, level, created_by_type, updated_by_type)
+       values ($1, 'custom_role', $2, $3, 'nonsense', 'system', 'system')`,
+      [w.workspaceId, role.id, w.companies],
+    );
+    expect(objectLevel((await w.enter(ada)).access, w.companies)).toBe('none');
   });
 });

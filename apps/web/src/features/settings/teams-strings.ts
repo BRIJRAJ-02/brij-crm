@@ -60,6 +60,10 @@ export const strings = {
   /** Each role a rule can be about, as a group of people; a role added to the roles list fails here until named. */
   roleGroups: { member: 'Members', guest: 'Guests' } as const satisfies Record<RuleRole, string>,
   guestsTip: 'Guests can view, never edit.',
+  /** A custom role as a rule subject (spec 0037, AC-1230): how many people hold it, and why it can't be given edit. */
+  appliesTo: (count: number) => `${String(count)} ${count === 1 ? 'person' : 'people'}`,
+  appliesToLabel: (name: string) => `with ${name}`,
+  readOnlyRoleTip: 'This role can view records, never edit. Change its data access on its own page.',
   addTeam: 'Add team',
   makeTeam: 'Make a team first',
   removeRow: (name: string) => `Remove ${name}`,

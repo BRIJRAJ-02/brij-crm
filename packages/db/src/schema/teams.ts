@@ -1,11 +1,12 @@
-// Teams and access rules (specs 0031 slice 8 and 0032): `teams` and who is in them, then the rules that name a role
-// or a team and say what it may do with an object, a field of it, or which of its records. The rules are text on
+// Teams and access rules (specs 0031 slice 8 and 0032; custom role subjects from spec 0037, AC-1230): `teams` and
+// who is in them, then the rules that name a built in role, a custom role or a team and say what it may do with an object, a field of it, or which of its records. The rules are text on
 // purpose (`level`, `kind`, `subject_role`), as `schedule_delegations` keeps its levels: a value written by a newer
 // deploy reads as nothing after a rollback, so the code fails closed instead of the database refusing the row.
 import { sql } from 'drizzle-orm';
 import { check, foreignKey, index, pgTable, primaryKey, text, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { actorColumns, auditColumns, id, timestamptz, workspaceId } from './common.ts';
 import { attributes, objects } from './definitions.ts';
+import { workspaceRoles } from './roles.ts';
 import { actorConstraints, members } from './workspaces.ts';
 
 /** A group of members that access rules can name (spec 0031, AC-824). Flat: no nesting, no leads. */
@@ -73,7 +74,8 @@ export const teamMembers = pgTable(
 
 /**
  * One object or field rule (spec 0032, AC-841): who it is about (a role or a team), the object, the attribute when it
- * is a field rule, and the level as stored text. Exactly one of `subject_role` and `subject_team_id` is set.
+ * is a field rule, and the level as stored text. Exactly one of `subject_role`, `subject_custom_role_id` and
+ * `subject_team_id` is set.
  */
 export const accessRules = pgTable(
   'access_rules',
@@ -82,6 +84,8 @@ export const accessRules = pgTable(
     id: id(),
     subjectType: text('subject_type').notNull(),
     subjectRole: text('subject_role'),
+    /** The custom role a rule is about (spec 0037, AC-1230); exactly one subject column is set. */
+    subjectCustomRoleId: uuid('subject_custom_role_id'),
     subjectTeamId: uuid('subject_team_id'),
     objectId: uuid('object_id').notNull(),
     attributeId: uuid('attribute_id'),
@@ -95,6 +99,12 @@ export const accessRules = pgTable(
       columns: [t.workspaceId, t.subjectTeamId],
       foreignColumns: [teams.workspaceId, teams.id],
     }),
+    // A role deleted takes its own rules with it (AC-1238): `deleteRole` moves its holders, the rules just go.
+    foreignKey({
+      name: 'access_rules_custom_role',
+      columns: [t.workspaceId, t.subjectCustomRoleId],
+      foreignColumns: [workspaceRoles.workspaceId, workspaceRoles.id],
+    }).onDelete('cascade'),
     foreignKey({
       name: 'access_rules_object',
       columns: [t.workspaceId, t.objectId],
@@ -107,14 +117,16 @@ export const accessRules = pgTable(
     }),
     check(
       'access_rules_subject',
-      sql`(${t.subjectType} = 'role' and ${t.subjectRole} is not null and ${t.subjectTeamId} is null and ${t.subjectRole} in ('member', 'guest'))
-        or (${t.subjectType} = 'team' and ${t.subjectRole} is null and ${t.subjectTeamId} is not null)`,
+      sql`(${t.subjectType} = 'role' and ${t.subjectRole} is not null and ${t.subjectCustomRoleId} is null and ${t.subjectTeamId} is null and ${t.subjectRole} in ('member', 'guest'))
+        or (${t.subjectType} = 'custom_role' and ${t.subjectRole} is null and ${t.subjectCustomRoleId} is not null and ${t.subjectTeamId} is null)
+        or (${t.subjectType} = 'team' and ${t.subjectRole} is null and ${t.subjectCustomRoleId} is null and ${t.subjectTeamId} is not null)`,
     ),
     // One rule per subject, object and field: a set replaces it.
     uniqueIndex('access_rules_one').on(
       t.workspaceId,
       t.objectId,
       sql`coalesce(${t.subjectRole}, '')`,
+      sql`coalesce(${t.subjectCustomRoleId}, '00000000-0000-0000-0000-000000000000'::uuid)`,
       sql`coalesce(${t.subjectTeamId}, '00000000-0000-0000-0000-000000000000'::uuid)`,
       sql`coalesce(${t.attributeId}, '00000000-0000-0000-0000-000000000000'::uuid)`,
     ),
@@ -122,6 +134,9 @@ export const accessRules = pgTable(
     index('access_rules_by_role')
       .on(t.workspaceId, t.subjectRole)
       .where(sql`${t.subjectRole} is not null`),
+    index('access_rules_by_custom_role')
+      .on(t.workspaceId, t.subjectCustomRoleId)
+      .where(sql`${t.subjectCustomRoleId} is not null`),
     index('access_rules_by_team')
       .on(t.workspaceId, t.subjectTeamId)
       .where(sql`${t.subjectTeamId} is not null`),
@@ -149,6 +164,8 @@ export const recordRules = pgTable(
     id: id(),
     subjectType: text('subject_type').notNull(),
     subjectRole: text('subject_role'),
+    /** The custom role a rule is about (spec 0037, AC-1230); exactly one subject column is set. */
+    subjectCustomRoleId: uuid('subject_custom_role_id'),
     subjectTeamId: uuid('subject_team_id'),
     objectId: uuid('object_id').notNull(),
     kind: text('kind').notNull(),
@@ -162,6 +179,12 @@ export const recordRules = pgTable(
       columns: [t.workspaceId, t.subjectTeamId],
       foreignColumns: [teams.workspaceId, teams.id],
     }),
+    // A role deleted takes its own rules with it (AC-1238): `deleteRole` moves its holders, the rules just go.
+    foreignKey({
+      name: 'record_rules_custom_role',
+      columns: [t.workspaceId, t.subjectCustomRoleId],
+      foreignColumns: [workspaceRoles.workspaceId, workspaceRoles.id],
+    }).onDelete('cascade'),
     foreignKey({
       name: 'record_rules_object',
       columns: [t.workspaceId, t.objectId],
@@ -174,18 +197,23 @@ export const recordRules = pgTable(
     }),
     check(
       'record_rules_subject',
-      sql`(${t.subjectType} = 'role' and ${t.subjectRole} is not null and ${t.subjectTeamId} is null and ${t.subjectRole} in ('member', 'guest'))
-        or (${t.subjectType} = 'team' and ${t.subjectRole} is null and ${t.subjectTeamId} is not null)`,
+      sql`(${t.subjectType} = 'role' and ${t.subjectRole} is not null and ${t.subjectCustomRoleId} is null and ${t.subjectTeamId} is null and ${t.subjectRole} in ('member', 'guest'))
+        or (${t.subjectType} = 'custom_role' and ${t.subjectRole} is null and ${t.subjectCustomRoleId} is not null and ${t.subjectTeamId} is null)
+        or (${t.subjectType} = 'team' and ${t.subjectRole} is null and ${t.subjectCustomRoleId} is null and ${t.subjectTeamId} is not null)`,
     ),
     uniqueIndex('record_rules_one').on(
       t.workspaceId,
       t.objectId,
       sql`coalesce(${t.subjectRole}, '')`,
+      sql`coalesce(${t.subjectCustomRoleId}, '00000000-0000-0000-0000-000000000000'::uuid)`,
       sql`coalesce(${t.subjectTeamId}, '00000000-0000-0000-0000-000000000000'::uuid)`,
     ),
     index('record_rules_by_role')
       .on(t.workspaceId, t.subjectRole)
       .where(sql`${t.subjectRole} is not null`),
+    index('record_rules_by_custom_role')
+      .on(t.workspaceId, t.subjectCustomRoleId)
+      .where(sql`${t.subjectCustomRoleId} is not null`),
     index('record_rules_by_team')
       .on(t.workspaceId, t.subjectTeamId)
       .where(sql`${t.subjectTeamId} is not null`),

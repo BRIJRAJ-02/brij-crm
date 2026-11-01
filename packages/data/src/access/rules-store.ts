@@ -76,7 +76,11 @@ const timer = (run: () => void, ms: number) => {
 
 /** One subject's key: a role by name, a team by id. */
 const subjectKey = (subject: RuleSubject): string =>
-  subject.type === 'role' ? `role:${subject.role}` : `team:${subject.teamId}`;
+  subject.type === 'role'
+    ? `role:${subject.role}`
+    : subject.type === 'custom_role'
+      ? `custom_role:${subject.roleId}`
+      : `team:${subject.teamId}`;
 
 interface Entry {
   readonly workspace: string;

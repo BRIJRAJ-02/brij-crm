@@ -17,13 +17,13 @@ export interface Rule {
   readonly fields?: FieldRules;
 }
 
-/** The role a subject names, as plain text (the roles list grows: Guest), or none for a team. */
+/** The role a subject names, as plain text (the roles list grows: Guest), or none for a custom role or a team. */
 export const roleOf = (subject: RuleSubject): string | undefined =>
   subject.type === 'role' ? subject.role : undefined;
 
 /** The key a subject is held under. */
 export const keyOf = (subject: RuleSubject): string =>
-  subject.type === 'role' ? `role:${subject.role}` : subject.teamId;
+  subject.type === 'role' ? `role:${subject.role}` : subject.type === 'custom_role' ? subject.roleId : subject.teamId;
 
 /**
  * What the grid shows at once for a change, before the server answers: the subject's new standing, a role at its
@@ -40,13 +40,14 @@ export function expected(
   const found = access.subjects.find((each) => keyOf(each.subject) === keyOf(subject));
   const people = found?.people ?? 0;
   // What the subject gets with no rule: the server says, so a role added to the roles list needs nothing here.
-  const defaultLevel = found?.defaultLevel ?? (subject.type === 'role' ? 'write' : 'none');
+  const defaultLevel = found?.defaultLevel ?? (subject.type === 'team' ? 'none' : 'write');
   // Field rules: those given, else the ones it has; clearing the rule clears them too.
   const fields: FieldRules = rule === null ? {} : (rule.fields ?? found?.fields ?? {});
   const next: SubjectAccess | undefined =
-    subject.type === 'role'
+    subject.type !== 'team'
       ? {
           subject,
+          ...(found?.label === undefined ? {} : { label: found.label }),
           level: rule?.level ?? defaultLevel,
           records: rule?.records ?? 'all',
           defaultLevel,
@@ -72,7 +73,7 @@ export function expected(
   // A new team goes in among the teams by name, after the roles.
   const nameOf = (each: SubjectAccess) =>
     (each.subject.type === 'team' ? (teamNames.get(each.subject.teamId) ?? '') : '').toLowerCase();
-  const roles = access.subjects.filter((each) => each.subject.type === 'role');
+  const roles = access.subjects.filter((each) => each.subject.type !== 'team');
   const teams = [...access.subjects.filter((each) => each.subject.type === 'team'), next].sort((a, b) =>
     nameOf(a).localeCompare(nameOf(b)),
   );

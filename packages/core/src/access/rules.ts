@@ -1,5 +1,6 @@
 // Access rules by role and team, as an object's Access tab edits them (spec 0032, milestones 1 and 3, AC-846 to
-// AC-852): for one object, what the Member role and each team may do (nothing, view, edit) and which of its records
+// AC-852; custom role subjects from spec 0037, AC-1230): for one object, what the Member role, each custom role and
+// each team may do (nothing, view, edit) and which of its records
 // they see (all, the ones that name them, the ones that name their team). Owners and admins are never restricted, so
 // nobody who manages access can be locked out of the data (AC-843).
 //
@@ -46,6 +47,7 @@ import { requirePermission } from './check.ts';
 import { CUSTOM_ROLE_COLUMNS, customRoleJoin, isKnownMember, memberAccess, memberRowOf } from './door.ts';
 import type { EngineScope } from './mint.ts';
 import {
+  customRoleLevel,
   fieldLevel,
   objectLevel,
   recordRule,
@@ -61,6 +63,7 @@ const { accessRules, attributes, members, objects, recordRules, teamMembers, tea
 
 const OBJECT_NOT_FOUND = "That object doesn't exist.";
 const TEAM_NOT_FOUND = "That team doesn't exist.";
+const ROLE_NOT_FOUND = "That role doesn't exist.";
 const FIELD_NOT_FOUND = "That field doesn't exist.";
 
 /** What setting one subject's access takes: a level and a record scope, or `null` to clear it. */
@@ -105,14 +108,26 @@ export async function ownerAttributeOf(tx: WorkspaceTx, objectId: string): Promi
   return found;
 }
 
-/** How many active members each role covers, and how many are in each team. */
+/**
+ * How many active members each subject covers: each built in role (its holders alone, so a custom role holder is
+ * counted under their own role, spec 0037 AC-1230), each custom role, and each team.
+ */
 async function peopleCounts(tx: WorkspaceTx, workspaceId: string, teamIds: readonly string[]) {
   const roles = await tx
-    .select({ role: members.role, n: sql<number>`count(*)::int` })
+    .select({
+      role: members.role,
+      customRoleId: members.customRoleId,
+      n: sql<number>`count(*)::int`,
+    })
     .from(members)
     .where(and(eq(members.workspaceId, workspaceId), eq(members.status, 'active')))
-    .groupBy(members.role);
-  const byRole = new Map<string, number>(roles.map((row) => [row.role, row.n]));
+    .groupBy(members.role, members.customRoleId);
+  const byRole = new Map<string, number>();
+  const byCustomRole = new Map<string, number>();
+  for (const row of roles) {
+    if (row.customRoleId === null) byRole.set(row.role, (byRole.get(row.role) ?? 0) + row.n);
+    else byCustomRole.set(row.customRoleId, (byCustomRole.get(row.customRoleId) ?? 0) + row.n);
+  }
   const byTeam = new Map<string, number>();
   if (teamIds.length > 0) {
     const rows = await tx
@@ -129,7 +144,7 @@ async function peopleCounts(tx: WorkspaceTx, workspaceId: string, teamIds: reado
       .groupBy(teamMembers.teamId);
     for (const row of rows) byTeam.set(row.teamId, row.n);
   }
-  return { byRole, byTeam };
+  return { byRole, byCustomRole, byTeam };
 }
 
 /** The stored rows of one subject, read as the code reads them (an unknown level is nothing, a kind other than own or team is all). */
@@ -175,7 +190,35 @@ async function attributeNamed(tx: WorkspaceTx, workspaceId: string, id: string):
   return found;
 }
 
-/** Reads an object's access inside `tx`: each rule role in the roles list's order, then each team that has a rule. */
+/** A custom role as a rule subject: its name and the data access that is both its default and its ceiling. */
+interface RoleSubjectRow {
+  readonly id: string;
+  readonly name: string;
+  readonly position: number;
+  readonly defaultObjectLevel: string;
+}
+
+/**
+ * The workspace's custom roles, in their own order (spec 0037, AC-1230): each is a rule subject after Member and
+ * Guest, with its data access as what it gets on an object no rule names (AC-1229).
+ */
+async function customRoleSubjects(tx: WorkspaceTx, workspaceId: string): Promise<readonly RoleSubjectRow[]> {
+  return tx
+    .select({
+      id: workspaceRoles.id,
+      name: workspaceRoles.name,
+      position: workspaceRoles.position,
+      defaultObjectLevel: workspaceRoles.defaultObjectLevel,
+    })
+    .from(workspaceRoles)
+    .where(eq(workspaceRoles.workspaceId, workspaceId))
+    .orderBy(asc(workspaceRoles.position), asc(workspaceRoles.id));
+}
+
+/**
+ * Reads an object's access inside `tx`: each rule role in the roles list's order, then each custom role in its own
+ * order, then each team that has a rule.
+ */
 async function readAccess(tx: WorkspaceTx, workspaceId: string, objectId: string): Promise<ObjectAccess> {
   const [object] = await tx
     .select({ id: objects.id, primaryAttributeId: objects.primaryAttributeId })
@@ -185,6 +228,7 @@ async function readAccess(tx: WorkspaceTx, workspaceId: string, objectId: string
   const levelRows = await tx
     .select({
       role: accessRules.subjectRole,
+      customRoleId: accessRules.subjectCustomRoleId,
       teamId: accessRules.subjectTeamId,
       attributeId: accessRules.attributeId,
       level: accessRules.level,
@@ -194,6 +238,7 @@ async function readAccess(tx: WorkspaceTx, workspaceId: string, objectId: string
   const recordRows = await tx
     .select({
       role: recordRules.subjectRole,
+      customRoleId: recordRules.subjectCustomRoleId,
       teamId: recordRules.subjectTeamId,
       kind: recordRules.kind,
       attributeId: recordRules.attributeId,
@@ -223,7 +268,10 @@ async function readAccess(tx: WorkspaceTx, workspaceId: string, objectId: string
           .from(teams)
           .where(and(eq(teams.workspaceId, workspaceId), inArray(teams.id, teamIds)));
   const people = await peopleCounts(tx, workspaceId, teamIds);
-  const storedOf = (matches: (row: { role: string | null; teamId: string | null }) => boolean): Stored => ({
+  const roles = await customRoleSubjects(tx, workspaceId);
+  const storedOf = (
+    matches: (row: { role: string | null; customRoleId: string | null; teamId: string | null }) => boolean,
+  ): Stored => ({
     level: levelRows.find((row) => row.attributeId === null && matches(row))?.level,
     kind: recordRows.find((row) => matches(row))?.kind,
     fields: new Map(
@@ -240,6 +288,18 @@ async function readAccess(tx: WorkspaceTx, workspaceId: string, objectId: string
     ),
     people: people.byRole.get(role) ?? 0,
   }));
+  // Each custom role after the built in ones (AC-1230): its data access is what it gets where no rule names it.
+  for (const role of roles) {
+    subjects.push({
+      subject: { type: 'custom_role', roleId: role.id },
+      ...shown(
+        storedOf((row) => row.customRoleId === role.id),
+        customRoleLevel(role.defaultObjectLevel),
+      ),
+      people: people.byCustomRole.get(role.id) ?? 0,
+      label: role.name,
+    });
+  }
   for (const team of [...names].sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()))) {
     subjects.push({
       subject: { type: 'team', teamId: team.id },
@@ -256,6 +316,48 @@ async function readAccess(tx: WorkspaceTx, workspaceId: string, objectId: string
     ...(owner === undefined ? {} : { ownerAttribute: owner }),
     subjects,
   };
+}
+
+/**
+ * Copies one subject's object, field and record rules to a custom role, in the caller's own transaction (spec 0037,
+ * AC-1230): what a new role starts with, from its "Start from" (the Member role, which the `viewer` preset sits on
+ * too, or another custom role). Afterwards the two are independent: a change to one never touches the other.
+ *
+ * The copy goes only to a role that has no rules yet, so a retry of the same create writes nothing twice. It is a
+ * narrowing, never a widening: the role would otherwise start at its data access on every object, and a Read only
+ * role is still capped by the policy at read whatever a copied rule says (AC-1229).
+ */
+export async function copyRulesToRole(
+  tx: WorkspaceTx,
+  workspaceId: string,
+  actor: EngineScope['actor'],
+  input: { readonly from: { readonly role: string } | { readonly roleId: string }; readonly to: string },
+): Promise<void> {
+  const by = actorRow(actor);
+  const fromRole = 'role' in input.from ? input.from.role : null;
+  const fromRoleId = 'role' in input.from ? null : input.from.roleId;
+  const matches = sql`(source.subject_role = ${fromRole}::text or source.subject_custom_role_id = ${fromRoleId}::uuid)`;
+  const stamp = sql`${by.type}::actor_type, ${by.id}::uuid, ${by.memberId}::uuid, ${by.type}::actor_type, ${by.id}::uuid, ${by.memberId}::uuid`;
+  await tx.execute(sql`
+    insert into access_rules (workspace_id, subject_type, subject_custom_role_id, object_id, attribute_id, level,
+      created_by_type, created_by_id, created_by_member_id, updated_by_type, updated_by_id, updated_by_member_id)
+    select source.workspace_id, 'custom_role', ${input.to}::uuid, source.object_id, source.attribute_id, source.level,
+      ${stamp}
+      from access_rules source
+      where source.workspace_id = ${workspaceId}::uuid and ${matches}
+        and not exists (select 1 from access_rules mine
+          where mine.workspace_id = ${workspaceId}::uuid and mine.subject_custom_role_id = ${input.to}::uuid)
+  `);
+  await tx.execute(sql`
+    insert into record_rules (workspace_id, subject_type, subject_custom_role_id, object_id, kind, attribute_id,
+      created_by_type, created_by_id, created_by_member_id, updated_by_type, updated_by_id, updated_by_member_id)
+    select source.workspace_id, 'custom_role', ${input.to}::uuid, source.object_id, source.kind, source.attribute_id,
+      ${stamp}
+      from record_rules source
+      where source.workspace_id = ${workspaceId}::uuid and ${matches}
+        and not exists (select 1 from record_rules mine
+          where mine.workspace_id = ${workspaceId}::uuid and mine.subject_custom_role_id = ${input.to}::uuid)
+  `);
 }
 
 /**
@@ -284,16 +386,13 @@ const same = (a: SubjectAccess | undefined, b: SubjectAccess | undefined): boole
   a.isDefault === b.isDefault &&
   sameFields(a.fields, b.fields);
 
-/** The role a subject names, as plain text: the roles list grows (Guest), so a role is compared as a name. */
-const roleOf = (subject: RuleSubject): string | undefined => (subject.type === 'role' ? subject.role : undefined);
+/** The key a subject is held under here: a built in role's name, a custom role's id, or a team's id. */
+const keyOf = (subject: RuleSubject | LevelRule['subject']): string =>
+  subject.type === 'role' ? `role:${subject.role}` : subject.type === 'custom_role' ? subject.roleId : subject.teamId;
 
 /** The standing of `subject` in `access`, or undefined when it has none. */
 function standing(access: ObjectAccess, subject: RuleSubject): SubjectAccess | undefined {
-  return access.subjects.find((each) =>
-    subject.type === 'role'
-      ? roleOf(each.subject) === roleOf(subject)
-      : each.subject.type === 'team' && each.subject.teamId === subject.teamId,
-  );
+  return access.subjects.find((each) => keyOf(each.subject) === keyOf(subject));
 }
 
 /** The rows a subject's rule is stored as, in the policy's own shapes, so the impact reads them as the door would. */
@@ -311,10 +410,11 @@ function rowsOf(
   objectId: string,
   stored: { readonly level: ObjectAccessLevel; readonly records: RecordScope; readonly fields: FieldRules } | undefined,
   ownerId: string | undefined,
+  /** What the subject gets where no rule names it: a role's default, a custom role's data access, nothing for a team. */
+  roleDefault: ObjectAccessLevel | undefined,
 ): RuleRows {
   if (stored === undefined) return { levels: [], records: [] };
   const { level, records, fields } = stored;
-  const roleDefault = subject.type === 'role' ? ROLE_DEFAULT_LEVEL[subject.role] : undefined;
   const isTeamWithNothing = subject.type === 'team' && level === 'none';
   const storesLevel = !isTeamWithNothing && !(roleDefault !== undefined && level === roleDefault && records === 'all');
   const levels: LevelRule[] = [];
@@ -333,9 +433,7 @@ function rowsOf(
 
 /** Whether a rule row is about this subject. */
 const aboutSubject = (rowSubject: LevelRule['subject'], subject: RuleSubject): boolean =>
-  subject.type === 'role'
-    ? rowSubject.type === 'role' && rowSubject.role === subject.role
-    : rowSubject.type === 'team' && rowSubject.teamId === subject.teamId;
+  rowSubject.type === subject.type && keyOf(rowSubject) === keyOf(subject);
 
 const LEVEL_RANK: Readonly<Record<string, number>> = { none: 0, hidden: 0, read: 1, write: 2 };
 
@@ -488,8 +586,9 @@ async function impactOf(
 /**
  * Sets one subject's access to an object (spec 0032, AC-846 to AC-852). `rule` replaces what the subject had (its
  * field rules too when it carries them); `null` clears it (a team row goes, a role returns to its default). Only a
- * role the roles list says a rule can be about (`RuleRole`: not an owner or an admin) and a team can be a subject,
- * never a person: 422 `CONFIG_INVALID`. A record scope of `own` or `team` needs the object to have a Member field to
+ * role the roles list says a rule can be about (`RuleRole`: not an owner or an admin), a custom role (spec 0037,
+ * AC-1230) and a team can be a subject, never a person: 422 `CONFIG_INVALID`. A read only custom role is refused
+ * edit (`CONFIG_INVALID`), since its data access caps it anyway. A record scope of `own` or `team` needs the object to have a Member field to
  * read, else it is refused `CONFIG_INVALID`; a field rule names a live field of this object, and the record's name
  * field is never hidden (`CONFIG_INVALID`). Answers the object's access as it stands and what the change took away
  * from people who had it. Needs `access.manage`.
@@ -534,6 +633,7 @@ export async function setObjectAccess(
           }),
         );
   const teamId = subject.type === 'team' ? checkId(subject.teamId, TEAM_NOT_FOUND) : undefined;
+  const customRoleId = subject.type === 'custom_role' ? checkId(subject.roleId, ROLE_NOT_FOUND) : undefined;
   const { result } = await runWrite(
     scope,
     async (context) => {
@@ -545,6 +645,24 @@ export async function setObjectAccess(
         .where(and(eq(objects.workspaceId, scope.workspaceId), eq(objects.id, objectId)))
         .for('no key update');
       const before = await readAccess(tx, scope.workspaceId, objectId);
+      // A Read only custom role (spec 0037, AC-1229) can never edit through a rule of its own: the policy caps it at
+      // the role's data access, so offering edit here would store a rule that never takes effect.
+      let roleName: string | undefined;
+      if (customRoleId !== undefined) {
+        const [role] = await tx
+          .select({ name: workspaceRoles.name, dataAccess: workspaceRoles.defaultObjectLevel })
+          .from(workspaceRoles)
+          .where(and(eq(workspaceRoles.workspaceId, scope.workspaceId), eq(workspaceRoles.id, customRoleId)))
+          .for('share');
+        if (role === undefined) throw refuse('NOT_FOUND', ROLE_NOT_FOUND);
+        roleName = role.name;
+        if (rule?.level === 'write' && customRoleLevel(role.dataAccess) !== 'write') {
+          throw refuse(
+            'CONFIG_INVALID',
+            `${role.name} is a read only role. Give it Read and write data access first, then edit here.`,
+          );
+        }
+      }
       let teamName: string | undefined;
       if (teamId !== undefined) {
         const [team] = await tx
@@ -578,8 +696,21 @@ export async function setObjectAccess(
           }
         }
       }
-      const next = rowsOf(subject, objectId, rule === null ? undefined : { level, records, fields }, owner?.id);
-      const roleDefault = subject.type === 'role' ? ROLE_DEFAULT_LEVEL[subject.role] : undefined;
+      // What the subject gets where no rule names it: the role list's default, a custom role's data access, or
+      // nothing for a team (it only grants). `was` carries what the read worked out, so this agrees with the grid.
+      const roleDefault =
+        subject.type === 'role'
+          ? ROLE_DEFAULT_LEVEL[subject.role]
+          : subject.type === 'custom_role'
+            ? (was?.defaultLevel ?? 'write')
+            : undefined;
+      const next = rowsOf(
+        subject,
+        objectId,
+        rule === null ? undefined : { level, records, fields },
+        owner?.id,
+        roleDefault,
+      );
       const stores = next.levels.length > 0 || next.records.length > 0;
       const nextStanding: SubjectAccess = {
         subject,
@@ -593,9 +724,12 @@ export async function setObjectAccess(
           ),
         ),
         people: was?.people ?? 0,
+        ...(roleName === undefined ? {} : { label: roleName }),
       };
       const nothing: AccessImpact = { people: 0, views: 0, forms: 0 };
       if (same(was, nextStanding) || (was === undefined && !stores)) return { access: before, impact: nothing };
+      // Who the subject covers: a built in role its holders alone (a custom role holder is under their own role,
+      // AC-1230), a custom role its holders, a team its members.
       const covered =
         subject.type === 'role'
           ? await tx
@@ -606,17 +740,33 @@ export async function setObjectAccess(
                   eq(members.workspaceId, scope.workspaceId),
                   eq(members.status, 'active'),
                   eq(members.role, subject.role),
+                  isNull(members.customRoleId),
                 ),
               )
-          : await tx
-              .select({ id: teamMembers.memberId })
-              .from(teamMembers)
-              .where(and(eq(teamMembers.workspaceId, scope.workspaceId), eq(teamMembers.teamId, subject.teamId)));
+          : subject.type === 'custom_role'
+            ? await tx
+                .select({ id: members.id })
+                .from(members)
+                .where(
+                  and(
+                    eq(members.workspaceId, scope.workspaceId),
+                    eq(members.status, 'active'),
+                    eq(members.customRoleId, subject.roleId),
+                  ),
+                )
+            : await tx
+                .select({ id: teamMembers.memberId })
+                .from(teamMembers)
+                .where(and(eq(teamMembers.workspaceId, scope.workspaceId), eq(teamMembers.teamId, subject.teamId)));
       const coveredIds = covered.map((row) => row.id);
       // What this takes away is read from the policy as it stands, before a row changes.
       const impact = await impactOf(tx, scope, objectId, subject, next, coveredIds);
       const subjectWhere = (table: typeof accessRules | typeof recordRules) =>
-        subject.type === 'role' ? eq(table.subjectRole, subject.role) : eq(table.subjectTeamId, subject.teamId);
+        subject.type === 'role'
+          ? eq(table.subjectRole, subject.role)
+          : subject.type === 'custom_role'
+            ? eq(table.subjectCustomRoleId, subject.roleId)
+            : eq(table.subjectTeamId, subject.teamId);
       await tx
         .delete(accessRules)
         .where(
@@ -647,7 +797,9 @@ export async function setObjectAccess(
       const who =
         subject.type === 'role'
           ? { subjectType: 'role', subjectRole: subject.role }
-          : { subjectType: 'team', subjectTeamId: subject.teamId };
+          : subject.type === 'custom_role'
+            ? { subjectType: 'custom_role', subjectCustomRoleId: subject.roleId }
+            : { subjectType: 'team', subjectTeamId: subject.teamId };
       for (const row of next.levels) {
         await tx.insert(accessRules).values({
           workspaceId: scope.workspaceId,
@@ -693,8 +845,9 @@ export async function setObjectAccess(
           before: { ...side(was), isDefault: was?.isDefault },
           after: {
             object: object?.name,
-            subject: subject.type === 'role' ? subject.role : 'team',
+            subject: subject.type === 'role' ? subject.role : subject.type,
             ...(teamId === undefined ? {} : { teamId, team: teamName }),
+            ...(customRoleId === undefined ? {} : { roleId: customRoleId, role: roleName }),
             ...side(nextStanding),
             isDefault: nextStanding.isDefault,
           },

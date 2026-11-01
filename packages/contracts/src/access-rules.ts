@@ -40,9 +40,14 @@ export const ROLE_DEFAULT_LEVEL = {
   guest: 'none',
 } as const satisfies Record<RuleRole, ObjectAccessLevel>;
 
-/** Who a rule is about: everyone with a role, or everyone in one team. Never one named person. */
+/**
+ * Who a rule is about: everyone on a built in role a rule can name, everyone holding one custom role (spec 0037,
+ * AC-1230), or everyone in one team. Never one named person. A `role` subject is about the built in role alone: a
+ * custom role holder is under their own role's rules, which a new role starts as a copy of what it started from.
+ */
 export const RuleSubject = z.discriminatedUnion('type', [
   z.object({ type: z.literal('role'), role: RuleRole }),
+  z.object({ type: z.literal('custom_role'), roleId: Uuid }),
   z.object({ type: z.literal('team'), teamId: Uuid }),
 ]);
 /** Who a rule is about. */
@@ -73,6 +78,8 @@ export const SubjectAccess = z.object({
   fields: FieldRules,
   /** How many active people the subject covers. */
   people: z.number().int().nonnegative(),
+  /** A custom role subject's name as the workspace spelled it (spec 0037, AC-1230); absent for the other subjects. */
+  label: z.string().optional(),
 });
 /** One subject's standing on an object. */
 export type SubjectAccess = z.infer<typeof SubjectAccess>;

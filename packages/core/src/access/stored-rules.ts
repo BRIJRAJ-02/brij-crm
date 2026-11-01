@@ -1,6 +1,7 @@
 // The production rule source (spec 0032, AC-841; spec 0031, AC-825): what the door reads about a member beyond their
 // row, in the same transaction and in one statement. Their teams (and the active members of those teams, for a `team`
-// record rule) and the stored object, field and record rules that name their role or one of their teams. Rows are
+// record rule) and the stored object, field and record rules that name their role (their custom role where they hold
+// one, spec 0037 AC-1230) or one of their teams. Rows are
 // read as text and handed to the policy as they are: a level or kind the code doesn't know is the policy's to fail
 // closed on, not this file's to drop.
 //
@@ -21,10 +22,11 @@ type Row = {
   readonly e: string | null;
 };
 
-/** The subject a stored row names: a role by its name, or a team by its id. */
+/** The subject a stored row names: a role by its name, a custom role by its id, or a team by its id. */
 const subjectOf = (type: string | null, who: string | null): RuleSubject | undefined => {
   if (who === null) return undefined;
   if (type === 'role') return { type: 'role', role: who };
+  if (type === 'custom_role') return { type: 'custom_role', roleId: who };
   if (type === 'team') return { type: 'team', teamId: who };
   return undefined;
 };
@@ -66,9 +68,11 @@ function computedOf(row: Row): ComputedInputRule | undefined {
  * their role or any of those teams. A member in no team and a workspace with no rules cost the same one statement.
  */
 export const storedRules: RuleSource = async (tx, member) => {
-  // A custom role holder is under their base role's (Member's) rules until custom roles get rule subjects of their own
-  // (spec 0037, J10), so a custom role never sees past a rule Member has.
-  const roleSubject = member.role;
+  // A custom role holder is under their own role's rules (spec 0037, AC-1230), never their base role's: the role was
+  // made with a copy of what it started from, so it starts no wider than Member and the policy caps it at the role's
+  // data access either way. A member on a built in role reads that role's rules, as before.
+  const roleSubject = member.customRoleId === undefined ? member.role : null;
+  const customRoleSubject = member.customRoleId ?? null;
   const found = await tx.execute<Row>(sql`
     with workspace as (select nullif(current_setting('app.workspace_id', true), '')::uuid as id),
     mine as (
@@ -82,17 +86,21 @@ export const storedRules: RuleSource = async (tx, member) => {
       join members m on m.workspace_id = tm.workspace_id and m.id = tm.member_id and m.status = 'active'
       where tm.team_id in (select team_id from mine) and tm.workspace_id = (select id from workspace)
     union all
-    select 'level', r.subject_type, coalesce(r.subject_role, r.subject_team_id::text), r.object_id::text,
+    select 'level', r.subject_type,
+        coalesce(r.subject_role, r.subject_custom_role_id::text, r.subject_team_id::text), r.object_id::text,
         r.attribute_id::text, r.level
       from access_rules r
       where r.workspace_id = (select id from workspace)
-        and (r.subject_role = ${roleSubject}::text or r.subject_team_id in (select team_id from mine))
+        and (r.subject_role = ${roleSubject}::text or r.subject_custom_role_id = ${customRoleSubject}::uuid
+          or r.subject_team_id in (select team_id from mine))
     union all
-    select 'record', r.subject_type, coalesce(r.subject_role, r.subject_team_id::text), r.object_id::text,
+    select 'record', r.subject_type,
+        coalesce(r.subject_role, r.subject_custom_role_id::text, r.subject_team_id::text), r.object_id::text,
         r.attribute_id::text, r.kind
       from record_rules r
       where r.workspace_id = (select id from workspace)
-        and (r.subject_role = ${roleSubject}::text or r.subject_team_id in (select team_id from mine))
+        and (r.subject_role = ${roleSubject}::text or r.subject_custom_role_id = ${customRoleSubject}::uuid
+          or r.subject_team_id in (select team_id from mine))
     union all
     select 'computed', ci.computed_attribute_id::text, c.object_id::text, ci.input_attribute_id::text, i.object_id::text, c.computed->>'kind'
       from computed_inputs ci
@@ -100,9 +108,11 @@ export const storedRules: RuleSource = async (tx, member) => {
       join attributes i on i.workspace_id = ci.workspace_id and i.id = ci.input_attribute_id
       where ci.workspace_id = (select id from workspace) and c.object_id is not null and i.object_id is not null
         and (exists (select 1 from access_rules r where r.workspace_id = (select id from workspace)
-            and (r.subject_role = ${roleSubject}::text or r.subject_team_id in (select team_id from mine)))
+            and (r.subject_role = ${roleSubject}::text or r.subject_custom_role_id = ${customRoleSubject}::uuid
+          or r.subject_team_id in (select team_id from mine)))
           or exists (select 1 from record_rules r where r.workspace_id = (select id from workspace)
-            and (r.subject_role = ${roleSubject}::text or r.subject_team_id in (select team_id from mine))))
+            and (r.subject_role = ${roleSubject}::text or r.subject_custom_role_id = ${customRoleSubject}::uuid
+          or r.subject_team_id in (select team_id from mine))))
   `);
   const levels: LevelRule[] = [];
   const records: RecordRuleRow[] = [];
@@ -148,11 +158,13 @@ export async function workspaceRules(tx: WorkspaceTx): Promise<WorkspaceRules> {
       join members m on m.workspace_id = tm.workspace_id and m.id = tm.member_id and m.status = 'active'
       where tm.workspace_id = (select id from workspace)
     union all
-    select 'level', r.subject_type, coalesce(r.subject_role, r.subject_team_id::text), r.object_id::text,
+    select 'level', r.subject_type,
+        coalesce(r.subject_role, r.subject_custom_role_id::text, r.subject_team_id::text), r.object_id::text,
         r.attribute_id::text, r.level
       from access_rules r where r.workspace_id = (select id from workspace)
     union all
-    select 'record', r.subject_type, coalesce(r.subject_role, r.subject_team_id::text), r.object_id::text,
+    select 'record', r.subject_type,
+        coalesce(r.subject_role, r.subject_custom_role_id::text, r.subject_team_id::text), r.object_id::text,
         r.attribute_id::text, r.kind
       from record_rules r where r.workspace_id = (select id from workspace)
     union all

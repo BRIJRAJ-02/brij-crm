@@ -87,3 +87,41 @@ describe('guests in the line (spec 0031, AC-828)', () => {
     ).toBe('Members can view Deals. Guests can view their own deals.');
   });
 });
+
+describe('custom roles in the line (spec 0037, AC-1230)', () => {
+  it('leaves out a role that stands where Members do, and never says Everyone over one that doesn’t', () => {
+    expect(
+      summarizeAccess({
+        object: 'Deals',
+        role: DEFAULT,
+        teams: [],
+        roles: [{ name: 'Receptionist', level: 'write', records: 'all' }],
+      }),
+    ).toBe('Everyone can edit Deals.');
+    expect(
+      summarizeAccess({
+        object: 'Deals',
+        role: DEFAULT,
+        teams: [],
+        roles: [
+          { name: 'Viewer', level: 'read', records: 'all' },
+          { name: 'Receptionist', level: 'write', records: 'all' },
+        ],
+      }),
+    ).toBe('Members can edit Deals. Viewer can view Deals.');
+  });
+
+  it('groups roles that stand together, and says a role that sees nothing', () => {
+    expect(
+      summarizeAccess({
+        object: 'Deals',
+        role: { level: 'read', records: 'all', isDefault: false },
+        teams: [],
+        roles: [
+          { name: 'Viewer', level: 'none', records: 'all' },
+          { name: 'Contractor', level: 'none', records: 'all' },
+        ],
+      }),
+    ).toBe('Members can view Deals. Viewer and Contractor can’t see Deals.');
+  });
+});

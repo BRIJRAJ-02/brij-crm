@@ -1121,6 +1121,13 @@
       "when": 1795502500000,
       "tag": "0161_custom_roles",
       "breakpoints": true
+    },
+    {
+      "idx": 162,
+      "version": "7",
+      "when": 1795502600000,
+      "tag": "0162_custom_role_rules",
+      "breakpoints": true
     }
   ]
 }

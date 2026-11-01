@@ -1,10 +1,11 @@
 // Brief
-// Purpose: an object's Access tab (spec 0032, AC-846, AC-851, AC-856): who can see and edit its records, one row per
-// who, with a plain line saying the result.
+// Purpose: an object's Access tab (spec 0032, AC-846, AC-851, AC-856; custom roles as subjects, spec 0037, AC-1230):
+// who can see and edit its records, one row per who, with a plain line saying the result.
 // Main task: tick who can edit and who can see; pick which records (all, their own, their team's); add a team; fold
 // open Fields to hide or lock fields; Preview as to see the result as someone would. A change that takes access away
 // from people says how many, as chips, with Undo.
-// Leaves out: per list access, and edit for guests (they view at most, spec 0031 AC-828).
+// Leaves out: per list access, edit for guests (they view at most, spec 0031 AC-828) and edit for a read only custom
+// role (its data access caps it, spec 0037 AC-1229; that is changed on the role's own page).
 import {
   isDataError,
   type AccessImpact,
@@ -117,10 +118,24 @@ export function AccessTab({ data, toasts, slug, object, access: initial, teams, 
   // The toast of the last change, so each change replaces the one before it rather than stacking its own Undo.
   const lastToast = useRef<string | undefined>(undefined);
   const teamNames = useMemo(() => new Map(teams.map((team) => [team.id, team.name])), [teams]);
+  // A custom role's name comes with its row (spec 0037, AC-1230), so the grid never reads the roles itself.
+  const roleNames = useMemo(
+    () =>
+      new Map(
+        access.subjects.flatMap((each) =>
+          each.subject.type === 'custom_role' ? [[each.subject.roleId, each.label ?? '']] : [],
+        ),
+      ),
+    [access.subjects],
+  );
   const owner = access.ownerAttribute;
 
   const nameOf = (subject: RuleSubject): string =>
-    subject.type === 'role' ? strings.roleGroups[subject.role] : (teamNames.get(subject.teamId) ?? '');
+    subject.type === 'role'
+      ? strings.roleGroups[subject.role]
+      : subject.type === 'custom_role'
+        ? (roleNames.get(subject.roleId) ?? '')
+        : (teamNames.get(subject.teamId) ?? '');
 
   /**
    * Sends one subject's access and shows it at once (the data layer's held source); the latest answer replaces what is
@@ -212,6 +227,11 @@ export function AccessTab({ data, toasts, slug, object, access: initial, teams, 
     teams: access.subjects.flatMap((each) =>
       each.subject.type === 'team' ? [{ name: nameOf(each.subject), level: each.level, records: each.records }] : [],
     ),
+    roles: access.subjects.flatMap((each) =>
+      each.subject.type === 'custom_role'
+        ? [{ name: nameOf(each.subject), level: each.level, records: each.records }]
+        : [],
+    ),
   });
 
   const cell = (row: Row, column: string) => {
@@ -245,8 +265,20 @@ export function AccessTab({ data, toasts, slug, object, access: initial, teams, 
     const who = nameOf(standing.subject);
     const isTeam = standing.subject.type === 'team';
     const isGuest = roleOf(standing.subject) === 'guest';
+    const isRole = standing.subject.type === 'custom_role';
+    // A read only custom role (AC-1229) is capped at view by its data access, wherever its rules land.
+    const isReadOnlyRole = isRole && standing.defaultLevel !== 'write';
     switch (column) {
       case 'who':
+        if (isRole) {
+          return (
+            <>
+              {who}
+              <Badge size="chip" text={strings.appliesTo(standing.people)} label={strings.appliesToLabel(who)} />
+              {isReadOnlyRole && <InfoTip label={who}>{strings.readOnlyRoleTip}</InfoTip>}
+            </>
+          );
+        }
         return isGuest ? (
           <>
             {who}
@@ -274,8 +306,9 @@ export function AccessTab({ data, toasts, slug, object, access: initial, teams, 
             label={strings.editFor(who)}
             isLabelHidden
             isSelected={standing.level === 'write'}
-            // A guest views at most: the server refuses edit for them, so the box never offers it.
-            isDisabled={isGuest}
+            // A guest views at most, and so does a read only role: the server refuses edit for both, so the box
+            // never offers it.
+            isDisabled={isGuest || isReadOnlyRole}
             onChange={(isSelected) => {
               change(standing, { level: isSelected ? 'write' : 'read' });
             }}

@@ -29,6 +29,7 @@ import {
 } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { requirePermission } from '../access/check.ts';
+import { copyRulesToRole } from '../access/rules.ts';
 import { checkScope, type EngineScope } from '../access/mint.ts';
 import { customRoleLevel } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
@@ -316,7 +317,7 @@ async function recordRoleChange(context: WriteContext, holders: readonly string[
  * Makes a custom role (spec 0037, AC-1228, AC-1229): `access.manage`; a name of 1 to 40 characters, unique ignoring
  * case and never a built in role's (422 `ROLE_NAME_RESERVED`); a description up to 200; only grant `any`
  * permissions (422 `PERMISSION_NOT_ALLOWED`); a data access; and what it starts from (`member`, the `viewer` preset,
- * or a custom role, kept for spec 0037 J10's rule copy). At most 20 per workspace (409 `ROLE_LIMIT`), counted under
+ * or a custom role, whose rules the new role starts with, AC-1230). At most 20 per workspace (409 `ROLE_LIMIT`), counted under
  * the workspace's roles lock. `id` is the caller's own: a retry with it answers the role it made. Its holders are
  * nobody yet, so only the Roles screens hear of it.
  */
@@ -377,6 +378,12 @@ export async function createRole(
           .returning(ROLE_COLUMNS),
       );
       if (row === undefined) throw new Error('The role was not stored.');
+      // What it starts from, it starts with (AC-1230): a copy of that subject's object, field and record rules, in
+      // this transaction. `viewer` sits on Member, so it copies Member's: no new role ever sees past a Member rule.
+      await copyRulesToRole(tx, scope.workspaceId, scope.actor, {
+        from: startFrom === 'member' || startFrom === 'viewer' ? { role: 'member' } : { roleId: startFrom },
+        to: id,
+      });
       await writeAudit(
         tx,
         scope.workspaceId,
@@ -504,8 +511,8 @@ export function copyName(name: string, taken: ReadonlySet<string>): string {
 
 /**
  * Copies a custom role (spec 0037, AC-1232): "<name> copy" (" 2", " 3" on clashes) with the same permissions and
- * data access, started from the role it copies; it counts toward the 20 (409 `ROLE_LIMIT`). `id` is the caller's
- * own. (Copying its access rules arrives with custom role rule subjects, spec 0037 J10.)
+ * data access, started from the role it copies, and a copy of its access rules; it counts toward the 20 (409
+ * `ROLE_LIMIT`). `id` is the caller's own.
  */
 export async function duplicateRole(
   scope: EngineScope,
@@ -546,6 +553,8 @@ export async function duplicateRole(
           .returning(ROLE_COLUMNS),
       );
       if (row === undefined) throw new Error('The role was not stored.');
+      // A copy carries a copy of the role's rules too (AC-1232), independent from then on.
+      await copyRulesToRole(tx, scope.workspaceId, scope.actor, { from: { roleId: source.id }, to: id });
       await writeAudit(
         tx,
         scope.workspaceId,

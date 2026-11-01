@@ -116,9 +116,14 @@ export interface Access {
   readonly data: DataPolicy;
 }
 
-/** Who a rule is about: everyone with a role, or everyone in a team (#23). */
+/**
+ * Who a rule is about: everyone on a built in role, everyone holding one custom role (spec 0037, AC-1230), or
+ * everyone in a team (#23).
+ */
 export type RuleSubject =
-  { readonly type: 'role'; readonly role: string } | { readonly type: 'team'; readonly teamId: string };
+  | { readonly type: 'role'; readonly role: string }
+  | { readonly type: 'custom_role'; readonly roleId: string }
+  | { readonly type: 'team'; readonly teamId: string };
 
 /**
  * One object or field rule, as #24's `access_rules` stores it. `level` is kept
@@ -264,13 +269,14 @@ export function policyKey(policy: Omit<DataPolicy, 'key'>): string {
 }
 
 /**
- * Whether a rule's subject applies to the member: a `role` subject to everyone on that base role, a team subject to
- * its members. A custom role holder sits on Member, so Member's rules apply to them too, until custom roles get rule
- * subjects of their own with a copy of Member's (spec 0037, J10); otherwise a custom role would see past every rule
- * Member has (fail closed: the rules only ever narrow Member's default).
+ * Whether a rule's subject applies to the member: a `role` subject to everyone on that base role who holds no custom
+ * role, a `custom_role` subject to the holders of that role, a team subject to its members (spec 0037, AC-1230).
+ * A custom role holder is under their own role's rules alone, which the role was created with as a copy of what it
+ * started from, so a new role never sees past a rule Member had and the two drift apart only as someone edits them.
  */
 function subjectMatches(subject: RuleSubject, principal: MemberPrincipal): boolean {
-  if (subject.type === 'role') return subject.role === principal.role;
+  if (subject.type === 'role') return subject.role === principal.role && principal.customRoleId === undefined;
+  if (subject.type === 'custom_role') return subject.roleId === principal.customRoleId;
   return principal.teamIds.includes(subject.teamId);
 }
 
@@ -359,7 +365,8 @@ function memberPolicy(
 ): DataPolicy {
   // Owners and admins are never restricted by stored rules (AC-843): a rule can't name them (AC-842), and a team only
   // grants, so they keep the open policy and its audience. Only rules injected by hand (tests) name their role.
-  const namesRole = (subject: RuleSubject) => subjectMatches(subject, principal) && subject.type === 'role';
+  const namesRole = (subject: RuleSubject) =>
+    subjectMatches(subject, principal) && (subject.type === 'role' || subject.type === 'custom_role');
   if (
     (principal.role === 'owner' || principal.role === 'admin') &&
     !rules.levels.some((rule) => namesRole(rule.subject)) &&
@@ -371,7 +378,7 @@ function memberPolicy(
   const stored = new Map<string, Map<string, StoredView>>();
   const storedOf = (subject: RuleSubject, objectId: string): StoredView | undefined => {
     if (!subjectMatches(subject, principal)) return undefined;
-    const key = subject.type === 'role' ? 'role' : `team:${subject.teamId}`;
+    const key = subject.type === 'team' ? `team:${subject.teamId}` : 'role';
     let byObject = stored.get(key);
     if (byObject === undefined) {
       byObject = new Map();
@@ -483,7 +490,8 @@ export function customRoleLevel(stored: string): ObjectLevel {
  * A role the code doesn't know grants nothing and sees nothing. A custom role
  * holder (spec 0037) holds the role's stored permissions kept to those of grant
  * `any` (`customRolePermissions`), and the role's data access is their default
- * object level; Member's rules never apply to them. A principal naming a
+ * object level and the ceiling on what its own rules may give them (AC-1229);
+ * Member's rules never apply to them (AC-1230). A principal naming a
  * custom role with no grant beside it is refused like an unknown role.
  */
 export function roleAccess(

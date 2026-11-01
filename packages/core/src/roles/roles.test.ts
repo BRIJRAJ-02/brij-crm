@@ -12,6 +12,7 @@ import { audiences } from '../access/audiences.ts';
 import { enterAsActor, systemScope } from '../access/door.ts';
 import { objectLevel } from '../access/policy.ts';
 import { canActFor, schedulingReach } from '../access/scheduling.ts';
+import { setObjectAccess } from '../access/rules.ts';
 import { storedRules } from '../access/stored-rules.ts';
 import { newId } from '../engine/ids.ts';
 import { isRefusal } from '../engine/refusals.ts';
@@ -200,7 +201,7 @@ describe('holding a role (AC-1233 to AC-1235)', () => {
     });
   });
 
-  it('gives a Read only role read on every object, and keeps Member’s rules on its holders until J10', async () => {
+  it('gives a Read only role read on every object, and its own rules, not Member’s (AC-1230)', async () => {
     const w = await world();
     const vera = await w.add('Vera Viewer');
     const max = await w.add('Max Member');
@@ -212,7 +213,8 @@ describe('holding a role (AC-1233 to AC-1235)', () => {
       [w.workspaceId],
     );
     const peopleId = people[0]?.id ?? '';
-    // Member's rule takes People away from Members, custom role holders included (they sit on Member).
+    // A Member rule made after the role takes People from Members alone: the role took its copy of Member's rules
+    // when it was made (there were none), and the two are independent from then on (spec 0037, AC-1230).
     await testQuery(
       ownerUrl,
       `insert into access_rules (workspace_id, subject_type, subject_role, object_id, level, created_by_type, updated_by_type)
@@ -221,9 +223,59 @@ describe('holding a role (AC-1233 to AC-1235)', () => {
     );
     const veraScope = await w.entered(vera);
     expect(veraScope.access.data.defaultObject).toBe('read');
-    expect(objectLevel(veraScope.access, peopleId)).toBe('none');
+    expect(objectLevel(veraScope.access, peopleId)).toBe('read');
     expect(objectLevel(veraScope.access, newId())).toBe('read');
     expect(objectLevel((await w.entered(max)).access, peopleId)).toBe('none');
+  });
+
+  it('starts a new role with a copy of what it started from, and the two drift apart after (AC-1230)', async () => {
+    const w = await world();
+    const people = await testQuery<{ id: string }>(
+      ownerUrl,
+      `select id::text from objects where workspace_id = $1 and api_slug = 'people'`,
+      [w.workspaceId],
+    );
+    const peopleId = people[0]?.id ?? '';
+    // Member sees nothing of People before the role is made, so the role starts there too.
+    await setObjectAccess(w.owner, {
+      objectId: peopleId,
+      subject: { type: 'role', role: 'member' },
+      rule: { level: 'none', records: 'all' },
+    });
+    const role = await w.make('Receptionist', ['booking.manage']);
+    const rita = await w.add('Rita Reception');
+    await setMemberRole(w.owner, { memberId: rita, customRoleId: role.id });
+    expect(objectLevel((await w.entered(rita)).access, peopleId)).toBe('none');
+    // Member opening People again leaves the role where it was.
+    await setObjectAccess(w.owner, {
+      objectId: peopleId,
+      subject: { type: 'role', role: 'member' },
+      rule: { level: 'write', records: 'all' },
+    });
+    expect(objectLevel((await w.entered(rita)).access, peopleId)).toBe('none');
+    // And the role's own rule reaches its holders alone.
+    await setObjectAccess(w.owner, {
+      objectId: peopleId,
+      subject: { type: 'custom_role', roleId: role.id },
+      rule: { level: 'read', records: 'all' },
+    });
+    expect(objectLevel((await w.entered(rita)).access, peopleId)).toBe('read');
+    const max = await w.add('Max Member');
+    expect(objectLevel((await w.entered(max)).access, peopleId)).toBe('write');
+    // A copy of the role carries a copy of its rules, independent again.
+    const copy = await duplicateRole(w.owner, { roleId: role.id, id: newId() });
+    const cora = await w.add('Cora Copy');
+    await setMemberRole(w.owner, { memberId: cora, customRoleId: copy.id });
+    expect(objectLevel((await w.entered(cora)).access, peopleId)).toBe('read');
+    // Deleting the role takes its rules with it (AC-1238).
+    await deleteRole(w.owner, { roleId: role.id, moveTo: 'member' });
+    const left = await testQuery<{ n: string }>(
+      ownerUrl,
+      `select count(*)::text as n from access_rules where workspace_id = $1 and subject_custom_role_id = $2`,
+      [w.workspaceId, role.id],
+    );
+    expect(left[0]?.n).toBe('0');
+    expect(objectLevel((await w.entered(rita)).access, peopleId)).toBe('write');
   });
 
   it('moves a guest into a custom role and several people at once, one audit row each', async () => {

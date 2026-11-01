@@ -562,31 +562,47 @@ describe('a custom role (spec 0037, AC-1229, AC-1234, AC-1248)', () => {
     expect(onAdmin.permissions).toEqual([]);
   });
 
-  it('is under Member’s rules until custom roles get their own (J10), and a team’s grant still opens what it grants', () => {
+  it('is under its own rules, never Member’s, and a team’s grant still opens what it grants (AC-1230, AC-1248)', () => {
     const teamRule: LevelRule = {
       subject: { type: 'team', teamId: TEAM },
       target: { type: 'object', objectId: OTHER },
       level: 'write',
     };
     const both = rules([objectRule('none'), teamRule]);
-    // A Member is under Member's rule, and so is a holder of a custom role (it sits on Member).
+    // Member's rule is Member's: a holder of a custom role is at their role's default on the same object.
     expect(objectLevel(roleAccess(member('member'), both), OBJECT)).toBe('none');
-    expect(objectLevel(roleAccess(holder(), both, grant([])), OBJECT)).toBe('none');
+    expect(objectLevel(roleAccess(holder(), both, grant([])), OBJECT)).toBe('write');
+    // The role's own rule does reach them, and only them.
+    const mine: LevelRule = {
+      subject: { type: 'custom_role', roleId: ROLE },
+      target: { type: 'object', objectId: OBJECT },
+      level: 'none',
+    };
+    const ownRules = rules([objectRule('write'), mine, teamRule]);
+    expect(objectLevel(roleAccess(holder(), ownRules, grant([])), OBJECT)).toBe('none');
+    expect(objectLevel(roleAccess(member('member'), ownRules), OBJECT)).toBe('write');
     // A Read only holder in a team that grants write on OTHER gets write there, read elsewhere.
-    const readOnlyInTeam = roleAccess(holder([TEAM]), both, grant([], 'read'));
+    const readOnlyInTeam = roleAccess(holder([TEAM]), ownRules, grant([], 'read'));
     expect(objectLevel(readOnlyInTeam, OTHER)).toBe('write');
     expect(objectLevel(readOnlyInTeam, OBJECT)).toBe('none');
     expect(objectLevel(readOnlyInTeam, FIELD)).toBe('read');
   });
 
-  it('never writes through Member’s rule when it is Read only: the role’s data access caps what that rule gives', () => {
-    // Member: write on their own records, stored as an explicit write row with a record rule.
+  it('never writes through a rule of its own when it is Read only: its data access caps what that rule gives', () => {
+    // The role's own rule: write on its own records, stored as an explicit write row with a record rule.
+    const subject = { type: 'custom_role', roleId: ROLE } as const;
     const ownWrite = rules(
+      [{ subject, target: { type: 'object', objectId: OBJECT }, level: 'write' }],
+      [{ subject, objectId: OBJECT, kind: 'own', attributeId: MEMBER_FIELD }],
+    );
+    expect(objectLevel(roleAccess(holder(), ownWrite, grant([], 'write')), OBJECT)).toBe('write');
+    expect(objectLevel(roleAccess(holder(), ownWrite, grant([], 'read')), OBJECT)).toBe('read');
+    // And a Member read from the same rules is untouched by it.
+    const memberWrite = rules(
       [objectRule('write')],
       [{ subject: { type: 'role', role: 'member' }, objectId: OBJECT, kind: 'own', attributeId: MEMBER_FIELD }],
     );
-    expect(objectLevel(roleAccess(member('member'), ownWrite), OBJECT)).toBe('write');
-    expect(objectLevel(roleAccess(holder(), ownWrite, grant([], 'write')), OBJECT)).toBe('write');
-    expect(objectLevel(roleAccess(holder(), ownWrite, grant([], 'read')), OBJECT)).toBe('read');
+    expect(objectLevel(roleAccess(member('member'), memberWrite), OBJECT)).toBe('write');
+    expect(objectLevel(roleAccess(holder(), memberWrite, grant([], 'read')), OBJECT)).toBe('read');
   });
 });
