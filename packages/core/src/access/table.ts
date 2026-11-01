@@ -499,6 +499,19 @@ export const ACCESS_TABLE = {
   startSubmissionsExport: { data: 'read' },
   getExport: { data: 'read' },
   exportFile: { data: 'read' },
+  // A record's Follow (the follows lane): reading and setting it needs only read on the record, since the row is
+  // the caller's own and no event goes out.
+  getFollow: { data: 'read' },
+  setFollow: { data: 'read' },
+  // Sample data (the sample lane): every member reads whether it is live (the answer says whether they may manage
+  // it); adding, removing and undoing it shape the workspace, so they take `schema.manage`.
+  getSampleData: { anyMember: true },
+  addSampleData: { permission: 'schema.manage' },
+  applySalesTemplate: { permission: 'schema.manage' },
+  removeSampleData: { permission: 'schema.manage' },
+  undoRemoveSampleData: { permission: 'schema.manage' },
+  // The whole workspace as a file (the data io lane): an owner's own export, `workspace.export` over every object.
+  startWorkspaceExport: { permission: 'workspace.export' },
   exportPart: { data: 'read' },
   deleteSubmission: { permission: 'forms.manage' },
   // Imports (spec 0040): write on the object to create, stage, start and undo (only the starter stages and starts;

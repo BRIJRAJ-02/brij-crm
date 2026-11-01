@@ -7,7 +7,8 @@ import { createDatabase } from '@crm/db';
 import { newId } from '../engine/ids.ts';
 import { jobKinds } from '../jobs/kinds/index.ts';
 import { jobTestKit, refusalOf } from '../../test/jobs-kit.ts';
-import { addSampleData, getSampleData, removeSampleData, SAMPLE_FORBIDDEN, undoRemoveSampleData } from './sample.ts';
+import { PERMISSIONS } from '@crm/contracts';
+import { addSampleData, getSampleData, removeSampleData, undoRemoveSampleData } from './sample.ts';
 import { dayFrom, planStages, SAMPLE_COMPANIES, SAMPLE_DEALS, SAMPLE_PEOPLE, sampleEmail } from './seed.ts';
 
 describe('the Sales template’s stage plan', () => {
@@ -46,9 +47,11 @@ const registry = jobKinds({ environment: 'local' });
 describe('sample data', () => {
   it('adds the template and the set as the member, removes exactly it with Undo, and only for owners and admins', async () => {
     const w = await team(['member', 'admin']);
+    // The catalog's own sentence for `schema.manage`: every refusal for a permission reads the same (the access
+    // table's walk holds this), so sample data doesn't word its own.
     expect(await refusalOf(addSampleData(w.member, registry))).toMatchObject({
       code: 'FORBIDDEN',
-      message: SAMPLE_FORBIDDEN,
+      message: PERMISSIONS['schema.manage'].message,
     });
     expect(await getSampleData(w.member)).toMatchObject({ present: false, canManage: false });
     for (const call of [removeSampleData, undoRemoveSampleData]) {

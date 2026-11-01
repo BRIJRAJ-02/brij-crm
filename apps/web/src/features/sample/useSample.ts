@@ -6,10 +6,17 @@ import { useSampleData } from '@crm/data/react';
 import { useRouteContext } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 
+/**
+ * What a screen shows before the store loads, as one value: `useSyncExternalStore` compares what `getSnapshot`
+ * answers by identity, so a fresh object each call reads as a change and renders for ever (React says "The result
+ * of getSnapshot should be cached to avoid an infinite loop", then "Maximum update depth exceeded").
+ */
+const LOADING: SampleSnapshot = { status: 'loading' };
+
 /** A held copy that never reads: what a screen shows before the store loads. */
 const WAITING: SampleHeld = {
   subscribe: () => () => undefined,
-  getSnapshot: () => ({ status: 'loading' }),
+  getSnapshot: () => LOADING,
   retain: () => () => undefined,
 };
 

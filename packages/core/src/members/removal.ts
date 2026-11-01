@@ -169,6 +169,8 @@ export const KEPT_ON_REMOVAL: Readonly<Record<string, string>> = {
   emails_to_member: 'history: an email sent to them',
   emails_reply_to_member: 'history: whose replies an email asked for',
   member_preferences_member: 'their own preferences: nobody reads them once they have left',
+  record_follows_member:
+    'the records they followed: every notice reads active members only, so the rows say nothing once they have left (and go with the member row)',
   comment_reactions_member: 'history: who reacted to a comment',
   comments_resolved_by: 'history: who resolved a thread',
   comments_deleted_by: 'history: who deleted a comment',

@@ -9,6 +9,7 @@ import { sql } from 'drizzle-orm';
 import * as z from 'zod';
 import type { SampleDataState } from '@crm/contracts';
 import type { WorkspaceTx } from '@crm/db';
+import { requirePermission } from '../access/check.ts';
 import { checkScope } from '../access/mint.ts';
 import { can } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
@@ -56,9 +57,12 @@ export const SampleDataParams = z.strictObject({});
 /** The job's params. */
 export type SampleDataParams = z.infer<typeof SampleDataParams>;
 
-/** Refuses `FORBIDDEN` unless the caller is an owner or an admin. */
+/**
+ * Refuses `FORBIDDEN` unless the caller is an owner or an admin. The catalog's own sentence for `schema.manage`,
+ * not one of our own: every refusal for a permission reads the same (`table.test.ts`'s walk holds this).
+ */
 function requireManager(scope: EngineScope): void {
-  if (!can(scope.access, 'schema.manage')) throw refuse('FORBIDDEN', SAMPLE_FORBIDDEN);
+  requirePermission(scope, 'schema.manage');
 }
 
 /** Whether a live sample record exists. */

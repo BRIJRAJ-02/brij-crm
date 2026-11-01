@@ -73,7 +73,7 @@ export function jobKinds(options: JobKindsOptions): JobRegistry {
     recordsExport(),
     workspaceExport(options.exportFiles),
     ...computedKinds(),
-    sampleDataKind() as AnyKind,
+    sampleDataKind(),
     ...tests,
     ...(options.extra ?? []),
   ]);

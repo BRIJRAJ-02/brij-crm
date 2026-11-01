@@ -282,6 +282,14 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   // parser that turns one of their pages into rows. HTML in, rows out — no scope, no database, no network.
   'isImportableHost',
   'readImportedPage',
+  // What a followed record's change says in the inbox (the follows lane): a change in, its lines out; pure.
+  'summarizeActivity',
+  // The job kinds the worker runs (the sample and data io lanes): factories the registry is built from, no scope.
+  'sampleDataKind',
+  'workspaceExport',
+  // Building an .xlsx (the data io lane): a sheet's name made safe, and the rows streamed; pure, no scope.
+  'sheetName',
+  'xlsxStream',
   // A new membership's link page (26 Oct 2026): the editor's path, pure, for the approval email.
   'linkPageEditPath',
 ]);
@@ -1403,6 +1411,11 @@ const DATA_CASES: Readonly<Record<string, DataCase>> = {
   // A record's Files tab (#32): a reader who can't see the record finds nothing; one who may only read it adds,
   // deletes and restores nothing.
   listAttachments: refused('NOT_FOUND', (scope, world) => core.listAttachments(scope, { recordId: world.recordId })),
+  // A record's Follow (the follows lane): a record the reader can't see is absent, following and all.
+  getFollow: refused('NOT_FOUND', (scope, world) => core.getFollow(scope, { recordId: world.recordId })),
+  setFollow: refused('NOT_FOUND', (scope, world) =>
+    core.setFollow(scope, { recordId: world.recordId, following: true }),
+  ),
   prepareAttachment: refused('FORBIDDEN', (scope, world) =>
     core.prepareAttachment(scope, { recordId: world.recordId, size: 1 }),
   ),
