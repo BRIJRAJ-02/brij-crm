@@ -115,6 +115,8 @@ export function BookingChanges({
       </div>
       {mode !== 'idle' && (
         <div
+          // A change switched to another (Move to Guests) opens anew, so the band grows to its new content.
+          key={mode}
           ref={panel}
           id={panelId}
           role="region"
@@ -217,7 +219,12 @@ function GuestsPanel({
         <h3 id={titleId} ref={title} tabIndex={-1} className={styles.title}>
           {strings.guests}
         </h3>
-        <span className={styles.count}>{strings.count(guests.length, maxGuests)}</span>
+        <span className={styles.count}>
+          {/* Keyed by its words, so a new count swaps in place. */}
+          <span key={guests.length} className={styles.swap}>
+            {strings.count(guests.length, maxGuests)}
+          </span>
+        </span>
       </div>
       {guests.length > 0 && (
         <ul className={styles.list} aria-labelledby={titleId}>
@@ -274,7 +281,10 @@ function GuestsPanel({
         </Callout>
       )}
       <p className={styles.status} role="status">
-        {status}
+        {/* The region stays put for screen readers; what it says fades in each time it changes. */}
+        <span key={status} className={styles.swap}>
+          {status}
+        </span>
       </p>
       <p className={styles.note}>{strings.guestsNote}</p>
       {confirming !== undefined && (

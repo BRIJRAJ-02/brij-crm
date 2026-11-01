@@ -7,6 +7,10 @@
     /* A panel opening, transitions.dev's 400ms (the owner, 2 November 2026), a literal until the artifact has it. */
     /* stylelint-disable-next-line unit-disallowed-list -- transitions.dev's timing for this usage, until the artifact carries it */
     --panel-duration: 480ms;
+    /* The blur a changed count or status line resolves out of (transitions.dev's text swap), a literal until the
+       artifact has a blur token. */
+    /* stylelint-disable-next-line unit-disallowed-list -- a value waiting on the artifact's blur token, not a borrowed one */
+    --swap-blur: 2px;
 
     display: flex;
     flex-direction: column;
@@ -164,7 +168,17 @@
     letter-spacing: var(--tracking-label);
   }
 
+  /* A count or a status line that changes swaps in place (transitions.dev's text swap). */
+  .swap {
+    display: inline-block;
+    animation: swap-in var(--duration-move) var(--ease-in-out) backwards;
+  }
+
   @media (prefers-reduced-motion: reduce) {
+    .swap {
+      animation-name: guest-fade;
+    }
+
     .panel {
       animation-name: panel-fade;
     }
@@ -192,6 +206,14 @@
   @keyframes panel-fade {
     from {
       opacity: 0;
+    }
+  }
+
+  @keyframes swap-in {
+    from {
+      opacity: 0;
+      translate: 0 var(--space-4);
+      filter: blur(var(--swap-blur));
     }
   }
 

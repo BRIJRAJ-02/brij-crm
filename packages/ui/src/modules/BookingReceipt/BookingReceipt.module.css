@@ -6,6 +6,22 @@
        eases to this scale while held. Set here, not in tokens.css (generated from the artifact, where it stays 1 for
        the app), because this module only ever mounts on the public pages. */
     --scale-press: 0.97;
+    /* The booking page's calmer pace, here too (the owner, 2 November 2026): the motion tokens run about half as long
+       again, and a changed Button label (Guests (2), Adding) resolves in. Literals until the artifact carries them. */
+    /* stylelint-disable-next-line unit-disallowed-list -- this page's calmer pace, until the artifact carries it */
+    --duration-hover: 180ms;
+    /* stylelint-disable-next-line unit-disallowed-list -- this page's calmer pace, until the artifact carries it */
+    --duration-press: 220ms;
+    /* stylelint-disable-next-line unit-disallowed-list -- this page's calmer pace, until the artifact carries it */
+    --duration-exit: 200ms;
+    /* stylelint-disable-next-line unit-disallowed-list -- this page's calmer pace, until the artifact carries it */
+    --duration-popover: 280ms;
+    /* stylelint-disable-next-line unit-disallowed-list -- this page's calmer pace, until the artifact carries it */
+    --duration-move: 340ms;
+    /* stylelint-disable-next-line unit-disallowed-list -- this page's calmer pace, until the artifact carries it */
+    --duration-modal: 380ms;
+    /* stylelint-disable-next-line unit-disallowed-list -- this page's calmer pace, until the artifact carries it */
+    --label-swap: 260ms;
     /* The blur the heading rises out of (transitions.dev's texts reveal, 3px), a literal because the token set has no
        blur yet: the artifact owes a motion blur token. */
     /* stylelint-disable-next-line unit-disallowed-list -- a value waiting on the artifact's blur token, not a borrowed one */
@@ -245,6 +261,26 @@
     display: flex;
     flex-wrap: wrap;
     gap: var(--space-8);
+  }
+
+  /* Share this meeting: the details as they will be sent, in a quiet well, then Share and Copy details. */
+  .share {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    padding: var(--space-20);
+    border-block-start: var(--border-width-hairline) solid var(--border-subtle);
+  }
+
+  .shareText {
+    margin: 0;
+    padding: var(--space-12);
+    border: var(--border-width-hairline) solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    background: var(--surface-subtle);
+    color: var(--text-secondary);
+    white-space: pre-line;
+    overflow-wrap: anywhere;
   }
 
   .again {
