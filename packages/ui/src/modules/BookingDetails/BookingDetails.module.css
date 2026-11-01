@@ -175,31 +175,31 @@
 
   @keyframes shake-even {
     20% {
-      translate: calc(-1 * var(--space-6)) 0;
+      translate: calc(-1 * var(--space-8)) 0;
     }
     40% {
-      translate: var(--space-6) 0;
+      translate: var(--space-8) 0;
     }
     60% {
-      translate: calc(-1 * var(--space-4)) 0;
+      translate: calc(-1 * var(--space-6)) 0;
     }
     80% {
-      translate: var(--space-4) 0;
+      translate: var(--space-6) 0;
     }
   }
 
   @keyframes shake-odd {
     20% {
-      translate: calc(-1 * var(--space-6)) 0;
+      translate: calc(-1 * var(--space-8)) 0;
     }
     40% {
-      translate: var(--space-6) 0;
+      translate: var(--space-8) 0;
     }
     60% {
-      translate: calc(-1 * var(--space-4)) 0;
+      translate: calc(-1 * var(--space-6)) 0;
     }
     80% {
-      translate: var(--space-4) 0;
+      translate: var(--space-6) 0;
     }
   }
 
