@@ -1,6 +1,6 @@
 # BookingReceipt
 
-A guest's booking page (spec 0025, AC-674), kept without an account: the host with the state's mark (a tick, a cross or a clock, a 16px dot hung off the avatar's corner so it never covers the initials), a heading by state that takes focus as the page arrives ("You're booked" right after booking), then one card that leads with the summary (spec 0058, AC-19): the date chip beside what it is and who with (`summary`: "Intro call  with Ada Lovelace"), the time, the whole date and zone and how soon, and, while it's ahead, the one thing to do with it in the same block, Join the call, with Add to calendar (Google, Outlook, an .ics file). The details follow under a rule: Who in full (the name, then the email kept whole on its own line, DescriptionList's `address`), guests, Where and the note. A cancelled or past booking offers a way to book again. Right after booking, one warm line sits under "You're booked" ("Ada will see you then."), and the state's mark pops in once beside the host, the page's short success check; reduced motion shows both at once. The Timefix foot (BookingFoot) sits under it, as on every public page.
+A guest's booking page (spec 0025, AC-674), kept without an account: the host with the state's mark (a tick, a cross or a clock, a 16px dot hung off the avatar's corner so it never covers the initials), a heading by state that takes focus as the page arrives ("You're booked" right after booking), then one card that leads with the summary (spec 0058, AC-19): the date chip beside what it is and who with (`summary`: "Intro call with Ada Lovelace"), the time, the whole date and zone and how soon, and, while it's ahead, the one thing to do with it in the same block, Join the call, with Add to calendar (Google, Outlook, an .ics file). The details follow under a rule: Who in full (the name, then the email kept whole on its own line, DescriptionList's `address`), guests, Where and the note. A cancelled or past booking offers a way to book again. Right after booking, one warm line sits under "You're booked" ("Ada will see you then."), and the state's mark pops in once beside the host, the page's short success check; reduced motion shows both at once. The Timefix foot (BookingFoot) sits under it, as on every public page.
 
 ## Why it exists
 
@@ -21,6 +21,10 @@ The page formats every date and time in the booking's zone; the receipt draws wh
 ## States
 
 Confirmed (welcome or not), cancelled, past.
+
+## Motion
+
+The card rises in and the check pops out of a soft blur. Reduced motion fades the card and shows the check at once.
 
 ## Keyboard
 

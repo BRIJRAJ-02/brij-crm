@@ -6,6 +6,11 @@
   /* In a view of a set height (the booking card's, which the month sets) the chat fills it: the thread takes what
      the composer leaves, so the composer stands at the foot from the first frame. */
   .root {
+    /* The blur a reply's words resolve out of (transitions.dev's streaming text, 1px), named here because the token
+       set has no blur yet: the artifact owes a motion blur token. */
+    /* stylelint-disable-next-line unit-disallowed-list -- a value waiting on the artifact's blur token, not a borrowed one */
+    --stream-blur: 1px;
+
     display: flex;
     flex: 1;
     flex-direction: column;
@@ -61,6 +66,21 @@
     background: var(--accent-soft);
   }
 
+  /* A reply writes itself: each word resolves a beat after the one before (Written in BookingChat.tsx), the whole
+     reply inside about 300ms (40 words at most are staggered), so it never slows the step down. */
+  .word {
+    animation: word-in var(--duration-move) var(--ease-out) backwards;
+    animation-delay: calc(var(--word, 0) * var(--duration-hover) / 16);
+  }
+
+  /* What the reply offers (its times, its suggestions) arrives once its words have: the answer first, then the
+     choices, as a person would say it and then point. */
+  .offers,
+  .suggestions {
+    animation: line-in var(--duration-popover) var(--ease-out) backwards;
+    animation-delay: calc(var(--words, 0) * var(--duration-hover) / 16 + var(--duration-hover));
+  }
+
   /* Each day's times start a group of their own: as far under the reply as the reply sits under the card's heading. */
   .offers {
     inline-size: 100%;
@@ -73,8 +93,26 @@
     gap: var(--space-4);
   }
 
+  /* While the reply is being written: its words in a light passing across them, the way a status line shimmers. */
+  .thinking {
+    background-image: linear-gradient(
+      90deg,
+      var(--text-secondary) 0%,
+      var(--text-secondary) 40%,
+      var(--text) 50%,
+      var(--text-secondary) 60%,
+      var(--text-secondary) 100%
+    );
+    background-size: 300% 100%;
+    background-clip: text;
+    color: transparent;
+    animation: thinking var(--duration-pulse) linear infinite;
+  }
+
   .waiting {
     display: inline-flex;
+    align-items: center;
+    gap: var(--space-8);
     padding: var(--space-8) var(--space-12);
     border-radius: var(--radius-lg);
     background: var(--surface-subtle);
@@ -131,12 +169,42 @@
     .line {
       animation-name: line-fade;
     }
+
+    /* Whole replies, and their choices with them: a fade, no writing out and no wait. */
+    .word {
+      animation: none;
+    }
+
+    .thinking {
+      animation: none;
+      background-image: none;
+      color: var(--text-secondary);
+    }
+
+    .offers,
+    .suggestions {
+      animation-name: line-fade;
+      animation-delay: initial;
+    }
   }
 
   @keyframes line-in {
     from {
       opacity: 0;
       translate: 0 var(--space-4);
+    }
+  }
+
+  @keyframes word-in {
+    from {
+      opacity: 0;
+      filter: blur(var(--stream-blur));
+    }
+  }
+
+  @keyframes thinking {
+    from {
+      background-position-x: 100%;
     }
   }
 

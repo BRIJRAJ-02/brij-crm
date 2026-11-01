@@ -53,6 +53,11 @@
     gap: var(--space-12);
   }
 
+  /* A guest row arrives under the one above it, a little lower then settling, so Add guests reads as making it. */
+  .guest {
+    animation: guest-in var(--duration-move) var(--ease-out) both;
+  }
+
   /* Add guests sits close under what it adds to. */
   .add {
     display: flex;
@@ -78,6 +83,11 @@
     min-block-size: 0;
   }
 
+  /* What went wrong fades in where it will stay, rather than appearing at once under the form. */
+  .line:not(:empty) {
+    animation: line-in var(--duration-move) var(--ease-out) both;
+  }
+
   .actions {
     display: flex;
     align-items: center;
@@ -88,6 +98,25 @@
   @media (hover: hover) and (pointer: fine) {
     .inline:hover {
       text-decoration: underline;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .guest {
+      animation-name: line-in;
+    }
+  }
+
+  @keyframes guest-in {
+    from {
+      opacity: 0;
+      translate: 0 calc(-1 * var(--space-4));
+    }
+  }
+
+  @keyframes line-in {
+    from {
+      opacity: 0;
     }
   }
 }

@@ -29,6 +29,10 @@ Default, picked (picker only), Best, busy, hover, focus, pressed, loading, empty
 
 Loading draws the times' own grid with a time's box in each place, at a time's own height, rather than one block: the list is then already the shape and the height it will be, so the times land in the places that were drawn for them instead of pushing the page around (24 October 2026). It holds a nine to five day at half hour steps, which is what a page offers until its owner says otherwise, and is deliberately a little too tall rather than a little too short: inside a site's frame the page is only as tall as the height it last reported, so a list that grows when the times land leaves the frame scrolling until the new height reaches the host, while one that shrinks never does (`apps/web/e2e/embed.flow.ts`). The boxes have no entrance of their own, since a placeholder arrives with the page rather than after it.
 
+## Motion
+
+A picked time's fill settles in at the movement pace and lets go at the hover pace; nothing moves or scales (the owner's no press shrink, 20 Oct 2026). When the clock switches 12h and 24h each time keeps its box and only its words resolve out of a soft blur, and a new day's name does the same, so the list never redraws under the visitor. Reduced motion keeps a fade. A fast second tap picks the time tapped last, and a refresh that lands with a pick keeps it and a refresh that drops the picked time (taken meanwhile) leaves nothing picked rather than landing on another (stories FastSecondTap, PickDuringRefresh, PickedTimeGone, ClockSwitchInPlace).
+
 ## Keyboard
 
 Tab reaches each time; Enter or Space picks. The clock switch is a SegmentedControl (the arrows move).

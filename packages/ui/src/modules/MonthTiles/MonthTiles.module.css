@@ -129,9 +129,13 @@
   /* The chosen day in the accent, as the app's date picker chooses (the
      owner's call, 20 October 2026: inverse ink was the page's brightest block
      in dark). */
+  /* The chosen day's fill settles in at the movement pace; the day let go of fades at the hover pace. */
   .day[aria-pressed='true'] {
     background: var(--accent);
     color: var(--on-accent);
+    transition:
+      background-color var(--duration-move) var(--ease-out),
+      color var(--duration-move) var(--ease-out);
   }
 
   /* A day holding a Best time: a small accent mark in its corner. */
@@ -153,6 +157,13 @@
   .day:focus-visible {
     outline: var(--border-width-thick) solid var(--accent-line);
     outline-offset: var(--border-width-hairline);
+  }
+
+  /* The times just arrived: each day settles from the loading shade into what it is, a week's row at a time from
+     the top, so the month reads as filling in rather than switching. */
+  .grid[data-settle] .day {
+    animation: day-settle var(--duration-move) var(--ease-out) backwards;
+    animation-delay: calc(var(--day-row, 0) * var(--duration-hover) / 3);
   }
 
   @media (hover: hover) and (pointer: fine) {
@@ -184,8 +195,19 @@
       animation: none;
     }
 
+    .grid[data-settle] .day {
+      animation-delay: initial;
+    }
+
     .day[aria-pressed='true'] {
       animation: none;
+    }
+  }
+
+  @keyframes day-settle {
+    from {
+      background: var(--surface-selected);
+      color: var(--text-tertiary);
     }
   }
 

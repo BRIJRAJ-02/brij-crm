@@ -31,6 +31,10 @@ New. Nothing in the library draws a conversation: ActivityFeed and NoteList are 
 
 Loading, the greeting with times, no times, a few turns with the read back, waiting, failed (Try again), paused (a warning), start over, done. Hover, focus and pressed come from Button and Field.
 
+## Motion
+
+A reply writes itself: its words resolve out of a soft blur one after another (the whole reply inside about 300ms, so a long one never keeps the visitor waiting), and its times and suggestions arrive after its words. The whole text is in the log from the start, so it is read once. While a reply is out, the waiting line shows its words beside the spinner with a light passing across them. Reduced motion shows whole replies and a plain waiting line.
+
 ## Keyboard and screen readers
 
 The thread is a log (`role="log"`, polite), so each reply is read as it arrives, with who said it. Each day's times are a labelled list ("Times on Tue 27 Oct"). Tab moves from the times to the suggestions to the field and Send; Enter in the field sends, and focus stays there.

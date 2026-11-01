@@ -31,6 +31,10 @@ Open, closed, chosen, today, Best, hover, focus, pressed, loading; the first and
 
 `isLoading` is the month drawn before any day's times are known: the tiles stand in their places quietly, the grid is `aria-busy`, and no day's label says it has no times, which while the times are still coming would not be true. The booking page draws it that way from its first paint, so the month never arrives, it only fills in.
 
+## Motion
+
+The chosen day's fill settles in at the movement pace. When the times arrive, the days settle from their loading shade a week's row at a time from the top, once for that month (`data-settle`); moving to another month shows its days as they are. Reduced motion keeps the fade and drops the stagger.
+
 ## Keyboard
 
 One day is in the tab order. The arrows move between open days, Up and Down a week (to the nearest open day), Home and End to the first and last. Enter or Space chooses. A swipe turns the month on touch.

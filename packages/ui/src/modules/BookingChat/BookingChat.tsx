@@ -55,6 +55,26 @@ export interface BookingChatProps {
   readonly maxLength?: number;
 }
 
+/** Words past this many arrive together: a long reply never makes the visitor wait on its last words. */
+const STAGGERED_WORDS = 40;
+
+/**
+ * A reply's words, each in a span that fades in a beat after the one before (CSS staggers them by `--word`), so a
+ * reply reads as being written rather than appearing whole. The text is all there from the start, so a screen
+ * reader and the log read it once, as before.
+ */
+function Written({ text }: { text: string }) {
+  return text.split(/(\s+)/).map((part, index) =>
+    /^\s*$/.test(part) ? (
+      part
+    ) : (
+      <span key={index} className={styles.word} style={{ '--word': String(Math.min(index / 2, STAGGERED_WORDS)) }}>
+        {part}
+      </span>
+    ),
+  );
+}
+
 /**
  * Book by chat on the public booking page (spec 0042): the conversation as a
  * log that announces each reply, the last reply's times grouped by day (the
@@ -109,11 +129,17 @@ export function BookingChat({
           lines.map((line) => {
             const isLive = line.id === lastAssistant && !isLocked;
             return (
-              <div key={line.id} className={styles.line} data-role={line.role}>
+              <div
+                key={line.id}
+                className={styles.line}
+                data-role={line.role}
+                // How long the reply takes to write itself, so its times and suggestions come after its words.
+                style={{ '--words': String(Math.min(line.text.split(/\s+/).length, STAGGERED_WORDS)) }}
+              >
                 <VisuallyHidden>
                   {strings.said(line.role === 'visitor' ? strings.you : strings.assistant)}
                 </VisuallyHidden>
-                <p className={styles.bubble}>{line.text}</p>
+                <p className={styles.bubble}>{line.role === 'assistant' ? <Written text={line.text} /> : line.text}</p>
                 {isLive &&
                   line.days?.map((group) => (
                     <div key={group.day} className={styles.offers}>
@@ -154,7 +180,7 @@ export function BookingChat({
           <div className={styles.line} data-role="assistant" aria-busy="true">
             <span className={styles.waiting}>
               <Spinner />
-              <VisuallyHidden>{strings.waiting}</VisuallyHidden>
+              <span className={styles.thinking}>{strings.waiting}</span>
             </span>
           </div>
         )}

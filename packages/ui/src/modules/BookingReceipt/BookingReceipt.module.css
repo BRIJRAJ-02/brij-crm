@@ -36,7 +36,11 @@
 
   /* The state's mark sits on the avatar's corner, outside its initials: a 16px dot hung past the circle's edge, so
      "AL" never reads as "AI" under it. */
+  /* The blur the check pops out of (transitions.dev's success check, kept small at 2px on a 16px mark), a literal
+     because the token set has no blur yet: the artifact owes a motion blur token. */
   .mark {
+    /* stylelint-disable-next-line unit-disallowed-list -- a value waiting on the artifact's blur token, not a borrowed one */
+    --check-blur: 2px;
     position: absolute;
     inset-block-end: calc(-1 * var(--space-6));
     inset-inline-end: calc(-1 * var(--space-6));
@@ -257,10 +261,12 @@
     }
   }
 
+  /* The check pops out of a soft blur (transitions.dev's success check), so it lands rather than appears. */
   @keyframes mark-pop {
     from {
       scale: var(--scale-shrunk);
       opacity: 0;
+      filter: blur(var(--check-blur));
     }
   }
 }

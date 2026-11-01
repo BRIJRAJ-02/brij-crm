@@ -84,7 +84,11 @@ export function SlotList({
         <div className={styles.head}>
           {/* Only once there is a day: a heading with nothing in it is an empty heading, and `.head` holds the
               row's height either way. */}
-          {heading !== '' && <h2 className={styles.heading}>{heading}</h2>}
+          {heading !== '' && (
+            <h2 key={heading} className={styles.heading}>
+              {heading}
+            </h2>
+          )}
           {onHour12Change !== undefined && (
             <SegmentedControl
               label={strings.clock}
@@ -138,7 +142,10 @@ export function SlotList({
                     .join(', ')}
                   onClick={() => onChange(slot.id)}
                 >
-                  <span className={styles.time}>{slot.label}</span>
+                  {/* Keyed by its words, so 12h to 24h fades the new label in where the old one was. */}
+                  <span key={slot.label} className={styles.time}>
+                    {slot.label}
+                  </span>
                   {slot.isBest === true && (
                     <span className={styles.best} aria-hidden="true">
                       {strings.bestTag}

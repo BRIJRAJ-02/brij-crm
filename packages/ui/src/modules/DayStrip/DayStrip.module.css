@@ -51,9 +51,13 @@
     }
   }
 
+  /* The chosen day's fill settles in at the movement pace; the day let go of fades at the hover pace. */
   .day[aria-pressed='true'] {
     background: var(--accent);
     color: var(--on-accent);
+    transition:
+      background-color var(--duration-move) var(--ease-out),
+      color var(--duration-move) var(--ease-out);
   }
 
   .day[data-best]::after {

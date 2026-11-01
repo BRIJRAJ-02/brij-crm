@@ -305,37 +305,38 @@ export function BookingDetails({
           {guests.map((guest, index) => {
             const field = `guest-${String(index)}`;
             return (
-              <Field
-                key={field}
-                label={strings.guest(index + 1)}
-                name={field}
-                type="email"
-                placeholder={strings.guestPlaceholder}
-                maxLength={254}
-                value={guest}
-                onChange={(next) => {
-                  setGuests((current) => current.map((each, at) => (at === index ? next : each)));
-                  clear(field);
-                }}
-                suffix={
-                  <Button
-                    variant="ghost"
-                    icon="x"
-                    label={strings.removeGuest(index + 1)}
-                    onPress={() => {
-                      setGuests((current) => current.filter((_, at) => at !== index));
-                      setErrors({});
-                      // The row goes with its button: focus the row before it, or Add guests.
-                      if (guests.length > 1) focusField(`guest-${String(Math.max(0, index - 1))}`);
-                      else
-                        globalThis.requestAnimationFrame(() =>
-                          form.current?.querySelector<HTMLElement>('[data-add-guest] button')?.focus(),
-                        );
-                    }}
-                  />
-                }
-                {...(errors[field] === undefined ? {} : { error: errors[field] })}
-              />
+              <div key={field} className={styles.guest}>
+                <Field
+                  label={strings.guest(index + 1)}
+                  name={field}
+                  type="email"
+                  placeholder={strings.guestPlaceholder}
+                  maxLength={254}
+                  value={guest}
+                  onChange={(next) => {
+                    setGuests((current) => current.map((each, at) => (at === index ? next : each)));
+                    clear(field);
+                  }}
+                  suffix={
+                    <Button
+                      variant="ghost"
+                      icon="x"
+                      label={strings.removeGuest(index + 1)}
+                      onPress={() => {
+                        setGuests((current) => current.filter((_, at) => at !== index));
+                        setErrors({});
+                        // The row goes with its button: focus the row before it, or Add guests.
+                        if (guests.length > 1) focusField(`guest-${String(Math.max(0, index - 1))}`);
+                        else
+                          globalThis.requestAnimationFrame(() =>
+                            form.current?.querySelector<HTMLElement>('[data-add-guest] button')?.focus(),
+                          );
+                      }}
+                    />
+                  }
+                  {...(errors[field] === undefined ? {} : { error: errors[field] })}
+                />
+              </div>
             );
           })}
         </div>

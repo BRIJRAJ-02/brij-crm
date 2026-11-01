@@ -25,6 +25,10 @@ A page with its own questions (spec 0057) passes `questions` (the hosted form's 
 
 Empty, prefilled, with guests, a phone page, with questions (one shown by an earlier answer), invalid, sending (Confirm pending, Back off), failed.
 
+## Motion
+
+A new guest row arrives a little lower and settles under the one above, and the line above the buttons fades in when it has something to say. Removing a guest is immediate, since rows are keyed by place.
+
 ## Keyboard
 
 Tab through the fields, Add guests, each guest's Remove, the note, the page's questions, Back and Confirm. Enter in a field sends.
