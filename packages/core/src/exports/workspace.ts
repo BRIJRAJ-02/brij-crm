@@ -27,6 +27,7 @@ import { runWrite, type AfterWrite, type WriteContext } from '../engine/write.ts
 import { exportAccessKey, UNKNOWN_EXPORT } from '../forms/export.ts';
 import { defineKind, MAX_ATTEMPTS, type JobRegistry, type KindDefinition, type StepOutcome } from '../jobs/registry.ts';
 import { startJob } from '../jobs/service.ts';
+import { writeAudit } from '../members/audit.ts';
 import { appendChunk } from './chunks.ts';
 import { exportColumns, namesFor } from './records.ts';
 
@@ -145,10 +146,16 @@ export async function startWorkspaceExport(
     async (context) => {
       const { tx } = context;
       const [held] = await tx
-        .select(COLUMNS)
+        .select({ ...COLUMNS, source: exports.source, createdByMemberId: exports.createdByMemberId })
         .from(exports)
-        .where(and(eq(exports.id, exportId), eq(exports.source, 'workspace'), eq(exports.createdByMemberId, me)));
-      if (held !== undefined) return viewOf(held);
+        .where(eq(exports.id, exportId));
+      // The same id again is the same export; one another export already took is refused, never a stored clash.
+      if (held !== undefined) {
+        if (held.source !== 'workspace' || held.createdByMemberId !== me) {
+          throw refuse('ID_TAKEN', 'That export id is already taken. Start the export again.');
+        }
+        return viewOf(held);
+      }
       // One start at a time per workspace, so two owners at once can't both pass the check.
       await tx.execute(
         sql`select pg_advisory_xact_lock(hashtextextended(${`workspace-export:${scope.workspaceId}`}, 0))`,
@@ -184,6 +191,13 @@ export async function startWorkspaceExport(
         })
         .returning(COLUMNS);
       if (row === undefined) throw new Error('The export row was not stored.');
+      // Everything leaving at once is a security event: History › Security says who took it, and when.
+      await writeAudit(tx, scope.workspaceId, scope.actor, {
+        action: 'workspace.exported',
+        targetType: 'workspace',
+        targetId: scope.workspaceId,
+        after: { exportId },
+      });
       return viewOf(row);
     },
     hooks,
@@ -434,8 +448,8 @@ async function pageOf(context: WriteContext, file: PlannedFile, after: string | 
           join attributes a on a.id = rel.from_attribute_id
           join records fr on fr.id = l.from_record_id and fr.deleted_at is null
           join records tr on tr.id = l.to_record_id and tr.deleted_at is null
-          join objects fo on fo.id = fr.object_id
-          join objects tobj on tobj.id = tr.object_id
+          join objects fo on fo.id = fr.object_id and fo.archived_at is null
+          join objects tobj on tobj.id = tr.object_id and tobj.archived_at is null
           where l.active_until is null ${afterId('l.id', from)}
           order by l.id limit ${limit}`,
         after,
@@ -462,6 +476,7 @@ async function pageOf(context: WriteContext, file: PlannedFile, after: string | 
           select n.id::text, n.record_id::text as "recordId",
                  coalesce((select array_agg(nr.record_id::text order by nr.position) from note_records nr
                            join records lr on lr.id = nr.record_id and lr.deleted_at is null
+                           join objects lo on lo.id = lr.object_id and lo.archived_at is null
                            where nr.note_id = n.id and nr.record_id <> n.record_id), '{}') as "linkedRecordIds",
                  n.kind, n.title, n.content_text as text, n.content,
                  to_char(n.occurred_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as "occurredAt",
@@ -469,7 +484,9 @@ async function pageOf(context: WriteContext, file: PlannedFile, after: string | 
                  n.created_by_member_id::text as "createdByMemberId",
                  to_char(n.created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as "createdAt",
                  to_char(n.updated_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as "updatedAt"
-          from notes n join records r on r.id = n.record_id and r.deleted_at is null
+          from notes n
+          join records r on r.id = n.record_id and r.deleted_at is null
+          join objects o on o.id = r.object_id and o.archived_at is null
           where n.deleted_at is null ${afterId('n.id', from)}
           order by n.id limit ${limit}`,
         after,
@@ -477,7 +494,8 @@ async function pageOf(context: WriteContext, file: PlannedFile, after: string | 
         '',
       );
     case 'tasks':
-      // A task whose links went with their records is its creator's and assignee's only (late trap #79).
+      // As `taskVisible` reads a task: one linking no records at all (none lost to a purge), one with a live linked
+      // record, or one the owner made or holds. A task whose links all went is its creator's and assignee's only.
       return rowsPage(
         tx,
         (from, limit) => sql`
@@ -487,13 +505,23 @@ async function pageOf(context: WriteContext, file: PlannedFile, after: string | 
                  t.assignee_member_id::text as "assigneeMemberId",
                  coalesce((select array_agg(tr.record_id::text order by tr.position) from task_records tr
                            join records lr on lr.id = tr.record_id and lr.deleted_at is null
+                           join objects lo on lo.id = lr.object_id and lo.archived_at is null
                            where tr.task_id = t.id), '{}') as "recordIds",
                  t.created_by_member_id::text as "createdByMemberId",
                  to_char(t.created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as "createdAt",
                  to_char(t.updated_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as "updatedAt"
           from tasks t
           where t.deleted_at is null
-            and (not t.links_purged or t.created_by_member_id = ${me}::uuid or t.assignee_member_id = ${me}::uuid)
+            and (
+              t.created_by_member_id = ${me}::uuid or t.assignee_member_id = ${me}::uuid
+              or (not t.links_purged and not exists (select 1 from task_records tr where tr.task_id = t.id))
+              or exists (
+                select 1 from task_records tr
+                join records lr on lr.id = tr.record_id and lr.deleted_at is null
+                join objects lo on lo.id = lr.object_id and lo.archived_at is null
+                where tr.task_id = t.id
+              )
+            )
             ${afterId('t.id', from)}
           order by t.id limit ${limit}`,
         after,
@@ -509,7 +537,9 @@ async function pageOf(context: WriteContext, file: PlannedFile, after: string | 
                  c.created_by_member_id::text as "createdByMemberId",
                  to_char(c.created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as "createdAt",
                  to_char(c.edited_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as "editedAt"
-          from comments c join records r on r.id = c.record_id and r.deleted_at is null
+          from comments c
+          join records r on r.id = c.record_id and r.deleted_at is null
+          join objects o on o.id = r.object_id and o.archived_at is null
           where c.deleted_at is null ${afterId('c.id', from)}
           order by c.id limit ${limit}`,
         after,
@@ -522,13 +552,15 @@ async function pageOf(context: WriteContext, file: PlannedFile, after: string | 
 /** The step's failure past the size limit. */
 const GREW = { finished: true, failed: { code: 'EXPORT_TOO_LARGE', message: TOO_LARGE } } as const;
 
-/** A part of the zip's text, read from the chunks in order, 50 at a time. */
-async function readParts(tx: WorkspaceTx, exportId: string, first: number, last: number): Promise<readonly string[]> {
-  if (first < 0) return [];
+/** How many chunks the zip reads at once: about 20 MB of text at most, so one page is held, never a whole file. */
+const PARTS_PAGE = 20;
+
+/** Parts `from` to `to` of the zip's text, in order. */
+async function readParts(tx: WorkspaceTx, exportId: string, from: number, to: number): Promise<readonly string[]> {
   const rows = await tx
     .select({ part: exportChunks.part, body: exportChunks.body })
     .from(exportChunks)
-    .where(and(eq(exportChunks.exportId, exportId), sql`${exportChunks.part} between ${first} and ${last}`))
+    .where(and(eq(exportChunks.exportId, exportId), sql`${exportChunks.part} between ${from} and ${to}`))
     .orderBy(asc(exportChunks.part));
   return rows.map((row) => row.body);
 }
@@ -555,7 +587,10 @@ function manifestOf(
   )}\n`;
 }
 
-/** Zips the files' chunks and the manifest, deflated, in memory (at most `WORKSPACE_EXPORT_BYTES_MAX` of text in). */
+/**
+ * Zips the files' chunks and the manifest, deflated as they are read (`PARTS_PAGE` chunks at a time, the fast
+ * level), so only one page of text is held beside the compressed zip.
+ */
 async function zipFiles(
   tx: WorkspaceTx,
   exportId: string,
@@ -568,19 +603,23 @@ async function zipFiles(
     if (error !== null) failed = error;
     else out.push(chunk);
   });
-  const add = (path: string, texts: readonly string[]) => {
-    const entry = new ZipDeflate(path, { level: 6 });
+  const entryOf = (path: string) => {
+    const entry = new ZipDeflate(path, { level: 1 });
     zip.add(entry);
-    texts.forEach((text, index) => {
-      entry.push(strToU8(text), index === texts.length - 1);
-    });
-    if (texts.length === 0) entry.push(new Uint8Array(0), true);
+    return entry;
   };
-  add('manifest.json', [manifest]);
+  entryOf('manifest.json').push(strToU8(manifest), true);
   for (const file of files) {
+    const entry = entryOf(file.path);
     // A CSV starts with a byte order mark, so a spreadsheet reads it as UTF-8.
-    const body = await readParts(tx, exportId, file.first, file.last);
-    add(file.path, file.path.endsWith('.csv') ? ['﻿', ...body] : body);
+    if (file.path.endsWith('.csv')) entry.push(strToU8('\ufeff'));
+    if (file.first >= 0) {
+      for (let from = file.first; from <= file.last; from += PARTS_PAGE) {
+        const page = await readParts(tx, exportId, from, Math.min(from + PARTS_PAGE - 1, file.last));
+        for (const text of page) entry.push(strToU8(text));
+      }
+    }
+    entry.push(new Uint8Array(0), true);
   }
   zip.end();
   if (failed !== undefined) throw failed;

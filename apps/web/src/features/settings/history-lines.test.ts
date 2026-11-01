@@ -257,6 +257,10 @@ const SENTENCES: readonly (readonly [AuditEntryView, string])[] = [
     'Ada Lovelace signed everyone out of the workspace',
   ],
   [
+    { ...base, action: 'workspace.exported', target: workspace, params: {} },
+    'Ada Lovelace exported everything in the workspace',
+  ],
+  [
     { ...base, action: 'api_key.created', target: workspace, params: { name: 'Zapier' } },
     'Ada Lovelace made the API key Zapier',
   ],

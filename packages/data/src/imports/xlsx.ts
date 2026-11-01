@@ -125,7 +125,11 @@ export function xmlText(text: string): string {
         return Number.isInteger(code) && code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : '';
       },
     )
-    .replace(/_x([0-9a-f]{4})_/giu, (_, hex: string) => String.fromCharCode(Number.parseInt(hex, 16)));
+    .replace(/_x([0-9a-f]{4})_/giu, (_, hex: string) => {
+      const code = Number.parseInt(hex, 16);
+      // A NUL or a lone surrogate can't be stored or shown: dropped.
+      return code === 0 || (code >= 0xd800 && code <= 0xdfff) ? '' : String.fromCharCode(code);
+    });
 }
 
 /** One attribute's value from an element's attribute text (`name="value"`), decoded. */

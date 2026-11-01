@@ -7,7 +7,7 @@
 // exports switched off, saying to narrow the filter.
 import { useView } from '@crm/data/react';
 import type { ObjectSummary, RecordsView, WindowCount } from '@crm/data';
-import { Button, Menu, MenuItem, MenuSeparator, MenuTrigger, SubmenuTrigger } from '@crm/ui';
+import { Button, Menu, MenuItem, MenuSection, MenuTrigger, SubmenuTrigger } from '@crm/ui';
 import { isOverExportLimit } from '../imports/export-run.ts';
 import { importHref } from '../imports/paths.ts';
 import { useCan } from '../workspace/WorkspacePage.tsx';
@@ -72,42 +72,37 @@ function Transfer({
             {importStrings.importPlural(object.pluralName)}
           </MenuItem>
         )}
-        {canImport && canExport && <MenuSeparator />}
         {canExport && (
-          <MenuItem
-            id="export-xlsx"
-            icon="file-spreadsheet"
-            {...(isTooMany ? tooMany : { description: importStrings.columnsShown(shownColumns) })}
-          >
-            {importStrings.exportExcel}
-          </MenuItem>
-        )}
-        {canExport && (
-          <MenuItem id="export-csv" icon="download" {...tooMany}>
-            {importStrings.exportCsv}
-          </MenuItem>
-        )}
-        {canExport && allColumns > shownColumns && (
-          // The rarer case, one level down: the hidden columns too, in either format.
-          <SubmenuTrigger>
-            <MenuItem id="export-all" icon="eye" {...(isTooMany ? tooMany : {})}>
-              {importStrings.exportAll(allColumns)}
+          // One choice of format for the shown columns, the count in the heading; the hidden ones one level down.
+          <MenuSection label={importStrings.exportSection(shownColumns)}>
+            <MenuItem id="export-xlsx" icon="file-spreadsheet" {...tooMany}>
+              {importStrings.exportExcel}
             </MenuItem>
-            <Menu
-              label={importStrings.exportAll(allColumns)}
-              onAction={(key) => {
-                if (key === 'all-xlsx') onExport(true, 'xlsx');
-                if (key === 'all-csv') onExport(true, 'csv');
-              }}
-            >
-              <MenuItem id="all-xlsx" icon="file-spreadsheet">
-                {importStrings.excel}
-              </MenuItem>
-              <MenuItem id="all-csv" icon="download">
-                {importStrings.csv}
-              </MenuItem>
-            </Menu>
-          </SubmenuTrigger>
+            <MenuItem id="export-csv" icon="file-text" {...tooMany}>
+              {importStrings.exportCsv}
+            </MenuItem>
+            {allColumns > shownColumns && (
+              <SubmenuTrigger>
+                <MenuItem id="export-all" icon="eye" {...tooMany}>
+                  {importStrings.exportAll(allColumns)}
+                </MenuItem>
+                <Menu
+                  label={importStrings.exportAll(allColumns)}
+                  onAction={(key) => {
+                    if (key === 'all-xlsx') onExport(true, 'xlsx');
+                    if (key === 'all-csv') onExport(true, 'csv');
+                  }}
+                >
+                  <MenuItem id="all-xlsx" icon="file-spreadsheet">
+                    {importStrings.excel}
+                  </MenuItem>
+                  <MenuItem id="all-csv" icon="file-text">
+                    {importStrings.csv}
+                  </MenuItem>
+                </Menu>
+              </SubmenuTrigger>
+            )}
+          </MenuSection>
         )}
       </Menu>
     </MenuTrigger>

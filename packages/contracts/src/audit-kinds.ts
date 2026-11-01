@@ -53,6 +53,8 @@ export const AUDIT_KINDS = {
     'workspace_security.changed',
     'workspace_security.signed_out_everyone',
     'access.rule_set',
+    // Everything taken out at once (lane wip/crm-dataio).
+    'workspace.exported',
     // Keys reach the workspace's data from outside (parity #34).
     'api_key.created',
     'api_key.revoked',

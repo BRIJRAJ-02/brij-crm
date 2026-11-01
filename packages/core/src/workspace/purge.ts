@@ -62,7 +62,8 @@ const FILES_BATCH = 50;
 
 /** Whether a stored path is this workspace's own: the purge never asks the store to remove another workspace's bytes. */
 function ownPath(kind: string, pathname: string, workspaceId: string): boolean {
-  return pathname.startsWith(`${kind === 'upload' ? 'forms' : 'records'}/${workspaceId}/`);
+  const folder = kind === 'upload' ? 'forms' : kind === 'export' ? 'workspace-exports' : 'records';
+  return pathname.startsWith(`${folder}/${workspaceId}/`);
 }
 
 /**
@@ -83,6 +84,11 @@ async function removeStoredFiles(
       union all
       (select 'record' as kind, id::text, pathname from record_files
         where workspace_id = ${workspaceId}::uuid and ${stillDeleted(workspaceId)} limit ${FILES_BATCH})
+      union all
+      -- A full workspace export's zip (lane wip/crm-dataio): one the daily cleanup didn't reach goes with the workspace.
+      (select 'export' as kind, id::text, storage_path as pathname from exports
+        where workspace_id = ${workspaceId}::uuid and storage_path is not null and ${stillDeleted(workspaceId)}
+        limit ${FILES_BATCH})
     `);
     if (found.rows.length === 0) return 0;
     const own = found.rows.filter((row) => ownPath(row.kind, row.pathname, workspaceId));
@@ -100,6 +106,10 @@ async function removeStoredFiles(
       delete from record_files where workspace_id = ${workspaceId}::uuid
         and id in (select jsonb_array_elements_text(${ids('record')}::jsonb)::uuid)
     `);
+    await tx.execute(sql`
+      delete from exports where workspace_id = ${workspaceId}::uuid
+        and id in (select jsonb_array_elements_text(${ids('export')}::jsonb)::uuid)
+    `);
     return found.rows.length;
   });
 }
@@ -109,7 +119,8 @@ async function storedFiles(db: Database, workspaceId: string): Promise<number> {
   const found = await db.withWorkspace(workspaceId, (tx) =>
     tx.execute<{ n: number }>(sql`
       select (select count(*) from form_uploads where workspace_id = ${workspaceId}::uuid)::int
-        + (select count(*) from record_files where workspace_id = ${workspaceId}::uuid)::int as n
+        + (select count(*) from record_files where workspace_id = ${workspaceId}::uuid)::int
+        + (select count(*) from exports where workspace_id = ${workspaceId}::uuid and storage_path is not null)::int as n
     `),
   );
   return found.rows[0]?.n ?? 0;

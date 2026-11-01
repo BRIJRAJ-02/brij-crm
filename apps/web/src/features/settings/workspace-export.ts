@@ -27,4 +27,3 @@ export function exportState(jobs: readonly JobView[], now: number): ExportState 
   if (exportId === undefined || expiresAt <= now) return { kind: 'none' };
   return { kind: 'ready', job, exportId, expiresAt };
 }
-

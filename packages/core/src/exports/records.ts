@@ -497,7 +497,8 @@ async function exportStep(
   const objectId = held.objectId;
   const { principal } = scope.access;
   if (principal.kind !== 'member' || principal.memberId !== held.createdByMemberId) return gone;
-  if (held.policyKey !== exportAccessKey(scope.access)) {
+  // A role that lost the export permission mid run stops, as one under other access does.
+  if (held.policyKey !== exportAccessKey(scope.access) || !can(scope.access, 'records.export')) {
     return {
       finished: true,
       failed: { code: 'FORBIDDEN', message: 'Your access changed while this export was being written. Export again.' },

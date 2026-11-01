@@ -153,7 +153,7 @@ test.describe('the data journey’s edges', () => {
     const shown = page.getByRole('menuitem', { name: /^Export to Excel/u });
     await expect(shown).toBeVisible();
     await expect(shown).toBeEnabled();
-    await expect(page.getByText(/^\d+ columns?$/u)).toBeVisible();
+    await expect(page.getByText(/^Export · \d+ columns?$/u)).toBeVisible();
     await expect(page.getByRole('menuitem', { name: /^Export to CSV/u })).toBeVisible();
     await expect(page.getByRole('menuitem', { name: /^All columns \(\d+\)/u })).toBeVisible();
     await page.keyboard.press('Escape');

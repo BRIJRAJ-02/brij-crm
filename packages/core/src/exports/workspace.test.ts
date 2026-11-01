@@ -12,6 +12,7 @@ import { NO_RULES, type AccessRules } from '../access/policy.ts';
 import { createComment } from '../comments/comments.ts';
 import { newId } from '../engine/ids.ts';
 import { createRecord } from '../engine/records.ts';
+import { deleteRecords } from '../engine/trash.ts';
 import { exportFile, exportPart } from '../forms/export.ts';
 import { jobKinds } from '../jobs/kinds/index.ts';
 import { saveNote } from '../notes/notes.ts';
@@ -217,6 +218,47 @@ describe('the full workspace export', () => {
     );
     expect(left.rows[0]?.n).toBe(0);
     expect(await refusalOf(exportFile(w.member, { exportId: started.id }))).toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('leaves the trash out, stops for a starter demoted mid run, and is no other owner’s to download', async () => {
+    const { files, store } = memoryStore();
+    const registry = jobKinds({ environment: 'local', exportFiles: store });
+    const t = await team(['owner']);
+    const other = testScope({
+      db,
+      workspaceId: t.workspaceId,
+      actor: { type: 'member', id: t.memberId },
+      role: 'owner',
+    });
+    const object = await db.withWorkspace(t.workspaceId, (tx) =>
+      tx.execute<{ id: string; name: string }>(sql`
+        select o.id::text, a.id::text as name from objects o
+        join attributes a on a.object_id = o.id and a.api_slug = 'name' where o.api_slug = 'companies'`),
+    );
+    const companies = object.rows[0]?.id ?? '';
+    const name = object.rows[0]?.name ?? '';
+    await createRecord(t.owner, { objectId: companies, values: { [name]: 'Kept Co' } });
+    const gone = await createRecord(t.owner, { objectId: companies, values: { [name]: 'Trashed Co' } });
+    await deleteRecords(t.owner, { objectId: companies, recordIds: [gone.recordId], batchId: newId() });
+
+    const started = await startWorkspaceExport(t.owner, registry, { id: newId() });
+    expect((await drive(runnerFor(registry), t.workspaceId, started.jobId)).at(-1)).toBe('succeeded');
+    const file = await exportFile(t.owner, { exportId: started.id });
+    const csv = strFromU8(
+      unzipSync(files.get(file.storagePath ?? '') ?? new Uint8Array())['records/companies.csv'] ?? new Uint8Array(),
+    );
+    expect(csv).toContain('Kept Co');
+    expect(csv).not.toContain('Trashed Co');
+    // Another owner of the same workspace never gets the starter's file.
+    expect(await refusalOf(exportFile(other, { exportId: started.id }))).toMatchObject({ code: 'NOT_FOUND' });
+
+    // A starter who stops being an owner while it runs: the next batch ends it, and nothing is kept.
+    const again = await startWorkspaceExport(t.owner, registry, { id: newId() });
+    await db.withWorkspace(t.workspaceId, (tx) =>
+      tx.execute(sql`update members set role = 'member' where id = ${t.ownerId}::uuid`),
+    );
+    expect((await drive(runnerFor(registry), t.workspaceId, again.jobId)).at(-1)).toBe('failed');
+    expect(files.size).toBe(1);
   });
 
   it('fails plainly where there is no file store, keeping nothing', async () => {

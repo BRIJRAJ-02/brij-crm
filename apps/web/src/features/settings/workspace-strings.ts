@@ -77,11 +77,12 @@ export const strings = {
   download: 'Download',
   exportingRows: (rows: number) => (rows === 0 ? 'Starting…' : `Exporting… ${rows.toLocaleString()} rows`),
   exportReady: (bytes: number | undefined, hours: number) =>
-    `${bytes === undefined ? 'Ready' : `Ready, ${size(bytes)}`} · goes in ${hours === 1 ? '1 hour' : `${String(hours)} hours`}`,
+    `${bytes === undefined ? 'Ready' : `Ready · ${size(bytes)}`} · deleted in ${hours === 1 ? '1 hour' : `${String(hours)} hours`}`,
   exportEnded: (why: string | undefined) =>
     why === undefined ? 'The last export failed.' : `The last export failed. ${why}`,
   exportFailed: 'The export couldn’t start. Try again.',
-  cancelExport: 'Cancel',
+  cancelExport: 'Cancel export',
+  cancelFailed: 'The export couldn’t be stopped. Try again.',
   cancelExportTitle: 'Stop the export?',
   cancelExportText: 'Nothing is kept. You can export again any time.',
   keepExporting: 'Keep exporting',

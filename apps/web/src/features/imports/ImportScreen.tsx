@@ -443,7 +443,12 @@ export function ImportScreen({
     setReading(true);
     setUploadError(undefined);
     setColumnsError(undefined);
-    const refused = sheet === undefined ? setUploadError : setColumnsError;
+    // Another sheet's refusal names it, so it's clear which one didn't read.
+    const sheetName = sheet === undefined ? undefined : loaded?.workbook?.sheets[sheet];
+    const refused = (message: string) => {
+      if (sheet === undefined) setUploadError(message);
+      else setColumnsError(sheetName === undefined ? message : strings.sheetRefused(sheetName, message));
+    };
     try {
       const needsPhone = choices.some((choice) => choice.attribute.type === 'phone');
       // A workbook is read off the page's thread, in its own worker (`xlsx-read.ts`).
@@ -1317,6 +1322,8 @@ function ColumnsStep({
     <Card
       title={strings.fileSummary(loaded.name, loaded.table.rows.length)}
       description={strings.columnsCount(matched, headers.length)}
+      // Another sheet being read: the card says so until its columns replace these.
+      isBusy={isReading}
       // A workbook of several sheets: which one imports, the first with data chosen for them.
       {...(loaded.workbook === undefined
         ? {}
@@ -1324,6 +1331,7 @@ function ColumnsStep({
             actions: (
               <Select
                 label={strings.sheet}
+                isLabelHidden
                 size="sm"
                 items={loaded.workbook.sheets.map((name, index) => ({ id: String(index), label: name }))}
                 value={String(loaded.workbook.sheet)}

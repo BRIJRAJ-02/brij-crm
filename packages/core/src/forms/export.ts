@@ -201,6 +201,8 @@ export async function ownExport(tx: WorkspaceTx, scope: EngineScope, exportId: s
   }
   // A records export (spec 0040): its object live and still readable.
   if (row.source === 'records' && row.objectId !== null) {
+    // A role that lost the export permission loses its files too.
+    if (!can(scope.access, 'records.export')) throw refuse('NOT_FOUND', UNKNOWN_EXPORT);
     await checkRecordsSource(tx, scope, row.objectId);
     return row;
   }
