@@ -120,13 +120,22 @@ export function rankingKey(candidate: Candidate, smart: SmartRanking | undefined
 export const RANKING_ROOM = 0.5;
 
 /**
+ * The room the ranking may spend for one seat: half the allowance, and never
+ * less than one meeting at weight 100, so a new or quiet rotation (where the
+ * allowance floors at one meeting) can still prefer the rep who matches.
+ */
+export function roomOf(smart: Pick<SmartRanking, 'slack'>): number {
+  return smart.slack <= 0 ? 0 : Math.max(smart.slack * RANKING_ROOM, SLACK_FLOOR);
+}
+
+/**
  * Whether the ranking may pick this candidate (AC-1364): their load is no
  * more than the room above the pool's lowest. The seat's own first choice is
  * always allowed, so a seat where everyone is over the room still books,
  * through the rotation's own order.
  */
 export function withinAllowance(candidate: Candidate, smart: SmartRanking): boolean {
-  return loadAt100(candidate) <= smart.floor + smart.slack * RANKING_ROOM + 1e-9;
+  return loadAt100(candidate) <= smart.floor + roomOf(smart) + 1e-9;
 }
 
 /**

@@ -653,6 +653,7 @@ export function createApp({
   mountLook(app, { db, files: pictureFiles, limiter: createMemoryLimiter(), auth, edgeCache });
   mountPublicBooking(app, {
     db,
+    rules,
     handoffKey: formsHandoffKey,
     publicOrigins,
     calendar: {

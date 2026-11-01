@@ -208,7 +208,7 @@ export const strings = {
   owner: 'Owner',
   ownerHint: 'For new records only.',
   /** A lead whose owner follows its meeting (spec 0037, AC-1423), while its claim is open. */
-  ownerWaiting: 'Waiting for the booking',
+  ownerWaiting: 'Set when the meeting is booked',
   /** The owner the form names, who has left the workspace (late trap #88). */
   ownerFormer: 'Former member',
   ownerLeftHint: 'They’ve left the workspace, so new records get no owner. Pick another.',

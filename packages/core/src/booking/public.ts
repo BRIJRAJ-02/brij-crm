@@ -88,7 +88,8 @@ import { writeAssignment } from '../rotation/ledger.ts';
 import { loadTeam, memberBusy, readTeam, teamMemberIds, teamSlots, type Team } from '../rotation/team.ts';
 import { buildBookingIcs } from './ics.ts';
 import { matchVisitor } from './visitor.ts';
-import { claimLeadOwnerAtBooking } from './lead.ts';
+import type { RuleSource } from '../access/door.ts';
+import { claimLeadOwnerAtBooking, tellLeadOwner } from './lead.ts';
 import { refuseExpiredHandoff } from '../routing/lead-owner.ts';
 import {
   bookingAnswersOf,
@@ -123,6 +124,12 @@ export interface PublicBookingDeps {
   readonly now?: () => Date;
   /** Where a failed calendar event is reported (the booking itself stands). */
   readonly log?: { warn(message: string, fields: Readonly<Record<string, unknown>>): void };
+  /**
+   * The access rules a member is read with when a lead's new owner is told
+   * (spec 0037, AC-1391): the api's `APP_RULES`. Without them that one notice
+   * tells nobody (fail closed), rather than read a member with no rules.
+   */
+  readonly rules?: RuleSource;
 }
 
 /** Refuses an entry the door didn't make for this page. */
@@ -1175,6 +1182,8 @@ export async function bookPublicSlot(
 
   // 3. Check and reserve, atomically, under the locks. The id is made here, so the token derives from it.
   const newId = randomUUID();
+  /** The member this booking made a lead's owner (spec 0037, AC-1372); told once it has committed. */
+  let leadOwnerId: string | undefined;
   const { token, hash: tokenHash } = manageTokenFor(deps.linkKey, newId);
   const { result } = await runWrite(
     entry.scope,
@@ -1325,7 +1334,10 @@ export async function bookPublicSlot(
       // The lead whose owner waited for this meeting (spec 0037, AC-1372): the seat of the form's own rotation
       // becomes the owner, claimed in the database, so the unbooked job can never assign as well.
       if (link !== undefined && chosen !== undefined) {
-        await claimLeadOwnerAtBooking(context, { submissionId: link.submissionId, picks: chosen.picks });
+        leadOwnerId = await claimLeadOwnerAtBooking(context, {
+          submissionId: link.submissionId,
+          picks: chosen.picks,
+        });
       }
 
       // The visitor's records, under a lock on their email, in a savepoint: a refusal keeps the booking. On a round
@@ -1447,6 +1459,16 @@ export async function bookPublicSlot(
     hosts,
     ...booked
   } = result as Booked & { readonly hostMemberId: string; readonly hosts: readonly string[] };
+
+  // The lead's new owner hears of it (spec 0037, AC-1391), after the commit and as the system, since a notice reads
+  // each member through the door. Left out when it fails, and never a reason the booking doesn't stand.
+  if (leadOwnerId !== undefined && link !== undefined && deps.rules !== undefined) {
+    await tellLeadOwner(entry.scope.db, workspaceId, link.submissionId, deps.rules).catch((error: unknown) => {
+      deps.log?.warn('booking.lead_owner_notice_failed', {
+        reason: error instanceof Error ? error.message : 'unknown',
+      });
+    });
+  }
 
   // 4. The calendar event on the host's calendar, after the commit: three tries, then the booking stands without one.
   // A team booking's other hosts are invited beside the visitor (AC-627, AC-1322).

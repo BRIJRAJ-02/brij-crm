@@ -202,15 +202,22 @@ export async function recordBookingRouting(
   },
 ): Promise<void> {
   const { routing } = input;
+  // The facts the ranking read (AC-1362): option ids only, each marked where it came from, never free text.
+  const facts = (routing.smart?.facts ?? []).map((fact) => ({ ...fact }));
+  const snapshot = input.snapshot ?? null;
   if (routing.handoffDecisionId !== undefined) {
     await tx
       .update(routingDecisions)
-      .set({ bookingId: input.bookingId })
+      .set({
+        bookingId: input.bookingId,
+        // A hand off's hosts win over the page's rules, so the page writes no decision of its own: the seat that
+        // was ranked is explained from the form's row instead, which would otherwise have nothing to explain.
+        ...(routing.page === undefined && facts.length > 0 ? { facts } : {}),
+        ...(routing.page === undefined && snapshot !== null ? { snapshot } : {}),
+      })
       .where(and(eq(routingDecisions.id, routing.handoffDecisionId), isNull(routingDecisions.bookingId)));
   }
   if (routing.page === undefined) return;
-  // The facts the ranking read (AC-1362): option ids only, each marked where it came from, never free text.
-  const facts = routing.smart?.facts ?? [];
   await tx
     .insert(routingDecisions)
     .values({
@@ -222,8 +229,8 @@ export async function recordBookingRouting(
       skipped: [...routing.page.skipped],
       hosts: input.narrowed && routing.hosts !== undefined ? [...routing.hosts] : null,
       bookingId: input.bookingId,
-      facts: facts.length === 0 ? null : facts.map((fact) => ({ ...fact })),
-      snapshot: input.snapshot ?? null,
+      facts: facts.length === 0 ? null : facts,
+      snapshot,
     })
     .onConflictDoNothing();
 }

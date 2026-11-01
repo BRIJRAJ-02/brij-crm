@@ -1,47 +1,31 @@
-// A form lead's owner that follows its meeting (spec 0037, AC-1372, AC-1391,
-// AC-1423, AC-1427).
+// A form lead's owner that follows its meeting (spec 0037, AC-1372, AC-1423,
+// AC-1427), routing's half: **the claim, and nothing else**.
 //
 // When a form's owner is a rotation and the submission's route books a team
-// page that uses that **same** rotation, the owner waits: the host the page
-// picks from that rotation becomes the lead's owner, and the booking's ledger
-// row is the one count for both. If no booking is made within the hand off's
-// life (24 hours), `routing.assign_unbooked` picks the owner through
-// `pickLeadOwner` five minutes later, as the submission's own form actor, so
-// caps, time off, a returning owner and "keep an existing owner" all apply
-// unchanged (AC-1423).
-//
-// **Exactly one path assigns.** Both the booking and the job first claim the
-// form's decision row with one conditional update:
+// page that uses that **same** rotation, the owner waits. Both paths that can
+// then give the lead an owner — the booking (`booking/lead.ts`) and
+// `routing.assign_unbooked` (`forms/unbooked.ts`) — first claim the form's
+// decision row with one conditional update:
 //
 //   update routing_decisions set assigned_member_id = …, assigned_at = now()
-//   where id = … and assigned_at is null
+//   where id = … and submission_id = … and assigned_at is null
 //
 // Only the winner writes the owner; a booking that loses still books its
 // host. The claim is the whole race, so the job needs no cancelling: it runs,
 // finds the claim taken and does nothing.
 //
-// Routing never writes the owner attribute itself (AC-1423): the owner only
-// ever comes from `pickLeadOwner`, or from the booking's own host through the
-// claim here.
+// Routing never writes the owner attribute itself (AC-1423), which is why
+// those two writes live under `booking/` and `forms/` and a source scan of
+// this folder finds none (`smart.test.ts`).
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import * as z from 'zod';
 import { schema, type WorkspaceTx } from '@crm/db';
-import { enterAsForm, type RuleSource } from '../access/door.ts';
-import { formAccess } from '../access/policy.ts';
 import { refuse } from '../engine/refusals.ts';
-import { updateRecord } from '../engine/records.ts';
-import { currentItems, loadAttributes } from '../engine/values.ts';
 import type { WriteContext } from '../engine/write.ts';
-import { createRegistry, defineKind, MAX_ATTEMPTS, type JobRegistry, type KindDefinition } from '../jobs/registry.ts';
+import { createRegistry, defineKind, MAX_ATTEMPTS, type JobRegistry } from '../jobs/registry.ts';
 import { startJob } from '../jobs/service.ts';
-import { lockRotation } from '../rotation/ledger.ts';
-import { pickLeadOwner, recordLeadOwner } from '../rotation/owner.ts';
-import { actingAs, ownerAttribute } from '../forms/process.ts';
-import { tellTeam } from '../forms/notify.ts';
-import { loadForm, loadVersions } from '../forms/shared.ts';
 
-const { bookingPageRotations, bookingPages, formSubmissionRecords, formSubmissions, routingDecisions, rotations } =
-  schema;
+const { bookingPageRotations, bookingPages, formSubmissions, routingDecisions, rotations } = schema;
 
 /** What a submission's `assignment` says while the owner waits for a booking (AC-1423). */
 export const WAITING_FOR_BOOKING = 'waiting_for_booking';
@@ -52,13 +36,29 @@ export const HANDOFF_LIFE_MS = 24 * 60 * 60 * 1_000;
 /** How long after the hand off expires the unbooked job picks the owner (spec 0037's Numbers). */
 export const UNBOOKED_DELAY_MS = 5 * 60 * 1_000;
 
-/** The kind's name. */
+/** The kind's name. The kind itself is declared in `forms/unbooked.ts`, which writes the owner. */
 export const ROUTING_ASSIGN_UNBOOKED = 'routing.assign_unbooked';
 
 /** What a visitor reads when they open a booking page through a hand off that has expired (AC-1427). */
 export const HANDOFF_EXPIRED_MESSAGE = 'That link has expired. Fill the form in again to book.';
 
-/** Whether a submission's hand off has expired (AC-1427): more than its life since it came in. */
+/** The kind's params: the one submission whose owner was waiting, and the decision row to claim. */
+export const UnbookedParams = z.strictObject({ submissionId: z.uuid(), decisionId: z.uuid() });
+/** The kind's params. */
+export type UnbookedParams = z.infer<typeof UnbookedParams>;
+
+/**
+ * Whether a submission's hand off has expired (AC-1427): more than its life
+ * since it came in.
+ *
+ * A submission this workspace can't see — another tenant's, or one that never
+ * existed — answers false, and the booking goes on **without** a hand off:
+ * `handoffSubmission` already refuses to link or read anything for it
+ * (`booking.test.ts`, the security review of 21 October 2026). That is the
+ * stricter answer, not the looser one: an unknown id grants nothing, and
+ * refusing the booking instead would let any stranger's token stop a page
+ * taking bookings at all.
+ */
 export async function handoffExpired(tx: WorkspaceTx, submissionId: string, now: Date): Promise<boolean> {
   const [row] = await tx
     .select({ receivedAt: formSubmissions.receivedAt })
@@ -158,10 +158,19 @@ export async function ensureFormDecision(
 
 /**
  * Claims a form's decision for `memberId` (AC-1372): one conditional update,
- * so of the booking and the unbooked job exactly one wins. True: this caller
+ * so of the booking and the unbooked job exactly one wins. The row must be
+ * this submission's, so a stale decision id from a job's params can never
+ * claim another lead. `null` closes the claim against nobody, which is what
+ * the job does when the rotation could give the lead to no one, so the
+ * submission's own record and the claim never disagree. True: this caller
  * writes the owner.
  */
-export async function claimDecision(tx: WorkspaceTx, decisionId: string, memberId: string): Promise<boolean> {
+export async function claimDecision(
+  tx: WorkspaceTx,
+  decisionId: string,
+  submissionId: string,
+  memberId: string | null,
+): Promise<boolean> {
   const claimed = await tx
     .update(routingDecisions)
     .set({ assignedMemberId: memberId, assignedAt: sql`now()` })
@@ -169,6 +178,7 @@ export async function claimDecision(tx: WorkspaceTx, decisionId: string, memberI
       and(
         eq(routingDecisions.id, decisionId),
         eq(routingDecisions.surfaceKind, 'form'),
+        eq(routingDecisions.submissionId, submissionId),
         isNull(routingDecisions.assignedAt),
       ),
     )
@@ -184,11 +194,6 @@ export async function claimOpen(tx: WorkspaceTx, submissionId: string): Promise<
     .where(and(eq(routingDecisions.surfaceKind, 'form'), eq(routingDecisions.submissionId, submissionId)));
   return row !== undefined && row.assignedAt === null;
 }
-
-/** The kind's params: the one submission whose owner was waiting. */
-export const UnbookedParams = z.strictObject({ submissionId: z.uuid(), decisionId: z.uuid() });
-/** The kind's params. */
-export type UnbookedParams = z.infer<typeof UnbookedParams>;
 
 /**
  * Starts `routing.assign_unbooked` in the caller's write (AC-1372): once per
@@ -242,151 +247,32 @@ export async function ownerWaitForSubmission(
   return ownerWait(tx, { ownerRotationId: input.ownerRotationId, submissionId: input.submissionId });
 }
 
-/** What the step reads of its submission. */
-interface WaitingRow extends Record<string, unknown> {
-  readonly form_id: string;
-  readonly version_id: string;
-  readonly main_record_id: string | null;
-  readonly state: string;
-}
-
 /**
- * Picks the owner of a lead whose booking never came (AC-1372, AC-1423): it
- * claims the decision, and on winning asks `pickLeadOwner` on the form's
- * rotation under that rotation's lock, writes the owner on the submission's
- * main record as the form's own actor (exactly the owner field, nothing
- * else), writes the ledger row, and leaves the submission's `assignment`
- * naming the member, which is what queues their notice (AC-1391).
- */
-export async function assignUnbooked(
-  context: WriteContext,
-  params: UnbookedParams,
-  now: Date,
-  rules?: RuleSource,
-): Promise<void> {
-  const { tx, scope } = context;
-  const found = await tx.execute<WaitingRow>(sql`
-    select form_id::text, version_id::text, main_record_id::text, state
-    from form_submissions where id = ${params.submissionId} for update
-  `);
-  const submission = found.rows[0];
-  if (submission === undefined || submission.state !== 'processed') return;
-  const form = await loadForm(tx, submission.form_id);
-  const rotationId = form?.ownerRotationId ?? null;
-  if (form === undefined || rotationId === null) return;
-  const version = (await loadVersions(tx, [submission.version_id])).get(submission.version_id);
-  const objectId = version?.document.targets.main?.objectId;
-  if (version === undefined || objectId === undefined) return;
-  // The record the submission filed into, which the owner goes on.
-  const [filed] = await tx
-    .select({ recordId: formSubmissionRecords.recordId })
-    .from(formSubmissionRecords)
-    .where(and(eq(formSubmissionRecords.submissionId, params.submissionId), eq(formSubmissionRecords.role, 'main')));
-  const recordId = filed?.recordId ?? submission.main_record_id;
-  if (recordId === null) return;
-  const attributes = await loadAttributes(tx, objectId);
-  const owner = ownerAttribute(attributes);
-  if (owner === undefined) return;
-
-  // The rotation's lock first, as every other assignment takes it, and held to commit.
-  await lockRotation(tx, scope.workspaceId, rotationId);
-  const held = await currentItems(tx, [recordId], [owner.id]);
-  const current = held.find((item) => item.ownerId === recordId && !item.isCleared && item.actorId !== null);
-  const lead = await pickLeadOwner(tx, {
-    workspaceId: scope.workspaceId,
-    rotationId,
-    now,
-    recordId,
-    ...(current === undefined ? {} : { current: heldMember(current) }),
-  });
-  if (lead.kind === 'none') {
-    // Nobody could take it: the claim closes against nobody, so the lead stays unowned and nothing waits for ever.
-    await closeWait(tx, params, { rotationId, reason: lead.reason });
-    return;
-  }
-  const memberId = lead.kind === 'kept' ? undefined : lead.memberId;
-  if (memberId === undefined) {
-    await closeWait(tx, params, { rotationId, reason: 'kept_existing' });
-    return;
-  }
-  if (!(await claimDecision(tx, params.decisionId, memberId))) return;
-  const writer = actingAs(
-    context,
-    enterAsForm(
-      scope,
-      form.id,
-      formAccess(form.id, { objectId, attributeIds: [...attributes.keys()], writable: new Set([owner.id]) }),
-    ),
-  );
-  const value = owner.isMulti ? [{ type: 'member', id: memberId }] : { type: 'member', id: memberId };
-  await updateRecord(writer, { recordId, values: { [owner.id]: { value } } });
-  if (lead.kind === 'picked') {
-    await recordLeadOwner(tx, writer.scope, lead, {
-      recordId,
-      formId: form.id,
-      submissionId: params.submissionId,
-    });
-  }
-  await closeWait(tx, params, {
-    memberId,
-    rotationId,
-    reason: lead.kind === 'picked' ? lead.reason : 'already_assigned',
-  });
-  // The owner hears of the lead now, not at submit (AC-1391); everyone already told is skipped.
-  await tellTeam(context, rules, params.submissionId);
-}
-
-/** The member an owner value holds, as `pickLeadOwner` takes it: an actor row naming a member. */
-function heldMember(item: { readonly actorType: string | null; readonly actorId: string | null }): {
-  readonly memberId?: string;
-} {
-  return item.actorType === 'member' && item.actorId !== null ? { memberId: item.actorId } : {};
-}
-
-/** Writes the submission's own record of who owns the lead, replacing the waiting one. */
-async function closeWait(
-  tx: WorkspaceTx,
-  params: UnbookedParams,
-  assignment: { readonly memberId?: string; readonly rotationId: string; readonly reason: string },
-): Promise<void> {
-  await tx
-    .update(formSubmissions)
-    .set({ assignment, updatedAt: sql`now()` })
-    .where(eq(formSubmissions.id, params.submissionId));
-}
-
-/**
- * `routing.assign_unbooked` (AC-1372): the system's, on the light lane, one
- * submission a batch, never cancelled. Safe to run again: the claim is the
- * one decision, and a claim already taken makes the step a no op.
- */
-export function routingUnbooked(rules?: RuleSource): KindDefinition<UnbookedParams> {
-  return defineKind<UnbookedParams>({
-    kind: ROUTING_ASSIGN_UNBOOKED,
-    lane: 'light',
-    actor: 'system',
-    mode: 'cursor',
-    params: UnbookedParams,
-    cancellable: false,
-    maxAttempts: MAX_ATTEMPTS.light,
-    batchSize: 1,
-    sample: {
-      submissionId: '0199f0a0-0000-7000-8000-000000000001',
-      decisionId: '0199f0a0-0000-7000-8000-000000000002',
-    },
-    async step(context, { job }) {
-      await assignUnbooked(context, job.params, new Date(), rules);
-      return { finished: true };
-    },
-  });
-}
-
-/**
- * The registry a submission's own write starts the unbooked job through: only
- * this one kind, so the forms processing needs no registry of its own (as
- * `computedRegistry` does for the computed kinds). It is a system kind, which
- * any write may start (spec 0008, AC-125).
+ * The registry a submission's own write starts the unbooked job through: the
+ * one kind, with a step that refuses to run, since nothing here ever runs it
+ * (the worker's registry holds the real one, from `forms/unbooked.ts`).
+ * `startJob` only reads the kind's params, lane and actor, so this keeps the
+ * owner write out of this folder (AC-1423) while a submission's write still
+ * needs no registry of its own.
  */
 export function unbookedRegistry(): JobRegistry {
-  return createRegistry([routingUnbooked()]);
+  return createRegistry([
+    defineKind<UnbookedParams>({
+      kind: ROUTING_ASSIGN_UNBOOKED,
+      lane: 'light',
+      actor: 'system',
+      mode: 'cursor',
+      params: UnbookedParams,
+      cancellable: false,
+      maxAttempts: MAX_ATTEMPTS.light,
+      batchSize: 1,
+      sample: {
+        submissionId: '0199f0a0-0000-7000-8000-000000000001',
+        decisionId: '0199f0a0-0000-7000-8000-000000000002',
+      },
+      step: () => {
+        throw new Error('routing.assign_unbooked runs from the worker’s registry, never this one.');
+      },
+    }),
+  ]);
 }

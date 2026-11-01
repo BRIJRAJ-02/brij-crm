@@ -108,7 +108,7 @@ import {
   readPublicSlots,
   type IcsOrigin,
 } from '@crm/core/public';
-import type { ManageLinkKey } from '@crm/core';
+import type { ManageLinkKey, RuleSource } from '@crm/core';
 import type { Database } from '@crm/db';
 import type { Context, Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
@@ -160,6 +160,13 @@ export interface PublicBookingServices {
   readonly tickets?: TicketBook;
   readonly wakeRelay: WakeRelay;
   readonly now?: () => Date;
+  /**
+   * The access rules a member is read with when a lead's new owner is told
+   * (spec 0037, AC-1391): the app's `APP_RULES`, the same its door takes.
+   * Without them that notice tells nobody, rather than read a member with no
+   * rules.
+   */
+  readonly rules?: RuleSource;
   /** The key every booking's guest page token derives from (`booking-link.ts`). */
   readonly linkKey: ManageLinkKey;
   /** Reads a form's hand off (spec 0023 AC-1058): the prefill and the submission a booking links to. */
@@ -302,6 +309,7 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
     calendar,
     linkKey: services.linkKey,
     ...(services.now === undefined ? {} : { now: services.now }),
+    ...(services.rules === undefined ? {} : { rules: services.rules }),
     log,
   };
 

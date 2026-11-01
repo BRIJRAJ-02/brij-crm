@@ -149,7 +149,13 @@ export function RoutingScreen({ data, slug, search, members, stage, fitFields, t
       ) : search.view === 'test' ? (
         <TestTab data={data} slug={slug} surfaces={surfaces} />
       ) : search.view === 'smart' ? (
-        <SmartTab data={data} slug={slug} fields={fitFields} toasts={toasts} />
+        <SmartTab
+          data={data}
+          slug={slug}
+          fields={fitFields}
+          onSkills={() => onSearch({ view: 'skills' })}
+          toasts={toasts}
+        />
       ) : (
         <Decisions data={data} slug={slug} search={search} surfaces={surfaces} members={members} onSearch={onSearch} />
       )}

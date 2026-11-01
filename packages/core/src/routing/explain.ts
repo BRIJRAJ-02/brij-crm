@@ -64,10 +64,12 @@ function rates(seat: StoredSeat): { readonly team: number; readonly of: (memberI
   const trials = seat.candidates.reduce((total, each) => total + each.trials, 0);
   const successes = seat.candidates.reduce((total, each) => total + each.successes, 0);
   const team = trials === 0 ? 0 : successes / trials;
+  // One map, not a scan per candidate: a seat holds up to `SNAPSHOT_CANDIDATES_MAX` rows and a page holds 50 of them.
+  const byMember = new Map(seat.candidates.map((each) => [each.memberId, each]));
   return {
     team,
     of: (memberId) => {
-      const found = seat.candidates.find((each) => each.memberId === memberId);
+      const found = byMember.get(memberId);
       if (found === undefined) return team;
       return (found.successes + PRIOR * team) / (found.trials + PRIOR);
     },
@@ -133,9 +135,10 @@ export function explainDecision(stored: unknown, input: ExplainInput): Explanati
       load: each.load,
       fairShare: each.fairShare,
       fit: each.fit,
-      lift: each.lift,
-      trials: each.trials,
-      successes: each.successes,
+      lift: input.tier === 'manage' ? each.lift : 0,
+      // Every rate shows only to `routing.manage`, and so do the trials and successes a rate is worked out from.
+      trials: input.tier === 'manage' ? each.trials : 0,
+      successes: input.tier === 'manage' ? each.successes : 0,
       ...(input.tier === 'manage' ? { rate: rate.of(each.memberId), teamRate: rate.team } : {}),
       isPicked: each.isPicked,
     })),

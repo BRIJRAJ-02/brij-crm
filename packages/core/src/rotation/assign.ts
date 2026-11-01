@@ -100,6 +100,16 @@ export interface SnapshotCandidate {
   readonly isPicked: boolean;
 }
 
+/**
+ * The most candidates one seat's snapshot keeps (AC-1373). An explanation
+ * only ever names the pick and the people it was compared against closely, so
+ * a 200 host rotation (`routing_decisions_hosts`) would otherwise put about
+ * 30 kB of jsonb on every booking and carry it into every Decisions page.
+ * The picked member is always kept; the rest are the lowest keys, which are
+ * the ones the pick was actually decided against.
+ */
+export const SNAPSHOT_CANDIDATES_MAX = 20;
+
 /** One ranked seat's frozen numbers (AC-1373): every explanation is built from this, never from the stats. */
 export interface SeatSnapshot {
   readonly rotationId: string;
@@ -296,9 +306,18 @@ function snapshotOf(
     const pick = picks.find((each) => each.rotationId === seat.rotationId);
     // Only a ranked seat of two or more candidates has a snapshot: a returning guest's seat was never ranked.
     if (smart === undefined || pick === undefined || seat.candidates.length < 2) return [];
-    const loads = seat.candidates.map((each) => loadAt100(each));
-    const fairShare = loads.reduce((total, each) => total + each, 0) / Math.max(1, loads.length);
+    const loads = new Map(seat.candidates.map((each) => [each.memberId, loadAt100(each)]));
+    const fairShare =
+      [...loads.values()].reduce((total, each) => total + each, 0) / Math.max(1, seat.candidates.length);
     const windowDays = open.find((each) => each.rotation.rules.id === seat.rotationId)?.rotation.rules.windowDays ?? 30;
+    // The fair share is the whole seat's, worked out above; only the rows are cut.
+    const kept = [...seat.candidates]
+      .sort(
+        (a, b) =>
+          Number(b.memberId === pick.memberId) - Number(a.memberId === pick.memberId) ||
+          (loads.get(a.memberId) ?? 0) - (loads.get(b.memberId) ?? 0),
+      )
+      .slice(0, SNAPSHOT_CANDIDATES_MAX);
     return [
       {
         rotationId: seat.rotationId,
@@ -310,10 +329,10 @@ function snapshotOf(
         windowDays,
         pickedMemberId: pick.memberId,
         by: pick.reason === 'routed' ? ('track_record' as const) : ('fair_share' as const),
-        candidates: seat.candidates.map((each, index) => ({
+        candidates: kept.map((each) => ({
           memberId: each.memberId,
           count: each.count + each.calibration,
-          load: loads[index] ?? 0,
+          load: loads.get(each.memberId) ?? 0,
           fairShare,
           fit: smart.fit.get(each.memberId) ?? 0,
           lift: smart.lift.get(each.memberId) ?? 0,

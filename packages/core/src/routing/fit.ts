@@ -19,7 +19,7 @@ import { and, inArray, sql } from 'drizzle-orm';
 import { FitLink, FIT_LINKS_MAX } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { uuidArray } from '../engine/ids.ts';
-import { recordFacts, type RecordFactObjects } from './facts.ts';
+import { recordFacts, RECORD_FACTS_MAX, type RecordFactObjects } from './facts.ts';
 
 const { memberSkills } = schema;
 
@@ -174,7 +174,9 @@ export async function readFit(tx: WorkspaceTx, input: FitInput): Promise<Fit> {
     answered.set(attributeId, held);
   }
   // The rest from the records, read exactly as a rule's record fact is (one call, its own cap).
-  const fromRecords = [...fields].filter(([attributeId]) => !answered.has(attributeId));
+  // Its own budget of at most `RECORD_FACTS_MAX` fields, beside the rules' (noted for /architect: AC-1377 words
+  // the cap as one per decision, and sharing one read between the rules and fit is the better shape).
+  const fromRecords = [...fields].filter(([attributeId]) => !answered.has(attributeId)).slice(0, RECORD_FACTS_MAX);
   const keys = fromRecords.map(([attributeId, field]) => `${field.side}.${attributeId}`);
   const read: { readonly facts: Readonly<Record<string, unknown>> } =
     keys.length === 0 || input.email === '' ? { facts: {} } : await recordFacts(tx, input.objects, input.email, keys);

@@ -290,6 +290,8 @@ async function decisionsOf(
   tx: WorkspaceTx,
   scope: EngineScope,
   rows: readonly DecisionRow[],
+  /** True for `routing.decision`, the one a reader opened: only then are the candidates' numbers worth sending. */
+  withNumbers = false,
 ): Promise<readonly RoutingDecision[]> {
   const people = rows.flatMap((row) =>
     row.person_id === null || row.person_object_id === null
@@ -316,9 +318,9 @@ async function decisionsOf(
     ...kept.flatMap((row) => (row.routed_page_id === null ? [] : [row.routed_page_id])),
     ...[...steps.values()].flatMap((list) => list.flatMap((step) => (step.pageId === undefined ? [] : [step.pageId]))),
   ]);
-  // The ranked seats' snapshots (AC-1373): every name the explanation uses is read once, with the hosts'.
-  const seats = new Map(kept.map((row) => [row.id, snapshotOf(row.snapshot)]));
-  const ranked = [...seats.values()].flat();
+  // The ranked seats' snapshots (AC-1373): only the seat the explanation reads, so a page of 50 never parses or
+  // names every candidate of every seat. Every name it uses is read once, with the hosts'.
+  const ranked = kept.flatMap((row) => snapshotOf(row.snapshot).slice(0, 1));
   const members = await memberNames(tx, [
     ...kept.flatMap((row) => row.hosts ?? []),
     ...kept.flatMap((row) => (row.booking_host === null ? [] : [row.booking_host])),
@@ -382,7 +384,7 @@ async function decisionsOf(
         })),
         skipped: [...new Set(row.skipped ?? [])].map(label),
         // The reader holds `routing.manage` to be here at all, so this is the rates tier (AC-1373).
-        ...explained(row.snapshot, members, skills),
+        ...explained(row.snapshot, members, skills, withNumbers),
       },
     ];
   });
@@ -393,11 +395,13 @@ function explained(
   snapshot: unknown,
   memberNames: ReadonlyMap<string, string>,
   skillNames: ReadonlyMap<string, string>,
+  withNumbers: boolean,
 ) {
   const explanation = explainDecision(snapshot, { tier: 'manage', memberNames, skillNames });
   return {
     ...(explanation.pick === undefined ? {} : { pick: explanation.pick }),
-    numbers: [...explanation.numbers],
+    // The list shows each decision's one line; only the decision a reader opened carries everyone's numbers.
+    numbers: withNumbers ? [...explanation.numbers] : [],
   };
 }
 
@@ -473,7 +477,7 @@ export async function routingDecision(scope: EngineScope, input: { readonly id: 
   const missing = 'That decision doesn’t exist.';
   return inWorkspace(scope, async (tx) => {
     const rows = await readDecisions(tx, sql`d.id = ${checkId(input.id, missing)}::uuid`, 1);
-    const [decision] = await decisionsOf(tx, scope, rows);
+    const [decision] = await decisionsOf(tx, scope, rows, true);
     if (decision === undefined) throw refuse('NOT_FOUND', missing);
     return decision;
   });

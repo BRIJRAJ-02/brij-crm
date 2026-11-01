@@ -96,13 +96,7 @@ async function fitTargets(data: DataLayer, slug: string): Promise<readonly FitFi
       .map((attribute) => ({
         id: attribute.id,
         label: `${object.singularName} · ${attribute.title}`,
-        options: (attribute.options ?? [])
-          .filter((option) => !option.isArchived)
-          .map((option) => ({
-            id: option.id,
-            label: option.label,
-            hue: option.hue,
-          })),
+        attribute,
       })),
   );
 }
