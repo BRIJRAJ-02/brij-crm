@@ -98,12 +98,14 @@
     list-style: none;
   }
 
+  /* An invited guest drops in where the list ends, out of a soft fade, so the add reads as landing in the list. */
   .guest {
     display: flex;
     align-items: center;
     gap: var(--space-8);
     min-block-size: var(--size-row);
     padding-inline: var(--space-8);
+    animation: guest-in var(--duration-move) var(--ease-out) backwards;
   }
 
   .guest + .guest {
@@ -159,6 +161,10 @@
     .panel {
       animation-name: panel-fade;
     }
+
+    .guest {
+      animation-name: guest-fade;
+    }
   }
 
   @keyframes panel-in {
@@ -169,6 +175,19 @@
   }
 
   @keyframes panel-fade {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @keyframes guest-in {
+    from {
+      opacity: 0;
+      translate: 0 calc(-1 * var(--space-4));
+    }
+  }
+
+  @keyframes guest-fade {
     from {
       opacity: 0;
     }
