@@ -76,7 +76,7 @@ export function Avatar({ name, id, src, hue, size = 'sm', shape = 'circle', isDe
       data-shape={shape}
       data-hue={hue ?? stableHue(id ?? name)}
       // A loaded picture sits on a neutral plate, not the hue: a logo's clear parts (a transparent favicon) read on
-      // the page's surface in both themes rather than on a coloured tile (spec 0059 follow up, 31 October 2026).
+      // a near white plate in both themes rather than on a coloured tile (spec 0059 follow up, 31 October 2026).
       data-picture={showImage && !isWaiting ? 'loaded' : undefined}
       {...(isDecorative ? { 'aria-hidden': true } : { role: 'img', 'aria-label': name })}
     >

@@ -122,12 +122,14 @@
     color: var(--surface);
   }
 
-  /* A loaded picture's plate: the page's surface in place of the hue, after every hue so it wins, so a logo with
-     clear parts reads on a neutral ground in both themes, edged so a dark logo never melts into a dark page; its initials and hue stay the fallback and the wait. */
+  /* A loaded picture's plate, after every hue so it wins: the near white `on-accent` in both themes, as logo lists
+     draw them, so a favicon's clear parts and a dark logo (GitHub's) read in dark mode too, where the page's own
+     surface swallowed them (1 November 2026); a hairline edge holds it on a light page. The initials and the hue
+     stay the fallback and the wait. */
   .root[data-picture='loaded'] {
     outline: var(--border-width-hairline) solid var(--border-subtle);
     outline-offset: calc(var(--border-width-hairline) * -1);
-    background: var(--surface);
+    background: var(--on-accent);
   }
 
   .image {

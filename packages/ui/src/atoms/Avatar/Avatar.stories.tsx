@@ -99,7 +99,7 @@ const TRANSPARENT_LOGO =
   'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 4 4"%3E%3Ccircle cx="2" cy="2" r="1.2" fill="%23266df0"/%3E%3C/svg%3E';
 
 /**
- * A company's transparent logo once loaded: it sits on the neutral plate (`surface`), not its purple hue, so its clear
+ * A company's transparent logo once loaded: it sits on the near white plate (`on-accent`), not its purple hue, so its clear
  * parts read in both themes (spec 0059 follow up).
  */
 export const TransparentLogo: Story = {
