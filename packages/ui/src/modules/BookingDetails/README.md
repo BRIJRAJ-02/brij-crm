@@ -27,7 +27,7 @@ Empty, prefilled, with guests, a phone page, with questions (one shown by an ear
 
 ## Motion
 
-A new guest row arrives a little lower and settles under the one above, and the line above the buttons fades in when it has something to say. Removing a guest is immediate, since rows are keyed by place.
+Guests are chips (the owner, 1 November 2026, from stageshow's share example): Add guests opens one Guests field; an address becomes a removable chip on Enter, a comma, a semicolon or a space, and on leaving the field (just after the blur, so a press on Confirm lands before anything moves). A pasted list splits into chips, duplicates once. Whatever is still typed is taken on Confirm, so a guest is never dropped. Something that isn't an address stays in the field with the reason, to fix or remove. Backspace in the empty field takes the last chip off, each chip's remove button is in the Tab order, and each change is said in a status line. The values sent are unchanged (`guests: string[]`), and a server's `guest-n` marks the n-th chip. A chip resolves in out of a 2px blur. The line above the buttons fades in when it has something to say. Inside the public booking page `--scale-press` is 0.97 here, so its buttons answer a press.
 
 ## Keyboard
 

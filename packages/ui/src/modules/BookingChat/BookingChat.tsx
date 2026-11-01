@@ -94,6 +94,9 @@ export function BookingChat({
   maxLength = 500,
 }: BookingChatProps) {
   const [draft, setDraft] = useState('');
+  // The time picked from a reply's offers, kept on that reply as the record of the answer (stageshow's AI cards):
+  // the offers stay where they were, the picked one marked, so nothing below moves.
+  const [answered, setAnswered] = useState<{ readonly line: string; readonly id: string } | undefined>(undefined);
   const threadRef = useRef<HTMLDivElement>(null);
   const fieldRef = useRef<HTMLInputElement & HTMLTextAreaElement>(null);
   const lastAssistant = lines.findLast((line) => line.role === 'assistant')?.id;
@@ -140,7 +143,7 @@ export function BookingChat({
                   {strings.said(line.role === 'visitor' ? strings.you : strings.assistant)}
                 </VisuallyHidden>
                 <p className={styles.bubble}>{line.role === 'assistant' ? <Written text={line.text} /> : line.text}</p>
-                {isLive &&
+                {(isLive || answered?.line === line.id) &&
                   line.days?.map((group) => (
                     <div key={group.day} className={styles.offers}>
                       <SlotList
@@ -149,7 +152,9 @@ export function BookingChat({
                         heading={group.day}
                         slots={group.times}
                         value={undefined}
+                        {...(answered?.line === line.id ? { answered: answered.id } : {})}
                         onChange={(id) => {
+                          setAnswered({ line: line.id, id });
                           onPickTime(id);
                           focusField();
                         }}

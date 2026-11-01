@@ -207,12 +207,14 @@ test.describe('the booking journey’s edges', () => {
     await visitor.getByLabel('Your name').fill('Gus Host');
     await visitor.getByLabel('Email').fill(`gus-${pageId.slice(-6)}@example.com`);
     await visitor.getByRole('button', { name: /Add guests?/ }).click();
-    // A guest's address is checked before anything is sent.
-    await visitor.getByLabel('Guest 1 email').fill('not an email');
+    // A guest's address is checked before anything is sent: one that isn't an address stays in the field to fix.
+    const guests = visitor.getByRole('textbox', { name: /^Guests/ });
+    await guests.fill('notanemail');
     await visitor.waitForTimeout(HUMAN_PACE_MS);
     await visitor.getByRole('button', { name: 'Confirm booking' }).click();
-    await expect(visitor.getByText(/guest’s email address/).first()).toBeVisible();
-    await visitor.getByLabel('Guest 1 email').fill(`guest-${pageId.slice(-6)}@example.com`);
+    await expect(visitor.getByText(/isn’t an email address/).first()).toBeVisible();
+    // Typed and not yet a chip, the fixed address still goes with the booking.
+    await guests.fill(`guest-${pageId.slice(-6)}@example.com`);
     await visitor.getByRole('button', { name: 'Confirm booking' }).click();
     await expect(visitor).toHaveURL(/\/manage\?/, { timeout: 30_000 });
 

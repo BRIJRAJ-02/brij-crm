@@ -2,6 +2,11 @@
    the heading), then one card: the summary (what, when, who) with its actions, the details, and the changes. */
 @layer components {
   .root {
+    /* The booking page answers a press (the owner, 1 November 2026, public booking page only): any Button in here
+       eases to this scale while held. Set here, not in tokens.css (generated from the artifact, where it stays 1 for
+       the app), because this module only ever mounts on the public pages. */
+    --scale-press: 0.97;
+
     box-sizing: border-box;
     display: flex;
     justify-content: center;

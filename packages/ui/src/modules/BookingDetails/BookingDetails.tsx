@@ -8,6 +8,7 @@ import {
 } from '@crm/contracts/forms';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Button } from '../../atoms/Button/Button.tsx';
+import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { countriesIn } from '../../lib/countries.ts';
 import { Field } from '../../molecules/Field/Field.tsx';
 import { answerOf, focusQuestion, Question } from '../../public-form/Question.tsx';
@@ -77,6 +78,8 @@ const WORDS = formStrings('en');
 
 /** A rough email shape; the server checks it properly. */
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+/** What ends one guest's address: a comma, a semicolon, a space or a new line (a pasted list). */
+const GUEST_SEPARATORS = /[\s,;]+/;
 
 /**
  * The answer's errors the form can show under a field. A guest's `guest-<n>`
@@ -126,7 +129,19 @@ export function BookingDetails({
   const [name, setName] = useState(prefill?.name ?? '');
   const [email, setEmail] = useState(prefill?.email ?? '');
   const [phone, setPhone] = useState('');
-  const [guests, setGuests] = useState<readonly string[]>([]);
+  // Guests are chips (the owner, 1 November 2026): an address becomes one when Enter, a comma, a space or leaving the
+  // field ends it, and whatever is still typed is taken on Confirm, so a guest is never dropped.
+  const [guests, setGuestsState] = useState<readonly string[]>([]);
+  // The latest guests, for a chip made after a render (the blur's timer).
+  const latestGuests = useRef<readonly string[]>([]);
+  const setGuests = (next: readonly string[] | ((current: readonly string[]) => readonly string[])) => {
+    const value = typeof next === 'function' ? next(latestGuests.current) : next;
+    latestGuests.current = value;
+    setGuestsState(value);
+  };
+  const [guestDraft, setGuestDraft] = useState('');
+  const [isAddingGuests, setAddingGuests] = useState(false);
+  const [guestNote, setGuestNote] = useState('');
   const [note, setNote] = useState('');
   const [trap, setTrap] = useState('');
   const countryNames = useMemo(
@@ -162,14 +177,62 @@ export function BookingDetails({
   const focusField = (field: string) =>
     globalThis.requestAnimationFrame(() => form.current?.querySelector<HTMLElement>(`[name="${field}"]`)?.focus());
 
+  /**
+   * Takes typed text into chips: each well formed, new address joins the guests (up to the most a booking takes);
+   * anything else stays in the field to fix, with what's wrong. Returns the guests and what is left.
+   */
+  const takeGuests = (
+    text: string,
+  ): { readonly taken: readonly string[]; readonly left: string; readonly problem?: string } => {
+    const parts = text.split(GUEST_SEPARATORS).filter((part) => part !== '');
+    const current = latestGuests.current;
+    const known = new Set(current.map((guest) => guest.toLowerCase()));
+    const added: string[] = [];
+    const kept: string[] = [];
+    let problem: string | undefined;
+    for (const part of parts) {
+      if (!EMAIL.test(part)) {
+        kept.push(part);
+        problem ??= strings.guestNotEmail(part);
+      } else if (known.has(part.toLowerCase())) continue;
+      else if (current.length + added.length >= maxGuests) {
+        kept.push(part);
+        problem ??= strings.guestsMax(maxGuests);
+      } else {
+        known.add(part.toLowerCase());
+        added.push(part);
+      }
+    }
+    const taken = [...current, ...added];
+    if (added.length > 0) {
+      setGuests(taken);
+      setGuestNote(strings.guestAdded(added));
+    }
+    const left = kept.join(' ');
+    setGuestDraft(left);
+    setErrors((current) => {
+      const { guests: _, ...rest } = current;
+      return problem === undefined ? rest : { ...rest, guests: problem };
+    });
+    return problem === undefined ? { taken, left } : { taken, left, problem };
+  };
+  const removeGuest = (index: number) => {
+    const gone = guests[index];
+    if (gone === undefined) return;
+    setGuests((current) => current.filter((_, at) => at !== index));
+    setGuestNote(strings.guestRemoved(gone));
+    // A server's word on a guest no longer applies once the list changes.
+    setErrors((current) =>
+      Object.fromEntries(Object.entries(current).filter(([field]) => !field.startsWith('guest-'))),
+    );
+    focusField('guests');
+  };
+
   const check = (): Record<string, string> => {
     const found: Record<string, string> = {};
     if (name.trim() === '') found.name = strings.nameRequired;
     if (!EMAIL.test(email.trim())) found.email = strings.emailRequired;
     if (needsPhone && phone.trim() === '') found.phone = strings.phoneRequired;
-    guests.forEach((guest, index) => {
-      if (guest.trim() !== '' && !EMAIL.test(guest.trim())) found[`guest-${String(index)}`] = strings.guestInvalid;
-    });
     // The questions showing, checked as the server will (its Show when already decided here).
     if (showing.length > 0) {
       const visible = showing.map(({ showWhen: _decided, ...question }) => question);
@@ -185,6 +248,7 @@ export function BookingDetails({
     const first = [
       'name',
       'email',
+      'guests',
       ...guests.map((_, index) => `guest-${String(index)}`),
       'phone',
       ...showing.map((question) => `${ANSWER_FIELD}${question.key}`),
@@ -192,7 +256,7 @@ export function BookingDetails({
     if (first?.startsWith(ANSWER_FIELD) === true) {
       const key = first.slice(ANSWER_FIELD.length);
       globalThis.requestAnimationFrame(() => focusQuestion(form.current, key));
-    } else if (first !== undefined) focusField(first);
+    } else if (first !== undefined) focusField(first.startsWith('guest-') ? 'guests' : first);
   };
   const clear = (field: string) => {
     if (errors[field] === undefined) return;
@@ -203,21 +267,26 @@ export function BookingDetails({
   const submit = () => {
     if (isBusy) return;
     setLine('');
-    const found = check();
+    // An address still in the guests field goes with the booking: taken now, never dropped.
+    const pending = guestDraft.trim() === '' ? { taken: guests, left: '' } : takeGuests(guestDraft);
+    const found = {
+      ...check(),
+      ...('problem' in pending && pending.problem !== undefined ? { guests: pending.problem } : {}),
+    };
     if (Object.keys(found).length > 0) {
       showErrors(found);
       return;
     }
     setErrors({});
     setBusy(true);
-    const typed = guests.map((guest) => guest.trim());
-    // The row each guest that goes sits on: blank rows stay behind.
-    const sentRows = typed.flatMap((guest, row) => (guest === '' ? [] : [row]));
+    const typed = pending.taken;
+    // Every chip goes, in order: the server's guest-n is the n-th chip.
+    const sentRows = typed.map((_, row) => row);
     onSubmit({
       name: name.trim(),
       email: email.trim(),
       phone: phone.trim(),
-      guests: typed.filter((guest) => guest !== ''),
+      guests: typed,
       note: note.trim(),
       answers: Object.fromEntries(showing.map((question) => [question.key, given[question.key]])),
       trap,
@@ -300,58 +369,88 @@ export function BookingDetails({
         }}
         {...(errors.email === undefined ? {} : { error: errors.email })}
       />
-      {guests.length > 0 && (
+      {isAddingGuests || guests.length > 0 ? (
         <div className={styles.guests}>
-          {guests.map((guest, index) => {
-            const field = `guest-${String(index)}`;
-            return (
-              <div key={field} className={styles.guest}>
-                <Field
-                  label={strings.guest(index + 1)}
-                  name={field}
-                  type="email"
-                  placeholder={strings.guestPlaceholder}
-                  maxLength={254}
-                  value={guest}
-                  onChange={(next) => {
-                    setGuests((current) => current.map((each, at) => (at === index ? next : each)));
-                    clear(field);
-                  }}
-                  suffix={
-                    <Button
-                      variant="ghost"
-                      icon="x"
-                      label={strings.removeGuest(index + 1)}
-                      onPress={() => {
-                        setGuests((current) => current.filter((_, at) => at !== index));
-                        setErrors({});
-                        // The row goes with its button: focus the row before it, or Add guests.
-                        if (guests.length > 1) focusField(`guest-${String(Math.max(0, index - 1))}`);
-                        else
-                          globalThis.requestAnimationFrame(() =>
-                            form.current?.querySelector<HTMLElement>('[data-add-guest] button')?.focus(),
-                          );
-                      }}
-                    />
-                  }
-                  {...(errors[field] === undefined ? {} : { error: errors[field] })}
-                />
-              </div>
-            );
-          })}
+          {guests.length > 0 && (
+            <ul className={styles.chips} aria-label={strings.guestsList}>
+              {guests.map((guest, index) => (
+                <li
+                  key={guest}
+                  className={styles.chip}
+                  data-invalid={errors[`guest-${String(index)}`] === undefined ? undefined : ''}
+                >
+                  <span className={styles.chipText}>{guest}</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    icon="x"
+                    label={strings.removeGuest(guest)}
+                    onPress={() => removeGuest(index)}
+                  />
+                </li>
+              ))}
+            </ul>
+          )}
+          <Field
+            label={strings.guests}
+            name="guests"
+            type="text"
+            inputMode="email"
+            autoComplete="off"
+            placeholder={strings.guestPlaceholder}
+            hint={strings.guestsHint}
+            maxLength={2000}
+            value={guestDraft}
+            onChange={(next) => {
+              // A separator ends an address: what comes before the last one is taken, the rest is still being typed.
+              const end = next.search(/[\s,;]+[^\s,;]*$/);
+              if (end < 0) {
+                setGuestDraft(next);
+                clear('guests');
+                return;
+              }
+              const tail = next.slice(end).replace(GUEST_SEPARATORS, '');
+              const { left } = takeGuests(next.slice(0, end));
+              setGuestDraft([left, tail].filter((part) => part !== '').join(' '));
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' && guestDraft.trim() !== '') {
+                // Enter ends the address here; with nothing typed it books, as everywhere else in the form.
+                event.preventDefault();
+                takeGuests(guestDraft);
+              } else if (event.key === 'Backspace' && guestDraft === '' && guests.length > 0) {
+                event.preventDefault();
+                removeGuest(guests.length - 1);
+              }
+            }}
+            onBlur={() => {
+              if (guestDraft.trim() === '') return;
+              const draft = guestDraft;
+              // The chip is made just after the blur's own task, so a press on Confirm (whose button takes focus as
+              // the press ends) lands its click before the chip moves anything under the pointer.
+              globalThis.setTimeout(() => takeGuests(draft), 0);
+            }}
+            {...(errors.guests === undefined
+              ? Object.keys(errors).some((field) => field.startsWith('guest-'))
+                ? { error: strings.guestInvalid }
+                : {}
+              : { error: errors.guests })}
+          />
+          <VisuallyHidden>
+            <span role="status">{guestNote}</span>
+          </VisuallyHidden>
         </div>
-      )}
-      {guests.length < maxGuests && (
+      ) : (
         <div className={styles.add} data-add-guest="">
           <Button
             variant="ghost"
             icon="user-plus"
             onPress={() => {
-              setGuests((current) => [...current, '']);
-              focusField(`guest-${String(guests.length)}`);
+              setAddingGuests(true);
+              focusField('guests');
             }}
           >
-            {guests.length === 0 ? strings.addGuests : strings.addAnotherGuest}
+            {strings.addGuests}
           </Button>
         </div>
       )}

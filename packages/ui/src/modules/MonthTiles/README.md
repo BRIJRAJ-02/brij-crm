@@ -33,7 +33,7 @@ Open, closed, chosen, today, Best, hover, focus, pressed, loading; the first and
 
 ## Motion
 
-The chosen day's fill settles in at the movement pace. When the times arrive, the days settle from their loading shade a week's row at a time from the top, once for that month (`data-settle`); moving to another month shows its days as they are. Reduced motion keeps the fade and drops the stagger.
+The chosen day's fill settles in at the movement pace, a press eases the day to `--scale-press` (1 in the app, 0.97 on the public booking page), and a new month slides in out of a 3px blur. When the times arrive, the days settle from their loading shade a week's row at a time from the top, once for that month (`data-settle`); moving to another month shows its days as they are. Reduced motion keeps the fade and drops the stagger.
 
 ## Keyboard
 

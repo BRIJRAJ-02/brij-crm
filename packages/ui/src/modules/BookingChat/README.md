@@ -33,7 +33,7 @@ Loading, the greeting with times, no times, a few turns with the read back, wait
 
 ## Motion
 
-A reply writes itself: its words resolve out of a soft blur one after another (the whole reply inside about 300ms, so a long one never keeps the visitor waiting), and its times and suggestions arrive after its words. The whole text is in the log from the start, so it is read once. While a reply is out, the waiting line shows its words beside the spinner with a light passing across them. Reduced motion shows whole replies and a plain waiting line.
+A time picked from a reply stays on that reply as the record (SlotList's `answered`): marked with a check, the others quiet, none pressable again; the reply's offers no longer vanish while the next answer is written. A reply writes itself: its words resolve out of a soft blur one after another (the whole reply inside about 300ms, so a long one never keeps the visitor waiting), and its times and suggestions arrive after its words. The whole text is in the log from the start, so it is read once. While a reply is out, the waiting line shows its words beside the spinner with a light passing across them. Reduced motion shows whole replies and a plain waiting line.
 
 ## Keyboard and screen readers
 

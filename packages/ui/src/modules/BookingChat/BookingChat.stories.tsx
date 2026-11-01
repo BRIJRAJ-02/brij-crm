@@ -61,9 +61,13 @@ export const Greeting: Story = {
     await expect(args.onSend).toHaveBeenCalledWith('tuesday afternoon');
     await expect(field).toHaveValue('');
     await expect(field).toHaveFocus();
-    // A pressed time sends, and focus goes to the field for the next answer.
+    // The answered offers stay as the record: the picked time marked, the rest no longer take a press.
+    await expect(canvas.getByRole('button', { name: '9:30 AM, Fri 9 Oct, 30 minutes, picked' })).toHaveAttribute(
+      'aria-current',
+      'true',
+    );
     await userEvent.click(canvas.getByRole('button', { name: '9:00 AM, Mon 12 Oct, 30 minutes' }));
-    await waitFor(() => expect(field).toHaveFocus());
+    await expect(args.onPickTime).toHaveBeenCalledTimes(1);
   },
 };
 

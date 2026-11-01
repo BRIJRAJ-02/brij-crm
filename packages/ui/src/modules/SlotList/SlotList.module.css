@@ -141,7 +141,13 @@
     transition:
       border-color var(--duration-hover) var(--ease-hover),
       background-color var(--duration-hover) var(--ease-hover),
-      flex-grow var(--duration-move) var(--ease-out);
+      flex-grow var(--duration-move) var(--ease-out),
+      scale var(--duration-press) var(--ease-out);
+  }
+
+  /* A press eases the time down to --scale-press: 1 in the app, 0.97 where the public booking page sets it. */
+  .slot:active {
+    scale: var(--scale-press);
   }
 
   /* The pick settles in at the movement pace, so a tap reads as landing; letting go of it takes the quicker
@@ -193,8 +199,27 @@
     padding-block: var(--space-8);
   }
 
+  /* An answered offer (the chat's record): the picked time keeps a fill and a check beside its time, the rest go
+     quiet, and none takes a press. */
+  .root[data-answered] .slot {
+    cursor: default;
+  }
+
+  .item[data-answer] .slot {
+    flex-direction: row;
+    gap: var(--space-6);
+    border-color: var(--accent-line);
+    background: var(--accent-soft);
+    color: var(--link);
+  }
+
+  .item[data-quiet] .slot {
+    border-color: var(--border-subtle);
+    color: var(--text-tertiary);
+  }
+
   @media (hover: hover) and (pointer: fine) {
-    .slot:not([aria-pressed='true']):hover {
+    .root:not([data-answered]) .slot:not([aria-pressed='true']):hover {
       border-color: var(--text);
     }
   }
@@ -211,12 +236,18 @@
     .time {
       animation-name: slot-fade;
     }
+
+    .slot:active {
+      scale: none;
+    }
   }
 
+  /* Times resolve out of their placeholders with a little blur, as content settles out of a skeleton. */
   @keyframes slot-in {
     from {
       opacity: 0;
       translate: 0 var(--space-4);
+      filter: blur(var(--swap-blur));
     }
   }
 
